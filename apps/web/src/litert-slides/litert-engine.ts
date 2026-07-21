@@ -120,7 +120,7 @@ interface LiteRtModule {
 
 // ── Model registry ──────────────────────────────────────────────────────────
 
-export type ModelId = "e2b" | "e4b";
+export type ModelId = "e2b" | "e4b" | "12b" | "26b";
 
 export interface ModelInfo {
   id: ModelId;
@@ -132,7 +132,12 @@ export interface ModelInfo {
   blurb: string;
 }
 
-const LITERT_VERSION = "0.13.1";
+// 0.14.0: same Engine/Conversation surface as 0.13.1 (engine.d.ts is
+// byte-identical); the wrapped `{type:'function', function:{…}}` tool shape and
+// the `{type:'tool_response', name, response}` content item we send are now the
+// documented canonical forms. Bumped because the larger Gemma 4 web builds
+// (12B / 26B-A4B) shipped alongside this runtime release.
+const LITERT_VERSION = "0.14.0";
 const HF = "https://huggingface.co/litert-community";
 
 export const MODELS: Record<ModelId, ModelInfo> = {
@@ -149,6 +154,25 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     url: `${HF}/gemma-4-E4B-it-litert-lm/resolve/main/gemma-4-E4B-it-web.litertlm`,
     approxSize: "~2.9 GB",
     blurb: "Larger. Better tool-calling / reasoning, slower.",
+  },
+  // The two big variants are EXPERIMENTAL: the LiteRT-LM JS API officially
+  // lists only the E2B/E4B web builds, but litert-community ships -web.litertlm
+  // files for both of these, and this page is a testbed. Expect long downloads,
+  // heavy GPU/unified-memory use, and possible runtime rejection on some
+  // machines.
+  "12b": {
+    id: "12b",
+    label: "Gemma 4 12B (experimental)",
+    url: `${HF}/gemma-4-12B-it-litert-lm/resolve/main/gemma-4-12B-it-web.litertlm`,
+    approxSize: "~6.0 GB",
+    blurb: "Dense 12B. Needs ~16 GB+ GPU/unified memory; strongest tool use.",
+  },
+  "26b": {
+    id: "26b",
+    label: "Gemma 4 26B-A4B (experimental)",
+    url: `${HF}/gemma-4-26B-A4B-it-litert-lm/resolve/main/gemma-4-26B-A4B-it-web.litertlm`,
+    approxSize: "~15.8 GB",
+    blurb: "MoE, ~4B active. Huge download; needs a lot of memory + disk quota.",
   },
 };
 
@@ -177,7 +201,7 @@ const TEMPERATURE = 0.3;
 
 export type MetricEvent =
   | { type: "load_start"; modelId: ModelId }
-  | { type: "load_progress"; received: number; total: number }
+  | { type: "load_progress"; received: number; total: number; phase: WeightsPhase }
   | { type: "load_ready"; modelId: ModelId; loadMs: number; fromCache: boolean }
   | { type: "load_error"; message: string }
   | { type: "warmup_start"; modelId: ModelId }
@@ -195,31 +219,113 @@ export type MetricSink = (event: MetricEvent) => void;
 // The browser HTTP cache can NEVER reuse a weights download from HuggingFace:
 // the `resolve/…` URL 302s with `cache-control: no-store` to a SIGNED CDN URL
 // whose signature differs on every request, so each page load would re-pull the
-// full ~1.4–2.9 GB. We cache the weights ourselves in Cache Storage, keyed by
-// the stable canonical URL. Origin-scoped, so litert-slides and litert-paint
-// share one stored copy per model.
+// full multi-GB file. We cache the weights ourselves in Cache Storage, keyed by
+// the stable canonical URL. Cache Storage is ORIGIN-scoped, so on
+// persona-chat.dev every litert demo (slides / paint / shop / intake) shares
+// one stored copy per model, across page reloads and sessions. It does NOT
+// span origins (localhost dev re-downloads separately from prod) — that's what
+// the Cross-Origin Storage proposal (github.com/tomayac/awesome-cross-origin-
+// storage) would fix, but nothing ships it yet.
+//
+// Flow on a miss: download INTO the cache first (progress = "download"), then
+// stream the committed entry from disk to the engine (progress = "cache-read").
+// Download-then-serve, not res.clone(): cloning lets the engine race the
+// cache-put over the same multi-GB body (unread clone data buffers in memory,
+// and a navigation mid-put stores nothing). put() only commits complete
+// bodies, so an entry that matches is always a whole file. Before caching we
+// check quota headroom — a 15.8 GB model on a small disk streams straight to
+// the engine instead of failing a half-written put — and request persistent
+// storage so the browser won't quietly evict the weights under disk pressure.
 const MODEL_CACHE_NAME = "litert-model-weights";
+
+export type WeightsPhase = "download" | "cache-read";
+type WeightsProgress = (received: number, total: number, phase: WeightsPhase) => void;
+
+function countBytes(
+  body: ReadableStream<Uint8Array>,
+  total: number,
+  phase: WeightsPhase,
+  onProgress: WeightsProgress,
+): ReadableStream<Uint8Array> {
+  let received = 0;
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        received += chunk.byteLength;
+        onProgress(received, total, phase);
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+}
 
 async function fetchModelWeights(
   url: string,
-): Promise<{ res: Response; fromCache: boolean }> {
+  onProgress: WeightsProgress,
+): Promise<{ body: ReadableStream<Uint8Array>; fromCache: boolean }> {
   let cache: Cache | null = null;
   try {
     cache = await caches.open(MODEL_CACHE_NAME);
   } catch {
     // Cache Storage unavailable (some private-browsing modes) — plain fetch.
   }
+
   const hit = await cache?.match(url);
-  if (hit?.body) return { res: hit, fromCache: true };
-  const res = await fetch(url);
-  if (!res.ok || !res.body) {
-    throw new Error(`Model download failed: ${res.status} ${res.statusText}`);
+  if (hit?.body) {
+    const total = Number(hit.headers.get("content-length")) || 0;
+    return { body: countBytes(hit.body, total, "cache-read", onProgress), fromCache: true };
   }
-  // Persist a clone for the next load while the engine consumes the original.
-  // put() only commits complete bodies, so an aborted download stores nothing;
-  // a quota rejection is best-effort — we just re-download next time.
-  if (cache) void cache.put(url, res.clone()).catch(() => {});
-  return { res, fromCache: false };
+
+  const download = async (): Promise<{ res: Response; total: number }> => {
+    const res = await fetch(url);
+    if (!res.ok || !res.body) {
+      throw new Error(`Model download failed: ${res.status} ${res.statusText}`);
+    }
+    return { res, total: Number(res.headers.get("content-length")) || 0 };
+  };
+
+  const { res, total } = await download();
+  const direct = (r: Response, t: number): { body: ReadableStream<Uint8Array>; fromCache: false } => ({
+    body: countBytes(r.body!, t, "download", onProgress),
+    fromCache: false,
+  });
+  if (!cache) return direct(res, total);
+
+  // Quota headroom check: skip caching entirely rather than fail a
+  // half-written multi-GB put. 1.2× covers Cache Storage bookkeeping overhead.
+  try {
+    const est = await navigator.storage?.estimate?.();
+    if (total > 0 && est?.quota != null && est.usage != null && est.quota - est.usage < total * 1.2) {
+      return direct(res, total);
+    }
+  } catch {
+    // estimate() unavailable — attempt the put and rely on the catch below.
+  }
+  // Best-effort: granted silently by Chromium heuristics, prompts on Firefox.
+  // Without it the weights are still cached, just evictable under pressure.
+  void navigator.storage?.persist?.().catch(() => {});
+
+  try {
+    await cache.put(
+      url,
+      new Response(countBytes(res.body!, total, "download", onProgress), {
+        headers: {
+          "content-type": res.headers.get("content-type") ?? "application/octet-stream",
+          ...(total > 0 ? { "content-length": String(total) } : {}),
+        },
+      }),
+    );
+    const stored = await cache.match(url);
+    if (stored?.body) {
+      return { body: countBytes(stored.body, total, "cache-read", onProgress), fromCache: false };
+    }
+  } catch {
+    await cache.delete(url).catch(() => {});
+  }
+  // The put consumed the first response's body — re-download straight to the
+  // engine so a quota failure costs a retry, never the load.
+  const retry = await download();
+  return direct(retry.res, retry.total);
 }
 
 // ── Persona SSE wire ────────────────────────────────────────────────────────
@@ -479,18 +585,12 @@ export function createLiteRtPersonaEngine(options: {
 
         // Stream the weights into the runtime with live progress instead of
         // buffering the whole file: EngineSettings.model accepts a
-        // ReadableStream. Cache Storage first, network on a miss.
-        const { res, fromCache } = await fetchModelWeights(info.url);
-        const total = Number(res.headers.get("content-length")) || 0;
-        let received = 0;
-        const progressStream = res.body!.pipeThrough(
-          new TransformStream<Uint8Array, Uint8Array>({
-            transform(chunk, controller) {
-              received += chunk.byteLength;
-              metric({ type: "load_progress", received, total });
-              controller.enqueue(chunk);
-            },
-          }),
+        // ReadableStream. Cache Storage first, network on a miss (a cold load
+        // reports a slow "download" pass, then a fast "cache-read" pass as the
+        // committed entry streams off disk into the engine).
+        const { body: progressStream, fromCache } = await fetchModelWeights(
+          info.url,
+          (received, total, phase) => metric({ type: "load_progress", received, total, phase }),
         );
 
         // Tear down any previous engine + warm conversations before swapping.
