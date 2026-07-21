@@ -320,7 +320,9 @@ async function fetchModelWeights(
       return { body: countBytes(stored.body, total, "cache-read", onProgress), fromCache: false };
     }
   } catch {
-    await cache.delete(url).catch(() => {});
+    // A failed streaming put never commits a partial entry, so there is
+    // nothing to clean up — and deleting here could race away a valid entry
+    // another tab just committed for the same URL.
   }
   // The put consumed the first response's body — re-download straight to the
   // engine so a quota failure costs a retry, never the load.

@@ -144,6 +144,7 @@ export function createEvalHud(mount: HTMLElement): EvalHud {
       case "load_start":
         stats.modelId = event.modelId;
         stats.loading = true;
+        stats.loadPhase = "download";
         stats.loadError = null;
         stats.loadReceived = 0;
         stats.loadTotal = 0;
