@@ -94,7 +94,10 @@ interface LiteRtConversation {
     message: LiteRtMessageLike | LiteRtMessageLike[],
   ): ReadableStream<LiteRtMessage>;
   cancel(): void;
-  getHistory(): LiteRtMessage[];
+  // Sync in ≤0.13.x, Promise in 0.14.0 — always `await` the call so the engine
+  // works against either. (Spreading the 0.14.0 Promise threw "history is not
+  // iterable" and killed every text-only final turn as an execution_error.)
+  getHistory(): LiteRtMessage[] | Promise<LiteRtMessage[]>;
   delete(): Promise<void>;
 }
 interface LiteRtEngine {
@@ -765,7 +768,7 @@ export function createLiteRtPersonaEngine(options: {
     // call inline (some runtime builds only attach tool_calls to the committed
     // message).
     if (toolCalls.length === 0) {
-      const history = conversation.getHistory();
+      const history = await conversation.getHistory();
       const lastAssistant = [...history]
         .reverse()
         .find((m) => m.role !== "user" && m.tool_calls?.length);
