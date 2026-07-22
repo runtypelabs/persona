@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Slash Commands Demo</title>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Slash Commands</h1>
+          <p>Give the composer <strong>skills</strong>: type <code>/</code> at the start of a line to open a command menu. Commands are <em>verbs</em> — a prompt macro, a client action, or a server skill — running on the same engine as <code>@</code> context mentions (which are <em>nouns</em>).</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
+
+        <div class="info-section">
+          <h3>Try it</h3>
+          <ul>
+            <li>Type <code>/</code> at the <strong>start of a line</strong> (mid-line <code>/</code> is ignored)</li>
+            <li>Filter by typing the name; ↑/↓ to navigate, Enter to run</li>
+            <li>Pass args after the name, e.g. <code>/greet Ada</code> or <code>/lookup 1042</code></li>
+            <li>In the <strong>Client actions</strong> variant, <code>@</code> still opens context mentions</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h3>Event log</h3>
+          <div class="event-log" id="log">
+            <div style="color: var(--muted);">Waiting for command events…</div>
+          </div>
+        </div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
+        <p>Slash-commands reuse the context-mentions engine via a second <em>trigger channel</em>. Add a <code>/</code> channel to <code>contextMentions.triggers</code> (typically <code>triggerPosition: "line-start"</code>, <code>allowSpaces: true</code> for args). Its source is the in-package <code>createSlashCommandsSource</code>. The whole command runtime ships in the same lazy-loaded chunk as mentions, so the core bundle is unchanged.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Command flavors</h3>
+        <p>Use the <strong>Skill flavor</strong> toggle above the preview to compare the three dispatch kinds. There are only three — a command is always a prompt, an action, or a server skill. Everything else (taking an argument, coexisting with <code>@</code>) is a modifier any kind can carry, so each variant already shows an arg example:</p>
+        <ul>
+          <li><strong>Prompt macros</strong> — <code>kind: "prompt"</code> writes text into the composer (<code>submitOnSelect</code> sends it immediately). No message-in-a-chip; the command becomes the message. <code>/greet</code> takes an argument.</li>
+          <li><strong>Client actions</strong> — <code>kind: "action"</code> runs a browser function (<code>/clear</code>, <code>/help</code>, <code>/echo</code>). Nothing is sent; the host wires broader actions via the controller. This variant also registers an <code>@</code> context source, so commands and mentions share one engine (only one is active at any caret); the others stay pure slash commands.</li>
+          <li><strong>Server skill</strong> — <code>kind: "server"</code> sends structured <code>data(args)</code> to the backend via request <code>context.mentions</code>; the echo backend prints what it received.</li>
+        </ul>
+        <p>Arg-bearing commands (<code>/greet</code>, <code>/echo</code>, <code>/lookup</code>) use <em>inline completion</em> (Slack-style): selecting fills <code>/greet&nbsp;</code> into the composer with a <code>‹name›</code> hint, you type the argument inline, and the command runs at <em>submit</em>. Server commands always work this way.</p>
+        <p>All variants are produced by one shareable factory (<code>src/commands/slash-commands-experience.ts</code>) spread into <code>contextMentions</code> — the config is a portable unit, since the plugin registry is render-only.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Config snippet</h3>
+        <div class="code-block">
+          <span class="keyword">import</span> { createSlashCommandsSource } <span class="keyword">from</span> <span class="string">"@runtypelabs/persona"</span>;
+
+          <span class="keyword">const</span> config = {
+            <span class="prop">contextMentions</span>: {
+              <span class="prop">enabled</span>: <span class="keyword">true</span>,
+              <span class="prop">sources</span>: [<span class="comment">/* @ mention sources */</span>],
+              <span class="prop">triggers</span>: [{
+                <span class="prop">trigger</span>: <span class="string">"/"</span>,
+                <span class="prop">triggerPosition</span>: <span class="string">"line-start"</span>,
+                <span class="prop">allowSpaces</span>: <span class="keyword">true</span>,
+                <span class="prop">sources</span>: [
+                  createSlashCommandsSource({
+                    <span class="prop">id</span>: <span class="string">"commands"</span>,
+                    <span class="prop">label</span>: <span class="string">"Commands"</span>,
+                    <span class="prop">commands</span>: [
+                      { <span class="prop">name</span>: <span class="string">"summarize"</span>, <span class="prop">kind</span>: <span class="string">"prompt"</span>, <span class="prop">prompt</span>: <span class="string">"Summarize."</span>, <span class="prop">submitOnSelect</span>: <span class="keyword">true</span> },
+                      { <span class="prop">name</span>: <span class="string">"clear"</span>, <span class="prop">kind</span>: <span class="string">"action"</span>, <span class="prop">action</span>: () => controller.clearChat() },
+                      { <span class="prop">name</span>: <span class="string">"lookup"</span>, <span class="prop">kind</span>: <span class="string">"server"</span>, <span class="prop">data</span>: (args) => ({ <span class="prop">intent</span>: <span class="string">"lookup-order"</span>, <span class="prop">orderId</span>: args }) },
+                    ],
+                  }),
+                ],
+              }],
+            },
+          };
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Multiple arguments</h3>
+        <p>There are no named argument slots. <code>args</code> is a single free-text string: everything typed after the command name, trimmed. Split it however you like inside <code>data</code> / <code>action</code> / <code>prompt(args)</code>, so several space-separated values work today with no extra API:</p>
+        <div class="code-block">
+          { <span class="prop">name</span>: <span class="string">"deploy"</span>, <span class="prop">kind</span>: <span class="string">"action"</span>, <span class="prop">argsPlaceholder</span>: <span class="string">"env region"</span>,
+            <span class="prop">action</span>: ({ args }) => {
+              <span class="keyword">const</span> [env, region] = args.split(/\s+/); <span class="comment">// "staging us-east-1"</span>
+              <span class="comment">/* ... */</span>
+            } }
+        </div>
+        <p>Two caveats: for a <code>line-start</code> command the arguments come from the first line only (a newline ends the command line), and <code>argsPlaceholder</code> is a single display hint, not per-slot UI. Structured, validated argument slots (Discord's <code>/ban user: reason:</code> style) are not built in.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/slash-commands-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("slash-commands-demo");
+  </script>
+</body>
+</html>

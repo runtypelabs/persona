@@ -4542,3 +4542,72 @@ describe('AgentWidgetClient - Artifact display modes', () => {
     expect(props.markdown).toBe('# Hello');
   });
 });
+
+describe('AgentWidgetClient - mention context', () => {
+  const agentDone = (controller: ReadableStreamDefaultController, encoder: TextEncoder) => {
+    controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+      executionId: 'exec_1',
+      agentId: 'agent_123',
+      success: true,
+      iterations: 1,
+      completedAt: new Date().toISOString(),
+      seq: 1,
+    })));
+    controller.close();
+  };
+
+  const captureContext = () => {
+    let capturedPayload: any = null;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        body: new ReadableStream({ start(c) { agentDone(c, encoder); } }),
+      };
+    });
+    return () => capturedPayload;
+  };
+
+  it('attaches the latest user turn mention context under context.mentions', async () => {
+    const get = captureContext();
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000', agentId: 'agent_123' });
+
+    await client.dispatch({
+      messages: [{
+        id: 'u1', role: 'user', content: 'Summarize this',
+        createdAt: '2025-01-01T00:00:00.000Z',
+        mentionContext: { files: { app: { path: 'App.tsx' } } },
+      } as AgentWidgetMessage],
+    }, () => {});
+
+    expect(get().context).toEqual({ mentions: { files: { app: { path: 'App.tsx' } } } });
+  });
+
+  it('does NOT re-attach an older turn mention context on a later send', async () => {
+    const get = captureContext();
+    const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000', agentId: 'agent_123' });
+
+    await client.dispatch({
+      messages: [
+        {
+          id: 'u1', role: 'user', content: 'Summarize this',
+          createdAt: '2025-01-01T00:00:00.000Z',
+          mentionContext: { files: { app: { path: 'App.tsx' } } },
+        } as AgentWidgetMessage,
+        {
+          id: 'a1', role: 'assistant', content: 'Done',
+          createdAt: '2025-01-01T00:00:01.000Z',
+        } as AgentWidgetMessage,
+        {
+          id: 'u2', role: 'user', content: 'Now a plain follow-up',
+          createdAt: '2025-01-01T00:00:02.000Z',
+        } as AgentWidgetMessage,
+      ],
+    }, () => {});
+
+    // The most recent user turn (u2) carried no mentionContext, so the stale
+    // context from u1 must not leak into this request.
+    expect(get().context).toBeUndefined();
+  });
+});

@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
 import {
   AgentWidgetMessage,
   AgentWidgetMessageLayoutConfig,
@@ -11,9 +11,14 @@ import {
   AudioContentPart,
   VideoContentPart,
   FileContentPart,
+  AgentWidgetContextMentionRef,
+  AgentWidgetContentSegment,
+  AgentWidgetContextMentionTokenRenderContext,
   StopReasonKind
 } from "../types";
+import { createMentionTokenElement } from "../utils/mention-token";
 import { createIconButton } from "../utils/buttons";
+import { renderLucideIcon } from "../utils/icons";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "../utils/content";
 import {
   applyStreamBuffer,
@@ -184,6 +189,126 @@ const getMessageFileParts = (message: AgentWidgetMessage): FileContentPart[] => 
       typeof part.data === "string" &&
       part.data.trim().length > 0
   );
+};
+
+/**
+ * Read-only context-mention pills for a sent user bubble (from
+ * `message.contextMentions`). Same compact pill look as the composer chips, but
+ * no spinner / remove control. Returns null when the message carries no mentions.
+ */
+const createMessageMentionChips = (
+  mentions: AgentWidgetContextMentionRef[] | undefined
+): HTMLElement | null => {
+  if (!mentions || mentions.length === 0) return null;
+  const row = createNode("div", {
+    className: "persona-mention-context-row persona-message-mentions",
+    attrs: { "data-message-mentions": "" },
+  });
+  row.style.display = "flex";
+  for (const ref of mentions) {
+    const chip = createNode("div", {
+      className: "persona-mention-chip persona-mention-chip-readonly",
+      attrs: { "data-status": "ready", title: ref.label },
+    });
+    const iconHost = createElement("span", "persona-mention-chip-icon");
+    const icon = renderLucideIcon(ref.iconName ?? "at-sign", 13, "currentColor", 2);
+    if (icon) iconHost.appendChild(icon);
+    chip.appendChild(iconHost);
+    chip.appendChild(
+      createNode("span", { className: "persona-mention-chip-label", text: ref.label })
+    );
+    row.appendChild(chip);
+  }
+  return row;
+};
+
+/**
+ * Render a sent user bubble's prose with atomic mention tokens in place (inline
+ * display mode, from `message.contentSegments`). Text runs become text nodes;
+ * mention segments become read-only pill tokens (shared with the composer, so a
+ * host `renderMentionToken` + per-item `color` apply here too). Display/transcript
+ * concern only — the model saw the resolved bodies via `llmContent`. Returns a
+ * document fragment for `replaceChildren`.
+ */
+export const createMessageInlineMentions = (
+  segments: AgentWidgetContentSegment[],
+  render?: (
+    ctx: AgentWidgetContextMentionTokenRenderContext
+  ) => HTMLElement
+): DocumentFragment => {
+  const frag = document.createDocumentFragment();
+  for (const seg of segments) {
+    if (seg.kind === "text") {
+      frag.appendChild(document.createTextNode(seg.text));
+      continue;
+    }
+    frag.appendChild(
+      createMentionTokenElement(seg.ref, { readonly: true, render })
+    );
+  }
+  return frag;
+};
+
+/* PUA sentinels survive escapeHtml, markdown, and DOMPurify as plain text. */
+const MENTION_PH_OPEN = "\uE000";
+const MENTION_PH_CLOSE = "\uE001";
+
+/**
+ * Render segmented prose through the full message transform (actions, markdown,
+ * postprocess, sanitize): mention slots ride the pipeline as placeholder
+ * sentinels and are swapped for atomic token elements in the parsed output.
+ * Falls back to verbatim segment rendering when a transform drops or rewrites
+ * a slot, so a mention is never lost.
+ */
+export const renderSegmentsWithTransform = (
+  contentDiv: HTMLElement,
+  segments: AgentWidgetContentSegment[],
+  transformSource: (source: string) => string,
+  render?: (
+    ctx: AgentWidgetContextMentionTokenRenderContext
+  ) => HTMLElement
+): void => {
+  // Nonce keeps user-typed sentinel lookalikes from matching a real slot.
+  const nonce = Math.random().toString(36).slice(2, 8);
+  const placeholder = (i: number) =>
+    `${MENTION_PH_OPEN}${nonce}:${i}${MENTION_PH_CLOSE}`;
+  const source = segments
+    .map((seg, i) => (seg.kind === "text" ? seg.text : placeholder(i)))
+    .join("");
+  const html = transformSource(source);
+  // String-level check runs before the parse: a slot that was dropped,
+  // entity-encoded, or split by an inserted tag fails `includes`.
+  const survived = segments.every(
+    (seg, i) => seg.kind === "text" || html.includes(placeholder(i))
+  );
+  if (!survived) {
+    contentDiv.replaceChildren(createMessageInlineMentions(segments, render));
+    return;
+  }
+  contentDiv.innerHTML = html;
+  const pattern = new RegExp(
+    `${MENTION_PH_OPEN}${nonce}:(\\d+)${MENTION_PH_CLOSE}`
+  );
+  const walker = document.createTreeWalker(contentDiv, NodeFilter.SHOW_TEXT);
+  const textNodes: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    textNodes.push(n as Text);
+  }
+  for (const node of textNodes) {
+    let current = node;
+    for (let match = pattern.exec(current.data); match; match = pattern.exec(current.data)) {
+      const seg = segments[Number(match[1])];
+      const after = current.splitText(match.index);
+      after.data = after.data.slice(match[0].length);
+      if (seg?.kind === "mention") {
+        after.parentNode?.insertBefore(
+          createMentionTokenElement(seg.ref, { readonly: true, render }),
+          after
+        );
+      }
+      current = after;
+    }
+  }
 };
 
 const createMessageImagePreviews = (
@@ -820,33 +945,57 @@ export const createStandardBubble = (
       )
     : (message.content ?? "");
 
-  const transformedContent = transform({
-    text: bufferedContent,
-    message,
-    streaming: Boolean(message.streaming),
-    raw: message.rawContent
-  });
-
-  let animatedContent = transformedContent;
-  if (streamAnimationActive && streamPlugin?.wrap === "char") {
-    animatedContent = wrapStreamAnimation(transformedContent, "char", message.id, {
-      skipTags: streamPlugin.skipTags,
+  // Feeds the two text branches below; the inline-mention branch calls the
+  // transform itself with a placeholder-bearing source built from
+  // `contentSegments` instead of `bufferedContent`. Kept lazy so that branch
+  // doesn't pay for output it never reads. `bufferedContent` stays eager —
+  // the streaming skeleton logic reads it.
+  const computeAnimatedContent = (): string => {
+    const transformedContent = transform({
+      text: bufferedContent,
+      message,
+      streaming: Boolean(message.streaming),
+      raw: message.rawContent
     });
-  } else if (streamAnimationActive && streamPlugin?.wrap === "word") {
-    animatedContent = wrapStreamAnimation(transformedContent, "word", message.id, {
-      skipTags: streamPlugin.skipTags,
-    });
-  }
+    if (streamAnimationActive && streamPlugin?.wrap === "char") {
+      return wrapStreamAnimation(transformedContent, "char", message.id, {
+        skipTags: streamPlugin.skipTags,
+      });
+    }
+    if (streamAnimationActive && streamPlugin?.wrap === "word") {
+      return wrapStreamAnimation(transformedContent, "word", message.id, {
+        skipTags: streamPlugin.skipTags,
+      });
+    }
+    return transformedContent;
+  };
 
   let textContentDiv: HTMLElement | null = null;
 
   if (shouldHideTextUntilPreviewFails) {
     textContentDiv = document.createElement("div");
-    textContentDiv.innerHTML = animatedContent;
+    textContentDiv.innerHTML = computeAnimatedContent();
     textContentDiv.style.display = "none";
     contentDiv.appendChild(textContentDiv);
+  } else if (message.contentSegments?.length) {
+    // Inline-mention user bubble: prose runs through the same transform
+    // pipeline as every other bubble (markdown/postprocess/sanitize apply);
+    // mention slots ride through as placeholders and come back as atomic
+    // tokens. The resolved context reached the model via `llmContent`.
+    renderSegmentsWithTransform(
+      contentDiv,
+      message.contentSegments,
+      (source) =>
+        transform({
+          text: source,
+          message,
+          streaming: Boolean(message.streaming),
+          raw: message.rawContent,
+        }),
+      options?.widgetConfig?.contextMentions?.renderMentionToken
+    );
   } else {
-    contentDiv.innerHTML = animatedContent;
+    contentDiv.innerHTML = computeAnimatedContent();
   }
 
   if (
@@ -929,6 +1078,15 @@ export const createStandardBubble = (
     if (filePreviews) {
       bubble.appendChild(filePreviews);
     }
+  }
+
+  // Context mention pills (read-only) for the sent user bubble. Skipped in inline
+  // mode — the tokens render within the prose (above) instead of a separate row.
+  const mentionChips = message.contentSegments?.length
+    ? null
+    : createMessageMentionChips(message.contextMentions);
+  if (mentionChips) {
+    bubble.appendChild(mentionChips);
   }
 
   bubble.appendChild(contentDiv);

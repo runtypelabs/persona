@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { AgentWidgetSession, AgentWidgetSessionStatus } from './session';
-import { AgentWidgetMessage } from './types';
+import { AgentWidgetMessage, AgentWidgetContentSegment } from './types';
 
 describe('AgentWidgetSession - Message Injection', () => {
   let session: AgentWidgetSession;
@@ -369,6 +369,51 @@ describe('AgentWidgetSession - Message Injection', () => {
   });
 });
 
+describe('AgentWidgetSession - inline contentSegments', () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  const makeHangingSession = () => {
+    // A never-settling fetch keeps the turn in-flight so the appended user
+    // message can be inspected without a dispatch-error bubble replacing it.
+    global.fetch = vi.fn().mockImplementation(() => new Promise(() => {}));
+    return new AgentWidgetSession(
+      { apiUrl: 'http://example.invalid/chat' },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+      }
+    );
+  };
+
+  it('stores ordered contentSegments on the sent user message', () => {
+    const session = makeHangingSession();
+    const segments: AgentWidgetContentSegment[] = [
+      { kind: 'text', text: 'Check ' },
+      { kind: 'mention', ref: { sourceId: 'files', itemId: 'app', label: 'App.tsx' } },
+      { kind: 'text', text: ' please' },
+    ];
+    void session.sendMessage('Check @App.tsx please', {
+      contentSegments: segments,
+    });
+    const userMsg = session.getMessages().find((m) => m.role === 'user');
+    // Segments must land on the stored (sequence-normalized) copy, not just the
+    // orphaned input literal — this is the fix for the dead inline-token branch.
+    expect(userMsg?.contentSegments).toEqual(segments);
+  });
+
+  it('omits contentSegments for a plain message', () => {
+    const session = makeHangingSession();
+    void session.sendMessage('plain message');
+    const userMsg = session.getMessages().find((m) => m.role === 'user');
+    expect(userMsg?.contentSegments).toBeUndefined();
+  });
+});
+
 describe('AgentWidgetSession - cancel()', () => {
   const originalFetch = global.fetch;
 
@@ -404,9 +449,12 @@ describe('AgentWidgetSession - cancel()', () => {
 
     // Kick off the dispatch but don't await: we want it in-flight when we cancel.
     const dispatchPromise = session.sendMessage('Hello');
-    // Let the session set up the AbortController and call fetch.
-    await Promise.resolve();
-    await Promise.resolve();
+    // Drain microtasks until the session has set up the AbortController and
+    // called fetch (payload building is async, so the exact tick count is not a
+    // contract — wait for the observable effect instead).
+    for (let i = 0; i < 20 && capturedSignal === null; i++) {
+      await Promise.resolve();
+    }
 
     expect(streaming).toBe(true);
     expect(session.isStreaming()).toBe(true);

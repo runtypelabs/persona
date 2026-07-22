@@ -1182,6 +1182,66 @@ export class AgentWidgetClient {
     });
   }
 
+  /**
+   * The opt-in structured mention channel: the MOST RECENT user turn's
+   * `mentionContext` (set by `session.applyMentionBundle`) namespaced under
+   * `mentions`. Only the latest user message is consulted — otherwise an older
+   * turn's mentions would re-attach to `context.mentions` on every later send.
+   * Returns null when the latest user turn carried no structured mention context.
+   * The default model-visible path (`llmAppend`) already rode into the message's
+   * `llmContent`/`contentParts`, so it needs nothing here.
+   */
+  private latestMentionContext(
+    messages: AgentWidgetMessage[]
+  ): Record<string, unknown> | null {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role !== "user") continue;
+      // First user message from the end IS the latest user turn: use its
+      // mention context if any, and never look further back.
+      if (m.mentionContext && Object.keys(m.mentionContext).length > 0) {
+        return { mentions: m.mentionContext };
+      }
+      return null;
+    }
+    return null;
+  }
+
+  /**
+   * Aggregate request `context`: merge every context provider's result with the
+   * opt-in mention context from the latest user turn. Returns null when nothing
+   * contributed, so callers can skip setting `payload.context`. Shared by the
+   * agent and flow payload builders.
+   */
+  private async buildContextAggregate(
+    messages: AgentWidgetMessage[]
+  ): Promise<Record<string, unknown> | null> {
+    const contextAggregate: Record<string, unknown> = {};
+    if (this.contextProviders.length) {
+      await Promise.all(
+        this.contextProviders.map(async (provider) => {
+          try {
+            const result = await provider({
+              messages,
+              config: this.config
+            });
+            if (result && typeof result === "object") {
+              Object.assign(contextAggregate, result);
+            }
+          } catch (error) {
+            if (typeof console !== "undefined") {
+              // eslint-disable-next-line no-console
+              console.warn("[AgentWidget] Context provider failed:", error);
+            }
+          }
+        })
+      );
+    }
+    const mentionContext = this.latestMentionContext(messages);
+    if (mentionContext) Object.assign(contextAggregate, mentionContext);
+    return Object.keys(contextAggregate).length ? contextAggregate : null;
+  }
+
   private async buildAgentPayload(
     messages: AgentWidgetMessage[]
   ): Promise<AgentWidgetAgentRequestPayload> {
@@ -1231,32 +1291,9 @@ export class AgentWidgetClient {
       payload.clientTools = clientTools;
     }
 
-    // Add context from providers
-    if (this.contextProviders.length) {
-      const contextAggregate: Record<string, unknown> = {};
-      await Promise.all(
-        this.contextProviders.map(async (provider) => {
-          try {
-            const result = await provider({
-              messages,
-              config: this.config
-            });
-            if (result && typeof result === "object") {
-              Object.assign(contextAggregate, result);
-            }
-          } catch (error) {
-            if (typeof console !== "undefined") {
-              // eslint-disable-next-line no-console
-              console.warn("[AgentWidget] Context provider failed:", error);
-            }
-          }
-        })
-      );
-
-      if (Object.keys(contextAggregate).length) {
-        payload.context = contextAggregate;
-      }
-    }
+    // Add context from providers + opt-in mention context.
+    const contextAggregate = await this.buildContextAggregate(messages);
+    if (contextAggregate) payload.context = contextAggregate;
 
     return payload;
   }
@@ -1311,31 +1348,8 @@ export class AgentWidgetClient {
       payload.clientTools = clientTools;
     }
 
-    if (this.contextProviders.length) {
-      const contextAggregate: Record<string, unknown> = {};
-      await Promise.all(
-        this.contextProviders.map(async (provider) => {
-          try {
-            const result = await provider({
-              messages,
-              config: this.config
-            });
-            if (result && typeof result === "object") {
-              Object.assign(contextAggregate, result);
-            }
-          } catch (error) {
-            if (typeof console !== "undefined") {
-              // eslint-disable-next-line no-console
-              console.warn("[AgentWidget] Context provider failed:", error);
-            }
-          }
-        })
-      );
-
-      if (Object.keys(contextAggregate).length) {
-        payload.context = contextAggregate;
-      }
-    }
+    const contextAggregate = await this.buildContextAggregate(messages);
+    if (contextAggregate) payload.context = contextAggregate;
 
     if (this.requestMiddleware) {
       try {

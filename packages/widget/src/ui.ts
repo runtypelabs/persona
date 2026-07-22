@@ -30,9 +30,16 @@ import {
   PersonaArtifactRecord,
   PersonaArtifactManualUpsert,
   PersonaArtifactFileMeta,
-  PersonaArtifactActionContext
+  PersonaArtifactActionContext,
+  AgentWidgetContentSegment,
+  AgentWidgetContextMentionRef
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
+import {
+  createContextMentionOrchestrator,
+  type ContextMentionOrchestrator,
+} from "./utils/context-mention-orchestrator";
+import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
@@ -535,6 +542,35 @@ function buildDropOverlay(
   return overlay;
 }
 
+// Deep-merge two mention context maps (`{ [sourceId]: { [itemId]: unknown } }`).
+// A source contributing to both bundles keeps BOTH per-item maps; a shallow
+// spread would let one sourceId's inner map wholesale replace the other's.
+export const mergeMentionContext = (
+  a: MentionSubmitBundle["context"],
+  b: MentionSubmitBundle["context"]
+): MentionSubmitBundle["context"] => {
+  const out: MentionSubmitBundle["context"] = { ...a };
+  for (const [sourceId, items] of Object.entries(b)) {
+    const existing = out[sourceId];
+    out[sourceId] = existing ? { ...existing, ...items } : items;
+  }
+  return out;
+};
+
+// Concatenate the fulfilled halves of two finalize() results (either may be
+// absent when its side rejected), deep-merging their per-source context.
+export const mergeFinalizedMentions = (
+  bundles: MentionSubmitBundle[]
+): MentionSubmitBundle =>
+  bundles.reduce<MentionSubmitBundle>(
+    (acc, b) => ({
+      blocks: [...acc.blocks, ...b.blocks],
+      contentParts: [...acc.contentParts, ...b.contentParts],
+      context: mergeMentionContext(acc.context, b.context),
+    }),
+    { blocks: [], contentParts: [], context: {} }
+  );
+
 export const createAgentExperience = (
   mount: HTMLElement,
   initialConfig?: AgentWidgetConfig,
@@ -840,9 +876,13 @@ export const createAgentExperience = (
     header,
     footer,
     actionsRow: _actionsRow,
-    leftActions,
     rightActions
   } = panelElements;
+  // Nullable + reassignable: a plugin `replaceComposer` swaps the footer, and
+  // `bindComposerRefsFromFooter` must repoint this at the NEW left-action
+  // cluster (or null it so the composerForm fallback fires) — a stale ref would
+  // insert the mention/attachment buttons into the detached old subtree.
+  let leftActions: HTMLElement | null = panelElements.leftActions;
   let setSendButtonMode = panelElements.setSendButtonMode;
 
   // Use mutable references for mic button so we can update them dynamically
@@ -981,6 +1021,9 @@ export const createAgentExperience = (
 
   // Initialized after composer plugins rebind footer DOM (see `bindComposerRefsFromFooter`)
   let attachmentManager: AttachmentManager | null = null;
+  // Context mentions orchestrator (core, tiny); lazy-loads the heavy runtime on
+  // first use. Null when `contextMentions` is disabled / has no sources.
+  let mentionOrchestrator: ContextMentionOrchestrator | null = null;
 
   /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
   let composerVoiceBridge: (() => void) | null = null;
@@ -1251,6 +1294,10 @@ export const createAgentExperience = (
       ".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between"
     );
     if (ar) _actionsRow = ar;
+    // Rebind the left-action cluster to the NEW footer (both composer builders
+    // ship this class). Assign unconditionally: when a custom plugin composer
+    // has no left cluster, null lets the button-insert fall back to the form.
+    leftActions = pick<HTMLElement>(".persona-widget-composer__left-actions");
   };
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
@@ -1301,6 +1348,49 @@ export const createAgentExperience = (
     const dropCfg = config.attachments.dropOverlay;
     const overlay = buildDropOverlay(dropCfg);
     container.appendChild(overlay);
+  }
+
+  // Context mentions: render the affordance button + chip row eagerly (so the
+  // feature is discoverable) and lazy-load the heavy runtime on first use. The
+  // orchestrator returns null when disabled or sourceless.
+  const mentionPrefetch = () => mentionOrchestrator?.prefetch();
+  if (config.contextMentions?.enabled && textarea) {
+    // Slash-command dispatch (prompt macros write text / submit; client actions
+    // read/replace the value) and submission are owned by the composer input
+    // surface itself — the mention runtime builds a textarea (chip) or
+    // contenteditable (inline) adapter from this textarea. Broader host actions
+    // (clear transcript, theme) are still wired via closures over the controller.
+    mentionOrchestrator = createContextMentionOrchestrator({
+      config,
+      textarea,
+      anchor: composerForm ?? textarea,
+      getMessages: () => session.getMessages(),
+      // The engine chunk creates the mention live regions in this container on
+      // mount, keeping the live-region helper out of the core bundle.
+      liveRegionHost: container,
+    });
+
+    if (mentionOrchestrator) {
+      // Chip row sits directly above the textarea.
+      const ta = textarea;
+      ta.parentElement?.insertBefore(mentionOrchestrator.contextRow, ta);
+      // Each channel's "add context" affordance is a secondary control that
+      // augments the outgoing message, so it joins the LEFT action cluster
+      // (beside the attachment button) — never the right cluster with mic +
+      // send. Buttons are inserted leftmost in channel order so they read as
+      // "add to my message" and stay clear of the primary send action. Both
+      // composer builders (full + pill) always ship `leftActions`; the form
+      // fallback is purely defensive.
+      const buttons = mentionOrchestrator.affordanceButtons;
+      for (let i = buttons.length - 1; i >= 0; i--) {
+        const btn = buttons[i];
+        if (leftActions) leftActions.insertBefore(btn, leftActions.firstChild);
+        else composerForm?.appendChild(btn);
+      }
+      // The focus-prefetch listener (warm the chunk on first focus so the first
+      // `@` is instant) is registered through the shared `composerListeners`
+      // registry below, so it survives the inline contenteditable swap too.
+    }
   }
 
   // Slot system: allow custom content injection into specific regions
@@ -6174,6 +6264,145 @@ export const createAgentExperience = (
     setOpenState(true, "auto");
   };
 
+  // Combine `@`-chip mentions with an inline server-command's context bundle so
+  // both reach the message in one `mentions` payload. Either side may be null.
+  type SubmitMentions = NonNullable<
+    ReturnType<NonNullable<typeof mentionOrchestrator>["collectForSubmit"]>
+  >;
+  const mergeSubmitMentions = (
+    a: SubmitMentions | null,
+    b: SubmitMentions | null
+  ): SubmitMentions | null => {
+    if (!a) return b;
+    if (!b) return a;
+    return {
+      refs: [...a.refs, ...b.refs],
+      // allSettled, not all: one side rejecting must not discard the other
+      // side's already-resolved context (the bubble already echoed its chips).
+      finalize: async () => {
+        const [ra, rb] = await Promise.allSettled([a.finalize(), b.finalize()]);
+        const fulfilled: MentionSubmitBundle[] = [];
+        if (ra.status === "fulfilled") fulfilled.push(ra.value);
+        else console.warn("[Persona] a mention bundle failed to finalize; sending without it", ra.reason);
+        if (rb.status === "fulfilled") fulfilled.push(rb.value);
+        else console.warn("[Persona] a mention bundle failed to finalize; sending without it", rb.reason);
+        return mergeFinalizedMentions(fulfilled);
+      },
+    };
+  };
+
+  // Inline-mode composer element: after the contenteditable swap, `textarea`
+  // additionally exposes `getInlineMessageFields()` (built in the inline chunk,
+  // which owns the document model — the core never imports it). Structural shape
+  // only, so no runtime import crosses the bundle boundary.
+  type InlineComposerFieldsHost = {
+    getInlineMessageFields?: () => {
+      content: string;
+      contextMentions: AgentWidgetContextMentionRef[];
+      contentSegments: AgentWidgetContentSegment[];
+    };
+  };
+  // Read the ordered display segments from the live inline composer, but only
+  // when at least one mention is present: a plain-text inline message must keep
+  // the normal markdown-rendered bubble (segments bypass that path), so we return
+  // undefined for pure prose and let the bubble render `content` as usual.
+  const readInlineContentSegments = (): AgentWidgetContentSegment[] | undefined => {
+    const host = textarea as unknown as InlineComposerFieldsHost;
+    const fields = host.getInlineMessageFields?.();
+    if (!fields) return undefined;
+    const hasMention = fields.contentSegments.some((s) => s.kind === "mention");
+    return hasMention ? fields.contentSegments : undefined;
+  };
+
+  // Re-entrancy guard for the async submit path: `takeInlineCommand` awaits (a
+  // lazy chunk load + host resolve) before the composer clears, and
+  // `isStreaming()` is still false in that window, so a second Enter would
+  // otherwise dispatch the same text/command twice.
+  let submitInFlight = false;
+
+  const performSubmit = async (submitOptions?: { viaVoice?: boolean }) => {
+    const value = textarea.value.trim();
+    const hasAttachments = attachmentManager?.hasAttachments() ?? false;
+
+    // Inline slash command (Slack-style): every `command:"server"` plus any
+    // arg-bearing prompt/action. Resolve FIRST — a prompt command changes the
+    // text to send, and an action sends nothing at all.
+    const inline = value
+      ? await (mentionOrchestrator?.takeInlineCommand(value) ?? Promise.resolve(null))
+      : null;
+
+    if (inline?.kind === "action") {
+      // Ran in the browser; nothing to send. Clear the composer + any chips.
+      textarea.value = "";
+      textarea.style.height = "auto";
+      resetHistoryNavigation();
+      mentionOrchestrator?.clear();
+      return;
+    }
+
+    // Gather `@`-chip mentions synchronously (detaches chips + captures composer
+    // text before clearing); `finalize()` resolves them inside `sendMessage`.
+    const chipMentions = mentionOrchestrator?.collectForSubmit() ?? null;
+    const serverMentions = inline?.kind === "server" ? inline.mentions : null;
+    const mentions = mergeSubmitMentions(chipMentions, serverMentions);
+    // A prompt command replaces the outgoing text with its resolved macro.
+    const sendText = inline?.kind === "prompt" ? inline.sendText : value;
+
+    const hasChips = !!chipMentions && chipMentions.refs.length > 0;
+    // Must have text, attachments, chips, or an inline server command's context.
+    if (!sendText && !hasAttachments && !hasChips && !serverMentions) return;
+
+    maybeExpandComposerBar();
+
+    // Build content parts if there are attachments
+    let contentParts: ContentPart[] | undefined;
+    if (hasAttachments) {
+      contentParts = [];
+      // Add image parts first
+      contentParts.push(...attachmentManager!.getContentParts());
+      // Add text part if there's text
+      if (sendText) {
+        contentParts.push(createTextPart(sendText));
+      }
+    }
+
+    // Capture the inline display segments BEFORE clearing the composer (clearing
+    // rebuilds the document as empty text). Only set when a `prompt` macro didn't
+    // replace the outgoing text — a macro's segments no longer match `sendText`.
+    const contentSegments =
+      inline?.kind === "prompt" ? undefined : readInlineContentSegments();
+
+    textarea.value = "";
+    textarea.style.height = "auto"; // Reset height after clearing
+    resetHistoryNavigation();
+
+    // Send message with optional content parts + mentions
+    session.sendMessage(sendText, {
+      contentParts,
+      mentions: mentions ?? undefined,
+      contentSegments,
+      viaVoice: submitOptions?.viaVoice,
+    });
+
+    // Clear attachments + mention chips after sending
+    if (hasAttachments) {
+      attachmentManager!.clearAttachments();
+    }
+    if (chipMentions) {
+      mentionOrchestrator?.clear();
+    }
+  };
+
+  const doSubmit = async (submitOptions?: { viaVoice?: boolean }) => {
+    if (submitInFlight) return;
+    submitInFlight = true;
+    try {
+      await performSubmit(submitOptions);
+    } finally {
+      submitInFlight = false;
+    }
+  };
+
   const handleSubmit = (event: Event) => {
     event.preventDefault();
 
@@ -6189,37 +6418,8 @@ export const createAgentExperience = (
       return;
     }
 
-    const value = textarea.value.trim();
-    const hasAttachments = attachmentManager?.hasAttachments() ?? false;
-
-    // Must have text or attachments to send
-    if (!value && !hasAttachments) return;
-
-    maybeExpandComposerBar();
-
-    // Build content parts if there are attachments
-    let contentParts: ContentPart[] | undefined;
-    if (hasAttachments) {
-      contentParts = [];
-      // Add image parts first
-      contentParts.push(...attachmentManager!.getContentParts());
-      // Add text part if there's text
-      if (value) {
-        contentParts.push(createTextPart(value));
-      }
-    }
-
-    textarea.value = "";
-    textarea.style.height = "auto"; // Reset height after clearing
-    resetHistoryNavigation();
-
-    // Send message with optional content parts
-    session.sendMessage(value, { contentParts });
-
-    // Clear attachments after sending
-    if (hasAttachments) {
-      attachmentManager!.clearAttachments();
-    }
+    if (submitInFlight) return;
+    void doSubmit();
   };
 
   // --- Composer message-history navigation (Up/Down arrows) ---
@@ -6258,14 +6458,29 @@ export const createAgentExperience = (
     textarea.setSelectionRange(end, end);
   };
 
-  const handleComposerInput = () => {
-    // A real edit leaves history-navigation mode.
+  const handleComposerInput = (event: Event) => {
+    // The synthetic input from history recall (guarded by `suppressHistoryReset`)
+    // is not user typing: it must neither open the mention menu (an undefined
+    // inputType reads as menu-opening) nor exit history-navigation mode.
     if (suppressHistoryReset) return;
+    // Drive the mention menu (open/update/close) + lazy-load on first trigger.
+    // Skip while an IME composition is active: the intermediate value isn't the
+    // user's committed text, so it must not open or filter the menu.
+    if (!(event as InputEvent).isComposing) {
+      mentionOrchestrator?.handleInput((event as InputEvent).inputType ?? undefined);
+    }
+    // A real edit leaves history-navigation mode.
     resetHistoryNavigation();
   };
 
   const handleComposerKeydown = (event: KeyboardEvent) => {
     if (!textarea) return;
+
+    // Mention menu takes precedence when open (↑/↓ nav, Enter/Tab select, Esc
+    // close) and handles Backspace-removes-last-chip on an empty composer. One
+    // handler, no competing capture-phase listener. Skip during IME composition
+    // so Enter-to-confirm-composition isn't swallowed as a menu selection.
+    if (!event.isComposing && mentionOrchestrator?.handleKeydown(event)) return;
 
     // Up/Down: walk through previously sent user messages.
     if (
@@ -6301,6 +6516,12 @@ export const createAgentExperience = (
     // inert (never a stop trigger): the visible Stop button / Esc stop it.
     if (event.key === "Enter" && !event.shiftKey) {
       if (session.isStreaming()) {
+        event.preventDefault();
+        return;
+      }
+      // A submit is already awaiting its async pre-send work; a second Enter in
+      // that window would dispatch the same text twice.
+      if (submitInFlight) {
         event.preventDefault();
         return;
       }
@@ -6409,9 +6630,11 @@ export const createAgentExperience = (
           const finalValue = textarea.value.trim();
           if (finalValue && speechRecognition && isRecording) {
             stopVoiceRecognition();
-            textarea.value = "";
-            textarea.style.height = "auto"; // Reset height after clearing
-            session.sendMessage(finalValue, { viaVoice: true });
+            // Route through the normal submit path so mentions are collected +
+            // cleared like a manual send (the transcript already lives in the
+            // composer). Sending directly would leave stale tracked mention
+            // context to attach to the next unrelated message.
+            void doSubmit({ viaVoice: true });
           }
         }, pauseDuration);
       }
@@ -6429,9 +6652,9 @@ export const createAgentExperience = (
       if (isRecording) {
         const finalValue = textarea.value.trim();
         if (finalValue && finalValue !== initialText.trim()) {
-          textarea.value = "";
-          textarea.style.height = "auto"; // Reset height after clearing
-          session.sendMessage(finalValue, { viaVoice: true });
+          // Route through the normal submit path (mentions collect + clear), same
+          // as the pause-timer branch above.
+          void doSubmit({ viaVoice: true });
         }
         stopVoiceRecognition();
       }
@@ -7313,9 +7536,43 @@ export const createAgentExperience = (
   if (composerForm) {
     composerForm.addEventListener("submit", handleSubmit);
   }
-  textarea?.addEventListener("keydown", handleComposerKeydown);
-  textarea?.addEventListener("input", handleComposerInput);
-  textarea?.addEventListener("paste", handleInputPaste);
+
+  // Single registry of composer listeners. The initial attach and the inline
+  // contenteditable swap-reattach both consume this array, so a listener added
+  // here is mechanically included in both — no hand-maintained enumeration to
+  // drift. Add new composer listeners here, not as ad-hoc addEventListener calls.
+  type ComposerListener = [event: string, handler: (event: Event) => void];
+  const composerListeners: ComposerListener[] = [
+    ["keydown", handleComposerKeydown as unknown as (event: Event) => void],
+    ["input", handleComposerInput as (event: Event) => void],
+    ["paste", handleInputPaste as unknown as (event: Event) => void],
+    // Warm the mention chunk on first focus so the first `@` is instant.
+    ["focus", mentionPrefetch as (event: Event) => void],
+  ];
+  const attachComposerListeners = (el: HTMLElement | null): void => {
+    if (!el) return;
+    for (const [event, handler] of composerListeners) {
+      el.addEventListener(event, handler);
+    }
+  };
+  const detachComposerListeners = (el: HTMLElement | null): void => {
+    if (!el) return;
+    for (const [event, handler] of composerListeners) {
+      el.removeEventListener(event, handler);
+    }
+  };
+
+  attachComposerListeners(textarea);
+
+  // Inline mention mode swaps the textarea for a contenteditable surface (loaded
+  // lazily). When that happens, move the composer listeners onto the new element
+  // and repoint `textarea` (the swapped element shims the textarea API the rest of
+  // the composer code relies on). Fires immediately if the swap already occurred.
+  mentionOrchestrator?.onComposerSwap((next, prev) => {
+    detachComposerListeners(prev);
+    textarea = next as unknown as HTMLTextAreaElement;
+    attachComposerListeners(next);
+  });
 
   const escStopDoc = mount.ownerDocument ?? document;
   escStopDoc.addEventListener("keydown", handleEscStop, true);
@@ -7396,10 +7653,9 @@ export const createAgentExperience = (
     if (composerForm) {
       composerForm.removeEventListener("submit", handleSubmit);
     }
-    textarea?.removeEventListener("keydown", handleComposerKeydown);
-    textarea?.removeEventListener("input", handleComposerInput);
-    textarea?.removeEventListener("paste", handleInputPaste);
+    detachComposerListeners(textarea);
     escStopDoc.removeEventListener("keydown", handleEscStop, true);
+    mentionOrchestrator?.destroy();
   });
 
   destroyCallbacks.push(() => {
@@ -8441,19 +8697,11 @@ export const createAgentExperience = (
           attachmentButton.style.minHeight = attachIconSize;
           attachmentButton.style.fontSize = "18px";
           attachmentButton.style.lineHeight = "1";
-          attachmentButton.style.backgroundColor = "transparent";
-          attachmentButton.style.color = "var(--persona-primary, #111827)";
-          attachmentButton.style.border = "none";
-          attachmentButton.style.borderRadius = "6px";
-          attachmentButton.style.transition = "background-color 0.15s ease";
-
-          // Add hover effect via mouseenter/mouseleave
-          attachmentButton.addEventListener("mouseenter", () => {
-            attachmentButton!.style.backgroundColor = "var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.05))";
-          });
-          attachmentButton.addEventListener("mouseleave", () => {
-            attachmentButton!.style.backgroundColor = "transparent";
-          });
+          // Appearance (bg / fg / border / radius / hover) is themed from the
+          // shared `.persona-attachment-button` CSS rule via the
+          // `--persona-button-ghost-*` tokens — matching the static
+          // createAttachmentControls path. Only sizing stays inline here so
+          // this runtime-created button restyles identically to the built-in one.
 
           const attachIconSvg = renderLucideIcon(attachIconName, attachIconSizeNum, "currentColor", 1.5);
           if (attachIconSvg) {
@@ -8475,8 +8723,10 @@ export const createAgentExperience = (
           tooltip.textContent = attachTooltipText;
           attachmentButtonWrapper.appendChild(tooltip);
 
-          // Insert into left actions container
-          leftActions.append(attachmentButtonWrapper);
+          // Insert into left actions container (fall back to the form when a
+          // custom composer has no left cluster).
+          if (leftActions) leftActions.append(attachmentButtonWrapper);
+          else composerForm.appendChild(attachmentButtonWrapper);
 
           // Initialize attachment manager
           if (!attachmentManager && attachmentInput && attachmentPreviewsContainer) {

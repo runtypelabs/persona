@@ -40,10 +40,16 @@ import {
   type SmartDomAdapterOptions
 } from "./utils/smart-dom-adapter";
 import { formatEnrichedContext, type EnrichedPageElement } from "./utils/dom-context";
-import type { AgentWidgetContextProvider } from "./types";
+import { defaultMentionFilter } from "./utils/mention-matcher";
+import type {
+  AgentWidgetContextProvider,
+  AgentWidgetContextMentionItem,
+  AgentWidgetContextMentionSource,
+} from "./types";
 
 export { smartDomResultToEnriched };
 export type { SmartDomAdapterOptions } from "./utils/smart-dom-adapter";
+export type { EnrichedPageElement } from "./utils/dom-context";
 
 /** Options for {@link collectSmartDomContext} and {@link createSmartDomReaderContextProvider}. */
 export interface SmartDomContextOptions extends SmartDomAdapterOptions {
@@ -130,5 +136,125 @@ export function createSmartDomReaderContextProvider(
     const elements = collectSmartDomContext(opts);
     if (elements.length === 0) return {};
     return { [contextKey]: formatEnrichedContext(elements) };
+  };
+}
+
+/** Options for {@link createSmartDomMentionSource}. */
+export interface SmartDomMentionSourceOptions extends SmartDomContextOptions {
+  /** Source id. Default: "page". */
+  id?: string;
+  /** Group header shown in the menu. Default: "Page". */
+  label?: string;
+  /**
+   * Reshape each surfaced element into a mention item. Receives the raw
+   * {@link EnrichedPageElement} and the default-mapped item, so you can tweak
+   * one field (`{ ...defaultItem, iconName: "star" }`) or build from scratch.
+   * The returned item's `id` MUST stay a selector `resolve()` can read at submit
+   * (default: `el.selector`) unless you also override resolution. @default built-in mapping
+   */
+  mapItem?: (
+    el: EnrichedPageElement,
+    defaultItem: AgentWidgetContextMentionItem
+  ) => AgentWidgetContextMentionItem;
+}
+
+// Empty-query snapshot reuse window: the full Shadow-DOM-piercing scan is
+// synchronous and runs inside the keystroke handler, so rescanning on every `@`
+// / backspace-to-empty stalls the input. Reuse a snapshot this fresh; rescan
+// past it so a menu opened after page changes still sees current content.
+const SNAPSHOT_TTL_MS = 2000;
+
+const iconForInteractivity = (kind: EnrichedPageElement["interactivity"]): string => {
+  switch (kind) {
+    case "clickable":
+      return "mouse-pointer-click";
+    case "input":
+      return "text-cursor-input";
+    case "navigable":
+      return "link";
+    default:
+      return "text";
+  }
+};
+
+const elementToMentionItem = (
+  el: EnrichedPageElement
+): AgentWidgetContextMentionItem => {
+  const ariaLabel = el.attributes["aria-label"];
+  const raw = (ariaLabel || el.text || el.tagName).trim();
+  const label = raw.length > 48 ? `${raw.slice(0, 47)}…` : raw || el.tagName;
+  const descParts = [el.role ?? el.tagName, el.interactivity].filter(Boolean);
+  return {
+    id: el.selector, // stable key + the selector resolve() reads at submit
+    label,
+    description: descParts.join(" · "),
+    iconName: iconForInteractivity(el.interactivity),
+    group: undefined,
+  };
+};
+
+/**
+ * First-class **supported** mention source backed by smart-dom-reader: surfaces
+ * visible page elements (Shadow-DOM-piercing) as mentionable items, resolving a
+ * fresh snapshot of the chosen element's text at SUBMIT (`resolveOn: "submit"`),
+ * since the page is time-sensitive. The element list is snapshotted when the
+ * menu opens (empty query) and filtered client-side with `defaultMentionFilter`
+ * as the user types.
+ *
+ * @example
+ * ```ts
+ * import { createSmartDomMentionSource } from "@runtypelabs/persona/smart-dom-reader";
+ *
+ * initAgentWidget({
+ *   contextMentions: { enabled: true, sources: [createSmartDomMentionSource()] },
+ * });
+ * ```
+ */
+export function createSmartDomMentionSource(
+  opts: SmartDomMentionSourceOptions = {}
+): AgentWidgetContextMentionSource {
+  const id = opts.id ?? "page";
+  const label = opts.label ?? "Page";
+  let snapshot: AgentWidgetContextMentionItem[] | null = null;
+  let capturedAt = 0;
+
+  const rescan = (): AgentWidgetContextMentionItem[] => {
+    const items = collectSmartDomContext(opts).map((el) => {
+      const defaultItem = elementToMentionItem(el);
+      return opts.mapItem ? opts.mapItem(el, defaultItem) : defaultItem;
+    });
+    capturedAt = Date.now();
+    return items;
+  };
+
+  return {
+    id,
+    label,
+    resolveOn: "submit",
+    search: (query) => {
+      // Rescan on empty query only when there's no snapshot or it's staler than
+      // the TTL; reopening the menu quickly reuses the snapshot, keystrokes always
+      // filter the existing one, so we never re-scan mid-typing.
+      const stale = !snapshot || Date.now() - capturedAt > SNAPSHOT_TTL_MS;
+      if (!snapshot || (query === "" && stale)) {
+        snapshot = rescan();
+      }
+      return defaultMentionFilter(snapshot, query);
+    },
+    resolve: (item) => {
+      const doc =
+        opts.document ?? (typeof document !== "undefined" ? document : undefined);
+      let text = "";
+      try {
+        const el = doc?.querySelector(item.id);
+        text = el?.textContent?.trim() ?? "";
+      } catch {
+        /* invalid selector at resolve time — fall through to label only */
+      }
+      return {
+        llmAppend: `Page element "${item.label}" (${item.id}):\n${text || "(no text)"}`,
+        context: { selector: item.id },
+      };
+    },
   };
 }

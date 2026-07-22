@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "160 kB",
+    "limit": "158 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "160 kB",
+    "limit": "158 kB",
     "gzip": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "135 kB",
+    "limit": "136 kB",
     "gzip": true
   },
   {
@@ -75,6 +75,18 @@
     "name": "Lazy · Runtype TTS engine chunk (runtype-tts.js)",
     "path": "dist/runtype-tts.js",
     "limit": "4 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · context-mentions + slash-commands chunk (context-mentions.js)",
+    "path": "dist/context-mentions.js",
+    "limit": "18.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · inline-mention contenteditable chunk (context-mentions-inline.js)",
+    "path": "dist/context-mentions-inline.js",
+    "limit": "6 kB",
     "gzip": true
   }
 ]

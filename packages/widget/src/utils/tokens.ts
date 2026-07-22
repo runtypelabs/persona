@@ -263,6 +263,9 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       foreground: 'semantic.colors.text',
       borderRadius: 'palette.radius.md',
       padding: 'semantic.spacing.sm',
+      // Subtle neutral tint on hover — the composer's transparent icon buttons
+      // (attachment, mention) read this via `--persona-button-ghost-hover-bg`.
+      hoverBackground: 'rgba(0, 0, 0, 0.05)',
     },
   },
   input: {
@@ -326,12 +329,12 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     border: 'semantic.colors.border',
   },
   introCard: {
-    // Defaults preserve the legacy `persona-shadow-sm` look exactly so existing
-    // pages render unchanged when no token is set.
-    background: 'semantic.colors.surface',
+    // Flat by default: the greeting reads as plain text on the transcript
+    // background (the industry norm), not an elevated card.
+    background: 'transparent',
     borderRadius: 'palette.radius.2xl',
     padding: 'semantic.spacing.lg',
-    shadow: '0 5px 15px rgba(15, 23, 42, 0.08)',
+    shadow: 'palette.shadows.none',
   },
   toolBubble: {
     shadow: 'palette.shadows.sm',
@@ -739,6 +742,21 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-button-primary-borderRadius'] ??
     cssVars['--persona-palette-radius-full'] ??
     '9999px';
+  // Ghost variant: transparent, neutral-foreground icon buttons (the composer's
+  // attachment + mention affordances). Wired to `components.button.ghost.*`.
+  cssVars['--persona-button-ghost-bg'] =
+    cssVars['--persona-components-button-ghost-background'] ??
+    'transparent';
+  cssVars['--persona-button-ghost-fg'] =
+    cssVars['--persona-components-button-ghost-foreground'] ??
+    cssVars['--persona-text'];
+  cssVars['--persona-button-ghost-radius'] =
+    cssVars['--persona-components-button-ghost-borderRadius'] ??
+    cssVars['--persona-radius-md'] ??
+    '0.375rem';
+  cssVars['--persona-button-ghost-hover-bg'] =
+    cssVars['--persona-components-button-ghost-hoverBackground'] ??
+    'rgba(0, 0, 0, 0.05)';
   cssVars['--persona-panel-radius'] =
     cssVars['--persona-components-panel-borderRadius'] ??
     cssVars['--persona-radius-xl'] ??
@@ -791,19 +809,17 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   if (headerTokens?.borderBottom) cssVars['--persona-header-border-bottom'] = headerTokens.borderBottom;
 
   // Intro card aliases: short names the panel inline-styles read directly.
-  // The full-path `--persona-components-introCard-*` variables auto-emit above;
-  // these mirror them with sensible fallbacks so existing pages keep their look.
-  const introCardTokens = theme.components?.introCard;
+  // The full-path `--persona-components-introCard-*` variables auto-emit above.
+  // Default is flat (transparent, no shadow): the greeting renders as plain
+  // text on the transcript background; set introCard tokens for a card look.
   cssVars['--persona-intro-card-bg'] =
-    cssVars['--persona-components-introCard-background'] ?? cssVars['--persona-surface'];
+    cssVars['--persona-components-introCard-background'] ?? 'transparent';
   cssVars['--persona-intro-card-radius'] =
     cssVars['--persona-components-introCard-borderRadius'] ?? '1rem';
   cssVars['--persona-intro-card-padding'] =
     cssVars['--persona-components-introCard-padding'] ?? '1.5rem';
   cssVars['--persona-intro-card-shadow'] =
-    introCardTokens?.shadow
-      ?? cssVars['--persona-components-introCard-shadow']
-      ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
+    cssVars['--persona-components-introCard-shadow'] ?? 'none';
 
   cssVars['--persona-input-background'] =
     cssVars['--persona-components-input-background'] ?? cssVars['--persona-surface'];

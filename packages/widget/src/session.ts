@@ -27,7 +27,7 @@ import {
   generateUserMessageId,
   generateAssistantMessageId
 } from "./utils/message-id";
-import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT } from "./utils/content";
+import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, createTextPart, hasImages } from "./utils/content";
 import {
   buildArtifactRefRawContent,
   resolveArtifactDisplayMode
@@ -37,8 +37,11 @@ import type {
   VoiceStatus,
   VoiceConfig,
   ReadAloudState,
-  SpeechEngine
+  SpeechEngine,
+  AgentWidgetContentSegment,
+  AgentWidgetContextMentionRef
 } from "./types";
+import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import {
   createVoiceProvider,
   isVoiceSupported,
@@ -1129,17 +1132,92 @@ export class AgentWidgetSession {
     });
   }
 
+  /**
+   * Resolve the gathered mentions and merge them into the user message's
+   * model-visible content. Default path is `llmAppend` → `llmContent` (or a text
+   * `contentPart` when parts are present, since `contentParts` wins the priority
+   * chain); the opt-in structured `context` lands on `mentionContext` for the
+   * client to namespace into the request `context`. Failures were already
+   * dropped by `finalize()`.
+   */
+  private async applyMentionBundle(
+    userMessage: AgentWidgetMessage,
+    typedText: string,
+    finalize: () => Promise<MentionSubmitBundle>
+  ): Promise<void> {
+    let bundle: MentionSubmitBundle;
+    try {
+      bundle = await finalize();
+    } catch {
+      return; // resolution failed entirely; send the typed text as-is
+    }
+
+    // Blocks arrive pre-formatted from the mention layer (fenced/document/custom
+    // per `contextMentions.llmFormat`); the session just joins them and appends
+    // the typed prose last.
+    const block = bundle.blocks.join("\n\n");
+    const llmText = [block, typedText].filter(Boolean).join("\n\n");
+
+    const hasAttachments =
+      Array.isArray(userMessage.contentParts) &&
+      userMessage.contentParts.length > 0;
+    const hasMentionParts = bundle.contentParts.length > 0;
+
+    if (hasAttachments) {
+      // The typed text already rides as a content part; add the block + mention
+      // parts ahead of the existing attachment parts (mentions first).
+      const parts: ContentPart[] = [];
+      if (block) parts.push(createTextPart(block));
+      parts.push(...bundle.contentParts);
+      parts.push(...userMessage.contentParts!);
+      userMessage.contentParts = parts;
+    } else if (hasMentionParts) {
+      const parts: ContentPart[] = [];
+      if (llmText) parts.push(createTextPart(llmText));
+      parts.push(...bundle.contentParts);
+      userMessage.contentParts = parts;
+    } else if (block) {
+      userMessage.llmContent = llmText;
+    }
+
+    if (Object.keys(bundle.context).length > 0) {
+      userMessage.mentionContext = bundle.context;
+    }
+  }
+
   public async sendMessage(
     rawInput: string,
     options?: {
       viaVoice?: boolean;
       /** Multi-modal content parts (e.g., images) to include with the message */
       contentParts?: ContentPart[];
+      /**
+       * Context mentions gathered from the composer. `refs` echo immediately as
+       * chips; `finalize()` resolves any pending/submit sources just before
+       * dispatch (after the instant echo) and the bundle is merged into this
+       * message's model-visible content.
+       */
+      mentions?: {
+        refs: AgentWidgetContextMentionRef[];
+        finalize: () => Promise<MentionSubmitBundle>;
+      };
+      /**
+       * Ordered prose + mention segments for inline-mode display (`display:
+       * "inline"`). Stored on the user message so its bubble re-renders `@tokens`
+       * in place (and suppresses the chip row). Display/transcript only — the
+       * model still sees resolved bodies via the `mentions` bundle above.
+       */
+      contentSegments?: AgentWidgetContentSegment[];
     }
   ) {
     const input = rawInput.trim();
-    // Allow sending if there's text OR attachments
-    if (!input && (!options?.contentParts || options.contentParts.length === 0)) return;
+    // Allow sending if there's text OR attachments OR mentions
+    if (
+      !input &&
+      (!options?.contentParts || options.contentParts.length === 0) &&
+      (!options?.mentions || options.mentions.refs.length === 0)
+    )
+      return;
 
     this.stopSpeaking();
     this.abortController?.abort();
@@ -1160,24 +1238,62 @@ export class AgentWidgetSession {
     // the proxy path auto-generates a different id than `assistantMessageId`.
     this.activeAssistantMessageId = null;
 
+    // Fallback display text ONLY when the sole content is image attachments.
+    // A mention/command-only submit (empty text + a chip) must NOT read as
+    // "[Image]"; it renders its chips with empty text instead.
+    const imageOnlyFallback =
+      options?.contentParts && hasImages(options.contentParts)
+        ? IMAGE_ONLY_MESSAGE_FALLBACK_TEXT
+        : "";
+
     const userMessage: AgentWidgetMessage = {
       id: userMessageId,
       role: "user",
-      content: input || IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, // Display text (fallback if only images)
+      content: input || imageOnlyFallback, // Display text (fallback if only images)
       createdAt: new Date().toISOString(),
       sequence: this.nextSequence(),
       viaVoice: options?.viaVoice || false,
       // Include contentParts if provided (for multi-modal messages)
       ...(options?.contentParts && options.contentParts.length > 0 && {
         contentParts: options.contentParts
+      }),
+      // Echo mention chips immediately (refs only; payloads merged below).
+      ...(options?.mentions && options.mentions.refs.length > 0 && {
+        contextMentions: options.mentions.refs
+      }),
+      // Inline mode: ordered display segments for in-prose `@token` rendering.
+      ...(options?.contentSegments && options.contentSegments.length > 0 && {
+        contentSegments: options.contentSegments
       })
     };
 
     this.appendMessage(userMessage);
     this.setStreaming(true);
 
+    // Assign the fresh controller BEFORE the mention await so cancel() (or a
+    // superseding sendMessage) during finalize() aborts THIS turn, not a stale
+    // prior controller.
     const controller = new AbortController();
     this.abortController = controller;
+
+    // Resolve + merge mentions AFTER the instant echo but BEFORE dispatch, so
+    // the model sees the context while the user's bubble already rendered.
+    // `appendMessage` stores a sequence-normalized COPY (see `ensureSequence`),
+    // so mutate THAT live reference — not the orphaned `userMessage` literal —
+    // or the merged `llmContent`/`contentParts`/`mentionContext` never reach the
+    // dispatch snapshot below. Re-emit so any merged parts also reach the UI.
+    if (options?.mentions) {
+      const stored =
+        this.messages.find((m) => m.id === userMessageId) ?? userMessage;
+      await this.applyMentionBundle(stored, input, options.mentions.finalize);
+      // A cancel() or new sendMessage during finalize aborted this controller
+      // (and replaced/nulled the shared ref). Bail without dispatching and
+      // leave whatever idle/streaming state that caller already set.
+      if (controller.signal.aborted || this.abortController !== controller) {
+        return;
+      }
+      this.callbacks.onMessagesChanged([...this.messages]);
+    }
 
     const snapshot = [...this.messages];
 

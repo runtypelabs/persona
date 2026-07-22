@@ -188,6 +188,46 @@ describe("createPopover", () => {
     expect(content.getRootNode()).toBe(shadow);
   });
 
+  it("anchors vertically to a verticalOffset when placement is top-start", () => {
+    const { anchor, content } = setup();
+    anchor.getBoundingClientRect = () =>
+      ({
+        left: 100,
+        right: 400,
+        top: 200,
+        bottom: 260,
+        width: 300,
+        height: 60,
+        x: 100,
+        y: 200,
+        toJSON: () => ({}),
+      }) as DOMRect;
+    content.getBoundingClientRect = () =>
+      ({
+        width: 180,
+        height: 100,
+        left: 0,
+        right: 180,
+        top: 0,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    const popover = createPopover({
+      anchor,
+      content,
+      placement: "top-start",
+      offset: 6,
+      verticalOffset: () => 40,
+    });
+    popover.open();
+
+    // anchorTop = 200 + 40 = 240 → top = 240 - 6 - 100 = 134
+    expect(content.style.top).toBe("134px");
+  });
+
   it("destroy removes content and detaches listeners", () => {
     vi.useFakeTimers();
     const onDismiss = vi.fn();

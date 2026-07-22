@@ -4,10 +4,11 @@
 // vendored library under jsdom. The pure-mapper correctness guarantee lives in
 // utils/smart-dom-adapter.test.ts (no DOM, no library); this test confirms the
 // vendored runtime loads and the provider wires up against a real document.
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   collectSmartDomContext,
-  createSmartDomReaderContextProvider
+  createSmartDomReaderContextProvider,
+  createSmartDomMentionSource
 } from "./smart-dom-reader";
 
 // jsdom implements no layout, so getBoundingClientRect()/offsetParent report the
@@ -116,6 +117,66 @@ describe("smart-dom-reader entry (jsdom)", () => {
     expect(texts).toContain("Scoped shadow action");
   });
 
+  it("mention source surfaces page elements as items and resolves text at submit", async () => {
+    document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+    const source = createSmartDomMentionSource({ label: "Page", ...JSDOM_OPTS });
+    expect(source.id).toBe("page");
+    expect(source.resolveOn).toBe("submit");
+
+    const items = await source.search("", { messages: [], config: {} as never, signal: new AbortController().signal });
+    const go = items.find((i) => i.label.includes("Continue"));
+    expect(go).toBeTruthy();
+    expect(go!.id).toMatch(/#go|go/); // selector is the item id
+
+    // Filtering narrows the snapshot client-side.
+    const filtered = await source.search("checkout", { messages: [], config: {} as never, signal: new AbortController().signal });
+    expect(filtered.some((i) => i.label.includes("Continue"))).toBe(true);
+
+    // resolve() reads the live element text at submit.
+    const payload = await source.resolve(go!, {
+      messages: [],
+      config: {} as never,
+      composerText: "",
+      args: "",
+      signal: new AbortController().signal,
+    });
+    expect(payload.llmAppend).toContain("Continue to checkout");
+    expect(payload.context).toMatchObject({ selector: go!.id });
+  });
+
+  it("applies mapItem to reshape surfaced items without breaking resolve", async () => {
+    document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+    const source = createSmartDomMentionSource({
+      label: "Page",
+      ...JSDOM_OPTS,
+      mapItem: (el, defaultItem) => ({
+        ...defaultItem,
+        iconName: "star",
+        description: `custom:${el.tagName}`,
+      }),
+    });
+
+    const items = await source.search("", {
+      messages: [],
+      config: {} as never,
+      signal: new AbortController().signal,
+    });
+    const go = items.find((i) => i.label.includes("Continue"));
+    expect(go).toBeTruthy();
+    expect(go!.iconName).toBe("star");
+    expect(go!.description).toMatch(/^custom:/i);
+
+    // id stays the selector, so submit-time resolve still reads the live element.
+    const payload = await source.resolve(go!, {
+      messages: [],
+      config: {} as never,
+      composerText: "",
+      args: "",
+      signal: new AbortController().signal,
+    });
+    expect(payload.llmAppend).toContain("Continue to checkout");
+  });
+
   it("provider returns formatted context under the configured key", async () => {
     document.body.innerHTML = `<main><button id="go">Continue</button></main>`;
     const provider = createSmartDomReaderContextProvider({
@@ -131,5 +192,71 @@ describe("smart-dom-reader entry (jsdom)", () => {
   it("returns [] for an empty document", () => {
     document.body.innerHTML = "";
     expect(collectSmartDomContext(JSDOM_OPTS)).toEqual([]);
+  });
+
+  const searchCtx = () => ({
+    messages: [],
+    config: {} as never,
+    signal: new AbortController().signal,
+  });
+
+  it("reuses the snapshot across empty-query searches within the TTL (scans once)", async () => {
+    document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+    const source = createSmartDomMentionSource({ label: "Page", ...JSDOM_OPTS });
+
+    // Count extractions by observing DOM reads: a spy on querySelectorAll fires
+    // per scan. Simpler and TTL-independent: mutate the DOM between the two empty
+    // searches and assert the second still returns the pre-mutation snapshot.
+    const first = await source.search("", searchCtx());
+    expect(first.some((i) => i.label.includes("Continue"))).toBe(true);
+
+    // Change the page; a rescan would surface the new element.
+    document.body.innerHTML = `<main><button id="new">Brand new action</button></main>`;
+    const second = await source.search("", searchCtx());
+    // Still the cached snapshot: no rescan happened within the TTL.
+    expect(second.some((i) => i.label.includes("Continue"))).toBe(true);
+    expect(second.some((i) => i.label.includes("Brand new"))).toBe(false);
+  });
+
+  it("rescans on an empty query once the TTL has elapsed", async () => {
+    vi.useFakeTimers();
+    try {
+      document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+      const source = createSmartDomMentionSource({ label: "Page", ...JSDOM_OPTS });
+
+      const first = await source.search("", searchCtx());
+      expect(first.some((i) => i.label.includes("Continue"))).toBe(true);
+
+      // Mutate the page, then advance past the 2s TTL so the next empty query rescans.
+      document.body.innerHTML = `<main><button id="new">Brand new action</button></main>`;
+      vi.advanceTimersByTime(2500);
+
+      const second = await source.search("", searchCtx());
+      expect(second.some((i) => i.label.includes("Brand new"))).toBe(true);
+      expect(second.some((i) => i.label.includes("Continue"))).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("resolves an item from a cached snapshot against the live element", async () => {
+    document.body.innerHTML = `<main><button id="go">Continue to checkout</button></main>`;
+    const source = createSmartDomMentionSource({ label: "Page", ...JSDOM_OPTS });
+
+    // Prime the snapshot, then re-search (cached) to get the item without rescanning.
+    await source.search("", searchCtx());
+    const items = await source.search("checkout", searchCtx());
+    const go = items.find((i) => i.label.includes("Continue"));
+    expect(go).toBeTruthy();
+
+    const payload = await source.resolve(go!, {
+      messages: [],
+      config: {} as never,
+      composerText: "",
+      args: "",
+      signal: new AbortController().signal,
+    });
+    expect(payload.llmAppend).toContain("Continue to checkout");
+    expect(payload.context).toMatchObject({ selector: go!.id });
   });
 });

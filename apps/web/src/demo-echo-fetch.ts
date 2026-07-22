@@ -34,11 +34,13 @@ export interface DemoEchoFetchOptions {
   delayMs?: number;
   /**
    * Build the assistant reply from the visitor's latest message. Override to
-   * tailor the echo (e.g. a longer body to exercise scrolling). The default
+   * tailor the echo (e.g. a longer body to exercise scrolling). The second arg
+   * is the full request payload, so a demo can echo what reached the backend
+   * (e.g. `payload.context?.mentions` from a server slash-command). The default
    * quotes the message back and explains that the demo is not connected to a
    * live model.
    */
-  reply?: (userText: string) => string;
+  reply?: (userText: string, payload: AgentWidgetRequestPayload) => string;
 }
 
 function partText(part: unknown): string {
@@ -117,7 +119,7 @@ export function createDemoEchoFetch(
   return async function demoEchoFetch(_url, _init, payload) {
     turn += 1;
     const executionId = `demo-echo-${turn}`;
-    const reply = buildReply(latestUserText(payload));
+    const reply = buildReply(latestUserText(payload), payload);
     return createMockSSEResponse(echoFrames(executionId, reply, chunkSize), { delayMs });
   };
 }

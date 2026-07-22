@@ -10,36 +10,44 @@
  * to the textarea.
  */
 
-export interface ComposerHistoryState {
+/**
+ * Generic over the entry type `T` so the same machine drives both composer
+ * surfaces: chip mode recalls `string`s (textarea values); inline mode recalls
+ * `ComposerDocument`s (blocks + mention ids). The machine never inspects an entry
+ * — it only indexes the list and swaps the draft — so it stays entirely
+ * value-agnostic. Defaults to `string` so every existing chip-mode caller is
+ * unchanged.
+ */
+export interface ComposerHistoryState<T = string> {
   /** Index into the history list, or -1 when not navigating. */
   index: number;
-  /** The user's in-progress text, saved when navigation begins. */
-  draft: string;
+  /** The user's in-progress entry, saved when navigation begins. */
+  draft: T;
 }
 
-export const INITIAL_HISTORY_STATE: ComposerHistoryState = {
+export const INITIAL_HISTORY_STATE: ComposerHistoryState<string> = {
   index: -1,
   draft: ""
 };
 
-export interface ComposerHistoryInput {
+export interface ComposerHistoryInput<T = string> {
   direction: "up" | "down";
-  /** Previously sent user-message texts, oldest first. */
-  history: string[];
-  /** Current textarea value (saved as the draft when navigation begins). */
-  currentValue: string;
-  /** True when the caret sits at the very start of the textarea. */
+  /** Previously sent user entries, oldest first. */
+  history: T[];
+  /** Current composer entry (saved as the draft when navigation begins). */
+  currentValue: T;
+  /** True when the caret sits at the very start of the composer. */
   atStart: boolean;
-  state: ComposerHistoryState;
+  state: ComposerHistoryState<T>;
 }
 
-export interface ComposerHistoryResult {
+export interface ComposerHistoryResult<T = string> {
   /** Whether the key was consumed (caller should preventDefault). */
   handled: boolean;
-  /** New textarea value to apply: only present when it should change. */
-  value?: string;
+  /** New entry to apply: only present when it should change. */
+  value?: T;
   /** Next navigation state. */
-  state: ComposerHistoryState;
+  state: ComposerHistoryState<T>;
 }
 
 /**
@@ -50,9 +58,9 @@ export interface ComposerHistoryResult {
  * - **Down** only acts while already navigating, stepping toward newer messages
  *   and finally restoring the saved draft once it walks past the newest entry.
  */
-export function navigateComposerHistory(
-  input: ComposerHistoryInput
-): ComposerHistoryResult {
+export function navigateComposerHistory<T = string>(
+  input: ComposerHistoryInput<T>
+): ComposerHistoryResult<T> {
   const { direction, history, currentValue, atStart, state } = input;
   const inHistory = state.index !== -1;
 
@@ -104,10 +112,12 @@ export function navigateComposerHistory(
     };
   }
 
-  // Stepped past the newest entry: restore the saved draft and exit.
+  // Stepped past the newest entry: restore the saved draft and exit. `index: -1`
+  // marks "not navigating"; the draft field is dead until the next Up overwrites
+  // it, so keep the existing (correctly-typed) value rather than fabricating one.
   return {
     handled: true,
     value: state.draft,
-    state: { ...INITIAL_HISTORY_STATE }
+    state: { index: -1, draft: state.draft }
   };
 }

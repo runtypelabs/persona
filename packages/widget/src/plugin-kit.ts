@@ -118,6 +118,23 @@ export interface PopoverOptions {
   /** Set `content`'s `min-width` to the anchor's width. Default `false`. */
   matchAnchorWidth?: boolean;
   /**
+   * Horizontal anchoring override for `*-start` placements. Returns the desired
+   * left offset in px measured from the anchor's LEFT edge (e.g. the `@` trigger's
+   * x within the composer), or `null` to left-align with the anchor as usual. When
+   * this option is present the content is content-sized and capped to the anchor's
+   * width, and the resolved left is clamped so the content never overflows the
+   * anchor's left/right edges (Slack-style: a near-right trigger shifts the menu
+   * left to fit). Omit it entirely for plain anchor-left/right placement.
+   */
+  horizontalOffset?: () => number | null;
+  /**
+   * Vertical anchoring override for `top-*` placements. Returns the desired
+   * anchor point's top offset in px measured from the anchor's TOP edge (e.g.
+   * the trigger line's top within the composer), or `null` to use the anchor's
+   * top edge as usual.
+   */
+  verticalOffset?: () => number | null;
+  /**
    * Inline `z-index` for `content`. Default `2147483000` so it overlays the rest
    * of the widget. Pass `null` to leave z-index to your own CSS.
    */
@@ -175,6 +192,8 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     placement = "bottom-start",
     offset = 6,
     matchAnchorWidth = false,
+    horizontalOffset,
+    verticalOffset,
     zIndex = 2147483000,
     onOpen,
     onDismiss,
@@ -189,16 +208,31 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     const rect = anchor.getBoundingClientRect();
     content.style.position = "fixed";
     if (matchAnchorWidth) content.style.minWidth = `${rect.width}px`;
+    // Trigger-anchored mode: content is sized to its own contents but never wider
+    // than the composer, so it can shift horizontally within the composer's span.
+    if (horizontalOffset) content.style.maxWidth = `${rect.width}px`;
 
+    // Single content measurement per reposition (after width constraints apply).
+    const contentRect = content.getBoundingClientRect();
+
+    const offY = verticalOffset?.() ?? null;
+    const anchorTop = offY != null ? rect.top + offY : rect.top;
     const top =
       placement === "top-start" || placement === "top-end"
-        ? rect.top - offset - content.getBoundingClientRect().height
+        ? anchorTop - offset - contentRect.height
         : rect.bottom + offset;
 
-    const left =
-      placement === "bottom-end" || placement === "top-end"
-        ? rect.right - content.getBoundingClientRect().width
-        : rect.left;
+    const isEnd = placement === "bottom-end" || placement === "top-end";
+    // Default: anchor left (or anchor right for `*-end`). Trigger-anchored mode
+    // (offset present and non-null) overrides with the clamped trigger position so
+    // the menu never overflows the anchor's edges — a near-right trigger shifts it
+    // left to fit (Slack-style). A null offset falls back to the default.
+    let left = isEnd ? rect.right - contentRect.width : rect.left;
+    const off = horizontalOffset?.() ?? null;
+    if (off != null) {
+      const maxLeft = Math.max(rect.left, rect.right - contentRect.width);
+      left = Math.min(Math.max(rect.left + off, rect.left), maxLeft);
+    }
 
     content.style.top = `${top}px`;
     content.style.left = `${left}px`;

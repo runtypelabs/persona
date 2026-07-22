@@ -42,5 +42,23 @@ export default defineConfig({
     // `index-global.ts` registers a loader that imports the standalone
     // `markdown-parsers.js` chunk from a sibling URL instead.
     options.external.push("./markdown-parsers-entry");
+
+    // Keep the context-mentions runtime (controller/manager/menu) out of the CDN
+    // payload. The loader's fallback `import("@runtypelabs/persona/context-mentions")`
+    // is left as a dead external import; it is never invoked here because
+    // `index-global.ts` registers a loader that imports the standalone
+    // `context-mentions.js` chunk from a sibling URL instead. The core
+    // orchestrator only references the runtime via that dynamic import, so the
+    // heavy modules never enter this bundle (verified by the bundle test).
+    options.external.push("@runtypelabs/persona/context-mentions");
+
+    // Keep the inline-mention contenteditable engine (composer-document +
+    // composer-contenteditable + inline entry) out of the CDN payload. Same
+    // scheme: the loader's fallback
+    // `import("@runtypelabs/persona/context-mentions-inline")` is a dead external
+    // import here; `index-global.ts` registers a sibling-URL loader for the
+    // standalone `context-mentions-inline.js` chunk. Only loaded on composer mount
+    // when `display: "inline"`, so chip-only pages never fetch it.
+    options.external.push("@runtypelabs/persona/context-mentions-inline");
   },
 });

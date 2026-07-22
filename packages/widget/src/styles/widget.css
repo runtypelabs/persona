@@ -53,10 +53,6 @@
   align-items: center;
 }
 
-.persona-items-end {
-  align-items: flex-end;
-}
-
 .persona-items-start {
   align-items: flex-start;
 }
@@ -238,6 +234,24 @@
   border-radius: var(--persona-button-radius);
 }
 
+/* Composer ghost icon buttons (attachment + mention): transparent, neutral
+   foreground, subtle hover. Themeable via `components.button.ghost.*`
+   → `--persona-button-ghost-*`. The `[data-persona-root]` prefix outranks the
+   `.persona-rounded-button` full-radius above so the ghost radius wins. */
+[data-persona-root] .persona-mention-button,
+[data-persona-root] .persona-attachment-button {
+  background-color: var(--persona-button-ghost-bg, transparent);
+  color: var(--persona-button-ghost-fg, var(--persona-text, #111827));
+  border: none;
+  border-radius: var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem));
+  transition: background-color 0.15s ease;
+}
+
+[data-persona-root] .persona-mention-button:hover,
+[data-persona-root] .persona-attachment-button:hover {
+  background-color: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
+}
+
 .persona-overflow-hidden {
   overflow: hidden;
 }
@@ -272,10 +286,6 @@
 
 .persona-bg-gray-100 {
   background-color: #f3f4f6;
-}
-
-.persona-bg-gray-200 {
-  background-color: #e5e7eb;
 }
 
 .persona-text-persona-primary {
@@ -436,14 +446,6 @@
   padding-left: 0.75rem;
 }
 
-.persona-pl-7 {
-  padding-left: 1.75rem;
-}
-
-.persona-pr-7 {
-  padding-right: 1.75rem;
-}
-
 .persona-pl-8 {
   padding-left: 2rem;
 }
@@ -526,20 +528,8 @@
   opacity: 0.5;
 }
 
-.persona-shadow-2xl {
-  box-shadow: 0 30px 60px -15px rgba(15, 23, 42, 0.35);
-}
-
 .persona-shadow-sm {
   box-shadow: 0 5px 15px rgba(15, 23, 42, 0.08);
-}
-
-.persona-shadow-md {
-  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
-}
-
-.persona-shadow-lg {
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.18);
 }
 
 .persona-border {
@@ -558,14 +548,6 @@
   border-bottom-color: rgba(148, 163, 184, 0.28);
 }
 
-.persona-border-gray-100 {
-  border-color: #f1f5f9;
-}
-
-.persona-border-persona-secondary {
-  border-color: var(--persona-secondary, #7c3aed);
-}
-
 .persona-border-persona-border {
   border-color: var(--persona-border, #e5e7eb);
 }
@@ -574,18 +556,6 @@
   border-top-width: 1px;
   border-top-style: solid;
   border-top-color: rgba(148, 163, 184, 0.28);
-}
-
-.persona-border-t-persona-border {
-  border-top-width: 1px;
-  border-top-style: solid;
-  border-top-color: var(--persona-border, #f1f5f9);
-}
-
-.persona-border-b-persona-border {
-  border-bottom-width: 1px;
-  border-bottom-style: solid;
-  border-bottom-color: var(--persona-border, #f1f5f9);
 }
 
 .persona-border-t-persona-divider {
@@ -664,13 +634,6 @@
   width: 2.5rem;
 }
 
-.persona-h-12 {
-  height: 3rem;
-}
-
-.persona-w-12 {
-  width: 3rem;
-}
 
 .persona-leading-relaxed {
   line-height: 1.75;
@@ -777,8 +740,6 @@
   margin-top: 0.5rem;
 }
 
-.persona-h-12,
-.persona-w-12,
 .persona-h-10,
 .persona-w-10,
 .persona-h-8,
@@ -788,10 +749,6 @@
 
 .persona-text-right {
   text-align: right;
-}
-
-.hover\:persona-bg-gray-200:hover {
-  background-color: #e5e7eb;
 }
 
 .hover\:persona-bg-persona-container:hover {
@@ -1346,68 +1303,6 @@
   padding: 0.75rem 1rem;
   overflow-x: auto;
   font-size: 0.8125rem;
-}
-
-/* Code block copy button */
-.persona-code-block-wrapper {
-  position: relative;
-  margin: 0.5rem 0;
-}
-
-.persona-code-block-wrapper pre {
-  margin: 0 !important;
-  border-top-left-radius: 0 !important;
-  border-top-right-radius: 0 !important;
-}
-
-.persona-code-block-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background-color: var(--persona-md-code-block-bg, #f3f4f6);
-  border: 1px solid var(--persona-md-code-block-border-color, #e5e7eb);
-  border-bottom: none;
-  border-top-left-radius: var(--persona-md-code-block-border-radius, 0.375rem);
-  border-top-right-radius: var(--persona-md-code-block-border-radius, 0.375rem);
-  padding: 0.25rem 0.5rem 0.25rem 0.75rem;
-  font-size: 0.75rem;
-  color: var(--persona-text-muted, #6b7280);
-  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace;
-}
-
-.persona-code-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 0.25rem;
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
-  color: var(--persona-text-muted, #6b7280);
-  font-size: 0.75rem;
-  font-family: inherit;
-  line-height: 1;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-.persona-code-copy-btn:hover {
-  color: var(--persona-text, #111827);
-  border-color: var(--persona-md-code-block-border-color, #e5e7eb);
-}
-
-.persona-code-copy-btn.persona-code-copied {
-  color: #16a34a;
-}
-
-.persona-code-copy-btn.persona-code-copy-generating {
-  cursor: default;
-  opacity: 0.5;
-}
-
-.persona-code-copy-btn.persona-code-copy-generating:hover {
-  color: var(--persona-text-muted, #6b7280);
-  border-color: transparent;
 }
 
 /* Ensure all links in chat bubbles have underlines */
@@ -2726,9 +2621,6 @@
   background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
 }
 
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-label {
-  font-weight: 500;
-}
 
 /* Artifact tab theming */
 [data-persona-root] .persona-artifact-tab {
@@ -4784,5 +4676,216 @@
 @container (max-width: 390px) {
   [data-persona-root] .persona-event-copy-all {
     display: none;
+  }
+}
+
+/* ===========================================================================
+ * Context mentions (composer @-mentions): chip row, menu, affordance button.
+ * Tokens default off the existing palette vars so themed widgets pick them up.
+ * =========================================================================== */
+
+/* Composer size-query container. Both the full and pill composers carry
+ * `data-persona-composer-form`; establishing a container here lets a host
+ * stylesheet make composer controls responsive to the PANEL width rather than
+ * the viewport — correct across floating / docked / fullscreen, where the
+ * composer is frequently narrower than the screen. Safe: the form is block-level
+ * and already sized by its parent, so inline-size containment doesn't change its
+ * width, and the ask sheet + mention menu mount OUTSIDE the form, so layout
+ * containment can't capture them. Query with `@container persona-composer (...)`;
+ * `.persona-mention-button` is a supported, stable hook. */
+[data-persona-composer-form] {
+  container-type: inline-size;
+  container-name: persona-composer;
+}
+
+.persona-mention-context-row {
+  display: none; /* toggled to flex by the manager when chips exist */
+  flex-wrap: wrap;
+  gap: var(--persona-mention-chip-gap, 6px);
+  margin-bottom: var(--persona-mention-row-gap, 8px);
+}
+
+.persona-mention-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: var(--persona-mention-chip-height, 26px);
+  padding: 0 6px 0 8px;
+  border-radius: var(--persona-mention-chip-radius, 6px);
+  background: var(--persona-mention-chip-bg, var(--persona-container, #f3f4f6));
+  border: 1px solid var(--persona-mention-chip-border, var(--persona-border, #e5e7eb));
+  color: var(--persona-mention-chip-fg, var(--persona-text, #111827));
+  font-size: var(--persona-mention-chip-font-size, 12px);
+  line-height: 1;
+  max-width: 220px;
+}
+
+.persona-mention-chip[data-status="error"] {
+  border-color: var(--persona-mention-error, #dc2626);
+  color: var(--persona-mention-error, #dc2626);
+}
+
+.persona-mention-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  opacity: 0.8;
+}
+
+.persona-mention-chip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persona-mention-chip-spinner {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--persona-mention-chip-border, var(--persona-border, #d1d5db));
+  border-top-color: var(--persona-mention-accent, var(--persona-accent, #0f0f0f));
+  animation: persona-mention-spin 0.7s linear infinite;
+}
+
+@keyframes persona-mention-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.persona-mention-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.persona-mention-chip-remove:hover {
+  opacity: 1;
+  background: var(--persona-palette-colors-black-alpha-50, rgba(0, 0, 0, 0.06));
+}
+
+/* The mention MENU CSS (.persona-mention-menu / -list / -search / -group /
+ * -option / -status / -error / -retry and its coarse-pointer row sizing) lives
+ * in the lazy context-mentions chunk (src/styles/context-mention-menu-css.ts)
+ * and is injected on first menu open — so it also styles the body-mounted menu
+ * inside a useShadowDom widget. Only the eagerly-rendered chip / context-row
+ * pieces stay here. */
+
+.persona-mention-chip-readonly {
+  padding-right: 8px;
+  cursor: default;
+}
+
+/* Inline mention token (display: "inline"). Atomic styled chip that sits INSIDE
+ * the sentence — in the contenteditable composer and in the read-only sent
+ * bubble. Kept in the core stylesheet (tiny) so tokens are styled the instant a
+ * segmented bubble renders, without waiting on the inline chunk's CSS. */
+.persona-mention-token {
+  /* Per-token accent — set inline from `ref.color`, per source via
+   * `.persona-mention-token[data-mention-source="…"]`, or globally by overriding
+   * this var. Recolors the whole pill (tint bg + icon + label). */
+  --persona-mention-token-accent: var(--persona-accent, #4338ca);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--persona-mention-token-gap, 4px);
+  padding: var(--persona-mention-token-padding, 1px 6px);
+  border-radius: var(--persona-mention-token-radius, 6px);
+  /* Fallback flat tint first (older browsers), then a per-accent translucent
+   * tint via color-mix so each type reads as its own color (Slack/Cursor). */
+  background: var(--persona-mention-token-bg, #eef2ff);
+  background: var(
+    --persona-mention-token-bg,
+    color-mix(in srgb, var(--persona-mention-token-accent) 14%, transparent)
+  );
+  color: var(--persona-mention-token-fg, var(--persona-mention-token-accent));
+  font-size: var(--persona-mention-token-font-size, 0.95em);
+  font-weight: var(--persona-mention-token-font-weight, 550);
+  line-height: 1.5;
+  white-space: nowrap;
+  vertical-align: baseline;
+  user-select: none;
+}
+
+.persona-mention-token-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.persona-mention-token-label {
+  white-space: nowrap;
+}
+
+/* Read-only token in a sent bubble: no editable affordances (the composer's
+ * atomic caret/select behavior doesn't apply), so it reads as inert prose. */
+.persona-mention-token-readonly {
+  cursor: default;
+  user-select: text;
+}
+
+/* Resolve failure on an inline token: recolor the pill to the danger accent and
+ * add a subtle inset border ring, reusing the same accent custom-property the
+ * token already themes on (so bg tint + icon + label all shift together). */
+.persona-mention-token-error {
+  --persona-mention-token-accent: var(--persona-mention-error, #dc2626);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--persona-mention-token-accent) 45%, transparent);
+}
+
+/* The contenteditable composer surface: behaves like the textarea it replaced. */
+.persona-composer-contenteditable {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  outline: none;
+  max-height: var(--persona-composer-max-height, 200px);
+  overflow-y: auto;
+}
+
+.persona-composer-contenteditable:empty::before {
+  content: attr(data-placeholder);
+  color: var(--persona-placeholder, var(--persona-muted, #9ca3af));
+  pointer-events: none;
+}
+
+.persona-message-mentions {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+/* Touch targets: on coarse pointers (phones/tablets) grow the chip + its remove
+ * control to the ~44px minimum. Desktop keeps the compact sizing above. (The
+ * menu row / retry coarse sizing ships with the menu CSS in the lazy chunk.) */
+@media (pointer: coarse) {
+  .persona-mention-chip {
+    height: auto;
+    min-height: 40px;
+  }
+  .persona-mention-chip-remove {
+    width: 36px;
+    height: 36px;
+    margin-right: -6px; /* keep the visual gap tight while the hit area grows */
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* No spin: show a static neutral ring instead of a rotating arc. */
+  .persona-mention-chip-spinner {
+    animation: none;
+    border-top-color: var(
+      --persona-mention-chip-border,
+      var(--persona-border, #d1d5db)
+    );
+    opacity: 0.6;
   }
 }

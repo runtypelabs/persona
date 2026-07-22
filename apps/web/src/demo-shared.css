@@ -581,6 +581,11 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 0.6rem;
+  /* Variant-heavy demos (e.g. 5 rendering variants + mount pills) overflow the
+     toolbar at medium widths; wrap the variant group to its own row instead of
+     letting `.preview`'s `overflow: hidden` clip the tail. */
+  flex-wrap: wrap;
+  row-gap: 0.5rem;
   flex: none;
   padding: 0.45rem 0.7rem;
   border-bottom: 1px solid var(--border);
@@ -621,7 +626,8 @@ a {
 .preview-toolbar-variants {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.85rem;
   min-height: 32px;
 }
 .preview-toolbar-variants [data-variant-toolbar]:empty { display: none; }
@@ -1183,7 +1189,11 @@ body.demo-code-active [data-persona-root] { display: none; }
   color: var(--muted);
   margin: 0;
 }
-.notes-section > p + p { margin-top: 0.6rem; }
+.notes-section > p + p,
+.notes-section > p + ul,
+.notes-section > p + ol,
+.notes-section > ul + p,
+.notes-section > ol + p { margin-top: 0.6rem; }
 .notes-section ul,
 .notes-section ol {
   font-size: 0.875rem;
@@ -1363,8 +1373,17 @@ body.demo-code-active [data-persona-root] { display: none; }
 
 /* ─── Launcher scene ─── */
 
+/*
+ * The mount must NOT create a stacking context (no `z-index` here). On mobile
+ * the widget opens fullscreen and hoists its own host to z-index 100000 to
+ * escape parent stacking traps (see `syncOverlayHostStacking`). A `z-index` on
+ * this mount would scope that escape below the demo's fixed top nav
+ * (`.shell-header`, z-index: 9000), so the nav would paint over the panel
+ * header and clip it. The collapsed launcher button carries its own z-index
+ * inline, so it stays on top without one here.
+ */
 .launcher-scene { position: relative; width: 100%; height: 100%; min-height: 100%; }
-.launcher-scene-mount { position: absolute; right: 1.25rem; bottom: 1.25rem; z-index: 1; }
+.launcher-scene-mount { position: absolute; right: 1.25rem; bottom: 1.25rem; }
 
 /* ════════════════════════════════════════════════════════════════════════
    Fullscreen mode (agent-demo)

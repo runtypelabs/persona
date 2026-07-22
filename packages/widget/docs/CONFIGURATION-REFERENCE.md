@@ -522,6 +522,45 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `buttonTooltipText` | `string?` | Tooltip text. Default: `'Attach image'`. |
 | `onFileRejected` | `(file, reason: 'type' \| 'size' \| 'count') => void?` | Callback when a file is rejected. |
 
+### Context Mentions
+
+See [CONTEXT-MENTIONS.md](./CONTEXT-MENTIONS.md) for the full guide (sources,
+resolve lifecycle, display modes, slash commands, render overrides).
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `contextMentions` | `AgentWidgetContextMentionConfig` | `@`-mention menu for pulling host-provided context into a message (see sub-table). Disabled by default; the menu/chip runtime lazy-loads on first use. |
+
+**`contextMentions`**: `AgentWidgetContextMentionConfig`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | Enable the feature. Default: `false`. |
+| `sources` | `AgentWidgetContextMentionSource[]` | Registered sources (`search` + `resolve`). Use `createStaticMentionSource` for static lists. |
+| `display` | `'chip' \| 'inline'?` | How picked mentions appear: a removable pill in a context row (`'chip'`), or an atomic token in the sentence backed by a contenteditable composer (`'inline'`). Default: `'chip'`. |
+| `llmFormat` | `'fenced' \| 'document' \| ((entry, index) => string)?` | How each resolved mention's text is wrapped into a model-visible block. Default: `'fenced'`. |
+| `showButton` | `boolean?` | Show the visible composer affordance button. Default: `true`. |
+| `buttonIconName` | `string?` | Lucide icon for the affordance button. Default: `'plus'`. |
+| `buttonTooltipText` | `string?` | Tooltip / aria-label for the affordance button. Default: `'Add context'`. |
+| `searchPlaceholder` | `string?` | Placeholder for the picker's in-menu search field. Default: `'Search context…'`. |
+| `trigger` | `string?` | Primary trigger character. Default: `'@'`. |
+| `triggerPosition` | `'anywhere' \| 'line-start' \| 'input-start'?` | Where the primary trigger may open the menu. Default: `'anywhere'`. |
+| `triggers` | `AgentWidgetMentionTriggerChannel[]?` | Additional trigger channels sharing the same menu engine, e.g. a `'/'` slash-command channel built with `createSlashCommandsSource`. |
+| `maxMentions` | `number?` | Max mentions per message. Default: `8`. |
+| `maxItemsPerGroup` | `number?` | Max rows per source group before a "keep typing" hint. Default: `6`. |
+| `searchDebounceMs` | `number?` | Debounce for async source search only. Default: `150`. |
+| `chipIconName` | `string?` | Chip icon fallback when a source/item omits one. Default: `'at-sign'`. |
+| `renderMentionMenu` | `(ctx) => HTMLElement?` | Render override for the whole menu. The widget keeps trigger detection, search, keyboard nav, and positioning. |
+| `renderMentionItem` | `(ctx) => HTMLElement?` | Render override for one result row's inner content. Ignored when `renderMentionMenu` is set. |
+| `renderMentionChip` | `(ctx) => HTMLElement?` | Render override for one composer chip (chip mode). |
+| `renderMentionToken` | `(ctx) => HTMLElement?` | Render override for one inline token (inline mode). |
+| `onMentionRejected` | `(item, reason) => void?` | Fired when a pick is rejected: `'duplicate'`, `'limit'`, or `'stale'`. |
+| `onMentionResolveError` | `(item, error) => void?` | Fired when a `resolve()` throws or aborts; the mention is dropped and the message still sends. |
+
+Menu positioning is automatic and not configurable: composer-anchored and
+full-width in chip mode, anchored to the `@` glyph and its line in inline mode.
+See [Menu behavior and positioning](./CONTEXT-MENTIONS.md#menu-behavior-and-positioning).
+
 ### Status Indicator
 
 | Option | Type | Description |
