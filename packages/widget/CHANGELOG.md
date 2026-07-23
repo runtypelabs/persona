@@ -1,5 +1,24 @@
 # @runtypelabs/persona
 
+## 4.10.0
+
+### Minor Changes
+
+- 77c2635: update() now applies one consistent recursive patch policy across the live controller and the init handle. A key merges recursively only when both the previous value and the patch value are plain objects; otherwise the patch value replaces (arrays, functions, class instances, and boolean/string vs object unions all replace wholesale). A small replace-leaf list also replaces wholesale to avoid corrupt hybrids or stranded keys: headers, agent, storageAdapter, components, targetProviders, voiceRecognition.provider.custom, and features.streamAnimation.plugins. A key passed explicitly with value undefined clears the previous value and resets to its default (or stays unset when no default exists); an omitted key is preserved.
+
+  The merge is exposed as a new AgentWidgetConfigPatch type accepted by update() (a loosening from the full config type, so existing calls keep working). This also fixes the init handle passing the raw patch to the controller (a double-merge) and an inconsistent tool-call diff baseline.
+
+  Compatibility note: consumers who relied on omitting a nested field to erase sibling values will now see those values preserved. To disable or reset a nested field, set it explicitly (for example to false or to undefined) rather than omitting it.
+
+### Patch Changes
+
+- 26d2bf0: Fix the attachment button ignoring live `update()` changes: `buttonIconName` and `buttonTooltipText` were rendered once when the button was created and never re-applied, so updating them at runtime had no effect until a re-mount. The icon, tooltip, and aria-label are now re-rendered from the merged config on every update.
+- af2e99e: Fix three more cases where any live `update()` visibly restyled composer and header chrome: the mic icon boldened (updater rendered stroke 2 while the builder uses 1.5), the mic button color flipped from the text token to `currentColor` (updater had an extra fallback the builder does not), and the close and clear-chat icons lost the builder's `display:block`, shifting them off-center. The update path now mirrors the mount-time builders exactly.
+- a685fbd: Contain component artifacts to the pane width and reset stale horizontal scroll when selecting or expanding artifacts.
+- 26d2bf0: Fix the attachment drop overlay ignoring live `update()` changes: the overlay was built once at mount and never rebuilt, so `attachments.dropOverlay` values (background, icon, label, border, blur, inset) applied through `update()` had no effect until a re-mount. The overlay is now rebuilt from the merged config on every update.
+- e1391f0: Fix two header regressions triggered by any live `update()` call: the close button was revealed on non-closeable panels (an unset `layout.header.showCloseButton` was treated as "show" instead of deferring to panel toggleability), and the clear-chat icon boldened because the update path re-rendered it with stroke width 2 while the mount-time builder uses 1.
+- 1299c07: Fix the send button reverting from the stop icon to the send icon when a live `update()` lands during an active stream. The button showed the send arrow mid-stream while its aria-label still read "stop"; the icon content is now left untouched while streaming, so the stop glyph set by the composer survives an update and heals to the send icon on completion.
+
 ## 4.9.0
 
 ### Minor Changes
