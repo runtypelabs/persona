@@ -3206,6 +3206,20 @@
 /* Shared artifact preview body wrapper (artifact-preview.ts): generates no box
    so children (e.g. the iframe's height: 100%) lay out against the host
    container exactly as if they were its direct children. */
+[data-persona-root] .persona-artifact-content {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-persona-root]
+  .persona-artifact-content
+  > .persona-artifact-preview-body
+  > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
 [data-persona-root] .persona-artifact-preview-body {
   display: contents;
 }

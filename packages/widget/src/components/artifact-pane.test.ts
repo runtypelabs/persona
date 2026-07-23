@@ -436,6 +436,37 @@ describe("artifact-pane expand toggle", () => {
     expect(btn.title).toBe("Expand artifacts panel");
     expect(btn.querySelector("svg")).toBeTruthy();
   });
+
+  it("resets content scroll after expanded-state transitions only", () => {
+    const frames: Array<(time: number) => void> = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: (time: number) => void) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    try {
+      const pane = createArtifactPane(makeExpandConfig(), { onSelect: () => {} });
+      pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+      const content = contentEl(pane);
+
+      content.scrollLeft = 80;
+      pane.setExpanded(true);
+      expect(frames).toHaveLength(1);
+      frames.shift()?.(0);
+      expect(content.scrollLeft).toBe(0);
+
+      content.scrollLeft = 80;
+      pane.setExpanded(true);
+      expect(frames).toHaveLength(0);
+      expect(content.scrollLeft).toBe(80);
+
+      pane.setExpanded(false);
+      expect(frames).toHaveLength(1);
+      frames.shift()?.(0);
+      expect(content.scrollLeft).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 const makeCopyButtonConfig = (): AgentWidgetConfig =>
@@ -697,6 +728,22 @@ describe("artifact-pane tabs", () => {
     } finally {
       Element.prototype.scrollIntoView = orig;
     }
+  });
+
+  it("resets content scroll only when the selected artifact changes", () => {
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    const [a1, a2] = twoFileRecords();
+
+    pane.update({ artifacts: [a1], selectedId: "a1" });
+    const content = contentEl(pane);
+    content.scrollLeft = 80;
+
+    pane.update({ artifacts: [a1, a2], selectedId: "a2" });
+    expect(content.scrollLeft).toBe(0);
+
+    content.scrollLeft = 80;
+    pane.update({ artifacts: [a1, a2], selectedId: "a2" });
+    expect(content.scrollLeft).toBe(80);
   });
 });
 
