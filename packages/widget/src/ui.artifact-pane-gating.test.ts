@@ -402,7 +402,17 @@ describe("artifact pane expand toggle (full widget)", () => {
     expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(true);
 
     // Turning the toggle back off hides the button and collapses the pane.
-    controller.update(base);
+    // update() patches recursively now, so omission preserves the prior
+    // showExpandToggle: the flag must be set false explicitly to disable it.
+    controller.update({
+      features: {
+        artifacts: {
+          enabled: true,
+          allowedTypes: ["markdown", "component"],
+          layout: { showExpandToggle: false },
+        },
+      },
+    });
     expect(mountEl.classList.contains("persona-artifact-expanded")).toBe(false);
     expect(expandBtn(mountEl).classList.contains("persona-hidden")).toBe(true);
     controller.destroy();

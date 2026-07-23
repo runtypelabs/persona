@@ -86,7 +86,19 @@ const docked = initAgentWidget({
 });
 ```
 
-### Initialization options
+### Update merge policy
+
+`update()` applies a recursive patch, not a shallow replace. A key merges into the
+live config only when both the previous value and the patch value are plain
+objects, so a partial patch (for example `launcher.title`) preserves defaulted and
+earlier-set sibling values instead of dropping them. Arrays, functions, class
+instances, and scalar values replace wholesale, and so do a small set of
+replace-leaf fields whose plain-object values must not be spliced together:
+`headers`, `agent`, `storageAdapter`, `components`, `targetProviders`,
+`voiceRecognition.provider.custom`, and `features.streamAnimation.plugins`.
+Omitting a key preserves its current value: to reset a field, pass it explicitly
+with `undefined`, which falls back to the field's default, or leaves it unset
+when no default exists.
 
 `initAgentWidget` accepts the following options:
 

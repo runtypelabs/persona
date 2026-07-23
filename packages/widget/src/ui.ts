@@ -5,6 +5,7 @@ import { onMarkdownParsersReady, getMarkdownParsersSync } from "./markdown-parse
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
   AgentWidgetConfig,
+  AgentWidgetConfigPatch,
   AgentWidgetApprovalDecisionOptions,
   AgentWidgetMessage,
   AgentWidgetEvent,
@@ -133,6 +134,7 @@ import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resi
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults, DEFAULT_FLOATING_LAUNCHER_WIDTH } from "./defaults";
+import { mergeConfigUpdate } from "./utils/config-merge";
 import { createEventBus } from "./utils/events";
 import {
   createActionManager,
@@ -305,7 +307,7 @@ const stripStreamingFromMessages = (messages: AgentWidgetMessage[]) =>
   }));
 
 type Controller = {
-  update: (config: AgentWidgetConfig) => void;
+  update: (config: AgentWidgetConfigPatch) => void;
   destroy: () => void;
   open: () => void;
   close: () => void;
@@ -7683,7 +7685,7 @@ export const createAgentExperience = (
   }
 
   const controller: Controller = {
-    update(nextConfig: AgentWidgetConfig) {
+    update(nextConfig: AgentWidgetConfigPatch) {
       const previousToolCallConfig = config.toolCall;
       const previousMessageActions = config.messageActions;
       const previousLayoutMessages = config.layout?.messages;
@@ -7695,7 +7697,10 @@ export const createAgentExperience = (
       const previousToolCallDisplay = config.features?.toolCallDisplay;
       const previousReasoningDisplay = config.features?.reasoningDisplay;
       const previousStreamAnimationType = config.features?.streamAnimation?.type;
-      config = { ...config, ...nextConfig };
+      // One consistent recursive patch policy across the live controller and the
+      // init handle. See utils/config-merge.ts for the replace-leaf list and
+      // explicit-undefined reset semantics.
+      config = mergeConfigUpdate(config, nextConfig);
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
       applyThemeVariables(mount, config);
@@ -7926,7 +7931,7 @@ export const createAgentExperience = (
       refreshCloseButton();
 
       // Re-render messages if config affecting message rendering changed
-      const toolCallConfigChanged = JSON.stringify(nextConfig.toolCall) !== JSON.stringify(previousToolCallConfig);
+      const toolCallConfigChanged = JSON.stringify(config.toolCall) !== JSON.stringify(previousToolCallConfig);
       const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
       const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
       const loadingIndicatorChanged = config.loadingIndicator?.render !== previousLoadingIndicator?.render

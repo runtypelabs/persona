@@ -483,3 +483,63 @@ describe("initAgentWidget docked mode", () => {
     handleB.destroy();
   });
 });
+
+describe("initAgentWidget update merge policy", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    createAgentExperienceMock.mockReset();
+  });
+
+  it("passes an equivalent merged config to the controller (no double-merge, siblings preserved)", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    let controllerRef: ReturnType<typeof createMockController> | undefined;
+    createAgentExperienceMock.mockImplementation((_mount, config) => {
+      controllerRef = createMockController(config);
+      return controllerRef;
+    });
+
+    const handle = initAgentWidget({
+      target: "#target",
+      config: {
+        apiUrl: "https://api.example.com/chat",
+        launcher: { enabled: false, clearChat: { backgroundColor: "#123456" } },
+      },
+    });
+
+    handle.update({ launcher: { clearChat: { tooltipText: "Clear" } } });
+
+    const passed = controllerRef!.update.mock.calls.at(-1)?.[0] as any;
+    expect(passed.launcher.clearChat.backgroundColor).toBe("#123456");
+    expect(passed.launcher.clearChat.tooltipText).toBe("Clear");
+
+    handle.destroy();
+  });
+
+  it("retains prior nested overrides when a mount-mode change rebuilds the controller", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    createAgentExperienceMock.mockImplementation((_mount, config) => createMockController(config));
+
+    const handle = initAgentWidget({
+      target: "#target",
+      config: {
+        apiUrl: "https://api.example.com/chat",
+        launcher: { enabled: false, clearChat: { backgroundColor: "#123456" } },
+      },
+    });
+
+    // Patch a sibling, then flip the mount mode to force a rebuild.
+    handle.update({ launcher: { clearChat: { tooltipText: "Clear" } } });
+    handle.update({ launcher: { mountMode: "docked" } });
+
+    const rebuildConfig = createAgentExperienceMock.mock.calls.at(-1)?.[1] as any;
+    expect(rebuildConfig.launcher.clearChat.backgroundColor).toBe("#123456");
+    expect(rebuildConfig.launcher.clearChat.tooltipText).toBe("Clear");
+    expect(rebuildConfig.launcher.mountMode).toBe("docked");
+
+    handle.destroy();
+  });
+});

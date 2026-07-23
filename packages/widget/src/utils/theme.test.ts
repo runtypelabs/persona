@@ -60,6 +60,32 @@ describe('theme utils', () => {
     expect(cssVars['--persona-palette-colors-primary-500']).toBe('#22c55e');
   });
 
+  it('preserves user radius and typography palette overrides in dark mode', () => {
+    // Regression: createDarkTheme() used to spread a pre-built default palette
+    // over the merged user config, which kept only `colors` and silently
+    // dropped radius/typography overrides that light mode honored.
+    const themeConfig = {
+      colorScheme: 'dark' as const,
+      theme: {
+        palette: {
+          radius: { xl: '4px' },
+          typography: { fontFamily: { sans: 'Georgia, serif' } },
+        },
+      },
+    };
+
+    const activeTheme = getActiveTheme(themeConfig);
+    const cssVars = themeToCssVariables(activeTheme);
+
+    // User non-color palette overrides survive the dark rebuild…
+    expect(cssVars['--persona-palette-radius-xl']).toBe('4px');
+    expect(cssVars['--persona-palette-typography-fontFamily-sans']).toBe('Georgia, serif');
+    // …untouched radius steps still resolve from the defaults…
+    expect(cssVars['--persona-palette-radius-full']).toBe('9999px');
+    // …and the dark color palette still applies underneath.
+    expect(cssVars['--persona-palette-colors-primary-500']).toBe('#171717');
+  });
+
   it('maps radius tokens into the legacy widget radius aliases', () => {
     const theme = createTheme({
       palette: {

@@ -1,6 +1,7 @@
 import { createAgentExperience, AgentWidgetController } from "../ui";
-import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetInitOptions, AgentWidgetEvent as _AgentWidgetEvent } from "../types";
+import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetConfigPatch, AgentWidgetInitOptions, AgentWidgetEvent as _AgentWidgetEvent } from "../types";
 import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
+import { mergeConfigUpdate } from "../utils/config-merge";
 import { createWidgetHostLayout } from "./host-layout";
 
 const ensureTarget = (target: string | HTMLElement): HTMLElement => {
@@ -126,19 +127,8 @@ export const initAgentWidget = (
   };
 
   const handleBase = {
-    update(nextConfig: _AgentWidgetConfig) {
-      const mergedConfig = {
-        ...config,
-        ...nextConfig,
-        launcher: {
-          ...(config?.launcher ?? {}),
-          ...(nextConfig?.launcher ?? {}),
-          dock: {
-            ...(config?.launcher?.dock ?? {}),
-            ...(nextConfig?.launcher?.dock ?? {}),
-          },
-        },
-      } as _AgentWidgetConfig;
+    update(nextConfig: AgentWidgetConfigPatch) {
+      const mergedConfig = mergeConfigUpdate(config ?? ({} as _AgentWidgetConfig), nextConfig);
       const previousDocked = isDockedMountMode(config);
       const nextDocked = isDockedMountMode(mergedConfig);
       const previousComposerBar = isComposerBarMountMode(config);
@@ -151,7 +141,9 @@ export const initAgentWidget = (
 
       config = mergedConfig;
       hostLayout.updateConfig(config);
-      controller.update(nextConfig);
+      // Pass the merged config (not the raw patch): both layers share one
+      // idempotent policy, so controller.update over an equal base is a no-op.
+      controller.update(mergedConfig);
       syncHostState();
     },
     destroy() {

@@ -5431,6 +5431,23 @@ export type AgentWidgetConfig = {
   loadingIndicator?: AgentWidgetLoadingIndicatorConfig;
 };
 
+/**
+ * Patch-aware deep-partial of {@link AgentWidgetConfig} accepted by `update()`.
+ * Function types and arrays are preserved whole (not mapped over); plain-object
+ * leaves recurse so a partial patch merges into the live config. See the merge
+ * policy in utils/config-merge.ts (some plain-object fields still replace
+ * wholesale at runtime; that is not encoded at the type level).
+ */
+export type AgentWidgetConfigPatch = ConfigPatch<AgentWidgetConfig>;
+
+type ConfigPatch<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends readonly unknown[]
+    ? T
+    : T extends object
+      ? { [K in keyof T]?: ConfigPatch<T[K]> }
+      : T;
+
 export type AgentWidgetMessageRole = "user" | "assistant" | "system";
 
 export type AgentWidgetReasoning = {
