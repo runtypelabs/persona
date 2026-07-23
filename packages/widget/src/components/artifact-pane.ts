@@ -421,6 +421,21 @@ export function createArtifactPane(
     "div",
     "persona-artifact-content persona-flex-1 persona-min-h-0 persona-overflow-y-auto persona-p-3"
   );
+  const resetContentInlineScroll = () => {
+    // The shared body survives artifact and layout changes. Always return it to
+    // inline start at those lifecycle boundaries so a wide previous preview
+    // cannot leave the next one clipped by a stale horizontal offset.
+    content.scrollLeft = 0;
+  };
+  const scheduleContentInlineScrollReset = () => {
+    // ui.ts applies the expanded root class immediately before setExpanded().
+    // Wait one frame so the new pane width has taken effect before resetting.
+    if (typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(resetContentInlineScroll);
+    } else {
+      setTimeout(resetContentInlineScroll, 0);
+    }
+  };
   if (panePadding) {
     for (const el of [list, customBarMount]) {
       el.style.paddingLeft = panePadding;
@@ -437,6 +452,7 @@ export function createArtifactPane(
   let records: PersonaArtifactRecord[] = [];
   let selectedId: string | null = null;
   let mobileOpen = false;
+  let expandedState = false;
   // Lazy-render gate. `visible` reflects the host's explicit setVisible() signal
   // (never inferred from layout/offsetParent, so class-hiding + jsdom behave the
   // same). It defaults to true so the pane renders eagerly when constructed
@@ -682,11 +698,13 @@ export function createArtifactPane(
     element: shell,
     backdrop,
     update(state: { artifacts: PersonaArtifactRecord[]; selectedId: string | null }) {
-      records = state.artifacts;
-      selectedId =
+      const nextSelectedId =
         state.selectedId ??
         state.artifacts[state.artifacts.length - 1]?.id ??
         null;
+      const selectionChanged = nextSelectedId !== selectedId;
+      records = state.artifacts;
+      selectedId = nextSelectedId;
       if (records.length > 0) {
         mobileOpen = true;
       }
@@ -696,6 +714,7 @@ export function createArtifactPane(
       // executing artifact scripts twice. Defer the whole render() to reveal.
       dirty = true;
       if (visible) flush();
+      if (selectionChanged) resetContentInlineScroll();
     },
     setMobileOpen(open: boolean) {
       mobileOpen = open;
@@ -707,6 +726,10 @@ export function createArtifactPane(
       }
     },
     setExpanded(expanded: boolean) {
+      if (expanded !== expandedState) {
+        expandedState = expanded;
+        scheduleContentInlineScrollReset();
+      }
       // Swap the icon (the state signal) and update the accessible label. We
       // deliberately avoid aria-pressed here: the icon-btn [aria-pressed] CSS
       // would add unwanted active styling.

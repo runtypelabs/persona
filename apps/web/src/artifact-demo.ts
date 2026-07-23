@@ -827,25 +827,25 @@ const readAnimationControls = () => {
 // for shimmer-color.
 const buildArtifactsFeature = () => {
   const { mode, duration, primary, secondary } = readAnimationControls();
-  // Only send statusLabel when a non-default mode is picked; Default leaves the
-  // key unset so the widget keeps its built-in "Generating <type>..." label.
+  // Default mode returns undefined; sent explicitly so it clears a prior label.
   const statusLabel = buildStatusLabel();
-  // Custom tab bar for Buttons/Menu; undefined in Scroll mode leaves the
-  // built-in strip in place.
+  // Buttons/Menu return a renderer; Scroll returns undefined to clear it.
   const tabBar = buildTabBar();
+  // Read once; the pane-appearance recipe sends every key explicitly below so a
+  // control toggled back clears the previous recipe under patch-merge update().
+  const appearance = readPaneAppearance();
+  const chatFlush = appearance === "detached" && readChatFlush();
   return {
     ...artifactDemoConfigBase.features?.artifacts,
     display: readDisplayMode(),
-    ...(statusLabel !== undefined ? { statusLabel } : {}),
-    ...(tabBar ? { renderTabBar: tabBar } : {}),
+    statusLabel,
+    renderTabBar: tabBar,
     loadingAnimation: mode,
     loadingAnimationDuration: duration,
-    ...(mode === "shimmer-color"
-      ? {
-          loadingAnimationColor: primary,
-          loadingAnimationSecondaryColor: secondary,
-        }
-      : {}),
+    // Colors only apply to shimmer-color; cleared otherwise so they round-trip.
+    loadingAnimationColor: mode === "shimmer-color" ? primary : undefined,
+    loadingAnimationSecondaryColor:
+      mode === "shimmer-color" ? secondary : undefined,
     // Copy is always on in the demo so the default pane toolbar shows it;
     // the expand toggle stays behind its control pill. White pane surface so
     // the source view reads like a document sheet against this page's warm
@@ -853,38 +853,38 @@ const buildArtifactsFeature = () => {
     layout: {
       showCopyButton: true,
       paneBackground: "#ffffff",
-      ...(readExpandToggle() ? { showExpandToggle: true } : {}),
-      ...(readResizable() ? { resizable: true } : {}),
-      // Edge fade for the built-in Scroll strip; send only when turned Off.
-      // The custom Buttons/Menu bars (renderTabBar) own their own affordances.
-      ...(readTabFade() ? {} : { tabFade: false }),
-      ...(readPaneAppearance() === "seamless"
-        ? {
-            paneAppearance: "seamless" as const,
-            splitGap: "0",
-            paneShadow: "none",
-          }
-        : readPaneAppearance() === "detached"
-          ? // Detached: the widget widens the split gap to the panel inset
-            // token and adds all-side radius, border, and elevation. This
-            // page's warm background shows through the gap by default. Flush
-            // chat surface drops the chat card entirely so only the pane floats.
-            {
-              paneAppearance: "detached" as const,
-              // Flush squares the outer panel, so round the floating pane on its
-              // own token instead of inheriting the squared panel radius.
-              ...(readChatFlush()
-                ? { chatSurface: "flush" as const, paneBorderRadius: "0.75rem" }
-                : {}),
-            }
-          : // Panel: send it explicitly only under Always inset, so
-            // launcher.detachedPanel does not flip it to detached via the
-            // coordinated default; otherwise omit it (minimal default config).
-            readAlwaysInset()
-            ? { paneAppearance: "panel" as const }
-            : {}),
+      showExpandToggle: readExpandToggle(),
+      resizable: readResizable(),
+      // Edge fade for the built-in Scroll strip; the custom Buttons/Menu bars
+      // (renderTabBar) own their own affordances.
+      tabFade: readTabFade(),
+      // Panel sends undefined so launcher.detachedPanel can still flip the
+      // coordinated default to detached; "panel" pins it only under Always inset.
+      // Seamless/detached each set their own value.
+      paneAppearance:
+        appearance === "seamless"
+          ? ("seamless" as const)
+          : appearance === "detached"
+            ? ("detached" as const)
+            : readAlwaysInset()
+              ? ("panel" as const)
+              : undefined,
+      // Seamless flush recipe; cleared to undefined for panel/detached.
+      splitGap: appearance === "seamless" ? "0" : undefined,
+      paneShadow: appearance === "seamless" ? "none" : undefined,
+      // Detached + flush: square the outer panel, round the floating pane on its
+      // own token. Cleared to undefined otherwise.
+      chatSurface: chatFlush ? ("flush" as const) : undefined,
+      paneBorderRadius: chatFlush ? "0.75rem" : undefined,
     },
-    ...(readCustomActions() ? buildCustomActions() : {}),
+    // Off clears the sample actions (arrays replace wholesale under patch merge).
+    ...(readCustomActions()
+      ? buildCustomActions()
+      : {
+          toolbarActions: undefined,
+          cardActions: undefined,
+          inlineActions: undefined,
+        }),
     // Inline chrome On sends the object form so showViewToggle can ride along;
     // showCopy/showExpand default to true when unspecified in the object form.
     // Off sends inlineChrome: false for a bare inline body. showViewToggle is a
@@ -939,22 +939,20 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
             autoExpand: true,
             width: "100%",
             fullHeight: true,
-            // Always keeps the inline widget inset even when no artifact is open.
-            ...(readAlwaysInset() ? { detachedPanel: true } : {}),
+            // Always keeps the inline widget inset even when no artifact is open;
+            // sent explicitly so toggling Always off clears it.
+            detachedPanel: readAlwaysInset() ? true : undefined,
           },
     theme: {
       ...artifactDemoConfigBase.theme,
-      ...(insetLook
-        ? {
-            components: {
-              ...artifactDemoConfigBase.theme?.components,
-              panel: {
-                ...artifactDemoConfigBase.theme?.components?.panel,
-                borderRadius: "0.75rem",
-              },
-            },
-          }
-        : {}),
+      components: {
+        ...artifactDemoConfigBase.theme?.components,
+        panel: {
+          ...artifactDemoConfigBase.theme?.components?.panel,
+          // Rounded only under the inset look; cleared otherwise so it round-trips.
+          borderRadius: insetLook ? "0.75rem" : undefined,
+        },
+      },
     },
     layout: { showHeader: false },
   } as AgentWidgetConfig;

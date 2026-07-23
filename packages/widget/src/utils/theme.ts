@@ -146,13 +146,16 @@ export const createLightTheme = (userConfig?: DeepPartial<PersonaTheme>): Person
 };
 
 export const createDarkTheme = (userConfig?: DeepPartial<PersonaTheme>): PersonaTheme => {
-  const baseTheme = createTheme(undefined, { validate: false });
-  
+  // createTheme() already merges every palette sub-object (radius, typography,
+  // shadows, …) over the defaults, so only the dark color scales need to be
+  // layered UNDER the user's colors here. Spreading a pre-built default
+  // palette instead would clobber the user's non-color palette overrides
+  // (radius/typography) in dark mode while light mode honored them.
   return createTheme(
     {
       ...userConfig,
       palette: {
-        ...baseTheme.palette,
+        ...userConfig?.palette,
         colors: {
           ...DARK_PALETTE.colors,
           ...userConfig?.palette?.colors,

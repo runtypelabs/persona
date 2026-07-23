@@ -5,6 +5,7 @@ import { onMarkdownParsersReady, getMarkdownParsersSync } from "./markdown-parse
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
   AgentWidgetConfig,
+  AgentWidgetConfigPatch,
   AgentWidgetApprovalDecisionOptions,
   AgentWidgetMessage,
   AgentWidgetEvent,
@@ -133,6 +134,7 @@ import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resi
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults, DEFAULT_FLOATING_LAUNCHER_WIDTH } from "./defaults";
+import { mergeConfigUpdate } from "./utils/config-merge";
 import { createEventBus } from "./utils/events";
 import {
   createActionManager,
@@ -305,7 +307,7 @@ const stripStreamingFromMessages = (messages: AgentWidgetMessage[]) =>
   }));
 
 type Controller = {
-  update: (config: AgentWidgetConfig) => void;
+  update: (config: AgentWidgetConfigPatch) => void;
   destroy: () => void;
   open: () => void;
   close: () => void;
@@ -7683,7 +7685,7 @@ export const createAgentExperience = (
   }
 
   const controller: Controller = {
-    update(nextConfig: AgentWidgetConfig) {
+    update(nextConfig: AgentWidgetConfigPatch) {
       const previousToolCallConfig = config.toolCall;
       const previousMessageActions = config.messageActions;
       const previousLayoutMessages = config.layout?.messages;
@@ -7695,7 +7697,10 @@ export const createAgentExperience = (
       const previousToolCallDisplay = config.features?.toolCallDisplay;
       const previousReasoningDisplay = config.features?.reasoningDisplay;
       const previousStreamAnimationType = config.features?.streamAnimation?.type;
-      config = { ...config, ...nextConfig };
+      // One consistent recursive patch policy across the live controller and the
+      // init handle. See utils/config-merge.ts for the replace-leaf list and
+      // explicit-undefined reset semantics.
+      config = mergeConfigUpdate(config, nextConfig);
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
       applyThemeVariables(mount, config);
@@ -7865,7 +7870,10 @@ export const createAgentExperience = (
           headerSubtitle.style.display = headerLayoutConfig.showSubtitle === false ? "none" : "";
         }
         if (closeButton) {
-          closeButton.style.display = headerLayoutConfig.showCloseButton === false ? "none" : "";
+          // showCloseButton (defaulted true) filters on top of toggleability;
+          // it must not reveal the close button on non-closeable panels.
+          const showClose = isPanelToggleable() && headerLayoutConfig.showCloseButton !== false;
+          closeButton.style.display = showClose ? "" : "none";
         }
         if (panelElements.clearChatButtonWrapper) {
           // showClearChat explicitly controls visibility when set
@@ -7926,7 +7934,7 @@ export const createAgentExperience = (
       refreshCloseButton();
 
       // Re-render messages if config affecting message rendering changed
-      const toolCallConfigChanged = JSON.stringify(nextConfig.toolCall) !== JSON.stringify(previousToolCallConfig);
+      const toolCallConfigChanged = JSON.stringify(config.toolCall) !== JSON.stringify(previousToolCallConfig);
       const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
       const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
       const loadingIndicatorChanged = config.loadingIndicator?.render !== previousLoadingIndicator?.render
@@ -8067,13 +8075,11 @@ export const createAgentExperience = (
       }
 
       if (closeButton) {
-        // Handle close button visibility from layout config
-        const layoutShowCloseButton = config.layout?.header?.showCloseButton;
-        if (layoutShowCloseButton === false) {
-          closeButton.style.display = "none";
-        } else {
-          closeButton.style.display = "";
-        }
+        // showCloseButton (defaulted true) filters on top of toggleability;
+        // it must not reveal the close button on non-closeable panels.
+        const layoutShowCloseButton =
+          isPanelToggleable() && config.layout?.header?.showCloseButton !== false;
+        closeButton.style.display = layoutShowCloseButton ? "" : "none";
 
         const closeButtonSize = launcher.closeButtonSize ?? "32px";
         const closeButtonPlacement = launcher.closeButtonPlacement ?? "inline";
@@ -8164,6 +8170,9 @@ export const createAgentExperience = (
         closeButton.innerHTML = "";
         const iconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
         if (iconSvg) {
+          // display:block matches the builder; inline SVG baseline spacing
+          // shifts the icon off-center.
+          iconSvg.style.display = "block";
           closeButton.appendChild(iconSvg);
         } else {
           closeButton.textContent = closeButtonIconText;
@@ -8350,8 +8359,13 @@ export const createAgentExperience = (
           // the icon to match its 16px button.
           clearChatButton.innerHTML = "";
           const clearChatIconSize = isComposerBar() ? "14px" : "20px";
-          const iconSvg = renderLucideIcon(clearChatIconName, clearChatIconSize, "currentColor", 2);
+          // Stroke 1 matches the mount-time builder (header-parts.ts); a
+          // different weight here makes the icon visibly bolden on update.
+          const iconSvg = renderLucideIcon(clearChatIconName, clearChatIconSize, "currentColor", 1);
           if (iconSvg) {
+            // display:block matches the builder; inline SVG baseline spacing
+            // shifts the icon off-center.
+            iconSvg.style.display = "block";
             clearChatButton.appendChild(iconSvg);
           }
 
@@ -8554,10 +8568,16 @@ export const createAgentExperience = (
           micButton.style.minWidth = micIconSize;
           micButton.style.minHeight = micIconSize;
           
-          // Update icon
-          const iconColor = voiceConfig.iconColor ?? sendButtonConfig.textColor ?? "currentColor";
+          // Update icon; color chain and stroke 1.5 match the mount-time
+          // builder (composer-parts.ts) so an unrelated update cannot restyle.
+          const iconColor = voiceConfig.iconColor ?? sendButtonConfig.textColor;
           micButton.innerHTML = "";
-          const micIconSvg = renderLucideIcon(micIconName, micIconSizeNum, iconColor, 2);
+          const micIconSvg = renderLucideIcon(
+            micIconName,
+            micIconSizeNum,
+            iconColor || "currentColor",
+            1.5
+          );
           if (micIconSvg) {
             micButton.appendChild(micIconSvg);
           } else {
@@ -8741,10 +8761,6 @@ export const createAgentExperience = (
             });
           }
 
-          // Create drop overlay if missing
-          if (!container.querySelector(".persona-attachment-drop-overlay")) {
-            container.appendChild(buildDropOverlay(attachmentsConfig.dropOverlay));
-          }
         } else {
           // Show existing attachment button and update config
           attachmentButtonWrapper.style.display = "";
@@ -8764,6 +8780,33 @@ export const createAgentExperience = (
               maxFiles: attachmentsConfig.maxFiles
             });
           }
+        }
+
+        // Rebuild the overlay so live dropOverlay updates restyle it; visibility
+        // is owned by the container's drop-active class, so this is drag-safe.
+        container.querySelector(".persona-attachment-drop-overlay")?.remove();
+        container.appendChild(buildDropOverlay(config.attachments?.dropOverlay));
+
+        // Re-render icon/tooltip so live buttonIconName/buttonTooltipText
+        // updates apply; the button element itself is created once and kept.
+        if (attachmentButton) {
+          const attCfg = config.attachments ?? {};
+          const tooltipText = attCfg.buttonTooltipText ?? "Attach file";
+          attachmentButton.setAttribute("aria-label", tooltipText);
+          attachmentButton.textContent = "";
+          const btnSize = parseFloat(config.sendButton?.size ?? "40px") || 40;
+          const iconSvg = renderLucideIcon(
+            attCfg.buttonIconName ?? "paperclip",
+            Math.round(btnSize * 0.6),
+            "currentColor",
+            1.5
+          );
+          if (iconSvg) attachmentButton.appendChild(iconSvg);
+          else attachmentButton.textContent = "📎";
+          const attachTooltip = attachmentButtonWrapper?.querySelector(
+            ".persona-send-button-tooltip"
+          );
+          if (attachTooltip) attachTooltip.textContent = tooltipText;
         }
       } else {
         // Hide attachment button if disabled
@@ -8799,9 +8842,6 @@ export const createAgentExperience = (
         sendButton.style.fontSize = "18px";
         sendButton.style.lineHeight = "1";
         
-        // Clear existing content
-        sendButton.innerHTML = "";
-        
         // Set foreground color from config or theme token
         if (textColor) {
           sendButton.style.color = textColor;
@@ -8809,20 +8849,25 @@ export const createAgentExperience = (
           sendButton.style.color = "var(--persona-button-primary-fg, #ffffff)";
         }
 
-        // Use Lucide icon if iconName is provided, otherwise fall back to iconText
-        if (iconName) {
-          const iconSize = parseFloat(buttonSize) || 24;
-          const iconColor = textColor?.trim() || "currentColor";
-          const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, 2);
-          if (iconSvg) {
-            sendButton.appendChild(iconSvg);
+        // Skip the icon-content re-render while streaming: the button holds the
+        // stop icon (owned by setSendButtonMode), and clobbering it here would
+        // show the send arrow mid-stream while the aria-label still says stop.
+        if (!session.isStreaming()) {
+          sendButton.innerHTML = "";
+          if (iconName) {
+            const iconSize = parseFloat(buttonSize) || 24;
+            const iconColor = textColor?.trim() || "currentColor";
+            const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, 2);
+            if (iconSvg) {
+              sendButton.appendChild(iconSvg);
+            } else {
+              sendButton.textContent = iconText;
+            }
           } else {
             sendButton.textContent = iconText;
           }
-        } else {
-          sendButton.textContent = iconText;
         }
-        
+
         // Update classes
         sendButton.className = "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer";
         
