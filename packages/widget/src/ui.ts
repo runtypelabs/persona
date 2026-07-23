@@ -7870,7 +7870,10 @@ export const createAgentExperience = (
           headerSubtitle.style.display = headerLayoutConfig.showSubtitle === false ? "none" : "";
         }
         if (closeButton) {
-          closeButton.style.display = headerLayoutConfig.showCloseButton === false ? "none" : "";
+          // showCloseButton (defaulted true) filters on top of toggleability;
+          // it must not reveal the close button on non-closeable panels.
+          const showClose = isPanelToggleable() && headerLayoutConfig.showCloseButton !== false;
+          closeButton.style.display = showClose ? "" : "none";
         }
         if (panelElements.clearChatButtonWrapper) {
           // showClearChat explicitly controls visibility when set
@@ -8072,13 +8075,11 @@ export const createAgentExperience = (
       }
 
       if (closeButton) {
-        // Handle close button visibility from layout config
-        const layoutShowCloseButton = config.layout?.header?.showCloseButton;
-        if (layoutShowCloseButton === false) {
-          closeButton.style.display = "none";
-        } else {
-          closeButton.style.display = "";
-        }
+        // showCloseButton (defaulted true) filters on top of toggleability;
+        // it must not reveal the close button on non-closeable panels.
+        const layoutShowCloseButton =
+          isPanelToggleable() && config.layout?.header?.showCloseButton !== false;
+        closeButton.style.display = layoutShowCloseButton ? "" : "none";
 
         const closeButtonSize = launcher.closeButtonSize ?? "32px";
         const closeButtonPlacement = launcher.closeButtonPlacement ?? "inline";
@@ -8355,7 +8356,9 @@ export const createAgentExperience = (
           // the icon to match its 16px button.
           clearChatButton.innerHTML = "";
           const clearChatIconSize = isComposerBar() ? "14px" : "20px";
-          const iconSvg = renderLucideIcon(clearChatIconName, clearChatIconSize, "currentColor", 2);
+          // Stroke 1 matches the mount-time builder (header-parts.ts); a
+          // different weight here makes the icon visibly bolden on update.
+          const iconSvg = renderLucideIcon(clearChatIconName, clearChatIconSize, "currentColor", 1);
           if (iconSvg) {
             clearChatButton.appendChild(iconSvg);
           }
