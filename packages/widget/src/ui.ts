@@ -8842,9 +8842,6 @@ export const createAgentExperience = (
         sendButton.style.fontSize = "18px";
         sendButton.style.lineHeight = "1";
         
-        // Clear existing content
-        sendButton.innerHTML = "";
-        
         // Set foreground color from config or theme token
         if (textColor) {
           sendButton.style.color = textColor;
@@ -8852,20 +8849,25 @@ export const createAgentExperience = (
           sendButton.style.color = "var(--persona-button-primary-fg, #ffffff)";
         }
 
-        // Use Lucide icon if iconName is provided, otherwise fall back to iconText
-        if (iconName) {
-          const iconSize = parseFloat(buttonSize) || 24;
-          const iconColor = textColor?.trim() || "currentColor";
-          const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, 2);
-          if (iconSvg) {
-            sendButton.appendChild(iconSvg);
+        // Skip the icon-content re-render while streaming: the button holds the
+        // stop icon (owned by setSendButtonMode), and clobbering it here would
+        // show the send arrow mid-stream while the aria-label still says stop.
+        if (!session.isStreaming()) {
+          sendButton.innerHTML = "";
+          if (iconName) {
+            const iconSize = parseFloat(buttonSize) || 24;
+            const iconColor = textColor?.trim() || "currentColor";
+            const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, 2);
+            if (iconSvg) {
+              sendButton.appendChild(iconSvg);
+            } else {
+              sendButton.textContent = iconText;
+            }
           } else {
             sendButton.textContent = iconText;
           }
-        } else {
-          sendButton.textContent = iconText;
         }
-        
+
         // Update classes
         sendButton.className = "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer";
         
