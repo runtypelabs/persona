@@ -8170,6 +8170,9 @@ export const createAgentExperience = (
         closeButton.innerHTML = "";
         const iconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
         if (iconSvg) {
+          // display:block matches the builder; inline SVG baseline spacing
+          // shifts the icon off-center.
+          iconSvg.style.display = "block";
           closeButton.appendChild(iconSvg);
         } else {
           closeButton.textContent = closeButtonIconText;
@@ -8360,6 +8363,9 @@ export const createAgentExperience = (
           // different weight here makes the icon visibly bolden on update.
           const iconSvg = renderLucideIcon(clearChatIconName, clearChatIconSize, "currentColor", 1);
           if (iconSvg) {
+            // display:block matches the builder; inline SVG baseline spacing
+            // shifts the icon off-center.
+            iconSvg.style.display = "block";
             clearChatButton.appendChild(iconSvg);
           }
 
@@ -8562,10 +8568,16 @@ export const createAgentExperience = (
           micButton.style.minWidth = micIconSize;
           micButton.style.minHeight = micIconSize;
           
-          // Update icon
-          const iconColor = voiceConfig.iconColor ?? sendButtonConfig.textColor ?? "currentColor";
+          // Update icon; color chain and stroke 1.5 match the mount-time
+          // builder (composer-parts.ts) so an unrelated update cannot restyle.
+          const iconColor = voiceConfig.iconColor ?? sendButtonConfig.textColor;
           micButton.innerHTML = "";
-          const micIconSvg = renderLucideIcon(micIconName, micIconSizeNum, iconColor, 2);
+          const micIconSvg = renderLucideIcon(
+            micIconName,
+            micIconSizeNum,
+            iconColor || "currentColor",
+            1.5
+          );
           if (micIconSvg) {
             micButton.appendChild(micIconSvg);
           } else {

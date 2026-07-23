@@ -95,3 +95,55 @@ describe("header stability across unrelated updates", () => {
     controller.destroy();
   });
 });
+
+describe("composer and header icon stability across unrelated updates", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+
+  it("keeps the mic icon stroke and button color stable", () => {
+    window.scrollTo = vi.fn();
+    // The mic button only renders when speech recognition is available.
+    vi.stubGlobal("SpeechRecognition", class {});
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      voiceRecognition: { enabled: true },
+    });
+
+    const mic = () => mount.querySelector<HTMLElement>("[data-persona-composer-mic]")!;
+    expect(mic()).not.toBeNull();
+    expect(mic().querySelector("svg")!.getAttribute("stroke-width")).toBe("1.5");
+    expect(mic().style.color).toBe("var(--persona-text, #111827)");
+
+    controller.update({ attachments: { enabled: true } });
+
+    expect(mic().querySelector("svg")!.getAttribute("stroke-width")).toBe("1.5");
+    expect(mic().style.color).toBe("var(--persona-text, #111827)");
+
+    controller.destroy();
+  });
+
+  it("keeps display:block on close and clear-chat icons", () => {
+    window.scrollTo = vi.fn();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: true, autoExpand: true },
+    });
+
+    const iconDisplay = (label: string) =>
+      mount.querySelector<SVGElement>(`button[aria-label="${label}"] svg`)!.style.display;
+    expect(iconDisplay("Close chat")).toBe("block");
+    expect(iconDisplay("Clear chat")).toBe("block");
+
+    controller.update({ attachments: { enabled: true } });
+
+    expect(iconDisplay("Close chat")).toBe("block");
+    expect(iconDisplay("Clear chat")).toBe("block");
+
+    controller.destroy();
+  });
+});
