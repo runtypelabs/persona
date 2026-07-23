@@ -8746,10 +8746,6 @@ export const createAgentExperience = (
             });
           }
 
-          // Create drop overlay if missing
-          if (!container.querySelector(".persona-attachment-drop-overlay")) {
-            container.appendChild(buildDropOverlay(attachmentsConfig.dropOverlay));
-          }
         } else {
           // Show existing attachment button and update config
           attachmentButtonWrapper.style.display = "";
@@ -8769,6 +8765,33 @@ export const createAgentExperience = (
               maxFiles: attachmentsConfig.maxFiles
             });
           }
+        }
+
+        // Rebuild the overlay so live dropOverlay updates restyle it; visibility
+        // is owned by the container's drop-active class, so this is drag-safe.
+        container.querySelector(".persona-attachment-drop-overlay")?.remove();
+        container.appendChild(buildDropOverlay(config.attachments?.dropOverlay));
+
+        // Re-render icon/tooltip so live buttonIconName/buttonTooltipText
+        // updates apply; the button element itself is created once and kept.
+        if (attachmentButton) {
+          const attCfg = config.attachments ?? {};
+          const tooltipText = attCfg.buttonTooltipText ?? "Attach file";
+          attachmentButton.setAttribute("aria-label", tooltipText);
+          attachmentButton.textContent = "";
+          const btnSize = parseFloat(config.sendButton?.size ?? "40px") || 40;
+          const iconSvg = renderLucideIcon(
+            attCfg.buttonIconName ?? "paperclip",
+            Math.round(btnSize * 0.6),
+            "currentColor",
+            1.5
+          );
+          if (iconSvg) attachmentButton.appendChild(iconSvg);
+          else attachmentButton.textContent = "📎";
+          const attachTooltip = attachmentButtonWrapper?.querySelector(
+            ".persona-send-button-tooltip"
+          );
+          if (attachTooltip) attachTooltip.textContent = tooltipText;
         }
       } else {
         // Hide attachment button if disabled

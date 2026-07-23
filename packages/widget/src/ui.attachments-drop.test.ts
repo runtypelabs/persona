@@ -186,3 +186,93 @@ describe("createAgentExperience attachment file drop", () => {
     controller.destroy();
   });
 });
+
+describe("drop overlay live config updates", () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+
+  it("rebuilds the overlay with new dropOverlay values on update() (regression: built once, live updates ignored)", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      attachments: { enabled: true, dropOverlay: { label: "Drop it", background: "#111111" } },
+    });
+
+    const overlay = () => mount.querySelector<HTMLElement>(".persona-attachment-drop-overlay")!;
+    expect(overlay()).not.toBeNull();
+    expect(overlay().querySelector(".persona-drop-overlay-label")!.textContent).toBe("Drop it");
+    expect(overlay().style.getPropertyValue("--persona-drop-overlay-bg")).toBe("#111111");
+
+    controller.update({
+      attachments: { dropOverlay: { label: "New label", background: "#222222" } },
+    });
+
+    expect(overlay().querySelector(".persona-drop-overlay-label")!.textContent).toBe("New label");
+    expect(overlay().style.getPropertyValue("--persona-drop-overlay-bg")).toBe("#222222");
+    // Only one overlay after the rebuild.
+    expect(mount.querySelectorAll(".persona-attachment-drop-overlay").length).toBe(1);
+
+    controller.destroy();
+  });
+
+  it("clears overlay styling when dropOverlay is reset via explicit undefined", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      attachments: { enabled: true, dropOverlay: { label: "Drop it", background: "#111111" } },
+    });
+
+    controller.update({ attachments: { dropOverlay: undefined } });
+
+    const overlay = mount.querySelector<HTMLElement>(".persona-attachment-drop-overlay")!;
+    expect(overlay).not.toBeNull();
+    expect(overlay.querySelector(".persona-drop-overlay-label")).toBeNull();
+    expect(overlay.style.getPropertyValue("--persona-drop-overlay-bg")).toBe("");
+
+    controller.destroy();
+  });
+});
+
+describe("attachment button live config updates", () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+
+  it("re-renders the button icon and tooltip on update() (regression: set once at creation)", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      attachments: { enabled: true, buttonIconName: "paperclip", buttonTooltipText: "Attach file" },
+    });
+
+    const button = () => mount.querySelector<HTMLButtonElement>(".persona-attachment-button")!;
+    expect(button()).not.toBeNull();
+    const initialSvg = button().querySelector("svg")!.outerHTML;
+
+    controller.update({
+      attachments: { buttonIconName: "camera", buttonTooltipText: "Add a photo" },
+    });
+
+    expect(button().getAttribute("aria-label")).toBe("Add a photo");
+    const updatedSvg = button().querySelector("svg")!.outerHTML;
+    expect(updatedSvg).not.toBe(initialSvg);
+    const tooltip = button().parentElement!.querySelector(".persona-send-button-tooltip");
+    expect(tooltip?.textContent).toBe("Add a photo");
+
+    controller.destroy();
+  });
+});
