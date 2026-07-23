@@ -61,14 +61,16 @@ function readAttachmentsConfig(): AgentWidgetAttachmentsConfig {
   const dropBlur = (document.getElementById("cfg-drop-blur") as HTMLSelectElement).value;
   const dropInset = (document.getElementById("cfg-drop-inset") as HTMLSelectElement).value;
 
+  // Every key is sent explicitly (undefined when its control is empty) so
+  // clearing a control clears the value under patch-merge update().
   const dropOverlay: AgentWidgetAttachmentsConfig["dropOverlay"] = {
-    ...(dropBg ? { background: dropBg } : {}),
-    ...(dropIcon ? { iconName: dropIcon } : {}),
-    ...(dropStroke ? { iconStrokeWidth: Number(dropStroke) } : {}),
-    ...(dropLabel ? { label: dropLabel } : {}),
-    ...(dropBorder ? { border: dropBorder } : {}),
-    ...(dropBlur ? { backdropBlur: dropBlur } : {}),
-    ...(dropInset ? { inset: dropInset } : {}),
+    background: dropBg || undefined,
+    iconName: dropIcon || undefined,
+    iconStrokeWidth: dropStroke ? Number(dropStroke) : undefined,
+    label: dropLabel || undefined,
+    border: dropBorder || undefined,
+    backdropBlur: dropBlur || undefined,
+    inset: dropInset || undefined,
   };
 
   return {
@@ -77,7 +79,7 @@ function readAttachmentsConfig(): AgentWidgetAttachmentsConfig {
     maxFileSize,
     allowedTypes,
     buttonIconName,
-    ...(Object.keys(dropOverlay).length > 0 ? { dropOverlay } : {}),
+    dropOverlay,
   };
 }
 

@@ -112,6 +112,15 @@ const VARIANTS: Array<{
   },
 ];
 
+// Every formStyle key any variant sets, mapped to undefined. Spread first in the
+// config so switching to a variant that omits a key clears it under patch-merge
+// update() (absent keys are preserved, so an omitted key would otherwise persist).
+const FORM_STYLE_RESET = Object.fromEntries(
+  Array.from(
+    new Set(VARIANTS.flatMap((v) => Object.keys(v.formStyles))),
+  ).map((key) => [key, undefined]),
+) as DynamicFormStyles;
+
 let selectedVariant = VARIANTS[0];
 
 function buildFormProps(variant = selectedVariant) {
@@ -172,6 +181,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       "Create a status badge",
     ],
     formStyles: {
+      ...FORM_STYLE_RESET,
       ...selectedVariant.formStyles,
       ...(isLauncher
         ? {

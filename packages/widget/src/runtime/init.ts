@@ -141,9 +141,10 @@ export const initAgentWidget = (
 
       config = mergedConfig;
       hostLayout.updateConfig(config);
-      // Pass the merged config (not the raw patch): both layers share one
-      // idempotent policy, so controller.update over an equal base is a no-op.
-      controller.update(mergedConfig);
+      // Pass the raw patch: mergedConfig materializes explicit-undefined resets
+      // as absent keys, which the controller's patch merge would preserve
+      // instead of clearing. Both layers share mergeConfigUpdate, so they converge.
+      controller.update(nextConfig);
       syncHostState();
     },
     destroy() {

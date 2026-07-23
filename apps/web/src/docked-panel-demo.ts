@@ -109,10 +109,12 @@ function buildOttoTheme() {
         },
       },
     },
+    // panel.borderRadius is always sent so toggling detached clears the flush
+    // override under patch-merge update() and the rounded default returns.
     components: detachedCheck.checked
-      ? // Detached card: keep the theme's rounded defaults so the inset card
-        // reads as elevated; header still squares against the container clip.
-        { header: { borderRadius: "0" } }
+      ? // Detached card: clear the panel override so the theme's rounded default
+        // makes the inset card read as elevated; header still squares.
+        { panel: { borderRadius: undefined }, header: { borderRadius: "0" } }
       : // Flush dock: zero radius so the panel sits cleanly against the admin edge.
         {
           panel: { borderRadius: "0" },

@@ -490,7 +490,7 @@ describe("initAgentWidget update merge policy", () => {
     createAgentExperienceMock.mockReset();
   });
 
-  it("passes an equivalent merged config to the controller (no double-merge, siblings preserved)", async () => {
+  it("passes the raw patch to the controller so explicit-undefined resets survive", async () => {
     const { initAgentWidget } = await import("./init");
     document.body.innerHTML = `<div id="target"></div>`;
 
@@ -508,11 +508,13 @@ describe("initAgentWidget update merge policy", () => {
       },
     });
 
-    handle.update({ launcher: { clearChat: { tooltipText: "Clear" } } });
+    // The merged config materializes explicit-undefined as absence, which the
+    // controller's patch merge would preserve; only the raw patch carries resets.
+    const patch = { launcher: { clearChat: { tooltipText: "Clear" } } };
+    handle.update(patch);
 
     const passed = controllerRef!.update.mock.calls.at(-1)?.[0] as any;
-    expect(passed.launcher.clearChat.backgroundColor).toBe("#123456");
-    expect(passed.launcher.clearChat.tooltipText).toBe("Clear");
+    expect(passed).toBe(patch);
 
     handle.destroy();
   });
