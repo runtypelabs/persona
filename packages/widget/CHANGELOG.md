@@ -1,5 +1,16 @@
 # @runtypelabs/persona
 
+## 4.11.0
+
+### Minor Changes
+
+- 67be417: Add role-specific content or full-width message layouts with optional CSS max-width caps and Theme Configurator controls.
+
+### Patch Changes
+
+- 0928598: Portal and viewport-clamp control tooltips so long labels remain visible in narrow and overflow-clipped panels.
+- 67be417: Wide markdown tables now scroll horizontally inside their own container instead of pushing the whole chat column wide. Each table is wrapped in a scroll region with edge fades that appear only when there is more content to scroll toward, so tables stay contained and readable on narrow layouts. While a table streams in, it now scrolls at its natural width with columns locked to the header row, instead of being squeezed to fit the column and only becoming scrollable once streaming finished. The fade width is themeable via the `--persona-md-table-scroll-fade` CSS variable (set it to `0` to turn the fade off).
+
 ## 4.10.1
 
 ### Patch Changes
