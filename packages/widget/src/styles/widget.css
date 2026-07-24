@@ -1530,24 +1530,14 @@
   max-width: 100%;
   overflow-x: auto;
   margin: 0.5rem 0;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Registered so the fade widths animate smoothly when they cross the edge
-   threshold; degrades to an instant toggle where @property is unsupported. */
-@property --persona-fade-l {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
-}
-@property --persona-fade-r {
-  syntax: "<length>";
-  inherits: false;
-  initial-value: 0px;
 }
 
 /* Edge fades (set by table-scroll-fade.ts) cue that the table scrolls; each
-   side shows only when there is more content that way. */
+   side shows only when there is more content that way. The fade is applied
+   instantly, not transitioned: each morph strips and re-applies the fade state,
+   so a transition would animate it from 0 on every streaming chunk (flicker) and
+   once more when the finished paint re-enables it (a single flash). Instant also
+   tracks the scroll position exactly instead of lagging behind the finger. */
 .persona-table-scroll[data-persona-scroll-x] {
   -webkit-mask-image: linear-gradient(
     to right,
@@ -1563,9 +1553,6 @@
     #000 calc(100% - var(--persona-fade-r, 0px)),
     transparent 100%
   );
-  transition:
-    --persona-fade-l 150ms linear,
-    --persona-fade-r 150ms linear;
 }
 
 .persona-message-bubble table {
@@ -1602,13 +1589,18 @@
   background-color: rgba(0, 0, 0, 0.02);
 }
 
-/* While a message is still streaming, lock table column widths so incoming rows
-   append without the per-chunk horizontal reflow (Telegram-style space
-   reservation). The class is removed on the final render, relaxing the finished
-   table to natural content-fit widths. overflow-wrap keeps long cell content
-   from spilling past the fixed columns mid-stream. */
+/* While a message is still streaming, lock column widths to the header row
+   (table-layout: fixed) so incoming rows append without per-chunk reflow. width
+   auto sizes columns from the header and lets cells wrap, so a table that fits
+   once wrapped fills the column (min-width: 100%) with no scroll, while one too
+   wide even wrapped scrolls: it only shows the scroll fade when it genuinely
+   needs it, matching the finished table rather than forcing every cell onto one
+   line. The class is removed on the final render, settling columns to
+   content-fit widths. overflow-wrap keeps long words from spilling the column. */
 .persona-content-streaming table {
   table-layout: fixed;
+  width: auto;
+  min-width: 100%;
 }
 
 .persona-content-streaming th,
