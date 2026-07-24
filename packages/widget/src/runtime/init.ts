@@ -69,6 +69,9 @@ export const initAgentWidget = (
       mount.style.flexDirection = "column";
       mount.style.flex = "1";
       mount.style.minHeight = "0";
+      // Match the host's shrinkable baseline so a wide artifact split shrinks
+      // within the mount instead of forcing it past its content-based minimum.
+      mount.style.minWidth = "0";
     }
 
     if (useShadow) {

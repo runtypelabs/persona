@@ -119,6 +119,9 @@ const setDirectHostStyles = (host: HTMLElement, config?: AgentWidgetConfig): voi
   host.style.flexDirection = launcherEnabled ? "" : "column";
   host.style.flex = launcherEnabled ? "" : "1 1 auto";
   host.style.minHeight = launcherEnabled ? "" : "0";
+  // Flex items floor at min-width:auto (content width); without this the host
+  // grows past a shrinkable mount when a wide artifact split opens inside it.
+  host.style.minWidth = launcherEnabled ? "" : "0";
 };
 
 const clearOverlayDockSlotStyles = (dockSlot: HTMLElement): void => {
@@ -170,7 +173,9 @@ const resetContentSlotFlexSizing = (contentSlot: HTMLElement): void => {
 
 const clearEmergeDockStyles = (host: HTMLElement, dockSlot: HTMLElement): void => {
   host.style.width = "";
-  host.style.minWidth = "";
+  // Restore the docked shrinkable baseline, not "": non-emerge dock modes must
+  // stay shrinkable. Emerge re-pins minWidth to its fixed width after this.
+  host.style.minWidth = "0";
   host.style.maxWidth = "";
   host.style.boxSizing = "";
   dockSlot.style.alignItems = "";
@@ -298,6 +303,9 @@ const applyDockStyles = (
   host.className = "persona-host";
   host.style.height = "100%";
   host.style.minHeight = "0";
+  // Shrinkable baseline so a wide artifact split shrinks within the dock host
+  // instead of enlarging it. Emerge overwrites this with its fixed width below.
+  host.style.minWidth = "0";
   host.style.display = "flex";
   host.style.flexDirection = "column";
   host.style.flex = "1 1 auto";
