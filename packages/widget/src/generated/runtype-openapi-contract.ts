@@ -26,6 +26,10 @@ export type RuntypeExecutionStreamEvent = ({
   completedAt?: string;
   durationMs?: number;
   executionId: string;
+  externalAgent?: {
+  contextId?: string;
+  taskId?: string;
+};
   failedSteps?: number;
   finalOutput?: string;
   iterations?: number;
@@ -305,6 +309,10 @@ export type RuntypeExecutionStreamEvent = ({
   approvalId: string;
   description?: string;
   executionId: string;
+  externalAgent?: {
+  contextId?: string;
+  taskId?: string;
+};
   iteration?: number;
   parameters?: Record<string, unknown>;
   reason?: string;
@@ -373,322 +381,6 @@ export type RuntypeExecutionStreamEvent = ({
   value?: unknown;
 };
 
-export type RuntypeFlowSSEEvent = {
-  executionContext?: Record<string, unknown>;
-  executionId?: string;
-  flowId: string;
-  flowName?: string;
-  input?: unknown;
-  seq?: number;
-  source?: string;
-  startedAt: string;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  totalSteps?: number;
-  type: "flow_start";
-} | {
-  claudeManagedAgentId?: string;
-  completedAt?: string;
-  completedSteps?: number;
-  duration?: number;
-  executionContext?: Record<string, unknown>;
-  executionId?: string;
-  executionTime?: number;
-  failedSteps?: number;
-  finalOutput?: string;
-  flowId?: string;
-  flowName?: string;
-  output?: unknown;
-  seq?: number;
-  source?: string;
-  success?: boolean;
-  successfulSteps?: number;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  totalSteps?: number;
-  totalTokensUsed?: number;
-  type: "flow_complete";
-} | ({
-  blockReason?: string;
-  code?: string;
-  error: string | {
-  code: string;
-  message: string;
-  stepId?: string;
-  stepType?: string;
-};
-  executionId?: string;
-  executionTime?: number;
-  flowId?: string;
-  seq?: number;
-  timestamp?: string;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  type: "flow_error";
-  upgradeUrl?: string;
-}) | ({
-  approvalId?: string;
-  awaitReason?: string;
-  awaitedAt: string;
-  crawlId?: string;
-  elicitation?: {
-  message: string;
-  mode: "form" | "url";
-  pauseCount?: number;
-  requestedSchema?: Record<string, unknown>;
-  serverName?: string;
-  url?: string;
-};
-  executionId?: string;
-  flowId: string;
-  origin?: "webmcp" | "sdk";
-  pageOrigin?: string;
-  parameters?: Record<string, unknown>;
-  seq?: number;
-  stepId?: string;
-  timeout?: number;
-  toolCallId?: string;
-  toolId?: string;
-  toolName?: string;
-  type: "flow_await";
-}) | {
-  estimatedTokens?: number;
-  executionId?: string;
-  id?: string;
-  index?: number;
-  name?: string;
-  outputVariable?: string;
-  seq?: number;
-  startedAt: string;
-  stepId?: string;
-  stepName?: string;
-  stepType?: string;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  totalSteps?: number;
-  type: "step_start";
-} | {
-  delta?: string;
-  executionId?: string;
-  id?: string;
-  messageId?: string;
-  partId?: string;
-  seq?: number;
-  text?: string;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  toolId?: string;
-  type: "step_delta";
-} | ({
-  completedAt?: string;
-  duration?: number;
-  durationMs?: number;
-  error?: string | null;
-  executionId?: string;
-  executionTime?: number;
-  id?: string;
-  index?: number;
-  name?: string;
-  output?: unknown;
-  result?: unknown;
-  seq?: number;
-  stepId?: string;
-  stepName?: string;
-  stepType?: string;
-  stopReason?: "end_turn" | "max_tool_calls" | "length" | "content_filter" | "error" | "unknown";
-  success?: boolean;
-  tokensUsed?: number;
-  toolContext?: {
-  executionId: string;
-  stepId: string;
-  toolId: string;
-};
-  type: "step_complete";
-  unresolvedVariables?: Array<string>;
-}) | {
-  error: string;
-  executionId?: string;
-  executionTime?: number;
-  id?: string;
-  index?: number;
-  name?: string;
-  seq?: number;
-  stepType?: string;
-  type: "step_error";
-} | {
-  error?: string;
-  executionId?: string;
-  id: string;
-  index?: number;
-  name?: string;
-  seq?: number;
-  skippedAt: string;
-  stepType: string;
-  totalSteps: number;
-  type: "step_skip";
-  when: string;
-} | ({
-  elicitation?: {
-  message: string;
-  mode: "form" | "url";
-  pauseCount?: number;
-  requestedSchema?: Record<string, unknown>;
-  serverName?: string;
-  url?: string;
-};
-  executionId?: string;
-  reason?: string;
-  seq?: number;
-  type: "step_await";
-  [key: string]: unknown;
-}) | ({
-  agentContext?: {
-  executionId: string;
-  iteration: number;
-  seq: number;
-};
-  executionId?: string;
-  hiddenParameterNames?: Array<string>;
-  name?: string;
-  parameters?: Record<string, unknown>;
-  providerOptions?: Record<string, unknown>;
-  seq?: number;
-  startedAt?: string;
-  stepId?: string;
-  toolCallId?: string;
-  toolId?: string;
-  toolName?: string;
-  toolType: "flow" | "mcp" | "builtin" | "custom" | "external" | "advisor" | "subagent" | "local";
-  type: "tool_start";
-  [key: string]: unknown;
-}) | {
-  delta?: string;
-  executionId?: string;
-  seq?: number;
-  toolId?: string;
-  type: "tool_delta";
-  [key: string]: unknown;
-} | {
-  delta: string;
-  executionId?: string;
-  seq?: number;
-  stepId?: string;
-  toolCallId?: string;
-  toolId?: string;
-  type: "tool_input_delta";
-} | {
-  executionId?: string;
-  hiddenParameterNames?: Array<string>;
-  parameters: Record<string, unknown>;
-  providerOptions?: Record<string, unknown>;
-  seq?: number;
-  stepId?: string;
-  toolCallId?: string;
-  toolId?: string;
-  toolName?: string;
-  type: "tool_input_complete";
-} | {
-  agentContext?: {
-  executionId: string;
-  iteration: number;
-  seq: number;
-};
-  completedAt?: string;
-  error?: string;
-  executionId?: string;
-  executionTime?: number;
-  name?: string;
-  result?: unknown;
-  seq?: number;
-  stepId?: string;
-  success: boolean;
-  toolCallId?: string;
-  toolCost?: number;
-  toolId?: string;
-  toolName?: string;
-  type: "tool_complete";
-} | {
-  agentContext?: {
-  executionId: string;
-  iteration: number;
-  seq: number;
-};
-  error: string;
-  executionId?: string;
-  executionTime?: number;
-  failedAt?: string;
-  name: string;
-  seq?: number;
-  toolId: string;
-  type: "tool_error";
-} | {
-  executionId?: string;
-  id: string;
-  seq?: number;
-  text: string;
-  type: "chunk";
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "text_start";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "text_end";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "reason_start";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "reason_delta";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "reason_complete";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "source";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "fallback_start";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "fallback_complete";
-  [key: string]: unknown;
-} | {
-  executionId?: string;
-  seq?: number;
-  type: "fallback_exhausted";
-  [key: string]: unknown;
-};
-
 export type RuntypeStreamEventOf<U, T extends string> = Extract<U, { type: T }>;
 
 export type RuntypeTurnCompleteEvent = RuntypeStreamEventOf<
@@ -697,7 +389,7 @@ export type RuntypeTurnCompleteEvent = RuntypeStreamEventOf<
 >;
 
 export type RuntypeStepCompleteEvent = RuntypeStreamEventOf<
-  RuntypeFlowSSEEvent,
+  RuntypeExecutionStreamEvent,
   "step_complete"
 >;
 

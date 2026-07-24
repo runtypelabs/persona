@@ -63,12 +63,16 @@ export const initAgentWidget = (
     const mount = ownerDocument.createElement("div");
     mount.setAttribute("data-persona-root", "true");
 
+    // Initial fill styling only. On every relayout the controller's
+    // applyFullHeightStyles resets mount.style.cssText and re-applies these
+    // (including the shrinkable min-width:0), so it owns the runtime truth.
     if (shouldFillHost) {
       mount.style.height = "100%";
       mount.style.display = "flex";
       mount.style.flexDirection = "column";
       mount.style.flex = "1";
       mount.style.minHeight = "0";
+      mount.style.minWidth = "0";
     }
 
     if (useShadow) {

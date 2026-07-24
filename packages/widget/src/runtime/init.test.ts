@@ -92,6 +92,39 @@ describe("initAgentWidget windowKey and ready notifications", () => {
     createAgentExperienceMock.mockImplementation((_mount, config) => createMockController(config));
   });
 
+  it("makes the mount shrinkable when it fills the host (launcher disabled)", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const handle = initAgentWidget({
+      target: "#target",
+      config: { launcher: { enabled: false } },
+    });
+
+    const mount = createAgentExperienceMock.mock.calls[0][0] as HTMLElement;
+    // shouldFillHost mounts must match the host's shrinkable baseline, else a
+    // wide artifact split forces the mount past its content-based minimum width.
+    expect(mount.style.minWidth).toBe("0px");
+    expect(mount.style.minHeight).toBe("0px");
+
+    handle.destroy();
+  });
+
+  it("leaves the mount min-width unset when the launcher is enabled (floating)", async () => {
+    const { initAgentWidget } = await import("./init");
+    document.body.innerHTML = `<div id="target"></div>`;
+
+    const handle = initAgentWidget({
+      target: "#target",
+      config: { launcher: { enabled: true } },
+    });
+
+    const mount = createAgentExperienceMock.mock.calls[0][0] as HTMLElement;
+    expect(mount.style.minWidth).toBe("");
+
+    handle.destroy();
+  });
+
   it("assigns the handle to window[windowKey] when windowKey is provided", async () => {
     const { initAgentWidget } = await import("./init");
     document.body.innerHTML = `<div id="target"></div>`;

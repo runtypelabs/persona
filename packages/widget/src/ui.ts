@@ -2965,6 +2965,17 @@ export const createAgentExperience = (
       body.style.display = "none";
     }
 
+    // Shrinkable baseline for every fill mount (launcher-off embed OR fullHeight/
+    // docked/sidebar), applied outside the fullHeight branch so the launcher-off,
+    // no-fullHeight embed keeps it too: the cssText reset above wipes the min-width
+    // the host layer set, and without it a wide artifact split isn't forced to
+    // shrink within the mount. In practice the column host's own min-width:0 is
+    // what caps container overflow (the mount is a cross-axis child), but the
+    // baseline is kept here so intent is consistent across every fill mode.
+    if (fullHeight || isInlineEmbed) {
+      mount.style.minWidth = "0";
+    }
+
     const restoreBodyScrollTop = (): void => {
       if (prevBodyScrollTop <= 0) return;
       const ownerWindow = body.ownerDocument.defaultView ?? window;
@@ -3131,6 +3142,8 @@ export const createAgentExperience = (
       mount.style.flexDirection = 'column';
       mount.style.height = '100%';
       mount.style.minHeight = '0';
+      // min-width:0 baseline is applied above (outside this branch) for every
+      // fill mount, including the launcher-off, no-fullHeight embed.
       if (isInlineEmbed) {
         mount.style.width = '100%';
       }

@@ -135,7 +135,6 @@ export type {
 
 export type {
   RuntypeExecutionStreamEvent,
-  RuntypeFlowSSEEvent,
   RuntypeStreamEventOf,
   RuntypeTurnCompleteEvent,
   RuntypeStepCompleteEvent,
@@ -150,6 +149,12 @@ export type {
   RuntypeClientFeedbackResponse,
   RuntypeClientFeedbackType,
 } from "./generated/runtype-openapi-contract";
+
+import type { RuntypeExecutionStreamEvent } from "./generated/runtype-openapi-contract";
+
+/** @deprecated FlowSSEEvent was folded into the unified ExecutionStreamEvent
+ *  (Runtype PR #5722). Use RuntypeExecutionStreamEvent instead. */
+export type RuntypeFlowSSEEvent = RuntypeExecutionStreamEvent;
 
 export {
   ASK_USER_QUESTION_TOOL_NAME,

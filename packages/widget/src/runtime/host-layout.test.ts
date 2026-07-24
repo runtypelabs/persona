@@ -4,6 +4,51 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createWidgetHostLayout } from "./host-layout";
 
+describe("createWidgetHostLayout direct", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+  });
+
+  it("makes the host shrinkable when the launcher is disabled", () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    const layout = createWidgetHostLayout(target, { launcher: { enabled: false } });
+    // Flex items floor at min-width:auto; the host must stay shrinkable so a wide
+    // artifact split shrinks within the mount rather than enlarging the host.
+    expect(layout.host.style.minWidth).toBe("0px");
+    expect(layout.host.style.flex).toBe("1 1 auto");
+
+    layout.destroy();
+  });
+
+  it("leaves the host min-width unset when the launcher is enabled", () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    const layout = createWidgetHostLayout(target, { launcher: { enabled: true } });
+    expect(layout.host.style.minWidth).toBe("");
+
+    layout.destroy();
+  });
+
+  it("restores/clears the shrinkable host baseline when the launcher toggles at runtime", () => {
+    const target = document.createElement("div");
+    document.body.appendChild(target);
+
+    const layout = createWidgetHostLayout(target, { launcher: { enabled: false } });
+    expect(layout.host.style.minWidth).toBe("0px");
+
+    layout.updateConfig({ launcher: { enabled: true } });
+    expect(layout.host.style.minWidth).toBe("");
+
+    layout.updateConfig({ launcher: { enabled: false } });
+    expect(layout.host.style.minWidth).toBe("0px");
+
+    layout.destroy();
+  });
+});
+
 describe("createWidgetHostLayout docked", () => {
   afterEach(() => {
     document.body.innerHTML = "";
@@ -35,6 +80,55 @@ describe("createWidgetHostLayout docked", () => {
     layout.syncWidgetState({ open: false, launcherEnabled: true });
     expect(dockSlot?.style.minWidth).toBe("0px");
     expect(dockSlot?.style.overflow).toBe("hidden");
+
+    layout.destroy();
+  });
+
+  it("keeps a shrinkable host baseline for non-emerge dock modes but pins it for emerge", () => {
+    for (const reveal of ["resize", "overlay", "push"] as const) {
+      const parent = document.createElement("div");
+      document.body.appendChild(parent);
+      const target = document.createElement("div");
+      parent.appendChild(target);
+
+      const layout = createWidgetHostLayout(target, {
+        launcher: { mountMode: "docked", autoExpand: false, dock: { width: "320px", reveal } },
+      });
+      // The docked host must shrink within its mount so a wide artifact split
+      // stays contained instead of enlarging the host.
+      expect(layout.host.style.minWidth, reveal).toBe("0px");
+
+      layout.destroy();
+      document.body.innerHTML = "";
+    }
+
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const target = document.createElement("div");
+    parent.appendChild(target);
+    const layout = createWidgetHostLayout(target, {
+      launcher: { mountMode: "docked", autoExpand: true, dock: { width: "320px", reveal: "emerge" } },
+    });
+    // Emerge intentionally pins the host to its fixed width, overriding the baseline.
+    expect(layout.host.style.minWidth).toBe("320px");
+    layout.destroy();
+  });
+
+  it("restores the shrinkable host baseline when switching away from emerge", () => {
+    const parent = document.createElement("div");
+    document.body.appendChild(parent);
+    const target = document.createElement("div");
+    parent.appendChild(target);
+
+    const layout = createWidgetHostLayout(target, {
+      launcher: { mountMode: "docked", autoExpand: true, dock: { width: "320px", reveal: "emerge" } },
+    });
+    expect(layout.host.style.minWidth).toBe("320px");
+
+    layout.updateConfig({
+      launcher: { mountMode: "docked", autoExpand: true, dock: { width: "320px", reveal: "resize" } },
+    });
+    expect(layout.host.style.minWidth).toBe("0px");
 
     layout.destroy();
   });
