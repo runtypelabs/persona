@@ -32,7 +32,11 @@
         border-radius: 0.75rem;
         overflow: hidden;
         background: var(--surface, #fff);
+        transition: max-width 200ms ease;
       }
+      /* Chat-column width: wide tables overflow, so the in-place horizontal
+         scroll and edge fades become visible (as in a docked/floating panel). */
+      .stream-panel.narrow { max-width: 420px; }
       .stream-panel-head {
         padding: 0.75rem 1rem;
         border-bottom: 1px solid var(--border, #e5e7eb);
@@ -54,7 +58,10 @@
           reserves the column widths, so a real table appears immediately and
           rows fill in without the header flipping from a paragraph or the
           columns jiggling. Widths relax to their natural sizes once the stream
-          finishes. Pick a sample, slow the chunk delay down, and replay.
+          finishes. A table wider than the column scrolls horizontally in
+          place, with edge fades that show only on the side with more content,
+          so it never widens the chat. Try the wide sample in the chat-column
+          width, then scroll the table sideways.
         </p>
       </header>
 
@@ -62,6 +69,13 @@
         <div class="section">
           <label>Sample</label>
           <div class="mode-group" id="sample-selector"></div>
+        </div>
+        <div class="section">
+          <label>Panel width</label>
+          <div class="mode-group" id="width-selector">
+            <button class="mode-btn active" data-width="narrow">Chat column</button>
+            <button class="mode-btn" data-width="full">Full width</button>
+          </div>
         </div>
         <div class="section">
           <label>Chunk delay</label>
@@ -75,7 +89,7 @@
         </div>
       </div>
 
-      <div class="stream-panel">
+      <div class="stream-panel narrow">
         <div class="stream-panel-head">
           <h3>Assistant reply</h3>
         </div>

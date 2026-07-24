@@ -65,6 +65,7 @@ export type {
   AgentWidgetLayoutConfig,
   AgentWidgetHeaderLayoutConfig,
   AgentWidgetMessageLayoutConfig,
+  AgentWidgetMessageRoleLayout,
   AgentWidgetAvatarConfig,
   AgentWidgetTimestampConfig,
   WidgetLayoutSlot,

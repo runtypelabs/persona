@@ -653,7 +653,7 @@ const getBubbleClasses = (
   role: "user" | "assistant" | "system",
   layout: AgentWidgetMessageLayoutConfig["layout"] = "bubble"
 ): string[] => {
-  const baseClasses = ["persona-message-bubble", "persona-max-w-[85%]"];
+  const baseClasses = ["persona-message-bubble"];
 
   switch (layout) {
     case "flat":
@@ -1171,7 +1171,9 @@ export const createStandardBubble = (
   // Create wrapper with avatar
   const wrapper = createElement(
     "div",
-    `persona-flex persona-gap-2 ${message.role === "user" ? "persona-flex-row-reverse" : ""}`
+    `persona-message-with-avatar persona-flex persona-gap-2 ${
+      message.role === "user" ? "persona-flex-row-reverse" : ""
+    }`
   );
 
   const avatar = createAvatar(avatarConfig!, message.role);
@@ -1181,10 +1183,6 @@ export const createStandardBubble = (
   } else {
     wrapper.append(avatar, bubble);
   }
-
-  // Adjust bubble max-width when avatar is present
-  bubble.classList.remove("persona-max-w-[85%]");
-  bubble.classList.add("persona-max-w-[calc(85%-2.5rem)]");
 
   return wrapper;
 };

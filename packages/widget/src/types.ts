@@ -3976,6 +3976,27 @@ export type AgentWidgetTimestampConfig = {
 };
 
 /**
+ * Width configuration for one message role.
+ *
+ * `content` shrink-wraps the rendered message up to `maxWidth`; `full` fills
+ * the available transcript track up to `maxWidth`. The track already accounts
+ * for transcript padding and, when present, the avatar and its gap.
+ */
+export type AgentWidgetMessageRoleLayout = {
+  /**
+   * Message width behavior.
+   * - content: size to the rendered content (the backward-compatible default)
+   * - full: fill the available transcript track
+   */
+  width?: "content" | "full";
+  /**
+   * Optional CSS max-width (for example "80%", "42rem", or "72ch").
+   * Defaults to "85%" for content width and "100%" for full width.
+   */
+  maxWidth?: string;
+};
+
+/**
  * Message layout configuration
  * Allows customization of how chat messages are displayed
  */
@@ -3993,6 +4014,10 @@ export type AgentWidgetMessageLayoutConfig = {
   timestamp?: AgentWidgetTimestampConfig;
   /** Group consecutive messages from the same role */
   groupConsecutive?: boolean;
+  /** Width behavior for user-authored message rows */
+  user?: AgentWidgetMessageRoleLayout;
+  /** Width behavior for assistant-authored message rows and assistant UI variants */
+  assistant?: AgentWidgetMessageRoleLayout;
   /**
    * Custom renderer for user messages
    * When provided, replaces the default user message rendering

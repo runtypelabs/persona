@@ -1,6 +1,7 @@
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
+import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
 import { onMarkdownParsersReady, getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
 import {
@@ -4171,6 +4172,46 @@ export const createAgentExperience = (
 
 
   // Message rendering with plugin support (implementation)
+  const applyMessageRowLayout = (
+    wrapper: HTMLElement,
+    role: AgentWidgetMessage["role"]
+  ): void => {
+    const sizingRole = role === "user" ? "user" : "assistant";
+    const roleLayout = config.layout?.messages?.[sizingRole];
+    const width = roleLayout?.width ?? "content";
+    const maxWidth =
+      roleLayout?.maxWidth ?? (width === "full" ? "100%" : "85%");
+
+    wrapper.classList.add("persona-message-row");
+    wrapper.classList.remove(
+      "persona-message-row-user",
+      "persona-message-row-assistant",
+      "persona-message-row-system",
+      "persona-message-width-content",
+      "persona-message-width-full"
+    );
+    wrapper.classList.add(
+      `persona-message-row-${role}`,
+      `persona-message-width-${width}`
+    );
+    wrapper.classList.toggle("persona-justify-end", role === "user");
+    wrapper.setAttribute("data-message-role", role);
+    wrapper.setAttribute("data-message-width", width);
+    wrapper.style.setProperty("--persona-message-row-max-width", maxWidth);
+  };
+
+  const createMessageRow = (
+    id: string,
+    role: AgentWidgetMessage["role"]
+  ): HTMLElement => {
+    const wrapper = document.createElement("div");
+    wrapper.className = "persona-flex";
+    wrapper.id = `wrapper-${id}`;
+    wrapper.setAttribute("data-wrapper-id", id);
+    applyMessageRowLayout(wrapper, role);
+    return wrapper;
+  };
+
   const renderMessagesWithPluginsImpl = (
     container: HTMLElement,
     messages: AgentWidgetMessage[],
@@ -4212,6 +4253,7 @@ export const createAgentExperience = (
 
     // Track active message IDs for cache pruning
     const activeMessageIds = new Set<string>();
+    const messageRolesById = new Map<string, AgentWidgetMessage["role"]>();
     // Track ask_user_question tool-call ids whose bubbles were rendered this
     // pass: used to prune stale sheets from the composer overlay afterward.
     const liveAskToolIds = new Set<string>();
@@ -4265,6 +4307,7 @@ export const createAgentExperience = (
 
     messages.forEach((message) => {
       activeMessageIds.add(message.id);
+      messageRolesById.set(message.id, message.role);
 
       const askWithPlugin = hasAskPlugin && isAskUserQuestionMessage(message);
       const approvalWithPlugin =
@@ -4444,10 +4487,7 @@ export const createAgentExperience = (
 
           // Append a stub wrapper for the morph pass; hydrate the real bubble
           // into it post-morph so its event listeners survive.
-          const stub = document.createElement("div");
-          stub.className = "persona-flex";
-          stub.id = `wrapper-${message.id}`;
-          stub.setAttribute("data-wrapper-id", message.id);
+          const stub = createMessageRow(message.id, message.role);
           stub.setAttribute("data-ask-plugin-stub", "true");
           stub.setAttribute("data-preserve-runtime", "true");
           tempContainer.appendChild(stub);
@@ -4522,10 +4562,7 @@ export const createAgentExperience = (
         } else {
           // A fresh live bubble to hydrate (needsRebuild), or fingerprint
           // unchanged so we reuse the preserved live wrapper (`bubble: null`).
-          const stub = document.createElement("div");
-          stub.className = "persona-flex";
-          stub.id = `wrapper-${message.id}`;
-          stub.setAttribute("data-wrapper-id", message.id);
+          const stub = createMessageRow(message.id, message.role);
           stub.setAttribute("data-approval-plugin-stub", "true");
           stub.setAttribute("data-preserve-runtime", "true");
           tempContainer.appendChild(stub);
@@ -4642,7 +4679,6 @@ export const createAgentExperience = (
                 const componentWrapper = document.createElement("div");
                 componentWrapper.className = [
                   "persona-message-bubble",
-                  "persona-max-w-[85%]",
                   "persona-rounded-2xl",
                   "persona-bg-persona-surface",
                   "persona-border",
@@ -4698,15 +4734,9 @@ export const createAgentExperience = (
           // Otherwise fall through to the standard render path so the message
           // text is at least visible.
           if (liveBubble || lastFp != null) {
-            const stub = document.createElement("div");
-            stub.className = "persona-flex";
-            stub.id = `wrapper-${message.id}`;
-            stub.setAttribute("data-wrapper-id", message.id);
+            const stub = createMessageRow(message.id, message.role);
             stub.setAttribute("data-component-directive-stub", "true");
             stub.setAttribute("data-preserve-runtime", "true");
-            if (!wrapChrome) {
-              stub.classList.add("persona-w-full");
-            }
             tempContainer.appendChild(stub);
             componentDirectiveHydrate.push({
               messageId: message.id,
@@ -4763,17 +4793,7 @@ export const createAgentExperience = (
         }
       }
 
-      const wrapper = document.createElement("div");
-      wrapper.className = "persona-flex";
-      // Set id for idiomorph matching
-      wrapper.id = `wrapper-${message.id}`;
-      wrapper.setAttribute("data-wrapper-id", message.id);
-      if (message.role === "user") {
-        wrapper.classList.add("persona-justify-end");
-      }
-      if (bubble?.getAttribute("data-persona-component-directive") === "true") {
-        wrapper.classList.add("persona-w-full");
-      }
+      const wrapper = createMessageRow(message.id, message.role);
       wrapper.appendChild(bubble);
       setCachedWrapper(messageCache, message.id, fingerprint, wrapper);
       tempContainer.appendChild(wrapper);
@@ -4832,10 +4852,11 @@ export const createAgentExperience = (
           return;
         }
 
-        const groupWrapper = document.createElement("div");
-        groupWrapper.className = "persona-flex";
-        groupWrapper.id = `wrapper-tool-group-${groupIndex}-${group[0].id}`;
-        groupWrapper.setAttribute("data-wrapper-id", `tool-group-${groupIndex}-${group[0].id}`);
+        const groupWrapper = createMessageRow(
+          `tool-group-${groupIndex}-${group[0].id}`,
+          "assistant"
+        );
+        groupWrapper.setAttribute("data-persona-tool-group-row", "true");
 
         const groupContainer = document.createElement("div");
         groupContainer.className =
@@ -4875,6 +4896,10 @@ export const createAgentExperience = (
             wrapper.remove();
             return;
           }
+          // The outer group row owns role sizing. Inner message rows fill that
+          // resolved track instead of applying the role max-width a second
+          // time (which would turn an 85% cap into 72.25%).
+          wrapper.style.setProperty("--persona-message-row-max-width", "100%");
           const item = document.createElement("div");
           item.className = "persona-tool-group-item persona-relative";
           item.setAttribute("data-persona-tool-group-item", "true");
@@ -4938,7 +4963,6 @@ export const createAgentExperience = (
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
         typingBubble.className = showBubble
           ? [
-              "persona-max-w-[85%]",
               "persona-rounded-2xl",
               "persona-text-sm",
               "persona-leading-relaxed",
@@ -4950,7 +4974,6 @@ export const createAgentExperience = (
               "persona-py-3"
             ].join(" ")
           : [
-              "persona-max-w-[85%]",
               "persona-text-sm",
               "persona-leading-relaxed",
               "persona-text-persona-primary"
@@ -4960,11 +4983,10 @@ export const createAgentExperience = (
 
         typingBubble.appendChild(typingIndicator);
 
-        const typingWrapper = document.createElement("div");
-        typingWrapper.className = "persona-flex";
-        // Set id for idiomorph matching
-        typingWrapper.id = "wrapper-typing-indicator";
-        typingWrapper.setAttribute("data-wrapper-id", "typing-indicator");
+        const typingWrapper = createMessageRow(
+          "typing-indicator",
+          "assistant"
+        );
         typingWrapper.appendChild(typingBubble);
         tempContainer.appendChild(typingWrapper);
       }
@@ -5002,7 +5024,6 @@ export const createAgentExperience = (
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
         idleBubble.className = showBubble
           ? [
-              "persona-max-w-[85%]",
               "persona-rounded-2xl",
               "persona-text-sm",
               "persona-leading-relaxed",
@@ -5015,7 +5036,6 @@ export const createAgentExperience = (
               "persona-py-3"
             ].join(" ")
           : [
-              "persona-max-w-[85%]",
               "persona-text-sm",
               "persona-leading-relaxed",
               "persona-text-persona-primary"
@@ -5024,18 +5044,22 @@ export const createAgentExperience = (
 
         idleBubble.appendChild(idleIndicator);
 
-        const idleWrapper = document.createElement("div");
-        idleWrapper.className = "persona-flex";
-        // Set id for idiomorph matching
-        idleWrapper.id = "wrapper-idle-indicator";
-        idleWrapper.setAttribute("data-wrapper-id", "idle-indicator");
+        const idleWrapper = createMessageRow("idle-indicator", "assistant");
         idleWrapper.appendChild(idleBubble);
         tempContainer.appendChild(idleWrapper);
       }
     }
 
+    // Wrap wide tables in a horizontal-scroll container before morphing so the
+    // wrapper exists on both sides of the diff (survives streaming re-renders).
+    wrapScrollableTables(tempContainer);
+
     // Use idiomorph to morph the container contents
     morphMessages(container, tempContainer);
+
+    // Set initial edge-fade state on the live table wrappers and attach the
+    // delegated scroll listener (once) that keeps the fades in sync.
+    refreshTableScrollFades(container);
 
     // Hydrate plugin-rendered ask-question bubbles into their stub wrappers.
     // Idiomorph imports new nodes via `document.importNode`, which strips
@@ -5043,8 +5067,12 @@ export const createAgentExperience = (
     // the real, listener-bearing bubble directly into the live DOM.
     if (askPluginHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of askPluginHydrate) {
-        const wrapper = container.querySelector(`#wrapper-${messageId}`);
+        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
         if (!wrapper) continue;
+        applyMessageRowLayout(
+          wrapper,
+          messageRolesById.get(messageId) ?? "assistant"
+        );
         if (bubble === null) {
           // No fresh bubble built this pass: either the plugin opted out
           // and a previously-mounted bubble already lives here (preserved by
@@ -5070,8 +5098,12 @@ export const createAgentExperience = (
     // the ask-question hydration above.
     if (componentDirectiveHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of componentDirectiveHydrate) {
-        const wrapper = container.querySelector(`#wrapper-${messageId}`);
+        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
         if (!wrapper) continue;
+        applyMessageRowLayout(
+          wrapper,
+          messageRolesById.get(messageId) ?? "assistant"
+        );
         if (bubble === null) {
           // Fingerprint matched the previous pass: the live wrapper (kept
           // alive by `data-preserve-runtime`) still holds the listener-bearing
@@ -5094,8 +5126,12 @@ export const createAgentExperience = (
     // mirroring the ask-question / component-directive hydration above.
     if (approvalPluginHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of approvalPluginHydrate) {
-        const wrapper = container.querySelector(`#wrapper-${messageId}`);
+        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
         if (!wrapper) continue;
+        applyMessageRowLayout(
+          wrapper,
+          messageRolesById.get(messageId) ?? "assistant"
+        );
         if (bubble === null) {
           // Fingerprint matched the previous pass (or the plugin opted out
           // after a prior render): the live wrapper, kept alive by

@@ -1017,7 +1017,28 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `groupConsecutive` | Group consecutive same-role messages |
 | `avatar.show` / `avatar.position` / `avatar.userAvatar` / `avatar.assistantAvatar` | Avatar config |
 | `timestamp.show` / `timestamp.position` / `timestamp.format` | Timestamp config |
+| `user.width` / `assistant.width` | `"content"` (shrink-wrap, default) or `"full"` (fill the available transcript track) |
+| `user.maxWidth` / `assistant.maxWidth` | Optional CSS max-width. Defaults to `"85%"` for content width and `"100%"` for full width |
 | `renderUserMessage` / `renderAssistantMessage` | Custom render functions |
+
+Role width is independent of the message chrome preset. For example, a modern
+AI-assistant layout can combine a content-sized user bubble with a flat,
+full-width assistant response:
+
+```ts
+layout: {
+  contentMaxWidth: "72ch",
+  messages: {
+    layout: "flat",
+    user: { width: "content", maxWidth: "80%" },
+    assistant: { width: "full" },
+  },
+}
+```
+
+`"full"` means the full track inside the transcript's padding and
+`layout.contentMaxWidth`; when an avatar is shown, the message fills the space
+remaining after the avatar and gap.
 
 ### Slots (`layout.slots.*`)
 Available: `header-left`, `header-center`, `header-right`, `body-top`, `messages`, `body-bottom`, `footer-top`, `composer`, `footer-bottom`

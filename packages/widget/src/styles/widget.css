@@ -643,6 +643,47 @@
   max-width: 85%;
 }
 
+/* Message row geometry is role-configurable. The row always spans the
+   transcript; its direct content track either shrink-wraps or fills that row.
+   `--persona-message-row-max-width` is resolved per role in ui.ts. */
+.persona-message-row {
+  width: 100%;
+  min-width: 0;
+}
+
+.persona-message-row > * {
+  min-width: 0;
+  max-width: var(--persona-message-row-max-width, 85%);
+}
+
+.persona-message-row[data-message-width="content"] > * {
+  flex: 0 1 auto;
+}
+
+.persona-message-row[data-message-width="full"] > * {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+/* Avatars live inside the role-sized content track. The bubble flexes into
+   the space left after the fixed avatar + gap instead of making a full row
+   overflow by the avatar width. */
+.persona-message-with-avatar {
+  min-width: 0;
+}
+
+.persona-message-with-avatar > .persona-message-bubble {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.persona-message-row[data-message-width="full"]
+  > .persona-message-with-avatar
+  > .persona-message-bubble {
+  flex: 1 1 auto;
+  width: auto;
+}
+
 .persona-transition {
   transition: transform 160ms ease, background-color 160ms ease,
     box-shadow 160ms ease, opacity 160ms ease;
@@ -1501,12 +1542,58 @@
   flex-grow: 1;
 }
 
+/* Wide tables scroll inside this wrapper instead of widening the chat column.
+   The table keeps width:100% so it fills when it fits, but auto-grows past the
+   wrapper when its content is wider, and the wrapper scrolls. Injected by
+   wrapScrollableTables() before each morph. */
+.persona-table-scroll {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Registered so the fade widths animate smoothly when they cross the edge
+   threshold; degrades to an instant toggle where @property is unsupported. */
+@property --persona-fade-l {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+@property --persona-fade-r {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+/* Edge fades (set by table-scroll-fade.ts) cue that the table scrolls; each
+   side shows only when there is more content that way. */
+.persona-table-scroll[data-persona-scroll-x] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-fade-l, 0px),
+    #000 calc(100% - var(--persona-fade-r, 0px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-fade-l, 0px),
+    #000 calc(100% - var(--persona-fade-r, 0px)),
+    transparent 100%
+  );
+  transition:
+    --persona-fade-l 150ms linear,
+    --persona-fade-r 150ms linear;
+}
+
 .persona-message-bubble table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.5rem 0;
+  margin: 0;
   font-size: 0.875rem;
-  overflow: hidden;
   border-radius: var(--persona-md-table-border-radius);
   border: 1px solid var(--persona-md-table-border-color);
 }
