@@ -34,7 +34,7 @@ function parseArgs(argv) {
 }
 
 function assertContractShape(doc, source) {
-  const requiredComponents = ["ExecutionStreamEvent", "FlowSSEEvent"];
+  const requiredComponents = ["ExecutionStreamEvent"];
   const requiredPaths = [
     "/v1/client/chat",
     "/v1/client/init",
@@ -61,7 +61,9 @@ function assertContractShape(doc, source) {
     }
   }
 
-  const stepComplete = doc.components?.schemas?.FlowSSEEvent?.oneOf?.find((variant) => {
+  // step_complete now lives on the unified ExecutionStreamEvent union (the
+  // legacy FlowSSEEvent schema was removed once streams became unified-only).
+  const stepComplete = doc.components?.schemas?.ExecutionStreamEvent?.oneOf?.find((variant) => {
     const enumValue = variant?.properties?.type?.enum?.[0];
     const constValue = variant?.properties?.type?.const;
     return enumValue === "step_complete" || constValue === "step_complete";
@@ -69,7 +71,7 @@ function assertContractShape(doc, source) {
   const stopReasonEnum = stepComplete?.properties?.stopReason?.enum;
   const expectedStopReasons = ["end_turn", "max_tool_calls", "length", "content_filter", "error", "unknown"];
   if (!stopReasonEnum || expectedStopReasons.some((value) => !stopReasonEnum.includes(value))) {
-    throw new Error(`OpenAPI response from ${source} is missing FlowSSEEvent.step_complete.stopReason with the expected enum`);
+    throw new Error(`OpenAPI response from ${source} is missing ExecutionStreamEvent.step_complete.stopReason with the expected enum`);
   }
 }
 
