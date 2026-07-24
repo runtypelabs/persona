@@ -1013,7 +1013,7 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 ### Messages (`layout.messages.*`)
 | Property | Description |
 |----------|-------------|
-| `layout` | `"bubble" \| "flat" \| "minimal"` |
+| `layout` | `"bubble"` (bubbles for both), `"minimal"` (user bubble with an open assistant response), or `"flat"` (open messages for both) |
 | `groupConsecutive` | Group consecutive same-role messages |
 | `avatar.show` / `avatar.position` / `avatar.userAvatar` / `avatar.assistantAvatar` | Avatar config |
 | `timestamp.show` / `timestamp.position` / `timestamp.format` | Timestamp config |
@@ -1029,9 +1029,14 @@ full-width assistant response:
 layout: {
   contentMaxWidth: "72ch",
   messages: {
-    layout: "flat",
-    user: { width: "content", maxWidth: "80%" },
-    assistant: { width: "full" },
+    layout: "minimal",
+    user: {
+      width: "content",
+      maxWidth: "80%",
+    },
+    assistant: {
+      width: "full",
+    },
   },
 }
 ```
