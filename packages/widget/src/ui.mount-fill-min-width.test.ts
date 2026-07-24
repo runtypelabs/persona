@@ -59,6 +59,17 @@ describe("mount fill min-width (fullHeight embed)", () => {
     controller.destroy();
   });
 
+  it("keeps min-width:0 on a launcher-disabled embed without fullHeight", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      launcher: { enabled: false },
+    });
+    // min-width baseline applies to every fill mount, not only the fullHeight
+    // branch, so the launcher-off embed stays shrinkable after the cssText reset.
+    expect(mount.style.minWidth).toBe("0px");
+    controller.destroy();
+  });
+
   it("keeps min-width:0 on the mount in docked mode", () => {
     const mount = createMount();
     const controller = createAgentExperience(mount, {
