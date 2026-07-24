@@ -1,7 +1,7 @@
-import { createElement, createElementInDocument, createNode, cx } from "../utils/dom";
+import { createElement, createNode, cx } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
-import { PORTALED_OVERLAY_Z_INDEX } from "../utils/constants";
+import { attachTooltip } from "../utils/tooltip";
 import { HEADER_THEME_CSS } from "./header-builder";
 
 export interface CloseButtonParts {
@@ -136,59 +136,12 @@ export const createCloseButton = (
   }
 
   wrapper.appendChild(button);
-
-  if (closeButtonShowTooltip && closeButtonTooltipText) {
-    let portaledTooltip: HTMLElement | null = null;
-
-    const showTooltip = () => {
-      if (portaledTooltip) return;
-
-      const tooltipDocument = button.ownerDocument;
-      const tooltipContainer = tooltipDocument.body;
-      if (!tooltipContainer) return;
-
-      portaledTooltip = createElementInDocument(
-        tooltipDocument,
-        "div",
-        "persona-clear-chat-tooltip"
-      );
-      portaledTooltip.textContent = closeButtonTooltipText;
-
-      const arrow = createElementInDocument(tooltipDocument, "div");
-      arrow.className = "persona-clear-chat-tooltip-arrow";
-      portaledTooltip.appendChild(arrow);
-
-      const buttonRect = button.getBoundingClientRect();
-
-      portaledTooltip.style.position = "fixed";
-      portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
-      portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
-      portaledTooltip.style.top = `${buttonRect.top - 8}px`;
-      portaledTooltip.style.transform = "translate(-50%, -100%)";
-
-      tooltipContainer.appendChild(portaledTooltip);
-    };
-
-    const hideTooltip = () => {
-      if (portaledTooltip && portaledTooltip.parentNode) {
-        portaledTooltip.parentNode.removeChild(portaledTooltip);
-        portaledTooltip = null;
-      }
-    };
-
-    wrapper.addEventListener("mouseenter", showTooltip);
-    wrapper.addEventListener("mouseleave", hideTooltip);
-    button.addEventListener("focus", showTooltip);
-    button.addEventListener("blur", hideTooltip);
-
-    (wrapper as any)._cleanupTooltip = () => {
-      hideTooltip();
-      wrapper.removeEventListener("mouseenter", showTooltip);
-      wrapper.removeEventListener("mouseleave", hideTooltip);
-      button.removeEventListener("focus", showTooltip);
-      button.removeEventListener("blur", hideTooltip);
-    };
-  }
+  attachTooltip({
+    anchor: button,
+    trigger: wrapper,
+    text: () => button.getAttribute("aria-label") ?? closeButtonTooltipText,
+    enabled: closeButtonShowTooltip,
+  });
 
   return { button, wrapper };
 };
@@ -271,59 +224,12 @@ export const createClearChatButton = (
   }
 
   wrapper.appendChild(button);
-
-  if (clearChatShowTooltip && clearChatTooltipText) {
-    let portaledTooltip: HTMLElement | null = null;
-
-    const showTooltip = () => {
-      if (portaledTooltip) return;
-
-      const tooltipDocument = button.ownerDocument;
-      const tooltipContainer = tooltipDocument.body;
-      if (!tooltipContainer) return;
-
-      portaledTooltip = createElementInDocument(
-        tooltipDocument,
-        "div",
-        "persona-clear-chat-tooltip"
-      );
-      portaledTooltip.textContent = clearChatTooltipText;
-
-      const arrow = createElementInDocument(tooltipDocument, "div");
-      arrow.className = "persona-clear-chat-tooltip-arrow";
-      portaledTooltip.appendChild(arrow);
-
-      const buttonRect = button.getBoundingClientRect();
-
-      portaledTooltip.style.position = "fixed";
-      portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
-      portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
-      portaledTooltip.style.top = `${buttonRect.top - 8}px`;
-      portaledTooltip.style.transform = "translate(-50%, -100%)";
-
-      tooltipContainer.appendChild(portaledTooltip);
-    };
-
-    const hideTooltip = () => {
-      if (portaledTooltip && portaledTooltip.parentNode) {
-        portaledTooltip.parentNode.removeChild(portaledTooltip);
-        portaledTooltip = null;
-      }
-    };
-
-    wrapper.addEventListener("mouseenter", showTooltip);
-    wrapper.addEventListener("mouseleave", hideTooltip);
-    button.addEventListener("focus", showTooltip);
-    button.addEventListener("blur", hideTooltip);
-
-    (wrapper as any)._cleanupTooltip = () => {
-      hideTooltip();
-      wrapper.removeEventListener("mouseenter", showTooltip);
-      wrapper.removeEventListener("mouseleave", hideTooltip);
-      button.removeEventListener("focus", showTooltip);
-      button.removeEventListener("blur", hideTooltip);
-    };
-  }
+  attachTooltip({
+    anchor: button,
+    trigger: wrapper,
+    text: () => button.getAttribute("aria-label") ?? clearChatTooltipText,
+    enabled: clearChatShowTooltip,
+  });
 
   return { button, wrapper };
 };

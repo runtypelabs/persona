@@ -46,7 +46,8 @@ import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
-import { createElement, createElementInDocument } from "./utils/dom";
+import { createElement } from "./utils/dom";
+import { attachTooltip } from "./utils/tooltip";
 import { downloadInfoFor } from "./utils/artifact-file";
 import { artifactCopyText } from "./components/artifact-preview";
 import { morphMessages } from "./utils/morph";
@@ -67,7 +68,7 @@ import {
   resolveFollowStateFromScroll,
   resolveFollowStateFromWheel
 } from "./utils/auto-follow";
-import { statusCopy, DEFAULT_OVERLAY_Z_INDEX, PORTALED_OVERLAY_Z_INDEX } from "./utils/constants";
+import { statusCopy, DEFAULT_OVERLAY_Z_INDEX } from "./utils/constants";
 import {
   applyStreamBuffer,
   createSkeletonPlaceholder,
@@ -6825,7 +6826,8 @@ export const createAgentExperience = (
     ) as HTMLButtonElement;
     
     micButton.type = "button";
-    micButton.setAttribute("aria-label", "Start voice recognition");
+    const tooltipText = voiceConfig?.tooltipText ?? "Start voice recognition";
+    micButton.setAttribute("aria-label", tooltipText);
     
     const micIconName = voiceConfig?.iconName ?? "mic";
     const buttonSize = sendButtonConfig?.size ?? "40px";
@@ -6886,15 +6888,13 @@ export const createAgentExperience = (
     }
     
     micButtonWrapper.appendChild(micButton);
-    
-    // Add tooltip if enabled
-    const tooltipText = voiceConfig?.tooltipText ?? "Start voice recognition";
     const showTooltip = voiceConfig?.showTooltip ?? false;
-    if (showTooltip && tooltipText) {
-      const tooltip = createElement("div", "persona-send-button-tooltip");
-      tooltip.textContent = tooltipText;
-      micButtonWrapper.appendChild(tooltip);
-    }
+    attachTooltip({
+      anchor: micButton,
+      trigger: micButtonWrapper,
+      text: () => micButton.getAttribute("aria-label") ?? tooltipText,
+      enabled: showTooltip,
+    });
     
     return { micButton, micButtonWrapper };
   };
@@ -8234,76 +8234,13 @@ export const createAgentExperience = (
         closeButton.setAttribute("aria-label", closeButtonTooltipText);
 
         if (closeButtonWrapper) {
-          // Clean up old tooltip event listeners if they exist
-          if ((closeButtonWrapper as any)._cleanupTooltip) {
-            (closeButtonWrapper as any)._cleanupTooltip();
-            delete (closeButtonWrapper as any)._cleanupTooltip;
-          }
-
-          // Set up new portaled tooltip with event listeners
-          if (closeButtonShowTooltip && closeButtonTooltipText) {
-            let portaledTooltip: HTMLElement | null = null;
-
-            const showTooltip = () => {
-              if (portaledTooltip || !closeButton) return; // Already showing or button doesn't exist
-
-              const tooltipDocument = closeButton.ownerDocument;
-              const tooltipContainer = tooltipDocument.body;
-              if (!tooltipContainer) return;
-
-              // Create tooltip element
-              portaledTooltip = createElementInDocument(
-                tooltipDocument,
-                "div",
-                "persona-clear-chat-tooltip"
-              );
-              portaledTooltip.textContent = closeButtonTooltipText;
-
-              // Add arrow
-              const arrow = createElementInDocument(tooltipDocument, "div");
-              arrow.className = "persona-clear-chat-tooltip-arrow";
-              portaledTooltip.appendChild(arrow);
-
-              // Get button position
-              const buttonRect = closeButton.getBoundingClientRect();
-
-              // Position tooltip above button
-              portaledTooltip.style.position = "fixed";
-              portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
-              portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
-              portaledTooltip.style.top = `${buttonRect.top - 8}px`;
-              portaledTooltip.style.transform = "translate(-50%, -100%)";
-
-              // Append to body
-              tooltipContainer.appendChild(portaledTooltip);
-            };
-
-            const hideTooltip = () => {
-              if (portaledTooltip && portaledTooltip.parentNode) {
-                portaledTooltip.parentNode.removeChild(portaledTooltip);
-                portaledTooltip = null;
-              }
-            };
-
-            // Add event listeners
-            closeButtonWrapper.addEventListener("mouseenter", showTooltip);
-            closeButtonWrapper.addEventListener("mouseleave", hideTooltip);
-            closeButton.addEventListener("focus", showTooltip);
-            closeButton.addEventListener("blur", hideTooltip);
-
-            // Store cleanup function on the wrapper for later use
-            (closeButtonWrapper as any)._cleanupTooltip = () => {
-              hideTooltip();
-              if (closeButtonWrapper) {
-                closeButtonWrapper.removeEventListener("mouseenter", showTooltip);
-                closeButtonWrapper.removeEventListener("mouseleave", hideTooltip);
-              }
-              if (closeButton) {
-                closeButton.removeEventListener("focus", showTooltip);
-                closeButton.removeEventListener("blur", hideTooltip);
-              }
-            };
-          }
+          attachTooltip({
+            anchor: closeButton,
+            trigger: closeButtonWrapper,
+            text: () =>
+              closeButton?.getAttribute("aria-label") ?? closeButtonTooltipText,
+            enabled: closeButtonShowTooltip,
+          });
         }
       }
 
@@ -8469,76 +8406,14 @@ export const createAgentExperience = (
           clearChatButton.setAttribute("aria-label", clearChatTooltipText);
 
           if (clearChatButtonWrapper) {
-            // Clean up old tooltip event listeners if they exist
-            if ((clearChatButtonWrapper as any)._cleanupTooltip) {
-              (clearChatButtonWrapper as any)._cleanupTooltip();
-              delete (clearChatButtonWrapper as any)._cleanupTooltip;
-            }
-
-            // Set up new portaled tooltip with event listeners
-            if (clearChatShowTooltip && clearChatTooltipText) {
-              let portaledTooltip: HTMLElement | null = null;
-
-              const showTooltip = () => {
-                if (portaledTooltip || !clearChatButton) return; // Already showing or button doesn't exist
-
-                const tooltipDocument = clearChatButton.ownerDocument;
-                const tooltipContainer = tooltipDocument.body;
-                if (!tooltipContainer) return;
-
-                // Create tooltip element
-                portaledTooltip = createElementInDocument(
-                  tooltipDocument,
-                  "div",
-                  "persona-clear-chat-tooltip"
-                );
-                portaledTooltip.textContent = clearChatTooltipText;
-
-                // Add arrow
-                const arrow = createElementInDocument(tooltipDocument, "div");
-                arrow.className = "persona-clear-chat-tooltip-arrow";
-                portaledTooltip.appendChild(arrow);
-
-                // Get button position
-                const buttonRect = clearChatButton.getBoundingClientRect();
-
-                // Position tooltip above button
-                portaledTooltip.style.position = "fixed";
-                portaledTooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
-                portaledTooltip.style.left = `${buttonRect.left + buttonRect.width / 2}px`;
-                portaledTooltip.style.top = `${buttonRect.top - 8}px`;
-                portaledTooltip.style.transform = "translate(-50%, -100%)";
-
-                // Append to body
-                tooltipContainer.appendChild(portaledTooltip);
-              };
-
-              const hideTooltip = () => {
-                if (portaledTooltip && portaledTooltip.parentNode) {
-                  portaledTooltip.parentNode.removeChild(portaledTooltip);
-                  portaledTooltip = null;
-                }
-              };
-
-              // Add event listeners
-              clearChatButtonWrapper.addEventListener("mouseenter", showTooltip);
-              clearChatButtonWrapper.addEventListener("mouseleave", hideTooltip);
-              clearChatButton.addEventListener("focus", showTooltip);
-              clearChatButton.addEventListener("blur", hideTooltip);
-
-              // Store cleanup function on the button for later use
-              (clearChatButtonWrapper as any)._cleanupTooltip = () => {
-                hideTooltip();
-                if (clearChatButtonWrapper) {
-                  clearChatButtonWrapper.removeEventListener("mouseenter", showTooltip);
-                  clearChatButtonWrapper.removeEventListener("mouseleave", hideTooltip);
-                }
-                if (clearChatButton) {
-                  clearChatButton.removeEventListener("focus", showTooltip);
-                  clearChatButton.removeEventListener("blur", hideTooltip);
-                }
-              };
-            }
+            attachTooltip({
+              anchor: clearChatButton,
+              trigger: clearChatButtonWrapper,
+              text: () =>
+                clearChatButton?.getAttribute("aria-label") ??
+                clearChatTooltipText,
+              enabled: clearChatShowTooltip,
+            });
           }
         }
       }
@@ -8677,24 +8552,16 @@ export const createAgentExperience = (
             micButton.style.paddingBottom = "";
           }
           
-          // Update tooltip
-          const tooltip = micButtonWrapper?.querySelector(".persona-send-button-tooltip") as HTMLElement | null;
           const tooltipText = voiceConfig.tooltipText ?? "Start voice recognition";
           const showTooltip = voiceConfig.showTooltip ?? false;
-          if (showTooltip && tooltipText) {
-            if (!tooltip) {
-              // Create tooltip if it doesn't exist
-              const newTooltip = document.createElement("div");
-              newTooltip.className = "persona-send-button-tooltip";
-              newTooltip.textContent = tooltipText;
-              micButtonWrapper?.insertBefore(newTooltip, micButton);
-            } else {
-              tooltip.textContent = tooltipText;
-              tooltip.style.display = "";
-            }
-          } else if (tooltip) {
-            // Hide tooltip if disabled
-            tooltip.style.display = "none";
+          micButton.setAttribute("aria-label", tooltipText);
+          if (micButtonWrapper) {
+            attachTooltip({
+              anchor: micButton,
+              trigger: micButtonWrapper,
+              text: () => micButton?.getAttribute("aria-label") ?? tooltipText,
+              enabled: showTooltip,
+            });
           }
           
           // Show and update disabled state
@@ -8786,11 +8653,13 @@ export const createAgentExperience = (
 
           attachmentButtonWrapper.appendChild(attachmentButton);
 
-          // Add tooltip
           const attachTooltipText = attachmentsConfig.buttonTooltipText ?? "Attach file";
-          const tooltip = createElement("div", "persona-send-button-tooltip");
-          tooltip.textContent = attachTooltipText;
-          attachmentButtonWrapper.appendChild(tooltip);
+          attachTooltip({
+            anchor: attachmentButton,
+            trigger: attachmentButtonWrapper,
+            text: () =>
+              attachmentButton?.getAttribute("aria-label") ?? attachTooltipText,
+          });
 
           // Insert into left actions container (fall back to the form when a
           // custom composer has no left cluster).
@@ -8852,10 +8721,14 @@ export const createAgentExperience = (
           );
           if (iconSvg) attachmentButton.appendChild(iconSvg);
           else attachmentButton.textContent = "📎";
-          const attachTooltip = attachmentButtonWrapper?.querySelector(
-            ".persona-send-button-tooltip"
-          );
-          if (attachTooltip) attachTooltip.textContent = tooltipText;
+          if (attachmentButtonWrapper) {
+            attachTooltip({
+              anchor: attachmentButton,
+              trigger: attachmentButtonWrapper,
+              text: () =>
+                attachmentButton?.getAttribute("aria-label") ?? tooltipText,
+            });
+          }
         }
       } else {
         // Hide attachment button if disabled
@@ -8984,21 +8857,16 @@ export const createAgentExperience = (
         sendButton.style.paddingBottom = "";
       }
 
-      // Update tooltip
-      const tooltip = sendButtonWrapper?.querySelector(".persona-send-button-tooltip") as HTMLElement | null;
-      if (showTooltip && tooltipText) {
-        if (!tooltip) {
-          // Create tooltip if it doesn't exist
-          const newTooltip = document.createElement("div");
-          newTooltip.className = "persona-send-button-tooltip";
-          newTooltip.textContent = tooltipText;
-          sendButtonWrapper?.insertBefore(newTooltip, sendButton);
-        } else {
-          tooltip.textContent = tooltipText;
-          tooltip.style.display = "";
-        }
-      } else if (tooltip) {
-        tooltip.style.display = "none";
+      if (!session.isStreaming()) {
+        sendButton.setAttribute("aria-label", tooltipText);
+      }
+      if (sendButtonWrapper) {
+        attachTooltip({
+          anchor: sendButton,
+          trigger: sendButtonWrapper,
+          text: () => sendButton.getAttribute("aria-label") ?? tooltipText,
+          enabled: showTooltip,
+        });
       }
       
       // Update contentMaxWidth on messages wrapper and composer. Same

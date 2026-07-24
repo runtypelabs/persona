@@ -993,7 +993,8 @@
   cursor: pointer;
 }
 
-/* Send button tooltip */
+/* Shared icon-control tooltip. It is portaled to the document body (or the
+   widget ShadowRoot) and positioned in JS so panel overflow never clips it. */
 .persona-send-button-wrapper {
   position: relative;
   display: inline-flex;
@@ -1001,47 +1002,46 @@
   justify-content: center;
 }
 
-.persona-send-button-tooltip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+.persona-control-tooltip {
+  position: fixed;
+  box-sizing: border-box;
+  max-width: min(320px, calc(100vw - 16px));
   background-color: var(--persona-tooltip-background, #111827);
   color: var(--persona-tooltip-foreground, #ffffff);
   padding: 6px 12px;
   border-radius: var(--persona-radius-sm, 0.125rem);
   font-size: 12px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-  z-index: 1000;
-}
-
-.persona-send-button-tooltip::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 4px solid transparent;
-  border-top-color: var(--persona-tooltip-background, #111827);
-}
-
-.persona-send-button-wrapper:hover .persona-send-button-tooltip,
-.persona-send-button-wrapper:focus-within .persona-send-button-tooltip {
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: var(--persona-tooltip-shadow, 0 4px 12px rgba(15, 23, 42, 0.18));
   opacity: 1;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
-/* Hide tooltips on touch devices: hover doesn't exist, and they cause clipping issues */
-@media (hover: none), (max-width: 500px) {
-  .persona-send-button-wrapper:hover .persona-send-button-tooltip,
-  .persona-send-button-wrapper:focus-within .persona-send-button-tooltip {
-    opacity: 0;
-  }
+.persona-control-tooltip[data-state="measuring"] {
+  visibility: hidden;
+  opacity: 0;
 }
 
-/* Clear chat button tooltip */
+.persona-control-tooltip__arrow {
+  position: absolute;
+  left: var(--persona-tooltip-arrow-x, 50%);
+  width: 8px;
+  height: 8px;
+  background: var(--persona-tooltip-background, #111827);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.persona-control-tooltip[data-placement="top"] .persona-control-tooltip__arrow {
+  top: calc(100% - 4px);
+}
+
+.persona-control-tooltip[data-placement="bottom"] .persona-control-tooltip__arrow {
+  bottom: calc(100% - 4px);
+}
+
 .persona-clear-chat-button-wrapper {
   position: relative;
   display: inline-flex;
@@ -1049,30 +1049,9 @@
   justify-content: center;
 }
 
-.persona-clear-chat-tooltip {
-  background-color: var(--persona-tooltip-background, #111827);
-  color: var(--persona-tooltip-foreground, #ffffff);
-  padding: 6px 12px;
-  border-radius: var(--persona-radius-sm, 0.125rem);
-  font-size: 12px;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 10000;
-}
-
-.persona-clear-chat-tooltip-arrow {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 4px solid transparent;
-  border-top-color: var(--persona-tooltip-background, #111827);
-}
-
-@media (hover: none), (max-width: 500px) {
-  .persona-clear-chat-tooltip {
-    display: none !important;
+@media (prefers-reduced-motion: reduce) {
+  .persona-control-tooltip {
+    transition: none;
   }
 }
 
