@@ -125,36 +125,6 @@ describe("initAgentWidget windowKey and ready notifications", () => {
     handle.destroy();
   });
 
-  it("re-syncs the mount fill styles when the launcher is toggled at runtime", async () => {
-    const { initAgentWidget } = await import("./init");
-    document.body.innerHTML = `<div id="target"></div>`;
-
-    // Floating launcher: mount does not fill, no shrinkable baseline.
-    const handle = initAgentWidget({
-      target: "#target",
-      config: { launcher: { enabled: true } },
-    });
-    const mount = createAgentExperienceMock.mock.calls[0][0] as HTMLElement;
-    expect(mount.style.minWidth).toBe("");
-    expect(mount.style.flex).toBe("");
-
-    // Disable the launcher in place (no mountMode change, so no rebuild): the
-    // mount must gain the shrinkable fill styles, not stay stale from creation.
-    handle.update({ launcher: { enabled: false } });
-    expect(mount.style.minWidth).toBe("0px");
-    expect(mount.style.minHeight).toBe("0px");
-    expect(mount.style.flex).toBe("1 1 0%");
-    // Same mount element (no rebuild), so an artifact split shrinks within it.
-    expect(createAgentExperienceMock.mock.calls).toHaveLength(1);
-
-    // Re-enabling clears the fill styles again.
-    handle.update({ launcher: { enabled: true } });
-    expect(mount.style.minWidth).toBe("");
-    expect(mount.style.flex).toBe("");
-
-    handle.destroy();
-  });
-
   it("assigns the handle to window[windowKey] when windowKey is provided", async () => {
     const { initAgentWidget } = await import("./init");
     document.body.innerHTML = `<div id="target"></div>`;

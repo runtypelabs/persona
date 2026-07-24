@@ -3131,6 +3131,10 @@ export const createAgentExperience = (
       mount.style.flexDirection = 'column';
       mount.style.height = '100%';
       mount.style.minHeight = '0';
+      // Shrinkable baseline: the cssText reset above wipes any min-width the host
+      // layer set, so re-apply it here (this runs on every update) or a wide
+      // artifact split forces the mount past its content-based minimum width.
+      mount.style.minWidth = '0';
       if (isInlineEmbed) {
         mount.style.width = '100%';
       }
