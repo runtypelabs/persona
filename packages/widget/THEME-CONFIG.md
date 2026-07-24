@@ -1078,6 +1078,8 @@ Available: `header-left`, `header-center`, `header-right`, `body-top`, `messages
   --persona-md-table-border-color: #e5e7eb;
   --persona-md-table-header-bg: #f8fafc;
   --persona-md-table-cell-padding: 0.5rem 0.75rem;
+  /* Edge fade shown when a wide table scrolls horizontally; set to 0 to disable. */
+  --persona-md-table-scroll-fade: 24px;
 
   /* Blockquotes */
   --persona-md-blockquote-border-color: var(--persona-accent);
@@ -1183,6 +1185,7 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
   --persona-md-table-header-weight: 600;
   --persona-md-table-cell-padding: 0.5rem 0.75rem;
   --persona-md-table-border-radius: 0.375rem;
+  --persona-md-table-scroll-fade: 24px;
 
   /* Horizontal Rule */
   --persona-md-hr-color: var(--persona-divider, #e5e7eb);

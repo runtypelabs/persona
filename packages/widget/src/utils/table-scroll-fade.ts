@@ -4,7 +4,10 @@
 // then exists on both sides of every subsequent diff, so it (and its scroll
 // position) survives streaming re-renders.
 
-const FADE_PX = 24;
+// Off-edge fade width, themeable via --persona-md-table-scroll-fade (set it to
+// 0 to disable the fade). Written as a var() reference, not a resolved px value,
+// so a consumer's CSS token wins over this inline style.
+const FADE = "var(--persona-md-table-scroll-fade, 24px)";
 
 // Containers that already carry the delegated scroll listener.
 const LISTENING = new WeakSet<HTMLElement>();
@@ -35,11 +38,8 @@ function updateFade(el: HTMLElement): void {
   el.setAttribute("data-persona-scroll-x", "");
   // scrollLeft can be negative in RTL; magnitude is what matters for the edges.
   const left = Math.abs(el.scrollLeft);
-  el.style.setProperty("--persona-fade-l", left <= 1 ? "0px" : `${FADE_PX}px`);
-  el.style.setProperty(
-    "--persona-fade-r",
-    left >= overflow - 1 ? "0px" : `${FADE_PX}px`
-  );
+  el.style.setProperty("--persona-fade-l", left <= 1 ? "0px" : FADE);
+  el.style.setProperty("--persona-fade-r", left >= overflow - 1 ? "0px" : FADE);
 }
 
 /**

@@ -163,6 +163,8 @@
   --persona-md-table-header-weight: 600;
   --persona-md-table-cell-padding: 0.5rem 0.75rem;
   --persona-md-table-border-radius: 0.375rem;
+  /* Width of the horizontal-scroll edge fade on wide tables; set to 0 to disable. */
+  --persona-md-table-scroll-fade: 24px;
 
   /* Markdown Horizontal Rule Variables */
   --persona-md-hr-color: var(--persona-divider, #e5e7eb);
