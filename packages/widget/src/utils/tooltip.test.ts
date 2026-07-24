@@ -25,6 +25,7 @@ describe("attachTooltip", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("portals outside a clipped wrapper and clamps a long tooltip to the viewport", () => {
@@ -107,6 +108,92 @@ describe("attachTooltip", () => {
 
     button.blur();
     expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+  });
+
+  it("dismisses an open tooltip with Escape", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+
+    attachTooltip({ anchor: button, text: "Close chat" });
+    button.focus();
+    expect(document.body.querySelector(".persona-control-tooltip")).not.toBeNull();
+
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+  });
+
+  it("suppresses hover tooltips when the device has no hover capability", () => {
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn().mockReturnValue({ matches: true })
+    );
+    const button = document.createElement("button");
+    button.setAttribute("aria-label", "Add context");
+    document.body.appendChild(button);
+
+    attachTooltip({
+      anchor: button,
+      text: () => button.getAttribute("aria-label") ?? "",
+    });
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+
+    expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+    expect(button.getAttribute("aria-label")).toBe("Add context");
+  });
+
+  it("repositions an open tooltip after resize and scroll", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    Object.defineProperty(document.documentElement, "clientWidth", {
+      configurable: true,
+      value: 500,
+    });
+    Object.defineProperty(document.documentElement, "clientHeight", {
+      configurable: true,
+      value: 300,
+    });
+    let anchorLeft = 100;
+    vi.spyOn(button, "getBoundingClientRect").mockImplementation(() =>
+      rect(anchorLeft, 200, 40, 40)
+    );
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        return this.classList.contains("persona-control-tooltip")
+          ? rect(0, 0, 120, 32)
+          : rect(0, 0, 0, 0);
+      }
+    );
+
+    attachTooltip({ anchor: button, text: "Add context" });
+    button.focus();
+    const tooltip = document.body.querySelector<HTMLElement>(
+      ".persona-control-tooltip"
+    );
+    expect(tooltip?.style.left).toBe("60px");
+
+    anchorLeft = 200;
+    window.dispatchEvent(new Event("resize"));
+    expect(tooltip?.style.left).toBe("160px");
+
+    anchorLeft = 300;
+    window.dispatchEvent(new Event("scroll"));
+    expect(tooltip?.style.left).toBe("260px");
+  });
+
+  it("cleans up an open tooltip when its anchor is removed", async () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+
+    attachTooltip({ anchor: button, text: "Add context" });
+    button.focus();
+    expect(document.body.querySelector(".persona-control-tooltip")).not.toBeNull();
+
+    button.remove();
+
+    await vi.waitFor(() => {
+      expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+    });
   });
 
   it("re-attaching replaces old listeners and disabled tooltips stay closed", () => {
