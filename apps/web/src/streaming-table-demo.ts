@@ -21,6 +21,12 @@ import { createMarkdownProcessor, createDefaultSanitizer } from "@runtypelabs/pe
 // Internal modules, reachable via the apps/web "@runtypelabs/persona" → src alias.
 import { stabilizeStreamingTables } from "@runtypelabs/persona/utils/streaming-table";
 import { morphMessages } from "@runtypelabs/persona/utils/morph";
+// The same wrap-then-fade helpers the widget's transcript render path uses, so
+// this demo exercises the real overflow behavior (not a lookalike).
+import {
+  wrapScrollableTables,
+  refreshTableScrollFades,
+} from "@runtypelabs/persona/utils/table-scroll-fade";
 
 const md = createMarkdownProcessor();
 const sanitize = createDefaultSanitizer();
@@ -30,6 +36,19 @@ const render = (markdown: string): string => sanitize(md(markdown));
 type Sample = { id: string; label: string; text: string };
 
 const SAMPLES: Sample[] = [
+  {
+    id: "wide",
+    label: "Wide table (scrolls)",
+    text: `Here is the weekly production summary, actual vs target:
+
+| Site | Target (t) | Actual (t) | Variance (t) | % of Target | Trend | Site manager |
+| --- | --- | --- | --- | --- | --- | --- |
+| Cedar Ridge | 5,200 | 4,991 | -209 | 96% | down | Alex Johnson |
+| North Basin | 3,800 | 3,836 | +36 | 101% | up | Priya Chandrasekaran |
+| West Overlook | 7,100 | 7,540 | +440 | 106% | up | Bartholomew Fitzgerald |
+
+Cedar Ridge is the only site under target this week.`,
+  },
   {
     id: "pricing",
     label: "Pricing comparison",
@@ -84,7 +103,9 @@ const freshCancel = () => {
 };
 
 const content = document.getElementById("stream-content") as HTMLElement;
+const streamPanel = document.querySelector(".stream-panel") as HTMLElement;
 const sampleSelector = document.getElementById("sample-selector") as HTMLElement;
+const widthSelector = document.getElementById("width-selector") as HTMLElement;
 const speedSlider = document.getElementById("speed") as HTMLInputElement;
 const speedLabel = document.getElementById("speed-label") as HTMLElement;
 const playBtn = document.getElementById("btn-play") as HTMLButtonElement;
@@ -97,7 +118,11 @@ const paint = (acc: string, streaming: boolean) => {
   // paint) and stabilize the table-in-progress so it renders from the first row.
   content.classList.toggle("persona-content-streaming", streaming);
   scratch.innerHTML = render(streaming ? stabilizeStreamingTables(acc) : acc);
+  // Wrap tables before morphing (wrapper exists on both sides of the diff) and
+  // refresh the edge fades after — mirrors the widget's real render path.
+  wrapScrollableTables(scratch);
   morphMessages(content, scratch, { preserveTypingAnimation: false });
+  refreshTableScrollFades(content);
 };
 
 let activeSampleId = SAMPLES[0].id;
@@ -153,6 +178,18 @@ sampleSelector.addEventListener("click", (e) => {
   btn.classList.add("active");
   activeSampleId = btn.dataset.sample ?? SAMPLES[0].id;
   void replay();
+});
+
+// Width toggle: a "chat column" width makes wide tables overflow so the
+// horizontal scroll and edge fades are visible, the way they are in a docked or
+// floating panel. Recompute fades against the new width without a full replay.
+widthSelector.addEventListener("click", (e) => {
+  const btn = (e.target as HTMLElement).closest<HTMLElement>(".mode-btn");
+  if (!btn) return;
+  widthSelector.querySelectorAll(".mode-btn").forEach((b) => b.classList.remove("active"));
+  btn.classList.add("active");
+  streamPanel.classList.toggle("narrow", btn.dataset.width === "narrow");
+  refreshTableScrollFades(content);
 });
 
 speedSlider.addEventListener("input", () => {

@@ -270,7 +270,8 @@ describe("attachment button live config updates", () => {
     expect(button().getAttribute("aria-label")).toBe("Add a photo");
     const updatedSvg = button().querySelector("svg")!.outerHTML;
     expect(updatedSvg).not.toBe(initialSvg);
-    const tooltip = button().parentElement!.querySelector(".persona-send-button-tooltip");
+    button().parentElement!.dispatchEvent(new MouseEvent("mouseenter"));
+    const tooltip = document.body.querySelector(".persona-control-tooltip");
     expect(tooltip?.textContent).toBe("Add a photo");
 
     controller.destroy();

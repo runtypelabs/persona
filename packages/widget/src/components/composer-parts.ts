@@ -2,6 +2,7 @@ import { createElement, createNode, cx } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
 import { ALL_SUPPORTED_MIME_TYPES } from "../utils/content";
+import { attachTooltip } from "../utils/tooltip";
 
 /**
  * Low-level composer control factories. Both `buildComposer` (full,
@@ -172,15 +173,14 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     button.textContent = sendLabel;
   }
 
-  let tooltip: HTMLElement | null = null;
-  if (showTooltip && tooltipText) {
-    tooltip = createElement("div", "persona-send-button-tooltip");
-    tooltip.textContent = tooltipText;
-    wrapper.appendChild(tooltip);
-  }
-
   button.setAttribute("aria-label", tooltipText);
   wrapper.appendChild(button);
+  attachTooltip({
+    anchor: button,
+    trigger: wrapper,
+    text: () => button.getAttribute("aria-label") ?? "",
+    enabled: showTooltip,
+  });
 
   let currentMode: "send" | "stop" = "send";
   const setMode = (mode: "send" | "stop") => {
@@ -188,9 +188,6 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     currentMode = mode;
     const label = mode === "stop" ? stopTooltipText : tooltipText;
     button.setAttribute("aria-label", label);
-    if (tooltip) {
-      tooltip.textContent = label;
-    }
 
     if (useIcon) {
       if (sendIcon && stopIcon) {
@@ -250,7 +247,7 @@ export const createMicButton = (config?: AgentWidgetConfig): MicButtonParts | nu
     attrs: {
       type: "button",
       "data-persona-composer-mic": "",
-      "aria-label": "Start voice recognition",
+      "aria-label": voiceRecognitionConfig.tooltipText ?? "Start voice recognition",
     },
     style: {
       width: micIconSize,
@@ -283,11 +280,12 @@ export const createMicButton = (config?: AgentWidgetConfig): MicButtonParts | nu
 
   const micTooltipText = voiceRecognitionConfig.tooltipText ?? "Start voice recognition";
   const showMicTooltip = voiceRecognitionConfig.showTooltip ?? false;
-  if (showMicTooltip && micTooltipText) {
-    const tooltip = createElement("div", "persona-send-button-tooltip");
-    tooltip.textContent = micTooltipText;
-    wrapper.appendChild(tooltip);
-  }
+  attachTooltip({
+    anchor: button,
+    trigger: wrapper,
+    text: () => button.getAttribute("aria-label") ?? micTooltipText,
+    enabled: showMicTooltip,
+  });
 
   return { button, wrapper };
 };
@@ -368,9 +366,11 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
   wrapper.appendChild(button);
 
   const attachTooltipText = attachmentsConfig.buttonTooltipText ?? "Attach file";
-  const tooltip = createElement("div", "persona-send-button-tooltip");
-  tooltip.textContent = attachTooltipText;
-  wrapper.appendChild(tooltip);
+  attachTooltip({
+    anchor: button,
+    trigger: wrapper,
+    text: () => button.getAttribute("aria-label") ?? attachTooltipText,
+  });
 
   return { button, wrapper, input, previewsContainer };
 };

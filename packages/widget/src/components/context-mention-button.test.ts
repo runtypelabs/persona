@@ -22,13 +22,17 @@ describe("createMentionButton", () => {
       config: config({ buttonTooltipText: "Add context" }),
       onOpen,
     });
+    document.body.appendChild(wrapper);
     expect(button.getAttribute("aria-label")).toBe("Add context");
-    expect(wrapper.querySelector(".persona-send-button-tooltip")?.textContent).toBe(
+    wrapper.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(document.body.querySelector(".persona-control-tooltip")?.textContent).toBe(
       "Add context"
     );
+    expect(wrapper.querySelector(".persona-control-tooltip")).toBeNull();
 
     button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     expect(onOpen).toHaveBeenCalledTimes(1);
+    wrapper.dispatchEvent(new MouseEvent("mouseleave"));
   });
 
   it("defaults to a '+' add-context icon, not an '@' glyph", () => {

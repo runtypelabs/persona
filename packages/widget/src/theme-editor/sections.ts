@@ -22,6 +22,11 @@ import {
   ROLE_BORDERS,
 } from './role-mappings';
 
+const parseOptionalCssValue = (value: unknown): string | undefined => {
+  const normalized = String(value ?? '').trim();
+  return normalized || undefined;
+};
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // STYLE TAB: brand colors, chat colors, typography, shape, etc.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -601,7 +606,11 @@ const headerLayoutSectionDef: SectionDef = {
 const messagesLayoutSectionDef: SectionDef = {
   id: 'messages-layout', title: 'Messages', collapsed: true,
   fields: [
-    { id: 'layout-messages', label: 'Messages Layout', type: 'select', path: 'layout.messages.layout', defaultValue: 'bubble', options: [{ value: 'bubble', label: 'Bubble' }, { value: 'flat', label: 'Flat' }, { value: 'minimal', label: 'Minimal' }] },
+    { id: 'layout-messages', label: 'Message Style', description: 'Minimal uses a user bubble with an open assistant response', type: 'select', path: 'layout.messages.layout', defaultValue: 'bubble', options: [{ value: 'bubble', label: 'Bubble — bubbles for both' }, { value: 'minimal', label: 'Minimal — user bubble, open assistant' }, { value: 'flat', label: 'Flat — open messages for both' }] },
+    { id: 'layout-message-user-width', label: 'User Width', description: 'Content hugs the message; Full fills the transcript track', type: 'select', path: 'layout.messages.user.width', defaultValue: 'content', options: [{ value: 'content', label: 'Content' }, { value: 'full', label: 'Full' }] },
+    { id: 'layout-message-user-max-width', label: 'User Max Width', description: 'Optional CSS width such as 80%, 42rem, or 72ch; blank uses the width mode default', type: 'text', path: 'layout.messages.user.maxWidth', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'layout-message-assistant-width', label: 'Assistant Width', description: 'Content hugs the message; Full fills the transcript track', type: 'select', path: 'layout.messages.assistant.width', defaultValue: 'content', options: [{ value: 'content', label: 'Content' }, { value: 'full', label: 'Full' }] },
+    { id: 'layout-message-assistant-max-width', label: 'Assistant Max Width', description: 'Optional CSS width such as 80%, 42rem, or 72ch; blank uses the width mode default', type: 'text', path: 'layout.messages.assistant.maxWidth', defaultValue: '', parseValue: parseOptionalCssValue },
     { id: 'layout-group', label: 'Group Consecutive', type: 'toggle', path: 'layout.messages.groupConsecutive', defaultValue: false },
     { id: 'layout-avatar-show', label: 'Show Avatars', type: 'toggle', path: 'layout.messages.avatar.show', defaultValue: false },
     { id: 'layout-avatar-pos', label: 'Avatar Position', type: 'select', path: 'layout.messages.avatar.position', defaultValue: 'left', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },

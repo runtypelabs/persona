@@ -72,7 +72,6 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
       "persona-message-bubble",
       "persona-reasoning-bubble",
       "persona-w-full",
-      "persona-max-w-[85%]",
       "persona-rounded-2xl",
       "persona-bg-persona-surface",
       "persona-border",
@@ -350,6 +349,5 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
   bubble.append(header, collapsedPreview, content);
   return bubble;
 };
-
 
 

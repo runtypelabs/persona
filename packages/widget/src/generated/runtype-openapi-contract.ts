@@ -44,6 +44,7 @@ export type RuntypeExecutionStreamEvent = ({
   input: number;
   output: number;
 };
+  totalTokensUsed?: number;
   type: "execution_complete";
 }) | ({
   blockReason?: string;
@@ -303,6 +304,7 @@ export type RuntypeExecutionStreamEvent = ({
   stepId?: string;
   success: boolean;
   toolCallId: string;
+  toolCost?: number;
   toolName?: string;
   type: "tool_complete";
 } | {

@@ -653,7 +653,7 @@ const getBubbleClasses = (
   role: "user" | "assistant" | "system",
   layout: AgentWidgetMessageLayoutConfig["layout"] = "bubble"
 ): string[] => {
-  const baseClasses = ["persona-message-bubble", "persona-max-w-[85%]"];
+  const baseClasses = ["persona-message-bubble"];
 
   switch (layout) {
     case "flat":
@@ -877,7 +877,10 @@ export const createStandardBubble = (
   bubble.setAttribute("data-persona-theme-zone", message.role === "user" ? "user-message" : "assistant-message");
 
   // Apply component-level color overrides via CSS variables
-  if (message.role === "user") {
+  if (layout === "flat") {
+    bubble.style.backgroundColor = "transparent";
+    bubble.style.color = "var(--persona-primary, var(--persona-text))";
+  } else if (message.role === "user") {
     bubble.style.backgroundColor = 'var(--persona-message-user-bg, var(--persona-accent))';
     bubble.style.color = 'var(--persona-message-user-text, white)';
   } else if (message.role === "assistant") {
@@ -1171,7 +1174,9 @@ export const createStandardBubble = (
   // Create wrapper with avatar
   const wrapper = createElement(
     "div",
-    `persona-flex persona-gap-2 ${message.role === "user" ? "persona-flex-row-reverse" : ""}`
+    `persona-message-with-avatar persona-flex persona-gap-2 ${
+      message.role === "user" ? "persona-flex-row-reverse" : ""
+    }`
   );
 
   const avatar = createAvatar(avatarConfig!, message.role);
@@ -1181,10 +1186,6 @@ export const createStandardBubble = (
   } else {
     wrapper.append(avatar, bubble);
   }
-
-  // Adjust bubble max-width when avatar is present
-  bubble.classList.remove("persona-max-w-[85%]");
-  bubble.classList.add("persona-max-w-[calc(85%-2.5rem)]");
 
   return wrapper;
 };

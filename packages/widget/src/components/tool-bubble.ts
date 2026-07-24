@@ -146,7 +146,6 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
       "persona-message-bubble",
       "persona-tool-bubble",
       "persona-w-full",
-      "persona-max-w-[85%]",
       "persona-rounded-2xl",
       "persona-bg-persona-surface",
       "persona-border",
@@ -542,6 +541,5 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
   bubble.append(header, collapsedPreview, content);
   return bubble;
 };
-
 
 

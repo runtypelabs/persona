@@ -14,13 +14,13 @@
   {
     "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
-    "limit": "15 kB",
+    "limit": "15.5 kB",
     "gzip": true
   },
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "158 kB",
+    "limit": "160 kB",
     "gzip": true
   },
   {

@@ -161,7 +161,6 @@ export const createApprovalBubble = (
     [
       "persona-approval-bubble",
       "persona-w-full",
-      "persona-max-w-[85%]",
       "persona-rounded-2xl",
       "persona-border",
       "persona-shadow-sm",

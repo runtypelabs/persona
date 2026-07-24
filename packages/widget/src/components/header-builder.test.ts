@@ -22,11 +22,11 @@ describe("buildHeader tooltips", () => {
 
     closeButtonWrapper.dispatchEvent(new Event("mouseenter"));
 
-    expect(iframeDocument.body.querySelector(".persona-clear-chat-tooltip")).not.toBeNull();
-    expect(document.body.querySelector(".persona-clear-chat-tooltip")).toBeNull();
+    expect(iframeDocument.body.querySelector(".persona-control-tooltip")).not.toBeNull();
+    expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
 
     closeButtonWrapper.dispatchEvent(new Event("mouseleave"));
 
-    expect(iframeDocument.body.querySelector(".persona-clear-chat-tooltip")).toBeNull();
+    expect(iframeDocument.body.querySelector(".persona-control-tooltip")).toBeNull();
   });
 });

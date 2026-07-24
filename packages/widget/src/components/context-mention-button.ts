@@ -1,6 +1,7 @@
 import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import type { AgentWidgetContextMentionConfig } from "../types";
+import { attachTooltip } from "../utils/tooltip";
 
 export interface MentionButtonParts {
   button: HTMLButtonElement;
@@ -73,10 +74,11 @@ export function createMentionButton(opts: {
   });
 
   wrapper.appendChild(button);
-
-  const tooltip = createElement("div", "persona-send-button-tooltip");
-  tooltip.textContent = tooltipText;
-  wrapper.appendChild(tooltip);
+  attachTooltip({
+    anchor: button,
+    trigger: wrapper,
+    text: () => button.getAttribute("aria-label") ?? tooltipText,
+  });
 
   return { button, wrapper };
 }

@@ -257,6 +257,55 @@ describe("isSafeImageSrc", () => {
 });
 
 describe("createStandardBubble", () => {
+  it("uses a compact user bubble and borderless assistant response in minimal style", () => {
+    const userBubble = createStandardBubble(
+      makeMessage({ id: "minimal-user", role: "user", content: "Question" }),
+      ({ text }) => text,
+      { layout: "minimal" }
+    );
+    const assistantBubble = createStandardBubble(
+      makeMessage({
+        id: "minimal-assistant",
+        role: "assistant",
+        content: "Answer",
+      }),
+      ({ text }) => text,
+      { layout: "minimal" }
+    );
+
+    expect(userBubble.classList.contains("persona-bg-persona-accent")).toBe(true);
+    expect(userBubble.classList.contains("persona-rounded-lg")).toBe(true);
+    expect(userBubble.classList.contains("persona-px-3")).toBe(true);
+    expect(assistantBubble.classList.contains("persona-bg-persona-surface")).toBe(
+      true
+    );
+    expect(assistantBubble.classList.contains("persona-rounded-lg")).toBe(true);
+    expect(assistantBubble.classList.contains("persona-border")).toBe(false);
+    expect(assistantBubble.classList.contains("persona-shadow-sm")).toBe(false);
+  });
+
+  it("removes role background chrome from flat messages", () => {
+    const userMessage = createStandardBubble(
+      makeMessage({ id: "flat-user", role: "user", content: "Question" }),
+      ({ text }) => text,
+      { layout: "flat" }
+    );
+    const assistantMessage = createStandardBubble(
+      makeMessage({
+        id: "flat-assistant",
+        role: "assistant",
+        content: "Answer",
+      }),
+      ({ text }) => text,
+      { layout: "flat" }
+    );
+
+    expect(userMessage.style.backgroundColor).toBe("transparent");
+    expect(assistantMessage.style.backgroundColor).toBe("transparent");
+    expect(userMessage.classList.contains("persona-px-3")).toBe(false);
+    expect(assistantMessage.classList.contains("persona-px-3")).toBe(false);
+  });
+
   it("skips rendering blocked image previews while keeping safe ones", () => {
     const bubble = createStandardBubble(
       makeMessage({

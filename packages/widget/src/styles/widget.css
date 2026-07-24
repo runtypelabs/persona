@@ -163,6 +163,8 @@
   --persona-md-table-header-weight: 600;
   --persona-md-table-cell-padding: 0.5rem 0.75rem;
   --persona-md-table-border-radius: 0.375rem;
+  /* Width of the horizontal-scroll edge fade on wide tables; set to 0 to disable. */
+  --persona-md-table-scroll-fade: 24px;
 
   /* Markdown Horizontal Rule Variables */
   --persona-md-hr-color: var(--persona-divider, #e5e7eb);
@@ -643,6 +645,47 @@
   max-width: 85%;
 }
 
+/* Message row geometry is role-configurable. The row always spans the
+   transcript; its direct content track either shrink-wraps or fills that row.
+   `--persona-message-row-max-width` is resolved per role in ui.ts. */
+.persona-message-row {
+  width: 100%;
+  min-width: 0;
+}
+
+.persona-message-row > * {
+  min-width: 0;
+  max-width: var(--persona-message-row-max-width, 85%);
+}
+
+.persona-message-row[data-message-width="content"] > * {
+  flex: 0 1 auto;
+}
+
+.persona-message-row[data-message-width="full"] > * {
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+/* Avatars live inside the role-sized content track. The bubble flexes into
+   the space left after the fixed avatar + gap instead of making a full row
+   overflow by the avatar width. */
+.persona-message-with-avatar {
+  min-width: 0;
+}
+
+.persona-message-with-avatar > .persona-message-bubble {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.persona-message-row[data-message-width="full"]
+  > .persona-message-with-avatar
+  > .persona-message-bubble {
+  flex: 1 1 auto;
+  width: auto;
+}
+
 .persona-transition {
   transition: transform 160ms ease, background-color 160ms ease,
     box-shadow 160ms ease, opacity 160ms ease;
@@ -952,7 +995,8 @@
   cursor: pointer;
 }
 
-/* Send button tooltip */
+/* Shared icon-control tooltip. It is portaled to the document body (or the
+   widget ShadowRoot) and positioned in JS so panel overflow never clips it. */
 .persona-send-button-wrapper {
   position: relative;
   display: inline-flex;
@@ -960,47 +1004,46 @@
   justify-content: center;
 }
 
-.persona-send-button-tooltip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+.persona-control-tooltip {
+  position: fixed;
+  box-sizing: border-box;
+  max-width: min(320px, calc(100vw - 16px));
   background-color: var(--persona-tooltip-background, #111827);
   color: var(--persona-tooltip-foreground, #ffffff);
   padding: 6px 12px;
   border-radius: var(--persona-radius-sm, 0.125rem);
   font-size: 12px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s;
-  z-index: 1000;
-}
-
-.persona-send-button-tooltip::after {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 4px solid transparent;
-  border-top-color: var(--persona-tooltip-background, #111827);
-}
-
-.persona-send-button-wrapper:hover .persona-send-button-tooltip,
-.persona-send-button-wrapper:focus-within .persona-send-button-tooltip {
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  box-shadow: var(--persona-tooltip-shadow, 0 4px 12px rgba(15, 23, 42, 0.18));
   opacity: 1;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
-/* Hide tooltips on touch devices: hover doesn't exist, and they cause clipping issues */
-@media (hover: none), (max-width: 500px) {
-  .persona-send-button-wrapper:hover .persona-send-button-tooltip,
-  .persona-send-button-wrapper:focus-within .persona-send-button-tooltip {
-    opacity: 0;
-  }
+.persona-control-tooltip[data-state="measuring"] {
+  visibility: hidden;
+  opacity: 0;
 }
 
-/* Clear chat button tooltip */
+.persona-control-tooltip__arrow {
+  position: absolute;
+  left: var(--persona-tooltip-arrow-x, 50%);
+  width: 8px;
+  height: 8px;
+  background: var(--persona-tooltip-background, #111827);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.persona-control-tooltip[data-placement="top"] .persona-control-tooltip__arrow {
+  top: calc(100% - 4px);
+}
+
+.persona-control-tooltip[data-placement="bottom"] .persona-control-tooltip__arrow {
+  bottom: calc(100% - 4px);
+}
+
 .persona-clear-chat-button-wrapper {
   position: relative;
   display: inline-flex;
@@ -1008,30 +1051,9 @@
   justify-content: center;
 }
 
-.persona-clear-chat-tooltip {
-  background-color: var(--persona-tooltip-background, #111827);
-  color: var(--persona-tooltip-foreground, #ffffff);
-  padding: 6px 12px;
-  border-radius: var(--persona-radius-sm, 0.125rem);
-  font-size: 12px;
-  white-space: nowrap;
-  pointer-events: none;
-  z-index: 10000;
-}
-
-.persona-clear-chat-tooltip-arrow {
-  content: "";
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 4px solid transparent;
-  border-top-color: var(--persona-tooltip-background, #111827);
-}
-
-@media (hover: none), (max-width: 500px) {
-  .persona-clear-chat-tooltip {
-    display: none !important;
+@media (prefers-reduced-motion: reduce) {
+  .persona-control-tooltip {
+    transition: none;
   }
 }
 
@@ -1501,12 +1523,45 @@
   flex-grow: 1;
 }
 
+/* Wide tables scroll inside this wrapper instead of widening the chat column.
+   The table keeps width:100% so it fills when it fits, but auto-grows past the
+   wrapper when its content is wider, and the wrapper scrolls. Injected by
+   wrapScrollableTables() before each morph. */
+.persona-table-scroll {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+/* Edge fades (set by table-scroll-fade.ts) cue that the table scrolls; each
+   side shows only when there is more content that way. The fade is applied
+   instantly, not transitioned: each morph strips and re-applies the fade state,
+   so a transition would animate it from 0 on every streaming chunk (flicker) and
+   once more when the finished paint re-enables it (a single flash). Instant also
+   tracks the scroll position exactly instead of lagging behind the finger. */
+.persona-table-scroll[data-persona-scroll-x] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-fade-l, 0px),
+    #000 calc(100% - var(--persona-fade-r, 0px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-fade-l, 0px),
+    #000 calc(100% - var(--persona-fade-r, 0px)),
+    transparent 100%
+  );
+}
+
 .persona-message-bubble table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0.5rem 0;
+  margin: 0;
   font-size: 0.875rem;
-  overflow: hidden;
   border-radius: var(--persona-md-table-border-radius);
   border: 1px solid var(--persona-md-table-border-color);
 }
@@ -1536,13 +1591,18 @@
   background-color: rgba(0, 0, 0, 0.02);
 }
 
-/* While a message is still streaming, lock table column widths so incoming rows
-   append without the per-chunk horizontal reflow (Telegram-style space
-   reservation). The class is removed on the final render, relaxing the finished
-   table to natural content-fit widths. overflow-wrap keeps long cell content
-   from spilling past the fixed columns mid-stream. */
+/* While a message is still streaming, lock column widths to the header row
+   (table-layout: fixed) so incoming rows append without per-chunk reflow. width
+   auto sizes columns from the header and lets cells wrap, so a table that fits
+   once wrapped fills the column (min-width: 100%) with no scroll, while one too
+   wide even wrapped scrolls: it only shows the scroll fade when it genuinely
+   needs it, matching the finished table rather than forcing every cell onto one
+   line. The class is removed on the final render, settling columns to
+   content-fit widths. overflow-wrap keeps long words from spilling the column. */
 .persona-content-streaming table {
   table-layout: fixed;
+  width: auto;
+  min-width: 100%;
 }
 
 .persona-content-streaming th,

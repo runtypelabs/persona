@@ -19,6 +19,10 @@ describe('widget config section parity', () => {
     // Layout sub-group
     expect(paths).toContain('layout.header.layout');
     expect(paths).toContain('layout.messages.layout');
+    expect(paths).toContain('layout.messages.user.width');
+    expect(paths).toContain('layout.messages.user.maxWidth');
+    expect(paths).toContain('layout.messages.assistant.width');
+    expect(paths).toContain('layout.messages.assistant.maxWidth');
     expect(paths).toContain('messageActions.enabled');
 
     // Widget sub-group: full launcher config is now in Configure tab
