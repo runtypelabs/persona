@@ -1,5 +1,12 @@
 # @runtypelabs/persona
 
+## 4.10.1
+
+### Patch Changes
+
+- a8b74da: Fix parent-level artifact overflow in embedded and docked layouts. The injected host is a filling flex surface when the launcher is disabled or docked, but it kept its default `min-width: auto` (content-based) floor, so opening a wide artifact split could grow the host past a shrinkable mount and push content outside the viewport. The host and mount now carry a `min-width: 0` baseline wherever Persona fills its container; emerge dock mode still pins the host to its intentional fixed width. Floating launcher sizing is unchanged.
+- c962488: Sync the generated Runtype OpenAPI contract with the unified-only stream spec. The Runtype API removed the legacy `FlowSSEEvent` component (its `step_complete` variant now lives on the unified `ExecutionStreamEvent`), which was breaking the `check:runtype-types` gate. `RuntypeStepCompleteEvent` is now derived from `RuntypeExecutionStreamEvent` with an unchanged shape, and `RuntypeFlowSSEEvent` stays exported as a `@deprecated` alias of `RuntypeExecutionStreamEvent` so existing imports keep working. Prefer `RuntypeExecutionStreamEvent` going forward.
+
 ## 4.10.0
 
 ### Minor Changes
