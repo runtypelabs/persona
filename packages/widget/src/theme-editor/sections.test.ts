@@ -4,6 +4,31 @@ import { COMPONENTS_SECTIONS, CONFIGURE_SECTIONS, INTERFACE_ROLES_SECTION, STYLE
 import { ALL_ROLES } from "./role-mappings";
 
 describe("theme editor scroll-to-bottom controls", () => {
+  it("exposes independent user and assistant message width controls", () => {
+    const section = CONFIGURE_SECTIONS.find((entry) => entry.id === "messages-layout");
+    const fieldsByPath = new Map(
+      section?.fields.map((field) => [field.path, field]) ?? []
+    );
+
+    expect(fieldsByPath.get("layout.messages.user.width")?.options).toEqual([
+      { value: "content", label: "Content" },
+      { value: "full", label: "Full" },
+    ]);
+    expect(fieldsByPath.get("layout.messages.assistant.width")?.options).toEqual([
+      { value: "content", label: "Content" },
+      { value: "full", label: "Full" },
+    ]);
+
+    const userMaxWidth = fieldsByPath.get("layout.messages.user.maxWidth");
+    const assistantMaxWidth = fieldsByPath.get(
+      "layout.messages.assistant.maxWidth"
+    );
+    expect(userMaxWidth?.parseValue?.(" 72ch ")).toBe("72ch");
+    expect(userMaxWidth?.parseValue?.("  ")).toBeUndefined();
+    expect(assistantMaxWidth?.parseValue?.("80%")).toBe("80%");
+    expect(assistantMaxWidth?.parseValue?.("")).toBeUndefined();
+  });
+
   it("exposes scroll-to-bottom config controls", () => {
     const featureSection = CONFIGURE_SECTIONS.find((section) => section.id === "features");
 
