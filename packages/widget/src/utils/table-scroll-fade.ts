@@ -36,10 +36,15 @@ function updateFade(el: HTMLElement): void {
     return;
   }
   el.setAttribute("data-persona-scroll-x", "");
-  // scrollLeft can be negative in RTL; magnitude is what matters for the edges.
-  const left = Math.abs(el.scrollLeft);
-  el.style.setProperty("--persona-fade-l", left <= 1 ? "0px" : FADE);
-  el.style.setProperty("--persona-fade-r", left >= overflow - 1 ? "0px" : FADE);
+  // Each edge fades only when content is hidden past it, so the amounts must be
+  // physical (left/right), not directional. RTL scrolls on the negative model:
+  // scrollLeft runs [-overflow, 0] and starts at 0 with content hidden to the
+  // left, the mirror of LTR. Magnitude alone can't tell them apart at 0.
+  const rtl = getComputedStyle(el).direction === "rtl";
+  const hiddenLeft = rtl ? overflow + el.scrollLeft : el.scrollLeft;
+  const hiddenRight = overflow - hiddenLeft;
+  el.style.setProperty("--persona-fade-l", hiddenLeft <= 1 ? "0px" : FADE);
+  el.style.setProperty("--persona-fade-r", hiddenRight <= 1 ? "0px" : FADE);
 }
 
 /**

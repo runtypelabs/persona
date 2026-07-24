@@ -85,6 +85,24 @@ describe("refreshTableScrollFades", () => {
     expect(wrapper.style.getPropertyValue("--persona-fade-r")).toBe(FADE_ON);
   });
 
+  // RTL scrolls on the negative model: scrollLeft runs [-overflow, 0], starting
+  // at 0 with the hidden content to the physical left (mirror of LTR).
+  it("fades the left edge at an RTL table's start position", () => {
+    wrapper.style.direction = "rtl";
+    stubMetrics(wrapper, { scrollWidth: 600, clientWidth: 300, scrollLeft: 0 });
+    refreshTableScrollFades(container);
+    expect(wrapper.style.getPropertyValue("--persona-fade-l")).toBe(FADE_ON);
+    expect(wrapper.style.getPropertyValue("--persona-fade-r")).toBe("0px");
+  });
+
+  it("fades the right edge when an RTL table is scrolled to its end", () => {
+    wrapper.style.direction = "rtl";
+    stubMetrics(wrapper, { scrollWidth: 600, clientWidth: 300, scrollLeft: -300 });
+    refreshTableScrollFades(container);
+    expect(wrapper.style.getPropertyValue("--persona-fade-l")).toBe("0px");
+    expect(wrapper.style.getPropertyValue("--persona-fade-r")).toBe(FADE_ON);
+  });
+
   it("leaves a table that fits unmarked (no fade)", () => {
     stubMetrics(wrapper, { scrollWidth: 300, clientWidth: 300, scrollLeft: 0 });
     refreshTableScrollFades(container);

@@ -7409,6 +7409,9 @@ export const createAgentExperience = (
   if (typeof ResizeObserver !== "undefined") {
     const contentResizeObserver = new ResizeObserver(() => {
       handleContentResize();
+      // A resize can start or stop a table overflowing without a render or a
+      // scroll, which are the only other things that recompute the fades.
+      refreshTableScrollFades(messagesWrapper);
     });
     contentResizeObserver.observe(messagesWrapper);
     contentResizeObserver.observe(body);
