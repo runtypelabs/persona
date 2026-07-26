@@ -91,7 +91,7 @@ import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
 import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } from "./components/message-bubble";
-import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
+import { createStandardBubble, createTypingIndicator, getBubbleClasses } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
 import {
@@ -5045,28 +5045,28 @@ export const createAgentExperience = (
 
       // Only render if we have an indicator (allows hiding via returning null)
       if (typingIndicator) {
-        // Create a bubble wrapper for the typing indicator (similar to assistant messages)
+        // Bubble wrapper for the typing indicator. It borrows the assistant
+        // bubble's classes and background so the "thinking" bubble matches the
+        // message bubbles that replace it under every layout preset.
         const typingBubble = document.createElement("div");
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
+        const messageLayout = config.layout?.messages?.layout ?? "bubble";
         typingBubble.className = showBubble
-          ? [
-              "persona-rounded-2xl",
-              "persona-text-sm",
-              "persona-leading-relaxed",
-              "persona-shadow-sm",
-              "persona-bg-persona-surface",
-              "persona-border",
-              "persona-text-persona-primary",
-              "persona-px-5",
-              "persona-py-3"
-            ].join(" ")
+          ? getBubbleClasses("assistant", messageLayout).join(" ")
           : [
               "persona-text-sm",
               "persona-leading-relaxed",
               "persona-text-persona-primary"
             ].join(" ");
         typingBubble.setAttribute("data-typing-indicator", "true");
-        typingBubble.style.borderColor = "var(--persona-message-assistant-border, var(--persona-border, #e5e7eb))";
+        if (showBubble && messageLayout !== "flat") {
+          typingBubble.style.backgroundColor =
+            "var(--persona-message-assistant-bg, var(--persona-surface))";
+          typingBubble.style.color =
+            "var(--persona-message-assistant-text, var(--persona-text))";
+          typingBubble.style.borderColor =
+            "var(--persona-message-assistant-border, var(--persona-border, #e5e7eb))";
+        }
 
         typingBubble.appendChild(typingIndicator);
 

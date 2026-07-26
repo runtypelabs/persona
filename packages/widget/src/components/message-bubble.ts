@@ -649,7 +649,7 @@ const createTimestamp = (
 /**
  * Get bubble classes based on layout preset
  */
-const getBubbleClasses = (
+export const getBubbleClasses = (
   role: "user" | "assistant" | "system",
   layout: AgentWidgetMessageLayoutConfig["layout"] = "bubble"
 ): string[] => {
