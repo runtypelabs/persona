@@ -1,5 +1,11 @@
 # @runtypelabs/persona
 
+## 4.11.1
+
+### Patch Changes
+
+- b7435fc: Start grouped summaries with the first tool and preserve their DOM identity while calls stream and grow.
+
 ## 4.11.0
 
 ### Minor Changes
