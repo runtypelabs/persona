@@ -31,7 +31,10 @@ const injectToolMessage = (
       id,
       role: "assistant",
       content: "",
-      createdAt: new Date().toISOString(),
+      // Real stream updates reuse the original tool message's timeline fields.
+      // Keep them stable here so an upsert does not reorder the group.
+      createdAt: "2026-01-01T00:00:00.000Z",
+      sequence: Number(id.match(/(\d+)$/)?.[1] ?? 0),
       streaming: status !== "complete",
       variant: "tool",
       toolCall: {
@@ -76,6 +79,7 @@ const injectReasoningMessage = (
 
 describe("createAgentExperience tool call display modes", () => {
   beforeEach(() => {
+    window.localStorage.clear();
     vi.stubGlobal("requestAnimationFrame", (cb: (time: number) => void) => {
       cb(0);
       return 1;
@@ -157,6 +161,48 @@ describe("createAgentExperience tool call display modes", () => {
     controller.destroy();
   });
 
+  it("preserves a custom collapsed summary across tool chunk updates", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        toolCallDisplay: {
+          grouped: false,
+          expandable: false,
+          loadingAnimation: "none",
+        },
+      },
+      toolCall: {
+        renderCollapsedSummary: ({ toolCall }: any) => {
+          const summary = document.createElement("span");
+          summary.setAttribute("data-test-collapsed-summary", "true");
+          summary.textContent = `${toolCall.name}:${toolCall.status}`;
+          return summary;
+        },
+      },
+    } as any);
+
+    injectToolMessage(controller, {
+      id: "tool-1",
+      name: "Run SQL",
+      chunks: ["starting"],
+    });
+    const bubble = mount.querySelector("#bubble-tool-1");
+    const summary = mount.querySelector("[data-test-collapsed-summary='true']");
+
+    injectToolMessage(controller, {
+      id: "tool-1",
+      name: "Run SQL",
+      chunks: ["starting", "received rows"],
+    });
+
+    expect(mount.querySelector("#bubble-tool-1")).toBe(bubble);
+    expect(mount.querySelector("[data-test-collapsed-summary='true']")).toBe(summary);
+
+    controller.destroy();
+  });
+
   it("renders a collapsed preview for active reasoning rows when enabled", () => {
     const mount = createMount();
     const controller = createAgentExperience(mount, {
@@ -202,6 +248,41 @@ describe("createAgentExperience tool call display modes", () => {
     controller.destroy();
   });
 
+  it("preserves tool rows when a standalone row becomes a stacked group", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        toolCallDisplay: {
+          grouped: true,
+          groupedMode: "stack",
+        },
+      },
+    } as any);
+
+    injectToolMessage(controller, { id: "tool-1", name: "Inspect data" });
+
+    const firstRow = mount.querySelector("#wrapper-tool-1");
+    const firstBubble = mount.querySelector("#bubble-tool-1");
+    expect(firstRow).not.toBeNull();
+    expect(firstBubble).not.toBeNull();
+
+    injectToolMessage(controller, { id: "tool-2", name: "Run analysis" });
+
+    const groupRow = mount.querySelector("[data-persona-tool-group-row='true']");
+    expect(groupRow).not.toBeNull();
+    expect(mount.querySelector("#wrapper-tool-1")).toBe(firstRow);
+    expect(mount.querySelector("#bubble-tool-1")).toBe(firstBubble);
+
+    injectToolMessage(controller, { id: "tool-3", name: "Build chart" });
+    expect(mount.querySelector("[data-persona-tool-group-row='true']")).toBe(groupRow);
+    expect(mount.querySelector("#wrapper-tool-1")).toBe(firstRow);
+    expect(mount.querySelector("#bubble-tool-1")).toBe(firstBubble);
+
+    controller.destroy();
+  });
+
   it("keeps tool calls grouped across reasoning that is hidden", () => {
     const mount = createMount();
     const controller = createAgentExperience(mount, {
@@ -226,29 +307,117 @@ describe("createAgentExperience tool call display modes", () => {
     controller.destroy();
   });
 
-  it("can render a grouped tool sequence as one summary item", () => {
+  it("keeps a summary group's visible DOM stable from the first tool onward", () => {
     const mount = createMount();
+    const renderedSummaries: HTMLElement[] = [];
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
       launcher: { enabled: false },
       features: {
         toolCallDisplay: {
+          collapsedMode: "tool-name",
+          activePreview: false,
           grouped: true,
           groupedMode: "summary",
+          expandable: false,
+          loadingAnimation: "shimmer-color",
         },
       },
       toolCall: {
-        renderGroupedSummary: () => "Analysis ready",
+        renderCollapsedSummary: ({ message, toolCall }: any) => {
+          const step = document.createElement("span");
+          step.setAttribute("data-test-collapsed-step", message.id);
+          step.textContent = `${toolCall.name}:${toolCall.status}`;
+          return step;
+        },
+        renderGroupedSummary: ({ toolCalls }: any) => {
+          const list = document.createElement("span");
+          list.setAttribute("data-test-activity-list", "true");
+          toolCalls.forEach((toolCall: { id: string; status: string }) => {
+            const step = document.createElement("span");
+            step.setAttribute("data-test-activity-step", toolCall.id);
+            step.textContent = `${toolCall.id}:${toolCall.status}`;
+            list.appendChild(step);
+          });
+          renderedSummaries.push(list);
+          return list;
+        },
       },
     } as any);
 
-    injectToolMessage(controller, { id: "tool-1", name: "Inspect data", status: "complete" });
-    injectToolMessage(controller, { id: "tool-2", name: "Run analysis", status: "complete" });
+    injectToolMessage(controller, {
+      id: "tool-1",
+      name: "Inspect data",
+      status: "pending",
+    });
 
-    const group = mount.querySelector("[data-persona-tool-group='true']");
-    expect(group?.textContent).toContain("Analysis ready");
-    expect(group?.querySelector("[data-persona-tool-group-item]")).toBeNull();
+    const groupRow = mount.querySelector("[data-persona-tool-group-row='true']");
+    const activityList = mount.querySelector("[data-test-activity-list='true']");
+    const firstStep = mount.querySelector("[data-test-activity-step='tool-1']");
+    expect(groupRow).not.toBeNull();
+    expect(groupRow?.getAttribute("data-wrapper-id")).toBe("tool-group-tool-1");
+    expect(activityList).not.toBeNull();
+    expect(firstStep).not.toBeNull();
     expect(mount.querySelector(".persona-tool-bubble")).toBeNull();
+
+    injectToolMessage(controller, {
+      id: "tool-1",
+      name: "Inspect data",
+      status: "running",
+      chunks: ["starting"],
+    });
+    expect(mount.querySelector("[data-persona-tool-group-row='true']")).toBe(groupRow);
+    expect(mount.querySelector("[data-test-activity-list='true']")).toBe(activityList);
+    expect(mount.querySelector("[data-test-activity-step='tool-1']")).toBe(firstStep);
+
+    injectToolMessage(controller, {
+      id: "tool-1",
+      name: "Inspect data",
+      chunks: ["starting", "received rows"],
+    });
+    expect(mount.querySelector("[data-persona-tool-group-row='true']")).toBe(groupRow);
+    expect(mount.querySelector("[data-test-activity-list='true']")).toBe(activityList);
+    expect(mount.querySelector("[data-test-activity-step='tool-1']")).toBe(firstStep);
+
+    injectToolMessage(controller, { id: "tool-2", name: "Run analysis" });
+
+    const secondStep = mount.querySelector("[data-test-activity-step='tool-2']");
+    expect(mount.querySelector("[data-persona-tool-group-row='true']")).toBe(groupRow);
+    expect(mount.querySelector("[data-test-activity-list='true']")).toBe(activityList);
+    expect(mount.querySelector("[data-test-activity-step='tool-1']")).toBe(firstStep);
+    expect(secondStep).not.toBeNull();
+    expect(mount.querySelector(".persona-tool-bubble")).toBeNull();
+
+    injectToolMessage(controller, {
+      id: "tool-1",
+      name: "Inspect data",
+      status: "complete",
+      chunks: ["starting", "received rows"],
+    });
+    expect(mount.querySelector("[data-persona-tool-group-row='true']")).toBe(groupRow);
+    expect(mount.querySelector("[data-test-activity-list='true']")).toBe(activityList);
+    expect(mount.querySelector("[data-test-activity-step='tool-1']")).toBe(firstStep);
+    expect(mount.querySelector("[data-test-activity-step='tool-2']")).toBe(secondStep);
+    expect(firstStep?.textContent).toBe("tool-1:complete");
+    expect(secondStep?.textContent).toBe("tool-2:running");
+
+    injectToolMessage(controller, {
+      id: "tool-2",
+      name: "Run analysis",
+      status: "complete",
+    });
+    expect(mount.querySelector("[data-persona-tool-group-row='true']")).toBe(groupRow);
+    expect(mount.querySelector("[data-test-activity-list='true']")).toBe(activityList);
+    expect(mount.querySelector("[data-test-activity-step='tool-1']")).toBe(firstStep);
+    expect(mount.querySelector("[data-test-activity-step='tool-2']")).toBe(secondStep);
+    expect(secondStep?.textContent).toBe("tool-2:complete");
+    expect(mount.querySelector(".persona-tool-bubble")).toBeNull();
+
+    // The callback can return a fresh tree on every status update; idiomorph
+    // must reconcile it into the existing visible summary rather than mounting
+    // those detached callback results.
+    expect(renderedSummaries.length).toBeGreaterThan(1);
+    expect(renderedSummaries).not.toContain(activityList);
 
     controller.destroy();
   });

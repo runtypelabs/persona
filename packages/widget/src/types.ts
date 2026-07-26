@@ -3478,6 +3478,8 @@ export type AgentWidgetToolCallConfig = {
   }) => HTMLElement | string | null;
   /**
    * Override the summary content for grouped consecutive tool-call containers.
+   * In `groupedMode: "summary"`, the summary owns the visible row starting
+   * with the first tool so its DOM stays stable as more calls arrive.
    * Return `null` to fall back to the built-in `Called [x] tools` summary.
    */
   renderGroupedSummary?: (context: {

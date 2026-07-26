@@ -4817,6 +4817,8 @@ export const createAgentExperience = (
     if (config.features?.toolCallDisplay?.grouped) {
       const toolGroups: AgentWidgetMessage[][] = [];
       let currentGroup: AgentWidgetMessage[] = [];
+      const summaryOnly =
+        config.features.toolCallDisplay.groupedMode === "summary";
 
       messages.forEach((message) => {
         if (message.variant === "tool" && message.toolCall && showToolCalls) {
@@ -4829,16 +4831,20 @@ export const createAgentExperience = (
         if (message.variant === "reasoning" && !showReasoning) {
           return;
         }
-        if (currentGroup.length > 1) {
+        // Summary mode owns the visible row from the first tool onward. Waiting
+        // for a second tool would replace the standalone tool bubble with a new
+        // group row, restarting custom activity animations and transiently
+        // dropping interactive DOM state during the handoff.
+        if (currentGroup.length > 1 || (summaryOnly && currentGroup.length > 0)) {
           toolGroups.push(currentGroup);
         }
         currentGroup = [];
       });
-      if (currentGroup.length > 1) {
+      if (currentGroup.length > 1 || (summaryOnly && currentGroup.length > 0)) {
         toolGroups.push(currentGroup);
       }
 
-      toolGroups.forEach((group, groupIndex) => {
+      toolGroups.forEach((group) => {
         const wrappers = group
           .map((groupMessage) =>
             Array.from(tempContainer.children).find(
@@ -4849,12 +4855,12 @@ export const createAgentExperience = (
           )
           .filter((wrapper): wrapper is HTMLElement => Boolean(wrapper));
 
-        if (wrappers.length < 2) {
+        if (wrappers.length < (summaryOnly ? 1 : 2)) {
           return;
         }
 
         const groupWrapper = createMessageRow(
-          `tool-group-${groupIndex}-${group[0].id}`,
+          `tool-group-${group[0].id}`,
           "assistant"
         );
         groupWrapper.setAttribute("data-persona-tool-group-row", "true");
@@ -4867,8 +4873,9 @@ export const createAgentExperience = (
         const summary = document.createElement("div");
         summary.className =
           "persona-tool-group-summary persona-text-xs persona-text-persona-muted";
+        summary.id = `tool-group-summary-${group[0].id}`;
 
-        const defaultSummary = `Called ${group.length} tools`;
+        const defaultSummary = `Called ${group.length} ${group.length === 1 ? "tool" : "tools"}`;
         const renderedSummary = config.toolCall?.renderGroupedSummary?.({
           messages: group,
           toolCalls: group
@@ -4883,8 +4890,9 @@ export const createAgentExperience = (
 
         const stack = document.createElement("div");
         stack.className = "persona-tool-group-stack persona-flex persona-flex-col";
+        stack.id = `tool-group-stack-${group[0].id}`;
+        stack.setAttribute("data-persona-tool-group-stack", "true");
 
-        const summaryOnly = config.features?.toolCallDisplay?.groupedMode === "summary";
         groupContainer.appendChild(summary);
         if (!summaryOnly) {
           groupContainer.appendChild(stack);
