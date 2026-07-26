@@ -19,6 +19,8 @@ describe("createComposerTextarea", () => {
     expect(textarea.tagName).toBe("TEXTAREA");
     expect(textarea.getAttribute("data-persona-composer-input")).toBe("");
     expect(textarea.classList.contains("persona-composer-textarea")).toBe(true);
+    expect(textarea.classList.contains("persona-text-persona-text")).toBe(true);
+    expect(textarea.classList.contains("persona-text-persona-primary")).toBe(false);
   });
 
   it("attachAutoResize wires an input listener that grows up to maxHeight", () => {

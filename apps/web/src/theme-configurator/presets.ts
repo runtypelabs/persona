@@ -18,6 +18,8 @@ export interface ThemePreset {
   builtIn: boolean;
 }
 
+const PERSONA_DEFAULT_PRESET_ID = 'persona-default';
+
 /** Map headless presets to the local ThemePreset shape */
 export const BUILT_IN_PRESETS: ThemePreset[] = [
   // Presets from headless core
@@ -26,6 +28,12 @@ export const BUILT_IN_PRESETS: ThemePreset[] = [
     label: p.name,
     description: p.description,
     theme: p.theme as Partial<PersonaTheme>,
+    config: p.darkTheme
+      ? {
+          colorScheme: 'auto' as const,
+          darkTheme: p.darkTheme as AgentWidgetConfig['darkTheme'],
+        }
+      : undefined,
     builtIn: true as const,
   })),
 ] as ThemePreset[];
@@ -147,9 +155,13 @@ function cleanedConfigForThemeOnlyPreset(config: AgentWidgetConfig): AgentWidget
 export function applyPreset(preset: ThemePreset): void {
   const theme = createTheme(preset.theme, { validate: false });
   if (preset.config) {
+    const currentConfig =
+      preset.id === PERSONA_DEFAULT_PRESET_ID
+        ? withoutLayoutArtifactPaneBackground(state.getConfig())
+        : state.getConfig();
     state.setFullConfig(
       {
-        ...state.getConfig(),
+        ...currentConfig,
         ...preset.config,
       } as AgentWidgetConfig,
       theme

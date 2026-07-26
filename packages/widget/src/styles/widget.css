@@ -294,6 +294,10 @@
   color: var(--persona-primary, #171717);
 }
 
+.persona-text-persona-text {
+  color: var(--persona-text, #111827);
+}
+
 .persona-text-persona-call-to-action {
   color: var(--persona-call-to-action, var(--persona-text-inverse, #ffffff));
 }
@@ -928,6 +932,11 @@
   border-style: none !important;
   border-color: transparent !important;
   box-shadow: none !important;
+}
+
+.persona-composer-textarea::placeholder {
+  color: var(--persona-input-placeholder, var(--persona-text-muted, #9ca3af));
+  opacity: 1;
 }
 
 /* Prevent iOS Safari from zooming on input focus (requires 16px minimum) */
@@ -4928,7 +4937,7 @@
 
 .persona-composer-contenteditable:empty::before {
   content: attr(data-placeholder);
-  color: var(--persona-placeholder, var(--persona-muted, #9ca3af));
+  color: var(--persona-input-placeholder, var(--persona-text-muted, #9ca3af));
   pointer-events: none;
 }
 

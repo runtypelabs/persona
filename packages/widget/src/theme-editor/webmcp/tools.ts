@@ -469,6 +469,7 @@ export function createThemeEditorTools(
       const config: AgentWidgetConfig = { ...state.getConfig() };
       if (preset.darkTheme) {
         config.darkTheme = createTheme(preset.darkTheme, { validate: false }) as PersonaTheme;
+        config.colorScheme = 'auto';
       }
       if (preset.toolCall) config.toolCall = preset.toolCall;
       state.setFullConfig(config, theme);

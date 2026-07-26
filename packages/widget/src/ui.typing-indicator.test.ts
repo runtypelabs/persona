@@ -78,6 +78,9 @@ describe("standalone typing indicator bubble", () => {
     expect(bubble.classList.contains("persona-shadow-sm")).toBe(false);
     expect(bubble.classList.contains("persona-border")).toBe(false);
     expect(bubble.style.backgroundColor).toBe("");
+    expect(bubble.style.color).toBe(
+      "var(--persona-message-assistant-text, var(--persona-text))"
+    );
 
     destroy();
   });
@@ -90,6 +93,8 @@ describe("standalone typing indicator bubble", () => {
     expect(bubble.classList.contains("persona-message-assistant-bubble")).toBe(false);
     expect(bubble.classList.contains("persona-shadow-sm")).toBe(false);
     expect(bubble.classList.contains("persona-border")).toBe(false);
+    expect(bubble.classList.contains("persona-text-persona-text")).toBe(true);
+    expect(bubble.classList.contains("persona-text-persona-primary")).toBe(false);
     expect(bubble.style.backgroundColor).toBe("");
 
     destroy();
@@ -98,12 +103,31 @@ describe("standalone typing indicator bubble", () => {
   it("honors the assistant bubble theme background token", async () => {
     const { bubble, destroy } = await renderTypingBubble({
       layout: { messages: { layout: "minimal" } },
+      theme: {
+        semantic: {
+          colors: {
+            container: "#112233",
+            text: "#ddeeff",
+            border: "#445566",
+          },
+        },
+      },
     });
 
     // The bubble reads the same variable the assistant message bubbles read,
     // so `theme.components.message.assistant.background` covers both.
     expect(bubble.style.backgroundColor).toBe(
-      "var(--persona-message-assistant-bg, var(--persona-surface))"
+      "var(--persona-message-assistant-bg, var(--persona-container))"
+    );
+    const root = bubble.closest<HTMLElement>("[data-persona-root]");
+    expect(root?.style.getPropertyValue("--persona-message-assistant-bg")).toBe(
+      "#112233"
+    );
+    expect(root?.style.getPropertyValue("--persona-message-assistant-text")).toBe(
+      "#ddeeff"
+    );
+    expect(root?.style.getPropertyValue("--persona-message-assistant-border")).toBe(
+      "#445566"
     );
 
     destroy();

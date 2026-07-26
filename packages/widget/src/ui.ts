@@ -5056,16 +5056,18 @@ export const createAgentExperience = (
           : [
               "persona-text-sm",
               "persona-leading-relaxed",
-              "persona-text-persona-primary"
+              "persona-text-persona-text"
             ].join(" ");
         typingBubble.setAttribute("data-typing-indicator", "true");
-        if (showBubble && messageLayout !== "flat") {
-          typingBubble.style.backgroundColor =
-            "var(--persona-message-assistant-bg, var(--persona-surface))";
+        if (showBubble) {
           typingBubble.style.color =
             "var(--persona-message-assistant-text, var(--persona-text))";
-          typingBubble.style.borderColor =
-            "var(--persona-message-assistant-border, var(--persona-border, #e5e7eb))";
+          if (messageLayout !== "flat") {
+            typingBubble.style.backgroundColor =
+              "var(--persona-message-assistant-bg, var(--persona-container))";
+            typingBubble.style.borderColor =
+              "var(--persona-message-assistant-border, var(--persona-border, #e5e7eb))";
+          }
         }
 
         typingBubble.appendChild(typingIndicator);

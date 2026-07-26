@@ -668,7 +668,7 @@ export const getBubbleClasses = (
       } else {
         baseClasses.push(
           "persona-message-assistant-bubble",
-          "persona-text-persona-primary",
+          "persona-text-persona-text",
           "persona-py-2"
         );
       }
@@ -693,8 +693,8 @@ export const getBubbleClasses = (
       } else {
         baseClasses.push(
           "persona-message-assistant-bubble",
-          "persona-bg-persona-surface",
-          "persona-text-persona-primary",
+          "persona-bg-persona-container",
+          "persona-text-persona-text",
           "persona-px-3",
           "persona-py-2",
           "persona-rounded-lg"
@@ -723,10 +723,10 @@ export const getBubbleClasses = (
       } else {
         baseClasses.push(
           "persona-message-assistant-bubble",
-          "persona-bg-persona-surface",
+          "persona-bg-persona-container",
           "persona-border",
           "persona-border-persona-message-border",
-          "persona-text-persona-primary",
+          "persona-text-persona-text",
           "persona-px-5",
           "persona-py-3"
         );
@@ -879,12 +879,15 @@ export const createStandardBubble = (
   // Apply component-level color overrides via CSS variables
   if (layout === "flat") {
     bubble.style.backgroundColor = "transparent";
-    bubble.style.color = "var(--persona-primary, var(--persona-text))";
+    bubble.style.color =
+      message.role === "user"
+        ? "var(--persona-primary, var(--persona-text))"
+        : "var(--persona-message-assistant-text, var(--persona-text))";
   } else if (message.role === "user") {
     bubble.style.backgroundColor = 'var(--persona-message-user-bg, var(--persona-accent))';
     bubble.style.color = 'var(--persona-message-user-text, white)';
   } else if (message.role === "assistant") {
-    bubble.style.backgroundColor = 'var(--persona-message-assistant-bg, var(--persona-surface))';
+    bubble.style.backgroundColor = 'var(--persona-message-assistant-bg, var(--persona-container))';
     bubble.style.color = 'var(--persona-message-assistant-text, var(--persona-text))';
   }
 
