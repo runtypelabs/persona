@@ -37,8 +37,8 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 
 **Installer options:**
 
-- `version` - Package version to load (default: `"latest"`)
-- `cdn` - CDN provider: `"jsdelivr"` or `"unpkg"` (default: `"jsdelivr"`)
+- `version` - Package version to load from an npm CDN (setting it switches asset loading to npm-CDN URLs; `"latest"` when only `cdn` is set)
+- `cdn` - npm CDN provider: `"jsdelivr"` or `"unpkg"`. By default the installer loads `widget.css` / `index.global.js` / `launcher.global.js` from the same directory it was itself served from, so self-hosted and first-party CDN copies work with no extra config (and satisfy the same CSP that allowed the installer). Setting `cdn` or `version` opts into npm-CDN URLs instead; jsDelivr `@latest` is the fallback when the installer's own URL can't be determined (e.g. bundled/module usage).
 - `cssUrl` - Custom CSS URL (overrides CDN)
 - `jsUrl` - Custom JS URL (overrides CDN)
 - `target` - CSS selector or element where widget mounts (default: `"body"`)

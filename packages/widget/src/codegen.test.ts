@@ -23,6 +23,33 @@ describe("codegen subpath", () => {
     expect(code).not.toContain("@latest");
   });
 
+  describe("cdnBase option", () => {
+    const cdnBase = "https://cdn.runtype.com/persona/latest";
+
+    it("emits the custom base in every script format", () => {
+      expect(fromSubpath(config, "script-installer", { cdnBase })).toContain(
+        `src="${cdnBase}/install.global.js"`
+      );
+      const manual = fromSubpath(config, "script-manual", { cdnBase });
+      expect(manual).toContain(`href="${cdnBase}/widget.css"`);
+      expect(manual).toContain(`src="${cdnBase}/index.global.js"`);
+      expect(fromSubpath(config, "script-advanced", { cdnBase })).toContain(
+        `var CDN_BASE = '${cdnBase}';`
+      );
+    });
+
+    it("tolerates a trailing slash", () => {
+      const code = fromSubpath(config, "script-installer", { cdnBase: `${cdnBase}/` });
+      expect(code).toContain(`src="${cdnBase}/install.global.js"`);
+    });
+
+    it("leaves no jsDelivr URL behind when a custom base is set", () => {
+      for (const format of ["script-installer", "script-manual", "script-advanced"] as const) {
+        expect(fromSubpath(config, format, { cdnBase })).not.toContain("jsdelivr");
+      }
+    });
+  });
+
   describe("mount target option", () => {
     it("defaults to body when no target is given", () => {
       expect(fromSubpath(config, "react-component")).toContain("target: 'body'");

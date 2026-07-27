@@ -343,6 +343,89 @@ describe("install.ts: deferral gate", () => {
   });
 });
 
+describe("install.ts: CDN base derivation", () => {
+  // The installer captures document.currentScript.src synchronously at module
+  // evaluation; fake it with an own-property override (jsdom's getter lives on
+  // the prototype, so a configurable instance property shadows it cleanly).
+  function setCurrentScript(src: string) {
+    const script = document.createElement("script");
+    script.src = src;
+    Object.defineProperty(document, "currentScript", { value: script, configurable: true });
+  }
+
+  afterEach(() => {
+    delete (document as any).currentScript;
+  });
+
+  /**
+   * Run the deferred path with NO bundles provided so loadCSS/loadLauncher
+   * inject real (never-resolving in jsdom) elements whose URLs we can read.
+   */
+  async function installedUrls(installerOptions: any) {
+    await install({ config: { apiUrl: "/api", launcher: { enabled: true } }, ...installerOptions });
+    await flush();
+    const css = document.head.querySelector("link[rel=\"stylesheet\"][data-persona]") as HTMLLinkElement | null;
+    const scripts = Array.from(document.head.querySelectorAll("script")).map((s) => s.src);
+    return { cssHref: css?.href ?? null, scripts };
+  }
+
+  it("derives asset URLs from the installer's own script directory (first-party CDN)", async () => {
+    setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    const { cssHref, scripts } = await installedUrls({});
+    expect(cssHref).toBe("https://cdn.runtype.com/persona/latest/widget.css");
+    expect(scripts).toContain("https://cdn.runtype.com/persona/latest/launcher.global.js");
+  });
+
+  it("keeps npm-CDN siblings on the installer's own pinned range (no @latest skew)", async () => {
+    setCurrentScript("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/install.global.js");
+    const { cssHref, scripts } = await installedUrls({});
+    expect(cssHref).toBe("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/widget.css");
+    expect(scripts).toContain("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4/dist/launcher.global.js");
+  });
+
+  it("the full bundle URL follows the installer directory on the eager path", async () => {
+    setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    markCssLoaded();
+    await install({ config: { apiUrl: "/api", launcher: { enabled: false } } });
+    await flush();
+    const scripts = Array.from(document.head.querySelectorAll("script")).map((s) => s.src);
+    expect(scripts).toContain("https://cdn.runtype.com/persona/latest/index.global.js");
+  });
+
+  it("falls back to jsDelivr@latest when currentScript is unavailable", async () => {
+    // No setCurrentScript: module/inline contexts have no script src.
+    const { cssHref } = await installedUrls({});
+    expect(cssHref).toBe("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/widget.css");
+  });
+
+  it("falls back to the npm CDN for a non-http(s) installer source", async () => {
+    setCurrentScript("data:text/javascript,void%200");
+    const { cssHref } = await installedUrls({});
+    expect(cssHref).toBe("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/widget.css");
+  });
+
+  it("an explicit `version` opts back into npm-CDN URLs even when the src is derivable", async () => {
+    setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    const { cssHref } = await installedUrls({ version: "1.2.3" });
+    expect(cssHref).toBe("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@1.2.3/dist/widget.css");
+  });
+
+  it("an explicit `cdn` opts back into npm-CDN URLs even when the src is derivable", async () => {
+    setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    const { cssHref } = await installedUrls({ cdn: "unpkg" });
+    expect(cssHref).toBe("https://unpkg.com/@runtypelabs/persona@latest/dist/widget.css");
+  });
+
+  it("explicit cssUrl + jsUrl win over the derived installer base", async () => {
+    setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    const { cssHref } = await installedUrls({
+      cssUrl: "https://assets.example.com/persona/widget.css",
+      jsUrl: "https://assets.example.com/persona/index.global.js",
+    });
+    expect(cssHref).toBe("https://assets.example.com/persona/widget.css");
+  });
+});
+
 describe("install.ts: onError", () => {
   it("fires onError with phase 'init' and dispatches persona:error when initialization throws", async () => {
     markCssLoaded();

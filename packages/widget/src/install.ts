@@ -7,6 +7,9 @@
 export {};
 
 interface SiteAgentInstallConfig {
+  // Setting `version` or `cdn` explicitly opts into npm-CDN asset URLs
+  // (jsDelivr/unpkg). When neither is set, assets load from the directory the
+  // installer script itself was served from — see getCdnBase().
   version?: string;
   cdn?: "unpkg" | "jsdelivr";
   cssUrl?: string;
@@ -137,6 +140,10 @@ declare global {
   // Get config from script attributes (must be called synchronously during script execution)
   const scriptConfig = getConfigFromScript();
 
+  // The installer's own URL, captured now because document.currentScript is
+  // null once synchronous execution ends (and always inside modules).
+  const installerSrc = (document.currentScript as HTMLScriptElement | null)?.src || "";
+
   // Merge script attributes with window config (script attributes take precedence)
   const windowConfig: SiteAgentInstallConfig = window.siteAgentConfig || {};
   const config: SiteAgentInstallConfig = { ...windowConfig, ...scriptConfig };
@@ -194,7 +201,28 @@ declare global {
   const cdn = config.cdn || "jsdelivr";
   const autoInit = config.autoInit !== false; // Default to true
 
-  // Determine CDN base URL
+  // Directory the installer itself was served from. Every published layout
+  // (npm CDN dist/, first-party CDN, self-hosted copies) keeps the sibling
+  // assets next to install.global.js, so this base is valid wherever the
+  // installer loaded from — and always satisfies the same CSP/origin rules
+  // that let the installer through. Non-http(s) sources (inline, blob:) and
+  // module contexts (no currentScript) yield null.
+  const getInstallerBase = (): string | null => {
+    if (!installerSrc) return null;
+    try {
+      const url = new URL(installerSrc, document.baseURI);
+      if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+      return url.origin + url.pathname.slice(0, url.pathname.lastIndexOf("/"));
+    } catch {
+      return null;
+    }
+  };
+
+  // Determine CDN base URL. Precedence:
+  //   1. explicit cssUrl + jsUrl
+  //   2. explicit `cdn` / `version` → npm CDN construction
+  //   3. the installer's own directory (default)
+  //   4. npm CDN construction (currentScript unavailable)
   const getCdnBase = () => {
     // For a custom URL override, derive the sibling launcher URL when the
     // override mirrors the dist layout (…/index.global.js → …/launcher.global.js)
@@ -209,8 +237,26 @@ declare global {
       };
     }
 
+    // Default: load assets from wherever the installer was served, so a page
+    // whose CSP allows only its own CDN (e.g. cdn.runtype.com) never has
+    // sibling requests fan out to a third-party host. An explicit `cdn` or
+    // `version` keeps the documented npm-CDN behavior.
+    if (!config.cdn && !config.version) {
+      const selfBase = getInstallerBase();
+      if (selfBase) {
+        return {
+          cssUrl: `${selfBase}/widget.css`,
+          jsUrl: `${selfBase}/index.global.js`,
+          launcherUrl: `${selfBase}/launcher.global.js` as string | null,
+        };
+      }
+    }
+
     const packageName = "@runtypelabs/persona";
-    const basePath = `/npm/${packageName}@${version}/dist`;
+    // jsDelivr namespaces npm packages under /npm/; unpkg serves them at the root.
+    const basePath = cdn === "unpkg"
+      ? `/${packageName}@${version}/dist`
+      : `/npm/${packageName}@${version}/dist`;
     const host = cdn === "unpkg" ? "https://unpkg.com" : "https://cdn.jsdelivr.net";
 
     return {
