@@ -43,6 +43,22 @@ describe("codegen subpath", () => {
       expect(code).toContain(`src="${cdnBase}/install.global.js"`);
     });
 
+    it("percent-encodes characters that could break the emitted JS/HTML contexts", () => {
+      const hostile = "https://cdn.example.com/x'\"\\`/persona";
+      const encoded = "https://cdn.example.com/x%27%22%5C%60/persona";
+      // script-advanced emits into a single-quoted JS literal
+      expect(fromSubpath(config, "script-advanced", { cdnBase: hostile })).toContain(
+        `var CDN_BASE = '${encoded}';`
+      );
+      // script-installer / script-manual emit into double-quoted HTML attributes
+      expect(fromSubpath(config, "script-installer", { cdnBase: hostile })).toContain(
+        `src="${encoded}/install.global.js"`
+      );
+      expect(fromSubpath(config, "script-manual", { cdnBase: hostile })).toContain(
+        `href="${encoded}/widget.css"`
+      );
+    });
+
     it("leaves no jsDelivr URL behind when a custom base is set", () => {
       for (const format of ["script-installer", "script-manual", "script-advanced"] as const) {
         expect(fromSubpath(config, format, { cdnBase })).not.toContain("jsdelivr");

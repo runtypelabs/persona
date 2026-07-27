@@ -163,9 +163,18 @@ export type CodeGeneratorOptions = {
   cdnBase?: string;
 };
 
-/** Asset directory for script formats: explicit cdnBase or the version-pinned jsDelivr dist. */
+/**
+ * Asset directory for script formats: explicit cdnBase or the version-pinned
+ * jsDelivr dist. The base is emitted into single-quoted JS literals AND
+ * double-quoted HTML attributes, so percent-encode the characters that could
+ * break out of either context. All of them are illegal unencoded in a URL
+ * (RFC 3986), so encoding never changes the meaning of a valid base URL.
+ */
 function resolveCdnBase(options?: CodeGeneratorOptions): string {
-  const base = options?.cdnBase?.trim().replace(/\/+$/, "");
+  const base = options?.cdnBase
+    ?.trim()
+    .replace(/\/+$/, "")
+    .replace(/[\\'"<>`]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
   return base || `https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist`;
 }
 
