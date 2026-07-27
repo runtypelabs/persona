@@ -1,8 +1,14 @@
 /** V2 theme presets and custom preset CRUD */
 
-import type { PersonaTheme } from '@runtypelabs/persona';
-import { createTheme } from '@runtypelabs/persona';
-import type { AgentWidgetConfig } from '@runtypelabs/persona';
+import type {
+  AgentWidgetConfig,
+  PersonaTheme,
+  WidgetPreferenceSlice,
+} from '@runtypelabs/persona';
+import {
+  applyFeaturePreferences,
+  createTheme,
+} from '@runtypelabs/persona';
 import { BUILT_IN_PRESETS as HEADLESS_PRESETS } from '@runtypelabs/persona/theme-editor';
 import * as state from './state';
 
@@ -14,6 +20,7 @@ export interface ThemePreset {
   description: string;
   theme: Partial<PersonaTheme>;
   config?: Partial<AgentWidgetConfig>;
+  behavior?: WidgetPreferenceSlice;
   /** Whether this is a built-in preset (cannot be deleted) */
   builtIn: boolean;
 }
@@ -34,6 +41,7 @@ export const BUILT_IN_PRESETS: ThemePreset[] = [
           darkTheme: p.darkTheme as AgentWidgetConfig['darkTheme'],
         }
       : undefined,
+    behavior: p.behavior,
     builtIn: true as const,
   })),
 ] as ThemePreset[];
@@ -159,16 +167,27 @@ export function applyPreset(preset: ThemePreset): void {
       preset.id === PERSONA_DEFAULT_PRESET_ID
         ? withoutLayoutArtifactPaneBackground(state.getConfig())
         : state.getConfig();
-    state.setFullConfig(
-      {
-        ...currentConfig,
-        ...preset.config,
-      } as AgentWidgetConfig,
-      theme
-    );
+    const nextConfig = {
+      ...currentConfig,
+      ...preset.config,
+    } as AgentWidgetConfig;
+    if (preset.behavior) {
+      nextConfig.features = applyFeaturePreferences(
+        nextConfig.features,
+        [preset.behavior]
+      );
+    }
+    state.setFullConfig(nextConfig, theme);
     return;
   }
-  state.setFullConfig(cleanedConfigForThemeOnlyPreset(state.getConfig()), theme);
+  const nextConfig = cleanedConfigForThemeOnlyPreset(state.getConfig());
+  if (preset.behavior) {
+    nextConfig.features = applyFeaturePreferences(
+      nextConfig.features,
+      [preset.behavior]
+    );
+  }
+  state.setFullConfig(nextConfig, theme);
 }
 
 export function getAllPresets(): ThemePreset[] {

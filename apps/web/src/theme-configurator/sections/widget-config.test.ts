@@ -56,7 +56,14 @@ describe('widget config section parity', () => {
     const dividers = Array.from(container.querySelectorAll('.subgroup-divider .subgroup-label'))
       .map(el => el.textContent);
 
-    expect(dividers).toEqual(['Content', 'Layout', 'Widget', 'Features', 'Developer']);
+    expect(dividers).toEqual([
+      'Content',
+      'Layout',
+      'Widget',
+      'Features',
+      'Stream and artifacts',
+      'Developer',
+    ]);
   });
 
   test('launcher basics section surfaces position summary and a cross-link back to style', () => {

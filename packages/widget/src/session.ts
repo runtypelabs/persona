@@ -858,7 +858,11 @@ export class AgentWidgetSession {
   }
 
   public updateConfig(next: AgentWidgetConfig) {
+    const previousArtifactDisplay = this.config.features?.artifacts?.display;
     const merged = { ...this.config, ...next };
+    const artifactDisplayChanged =
+      JSON.stringify(previousArtifactDisplay) !==
+      JSON.stringify(merged.features?.artifacts?.display);
 
     // Connection/request-shaping change (apiUrl, clientToken, webmcp, headers,
     // parser, agent, …) → full client rebuild. UI-only change (theme, copy,
@@ -870,6 +874,7 @@ export class AgentWidgetSession {
     if (!connectionConfigChanged(this.config, merged)) {
       this.config = merged;
       this.client.updateConfig(merged);
+      if (artifactDisplayChanged) this.refreshArtifactReferenceBlocks();
       return;
     }
 
@@ -886,6 +891,7 @@ export class AgentWidgetSession {
     const prevSSECallback = this.client.getSSEEventCallback();
     this.config = merged;
     this.client = new AgentWidgetClient(this.config);
+    if (artifactDisplayChanged) this.refreshArtifactReferenceBlocks();
     this.wireDefaultWebMcpConfirm();
     if (prevSSECallback) {
       this.client.setSSEEventCallback(prevSSECallback);
@@ -2735,7 +2741,8 @@ export class AgentWidgetSession {
             title: manual.title,
             status: "complete",
             markdown: manual.content,
-            ...(manual.file ? { file: manual.file } : {})
+            ...(manual.file ? { file: manual.file } : {}),
+            ...(manual.presentation ? { presentation: manual.presentation } : {})
           }
         : {
             id,
@@ -2743,7 +2750,8 @@ export class AgentWidgetSession {
             title: manual.title,
             status: "complete",
             component: manual.component,
-            props: manual.props ?? {}
+            props: manual.props ?? {},
+            ...(manual.presentation ? { presentation: manual.presentation } : {})
           };
     this.artifacts.set(id, rec);
     this.selectedArtifactId = id;
@@ -2757,7 +2765,7 @@ export class AgentWidgetSession {
   /**
    * Injects (or refreshes) the in-thread artifact block for a programmatically
    * upserted artifact, matching the streamed UX: the resolved display mode
-   * picks the component ("card"/"panel" → reference card, "inline" → inline
+   * picks the component ("collapsed"/"panel" → reference card, "inline" → inline
    * preview).
    *
    * Unlike the streamed path (which embeds content on `artifact_complete`),
@@ -2774,7 +2782,7 @@ export class AgentWidgetSession {
     const refId = `artifact-ref-${rec.id}`;
     const displayMode = resolveArtifactDisplayMode(
       this.config.features?.artifacts,
-      rec.artifactType
+      rec
     );
     const rawContent = buildArtifactRefRawContent(displayMode, {
       artifactId: rec.id,
@@ -2782,6 +2790,7 @@ export class AgentWidgetSession {
       artifactType: rec.artifactType,
       status: "complete",
       ...(rec.file ? { file: rec.file } : {}),
+      ...(rec.presentation ? { presentation: rec.presentation } : {}),
       ...(rec.component ? { component: rec.component } : {}),
       ...(rec.props ? { componentProps: rec.props } : {}),
       ...(rec.markdown !== undefined ? { markdown: rec.markdown } : {})
@@ -2801,6 +2810,38 @@ export class AgentWidgetSession {
       content: "",
       rawContent
     });
+  }
+
+  /**
+   * Re-materialize existing transcript artifact blocks after a live display
+   * preference update. One messages callback keeps conversion atomic.
+   */
+  private refreshArtifactReferenceBlocks(): void {
+    let changed = false;
+    for (const rec of this.artifacts.values()) {
+      const message = this.messages.find((candidate) => candidate.id === `artifact-ref-${rec.id}`);
+      if (!message) continue;
+      const displayMode = resolveArtifactDisplayMode(
+        this.config.features?.artifacts,
+        rec
+      );
+      const rawContent = buildArtifactRefRawContent(displayMode, {
+        artifactId: rec.id,
+        title: rec.title,
+        artifactType: rec.artifactType,
+        status: rec.status,
+        ...(rec.file ? { file: rec.file } : {}),
+        ...(rec.presentation ? { presentation: rec.presentation } : {}),
+        ...(rec.component ? { component: rec.component } : {}),
+        ...(rec.props ? { componentProps: rec.props } : {}),
+        ...(rec.markdown !== undefined ? { markdown: rec.markdown } : {}),
+      });
+      if (message.rawContent === rawContent) continue;
+      message.rawContent = rawContent;
+      message.streaming = rec.status === "streaming";
+      changed = true;
+    }
+    if (changed) this.callbacks.onMessagesChanged([...this.messages]);
   }
 
   private clearArtifactState(): void {

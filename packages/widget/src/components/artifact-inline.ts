@@ -2,6 +2,7 @@ import type { ComponentContext, ComponentRenderer } from "./registry";
 import type {
   AgentWidgetArtifactsFeature,
   PersonaArtifactFileMeta,
+  PersonaArtifactPresentation,
   PersonaArtifactRecord
 } from "../types";
 import { createElement } from "../utils/dom";
@@ -126,6 +127,12 @@ function recordFromProps(props: Record<string, unknown>): PersonaArtifactRecord 
   const title =
     typeof props.title === "string" && props.title ? props.title : undefined;
   const status = props.status === "streaming" ? "streaming" : "complete";
+  const presentation =
+    props.presentation &&
+    typeof props.presentation === "object" &&
+    !Array.isArray(props.presentation)
+      ? (props.presentation as PersonaArtifactPresentation)
+      : undefined;
   if (props.artifactType === "component") {
     const embedded = props.componentProps;
     const componentProps =
@@ -138,7 +145,8 @@ function recordFromProps(props: Record<string, unknown>): PersonaArtifactRecord 
       title,
       status,
       component: typeof props.component === "string" ? props.component : "",
-      props: componentProps
+      props: componentProps,
+      ...(presentation ? { presentation } : {})
     };
   }
   const file =
@@ -151,7 +159,8 @@ function recordFromProps(props: Record<string, unknown>): PersonaArtifactRecord 
     title,
     status,
     markdown: typeof props.markdown === "string" ? props.markdown : "",
-    ...(file ? { file } : {})
+    ...(file ? { file } : {}),
+    ...(presentation ? { presentation } : {})
   };
 }
 

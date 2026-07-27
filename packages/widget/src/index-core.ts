@@ -12,12 +12,21 @@ export type {
   AgentWidgetArtifactsFeature,
   AgentWidgetArtifactsLayoutConfig,
   PersonaArtifactDisplayMode,
+  PersonaArtifactDisplayModeInput,
+  PersonaArtifactDisplayRules,
+  PersonaArtifactFilesDisplayRules,
   PersonaArtifactKind,
+  PersonaArtifactPresentation,
   PersonaArtifactRecord,
   PersonaArtifactActionContext,
   PersonaArtifactStatusLabelContext,
   PersonaArtifactCustomAction,
   PersonaArtifactManualUpsert,
+  WidgetPreferenceCapabilities,
+  WidgetArtifactLayoutPreference,
+  WidgetPreferenceSlice,
+  WidgetPreferencePatch,
+  ArtifactDisplayPreferenceTarget,
   ArtifactConfigPayload,
   AgentWidgetInitOptions,
   AgentWidgetMessage,
@@ -133,6 +142,46 @@ export type {
   AgentWidgetAskUserQuestionFeature,
   AgentWidgetAskUserQuestionStyles
 } from "./types";
+
+export {
+  mergeFeaturePreferences,
+  applyFeaturePreferencePatch,
+  applyFeaturePreferences,
+  parseWidgetPreferenceSlice,
+  getArtifactDisplayPreference,
+  createArtifactDisplayPreferencePatch,
+  resolveArtifactDisplayPreference,
+  normalizeMediaType,
+} from "./utils/feature-preferences";
+
+export type {
+  WidgetPreferenceParseIssueCode,
+  WidgetPreferenceParseIssue,
+  WidgetPreferenceParseResult,
+  WidgetPreferenceLayer,
+  ArtifactDisplayPreferenceSource,
+  ArtifactDisplayPreferenceResolution,
+} from "./utils/feature-preferences";
+
+export { createFeaturePreferenceStore } from "./utils/preference-store";
+
+export type {
+  FeaturePreferenceStore,
+  FeaturePreferenceStoreChange,
+  FeaturePreferenceStoreOptions,
+} from "./utils/preference-store";
+
+export {
+  canonicalArtifactDisplayMode,
+  resolveArtifactDisplay,
+  resolveArtifactDisplayMode,
+} from "./utils/artifact-display";
+
+export type {
+  PersonaArtifactDisplayDescriptor,
+  PersonaArtifactDisplayMatch,
+  PersonaArtifactDisplayResolution,
+} from "./utils/artifact-display";
 
 export type {
   RuntypeExecutionStreamEvent,

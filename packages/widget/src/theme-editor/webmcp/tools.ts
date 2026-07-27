@@ -10,6 +10,7 @@
  */
 
 import { createTheme } from '../../utils/theme';
+import { applyFeaturePreferences } from '../../utils/feature-preferences';
 import type { AgentWidgetConfig } from '../../types';
 import type { PersonaTheme } from '../../types/theme';
 import { generateColorScale, SHADE_KEYS } from '../color-utils';
@@ -472,6 +473,9 @@ export function createThemeEditorTools(
         config.colorScheme = 'auto';
       }
       if (preset.toolCall) config.toolCall = preset.toolCall;
+      if (preset.behavior) {
+        config.features = applyFeaturePreferences(config.features, [preset.behavior]);
+      }
       state.setFullConfig(config, theme);
       const warnings = quickContrastWarnings(state, ['body', 'assistant-message'], 'light');
       return result({ appliedPreset: { id: preset.id, name: preset.name } }, warnings);

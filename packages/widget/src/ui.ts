@@ -1800,7 +1800,7 @@ export const createAgentExperience = (
   let artifactPaneExpandedPinned = false;
   // Whether the user explicitly opened the pane (card click, inline Expand,
   // showArtifacts(), programmatic upsert). Auto-open is otherwise reserved for
-  // artifacts whose resolved display mode is "panel": "card" keeps the card as
+  // artifacts whose resolved display mode is "panel": "collapsed" keeps the card as
   // the only affordance and "inline" renders in the transcript. "inline" no
   // longer *auto*-opens the pane, but its Expand control is a deliberate,
   // user-driven open (setting artifactsPaneUserOpened, same as a card click);
@@ -1811,7 +1811,7 @@ export const createAgentExperience = (
     artifactsPaneUserOpened ||
     lastArtifactsState.artifacts.some(
       (a) =>
-        resolveArtifactDisplayMode(config.features?.artifacts, a.artifactType) === "panel"
+        resolveArtifactDisplayMode(config.features?.artifacts, a) === "panel"
     );
   const artifactPaneVisible = () =>
     lastArtifactsState.artifacts.length > 0 &&
@@ -2010,7 +2010,7 @@ export const createAgentExperience = (
     event.preventDefault();
     event.stopPropagation();
     artifactsPaneUserHidden = false;
-    // Card click is an explicit open: it overrides the "card"/"inline"
+    // Card click is an explicit open: it overrides the "collapsed"/"inline"
     // auto-open suppression for as long as artifacts exist.
     artifactsPaneUserOpened = true;
     session.selectArtifact(artifactId);
@@ -2518,7 +2518,7 @@ export const createAgentExperience = (
     } else if (lastArtifactsState.artifacts.length > 0 && artifactPaneCanShow()) {
       // User chose “show” again (e.g. programmatic showArtifacts): clear dismiss chrome
       // and force drawer open so narrow-host / mobile slide-out is not stuck off-screen.
-      // Artifacts whose display mode is "card" or "inline" don't auto-open the
+      // Artifacts whose display mode is "collapsed" or "inline" don't auto-open the
       // pane (artifactPaneCanShow); it stays hidden until an explicit open or
       // until a "panel"-mode artifact arrives.
       artifactPaneApi.element.classList.remove("persona-hidden");
@@ -9284,13 +9284,20 @@ export const createAgentExperience = (
       if (!artifactsSidebarEnabled(config)) return null;
       // Programmatic upserts match the streamed UX: only "panel"-mode
       // artifacts auto-open the pane (overriding a previous Close), while
-      // "card"/"inline" stay calm — the injected transcript block is the
+      // "collapsed"/"inline" stay calm — the injected transcript block is the
       // affordance. Independent of `transcript: false`: pane-only callers
-      // (e.g. the theme editor preview) rely on the panel-default surfacing;
-      // callers that want the pane in a non-panel mode call showArtifacts().
+      // (e.g. the theme editor preview) rely on the auto-open default
+      // surfacing; callers that want the pane in another mode call
+      // showArtifacts().
       const mode = resolveArtifactDisplayMode(
         config.features?.artifacts,
-        manual.artifactType
+        {
+          artifactType: manual.artifactType,
+          ...(manual.artifactType === "markdown" && manual.file
+            ? { file: manual.file }
+            : {}),
+          ...(manual.presentation ? { presentation: manual.presentation } : {}),
+        }
       );
       if (mode === "panel") {
         artifactsPaneUserHidden = false;

@@ -23,6 +23,16 @@ vi.mock('./state', () => ({
 }));
 
 vi.mock('@runtypelabs/persona', () => ({
+  applyFeaturePreferences: vi.fn(
+    (features: Record<string, unknown> | undefined, layers: Array<Record<string, unknown>>) => ({
+      ...features,
+      ...layers[0],
+      artifacts: {
+        ...((features?.artifacts as Record<string, unknown> | undefined) ?? {}),
+        ...((layers[0]?.artifacts as Record<string, unknown> | undefined) ?? {}),
+      },
+    })
+  ),
   createTheme: vi.fn((theme: unknown) => theme),
 }));
 
@@ -77,6 +87,52 @@ describe('custom presets', () => {
       })
     );
     expect(stateMocks.setTheme).not.toHaveBeenCalled();
+  });
+
+  test('applies behavior slices without replacing capability-owned artifact config', () => {
+    stateMocks.getConfig.mockReturnValueOnce({
+      apiUrl: 'https://api.example.com',
+      features: {
+        artifacts: {
+          enabled: true,
+          allowedTypes: ['markdown'],
+        },
+      },
+    } as any);
+
+    applyPreset({
+      id: 'behavior',
+      label: 'Behavior',
+      description: 'Behavior-aware preset',
+      builtIn: true,
+      theme: {},
+      behavior: {
+        artifacts: {
+          display: {
+            files: {
+              byMediaType: { 'text/csv': 'panel' },
+            },
+          },
+        },
+      },
+    });
+
+    expect(stateMocks.setFullConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        features: expect.objectContaining({
+          artifacts: expect.objectContaining({
+            enabled: true,
+            allowedTypes: ['markdown'],
+            display: {
+              files: {
+                byMediaType: { 'text/csv': 'panel' },
+              },
+            },
+          }),
+        }),
+      }),
+      expect.anything()
+    );
   });
 
   test('maps the paired Persona default into light and dark config slots', () => {

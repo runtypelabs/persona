@@ -1,7 +1,11 @@
 /** Field definition types for the declarative configurator system (headless: no DOM) */
 
 import type { DeepPartial, PersonaTheme } from '../types/theme';
-import type { AgentWidgetConfig } from '../types';
+import type {
+  AgentWidgetConfig,
+  WidgetPreferenceCapabilities,
+  WidgetPreferenceSlice,
+} from '../types';
 
 // ─── Field System ────────────────────────────────────────────────
 
@@ -101,6 +105,12 @@ export interface FieldDef {
   formatValue?: (value: unknown) => unknown;
   /** Convert control input back into the stored value shape */
   parseValue?: (value: unknown) => unknown;
+  /** Capability required for hosts to render this field. */
+  requiresCapability?: keyof WidgetPreferenceCapabilities;
+  /** The host may offer an inherit/reset action which deletes this path. */
+  unsettable?: boolean;
+  /** Label for the inherit/reset action. Default: "Use default". */
+  unsetLabel?: string;
 }
 
 export interface SectionDef {
@@ -112,6 +122,8 @@ export interface SectionDef {
   collapsed?: boolean;
   /** Preset buttons for this section */
   presets?: SectionPreset[];
+  /** Capability required for hosts to render this section. */
+  requiresCapability?: keyof WidgetPreferenceCapabilities;
 }
 
 export interface SectionPreset {
@@ -149,6 +161,8 @@ export interface ThemeEditorPreset {
   toolCall?: AgentWidgetToolCallConfig;
   /** Tool call styling for dark mode (falls back to toolCall if not set) */
   darkToolCall?: AgentWidgetToolCallConfig;
+  /** Sparse, persistable widget behavior layered separately from theme tokens. */
+  behavior?: WidgetPreferenceSlice;
   preview: {
     primary: string;
     surface: string;
