@@ -151,7 +151,32 @@ export type CodeGeneratorOptions = {
    * @default "body"
    */
   target?: string;
+
+  /**
+   * Base URL of the directory holding the widget assets (install.global.js,
+   * index.global.js, widget.css) for the script formats (script-installer,
+   * script-manual, script-advanced). Pass a first-party base such as
+   * "https://cdn.runtype.com/persona/latest" when the embedding page's CSP
+   * does not allow third-party CDNs. A trailing slash is tolerated.
+   * @default the jsDelivr dist directory pinned to this package version
+   */
+  cdnBase?: string;
 };
+
+/**
+ * Asset directory for script formats: explicit cdnBase or the version-pinned
+ * jsDelivr dist. The base is emitted into single-quoted JS literals AND
+ * double-quoted HTML attributes, so percent-encode the characters that could
+ * break out of either context. All of them are illegal unencoded in a URL
+ * (RFC 3986), so encoding never changes the meaning of a valid base URL.
+ */
+function resolveCdnBase(options?: CodeGeneratorOptions): string {
+  const base = options?.cdnBase
+    ?.trim()
+    .replace(/\/+$/, "")
+    .replace(/[\\'"<>`]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
+  return base || `https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist`;
+}
 
 // Internal type for normalized hooks (always strings)
 type NormalizedHooks = {
@@ -1402,7 +1427,7 @@ function generateScriptInstallerCode(config: any, options?: CodeGeneratorOptions
   // Escape single quotes in JSON for HTML attribute
   const configJson = JSON.stringify(payload, null, 0).replace(/'/g, "&#39;");
 
-  return `<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist/install.global.js" data-config='${configJson}'></script>`;
+  return `<script src="${resolveCdnBase(options)}/install.global.js" data-config='${configJson}'></script>`;
 }
 
 function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): string {
@@ -1410,12 +1435,13 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   const parserType = getParserTypeFromConfig(config as AgentWidgetConfig);
   const shouldEmitParserType = parserType !== "plain";
 
+  const cdnBase = resolveCdnBase(options);
   const lines: string[] = [
     "<!-- Load CSS -->",
-    `<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist/widget.css" />`,
+    `<link rel="stylesheet" href="${cdnBase}/widget.css" />`,
     "",
     "<!-- Load JavaScript -->",
-    `<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist/index.global.js"></script>`,
+    `<script src="${cdnBase}/index.global.js"></script>`,
     "",
     "<!-- Initialize widget -->",
     "<script>",
@@ -1565,7 +1591,7 @@ function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions)
     `  var CONFIG = ${configJson.split('\n').map((line, i) => i === 0 ? line : '  ' + line).join('\n')};`,
     "",
     "  // Constants",
-    `  var CDN_BASE = 'https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist';`,
+    `  var CDN_BASE = '${resolveCdnBase(options)}';`,
     "  var STORAGE_KEY = 'chat-widget-state';",
     "  var PROCESSED_ACTIONS_KEY = 'chat-widget-processed-actions';",
     "",

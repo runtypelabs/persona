@@ -23,6 +23,49 @@ describe("codegen subpath", () => {
     expect(code).not.toContain("@latest");
   });
 
+  describe("cdnBase option", () => {
+    const cdnBase = "https://cdn.runtype.com/persona/latest";
+
+    it("emits the custom base in every script format", () => {
+      expect(fromSubpath(config, "script-installer", { cdnBase })).toContain(
+        `src="${cdnBase}/install.global.js"`
+      );
+      const manual = fromSubpath(config, "script-manual", { cdnBase });
+      expect(manual).toContain(`href="${cdnBase}/widget.css"`);
+      expect(manual).toContain(`src="${cdnBase}/index.global.js"`);
+      expect(fromSubpath(config, "script-advanced", { cdnBase })).toContain(
+        `var CDN_BASE = '${cdnBase}';`
+      );
+    });
+
+    it("tolerates a trailing slash", () => {
+      const code = fromSubpath(config, "script-installer", { cdnBase: `${cdnBase}/` });
+      expect(code).toContain(`src="${cdnBase}/install.global.js"`);
+    });
+
+    it("percent-encodes characters that could break the emitted JS/HTML contexts", () => {
+      const hostile = "https://cdn.example.com/x'\"\\`/persona";
+      const encoded = "https://cdn.example.com/x%27%22%5C%60/persona";
+      // script-advanced emits into a single-quoted JS literal
+      expect(fromSubpath(config, "script-advanced", { cdnBase: hostile })).toContain(
+        `var CDN_BASE = '${encoded}';`
+      );
+      // script-installer / script-manual emit into double-quoted HTML attributes
+      expect(fromSubpath(config, "script-installer", { cdnBase: hostile })).toContain(
+        `src="${encoded}/install.global.js"`
+      );
+      expect(fromSubpath(config, "script-manual", { cdnBase: hostile })).toContain(
+        `href="${encoded}/widget.css"`
+      );
+    });
+
+    it("leaves no jsDelivr URL behind when a custom base is set", () => {
+      for (const format of ["script-installer", "script-manual", "script-advanced"] as const) {
+        expect(fromSubpath(config, format, { cdnBase })).not.toContain("jsdelivr");
+      }
+    });
+  });
+
   describe("mount target option", () => {
     it("defaults to body when no target is given", () => {
       expect(fromSubpath(config, "react-component")).toContain("target: 'body'");
