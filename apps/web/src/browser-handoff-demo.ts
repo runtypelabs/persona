@@ -458,6 +458,11 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: state.mock ? MOCK_DISPATCH_PATH : PROXY_DISPATCH_URL,
     webmcp: webmcpConfig,
+    // No transcript persistence. A restored handoff card would come back
+    // "waiting" with live buttons and nothing left to resolve — the tool call
+    // it belonged to died with the page, and the live view URL behind it
+    // expires in minutes anyway.
+    persistState: false,
     launcher: {
       ...DEFAULT_WIDGET_CONFIG.launcher,
       enabled: isLauncher,
