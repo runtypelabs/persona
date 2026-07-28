@@ -367,6 +367,42 @@ describe('AgentWidgetSession - Message Injection', () => {
       expect(parsed.props.title).toBe('v2');
     });
   });
+
+  describe('updateComponentDirectiveProps', () => {
+    it('merges props shallowly and preserves sibling directive keys', () => {
+      session.injectComponentDirective({
+        component: 'DynamicForm',
+        props: { title: 'Book a demo', submitted: false },
+        text: 'Share your details.',
+        id: 'form-1'
+      });
+
+      const updated = session.updateComponentDirectiveProps('form-1', {
+        submitted: true
+      });
+
+      expect(updated).not.toBeNull();
+      const parsed = JSON.parse(updated!.rawContent as string);
+      // `title` survives an update that names only `submitted`, and `text`
+      // (a sibling of `props`, not modelled by ComponentDirective) is intact.
+      expect(parsed).toEqual({
+        text: 'Share your details.',
+        component: 'DynamicForm',
+        props: { title: 'Book a demo', submitted: true }
+      });
+      expect(messages).toHaveLength(1);
+      expect(messages[0].rawContent).toBe(updated!.rawContent);
+    });
+
+    it('returns null for an unknown message id', () => {
+      expect(session.updateComponentDirectiveProps('nope', { a: 1 })).toBeNull();
+    });
+
+    it('returns null for a message that carries no directive', () => {
+      const plain = session.injectAssistantMessage({ content: 'just prose' });
+      expect(session.updateComponentDirectiveProps(plain.id, { a: 1 })).toBeNull();
+    });
+  });
 });
 
 describe('AgentWidgetSession - inline contentSegments', () => {

@@ -36,6 +36,25 @@ export type MessageCacheEntry = {
 export type MessageCache = Map<string, MessageCacheEntry>;
 
 /**
+ * djb2 over the whole string, base-36 encoded.
+ *
+ * Used for `rawContent`, which carries component-directive JSON: two directives
+ * can differ only in a value of the same width (`"status":"waiting"` →
+ * `"status":"running"`), so a length check misses the change entirely and the
+ * component never re-renders. Every other field in the fingerprint is a length,
+ * a status, or a short tail, so this is the only place that pays for a full
+ * pass — a single loop with no allocation and no JSON parse, on a field that is
+ * usually a few hundred bytes.
+ */
+function hashContent(value: string): number {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) + hash + value.charCodeAt(i)) | 0;
+  }
+  return hash;
+}
+
+/**
  * Compute a fast fingerprint for a message to detect changes.
  * Uses string concatenation with a delimiter rather than JSON.stringify for performance.
  * The configVersion parameter ensures cache invalidation when widget config changes.
@@ -56,6 +75,7 @@ export function computeMessageFingerprint(
     message.voiceProcessing ? "1" : "0",
     message.variant ?? "",
     message.rawContent?.length ?? 0,
+    message.rawContent ? hashContent(message.rawContent) : 0,
     message.llmContent?.length ?? 0,
     message.approval?.status ?? "",
     message.toolCall?.status ?? "",

@@ -157,6 +157,99 @@ describe("component directive bubble: listener preservation across morphs", () =
     controller.destroy();
   });
 
+  it("rebuilds when the directive changes without changing length", () => {
+    // The message fingerprint used to hash `rawContent` by length only, so a
+    // props edit that kept the byte count identical (a status word swapped for
+    // another of the same width) served the stale bubble from cache.
+    const calls: string[] = [];
+
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      parserType: "json",
+      enableComponentStreaming: true,
+      components: {
+        SameLenBadge: ((props) => {
+          const el = document.createElement("div");
+          el.setAttribute("data-test-id", "same-len-badge");
+          el.textContent = String(props.status ?? "");
+          calls.push(String(props.status ?? ""));
+          return el;
+        }) satisfies ComponentRenderer,
+      },
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+
+    const waiting = JSON.stringify({ component: "SameLenBadge", props: { status: "waiting" } });
+    const running = JSON.stringify({ component: "SameLenBadge", props: { status: "running" } });
+    expect(waiting.length).toBe(running.length);
+
+    directiveMessage(controller, { id: "same-len-1", rawContent: waiting });
+    directiveMessage(controller, { id: "same-len-1", rawContent: running });
+
+    expect(mount.querySelector('[data-test-id="same-len-badge"]')?.textContent).toBe("running");
+    expect(calls).toEqual(["waiting", "running"]);
+
+    controller.destroy();
+  });
+
+  it("re-renders the component when its renderer calls context.updateProps", () => {
+    // `updateProps` used to be wired to nothing in the transcript: the call
+    // site omitted `onPropsUpdate`, so a renderer that asked the thread to
+    // reflect new props got silence.
+    const calls: string[] = [];
+
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      parserType: "json",
+      enableComponentStreaming: true,
+      components: {
+        TestCounter: ((props, context) => {
+          const el = document.createElement("div");
+          el.setAttribute("data-test-id", "test-counter");
+          el.textContent = String(props.label ?? "");
+          calls.push(String(props.label ?? ""));
+          const button = document.createElement("button");
+          button.setAttribute("data-test-id", "test-counter-bump");
+          button.addEventListener("click", () => {
+            context.updateProps({ label: "bumped" });
+          });
+          el.appendChild(button);
+          return el;
+        }) satisfies ComponentRenderer,
+      },
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+
+    directiveMessage(controller, {
+      id: "counter-1",
+      rawContent: JSON.stringify({
+        component: "TestCounter",
+        props: { label: "initial", keep: "me" },
+      }),
+    });
+    expect(calls).toEqual(["initial"]);
+
+    mount.querySelector<HTMLButtonElement>('[data-test-id="test-counter-bump"]')!.click();
+
+    expect(calls).toEqual(["initial", "bumped"]);
+    expect(mount.querySelector('[data-test-id="test-counter"]')?.textContent).toContain("bumped");
+
+    // The merged props are persisted onto the message, so the update survives
+    // later re-renders and hydration — and props not named in the update are
+    // left alone.
+    const stored = controller
+      .getMessages()
+      .find((m) => m.id === "counter-1")?.rawContent;
+    expect(JSON.parse(stored!)).toMatchObject({
+      component: "TestCounter",
+      props: { label: "bumped", keep: "me" },
+    });
+
+    controller.destroy();
+  });
+
   it("renders a bubbleChrome:false component bare (no persona-message-bubble ancestor) under default config", () => {
     const mount = createMount();
     const controller = createAgentExperience(mount, {

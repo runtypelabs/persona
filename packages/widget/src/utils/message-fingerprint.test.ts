@@ -81,6 +81,34 @@ describe("computeMessageFingerprint", () => {
     expect(fp1).not.toBe(fp2);
   });
 
+  it("changes when rawContent changes without changing length", () => {
+    // A component directive whose props differ only in a same-width value.
+    // Fingerprinting rawContent by length alone reported these as identical,
+    // so the transcript served the stale bubble from cache and the component
+    // never re-rendered.
+    const waiting = '{"component":"Card","props":{"status":"waiting"}}';
+    const running = '{"component":"Card","props":{"status":"running"}}';
+    expect(waiting.length).toBe(running.length);
+    expect(computeMessageFingerprint(makeMessage({ rawContent: waiting }), 0)).not.toBe(
+      computeMessageFingerprint(makeMessage({ rawContent: running }), 0)
+    );
+  });
+
+  it("keeps identical rawContent stable across calls", () => {
+    const raw = '{"component":"Card","props":{"status":"waiting"}}';
+    expect(computeMessageFingerprint(makeMessage({ rawContent: raw }), 0)).toBe(
+      computeMessageFingerprint(makeMessage({ rawContent: raw }), 0)
+    );
+  });
+
+  it("distinguishes transposed rawContent of equal length", () => {
+    // Guards the hash against a trivially order-insensitive implementation
+    // (e.g. summing char codes), which two reordered props would defeat.
+    expect(computeMessageFingerprint(makeMessage({ rawContent: '{"a":1,"b":2}' }), 0)).not.toBe(
+      computeMessageFingerprint(makeMessage({ rawContent: '{"b":2,"a":1}' }), 0)
+    );
+  });
+
   it("changes when llmContent changes", () => {
     const fp1 = computeMessageFingerprint(makeMessage({ llmContent: undefined }), 0);
     const fp2 = computeMessageFingerprint(makeMessage({ llmContent: "context for llm" }), 0);

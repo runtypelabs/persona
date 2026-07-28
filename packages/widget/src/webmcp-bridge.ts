@@ -50,6 +50,9 @@ import type {
  * tool from pinning the agent indefinitely. The timeout aborts the polyfill's
  * `executeTool` via an `AbortSignal`, so the page's work is asked to stop too
  * (cooperatively: a tool that ignores the signal may still complete).
+ *
+ * Override per widget with `webmcp.toolTimeoutMs` — a tool that waits on a
+ * human needs minutes, not seconds.
  */
 const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
 
@@ -237,7 +240,11 @@ export class WebMcpBridge {
 
   constructor(private readonly config: AgentWidgetWebMcpConfig) {
     this.confirmHandler = config.onConfirm ?? null;
-    this.timeoutMs = DEFAULT_TOOL_TIMEOUT_MS;
+    const configured = config.toolTimeoutMs;
+    this.timeoutMs =
+      typeof configured === "number" && Number.isFinite(configured) && configured > 0
+        ? configured
+        : DEFAULT_TOOL_TIMEOUT_MS;
   }
 
   /**

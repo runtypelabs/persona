@@ -864,6 +864,20 @@ export type AgentWidgetWebMcpConfig = {
    * `window.confirm` fallback only applies when no widget UI is attached.
    */
   onConfirm?: WebMcpConfirmHandler;
+  /**
+   * Per-call ceiling on a page tool's `execute()`, in milliseconds. Default
+   * 30_000.
+   *
+   * The default suits tools that read or mutate the page and return promptly.
+   * It is far too short for a tool that deliberately waits on a person — a
+   * human-in-the-loop handoff where `execute()` stays pending until the user
+   * finishes signing in, say — where 30s means the agent is resumed with a
+   * timeout error while the user is still working. Raise it for those; the
+   * confirm gate is not counted against it either way.
+   *
+   * Values that are not finite and positive fall back to the default.
+   */
+  toolTimeoutMs?: number;
 };
 
 /**

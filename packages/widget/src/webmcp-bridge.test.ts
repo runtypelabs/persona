@@ -492,6 +492,58 @@ describe("WebMcpBridge.executeToolCall", () => {
     }
   });
 
+  it("honors a configured toolTimeoutMs instead of the 30s default", async () => {
+    // A tool that deliberately waits on a person (a live-view handoff) needs
+    // minutes. Under the fixed 30s budget the agent was resumed with a timeout
+    // error while the user was still working.
+    vi.useFakeTimers();
+    try {
+      registry.tools = [
+        fakeTool({ name: "handoff", execute: () => new Promise(() => undefined) }),
+      ];
+      const bridge = new WebMcpBridge({
+        enabled: true,
+        onConfirm: allowAll,
+        toolTimeoutMs: 300_000,
+      });
+      const pending = bridge.executeToolCall("webmcp:handoff", {});
+
+      let settled = false;
+      void pending.then(() => {
+        settled = true;
+      });
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(settled).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(270_000);
+      const r = await pending;
+      expect(r.isError).toBe(true);
+      expect((r.content[0] as { text: string }).text).toMatch(/timed out after 300000ms/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("falls back to the default budget for a non-positive toolTimeoutMs", async () => {
+    vi.useFakeTimers();
+    try {
+      registry.tools = [
+        fakeTool({ name: "slow", execute: () => new Promise(() => undefined) }),
+      ];
+      const bridge = new WebMcpBridge({
+        enabled: true,
+        onConfirm: allowAll,
+        toolTimeoutMs: 0,
+      });
+      const pending = bridge.executeToolCall("webmcp:slow", {});
+      await vi.advanceTimersByTimeAsync(30_000);
+      const r = await pending;
+      expect((r.content[0] as { text: string }).text).toMatch(/timed out after 30000ms/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("bails before rendering the confirm bubble when signal is already aborted", async () => {
     // A late approval after cancel() must not fire a host-page side effect. The
     // bridge checks the signal BEFORE rendering the confirm.

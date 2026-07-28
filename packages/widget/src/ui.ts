@@ -4714,7 +4714,24 @@ export const createAgentExperience = (
             let componentBubble = renderComponentDirective(directive, {
               config,
               message,
-              transform
+              transform,
+              // Backs `ComponentContext.updateProps`. The merged props are
+              // written back to the message's `rawContent`, so the change
+              // survives re-renders, persistence, and hydration; the resulting
+              // messages-changed render rebuilds the component with them.
+              //
+              // A rebuild replaces the mounted subtree — any live runtime state
+              // inside it (an iframe's session, a canvas, a media element) is
+              // recreated. Components that own such state should keep rendering
+              // once and mutate their own DOM instead of calling `updateProps`;
+              // `data-preserve-runtime` on the wrapper protects them from
+              // idiomorph, not from an intentional props update.
+              onPropsUpdate: (newProps) => {
+                sessionRef.current?.updateComponentDirectiveProps(
+                  message.id,
+                  newProps
+                );
+              }
             });
             // Reuse a mounted inline artifact block instead of the fresh
             // render: replacing it would cut the collapse-to-card animation

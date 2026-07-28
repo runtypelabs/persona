@@ -23,6 +23,7 @@ import {
   PersonaArtifactRecord,
   PersonaArtifactManualUpsert
 } from "./types";
+import { extractComponentDirectiveFromMessage } from "./utils/component-middleware";
 import {
   generateUserMessageId,
   generateAssistantMessageId
@@ -1130,6 +1131,50 @@ export class AgentWidgetSession {
       ...(createdAt !== undefined && { createdAt }),
       ...(sequence !== undefined && { sequence })
     });
+  }
+
+  /**
+   * Merge new props into an already-rendered component directive.
+   *
+   * This is what backs `ComponentContext.updateProps`: a renderer that wants
+   * the thread to reflect new props calls it, and the merged directive is
+   * written back to the message's `rawContent` so the change survives
+   * transcript re-renders, persistence, and hydration. The resulting
+   * `onMessagesChanged` re-render rebuilds the component with the merged props.
+   *
+   * Props merge shallowly, so a renderer can update one key without restating
+   * the rest. Returns the updated message, or `null` when the message is gone
+   * or no longer carries a directive.
+   */
+  public updateComponentDirectiveProps(
+    messageId: string,
+    newProps: Record<string, unknown>
+  ): AgentWidgetMessage | null {
+    const current = this.messages.find((m) => m.id === messageId);
+    if (!current) return null;
+
+    const directive = extractComponentDirectiveFromMessage(current);
+    if (!directive) return null;
+
+    // `raw` is the exact source the directive was parsed from, so re-serializing
+    // it preserves any sibling keys (`text`, and anything a host added) that
+    // `ComponentDirective` itself does not model.
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(directive.raw) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+
+    const updated: AgentWidgetMessage = {
+      ...current,
+      rawContent: JSON.stringify({
+        ...parsed,
+        props: { ...directive.props, ...newProps },
+      }),
+    };
+    this.upsertMessage(updated);
+    return updated;
   }
 
   /**
