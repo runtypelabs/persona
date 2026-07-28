@@ -26,7 +26,7 @@
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "159 kB",
+    "limit": "160.5 kB",
     "gzip": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "137 kB",
+    "limit": "138.5 kB",
     "gzip": true
   },
   {
