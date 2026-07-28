@@ -1,3 +1,38 @@
+import type { AgentWidgetMessage } from "../types";
+
+/**
+ * Is this message *output a human came for*, as opposed to progress chrome?
+ *
+ * This is the classifier behind anchor-top's "first unread" positioning: the
+ * transcript anchors to the first attention-worthy block of a response and
+ * leaves everything else to scroll past underneath. Two categories:
+ *
+ * - **Chrome** — tool calls and reasoning. Rendered so the reader *can* audit
+ *   the work, never positioned to. A response that opens with six tool calls
+ *   should not park the reader on the sixth one.
+ * - **Attention-worthy** — anything that carries the answer: prose, an
+ *   artifact or component block (charts, forms, documents — these carry their
+ *   payload in `rawContent` with an EMPTY `content`, so testing text alone
+ *   silently drops them), multi-modal parts (images), and approval requests
+ *   (which are the strongest case of all: the turn is blocked on the reader
+ *   deciding, so it must never sit off-screen).
+ *
+ * The empty streaming placeholder — an assistant bubble created at
+ * `text_start` before its first token — is deliberately NOT attention-worthy,
+ * so the anchor waits for content rather than jumping to a blank bubble.
+ */
+export function isAttentionWorthyMessage(message: AgentWidgetMessage): boolean {
+  if (message.role !== "assistant") return false;
+  if (message.variant === "tool" || message.variant === "reasoning") return false;
+  // Blocked on the reader: attention-worthy even with no text of its own.
+  if (message.variant === "approval") return true;
+  return Boolean(
+    message.content?.trim() ||
+      message.rawContent?.trim() ||
+      message.contentParts?.length
+  );
+}
+
 export type FollowStateAction = "none" | "pause" | "resume";
 
 export type FollowStateController = {

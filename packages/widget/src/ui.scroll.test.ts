@@ -991,7 +991,7 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
-  it("anchor-top mode pins the sent user message near the viewport top and never follows the stream", () => {
+  it("anchor-top mode pins the turn's first unread block near the viewport top and never follows the stream", () => {
     const raf = installRafMock();
     const resize = installResizeObserverMock();
     const mount = createMount();
@@ -1034,16 +1034,29 @@ describe("createAgentExperience streaming scroll", () => {
     raf.flush();
     expect(metrics.getScrollTop()).toBe(684);
 
-    // Streaming below the anchor never moves the viewport.
-    metrics.setScrollHeight(1150);
+    // The response's first block is the turn's first unread output, so the
+    // anchor hands off to it: target = 900 - 16 = 884, and with content at
+    // 1284 - 84 = 1200 the spacer re-sizes to 884 + 400 - 1200 = 84.
+    metrics.setScrollHeight(1284);
     emitStreamingMessage(controller, "Streaming response");
+    const streamBubble = scrollContainer!.querySelector<HTMLElement>(
+      `[data-message-id="${STREAM_MESSAGE_ID}"]`
+    );
+    expect(streamBubble).not.toBeNull();
+    Object.defineProperty(streamBubble!, "offsetTop", { value: 900 });
     raf.flush();
-    expect(metrics.getScrollTop()).toBe(684);
+    expect(metrics.getScrollTop()).toBe(884);
+
+    // Continuing to stream below that anchor never moves the viewport again.
+    metrics.setScrollHeight(1324);
+    emitStreamingMessage(controller, "Streaming response, now longer");
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(884);
 
     // As real content grows, the spacer gives room back (shrink-only):
-    // content grew from 1000 to 1150 - 84 = 1066, so spacer 84 - 66 = 18.
+    // content grew from 1200 to 1324 - 84 = 1240, so spacer 84 - 40 = 44.
     resize.trigger();
-    expect(spacer?.style.height).toBe("18px");
+    expect(spacer?.style.height).toBe("44px");
 
     // Jumping to the latest abandons the anchor: the spacer is dropped so
     // "bottom" is the real end of content.

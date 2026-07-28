@@ -6,10 +6,12 @@ import {
   createFollowStateController,
   getScrollBottomOffset,
   hasSelectionWithin,
+  isAttentionWorthyMessage,
   isElementNearBottom,
   resolveFollowStateFromScroll,
   resolveFollowStateFromWheel
 } from "./auto-follow";
+import type { AgentWidgetMessage } from "../types";
 
 describe("auto-follow utilities", () => {
   it("tracks pause and resume state", () => {
@@ -197,5 +199,41 @@ describe("auto-follow utilities", () => {
         resumeWhenNearBottom: true
       })
     ).toBe("resume");
+  });
+});
+
+describe("isAttentionWorthyMessage", () => {
+  const msg = (over: Partial<AgentWidgetMessage>): AgentWidgetMessage => ({
+    id: "m",
+    role: "assistant",
+    content: "",
+    createdAt: "2026-07-28T00:00:00.000Z",
+    ...over,
+  });
+
+  it("treats prose, artifacts/components, images and approvals as output", () => {
+    expect(isAttentionWorthyMessage(msg({ content: "Here is the answer." }))).toBe(true);
+    // Artifact / component blocks carry their payload in rawContent with an
+    // empty `content` — the case a text-only test silently drops.
+    expect(
+      isAttentionWorthyMessage(msg({ rawContent: '{"component":"Chart","props":{}}' }))
+    ).toBe(true);
+    expect(
+      isAttentionWorthyMessage(
+        msg({ contentParts: [{ type: "image", image: "data:image/png;base64,x" }] as never })
+      )
+    ).toBe(true);
+    // Blocked on the reader deciding: must never sit off-screen.
+    expect(isAttentionWorthyMessage(msg({ variant: "approval" }))).toBe(true);
+  });
+
+  it("treats tool calls and reasoning as progress chrome", () => {
+    expect(isAttentionWorthyMessage(msg({ variant: "tool", content: "searching" }))).toBe(false);
+    expect(isAttentionWorthyMessage(msg({ variant: "reasoning", content: "thinking" }))).toBe(false);
+  });
+
+  it("skips the empty streaming placeholder and non-assistant roles", () => {
+    expect(isAttentionWorthyMessage(msg({ content: "   " }))).toBe(false);
+    expect(isAttentionWorthyMessage(msg({ role: "user", content: "hi" }))).toBe(false);
   });
 });

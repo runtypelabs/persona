@@ -64,6 +64,7 @@ import {
   createFollowStateController,
   getScrollBottomOffset,
   hasSelectionWithin,
+  isAttentionWorthyMessage,
   isElementNearBottom,
   resolveFollowStateFromScroll,
   resolveFollowStateFromWheel
@@ -3537,6 +3538,24 @@ export const createAgentExperience = (
   // pinned and never re-arms the fallback, so a late-loading embed can't yank
   // the viewport down to the bottom.
   let currentTurnAnchored = false;
+  // Which message the anchor is currently parked on. Starts as the sent user
+  // message and moves once to the turn's first attention-worthy block (see
+  // `maybeAnchorToFirstUnread`).
+  let anchoredMessageId: string | null = null;
+  // Has the reader taken over positioning this turn? First-unread anchoring is
+  // a guess about where someone who ISN'T watching wants to land; the moment
+  // they demonstrably are watching, the guess stands down and never moves the
+  // viewport under them. Reset on each user send (an explicit "take me along").
+  //
+  // Driven by real INPUT (wheel, touch drag, pointer press, transcript
+  // keyboard nav, focus, selection) rather than by scroll deltas: streaming
+  // content under a pinned anchor makes the browser clamp and then restore
+  // scrollTop, which is indistinguishable from a deliberate scroll if you only
+  // look at the scroll event.
+  let readerEngagedThisTurn = false;
+  const markReaderEngaged = () => {
+    readerEngagedThisTurn = true;
+  };
   // Dedupes assistant-turn detection across token-by-token re-renders.
   let lastHandledAssistantId: string | null = null;
 
@@ -3940,6 +3959,24 @@ export const createAgentExperience = (
     return top;
   };
 
+  // Defined here (rather than beside the scroll listeners) because
+  // `maybeAnchorToFirstUnread` runs on every render and would otherwise hit
+  // these consts in their temporal dead zone on a synchronous first paint.
+  const getTranscriptSelection = (): Selection | null => {
+    // Selections inside a shadow root are not always reflected by
+    // document.getSelection(); prefer the shadow root's view when available
+    // (non-standard but supported where it matters).
+    const root = body.getRootNode();
+    const shadowSelection =
+      typeof (root as ShadowRoot & { getSelection?: () => Selection | null })
+        .getSelection === "function"
+        ? (root as ShadowRoot & { getSelection: () => Selection | null }).getSelection()
+        : null;
+    return shadowSelection ?? body.ownerDocument.getSelection();
+  };
+  const hasActiveTranscriptSelection = () =>
+    hasSelectionWithin(getTranscriptSelection(), body);
+
   // Principle 11: reopen where the reader left off. When `restorePosition` is
   // "last-user-turn" and there is pre-existing history, land with the last user
   // message pinned near the top of the viewport instead of jumping to the
@@ -4002,11 +4039,10 @@ export const createAgentExperience = (
     anchorSpacer.style.height = "0px";
   };
 
-  // Anchor-top mode: scroll the just-sent user message to rest
-  // `anchorTopOffset` px below the viewport top and hold it there while the
-  // response streams in beneath it. Deferred one frame so the message bubble
-  // has been rendered and laid out.
-  const scheduleAnchorToUserMessage = (messageId: string) => {
+  // Anchor-top mode: scroll `messageId` to rest `anchorTopOffset` px below the
+  // viewport top and hold it there while the response streams in beneath it.
+  // Deferred one frame so the message bubble has been rendered and laid out.
+  const scheduleAnchorToMessage = (messageId: string) => {
     if (anchorRAF !== null) {
       cancelAnimationFrame(anchorRAF);
     }
@@ -4087,7 +4123,11 @@ export const createAgentExperience = (
       // next user send.
       followFallbackActive = false;
       currentTurnAnchored = true;
-      scheduleAnchorToUserMessage(messageId);
+      // A send is an explicit "take me along": it re-arms first-unread
+      // positioning even if the reader had scrolled away during the last turn.
+      readerEngagedThisTurn = false;
+      anchoredMessageId = messageId;
+      scheduleAnchorToMessage(messageId);
     }
   };
 
@@ -4108,6 +4148,44 @@ export const createAgentExperience = (
     resetAnchorState();
     resumeAutoScroll();
     scheduleAutoScroll(true);
+  };
+
+  // Anchor-top positioning: park on the turn's FIRST UNREAD attention-worthy
+  // block.
+  //
+  // The read boundary is the last user send — the reader wrote it, so it (and
+  // everything above) is read; every attention-worthy block after it is not.
+  // Tool calls and reasoning are chrome and never targeted, so they scroll
+  // past underneath rather than parking the reader on progress output.
+  //
+  // The policy assumes the reader is NOT watching the stream, and picks the
+  // best place for them to land when they look back: the start of what they
+  // haven't seen. `readerEngagedThisTurn` is the escape hatch — once someone
+  // is demonstrably driving, their position wins and this stands down until
+  // the next send.
+  //
+  // Anchoring to the first unread (not the newest) block means this fires at
+  // most once per turn in practice, and later blocks stream in below the
+  // anchor exactly as they do today.
+  const maybeAnchorToFirstUnread = (messages: AgentWidgetMessage[]) => {
+    if (getScrollMode() !== "anchor-top") return;
+    if (!currentTurnAnchored) return;
+    if (readerEngagedThisTurn) return;
+    if (hasActiveTranscriptSelection()) return;
+
+    let pastReadBoundary = lastSentUserMessageId === null;
+    for (const message of messages) {
+      if (!pastReadBoundary) {
+        if (message.id === lastSentUserMessageId) pastReadBoundary = true;
+        continue;
+      }
+      if (!isAttentionWorthyMessage(message)) continue;
+      // Already parked on it: hold still while it streams.
+      if (message.id === anchoredMessageId) return;
+      anchoredMessageId = message.id;
+      scheduleAnchorToMessage(message.id);
+      return;
+    }
   };
 
   const trackMessages = (messages: AgentWidgetMessage[]) => {
@@ -5998,6 +6076,8 @@ export const createAgentExperience = (
       resetAnchorState();
       followFallbackActive = true;
       currentTurnAnchored = false;
+      anchoredMessageId = null;
+      readerEngagedThisTurn = false;
     }
     if (!scrollSendSeeded || suppressScrollSend) {
       scrollSendSeeded = true;
@@ -6013,6 +6093,7 @@ export const createAgentExperience = (
       handleAssistantTurnStarted();
     }
     if (lastAssistantMessage) lastHandledAssistantId = lastAssistantMessage.id;
+    maybeAnchorToFirstUnread(messages);
 
     const prevLastUserMessageId = voiceState.lastUserMessageId;
     if (lastUserMessage && lastUserMessage.id !== prevLastUserMessageId) {
@@ -7341,21 +7422,6 @@ export const createAgentExperience = (
   lastScrollTop = body.scrollTop;
   let lastBottomOffset = getScrollBottomOffset(body);
 
-  const getTranscriptSelection = (): Selection | null => {
-    // Selections inside a shadow root are not always reflected by
-    // document.getSelection(); prefer the shadow root's view when available
-    // (non-standard but supported where it matters).
-    const root = body.getRootNode();
-    const shadowSelection =
-      typeof (root as ShadowRoot & { getSelection?: () => Selection | null })
-        .getSelection === "function"
-        ? (root as ShadowRoot & { getSelection: () => Selection | null }).getSelection()
-        : null;
-    return shadowSelection ?? body.ownerDocument.getSelection();
-  };
-  const hasActiveTranscriptSelection = () =>
-    hasSelectionWithin(getTranscriptSelection(), body);
-
   const handleScroll = () => {
     const scrollTop = body.scrollTop;
     // When content mutates (e.g. stream-animation plugins re-rendering text)
@@ -7373,6 +7439,14 @@ export const createAgentExperience = (
     if (!isFollowEffective()) {
       // No follow state to manage (anchored anchor-top / none): just keep the
       // scroll-to-bottom affordance in sync with the user's position.
+      //
+      // Reader intent is deliberately NOT inferred from scroll deltas here.
+      // Growing the transcript under a pinned anchor makes the browser clamp
+      // scrollTop and then restore it, which lands as a matched pair of real
+      // scroll events (e.g. -12 then +12) with no user involved. The restore
+      // arrives while the bottom offset is GROWING, so the shrink mask above
+      // doesn't cover it, and it reads as a deliberate scroll. Engagement is
+      // tracked from actual input instead (see `markReaderEngaged` callers).
       lastScrollTop = scrollTop;
       syncScrollToBottomButton();
       return;
@@ -7459,21 +7533,23 @@ export const createAgentExperience = (
     "ArrowDown",
   ]);
   const handleTranscriptKeydown = (event: KeyboardEvent) => {
+    if (!NAV_KEYS.has(event.key)) return;
+    // Reader intent for first-unread anchoring is tracked unconditionally;
+    // only the follow-mode *pause* below stays behind the opt-in flag.
+    markReaderEngaged();
     if (!isPauseOnInteractionEnabled()) return;
     if (!isFollowEffective()) return;
     if (!autoFollow.isFollowing()) return;
-    if (NAV_KEYS.has(event.key)) {
-      pauseAutoScroll();
-    }
+    pauseAutoScroll();
   };
   const handleTranscriptFocusIn = (event: FocusEvent) => {
+    const target = event.target as Element | null;
+    if (!target?.closest("a, button, [tabindex], input, textarea, select")) return;
+    markReaderEngaged();
     if (!isPauseOnInteractionEnabled()) return;
     if (!isFollowEffective()) return;
     if (!autoFollow.isFollowing()) return;
-    const target = event.target as Element | null;
-    if (target && target.closest("a, button, [tabindex], input, textarea, select")) {
-      pauseAutoScroll();
-    }
+    pauseAutoScroll();
   };
   body.addEventListener("keydown", handleTranscriptKeydown);
   body.addEventListener("focusin", handleTranscriptFocusIn);
@@ -7483,6 +7559,9 @@ export const createAgentExperience = (
   });
 
   const handleWheel = (event: WheelEvent) => {
+    // A wheel tick is unambiguous reader intent in every mode — including
+    // anchored anchor-top, where there is no follow state to pause.
+    if (event.deltaY !== 0) markReaderEngaged();
     if (!isFollowEffective()) return;
     const action = resolveFollowStateFromWheel({
       following: autoFollow.isFollowing(),
@@ -7498,6 +7577,14 @@ export const createAgentExperience = (
     }
   };
   body.addEventListener("wheel", handleWheel, { passive: true });
+  // Touch drag and pointer press (scrollbar drags, tapping a tool bubble open)
+  // are the remaining ways a reader takes over without a wheel or key event.
+  body.addEventListener("touchmove", markReaderEngaged, { passive: true });
+  body.addEventListener("pointerdown", markReaderEngaged, { passive: true });
+  destroyCallbacks.push(() => {
+    body.removeEventListener("touchmove", markReaderEngaged);
+    body.removeEventListener("pointerdown", markReaderEngaged);
+  });
   destroyCallbacks.push(() => body.removeEventListener("wheel", handleWheel));
   scrollToBottomButton.addEventListener("click", () => {
     // Jumping to the latest abandons the current anchor: drop the spacer
