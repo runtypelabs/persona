@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Browser Handoff - Persona</title>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Browser Handoff</h1>
+          <p>An agent driving a remote browser parks on a login it can't do, embeds the live session in the transcript, and picks the run back up when you're done. The pause is a real <code>step_await</code>; the resume is a real <code>/resume</code>.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
+
+        <div class="info-section">
+          <h3>Try it</h3>
+          <div class="section">
+            <div class="btn-row">
+              <button class="btn btn-primary" id="simulate-handoff">Simulate handoff</button>
+              <button class="btn" id="reset-demo">Reset demo</button>
+            </div>
+            <p class="hint">Sends a message through the composer. The mock backend answers with a <code>local_tool_required</code> pause for <code>wait_for_human_handoff</code>, which renders the card and blocks the run until you answer it. Add <code>?live=1</code> to the URL to dispatch to the local proxy's WebMCP route instead.</p>
+          </div>
+
+          <div class="section">
+            <label for="live-view-url">Live view URL</label>
+            <input type="text" id="live-view-url" spellcheck="false" />
+            <p class="hint">Embedded in the card's iframe. Most sites refuse framing via <code>frame-ancestors</code>; <code>example.com</code> allows it. A real Cloudflare Browser Run live view URL works here too, and expires after about five minutes.</p>
+          </div>
+
+          <div class="section">
+            <label>Component artifact path</label>
+            <div class="btn-row">
+              <button class="btn" id="show-as-artifact">Render as artifact</button>
+            </div>
+            <p class="hint">The same registered renderer, reached the other way: a tool-result artifact with <code>artifactType: "component"</code>. It needs <code>display.byType.component: "inline"</code> to land in the thread rather than the side pane.</p>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>Log</h3>
+          <div class="event-log event-log--sm" id="handoff-log"></div>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How the run parks</h3>
+        <p><code>wait_for_human_handoff</code> is a WebMCP page tool on <code>document.modelContext</code>, so the widget ships it to the agent as a LOCAL tool on every dispatch. When the model calls it the server emits a <code>step_await</code> with <code>awaitReason: "local_tool_required"</code> and closes the SSE stream — the run is parked, not dropped. The widget then runs the tool's <code>execute()</code> in the browser; ours returns a promise that stays pending until you click a button on the card, and its result is POSTed to <code>${apiUrl}/resume</code> to continue the conversation.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Why the card never re-renders</h3>
+        <p>The iframe holds a live, single-use browser session, so rebuilding the card would drop your work. <code>ComponentContext.updateProps</code> is a no-op in the transcript, and re-injecting the directive rebuilds the subtree — so the renderer runs exactly once and every later state change mutates the mounted DOM through closure references. The widget stamps the wrapper <code>data-preserve-runtime="true"</code>, which makes idiomorph skip the subtree on subsequent render passes.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Embedding caveats</h3>
+        <p>A site that refuses framing still fires the iframe's <code>load</code> event with a browser error page inside it, and cross-origin means the page can't inspect the result — so the card always offers "Open in a new tab" as a first-class fallback, and warns after eight seconds if nothing has loaded at all.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/browser-handoff-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("browser-handoff-demo");
+  </script>
+</body>
+</html>

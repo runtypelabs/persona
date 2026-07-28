@@ -92,6 +92,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "browser-handoff-demo",
+    href: "/browser-handoff-demo.html",
+    title: "Browser Handoff",
+    blurb: "A browser agent parks on a login and hands you the live session, then resumes.",
+    tier: "patterns",
+    tags: ["agent", "tool-use", "interaction", "components", "webmcp"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "action-middleware",
     href: "/action-middleware.html",
     title: "Tool Action Handlers",

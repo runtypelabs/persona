@@ -35,7 +35,11 @@ let registered = false;
 export function registerGalleryComponents(): void {
   if (registered) return;
   for (const component of galleryComponents) {
-    componentRegistry.register(component.name, component.renderer);
+    componentRegistry.register(
+      component.name,
+      component.renderer,
+      component.registrationOptions,
+    );
   }
   registered = true;
 }

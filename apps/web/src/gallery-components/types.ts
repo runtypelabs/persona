@@ -1,4 +1,7 @@
-import type { ComponentRenderer } from "@runtypelabs/persona";
+import type {
+  ComponentRegistrationOptions,
+  ComponentRenderer,
+} from "@runtypelabs/persona";
 
 /**
  * One streamed UI component, contributed as a single self-contained file in
@@ -16,6 +19,12 @@ export interface GalleryComponent {
   label: string;
   /** The renderer registered with Persona's `componentRegistry` under `name`. */
   renderer: ComponentRenderer;
+  /**
+   * Passed straight to `componentRegistry.register`. Set
+   * `{ bubbleChrome: false }` for components that draw their own border and
+   * surface, so the thread doesn't wrap them in a second message bubble.
+   */
+  registrationOptions?: ComponentRegistrationOptions;
   /** Example directive the demo injects when this component's button is clicked. */
   sample: {
     /** Intro line shown in the chat bubble above the rendered component. */
