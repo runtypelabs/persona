@@ -295,10 +295,10 @@
         <div class="notes-section">
           <h3 class="notes-section-title">Which rule wins?</h3>
           <p>
-            Layers merge with one rule: an object refines lower layers per
-            key, while a string value replaces the whole subtree it names. So
-            a user-level <code>files: "inline"</code> overrides every
-            lower-layer file exception, and
+            Preferences overlay the base features with one rule: an object
+            refines the base per key, while a string value replaces the whole
+            subtree it names. So a preference of <code>files: "inline"</code>
+            overrides every base file exception, and
             <code>files: { default: "inline" }</code> keeps them. Persona then
             tests the merged rules from most specific to least specific:
           </p>
@@ -317,16 +317,17 @@
           <div class="notes-section">
             <h3 class="notes-section-title">Preference API</h3>
             <p>
-              <code>baseFeatures</code> remains code-owned and contains
-              capabilities, renderers, callbacks, and iframe security.
-              Preference layers are sparse JSON objects containing display
-              choices only.
+              <code>features</code> remains code-owned and contains
+              capabilities, renderers, callbacks, and iframe security. The
+              <code>preferences</code> config key takes a sparse JSON slice of
+              display choices only, applied over the features through a
+              runtime allowlist.
             </p>
             <p>
-              Choosing <strong>Use default</strong> passes <code>null</code>,
-              which deletes that user key. It does not save the currently
-              resolved mode, so future application-default changes still flow
-              through.
+              Choosing <strong>Use default</strong> deletes that key from the
+              slice. It does not save the currently resolved mode, so future
+              application-default changes still flow through. An
+              explicit-undefined update clears every override.
             </p>
             <p>
               Data loaded from storage can be passed through
@@ -336,21 +337,22 @@
           </div>
 
           <div class="notes-section">
-            <pre class="code-block"><code>const store =
-  createFeaturePreferenceStore({
-    base: baseFeatures,
-    layers: [{ id: "app", preferences: appDefaults }],
-    stored: loadFromStorage(),
-    onChange: ({ features, preferences }) => {
-      handle.update({ features });
-      saveToStorage(preferences);
-    },
-  });
+            <pre class="code-block"><code>const handle = initAgentWidget({
+  config: {
+    features: baseFeatures,
+    preferences: userPreferences,
+  },
+});
 
-store.setArtifactDisplay(
-  { type: "files" },
-  "inline", // null resets this choice
-);</code></pre>
+// A settings control writes one key:
+handle.update({
+  preferences: {
+    artifacts: { display: { files: "inline" } },
+  },
+});
+
+// Clear back to the base features:
+handle.update({ preferences: undefined });</code></pre>
           </div>
         </div>
 
@@ -359,40 +361,39 @@ store.setArtifactDisplay(
             <h3 class="notes-section-title">Explain the result</h3>
             <p>
               The reference controls use Persona’s public resolver rather than
-              duplicating fallback logic. It returns the effective mode, the
-              selector that matched, and the layer that supplied that selector.
+              duplicating fallback logic. It returns the effective mode and
+              the configured selector that matched.
             </p>
           </div>
           <div class="notes-section">
-            <pre class="code-block"><code>const result =
-  resolveArtifactDisplayPreference(
-    baseFeatures.artifacts,
-    [
-      { id: "app", preferences: appDefaults },
-      { id: "user", preferences: userPreferences },
-    ],
-    {
-      artifactType: "markdown",
-      file: {
-        path: "app.html",
-        mimeType: "text/html",
-      },
+            <pre class="code-block"><code>const features = applyFeaturePreferences(
+  baseFeatures,
+  [userPreferences],
+);
+
+const result = resolveArtifactDisplay(
+  features.artifacts,
+  {
+    artifactType: "markdown",
+    file: {
+      path: "app.html",
+      mimeType: "text/html",
     },
-  );
+  },
+);
 
 // result.mode
-// result.matchedBy
-// result.source</code></pre>
+// result.matchedBy</code></pre>
           </div>
         </div>
 
         <div class="notes-section">
           <h3 class="notes-section-title">Live conversion</h3>
           <p>
-            Updating <code>features</code> re-renders existing transcript
-            artifacts between card and inline modes. Panel rules affect where
-            subsequent artifacts open; an already-open pane remains open until
-            it is closed explicitly.
+            Updating <code>preferences</code> (or <code>features</code>)
+            re-renders existing transcript artifacts between card and inline
+            modes. Panel rules affect where subsequent artifacts open; an
+            already-open pane remains open until it is closed explicitly.
           </p>
         </div>
       </section>

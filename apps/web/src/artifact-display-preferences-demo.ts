@@ -4,18 +4,18 @@ import "./App.css";
 
 import {
   DEFAULT_WIDGET_CONFIG,
-  applyFeaturePreferencePatch,
+  applyFeaturePreferences,
   componentRegistry,
   createAgentExperience,
-  createArtifactDisplayPreferencePatch,
-  createFeaturePreferenceStore,
-  resolveArtifactDisplayPreference,
+  normalizeMediaType,
+  resolveArtifactDisplay,
   type AgentWidgetConfig,
   type AgentWidgetFeatureFlags,
   type AgentWidgetInitHandle,
-  type ArtifactDisplayPreferenceTarget,
   type PersonaArtifactDisplayDescriptor,
   type PersonaArtifactDisplayMode,
+  type PersonaArtifactDisplayRules,
+  type PersonaArtifactKind,
   type WidgetPreferenceSlice,
 } from "@runtypelabs/persona";
 import {
@@ -65,10 +65,17 @@ componentRegistry.register("DisplayPreferenceChart", (props) => {
   return root;
 });
 
+/** UI target for one settings control (host-owned concept, not a Persona type). */
+type PreferenceTarget =
+  | { type: "default" }
+  | { type: "files" }
+  | { type: "kind"; kind: PersonaArtifactKind }
+  | { type: "mediaType"; mediaType: string };
+
 type PreferenceRow = {
   label: string;
   detail: string;
-  target: ArtifactDisplayPreferenceTarget;
+  target: PreferenceTarget;
   group: "general" | "exception";
 };
 
@@ -76,7 +83,7 @@ const PREFERENCE_ROWS: readonly PreferenceRow[] = [
   {
     label: "Generated files",
     detail:
-      "One choice for every file. Setting it overrides file-type exceptions from lower layers.",
+      "One choice for every file. Setting it overrides the base file-type exceptions.",
     target: { type: "files" },
     group: "general",
   },
@@ -118,37 +125,22 @@ const MODE_LABELS: Record<PersonaArtifactDisplayMode, string> = {
   inline: "In conversation",
 };
 
-const organizationPreferences: WidgetPreferenceSlice = {
-  artifacts: {
-    display: {
-      default: "collapsed",
-    },
-  },
-};
-
-const surfacePreferences: WidgetPreferenceSlice = {
-  artifacts: {
-    display: {
-      files: {
-        default: "panel",
-        byMediaType: {
-          "text/html": "inline",
-        },
-      },
-      byKind: {
-        component: "inline",
-      },
-    },
-    filePreview: { enabled: true },
-  },
-};
-
+// Code-owned base config: capabilities, layout, security, and the app's
+// default display rules. Instance preferences overlay these at runtime.
 const baseFeatures: AgentWidgetFeatureFlags = {
   ...DEFAULT_WIDGET_CONFIG.features,
   artifacts: {
     ...DEFAULT_WIDGET_CONFIG.features?.artifacts,
     enabled: true,
     allowedTypes: ["markdown", "component"],
+    display: {
+      default: "collapsed",
+      byKind: { component: "inline" },
+      files: {
+        default: "panel",
+        byMediaType: { "text/html": "inline" },
+      },
+    },
     layout: {
       ...DEFAULT_WIDGET_CONFIG.features?.artifacts?.layout,
       paneWidth: "42%",
@@ -162,32 +154,157 @@ const baseFeatures: AgentWidgetFeatureFlags = {
   },
 };
 
+// The page's one sparse preference slice. Set writes a key; reset deletes it
+// so the base features show through again. This is what a host would persist.
+let userPreferences: WidgetPreferenceSlice = {};
+
+const cloneSlice = (slice: WidgetPreferenceSlice): WidgetPreferenceSlice =>
+  JSON.parse(JSON.stringify(slice)) as WidgetPreferenceSlice;
+
+const hasKeys = (value: object | undefined): boolean =>
+  !!value && Object.keys(value).length > 0;
+
+/** Display rules of a slice as an object, promoting the string shorthand. */
+const sliceRules = (
+  slice: WidgetPreferenceSlice,
+): PersonaArtifactDisplayRules => {
+  const artifacts = (slice.artifacts ??= {});
+  const display = artifacts.display;
+  if (display === undefined) return (artifacts.display = {});
+  if (typeof display === "string") {
+    return (artifacts.display = { default: display });
+  }
+  return display;
+};
+
+/** Delete empty containers so the slice stays sparse ("no opinion"). */
+const pruneSlice = (slice: WidgetPreferenceSlice): void => {
+  const display = slice.artifacts?.display;
+  if (display && typeof display !== "string") {
+    if (typeof display.files === "object" && !hasKeys(display.files)) {
+      delete display.files;
+    }
+    if (!hasKeys(display.byKind)) delete display.byKind;
+    if (!hasKeys(display)) delete slice.artifacts?.display;
+  }
+  if (!hasKeys(slice.artifacts)) delete slice.artifacts;
+};
+
+/** The slice's explicit choice for a target, if any (undefined = inherit). */
+const getDisplay = (
+  slice: WidgetPreferenceSlice,
+  target: PreferenceTarget,
+): PersonaArtifactDisplayMode | undefined => {
+  const display = slice.artifacts?.display;
+  if (!display) return undefined;
+  if (typeof display === "string") {
+    return target.type === "default"
+      ? (display as PersonaArtifactDisplayMode)
+      : undefined;
+  }
+  switch (target.type) {
+    case "default":
+      return display.default as PersonaArtifactDisplayMode | undefined;
+    case "files":
+      return (
+        typeof display.files === "string" ? display.files : display.files?.default
+      ) as PersonaArtifactDisplayMode | undefined;
+    case "kind":
+      return display.byKind?.[target.kind] as
+        | PersonaArtifactDisplayMode
+        | undefined;
+    case "mediaType":
+      return (
+        typeof display.files === "string"
+          ? undefined
+          : display.files?.byMediaType?.[normalizeMediaType(target.mediaType)]
+      ) as PersonaArtifactDisplayMode | undefined;
+  }
+};
+
+/**
+ * Write or reset (null) one choice on a slice. The `files` target writes the
+ * string form, replacing the base file exceptions; resetting it deletes only
+ * `files.default` so the user's own MIME exceptions survive.
+ */
+const setDisplay = (
+  slice: WidgetPreferenceSlice,
+  target: PreferenceTarget,
+  mode: PersonaArtifactDisplayMode | null,
+): void => {
+  const rules = sliceRules(slice);
+  switch (target.type) {
+    case "default":
+      if (mode === null) delete rules.default;
+      else rules.default = mode;
+      break;
+    case "kind": {
+      const byKind = (rules.byKind ??= {});
+      if (mode === null) delete byKind[target.kind];
+      else byKind[target.kind] = mode;
+      break;
+    }
+    case "files":
+      if (mode === null) {
+        if (typeof rules.files === "object") delete rules.files.default;
+        else delete rules.files;
+      } else {
+        rules.files = mode;
+      }
+      break;
+    case "mediaType": {
+      const key = normalizeMediaType(target.mediaType);
+      if (typeof rules.files === "string") {
+        // Promote the blanket choice so the exception extends it.
+        rules.files = { default: rules.files };
+      }
+      const files = (rules.files ??= {});
+      if (typeof files === "object") {
+        const byMediaType = (files.byMediaType ??= {});
+        if (mode === null) delete byMediaType[key];
+        else byMediaType[key] = mode;
+        if (!hasKeys(byMediaType)) delete files.byMediaType;
+      }
+      break;
+    }
+  }
+  pruneSlice(slice);
+};
+
+const effectiveFeatures = (slice: WidgetPreferenceSlice) =>
+  applyFeaturePreferences(baseFeatures, [slice]);
+
+const resolveWith = (
+  slice: WidgetPreferenceSlice,
+  artifact: PersonaArtifactDisplayDescriptor,
+) => resolveArtifactDisplay(effectiveFeatures(slice).artifacts, artifact);
+
 let handle: AgentWidgetInitHandle;
 
-// The store owns the parse → patch → merge → apply loop. Persist
-// `preferences` from onChange and feed `features` to the widget.
-const store = createFeaturePreferenceStore({
-  base: baseFeatures,
-  layers: [
-    { id: "organization", preferences: organizationPreferences },
-    { id: "surface", preferences: surfacePreferences },
-  ],
-  capabilities: { artifacts: true, tools: false, reasoning: false },
-  onChange: ({ features, preferences }) => {
-    handle.update({ features });
-    syncControls();
-    reportDemoConfig(configInspector, {
-      config: { ...baseConfig, features },
-      mode: "inline",
-      scenario: {
-        organizationPreferences,
-        surfacePreferences,
-        userPreferences: preferences,
-      },
-      scenarioLabel: "Preference layers",
-    });
-  },
-});
+const reportState = (): void => {
+  reportDemoConfig(configInspector, {
+    config: {
+      ...baseConfig,
+      preferences: hasKeys(userPreferences) ? userPreferences : undefined,
+    },
+    mode: "inline",
+    scenario: { userPreferences },
+    scenarioLabel: "Instance preferences",
+  });
+};
+
+/** Push the slice to the widget via the `preferences` config key. */
+const applyPreferences = (): void => {
+  // Explicit-undefined clears the key; the widget re-resolves from base
+  // `features`, never from a previously overlaid result.
+  handle.update({
+    preferences: hasKeys(userPreferences)
+      ? cloneSlice(userPreferences)
+      : undefined,
+  });
+  syncControls();
+  reportState();
+};
 
 const baseConfig: AgentWidgetConfig = {
   ...DEFAULT_WIDGET_CONFIG,
@@ -196,7 +313,7 @@ const baseConfig: AgentWidgetConfig = {
   persistState: false,
   statusIndicator: { visible: false },
   suggestionChips: [],
-  features: store.getFeatures(),
+  features: baseFeatures,
 };
 
 const stageMount = renderInlineMount(scaffold.stage);
@@ -216,7 +333,7 @@ const controlRows = new Map<
 >();
 
 const artifactForTarget = (
-  target: ArtifactDisplayPreferenceTarget,
+  target: PreferenceTarget,
 ): PersonaArtifactDisplayDescriptor => {
   switch (target.type) {
     case "kind":
@@ -241,26 +358,16 @@ const artifactForTarget = (
 
 /** Resolution preview for "what happens if this row is reset". */
 const resolveAfterReset = (row: PreferenceRow) => {
-  const resetPreferences = applyFeaturePreferencePatch(
-    store.getPreferences(),
-    createArtifactDisplayPreferencePatch(row.target, null),
-  );
-  return resolveArtifactDisplayPreference(
-    baseFeatures.artifacts,
-    [
-      { id: "organization", preferences: organizationPreferences },
-      { id: "surface", preferences: surfacePreferences },
-      { id: "user", preferences: resetPreferences },
-    ],
-    artifactForTarget(row.target),
-  );
+  const resetSlice = cloneSlice(userPreferences);
+  setDisplay(resetSlice, row.target, null);
+  return resolveWith(resetSlice, artifactForTarget(row.target));
 };
 
 const syncControls = (): void => {
   PREFERENCE_ROWS.forEach((row) => {
     const controls = controlRows.get(row);
     if (!controls) return;
-    const explicit = store.getArtifactDisplay(row.target);
+    const explicit = getDisplay(userPreferences, row.target);
     const resetResolution = resolveAfterReset(row);
     const resetLabel =
       row.target.type === "mediaType" &&
@@ -304,7 +411,8 @@ PREFERENCE_ROWS.forEach((row) => {
       select.value === ""
         ? null
         : (select.value as PersonaArtifactDisplayMode);
-    store.setArtifactDisplay(row.target, mode);
+    setDisplay(userPreferences, row.target, mode);
+    applyPreferences();
   });
 
   wrapper.append(copy, select);
@@ -317,15 +425,17 @@ PREFERENCE_ROWS.forEach((row) => {
 document
   .getElementById("preference-reset")
   ?.addEventListener("click", () => {
-    store.reset();
+    userPreferences = {};
+    applyPreferences();
   });
 
 document
   .getElementById("preference-all-inline")
   ?.addEventListener("click", () => {
     PREFERENCE_ROWS.forEach((row) => {
-      store.setArtifactDisplay(row.target, "inline");
+      setDisplay(userPreferences, row.target, "inline");
     });
+    applyPreferences();
   });
 
 handle.upsertArtifact({
@@ -341,7 +451,7 @@ handle.upsertArtifact({
   artifactType: "markdown",
   title: "README",
   content:
-    "# Artifact display QA\n\nThis plain document inherits the organization-level **collapsed** default.",
+    "# Artifact display QA\n\nThis plain document inherits the app's **collapsed** default.",
 });
 
 handle.upsertArtifact({
@@ -381,13 +491,4 @@ handle.upsertArtifact({
 });
 
 syncControls();
-reportDemoConfig(configInspector, {
-  config: { ...baseConfig, features: store.getFeatures() },
-  mode: "inline",
-  scenario: {
-    organizationPreferences,
-    surfacePreferences,
-    userPreferences: store.getPreferences(),
-  },
-  scenarioLabel: "Preference layers",
-});
+reportState();
