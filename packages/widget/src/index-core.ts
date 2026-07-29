@@ -5,6 +5,8 @@ import {
 
 export type {
   AgentWidgetConfig,
+  AgentWidgetStorageAdapter,
+  AgentWidgetStoredState,
   AgentWidgetConfigPatch,
   TargetResolver,
   ResolvedTarget,

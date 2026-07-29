@@ -127,10 +127,12 @@ const homeDemoSharedAssistant = {
 /** One prefix for both widgets so sessionStorage open/voice prefs are not split. */
 const homeDemoPersistKeyPrefix = "persona-home-demo-";
 
-const inlineMount = document.getElementById("inline-widget");
-if (!inlineMount) {
+const inlineMountLookup = document.getElementById("inline-widget");
+if (!inlineMountLookup) {
   throw new Error("Inline widget mount node missing");
 }
+// Re-bind as non-null so closures (mountWidget) see the narrowed type.
+const inlineMount: HTMLElement = inlineMountLookup;
 
 // Shared widget config for both mount modes; mountWidget() merges in the
 // per-mode launcher/layout bits below.

@@ -1150,11 +1150,7 @@ const config: AgentWidgetConfig = {
     agentIconText: "🍞"
   },
   theme: {
-    ...DEFAULT_WIDGET_CONFIG.theme,
-    primary: "#1C1917",
-    accent: "#D4A574",
-    surface: "#FAFAF9",
-    muted: "#78716C"
+    ...DEFAULT_WIDGET_CONFIG.theme
   },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,

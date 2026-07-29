@@ -92,6 +92,9 @@ export type {
   TranscriptStreamFrame,
   BuildTranscriptStreamFramesOptions,
 } from './preview-utils';
+// Type-only: the full preview implementation stays in
+// `@runtypelabs/persona/theme-editor/preview`.
+export type { CompareMode, PreviewShellMode } from './preview';
 
 // Role mappings (Interface Roles editor)
 export {
