@@ -1,5 +1,22 @@
 # @runtypelabs/persona
 
+## 4.14.0
+
+### Minor Changes
+
+- 84e378b: Add a paired Persona Default theme editor preset with light and dark themes.
+- 3a3e126: Add display preferences for tool calls, reasoning, and artifacts. The new `preferences` config key takes a JSON-safe `WidgetPreferenceSlice` of per-instance overrides, applied over `features` through a runtime allowlist (security and capability keys cannot pass), live-updatable via `controller.update({ preferences })`, and cleared back to the base features with an explicit-undefined patch. `parseWidgetPreferenceSlice`, `applyFeaturePreferences`, and `resolveConfigPreferences` are exported for hosts that persist or precompute preference slices themselves.
+
+  Artifact display modes are renamed to say where the body renders: `collapsed` (formerly `card`, which stays accepted as a deprecated alias that parsing and resolution canonicalize), `panel`, and `inline`. Display rules use one merge rule everywhere (a string replaces the subtree it names, an object refines it per key), nest MIME selectors under `files.byMediaType` with `image/*`-style wildcards, and honor a producer-supplied `presentation.preferredMode` hint that beats defaults but loses to explicit rules.
+
+  Resolution is explainable down to the matched selector, live display changes re-materialize existing card and inline artifact blocks without a remount, and the theme editor exports capability-aware preference sections with reset metadata.
+
+### Patch Changes
+
+- 7e1c8a2: Export the `AgentWidgetStorageAdapter` and `AgentWidgetStoredState` types from the package root, and the `CompareMode` and `PreviewShellMode` types from `@runtypelabs/persona/theme-editor`.
+- 84e378b: Cascade semantic surface, container, text, muted text, and border colors into the composer and assistant message defaults, including flat messages and typing indicators.
+- a831109: The standalone typing indicator bubble now follows `layout.messages.layout` instead of always painting the `bubble` preset, so it drops its shadow and border in `minimal` and its background in `flat`. It also reads the same `--persona-message-assistant-*` variables as assistant message bubbles, so `theme.components.message.assistant` tokens apply to it.
+
 ## 4.13.0
 
 ### Minor Changes
