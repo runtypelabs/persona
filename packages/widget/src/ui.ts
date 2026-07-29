@@ -872,6 +872,8 @@ export const createAgentExperience = (
     container,
     body,
     messagesWrapper,
+    starterSuggestions,
+    transcriptSuggestions,
     suggestions,
     textarea,
     sendButton,
@@ -1326,6 +1328,11 @@ export const createAgentExperience = (
     messagesWrapper.style.marginLeft = "auto";
     messagesWrapper.style.marginRight = "auto";
     messagesWrapper.style.width = "100%";
+    starterSuggestions.style.maxWidth = contentMaxWidth;
+    transcriptSuggestions.style.maxWidth = contentMaxWidth;
+    transcriptSuggestions.style.marginLeft = "auto";
+    transcriptSuggestions.style.marginRight = "auto";
+    transcriptSuggestions.style.width = "100%";
   }
   // The pill IS the composer in composer-bar mode and should match the
   // wrapper's responsive width (50vw / 70vw / 90vw), not be capped by
@@ -3446,7 +3453,17 @@ export const createAgentExperience = (
     }
   }
 
-  const suggestionsManager = createSuggestions(suggestions);
+  const composerSuggestionsManager = createSuggestions(suggestions);
+  const starterSuggestionsManager = createSuggestions(starterSuggestions);
+  const transcriptSuggestionsManager = createSuggestions(transcriptSuggestions);
+  const suggestionManagers = [
+    composerSuggestionsManager,
+    starterSuggestionsManager,
+    transcriptSuggestionsManager,
+  ];
+  destroyCallbacks.push(() => {
+    suggestionManagers.forEach((manager) => manager.destroy());
+  });
   let closeHandler: (() => void) | null = null;
   let session: AgentWidgetSession;
 
@@ -3460,31 +3477,100 @@ export const createAgentExperience = (
   const renderSuggestions = (messages?: AgentWidgetMessage[]) => {
     if (!session) return;
     const current = messages ?? session.getMessages();
-    const agentChips =
+    const clearManager = (manager: ReturnType<typeof createSuggestions>) => {
+      manager.render([], session, textarea, current);
+    };
+    const clearOthers = (active: ReturnType<typeof createSuggestions>) => {
+      suggestionManagers.forEach((manager) => {
+        if (manager !== active) clearManager(manager);
+      });
+    };
+    const agentSuggestions =
       config.features?.suggestReplies?.enabled !== false
         ? latestAgentSuggestions(current)
         : null;
-    if (agentChips) {
-      suggestionsManager.render(
-        agentChips,
+
+    if (agentSuggestions) {
+      const followUps = config.suggestions?.followUps;
+      const requestedPlacement =
+        followUps?.placement ?? (followUps ? "auto" : "composer");
+      const placement =
+        requestedPlacement === "auto"
+          ? isComposerBar()
+            ? "composer"
+            : "after-message"
+          : requestedPlacement;
+      const manager =
+        placement === "after-message"
+          ? transcriptSuggestionsManager
+          : composerSuggestionsManager;
+      clearOthers(manager);
+      manager.render(
+        agentSuggestions,
         session,
         textarea,
         current,
         config.suggestionChipsConfig,
-        { agentPushed: true }
+        {
+          agentPushed: true,
+          surface: "follow-up",
+          variant: followUps?.variant ?? "chip",
+          selection: followUps?.selection ?? "send",
+          overflow: followUps?.overflow ?? "scroll",
+          maxItems: followUps?.maxItems ?? 4,
+        }
       );
-    } else if (current.some((msg) => msg.role === "user")) {
-      // Hide suggestions once a user message exists.
-      suggestionsManager.render([], session, textarea, current);
-    } else {
-      suggestionsManager.render(
-        config.suggestionChips,
+      return;
+    }
+
+    if (current.some((message) => message.role === "user")) {
+      suggestionManagers.forEach(clearManager);
+      return;
+    }
+
+    const starters = config.suggestions?.starters;
+    if (starters) {
+      const placement =
+        starters.placement === "composer" ||
+        config.copy?.showWelcomeCard === false
+          ? "composer"
+          : "welcome";
+      const manager =
+        placement === "welcome"
+          ? starterSuggestionsManager
+          : composerSuggestionsManager;
+      clearOthers(manager);
+      manager.render(
+        starters.items ?? config.suggestionChips,
         session,
         textarea,
         current,
-        config.suggestionChipsConfig
+        config.suggestionChipsConfig,
+        {
+          surface: "starter",
+          variant: starters.variant ?? "card",
+          selection: starters.selection ?? "send",
+          overflow: "wrap",
+          maxItems: starters.maxItems ?? 4,
+        }
       );
+      return;
     }
+
+    clearOthers(composerSuggestionsManager);
+    composerSuggestionsManager.render(
+      config.suggestionChips,
+      session,
+      textarea,
+      current,
+      config.suggestionChipsConfig,
+      {
+        surface: "starter",
+        variant: "chip",
+        selection: "send",
+        overflow: "wrap",
+      }
+    );
   };
   let isStreaming = false;
   const messageCache = createMessageCache();
@@ -5884,8 +5970,10 @@ export const createAgentExperience = (
     if (micButton) {
       micButton.disabled = disabled;
     }
-    suggestionsManager.buttons.forEach((btn) => {
-      btn.disabled = disabled;
+    suggestionManagers.forEach((manager) => {
+      manager.buttons.forEach((button) => {
+        button.disabled = disabled;
+      });
     });
     footer.dataset.personaComposerStreaming = disabled ? "true" : "false";
     footer.querySelectorAll<HTMLElement>("[data-persona-composer-disable-when-streaming]").forEach((el) => {

@@ -430,6 +430,19 @@ function generateMarkdownConfig(config: any, indent: string): string[] {
   return lines;
 }
 
+// Suggestions may contain nested rich items. JSON object syntax is also valid
+// JavaScript/TypeScript, so preserve the complete public shape instead of
+// duplicating every leaf in each output-format generator.
+function generateSuggestionsConfig(config: any, indent: string): string[] {
+  if (!config.suggestions) return [];
+  const serialized = JSON.stringify(config.suggestions, null, 2).split("\n");
+  return serialized.map((line, index) => {
+    const prefix = index === 0 ? `${indent}suggestions: ` : indent;
+    const suffix = index === serialized.length - 1 ? "," : "";
+    return `${prefix}${line}${suffix}`;
+  });
+}
+
 // Helper to generate layout config (excluding render functions and slots)
 function generateLayoutConfig(config: any, indent: string): string[] {
   const lines: string[] = [];
@@ -697,6 +710,8 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
     lines.push("    },");
   }
 
+  lines.push(...generateSuggestionsConfig(config, "    "));
+
   if (config.suggestionChips && config.suggestionChips.length > 0) {
     lines.push("    suggestionChips: [");
     config.suggestionChips.forEach((chip: string) => {
@@ -844,6 +859,8 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
     });
     lines.push("        },");
   }
+
+  lines.push(...generateSuggestionsConfig(config, "        "));
 
   if (config.suggestionChips && config.suggestionChips.length > 0) {
     lines.push("        suggestionChips: [");
@@ -1110,6 +1127,8 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     lines.push("        },");
   }
 
+  lines.push(...generateSuggestionsConfig(config, "        "));
+
   if (config.suggestionChips && config.suggestionChips.length > 0) {
     lines.push("        suggestionChips: [");
     config.suggestionChips.forEach((chip: string) => {
@@ -1312,6 +1331,7 @@ function buildSerializableConfig(config: any): Record<string, any> {
   if (config.voiceRecognition) serializableConfig.voiceRecognition = config.voiceRecognition;
   if (config.statusIndicator) serializableConfig.statusIndicator = config.statusIndicator;
   if (config.features) serializableConfig.features = config.features;
+  if (config.suggestions) serializableConfig.suggestions = config.suggestions;
   if (config.suggestionChips?.length > 0) serializableConfig.suggestionChips = config.suggestionChips;
   if (config.suggestionChipsConfig) serializableConfig.suggestionChipsConfig = config.suggestionChipsConfig;
   if (config.debug) serializableConfig.debug = config.debug;
@@ -1519,6 +1539,8 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     });
     lines.push("      },");
   }
+
+  lines.push(...generateSuggestionsConfig(config, "      "));
 
   if (config.suggestionChips && config.suggestionChips.length > 0) {
     lines.push("      suggestionChips: [");

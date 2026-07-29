@@ -563,6 +563,46 @@ describe("Full Config with Hooks Integration", () => {
 // Backward Compatibility Tests
 // =============================================================================
 
+describe("Suggestions Serialization", () => {
+  it("preserves structured suggestion configuration in every format", () => {
+    const config = {
+      ...minimalConfig,
+      suggestions: {
+        starters: {
+          variant: "card",
+          selection: "fill",
+          items: [
+            {
+              id: "compare",
+              label: "Compare plans",
+              prompt: "Compare plans for my team",
+            },
+          ],
+        },
+        followUps: {
+          placement: "after-message",
+          overflow: "scroll",
+        },
+      },
+    };
+    const formats: CodeFormat[] = [
+      "esm",
+      "react-component",
+      "react-advanced",
+      "script-installer",
+      "script-manual",
+      "script-advanced",
+    ];
+
+    for (const format of formats) {
+      const code = generateCodeSnippet(config, format);
+      expect(code).toContain("suggestions");
+      expect(code).toContain("Compare plans");
+      expect(code).toContain("after-message");
+    }
+  });
+});
+
 describe("Backward Compatibility", () => {
   it("should work without options parameter", () => {
     const code = generateCodeSnippet(minimalConfig, "esm");

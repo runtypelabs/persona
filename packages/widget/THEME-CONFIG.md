@@ -990,15 +990,109 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `onFeedback` | Callback when user submits feedback: `(feedback: { type: 'upvote' \| 'downvote', messageId: string }) => void` |
 | `onCopy` | Callback when user copies a message: `(message: AgentWidgetMessage) => void` |
 
-## Suggestion Chips (`config.suggestionChipsConfig.*`)
+## Suggestions (`config.suggestions.*`)
 
-| Property | Description |
-|----------|-------------|
-| `fontFamily` | `"sans-serif" \| "serif" \| "mono"` |
-| `fontWeight` | Font weight |
-| `paddingX` / `paddingY` | Padding |
+Persona separates starter prompts from optional follow-ups:
 
-**Chip content:** `config.suggestionChips: string[]`
+- `suggestions.starters` is shown before the first user message.
+- `suggestions.followUps` presents the latest `suggest_replies` tool payload.
+- `ask_user_question` remains the correct primitive for a required answer.
+
+Strings are valid item shorthand. Rich items can separate a short visible
+`label` from the `prompt` that is sent or placed in the composer:
+
+```ts
+suggestions: {
+  starters: {
+    placement: "welcome",
+    variant: "card",
+    selection: "fill",
+    maxItems: 4,
+    items: [
+      {
+        id: "compare",
+        label: "Compare plans",
+        prompt: "Compare the plans for a team of 20",
+        description: "Review features, limits, and pricing",
+        icon: "dollar-sign",
+        emphasis: "primary",
+      },
+      "Show me a quick tour",
+    ],
+  },
+  followUps: {
+    placement: "auto",
+    variant: "chip",
+    selection: "send",
+    overflow: "scroll",
+    maxItems: 4,
+  },
+}
+```
+
+| Starter property | Default | Description |
+|----------|---------|-------------|
+| `items` | `suggestionChips` | `(string \| AgentWidgetSuggestionObject)[]` |
+| `variant` | `"card"` | `"card" \| "chip" \| "list"` |
+| `placement` | `"welcome"` | `"welcome" \| "composer"`; falls back to composer when the welcome card is hidden |
+| `selection` | `"send"` | `"send"` sends immediately; `"fill"` drafts in the composer |
+| `maxItems` | `4` | Maximum number shown |
+
+| Follow-up property | Default | Description |
+|----------|---------|-------------|
+| `variant` | `"chip"` | `"chip" \| "card" \| "list"` |
+| `placement` | `"auto"` | Regular panels use `"after-message"`; composer-bar mode uses `"composer"` |
+| `selection` | `"send"` | `"send" \| "fill"` |
+| `overflow` | `"scroll"` | `"scroll" \| "wrap"` |
+| `maxItems` | `4` | Maximum number shown |
+
+Each rich item supports `id`, `label`, `prompt`, `description`, `icon`,
+`selection`, and `emphasis`. Per-item `selection` overrides the surface.
+
+### Suggestion theme tokens
+
+Each variant under `theme.components.suggestion` supports:
+
+`background`, `foreground`, `border`, `borderRadius`, `padding`, `shadow`,
+`gap`, `minHeight`, `fontSize`, `lineHeight`, `iconSize`, `hoverBackground`,
+`hoverForeground`, `hoverBorder`, `pressedBackground`, `focusRing`, and
+`disabledOpacity`.
+
+```ts
+theme: {
+  components: {
+    suggestion: {
+      chip: {
+        background: "semantic.colors.surface",
+        border: "semantic.colors.border",
+        borderRadius: "palette.radius.full",
+        hoverBackground: "palette.colors.gray.100",
+        focusRing: "semantic.colors.interactive.focus",
+      },
+      card: {
+        borderRadius: "palette.radius.xl",
+        padding: "1rem",
+        shadow: "palette.shadows.sm",
+      },
+      list: {
+        background: "transparent",
+        minHeight: "44px",
+      },
+    },
+  },
+}
+```
+
+The deprecated `suggestionChips: string[]` and `suggestionChipsConfig` fields
+remain backwards compatible. They continue to render starter chips above the
+composer until a `suggestions.starters` configuration is supplied.
+
+### Suggestion events
+
+- `persona:suggestion:shown` includes suggestions, surface, source, and variant.
+- `persona:suggestion:selected` includes the selected item and send/fill mode.
+- Agent follow-ups also retain `persona:suggestReplies:shown` and
+  `persona:suggestReplies:selected` for backwards compatibility.
 
 ## Layout (`config.layout.*`)
 

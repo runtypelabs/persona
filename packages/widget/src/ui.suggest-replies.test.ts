@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import { SUGGEST_REPLIES_TOOL_NAME } from "./suggest-replies-tool";
+import type { AgentWidgetSuggestion } from "./types";
 
 const createMount = () => {
   const mount = document.createElement("div");
@@ -44,7 +45,7 @@ const injectSuggestReplies = (
   {
     id = "sr-1",
     suggestions = ["Tell me more", "Show pricing"],
-  }: { id?: string; suggestions?: string[] } = {},
+  }: { id?: string; suggestions?: AgentWidgetSuggestion[] } = {},
 ) => {
   controller.injectTestMessage({
     type: "message",
@@ -88,6 +89,108 @@ describe("suggest_replies chips UI", () => {
 
     expect(chipButtons(mount, "Tell me more")).toHaveLength(1);
     expect(chipButtons(mount, "Show pricing")).toHaveLength(1);
+
+    controller.destroy();
+  });
+
+  it("renders rich starter cards in the welcome surface", () => {
+    const { mount, controller } = makeController({
+      suggestions: {
+        starters: {
+          variant: "card",
+          items: [
+            {
+              id: "pricing",
+              label: "Compare plans",
+              prompt: "Help me compare plans",
+              description: "See features and pricing side by side",
+              icon: "dollar-sign",
+              emphasis: "primary",
+            },
+          ],
+        },
+      },
+    });
+
+    const welcome = mount.querySelector(
+      '[data-persona-suggestions="starter"]',
+    );
+    const button = welcome?.querySelector<HTMLButtonElement>(
+      '[data-suggestion-id="pricing"]',
+    );
+    expect(welcome?.getAttribute("data-variant")).toBe("card");
+    expect(button?.textContent).toContain("Compare plans");
+    expect(button?.textContent).toContain(
+      "See features and pricing side by side",
+    );
+    expect(button?.dataset.emphasis).toBe("primary");
+
+    controller.destroy();
+  });
+
+  it("places structured follow-ups after the transcript", () => {
+    const { mount, controller } = makeController({
+      suggestions: {
+        followUps: {
+          placement: "after-message",
+          variant: "list",
+        },
+      },
+    });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller, {
+      suggestions: [
+        {
+          label: "See examples",
+          description: "Browse common implementations",
+        },
+      ],
+    });
+
+    const transcriptHost = mount.querySelector(
+      '[data-persona-suggestions="follow-up"]',
+    );
+    expect(transcriptHost?.getAttribute("data-variant")).toBe("list");
+    expect(transcriptHost?.textContent).toContain("See examples");
+    expect(transcriptHost?.textContent).toContain(
+      "Browse common implementations",
+    );
+    expect(
+      mount.querySelector("[data-persona-composer-suggestions]")?.textContent,
+    ).not.toContain("See examples");
+
+    controller.destroy();
+  });
+
+  it("fills the composer without sending when selection is fill", () => {
+    global.fetch = vi.fn();
+    const { mount, controller } = makeController({
+      suggestions: {
+        followUps: {
+          placement: "composer",
+          selection: "fill",
+        },
+      },
+    });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller, {
+      suggestions: [
+        {
+          label: "Customize this",
+          prompt: "Customize this for my team",
+        },
+      ],
+    });
+
+    chipButtons(mount, "Customize this")[0]!.click();
+
+    expect(
+      mount.querySelector<HTMLTextAreaElement>("textarea")?.value,
+    ).toBe("Customize this for my team");
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(
+      controller.getMessages().filter((message) => message.role === "user"),
+    ).toHaveLength(1);
 
     controller.destroy();
   });
@@ -181,6 +284,133 @@ describe("suggest_replies chips UI", () => {
     controller.destroy();
   });
 
+  it("updates follow-up presentation and placement through live config", () => {
+    const { mount, controller } = makeController({
+      suggestions: {
+        followUps: {
+          placement: "after-message",
+          variant: "card",
+        },
+      },
+    });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+
+    expect(
+      mount
+        .querySelector('[data-persona-suggestions="follow-up"]')
+        ?.getAttribute("data-variant"),
+    ).toBe("card");
+
+    controller.update({
+      suggestions: {
+        followUps: {
+          placement: "composer",
+          variant: "list",
+          selection: "fill",
+        },
+      },
+    });
+
+    const composerSurface = mount.querySelector(
+      '[data-persona-composer-suggestions][data-persona-suggestion-surface="follow-up"]',
+    );
+    expect(composerSurface?.getAttribute("data-variant")).toBe("list");
+    const updatedButton = Array.from(
+      composerSurface?.querySelectorAll<HTMLButtonElement>("button") ?? [],
+    ).find((button) => button.textContent?.includes("Tell me more"));
+    updatedButton?.click();
+    expect(mount.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(
+      "Tell me more",
+    );
+
+    controller.destroy();
+  });
+
+  it("tracks the visible overflow edges for horizontally scrolling chips", async () => {
+    const { mount, controller } = makeController({
+      suggestions: {
+        followUps: {
+          placement: "after-message",
+          variant: "chip",
+          overflow: "scroll",
+        },
+      },
+    });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+
+    const surface = mount.querySelector<HTMLElement>(
+      '[data-persona-suggestions="follow-up"]',
+    )!;
+    Object.defineProperties(surface, {
+      clientWidth: { configurable: true, value: 200 },
+      scrollWidth: { configurable: true, value: 500 },
+    });
+    const flushOverflowFrame = () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    // Scroll snap may settle just inside the 2px visual padding.
+    surface.scrollLeft = 2;
+    surface.dispatchEvent(new Event("scroll"));
+    await flushOverflowFrame();
+    expect(surface.hasAttribute("data-scroll-left")).toBe(false);
+    expect(surface.hasAttribute("data-scroll-right")).toBe(true);
+
+    surface.scrollLeft = 150;
+    surface.dispatchEvent(new Event("scroll"));
+    await flushOverflowFrame();
+    expect(surface.hasAttribute("data-scroll-left")).toBe(true);
+    expect(surface.hasAttribute("data-scroll-right")).toBe(true);
+
+    surface.scrollLeft = 300;
+    surface.dispatchEvent(new Event("scroll"));
+    await flushOverflowFrame();
+    expect(surface.hasAttribute("data-scroll-left")).toBe(true);
+    expect(surface.hasAttribute("data-scroll-right")).toBe(false);
+
+    controller.destroy();
+  });
+
+  it("maps horizontal overflow edges correctly in RTL", async () => {
+    const { mount, controller } = makeController({
+      suggestions: {
+        followUps: {
+          placement: "after-message",
+          variant: "chip",
+          overflow: "scroll",
+        },
+      },
+    });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+
+    const surface = mount.querySelector<HTMLElement>(
+      '[data-persona-suggestions="follow-up"]',
+    )!;
+    surface.style.direction = "rtl";
+    Object.defineProperties(surface, {
+      clientWidth: { configurable: true, value: 200 },
+      scrollWidth: { configurable: true, value: 500 },
+    });
+    const flushOverflowFrame = () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+    surface.scrollLeft = 0;
+    surface.dispatchEvent(new Event("scroll"));
+    await flushOverflowFrame();
+    expect(surface.hasAttribute("data-scroll-left")).toBe(true);
+    expect(surface.hasAttribute("data-scroll-right")).toBe(false);
+
+    surface.scrollLeft = -300;
+    surface.dispatchEvent(new Event("scroll"));
+    await flushOverflowFrame();
+    expect(surface.hasAttribute("data-scroll-left")).toBe(false);
+    expect(surface.hasAttribute("data-scroll-right")).toBe(true);
+
+    controller.destroy();
+  });
+
   it("renders no chips and falls back to the tool bubble when disabled", () => {
     const { mount, controller } = makeController({
       features: { suggestReplies: { enabled: false } },
@@ -231,6 +461,43 @@ describe("suggest_replies chips UI", () => {
     chipButtons(mount, "Show pricing")[0]!.click();
     await Promise.resolve();
     expect(selected).toEqual(["Show pricing"]);
+
+    controller.destroy();
+  });
+
+  it("dispatches unified suggestion events with surface and selection metadata", () => {
+    const shown: CustomEvent["detail"][] = [];
+    const selected: CustomEvent["detail"][] = [];
+    document.addEventListener("persona:suggestion:shown", (event) => {
+      shown.push((event as CustomEvent).detail);
+    });
+    document.addEventListener("persona:suggestion:selected", (event) => {
+      selected.push((event as CustomEvent).detail);
+    });
+
+    const { mount, controller } = makeController({
+      suggestions: {
+        starters: {
+          selection: "fill",
+          items: [{ id: "draft", label: "Draft a reply" }],
+        },
+      },
+    });
+
+    chipButtons(mount, "Draft a reply")[0]!.click();
+
+    expect(shown).toHaveLength(1);
+    expect(shown[0]).toMatchObject({
+      surface: "starter",
+      source: "config",
+      variant: "card",
+    });
+    expect(selected[0]).toMatchObject({
+      surface: "starter",
+      source: "config",
+      selection: "fill",
+      suggestion: { id: "draft", prompt: "Draft a reply" },
+    });
 
     controller.destroy();
   });

@@ -1817,6 +1817,38 @@ body {
   border-radius: 6px;
 }
 
+.config-action-btn {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  color: #374151;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
+}
+
+.config-action-btn:hover {
+  border-color: #9ca3af;
+  background: #f3f4f6;
+}
+
+.config-action-btn:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.suggestions-preview-btn {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
 .control-row-toggle {
   display: flex;
   align-items: center;

@@ -2257,10 +2257,9 @@ export type AgentWidgetFeatureFlags = {
    */
   askUserQuestion?: AgentWidgetAskUserQuestionFeature;
   /**
-   * Built-in `suggest_replies` quick-reply chips. When the assistant invokes
-   * the tool, the widget shows the suggestions as tappable chips above the
-   * composer (reusing the suggestion-chips surface) and immediately resumes
-   * the execution: fire-and-forget, no user input awaited.
+   * Built-in `suggest_replies` follow-ups. When the assistant invokes the
+   * tool, the widget shows the suggestions using `suggestions.followUps` and
+   * immediately resumes the execution: fire-and-forget, no user input awaited.
    */
   suggestReplies?: AgentWidgetSuggestRepliesFeature;
 };
@@ -2327,11 +2326,9 @@ export type WidgetPreferenceSlice = {
 };
 
 /**
- * Feature config for the built-in `suggest_replies` quick-reply chips.
- * Chips render in the existing suggestions slot above the composer and are
- * styled by the widget-level `suggestionChipsConfig`. A tapped chip is sent
- * verbatim as the user's next message; chips clear once any user message
- * follows them.
+ * Feature config for the built-in `suggest_replies` follow-ups. Presentation,
+ * placement, and send/fill behavior live under `suggestions.followUps`; the
+ * suggestions clear once any user message follows them.
  */
 export type AgentWidgetSuggestRepliesFeature = {
   /**
@@ -3728,6 +3725,67 @@ export type AgentWidgetSuggestionChipsConfig = {
   paddingY?: string;
 };
 
+/** A suggested next action shown to the user. Strings remain supported as shorthand. */
+export type AgentWidgetSuggestion =
+  | string
+  | {
+      /** Stable analytics / DOM identity. Falls back to the prompt or label. */
+      id?: string;
+      /** Concise visible action label. */
+      label: string;
+      /** Text placed in the composer or sent. Defaults to `label`. */
+      prompt?: string;
+      /** Optional supporting copy, most useful with the `card` variant. */
+      description?: string;
+      /** Optional icon from Persona's bundled Lucide registry. */
+      icon?: IconName;
+      /** Override the surface's selection behavior for this item. */
+      selection?: AgentWidgetSuggestionSelection;
+      /** Visually promote one high-confidence action. */
+      emphasis?: "default" | "primary";
+    };
+
+export type AgentWidgetSuggestionSelection = "send" | "fill";
+export type AgentWidgetSuggestionVariant = "chip" | "card" | "list";
+
+export type AgentWidgetStarterSuggestionsConfig = {
+  /** Suggestions shown before the first user message. */
+  items?: AgentWidgetSuggestion[];
+  /** Cards are recommended in the welcome state; defaults to `card`. */
+  variant?: AgentWidgetSuggestionVariant;
+  /** Defaults to `welcome`, or `composer` when the welcome card is hidden. */
+  placement?: "welcome" | "composer";
+  /** Defaults to `send`. */
+  selection?: AgentWidgetSuggestionSelection;
+  /** Maximum visible items. Defaults to 4. */
+  maxItems?: number;
+};
+
+export type AgentWidgetFollowUpSuggestionsConfig = {
+  /** Compact chips are recommended after an assistant answer. */
+  variant?: AgentWidgetSuggestionVariant;
+  /**
+   * `auto` places follow-ups after the transcript in regular panels and above
+   * the composer in composer-bar mode. Defaults to `auto`.
+   */
+  placement?: "auto" | "after-message" | "composer";
+  /** Defaults to `send`. */
+  selection?: AgentWidgetSuggestionSelection;
+  /** Horizontal scrolling avoids tall walls of chips. Defaults to `scroll`. */
+  overflow?: "scroll" | "wrap";
+  /** Maximum visible items. Defaults to 4. */
+  maxItems?: number;
+};
+
+/**
+ * Structured suggestions configuration. The legacy `suggestionChips` and
+ * `suggestionChipsConfig` fields remain supported for backwards compatibility.
+ */
+export type AgentWidgetSuggestionsConfig = {
+  starters?: AgentWidgetStarterSuggestionsConfig;
+  followUps?: AgentWidgetFollowUpSuggestionsConfig;
+};
+
 /**
  * Interface for pluggable stream parsers that extract text from streaming responses.
  * Parsers handle incremental parsing to extract text values from structured formats (JSON, XML, etc.).
@@ -5048,7 +5106,11 @@ export type AgentWidgetConfig = {
    * with `initialArtifacts`.
    */
   initialSelectedArtifactId?: string | null;
+  /** Rich starter and follow-up suggestion surfaces. */
+  suggestions?: AgentWidgetSuggestionsConfig;
+  /** @deprecated Prefer `suggestions.starters.items`. */
   suggestionChips?: string[];
+  /** @deprecated Prefer semantic tokens under `theme.components.suggestion`. */
   suggestionChipsConfig?: AgentWidgetSuggestionChipsConfig;
   debug?: boolean;
   formEndpoint?: string;

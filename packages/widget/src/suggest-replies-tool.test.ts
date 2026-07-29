@@ -26,12 +26,13 @@ describe("SUGGEST_REPLIES_CLIENT_TOOL definition", () => {
     expect(SUGGEST_REPLIES_CLIENT_TOOL.annotations?.readOnlyHint).toBe(true);
   });
 
-  it("bounds suggestions to 1-4 short strings", () => {
+  it("bounds suggestions and accepts string or rich-item entries", () => {
     const suggestions =
       SUGGEST_REPLIES_PARAMETERS_SCHEMA.properties.suggestions;
     expect(suggestions.minItems).toBe(1);
     expect(suggestions.maxItems).toBe(SUGGEST_REPLIES_MAX);
-    expect(suggestions.items.maxLength).toBe(60);
+    expect(suggestions.items.oneOf[0].maxLength).toBe(60);
+    expect(suggestions.items.oneOf[1].required).toEqual(["label"]);
     expect(SUGGEST_REPLIES_PARAMETERS_SCHEMA.required).toEqual(["suggestions"]);
   });
 });
@@ -53,6 +54,36 @@ describe("parseSuggestRepliesPayload", () => {
         suggestions: ["  A  ", 42, "", null, "B", "   "],
       }),
     ).toEqual(["A", "B"]);
+  });
+
+  it("parses rich items while dropping malformed objects", () => {
+    expect(
+      parseSuggestRepliesPayload({
+        suggestions: [
+          {
+            id: "pricing",
+            label: " Pricing ",
+            prompt: " Tell me about pricing ",
+            description: " Compare plans ",
+            icon: "dollar-sign",
+            selection: "fill",
+            emphasis: "primary",
+          },
+          { label: "   " },
+          { nope: true },
+        ],
+      }),
+    ).toEqual([
+      {
+        id: "pricing",
+        label: "Pricing",
+        prompt: "Tell me about pricing",
+        description: "Compare plans",
+        icon: "dollar-sign",
+        selection: "fill",
+        emphasis: "primary",
+      },
+    ]);
   });
 
   it("truncates past the cap with a console warning", () => {

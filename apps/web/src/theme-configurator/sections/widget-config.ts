@@ -25,6 +25,23 @@ function renderSections(
     container.appendChild(element);
     allControls.push(...controls);
 
+    if (section.id === 'suggestions') {
+      const content = element.querySelector('.accordion-content');
+      const firstFollowUpControl = controls.find(
+        (control) => control.fieldDef.id === 'suggestions-followup-variant'
+      );
+      if (content && firstFollowUpControl) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = 'Preview follow-ups';
+        btn.className = 'config-action-btn suggestions-preview-btn';
+        btn.addEventListener('click', () => {
+          state.setPreviewScene('follow-ups');
+        });
+        content.insertBefore(btn, firstFollowUpControl.element);
+      }
+    }
+
     // Add "Show Sample Artifact" button to the artifacts section
     if (section.id === 'artifacts-config') {
       const content = element.querySelector('.accordion-content');
@@ -33,7 +50,6 @@ function renderSections(
         btn.type = 'button';
         btn.textContent = 'Show Sample Artifact';
         btn.className = 'config-action-btn';
-        btn.style.cssText = 'margin-top:8px;width:100%;padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);font-size:12px;cursor:pointer;';
         btn.addEventListener('click', () => {
           window.dispatchEvent(new CustomEvent('persona-configurator:inject-artifact'));
         });

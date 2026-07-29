@@ -6,10 +6,9 @@
  * wire surface as `ask_user_question` and WebMCP page tools. When the model
  * calls it, the execution pauses with a `step_await`
  * (`awaitReason: "local_tool_required"`); unlike `ask_user_question`, the
- * widget resolves it FIRE-AND-FORGET: it renders the suggestions as tappable
- * chips above the composer and immediately resumes the execution with a
- * canned "shown" result, so the agent's turn completes without waiting on the
- * user. Tapping a chip sends its text verbatim as the user's next message.
+ * widget resolves it FIRE-AND-FORGET: it renders the configured follow-up
+ * suggestion surface and immediately resumes the execution with a canned
+ * "shown" result, so the agent's turn completes without waiting on the user.
  *
  * Chip visibility is DERIVED state, not imperative show/hide: the chips of
  * the last `suggest_replies` tool message with no user message after it are
@@ -21,6 +20,7 @@
 import type {
   AgentWidgetConfig,
   AgentWidgetMessage,
+  AgentWidgetSuggestion,
   ClientToolDefinition,
 } from "./types";
 
@@ -43,7 +43,25 @@ export const SUGGEST_REPLIES_PARAMETERS_SCHEMA = {
       maxItems: SUGGEST_REPLIES_MAX,
       description:
         "1-4 short, distinct follow-up replies, phrased in the user's voice.",
-      items: { type: "string", minLength: 1, maxLength: 60 },
+      items: {
+        oneOf: [
+          { type: "string", minLength: 1, maxLength: 60 },
+          {
+            type: "object",
+            properties: {
+              id: { type: "string", minLength: 1, maxLength: 80 },
+              label: { type: "string", minLength: 1, maxLength: 80 },
+              prompt: { type: "string", minLength: 1, maxLength: 500 },
+              description: { type: "string", minLength: 1, maxLength: 160 },
+              icon: { type: "string", minLength: 1, maxLength: 60 },
+              selection: { type: "string", enum: ["send", "fill"] },
+              emphasis: { type: "string", enum: ["default", "primary"] },
+            },
+            required: ["label"],
+            additionalProperties: false,
+          },
+        ],
+      },
     },
   },
   required: ["suggestions"],
@@ -61,9 +79,11 @@ export const SUGGEST_REPLIES_CLIENT_TOOL: ClientToolDefinition = {
   description:
     "Offer the user tappable quick-reply suggestions for their next message. " +
     "Call at most once per turn, as the LAST action after your reply text is " +
-    "complete. Each suggestion is sent verbatim as the user's next message, " +
-    'so phrase suggestions in the user\'s voice (e.g. "Tell me more about ' +
-    'pricing"). Keep them short and distinct. The result only confirms the ' +
+    "complete. Use short strings for simple replies, or objects when the " +
+    "visible label needs supporting copy or a different prompt. Suggestions " +
+    "default to being sent as the user's next message, so phrase prompts in " +
+    'the user\'s voice (e.g. "Tell me more about pricing"). Keep them short ' +
+    "and distinct. The result only confirms the " +
     "suggestions were shown: do not add further commentary after calling " +
     "this tool; end your turn.",
   parametersSchema: SUGGEST_REPLIES_PARAMETERS_SCHEMA,
@@ -90,11 +110,13 @@ export const isSuggestRepliesMessage = (
   message.toolCall?.name === SUGGEST_REPLIES_TOOL_NAME;
 
 /**
- * Tolerant parse of a `suggest_replies` tool call's args into chip labels:
- * accepts a JSON string or object, coerces items to trimmed strings, drops
- * empties, and truncates past the renderer cap with a console warning.
+ * Tolerant parse of a `suggest_replies` tool call's args into suggestion
+ * items. String payloads stay strings for backwards compatibility; rich
+ * objects are trimmed and limited to the supported public fields.
  */
-export const parseSuggestRepliesPayload = (args: unknown): string[] => {
+export const parseSuggestRepliesPayload = (
+  args: unknown
+): AgentWidgetSuggestion[] => {
   let parsed: unknown = args;
   if (typeof parsed === "string") {
     try {
@@ -106,17 +128,47 @@ export const parseSuggestRepliesPayload = (args: unknown): string[] => {
   const raw = (parsed as { suggestions?: unknown } | null | undefined)
     ?.suggestions;
   if (!Array.isArray(raw)) return [];
-  const chips = raw
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0);
-  if (chips.length > SUGGEST_REPLIES_MAX) {
+  const suggestions = raw.flatMap<AgentWidgetSuggestion>((item) => {
+    if (typeof item === "string") {
+      const value = item.trim();
+      return value ? [value] : [];
+    }
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    if (typeof value.label !== "string" || !value.label.trim()) return [];
+    const suggestion: Exclude<AgentWidgetSuggestion, string> = {
+      label: value.label.trim(),
+    };
+    if (typeof value.id === "string" && value.id.trim()) {
+      suggestion.id = value.id.trim();
+    }
+    if (typeof value.prompt === "string" && value.prompt.trim()) {
+      suggestion.prompt = value.prompt.trim();
+    }
+    if (typeof value.description === "string" && value.description.trim()) {
+      suggestion.description = value.description.trim();
+    }
+    if (typeof value.icon === "string" && value.icon.trim()) {
+      suggestion.icon = value.icon.trim() as Exclude<
+        AgentWidgetSuggestion,
+        string
+      >["icon"];
+    }
+    if (value.selection === "send" || value.selection === "fill") {
+      suggestion.selection = value.selection;
+    }
+    if (value.emphasis === "default" || value.emphasis === "primary") {
+      suggestion.emphasis = value.emphasis;
+    }
+    return [suggestion];
+  });
+  if (suggestions.length > SUGGEST_REPLIES_MAX) {
     console.warn(
-      `[persona] suggest_replies: ${chips.length} suggestions exceeds the cap of ${SUGGEST_REPLIES_MAX}; extra suggestions dropped.`,
+      `[persona] suggest_replies: ${suggestions.length} suggestions exceeds the cap of ${SUGGEST_REPLIES_MAX}; extra suggestions dropped.`,
     );
-    return chips.slice(0, SUGGEST_REPLIES_MAX);
+    return suggestions.slice(0, SUGGEST_REPLIES_MAX);
   }
-  return chips;
+  return suggestions;
 };
 
 /**
@@ -127,7 +179,7 @@ export const parseSuggestRepliesPayload = (args: unknown): string[] => {
  */
 export const latestAgentSuggestions = (
   messages: AgentWidgetMessage[],
-): string[] | null => {
+): AgentWidgetSuggestion[] | null => {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role === "user") return null;

@@ -524,6 +524,28 @@ export interface ScrollToBottomTokens extends ComponentTokenSet {
   iconSize?: string;
 }
 
+/** Visual tokens shared by one suggestion presentation variant. */
+export interface SuggestionVariantTokens extends ComponentTokenSet {
+  gap?: string;
+  minHeight?: string;
+  fontSize?: string;
+  lineHeight?: string;
+  iconSize?: string;
+  hoverBackground?: TokenReference<'color'>;
+  hoverForeground?: TokenReference<'color'>;
+  hoverBorder?: TokenReference<'color'>;
+  pressedBackground?: TokenReference<'color'>;
+  focusRing?: TokenReference<'color'>;
+  disabledOpacity?: string;
+}
+
+/** Starter and follow-up suggestion chrome. */
+export interface SuggestionTokens {
+  chip: SuggestionVariantTokens;
+  card: SuggestionVariantTokens;
+  list: SuggestionVariantTokens;
+}
+
 /** Toggle group chrome (used by createToggleGroup). */
 export interface ToggleGroupTokens {
   /** Gap between toggle buttons. Default: 0 (connected). */
@@ -555,6 +577,8 @@ export interface ComponentTokens {
   labelButton?: LabelButtonTokens;
   /** Scroll-to-bottom indicator styling tokens. */
   scrollToBottom?: ScrollToBottomTokens;
+  /** Starter prompt and follow-up suggestion styling tokens. */
+  suggestion?: SuggestionTokens;
   /** Toggle group styling tokens. */
   toggleGroup?: ToggleGroupTokens;
   /** Artifact toolbar, tab strip, and pane chrome. */

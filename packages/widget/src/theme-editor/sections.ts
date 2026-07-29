@@ -466,6 +466,32 @@ const scrollToBottomSectionDef: SectionDef = {
   ],
 };
 
+const suggestionStyleSectionDef: SectionDef = {
+  id: 'comp-suggestions',
+  title: 'Suggestions',
+  description: 'Style starter cards, follow-up chips, and list rows.',
+  collapsed: true,
+  fields: [
+    { id: 'suggestion-chip-bg', label: 'Chip Background', type: 'token-ref', path: 'theme.components.suggestion.chip.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-chip-fg', label: 'Chip Text', type: 'token-ref', path: 'theme.components.suggestion.chip.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-chip-border', label: 'Chip Border', type: 'token-ref', path: 'theme.components.suggestion.chip.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-chip-hover', label: 'Chip Hover', type: 'token-ref', path: 'theme.components.suggestion.chip.hoverBackground', defaultValue: 'palette.colors.gray.100', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-chip-focus', label: 'Chip Focus Ring', type: 'token-ref', path: 'theme.components.suggestion.chip.focusRing', defaultValue: 'semantic.colors.interactive.focus', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-card-bg', label: 'Card Background', type: 'token-ref', path: 'theme.components.suggestion.card.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-card-fg', label: 'Card Text', type: 'token-ref', path: 'theme.components.suggestion.card.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-card-border', label: 'Card Border', type: 'token-ref', path: 'theme.components.suggestion.card.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-card-hover', label: 'Card Hover', type: 'token-ref', path: 'theme.components.suggestion.card.hoverBackground', defaultValue: 'palette.colors.gray.100', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-card-shadow', label: 'Card Shadow', type: 'select', path: 'theme.components.suggestion.card.shadow', defaultValue: 'palette.shadows.sm', options: [
+      { value: 'palette.shadows.none', label: 'None' },
+      { value: 'palette.shadows.sm', label: 'Small' },
+      { value: 'palette.shadows.md', label: 'Medium' },
+      { value: 'palette.shadows.lg', label: 'Large' },
+    ] },
+    { id: 'suggestion-list-bg', label: 'List Background', type: 'color', path: 'theme.components.suggestion.list.background', defaultValue: 'transparent' },
+    { id: 'suggestion-list-border', label: 'List Border', type: 'token-ref', path: 'theme.components.suggestion.list.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
 // Reusable shadow-scale options matching the launcher / panel / scroll-to-bottom selects.
 const SHADOW_SCALE_OPTIONS: { value: string; label: string }[] = [
   { value: 'palette.shadows.none', label: 'None' },
@@ -513,6 +539,7 @@ export const COMPONENT_COLOR_SECTIONS: SectionDef[] = [
   inputColorsSectionDef,
   buttonColorsSectionDef,
   scrollToBottomSectionDef,
+  suggestionStyleSectionDef,
 ];
 
 export const COMPONENTS_SECTIONS: SectionDef[] = [
@@ -576,9 +603,16 @@ const copySectionDef: SectionDef = {
 };
 
 const suggestionsSectionDef: SectionDef = {
-  id: 'suggestions', title: 'Suggestion Chips', description: 'Configure chip content and styling.', collapsed: true,
+  id: 'suggestions', title: 'Suggestions', description: 'Configure starter prompts and agent follow-ups.', collapsed: true,
   fields: [
-    { id: 'suggestions-list', label: 'Suggestions', description: 'Add, edit, and remove chips directly.', type: 'chip-list', path: 'suggestionChips', defaultValue: DEFAULT_SUGGESTION_CHIPS },
+    { id: 'suggestions-list', label: 'Starter Prompts', description: 'Add, edit, and remove starter prompts directly.', type: 'chip-list', path: 'suggestionChips', defaultValue: DEFAULT_SUGGESTION_CHIPS },
+    { id: 'suggestions-starter-variant', label: 'Starter Style', type: 'select', path: 'suggestions.starters.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Cards' }, { value: 'chip', label: 'Chips' }, { value: 'list', label: 'List' }] },
+    { id: 'suggestions-starter-placement', label: 'Starter Placement', type: 'select', path: 'suggestions.starters.placement', defaultValue: 'welcome', options: [{ value: 'welcome', label: 'Welcome Surface' }, { value: 'composer', label: 'Above Composer' }] },
+    { id: 'suggestions-starter-selection', label: 'Starter Click', type: 'select', path: 'suggestions.starters.selection', defaultValue: 'send', options: [{ value: 'send', label: 'Send Immediately' }, { value: 'fill', label: 'Fill Composer' }] },
+    { id: 'suggestions-followup-variant', label: 'Follow-up Style', type: 'select', path: 'suggestions.followUps.variant', defaultValue: 'chip', options: [{ value: 'chip', label: 'Chips' }, { value: 'card', label: 'Cards' }, { value: 'list', label: 'List' }] },
+    { id: 'suggestions-followup-placement', label: 'Follow-up Placement', type: 'select', path: 'suggestions.followUps.placement', defaultValue: 'auto', options: [{ value: 'auto', label: 'Automatic' }, { value: 'after-message', label: 'After Messages' }, { value: 'composer', label: 'Above Composer' }] },
+    { id: 'suggestions-followup-selection', label: 'Follow-up Click', type: 'select', path: 'suggestions.followUps.selection', defaultValue: 'send', options: [{ value: 'send', label: 'Send Immediately' }, { value: 'fill', label: 'Fill Composer' }] },
+    { id: 'suggestions-followup-overflow', label: 'Follow-up Overflow', type: 'select', path: 'suggestions.followUps.overflow', defaultValue: 'scroll', options: [{ value: 'scroll', label: 'Horizontal Scroll' }, { value: 'wrap', label: 'Wrap Rows' }] },
   ],
 };
 

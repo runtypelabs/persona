@@ -462,6 +462,51 @@ describe('theme utils', () => {
     expect(cssVars['--persona-intro-card-bg']).toBe('transparent');
   });
 
+  it('resolves semantic suggestion tokens for every variant and state', () => {
+    const theme = createTheme({
+      components: {
+        suggestion: {
+          chip: {
+            background: 'palette.colors.accent.50',
+            hoverBackground: 'palette.colors.accent.100',
+            focusRing: 'semantic.colors.interactive.focus',
+          },
+          card: {
+            borderRadius: 'palette.radius.lg',
+            shadow: 'palette.shadows.md',
+          },
+          list: {
+            minHeight: '48px',
+            disabledOpacity: '0.4',
+          },
+        },
+      },
+    });
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-components-suggestion-chip-background']).toBe(
+      '#ecfeff'
+    );
+    expect(
+      cssVars['--persona-components-suggestion-chip-hoverBackground']
+    ).toBe('#cffafe');
+    expect(cssVars['--persona-components-suggestion-chip-focusRing']).toBe(
+      '#0f0f0f'
+    );
+    expect(
+      cssVars['--persona-components-suggestion-card-borderRadius']
+    ).toBe('0.5rem');
+    expect(cssVars['--persona-components-suggestion-card-shadow']).toContain(
+      '0 4px 6px'
+    );
+    expect(cssVars['--persona-components-suggestion-list-minHeight']).toBe(
+      '48px'
+    );
+    expect(
+      cssVars['--persona-components-suggestion-list-disabledOpacity']
+    ).toBe('0.4');
+  });
+
   it('drives --persona-tool-bubble-shadow from the theme token (config.toolCall.shadow is applied inline on the bubble, not the root var)', () => {
     const el = document.createElement('div');
     applyThemeVariables(el, {

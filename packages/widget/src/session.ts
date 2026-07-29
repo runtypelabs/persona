@@ -77,10 +77,11 @@ export type AgentWidgetSessionStatus =
  * request. When NONE of these change, `updateConfig` can refresh the live
  * client in place (preserving the WebMCP bridge and any in-flight stream/resume)
  * instead of swapping in a fresh client and tearing down WebMCP state. Fields
- * outside this list (theme, copy, layout, suggestionChips, iterationDisplay,
- * postprocessMessage, feature display toggles, …) are display-only and safe to
- * apply mid-turn: which is what a self-styling widget needs when a `webmcp:*`
- * theme tool re-renders the widget while the agent's turn is still streaming.
+ * outside this list (theme, copy, layout, suggestions, suggestionChips,
+ * iterationDisplay, postprocessMessage, feature display toggles, …) are
+ * display-only and safe to apply mid-turn: which is what a self-styling widget
+ * needs when a `webmcp:*` theme tool re-renders the widget while the agent's
+ * turn is still streaming.
  *
  * Compared by identity (`!==`): primitives by value, functions/objects by
  * reference. A consumer that rebuilds these objects on every render simply

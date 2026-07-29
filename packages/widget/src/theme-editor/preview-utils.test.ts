@@ -9,6 +9,40 @@ import {
 } from "./preview-utils";
 
 describe("theme editor preview demo data", () => {
+  it("keeps the home scene in a true pre-conversation state", () => {
+    const config = buildPreviewConfig({ scene: "home" });
+
+    expect(config.initialMessages).toEqual([]);
+    expect(config.suggestionChips?.length).toBeGreaterThan(0);
+  });
+
+  it("seeds rich agent suggestions in the follow-ups scene", () => {
+    const config = buildPreviewConfig({ scene: "follow-ups" });
+    const messages = config.initialMessages ?? [];
+    const suggestionMessage = messages.find(
+      (message) =>
+        message.variant === "tool" &&
+        message.toolCall?.name === "suggest_replies",
+    );
+    const suggestions = (
+      suggestionMessage?.toolCall?.args as
+        | { suggestions?: Array<Record<string, unknown>> }
+        | undefined
+    )?.suggestions;
+
+    expect(messages.some((message) => message.role === "user")).toBe(true);
+    expect(suggestionMessage?.toolCall?.status).toBe("complete");
+    expect(suggestions).toHaveLength(4);
+    expect(suggestions?.[0]).toEqual(
+      expect.objectContaining({
+        label: "Show me an implementation",
+        description: expect.any(String),
+        icon: "code-2",
+        emphasis: "primary",
+      }),
+    );
+  });
+
   it("seeds tool call preview messages when advanced tool display modes are enabled", () => {
     const config = buildPreviewConfig({
       scene: "conversation",

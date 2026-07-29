@@ -245,8 +245,14 @@ export const THEME_TOKEN_DOCS = {
       properties:
         'enabled, provider ("browser" | "runtype"), browserFallback, voice, rate, pitch.',
     },
+    suggestions: {
+      description:
+        'Rich starter and follow-up suggestion surfaces. Strings remain valid item shorthand.',
+      properties:
+        'starters.items, starters.variant ("card" | "chip" | "list"), starters.placement ("welcome" | "composer"), starters.selection ("send" | "fill"), starters.maxItems, followUps.variant, followUps.placement ("auto" | "after-message" | "composer"), followUps.selection, followUps.overflow ("scroll" | "wrap"), followUps.maxItems.',
+    },
     suggestionChips:
-      'string[]: Suggested prompts shown to the user.',
+      'Deprecated string[] shorthand for starter prompts. Prefer suggestions.starters.items.',
     messageActions: {
       description: 'Message action buttons (copy, upvote, downvote).',
       properties:

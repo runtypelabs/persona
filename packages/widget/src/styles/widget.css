@@ -236,6 +236,381 @@
   border-radius: var(--persona-button-radius);
 }
 
+/* Suggestions ----------------------------------------------------------- */
+
+.persona-suggestions {
+  --persona-suggestion-icon-size: var(
+    --persona-components-suggestion-chip-iconSize,
+    16px
+  );
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+.persona-suggestions[hidden] {
+  display: none !important;
+}
+
+.persona-suggestions[data-persona-suggestion-surface="starter"] {
+  margin-top: 16px;
+}
+
+[data-persona-suggestions="follow-up"] {
+  /* The transcript body uses a roomy 24px section gap; pull contextual
+     follow-ups closer to the answer they belong to. */
+  margin-top: -12px;
+}
+
+.persona-suggestions[data-variant="card"] {
+  --persona-suggestion-icon-size: var(
+    --persona-components-suggestion-card-iconSize,
+    18px
+  );
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+}
+
+.persona-suggestions[data-variant="list"] {
+  --persona-suggestion-icon-size: var(
+    --persona-components-suggestion-list-iconSize,
+    17px
+  );
+  flex-direction: column;
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"] {
+  --persona-suggestion-scroll-fade-size: 32px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scroll-snap-type: inline proximity;
+  padding: 2px;
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-scroll-right]:not(
+    [data-scroll-left]
+  ) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--persona-suggestion-scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--persona-suggestion-scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-scroll-left]:not(
+    [data-scroll-right]
+  ) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-suggestion-scroll-fade-size),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-suggestion-scroll-fade-size),
+    #000 100%
+  );
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-scroll-left][data-scroll-right] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-suggestion-scroll-fade-size),
+    #000 calc(100% - var(--persona-suggestion-scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-suggestion-scroll-fade-size),
+    #000 calc(100% - var(--persona-suggestion-scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="wrap"] {
+  flex-wrap: wrap;
+}
+
+.persona-suggestion {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  text-align: left;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 100ms ease;
+}
+
+.persona-suggestion--chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  min-height: var(--persona-components-suggestion-chip-minHeight, 36px);
+  gap: var(--persona-components-suggestion-chip-gap, 0.5rem);
+  padding: var(
+    --persona-components-suggestion-chip-padding,
+    0.5rem 0.875rem
+  );
+  border: 1px solid
+    var(--persona-components-suggestion-chip-border, var(--persona-border));
+  border-radius: var(
+    --persona-components-suggestion-chip-borderRadius,
+    9999px
+  );
+  background: var(
+    --persona-components-suggestion-chip-background,
+    var(--persona-surface)
+  );
+  color: var(
+    --persona-components-suggestion-chip-foreground,
+    var(--persona-text)
+  );
+  font-size: var(--persona-components-suggestion-chip-fontSize, 0.8125rem);
+  line-height: var(--persona-components-suggestion-chip-lineHeight, 1.25);
+}
+
+.persona-suggestion--card {
+  min-height: var(--persona-components-suggestion-card-minHeight, 72px);
+  gap: var(--persona-components-suggestion-card-gap, 0.625rem);
+  padding: var(--persona-components-suggestion-card-padding, 1rem);
+  border: 1px solid
+    var(--persona-components-suggestion-card-border, var(--persona-border));
+  border-radius: var(
+    --persona-components-suggestion-card-borderRadius,
+    var(--persona-radius-xl)
+  );
+  background: var(
+    --persona-components-suggestion-card-background,
+    var(--persona-surface)
+  );
+  color: var(
+    --persona-components-suggestion-card-foreground,
+    var(--persona-text)
+  );
+  box-shadow: var(
+    --persona-components-suggestion-card-shadow,
+    var(--persona-shadow-sm)
+  );
+  font-size: var(--persona-components-suggestion-card-fontSize, 0.875rem);
+  line-height: var(--persona-components-suggestion-card-lineHeight, 1.35);
+}
+
+.persona-suggestion--list {
+  width: 100%;
+  min-height: var(--persona-components-suggestion-list-minHeight, 44px);
+  gap: var(--persona-components-suggestion-list-gap, 0.625rem);
+  padding: var(--persona-components-suggestion-list-padding, 0.75rem);
+  border: 1px solid
+    var(--persona-components-suggestion-list-border, var(--persona-border));
+  border-radius: var(
+    --persona-components-suggestion-list-borderRadius,
+    var(--persona-radius-md)
+  );
+  background: var(
+    --persona-components-suggestion-list-background,
+    transparent
+  );
+  color: var(
+    --persona-components-suggestion-list-foreground,
+    var(--persona-text)
+  );
+  font-size: var(--persona-components-suggestion-list-fontSize, 0.875rem);
+  line-height: var(--persona-components-suggestion-list-lineHeight, 1.35);
+}
+
+.persona-suggestion__icon,
+.persona-suggestion__arrow {
+  flex: 0 0 auto;
+}
+
+.persona-suggestion__copy {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.persona-suggestion__label {
+  overflow-wrap: anywhere;
+}
+
+.persona-suggestion__description {
+  color: var(--persona-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.persona-suggestion__arrow {
+  margin-left: auto;
+  opacity: 0.55;
+}
+
+.persona-suggestion[data-emphasis="primary"] {
+  border-color: var(--persona-primary);
+  background: var(--persona-primary);
+  color: var(--persona-text-inverse);
+}
+
+.persona-suggestion[data-emphasis="primary"]
+  .persona-suggestion__description {
+  color: currentColor;
+  opacity: 0.78;
+}
+
+@media (hover: hover) {
+  .persona-suggestion--chip:hover {
+    border-color: var(
+      --persona-components-suggestion-chip-hoverBorder,
+      var(--persona-border)
+    );
+    background: var(
+      --persona-components-suggestion-chip-hoverBackground,
+      var(--persona-container)
+    );
+    color: var(
+      --persona-components-suggestion-chip-hoverForeground,
+      inherit
+    );
+  }
+
+  .persona-suggestion--card:hover {
+    border-color: var(
+      --persona-components-suggestion-card-hoverBorder,
+      var(--persona-border)
+    );
+    background: var(
+      --persona-components-suggestion-card-hoverBackground,
+      var(--persona-container)
+    );
+  }
+
+  .persona-suggestion--list:hover {
+    border-color: var(
+      --persona-components-suggestion-list-hoverBorder,
+      var(--persona-border)
+    );
+    background: var(
+      --persona-components-suggestion-list-hoverBackground,
+      var(--persona-container)
+    );
+  }
+
+  .persona-suggestion[data-emphasis="primary"]:hover {
+    border-color: var(--persona-primary);
+    background: var(--persona-primary);
+    color: var(--persona-text-inverse);
+    filter: brightness(0.94);
+  }
+}
+
+.persona-suggestion:focus-visible {
+  outline: 2px solid
+    var(
+      --persona-components-suggestion-chip-focusRing,
+      var(--persona-accent)
+    );
+  outline-offset: 2px;
+}
+
+.persona-suggestion--card:focus-visible {
+  outline-color: var(
+    --persona-components-suggestion-card-focusRing,
+    var(--persona-accent)
+  );
+}
+
+.persona-suggestion--list:focus-visible {
+  outline-color: var(
+    --persona-components-suggestion-list-focusRing,
+    var(--persona-accent)
+  );
+}
+
+.persona-suggestion--chip:active {
+  background: var(
+    --persona-components-suggestion-chip-pressedBackground,
+    var(--persona-container)
+  );
+  transform: scale(0.98);
+}
+
+.persona-suggestion--card:active {
+  background: var(
+    --persona-components-suggestion-card-pressedBackground,
+    var(--persona-container)
+  );
+  transform: translateY(1px);
+}
+
+.persona-suggestion--list:active {
+  background: var(
+    --persona-components-suggestion-list-pressedBackground,
+    var(--persona-container)
+  );
+}
+
+.persona-suggestion[data-emphasis="primary"]:active {
+  background: var(--persona-primary);
+  filter: brightness(0.9);
+}
+
+.persona-suggestion:disabled {
+  cursor: not-allowed;
+  opacity: var(
+    --persona-components-suggestion-chip-disabledOpacity,
+    0.5
+  );
+}
+
+.persona-suggestion--card:disabled {
+  opacity: var(
+    --persona-components-suggestion-card-disabledOpacity,
+    0.5
+  );
+}
+
+.persona-suggestion--list:disabled {
+  opacity: var(
+    --persona-components-suggestion-list-disabledOpacity,
+    0.5
+  );
+}
+
+@media (pointer: coarse) {
+  .persona-suggestion {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-suggestion {
+    transition: none;
+  }
+}
+
 /* Composer ghost icon buttons (attachment + mention): transparent, neutral
    foreground, subtle hover. Themeable via `components.button.ghost.*`
    → `--persona-button-ghost-*`. The `[data-persona-root]` prefix outranks the

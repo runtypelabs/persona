@@ -81,7 +81,7 @@ export type EditingTheme = 'light' | 'dark';
 export type PreviewMode = 'light' | 'dark' | 'system';
 export type PreviewShellMode = 'light' | 'dark';
 export type PreviewDevice = 'desktop' | 'mobile';
-export type PreviewScene = 'home' | 'conversation' | 'minimized' | 'artifact';
+export type PreviewScene = 'home' | 'conversation' | 'follow-ups' | 'minimized' | 'artifact';
 export type EditorMode = 'basic' | 'advanced';
 
 let editingTheme: EditingTheme = 'light';
@@ -761,6 +761,7 @@ function loadEditorUiFromStorage(): EditorUiState | null {
         parsed.previewDevice === 'mobile') &&
       (parsed.previewScene === 'home' ||
         parsed.previewScene === 'conversation' ||
+        parsed.previewScene === 'follow-ups' ||
         parsed.previewScene === 'minimized' ||
         parsed.previewScene === 'artifact') &&
       (parsed.editorMode === 'basic' || parsed.editorMode === 'advanced')
