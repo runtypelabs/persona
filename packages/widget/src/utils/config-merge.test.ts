@@ -109,6 +109,23 @@ describe("mergeConfigUpdate", () => {
     });
   });
 
+  it("replaces the preferences slice wholesale so dropped overrides do not strand", () => {
+    const prev = base({
+      preferences: {
+        showToolCalls: false,
+        artifacts: { display: "inline", filePreview: { enabled: false } },
+      },
+    });
+    // The host's new slice dropped showToolCalls and filePreview: both must go.
+    const next = mergeConfigUpdate(prev, {
+      preferences: { artifacts: { display: "inline" } },
+    });
+    expect(next.preferences).toEqual({ artifacts: { display: "inline" } });
+    // Explicit-undefined still clears the whole slice.
+    const cleared = mergeConfigUpdate(next, { preferences: undefined });
+    expect(cleared.preferences).toBeUndefined();
+  });
+
   it("replaces storageAdapter wholesale (no hybrid: new adapter's absent save is not inherited)", () => {
     const oldSave = vi.fn();
     const oldLoad = vi.fn();

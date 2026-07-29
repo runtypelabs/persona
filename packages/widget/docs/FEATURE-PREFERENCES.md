@@ -30,10 +30,12 @@ controller.update({ preferences: { artifacts: { display: "collapsed" } } });
 controller.update({ preferences: undefined });
 ```
 
-Updates re-resolve from the code-owned base `features`, never from a
-previously overlaid result, so changing or clearing preferences behaves like
-swapping the whole slice. A live display change also re-materializes existing
-transcript artifact blocks, so a toggle takes effect without a remount.
+Each update replaces the previous slice wholesale — the slice you pass is the
+widget's full set of overrides, so a key dropped from it reverts to the base
+`features` (no partial patching to worry about). Updates always re-resolve
+from the code-owned base, never from a previously overlaid result. A live
+display change also re-materializes existing transcript artifact blocks, so a
+toggle takes effect without a remount.
 
 `resolveConfigPreferences(config)` exposes the same baking as a pure function
 for hosts that precompute config (SSR, config pipelines).

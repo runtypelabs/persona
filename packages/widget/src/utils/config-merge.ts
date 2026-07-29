@@ -13,6 +13,8 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 //   features.streamAnimation.plugins).
 // - implementation objects: partial merge splices two impls into a broken hybrid
 //   (agent, storageAdapter, voiceRecognition.provider.custom).
+// - preferences: the sparse slice a host passes IS its full opinion; recursive
+//   merge would keep overrides the host dropped from its slice.
 const REPLACE_LEAF_PATHS = new Set<string>([
   "headers",
   "agent",
@@ -22,7 +24,7 @@ const REPLACE_LEAF_PATHS = new Set<string>([
   "voiceRecognition.provider.custom",
   "features.artifacts.display",
   "features.streamAnimation.plugins",
-  "preferences.artifacts.display",
+  "preferences",
 ]);
 
 // Recursive patch merge. A key merges recursively iff both previous and patch

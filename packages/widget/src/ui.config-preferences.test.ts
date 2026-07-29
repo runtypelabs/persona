@@ -126,6 +126,25 @@ describe("config preferences overrides", () => {
     controller.destroy();
   });
 
+  it("an update's slice replaces the previous slice; dropped keys revert", () => {
+    const { mount, controller } = mountWith("collapsed");
+    controller.update({
+      preferences: {
+        showReasoning: false,
+        artifacts: { display: "inline" },
+      },
+    });
+    upsertSample(controller);
+    expect(inlineBlockCount(mount)).toBe(1);
+
+    // The new slice keeps showReasoning but drops the artifacts key. Patch
+    // semantics would strand display:"inline"; replace semantics revert the
+    // block to the base "collapsed" card.
+    controller.update({ preferences: { showReasoning: false } });
+    expect(inlineBlockCount(mount)).toBe(0);
+    controller.destroy();
+  });
+
   it("replacing preferences re-resolves from the base, not the prior overlay", () => {
     const { mount, controller } = mountWith(
       { default: "collapsed", byKind: { markdown: "inline" } },

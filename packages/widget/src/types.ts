@@ -5023,8 +5023,9 @@ export type AgentWidgetConfig = {
    * Per-instance display overrides, applied over `features` through the
    * preference allowlist (security/capability keys cannot pass). String
    * `display` values replace the base rule subtree; objects refine it per
-   * key. Live-updatable via `controller.update({ preferences })`; an
-   * explicit-undefined patch clears back to the base `features`.
+   * key. Each `controller.update({ preferences })` replaces the previous
+   * slice wholesale (dropped keys revert to the base `features`); an
+   * explicit-undefined patch clears it entirely.
    */
   preferences?: WidgetPreferenceSlice;
   /**
