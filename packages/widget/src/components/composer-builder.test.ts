@@ -17,6 +17,8 @@ describe("buildComposer (full column-stacked composer)", () => {
     expect(elements.composerForm.tagName).toBe("FORM");
     expect(elements.composerForm.getAttribute("data-persona-composer-form")).toBe("");
     expect(elements.composerForm.classList.contains("persona-flex-col")).toBe(true);
+    expect(elements.composerForm.classList.contains("persona-border-persona-border")).toBe(true);
+    expect(elements.composerForm.classList.contains("persona-border-gray-200")).toBe(false);
 
     expect(elements.textarea.getAttribute("data-persona-composer-input")).toBe("");
     expect(elements.sendButton.getAttribute("data-persona-composer-submit")).toBe("");

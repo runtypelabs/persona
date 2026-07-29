@@ -219,6 +219,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline"],
   },
   {
+    slug: "artifact-display-preferences",
+    href: "/artifact-display-preferences.html",
+    title: "Artifact Display Preferences",
+    blurb: "Visual QA for host-owned selectors, preference precedence, and live artifact conversion.",
+    tier: "reference",
+    tags: ["artifacts", "preferences", "dev"],
+    modes: ["inline"],
+  },
+  {
     slug: "event-stream-testing",
     href: "/event-stream-testing.html",
     title: "Event Inspector",

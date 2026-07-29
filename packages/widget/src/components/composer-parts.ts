@@ -32,7 +32,7 @@ export const createComposerTextarea = (config?: AgentWidgetConfig): ComposerText
   textarea.setAttribute("data-persona-composer-input", "");
   textarea.placeholder = config?.copy?.inputPlaceholder ?? "Type your message…";
   textarea.className =
-    "persona-w-full persona-min-h-[24px] persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-text-persona-primary focus:persona-outline-none focus:persona-border-none persona-composer-textarea";
+    "persona-w-full persona-min-h-[24px] persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-text-persona-text focus:persona-outline-none focus:persona-border-none persona-composer-textarea";
   textarea.rows = 1;
 
   textarea.style.fontFamily =

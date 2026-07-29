@@ -6,7 +6,7 @@
     "build:widget": "pnpm --filter @runtypelabs/persona build",
     "build:proxy": "pnpm --filter @runtypelabs/persona-proxy build",
     "lint": "pnpm --filter @runtypelabs/persona lint && pnpm --filter @runtypelabs/persona-proxy lint",
-    "typecheck": "pnpm --filter @runtypelabs/persona typecheck && pnpm --filter @runtypelabs/persona-proxy typecheck",
+    "typecheck": "pnpm --filter @runtypelabs/persona typecheck && pnpm --filter @runtypelabs/persona-proxy typecheck && pnpm --filter web typecheck",
     "test": "pnpm test:run",
     "test:run": "pnpm check:persona-wire && pnpm --filter @runtypelabs/persona test:run && pnpm --filter @runtypelabs/persona-proxy test:run && pnpm --filter web test:run && pnpm --filter echo-express --filter echo-hono --filter echo-script-tag --filter echo-sveltekit --filter eve-next --filter langgraph-next --filter openai-agents-next --filter runtype-hono-proxy test",
     "verify": "pnpm build && pnpm lint && pnpm typecheck && pnpm test:run",

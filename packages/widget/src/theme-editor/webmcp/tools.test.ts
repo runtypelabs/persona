@@ -123,6 +123,19 @@ describe('createThemeEditorTools', () => {
     );
   });
 
+  it('apply_preset installs both Persona default slots with automatic scheme selection', async () => {
+    const out = await call(tools.get('apply_preset')!, { presetId: 'persona-default' });
+
+    expect(out.applied.appliedPreset.id).toBe('persona-default');
+    expect(state.get('colorScheme')).toBe('auto');
+    expect(state.get('theme.components.artifact.pane.background')).toBe(
+      'semantic.colors.container'
+    );
+    expect(state.get('darkTheme.semantic.colors.surface')).toBe(
+      'palette.colors.gray.800'
+    );
+  });
+
   it('configure_widget writes config paths', async () => {
     await call(tools.get('configure_widget')!, {
       launcherPosition: 'bottom-left',

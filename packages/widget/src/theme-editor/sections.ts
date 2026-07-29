@@ -869,20 +869,71 @@ const apiIntegrationSectionDef: SectionDef = {
   ],
 };
 
+const DISPLAY_MODE_OPTIONS = [
+  { value: 'collapsed', label: 'Collapsed card' },
+  { value: 'panel', label: 'Side panel' },
+  { value: 'inline', label: 'In conversation' },
+];
+
+const INHERITABLE_DISPLAY_FIELD = {
+  type: 'select' as const,
+  defaultValue: 'panel',
+  options: DISPLAY_MODE_OPTIONS,
+  unsettable: true,
+  unsetLabel: 'Use default',
+  requiresCapability: 'artifacts' as const,
+};
+
+export const ARTIFACT_DISPLAY_PREFERENCE_SECTION: SectionDef = {
+  id: 'artifact-display-preferences',
+  title: 'Artifact display',
+  description: 'Choose where recognizable artifact groups appear.',
+  requiresCapability: 'artifacts',
+  fields: [
+    { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-files', label: 'Generated files', description: 'Default for HTML, CSV, documents, and code files.', path: 'features.artifacts.display.files' },
+    { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-components', label: 'Registered UI components', description: 'Charts, forms, cards, and custom UI rendered by the host.', path: 'features.artifacts.display.byKind.component' },
+    { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-default', label: 'Other artifacts', description: 'Plain documents and anything without a narrower rule.', path: 'features.artifacts.display.default' },
+    {
+      id: 'artifact-file-preview',
+      label: 'Render supported file previews',
+      type: 'toggle',
+      path: 'features.artifacts.filePreview.enabled',
+      defaultValue: true,
+      unsettable: true,
+      unsetLabel: 'Use default',
+      requiresCapability: 'artifacts',
+    },
+  ],
+};
+
+const streamDisplayPreferencesSectionDef: SectionDef = {
+  id: 'stream-display-preferences',
+  title: 'Tool calls and reasoning',
+  description: 'Control how agent activity appears in the conversation.',
+  fields: [
+    { id: 'pref-show-tools', label: 'Show tool calls', type: 'toggle', path: 'features.showToolCalls', defaultValue: true, unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-collapsed-mode', label: 'Tool call summary', type: 'select', path: 'features.toolCallDisplay.collapsedMode', defaultValue: 'tool-call', options: [{ value: 'tool-call', label: 'Tool call' }, { value: 'tool-name', label: 'Tool name' }, { value: 'tool-preview', label: 'Tool preview' }], unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-expandable', label: 'Tool calls expandable', type: 'toggle', path: 'features.toolCallDisplay.expandable', defaultValue: true, unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-grouped', label: 'Group sequential tool calls', type: 'toggle', path: 'features.toolCallDisplay.grouped', defaultValue: false, unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-grouped-mode', label: 'Grouped tool detail', type: 'select', path: 'features.toolCallDisplay.groupedMode', defaultValue: 'stack', options: [{ value: 'stack', label: 'Show steps' }, { value: 'summary', label: 'Summary only' }], unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-tool-loading-animation', label: 'Tool loading animation', type: 'select', path: 'features.toolCallDisplay.loadingAnimation', defaultValue: 'none', options: [{ value: 'none', label: 'None' }, { value: 'pulse', label: 'Pulse' }, { value: 'shimmer', label: 'Shimmer' }, { value: 'shimmer-color', label: 'Color shimmer' }, { value: 'rainbow', label: 'Rainbow' }], unsettable: true, requiresCapability: 'tools' },
+    { id: 'pref-show-reasoning', label: 'Show reasoning', type: 'toggle', path: 'features.showReasoning', defaultValue: true, unsettable: true, requiresCapability: 'reasoning' },
+    { id: 'pref-reasoning-expandable', label: 'Reasoning expandable', type: 'toggle', path: 'features.reasoningDisplay.expandable', defaultValue: true, unsettable: true, requiresCapability: 'reasoning' },
+    { id: 'pref-reasoning-active-preview', label: 'Reasoning preview while active', type: 'toggle', path: 'features.reasoningDisplay.activePreview', defaultValue: false, unsettable: true, requiresCapability: 'reasoning' },
+  ],
+};
+
+export const STREAM_AND_ARTIFACTS_SUB_GROUP: SubGroupDef = {
+  label: 'Stream and artifacts',
+  sections: [streamDisplayPreferencesSectionDef, ARTIFACT_DISPLAY_PREFERENCE_SECTION],
+};
+
 const debugSectionDef: SectionDef = {
   id: 'debug-inspection', title: 'Debug & Inspection', collapsed: true,
   fields: [
-    { id: 'dev-reasoning', label: 'Show Reasoning', description: 'Display AI reasoning steps', type: 'toggle', path: 'features.showReasoning', defaultValue: false },
-    { id: 'dev-tool-calls', label: 'Show Tool Calls', description: 'Display tool call details', type: 'toggle', path: 'features.showToolCalls', defaultValue: false },
-    { id: 'dev-tool-collapsed-mode', label: 'Tool Call Summary', description: 'Choose what collapsed tool rows show by default', type: 'select', path: 'features.toolCallDisplay.collapsedMode', defaultValue: 'tool-call', options: [{ value: 'tool-call', label: 'Tool Call' }, { value: 'tool-name', label: 'Tool Name' }, { value: 'tool-preview', label: 'Tool Preview' }] },
     { id: 'dev-tool-active-preview', label: 'Tool Preview While Active', description: 'Show a lightweight preview in collapsed active tool rows', type: 'toggle', path: 'features.toolCallDisplay.activePreview', defaultValue: false },
     { id: 'dev-tool-preview-lines', label: 'Tool Preview Lines', type: 'select', path: 'features.toolCallDisplay.previewMaxLines', defaultValue: 3, options: [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }, { value: '5', label: '5' }], formatValue: (v: unknown) => String(v ?? 3), parseValue: (v: unknown) => Number(v) },
     { id: 'dev-tool-active-min-height', label: 'Tool Active Min Height', description: 'CSS min-height for collapsed active tool rows (e.g. 5rem)', type: 'text', path: 'features.toolCallDisplay.activeMinHeight', defaultValue: '' },
-    { id: 'dev-tool-expandable', label: 'Tool Calls Expandable', description: 'Allow expanding tool call rows to see full details', type: 'toggle', path: 'features.toolCallDisplay.expandable', defaultValue: true },
-    { id: 'dev-tool-grouped', label: 'Group Sequential Tool Calls', description: 'Render consecutive tool rows inside a grouped container', type: 'toggle', path: 'features.toolCallDisplay.grouped', defaultValue: false },
-    { id: 'dev-tool-grouped-mode', label: 'Grouped Tool Detail', description: 'Show each tool step or one consolidated summary', type: 'select', path: 'features.toolCallDisplay.groupedMode', defaultValue: 'stack', options: [{ value: 'stack', label: 'Show Steps' }, { value: 'summary', label: 'Summary Only' }] },
-    { id: 'dev-reasoning-expandable', label: 'Reasoning Expandable', description: 'Allow expanding reasoning rows to see full details', type: 'toggle', path: 'features.reasoningDisplay.expandable', defaultValue: true },
-    { id: 'dev-reasoning-active-preview', label: 'Reasoning Preview While Active', description: 'Show a lightweight preview in collapsed active reasoning rows', type: 'toggle', path: 'features.reasoningDisplay.activePreview', defaultValue: false },
     { id: 'dev-reasoning-preview-lines', label: 'Reasoning Preview Lines', type: 'select', path: 'features.reasoningDisplay.previewMaxLines', defaultValue: 3, options: [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }, { value: '5', label: '5' }], formatValue: (v: unknown) => String(v ?? 3), parseValue: (v: unknown) => Number(v) },
     { id: 'dev-reasoning-active-min-height', label: 'Reasoning Active Min Height', description: 'CSS min-height for collapsed active reasoning rows (e.g. 5rem)', type: 'text', path: 'features.reasoningDisplay.activeMinHeight', defaultValue: '' },
     { id: 'dev-debug', label: 'Debug Mode', description: 'Show debug information', type: 'toggle', path: 'debug', defaultValue: false },
@@ -906,6 +957,7 @@ export const CONFIGURE_SUB_GROUPS: SubGroupDef[] = [
   { label: 'Layout', sections: [generalLayoutSectionDef, headerLayoutSectionDef, messagesLayoutSectionDef, messageActionsSectionDef] },
   { label: 'Widget', sections: [launcherBasicsSectionDef, launcherAdvancedSectionDef, sendButtonSectionDef, closeButtonSectionDef, clearChatSectionDef, statusIndicatorSectionDef] },
   { label: 'Features', sections: [featuresSectionDef, streamAnimationSectionDef, attachmentsSectionDef, artifactsSectionDef, artifactCustomizationSectionDef] },
+  STREAM_AND_ARTIFACTS_SUB_GROUP,
   { label: 'Developer', collapsedByDefault: true, sections: [apiIntegrationSectionDef, debugSectionDef, markdownSectionDef] },
 ];
 

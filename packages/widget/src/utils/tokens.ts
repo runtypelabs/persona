@@ -269,9 +269,9 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     },
   },
   input: {
-    // Input role: soft gray
-    background: 'palette.colors.gray.50',
-    placeholder: 'palette.colors.gray.400',
+    // Input role: semantic surface so host light/dark schemes cascade.
+    background: 'semantic.colors.surface',
+    placeholder: 'semantic.colors.textMuted',
     borderRadius: 'palette.radius.lg',
     padding: 'semantic.spacing.md',
     focus: {
@@ -319,11 +319,11 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       shadow: 'palette.shadows.sm',
     },
     assistant: {
-      // Assistant Messages role: soft gray
-      background: 'palette.colors.gray.50',
-      text: 'palette.colors.gray.900',
+      // Assistant Messages role: semantic neutral container.
+      background: 'semantic.colors.container',
+      text: 'semantic.colors.text',
       borderRadius: 'palette.radius.lg',
-      border: 'palette.colors.gray.200',
+      border: 'semantic.colors.border',
       shadow: 'palette.shadows.sm',
     },
     border: 'semantic.colors.border',

@@ -27,7 +27,7 @@ beforeAll(() => {
  *
  * The pane's own `update()` unhides its shell whenever records exist, so the
  * gate in `syncArtifactPane` must re-assert `persona-hidden` for artifacts
- * whose resolved mode is "card" or "inline". The original implementation only
+ * whose resolved mode is "collapsed" or "inline". The original implementation only
  * removed the class in the show branch and never re-added it, so inline-mode
  * artifacts still auto-opened the pane.
  */
@@ -88,8 +88,8 @@ describe("artifact pane auto-open gating by display mode", () => {
     controller.destroy();
   });
 
-  it('keeps the pane hidden for "card" mode until an explicit open', () => {
-    const { mount, controller } = mountWithDisplay("card");
+  it('keeps the pane hidden for "collapsed" mode until an explicit open', () => {
+    const { mount, controller } = mountWithDisplay("collapsed");
     upsertSample(controller);
     expect(paneEl(mount).classList.contains("persona-hidden")).toBe(true);
 
@@ -109,7 +109,7 @@ describe("artifact pane auto-open gating by display mode", () => {
     urlWithBlob.createObjectURL = () => "blob:persona-test";
     urlWithBlob.revokeObjectURL = () => {};
     try {
-      const { mount, controller } = mountWithDisplay("card");
+      const { mount, controller } = mountWithDisplay("collapsed");
       upsertSample(controller);
 
       // Recreate the reference card the way the default renderer shapes it
@@ -170,7 +170,7 @@ describe("artifact card custom actions (full widget)", () => {
         artifacts: {
           enabled: true,
           allowedTypes: ["markdown", "component"],
-          display: "card",
+          display: "collapsed",
           cardActions,
         },
       },

@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "pnpm --filter @runtypelabs/persona build && vite build",
     "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
     "test:run": "vitest run src"
   },
   "dependencies": {

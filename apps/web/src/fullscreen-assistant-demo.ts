@@ -461,17 +461,7 @@ const config = mergeWithDefaults({
   colorScheme: "dark",
   darkTheme: {
     ...DEFAULT_WIDGET_CONFIG.darkTheme,
-    ...fullscreenAssistantDarkTokens,
-    inputBackground: COLORS.chat,
-    border: COLORS.border,
-    divider: COLORS.border,
-    messageBorder: COLORS.border,
-    panelBorder: "none",
-    panelShadow: "none",
-    panelBorderRadius: "0",
-    micIconColor: COLORS.muted,
-    micBackgroundColor: "transparent",
-    micBorderColor: "transparent"
+    ...fullscreenAssistantDarkTokens
   },
   launcher: { enabled: false, fullHeight: true },
   copy: {

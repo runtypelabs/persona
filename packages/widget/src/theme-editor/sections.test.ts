@@ -99,16 +99,45 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(INTERFACE_ROLES_SECTION.fields.some((field) => field.id === "role-scroll-to-bottom")).toBe(true);
   });
 
-  it("exposes grouped and collapsed tool call preview controls", () => {
+  it("moves persistable stream controls out of developer debug without duplicates", () => {
     const debugSection = CONFIGURE_SECTIONS.find((section) => section.id === "debug-inspection");
+    const preferenceSection = CONFIGURE_SECTIONS.find(
+      (section) => section.id === "stream-display-preferences"
+    );
 
-    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.collapsedMode")).toBe(true);
+    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.collapsedMode")).toBe(false);
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.activePreview")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.previewMaxLines")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.activeMinHeight")).toBe(true);
-    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.expandable")).toBe(true);
-    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.grouped")).toBe(true);
-    expect(debugSection?.fields.some((field) => field.path === "features.toolCallDisplay.groupedMode")).toBe(true);
+    expect(preferenceSection?.fields.some((field) => field.path === "features.toolCallDisplay.collapsedMode")).toBe(true);
+    expect(preferenceSection?.fields.some((field) => field.path === "features.toolCallDisplay.expandable")).toBe(true);
+    expect(preferenceSection?.fields.some((field) => field.path === "features.toolCallDisplay.grouped")).toBe(true);
+    expect(preferenceSection?.fields.some((field) => field.path === "features.toolCallDisplay.groupedMode")).toBe(true);
+
+    const paths = CONFIGURE_SECTIONS.flatMap((section) =>
+      section.fields.map((field) => field.path)
+    );
+    expect(paths.filter((path) => path === "features.toolCallDisplay.grouped")).toHaveLength(1);
+  });
+
+  it("exposes inheritable capability-tagged artifact preference fields", () => {
+    const section = CONFIGURE_SECTIONS.find(
+      (entry) => entry.id === "artifact-display-preferences"
+    );
+    const paths = section?.fields.map((field) => field.path) ?? [];
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "features.artifacts.display.files",
+        "features.artifacts.display.byKind.component",
+        "features.artifacts.display.default",
+        "features.artifacts.filePreview.enabled",
+      ])
+    );
+    expect(paths).not.toContain("features.artifacts.display.byKind.markdown");
+    expect(paths).not.toContain("features.artifacts.display.byCategory.document");
+    expect(paths).not.toContain("features.artifacts.display.byCategory.application");
+    expect(section?.requiresCapability).toBe("artifacts");
+    expect(section?.fields.every((field) => field.unsettable)).toBe(true);
   });
 
   it("exposes product-facing artifact toolbar copy", () => {
@@ -129,9 +158,12 @@ describe("theme editor scroll-to-bottom controls", () => {
 
   it("exposes collapsed reasoning preview controls", () => {
     const debugSection = CONFIGURE_SECTIONS.find((section) => section.id === "debug-inspection");
+    const preferenceSection = CONFIGURE_SECTIONS.find(
+      (section) => section.id === "stream-display-preferences"
+    );
 
-    expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.expandable")).toBe(true);
-    expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.activePreview")).toBe(true);
+    expect(preferenceSection?.fields.some((field) => field.path === "features.reasoningDisplay.expandable")).toBe(true);
+    expect(preferenceSection?.fields.some((field) => field.path === "features.reasoningDisplay.activePreview")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.previewMaxLines")).toBe(true);
     expect(debugSection?.fields.some((field) => field.path === "features.reasoningDisplay.activeMinHeight")).toBe(true);
   });

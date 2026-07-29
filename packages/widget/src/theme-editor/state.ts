@@ -32,6 +32,30 @@ function setByPath(obj: unknown, path: string, value: unknown): unknown {
   };
 }
 
+function unsetByPath(obj: unknown, path: string): unknown {
+  const parts = path.split('.');
+  if (parts.length === 1) {
+    const result = { ...(obj as Record<string, unknown>) };
+    delete result[parts[0]];
+    return result;
+  }
+  const [first, ...rest] = parts;
+  const current = obj as Record<string, unknown>;
+  const child = unsetByPath(current?.[first] ?? {}, rest.join('.'));
+  const result = { ...current };
+  if (
+    typeof child === 'object' &&
+    child !== null &&
+    !Array.isArray(child) &&
+    Object.keys(child as Record<string, unknown>).length === 0
+  ) {
+    delete result[first];
+  } else {
+    result[first] = child;
+  }
+  return result;
+}
+
 // ─── ThemeEditorState ───────────────────────────────────────────
 
 export class ThemeEditorState {
@@ -107,6 +131,28 @@ export class ThemeEditorState {
       this.config = setByPath(this.config, path, value) as AgentWidgetConfig;
     }
 
+    this.recordHistory();
+    this.notifyListeners();
+  }
+
+  /** Delete a dot-path and prune empty parents so sparse preferences inherit. */
+  unset(path: string): void {
+    if (path.startsWith('theme.')) {
+      const themePath = path.replace('theme.', '');
+      this.theme = unsetByPath(this.theme, themePath) as PersonaTheme;
+      this.syncThemeIntoConfig();
+    } else if (path.startsWith('darkTheme.')) {
+      const themePath = path.replace('darkTheme.', '');
+      this.config = {
+        ...this.config,
+        darkTheme: unsetByPath(
+          this.config.darkTheme ?? {},
+          themePath
+        ) as AgentWidgetConfig['darkTheme'],
+      };
+    } else {
+      this.config = unsetByPath(this.config, path) as AgentWidgetConfig;
+    }
     this.recordHistory();
     this.notifyListeners();
   }

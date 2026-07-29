@@ -137,6 +137,98 @@ describe('theme utils', () => {
     expect(cssVars['--persona-button-radius']).toBe('6px');
   });
 
+  it.each([
+    {
+      role: 'surface',
+      sentinel: '#010203',
+      consumers: [
+        '--persona-components-input-background',
+        '--persona-input-background',
+      ],
+    },
+    {
+      role: 'container',
+      sentinel: '#0a0b0c',
+      consumers: [
+        '--persona-components-message-assistant-background',
+        '--persona-message-assistant-bg',
+      ],
+    },
+    {
+      role: 'textMuted',
+      sentinel: '#0d0e0f',
+      consumers: [
+        '--persona-components-input-placeholder',
+        '--persona-input-placeholder',
+      ],
+    },
+    {
+      role: 'text',
+      sentinel: '#121314',
+      consumers: [
+        '--persona-components-message-assistant-text',
+        '--persona-message-assistant-text',
+      ],
+    },
+    {
+      role: 'border',
+      sentinel: '#232425',
+      consumers: [
+        '--persona-components-message-assistant-border',
+        '--persona-message-assistant-border',
+      ],
+    },
+  ])(
+    'cascades semantic.colors.$role to its default input and assistant consumers',
+    ({ role, sentinel, consumers }) => {
+      const theme = createTheme({
+        semantic: {
+          colors: {
+            [role]: sentinel,
+          },
+        },
+      } as any);
+      const cssVars = themeToCssVariables(theme);
+
+      for (const consumer of consumers) {
+        expect(cssVars[consumer]).toBe(sentinel);
+      }
+    }
+  );
+
+  it('keeps explicit input and assistant component colors above semantic defaults', () => {
+    const theme = createTheme({
+      semantic: {
+        colors: {
+          surface: '#010203',
+          container: '#0a0b0c',
+          text: '#121314',
+          border: '#232425',
+        },
+      },
+      components: {
+        input: {
+          background: '#343536',
+          placeholder: '#3a3b3c',
+        },
+        message: {
+          assistant: {
+            background: '#454647',
+            text: '#565758',
+            border: '#676869',
+          },
+        },
+      },
+    } as any);
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-input-background']).toBe('#343536');
+    expect(cssVars['--persona-input-placeholder']).toBe('#3a3b3c');
+    expect(cssVars['--persona-message-assistant-bg']).toBe('#454647');
+    expect(cssVars['--persona-message-assistant-text']).toBe('#565758');
+    expect(cssVars['--persona-message-assistant-border']).toBe('#676869');
+  });
+
   it('maps markdown link and optional heading tokens to consumer CSS vars', () => {
     const theme = createTheme({
       components: {

@@ -24,7 +24,7 @@ export function getPackageDefaultForComponentsPath(fullPath: string): string | u
   for (const prefix of prefixes) {
     if (fullPath.startsWith(prefix)) {
       const rest = fullPath.slice(prefix.length);
-      const v = getByPath(DEFAULT_COMPONENTS as Record<string, unknown>, rest);
+      const v = getByPath(DEFAULT_COMPONENTS as unknown as Record<string, unknown>, rest);
       return typeof v === 'string' ? v : undefined;
     }
   }

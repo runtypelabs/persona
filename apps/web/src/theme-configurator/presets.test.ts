@@ -23,10 +23,25 @@ vi.mock('./state', () => ({
 }));
 
 vi.mock('@runtypelabs/persona', () => ({
+  applyFeaturePreferences: vi.fn(
+    (features: Record<string, unknown> | undefined, layers: Array<Record<string, unknown>>) => ({
+      ...features,
+      ...layers[0],
+      artifacts: {
+        ...((features?.artifacts as Record<string, unknown> | undefined) ?? {}),
+        ...((layers[0]?.artifacts as Record<string, unknown> | undefined) ?? {}),
+      },
+    })
+  ),
   createTheme: vi.fn((theme: unknown) => theme),
 }));
 
-import { applyPreset, loadCustomPresets, saveCustomPreset } from './presets';
+import {
+  applyPreset,
+  BUILT_IN_PRESETS,
+  loadCustomPresets,
+  saveCustomPreset,
+} from './presets';
 
 describe('custom presets', () => {
   beforeEach(() => {
@@ -72,6 +87,109 @@ describe('custom presets', () => {
       })
     );
     expect(stateMocks.setTheme).not.toHaveBeenCalled();
+  });
+
+  test('applies behavior slices without replacing capability-owned artifact config', () => {
+    stateMocks.getConfig.mockReturnValueOnce({
+      apiUrl: 'https://api.example.com',
+      features: {
+        artifacts: {
+          enabled: true,
+          allowedTypes: ['markdown'],
+        },
+      },
+    } as any);
+
+    applyPreset({
+      id: 'behavior',
+      label: 'Behavior',
+      description: 'Behavior-aware preset',
+      builtIn: true,
+      theme: {},
+      behavior: {
+        artifacts: {
+          display: {
+            files: {
+              byMediaType: { 'text/csv': 'panel' },
+            },
+          },
+        },
+      },
+    });
+
+    expect(stateMocks.setFullConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        features: expect.objectContaining({
+          artifacts: expect.objectContaining({
+            enabled: true,
+            allowedTypes: ['markdown'],
+            display: {
+              files: {
+                byMediaType: { 'text/csv': 'panel' },
+              },
+            },
+          }),
+        }),
+      }),
+      expect.anything()
+    );
+  });
+
+  test('maps the paired Persona default into light and dark config slots', () => {
+    const preset = BUILT_IN_PRESETS[0];
+
+    expect(preset).toMatchObject({
+      id: 'persona-default',
+      label: 'Persona Default',
+      builtIn: true,
+      config: {
+        colorScheme: 'auto',
+        darkTheme: expect.any(Object),
+      },
+    });
+    expect(preset.theme).toBeTruthy();
+  });
+
+  test('applying Persona Default replaces stale dark overrides and fixed pane backgrounds', () => {
+    const preset = BUILT_IN_PRESETS[0];
+    stateMocks.getConfig.mockReturnValueOnce({
+      apiUrl: 'https://api.example.com',
+      flowId: 'flow-1',
+      colorScheme: 'light',
+      darkTheme: {
+        semantic: { colors: { surface: '#ffffff' } },
+        components: { message: { assistant: { background: '#ffffff' } } },
+      },
+      features: {
+        artifacts: {
+          enabled: true,
+          layout: {
+            paneBackground: '#ffffff',
+            toolbarPreset: 'document',
+          },
+        },
+      },
+    } as any);
+
+    applyPreset(preset);
+
+    expect(stateMocks.setFullConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        apiUrl: 'https://api.example.com',
+        flowId: 'flow-1',
+        colorScheme: 'auto',
+        darkTheme: preset.config?.darkTheme,
+        features: expect.objectContaining({
+          artifacts: expect.objectContaining({
+            layout: expect.objectContaining({
+              paneBackground: undefined,
+              toolbarPreset: 'document',
+            }),
+          }),
+        }),
+      }),
+      preset.theme
+    );
   });
 
   test('theme-only presets clear layout paneBackground so semantic artifact fill applies', () => {

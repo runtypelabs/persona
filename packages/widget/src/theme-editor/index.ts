@@ -43,6 +43,8 @@ export {
   COMPONENT_COLOR_SECTIONS,
   CONFIGURE_SECTIONS,
   CONFIGURE_SUB_GROUPS,
+  STREAM_AND_ARTIFACTS_SUB_GROUP,
+  ARTIFACT_DISPLAY_PREFERENCE_SECTION,
   ALL_TABS,
   scopeSection,
   findSection,
@@ -90,6 +92,9 @@ export type {
   TranscriptStreamFrame,
   BuildTranscriptStreamFramesOptions,
 } from './preview-utils';
+// Type-only: the full preview implementation stays in
+// `@runtypelabs/persona/theme-editor/preview`.
+export type { CompareMode, PreviewShellMode } from './preview';
 
 // Role mappings (Interface Roles editor)
 export {

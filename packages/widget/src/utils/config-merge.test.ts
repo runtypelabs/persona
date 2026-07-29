@@ -66,6 +66,66 @@ describe("mergeConfigUpdate", () => {
     expect(next.features?.streamAnimation?.plugins?.p1).toBeUndefined();
   });
 
+  it("replaces artifact display scope maps so reset preferences do not strand stale keys", () => {
+    const previous = mergeWithDefaults({
+      features: {
+        artifacts: {
+          enabled: true,
+          display: {
+            default: "card",
+            files: {
+              byMediaType: {
+                "text/html": "inline",
+                "text/csv": "inline",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const next = mergeConfigUpdate(previous, {
+      features: {
+        artifacts: {
+          display: {
+            default: "card",
+            files: {
+              byMediaType: {
+                "text/csv": "panel",
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(next.features?.artifacts?.display).toEqual({
+      default: "card",
+      files: {
+        byMediaType: {
+          "text/csv": "panel",
+        },
+      },
+    });
+  });
+
+  it("replaces the preferences slice wholesale so dropped overrides do not strand", () => {
+    const prev = base({
+      preferences: {
+        showToolCalls: false,
+        artifacts: { display: "inline", filePreview: { enabled: false } },
+      },
+    });
+    // The host's new slice dropped showToolCalls and filePreview: both must go.
+    const next = mergeConfigUpdate(prev, {
+      preferences: { artifacts: { display: "inline" } },
+    });
+    expect(next.preferences).toEqual({ artifacts: { display: "inline" } });
+    // Explicit-undefined still clears the whole slice.
+    const cleared = mergeConfigUpdate(next, { preferences: undefined });
+    expect(cleared.preferences).toBeUndefined();
+  });
+
   it("replaces storageAdapter wholesale (no hybrid: new adapter's absent save is not inherited)", () => {
     const oldSave = vi.fn();
     const oldLoad = vi.fn();

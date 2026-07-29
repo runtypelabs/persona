@@ -4505,10 +4505,10 @@ describe('AgentWidgetClient - Artifact display modes', () => {
     });
   });
 
-  it('resolves the mode per artifact type via display.byType', async () => {
+  it('resolves the mode per artifact kind via display.byKind', async () => {
     const display: AgentWidgetArtifactsFeature['display'] = {
       default: 'card',
-      byType: { component: 'inline' },
+      byKind: { component: 'inline' },
     };
 
     const mdEvents = await dispatchAndCollect(markdownArtifactFrames(), {

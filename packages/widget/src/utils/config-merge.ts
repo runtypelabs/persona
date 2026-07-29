@@ -9,9 +9,12 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 
 // Dotted paths whose plain-object value replaces wholesale instead of recursing.
 // - user-defined key maps: recursive merge would strand stale keys from the old value
-//   (headers, targetProviders, components, features.streamAnimation.plugins).
+//   (headers, targetProviders, components, artifact display scopes,
+//   features.streamAnimation.plugins).
 // - implementation objects: partial merge splices two impls into a broken hybrid
 //   (agent, storageAdapter, voiceRecognition.provider.custom).
+// - preferences: the sparse slice a host passes IS its full opinion; recursive
+//   merge would keep overrides the host dropped from its slice.
 const REPLACE_LEAF_PATHS = new Set<string>([
   "headers",
   "agent",
@@ -19,7 +22,9 @@ const REPLACE_LEAF_PATHS = new Set<string>([
   "components",
   "targetProviders",
   "voiceRecognition.provider.custom",
+  "features.artifacts.display",
   "features.streamAnimation.plugins",
+  "preferences",
 ]);
 
 // Recursive patch merge. A key merges recursively iff both previous and patch

@@ -3184,7 +3184,10 @@ export class AgentWidgetClient {
               artifactIdsWithCards.add(artId);
               const displayMode = resolveArtifactDisplayMode(
                 this.config.features?.artifacts,
-                at
+                {
+                  artifactType: at,
+                  ...(artFile ? { file: artFile } : {}),
+                }
               );
               const artComponent =
                 typeof payload.component === "string" ? payload.component : undefined;

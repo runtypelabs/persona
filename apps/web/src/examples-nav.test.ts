@@ -70,4 +70,15 @@ describe("examples command palette", () => {
     );
     expect(hrefs).not.toContain("/custom-components.html");
   });
+
+  test("lists artifact display preference QA under reference and debugging", () => {
+    expect(ADVANCED_EXAMPLES).toContainEqual(
+      expect.objectContaining({
+        slug: "artifact-display-preferences",
+        href: "/artifact-display-preferences.html",
+        tier: "reference",
+        tags: expect.arrayContaining(["artifacts", "preferences", "dev"]),
+      }),
+    );
+  });
 });

@@ -685,6 +685,15 @@ export type AgentToolsConfig = {
 /** Artifact kinds for the Persona sidebar and dispatch payload */
 export type PersonaArtifactKind = "markdown" | "component";
 
+export type PersonaArtifactPresentation = {
+  /**
+   * Producer hint for where this artifact renders (content-disposition
+   * model). Beats configured defaults; loses to explicit `files`/`byKind`
+   * rules. Persona never infers it; the producer or host supplies it.
+   */
+  preferredMode?: PersonaArtifactDisplayModeInput;
+};
+
 /**
  * Agent configuration for agent execution mode.
  * When provided in the widget config, enables agent loop execution instead of flow dispatch.
@@ -1375,10 +1384,60 @@ export type AgentWidgetArtifactsLayoutConfig = {
   }) => void | Promise<void>;
 };
 
+/**
+ * Where the artifact body renders by default. Every mode shows the compact
+ * reference in the transcript; the mode names where the body goes:
+ * nowhere yet (`collapsed`), the side panel (`panel`), or the conversation
+ * itself (`inline`).
+ */
 export type PersonaArtifactDisplayMode =
-  | "card"    // reference card in transcript; pane opens on click
-  | "panel"   // reference card in transcript; pane also auto-opens on artifact_start (current default behavior)
-  | "inline"; // artifact preview renders directly in the transcript; no pane involvement
+  | "collapsed" // body renders nowhere until the user selects the reference; pane opens on click
+  | "panel" // body renders in the side panel, which auto-opens on artifact_start (default behavior)
+  | "inline"; // body renders directly in the transcript; no pane involvement
+
+/**
+ * Accepted wherever a display mode is written. `"card"` is a deprecated
+ * alias of `"collapsed"` (the old name described the reference card, which
+ * every mode shows, instead of where the body renders). Resolution and
+ * parsing always canonicalize to `"collapsed"`.
+ */
+export type PersonaArtifactDisplayModeInput =
+  | PersonaArtifactDisplayMode
+  | "card";
+
+/**
+ * Display rules for file-backed artifacts. `byMediaType` keys are exact MIME
+ * types (`"text/html"`) or major-type wildcards (`"image/*"`), matched
+ * case-insensitively without parameters; exact beats wildcard.
+ */
+export type PersonaArtifactFilesDisplayRules = {
+  default?: PersonaArtifactDisplayModeInput;
+  byMediaType?: Record<string, PersonaArtifactDisplayModeInput>;
+};
+
+/**
+ * Scoped artifact display rules. Matching resolves from the most specific
+ * selector to `default`; see `resolveArtifactDisplay`.
+ *
+ * Across preference layers, one merge rule applies everywhere: a string value
+ * replaces the whole subtree it names; an object refines it per key. So
+ * `files: "inline"` overrides every lower-layer file rule, while
+ * `files: { default: "inline" }` keeps lower-layer MIME exceptions.
+ */
+export type PersonaArtifactDisplayRules = {
+  default?: PersonaArtifactDisplayModeInput;
+  byKind?: Partial<
+    Record<PersonaArtifactKind, PersonaArtifactDisplayModeInput>
+  >;
+  /**
+   * @deprecated Use `byKind`. When both are present, `byKind` wins.
+   */
+  byType?: Partial<
+    Record<PersonaArtifactKind, PersonaArtifactDisplayModeInput>
+  >;
+  /** Rules for any artifact carrying file metadata. */
+  files?: PersonaArtifactDisplayModeInput | PersonaArtifactFilesDisplayRules;
+};
 
 /** Context handed to custom artifact actions. Content fields are best-effort: resolved from live session state or, after a refresh, from the persisted reference-card payload. */
 export type PersonaArtifactActionContext = {
@@ -1439,15 +1498,12 @@ export type AgentWidgetArtifactsFeature = {
   allowedTypes?: PersonaArtifactKind[];
   /**
    * Where artifact bodies render. A single mode applies to all artifacts;
-   * the object form sets a default plus per-type overrides.
+   * the object form sets a default plus scoped overrides.
    * Defaults to "panel" (current behavior).
    */
   display?:
-    | PersonaArtifactDisplayMode
-    | {
-        default?: PersonaArtifactDisplayMode;
-        byType?: Partial<Record<PersonaArtifactKind, PersonaArtifactDisplayMode>>;
-      };
+    | PersonaArtifactDisplayModeInput
+    | PersonaArtifactDisplayRules;
   /** Split / drawer dimensions and launcher widen behavior */
   layout?: AgentWidgetArtifactsLayoutConfig;
   /**
@@ -2207,6 +2263,67 @@ export type AgentWidgetFeatureFlags = {
    * the execution: fire-and-forget, no user input awaited.
    */
   suggestReplies?: AgentWidgetSuggestRepliesFeature;
+};
+
+export type WidgetPreferenceCapabilities = {
+  artifacts?: boolean;
+  tools?: boolean;
+  reasoning?: boolean;
+};
+
+/**
+ * Persistable artifact-layout choices. The full layout config deliberately is
+ * not exposed because it also contains callbacks and embedder-owned chrome.
+ */
+export type WidgetArtifactLayoutPreference = Pick<
+  AgentWidgetArtifactsLayoutConfig,
+  | "paneWidth"
+  | "paneMaxWidth"
+  | "paneMinWidth"
+  | "expandLauncherPanelWhenOpen"
+  | "expandedPanelWidth"
+  | "resizable"
+  | "resizableMinWidth"
+  | "resizableMaxWidth"
+>;
+
+/**
+ * Curated, JSON-serializable display preferences in native `features` shape.
+ *
+ * Absence means inherit the next preference layer and ultimately Persona's
+ * current default. Persist only explicit choices; resetting a choice deletes
+ * its key.
+ *
+ * Capability facts (`artifacts.enabled`, `allowedTypes`), trusted iframe
+ * security, callbacks, actions, renderers, labels, and theme styling are
+ * intentionally excluded because they remain embedder/code-owned.
+ */
+export type WidgetPreferenceSlice = {
+  showToolCalls?: boolean;
+  showReasoning?: boolean;
+  toolCallDisplay?: Pick<
+    AgentWidgetToolCallDisplayFeature,
+    | "collapsedMode"
+    | "expandable"
+    | "grouped"
+    | "groupedMode"
+    | "loadingAnimation"
+  >;
+  reasoningDisplay?: Pick<
+    AgentWidgetReasoningDisplayFeature,
+    "expandable" | "activePreview"
+  >;
+  artifacts?: {
+    /**
+     * String and object forms are both persistable and mean different things
+     * when layers merge: a string replaces every lower-layer display rule; an
+     * object refines lower layers per selector key (same rule applies to
+     * `display.files`).
+     */
+    display?: PersonaArtifactDisplayModeInput | PersonaArtifactDisplayRules;
+    filePreview?: { enabled?: boolean };
+    layout?: WidgetArtifactLayoutPreference;
+  };
 };
 
 /**
@@ -4903,6 +5020,15 @@ export type AgentWidgetConfig = {
   colorScheme?: 'auto' | 'light' | 'dark';
   features?: AgentWidgetFeatureFlags;
   /**
+   * Per-instance display overrides, applied over `features` through the
+   * preference allowlist (security/capability keys cannot pass). String
+   * `display` values replace the base rule subtree; objects refine it per
+   * key. Each `controller.update({ preferences })` replaces the previous
+   * slice wholesale (dropped keys revert to the base `features`); an
+   * explicit-undefined patch clears it entirely.
+   */
+  preferences?: WidgetPreferenceSlice;
+  /**
    * When true, focus the chat input after the panel opens and the open animation completes.
    * Applies to launcher mode (user click, controller.open(), autoExpand) and inline mode (on init).
    * Skip when voice is active to avoid stealing focus from voice UI.
@@ -5864,6 +5990,8 @@ export type PersonaArtifactRecord = {
   props?: Record<string, unknown>;
   /** Present when this markdown artifact is a previewable file (see PersonaArtifactFileMeta). */
   file?: PersonaArtifactFileMeta;
+  /** Optional presentation metadata such as the producer's display-mode hint. */
+  presentation?: PersonaArtifactPresentation;
 };
 
 /** Programmatic artifact upsert (controller / window API) */
@@ -5875,6 +6003,7 @@ export type PersonaArtifactManualUpsert =
       content: string;
       /** Optional file metadata for previewable file artifacts. */
       file?: PersonaArtifactFileMeta;
+      presentation?: PersonaArtifactPresentation;
       /** Set false to update the registry/pane without a transcript block (pre-4.x behavior). */
       transcript?: boolean;
     }
@@ -5884,6 +6013,7 @@ export type PersonaArtifactManualUpsert =
       title?: string;
       component: string;
       props?: Record<string, unknown>;
+      presentation?: PersonaArtifactPresentation;
       /** Set false to update the registry/pane without a transcript block (pre-4.x behavior). */
       transcript?: boolean;
     };

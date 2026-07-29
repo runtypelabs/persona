@@ -1,5 +1,9 @@
 import type { ComponentContext, ComponentRenderer } from "./registry";
-import type { PersonaArtifactFileMeta, PersonaArtifactRecord } from "../types";
+import type {
+  PersonaArtifactFileMeta,
+  PersonaArtifactPresentation,
+  PersonaArtifactRecord
+} from "../types";
 import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
 import {
   applyArtifactStatus,
@@ -33,6 +37,12 @@ function renderDefaultArtifactCard(
   const status = props.status === "streaming" ? "streaming" : "complete";
   const artifactType =
     typeof props.artifactType === "string" ? props.artifactType : "markdown";
+  const presentation =
+    props.presentation &&
+    typeof props.presentation === "object" &&
+    !Array.isArray(props.presentation)
+      ? (props.presentation as PersonaArtifactPresentation)
+      : undefined;
   const subtitle = file
     ? fileTypeLabel(file)
     : artifactType === "component"
@@ -83,7 +93,8 @@ function renderDefaultArtifactCard(
       title: rawTitle,
       status: "streaming",
       ...(typeof props.markdown === "string" ? { markdown: props.markdown } : {}),
-      ...(file ? { file } : {})
+      ...(file ? { file } : {}),
+      ...(presentation ? { presentation } : {})
     };
     const resolved = resolveArtifactStatusLabel(record, artifactsCfg, "card");
     applyArtifactStatus(subtitleEl, resolved, artifactsCfg);

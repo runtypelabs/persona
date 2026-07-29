@@ -59,10 +59,6 @@ const widgetConfig: AgentWidgetConfig = {
   persistState: false,
   theme: {
     ...DEFAULT_WIDGET_CONFIG.theme,
-    primary: "#111827",
-    accent: "#6366f1",
-    surface: "#ffffff",
-    muted: "#64748b",
   },
   // Default header (with the native clear-chat control), matching the other
   // demos: not the minimal/headerless variant.

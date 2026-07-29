@@ -91,7 +91,7 @@ import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
 import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } from "./components/message-bubble";
-import { createStandardBubble, createTypingIndicator } from "./components/message-bubble";
+import { createStandardBubble, createTypingIndicator, getBubbleClasses } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
 import {
@@ -133,6 +133,7 @@ import {
   shouldExpandLauncherForArtifacts
 } from "./utils/artifact-gate";
 import { resolveArtifactDisplayMode } from "./utils/artifact-display";
+import { resolveConfigPreferences } from "./utils/feature-preferences";
 import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resize";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
@@ -596,6 +597,11 @@ export const createAgentExperience = (
   }
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
+  // `config.features` holds the preference-resolved view every read site uses;
+  // `baseFeatures` keeps the pre-preference base so update() re-resolves from
+  // it instead of stacking new preferences onto already-overlaid values.
+  let baseFeatures = config.features;
+  config = resolveConfigPreferences(config);
   // Note: applyThemeVariables is called after applyFullHeightStyles() below
   // because applyFullHeightStyles resets mount.style.cssText
 
@@ -1800,7 +1806,7 @@ export const createAgentExperience = (
   let artifactPaneExpandedPinned = false;
   // Whether the user explicitly opened the pane (card click, inline Expand,
   // showArtifacts(), programmatic upsert). Auto-open is otherwise reserved for
-  // artifacts whose resolved display mode is "panel": "card" keeps the card as
+  // artifacts whose resolved display mode is "panel": "collapsed" keeps the card as
   // the only affordance and "inline" renders in the transcript. "inline" no
   // longer *auto*-opens the pane, but its Expand control is a deliberate,
   // user-driven open (setting artifactsPaneUserOpened, same as a card click);
@@ -1811,7 +1817,7 @@ export const createAgentExperience = (
     artifactsPaneUserOpened ||
     lastArtifactsState.artifacts.some(
       (a) =>
-        resolveArtifactDisplayMode(config.features?.artifacts, a.artifactType) === "panel"
+        resolveArtifactDisplayMode(config.features?.artifacts, a) === "panel"
     );
   const artifactPaneVisible = () =>
     lastArtifactsState.artifacts.length > 0 &&
@@ -2010,7 +2016,7 @@ export const createAgentExperience = (
     event.preventDefault();
     event.stopPropagation();
     artifactsPaneUserHidden = false;
-    // Card click is an explicit open: it overrides the "card"/"inline"
+    // Card click is an explicit open: it overrides the "collapsed"/"inline"
     // auto-open suppression for as long as artifacts exist.
     artifactsPaneUserOpened = true;
     session.selectArtifact(artifactId);
@@ -2518,7 +2524,7 @@ export const createAgentExperience = (
     } else if (lastArtifactsState.artifacts.length > 0 && artifactPaneCanShow()) {
       // User chose “show” again (e.g. programmatic showArtifacts): clear dismiss chrome
       // and force drawer open so narrow-host / mobile slide-out is not stuck off-screen.
-      // Artifacts whose display mode is "card" or "inline" don't auto-open the
+      // Artifacts whose display mode is "collapsed" or "inline" don't auto-open the
       // pane (artifactPaneCanShow); it stays hidden until an explicit open or
       // until a "panel"-mode artifact arrives.
       artifactPaneApi.element.classList.remove("persona-hidden");
@@ -5045,28 +5051,30 @@ export const createAgentExperience = (
 
       // Only render if we have an indicator (allows hiding via returning null)
       if (typingIndicator) {
-        // Create a bubble wrapper for the typing indicator (similar to assistant messages)
+        // Bubble wrapper for the typing indicator. It borrows the assistant
+        // bubble's classes and background so the "thinking" bubble matches the
+        // message bubbles that replace it under every layout preset.
         const typingBubble = document.createElement("div");
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
+        const messageLayout = config.layout?.messages?.layout ?? "bubble";
         typingBubble.className = showBubble
-          ? [
-              "persona-rounded-2xl",
-              "persona-text-sm",
-              "persona-leading-relaxed",
-              "persona-shadow-sm",
-              "persona-bg-persona-surface",
-              "persona-border",
-              "persona-text-persona-primary",
-              "persona-px-5",
-              "persona-py-3"
-            ].join(" ")
+          ? getBubbleClasses("assistant", messageLayout).join(" ")
           : [
               "persona-text-sm",
               "persona-leading-relaxed",
-              "persona-text-persona-primary"
+              "persona-text-persona-text"
             ].join(" ");
         typingBubble.setAttribute("data-typing-indicator", "true");
-        typingBubble.style.borderColor = "var(--persona-message-assistant-border, var(--persona-border, #e5e7eb))";
+        if (showBubble) {
+          typingBubble.style.color =
+            "var(--persona-message-assistant-text, var(--persona-text))";
+          if (messageLayout !== "flat") {
+            typingBubble.style.backgroundColor =
+              "var(--persona-message-assistant-bg, var(--persona-container))";
+            typingBubble.style.borderColor =
+              "var(--persona-message-assistant-border, var(--persona-border, #e5e7eb))";
+          }
+        }
 
         typingBubble.appendChild(typingIndicator);
 
@@ -7846,8 +7854,11 @@ export const createAgentExperience = (
       const previousStreamAnimationType = config.features?.streamAnimation?.type;
       // One consistent recursive patch policy across the live controller and the
       // init handle. See utils/config-merge.ts for the replace-leaf list and
-      // explicit-undefined reset semantics.
-      config = mergeConfigUpdate(config, nextConfig);
+      // explicit-undefined reset semantics. The patch merges over the
+      // pre-preference base features, then preferences re-resolve on top.
+      config = mergeConfigUpdate({ ...config, features: baseFeatures }, nextConfig);
+      baseFeatures = config.features;
+      config = resolveConfigPreferences(config);
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
       applyThemeVariables(mount, config);
@@ -9282,13 +9293,20 @@ export const createAgentExperience = (
       if (!artifactsSidebarEnabled(config)) return null;
       // Programmatic upserts match the streamed UX: only "panel"-mode
       // artifacts auto-open the pane (overriding a previous Close), while
-      // "card"/"inline" stay calm — the injected transcript block is the
+      // "collapsed"/"inline" stay calm — the injected transcript block is the
       // affordance. Independent of `transcript: false`: pane-only callers
-      // (e.g. the theme editor preview) rely on the panel-default surfacing;
-      // callers that want the pane in a non-panel mode call showArtifacts().
+      // (e.g. the theme editor preview) rely on the auto-open default
+      // surfacing; callers that want the pane in another mode call
+      // showArtifacts().
       const mode = resolveArtifactDisplayMode(
         config.features?.artifacts,
-        manual.artifactType
+        {
+          artifactType: manual.artifactType,
+          ...(manual.artifactType === "markdown" && manual.file
+            ? { file: manual.file }
+            : {}),
+          ...(manual.presentation ? { presentation: manual.presentation } : {}),
+        }
       );
       if (mode === "panel") {
         artifactsPaneUserHidden = false;

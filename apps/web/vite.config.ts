@@ -620,6 +620,7 @@ export default defineConfig({
         'action-middleware': path.resolve(__dirname, 'action-middleware.html'),
         'dynamic-components': path.resolve(__dirname, 'dynamic-components.html'),
         'dynamic-form-fields': path.resolve(__dirname, 'dynamic-form-fields.html'),
+        'artifact-display-preferences': path.resolve(__dirname, 'artifact-display-preferences.html'),
         theme: path.resolve(__dirname, 'theme.html'),
         products: path.resolve(__dirname, 'products.html'),
         'feedback-integration-demo': path.resolve(__dirname, 'feedback-integration-demo.html'),

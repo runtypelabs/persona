@@ -1,8 +1,14 @@
 /** V2 theme presets and custom preset CRUD */
 
-import type { PersonaTheme } from '@runtypelabs/persona';
-import { createTheme } from '@runtypelabs/persona';
-import type { AgentWidgetConfig } from '@runtypelabs/persona';
+import type {
+  AgentWidgetConfig,
+  PersonaTheme,
+  WidgetPreferenceSlice,
+} from '@runtypelabs/persona';
+import {
+  applyFeaturePreferences,
+  createTheme,
+} from '@runtypelabs/persona';
 import { BUILT_IN_PRESETS as HEADLESS_PRESETS } from '@runtypelabs/persona/theme-editor';
 import * as state from './state';
 
@@ -14,9 +20,12 @@ export interface ThemePreset {
   description: string;
   theme: Partial<PersonaTheme>;
   config?: Partial<AgentWidgetConfig>;
+  behavior?: WidgetPreferenceSlice;
   /** Whether this is a built-in preset (cannot be deleted) */
   builtIn: boolean;
 }
+
+const PERSONA_DEFAULT_PRESET_ID = 'persona-default';
 
 /** Map headless presets to the local ThemePreset shape */
 export const BUILT_IN_PRESETS: ThemePreset[] = [
@@ -26,6 +35,13 @@ export const BUILT_IN_PRESETS: ThemePreset[] = [
     label: p.name,
     description: p.description,
     theme: p.theme as Partial<PersonaTheme>,
+    config: p.darkTheme
+      ? {
+          colorScheme: 'auto' as const,
+          darkTheme: p.darkTheme as AgentWidgetConfig['darkTheme'],
+        }
+      : undefined,
+    behavior: p.behavior,
     builtIn: true as const,
   })),
 ] as ThemePreset[];
@@ -147,16 +163,31 @@ function cleanedConfigForThemeOnlyPreset(config: AgentWidgetConfig): AgentWidget
 export function applyPreset(preset: ThemePreset): void {
   const theme = createTheme(preset.theme, { validate: false });
   if (preset.config) {
-    state.setFullConfig(
-      {
-        ...state.getConfig(),
-        ...preset.config,
-      } as AgentWidgetConfig,
-      theme
-    );
+    const currentConfig =
+      preset.id === PERSONA_DEFAULT_PRESET_ID
+        ? withoutLayoutArtifactPaneBackground(state.getConfig())
+        : state.getConfig();
+    const nextConfig = {
+      ...currentConfig,
+      ...preset.config,
+    } as AgentWidgetConfig;
+    if (preset.behavior) {
+      nextConfig.features = applyFeaturePreferences(
+        nextConfig.features,
+        [preset.behavior]
+      );
+    }
+    state.setFullConfig(nextConfig, theme);
     return;
   }
-  state.setFullConfig(cleanedConfigForThemeOnlyPreset(state.getConfig()), theme);
+  const nextConfig = cleanedConfigForThemeOnlyPreset(state.getConfig());
+  if (preset.behavior) {
+    nextConfig.features = applyFeaturePreferences(
+      nextConfig.features,
+      [preset.behavior]
+    );
+  }
+  state.setFullConfig(nextConfig, theme);
 }
 
 export function getAllPresets(): ThemePreset[] {

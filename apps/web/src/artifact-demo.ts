@@ -59,7 +59,7 @@ const artifactDemoConfigBase: Partial<AgentWidgetConfig> = {
     ...DEFAULT_WIDGET_CONFIG.copy,
     welcomeTitle: "Artifacts demo",
     welcomeSubtitle:
-      "Use the artifact buttons to replay a scripted agent turn. Each button streams the real artifact wire frames, rendered per the selected display mode (panel, card, or inline).",
+      "Use the artifact buttons to replay a scripted agent turn. Each button streams the real artifact wire frames, rendered per the selected display mode (panel, collapsed, or inline).",
     inputPlaceholder: "Message the model…",
   },
   suggestionChips: [],
@@ -97,7 +97,7 @@ const getEl = <T extends HTMLElement>(id: string): T | null =>
 // Same DOM-is-the-source-of-truth pattern as the animation controls: the
 // active pill in #artifact-display-mode is read on every config build, so the
 // selection survives mount-mode re-mounts and applies via handle.update().
-type ArtifactDisplayMode = "panel" | "card" | "inline";
+type ArtifactDisplayMode = "panel" | "collapsed" | "inline";
 
 const DISPLAY_DEFAULT: ArtifactDisplayMode = "panel";
 

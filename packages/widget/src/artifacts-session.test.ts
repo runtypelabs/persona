@@ -255,4 +255,110 @@ describe("AgentWidgetSession artifacts", () => {
     });
     expect(session.getArtifactById(session.getArtifacts()[0].id)?.file).toEqual(file);
   });
+
+  it("uses exact media-type file rules and the producer preferredMode hint", () => {
+    const session = new AgentWidgetSession(
+      {
+        features: {
+          artifacts: {
+            enabled: true,
+            display: {
+              default: "card",
+              files: { byMediaType: { "text/html": "inline" } },
+            },
+          },
+        },
+      },
+      {
+        onMessagesChanged: () => {},
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {},
+      }
+    );
+    const rec = session.upsertArtifact({
+      id: "html-app",
+      artifactType: "markdown",
+      content: "<h1>App</h1>",
+      file: { path: "app.html", mimeType: "TEXT/HTML; charset=utf-8" },
+    });
+    const block = session.getMessages().find((message) => message.id === `artifact-ref-${rec.id}`);
+    expect(JSON.parse(block!.rawContent!).component).toBe("PersonaArtifactInline");
+
+    const hinted = session.upsertArtifact({
+      id: "hinted-doc",
+      artifactType: "markdown",
+      content: "# Live preview",
+      presentation: { preferredMode: "inline" },
+    });
+    const hintedBlock = session
+      .getMessages()
+      .find((message) => message.id === `artifact-ref-${hinted.id}`);
+    expect(JSON.parse(hintedBlock!.rawContent!).component).toBe(
+      "PersonaArtifactInline"
+    );
+  });
+
+  it("re-materializes existing artifact blocks after a live display update", () => {
+    const onMessagesChanged = vi.fn();
+    const session = new AgentWidgetSession(
+      { features: { artifacts: { enabled: true, display: "card" } } },
+      {
+        onMessagesChanged,
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onArtifactsState: () => {},
+      }
+    );
+    session.upsertArtifact({
+      id: "live",
+      artifactType: "component",
+      component: "Chart",
+      props: { values: [1, 2] },
+    });
+    session.upsertArtifact({
+      id: "live-markdown",
+      artifactType: "markdown",
+      content: "# Report",
+    });
+    const unmatchedRawContent = JSON.stringify({
+      component: "PersonaArtifactCard",
+      props: {
+        artifactId: "hydrated-without-record",
+        artifactType: "markdown",
+        status: "complete",
+      },
+    });
+    session.injectAssistantMessage({
+      id: "artifact-ref-hydrated-without-record",
+      content: "",
+      rawContent: unmatchedRawContent,
+    });
+    onMessagesChanged.mockClear();
+
+    session.updateConfig({
+      features: { artifacts: { enabled: true, display: "inline" } },
+    });
+
+    expect(onMessagesChanged).toHaveBeenCalledTimes(1);
+    const block = session.getMessages().find((message) => message.id === "artifact-ref-live");
+    const parsed = JSON.parse(block!.rawContent!);
+    expect(parsed.component).toBe("PersonaArtifactInline");
+    expect(parsed.props.component).toBe("Chart");
+    expect(parsed.props.componentProps).toEqual({ values: [1, 2] });
+    const markdownBlock = session
+      .getMessages()
+      .find((message) => message.id === "artifact-ref-live-markdown");
+    const parsedMarkdown = JSON.parse(markdownBlock!.rawContent!);
+    expect(parsedMarkdown.component).toBe("PersonaArtifactInline");
+    expect(parsedMarkdown.props.markdown).toBe("# Report");
+    expect(
+      session
+        .getMessages()
+        .find(
+          (message) =>
+            message.id === "artifact-ref-hydrated-without-record"
+        )?.rawContent
+    ).toBe(unmatchedRawContent);
+  });
 });

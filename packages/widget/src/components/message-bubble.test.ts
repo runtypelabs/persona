@@ -276,7 +276,7 @@ describe("createStandardBubble", () => {
     expect(userBubble.classList.contains("persona-bg-persona-accent")).toBe(true);
     expect(userBubble.classList.contains("persona-rounded-lg")).toBe(true);
     expect(userBubble.classList.contains("persona-px-3")).toBe(true);
-    expect(assistantBubble.classList.contains("persona-bg-persona-surface")).toBe(
+    expect(assistantBubble.classList.contains("persona-bg-persona-container")).toBe(
       true
     );
     expect(assistantBubble.classList.contains("persona-rounded-lg")).toBe(true);
@@ -302,6 +302,12 @@ describe("createStandardBubble", () => {
 
     expect(userMessage.style.backgroundColor).toBe("transparent");
     expect(assistantMessage.style.backgroundColor).toBe("transparent");
+    expect(assistantMessage.style.color).toBe(
+      "var(--persona-message-assistant-text, var(--persona-text))"
+    );
+    expect(assistantMessage.classList.contains("persona-text-persona-text")).toBe(
+      true
+    );
     expect(userMessage.classList.contains("persona-px-3")).toBe(false);
     expect(assistantMessage.classList.contains("persona-px-3")).toBe(false);
   });
