@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import { SUGGEST_REPLIES_TOOL_NAME } from "./suggest-replies-tool";
+import type { AgentWidgetPlugin } from "./plugins/types";
 import type { AgentWidgetSuggestion } from "./types";
 
 const createMount = () => {
@@ -498,6 +499,195 @@ describe("suggest_replies chips UI", () => {
       selection: "fill",
       suggestion: { id: "draft", prompt: "Draft a reply" },
     });
+
+    controller.destroy();
+  });
+
+  it("lets plugins transform starter and follow-up suggestion sets", () => {
+    const transformSuggestions = vi.fn<
+      NonNullable<AgentWidgetPlugin["transformSuggestions"]>
+    >(({ suggestions, surface }) =>
+        suggestions.map((suggestion, index) => {
+          const label =
+            typeof suggestion === "string" ? suggestion : suggestion.label;
+          return {
+            id: `${surface}-${index}`,
+            label: `${label} · curated`,
+            prompt:
+              typeof suggestion === "string"
+                ? suggestion
+                : suggestion.prompt,
+            description: `Transformed on the ${surface} surface`,
+            emphasis: index === 0 ? "primary" : "default",
+          };
+        }));
+    const { mount, controller } = makeController({
+      plugins: [{ id: "curate", transformSuggestions }],
+      suggestions: {
+        starters: {
+          items: ["Compare plans", "Browse docs"],
+          maxItems: 1,
+        },
+      },
+    });
+
+    expect(mount.textContent).toContain("Compare plans · curated");
+    expect(mount.textContent).toContain(
+      "Transformed on the starter surface",
+    );
+    expect(mount.textContent).not.toContain("Browse docs · curated");
+    expect(transformSuggestions).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surface: "starter",
+        source: "config",
+        suggestions: ["Compare plans", "Browse docs"],
+      }),
+    );
+
+    injectUserMessage(controller);
+    injectSuggestReplies(controller, { suggestions: ["See examples"] });
+    expect(mount.textContent).toContain("See examples · curated");
+    expect(transformSuggestions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        surface: "follow-up",
+        source: "agent",
+        suggestions: ["See examples"],
+      }),
+    );
+
+    controller.destroy();
+  });
+
+  it("composes suggestion transforms in plugin priority order", () => {
+    const append = (
+      suffix: string,
+    ): NonNullable<AgentWidgetPlugin["transformSuggestions"]> =>
+      ({ suggestions }) =>
+        suggestions.map((suggestion) => {
+          const label =
+            typeof suggestion === "string" ? suggestion : suggestion.label;
+          return { label: `${label} · ${suffix}` };
+        });
+    const { mount, controller } = makeController({
+      plugins: [
+        { id: "low", priority: 0, transformSuggestions: append("low") },
+        { id: "high", priority: 10, transformSuggestions: append("high") },
+      ],
+      suggestions: {
+        starters: { items: ["Original"] },
+      },
+    });
+
+    expect(mount.textContent).toContain("Original · high · low");
+
+    controller.destroy();
+  });
+
+  it("lets a renderSuggestion plugin own the item UI and use select()", () => {
+    const renderSuggestion = vi.fn<
+      NonNullable<AgentWidgetPlugin["renderSuggestion"]>
+    >(({ suggestion, surface, select }) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "custom-suggestion";
+        button.textContent = `${surface}: ${suggestion.label}`;
+        button.addEventListener("click", select);
+        return button;
+      });
+    const { mount, controller } = makeController({
+      plugins: [{ id: "custom-suggestion", renderSuggestion }],
+      suggestions: {
+        starters: {
+          selection: "fill",
+          items: [{ id: "draft", label: "Draft a reply" }],
+        },
+      },
+    });
+
+    const custom = mount.querySelector<HTMLButtonElement>(
+      ".custom-suggestion",
+    );
+    expect(custom?.textContent).toBe("starter: Draft a reply");
+    expect(custom?.dataset.suggestionId).toBe("draft");
+    custom?.click();
+    expect(mount.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(
+      "Draft a reply",
+    );
+    expect(renderSuggestion).toHaveBeenCalledWith(
+      expect.objectContaining({
+        index: 0,
+        surface: "starter",
+        source: "config",
+        variant: "card",
+        suggestion: expect.objectContaining({
+          id: "draft",
+          selection: "fill",
+        }),
+        defaultRenderer: expect.any(Function),
+        select: expect.any(Function),
+      }),
+    );
+
+    controller.destroy();
+  });
+
+  it("falls back to the built-in renderer when renderSuggestion returns null", () => {
+    const { mount, controller } = makeController({
+      plugins: [
+        {
+          id: "decline-suggestion",
+          renderSuggestion: () => null,
+        },
+      ],
+      suggestions: {
+        starters: { items: ["Use the default"] },
+      },
+    });
+
+    expect(
+      chipButtons(mount, "Use the default")[0]?.classList.contains(
+        "persona-suggestion--card",
+      ),
+    ).toBe(true);
+
+    controller.destroy();
+  });
+
+  it("lets selection hooks and cancelable DOM events prevent the default action", () => {
+    const onSuggestionSelect = vi.fn((): boolean => false);
+    const { mount, controller } = makeController({
+      plugins: [{ id: "selection-guard", onSuggestionSelect }],
+      suggestions: {
+        starters: {
+          selection: "fill",
+          items: ["Plugin guarded", "DOM guarded"],
+        },
+      },
+    });
+    const textarea = mount.querySelector<HTMLTextAreaElement>("textarea")!;
+
+    chipButtons(mount, "Plugin guarded")[0]!.click();
+    expect(onSuggestionSelect).toHaveBeenCalledWith(
+      expect.objectContaining({
+        surface: "starter",
+        source: "config",
+        variant: "card",
+        suggestion: expect.objectContaining({
+          label: "Plugin guarded",
+          selection: "fill",
+        }),
+      }),
+    );
+    expect(textarea.value).toBe("");
+
+    onSuggestionSelect.mockReturnValue(true);
+    mount.addEventListener(
+      "persona:suggestion:selected",
+      (event) => event.preventDefault(),
+      { once: true },
+    );
+    chipButtons(mount, "DOM guarded")[0]!.click();
+    expect(textarea.value).toBe("");
 
     controller.destroy();
   });

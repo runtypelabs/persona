@@ -3518,6 +3518,8 @@ export const createAgentExperience = (
           selection: followUps?.selection ?? "send",
           overflow: followUps?.overflow ?? "scroll",
           maxItems: followUps?.maxItems ?? 4,
+          config,
+          plugins,
         }
       );
       return;
@@ -3552,6 +3554,8 @@ export const createAgentExperience = (
           selection: starters.selection ?? "send",
           overflow: "wrap",
           maxItems: starters.maxItems ?? 4,
+          config,
+          plugins,
         }
       );
       return;
@@ -3569,6 +3573,8 @@ export const createAgentExperience = (
         variant: "chip",
         selection: "send",
         overflow: "wrap",
+        config,
+        plugins,
       }
     );
   };
@@ -5971,6 +5977,12 @@ export const createAgentExperience = (
       micButton.disabled = disabled;
     }
     suggestionManagers.forEach((manager) => {
+      manager.elements.forEach((element) => {
+        element.toggleAttribute("data-disabled", disabled);
+        if (!(element instanceof HTMLButtonElement)) {
+          element.setAttribute("aria-disabled", disabled ? "true" : "false");
+        }
+      });
       manager.buttons.forEach((button) => {
         button.disabled = disabled;
       });

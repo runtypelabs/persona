@@ -8,8 +8,47 @@ import {
   EventStreamViewRenderContext,
   EventStreamRowRenderContext,
   EventStreamToolbarRenderContext,
-  EventStreamPayloadRenderContext
+  EventStreamPayloadRenderContext,
+  AgentWidgetSuggestion,
+  AgentWidgetResolvedSuggestion,
+  AgentWidgetSuggestionSource,
+  AgentWidgetSuggestionSurface,
+  AgentWidgetSuggestionVariant
 } from "../types";
+
+export type AgentWidgetTransformSuggestionsContext = {
+  /** Fresh copy of the suggestions entering this plugin. */
+  suggestions: AgentWidgetSuggestion[];
+  surface: AgentWidgetSuggestionSurface;
+  source: AgentWidgetSuggestionSource;
+  config: AgentWidgetConfig;
+};
+
+export type AgentWidgetRenderSuggestionContext = {
+  /** Fully normalized suggestion, including the effective send/fill behavior. */
+  suggestion: AgentWidgetResolvedSuggestion;
+  index: number;
+  surface: AgentWidgetSuggestionSurface;
+  source: AgentWidgetSuggestionSource;
+  variant: AgentWidgetSuggestionVariant;
+  streaming: boolean;
+  config: AgentWidgetConfig;
+  /** Build Persona's standard chip, card, or list item. */
+  defaultRenderer: () => HTMLElement;
+  /**
+   * Run the normal selection pipeline: DOM event, plugin selection hooks, then
+   * send or fill. Custom renderers should call this instead of sending directly.
+   */
+  select: () => void;
+};
+
+export type AgentWidgetSuggestionSelectContext = {
+  suggestion: AgentWidgetResolvedSuggestion;
+  surface: AgentWidgetSuggestionSurface;
+  source: AgentWidgetSuggestionSource;
+  variant: AgentWidgetSuggestionVariant;
+  config: AgentWidgetConfig;
+};
 
 /**
  * Plugin interface for customizing widget components
@@ -24,6 +63,32 @@ export interface AgentWidgetPlugin {
    * Optional priority (higher = runs first). Default: 0
    */
   priority?: number;
+
+  /**
+   * Transform, filter, enrich, or reorder suggestions before Persona
+   * normalizes and caps them. Transform hooks compose in plugin priority order.
+   * Return an empty array to hide the surface.
+   */
+  transformSuggestions?: (
+    context: AgentWidgetTransformSuggestionsContext
+  ) => AgentWidgetSuggestion[];
+
+  /**
+   * Render one starter or follow-up suggestion. Return null to use Persona's
+   * default chip/card/list renderer. Call `select()` from custom interaction
+   * controls to preserve events, selection hooks, and send/fill behavior.
+   */
+  renderSuggestion?: (
+    context: AgentWidgetRenderSuggestionContext
+  ) => HTMLElement | null;
+
+  /**
+   * Observe or intercept a suggestion selection. Return false to cancel the
+   * built-in send/fill action. Hooks run in plugin priority order.
+   */
+  onSuggestionSelect?: (
+    context: AgentWidgetSuggestionSelectContext
+  ) => void | boolean;
 
   /**
    * Custom renderer for message bubbles
@@ -292,8 +357,6 @@ export interface AgentWidgetPlugin {
    */
   onUnregister?: () => void;
 }
-
-
 
 
 

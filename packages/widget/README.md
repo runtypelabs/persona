@@ -127,7 +127,7 @@ With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** c
 The full reference lives in [`docs/`](./docs/) and the theming guide:
 
 - [Extending Persona](./docs/EXTENDING.md): the map of every extension point: plugins, components, postprocessors, themes, stream parsers, animations, voice, sanitization, actions, context/WebMCP, layout slots, storage, and UI builders, each linked to its deep dive
-- [Authoring Plugins](./docs/PLUGINS.md): the `AgentWidgetPlugin` contract, all 14 render hooks, global vs per-instance registration, lifecycle, and the `@runtypelabs/persona/plugin-kit` helpers
+- [Authoring Plugins](./docs/PLUGINS.md): the `AgentWidgetPlugin` contract, render/data/interaction hooks, global vs per-instance registration, lifecycle, and the `@runtypelabs/persona/plugin-kit` helpers
 - [Contributing](../../CONTRIBUTING.md): current guidance for contributing plugins, themes, adapters, examples, and other customizations back to this monorepo
 - [Programmatic Control & Events](./docs/PROGRAMMATIC-CONTROL.md): controller API, message hooks and injection, enriched DOM context, WebMCP page tools, DOM and controller events, state loading
 - [UI Features & Components](./docs/UI-COMPONENTS.md): message actions and feedback, loading/idle indicators, approvals, built-in `ask_user_question` and `suggest_replies` tools, dropdown menus, button utilities, dynamic forms

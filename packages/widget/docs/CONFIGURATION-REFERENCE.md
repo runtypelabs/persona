@@ -495,12 +495,25 @@ initAgentWidget({
 
 For a direct AI SDK backend that translates WebMCP calls into Persona-compatible `step_await` / `/resume` traffic, see the repo-level [WebMCP without Runtype guide](../../../docs/webmcp-without-runtype.md).
 
-### Suggestion Chips
+### Suggestions
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `suggestionChips` | `string[]` | Render quick reply buttons above the composer. |
-| `suggestionChipsConfig` | `AgentWidgetSuggestionChipsConfig` | Chip styling: `fontFamily` (`'sans-serif' \| 'serif' \| 'mono'`), `fontWeight`, `paddingX`, `paddingY`. |
+| `suggestions` | `AgentWidgetSuggestionsConfig` | Structured starter and follow-up surfaces. |
+| `suggestionChips` | `string[]` | Deprecated shorthand for starter chips above the composer. |
+| `suggestionChipsConfig` | `AgentWidgetSuggestionChipsConfig` | Deprecated chip styling: `fontFamily`, `fontWeight`, `paddingX`, `paddingY`. Prefer suggestion theme tokens. |
+
+`suggestions.starters` accepts rich items (`label`, optional `prompt`,
+`description`, `icon`, per-item `selection`, and `emphasis`) plus `variant`
+(`chip`, `card`, `list`), `placement`, `selection`, and `maxItems`.
+`suggestions.followUps` applies the same variants and selection modes to the
+latest agent `suggest_replies` result, with transcript/composer placement and
+scroll/wrap overflow.
+
+Plugins can fully customize the pipeline with `transformSuggestions`,
+`renderSuggestion`, and `onSuggestionSelect`. See
+[Authoring Persona plugins](./PLUGINS.md#suggestion-hooks) and the
+[`suggestions-demo.html`](../../../apps/web/suggestions-demo.html) showcase.
 
 ### Input & Composer
 
@@ -730,4 +743,3 @@ Reconnect lifecycle is also surfaced as controller events (`stream:paused`, `str
 | `requestMiddleware` | `AgentWidgetRequestMiddleware` | Transform the request payload before it is sent. |
 | `actionParsers` | `AgentWidgetActionParser[]` | Parse structured directives from assistant messages. |
 | `actionHandlers` | `AgentWidgetActionHandler[]` | Handle parsed actions (navigation, UI updates, etc.). |
-

@@ -83,6 +83,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "suggestions-demo",
+    href: "/suggestions-demo.html",
+    title: "Suggestion Hooks",
+    blurb: "Transform, render, and intercept starter prompts and agent follow-ups.",
+    tier: "patterns",
+    tags: ["interaction", "plugins", "theming"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "approval-demo",
     href: "/approval-demo.html",
     title: "Tool Approval",

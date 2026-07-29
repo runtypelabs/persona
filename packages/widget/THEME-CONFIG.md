@@ -1087,10 +1087,32 @@ The deprecated `suggestionChips: string[]` and `suggestionChipsConfig` fields
 remain backwards compatible. They continue to render starter chips above the
 composer until a `suggestions.starters` configuration is supplied.
 
+### Complete customization with plugins
+
+Theme tokens and `config.suggestions` cover the common visual and behavioral
+choices. For product-specific ranking or markup, pass an
+`AgentWidgetPlugin` through `config.plugins`:
+
+- `transformSuggestions` filters, reorders, or enriches starter and follow-up
+  data before normalization and `maxItems`.
+- `renderSuggestion` replaces an individual item. It receives
+  `defaultRenderer()` for progressive customization and `select()` for the
+  standard events plus send/fill behavior.
+- `onSuggestionSelect` observes selection and can return `false` to cancel the
+  built-in action.
+
+The plugin contexts distinguish the `"starter"` / `"follow-up"` surface and
+the `"config"` / `"agent"` source. The
+`persona:suggestion:selected` DOM event is also cancelable with
+`event.preventDefault()`. See
+[`docs/PLUGINS.md`](./docs/PLUGINS.md#suggestion-hooks) and the live
+[`suggestions-demo.html`](../../apps/web/suggestions-demo.html).
+
 ### Suggestion events
 
 - `persona:suggestion:shown` includes suggestions, surface, source, and variant.
 - `persona:suggestion:selected` includes the selected item and send/fill mode.
+  It is cancelable; call `event.preventDefault()` to suppress the action.
 - Agent follow-ups also retain `persona:suggestReplies:shown` and
   `persona:suggestReplies:selected` for backwards compatibility.
 

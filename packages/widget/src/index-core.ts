@@ -140,7 +140,17 @@ export type {
   AskUserQuestionPrompt,
   AskUserQuestionOption,
   AgentWidgetAskUserQuestionFeature,
-  AgentWidgetAskUserQuestionStyles
+  AgentWidgetAskUserQuestionStyles,
+  AgentWidgetSuggestion,
+  AgentWidgetSuggestionChipsConfig,
+  AgentWidgetResolvedSuggestion,
+  AgentWidgetSuggestionSelection,
+  AgentWidgetSuggestionVariant,
+  AgentWidgetSuggestionSurface,
+  AgentWidgetSuggestionSource,
+  AgentWidgetStarterSuggestionsConfig,
+  AgentWidgetFollowUpSuggestionsConfig,
+  AgentWidgetSuggestionsConfig
 } from "./types";
 
 export {
@@ -326,7 +336,12 @@ export { VERSION } from "./version";
 export type { AgentWidgetInitHandle };
 
 // Plugin system exports
-export type { AgentWidgetPlugin } from "./plugins/types";
+export type {
+  AgentWidgetPlugin,
+  AgentWidgetTransformSuggestionsContext,
+  AgentWidgetRenderSuggestionContext,
+  AgentWidgetSuggestionSelectContext
+} from "./plugins/types";
 export { pluginRegistry } from "./plugins/registry";
 
 // Stream animation plugin API: lets consumers register custom animations

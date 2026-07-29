@@ -3747,6 +3747,22 @@ export type AgentWidgetSuggestion =
 
 export type AgentWidgetSuggestionSelection = "send" | "fill";
 export type AgentWidgetSuggestionVariant = "chip" | "card" | "list";
+export type AgentWidgetSuggestionSurface = "starter" | "follow-up";
+export type AgentWidgetSuggestionSource = "config" | "agent";
+
+/**
+ * A suggestion after Persona has normalized shorthand strings and resolved the
+ * effective selection behavior. Plugin hooks receive this stable shape.
+ */
+export type AgentWidgetResolvedSuggestion = {
+  id: string;
+  label: string;
+  prompt: string;
+  description?: string;
+  icon?: IconName;
+  selection: AgentWidgetSuggestionSelection;
+  emphasis: "default" | "primary";
+};
 
 export type AgentWidgetStarterSuggestionsConfig = {
   /** Suggestions shown before the first user message. */

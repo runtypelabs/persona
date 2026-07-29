@@ -409,7 +409,7 @@ For plugins that want to re-parse a tool message outside the hook context, the w
 
 ## Suggested Replies
 
-The `suggest_replies` feature lets the agent offer tappable quick-reply chips for the user's next message. When the agent calls the `suggest_replies` tool, the widget renders the suggestions as chips above the composer (the same slot, and `suggestionChipsConfig` styling, as the static `suggestionChips`) and **immediately** resumes the paused execution with a canned "shown" result. Unlike `ask_user_question`, nothing blocks on the user: the agent's turn completes, and tapping a chip simply sends its text verbatim as the user's next message.
+The `suggest_replies` feature lets the agent offer tappable next actions for the user's next message. When the agent calls the `suggest_replies` tool, the widget renders the latest suggestions using `config.suggestions.followUps` and **immediately** resumes the paused execution with a canned "shown" result. Unlike `ask_user_question`, nothing blocks on the user: the agent's turn completes, and selecting an item sends or fills its prompt according to configuration.
 
 This is the recommended pattern for follow-up discovery: teaching users what to ask next without forcing typing.
 
@@ -429,7 +429,17 @@ For server-side declaration, the exported `SUGGEST_REPLIES_CLIENT_TOOL` / `SUGGE
 
 ```ts
 {
-  suggestions: string[]   // 1-4 items, each ≤60 chars, phrased in the user's voice
+  suggestions: Array<
+    | string
+    | {
+        label: string
+        prompt?: string
+        description?: string
+        icon?: IconName
+        selection?: "send" | "fill"
+        emphasis?: "default" | "primary"
+      }
+  > // 1-4 items; strings remain the compact shorthand
 }
 ```
 
@@ -444,7 +454,9 @@ Chip visibility is derived from the transcript, not toggled imperatively: the wi
 
 No transcript bubble is rendered for the tool message: the chips are the entire UI. When `enabled: false`, the message falls through to the generic tool bubble instead.
 
-Note: integrators who replace the composer's suggestions slot via the composer layout API won't see agent-pushed chips: they render in the same container as `suggestionChips`.
+Follow-ups can render after the transcript or above the composer. Plugins can
+transform their data, replace each item, and intercept selection using the same
+hooks as starter prompts. See [PLUGINS.md](./PLUGINS.md#suggestion-hooks).
 
 ### Configuration
 
@@ -457,7 +469,9 @@ features: {
 }
 ```
 
-Chip styling reuses the widget-level `suggestionChipsConfig` (font family/weight, padding).
+Presentation comes from `config.suggestions.followUps` plus the semantic
+suggestion theme tokens. The legacy `suggestionChipsConfig` remains supported
+for backwards-compatible font and padding overrides.
 
 ### DOM events
 
@@ -465,6 +479,10 @@ Chip styling reuses the widget-level `suggestionChipsConfig` (font family/weight
 |---|---|
 | `persona:suggestReplies:shown` | `{ suggestions: string[] }`: fires once per distinct chip set |
 | `persona:suggestReplies:selected` | `{ suggestion: string }`: fires before the chip text is sent |
+
+The unified `persona:suggestion:shown` and
+`persona:suggestion:selected` events include the normalized item, surface,
+source, variant/selection metadata. `persona:suggestion:selected` is cancelable.
 
 ## Dropdown Menu
 
@@ -756,4 +774,3 @@ The shipped `DynamicForm` is an **example** in [`apps/web/src/components.ts`](..
 
 `directivePostprocessor` looks for either `<Form type="init" />` tokens or
 `<Directive>{"component":"form","type":"init"}</Directive>` blocks and swaps them for placeholders that the widget upgrades into interactive UI. This approach is limited to the predefined form templates in `formDefinitions`.
-

@@ -135,8 +135,26 @@ function sanitizeValue(value: unknown, key?: string): unknown {
   }
   if (key === "plugins" && Array.isArray(value)) {
     return value.map((p) => {
-      if (typeof p === "object" && p !== null && "name" in p) {
-        return { __demo: `plugin: ${String((p as { name?: string }).name)}` };
+      if (typeof p === "object" && p !== null) {
+        const plugin = p as Record<string, unknown>;
+        const identity =
+          typeof plugin.id === "string"
+            ? plugin.id
+            : typeof plugin.name === "string"
+              ? plugin.name
+              : "custom plugin";
+        const hooks = Object.entries(plugin)
+          .filter(
+            ([hook, implementation]) =>
+              typeof implementation === "function" &&
+              hook !== "onRegister" &&
+              hook !== "onUnregister",
+          )
+          .map(([hook]) => hook);
+        return {
+          id: identity,
+          ...(hooks.length ? { hooks } : {}),
+        };
       }
       return { __demo: "custom plugin" };
     });

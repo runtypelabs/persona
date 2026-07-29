@@ -43,10 +43,11 @@ Every render hook follows the same protocol:
 > `width: 100%` (or it will collapse and the bubble can overflow oddly). This
 > applies to bubble-level hooks specifically.
 
-## The 14 render hooks
+## Render hooks
 
 | Hook | Region | Key context (beyond `config`) |
 | --- | --- | --- |
+| `renderSuggestion` | One starter or follow-up suggestion | `suggestion`, `surface`, `source`, `variant`, `defaultRenderer`, `select` |
 | `renderMessage` | A message bubble | `message`, `defaultRenderer` |
 | `renderLauncher` | The collapsed launcher button | `defaultRenderer`, `onToggle` |
 | `renderHeader` | The panel header | `defaultRenderer`, `onClose?` |
@@ -64,6 +65,45 @@ Every render hook follows the same protocol:
 
 Most hooks are "return element or `null`". A few have richer protocols worth
 calling out:
+
+### Suggestion hooks
+
+Suggestions expose a three-stage plugin pipeline:
+
+1. `transformSuggestions({ suggestions, surface, source, config })` filters,
+   ranks, reorders, or enriches the raw configured/agent items. Every transform
+   hook runs in priority order, and `maxItems` is applied afterward.
+2. `renderSuggestion(...)` receives one normalized suggestion (including its
+   effective `selection`), plus `defaultRenderer()` and `select()`. Return any
+   `HTMLElement`, or `null` for Persona's built-in chip/card/list item. Custom
+   controls should call `select()` so unified/legacy DOM events, plugin
+   selection hooks, and send/fill behavior all remain intact.
+3. `onSuggestionSelect(...)` observes activation before the built-in action.
+   Return `false` to cancel sending/filling. For integrations that do not use
+   plugins, the bubbling `persona:suggestion:selected` DOM event is also
+   cancelable with `event.preventDefault()`.
+
+```ts
+const suggestionsPlugin: AgentWidgetPlugin = {
+  id: "product-suggestions",
+  transformSuggestions: ({ suggestions }) =>
+    suggestions.filter(canShow).map(addProductContext),
+  renderSuggestion: ({ suggestion, select }) => {
+    if (suggestion.emphasis !== "primary") return null;
+    const card = buildProductCard(suggestion);
+    card.addEventListener("click", select);
+    return card;
+  },
+  onSuggestionSelect: ({ suggestion, surface, source }) => {
+    analytics.track("suggestion_selected", { suggestion, surface, source });
+  },
+};
+```
+
+The context distinguishes `surface: "starter" | "follow-up"` and
+`source: "config" | "agent"`, so one plugin can render the welcome state and
+agent-produced `suggest_replies` differently. Use `injectStyles` from the
+plugin kit for custom UI that also works under Shadow DOM.
 
 ### `renderComposer`
 
@@ -201,10 +241,13 @@ composed path, so it works across the Shadow-DOM boundary).
 
 ## Worked examples
 
-Three example plugins ship in the showcase app. Each is a single file with no
+Example plugins ship in the showcase app. Each is a single file with no
 dependency beyond the plugin-kit subpath, and is written to be **copied into your
 own app**:
 
+- [`suggestion-showcase-plugins.ts`](../../../apps/web/src/plugins/suggestion-showcase-plugins.ts):
+  **`transformSuggestions` / `renderSuggestion` / `onSuggestionSelect`**:
+  compares data-only enrichment with a fully custom starter/follow-up UI.
 - [`ask-horizontal-pills-plugin.js`](../../../apps/web/src/plugins/ask-horizontal-pills-plugin.js):
   **`renderAskUserQuestion`**: renders the answer sheet as horizontal pill buttons
   with a free-text option and a multi-question stepper.

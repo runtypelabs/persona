@@ -2,25 +2,28 @@ import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetSession } from "../session";
 import {
+  AgentWidgetConfig,
   AgentWidgetMessage,
+  AgentWidgetResolvedSuggestion,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionChipsConfig,
   AgentWidgetSuggestionSelection,
+  AgentWidgetSuggestionSource,
+  AgentWidgetSuggestionSurface,
   AgentWidgetSuggestionVariant,
 } from "../types";
+import type { AgentWidgetPlugin } from "../plugins/types";
 
-export type NormalizedSuggestion = {
-  id: string;
-  label: string;
-  prompt: string;
-  description?: string;
-  icon?: string;
+export type NormalizedSuggestion = Omit<
+  AgentWidgetResolvedSuggestion,
+  "selection"
+> & {
   selection?: AgentWidgetSuggestionSelection;
-  emphasis: "default" | "primary";
 };
 
 export interface SuggestionButtons {
   buttons: HTMLButtonElement[];
+  elements: HTMLElement[];
   destroy: () => void;
   render: (
     items: AgentWidgetSuggestion[] | undefined,
@@ -34,7 +37,7 @@ export interface SuggestionButtons {
 
 export interface SuggestionRenderOptions {
   /** Whether these are welcome starters or agent-produced follow-ups. */
-  surface?: "starter" | "follow-up";
+  surface?: AgentWidgetSuggestionSurface;
   /** Presentation density. */
   variant?: AgentWidgetSuggestionVariant;
   /** Default click behavior, overridable per item. */
@@ -48,6 +51,10 @@ export interface SuggestionRenderOptions {
    * static config. Retains the legacy `persona:suggestReplies:*` events.
    */
   agentPushed?: boolean;
+  /** Live widget config exposed to plugin hooks. */
+  config?: AgentWidgetConfig;
+  /** Priority-sorted plugins active for this widget instance. */
+  plugins?: readonly AgentWidgetPlugin[];
 }
 
 export const normalizeSuggestion = (
@@ -94,6 +101,7 @@ const fontFamilyValue = (
 
 export const createSuggestions = (container: HTMLElement): SuggestionButtons => {
   const suggestionButtons: HTMLButtonElement[] = [];
+  const suggestionElements: HTMLElement[] = [];
   let lastShownKey: string | null = null;
   let overflowFrame: number | null = null;
 
@@ -166,24 +174,43 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
   ) => {
     container.replaceChildren();
     suggestionButtons.length = 0;
+    suggestionElements.length = 0;
 
     const agentPushed = opts?.agentPushed === true;
     const surface = opts?.surface ?? (agentPushed ? "follow-up" : "starter");
+    const source: AgentWidgetSuggestionSource = agentPushed ? "agent" : "config";
     const variant = opts?.variant ?? "chip";
     const selection = opts?.selection ?? "send";
     const overflow = opts?.overflow ?? "wrap";
+    const widgetConfig = opts?.config ?? ({} as AgentWidgetConfig);
+    const plugins = opts?.plugins ?? [];
     const maxItems =
       typeof opts?.maxItems === "number"
         ? Math.max(0, Math.floor(opts.maxItems))
         : undefined;
 
-    const allNormalized = (items ?? [])
+    let transformed = [...(items ?? [])];
+    plugins.forEach((plugin) => {
+      if (!plugin.transformSuggestions) return;
+      transformed = plugin.transformSuggestions({
+        suggestions: [...transformed],
+        surface,
+        source,
+        config: widgetConfig,
+      });
+    });
+
+    const allNormalized = transformed
       .map(normalizeSuggestion)
       .filter((item): item is NormalizedSuggestion => item !== null);
-    const normalized =
+    const normalized: AgentWidgetResolvedSuggestion[] = (
       maxItems === undefined
         ? allNormalized
-        : allNormalized.slice(0, maxItems);
+        : allNormalized.slice(0, maxItems)
+    ).map((item) => ({
+      ...item,
+      selection: item.selection ?? selection,
+    }));
 
     if (!normalized.length) {
       container.hidden = true;
@@ -210,84 +237,22 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     const fragment = document.createDocumentFragment();
     const streaming = session.isStreaming();
 
-    normalized.forEach((item) => {
-      const itemSelection = item.selection ?? selection;
-      const button = createElement(
-        "button",
-        `persona-suggestion persona-suggestion--${variant}`
-      ) as HTMLButtonElement;
-      button.type = "button";
-      button.disabled = streaming;
-      button.dataset.suggestionId = item.id;
-      button.dataset.emphasis = item.emphasis;
-      button.dataset.selection = itemSelection;
-
-      if (chipsConfig?.fontFamily) {
-        button.style.fontFamily = fontFamilyValue(chipsConfig.fontFamily);
-      }
-      if (chipsConfig?.fontWeight) {
-        button.style.fontWeight = chipsConfig.fontWeight;
-      }
-      if (chipsConfig?.paddingX) {
-        button.style.paddingLeft = chipsConfig.paddingX;
-        button.style.paddingRight = chipsConfig.paddingX;
-      }
-      if (chipsConfig?.paddingY) {
-        button.style.paddingTop = chipsConfig.paddingY;
-        button.style.paddingBottom = chipsConfig.paddingY;
-      }
-
-      if (item.icon) {
-        const icon = renderLucideIcon(
-          item.icon,
-          "var(--persona-suggestion-icon-size)",
-          "currentColor",
-          1.8
-        );
-        if (icon) {
-          icon.classList.add("persona-suggestion__icon");
-          button.appendChild(icon);
-        }
-      }
-
-      const copy = createElement("span", "persona-suggestion__copy");
-      copy.appendChild(
-        createNode("span", {
-          className: "persona-suggestion__label",
-          text: item.label,
-        })
-      );
-      if (item.description) {
-        copy.appendChild(
-          createNode("span", {
-            className: "persona-suggestion__description",
-            text: item.description,
-          })
-        );
-      }
-      button.appendChild(copy);
-
-      if (variant !== "chip") {
-        const arrow = renderLucideIcon("arrow-right", 16, "currentColor", 1.8);
-        if (arrow) {
-          arrow.classList.add("persona-suggestion__arrow");
-          button.appendChild(arrow);
-        }
-      }
-
-      button.addEventListener("click", () => {
+    normalized.forEach((item, index) => {
+      const itemSelection = item.selection;
+      const select = () => {
         if (session.isStreaming()) return;
         const detail = {
           suggestion: { ...item },
           surface,
-          source: agentPushed ? "agent" : "config",
+          source,
           selection: itemSelection,
         };
-        container.dispatchEvent(
+        const shouldContinue = container.dispatchEvent(
           new CustomEvent("persona:suggestion:selected", {
             detail,
             bubbles: true,
             composed: true,
+            cancelable: true,
           })
         );
         if (agentPushed) {
@@ -298,6 +263,21 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
               composed: true,
             })
           );
+        }
+        if (!shouldContinue) return;
+
+        for (const plugin of plugins) {
+          if (
+            plugin.onSuggestionSelect?.({
+              suggestion: { ...item },
+              surface,
+              source,
+              variant,
+              config: widgetConfig,
+            }) === false
+          ) {
+            return;
+          }
         }
 
         if (itemSelection === "fill") {
@@ -311,10 +291,112 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
 
         textarea.value = "";
         session.sendMessage(item.prompt);
-      });
+      };
 
-      fragment.appendChild(button);
-      suggestionButtons.push(button);
+      const defaultRenderer = (): HTMLElement => {
+        const button = createElement(
+          "button",
+          `persona-suggestion persona-suggestion--${variant}`
+        ) as HTMLButtonElement;
+        button.type = "button";
+        button.disabled = streaming;
+        button.dataset.suggestionId = item.id;
+        button.dataset.emphasis = item.emphasis;
+        button.dataset.selection = itemSelection;
+
+        if (chipsConfig?.fontFamily) {
+          button.style.fontFamily = fontFamilyValue(chipsConfig.fontFamily);
+        }
+        if (chipsConfig?.fontWeight) {
+          button.style.fontWeight = chipsConfig.fontWeight;
+        }
+        if (chipsConfig?.paddingX) {
+          button.style.paddingLeft = chipsConfig.paddingX;
+          button.style.paddingRight = chipsConfig.paddingX;
+        }
+        if (chipsConfig?.paddingY) {
+          button.style.paddingTop = chipsConfig.paddingY;
+          button.style.paddingBottom = chipsConfig.paddingY;
+        }
+
+        if (item.icon) {
+          const icon = renderLucideIcon(
+            item.icon,
+            "var(--persona-suggestion-icon-size)",
+            "currentColor",
+            1.8
+          );
+          if (icon) {
+            icon.classList.add("persona-suggestion__icon");
+            button.appendChild(icon);
+          }
+        }
+
+        const copy = createElement("span", "persona-suggestion__copy");
+        copy.appendChild(
+          createNode("span", {
+            className: "persona-suggestion__label",
+            text: item.label,
+          })
+        );
+        if (item.description) {
+          copy.appendChild(
+            createNode("span", {
+              className: "persona-suggestion__description",
+              text: item.description,
+            })
+          );
+        }
+        button.appendChild(copy);
+
+        if (variant !== "chip") {
+          const arrow = renderLucideIcon("arrow-right", 16, "currentColor", 1.8);
+          if (arrow) {
+            arrow.classList.add("persona-suggestion__arrow");
+            button.appendChild(arrow);
+          }
+        }
+
+        button.addEventListener("click", select);
+        return button;
+      };
+
+      let element: HTMLElement | null = null;
+      for (const plugin of plugins) {
+        if (!plugin.renderSuggestion) continue;
+        element = plugin.renderSuggestion({
+          suggestion: { ...item },
+          index,
+          surface,
+          source,
+          variant,
+          streaming,
+          config: widgetConfig,
+          defaultRenderer,
+          select,
+        });
+        if (element) break;
+      }
+      element ??= defaultRenderer();
+      element.dataset.suggestionId ||= item.id;
+      element.dataset.selection ||= itemSelection;
+      element.dataset.emphasis ||= item.emphasis;
+      if (!(element instanceof HTMLButtonElement)) {
+        element.setAttribute("aria-disabled", streaming ? "true" : "false");
+      }
+
+      fragment.appendChild(element);
+      suggestionElements.push(element);
+      const buttons = [
+        ...(element instanceof HTMLButtonElement ? [element] : []),
+        ...Array.from(element.querySelectorAll<HTMLButtonElement>("button")),
+      ];
+      buttons.forEach((button) => {
+        if (!suggestionButtons.includes(button)) {
+          button.disabled = streaming;
+          suggestionButtons.push(button);
+        }
+      });
     });
     container.appendChild(fragment);
     syncOverflowAffordance();
@@ -333,7 +415,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
           detail: {
             suggestions: normalized.map((item) => ({ ...item })),
             surface,
-            source: agentPushed ? "agent" : "config",
+            source,
             variant,
           },
           bubbles: true,
@@ -356,6 +438,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
 
   return {
     buttons: suggestionButtons,
+    elements: suggestionElements,
     destroy: () => {
       container.removeEventListener("scroll", scheduleOverflowAffordance);
       resizeObserver?.disconnect();
