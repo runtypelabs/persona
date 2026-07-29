@@ -10,52 +10,44 @@ Persona separates two concerns:
 Hosts render and store their own settings UI. Persona owns the preference
 schema, validation, merge behavior, and artifact resolver.
 
-## Recommended integration
+## Recommended integration: the `preferences` config key
 
-`createFeaturePreferenceStore` owns the parse → patch → merge → apply loop.
-Hand `getFeatures()` to the widget and persist `preferences` from `onChange`:
+For per-instance overrides — a dashboard drop site, a builder preview, a
+debug bar — pass a preference slice directly in the widget config. It is
+applied over `features` through the allowlist, so it can adjust display
+without touching security or capability configuration:
 
 ```ts
-import { createFeaturePreferenceStore } from "@runtypelabs/persona";
-
-const store = createFeaturePreferenceStore({
-  base: {
-    artifacts: {
-      enabled: true,
-      allowedTypes: ["markdown", "component"],
-      filePreview: { iframeSandbox: "allow-scripts" },
-    },
-  },
-  layers: [
-    { id: "organization", preferences: organizationPreferences },
-    { id: "surface", preferences: surfacePreferences },
-  ],
-  // Stored JSON is untrusted; the store parses it through the allowlist.
-  stored: JSON.parse(localStorage.getItem("persona-preferences") ?? "{}"),
-  onChange: ({ features, preferences }) => {
-    controller.update({ features });
-    localStorage.setItem("persona-preferences", JSON.stringify(preferences));
-  },
+createAgentWidget({
+  ...sharedConfig,
+  preferences: { artifacts: { display: "inline" } },
 });
 
-controller.update({ features: store.getFeatures() });
+// Live, e.g. from a debug bar:
+controller.update({ preferences: { artifacts: { display: "collapsed" } } });
 
-// A settings control writes one choice; null resets it.
-store.setArtifactDisplay({ type: "mediaType", mediaType: "text/html" }, "inline");
-store.setArtifactDisplay({ type: "files" }, null);
+// Clear back to the base features (explicit-undefined reset):
+controller.update({ preferences: undefined });
 ```
 
-The underlying primitives (`parseWidgetPreferenceSlice`,
-`mergeFeaturePreferences`, `applyFeaturePreferencePatch`,
-`applyFeaturePreferences`, `createArtifactDisplayPreferencePatch`) remain
-exported for hosts with their own state management; the store is a thin
-convenience over them.
+Updates re-resolve from the code-owned base `features`, never from a
+previously overlaid result, so changing or clearing preferences behaves like
+swapping the whole slice. A live display change also re-materializes existing
+transcript artifact blocks, so a toggle takes effect without a remount.
 
-Preference layers are ordered from lowest to highest priority. Patches follow
-JSON Merge Patch (RFC 7386) semantics: objects merge per key, any other value
-replaces, and `null` deletes the stored key. Reset deletes the key instead of
-copying the current effective value, so a lower layer or future Persona
-default can become visible automatically.
+`resolveConfigPreferences(config)` exposes the same baking as a pure function
+for hosts that precompute config (SSR, config pipelines).
+
+## Persisted user settings
+
+Persisting choices across reloads stays host-owned: keep a sparse
+`WidgetPreferenceSlice` in your own storage, parse it on load with
+`parseWidgetPreferenceSlice` (stored JSON is untrusted), and pass the result
+as `preferences`. Represent "reset" by deleting the key from your stored
+slice rather than writing the current effective value, so a changed base
+config or future Persona default becomes visible automatically. Hosts that
+merge several preference sources can combine slices with
+`applyFeaturePreferences(baseFeatures, [lowest, ..., highest])`.
 
 ## Artifact display schema
 
@@ -133,8 +125,8 @@ so hosts and users always have the last word. Persona never infers it.
 
 ## How a value wins
 
-After the layers merge, Persona tests the resulting rules from most specific
-to least specific:
+After preferences overlay the base features, Persona tests the resulting
+rules from most specific to least specific:
 
 1. exact MIME type (`files.byMediaType["text/html"]`);
 2. wildcard MIME type (`files.byMediaType["image/*"]`);
@@ -148,38 +140,35 @@ Use the public resolver when a settings or debugging UI needs to explain the
 outcome:
 
 ```ts
-const resolution = store.resolveArtifactDisplay({
+import { resolveArtifactDisplay, resolveConfigPreferences } from "@runtypelabs/persona";
+
+const effective = resolveConfigPreferences(config);
+const resolution = resolveArtifactDisplay(effective.features?.artifacts, {
   artifactType: "markdown",
   file: { path: "chart.png", mimeType: "image/png" },
 });
 // {
 //   mode: "panel",
-//   matchedBy: { type: "mediaType", mediaType: "image/png", selector: "image/*" },
-//   source: { type: "preference", layerId: "organization" }
+//   matchedBy: { type: "mediaType", mediaType: "image/png", selector: "image/*" }
 // }
 ```
 
 `matchedBy.selector` is the configured key that matched (useful for writing an
-override to exactly the rule that won), and `source` names the preference
-layer — or `base`, `artifact` (the producer hint), or `persona` — that
-supplied the value. The standalone `resolveArtifactDisplayPreference`,
-`resolveArtifactDisplay`, and `resolveArtifactDisplayMode` functions expose
-the same resolution without a store.
+override to exactly the rule that won). `resolveArtifactDisplayMode` returns
+just the mode when no explanation is needed.
 
 ## Runtime validation and trust boundary
 
 TypeScript types do not validate JSON loaded from a database, local storage,
-or an API. The store parses `stored` input automatically; pass other unknown
-data through `parseWidgetPreferenceSlice`. It returns the sanitized value plus
-issues that a host can log or expose in debugging UI:
+or an API. Pass unknown data through `parseWidgetPreferenceSlice`. It returns
+the sanitized value plus issues that a host can log or expose in debugging UI:
 
 ```ts
 const { preferences, issues } = parseWidgetPreferenceSlice(untrustedJson);
 ```
 
-`mergeFeaturePreferences`, `applyFeaturePreferencePatch`, and
-`applyFeaturePreferences` also parse their inputs defensively. Only the
-curated preference keys survive.
+The config `preferences` key and `applyFeaturePreferences` also parse their
+inputs defensively. Only the curated preference keys survive.
 
 Security-sensitive and capability fields are deliberately excluded. Stored
 preferences cannot change:
@@ -196,8 +185,8 @@ Keep those values in the code-owned base feature configuration.
 The complete schema is developer plumbing, not a recommended flat settings
 screen. Start with recognizable groups:
 
-- **Generated files** maps to the `files` target (writes the string form, so
-  the user's choice overrides lower-layer file exceptions).
+- **Generated files** writes the `files` string form, so the user's blanket
+  choice overrides any narrower file exceptions beneath it.
 - **Registered UI components** maps to `byKind.component`.
 - **Other artifacts** maps to `default`.
 
@@ -221,6 +210,6 @@ field definitions. Preference fields carry `requiresCapability`, `unsettable`,
 and `unsetLabel` metadata. Call `ThemeEditorState.unset(path)` for the reset
 action instead of writing a concrete default.
 
-Exact MIME overrides are dynamic and should use
-`createArtifactDisplayPreferencePatch` (or `store.setArtifactDisplay`); they
-are not represented as fixed theme-editor fields.
+Exact MIME overrides are dynamic and are written by the host directly into
+its preference slice (`display.files.byMediaType`); they are not represented
+as fixed theme-editor fields.

@@ -22,6 +22,7 @@ const REPLACE_LEAF_PATHS = new Set<string>([
   "voiceRecognition.provider.custom",
   "features.artifacts.display",
   "features.streamAnimation.plugins",
+  "preferences.artifacts.display",
 ]);
 
 // Recursive patch merge. A key merges recursively iff both previous and patch

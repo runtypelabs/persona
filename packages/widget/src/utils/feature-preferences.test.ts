@@ -1,15 +1,11 @@
 import { describe, expect, test } from "vitest";
 import {
-  applyFeaturePreferencePatch,
   applyFeaturePreferences,
-  createArtifactDisplayPreferencePatch,
-  getArtifactDisplayPreference,
   mergeFeaturePreferences,
   parseWidgetPreferenceSlice,
-  resolveArtifactDisplayPreference,
-  type WidgetPreferenceLayer,
+  resolveConfigPreferences,
 } from "./feature-preferences";
-import type { WidgetPreferenceSlice } from "../types";
+import type { AgentWidgetConfig, WidgetPreferenceSlice } from "../types";
 
 describe("feature preferences", () => {
   test("merges object display rules by selector key across layers", () => {
@@ -98,11 +94,6 @@ describe("feature preferences", () => {
         },
       },
     });
-    expect(
-      createArtifactDisplayPreferencePatch({ type: "files" }, "card")
-    ).toEqual({
-      artifacts: { display: { files: "collapsed" } },
-    });
   });
 
   test("normalizes the deprecated byType selector to byKind", () => {
@@ -122,20 +113,6 @@ describe("feature preferences", () => {
         },
       },
     });
-  });
-
-  test("gates capability-owned groups without mutating layers", () => {
-    const layer = {
-      showToolCalls: true,
-      showReasoning: true,
-      artifacts: { display: { default: "inline" as const } },
-    };
-    expect(
-      mergeFeaturePreferences([layer], {
-        capabilities: { artifacts: false, tools: false, reasoning: false },
-      })
-    ).toEqual({});
-    expect(layer.artifacts.display.default).toBe("inline");
   });
 
   test("does not mutate inputs and ignores prototype-pollution keys", () => {
@@ -170,29 +147,6 @@ describe("feature preferences", () => {
       },
     });
     expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
-  });
-
-  test("applies null resets and prunes empty containers", () => {
-    const layer = {
-      artifacts: {
-        display: {
-          files: "inline" as const,
-          byKind: { component: "panel" as const },
-        },
-      },
-    };
-    const next = applyFeaturePreferencePatch(
-      layer,
-      createArtifactDisplayPreferencePatch({ type: "files" }, null)
-    );
-    expect(next).toEqual({
-      artifacts: { display: { byKind: { component: "panel" } } },
-    });
-    expect(
-      applyFeaturePreferencePatch(next, {
-        artifacts: { display: { byKind: { component: null } } },
-      })
-    ).toEqual({});
   });
 
   test("allows only curated persisted fields at the runtime boundary", () => {
@@ -284,71 +238,6 @@ describe("feature preferences", () => {
     });
   });
 
-  test("creates and reads selector patches including normalized MIME types", () => {
-    const patch = createArtifactDisplayPreferencePatch(
-      { type: "mediaType", mediaType: "Text/HTML; charset=utf-8" },
-      "inline"
-    );
-    const next = applyFeaturePreferencePatch({}, patch);
-    expect(next).toEqual({
-      artifacts: {
-        display: { files: { byMediaType: { "text/html": "inline" } } },
-      },
-    });
-    expect(
-      getArtifactDisplayPreference(next, {
-        type: "mediaType",
-        mediaType: "TEXT/HTML",
-      })
-    ).toBe("inline");
-    expect(
-      createArtifactDisplayPreferencePatch(
-        { type: "kind", kind: "component" },
-        "collapsed"
-      )
-    ).toEqual({
-      artifacts: { display: { byKind: { component: "collapsed" } } },
-    });
-  });
-
-  test("promotes a stored files blanket to its default when a MIME exception is added", () => {
-    const blanket = applyFeaturePreferencePatch(
-      {},
-      createArtifactDisplayPreferencePatch({ type: "files" }, "inline")
-    );
-    expect(blanket).toEqual({
-      artifacts: { display: { files: "inline" } },
-    });
-    const withException = applyFeaturePreferencePatch(
-      blanket,
-      createArtifactDisplayPreferencePatch(
-        { type: "mediaType", mediaType: "text/csv" },
-        "panel"
-      )
-    );
-    expect(withException).toEqual({
-      artifacts: {
-        display: {
-          files: {
-            default: "inline",
-            byMediaType: { "text/csv": "panel" },
-          },
-        },
-      },
-    });
-    // Resetting the files choice deletes only the default; exceptions survive.
-    expect(
-      applyFeaturePreferencePatch(
-        withException,
-        createArtifactDisplayPreferencePatch({ type: "files" }, null)
-      )
-    ).toEqual({
-      artifacts: {
-        display: { files: { byMediaType: { "text/csv": "panel" } } },
-      },
-    });
-  });
-
   test("rejects invalid media-type selectors but accepts wildcards", () => {
     const parsed = parseWidgetPreferenceSlice({
       artifacts: {
@@ -373,110 +262,65 @@ describe("feature preferences", () => {
       "artifacts.display.files.byMediaType.not a mime",
     ]);
   });
+});
 
-  test("explains the winning selector and preference layer", () => {
-    const layers: WidgetPreferenceLayer[] = [
-      {
-        id: "organization",
-        preferences: {
-          artifacts: {
-            display: {
-              files: {
-                default: "panel",
-                byMediaType: { "text/html": "inline" },
-              },
-            },
-          },
+describe("resolveConfigPreferences", () => {
+  test("returns the config unchanged when preferences are absent or empty", () => {
+    const config: AgentWidgetConfig = {
+      apiUrl: "https://api.example.com/chat",
+      features: { artifacts: { enabled: true, display: "panel" } },
+    };
+    expect(resolveConfigPreferences(config)).toBe(config);
+    const withEmpty = { ...config, preferences: {} };
+    expect(resolveConfigPreferences(withEmpty)).toBe(withEmpty);
+  });
+
+  test("bakes preferences into features and keeps other config keys", () => {
+    const resolved = resolveConfigPreferences({
+      apiUrl: "https://api.example.com/chat",
+      features: {
+        artifacts: {
+          enabled: true,
+          display: { default: "panel", byKind: { component: "collapsed" } },
         },
       },
-      {
-        id: "user",
-        preferences: {
-          artifacts: { display: { files: { default: "collapsed" } } },
-        },
-      },
-    ];
-    // The user refined with the object form, so the organization's HTML
-    // exception stays visible and is attributed to the organization.
-    expect(
-      resolveArtifactDisplayPreference(
-        { display: "panel" },
-        layers,
-        {
-          artifactType: "markdown",
-          file: { path: "app.html", mimeType: "text/html" },
-        }
-      )
-    ).toEqual({
-      mode: "inline",
-      matchedBy: {
-        type: "mediaType",
-        mediaType: "text/html",
-        selector: "text/html",
-      },
-      source: { type: "preference", layerId: "organization" },
+      preferences: { artifacts: { display: { default: "inline" } } },
     });
-    expect(
-      resolveArtifactDisplayPreference(
-        { display: "panel" },
-        layers,
-        {
-          artifactType: "markdown",
-          file: { path: "data.csv", mimeType: "text/csv" },
-        }
-      )
-    ).toEqual({
-      mode: "collapsed",
-      matchedBy: { type: "files" },
-      source: { type: "preference", layerId: "user" },
+    expect(resolved.apiUrl).toBe("https://api.example.com/chat");
+    expect(resolved.features?.artifacts?.enabled).toBe(true);
+    expect(resolved.features?.artifacts?.display).toEqual({
+      default: "inline",
+      byKind: { component: "collapsed" },
     });
   });
 
-  test("a user files blanket beats lower-layer MIME exceptions and is attributed to the user", () => {
-    const layers: WidgetPreferenceLayer[] = [
-      {
-        id: "organization",
-        preferences: {
-          artifacts: {
-            display: {
-              files: { byMediaType: { "text/html": "panel" } },
-            },
-          },
+  test("a string display preference replaces the base rule subtree", () => {
+    const resolved = resolveConfigPreferences({
+      features: {
+        artifacts: {
+          display: { default: "panel", byKind: { markdown: "collapsed" } },
         },
       },
-      {
-        id: "user",
-        preferences: {
-          artifacts: { display: { files: "inline" } },
-        },
-      },
-    ];
-    expect(
-      resolveArtifactDisplayPreference(undefined, layers, {
-        artifactType: "markdown",
-        file: { path: "app.html", mimeType: "text/html" },
-      })
-    ).toEqual({
-      mode: "inline",
-      matchedBy: { type: "files" },
-      source: { type: "preference", layerId: "user" },
+      preferences: { artifacts: { display: "inline" } },
     });
+    expect(resolved.features?.artifacts?.display).toBe("inline");
   });
 
-  test("attributes a producer preferredMode hint to the artifact", () => {
-    expect(
-      resolveArtifactDisplayPreference(
-        { display: "collapsed" },
-        [],
-        {
-          artifactType: "markdown",
-          presentation: { preferredMode: "panel" },
-        }
-      )
-    ).toEqual({
-      mode: "panel",
-      matchedBy: { type: "preferredMode" },
-      source: { type: "artifact" },
+  test("preferences cannot carry keys outside the allowlist", () => {
+    const resolved = resolveConfigPreferences({
+      features: {
+        artifacts: { enabled: true, filePreview: { iframeSandbox: "allow-scripts" } },
+      },
+      preferences: {
+        artifacts: {
+          display: "inline",
+          filePreview: { iframeSandbox: "allow-same-origin" },
+        },
+      } as unknown as WidgetPreferenceSlice,
     });
+    expect(resolved.features?.artifacts?.filePreview?.iframeSandbox).toBe(
+      "allow-scripts"
+    );
+    expect(resolved.features?.artifacts?.display).toBe("inline");
   });
 });

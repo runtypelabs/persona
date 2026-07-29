@@ -2292,7 +2292,7 @@ export type WidgetArtifactLayoutPreference = Pick<
  *
  * Absence means inherit the next preference layer and ultimately Persona's
  * current default. Persist only explicit choices; resetting a choice deletes
- * its key through {@link WidgetPreferencePatch}.
+ * its key.
  *
  * Capability facts (`artifacts.enabled`, `allowedTypes`), trusted iframe
  * security, callbacks, actions, renderers, labels, and theme styling are
@@ -2325,28 +2325,6 @@ export type WidgetPreferenceSlice = {
     layout?: WidgetArtifactLayoutPreference;
   };
 };
-
-type WidgetPreferencePatchValue<T> =
-  T extends readonly unknown[]
-    ? T | null
-    : T extends object
-      ? { [K in keyof T]?: WidgetPreferencePatchValue<T[K]> } | null
-      : T | null;
-
-/** JSON-safe sparse patch. `null` deletes the corresponding stored-layer key. */
-export type WidgetPreferencePatch = {
-  [K in keyof WidgetPreferenceSlice]?: WidgetPreferencePatchValue<
-    WidgetPreferenceSlice[K]
-  >;
-};
-
-export type ArtifactDisplayPreferenceTarget =
-  | { type: "default" }
-  /** All file-backed artifacts. Writes the string form, replacing lower-layer file rules. */
-  | { type: "files" }
-  | { type: "kind"; kind: PersonaArtifactKind }
-  /** Exact MIME type ("text/html") or major-type wildcard ("image/*"). */
-  | { type: "mediaType"; mediaType: string };
 
 /**
  * Feature config for the built-in `suggest_replies` quick-reply chips.
@@ -5041,6 +5019,14 @@ export type AgentWidgetConfig = {
    */
   colorScheme?: 'auto' | 'light' | 'dark';
   features?: AgentWidgetFeatureFlags;
+  /**
+   * Per-instance display overrides, applied over `features` through the
+   * preference allowlist (security/capability keys cannot pass). String
+   * `display` values replace the base rule subtree; objects refine it per
+   * key. Live-updatable via `controller.update({ preferences })`; an
+   * explicit-undefined patch clears back to the base `features`.
+   */
+  preferences?: WidgetPreferenceSlice;
   /**
    * When true, focus the chat input after the panel opens and the open animation completes.
    * Applies to launcher mode (user click, controller.open(), autoExpand) and inline mode (on init).

@@ -1,23 +1,18 @@
 import type {
   AgentWidgetArtifactsFeature,
+  AgentWidgetConfig,
   AgentWidgetFeatureFlags,
-  ArtifactDisplayPreferenceTarget,
   PersonaArtifactDisplayMode,
   PersonaArtifactDisplayModeInput,
   PersonaArtifactDisplayRules,
   PersonaArtifactFilesDisplayRules,
   PersonaArtifactKind,
   WidgetArtifactLayoutPreference,
-  WidgetPreferenceCapabilities,
-  WidgetPreferencePatch,
   WidgetPreferenceSlice,
 } from "../types";
 import {
   canonicalArtifactDisplayMode,
   normalizeMediaType,
-  resolveArtifactDisplay,
-  type PersonaArtifactDisplayDescriptor,
-  type PersonaArtifactDisplayResolution,
 } from "./artifact-display";
 
 export { normalizeMediaType };
@@ -38,24 +33,6 @@ export type WidgetPreferenceParseResult = {
   preferences: WidgetPreferenceSlice;
   issues: WidgetPreferenceParseIssue[];
 };
-
-export type WidgetPreferenceLayer = {
-  /** Stable identifier used when explaining which layer supplied a value. */
-  id: string;
-  preferences?: WidgetPreferenceSlice;
-};
-
-export type ArtifactDisplayPreferenceSource =
-  | { type: "preference"; layerId: string }
-  | { type: "base" }
-  /** The artifact's own `presentation.preferredMode` hint supplied the mode. */
-  | { type: "artifact" }
-  | { type: "persona" };
-
-export type ArtifactDisplayPreferenceResolution =
-  PersonaArtifactDisplayResolution & {
-    source: ArtifactDisplayPreferenceSource;
-  };
 
 const BLOCKED_KEYS = new Set(["__proto__", "prototype", "constructor"]);
 // Accepted input values; "card" is the deprecated alias of "collapsed" and
@@ -567,56 +544,14 @@ function mergeRecords(
   return result;
 }
 
-function pruneRecord(value: unknown): unknown {
-  if (!isRecord(value)) return value;
-  const result: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value)) {
-    if (!isSafeKey(key) || child === undefined) continue;
-    const pruned = pruneRecord(child);
-    if (!isRecord(pruned) || hasKeys(pruned)) result[key] = pruned;
-  }
-  return result;
-}
-
-function applyPatchValue(previous: unknown, patch: unknown): unknown {
-  if (patch === null) return undefined;
-  if (!isRecord(patch)) return cloneValue(patch);
-  const result = isRecord(previous) ? cloneValue(previous) : {};
-  for (const [key, value] of Object.entries(patch)) {
-    if (!isSafeKey(key) || value === undefined) continue;
-    const next = applyPatchValue(result[key], value);
-    if (next === undefined) delete result[key];
-    else result[key] = next;
-  }
-  return pruneRecord(result);
-}
-
-function applyCapabilities(
-  preferences: WidgetPreferenceSlice,
-  capabilities?: WidgetPreferenceCapabilities
-): WidgetPreferenceSlice {
-  const result = cloneValue(preferences);
-  if (capabilities?.artifacts === false) delete result.artifacts;
-  if (capabilities?.tools === false) {
-    delete result.showToolCalls;
-    delete result.toolCallDisplay;
-  }
-  if (capabilities?.reasoning === false) {
-    delete result.showReasoning;
-    delete result.reasoningDisplay;
-  }
-  return result;
-}
-
 /**
- * Merge lowest-to-highest preference layers after parsing each as untrusted
- * persisted data. Objects merge per key, so later layers win only for keys
- * they explicitly contain; a string `display` or `display.files` value in a
- * later layer replaces that whole subtree instead.
+ * Merge lowest-to-highest preference slices after parsing each as untrusted
+ * data. Objects merge per key, so later slices win only for keys they
+ * explicitly contain; a string `display` or `display.files` value in a later
+ * slice replaces that whole subtree instead.
  */
 export function mergeFeaturePreferences(
-  layers: readonly WidgetPreferenceSlice[],
-  options?: { capabilities?: WidgetPreferenceCapabilities }
+  layers: readonly WidgetPreferenceSlice[]
 ): WidgetPreferenceSlice {
   let merged: Record<string, unknown> = {};
   let display: ArtifactDisplayValue | undefined;
@@ -632,48 +567,7 @@ export function mergeFeaturePreferences(
     if (display !== undefined) result.artifacts.display = display;
     else delete result.artifacts.display;
   }
-  return applyCapabilities(result, options?.capabilities);
-}
-
-/**
- * When a patch refines a subtree whose stored value is the string shorthand,
- * promote the string to `{ default }` first so the refinement extends the
- * stored choice instead of discarding it.
- */
-function promoteDisplayForPatch(
-  previous: WidgetPreferenceSlice,
-  patch: WidgetPreferencePatch
-): void {
-  const patchDisplay = patch.artifacts?.display;
-  const artifacts = previous.artifacts;
-  if (!artifacts || !isRecord(patchDisplay)) return;
-  if (typeof artifacts.display === "string") {
-    artifacts.display = { default: artifacts.display };
-  }
-  const display = artifacts.display;
-  if (
-    display &&
-    typeof display !== "string" &&
-    isRecord(patchDisplay.files) &&
-    typeof display.files === "string"
-  ) {
-    display.files = { default: display.files };
-  }
-}
-
-/**
- * Apply a JSON-safe sparse patch (RFC 7386 JSON Merge Patch semantics) to one
- * stored layer. `null` deletes a key. The result is parsed again so an
- * untyped patch cannot escape the allowlist.
- */
-export function applyFeaturePreferencePatch(
-  layer: WidgetPreferenceSlice,
-  patch: WidgetPreferencePatch
-): WidgetPreferenceSlice {
-  const previous = parseWidgetPreferenceSlice(layer).preferences;
-  promoteDisplayForPatch(previous, patch);
-  const next = applyPatchValue(previous, patch);
-  return parseWidgetPreferenceSlice(next).preferences;
+  return result;
 }
 
 type ArtifactDisplayValue =
@@ -738,10 +632,9 @@ function mergeDisplayValue(
  */
 export function applyFeaturePreferences(
   baseFeatures: AgentWidgetFeatureFlags = {},
-  layers: readonly WidgetPreferenceSlice[],
-  options?: { capabilities?: WidgetPreferenceCapabilities }
+  layers: readonly WidgetPreferenceSlice[]
 ): AgentWidgetFeatureFlags {
-  const preferences = mergeFeaturePreferences(layers, options);
+  const preferences = mergeFeaturePreferences(layers);
   const result: AgentWidgetFeatureFlags = { ...baseFeatures };
   if (preferences.showToolCalls !== undefined) {
     result.showToolCalls = preferences.showToolCalls;
@@ -788,140 +681,18 @@ export function applyFeaturePreferences(
   return result;
 }
 
-const canonicalOrUndefined = (
-  mode: PersonaArtifactDisplayModeInput | undefined
-): PersonaArtifactDisplayMode | undefined =>
-  mode === undefined ? undefined : canonicalArtifactDisplayMode(mode);
-
-export function getArtifactDisplayPreference(
-  preferences: WidgetPreferenceSlice,
-  target: ArtifactDisplayPreferenceTarget
-): PersonaArtifactDisplayMode | undefined {
-  const display = preferences.artifacts?.display;
-  if (!display) return undefined;
-  if (typeof display === "string") {
-    return target.type === "default"
-      ? canonicalArtifactDisplayMode(display)
-      : undefined;
-  }
-  switch (target.type) {
-    case "default":
-      return canonicalOrUndefined(display.default);
-    case "files":
-      return canonicalOrUndefined(
-        typeof display.files === "string"
-          ? display.files
-          : display.files?.default
-      );
-    case "kind":
-      return canonicalOrUndefined(
-        display.byKind?.[target.kind] ?? display.byType?.[target.kind]
-      );
-    case "mediaType":
-      return canonicalOrUndefined(
-        typeof display.files === "string"
-          ? undefined
-          : display.files?.byMediaType?.[normalizeMediaType(target.mediaType)]
-      );
-  }
-}
-
 /**
- * Build the sparse patch for one display choice. Setting the `files` target
- * writes the string form, which replaces lower-layer file rules wholesale;
- * resetting it (`null`) deletes only `files.default` so stored MIME
- * exceptions survive.
+ * Bake `config.preferences` into `config.features` for one widget instance.
+ * Callers supporting live preference updates must re-resolve from the
+ * pre-preference base features, not from a previously resolved result.
  */
-export function createArtifactDisplayPreferencePatch(
-  target: ArtifactDisplayPreferenceTarget,
-  mode: PersonaArtifactDisplayModeInput | null
-): WidgetPreferencePatch {
-  const canonical = mode === null ? null : canonicalArtifactDisplayMode(mode);
-  switch (target.type) {
-    case "default":
-      return { artifacts: { display: { default: canonical } } };
-    case "files":
-      return canonical === null
-        ? { artifacts: { display: { files: { default: null } } } }
-        : { artifacts: { display: { files: canonical } } };
-    case "kind":
-      return {
-        artifacts: { display: { byKind: { [target.kind]: canonical } } },
-      };
-    case "mediaType":
-      return {
-        artifacts: {
-          display: {
-            files: {
-              byMediaType: {
-                [normalizeMediaType(target.mediaType)]: canonical,
-              },
-            },
-          },
-        },
-      };
-  }
-}
-
-function targetForResolution(
-  resolution: PersonaArtifactDisplayResolution
-): ArtifactDisplayPreferenceTarget | undefined {
-  switch (resolution.matchedBy.type) {
-    case "mediaType":
-      // The configured selector, not the artifact's concrete MIME type, so a
-      // wildcard match attributes to the "image/*" key that supplied it.
-      return {
-        type: "mediaType",
-        mediaType: resolution.matchedBy.selector,
-      };
-    case "files":
-      return { type: "files" };
-    case "kind":
-      return { type: "kind", kind: resolution.matchedBy.kind };
-    case "default":
-      return { type: "default" };
-    case "preferredMode":
-    case "personaDefault":
-      return undefined;
-  }
-}
-
-/**
- * Resolve an artifact and explain both the selector and preference layer that
- * supplied the winning value.
- */
-export function resolveArtifactDisplayPreference(
-  baseArtifacts: AgentWidgetArtifactsFeature | undefined,
-  layers: readonly WidgetPreferenceLayer[],
-  artifact: PersonaArtifactDisplayDescriptor,
-  options?: { capabilities?: WidgetPreferenceCapabilities }
-): ArtifactDisplayPreferenceResolution {
-  const parsedLayers = layers.map((layer) => ({
-    id: layer.id,
-    preferences: parseWidgetPreferenceSlice(layer.preferences).preferences,
-  }));
-  const features = applyFeaturePreferences(
-    { artifacts: baseArtifacts },
-    parsedLayers.map((layer) => layer.preferences),
-    options
-  );
-  const resolution = resolveArtifactDisplay(features.artifacts, artifact);
-  if (resolution.matchedBy.type === "preferredMode") {
-    return { ...resolution, source: { type: "artifact" } };
-  }
-  const target = targetForResolution(resolution);
-  if (!target) return { ...resolution, source: { type: "persona" } };
-
-  for (let index = parsedLayers.length - 1; index >= 0; index -= 1) {
-    if (
-      getArtifactDisplayPreference(parsedLayers[index].preferences, target) !==
-      undefined
-    ) {
-      return {
-        ...resolution,
-        source: { type: "preference", layerId: parsedLayers[index].id },
-      };
-    }
-  }
-  return { ...resolution, source: { type: "base" } };
+export function resolveConfigPreferences(
+  config: AgentWidgetConfig
+): AgentWidgetConfig {
+  const preferences = config.preferences;
+  if (!preferences || !hasKeys(preferences)) return config;
+  return {
+    ...config,
+    features: applyFeaturePreferences(config.features ?? {}, [preferences]),
+  };
 }

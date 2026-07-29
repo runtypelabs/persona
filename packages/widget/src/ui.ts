@@ -133,6 +133,7 @@ import {
   shouldExpandLauncherForArtifacts
 } from "./utils/artifact-gate";
 import { resolveArtifactDisplayMode } from "./utils/artifact-display";
+import { resolveConfigPreferences } from "./utils/feature-preferences";
 import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resize";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
@@ -596,6 +597,11 @@ export const createAgentExperience = (
   }
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
+  // `config.features` holds the preference-resolved view every read site uses;
+  // `baseFeatures` keeps the pre-preference base so update() re-resolves from
+  // it instead of stacking new preferences onto already-overlaid values.
+  let baseFeatures = config.features;
+  config = resolveConfigPreferences(config);
   // Note: applyThemeVariables is called after applyFullHeightStyles() below
   // because applyFullHeightStyles resets mount.style.cssText
 
@@ -7848,8 +7854,11 @@ export const createAgentExperience = (
       const previousStreamAnimationType = config.features?.streamAnimation?.type;
       // One consistent recursive patch policy across the live controller and the
       // init handle. See utils/config-merge.ts for the replace-leaf list and
-      // explicit-undefined reset semantics.
-      config = mergeConfigUpdate(config, nextConfig);
+      // explicit-undefined reset semantics. The patch merges over the
+      // pre-preference base features, then preferences re-resolve on top.
+      config = mergeConfigUpdate({ ...config, features: baseFeatures }, nextConfig);
+      baseFeatures = config.features;
+      config = resolveConfigPreferences(config);
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
       applyThemeVariables(mount, config);
