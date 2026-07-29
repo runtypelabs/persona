@@ -51,32 +51,6 @@ const ARTIFACT_KINDS = new Set<PersonaArtifactKind>([
 // because it duplicates files.default.
 const MEDIA_TYPE_SELECTOR_PATTERN =
   /^[a-z0-9][a-z0-9!#$&^_.+-]*\/(\*|[a-z0-9!#$&^_.+-]+)$/;
-const TOOL_COLLAPSED_MODES = new Set([
-  "tool-call",
-  "tool-name",
-  "tool-preview",
-]);
-const TOOL_GROUPED_MODES = new Set(["stack", "summary"]);
-const TOOL_LOADING_ANIMATIONS = new Set([
-  "none",
-  "pulse",
-  "shimmer",
-  "shimmer-color",
-  "rainbow",
-]);
-const ARTIFACT_LAYOUT_STRING_KEYS = new Set([
-  "paneWidth",
-  "paneMaxWidth",
-  "paneMinWidth",
-  "expandedPanelWidth",
-  "resizableMinWidth",
-  "resizableMaxWidth",
-]);
-const ARTIFACT_LAYOUT_BOOLEAN_KEYS = new Set([
-  "expandLauncherPanelWhenOpen",
-  "resizable",
-]);
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -95,368 +69,234 @@ function issue(
   path: string,
   code: WidgetPreferenceParseIssueCode,
   message: string
-): void {
+): undefined {
   issues.push({ path, code, message });
-}
-
-function unknownKeys(
-  value: Record<string, unknown>,
-  allowed: ReadonlySet<string>,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): void {
-  for (const key of Object.keys(value)) {
-    if (!isSafeKey(key) || !allowed.has(key)) {
-      issue(
-        issues,
-        path ? `${path}.${key}` : key,
-        "unknown_key",
-        "Ignored because this key is not part of the persisted preference schema."
-      );
-    }
-  }
-}
-
-function parseBoolean(
-  value: unknown,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): boolean | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === "boolean") return value;
-  issue(issues, path, "invalid_type", "Expected a boolean.");
   return undefined;
 }
 
-function parseEnum<T extends string>(
-  value: unknown,
-  values: ReadonlySet<string>,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): T | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === "string" && values.has(value)) return value as T;
-  issue(issues, path, "invalid_value", "Ignored an unsupported value.");
-  return undefined;
-}
+const UNKNOWN_KEY_MESSAGE =
+  "Ignored because this key is not part of the persisted preference schema.";
+const UNSUPPORTED_VALUE_MESSAGE = "Ignored an unsupported value.";
+const MODE_VALUE_MESSAGE = "Expected collapsed, panel, or inline.";
+const MEDIA_TYPE_MESSAGE =
+  'Expected a MIME type such as "text/html" or a wildcard such as "image/*".';
 
-function parseDisplayModeMap<K extends string>(
-  value: unknown,
-  keys: ReadonlySet<K>,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): Partial<Record<K, PersonaArtifactDisplayMode>> | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) {
-    issue(issues, path, "invalid_type", "Expected an object.");
-    return undefined;
-  }
-
-  const result: Partial<Record<K, PersonaArtifactDisplayMode>> = {};
-  for (const [key, mode] of Object.entries(value)) {
-    if (!isSafeKey(key) || !keys.has(key as K)) {
-      issue(issues, `${path}.${key}`, "unknown_key", "Ignored an unsupported selector.");
-      continue;
+type PreferenceNode = {
+  /** Fold this key's parsed value into another output key, that key winning. */
+  alias?: string;
+  /** Reported whenever the input carries this key, valid or not. */
+  deprecated?: string;
+} & (
+  | { kind: "boolean" }
+  | { kind: "string"; message: string }
+  | { kind: "enum"; values: ReadonlySet<string>; message: string }
+  /** Display mode; canonicalizes the deprecated "card" alias to "collapsed". */
+  | { kind: "mode"; message: string }
+  /** Mode values keyed by a closed selector set, or by MIME selector. */
+  | { kind: "modeMap"; keys: ReadonlySet<string> | "mediaType" }
+  | {
+      kind: "object";
+      children: Record<string, PreferenceNode>;
+      message?: string;
+      /** Also accept a bare mode string in place of the rules object. */
+      bareMode?: true;
     }
-    if (!isDisplayMode(mode)) {
-      issue(
-        issues,
-        `${path}.${key}`,
-        "invalid_value",
-        "Expected collapsed, panel, or inline."
-      );
-      continue;
+);
+
+const DEFAULT_MODE: PreferenceNode = {
+  kind: "mode",
+  message: UNSUPPORTED_VALUE_MESSAGE,
+};
+const CSS_LENGTH: PreferenceNode = {
+  kind: "string",
+  message: "Expected a CSS length string.",
+};
+const BOOLEAN: PreferenceNode = { kind: "boolean" };
+
+// Keyed by the preference type so the table stays exhaustive; string keys are
+// declared before boolean keys because issue order follows declaration order.
+const ARTIFACT_LAYOUT_CHILDREN: Record<
+  keyof WidgetArtifactLayoutPreference,
+  PreferenceNode
+> = {
+  paneWidth: CSS_LENGTH,
+  paneMaxWidth: CSS_LENGTH,
+  paneMinWidth: CSS_LENGTH,
+  expandedPanelWidth: CSS_LENGTH,
+  resizableMinWidth: CSS_LENGTH,
+  resizableMaxWidth: CSS_LENGTH,
+  expandLauncherPanelWhenOpen: BOOLEAN,
+  resizable: BOOLEAN,
+};
+
+const ROOT_NODE: PreferenceNode = {
+  kind: "object",
+  message: "Expected a preference object.",
+  children: {
+    showToolCalls: BOOLEAN,
+    showReasoning: BOOLEAN,
+    toolCallDisplay: {
+      kind: "object",
+      children: {
+        collapsedMode: {
+          kind: "enum",
+          values: new Set(["tool-call", "tool-name", "tool-preview"]),
+          message: UNSUPPORTED_VALUE_MESSAGE,
+        },
+        groupedMode: {
+          kind: "enum",
+          values: new Set(["stack", "summary"]),
+          message: UNSUPPORTED_VALUE_MESSAGE,
+        },
+        loadingAnimation: {
+          kind: "enum",
+          values: new Set([
+            "none",
+            "pulse",
+            "shimmer",
+            "shimmer-color",
+            "rainbow",
+          ]),
+          message: UNSUPPORTED_VALUE_MESSAGE,
+        },
+        expandable: BOOLEAN,
+        grouped: BOOLEAN,
+      },
+    },
+    reasoningDisplay: {
+      kind: "object",
+      children: { expandable: BOOLEAN, activePreview: BOOLEAN },
+    },
+    artifacts: {
+      kind: "object",
+      children: {
+        display: {
+          kind: "object",
+          bareMode: true,
+          message: "Expected an artifact display rules object.",
+          children: {
+            default: DEFAULT_MODE,
+            files: {
+              kind: "object",
+              bareMode: true,
+              message:
+                "Expected collapsed, panel, inline, or a file display rules object.",
+              children: {
+                default: DEFAULT_MODE,
+                byMediaType: { kind: "modeMap", keys: "mediaType" },
+              },
+            },
+            // Declared before byKind: fold order decides alias precedence.
+            byType: {
+              kind: "modeMap",
+              keys: ARTIFACT_KINDS,
+              alias: "byKind",
+              deprecated:
+                "Use byKind. The legacy selector was normalized automatically.",
+            },
+            byKind: { kind: "modeMap", keys: ARTIFACT_KINDS },
+          },
+        },
+        filePreview: { kind: "object", children: { enabled: BOOLEAN } },
+        layout: { kind: "object", children: ARTIFACT_LAYOUT_CHILDREN },
+      },
+    },
+  },
+};
+
+/**
+ * Walk one value against its schema node. Returns the parsed value, or
+ * `undefined` when the value is absent, rejected, or parsed to nothing.
+ */
+function parseNode(
+  value: unknown,
+  node: PreferenceNode,
+  path: string,
+  issues: WidgetPreferenceParseIssue[]
+): unknown {
+  if (value === undefined) return undefined;
+  switch (node.kind) {
+    case "boolean":
+      return typeof value === "boolean"
+        ? value
+        : issue(issues, path, "invalid_type", "Expected a boolean.");
+    case "string":
+      return typeof value === "string"
+        ? value
+        : issue(issues, path, "invalid_type", node.message);
+    case "enum":
+      return typeof value === "string" && node.values.has(value)
+        ? value
+        : issue(issues, path, "invalid_value", node.message);
+    case "mode":
+      return isDisplayMode(value)
+        ? canonicalArtifactDisplayMode(value)
+        : issue(issues, path, "invalid_value", node.message);
+    case "modeMap": {
+      if (!isRecord(value)) {
+        return issue(issues, path, "invalid_type", "Expected an object.");
+      }
+      const keys = node.keys === "mediaType" ? undefined : node.keys;
+      const map: Record<string, PersonaArtifactDisplayMode> = {};
+      for (const [key, mode] of Object.entries(value)) {
+        const selector = keys ? key : normalizeMediaType(key);
+        const known =
+          isSafeKey(key) &&
+          (keys ? keys.has(key) : MEDIA_TYPE_SELECTOR_PATTERN.test(selector));
+        if (!known) {
+          issue(
+            issues,
+            `${path}.${key}`,
+            keys ? "unknown_key" : "invalid_value",
+            keys ? "Ignored an unsupported selector." : MEDIA_TYPE_MESSAGE
+          );
+        } else if (!isDisplayMode(mode)) {
+          issue(issues, `${path}.${key}`, "invalid_value", MODE_VALUE_MESSAGE);
+        } else {
+          map[selector] = canonicalArtifactDisplayMode(mode);
+        }
+      }
+      return hasKeys(map) ? map : undefined;
     }
-    result[key as K] = canonicalArtifactDisplayMode(mode);
-  }
-  return hasKeys(result) ? result : undefined;
-}
-
-function parseMediaTypeMap(
-  value: unknown,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): Record<string, PersonaArtifactDisplayMode> | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) {
-    issue(issues, path, "invalid_type", "Expected an object.");
-    return undefined;
-  }
-
-  const result: Record<string, PersonaArtifactDisplayMode> = {};
-  for (const [candidate, mode] of Object.entries(value)) {
-    const mediaType = normalizeMediaType(candidate);
-    if (!isSafeKey(candidate) || !MEDIA_TYPE_SELECTOR_PATTERN.test(mediaType)) {
-      issue(
-        issues,
-        `${path}.${candidate}`,
-        "invalid_value",
-        'Expected a MIME type such as "text/html" or a wildcard such as "image/*".'
-      );
-      continue;
-    }
-    if (!isDisplayMode(mode)) {
-      issue(
-        issues,
-        `${path}.${candidate}`,
-        "invalid_value",
-        "Expected collapsed, panel, or inline."
-      );
-      continue;
-    }
-    result[mediaType] = canonicalArtifactDisplayMode(mode);
-  }
-  return hasKeys(result) ? result : undefined;
-}
-
-function parseFilesValue(
-  value: unknown,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): PersonaArtifactDisplayMode | PersonaArtifactFilesDisplayRules | undefined {
-  if (value === undefined) return undefined;
-  if (isDisplayMode(value)) return canonicalArtifactDisplayMode(value);
-  if (!isRecord(value)) {
-    issue(
-      issues,
-      path,
-      "invalid_type",
-      "Expected collapsed, panel, inline, or a file display rules object."
-    );
-    return undefined;
-  }
-  unknownKeys(value, new Set(["default", "byMediaType"]), path, issues);
-  const defaultMode = parseEnum<PersonaArtifactDisplayModeInput>(
-    value.default,
-    DISPLAY_MODES,
-    `${path}.default`,
-    issues
-  );
-  const byMediaType = parseMediaTypeMap(
-    value.byMediaType,
-    `${path}.byMediaType`,
-    issues
-  );
-  const result: PersonaArtifactFilesDisplayRules = {
-    ...(defaultMode
-      ? { default: canonicalArtifactDisplayMode(defaultMode) }
-      : {}),
-    ...(byMediaType ? { byMediaType } : {}),
-  };
-  return hasKeys(result) ? result : undefined;
-}
-
-function parseDisplayRules(
-  value: unknown,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): PersonaArtifactDisplayMode | PersonaArtifactDisplayRules | undefined {
-  if (value === undefined) return undefined;
-  // A bare mode is a meaningful stored value: when layers merge it replaces
-  // every lower-layer display rule instead of refining them.
-  if (isDisplayMode(value)) return canonicalArtifactDisplayMode(value);
-  if (!isRecord(value)) {
-    issue(issues, path, "invalid_type", "Expected an artifact display rules object.");
-    return undefined;
-  }
-
-  unknownKeys(value, new Set(["default", "files", "byKind", "byType"]), path, issues);
-
-  const defaultMode = parseEnum<PersonaArtifactDisplayModeInput>(
-    value.default,
-    DISPLAY_MODES,
-    `${path}.default`,
-    issues
-  );
-  const files = parseFilesValue(value.files, `${path}.files`, issues);
-  const legacyByType = parseDisplayModeMap(
-    value.byType,
-    ARTIFACT_KINDS,
-    `${path}.byType`,
-    issues
-  );
-  if (value.byType !== undefined) {
-    issue(
-      issues,
-      `${path}.byType`,
-      "deprecated_key",
-      "Use byKind. The legacy selector was normalized automatically."
-    );
-  }
-  const byKind = parseDisplayModeMap(
-    value.byKind,
-    ARTIFACT_KINDS,
-    `${path}.byKind`,
-    issues
-  );
-
-  const result: PersonaArtifactDisplayRules = {
-    ...(defaultMode
-      ? { default: canonicalArtifactDisplayMode(defaultMode) }
-      : {}),
-    ...(files !== undefined ? { files } : {}),
-    ...(legacyByType || byKind
-      ? { byKind: { ...legacyByType, ...byKind } }
-      : {}),
-  };
-  return hasKeys(result) ? result : undefined;
-}
-
-function parseToolCallDisplay(
-  value: unknown,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): WidgetPreferenceSlice["toolCallDisplay"] {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) {
-    issue(issues, path, "invalid_type", "Expected an object.");
-    return undefined;
-  }
-  unknownKeys(
-    value,
-    new Set([
-      "collapsedMode",
-      "expandable",
-      "grouped",
-      "groupedMode",
-      "loadingAnimation",
-    ]),
-    path,
-    issues
-  );
-  const result: NonNullable<WidgetPreferenceSlice["toolCallDisplay"]> = {};
-  const collapsedMode = parseEnum<
-    NonNullable<
-      NonNullable<WidgetPreferenceSlice["toolCallDisplay"]>["collapsedMode"]
-    >
-  >(
-    value.collapsedMode,
-    TOOL_COLLAPSED_MODES,
-    `${path}.collapsedMode`,
-    issues
-  );
-  const groupedMode = parseEnum<
-    NonNullable<
-      NonNullable<WidgetPreferenceSlice["toolCallDisplay"]>["groupedMode"]
-    >
-  >(
-    value.groupedMode,
-    TOOL_GROUPED_MODES,
-    `${path}.groupedMode`,
-    issues
-  );
-  const loadingAnimation = parseEnum<
-    NonNullable<
-      NonNullable<WidgetPreferenceSlice["toolCallDisplay"]>["loadingAnimation"]
-    >
-  >(
-    value.loadingAnimation,
-    TOOL_LOADING_ANIMATIONS,
-    `${path}.loadingAnimation`,
-    issues
-  );
-  const expandable = parseBoolean(value.expandable, `${path}.expandable`, issues);
-  const grouped = parseBoolean(value.grouped, `${path}.grouped`, issues);
-  if (collapsedMode) result.collapsedMode = collapsedMode;
-  if (groupedMode) result.groupedMode = groupedMode;
-  if (loadingAnimation) result.loadingAnimation = loadingAnimation;
-  if (expandable !== undefined) result.expandable = expandable;
-  if (grouped !== undefined) result.grouped = grouped;
-  return hasKeys(result) ? result : undefined;
-}
-
-function parseReasoningDisplay(
-  value: unknown,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): WidgetPreferenceSlice["reasoningDisplay"] {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) {
-    issue(issues, path, "invalid_type", "Expected an object.");
-    return undefined;
-  }
-  unknownKeys(value, new Set(["expandable", "activePreview"]), path, issues);
-  const result: NonNullable<WidgetPreferenceSlice["reasoningDisplay"]> = {};
-  const expandable = parseBoolean(value.expandable, `${path}.expandable`, issues);
-  const activePreview = parseBoolean(
-    value.activePreview,
-    `${path}.activePreview`,
-    issues
-  );
-  if (expandable !== undefined) result.expandable = expandable;
-  if (activePreview !== undefined) result.activePreview = activePreview;
-  return hasKeys(result) ? result : undefined;
-}
-
-function parseArtifactLayout(
-  value: unknown,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): WidgetArtifactLayoutPreference | undefined {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) {
-    issue(issues, path, "invalid_type", "Expected an object.");
-    return undefined;
-  }
-
-  unknownKeys(
-    value,
-    new Set([...ARTIFACT_LAYOUT_STRING_KEYS, ...ARTIFACT_LAYOUT_BOOLEAN_KEYS]),
-    path,
-    issues
-  );
-  const result: Record<string, string | boolean> = {};
-  for (const key of ARTIFACT_LAYOUT_STRING_KEYS) {
-    if (value[key] === undefined) continue;
-    if (typeof value[key] === "string") result[key] = value[key];
-    else issue(issues, `${path}.${key}`, "invalid_type", "Expected a CSS length string.");
-  }
-  for (const key of ARTIFACT_LAYOUT_BOOLEAN_KEYS) {
-    const parsed = parseBoolean(value[key], `${path}.${key}`, issues);
-    if (parsed !== undefined) result[key] = parsed;
-  }
-  return hasKeys(result) ? (result as WidgetArtifactLayoutPreference) : undefined;
-}
-
-function parseArtifacts(
-  value: unknown,
-  path: string,
-  issues: WidgetPreferenceParseIssue[]
-): WidgetPreferenceSlice["artifacts"] {
-  if (value === undefined) return undefined;
-  if (!isRecord(value)) {
-    issue(issues, path, "invalid_type", "Expected an object.");
-    return undefined;
-  }
-  unknownKeys(value, new Set(["display", "filePreview", "layout"]), path, issues);
-
-  const display = parseDisplayRules(value.display, `${path}.display`, issues);
-  let filePreview: { enabled?: boolean } | undefined;
-  if (value.filePreview !== undefined) {
-    if (!isRecord(value.filePreview)) {
-      issue(issues, `${path}.filePreview`, "invalid_type", "Expected an object.");
-    } else {
-      unknownKeys(
-        value.filePreview,
-        new Set(["enabled"]),
-        `${path}.filePreview`,
-        issues
-      );
-      const enabled = parseBoolean(
-        value.filePreview.enabled,
-        `${path}.filePreview.enabled`,
-        issues
-      );
-      if (enabled !== undefined) filePreview = { enabled };
+    case "object": {
+      // A bare mode is a meaningful stored value: when layers merge it replaces
+      // every lower-layer display rule instead of refining them.
+      if (node.bareMode && isDisplayMode(value)) {
+        return canonicalArtifactDisplayMode(value);
+      }
+      if (!isRecord(value)) {
+        return issue(
+          issues,
+          path,
+          "invalid_type",
+          node.message ?? "Expected an object."
+        );
+      }
+      const childKeys = Object.keys(node.children);
+      const childPath = (key: string) => (path ? `${path}.${key}` : key);
+      for (const key of Object.keys(value)) {
+        if (!isSafeKey(key) || !childKeys.includes(key)) {
+          issue(issues, childPath(key), "unknown_key", UNKNOWN_KEY_MESSAGE);
+        }
+      }
+      const result: Record<string, unknown> = {};
+      for (const key of childKeys) {
+        const child = node.children[key];
+        const parsed = parseNode(value[key], child, childPath(key), issues);
+        if (child.deprecated && value[key] !== undefined) {
+          issue(issues, childPath(key), "deprecated_key", child.deprecated);
+        }
+        if (parsed === undefined) continue;
+        const target = child.alias ?? key;
+        const previous = result[target];
+        result[target] =
+          isRecord(previous) && isRecord(parsed)
+            ? { ...previous, ...parsed }
+            : parsed;
+      }
+      return hasKeys(result) ? result : undefined;
     }
   }
-  const layout = parseArtifactLayout(value.layout, `${path}.layout`, issues);
-  const result: NonNullable<WidgetPreferenceSlice["artifacts"]> = {
-    ...(display ? { display } : {}),
-    ...(filePreview ? { filePreview } : {}),
-    ...(layout ? { layout } : {}),
-  };
-  return hasKeys(result) ? result : undefined;
 }
 
 /**
@@ -469,53 +309,13 @@ export function parseWidgetPreferenceSlice(
   input: unknown
 ): WidgetPreferenceParseResult {
   const issues: WidgetPreferenceParseIssue[] = [];
-  if (!isRecord(input)) {
-    if (input !== undefined && input !== null) {
-      issue(issues, "", "invalid_type", "Expected a preference object.");
-    }
-    return { preferences: {}, issues };
-  }
-
-  unknownKeys(
-    input,
-    new Set([
-      "showToolCalls",
-      "showReasoning",
-      "toolCallDisplay",
-      "reasoningDisplay",
-      "artifacts",
-    ]),
-    "",
-    issues
-  );
-  const preferences: WidgetPreferenceSlice = {};
-  const showToolCalls = parseBoolean(
-    input.showToolCalls,
-    "showToolCalls",
-    issues
-  );
-  const showReasoning = parseBoolean(
-    input.showReasoning,
-    "showReasoning",
-    issues
-  );
-  const toolCallDisplay = parseToolCallDisplay(
-    input.toolCallDisplay,
-    "toolCallDisplay",
-    issues
-  );
-  const reasoningDisplay = parseReasoningDisplay(
-    input.reasoningDisplay,
-    "reasoningDisplay",
-    issues
-  );
-  const artifacts = parseArtifacts(input.artifacts, "artifacts", issues);
-  if (showToolCalls !== undefined) preferences.showToolCalls = showToolCalls;
-  if (showReasoning !== undefined) preferences.showReasoning = showReasoning;
-  if (toolCallDisplay) preferences.toolCallDisplay = toolCallDisplay;
-  if (reasoningDisplay) preferences.reasoningDisplay = reasoningDisplay;
-  if (artifacts) preferences.artifacts = artifacts;
-  return { preferences, issues };
+  // null is an absent slice, not a malformed one.
+  const parsed =
+    input === null ? undefined : parseNode(input, ROOT_NODE, "", issues);
+  return {
+    preferences: (parsed as WidgetPreferenceSlice | undefined) ?? {},
+    issues,
+  };
 }
 
 function cloneValue<T>(value: T): T {
