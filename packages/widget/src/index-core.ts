@@ -144,10 +144,11 @@ export type {
   AgentWidgetSuggestion,
   AgentWidgetSuggestionChipsConfig,
   AgentWidgetResolvedSuggestion,
-  AgentWidgetSuggestionSelection,
+  AgentWidgetSuggestionBehavior,
   AgentWidgetSuggestionVariant,
   AgentWidgetSuggestionSurface,
   AgentWidgetSuggestionSource,
+  AgentWidgetSuggestionSurfaceConfig,
   AgentWidgetStarterSuggestionsConfig,
   AgentWidgetFollowUpSuggestionsConfig,
   AgentWidgetSuggestionsConfig

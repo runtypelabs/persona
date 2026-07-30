@@ -17,8 +17,11 @@ import {
 } from "../types";
 
 export type AgentWidgetTransformSuggestionsContext = {
-  /** Fresh copy of the suggestions entering this plugin. */
-  suggestions: AgentWidgetSuggestion[];
+  /**
+   * Fresh copy of the suggestions entering this plugin, already normalized:
+   * shorthand strings expanded and the effective send/fill behavior resolved.
+   */
+  suggestions: AgentWidgetResolvedSuggestion[];
   surface: AgentWidgetSuggestionSurface;
   source: AgentWidgetSuggestionSource;
   config: AgentWidgetConfig;
@@ -65,9 +68,11 @@ export interface AgentWidgetPlugin {
   priority?: number;
 
   /**
-   * Transform, filter, enrich, or reorder suggestions before Persona
-   * normalizes and caps them. Transform hooks compose in plugin priority order.
-   * Return an empty array to hide the surface.
+   * Transform, filter, enrich, or reorder suggestions. Hooks receive normalized
+   * items and compose in plugin priority order; the return value may use the
+   * loose shape (string shorthand included) and is re-normalized before the next
+   * hook. A per-item `behavior` set here survives. `maxItems` caps the list
+   * after the full chain. Return an empty array to hide the surface.
    */
   transformSuggestions?: (
     context: AgentWidgetTransformSuggestionsContext

@@ -2,6 +2,7 @@ import { AgentWidgetClient, type SSEEventCallback } from "./client";
 import { isWebMcpToolName } from "./webmcp-bridge";
 import {
   SUGGEST_REPLIES_TOOL_NAME,
+  resolveFollowUpsFeature,
   suggestRepliesToolResult,
 } from "./suggest-replies-tool";
 import {
@@ -2984,15 +2985,15 @@ export class AgentWidgetSession {
       // indefinitely: `resolveWebMcpToolCall` translates the missing-bridge
       // case into an isError result that resumes the flow cleanly.
       // `suggest_replies`, by contrast, is gated on its feature flag: when
-      // `features.suggestReplies.enabled === false` the widget neither
-      // renders chips nor resumes: the same parked-execution posture as a
-      // server-declared ask_user_question with its sheet disabled.
+      // the resolved `enabled` is false the widget neither renders chips nor
+      // resumes: the same parked-execution posture as a server-declared
+      // ask_user_question with its sheet disabled.
       const tc = event.message.toolCall;
       const autoResolvable =
         !!tc?.name &&
         (isWebMcpToolName(tc.name) ||
           (tc.name === SUGGEST_REPLIES_TOOL_NAME &&
-            this.config.features?.suggestReplies?.enabled !== false));
+            resolveFollowUpsFeature(this.config).enabled));
       if (
         event.message.agentMetadata?.awaitingLocalTool === true &&
         autoResolvable

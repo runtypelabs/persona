@@ -34,7 +34,9 @@ import {
   PersonaArtifactFileMeta,
   PersonaArtifactActionContext,
   AgentWidgetContentSegment,
-  AgentWidgetContextMentionRef
+  AgentWidgetContextMentionRef,
+  AgentWidgetSuggestion,
+  AgentWidgetSuggestionSource
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import {
@@ -111,6 +113,7 @@ import {
 import {
   isSuggestRepliesMessage,
   latestAgentSuggestions,
+  resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
 import { formatElapsedMs } from "./utils/formatting";
 import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
@@ -359,6 +362,19 @@ type Controller = {
    * @deprecated Use injectMessage() instead.
    */
   injectTestMessage: (event: AgentWidgetEvent) => void;
+  /**
+   * Show follow-up suggestions from host code. An ephemeral UI overlay: the
+   * items never enter the transcript, the wire payload, or persisted state, so
+   * they do not survive a refresh. Cleared automatically when the next user
+   * message appends. Latest writer wins against the agent's `suggest_replies`
+   * payloads: this call overrides chips shown now, and a payload arriving
+   * afterwards overrides these. Renders through the `suggestions.followUps`
+   * presentation config and the full plugin and `persona:suggestReplies:*`
+   * event pipeline, with source `"host"`. An empty array clears.
+   */
+  setFollowUpSuggestions: (items: AgentWidgetSuggestion[]) => void;
+  /** Remove host-set follow-up suggestions. Agent-set chips are untouched. */
+  clearFollowUpSuggestions: () => void;
   getMessages: () => AgentWidgetMessage[];
   getStatus: () => AgentWidgetSessionStatus;
   getPersistentMetadata: () => Record<string, unknown>;
@@ -3474,6 +3490,39 @@ export const createAgentExperience = (
   // keep their before-first-user-message behavior. Config updates MUST route
   // through here too: re-rendering with only `config.suggestionChips` would
   // drop a live agent chip row until the next message change.
+  // Warn once per widget instance: renderSuggestions runs on every change.
+  // Host-set follow-ups (`setFollowUpSuggestions`) are an ephemeral UI overlay:
+  // never appended to the session, never sent on the wire, never persisted.
+  let hostFollowUps: AgentWidgetSuggestion[] | null = null;
+  // Latest-writer-wins bookkeeping captured at set time: the overlay is dropped
+  // once another user message appends or a newer suggest_replies message lands.
+  let hostFollowUpsUserCount = 0;
+  let hostFollowUpsAgentId: string | null = null;
+
+  const countUserMessages = (messages: AgentWidgetMessage[]): number =>
+    messages.reduce(
+      (total, message) => (message.role === "user" ? total + 1 : total),
+      0
+    );
+
+  /** Identity of the newest suggest_replies message, regardless of position. */
+  const latestSuggestRepliesId = (
+    messages: AgentWidgetMessage[]
+  ): string | null => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (isSuggestRepliesMessage(messages[i])) return messages[i].id ?? null;
+    }
+    return null;
+  };
+
+  let warnedPinnedStarterPlacement = false;
+  const warnPinnedStarterPlacement = () => {
+    if (warnedPinnedStarterPlacement || config.debug !== true) return;
+    warnedPinnedStarterPlacement = true;
+    console.warn(
+      '[persona] suggestions.starters.placement is pinned to "welcome" but copy.showWelcomeCard is false, so no starters render. Use "auto" or "composer".',
+    );
+  };
   const renderSuggestions = (messages?: AgentWidgetMessage[]) => {
     if (!session) return;
     const current = messages ?? session.getMessages();
@@ -3485,12 +3534,27 @@ export const createAgentExperience = (
         if (manager !== active) clearManager(manager);
       });
     };
-    const agentSuggestions =
-      config.features?.suggestReplies?.enabled !== false
-        ? latestAgentSuggestions(current)
-        : null;
+    // Same lifecycle as agent follow-ups: the overlay expires on the next user
+    // message, and a suggest_replies message newer than the set call wins.
+    if (
+      hostFollowUps &&
+      (countUserMessages(current) > hostFollowUpsUserCount ||
+        latestSuggestRepliesId(current) !== hostFollowUpsAgentId)
+    ) {
+      hostFollowUps = null;
+    }
 
-    if (agentSuggestions) {
+    // `enabled: false` disables the tool, not the surface: host-set follow-ups
+    // still render.
+    const agentSuggestions = resolveFollowUpsFeature(config).enabled
+      ? latestAgentSuggestions(current)
+      : null;
+    const followUpSuggestions = hostFollowUps ?? agentSuggestions;
+    const followUpSource: AgentWidgetSuggestionSource = hostFollowUps
+      ? "host"
+      : "agent";
+
+    if (followUpSuggestions) {
       const followUps = config.suggestions?.followUps;
       const requestedPlacement =
         followUps?.placement ?? (followUps ? "auto" : "composer");
@@ -3506,16 +3570,16 @@ export const createAgentExperience = (
           : composerSuggestionsManager;
       clearOthers(manager);
       manager.render(
-        agentSuggestions,
+        followUpSuggestions,
         session,
         textarea,
         current,
         config.suggestionChipsConfig,
         {
-          agentPushed: true,
-          surface: "follow-up",
+          source: followUpSource,
+          surface: "followUp",
           variant: followUps?.variant ?? "chip",
-          selection: followUps?.selection ?? "send",
+          behavior: followUps?.behavior ?? "send",
           overflow: followUps?.overflow ?? "scroll",
           maxItems: followUps?.maxItems ?? 4,
           config,
@@ -3532,11 +3596,21 @@ export const createAgentExperience = (
 
     const starters = config.suggestions?.starters;
     if (starters) {
+      // The starter host lives inside the welcome card, so a pinned "welcome"
+      // placement has nowhere to render when that card is hidden.
+      const welcomeCardVisible = config.copy?.showWelcomeCard !== false;
+      const requestedPlacement = starters.placement ?? "auto";
       const placement =
-        starters.placement === "composer" ||
-        config.copy?.showWelcomeCard === false
-          ? "composer"
-          : "welcome";
+        requestedPlacement === "auto"
+          ? welcomeCardVisible
+            ? "welcome"
+            : "composer"
+          : requestedPlacement;
+      if (placement === "welcome" && !welcomeCardVisible) {
+        warnPinnedStarterPlacement();
+        suggestionManagers.forEach(clearManager);
+        return;
+      }
       const manager =
         placement === "welcome"
           ? starterSuggestionsManager
@@ -3551,8 +3625,8 @@ export const createAgentExperience = (
         {
           surface: "starter",
           variant: starters.variant ?? "card",
-          selection: starters.selection ?? "send",
-          overflow: "wrap",
+          behavior: starters.behavior ?? "send",
+          overflow: starters.overflow ?? "wrap",
           maxItems: starters.maxItems ?? 4,
           config,
           plugins,
@@ -3571,13 +3645,33 @@ export const createAgentExperience = (
       {
         surface: "starter",
         variant: "chip",
-        selection: "send",
+        behavior: "send",
         overflow: "wrap",
         config,
         plugins,
       }
     );
   };
+
+  const clearHostFollowUps = () => {
+    if (!hostFollowUps) return;
+    hostFollowUps = null;
+    renderSuggestions();
+  };
+
+  const setHostFollowUps = (items: AgentWidgetSuggestion[]) => {
+    const list = Array.isArray(items) ? [...items] : [];
+    if (!list.length) {
+      clearHostFollowUps();
+      return;
+    }
+    const current = session ? session.getMessages() : [];
+    hostFollowUps = list;
+    hostFollowUpsUserCount = countUserMessages(current);
+    hostFollowUpsAgentId = latestSuggestRepliesId(current);
+    renderSuggestions(current);
+  };
+
   let isStreaming = false;
   const messageCache = createMessageCache();
   // Tracks the last fingerprint we rendered a plugin-rendered ask_user_question
@@ -4603,7 +4697,7 @@ export const createAgentExperience = (
       // visible instead of silently swallowed.
       if (
         isSuggestRepliesMessage(message) &&
-        config.features?.suggestReplies?.enabled !== false
+        resolveFollowUpsFeature(config).enabled
       ) {
         return;
       }
@@ -9457,6 +9551,21 @@ export const createAgentExperience = (
         return;
       }
       return session.resolveApproval(approvalMessage.approval, decision, options);
+    },
+    /**
+     * Show follow-up suggestions from host code. Ephemeral UI state only: the
+     * items never enter the transcript, the wire payload, or persistence, so
+     * they do not survive a refresh. Cleared when the next user message
+     * appends. Latest writer wins against agent `suggest_replies` payloads.
+     * Renders through the `suggestions.followUps` presentation config and the
+     * full plugin and DOM-event pipeline with source `"host"`.
+     */
+    setFollowUpSuggestions(items: AgentWidgetSuggestion[]): void {
+      setHostFollowUps(items);
+    },
+    /** Remove host-set follow-ups. Agent-set chips are untouched. */
+    clearFollowUpSuggestions(): void {
+      clearHostFollowUps();
     },
     getMessages() {
       return session.getMessages();

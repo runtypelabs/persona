@@ -504,11 +504,42 @@ For a direct AI SDK backend that translates WebMCP calls into Persona-compatible
 | `suggestionChipsConfig` | `AgentWidgetSuggestionChipsConfig` | Deprecated chip styling: `fontFamily`, `fontWeight`, `paddingX`, `paddingY`. Prefer suggestion theme tokens. |
 
 `suggestions.starters` accepts rich items (`label`, optional `prompt`,
-`description`, `icon`, per-item `selection`, and `emphasis`) plus `variant`
-(`chip`, `card`, `list`), `placement`, `selection`, and `maxItems`.
-`suggestions.followUps` applies the same variants and selection modes to the
-latest agent `suggest_replies` result, with transcript/composer placement and
-scroll/wrap overflow.
+`description`, `icon`, per-item `behavior`, and `emphasis`).
+`suggestions.followUps` applies the same presentation keys to the latest agent
+`suggest_replies` result, and also owns the two capability keys for that
+built-in tool.
+
+**`suggestions.starters`**: `AgentWidgetStarterSuggestionsConfig`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `items` | `AgentWidgetSuggestion[]?` | Rich items or plain strings. Falls back to the deprecated `suggestionChips`. |
+| `variant` | `'chip' \| 'card' \| 'list'?` | Item density. Default: `'card'`. |
+| `placement` | `'auto' \| 'welcome' \| 'composer'?` | `auto` uses the welcome surface when the welcome card renders and the composer otherwise. Explicit values are literal: pinned `welcome` renders nothing when `copy.showWelcomeCard` is `false` (with a debug-mode warning). Default: `'auto'`. |
+| `behavior` | `'send' \| 'fill'?` | Default click behavior, overridable per item. Default: `'send'`. |
+| `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Default: `'wrap'`. |
+| `maxItems` | `number?` | Cap applied after the plugin transform chain. Default: `4`. |
+
+**`suggestions.followUps`**: `AgentWidgetFollowUpSuggestionsConfig`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | Render follow-ups and auto-resume `suggest_replies`. Default: `true`. When `false`, the tool falls through to a generic tool bubble and does not auto-resume. |
+| `expose` | `boolean?` | Advertise the built-in LOCAL tool on `clientTools[]`. Default: `false`; leave off when the flow already declares the tool server-side. Forced off when `enabled` is `false`. |
+| `variant` | `'chip' \| 'card' \| 'list'?` | Item density. Default: `'chip'`. |
+| `placement` | `'auto' \| 'after-message' \| 'composer'?` | `auto` renders after the transcript in regular panels and above the composer in composer-bar mode. Default: `'auto'`. |
+| `behavior` | `'send' \| 'fill'?` | Default click behavior, overridable per item. Default: `'send'`. |
+| `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Default: `'scroll'`. |
+| `maxItems` | `number?` | Cap applied after the plugin transform chain. Default: `4`. |
+
+There is no `followUps.items`: follow-up items come from the agent's
+`suggest_replies` call or from `controller.setFollowUpSuggestions()`, an
+ephemeral host overlay that is never persisted or sent on the wire. Static
+lists belong in `starters`.
+
+`features.suggestReplies.enabled` / `.expose` are deprecated aliases of
+`suggestions.followUps.enabled` / `.expose`. Resolution is per key with
+`suggestions.followUps` winning; the aliases are removed in 5.0.
 
 Plugins can fully customize the pipeline with `transformSuggestions`,
 `renderSuggestion`, and `onSuggestionSelect`. See
@@ -602,7 +633,7 @@ See [Menu behavior and positioning](./CONTEXT-MENTIONS.md#menu-behavior-and-posi
 | `eventStream` | `EventStreamConfig?` | Event stream inspector configuration: `badgeColors`, `timestampFormat`, `showSequenceNumbers`, `maxEvents`, `descriptionFields`, `classNames`. |
 | `artifacts` | `AgentWidgetArtifactsFeature?` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (see below). |
 | `askUserQuestion` | `AgentWidgetAskUserQuestionFeature?` | Built-in `ask_user_question` answer sheet. `enabled` defaults to `true`; set `expose: true` to advertise the LOCAL tool via `clientTools[]`. |
-| `suggestReplies` | `AgentWidgetSuggestRepliesFeature?` | Built-in `suggest_replies` chips. `enabled` defaults to `true`; set `expose: true` to advertise the LOCAL tool via `clientTools[]` and auto-resume when called. |
+| `suggestReplies` | `AgentWidgetSuggestRepliesFeature?` | **Deprecated.** Alias of `suggestions.followUps.enabled` / `.expose`; see [Suggestions](#suggestions). |
 
 **`features.scrollBehavior`**: `AgentWidgetScrollBehaviorFeature`
 
@@ -662,12 +693,17 @@ See [Menu behavior and positioning](./CONTEXT-MENTIONS.md#menu-behavior-and-posi
 | `layout` | `'rows' \| 'pills'?` | Option layout. `rows` is the default full-width layout; `pills` is the legacy compact wrap layout. |
 | `slideInMs`, `freeTextLabel`, `freeTextPlaceholder`, `submitLabel`, `nextLabel`, `backLabel`, `submitAllLabel`, `skipLabel`, `groupedAutoAdvance`, `styles` | various | Sheet animation, copy, multi-question navigation, and CSS variable overrides. See [UI Features & Components](./UI-COMPONENTS.md#ask-user-question). |
 
-**`features.suggestReplies`**: `AgentWidgetSuggestRepliesFeature`
+**`features.suggestReplies`**: `AgentWidgetSuggestRepliesFeature` (deprecated)
+
+Both keys moved to [`suggestions.followUps`](#suggestions), which also owns
+presentation, placement, and send/fill behavior for the same surface. The alias
+keeps working per key, with `suggestions.followUps` winning and a debug-mode
+warning when the two homes disagree. Removal waits for 5.0.
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `enabled` | `boolean?` | Render chips and auto-resume `suggest_replies`. Default: `true`. When `false`, it falls through to a generic tool bubble and does not auto-resume. |
-| `expose` | `boolean?` | Advertise the built-in LOCAL tool definition on `clientTools[]`. Default: `false`; leave off when the flow already declares the tool server-side. |
+| `enabled` | `boolean?` | Deprecated alias of `suggestions.followUps.enabled`. |
+| `expose` | `boolean?` | Deprecated alias of `suggestions.followUps.expose`. |
 
 **`features.artifacts`**: `AgentWidgetArtifactsFeature`
 

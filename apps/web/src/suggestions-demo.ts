@@ -180,13 +180,13 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => ({
       items: starterItems,
       variant: "card",
       placement: "welcome",
-      selection: variant === "custom" ? "fill" : "send",
+      behavior: variant === "custom" ? "fill" : "send",
       maxItems: 4,
     },
     followUps: {
       variant: variant === "custom" ? "list" : "chip",
       placement: "after-message",
-      selection: variant === "custom" ? "fill" : "send",
+      behavior: variant === "custom" ? "fill" : "send",
       overflow: "scroll",
       maxItems: 4,
     },
@@ -261,7 +261,7 @@ document.addEventListener("persona:suggestion:selected", (event) => {
   if (variant === "custom") return;
   const detail = (event as CustomEvent).detail;
   logSelection(
-    `${detail.surface} · ${detail.source} · ${detail.selection}: “${detail.suggestion.label}”`,
+    `${detail.surface} · ${detail.source} · ${detail.behavior}: “${detail.suggestion.label}”`,
   );
 });
 

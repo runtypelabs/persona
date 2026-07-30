@@ -413,35 +413,61 @@ The `suggest_replies` feature lets the agent offer tappable next actions for the
 
 This is the recommended pattern for follow-up discovery: teaching users what to ask next without forcing typing.
 
+### Where suggestion things live
+
+| Concern | Home |
+| --- | --- |
+| Enable/expose, items, variant, placement, behavior, caps | `suggestions.*` |
+| Colors, radius, states | `theme.components.suggestion` |
+| Ranking, custom markup, selection interception | `config.plugins` |
+| Deprecated aliases | `features.suggestReplies`, `suggestionChips`, `suggestionChipsConfig` |
+
+`suggestions.starters` owns the pre-conversation surface and
+`suggestions.followUps` owns the agent-produced one, including the two
+capability keys (`enabled`, `expose`) described below.
+
 ### Exposing the tool to the agent
 
 ```ts
-features: {
-  suggestReplies: { expose: true }
+suggestions: {
+  followUps: { expose: true }
 }
 ```
 
-`expose` defaults to `false`: flows that already declare the tool via `runtimeTools` would otherwise present it to the model twice. It is also ignored when `enabled: false`: a disabled feature neither renders chips nor auto-resumes, so exposing the tool alongside it would park the execution on a generic tool bubble forever. (The same applies to a server-declared `suggest_replies` with `enabled: false` : treat that combination as a configuration error.)
+`expose` defaults to `false`: flows that already declare the tool via `runtimeTools` would otherwise present it to the model twice. It is also ignored when `enabled: false`: a disabled feature neither renders chips nor auto-resumes, so exposing the tool alongside it would park the execution on a generic tool bubble forever. (The same applies to a server-declared `suggest_replies` with `enabled: false`: treat that combination as a configuration error.)
+
+`features.suggestReplies.enabled` and `features.suggestReplies.expose` keep
+working as deprecated aliases. Resolution is per key, and `suggestions.followUps`
+wins: an embed that disables the feature under `features` and then adds
+presentation-only `suggestions.followUps` keys is not silently re-enabled. In
+`debug: true` mode the widget warns once per key when the two homes disagree.
+The aliases are removed in 5.0.
 
 For server-side declaration, the exported `SUGGEST_REPLIES_CLIENT_TOOL` / `SUGGEST_REPLIES_PARAMETERS_SCHEMA` constants provide the same description and schema to reuse in a flow's `runtimeTools`.
 
 ### Tool schema
 
+The advertised schema is object-only, so strict structured-output modes never
+have to flatten a union:
+
 ```ts
 {
-  suggestions: Array<
-    | string
-    | {
-        label: string
-        prompt?: string
-        description?: string
-        icon?: IconName
-        selection?: "send" | "fill"
-        emphasis?: "default" | "primary"
-      }
-  > // 1-4 items; strings remain the compact shorthand
+  suggestions: Array<{
+    label: string        // 1-80 chars, the short visible text
+    prompt?: string      // 1-500 chars, defaults to the label
+    description?: string // 1-160 chars, one line of supporting copy
+  }> // 1-4 items
 }
 ```
+
+The model owns semantics, the host owns presentation. `id`, `icon`, `behavior`,
+and `emphasis` are not advertised, and `parseSuggestRepliesPayload` strips them
+from agent payloads even if a model ignores `additionalProperties`. Reclaim them
+with the `transformSuggestions` plugin hook (see the
+[recipes in PLUGINS.md](./PLUGINS.md#transform-recipes)).
+
+Plain strings stay tolerated on the parse side for older flows that emit
+`suggestions: string[]`; a string is treated as both label and prompt.
 
 ### Lifecycle
 
@@ -461,17 +487,63 @@ hooks as starter prompts. See [PLUGINS.md](./PLUGINS.md#suggestion-hooks).
 ### Configuration
 
 ```ts
-features: {
-  suggestReplies: {
-    enabled: true,   // default: true. When false, the tool falls through to the normal tool-bubble path and is NOT auto-resumed.
-    expose: false    // default: false. When true, advertises the built-in tool to the agent via clientTools[].
-  }
+suggestions: {
+  followUps: {
+    enabled: true,      // default: true
+    expose: false,      // default: false
+    variant: "chip",    // "chip" | "card" | "list"
+    placement: "auto",  // "auto" | "after-message" | "composer"
+    behavior: "send",   // "send" | "fill"
+    overflow: "scroll", // "scroll" | "wrap"
+    maxItems: 4,
+  },
 }
 ```
 
-Presentation comes from `config.suggestions.followUps` plus the semantic
-suggestion theme tokens. The legacy `suggestionChipsConfig` remains supported
-for backwards-compatible font and padding overrides.
+| Property | Default | Description |
+| --- | --- | --- |
+| `enabled` | `true` | Render follow-ups and auto-resume the tool call. When `false`, `suggest_replies` falls through to the generic tool bubble and is not auto-resumed. |
+| `expose` | `false` | Advertise the built-in local tool on `clientTools[]`. Forced off when `enabled` is `false`. |
+| `variant` | `"chip"` | Item density: `chip`, `card`, or `list`. |
+| `placement` | `"auto"` | `auto` renders after the transcript in regular panels and above the composer in composer-bar mode. Explicit `after-message` and `composer` are literal. |
+| `behavior` | `"send"` | `send` sends the prompt immediately; `fill` drafts it in the composer. Per-item `behavior` overrides the surface. |
+| `overflow` | `"scroll"` | Layout for items past the surface width: `scroll` or `wrap`. |
+| `maxItems` | `4` | Cap applied after the plugin transform chain. |
+
+There is no `followUps.items`: follow-ups are contextual, so they come from the
+agent's `suggest_replies` call or from `controller.setFollowUpSuggestions`. A
+static list belongs in `suggestions.starters`.
+
+Styling comes from the semantic suggestion theme tokens under
+`theme.components.suggestion`. The legacy `suggestionChipsConfig` remains
+supported for backwards-compatible font and padding overrides.
+
+### Programmatic follow-ups
+
+Host code can show follow-ups without an agent round trip:
+
+```ts
+controller.setFollowUpSuggestions([
+  "Track my order",
+  { label: "Talk to a human", prompt: "I want to talk to a person", behavior: "fill" },
+]);
+
+controller.clearFollowUpSuggestions();
+```
+
+Semantics:
+
+- **Ephemeral.** The list is UI state only. It never enters the transcript, the
+  wire payload, or persisted state, so it does not survive a refresh.
+- **Latest writer wins.** The call overrides chips showing now, and a
+  `suggest_replies` payload arriving afterwards overrides the host list.
+- **Same lifecycle as agent follow-ups.** The overlay clears when the next user
+  message appends, or on `clearFollowUpSuggestions()` (an empty array clears
+  too). Agent-set chips are untouched by the clear.
+- **Same pipeline.** Items render through `suggestions.followUps`, the plugin
+  hooks, and both the unified and legacy DOM events, with `source: "host"`.
+- **Renders even when disabled.** `enabled: false` disables the tool, not the
+  surface, so host-set follow-ups still render.
 
 ### DOM events
 
@@ -480,9 +552,11 @@ for backwards-compatible font and padding overrides.
 | `persona:suggestReplies:shown` | `{ suggestions: string[] }`: fires once per distinct chip set |
 | `persona:suggestReplies:selected` | `{ suggestion: string }`: fires before the chip text is sent |
 
-The unified `persona:suggestion:shown` and
-`persona:suggestion:selected` events include the normalized item, surface,
-source, variant/selection metadata. `persona:suggestion:selected` is cancelable.
+Both legacy events fire for host-set follow-ups too. The unified
+`persona:suggestion:shown` and `persona:suggestion:selected` events include the
+normalized item, surface (`"starter"` or `"followUp"`), source (`"config"`,
+`"agent"`, or `"host"`), and variant/behavior metadata.
+`persona:suggestion:selected` is cancelable.
 
 ## Dropdown Menu
 

@@ -22,7 +22,7 @@ import {
 } from "./components/ask-user-question-bubble";
 import {
   SUGGEST_REPLIES_CLIENT_TOOL,
-  shouldExposeSuggestReplies,
+  resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
 import type { AgentWidgetConfig, ClientToolDefinition } from "./types";
 
@@ -129,7 +129,7 @@ export const builtInClientToolsForDispatch = (
   if (ask?.expose === true && ask.enabled !== false) {
     tools.push(ASK_USER_QUESTION_CLIENT_TOOL);
   }
-  if (shouldExposeSuggestReplies(config)) {
+  if (resolveFollowUpsFeature(config).expose) {
     tools.push(SUGGEST_REPLIES_CLIENT_TOOL);
   }
   return tools;

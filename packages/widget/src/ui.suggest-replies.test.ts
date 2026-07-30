@@ -129,6 +129,101 @@ describe("suggest_replies chips UI", () => {
     controller.destroy();
   });
 
+  it("wraps starters by default and honors an explicit overflow", () => {
+    const wrapping = makeController({
+      suggestions: { starters: { items: ["Compare plans"] } },
+    });
+    expect(
+      wrapping.mount
+        .querySelector('[data-persona-suggestions="starter"]')
+        ?.getAttribute("data-overflow"),
+    ).toBe("wrap");
+    wrapping.controller.destroy();
+
+    const scrolling = makeController({
+      suggestions: {
+        starters: { items: ["Compare plans"], overflow: "scroll" },
+      },
+    });
+    expect(
+      scrolling.mount
+        .querySelector('[data-persona-suggestions="starter"]')
+        ?.getAttribute("data-overflow"),
+    ).toBe("scroll");
+    scrolling.controller.destroy();
+  });
+
+  it("auto placement follows welcome-card visibility", () => {
+    const withCard = makeController({
+      suggestions: { starters: { items: ["Compare plans"] } },
+    });
+    expect(
+      withCard.mount.querySelector('[data-persona-suggestions="starter"]')
+        ?.textContent,
+    ).toContain("Compare plans");
+    withCard.controller.destroy();
+
+    const withoutCard = makeController({
+      copy: { showWelcomeCard: false },
+      suggestions: { starters: { items: ["Compare plans"] } },
+    });
+    expect(
+      withoutCard.mount.querySelector('[data-persona-suggestions="starter"]')
+        ?.textContent,
+    ).not.toContain("Compare plans");
+    expect(
+      withoutCard.mount.querySelector("[data-persona-composer-suggestions]")
+        ?.textContent,
+    ).toContain("Compare plans");
+    withoutCard.controller.destroy();
+  });
+
+  it("renders nothing and warns in debug when welcome is pinned without the card", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const { mount, controller } = makeController({
+      debug: true,
+      copy: { showWelcomeCard: false },
+      suggestions: {
+        starters: { items: ["Compare plans"], placement: "welcome" },
+      },
+    });
+
+    expect(chipButtons(mount, "Compare plans")).toHaveLength(0);
+    const placementWarnings = warn.mock.calls.filter((call) =>
+      String(call[0]).includes("suggestions.starters.placement"),
+    );
+    expect(placementWarnings).toHaveLength(1);
+
+    // Re-rendering the surface must not repeat the warning.
+    controller.update({
+      copy: { showWelcomeCard: false, welcomeTitle: "Updated" },
+    });
+    expect(
+      warn.mock.calls.filter((call) =>
+        String(call[0]).includes("suggestions.starters.placement"),
+      ),
+    ).toHaveLength(1);
+
+    controller.destroy();
+  });
+
+  it("honors an explicit composer placement while the welcome card shows", () => {
+    const { mount, controller } = makeController({
+      suggestions: {
+        starters: { items: ["Compare plans"], placement: "composer" },
+      },
+    });
+
+    expect(
+      mount.querySelector("[data-persona-composer-suggestions]")?.textContent,
+    ).toContain("Compare plans");
+    expect(
+      mount.querySelector('[data-persona-suggestions="starter"]')?.textContent,
+    ).not.toContain("Compare plans");
+
+    controller.destroy();
+  });
+
   it("places structured follow-ups after the transcript", () => {
     const { mount, controller } = makeController({
       suggestions: {
@@ -163,13 +258,13 @@ describe("suggest_replies chips UI", () => {
     controller.destroy();
   });
 
-  it("fills the composer without sending when selection is fill", () => {
+  it("fills the composer without sending when behavior is fill", () => {
     global.fetch = vi.fn();
     const { mount, controller } = makeController({
       suggestions: {
         followUps: {
           placement: "composer",
-          selection: "fill",
+          behavior: "fill",
         },
       },
     });
@@ -308,7 +403,7 @@ describe("suggest_replies chips UI", () => {
         followUps: {
           placement: "composer",
           variant: "list",
-          selection: "fill",
+          behavior: "fill",
         },
       },
     });
@@ -466,7 +561,7 @@ describe("suggest_replies chips UI", () => {
     controller.destroy();
   });
 
-  it("dispatches unified suggestion events with surface and selection metadata", () => {
+  it("dispatches unified suggestion events with surface and behavior metadata", () => {
     const shown: CustomEvent["detail"][] = [];
     const selected: CustomEvent["detail"][] = [];
     document.addEventListener("persona:suggestion:shown", (event) => {
@@ -479,7 +574,7 @@ describe("suggest_replies chips UI", () => {
     const { mount, controller } = makeController({
       suggestions: {
         starters: {
-          selection: "fill",
+          behavior: "fill",
           items: [{ id: "draft", label: "Draft a reply" }],
         },
       },
@@ -496,7 +591,7 @@ describe("suggest_replies chips UI", () => {
     expect(selected[0]).toMatchObject({
       surface: "starter",
       source: "config",
-      selection: "fill",
+      behavior: "fill",
       suggestion: { id: "draft", prompt: "Draft a reply" },
     });
 
@@ -507,20 +602,13 @@ describe("suggest_replies chips UI", () => {
     const transformSuggestions = vi.fn<
       NonNullable<AgentWidgetPlugin["transformSuggestions"]>
     >(({ suggestions, surface }) =>
-        suggestions.map((suggestion, index) => {
-          const label =
-            typeof suggestion === "string" ? suggestion : suggestion.label;
-          return {
-            id: `${surface}-${index}`,
-            label: `${label} · curated`,
-            prompt:
-              typeof suggestion === "string"
-                ? suggestion
-                : suggestion.prompt,
-            description: `Transformed on the ${surface} surface`,
-            emphasis: index === 0 ? "primary" : "default",
-          };
-        }));
+        suggestions.map((suggestion, index) => ({
+          ...suggestion,
+          id: `${surface}-${index}`,
+          label: `${suggestion.label} · curated`,
+          description: `Transformed on the ${surface} surface`,
+          emphasis: index === 0 ? "primary" : "default",
+        })));
     const { mount, controller } = makeController({
       plugins: [{ id: "curate", transformSuggestions }],
       suggestions: {
@@ -536,11 +624,28 @@ describe("suggest_replies chips UI", () => {
       "Transformed on the starter surface",
     );
     expect(mount.textContent).not.toContain("Browse docs · curated");
+    // Hooks receive normalized items: the string shorthand is already expanded
+    // and the surface behavior resolved before the first transform runs.
     expect(transformSuggestions).toHaveBeenCalledWith(
       expect.objectContaining({
         surface: "starter",
         source: "config",
-        suggestions: ["Compare plans", "Browse docs"],
+        suggestions: [
+          {
+            id: "Compare plans",
+            label: "Compare plans",
+            prompt: "Compare plans",
+            emphasis: "default",
+            behavior: "send",
+          },
+          {
+            id: "Browse docs",
+            label: "Browse docs",
+            prompt: "Browse docs",
+            emphasis: "default",
+            behavior: "send",
+          },
+        ],
       }),
     );
 
@@ -549,9 +654,15 @@ describe("suggest_replies chips UI", () => {
     expect(mount.textContent).toContain("See examples · curated");
     expect(transformSuggestions).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        surface: "follow-up",
+        surface: "followUp",
         source: "agent",
-        suggestions: ["See examples"],
+        suggestions: [
+          expect.objectContaining({
+            label: "See examples",
+            prompt: "See examples",
+            behavior: "send",
+          }),
+        ],
       }),
     );
 
@@ -563,11 +674,10 @@ describe("suggest_replies chips UI", () => {
       suffix: string,
     ): NonNullable<AgentWidgetPlugin["transformSuggestions"]> =>
       ({ suggestions }) =>
-        suggestions.map((suggestion) => {
-          const label =
-            typeof suggestion === "string" ? suggestion : suggestion.label;
-          return { label: `${label} · ${suffix}` };
-        });
+        suggestions.map((suggestion) => ({
+          ...suggestion,
+          label: `${suggestion.label} · ${suffix}`,
+        }));
     const { mount, controller } = makeController({
       plugins: [
         { id: "low", priority: 0, transformSuggestions: append("low") },
@@ -579,6 +689,102 @@ describe("suggest_replies chips UI", () => {
     });
 
     expect(mount.textContent).toContain("Original · high · low");
+
+    controller.destroy();
+  });
+
+  it("re-normalizes string shorthand returned by a transform", () => {
+    const shorthand: AgentWidgetPlugin = {
+      id: "shorthand",
+      transformSuggestions: ({ suggestions }) => [
+        ...suggestions,
+        "Appended shorthand",
+      ],
+    };
+    const { mount, controller } = makeController({
+      plugins: [shorthand],
+      suggestions: {
+        starters: { items: [{ label: "Configured" }] },
+      },
+    });
+
+    const appended = chipButtons(mount, "Appended shorthand")[0];
+    expect(appended).toBeDefined();
+    expect(appended?.dataset.suggestionId).toBe("Appended shorthand");
+    expect(appended?.dataset.behavior).toBe("send");
+
+    controller.destroy();
+  });
+
+  it("keeps a per-item behavior set by a transform", () => {
+    const fillLongPrompts: AgentWidgetPlugin = {
+      id: "long-prompts-fill",
+      transformSuggestions: ({ suggestions }) =>
+        suggestions.map((suggestion) =>
+          suggestion.label === "Draft"
+            ? { ...suggestion, behavior: "fill" as const }
+            : suggestion,
+        ),
+    };
+    const { mount, controller } = makeController({
+      plugins: [fillLongPrompts],
+      suggestions: {
+        starters: { behavior: "send", items: ["Draft", "Send"] },
+      },
+    });
+
+    expect(chipButtons(mount, "Draft")[0]?.dataset.behavior).toBe("fill");
+    expect(chipButtons(mount, "Send")[0]?.dataset.behavior).toBe("send");
+
+    chipButtons(mount, "Draft")[0]!.click();
+    expect(mount.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(
+      "Draft",
+    );
+
+    controller.destroy();
+  });
+
+  it("caps after the full transform chain, so transforms can add items", () => {
+    const expand: AgentWidgetPlugin = {
+      id: "expand",
+      transformSuggestions: ({ suggestions }) => [
+        ...suggestions,
+        "Added one",
+        "Added two",
+        "Beyond the cap",
+      ],
+    };
+    const { mount, controller } = makeController({
+      plugins: [expand],
+      suggestions: {
+        starters: { items: ["Configured"], maxItems: 3 },
+      },
+    });
+
+    expect(chipButtons(mount, "Configured")).toHaveLength(1);
+    expect(chipButtons(mount, "Added one")).toHaveLength(1);
+    expect(chipButtons(mount, "Added two")).toHaveLength(1);
+    expect(chipButtons(mount, "Beyond the cap")).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("hides the surface when a transform returns an empty array", () => {
+    const { mount, controller } = makeController({
+      plugins: [{ id: "hide-all", transformSuggestions: () => [] }],
+      suggestions: {
+        starters: { items: ["Compare plans", "Browse docs"] },
+      },
+    });
+
+    expect(chipButtons(mount, "Compare plans")).toHaveLength(0);
+    const surfaces = Array.from(
+      mount.querySelectorAll<HTMLElement>(
+        '[data-persona-suggestions="starter"]',
+      ),
+    );
+    expect(surfaces.length).toBeGreaterThan(0);
+    expect(surfaces.every((surface) => surface.hidden)).toBe(true);
 
     controller.destroy();
   });
@@ -598,7 +804,7 @@ describe("suggest_replies chips UI", () => {
       plugins: [{ id: "custom-suggestion", renderSuggestion }],
       suggestions: {
         starters: {
-          selection: "fill",
+          behavior: "fill",
           items: [{ id: "draft", label: "Draft a reply" }],
         },
       },
@@ -621,7 +827,7 @@ describe("suggest_replies chips UI", () => {
         variant: "card",
         suggestion: expect.objectContaining({
           id: "draft",
-          selection: "fill",
+          behavior: "fill",
         }),
         defaultRenderer: expect.any(Function),
         select: expect.any(Function),
@@ -659,7 +865,7 @@ describe("suggest_replies chips UI", () => {
       plugins: [{ id: "selection-guard", onSuggestionSelect }],
       suggestions: {
         starters: {
-          selection: "fill",
+          behavior: "fill",
           items: ["Plugin guarded", "DOM guarded"],
         },
       },
@@ -674,7 +880,7 @@ describe("suggest_replies chips UI", () => {
         variant: "card",
         suggestion: expect.objectContaining({
           label: "Plugin guarded",
-          selection: "fill",
+          behavior: "fill",
         }),
       }),
     );
@@ -688,6 +894,199 @@ describe("suggest_replies chips UI", () => {
     );
     chipButtons(mount, "DOM guarded")[0]!.click();
     expect(textarea.value).toBe("");
+
+    controller.destroy();
+  });
+});
+
+describe("host-set follow-up suggestions", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it("renders through the followUps config and reports source host", () => {
+    const transformSuggestions = vi.fn<
+      NonNullable<AgentWidgetPlugin["transformSuggestions"]>
+    >(({ suggestions }) => suggestions);
+    const { mount, controller } = makeController({
+      plugins: [{ id: "spy", transformSuggestions }],
+      suggestions: {
+        followUps: { placement: "after-message", variant: "list" },
+      },
+    });
+    const shown: CustomEvent["detail"][] = [];
+    const legacyShown: string[][] = [];
+    mount.addEventListener("persona:suggestion:shown", (event) => {
+      shown.push((event as CustomEvent).detail);
+    });
+    mount.addEventListener("persona:suggestReplies:shown", (event) => {
+      legacyShown.push((event as CustomEvent).detail.suggestions);
+    });
+
+    injectUserMessage(controller);
+    controller.setFollowUpSuggestions([
+      { label: "Book a demo", description: "Talk to the team" },
+    ]);
+
+    const surface = mount.querySelector(
+      '[data-persona-suggestions="follow-up"]',
+    );
+    expect(surface?.getAttribute("data-variant")).toBe("list");
+    expect(surface?.textContent).toContain("Book a demo");
+    expect(surface?.textContent).toContain("Talk to the team");
+    expect(transformSuggestions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ surface: "followUp", source: "host" }),
+    );
+    expect(shown.at(-1)).toMatchObject({
+      surface: "followUp",
+      source: "host",
+      variant: "list",
+    });
+    expect(legacyShown.at(-1)).toEqual(["Book a demo"]);
+
+    controller.destroy();
+  });
+
+  it("reports source host to the selection hook and legacy event", () => {
+    const onSuggestionSelect = vi.fn((): boolean => false);
+    const { mount, controller } = makeController({
+      plugins: [{ id: "guard", onSuggestionSelect }],
+      suggestions: { followUps: { placement: "composer" } },
+    });
+    const legacySelected: string[] = [];
+    mount.addEventListener("persona:suggestReplies:selected", (event) => {
+      legacySelected.push((event as CustomEvent).detail.suggestion);
+    });
+
+    injectUserMessage(controller);
+    controller.setFollowUpSuggestions(["Show pricing"]);
+    chipButtons(mount, "Show pricing")[0]!.click();
+
+    expect(onSuggestionSelect).toHaveBeenCalledWith(
+      expect.objectContaining({ surface: "followUp", source: "host" }),
+    );
+    expect(legacySelected).toEqual(["Show pricing"]);
+
+    controller.destroy();
+  });
+
+  it("clears on the next user message", () => {
+    const { mount, controller } = makeController();
+    injectUserMessage(controller, "u1");
+    controller.setFollowUpSuggestions(["Keep going"]);
+    expect(chipButtons(mount, "Keep going")).toHaveLength(1);
+
+    injectUserMessage(controller, "u2", "2026-06-10T00:00:02.000Z");
+    expect(chipButtons(mount, "Keep going")).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("clears via clearFollowUpSuggestions and via an empty array", () => {
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+
+    controller.setFollowUpSuggestions(["Keep going"]);
+    expect(chipButtons(mount, "Keep going")).toHaveLength(1);
+    controller.clearFollowUpSuggestions();
+    expect(chipButtons(mount, "Keep going")).toHaveLength(0);
+
+    controller.setFollowUpSuggestions(["Keep going"]);
+    expect(chipButtons(mount, "Keep going")).toHaveLength(1);
+    controller.setFollowUpSuggestions([]);
+    expect(chipButtons(mount, "Keep going")).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("overrides agent chips shown at the time of the call", () => {
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    expect(chipButtons(mount, "Tell me more")).toHaveLength(1);
+
+    controller.setFollowUpSuggestions(["Host wins"]);
+    expect(chipButtons(mount, "Host wins")).toHaveLength(1);
+    expect(chipButtons(mount, "Tell me more")).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("yields to a suggest_replies payload that arrives afterwards", () => {
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+    injectSuggestReplies(controller, { id: "sr-1", suggestions: ["First"] });
+    controller.setFollowUpSuggestions(["Host wins"]);
+    expect(chipButtons(mount, "Host wins")).toHaveLength(1);
+
+    injectSuggestReplies(controller, { id: "sr-2", suggestions: ["Newest"] });
+    expect(chipButtons(mount, "Host wins")).toHaveLength(0);
+    expect(chipButtons(mount, "Newest")).toHaveLength(1);
+
+    controller.destroy();
+  });
+
+  it("renders even when the follow-ups feature is disabled", () => {
+    const { mount, controller } = makeController({
+      suggestions: { followUps: { enabled: false } },
+    });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    expect(chipButtons(mount, "Tell me more")).toHaveLength(0);
+
+    controller.setFollowUpSuggestions(["Still rendered"]);
+    expect(chipButtons(mount, "Still rendered")).toHaveLength(1);
+
+    controller.destroy();
+  });
+
+  it("renders with no suggestions config present", () => {
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+    controller.setFollowUpSuggestions(["Defaults apply"]);
+
+    const surface = mount.querySelector(
+      '[data-persona-composer-suggestions][data-persona-suggestion-surface="follow-up"]',
+    );
+    expect(surface?.getAttribute("data-variant")).toBe("chip");
+    expect(surface?.textContent).toContain("Defaults apply");
+
+    controller.destroy();
+  });
+
+  it("keeps items set while the panel is closed and shows them on open", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: true },
+      suggestionChips: [],
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+
+    expect(controller.isOpen()).toBe(false);
+    injectUserMessage(controller);
+    controller.setFollowUpSuggestions(["Set while closed"]);
+
+    controller.open();
+    expect(chipButtons(mount, "Set while closed")).toHaveLength(1);
+
+    controller.destroy();
+  });
+
+  it("keeps the overlay out of the session transcript", () => {
+    const { controller } = makeController();
+    injectUserMessage(controller);
+    const before = controller.getMessages();
+
+    controller.setFollowUpSuggestions([
+      { label: "Book a demo", prompt: "Book a demo for my team" },
+    ]);
+
+    expect(controller.getMessages()).toEqual(before);
+    expect(
+      JSON.stringify(controller.getMessages()),
+    ).not.toContain("Book a demo");
 
     controller.destroy();
   });

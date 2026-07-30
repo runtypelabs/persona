@@ -1,6 +1,7 @@
 import { createElement, createNode } from "../utils/dom";
 import { DEFAULT_FLOATING_LAUNCHER_WIDTH } from "../defaults";
-import { AgentWidgetConfig } from "../types";
+import { AgentWidgetConfig, AgentWidgetSuggestionSurface } from "../types";
+import { suggestionSurfaceAttr } from "./suggestions";
 import { positionMap } from "../utils/positioning";
 import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
 import { DEFAULT_OVERLAY_Z_INDEX } from "../utils/constants";
@@ -183,11 +184,11 @@ export interface PanelElements {
 }
 
 const createSuggestionHost = (
-  surface: "starter" | "follow-up"
+  surface: AgentWidgetSuggestionSurface
 ): HTMLElement => {
   const host = createNode("div", {
     className: "persona-suggestions",
-    attrs: { "data-persona-suggestions": surface },
+    attrs: { "data-persona-suggestions": suggestionSurfaceAttr(surface) },
   });
   host.hidden = true;
   return host;
@@ -311,7 +312,7 @@ const buildComposerBarPanel = (
     "div",
     "persona-flex persona-flex-col persona-gap-3"
   );
-  const transcriptSuggestions = createSuggestionHost("follow-up");
+  const transcriptSuggestions = createSuggestionHost("followUp");
   const contentMaxWidth = config?.layout?.contentMaxWidth;
   if (contentMaxWidth) {
     messagesWrapper.style.maxWidth = contentMaxWidth;
@@ -459,7 +460,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     "div",
     "persona-flex persona-flex-col persona-gap-3"
   );
-  const transcriptSuggestions = createSuggestionHost("follow-up");
+  const transcriptSuggestions = createSuggestionHost("followUp");
 
   const contentMaxWidth = config?.layout?.contentMaxWidth;
   if (contentMaxWidth) {

@@ -6,6 +6,7 @@ import {
   SUGGEST_REPLIES_TOOL_NAME,
   latestAgentSuggestions,
   parseSuggestRepliesPayload,
+  resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
 import {
   ASK_USER_QUESTION_CLIENT_TOOL,
@@ -26,14 +27,26 @@ describe("SUGGEST_REPLIES_CLIENT_TOOL definition", () => {
     expect(SUGGEST_REPLIES_CLIENT_TOOL.annotations?.readOnlyHint).toBe(true);
   });
 
-  it("bounds suggestions and accepts string or rich-item entries", () => {
+  it("bounds suggestions to semantic-only object items", () => {
     const suggestions =
       SUGGEST_REPLIES_PARAMETERS_SCHEMA.properties.suggestions;
     expect(suggestions.minItems).toBe(1);
     expect(suggestions.maxItems).toBe(SUGGEST_REPLIES_MAX);
-    expect(suggestions.items.oneOf[0].maxLength).toBe(60);
-    expect(suggestions.items.oneOf[1].required).toEqual(["label"]);
+    expect(suggestions.items.type).toBe("object");
+    expect(suggestions.items.required).toEqual(["label"]);
+    expect(suggestions.items.additionalProperties).toBe(false);
     expect(SUGGEST_REPLIES_PARAMETERS_SCHEMA.required).toEqual(["suggestions"]);
+  });
+
+  it("advertises no oneOf union and no presentation fields", () => {
+    const items = SUGGEST_REPLIES_PARAMETERS_SCHEMA.properties.suggestions
+      .items as Record<string, unknown>;
+    expect(items.oneOf).toBeUndefined();
+    expect(Object.keys(items.properties as Record<string, unknown>)).toEqual([
+      "label",
+      "prompt",
+      "description",
+    ]);
   });
 });
 
@@ -61,13 +74,9 @@ describe("parseSuggestRepliesPayload", () => {
       parseSuggestRepliesPayload({
         suggestions: [
           {
-            id: "pricing",
             label: " Pricing ",
             prompt: " Tell me about pricing ",
             description: " Compare plans ",
-            icon: "dollar-sign",
-            selection: "fill",
-            emphasis: "primary",
           },
           { label: "   " },
           { nope: true },
@@ -75,15 +84,27 @@ describe("parseSuggestRepliesPayload", () => {
       }),
     ).toEqual([
       {
-        id: "pricing",
         label: "Pricing",
         prompt: "Tell me about pricing",
         description: "Compare plans",
-        icon: "dollar-sign",
-        selection: "fill",
-        emphasis: "primary",
       },
     ]);
+  });
+
+  it("strips presentation fields a model may send anyway", () => {
+    expect(
+      parseSuggestRepliesPayload({
+        suggestions: [
+          {
+            id: "pricing",
+            label: "Pricing",
+            icon: "dollar-sign",
+            behavior: "fill",
+            emphasis: "primary",
+          },
+        ],
+      }),
+    ).toEqual([{ label: "Pricing" }]);
   });
 
   it("truncates past the cap with a console warning", () => {
@@ -176,6 +197,121 @@ describe("latestAgentSuggestions", () => {
   });
 });
 
+describe("resolveFollowUpsFeature", () => {
+  const cfg = (config: Partial<AgentWidgetConfig>): AgentWidgetConfig =>
+    config as AgentWidgetConfig;
+
+  it("defaults to enabled and not exposed", () => {
+    expect(resolveFollowUpsFeature(undefined)).toEqual({
+      enabled: true,
+      expose: false,
+    });
+    expect(resolveFollowUpsFeature(cfg({}))).toEqual({
+      enabled: true,
+      expose: false,
+    });
+  });
+
+  it("reads each key from suggestions.followUps", () => {
+    expect(
+      resolveFollowUpsFeature(
+        cfg({ suggestions: { followUps: { expose: true } } }),
+      ),
+    ).toEqual({ enabled: true, expose: true });
+    expect(
+      resolveFollowUpsFeature(
+        cfg({ suggestions: { followUps: { enabled: false } } }),
+      ),
+    ).toEqual({ enabled: false, expose: false });
+  });
+
+  it("falls back per key to the deprecated features.suggestReplies alias", () => {
+    expect(
+      resolveFollowUpsFeature(
+        cfg({
+          features: { suggestReplies: { enabled: true, expose: true } },
+          suggestions: { followUps: { variant: "card" } },
+        }),
+      ),
+    ).toEqual({ enabled: true, expose: true });
+    // New home supplies `expose`, alias still supplies `enabled`.
+    expect(
+      resolveFollowUpsFeature(
+        cfg({
+          features: { suggestReplies: { enabled: false } },
+          suggestions: { followUps: { expose: true } },
+        }),
+      ),
+    ).toEqual({ enabled: false, expose: false });
+  });
+
+  it("does not silently re-enable when only presentation keys are added", () => {
+    expect(
+      resolveFollowUpsFeature(
+        cfg({
+          features: { suggestReplies: { enabled: false } },
+          suggestions: { followUps: { variant: "card" } },
+        }),
+      ),
+    ).toEqual({ enabled: false, expose: false });
+  });
+
+  it("lets suggestions.followUps win on conflict", () => {
+    expect(
+      resolveFollowUpsFeature(
+        cfg({
+          features: { suggestReplies: { enabled: false, expose: false } },
+          suggestions: { followUps: { enabled: true, expose: true } },
+        }),
+      ),
+    ).toEqual({ enabled: true, expose: true });
+    expect(
+      resolveFollowUpsFeature(
+        cfg({
+          features: { suggestReplies: { enabled: true, expose: true } },
+          suggestions: { followUps: { enabled: false } },
+        }),
+      ),
+    ).toEqual({ enabled: false, expose: false });
+  });
+
+  it("forces expose off when enabled resolves false", () => {
+    expect(
+      resolveFollowUpsFeature(
+        cfg({
+          suggestions: { followUps: { enabled: false, expose: true } },
+        }),
+      ),
+    ).toEqual({ enabled: false, expose: false });
+  });
+
+  it("warns once per key on conflict, and only in debug mode", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const quiet = cfg({
+      features: { suggestReplies: { enabled: true, expose: false } },
+      suggestions: { followUps: { enabled: false, expose: true } },
+    });
+    resolveFollowUpsFeature(quiet);
+    expect(warn).not.toHaveBeenCalled();
+
+    const loud = cfg({
+      debug: true,
+      features: { suggestReplies: { enabled: true, expose: false } },
+      suggestions: { followUps: { enabled: false, expose: true } },
+    });
+    resolveFollowUpsFeature(loud);
+    resolveFollowUpsFeature(loud);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls.map((call) => String(call[0]))).toEqual([
+      expect.stringContaining("suggestions.followUps.enabled"),
+      expect.stringContaining("suggestions.followUps.expose"),
+    ]);
+
+    warn.mockRestore();
+  });
+});
+
 describe("builtInClientToolsForDispatch - suggest_replies gating", () => {
   it("returns nothing by default (expose is opt-in)", () => {
     expect(builtInClientToolsForDispatch(undefined)).toEqual([]);
@@ -200,6 +336,19 @@ describe("builtInClientToolsForDispatch - suggest_replies gating", () => {
     expect(
       builtInClientToolsForDispatch({
         features: { suggestReplies: { expose: true, enabled: false } },
+      } as AgentWidgetConfig),
+    ).toEqual([]);
+  });
+
+  it("reads expose from suggestions.followUps too", () => {
+    expect(
+      builtInClientToolsForDispatch({
+        suggestions: { followUps: { expose: true } },
+      } as AgentWidgetConfig),
+    ).toEqual([SUGGEST_REPLIES_CLIENT_TOOL]);
+    expect(
+      builtInClientToolsForDispatch({
+        suggestions: { followUps: { expose: true, enabled: false } },
       } as AgentWidgetConfig),
     ).toEqual([]);
   });

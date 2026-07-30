@@ -1,55 +1,35 @@
-import type {
-  AgentWidgetPlugin,
-  AgentWidgetSuggestion,
-} from "@runtypelabs/persona";
+import type { AgentWidgetPlugin } from "@runtypelabs/persona";
 import { injectStyles } from "@runtypelabs/persona/plugin-kit";
 
 type SelectionLogger = (message: string) => void;
 
-const suggestionText = (
-  suggestion: AgentWidgetSuggestion,
-): { label: string; prompt: string } => {
-  if (typeof suggestion === "string") {
-    return { label: suggestion, prompt: suggestion };
-  }
-  return {
-    label: suggestion.label,
-    prompt: suggestion.prompt ?? suggestion.label,
-  };
-};
-
 /**
  * Data-only customization: works with Persona's standard chip/card/list UI.
  * A real app could rank with product context, permissions, or analytics.
+ * Hooks receive normalized items, so there is no string shorthand to unwrap.
  */
 export const createCuratedSuggestionsPlugin = (): AgentWidgetPlugin => ({
   id: "demo-suggestion-curation",
   transformSuggestions: ({ suggestions, surface }) =>
-    suggestions.map((suggestion, index) => {
-      const { label, prompt } = suggestionText(suggestion);
-      const original =
-        typeof suggestion === "string" ? undefined : suggestion;
-      return {
-        ...(original ?? {}),
-        id: original?.id ?? `${surface}-${index}`,
-        label: index === 0 ? `Recommended · ${label}` : label,
-        prompt,
-        description: `${surface === "starter" ? "Context-ranked" : "Based on this answer"} · ${
-          original?.description ??
-          (surface === "starter"
-            ? "Personalized from account and product context"
-            : "Recommended from the latest assistant response")
-        }`,
-        icon:
-          original?.icon ??
-          (index === 0
-            ? "sparkles"
-            : surface === "starter"
-              ? "globe"
-              : "arrow-up-right"),
-        emphasis: index === 0 ? "primary" : original?.emphasis,
-      };
-    }),
+    suggestions.map((suggestion, index) => ({
+      ...suggestion,
+      label:
+        index === 0 ? `Recommended · ${suggestion.label}` : suggestion.label,
+      description: `${surface === "starter" ? "Context-ranked" : "Based on this answer"} · ${
+        suggestion.description ??
+        (surface === "starter"
+          ? "Personalized from account and product context"
+          : "Recommended from the latest assistant response")
+      }`,
+      icon:
+        suggestion.icon ??
+        (index === 0
+          ? "sparkles"
+          : surface === "starter"
+            ? "globe"
+            : "arrow-up-right"),
+      emphasis: index === 0 ? "primary" : suggestion.emphasis,
+    })),
 });
 
 const CUSTOM_SUGGESTION_CSS = `
@@ -174,22 +154,14 @@ export const createCustomSuggestionsPlugin = (
   id: "demo-custom-suggestions",
   priority: 20,
   transformSuggestions: ({ suggestions, surface }) =>
-    suggestions.map((suggestion, index) => {
-      const { label, prompt } = suggestionText(suggestion);
-      const original =
-        typeof suggestion === "string" ? undefined : suggestion;
-      return {
-        ...(original ?? {}),
-        id: original?.id ?? `${surface}-custom-${index}`,
-        label,
-        prompt,
-        description:
-          original?.description ??
-          (surface === "starter"
-            ? "A completely custom suggestion component"
-            : "Custom follow-up UI using the same render hook"),
-      };
-    }),
+    suggestions.map((suggestion) => ({
+      ...suggestion,
+      description:
+        suggestion.description ??
+        (surface === "starter"
+          ? "A completely custom suggestion component"
+          : "Custom follow-up UI using the same render hook"),
+    })),
   renderSuggestion: ({
     suggestion,
     surface,
@@ -200,7 +172,8 @@ export const createCustomSuggestionsPlugin = (
     const button = document.createElement("button");
     button.type = "button";
     button.className = "suggestion-showcase-tile";
-    button.dataset.surface = surface;
+    // DOM attribute values stay kebab-case; TS surface values stay camelCase.
+    button.dataset.surface = surface === "followUp" ? "follow-up" : surface;
     button.disabled = streaming;
     button.innerHTML = `
       <span class="suggestion-showcase-icon" aria-hidden="true">${index === 0 ? "✦" : index === 1 ? "↗" : "→"}</span>
@@ -209,7 +182,7 @@ export const createCustomSuggestionsPlugin = (
         <span class="suggestion-showcase-label"></span>
         ${suggestion.description ? '<span class="suggestion-showcase-description"></span>' : ""}
       </span>
-      ${surface === "follow-up" ? `<span class="suggestion-showcase-action">${suggestion.selection === "fill" ? "Draft" : "Ask"} →</span>` : ""}
+      ${surface === "followUp" ? `<span class="suggestion-showcase-action">${suggestion.behavior === "fill" ? "Draft" : "Ask"} →</span>` : ""}
     `;
     button.querySelector<HTMLElement>(".suggestion-showcase-label")!.textContent =
       suggestion.label;
@@ -227,7 +200,7 @@ export const createCustomSuggestionsPlugin = (
   },
   onSuggestionSelect: ({ suggestion, surface, source }) => {
     log(
-      `${surface} · ${source} · ${suggestion.selection}: “${suggestion.label}”`,
+      `${surface} · ${source} · ${suggestion.behavior}: “${suggestion.label}”`,
     );
   },
 });

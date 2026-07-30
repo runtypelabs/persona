@@ -62,6 +62,28 @@ const chat = initAgentWidget({
 chat.clearChat()
 ```
 
+### Follow-up suggestions
+
+Push follow-up suggestions from host code without an agent round trip:
+
+```ts
+chat.setFollowUpSuggestions([
+  "Track my order",
+  { label: "Talk to a human", prompt: "I want to talk to a person", behavior: "fill" },
+])
+
+chat.clearFollowUpSuggestions()
+```
+
+This is an ephemeral UI overlay: the items never enter the transcript, the wire
+payload, or persisted state, so they do not survive a refresh. They clear when
+the next user message appends, and latest writer wins against the agent's
+`suggest_replies` payloads. Rendering goes through `suggestions.followUps`, the
+plugin hooks, and the usual DOM events with `source: "host"`, and works even
+when `suggestions.followUps.enabled` is `false` (that key disables the tool, not
+the surface). See
+[UI Features & Components](./UI-COMPONENTS.md#programmatic-follow-ups).
+
 ### Message Injection
 
 Inject messages programmatically from external sources like tool call responses, system events, or third-party integrations. This is useful when local tools need to push results back into the conversation.

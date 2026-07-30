@@ -70,10 +70,10 @@ describe("theme editor scroll-to-bottom controls", () => {
       expect.arrayContaining([
         "suggestions.starters.variant",
         "suggestions.starters.placement",
-        "suggestions.starters.selection",
+        "suggestions.starters.behavior",
         "suggestions.followUps.variant",
         "suggestions.followUps.placement",
-        "suggestions.followUps.selection",
+        "suggestions.followUps.behavior",
         "suggestions.followUps.overflow",
       ])
     );

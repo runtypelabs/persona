@@ -249,7 +249,7 @@ export const THEME_TOKEN_DOCS = {
       description:
         'Rich starter and follow-up suggestion surfaces. Strings remain valid item shorthand.',
       properties:
-        'starters.items, starters.variant ("card" | "chip" | "list"), starters.placement ("welcome" | "composer"), starters.selection ("send" | "fill"), starters.maxItems, followUps.variant, followUps.placement ("auto" | "after-message" | "composer"), followUps.selection, followUps.overflow ("scroll" | "wrap"), followUps.maxItems.',
+        'starters.items, starters.variant ("card" | "chip" | "list"), starters.placement ("auto" | "welcome" | "composer"), starters.behavior ("send" | "fill"), starters.overflow ("scroll" | "wrap"), starters.maxItems, followUps.enabled, followUps.expose, followUps.variant, followUps.placement ("auto" | "after-message" | "composer"), followUps.behavior, followUps.overflow ("scroll" | "wrap"), followUps.maxItems.',
     },
     suggestionChips:
       'Deprecated string[] shorthand for starter prompts. Prefer suggestions.starters.items.',

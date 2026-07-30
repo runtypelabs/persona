@@ -7,7 +7,7 @@ import {
   AgentWidgetResolvedSuggestion,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionChipsConfig,
-  AgentWidgetSuggestionSelection,
+  AgentWidgetSuggestionBehavior,
   AgentWidgetSuggestionSource,
   AgentWidgetSuggestionSurface,
   AgentWidgetSuggestionVariant,
@@ -16,10 +16,15 @@ import type { AgentWidgetPlugin } from "../plugins/types";
 
 export type NormalizedSuggestion = Omit<
   AgentWidgetResolvedSuggestion,
-  "selection"
+  "behavior"
 > & {
-  selection?: AgentWidgetSuggestionSelection;
+  behavior?: AgentWidgetSuggestionBehavior;
 };
+
+/** DOM attribute values stay kebab-case; TS surface values stay camelCase. */
+export const suggestionSurfaceAttr = (
+  surface: AgentWidgetSuggestionSurface
+): string => (surface === "followUp" ? "follow-up" : surface);
 
 export interface SuggestionButtons {
   buttons: HTMLButtonElement[];
@@ -41,16 +46,17 @@ export interface SuggestionRenderOptions {
   /** Presentation density. */
   variant?: AgentWidgetSuggestionVariant;
   /** Default click behavior, overridable per item. */
-  selection?: AgentWidgetSuggestionSelection;
+  behavior?: AgentWidgetSuggestionBehavior;
   /** Chip overflow behavior. */
   overflow?: "scroll" | "wrap";
   /** Renderer cap. */
   maxItems?: number;
   /**
-   * Suggestions pushed by the agent's `suggest_replies` tool rather than
-   * static config. Retains the legacy `persona:suggestReplies:*` events.
+   * Who produced these items. Defaults to `config`; `agent` and `host` mark
+   * the follow-up surface, which keeps the legacy `persona:suggestReplies:*`
+   * events and skips the starters' before-first-user-message gate.
    */
-  agentPushed?: boolean;
+  source?: AgentWidgetSuggestionSource;
   /** Live widget config exposed to plugin hooks. */
   config?: AgentWidgetConfig;
   /** Priority-sorted plugins active for this widget instance. */
@@ -81,7 +87,7 @@ export const normalizeSuggestion = (
     prompt,
     description: item.description?.trim() || undefined,
     icon: item.icon,
-    selection: item.selection,
+    behavior: item.behavior,
     emphasis: item.emphasis ?? "default",
   };
 };
@@ -176,11 +182,13 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     suggestionButtons.length = 0;
     suggestionElements.length = 0;
 
-    const agentPushed = opts?.agentPushed === true;
-    const surface = opts?.surface ?? (agentPushed ? "follow-up" : "starter");
-    const source: AgentWidgetSuggestionSource = agentPushed ? "agent" : "config";
+    const source: AgentWidgetSuggestionSource = opts?.source ?? "config";
+    const surface =
+      opts?.surface ?? (source === "config" ? "starter" : "followUp");
+    // Follow-ups render mid-conversation and keep the legacy event names.
+    const isFollowUp = surface === "followUp";
     const variant = opts?.variant ?? "chip";
-    const selection = opts?.selection ?? "send";
+    const behavior = opts?.behavior ?? "send";
     const overflow = opts?.overflow ?? "wrap";
     const widgetConfig = opts?.config ?? ({} as AgentWidgetConfig);
     const plugins = opts?.plugins ?? [];
@@ -189,28 +197,32 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
         ? Math.max(0, Math.floor(opts.maxItems))
         : undefined;
 
-    let transformed = [...(items ?? [])];
+    // Normalize before transform: hooks see resolved items and may return the
+    // loose shape, so re-resolution only fills a missing per-item behavior.
+    const resolveAll = (
+      list: AgentWidgetSuggestion[]
+    ): AgentWidgetResolvedSuggestion[] =>
+      list
+        .map(normalizeSuggestion)
+        .filter((item): item is NormalizedSuggestion => item !== null)
+        .map((item) => ({ ...item, behavior: item.behavior ?? behavior }));
+
+    let resolved = resolveAll(items ?? []);
     plugins.forEach((plugin) => {
       if (!plugin.transformSuggestions) return;
-      transformed = plugin.transformSuggestions({
-        suggestions: [...transformed],
-        surface,
-        source,
-        config: widgetConfig,
-      });
+      resolved = resolveAll(
+        plugin.transformSuggestions({
+          suggestions: resolved.map((item) => ({ ...item })),
+          surface,
+          source,
+          config: widgetConfig,
+        })
+      );
     });
 
-    const allNormalized = transformed
-      .map(normalizeSuggestion)
-      .filter((item): item is NormalizedSuggestion => item !== null);
-    const normalized: AgentWidgetResolvedSuggestion[] = (
-      maxItems === undefined
-        ? allNormalized
-        : allNormalized.slice(0, maxItems)
-    ).map((item) => ({
-      ...item,
-      selection: item.selection ?? selection,
-    }));
+    // The cap applies once, after the full transform chain.
+    const normalized =
+      maxItems === undefined ? resolved : resolved.slice(0, maxItems);
 
     if (!normalized.length) {
       container.hidden = true;
@@ -219,7 +231,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
       return;
     }
 
-    if (!agentPushed) {
+    if (!isFollowUp) {
       const messagesToCheck = messages ?? session.getMessages();
       if (messagesToCheck.some((message) => message.role === "user")) {
         container.hidden = true;
@@ -230,7 +242,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
 
     container.hidden = false;
     container.classList.add("persona-suggestions");
-    container.dataset.personaSuggestionSurface = surface;
+    container.dataset.personaSuggestionSurface = suggestionSurfaceAttr(surface);
     container.dataset.variant = variant;
     container.dataset.overflow = overflow;
 
@@ -238,14 +250,14 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     const streaming = session.isStreaming();
 
     normalized.forEach((item, index) => {
-      const itemSelection = item.selection;
+      const itemBehavior = item.behavior;
       const select = () => {
         if (session.isStreaming()) return;
         const detail = {
           suggestion: { ...item },
           surface,
           source,
-          selection: itemSelection,
+          behavior: itemBehavior,
         };
         const shouldContinue = container.dispatchEvent(
           new CustomEvent("persona:suggestion:selected", {
@@ -255,7 +267,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
             cancelable: true,
           })
         );
-        if (agentPushed) {
+        if (isFollowUp) {
           container.dispatchEvent(
             new CustomEvent("persona:suggestReplies:selected", {
               detail: { suggestion: item.prompt },
@@ -280,7 +292,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
           }
         }
 
-        if (itemSelection === "fill") {
+        if (itemBehavior === "fill") {
           textarea.value = item.prompt;
           textarea.dispatchEvent(
             new Event("input", { bubbles: true, composed: true })
@@ -302,7 +314,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
         button.disabled = streaming;
         button.dataset.suggestionId = item.id;
         button.dataset.emphasis = item.emphasis;
-        button.dataset.selection = itemSelection;
+        button.dataset.behavior = itemBehavior;
 
         if (chipsConfig?.fontFamily) {
           button.style.fontFamily = fontFamilyValue(chipsConfig.fontFamily);
@@ -379,7 +391,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
       }
       element ??= defaultRenderer();
       element.dataset.suggestionId ||= item.id;
-      element.dataset.selection ||= itemSelection;
+      element.dataset.behavior ||= itemBehavior;
       element.dataset.emphasis ||= item.emphasis;
       if (!(element instanceof HTMLButtonElement)) {
         element.setAttribute("aria-disabled", streaming ? "true" : "false");
@@ -406,7 +418,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
       normalized,
       surface,
       variant,
-      agentPushed,
+      source,
     });
     if (shownKey !== lastShownKey) {
       lastShownKey = shownKey;
@@ -422,7 +434,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
           composed: true,
         })
       );
-      if (agentPushed) {
+      if (isFollowUp) {
         container.dispatchEvent(
           new CustomEvent("persona:suggestReplies:shown", {
             detail: {

@@ -71,10 +71,12 @@ calling out:
 Suggestions expose a three-stage plugin pipeline:
 
 1. `transformSuggestions({ suggestions, surface, source, config })` filters,
-   ranks, reorders, or enriches the raw configured/agent items. Every transform
-   hook runs in priority order, and `maxItems` is applied afterward.
+   ranks, reorders, or enriches the normalized configured/agent items. Hooks
+   receive fully resolved suggestions and may return the loose shape (string
+   shorthand included), which is re-normalized before the next hook. Every
+   transform hook runs in priority order, and `maxItems` is applied afterward.
 2. `renderSuggestion(...)` receives one normalized suggestion (including its
-   effective `selection`), plus `defaultRenderer()` and `select()`. Return any
+   effective `behavior`), plus `defaultRenderer()` and `select()`. Return any
    `HTMLElement`, or `null` for Persona's built-in chip/card/list item. Custom
    controls should call `select()` so unified/legacy DOM events, plugin
    selection hooks, and send/fill behavior all remain intact.
@@ -100,10 +102,53 @@ const suggestionsPlugin: AgentWidgetPlugin = {
 };
 ```
 
-The context distinguishes `surface: "starter" | "follow-up"` and
-`source: "config" | "agent"`, so one plugin can render the welcome state and
-agent-produced `suggest_replies` differently. Use `injectStyles` from the
-plugin kit for custom UI that also works under Shadow DOM.
+The context distinguishes `surface: "starter" | "followUp"` and
+`source: "config" | "agent" | "host"`, so one plugin can render the welcome
+state, agent-produced `suggest_replies`, and host-pushed
+`controller.setFollowUpSuggestions` items differently. Use `injectStyles` from
+the plugin kit for custom UI that also works under Shadow DOM.
+
+#### Transform recipes
+
+The `suggest_replies` schema advertises semantics only (`label`, `prompt`,
+`description`). Presentation is the host's, and `transformSuggestions` is where
+it is applied. Hooks receive resolved items, so these are plain object spreads
+with no string unwrapping.
+
+Add icons by keyword:
+
+```ts
+const iconFor = (label: string) =>
+  /price|plan|billing/i.test(label) ? "dollar-sign" : "message-circle";
+
+transformSuggestions: ({ suggestions }) =>
+  suggestions.map((s) => ({ ...s, icon: s.icon ?? iconFor(s.label) })),
+```
+
+Mark the first item primary:
+
+```ts
+transformSuggestions: ({ suggestions }) =>
+  suggestions.map((s, index) => ({
+    ...s,
+    emphasis: index === 0 ? "primary" : s.emphasis,
+  })),
+```
+
+Switch long prompts to fill so the user can edit before sending, agent items
+only:
+
+```ts
+transformSuggestions: ({ suggestions, source }) =>
+  source === "agent"
+    ? suggestions.map((s) =>
+        s.prompt.length > 120 ? { ...s, behavior: "fill" } : s
+      )
+    : suggestions,
+```
+
+Unknown icon names degrade gracefully: `renderLucideIcon` warns and the item
+renders without an icon.
 
 ### `renderComposer`
 

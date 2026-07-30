@@ -537,10 +537,10 @@
           plugins,
           features: {
             askUserQuestion: { groupedAutoAdvance: autoAdvance },
-            // expose only matters for real dispatch advertising (the mock
-            // ignores clientTools); set for config-inspector fidelity.
-            suggestReplies: { expose: true },
           },
+          // expose only matters for real dispatch advertising (the mock
+          // ignores clientTools); set for config-inspector fidelity.
+          suggestions: { followUps: { expose: true } },
           copy: {
             welcomeTitle: "Ask User Question Demo",
             welcomeSubtitle: "Trigger a preset question from the left panel.",

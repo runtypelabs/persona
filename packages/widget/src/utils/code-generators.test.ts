@@ -570,7 +570,7 @@ describe("Suggestions Serialization", () => {
       suggestions: {
         starters: {
           variant: "card",
-          selection: "fill",
+          behavior: "fill",
           items: [
             {
               id: "compare",

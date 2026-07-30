@@ -607,11 +607,12 @@ const suggestionsSectionDef: SectionDef = {
   fields: [
     { id: 'suggestions-list', label: 'Starter Prompts', description: 'Add, edit, and remove starter prompts directly.', type: 'chip-list', path: 'suggestionChips', defaultValue: DEFAULT_SUGGESTION_CHIPS },
     { id: 'suggestions-starter-variant', label: 'Starter Style', type: 'select', path: 'suggestions.starters.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Cards' }, { value: 'chip', label: 'Chips' }, { value: 'list', label: 'List' }] },
-    { id: 'suggestions-starter-placement', label: 'Starter Placement', type: 'select', path: 'suggestions.starters.placement', defaultValue: 'welcome', options: [{ value: 'welcome', label: 'Welcome Surface' }, { value: 'composer', label: 'Above Composer' }] },
-    { id: 'suggestions-starter-selection', label: 'Starter Click', type: 'select', path: 'suggestions.starters.selection', defaultValue: 'send', options: [{ value: 'send', label: 'Send Immediately' }, { value: 'fill', label: 'Fill Composer' }] },
+    { id: 'suggestions-starter-placement', label: 'Starter Placement', type: 'select', path: 'suggestions.starters.placement', defaultValue: 'auto', options: [{ value: 'auto', label: 'Automatic' }, { value: 'welcome', label: 'Welcome Surface' }, { value: 'composer', label: 'Above Composer' }] },
+    { id: 'suggestions-starter-behavior', label: 'Starter Click', type: 'select', path: 'suggestions.starters.behavior', defaultValue: 'send', options: [{ value: 'send', label: 'Send Immediately' }, { value: 'fill', label: 'Fill Composer' }] },
+    { id: 'suggestions-starter-overflow', label: 'Starter Overflow', type: 'select', path: 'suggestions.starters.overflow', defaultValue: 'wrap', options: [{ value: 'wrap', label: 'Wrap Rows' }, { value: 'scroll', label: 'Horizontal Scroll' }] },
     { id: 'suggestions-followup-variant', label: 'Follow-up Style', type: 'select', path: 'suggestions.followUps.variant', defaultValue: 'chip', options: [{ value: 'chip', label: 'Chips' }, { value: 'card', label: 'Cards' }, { value: 'list', label: 'List' }] },
     { id: 'suggestions-followup-placement', label: 'Follow-up Placement', type: 'select', path: 'suggestions.followUps.placement', defaultValue: 'auto', options: [{ value: 'auto', label: 'Automatic' }, { value: 'after-message', label: 'After Messages' }, { value: 'composer', label: 'Above Composer' }] },
-    { id: 'suggestions-followup-selection', label: 'Follow-up Click', type: 'select', path: 'suggestions.followUps.selection', defaultValue: 'send', options: [{ value: 'send', label: 'Send Immediately' }, { value: 'fill', label: 'Fill Composer' }] },
+    { id: 'suggestions-followup-behavior', label: 'Follow-up Click', type: 'select', path: 'suggestions.followUps.behavior', defaultValue: 'send', options: [{ value: 'send', label: 'Send Immediately' }, { value: 'fill', label: 'Fill Composer' }] },
     { id: 'suggestions-followup-overflow', label: 'Follow-up Overflow', type: 'select', path: 'suggestions.followUps.overflow', defaultValue: 'scroll', options: [{ value: 'scroll', label: 'Horizontal Scroll' }, { value: 'wrap', label: 'Wrap Rows' }] },
   ],
 };

@@ -995,7 +995,8 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 Persona separates starter prompts from optional follow-ups:
 
 - `suggestions.starters` is shown before the first user message.
-- `suggestions.followUps` presents the latest `suggest_replies` tool payload.
+- `suggestions.followUps` presents the latest `suggest_replies` tool payload,
+  and owns the `enabled` / `expose` keys for that built-in tool.
 - `ask_user_question` remains the correct primitive for a required answer.
 
 Strings are valid item shorthand. Rich items can separate a short visible
@@ -1004,9 +1005,9 @@ Strings are valid item shorthand. Rich items can separate a short visible
 ```ts
 suggestions: {
   starters: {
-    placement: "welcome",
+    placement: "auto",
     variant: "card",
-    selection: "fill",
+    behavior: "fill",
     maxItems: 4,
     items: [
       {
@@ -1023,7 +1024,7 @@ suggestions: {
   followUps: {
     placement: "auto",
     variant: "chip",
-    selection: "send",
+    behavior: "send",
     overflow: "scroll",
     maxItems: 4,
   },
@@ -1034,20 +1035,29 @@ suggestions: {
 |----------|---------|-------------|
 | `items` | `suggestionChips` | `(string \| AgentWidgetSuggestionObject)[]` |
 | `variant` | `"card"` | `"card" \| "chip" \| "list"` |
-| `placement` | `"welcome"` | `"welcome" \| "composer"`; falls back to composer when the welcome card is hidden |
-| `selection` | `"send"` | `"send"` sends immediately; `"fill"` drafts in the composer |
+| `placement` | `"auto"` | `"auto" \| "welcome" \| "composer"`; `auto` uses the welcome surface when the welcome card renders and the composer otherwise. Explicit values are literal: pinned `"welcome"` renders nothing when the welcome card is hidden |
+| `behavior` | `"send"` | `"send"` sends immediately; `"fill"` drafts in the composer |
+| `overflow` | `"wrap"` | `"scroll" \| "wrap"` |
 | `maxItems` | `4` | Maximum number shown |
 
 | Follow-up property | Default | Description |
 |----------|---------|-------------|
+| `enabled` | `true` | Render follow-ups and auto-resume `suggest_replies` |
+| `expose` | `false` | Advertise the built-in tool on `clientTools[]`; forced off when `enabled` is `false` |
 | `variant` | `"chip"` | `"chip" \| "card" \| "list"` |
-| `placement` | `"auto"` | Regular panels use `"after-message"`; composer-bar mode uses `"composer"` |
-| `selection` | `"send"` | `"send" \| "fill"` |
+| `placement` | `"auto"` | `"auto" \| "after-message" \| "composer"`; `auto` uses `"after-message"` in regular panels and `"composer"` in composer-bar mode |
+| `behavior` | `"send"` | `"send" \| "fill"` |
 | `overflow` | `"scroll"` | `"scroll" \| "wrap"` |
 | `maxItems` | `4` | Maximum number shown |
 
 Each rich item supports `id`, `label`, `prompt`, `description`, `icon`,
-`selection`, and `emphasis`. Per-item `selection` overrides the surface.
+`behavior`, and `emphasis`. Per-item `behavior` overrides the surface.
+
+Follow-ups have no `items` key: they come from the agent's `suggest_replies`
+call or from `controller.setFollowUpSuggestions()`, an ephemeral host overlay
+that clears on the next user message and is never persisted. The deprecated
+`features.suggestReplies.enabled` / `.expose` aliases still resolve per key,
+with `suggestions.followUps` winning.
 
 ### Suggestion theme tokens
 
@@ -1093,16 +1103,20 @@ Theme tokens and `config.suggestions` cover the common visual and behavioral
 choices. For product-specific ranking or markup, pass an
 `AgentWidgetPlugin` through `config.plugins`:
 
-- `transformSuggestions` filters, reorders, or enriches starter and follow-up
-  data before normalization and `maxItems`.
+- `transformSuggestions` filters, reorders, or enriches normalized starter and
+  follow-up data before `maxItems`. Hooks receive resolved items (strings are
+  already expanded) and may return the loose shape, which is re-normalized
+  before the next hook. This is also where a host re-adds the `icon`,
+  `emphasis`, and per-item `behavior` that the `suggest_replies` schema
+  deliberately withholds from the model.
 - `renderSuggestion` replaces an individual item. It receives
   `defaultRenderer()` for progressive customization and `select()` for the
   standard events plus send/fill behavior.
 - `onSuggestionSelect` observes selection and can return `false` to cancel the
   built-in action.
 
-The plugin contexts distinguish the `"starter"` / `"follow-up"` surface and
-the `"config"` / `"agent"` source. The
+The plugin contexts distinguish the `"starter"` / `"followUp"` surface and
+the `"config"` / `"agent"` / `"host"` source. The
 `persona:suggestion:selected` DOM event is also cancelable with
 `event.preventDefault()`. See
 [`docs/PLUGINS.md`](./docs/PLUGINS.md#suggestion-hooks) and the live
@@ -1113,8 +1127,9 @@ the `"config"` / `"agent"` source. The
 - `persona:suggestion:shown` includes suggestions, surface, source, and variant.
 - `persona:suggestion:selected` includes the selected item and send/fill mode.
   It is cancelable; call `event.preventDefault()` to suppress the action.
-- Agent follow-ups also retain `persona:suggestReplies:shown` and
-  `persona:suggestReplies:selected` for backwards compatibility.
+- The follow-up surface also retains `persona:suggestReplies:shown` and
+  `persona:suggestReplies:selected` for backwards compatibility, for both
+  agent-set and host-set items.
 
 ## Layout (`config.layout.*`)
 

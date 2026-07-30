@@ -14,19 +14,19 @@
   {
     "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
-    "limit": "15.5 kB",
+    "limit": "16.5 kB",
     "gzip": true
   },
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "163 kB",
+    "limit": "164 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "164 kB",
+    "limit": "165 kB",
     "gzip": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "142 kB",
+    "limit": "143 kB",
     "gzip": true
   },
   {

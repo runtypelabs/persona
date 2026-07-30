@@ -35,7 +35,7 @@ describe("mergeConfigUpdate", () => {
   it("patches suggestion surfaces without dropping sibling behavior", () => {
     const prev = base({
       suggestions: {
-        starters: { variant: "card", selection: "fill" },
+        starters: { variant: "card", behavior: "fill" },
         followUps: { variant: "chip", placement: "after-message" },
       },
     });
@@ -47,7 +47,7 @@ describe("mergeConfigUpdate", () => {
 
     expect(next.suggestions?.starters).toEqual({
       variant: "card",
-      selection: "fill",
+      behavior: "fill",
     });
     expect(next.suggestions?.followUps).toEqual({
       variant: "chip",
