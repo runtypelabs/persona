@@ -1,8 +1,6 @@
 import type { AgentWidgetPlugin } from "@runtypelabs/persona";
 import { injectStyles } from "@runtypelabs/persona/plugin-kit";
 
-type SelectionLogger = (message: string) => void;
-
 /**
  * Data-only customization: works with Persona's standard chip/card/list UI.
  * A real app could rank with product context, permissions, or analytics.
@@ -155,9 +153,7 @@ const CUSTOM_SUGGESTION_CSS = `
  * Full UI customization. The plugin owns every item but calls `select()` so
  * Persona still emits events and applies the configured send/fill behavior.
  */
-export const createCustomSuggestionsPlugin = (
-  log: SelectionLogger,
-): AgentWidgetPlugin => ({
+export const createCustomSuggestionsPlugin = (): AgentWidgetPlugin => ({
   id: "demo-custom-suggestions",
   priority: 20,
   transformSuggestions: ({ suggestions, surface }) =>
@@ -204,10 +200,5 @@ export const createCustomSuggestionsPlugin = (
       CUSTOM_SUGGESTION_CSS,
     );
     return button;
-  },
-  onSuggestionSelect: ({ suggestion, surface, source }) => {
-    log(
-      `${surface} · ${source} · ${suggestion.behavior}: “${suggestion.label}”`,
-    );
   },
 });

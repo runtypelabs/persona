@@ -1052,6 +1052,8 @@ suggestions: {
 
 Each rich item supports `id`, `label`, `prompt`, `description`, `icon`,
 `behavior`, and `emphasis`. Per-item `behavior` overrides the surface.
+`emphasis: "primary"` renders a quiet accent (accent border, faint accent wash,
+accent icon), not a solid fill; go louder with the token overrides below.
 
 Follow-ups have no `items` key: they come from the agent's `suggest_replies`
 call or from `controller.setFollowUpSuggestions()`, an ephemeral host overlay
@@ -1082,6 +1084,8 @@ theme: {
       card: {
         borderRadius: "palette.radius.xl",
         padding: "1rem",
+        // Cards rest shadowless by default and gain a shadow plus a 1px lift
+        // on hover; set `shadow` to keep one at rest.
         shadow: "palette.shadows.sm",
       },
       list: {

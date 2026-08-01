@@ -75,9 +75,9 @@ export const PRESET_SHOP: WidgetPreset = {
       sendButtonLabel: "Send",
     },
     suggestionChips: [
-      "What can you help me with?",
-      "Tell me about your features",
-      "How does this work?",
+      "Show me what you can help with",
+      "Walk me through getting started",
+      "Answer a question about this page",
     ],
   },
 };

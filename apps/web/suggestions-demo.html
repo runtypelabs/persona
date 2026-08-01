@@ -9,25 +9,18 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <title>Suggestion Customization Demo</title>
   <style>
-    .suggestion-state-buttons {
+    .suggestion-state-buttons,
+    .suggestion-example-buttons {
       display: grid;
       grid-template-columns: 1fr 1fr;
     }
-    .suggestion-event-log {
-      min-height: 92px;
-      max-height: 160px;
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 9px;
-      background: var(--surface);
-      padding: 9px 10px;
-      color: var(--muted);
-      font: 0.75rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    .suggestion-example-buttons {
+      grid-template-columns: repeat(3, 1fr);
     }
-    .suggestion-event-log div + div {
-      border-top: 1px solid var(--line);
-      margin-top: 5px;
-      padding-top: 5px;
+    .suggestion-example-control {
+      display: grid;
+      gap: 0.45rem;
+      margin-top: 1rem;
     }
   </style>
 </head>
@@ -35,12 +28,6 @@
   <main class="shell-main">
     <div class="stage">
       <aside class="stage-controls">
-        <header class="demo-meta">
-          <h1>Suggestion Hooks</h1>
-          <p>Transform the data, replace each item, or intercept selection without forking Persona.</p>
-          <div class="mount-toolbar" data-mount-toolbar></div>
-        </header>
-
         <div class="info-section">
           <h3>Conversation state</h3>
           <p>Compare the same plugin on welcome starters and agent-produced follow-ups.</p>
@@ -48,13 +35,13 @@
             <button class="suggestion-state-button mount-toggle-button" type="button" data-state="starter" aria-pressed="true">Starters</button>
             <button class="suggestion-state-button mount-toggle-button" type="button" data-state="follow-up" aria-pressed="false">Follow-ups</button>
           </div>
-        </div>
-
-        <div class="info-section">
-          <h3>Selection event log</h3>
-          <p>The custom renderer still routes clicks through Persona’s normal selection pipeline.</p>
-          <div class="suggestion-event-log" id="suggestion-event-log" aria-live="polite">
-            <div>Choose a suggestion to inspect its hook metadata.</div>
+          <div class="suggestion-example-control">
+            <span class="mount-toggle-label">Example</span>
+            <div class="suggestion-example-buttons mount-toggle-group" role="group" aria-label="Example">
+              <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="built-in" aria-pressed="true" title="Structured suggestions using Persona's default renderer.">Built-in</button>
+              <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="transform" aria-pressed="false" title="Enrich and rank data while keeping the default UI.">Transform</button>
+              <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="custom" aria-pressed="false" title="Replace every suggestion with a plugin-rendered element.">Custom UI</button>
+            </div>
           </div>
         </div>
 

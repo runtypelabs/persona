@@ -109,6 +109,34 @@ const fontFamilyValue = (
 // managers, so a per-instance flag hints once per surface instead of once.
 const hintedOverflowVariant = new WeakSet<AgentWidgetConfig>();
 
+const prefersReducedMotion = (): boolean =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * Staggered fade-up for a newly shown set. WAAPI, not CSS transitions: morph
+ * re-renders strip post-render CSS state, and a running animation survives.
+ */
+const animateEntrance = (elements: readonly HTMLElement[]): void => {
+  if (prefersReducedMotion()) return;
+  elements.forEach((element, index) => {
+    if (typeof element.animate !== "function") return;
+    element.animate(
+      [
+        { opacity: "0", transform: "translateY(4px)" },
+        { opacity: "1", transform: "none" },
+      ],
+      {
+        duration: 250,
+        delay: index * 60,
+        easing: "ease-out",
+        fill: "backwards",
+      }
+    );
+  });
+};
+
 export const createSuggestions = (container: HTMLElement): SuggestionButtons => {
   const suggestionButtons: HTMLButtonElement[] = [];
   const suggestionElements: HTMLElement[] = [];
@@ -441,6 +469,9 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     });
     if (shownKey !== lastShownKey) {
       lastShownKey = shownKey;
+      // Guarded by the same key as the shown event: render() re-runs on every
+      // UI update with identical items and must not re-animate.
+      animateEntrance(suggestionElements);
       container.dispatchEvent(
         new CustomEvent("persona:suggestion:shown", {
           detail: {

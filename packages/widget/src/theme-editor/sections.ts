@@ -553,9 +553,9 @@ export const COMPONENTS_SECTIONS: SectionDef[] = [
 
 const MB = 1024 * 1024;
 const DEFAULT_SUGGESTION_CHIPS = [
-  'What can you help me with?',
-  'Tell me about your features',
-  'How does this work?',
+  'Show me what you can help with',
+  'Walk me through getting started',
+  'Answer a question about this page',
 ];
 
 const ATTACHMENT_TYPE_PRESETS: Record<string, string[]> = {

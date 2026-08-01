@@ -270,7 +270,14 @@
     18px
   );
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+/* Welcome-surface policy, not a card property: the cap keeps a wide inline
+   panel at two starter columns instead of one stretched row. Moves to the
+   welcome host in phase 3 (docs/welcome-state-design.md). */
+.persona-suggestions[data-variant="card"][data-persona-suggestion-surface="starter"] {
+  max-width: 600px;
 }
 
 .persona-suggestions[data-variant="list"] {
@@ -392,6 +399,7 @@
 }
 
 .persona-suggestion--card {
+  align-items: flex-start;
   min-height: var(--persona-components-suggestion-card-minHeight, 72px);
   gap: var(--persona-components-suggestion-card-gap, 0.625rem);
   padding: var(--persona-components-suggestion-card-padding, 1rem);
@@ -409,15 +417,13 @@
     --persona-components-suggestion-card-foreground,
     var(--persona-text)
   );
-  box-shadow: var(
-    --persona-components-suggestion-card-shadow,
-    var(--persona-shadow-sm)
-  );
+  box-shadow: var(--persona-components-suggestion-card-shadow, none);
   font-size: var(--persona-components-suggestion-card-fontSize, 0.875rem);
   line-height: var(--persona-components-suggestion-card-lineHeight, 1.35);
 }
 
 .persona-suggestion--list {
+  align-items: flex-start;
   width: 100%;
   min-height: var(--persona-components-suggestion-list-minHeight, 44px);
   gap: var(--persona-components-suggestion-list-gap, 0.625rem);
@@ -445,6 +451,20 @@
   flex: 0 0 auto;
 }
 
+/* The taller viewport box centers the graphic on the label's first line box;
+   the icon keeps its size because the width constraint drives `meet` scaling. */
+.persona-suggestion--card .persona-suggestion__icon {
+  block-size: calc(
+    1em * var(--persona-components-suggestion-card-lineHeight, 1.35)
+  );
+}
+
+.persona-suggestion--list .persona-suggestion__icon {
+  block-size: calc(
+    1em * var(--persona-components-suggestion-list-lineHeight, 1.35)
+  );
+}
+
 .persona-suggestion__copy {
   display: flex;
   flex: 1 1 auto;
@@ -464,21 +484,27 @@
   line-height: 1.35;
 }
 
+/* Hover-revealed: the arrow is an affordance hint, not standing decoration. */
 .persona-suggestion__arrow {
   margin-left: auto;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.persona-suggestion:focus-visible .persona-suggestion__arrow {
   opacity: 0.55;
 }
 
+/* Quiet accent, never a solid fill: an emphasized item reads as a sibling of
+   the set rather than a CTA among ghost buttons. */
 .persona-suggestion[data-emphasis="primary"] {
   border-color: var(--persona-primary);
-  background: var(--persona-primary);
-  color: var(--persona-text-inverse);
+  background: transparent;
+  background: color-mix(in srgb, var(--persona-primary) 6%, transparent);
 }
 
-.persona-suggestion[data-emphasis="primary"]
-  .persona-suggestion__description {
-  color: currentColor;
-  opacity: 0.78;
+.persona-suggestion[data-emphasis="primary"] .persona-suggestion__icon {
+  color: var(--persona-primary);
 }
 
 @media (hover: hover) {
@@ -497,6 +523,10 @@
     );
   }
 
+  .persona-suggestion:hover .persona-suggestion__arrow {
+    opacity: 0.55;
+  }
+
   .persona-suggestion--card:hover {
     border-color: var(
       --persona-components-suggestion-card-hoverBorder,
@@ -506,6 +536,8 @@
       --persona-components-suggestion-card-hoverBackground,
       var(--persona-container)
     );
+    box-shadow: var(--persona-shadow-sm);
+    transform: translateY(-1px);
   }
 
   .persona-suggestion--list:hover {
@@ -521,9 +553,8 @@
 
   .persona-suggestion[data-emphasis="primary"]:hover {
     border-color: var(--persona-primary);
-    background: var(--persona-primary);
-    color: var(--persona-text-inverse);
-    filter: brightness(0.94);
+    background: transparent;
+    background: color-mix(in srgb, var(--persona-primary) 12%, transparent);
   }
 }
 
@@ -574,8 +605,8 @@
 }
 
 .persona-suggestion[data-emphasis="primary"]:active {
-  background: var(--persona-primary);
-  filter: brightness(0.9);
+  background: transparent;
+  background: color-mix(in srgb, var(--persona-primary) 16%, transparent);
 }
 
 .persona-suggestion:disabled {
@@ -604,10 +635,16 @@
   .persona-suggestion {
     min-height: 44px;
   }
+
+  /* No hover to reveal it, so the arrow would be permanent decoration. */
+  .persona-suggestion__arrow {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .persona-suggestion {
+  .persona-suggestion,
+  .persona-suggestion__arrow {
     transition: none;
   }
 }

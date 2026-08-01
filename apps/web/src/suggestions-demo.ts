@@ -30,80 +30,41 @@ let activeStage: HTMLElement | null = null;
 let activeController: AgentWidgetController | null = null;
 let teardownActive: (() => void) | null = null;
 
-const eventLog = (): HTMLElement | null =>
-  document.getElementById("suggestion-event-log");
-
-const logSelection = (message: string): void => {
-  const log = eventLog();
-  if (!log) return;
-  const entry = document.createElement("div");
-  entry.textContent = message;
-  log.prepend(entry);
-  while (log.children.length > 5) log.lastElementChild?.remove();
-};
-
 const scaffold = renderDemoScaffold({
   slug: "suggestions-demo",
-  variants: {
-    label: "Example",
-    initial: variant,
-    options: [
-      {
-        id: "built-in",
-        label: "Built-in",
-        description: "Structured suggestions using Persona's default renderer.",
-      },
-      {
-        id: "transform",
-        label: "Transform",
-        description: "Enrich and rank data while keeping the default UI.",
-      },
-      {
-        id: "custom",
-        label: "Custom UI",
-        description: "Replace every suggestion with a plugin-rendered element.",
-      },
-    ],
-    onSelect: (id) => {
-      variant = id as DemoVariant;
-      remount();
-    },
-  },
 });
 
 const configInspector = createDemoConfigInspector({
   title: "Suggestion Hooks",
 });
 
+// Single-line-first starters: verb-first, user-voice sentences of roughly 25 to
+// 45 characters, each sampling a different capability. No `prompt` field, so
+// with `behavior: "send"` the label is literally the message that gets sent.
+// One item keeps a `description` to show it stays supported as additive
+// context: it names the API the label does not carry.
 const starterItems = [
   {
-    id: "implementation",
-    label: "Show me an implementation",
-    prompt: "Show me a complete suggestions implementation",
-    description: "See configured starters and agent follow-ups together",
-    icon: "code-xml" as const,
+    id: "write-starters",
+    label: "Write starter prompts for my app",
+    icon: "sparkles" as const,
     emphasis: "primary" as const,
   },
   {
     id: "theming",
-    label: "Explore theming",
-    prompt: "How can I theme suggestions?",
-    description: "Customize tokens, variants, and responsive behavior",
+    label: "Theme suggestions to match my brand",
     icon: "settings" as const,
   },
   {
     id: "events",
-    label: "Track selections",
-    prompt: "How do suggestion selection events work?",
-    description: "Use plugin hooks or cancelable DOM events",
+    label: "Track which suggestions get clicked",
     icon: "activity" as const,
   },
   {
-    id: "agent",
-    label: "Add agent follow-ups",
-    prompt: "How does suggest_replies produce follow-ups?",
-    description: "Render contextual next steps after an answer",
-    icon: "sparkles" as const,
+    id: "custom-ui",
+    label: "Replace the cards with my own UI",
+    description: "Uses the renderSuggestion plugin hook",
+    icon: "code-xml" as const,
   },
 ];
 
@@ -170,9 +131,7 @@ const followUpMessages = (): AgentWidgetMessage[] => [
 
 const pluginsForVariant = (): AgentWidgetPlugin[] => {
   if (variant === "transform") return [createCuratedSuggestionsPlugin()];
-  if (variant === "custom") {
-    return [createCustomSuggestionsPlugin(logSelection)];
-  }
+  if (variant === "custom") return [createCustomSuggestionsPlugin()];
   return [];
 };
 
@@ -207,9 +166,11 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => ({
   },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
+    // Voice layering: the subtitle states scope in the assistant's voice, the
+    // starter labels state tasks in the user's voice.
     welcomeTitle: "What should we explore?",
     welcomeSubtitle:
-      "These suggestions can stay built-in or be completely replaced by a plugin.",
+      "I can help you configure, theme, and extend Persona's suggestion surfaces.",
     inputPlaceholder: "Choose a suggestion or write your own…",
   },
 });
@@ -258,18 +219,28 @@ document
             candidate.dataset.state === previewState ? "true" : "false",
           ),
         );
-      logSelection(`Preview state: ${previewState}`);
       remount();
     });
   });
 
-document.addEventListener("persona:suggestion:selected", (event) => {
-  if (variant === "custom") return;
-  const detail = (event as CustomEvent).detail;
-  logSelection(
-    `${detail.surface} · ${detail.source} · ${detail.behavior}: “${detail.suggestion.label}”`,
-  );
-});
+document
+  .querySelectorAll<HTMLButtonElement>(".suggestion-example-button")
+  .forEach((button) => {
+    button.addEventListener("click", () => {
+      const next = button.dataset.variant as DemoVariant | undefined;
+      if (!next || next === variant) return;
+      variant = next;
+      document
+        .querySelectorAll<HTMLButtonElement>(".suggestion-example-button")
+        .forEach((candidate) =>
+          candidate.setAttribute(
+            "aria-pressed",
+            candidate.dataset.variant === variant ? "true" : "false",
+          ),
+        );
+      remount();
+    });
+  });
 
 // Keep the value live for the browser console while exploring the demo.
 Object.defineProperty(window, "suggestionsDemoController", {
