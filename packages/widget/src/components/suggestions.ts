@@ -363,19 +363,23 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
         button.dataset.emphasis = item.emphasis;
         button.dataset.behavior = itemBehavior;
 
-        if (chipsConfig?.fontFamily) {
-          button.style.fontFamily = fontFamilyValue(chipsConfig.fontFamily);
-        }
-        if (chipsConfig?.fontWeight) {
-          button.style.fontWeight = chipsConfig.fontWeight;
-        }
-        if (chipsConfig?.paddingX) {
-          button.style.paddingLeft = chipsConfig.paddingX;
-          button.style.paddingRight = chipsConfig.paddingX;
-        }
-        if (chipsConfig?.paddingY) {
-          button.style.paddingTop = chipsConfig.paddingY;
-          button.style.paddingBottom = chipsConfig.paddingY;
+        // Legacy `suggestionChipsConfig` compat is chip-only: its inline
+        // styles would otherwise override the card/list padding tokens.
+        if (variant === "chip") {
+          if (chipsConfig?.fontFamily) {
+            button.style.fontFamily = fontFamilyValue(chipsConfig.fontFamily);
+          }
+          if (chipsConfig?.fontWeight) {
+            button.style.fontWeight = chipsConfig.fontWeight;
+          }
+          if (chipsConfig?.paddingX) {
+            button.style.paddingLeft = chipsConfig.paddingX;
+            button.style.paddingRight = chipsConfig.paddingX;
+          }
+          if (chipsConfig?.paddingY) {
+            button.style.paddingTop = chipsConfig.paddingY;
+            button.style.paddingBottom = chipsConfig.paddingY;
+          }
         }
 
         if (item.icon) {

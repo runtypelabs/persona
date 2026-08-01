@@ -393,6 +393,40 @@ describe('theme utils', () => {
     expect(cssVars['--persona-composer-shadow']).toBe('none');
   });
 
+  it('falls back composer spacing/type vars to the utility-class defaults', () => {
+    const cssVars = themeToCssVariables(createTheme());
+
+    expect(cssVars['--persona-composer-padding']).toBe('0.75rem 1rem');
+    expect(cssVars['--persona-composer-gap']).toBe('0.5rem');
+    expect(cssVars['--persona-composer-font-size']).toBe('0.875rem');
+    expect(cssVars['--persona-composer-line-height']).toBe('1.25rem');
+  });
+
+  it('maps composer spacing/type tokens to dedicated CSS variables', () => {
+    const theme = createTheme({
+      components: {
+        composer: {
+          padding: '1rem 1.25rem',
+          gap: '0.75rem',
+          fontSize: '1rem',
+          lineHeight: '1.5rem',
+        },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-components-composer-padding']).toBe('1rem 1.25rem');
+    expect(cssVars['--persona-components-composer-gap']).toBe('0.75rem');
+    expect(cssVars['--persona-components-composer-fontSize']).toBe('1rem');
+    expect(cssVars['--persona-components-composer-lineHeight']).toBe('1.5rem');
+
+    expect(cssVars['--persona-composer-padding']).toBe('1rem 1.25rem');
+    expect(cssVars['--persona-composer-gap']).toBe('0.75rem');
+    expect(cssVars['--persona-composer-font-size']).toBe('1rem');
+    expect(cssVars['--persona-composer-line-height']).toBe('1.5rem');
+  });
+
   it('maps scroll-to-bottom component tokens to dedicated CSS variables', () => {
     const theme = createTheme({
       components: {

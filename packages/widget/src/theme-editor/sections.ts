@@ -369,6 +369,18 @@ const inputShapeSectionDef: SectionDef = {
   ],
 };
 
+const composerSpacingSectionDef: SectionDef = {
+  id: 'comp-composer-spacing',
+  title: 'Composer Spacing',
+  collapsed: true,
+  fields: [
+    { id: 'composer-padding', label: 'Padding', type: 'text', path: 'theme.components.composer.padding', defaultValue: '0.75rem 1rem' },
+    { id: 'composer-gap', label: 'Row Gap', description: 'Space between the textarea row and the actions row', type: 'text', path: 'theme.components.composer.gap', defaultValue: '0.5rem' },
+    { id: 'composer-font-size', label: 'Font Size', type: 'text', path: 'theme.components.composer.fontSize', defaultValue: '0.875rem' },
+    { id: 'composer-line-height', label: 'Line Height', type: 'text', path: 'theme.components.composer.lineHeight', defaultValue: '1.25rem' },
+  ],
+};
+
 const buttonShapeSectionDef: SectionDef = {
   id: 'comp-button-shape',
   title: 'Button Shape',
@@ -528,6 +540,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   launcherLayoutSectionDef,
   messageShapeSectionDef,
   inputShapeSectionDef,
+  composerSpacingSectionDef,
   buttonShapeSectionDef,
   componentShadowsSectionDef,
 ];

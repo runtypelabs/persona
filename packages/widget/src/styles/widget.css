@@ -274,8 +274,7 @@
 }
 
 /* Welcome-surface policy, not a card property: the cap keeps a wide inline
-   panel at two starter columns instead of one stretched row. Moves to the
-   welcome host in phase 3 (docs/welcome-state-design.md). */
+   panel at two starter columns instead of one stretched row. */
 .persona-suggestions[data-variant="card"][data-persona-suggestion-surface="starter"] {
   max-width: 600px;
 }
@@ -1401,6 +1400,24 @@
 .persona-widget-composer {
   border-radius: var(--persona-input-radius, var(--persona-radius-lg, 0.5rem));
   box-shadow: var(--persona-composer-shadow, none);
+}
+
+/* Composer spacing, themeable via `components.composer.padding` / `.gap`.
+   The `[data-persona-root]` prefix outranks the `persona-px-4 persona-py-3
+   persona-gap-2` utilities the form still carries; the fallbacks reproduce
+   them exactly. The pill composer is excluded because it sets its own
+   grid padding/gap (see `.persona-pill-composer`). */
+[data-persona-root] .persona-widget-composer:not(.persona-pill-composer) {
+  padding: var(--persona-composer-padding, 0.75rem 1rem);
+  gap: var(--persona-composer-gap, 0.5rem);
+}
+
+/* Composer type scale, themeable via `components.composer.fontSize` /
+   `.lineHeight`. Outranks the `persona-text-sm` utility on the textarea;
+   fallbacks match it. Applies to the pill composer's textarea too. */
+[data-persona-root] .persona-composer-textarea {
+  font-size: var(--persona-composer-font-size, 0.875rem);
+  line-height: var(--persona-composer-line-height, 1.25rem);
 }
 
 .persona-form-grid {

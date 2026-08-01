@@ -451,6 +451,37 @@ Set `copy.showWelcomeCard: false` to hide it entirely, or use
 | `padding` | `semantic.spacing.lg` |
 | `shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` *(matches the legacy `persona-shadow-sm` look)* |
 
+### Composer (`components.composer.*`)
+
+The message input form at the bottom of the panel. `padding` and `gap` shape the
+form itself; `fontSize` and `lineHeight` set the textarea's type.
+
+| Token | Default | CSS Variable |
+|-------|---------|--------------|
+| `shadow` | `palette.shadows.none` | `--persona-composer-shadow` |
+| `padding` | `"0.75rem 1rem"` | `--persona-composer-padding` |
+| `gap` | `"0.5rem"` *(textarea row to actions row)* | `--persona-composer-gap` |
+| `fontSize` | `"0.875rem"` | `--persona-composer-font-size` |
+| `lineHeight` | `"1.25rem"` | `--persona-composer-line-height` |
+
+```typescript
+const theme = createTheme({
+  components: {
+    composer: {
+      padding: '1rem 1.25rem',
+      gap: '0.75rem',
+      fontSize: '1rem',
+      lineHeight: '1.5rem',
+    },
+  },
+});
+```
+
+`padding` and `gap` do not apply to the collapsed pill in
+`launcher.mountMode: "composer-bar"`, which keeps its own single-row geometry.
+`fontSize` and `lineHeight` apply to both. On coarse-pointer devices the
+textarea is still pinned to `1rem` so iOS Safari does not zoom on focus.
+
 ### Scroll To Bottom (`components.scrollToBottom.*`)
 
 | Token | Default Reference |

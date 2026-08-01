@@ -121,3 +121,42 @@ describe("suggestion interaction styles", () => {
     );
   });
 });
+
+describe("composer spacing styles", () => {
+  it("themes the composer form padding and gap with utility-matching fallbacks", () => {
+    const selector =
+      "[data-persona-root] .persona-widget-composer:not(.persona-pill-composer) {";
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    // Fallbacks reproduce `persona-px-4 persona-py-3` and `persona-gap-2`.
+    expect(rule).toContain(
+      "padding: var(--persona-composer-padding, 0.75rem 1rem)",
+    );
+    expect(rule).toContain("gap: var(--persona-composer-gap, 0.5rem)");
+  });
+
+  it("themes the composer textarea type with text-sm fallbacks", () => {
+    const selector = "[data-persona-root] .persona-composer-textarea {";
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "font-size: var(--persona-composer-font-size, 0.875rem)",
+    );
+    expect(rule).toContain(
+      "line-height: var(--persona-composer-line-height, 1.25rem)",
+    );
+  });
+
+  it("leaves the pill composer on its own single-row geometry", () => {
+    const start = widgetCss.indexOf(".persona-pill-composer {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("padding: 6px 14px");
+    expect(rule).toContain("gap: 8px");
+  });
+});

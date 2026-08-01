@@ -937,6 +937,16 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-reasoningBubble-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
   cssVars['--persona-composer-shadow'] =
     cssVars['--persona-components-composer-shadow'] ?? 'none';
+  // Composer spacing/type. Fallbacks reproduce the utility classes the form
+  // used to carry (`px-4 py-3`, `gap-2`, `text-sm`) exactly.
+  cssVars['--persona-composer-padding'] =
+    cssVars['--persona-components-composer-padding'] ?? '0.75rem 1rem';
+  cssVars['--persona-composer-gap'] =
+    cssVars['--persona-components-composer-gap'] ?? '0.5rem';
+  cssVars['--persona-composer-font-size'] =
+    cssVars['--persona-components-composer-fontSize'] ?? '0.875rem';
+  cssVars['--persona-composer-line-height'] =
+    cssVars['--persona-components-composer-lineHeight'] ?? '1.25rem';
 
   cssVars['--persona-md-inline-code-bg'] =
     cssVars['--persona-components-markdown-inlineCode-background'] ?? cssVars['--persona-container'];

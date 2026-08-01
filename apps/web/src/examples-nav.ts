@@ -92,6 +92,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "suggestion-recreations",
+    href: "/suggestion-recreations.html",
+    title: "Starter Prompt Recreations",
+    blurb: "ChatGPT, Claude, Gemini, Copilot, and Perplexity welcome states, rebuilt with config and theme tokens only.",
+    tier: "patterns",
+    tags: ["interaction", "theming", "welcome"],
+    modes: ["inline"],
+  },
+  {
     slug: "approval-demo",
     href: "/approval-demo.html",
     title: "Tool Approval",

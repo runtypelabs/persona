@@ -142,7 +142,8 @@ export const THEME_TOKEN_DOCS = {
         'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize.',
       toolBubble: 'shadow: tool call row box-shadow.',
       reasoningBubble: 'shadow: reasoning/thinking row box-shadow.',
-      composer: 'shadow: message input form box-shadow.',
+      composer:
+        'Message input form: shadow (box-shadow), padding (form inset), gap (textarea row to actions row), fontSize and lineHeight (textarea type).',
       artifact:
         'toolbar (icon styling, copy menu), tab (background, active states), pane (background, toolbarBackground).',
     },

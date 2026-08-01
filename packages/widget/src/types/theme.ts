@@ -365,6 +365,14 @@ export interface ReasoningBubbleTokens {
 export interface ComposerChromeTokens {
   /** Box-shadow on the composer form (raw CSS, e.g. `none`). */
   shadow: string;
+  /** Inner padding of the composer form (raw CSS shorthand). @default "0.75rem 1rem" */
+  padding?: string;
+  /** Gap between the textarea row and the actions row. @default "0.5rem" */
+  gap?: string;
+  /** Composer textarea font-size. @default "0.875rem" */
+  fontSize?: string;
+  /** Composer textarea line-height. @default "1.25rem" */
+  lineHeight?: string;
 }
 
 /** Artifact toolbar chrome. */

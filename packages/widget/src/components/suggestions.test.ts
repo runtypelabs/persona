@@ -116,3 +116,37 @@ describe("suggestion entrance animation", () => {
     expect(container.querySelectorAll(".persona-suggestion")).toHaveLength(2);
   });
 });
+
+describe("legacy suggestionChipsConfig scoping", () => {
+  const chipsConfig = {
+    fontFamily: "sans-serif" as const,
+    fontWeight: "500",
+    paddingX: "12px",
+    paddingY: "6px",
+  };
+
+  it("applies inline chip styles to the chip variant", () => {
+    const { manager, session, textarea, container } = setup();
+
+    manager.render(["One"], session, textarea, [], chipsConfig, {
+      variant: "chip",
+    });
+
+    const button = container.querySelector("button") as HTMLButtonElement;
+    expect(button.style.paddingLeft).toBe("12px");
+    expect(button.style.paddingTop).toBe("6px");
+    expect(button.style.fontWeight).toBe("500");
+  });
+
+  it("does not let chip config override card and list padding tokens", () => {
+    const { manager, session, textarea, container } = setup();
+
+    for (const variant of ["card", "list"] as const) {
+      manager.render(["One"], session, textarea, [], chipsConfig, { variant });
+      const button = container.querySelector("button") as HTMLButtonElement;
+      expect(button.style.paddingLeft).toBe("");
+      expect(button.style.paddingTop).toBe("");
+      expect(button.style.fontFamily).toBe("");
+    }
+  });
+});
