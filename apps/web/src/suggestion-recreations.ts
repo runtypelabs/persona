@@ -84,22 +84,14 @@ const chatgpt = (): AgentWidgetConfig => ({
       behavior: "fill",
       placement: "welcome",
       maxItems: 5,
+      // Per-pill accent glyphs on neutral text, ChatGPT's signature trait:
+      // `iconColor` tints only the icon, so borders and labels stay gray.
       items: [
-        {
-          id: "image",
-          label: "Create image",
-          prompt: "Create an image of ",
-          // Token gap: per-item icon color is not configurable. ChatGPT tints
-          // each pill's glyph a different accent; only `emphasis: "primary"`
-          // recolors an icon here, and it recolors the border too.
-          icon: "image-plus",
-        },
-        { id: "summarize", label: "Summarize text", prompt: "Summarize this text: ", icon: "file-text" },
-        { id: "write", label: "Help me write", prompt: "Help me write ", icon: "pencil" },
-        { id: "brainstorm", label: "Brainstorm", prompt: "Brainstorm ideas for ", icon: "sparkles" },
-        // Token gap: the bundled Lucide registry has no `lightbulb` or
-        // `chart-column`, the two glyphs ChatGPT uses here.
-        { id: "analyze", label: "Analyze data", prompt: "Analyze this data: ", icon: "file-spreadsheet" },
+        { id: "image", label: "Create image", prompt: "Create an image of ", icon: "image", iconColor: "#43a25a" },
+        { id: "summarize", label: "Summarize text", prompt: "Summarize this text: ", icon: "file-text", iconColor: "#e0843a" },
+        { id: "write", label: "Help me write", prompt: "Help me write ", icon: "pen-line", iconColor: "#8e6ee6" },
+        { id: "brainstorm", label: "Brainstorm", prompt: "Brainstorm ideas for ", icon: "lightbulb", iconColor: "#e2b93b" },
+        { id: "analyze", label: "Analyze data", prompt: "Analyze this data: ", icon: "chart-column", iconColor: "#4a9fd8" },
       ],
     },
   },

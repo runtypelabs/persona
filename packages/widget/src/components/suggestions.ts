@@ -87,6 +87,7 @@ export const normalizeSuggestion = (
     prompt,
     description: item.description?.trim() || undefined,
     icon: item.icon,
+    iconColor: item.iconColor?.trim() || undefined,
     behavior: item.behavior,
     emphasis: item.emphasis ?? "default",
   };
@@ -391,6 +392,9 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
           );
           if (icon) {
             icon.classList.add("persona-suggestion__icon");
+            // The glyph strokes in currentColor, so this tints it alone; inline
+            // also beats the emphasis-primary icon rule.
+            if (item.iconColor) icon.style.color = item.iconColor;
             button.appendChild(icon);
           }
         }

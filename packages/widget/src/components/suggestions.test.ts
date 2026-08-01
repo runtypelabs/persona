@@ -117,6 +117,87 @@ describe("suggestion entrance animation", () => {
   });
 });
 
+describe("per-item icon color", () => {
+  const iconOf = (container: HTMLElement): SVGElement =>
+    container.querySelector(".persona-suggestion__icon") as SVGElement;
+
+  it("tints only the icon element", () => {
+    const { manager, session, textarea, container } = setup();
+
+    manager.render(
+      [{ label: "Compare plans", icon: "dollar-sign", iconColor: "#16a34a" }],
+      session,
+      textarea,
+      [],
+      undefined,
+      { variant: "card" }
+    );
+
+    const button = container.querySelector("button") as HTMLButtonElement;
+    expect(iconOf(container).style.color).toBe("rgb(22, 163, 74)");
+    expect(button.style.color).toBe("");
+    expect(button.style.borderColor).toBe("");
+    expect(button.style.background).toBe("");
+    expect(
+      (container.querySelector(".persona-suggestion__label") as HTMLElement)
+        .style.color
+    ).toBe("");
+  });
+
+  it("wins over the emphasis-primary icon tint without recoloring the button", () => {
+    const { manager, session, textarea, container } = setup();
+
+    manager.render(
+      [
+        {
+          label: "Compare plans",
+          icon: "dollar-sign",
+          iconColor: "#16a34a",
+          emphasis: "primary",
+        },
+      ],
+      session,
+      textarea,
+      [],
+      undefined,
+      { variant: "card" }
+    );
+
+    const button = container.querySelector("button") as HTMLButtonElement;
+    expect(button.dataset.emphasis).toBe("primary");
+    expect(iconOf(container).style.color).toBe("rgb(22, 163, 74)");
+  });
+
+  it("leaves the icon in currentColor when iconColor is absent", () => {
+    const { manager, session, textarea, container } = setup();
+
+    manager.render(
+      [{ label: "Compare plans", icon: "dollar-sign" }],
+      session,
+      textarea,
+      [],
+      undefined,
+      { variant: "card" }
+    );
+
+    const icon = iconOf(container);
+    expect(icon.style.color).toBe("");
+    expect(icon.getAttribute("stroke")).toBe("currentColor");
+  });
+
+  it("leaves string shorthand items unaffected", () => {
+    const { manager, session, textarea, container } = setup();
+
+    manager.render(["Compare plans"], session, textarea, [], undefined, {
+      variant: "card",
+    });
+
+    expect(container.querySelector(".persona-suggestion__icon")).toBeNull();
+    const button = container.querySelector("button") as HTMLButtonElement;
+    expect(button.style.color).toBe("");
+  });
+});
+
 describe("legacy suggestionChipsConfig scoping", () => {
   const chipsConfig = {
     fontFamily: "sans-serif" as const,

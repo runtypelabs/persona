@@ -1047,6 +1047,7 @@ suggestions: {
         prompt: "Compare the plans for a team of 20",
         description: "Review features, limits, and pricing",
         icon: "dollar-sign",
+        iconColor: "#16a34a",
         emphasis: "primary",
       },
       "Show me a quick tour",
@@ -1082,9 +1083,12 @@ suggestions: {
 | `maxItems` | `4` | Maximum number shown |
 
 Each rich item supports `id`, `label`, `prompt`, `description`, `icon`,
-`behavior`, and `emphasis`. Per-item `behavior` overrides the surface.
-`emphasis: "primary"` renders a quiet accent (accent border, faint accent wash,
-accent icon), not a solid fill; go louder with the token overrides below.
+`iconColor`, `behavior`, and `emphasis`. Per-item `behavior` overrides the
+surface. `emphasis: "primary"` renders a quiet accent (accent border, faint
+accent wash, accent icon), not a solid fill; go louder with the token overrides
+below. `iconColor` takes any CSS color and tints that item's glyph alone,
+leaving the label, border, and background neutral: use it to color-code a set
+without promoting one item.
 
 Follow-ups have no `items` key: they come from the agent's `suggest_replies`
 call or from `controller.setFollowUpSuggestions()`, an ephemeral host overlay

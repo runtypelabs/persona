@@ -44,7 +44,58 @@ describe("createComposerTextarea", () => {
     Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 10000 });
     textarea.dispatchEvent(new Event("input"));
     expect(textarea.style.height).toBe("200px");
+    // The override keeps winning on later input events (pill composer path).
+    textarea.dispatchEvent(new Event("input"));
+    expect(textarea.style.height).toBe("200px");
+    expect(textarea.style.maxHeight).toBe("200px");
     document.body.removeChild(textarea);
+  });
+
+  it("caps at 3 lines of the rendered line height when themed", () => {
+    const { textarea, attachAutoResize } = createComposerTextarea(baseConfig);
+    textarea.style.lineHeight = "24px";
+    document.body.appendChild(textarea);
+    attachAutoResize();
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 10000 });
+    textarea.dispatchEvent(new Event("input"));
+    expect(textarea.style.height).toBe("72px");
+    expect(textarea.style.maxHeight).toBe("72px");
+    document.body.removeChild(textarea);
+  });
+
+  it("defaults to 60px (3 × 20px) before any resize", () => {
+    const { textarea } = createComposerTextarea(baseConfig);
+    expect(textarea.style.maxHeight).toBe("60px");
+    expect(textarea.style.overflowY).toBe("auto");
+  });
+
+  it("falls back to 60px when the line height is `normal`", () => {
+    const { textarea, attachAutoResize } = createComposerTextarea(baseConfig);
+    textarea.style.lineHeight = "normal";
+    document.body.appendChild(textarea);
+    attachAutoResize();
+    Object.defineProperty(textarea, "scrollHeight", { configurable: true, value: 10000 });
+    textarea.dispatchEvent(new Event("input"));
+    expect(textarea.style.height).toBe("60px");
+    document.body.removeChild(textarea);
+  });
+
+  it("falls back to 60px for unitless line heights and detached nodes", () => {
+    const unitless = createComposerTextarea(baseConfig);
+    unitless.textarea.style.lineHeight = "1.5";
+    document.body.appendChild(unitless.textarea);
+    unitless.attachAutoResize();
+    Object.defineProperty(unitless.textarea, "scrollHeight", { configurable: true, value: 10000 });
+    unitless.textarea.dispatchEvent(new Event("input"));
+    expect(unitless.textarea.style.height).toBe("60px");
+    document.body.removeChild(unitless.textarea);
+
+    // Never appended: getComputedStyle still must not throw or produce NaN.
+    const detached = createComposerTextarea(baseConfig);
+    detached.attachAutoResize();
+    Object.defineProperty(detached.textarea, "scrollHeight", { configurable: true, value: 10000 });
+    detached.textarea.dispatchEvent(new Event("input"));
+    expect(detached.textarea.style.height).toBe("60px");
   });
 });
 

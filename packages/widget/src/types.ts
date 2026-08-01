@@ -3753,6 +3753,11 @@ export type AgentWidgetSuggestion =
       description?: string;
       /** Optional icon from Persona's bundled Lucide registry. */
       icon?: IconName;
+      /**
+       * CSS color for this item's glyph. Tints the icon only: label, border,
+       * and background stay neutral. Ignored without an `icon`.
+       */
+      iconColor?: string;
       /** Override the surface's click behavior for this item. */
       behavior?: AgentWidgetSuggestionBehavior;
       /** Visually promote one high-confidence action. */
@@ -3778,6 +3783,8 @@ export type AgentWidgetResolvedSuggestion = {
   prompt: string;
   description?: string;
   icon?: IconName;
+  /** CSS color for the glyph only; never the label, border, or background. */
+  iconColor?: string;
   behavior: AgentWidgetSuggestionBehavior;
   emphasis: "default" | "primary";
 };

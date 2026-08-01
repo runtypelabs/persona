@@ -39,19 +39,47 @@ export const createComposerTextarea = (config?: AgentWidgetConfig): ComposerText
     'var(--persona-input-font-family, var(--persona-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif))';
   textarea.style.fontWeight = "var(--persona-input-font-weight, var(--persona-font-weight, 400))";
 
-  // Auto-resize: expand up to 3 lines for the full composer (line-height ~20px
-  // for text-sm). The pill composer overrides this maxHeight after construction
-  // (allowing more growth in expanded mode), and the closure below honors
-  // whatever maxHeight is set at the time of the input event.
+  // Auto-resize: expand up to 3 lines for the full composer. The pill composer
+  // overrides this maxHeight after construction (allowing more growth in
+  // expanded mode), and the closure below honors whatever maxHeight is set at
+  // the time of the input event.
   const defaultMaxLines = 3;
-  const lineHeight = 20;
-  textarea.style.maxHeight = `${defaultMaxLines * lineHeight}px`;
+  // Used only when the rendered line height can't be resolved (detached node,
+  // jsdom, `normal`); matches the `persona-text-sm` / composer default.
+  const fallbackLineHeight = 20;
+
+  // `theme.components.composer.lineHeight` (--persona-composer-line-height) can
+  // change the rendered line height, so 3 lines is only correct when measured
+  // from the live element. Read lazily: at construction the textarea is usually
+  // still detached and getComputedStyle would report nothing useful.
+  const readLineHeight = (): number => {
+    const view = textarea.ownerDocument?.defaultView;
+    if (!view?.getComputedStyle) return fallbackLineHeight;
+    // Only px values are meaningful here: `normal` and unitless ratios aren't
+    // line box heights we can multiply.
+    const computed = view.getComputedStyle(textarea).lineHeight;
+    if (!computed || !computed.trim().endsWith("px")) return fallbackLineHeight;
+    const parsed = parseFloat(computed);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackLineHeight;
+  };
+
+  // Tracks the last maxHeight this module wrote, so a caller's post-construction
+  // override is distinguishable from our own default and always wins.
+  let managedMaxHeight = `${defaultMaxLines * fallbackLineHeight}px`;
+  textarea.style.maxHeight = managedMaxHeight;
   textarea.style.overflowY = "auto";
 
   // Read maxHeight at event time so callers can change it after construction.
   const readMaxHeight = (): number => {
-    const parsed = parseFloat(textarea.style.maxHeight);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultMaxLines * lineHeight;
+    const current = textarea.style.maxHeight;
+    if (current !== managedMaxHeight) {
+      const overridden = parseFloat(current);
+      if (Number.isFinite(overridden) && overridden > 0) return overridden;
+    }
+    const derived = defaultMaxLines * readLineHeight();
+    managedMaxHeight = `${derived}px`;
+    textarea.style.maxHeight = managedMaxHeight;
+    return derived;
   };
 
   const attachAutoResize = () => {
