@@ -76,7 +76,7 @@ const mergeCriticalLauncherConfig = (
  * Mirrors the full widget's DOM exactly (`runtime/init.ts` + `ui.ts`): a
  * `[data-persona-root]` wrapper carries the theme CSS variables and the launcher
  * button is its child. Keeping the theme vars on the wrapper (not the button)
- * leaves the button's own inline style byte-identical to the full widget's, so
+ * leaves the button's own inline style matching the full widget's, so
  * the eventual mount-then-remove handoff is invisible.
  */
 export const mount = (

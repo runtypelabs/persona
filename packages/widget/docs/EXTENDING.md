@@ -21,7 +21,7 @@ section tells you where it can live in this monorepo.
 
 | Area | What it customizes | Public API | Deep dive |
 | --- | --- | --- | --- |
-| [Plugins](#plugins) | Any rendered UI region (14 hooks) | `pluginRegistry`, `AgentWidgetPlugin`, `config.plugins` | [PLUGINS.md](./PLUGINS.md) |
+| [Plugins](#plugins) | Rendered UI, suggestion transforms, and interaction hooks | `pluginRegistry`, `AgentWidgetPlugin`, `config.plugins` | [PLUGINS.md](./PLUGINS.md) |
 | [Components](#components) | Inline, agent-rendered rich UI | `componentRegistry`, `createComponentStreamParser` | [MESSAGE-INJECTION.md](./MESSAGE-INJECTION.md) · [gallery README](../../../apps/web/src/gallery-components/README.md) |
 | [Postprocessors](#postprocessors) | Markdown / directive transforms of message text | `createMarkdownProcessorFromConfig`, `createDirectivePostprocessor` | [CONFIGURATION-REFERENCE.md](./CONFIGURATION-REFERENCE.md) |
 | [Themes & theme plugins](#themes--theme-plugins) | Design tokens and runtime theme behavior | `createTheme`, `createPlugin`, `brandPlugin`, `accessibilityPlugin` | [THEME-CONFIG.md](../THEME-CONFIG.md) |
@@ -42,7 +42,9 @@ section tells you where it can live in this monorepo.
 Plugins are the broadest seam: a plugin is a plain object with one or more
 `render*` hooks, each of which can take over a region of the UI (message bubbles,
 launcher, header, composer, reasoning, tool calls, approvals, the
-`ask_user_question` sheet, loading/idle indicators, and the event stream).
+`ask_user_question` sheet, suggestions, loading/idle indicators, and the event
+stream). Suggestions additionally expose data transforms and a cancelable
+selection hook.
 Return an `HTMLElement` to take over, or `null` to fall through to the default.
 
 ```ts

@@ -236,6 +236,418 @@
   border-radius: var(--persona-button-radius);
 }
 
+/* Suggestions ----------------------------------------------------------- */
+
+.persona-suggestions {
+  --persona-suggestion-icon-size: var(
+    --persona-components-suggestion-chip-iconSize,
+    16px
+  );
+  display: flex;
+  align-items: stretch;
+  flex-shrink: 0;
+  gap: 8px;
+  min-width: 0;
+}
+
+.persona-suggestions[hidden] {
+  display: none !important;
+}
+
+.persona-suggestions[data-persona-suggestion-surface="starter"] {
+  margin-top: 16px;
+}
+
+[data-persona-suggestions="follow-up"] {
+  /* The transcript body uses a roomy 24px section gap; pull contextual
+     follow-ups closer to the answer they belong to. */
+  margin-top: -12px;
+}
+
+.persona-suggestions[data-variant="card"] {
+  --persona-suggestion-icon-size: var(
+    --persona-components-suggestion-card-iconSize,
+    18px
+  );
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+/* Welcome-surface policy, not a card property: the cap keeps a wide inline
+   panel at two starter columns instead of one stretched row. */
+.persona-suggestions[data-variant="card"][data-persona-suggestion-surface="starter"] {
+  max-width: 600px;
+}
+
+.persona-suggestions[data-variant="list"] {
+  --persona-suggestion-icon-size: var(
+    --persona-components-suggestion-list-iconSize,
+    17px
+  );
+  flex-direction: column;
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"] {
+  --persona-suggestion-scroll-fade-size: 32px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  scroll-snap-type: inline proximity;
+  padding: 2px;
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-scroll-right]:not(
+    [data-scroll-left]
+  ) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--persona-suggestion-scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 calc(100% - var(--persona-suggestion-scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-scroll-left]:not(
+    [data-scroll-right]
+  ) {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-suggestion-scroll-fade-size),
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-suggestion-scroll-fade-size),
+    #000 100%
+  );
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-scroll-left][data-scroll-right] {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-suggestion-scroll-fade-size),
+    #000 calc(100% - var(--persona-suggestion-scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--persona-suggestion-scroll-fade-size),
+    #000 calc(100% - var(--persona-suggestion-scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+.persona-suggestions[data-variant="chip"][data-overflow="wrap"] {
+  flex-wrap: wrap;
+}
+
+.persona-suggestion {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  text-align: left;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 100ms ease;
+}
+
+.persona-suggestion--chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  min-height: var(--persona-components-suggestion-chip-minHeight, 36px);
+  gap: var(--persona-components-suggestion-chip-gap, 0.5rem);
+  padding: var(
+    --persona-components-suggestion-chip-padding,
+    0.5rem 0.875rem
+  );
+  border: 1px solid
+    var(--persona-components-suggestion-chip-border, var(--persona-border));
+  border-radius: var(
+    --persona-components-suggestion-chip-borderRadius,
+    9999px
+  );
+  background: var(
+    --persona-components-suggestion-chip-background,
+    var(--persona-surface)
+  );
+  color: var(
+    --persona-components-suggestion-chip-foreground,
+    var(--persona-text)
+  );
+  font-size: var(--persona-components-suggestion-chip-fontSize, 0.8125rem);
+  line-height: var(--persona-components-suggestion-chip-lineHeight, 1.25);
+}
+
+.persona-suggestion--card {
+  align-items: flex-start;
+  min-height: var(--persona-components-suggestion-card-minHeight, 72px);
+  gap: var(--persona-components-suggestion-card-gap, 0.625rem);
+  padding: var(--persona-components-suggestion-card-padding, 1rem);
+  border: 1px solid
+    var(--persona-components-suggestion-card-border, var(--persona-border));
+  border-radius: var(
+    --persona-components-suggestion-card-borderRadius,
+    var(--persona-radius-xl)
+  );
+  background: var(
+    --persona-components-suggestion-card-background,
+    var(--persona-surface)
+  );
+  color: var(
+    --persona-components-suggestion-card-foreground,
+    var(--persona-text)
+  );
+  box-shadow: var(--persona-components-suggestion-card-shadow, none);
+  font-size: var(--persona-components-suggestion-card-fontSize, 0.875rem);
+  line-height: var(--persona-components-suggestion-card-lineHeight, 1.35);
+}
+
+.persona-suggestion--list {
+  align-items: flex-start;
+  width: 100%;
+  min-height: var(--persona-components-suggestion-list-minHeight, 44px);
+  gap: var(--persona-components-suggestion-list-gap, 0.625rem);
+  padding: var(--persona-components-suggestion-list-padding, 0.75rem);
+  border: 1px solid
+    var(--persona-components-suggestion-list-border, var(--persona-border));
+  border-radius: var(
+    --persona-components-suggestion-list-borderRadius,
+    var(--persona-radius-md)
+  );
+  background: var(
+    --persona-components-suggestion-list-background,
+    transparent
+  );
+  color: var(
+    --persona-components-suggestion-list-foreground,
+    var(--persona-text)
+  );
+  font-size: var(--persona-components-suggestion-list-fontSize, 0.875rem);
+  line-height: var(--persona-components-suggestion-list-lineHeight, 1.35);
+}
+
+.persona-suggestion__icon,
+.persona-suggestion__arrow {
+  flex: 0 0 auto;
+}
+
+/* The taller viewport box centers the graphic on the label's first line box;
+   the icon keeps its size because the width constraint drives `meet` scaling. */
+.persona-suggestion--card .persona-suggestion__icon {
+  block-size: calc(
+    1em * var(--persona-components-suggestion-card-lineHeight, 1.35)
+  );
+}
+
+.persona-suggestion--list .persona-suggestion__icon {
+  block-size: calc(
+    1em * var(--persona-components-suggestion-list-lineHeight, 1.35)
+  );
+}
+
+.persona-suggestion__copy {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.persona-suggestion__label {
+  overflow-wrap: anywhere;
+}
+
+.persona-suggestion__description {
+  color: var(--persona-text-muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+/* Hover-revealed: the arrow is an affordance hint, not standing decoration. */
+.persona-suggestion__arrow {
+  margin-left: auto;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.persona-suggestion:focus-visible .persona-suggestion__arrow {
+  opacity: 0.55;
+}
+
+/* Quiet accent, never a solid fill: an emphasized item reads as a sibling of
+   the set rather than a CTA among ghost buttons. */
+.persona-suggestion[data-emphasis="primary"] {
+  border-color: var(--persona-primary);
+  background: transparent;
+  background: color-mix(in srgb, var(--persona-primary) 6%, transparent);
+}
+
+.persona-suggestion[data-emphasis="primary"] .persona-suggestion__icon {
+  color: var(--persona-primary);
+}
+
+@media (hover: hover) {
+  .persona-suggestion--chip:hover {
+    border-color: var(
+      --persona-components-suggestion-chip-hoverBorder,
+      var(--persona-border)
+    );
+    background: var(
+      --persona-components-suggestion-chip-hoverBackground,
+      var(--persona-container)
+    );
+    color: var(
+      --persona-components-suggestion-chip-hoverForeground,
+      inherit
+    );
+  }
+
+  .persona-suggestion:hover .persona-suggestion__arrow {
+    opacity: 0.55;
+  }
+
+  .persona-suggestion--card:hover {
+    border-color: var(
+      --persona-components-suggestion-card-hoverBorder,
+      var(--persona-border)
+    );
+    background: var(
+      --persona-components-suggestion-card-hoverBackground,
+      var(--persona-container)
+    );
+    box-shadow: var(--persona-shadow-sm);
+    transform: translateY(-1px);
+  }
+
+  .persona-suggestion--list:hover {
+    border-color: var(
+      --persona-components-suggestion-list-hoverBorder,
+      var(--persona-border)
+    );
+    background: var(
+      --persona-components-suggestion-list-hoverBackground,
+      var(--persona-container)
+    );
+  }
+
+  .persona-suggestion[data-emphasis="primary"]:hover {
+    border-color: var(--persona-primary);
+    background: transparent;
+    background: color-mix(in srgb, var(--persona-primary) 12%, transparent);
+  }
+}
+
+.persona-suggestion:focus-visible {
+  outline: 2px solid
+    var(
+      --persona-components-suggestion-chip-focusRing,
+      var(--persona-accent)
+    );
+  outline-offset: 2px;
+}
+
+.persona-suggestion--card:focus-visible {
+  outline-color: var(
+    --persona-components-suggestion-card-focusRing,
+    var(--persona-accent)
+  );
+}
+
+.persona-suggestion--list:focus-visible {
+  outline-color: var(
+    --persona-components-suggestion-list-focusRing,
+    var(--persona-accent)
+  );
+}
+
+.persona-suggestion--chip:active {
+  background: var(
+    --persona-components-suggestion-chip-pressedBackground,
+    var(--persona-container)
+  );
+  transform: scale(0.98);
+}
+
+.persona-suggestion--card:active {
+  background: var(
+    --persona-components-suggestion-card-pressedBackground,
+    var(--persona-container)
+  );
+  transform: translateY(1px);
+}
+
+.persona-suggestion--list:active {
+  background: var(
+    --persona-components-suggestion-list-pressedBackground,
+    var(--persona-container)
+  );
+}
+
+.persona-suggestion[data-emphasis="primary"]:active {
+  background: transparent;
+  background: color-mix(in srgb, var(--persona-primary) 16%, transparent);
+}
+
+.persona-suggestion:disabled {
+  cursor: not-allowed;
+  opacity: var(
+    --persona-components-suggestion-chip-disabledOpacity,
+    0.5
+  );
+}
+
+.persona-suggestion--card:disabled {
+  opacity: var(
+    --persona-components-suggestion-card-disabledOpacity,
+    0.5
+  );
+}
+
+.persona-suggestion--list:disabled {
+  opacity: var(
+    --persona-components-suggestion-list-disabledOpacity,
+    0.5
+  );
+}
+
+@media (pointer: coarse) {
+  .persona-suggestion {
+    min-height: 44px;
+  }
+
+  /* No hover to reveal it, so the arrow would be permanent decoration. */
+  .persona-suggestion__arrow {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-suggestion,
+  .persona-suggestion__arrow {
+    transition: none;
+  }
+}
+
 /* Composer ghost icon buttons (attachment + mention): transparent, neutral
    foreground, subtle hover. Themeable via `components.button.ghost.*`
    → `--persona-button-ghost-*`. The `[data-persona-root]` prefix outranks the
@@ -988,6 +1400,24 @@
 .persona-widget-composer {
   border-radius: var(--persona-input-radius, var(--persona-radius-lg, 0.5rem));
   box-shadow: var(--persona-composer-shadow, none);
+}
+
+/* Composer spacing, themeable via `components.composer.padding` / `.gap`.
+   The `[data-persona-root]` prefix outranks the `persona-px-4 persona-py-3
+   persona-gap-2` utilities the form still carries; the fallbacks reproduce
+   them exactly. The pill composer is excluded because it sets its own
+   grid padding/gap (see `.persona-pill-composer`). */
+[data-persona-root] .persona-widget-composer:not(.persona-pill-composer) {
+  padding: var(--persona-composer-padding, 0.75rem 1rem);
+  gap: var(--persona-composer-gap, 0.5rem);
+}
+
+/* Composer type scale, themeable via `components.composer.fontSize` /
+   `.lineHeight`. Outranks the `persona-text-sm` utility on the textarea;
+   fallbacks match it. Applies to the pill composer's textarea too. */
+[data-persona-root] .persona-composer-textarea {
+  font-size: var(--persona-composer-font-size, 0.875rem);
+  line-height: var(--persona-composer-line-height, 1.25rem);
 }
 
 .persona-form-grid {

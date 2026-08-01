@@ -79,6 +79,24 @@ describe("buildPillComposer (single-row pill composer)", () => {
     expect(formChildren[2]).toBe(elements.rightActions);
   });
 
+  it("keeps its 100px max-height cap, even under a themed line height", () => {
+    const elements = buildPillComposer({ config: { apiUrl: "/api" } });
+    expect(elements.textarea.style.maxHeight).toBe("100px");
+
+    // A themed line height must not re-derive the cap: the pill's explicit
+    // post-construction override wins over the 3-line default.
+    elements.textarea.style.lineHeight = "24px";
+    document.body.appendChild(elements.textarea);
+    Object.defineProperty(elements.textarea, "scrollHeight", {
+      configurable: true,
+      value: 10000,
+    });
+    elements.textarea.dispatchEvent(new Event("input"));
+    expect(elements.textarea.style.maxHeight).toBe("100px");
+    expect(elements.textarea.style.height).toBe("100px");
+    document.body.removeChild(elements.textarea);
+  });
+
   it("returns null for optional controls when disabled (matching ComposerElements contract)", () => {
     const elements = buildPillComposer({ config: { apiUrl: "/api" } });
     expect(elements.attachmentButton).toBeNull();

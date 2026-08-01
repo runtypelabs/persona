@@ -451,6 +451,37 @@ Set `copy.showWelcomeCard: false` to hide it entirely, or use
 | `padding` | `semantic.spacing.lg` |
 | `shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` *(matches the legacy `persona-shadow-sm` look)* |
 
+### Composer (`components.composer.*`)
+
+The message input form at the bottom of the panel. `padding` and `gap` shape the
+form itself; `fontSize` and `lineHeight` set the textarea's type.
+
+| Token | Default | CSS Variable |
+|-------|---------|--------------|
+| `shadow` | `palette.shadows.none` | `--persona-composer-shadow` |
+| `padding` | `"0.75rem 1rem"` | `--persona-composer-padding` |
+| `gap` | `"0.5rem"` *(textarea row to actions row)* | `--persona-composer-gap` |
+| `fontSize` | `"0.875rem"` | `--persona-composer-font-size` |
+| `lineHeight` | `"1.25rem"` | `--persona-composer-line-height` |
+
+```typescript
+const theme = createTheme({
+  components: {
+    composer: {
+      padding: '1rem 1.25rem',
+      gap: '0.75rem',
+      fontSize: '1rem',
+      lineHeight: '1.5rem',
+    },
+  },
+});
+```
+
+`padding` and `gap` do not apply to the collapsed pill in
+`launcher.mountMode: "composer-bar"`, which keeps its own single-row geometry.
+`fontSize` and `lineHeight` apply to both. On coarse-pointer devices the
+textarea is still pinned to `1rem` so iOS Safari does not zoom on focus.
+
 ### Scroll To Bottom (`components.scrollToBottom.*`)
 
 | Token | Default Reference |
@@ -990,15 +1021,154 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `onFeedback` | Callback when user submits feedback: `(feedback: { type: 'upvote' \| 'downvote', messageId: string }) => void` |
 | `onCopy` | Callback when user copies a message: `(message: AgentWidgetMessage) => void` |
 
-## Suggestion Chips (`config.suggestionChipsConfig.*`)
+## Suggestions (`config.suggestions.*`)
 
-| Property | Description |
-|----------|-------------|
-| `fontFamily` | `"sans-serif" \| "serif" \| "mono"` |
-| `fontWeight` | Font weight |
-| `paddingX` / `paddingY` | Padding |
+Persona separates starter prompts from optional follow-ups:
 
-**Chip content:** `config.suggestionChips: string[]`
+- `suggestions.starters` is shown before the first user message.
+- `suggestions.followUps` presents the latest `suggest_replies` tool payload,
+  and owns the `enabled` / `expose` keys for that built-in tool.
+- `ask_user_question` remains the correct primitive for a required answer.
+
+Strings are valid item shorthand. Rich items can separate a short visible
+`label` from the `prompt` that is sent or placed in the composer:
+
+```ts
+suggestions: {
+  starters: {
+    placement: "auto",
+    variant: "card",
+    behavior: "fill",
+    maxItems: 4,
+    items: [
+      {
+        id: "compare",
+        label: "Compare plans",
+        prompt: "Compare the plans for a team of 20",
+        description: "Review features, limits, and pricing",
+        icon: "dollar-sign",
+        iconColor: "#16a34a",
+        emphasis: "primary",
+      },
+      "Show me a quick tour",
+    ],
+  },
+  followUps: {
+    placement: "auto",
+    variant: "chip",
+    behavior: "send",
+    overflow: "scroll",
+    maxItems: 4,
+  },
+}
+```
+
+| Starter property | Default | Description |
+|----------|---------|-------------|
+| `items` | `suggestionChips` | `(string \| AgentWidgetSuggestionObject)[]` |
+| `variant` | `"card"` | `"card" \| "chip" \| "list"` |
+| `placement` | `"auto"` | `"auto" \| "welcome" \| "composer"`; `auto` uses the welcome surface when the welcome card renders and the composer otherwise. Explicit values are literal: pinned `"welcome"` renders nothing when the welcome card is hidden |
+| `behavior` | `"send"` | `"send"` sends immediately; `"fill"` drafts in the composer |
+| `overflow` | `"wrap"` | `"scroll" \| "wrap"` |
+| `maxItems` | `4` | Maximum number shown |
+
+| Follow-up property | Default | Description |
+|----------|---------|-------------|
+| `enabled` | `true` | Render follow-ups and auto-resume `suggest_replies` |
+| `expose` | `false` | Advertise the built-in tool on `clientTools[]`; forced off when `enabled` is `false` |
+| `variant` | `"chip"` | `"chip" \| "card" \| "list"` |
+| `placement` | `"auto"` | `"auto" \| "after-message" \| "composer"`; `auto` uses `"after-message"` in regular panels and `"composer"` in composer-bar mode |
+| `behavior` | `"send"` | `"send" \| "fill"` |
+| `overflow` | `"scroll"` | `"scroll" \| "wrap"` |
+| `maxItems` | `4` | Maximum number shown |
+
+Each rich item supports `id`, `label`, `prompt`, `description`, `icon`,
+`iconColor`, `behavior`, and `emphasis`. Per-item `behavior` overrides the
+surface. `emphasis: "primary"` renders a quiet accent (accent border, faint
+accent wash, accent icon), not a solid fill; go louder with the token overrides
+below. `iconColor` takes any CSS color and tints that item's glyph alone,
+leaving the label, border, and background neutral: use it to color-code a set
+without promoting one item.
+
+Follow-ups have no `items` key: they come from the agent's `suggest_replies`
+call or from `controller.setFollowUpSuggestions()`, an ephemeral host overlay
+that clears on the next user message and is never persisted. The deprecated
+`features.suggestReplies.enabled` / `.expose` aliases still resolve per key,
+with `suggestions.followUps` winning.
+
+### Suggestion theme tokens
+
+Each variant under `theme.components.suggestion` supports:
+
+`background`, `foreground`, `border`, `borderRadius`, `padding`, `shadow`,
+`gap`, `minHeight`, `fontSize`, `lineHeight`, `iconSize`, `hoverBackground`,
+`hoverForeground`, `hoverBorder`, `pressedBackground`, `focusRing`, and
+`disabledOpacity`.
+
+```ts
+theme: {
+  components: {
+    suggestion: {
+      chip: {
+        background: "semantic.colors.surface",
+        border: "semantic.colors.border",
+        borderRadius: "palette.radius.full",
+        hoverBackground: "palette.colors.gray.100",
+        focusRing: "semantic.colors.interactive.focus",
+      },
+      card: {
+        borderRadius: "palette.radius.xl",
+        padding: "1rem",
+        // Cards rest shadowless by default and gain a shadow plus a 1px lift
+        // on hover; set `shadow` to keep one at rest.
+        shadow: "palette.shadows.sm",
+      },
+      list: {
+        background: "transparent",
+        minHeight: "44px",
+      },
+    },
+  },
+}
+```
+
+The deprecated `suggestionChips: string[]` and `suggestionChipsConfig` fields
+remain backwards compatible. They continue to render starter chips above the
+composer until a `suggestions.starters` configuration is supplied.
+
+### Complete customization with plugins
+
+Theme tokens and `config.suggestions` cover the common visual and behavioral
+choices. For product-specific ranking or markup, pass an
+`AgentWidgetPlugin` through `config.plugins`:
+
+- `transformSuggestions` filters, reorders, or enriches normalized starter and
+  follow-up data before `maxItems`. Hooks receive resolved items (strings are
+  already expanded) and may return the loose shape, which is re-normalized
+  before the next hook. This is also where a host re-adds the `icon`,
+  `emphasis`, and per-item `behavior` that the `suggest_replies` schema
+  deliberately withholds from the model.
+- `renderSuggestion` replaces an individual item. It receives
+  `defaultRenderer()` for progressive customization and `select()` for the
+  standard events plus send/fill behavior.
+- `onSuggestionSelect` observes selection and can return `false` to cancel the
+  built-in action.
+
+The plugin contexts distinguish the `"starter"` / `"followUp"` surface and
+the `"config"` / `"agent"` / `"host"` source. The
+`persona:suggestion:selected` DOM event is also cancelable with
+`event.preventDefault()`. See
+[`docs/PLUGINS.md`](./docs/PLUGINS.md#suggestion-hooks) and the live
+[`suggestions-demo.html`](../../apps/web/suggestions-demo.html).
+
+### Suggestion events
+
+- `persona:suggestion:shown` includes suggestions, surface, source, and variant.
+- `persona:suggestion:selected` includes the selected item and send/fill mode.
+  It is cancelable; call `event.preventDefault()` to suppress the action.
+- The follow-up surface also retains `persona:suggestReplies:shown` and
+  `persona:suggestReplies:selected` for backwards compatibility, for both
+  agent-set and host-set items.
 
 ## Layout (`config.layout.*`)
 

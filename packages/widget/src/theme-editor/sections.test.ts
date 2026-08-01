@@ -60,6 +60,39 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(fieldPaths).toContain("theme.components.scrollToBottom.iconSize");
   });
 
+  it("exposes suggestion behavior and component token controls", () => {
+    const suggestions = CONFIGURE_SECTIONS.find(
+      (section) => section.id === "suggestions"
+    );
+    const configPaths =
+      suggestions?.fields.map((field) => field.path) ?? [];
+    expect(configPaths).toEqual(
+      expect.arrayContaining([
+        "suggestions.starters.variant",
+        "suggestions.starters.placement",
+        "suggestions.starters.behavior",
+        "suggestions.followUps.variant",
+        "suggestions.followUps.placement",
+        "suggestions.followUps.behavior",
+        "suggestions.followUps.overflow",
+      ])
+    );
+
+    const componentPaths = COMPONENTS_SECTIONS.flatMap((section) =>
+      section.fields.map((field) => field.path)
+    );
+    expect(componentPaths).toEqual(
+      expect.arrayContaining([
+        "theme.components.suggestion.chip.background",
+        "theme.components.suggestion.chip.hoverBackground",
+        "theme.components.suggestion.chip.focusRing",
+        "theme.components.suggestion.card.background",
+        "theme.components.suggestion.card.shadow",
+        "theme.components.suggestion.list.background",
+      ])
+    );
+  });
+
   it("exposes a shadow control for every themeable component", () => {
     const fieldPaths = COMPONENTS_SECTIONS.flatMap((section) => section.fields.map((field) => field.path));
 

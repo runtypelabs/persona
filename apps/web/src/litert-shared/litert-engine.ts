@@ -136,7 +136,7 @@ export interface ModelInfo {
 }
 
 // 0.14.0: same Engine/Conversation surface as 0.13.1 (engine.d.ts is
-// byte-identical); the wrapped `{type:'function', function:{…}}` tool shape and
+// unchanged); the wrapped `{type:'function', function:{…}}` tool shape and
 // the `{type:'tool_response', name, response}` content item we send are now the
 // documented canonical forms. Bumped because the larger Gemma 4 web builds
 // (12B / 26B-A4B) shipped alongside this runtime release.

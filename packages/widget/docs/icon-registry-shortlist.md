@@ -241,3 +241,17 @@ Useful when someone later asks "why isn't `foo` in the registry?"
 | `hourglass` | Niche; `timer` and `clock` cover the "time passing" semantic without it. |
 | `file-image` | Redundant with `image`; not worth the kilobyte unless attachment previews start using a dedicated file-shaped variant. |
 | `bot-message-square`, `palette` | Brand/decorative; pull in only if/when the widget adopts them as defaults. |
+
+---
+
+## Added after the original curation
+
+The counts above are a snapshot of the initial shortlist. Later additions:
+
+| Icon | Rationale |
+|---|---|
+| `lightbulb` | Idea / suggestion affordance; the natural glyph for suggestion chips and tips |
+| `chart-column` | Data / analytics affordance (lucide's current name for `bar-chart`) |
+| `pen-line` | Compose / write affordance. Distinct from `pencil`: the baseline stroke reads as "write something", not "edit this" |
+
+`image` was already registered under Media.

@@ -142,7 +142,8 @@ export const THEME_TOKEN_DOCS = {
         'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize.',
       toolBubble: 'shadow: tool call row box-shadow.',
       reasoningBubble: 'shadow: reasoning/thinking row box-shadow.',
-      composer: 'shadow: message input form box-shadow.',
+      composer:
+        'Message input form: shadow (box-shadow), padding (form inset), gap (textarea row to actions row), fontSize and lineHeight (textarea type).',
       artifact:
         'toolbar (icon styling, copy menu), tab (background, active states), pane (background, toolbarBackground).',
     },
@@ -245,8 +246,14 @@ export const THEME_TOKEN_DOCS = {
       properties:
         'enabled, provider ("browser" | "runtype"), browserFallback, voice, rate, pitch.',
     },
+    suggestions: {
+      description:
+        'Rich starter and follow-up suggestion surfaces. Strings remain valid item shorthand.',
+      properties:
+        'starters.items, starters.variant ("card" | "chip" | "list"), starters.placement ("auto" | "welcome" | "composer"), starters.behavior ("send" | "fill"), starters.overflow ("scroll" | "wrap"), starters.maxItems, followUps.enabled, followUps.expose, followUps.variant, followUps.placement ("auto" | "after-message" | "composer"), followUps.behavior, followUps.overflow ("scroll" | "wrap"), followUps.maxItems.',
+    },
     suggestionChips:
-      'string[]: Suggested prompts shown to the user.',
+      'Deprecated string[] shorthand for starter prompts. Prefer suggestions.starters.items.',
     messageActions: {
       description: 'Message action buttons (copy, upvote, downvote).',
       properties:

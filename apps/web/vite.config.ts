@@ -667,6 +667,8 @@ export default defineConfig({
         'fullscreen-assistant-demo': path.resolve(__dirname, 'fullscreen-assistant-demo.html'),
         'launcher-demo': path.resolve(__dirname, 'launcher-demo.html'),
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
+        'suggestions-demo': path.resolve(__dirname, 'suggestions-demo.html'),
+        'suggestion-recreations': path.resolve(__dirname, 'suggestion-recreations.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
         'stream-animations-demo': path.resolve(__dirname, 'stream-animations-demo.html'),
         'streaming-table-demo': path.resolve(__dirname, 'streaming-table-demo.html'),

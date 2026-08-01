@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
 import { createEchoPersonaHandler /*, openAiResponder */ } from "./lib/echo-adapter";
@@ -15,8 +15,6 @@ const dispatch = createEchoPersonaHandler();
 // and no network. `@runtypelabs/persona`'s main entry lives in `dist/`, so its
 // directory is where the IIFE build sits too.
 const distDir = dirname(createRequire(import.meta.url).resolve("@runtypelabs/persona"));
-const widgetGlobalJs = readFileSync(join(distDir, "index.global.js"), "utf8");
-
 const app = new Hono();
 
 // The whole point of the matrix: mount the SAME handler with one line. Hono
@@ -24,12 +22,24 @@ const app = new Hono();
 // Web Response. No host-specific streaming glue needed.
 app.post("/dispatch", (c) => dispatch(c.req.raw));
 
-// Serve the widget's self-contained IIFE build for the `<script>` tag in page.ts.
-app.get("/persona/index.global.js", (c) =>
-  c.body(widgetGlobalJs, 200, { "content-type": "text/javascript; charset=utf-8" }),
-);
+// Serve the IIFE and any sibling runtime chunks it imports. `basename` keeps
+// the route inside the package dist directory.
+app.get("/persona/:asset", (c) => {
+  try {
+    const asset = readFileSync(join(distDir, basename(c.req.param("asset"))));
+    return c.body(asset, 200, { "content-type": contentTypeFor(c.req.path) });
+  } catch {
+    return c.text("not found", 404);
+  }
+});
 
 app.get("/", (c) => c.html(PAGE));
+
+function contentTypeFor(pathname: string): string {
+  if (pathname.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (pathname.endsWith(".css")) return "text/css; charset=utf-8";
+  return "application/octet-stream";
+}
 
 const port = Number(process.env.PORT ?? 3110);
 serve({ fetch: app.fetch, port }, ({ port }) => {

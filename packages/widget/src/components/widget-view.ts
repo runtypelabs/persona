@@ -30,6 +30,8 @@ export interface WidgetTranscriptRefs {
   container: HTMLElement;
   body: HTMLElement;
   messagesWrapper: HTMLElement;
+  starterSuggestions: HTMLElement;
+  transcriptSuggestions: HTMLElement;
   /** Absolute slot above the composer where interactive sheets mount. */
   composerOverlay: HTMLElement;
   introTitle: HTMLElement;
@@ -119,6 +121,8 @@ export const createWidgetView = ({
     container: panelElements.container,
     body: panelElements.body,
     messagesWrapper: panelElements.messagesWrapper,
+    starterSuggestions: panelElements.starterSuggestions,
+    transcriptSuggestions: panelElements.transcriptSuggestions,
     composerOverlay: panelElements.composerOverlay,
     introTitle: panelElements.introTitle,
     introSubtitle: panelElements.introSubtitle,

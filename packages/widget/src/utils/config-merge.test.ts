@@ -32,6 +32,30 @@ describe("mergeConfigUpdate", () => {
     expect(next.suggestionChips).toEqual(["x"]);
   });
 
+  it("patches suggestion surfaces without dropping sibling behavior", () => {
+    const prev = base({
+      suggestions: {
+        starters: { variant: "card", behavior: "fill" },
+        followUps: { variant: "chip", placement: "after-message" },
+      },
+    });
+    const next = mergeConfigUpdate(prev, {
+      suggestions: {
+        followUps: { overflow: "wrap" },
+      },
+    });
+
+    expect(next.suggestions?.starters).toEqual({
+      variant: "card",
+      behavior: "fill",
+    });
+    expect(next.suggestions?.followUps).toEqual({
+      variant: "chip",
+      placement: "after-message",
+      overflow: "wrap",
+    });
+  });
+
   it("replaces callbacks wholesale", () => {
     const first = vi.fn();
     const second = vi.fn();

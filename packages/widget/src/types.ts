@@ -2257,10 +2257,13 @@ export type AgentWidgetFeatureFlags = {
    */
   askUserQuestion?: AgentWidgetAskUserQuestionFeature;
   /**
-   * Built-in `suggest_replies` quick-reply chips. When the assistant invokes
-   * the tool, the widget shows the suggestions as tappable chips above the
-   * composer (reusing the suggestion-chips surface) and immediately resumes
-   * the execution: fire-and-forget, no user input awaited.
+   * Built-in `suggest_replies` follow-ups. When the assistant invokes the
+   * tool, the widget shows the suggestions using `suggestions.followUps` and
+   * immediately resumes the execution: fire-and-forget, no user input awaited.
+   *
+   * @deprecated Both keys moved to `suggestions.followUps`: use
+   * `suggestions.followUps.enabled` and `suggestions.followUps.expose`. This
+   * alias keeps working per key, with `suggestions.followUps` winning.
    */
   suggestReplies?: AgentWidgetSuggestRepliesFeature;
 };
@@ -2327,11 +2330,12 @@ export type WidgetPreferenceSlice = {
 };
 
 /**
- * Feature config for the built-in `suggest_replies` quick-reply chips.
- * Chips render in the existing suggestions slot above the composer and are
- * styled by the widget-level `suggestionChipsConfig`. A tapped chip is sent
- * verbatim as the user's next message; chips clear once any user message
- * follows them.
+ * Feature config for the built-in `suggest_replies` follow-ups.
+ *
+ * @deprecated Both keys moved to `suggestions.followUps`
+ * (`suggestions.followUps.enabled` / `suggestions.followUps.expose`), which
+ * also owns presentation, placement, and send/fill behavior. Resolution is
+ * per key with `suggestions.followUps` winning; removal waits for 5.0.
  */
 export type AgentWidgetSuggestRepliesFeature = {
   /**
@@ -2339,14 +2343,18 @@ export type AgentWidgetSuggestRepliesFeature = {
    * renders as a regular tool bubble and is NOT auto-resumed: only set this
    * with no server-side `suggest_replies` declaration, or the execution
    * parks awaiting a resume that never comes.
+   * @deprecated Use `suggestions.followUps.enabled`.
    */
   enabled?: boolean;
   /**
    * Advertise the built-in `suggest_replies` tool to the agent on every
    * dispatch via `clientTools[]`: no server-side `runtimeTools` declaration
-   * needed. Defaults to `false`: flows that already declare the tool via
-   * `runtimeTools` would otherwise present it to the model twice. Ignored
-   * when `enabled` is `false`.
+   * needed. Defaults to `false`. Declare the tool in one place: the API
+   * dedupes a double declaration by name with `clientTools[]` winning, so the
+   * model still sees exactly one tool, but the widget's description and schema
+   * win and the effective tool type becomes `local` (the execution pauses and
+   * the widget auto-resumes it). Ignored when `enabled` is `false`.
+   * @deprecated Use `suggestions.followUps.expose`.
    */
   expose?: boolean;
 };
@@ -2421,10 +2429,13 @@ export type AgentWidgetAskUserQuestionFeature = {
    * matching {@link AskUserQuestionPayload}; when the model calls it, the
    * existing answer-pill sheet renders and the answer resumes the execution.
    *
-   * Defaults to `false`: flows that already declare `ask_user_question` via
-   * `runtimeTools` would otherwise present the tool to the model twice.
-   * Ignored when `enabled` is `false`: never offer the agent a question
-   * tool the widget can't render an answer UI for.
+   * Defaults to `false`. Declare the tool in one place: the API dedupes a
+   * double declaration by name with `clientTools[]` winning, so the model
+   * still sees exactly one tool, but the widget's description and schema win
+   * and the effective tool type becomes `local` (the execution pauses and the
+   * widget resumes it with the user's answer). Ignored when `enabled` is
+   * `false`: never offer the agent a question tool the widget can't render an
+   * answer UI for.
    */
   expose?: boolean;
   /** Slide-in animation duration in ms. Defaults to 180. */
@@ -2913,6 +2924,10 @@ export type AgentWidgetSendButtonConfig = {
   paddingY?: string;
   iconText?: string;
   iconName?: string;
+  /** Icon glyph box in icon mode, e.g. "20px". Defaults to half of `size`. */
+  iconSize?: string;
+  /** Stroke width for the icon glyph, in viewBox units. Default 2. */
+  iconStrokeWidth?: number;
   useIcon?: boolean;
   tooltipText?: string;
   showTooltip?: boolean;
@@ -3726,6 +3741,123 @@ export type AgentWidgetSuggestionChipsConfig = {
   fontWeight?: string;
   paddingX?: string;
   paddingY?: string;
+};
+
+/** A suggested next action shown to the user. Strings remain supported as shorthand. */
+export type AgentWidgetSuggestion =
+  | string
+  | {
+      /** Stable analytics / DOM identity. Falls back to the prompt or label. */
+      id?: string;
+      /** Concise visible action label. */
+      label: string;
+      /** Text placed in the composer or sent. Defaults to `label`. */
+      prompt?: string;
+      /** Optional supporting copy, most useful with the `card` variant. */
+      description?: string;
+      /** Optional icon from Persona's bundled Lucide registry. */
+      icon?: IconName;
+      /**
+       * CSS color for this item's glyph. Tints the icon only: label, border,
+       * and background stay neutral. Ignored without an `icon`.
+       */
+      iconColor?: string;
+      /** Override the surface's click behavior for this item. */
+      behavior?: AgentWidgetSuggestionBehavior;
+      /** Visually promote one high-confidence action. */
+      emphasis?: "default" | "primary";
+    };
+
+export type AgentWidgetSuggestionBehavior = "send" | "fill";
+export type AgentWidgetSuggestionVariant = "chip" | "card" | "list";
+export type AgentWidgetSuggestionSurface = "starter" | "followUp";
+/**
+ * Who produced the rendered suggestions: static config, the agent's
+ * `suggest_replies` tool, or `controller.setFollowUpSuggestions`.
+ */
+export type AgentWidgetSuggestionSource = "config" | "agent" | "host";
+
+/**
+ * A suggestion after Persona has normalized shorthand strings and resolved the
+ * effective click behavior. Plugin hooks receive this stable shape.
+ */
+export type AgentWidgetResolvedSuggestion = {
+  id: string;
+  label: string;
+  prompt: string;
+  description?: string;
+  icon?: IconName;
+  /** CSS color for the glyph only; never the label, border, or background. */
+  iconColor?: string;
+  behavior: AgentWidgetSuggestionBehavior;
+  emphasis: "default" | "primary";
+};
+
+/** Presentation keys shared by every suggestion surface. */
+export type AgentWidgetSuggestionSurfaceConfig = {
+  /** Item density. Defaults to `card` for starters and `chip` for follow-ups. */
+  variant?: AgentWidgetSuggestionVariant;
+  /** Default click behavior, overridable per item. Defaults to `send`. */
+  behavior?: AgentWidgetSuggestionBehavior;
+  /**
+   * Layout for items past the surface width. Defaults to `wrap` for starters
+   * and `scroll` for follow-ups. Applies to the `chip` variant only; the
+   * `card` and `list` layouts manage their own stacking.
+   */
+  overflow?: "scroll" | "wrap";
+  /** Maximum visible items. Defaults to 4. */
+  maxItems?: number;
+};
+
+export type AgentWidgetStarterSuggestionsConfig =
+  AgentWidgetSuggestionSurfaceConfig & {
+    /** Suggestions shown before the first user message. */
+    items?: AgentWidgetSuggestion[];
+    /**
+     * `auto` uses the welcome surface when the welcome card renders and the
+     * composer otherwise. Explicit values are literal: `welcome` renders
+     * nothing when the welcome card is hidden. Defaults to `auto`.
+     */
+    placement?: "auto" | "welcome" | "composer";
+  };
+
+export type AgentWidgetFollowUpSuggestionsConfig =
+  AgentWidgetSuggestionSurfaceConfig & {
+    /**
+     * Enable the built-in `suggest_replies` follow-ups. Defaults to true. When
+     * false, `suggest_replies` renders as a regular tool bubble and is NOT
+     * auto-resumed: only set this with no server-side `suggest_replies`
+     * declaration, or the execution parks awaiting a resume that never comes.
+     */
+    enabled?: boolean;
+    /**
+     * Advertise the built-in `suggest_replies` tool to the agent on every
+     * dispatch via `clientTools[]`: no server-side `runtimeTools` declaration
+     * needed. Defaults to `false`. Declare the tool in one place: the API
+     * dedupes a double declaration by name with `clientTools[]` winning, so
+     * the model still sees exactly one tool, but the widget's description and
+     * schema win and the effective tool type becomes `local` (the execution
+     * pauses and the widget auto-resumes it). Ignored when `enabled` is
+     * `false`.
+     */
+    expose?: boolean;
+    /**
+     * `auto` places follow-ups after the transcript in regular panels and above
+     * the composer in composer-bar mode. Defaults to `auto`.
+     */
+    placement?: "auto" | "after-message" | "composer";
+    // No `items`: follow-up items are contextual and come from the agent's
+    // `suggest_replies` tool or `controller.setFollowUpSuggestions`, not static
+    // config. Static lists are `starters`.
+  };
+
+/**
+ * Structured suggestions configuration. The legacy `suggestionChips` and
+ * `suggestionChipsConfig` fields remain supported for backwards compatibility.
+ */
+export type AgentWidgetSuggestionsConfig = {
+  starters?: AgentWidgetStarterSuggestionsConfig;
+  followUps?: AgentWidgetFollowUpSuggestionsConfig;
 };
 
 /**
@@ -5048,7 +5180,11 @@ export type AgentWidgetConfig = {
    * with `initialArtifacts`.
    */
   initialSelectedArtifactId?: string | null;
+  /** Rich starter and follow-up suggestion surfaces. */
+  suggestions?: AgentWidgetSuggestionsConfig;
+  /** @deprecated Prefer `suggestions.starters.items`. */
   suggestionChips?: string[];
+  /** @deprecated Prefer semantic tokens under `theme.components.suggestion`. */
   suggestionChipsConfig?: AgentWidgetSuggestionChipsConfig;
   debug?: boolean;
   formEndpoint?: string;

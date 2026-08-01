@@ -393,6 +393,40 @@ describe('theme utils', () => {
     expect(cssVars['--persona-composer-shadow']).toBe('none');
   });
 
+  it('falls back composer spacing/type vars to the utility-class defaults', () => {
+    const cssVars = themeToCssVariables(createTheme());
+
+    expect(cssVars['--persona-composer-padding']).toBe('0.75rem 1rem');
+    expect(cssVars['--persona-composer-gap']).toBe('0.5rem');
+    expect(cssVars['--persona-composer-font-size']).toBe('0.875rem');
+    expect(cssVars['--persona-composer-line-height']).toBe('1.25rem');
+  });
+
+  it('maps composer spacing/type tokens to dedicated CSS variables', () => {
+    const theme = createTheme({
+      components: {
+        composer: {
+          padding: '1rem 1.25rem',
+          gap: '0.75rem',
+          fontSize: '1rem',
+          lineHeight: '1.5rem',
+        },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-components-composer-padding']).toBe('1rem 1.25rem');
+    expect(cssVars['--persona-components-composer-gap']).toBe('0.75rem');
+    expect(cssVars['--persona-components-composer-fontSize']).toBe('1rem');
+    expect(cssVars['--persona-components-composer-lineHeight']).toBe('1.5rem');
+
+    expect(cssVars['--persona-composer-padding']).toBe('1rem 1.25rem');
+    expect(cssVars['--persona-composer-gap']).toBe('0.75rem');
+    expect(cssVars['--persona-composer-font-size']).toBe('1rem');
+    expect(cssVars['--persona-composer-line-height']).toBe('1.5rem');
+  });
+
   it('maps scroll-to-bottom component tokens to dedicated CSS variables', () => {
     const theme = createTheme({
       components: {
@@ -460,6 +494,51 @@ describe('theme utils', () => {
     const cssVars = themeToCssVariables(theme);
     expect(cssVars['--persona-intro-card-shadow']).toBe('none');
     expect(cssVars['--persona-intro-card-bg']).toBe('transparent');
+  });
+
+  it('resolves semantic suggestion tokens for every variant and state', () => {
+    const theme = createTheme({
+      components: {
+        suggestion: {
+          chip: {
+            background: 'palette.colors.accent.50',
+            hoverBackground: 'palette.colors.accent.100',
+            focusRing: 'semantic.colors.interactive.focus',
+          },
+          card: {
+            borderRadius: 'palette.radius.lg',
+            shadow: 'palette.shadows.md',
+          },
+          list: {
+            minHeight: '48px',
+            disabledOpacity: '0.4',
+          },
+        },
+      },
+    });
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-components-suggestion-chip-background']).toBe(
+      '#ecfeff'
+    );
+    expect(
+      cssVars['--persona-components-suggestion-chip-hoverBackground']
+    ).toBe('#cffafe');
+    expect(cssVars['--persona-components-suggestion-chip-focusRing']).toBe(
+      '#0f0f0f'
+    );
+    expect(
+      cssVars['--persona-components-suggestion-card-borderRadius']
+    ).toBe('0.5rem');
+    expect(cssVars['--persona-components-suggestion-card-shadow']).toContain(
+      '0 4px 6px'
+    );
+    expect(cssVars['--persona-components-suggestion-list-minHeight']).toBe(
+      '48px'
+    );
+    expect(
+      cssVars['--persona-components-suggestion-list-disabledOpacity']
+    ).toBe('0.4');
   });
 
   it('drives --persona-tool-bubble-shadow from the theme token (config.toolCall.shadow is applied inline on the bubble, not the root var)', () => {

@@ -336,6 +336,60 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     padding: 'semantic.spacing.lg',
     shadow: 'palette.shadows.none',
   },
+  suggestion: {
+    chip: {
+      background: 'semantic.colors.surface',
+      foreground: 'semantic.colors.text',
+      border: 'semantic.colors.border',
+      borderRadius: 'palette.radius.full',
+      padding: '0.5rem 0.875rem',
+      gap: '0.5rem',
+      minHeight: '36px',
+      fontSize: '0.8125rem',
+      lineHeight: '1.25',
+      iconSize: '16px',
+      hoverBackground: 'palette.colors.gray.100',
+      hoverBorder: 'palette.colors.gray.300',
+      pressedBackground: 'palette.colors.gray.200',
+      focusRing: 'semantic.colors.interactive.focus',
+      disabledOpacity: '0.5',
+    },
+    card: {
+      background: 'semantic.colors.surface',
+      foreground: 'semantic.colors.text',
+      border: 'semantic.colors.border',
+      borderRadius: 'palette.radius.xl',
+      padding: '1rem',
+      shadow: 'palette.shadows.sm',
+      gap: '0.625rem',
+      minHeight: '72px',
+      fontSize: '0.875rem',
+      lineHeight: '1.35',
+      iconSize: '18px',
+      hoverBackground: 'palette.colors.gray.100',
+      hoverBorder: 'palette.colors.gray.300',
+      pressedBackground: 'palette.colors.gray.200',
+      focusRing: 'semantic.colors.interactive.focus',
+      disabledOpacity: '0.5',
+    },
+    list: {
+      background: 'transparent',
+      foreground: 'semantic.colors.text',
+      border: 'semantic.colors.border',
+      borderRadius: 'palette.radius.md',
+      padding: '0.75rem',
+      gap: '0.625rem',
+      minHeight: '44px',
+      fontSize: '0.875rem',
+      lineHeight: '1.35',
+      iconSize: '17px',
+      hoverBackground: 'palette.colors.gray.100',
+      hoverBorder: 'palette.colors.gray.300',
+      pressedBackground: 'palette.colors.gray.200',
+      focusRing: 'semantic.colors.interactive.focus',
+      disabledOpacity: '0.5',
+    },
+  },
   toolBubble: {
     shadow: 'palette.shadows.sm',
   },
@@ -883,6 +937,16 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-reasoningBubble-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
   cssVars['--persona-composer-shadow'] =
     cssVars['--persona-components-composer-shadow'] ?? 'none';
+  // Composer spacing/type. Fallbacks reproduce the utility classes the form
+  // used to carry (`px-4 py-3`, `gap-2`, `text-sm`) exactly.
+  cssVars['--persona-composer-padding'] =
+    cssVars['--persona-components-composer-padding'] ?? '0.75rem 1rem';
+  cssVars['--persona-composer-gap'] =
+    cssVars['--persona-components-composer-gap'] ?? '0.5rem';
+  cssVars['--persona-composer-font-size'] =
+    cssVars['--persona-components-composer-fontSize'] ?? '0.875rem';
+  cssVars['--persona-composer-line-height'] =
+    cssVars['--persona-components-composer-lineHeight'] ?? '1.25rem';
 
   cssVars['--persona-md-inline-code-bg'] =
     cssVars['--persona-components-markdown-inlineCode-background'] ?? cssVars['--persona-container'];

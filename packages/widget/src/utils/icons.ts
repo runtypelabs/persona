@@ -70,6 +70,7 @@ import {
   Plus,
   Minus,
   Pencil,
+  PenLine,
   Trash,
   Trash2,
   Save,
@@ -117,12 +118,15 @@ import {
   Folder,
   FolderOpen,
   Files,
+  // ---------- Data ----------
+  ChartColumn,
   // ---------- Decorative ----------
   Sparkles,
   Zap,
   Sun,
   Moon,
   Flag,
+  Lightbulb,
   // ---------- Devices ----------
   Monitor,
   Smartphone,
@@ -220,6 +224,7 @@ const LUCIDE_ICONS = {
   "plus": Plus,
   "minus": Minus,
   "pencil": Pencil,
+  "pen-line": PenLine,
   "trash": Trash,
   "trash-2": Trash2,
   "save": Save,
@@ -267,12 +272,15 @@ const LUCIDE_ICONS = {
   "folder": Folder,
   "folder-open": FolderOpen,
   "files": Files,
+  // Data
+  "chart-column": ChartColumn,
   // Decorative
   "sparkles": Sparkles,
   "zap": Zap,
   "sun": Sun,
   "moon": Moon,
   "flag": Flag,
+  "lightbulb": Lightbulb,
   // Devices
   "monitor": Monitor,
   "smartphone": Smartphone,

@@ -160,10 +160,10 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
     expect(state.getPreviewScene()).toBe('conversation');
 
     state.setPreviewDevice('mobile');
-    state.setPreviewScene('home');
+    state.setPreviewScene('follow-ups');
 
     expect(state.getPreviewDevice()).toBe('mobile');
-    expect(state.getPreviewScene()).toBe('home');
+    expect(state.getPreviewScene()).toBe('follow-ups');
   });
 
   test('editor mode defaults to basic and can be updated', () => {
@@ -180,7 +180,7 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
     expect(previewConfig.launcher?.enabled).toBe(true);
     expect(previewConfig.launcher?.autoExpand).toBe(true);
     expect(previewConfig.suggestionChips?.length).toBeGreaterThan(0);
-    expect(previewConfig.initialMessages?.length).toBe(1);
+    expect(previewConfig.initialMessages).toEqual([]);
 
     const exported = state.exportSnapshot();
     expect(exported.config.initialMessages).toBeUndefined();
@@ -192,6 +192,22 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
     const previewConfig = state.buildPreviewConfig(undefined, 'system', 'home');
 
     expect(previewConfig.suggestionChips).toEqual(['New suggestion', 'Pricing']);
+  });
+
+  test('buildPreviewConfig seeds a suggest_replies result in the follow-ups scene', () => {
+    const previewConfig = state.buildPreviewConfig(undefined, 'system', 'follow-ups');
+    const suggestionMessage = previewConfig.initialMessages?.find(
+      (message) => message.variant === 'tool' && message.toolCall?.name === 'suggest_replies'
+    );
+
+    expect(suggestionMessage?.toolCall?.status).toBe('complete');
+    expect(suggestionMessage?.toolCall?.args).toEqual(
+      expect.objectContaining({
+        suggestions: expect.arrayContaining([
+          expect.objectContaining({ label: 'Show me an implementation' }),
+        ]),
+      })
+    );
   });
 
   test('buildPreviewConfig filters blank suggestion chips from preview output', () => {

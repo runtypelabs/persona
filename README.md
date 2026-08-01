@@ -173,7 +173,7 @@ Optional speech-to-text via the Web Speech API or Runtype's WebSocket voice serv
 Collapsible reasoning bubbles that display model chain-of-thought with duration tracking and streaming. Controlled by `features.showReasoning`: on by default, or override the renderer with a plugin hook.
 
 ### Tool Calls, Approvals & Local Client Tools
-Expandable tool call bubbles showing name, status, arguments, and results, with compact display modes, active previews, grouping, and loading animations. Optional human-in-the-loop approval bubbles include friendly summaries, hidden/collapsed technical details, agent-stated reasons, and custom approve/deny handlers. Built-in LOCAL client tools (`ask_user_question` and `suggest_replies`) can be advertised from the widget with `features.askUserQuestion.expose` and `features.suggestReplies.expose`.
+Expandable tool call bubbles showing name, status, arguments, and results, with compact display modes, active previews, grouping, and loading animations. Optional human-in-the-loop approval bubbles include friendly summaries, hidden/collapsed technical details, agent-stated reasons, and custom approve/deny handlers. Built-in LOCAL client tools (`ask_user_question` and `suggest_replies`) can be advertised from the widget with `features.askUserQuestion.expose` and `suggestions.followUps.expose`.
 
 ### Artifacts
 Optional side-panel for rendering markdown and component content. Desktop split layout (resizable, with an optional expand-to-full-width toolbar toggle via `layout.showExpandToggle`) or mobile drawer. Enable via `features.artifacts`, configure toolbar presets, copy behavior, and appearance. Add product-specific buttons (icon, label, handler) to the pane toolbar and reference card with `toolbarActions` and `cardActions`.

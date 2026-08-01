@@ -30,6 +30,8 @@ export type WireSummary = {
   events: string[];
   /** Assistant text reconstructed from `text_delta` frames. */
   text: string;
+  /** Tool calls in wire order, read from `tool_start` frames. */
+  toolCalls: { name: string; parameters: unknown }[];
   /** Distinct `executionId`s seen; a valid run carries exactly one. */
   executionIds: Set<string>;
   /** Distinct `kind`s seen on lifecycle frames. */
@@ -48,6 +50,9 @@ export function summarizeWire(frames: ParsedFrame[]): WireSummary {
     .filter((f) => f.event === "text_delta")
     .map((f) => String(f.data.delta ?? ""))
     .join("");
+  const toolCalls = frames
+    .filter((f) => f.event === "tool_start")
+    .map((f) => ({ name: String(f.data.toolName ?? ""), parameters: f.data.parameters }));
   const executionIds = new Set<string>(
     frames.map((f) => f.data.executionId).filter(Boolean) as string[],
   );
@@ -61,6 +66,7 @@ export function summarizeWire(frames: ParsedFrame[]): WireSummary {
   return {
     events,
     text,
+    toolCalls,
     executionIds,
     kinds,
     success: Boolean(complete?.data.success),

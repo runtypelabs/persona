@@ -169,10 +169,12 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       submitLabel: "Send",
     },
   },
+  // Placeholder copy that models the right shape: verb-first, user-voice,
+  // one line. Integrators should swap in domain prompts.
   suggestionChips: [
-    "What can you help me with?",
-    "Tell me about your features",
-    "How does this work?",
+    "Show me what you can help with",
+    "Walk me through getting started",
+    "Answer a question about this page",
   ],
   suggestionChipsConfig: {
     fontFamily: "sans-serif",

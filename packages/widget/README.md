@@ -42,7 +42,7 @@ createAgentExperience(inlineHost, {
   theme: {
     semantic: { colors: { accent: '#2563eb' } }
   },
-  suggestionChips: ['What can you do?', 'Show API docs'],
+  suggestions: { starters: { items: ['What can you do?', 'Show API docs'] } },
   postprocessMessage: ({ text }) => markdownPostprocessor(text)
 });
 
@@ -127,12 +127,12 @@ With **`dock.reveal: 'resize'`** (default), a **closed** dock uses a **`0px`** c
 The full reference lives in [`docs/`](./docs/) and the theming guide:
 
 - [Extending Persona](./docs/EXTENDING.md): the map of every extension point: plugins, components, postprocessors, themes, stream parsers, animations, voice, sanitization, actions, context/WebMCP, layout slots, storage, and UI builders, each linked to its deep dive
-- [Authoring Plugins](./docs/PLUGINS.md): the `AgentWidgetPlugin` contract, all 14 render hooks, global vs per-instance registration, lifecycle, and the `@runtypelabs/persona/plugin-kit` helpers
+- [Authoring Plugins](./docs/PLUGINS.md): the `AgentWidgetPlugin` contract, render/data/interaction hooks, global vs per-instance registration, lifecycle, and the `@runtypelabs/persona/plugin-kit` helpers
 - [Contributing](../../CONTRIBUTING.md): current guidance for contributing plugins, themes, adapters, examples, and other customizations back to this monorepo
 - [Programmatic Control & Events](./docs/PROGRAMMATIC-CONTROL.md): controller API, message hooks and injection, enriched DOM context, WebMCP page tools, DOM and controller events, state loading
 - [UI Features & Components](./docs/UI-COMPONENTS.md): message actions and feedback, loading/idle indicators, approvals, built-in `ask_user_question` and `suggest_replies` tools, dropdown menus, button utilities, dynamic forms
 - [Script Tag Installation & Framework Integration](./docs/INSTALLATION-FRAMEWORKS.md): automatic installer, deferred launcher lifecycle hooks, manual script tag setup, React, Next.js, Remix, Gatsby, and Astro guides
-- [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md): every config option: core, client token mode, agent mode, UI & theme, launcher/docking, layout, voice, WebMCP, tool calls, features, suggestion chips, state & storage
+- [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md): every config option: core, client token mode, agent mode, UI & theme, launcher/docking, layout, voice, WebMCP, tool calls, features, suggestions, state & storage
 - [Context Mentions](./docs/CONTEXT-MENTIONS.md): `@`-mention sources, resolve lifecycle, chip vs inline display, menu positioning, slash commands, and render overrides
 - [Stream Parser Configuration](./docs/STREAM-PARSERS.md): JSON, XML, and plain-text stream parsers and custom parser factories
 - [Message Injection](./docs/MESSAGE-INJECTION.md): full injection and component-directive reference
@@ -233,5 +233,5 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 - Tailwind classes are prefixed with `tvw-` and scoped to `[data-persona-root]`, so they won't collide with the host page.
 - Run `pnpm dev` from the repository root to boot the example Runtype proxy (`examples/runtype-hono-proxy`) and the vanilla demo (`apps/web`).
 - The proxy prefers port `43111` but automatically selects the next free port if needed.
-- `features.askUserQuestion.expose` and `features.suggestReplies.expose` advertise built-in LOCAL client tools through `clientTools[]`; leave `expose` off if the flow already declares those tools server-side.
+- `features.askUserQuestion.expose` and `suggestions.followUps.expose` advertise built-in LOCAL client tools through `clientTools[]`; leave `expose` off if the flow already declares those tools server-side.
 - `webmcp: { enabled: true }` snapshots page-registered tools on `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:*` calls in the browser, and resumes the paused execution.

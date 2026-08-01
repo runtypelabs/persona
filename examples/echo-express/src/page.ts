@@ -1,7 +1,7 @@
 /**
  * The demo page. Mounts the real Persona widget from a plain `<script>` tag,
  * no bundler. The widget's IIFE build attaches the public API to
- * `window.AgentWidgetBrowser`; Express serves it from the local workspace build
+ * `window.AgentWidget`; Express serves it from the local workspace build
  * (see `index.ts`) so the page works fully offline.
  */
 export const PAGE = /* html */ `<!doctype html>
@@ -10,6 +10,7 @@ export const PAGE = /* html */ `<!doctype html>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Persona × Express</title>
+    <link rel="stylesheet" href="/persona/widget.css" />
     <style>
       :root { color-scheme: light; }
       body {
@@ -30,6 +31,7 @@ export const PAGE = /* html */ `<!doctype html>
         margin-top: 28px; height: 520px; border: 1px solid #e3e6ee;
         border-radius: 14px; overflow: hidden; background: #fff;
       }
+      #persona-root { width: 100%; height: 100%; }
     </style>
   </head>
   <body>
@@ -40,18 +42,19 @@ export const PAGE = /* html */ `<!doctype html>
         The same canonical adapter, bridged from Express's <code>(req, res)</code> callback style:
         build a Web <code>Request</code>, call the handler, and
         <code>Readable.fromWeb(webRes.body).pipe(res)</code>. The
-        <code>persona-wire.ts</code> file is byte-identical to every other host in the matrix.
+        <code>persona-wire.ts</code> file is the same file in every other host in the matrix.
       </p>
       <p>Active backend: <code>POST /dispatch</code> (zero-dependency echo agent)</p>
-      <div id="persona-root" class="widget-host"></div>
+      <div class="widget-host"><div id="persona-root"></div></div>
     </div>
 
     <script src="/persona/index.global.js"></script>
     <script>
-      const { createAgentExperience, markdownPostprocessor } = window.AgentWidgetBrowser;
+      const { createAgentExperience } = window.AgentWidget;
       createAgentExperience(document.getElementById("persona-root"), {
         apiUrl: "/dispatch",
-        launcher: { enabled: false },
+        persistState: false,
+        launcher: { enabled: false, width: "100%" },
         copy: {
           welcomeTitle: "Persona × Express",
           welcomeSubtitle: "Ask anything. The echo agent streams it back over the Persona wire.",
@@ -72,7 +75,6 @@ export const PAGE = /* html */ `<!doctype html>
           "Why does Express need a bridge?",
           "Explain the Persona wire",
         ],
-        postprocessMessage: ({ text }) => markdownPostprocessor(text),
       });
     </script>
   </body>

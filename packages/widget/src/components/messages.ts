@@ -9,7 +9,10 @@ import {
   isAskUserQuestionMessage,
   removeAskUserQuestionSheet,
 } from "./ask-user-question-bubble";
-import { isSuggestRepliesMessage } from "../suggest-replies-tool";
+import {
+  isSuggestRepliesMessage,
+  resolveFollowUpsFeature,
+} from "../suggest-replies-tool";
 
 export const renderMessages = (
   container: HTMLElement,
@@ -43,7 +46,7 @@ export const renderMessages = (
       return;
     } else if (
       isSuggestRepliesMessage(message) &&
-      config?.features?.suggestReplies?.enabled !== false
+      resolveFollowUpsFeature(config).enabled
     ) {
       // No transcript bubble: the chips above the composer are the only UI.
       // When the feature is disabled the message falls through to the generic

@@ -7,7 +7,7 @@ reply as Persona's SSE event vocabulary, the same wire the Runtype API emits.
 This is the **callback-host** entry in Persona's **host matrix**. The same adapter is re-hosted four
 ways ([`echo-script-tag`](../echo-script-tag), [`echo-hono`](../echo-hono),
 [this one](.), [`echo-sveltekit`](../echo-sveltekit)). `src/lib/persona-wire.ts`
-and `src/lib/echo-adapter.ts` are **byte-identical across all four**.
+and `src/lib/echo-adapter.ts` are **exact copies across all four**.
 
 ## The one host that needs a real bridge
 
@@ -53,6 +53,28 @@ pnpm --filter echo-express test
 
 Same adapter test as every host in the matrix: it drives the `(Request) => Response` handler
 directly, with no Express and no port. It asserts a well-formed SSE run.
+
+## Follow-up suggestions
+
+After the reply, the adapter calls `emit.suggestReplies([...])` (see `FOLLOW_UP_SUGGESTIONS` in
+`src/lib/echo-adapter.ts`), and the widget renders the items as tappable chips under the message.
+No widget config and no `/resume` endpoint: the chips are pure wire, a `suggest_replies` tool call
+emitted as a `tool_start` / `tool_complete` pair that the run does not wait on.
+
+```ts
+for await (const chunk of respond(messages)) emit.textDelta(chunk);
+emit.suggestReplies([
+  { label: "Say that again" },
+  { label: "Swap in a real model", prompt: "How do I swap in a real model?" },
+]);
+emit.complete();
+```
+
+Items are `{ label, prompt?, description? }` (or bare strings), max 4, and must be emitted after the
+last `textDelta` and before `complete()`: chips stay disabled until the stream terminates. With a
+real model, map its tool call onto the general form, `emit.toolCall(name, parameters)`. See
+[`echo-hono`](../echo-hono) for the annotated version and [`ai-sdk-next`](../ai-sdk-next) for the
+model-driven one.
 
 ## Swap in a real model
 

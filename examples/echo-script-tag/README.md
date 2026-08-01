@@ -9,7 +9,7 @@ This is the most honest "works anywhere" host in Persona's **host matrix**. The 
 re-hosted four ways ([this one](.), [`echo-hono`](../echo-hono),
 [`echo-express`](../echo-express),
 [`echo-sveltekit`](../echo-sveltekit)). `src/lib/persona-wire.ts` and
-`src/lib/echo-adapter.ts` are **byte-identical across all four**.
+`src/lib/echo-adapter.ts` are **exact copies across all four**.
 
 ## Two things to look at
 
@@ -62,6 +62,28 @@ pnpm --filter echo-script-tag test
 
 Same adapter test as every host in the matrix: it drives the `(Request) => Response` handler
 directly and asserts a well-formed SSE run.
+
+## Follow-up suggestions
+
+After the reply, the adapter calls `emit.suggestReplies([...])` (see `FOLLOW_UP_SUGGESTIONS` in
+`src/lib/echo-adapter.ts`), and the widget renders the items as tappable chips under the message.
+No widget config and no `/resume` endpoint: the chips are pure wire, a `suggest_replies` tool call
+emitted as a `tool_start` / `tool_complete` pair that the run does not wait on.
+
+```ts
+for await (const chunk of respond(messages)) emit.textDelta(chunk);
+emit.suggestReplies([
+  { label: "Say that again" },
+  { label: "Swap in a real model", prompt: "How do I swap in a real model?" },
+]);
+emit.complete();
+```
+
+Items are `{ label, prompt?, description? }` (or bare strings), max 4, and must be emitted after the
+last `textDelta` and before `complete()`: chips stay disabled until the stream terminates. With a
+real model, map its tool call onto the general form, `emit.toolCall(name, parameters)`. See
+[`echo-hono`](../echo-hono) for the annotated version and [`ai-sdk-next`](../ai-sdk-next) for the
+model-driven one.
 
 ## Swap in a real model
 

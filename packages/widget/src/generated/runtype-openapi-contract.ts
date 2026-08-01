@@ -260,7 +260,24 @@ export type RuntypeExecutionStreamEvent = ({
   type: "source";
   url?: string;
   [key: string]: unknown;
+} | {
+  executionId: string;
+  iteration?: number;
+  seq: number;
+  state: Record<string, unknown>;
+  type: "state_snapshot";
 } | ({
+  executionId: string;
+  iteration?: number;
+  patch: Array<{
+  from?: string;
+  op: "add" | "remove" | "replace" | "move" | "copy" | "test";
+  path: string;
+  value?: unknown;
+}>;
+  seq: number;
+  type: "state_delta";
+}) | ({
   executionId: string;
   hiddenParameterNames?: Array<string>;
   iteration?: number;

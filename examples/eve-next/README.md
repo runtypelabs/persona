@@ -44,7 +44,9 @@ pnpm --filter eve-next test
 The session stream is an **injected dependency**, so the test drives the adapter with a **mock
 LLM** (a fake event stream yielding eve's own `message.appended` / `messageDelta` shapes). It
 asserts the emitted SSE is a valid SSE run (and that mid-stream errors surface as
-`execution_error`). No running eve server and no model key are needed.
+`execution_error`). The follow-up cases stub an `actions.requested` event, since an offline
+run cannot make a real model decide to call a tool. No running eve server and no model key
+are needed.
 
 ## How it maps to the wire protocol
 
@@ -53,8 +55,39 @@ asserts the emitted SSE is a valid SSE run (and that mid-stream errors surface a
 | `execution_start` `{executionId, kind:"agent", agentId}` | run start |
 | `turn_start` `{id:"turn_…", iteration:1}` | first delta |
 | `text_start`·`text_delta`·`text_complete` `{id:"text_…", delta}` | each `message.appended` / `messageDelta` |
+| `tool_start` + `tool_complete` `{toolCallId, toolName, parameters}` | each `actions.requested` / `kind:"tool-call"` action |
 | `turn_complete` + `execution_complete` `{kind:"agent", success}` | session end |
 | `execution_error` `{error:{message}}` | a thrown/failed session |
+
+## Follow-up suggestions
+
+After each answer the agent offers a couple of tappable quick replies. Three pieces
+make that work, one per layer:
+
+1. **The tool**, in eve's filesystem-first idiom: [`agent/tools/suggest_replies.ts`](./agent/tools/suggest_replies.ts).
+   The filename is the model-facing name, which is exactly the name Persona's widget
+   looks for. Its `inputSchema` is the widget's own JSON Schema, copied inline so the
+   example stays zero-dependency, and `execute` just returns the canned "shown"
+   result: the chips are rendered by the widget, not by the tool.
+2. **The steering**, in [`agent/instructions.md`](./agent/instructions.md): a line
+   telling the agent to offer 2-3 follow-ups in the user's voice after answering.
+   Declaring the tool makes the call possible; the instructions make it happen.
+3. **The mapping**, in [`app/lib/eve-adapter.ts`](./app/lib/eve-adapter.ts): eve's
+   `actions.requested` events carry `{ kind: "tool-call", callId, toolName, input }`,
+   and each one becomes `emit.toolCall(...)`, which puts a `tool_start` +
+   `tool_complete` pair on the wire.
+
+The call is fire-and-forget: eve runs the tool itself, so there is no pause, no
+`/resume` endpoint, and no widget config to set. The widget renders chips from any
+`suggest_replies` tool call it sees in the transcript. Two things to keep right if
+you copy this: the arguments must ride `tool_start.parameters` (streamed argument
+deltas are display-only), and no frame should carry `origin: "webmcp"`. The widget
+reads `origin` on `await` frames only, where it renames the tool and routes it to
+the page-tool bridge; `tool_start` ignores the field, so omitting it always holds.
+
+For a keyless, offline version of the same wire frames see
+[`echo-hono`](../echo-hono); for the AI SDK spelling of the same idea see
+[`ai-sdk-next`](../ai-sdk-next).
 
 ## Use it in your app
 
@@ -92,5 +125,7 @@ default `eve/client` connection.
 
 ## What this intentionally does not show
 
-Plain streaming chat. No WebMCP, local tools, the `await` pause, or `/resume`. eve has its own
-tools / skills / channels / schedules model; this example only forwards assistant text deltas.
+Streaming chat plus one fire-and-forget tool call. No WebMCP, no `await` pause, no `/resume`.
+eve has its own tools / skills / channels / schedules model, and this example uses only the
+smallest slice of it. For the pausing, resumable tool pattern see
+[`ai-sdk-webmcp`](../ai-sdk-webmcp).

@@ -884,6 +884,8 @@ const config: AgentWidgetConfig = {
     inputPlaceholder: "Ask what changed, why it changed, or where to focus next…",
   },
   suggestionChips: ANALYTICS_STARTER_SCENARIOS.map((scenario) => scenario.prompt),
+  // Lets Atlas end an analysis with tappable follow-up questions.
+  suggestions: { followUps: { expose: true } },
   suggestionChipsConfig: {
     fontFamily: "sans-serif",
     fontWeight: "620",
@@ -920,8 +922,6 @@ const config: AgentWidgetConfig = {
     ...DEFAULT_WIDGET_CONFIG.features,
     showReasoning: false,
     showToolCalls: true,
-    // Lets Atlas end an analysis with tappable follow-up questions.
-    suggestReplies: { expose: true },
     toolCallDisplay: {
       ...DEFAULT_WIDGET_CONFIG.features?.toolCallDisplay,
       collapsedMode: "tool-name",

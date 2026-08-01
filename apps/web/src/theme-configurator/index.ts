@@ -932,6 +932,7 @@ function syncAllControls(): void {
 const SCENE_LABELS: Record<string, string> = {
   conversation: 'Conversation',
   home: 'Home',
+  'follow-ups': 'Follow-ups',
   minimized: 'Minimized',
   artifact: 'Artifact',
 };

@@ -5,15 +5,18 @@
  * `clientTools[]` (set `features.askUserQuestion.expose: true`): the same
  * wire surface WebMCP page tools ride. The server registers it as a LOCAL
  * tool under its bare name (`origin: 'sdk'` tools are not `webmcp:`-prefixed),
- * so when the model calls it the execution pauses with a `step_await`
- * (`awaitReason: "local_tool_required"`), the widget's answer-pill sheet
- * renders, and `session.resolveAskUserQuestion()` resumes the execution with
- * the structured answers.
+ * so when the model calls it the execution pauses with a `step_await`, the
+ * widget's answer-pill sheet renders, and `session.resolveAskUserQuestion()`
+ * resumes the execution with the structured answers. The public await frame
+ * for a local-tool pause carries no `awaitReason`; that discriminator is
+ * internal, and its absence is what marks a client-resolvable pause.
  *
  * This replaces the previous integrator burden of hand-declaring the tool in
  * a flow's `runtimeTools` and keeping that schema in sync with the renderer.
  * Flows that already declare `ask_user_question` server-side should leave
- * `expose` off: the model would otherwise see the tool twice.
+ * `expose` off: the API dedupes a double declaration by name with
+ * `clientTools[]` winning, so the model still sees exactly one tool, but the
+ * widget's description and schema silently replace the flow's.
  */
 
 import {
@@ -22,7 +25,7 @@ import {
 } from "./components/ask-user-question-bubble";
 import {
   SUGGEST_REPLIES_CLIENT_TOOL,
-  shouldExposeSuggestReplies,
+  resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
 import type { AgentWidgetConfig, ClientToolDefinition } from "./types";
 
@@ -129,7 +132,7 @@ export const builtInClientToolsForDispatch = (
   if (ask?.expose === true && ask.enabled !== false) {
     tools.push(ASK_USER_QUESTION_CLIENT_TOOL);
   }
-  if (shouldExposeSuggestReplies(config)) {
+  if (resolveFollowUpsFeature(config).expose) {
     tools.push(SUGGEST_REPLIES_CLIENT_TOOL);
   }
   return tools;

@@ -8,7 +8,7 @@ This is the reference host in Persona's **host matrix**. The same adapter is re-
 ([`echo-script-tag`](../echo-script-tag), this one, [`echo-express`](../echo-express),
 [`echo-sveltekit`](../echo-sveltekit)). The two files that do the real work,
 `src/lib/persona-wire.ts` (the zero-dependency wire helper) and `src/lib/echo-adapter.ts` (the
-agent), are **byte-identical across all four**. Diff the examples and only the host wrapper moves.
+agent), are **exact copies across all four**. Diff the examples and only the host wrapper moves.
 
 Hono is the most portable host: the one `app.fetch` handler runs unchanged on Node, Bun, Deno, and
 Cloudflare Workers.
@@ -56,8 +56,31 @@ changes.
 | `execution_start` `{executionId, kind:"agent", agentId}`           | run start                           |
 | `turn_start` `{id:"turn_…", iteration:1}`                          | first delta                         |
 | `text_start`·`text_delta`·`text_complete` `{id:"text_…", delta}`   | each streamed chunk from `respond`  |
+| `tool_start` + `tool_complete` `{toolCallId, toolName, parameters}` | one fire-and-forget tool call       |
 | `turn_complete` + `execution_complete` `{kind:"agent", success}`   | end of turn                         |
 | `execution_error` `{error:{message}}`                              | a thrown/failed responder           |
+
+## Follow-up suggestions
+
+After the reply, the adapter calls `emit.suggestReplies([...])` (see `FOLLOW_UP_SUGGESTIONS` in
+`src/lib/echo-adapter.ts`), and the widget renders the items as tappable chips under the message.
+No widget config, no API key, no `/resume` endpoint: the chips are pure wire, a `suggest_replies`
+tool call emitted as a `tool_start` / `tool_complete` pair that the run does not wait on.
+
+```ts
+for await (const chunk of respond(messages)) emit.textDelta(chunk);
+emit.suggestReplies([
+  { label: "Say that again" },
+  { label: "Swap in a real model", prompt: "How do I swap in a real model?" },
+]);
+emit.complete();
+```
+
+Items are `{ label, prompt?, description? }` (or bare strings), max 4, and must be emitted after the
+last `textDelta` and before `complete()`: chips stay disabled until the stream terminates. With a
+real model, declare a `suggest_replies` tool in your SDK, ask for it in your system prompt, and map
+the model's tool call onto the general form, `emit.toolCall(name, parameters)`. See
+[`ai-sdk-next`](../ai-sdk-next) for that version.
 
 ## Swap in a real model
 
@@ -80,5 +103,6 @@ and [`ai-sdk-next`](../ai-sdk-next).)
 
 ## What this intentionally does not show
 
-Plain streaming chat only. No WebMCP, local tools, the `await` pause, or `/resume`: just assistant
-text deltas, to keep the host comparison clean.
+Streaming text plus one fire-and-forget tool call. No WebMCP, no `await` pause, and no `/resume`
+endpoint, to keep the host comparison clean. A tool call the agent must wait on needs server-side
+state; see [`ai-sdk-webmcp`](../ai-sdk-webmcp) for that.

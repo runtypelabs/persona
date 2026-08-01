@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Suggestion Customization Demo</title>
+  <style>
+    .suggestion-state-buttons,
+    .suggestion-example-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .suggestion-example-buttons {
+      grid-template-columns: repeat(3, 1fr);
+    }
+    .suggestion-example-control {
+      display: grid;
+      gap: 0.45rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <div class="info-section">
+          <h3>Conversation state</h3>
+          <p>Compare the same plugin on welcome starters and agent-produced follow-ups.</p>
+          <div class="suggestion-state-buttons mount-toggle-group" role="group" aria-label="Suggestion state">
+            <button class="suggestion-state-button mount-toggle-button" type="button" data-state="starter" aria-pressed="true">Starters</button>
+            <button class="suggestion-state-button mount-toggle-button" type="button" data-state="follow-up" aria-pressed="false">Follow-ups</button>
+          </div>
+          <div class="suggestion-example-control">
+            <span class="mount-toggle-label">Example</span>
+            <div class="suggestion-example-buttons mount-toggle-group" role="group" aria-label="Example">
+              <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="built-in" aria-pressed="true" title="Structured suggestions using Persona's default renderer.">Built-in</button>
+              <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="transform" aria-pressed="false" title="Enrich and rank data while keeping the default UI.">Transform</button>
+              <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="custom" aria-pressed="false" title="Replace every suggestion with a plugin-rendered element.">Custom UI</button>
+            </div>
+          </div>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Suggestion customization</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Transform the data</h3>
+        <p><code>transformSuggestions</code> can filter, rank, reorder, or enrich both configured starters and agent-produced follow-ups. Hooks receive resolved items, so string shorthand is already expanded and every item has an effective <code>behavior</code>: a plain object spread is all it takes to add an <code>icon</code>, promote one item to <code>primary</code>, or switch a long prompt to <code>fill</code>. Transform hooks compose in plugin priority order and run before <code>maxItems</code>.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Own the UI</h3>
+        <p><code>renderSuggestion</code> receives the normalized suggestion, surface, source, variant, <code>defaultRenderer()</code>, and <code>select()</code>. Return any <code>HTMLElement</code>; call <code>select()</code> to preserve events plus send/fill behavior.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Intercept selection</h3>
+        <p><code>onSuggestionSelect</code> is useful for analytics, routing, or policy checks. Return <code>false</code> to cancel the default action. Outside plugins, <code>persona:suggestion:selected</code> is cancelable with <code>event.preventDefault()</code>.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Plugin sketch</h3>
+        <div class="code-block">
+plugins: [{
+  <span class="prop">id</span>: <span class="string">"custom-suggestions"</span>,
+  <span class="function">transformSuggestions</span>: ({ suggestions, source }) =&gt;
+    [...suggestions]
+    .sort((a, b) =&gt; b.label.length - a.label.length)
+    .map((s, i) =&gt; ({
+      ...s,
+      <span class="prop">icon</span>: s.icon ?? iconFor(s.label),
+      <span class="prop">emphasis</span>: i === 0 ? <span class="string">"primary"</span> : s.emphasis,
+      <span class="prop">behavior</span>: source === <span class="string">"agent"</span> &amp;&amp; s.prompt.length &gt; 120 ? <span class="string">"fill"</span> : s.behavior,
+    })),
+  <span class="function">renderSuggestion</span>: ({ suggestion, select }) =&gt; {
+    <span class="keyword">const</span> card = buildCard(suggestion);
+    card.addEventListener(<span class="string">"click"</span>, select);
+    <span class="keyword">return</span> card;
+  },
+  <span class="function">onSuggestionSelect</span>: ({ suggestion }) =&gt; {
+    analytics.track(<span class="string">"suggestion_selected"</span>, suggestion);
+  }
+}]
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/suggestions-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("suggestions-demo");
+  </script>
+</body>
+</html>

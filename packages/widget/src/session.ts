@@ -2,6 +2,7 @@ import { AgentWidgetClient, type SSEEventCallback } from "./client";
 import { isWebMcpToolName } from "./webmcp-bridge";
 import {
   SUGGEST_REPLIES_TOOL_NAME,
+  resolveFollowUpsFeature,
   suggestRepliesToolResult,
 } from "./suggest-replies-tool";
 import {
@@ -77,10 +78,11 @@ export type AgentWidgetSessionStatus =
  * request. When NONE of these change, `updateConfig` can refresh the live
  * client in place (preserving the WebMCP bridge and any in-flight stream/resume)
  * instead of swapping in a fresh client and tearing down WebMCP state. Fields
- * outside this list (theme, copy, layout, suggestionChips, iterationDisplay,
- * postprocessMessage, feature display toggles, …) are display-only and safe to
- * apply mid-turn: which is what a self-styling widget needs when a `webmcp:*`
- * theme tool re-renders the widget while the agent's turn is still streaming.
+ * outside this list (theme, copy, layout, suggestions, suggestionChips,
+ * iterationDisplay, postprocessMessage, feature display toggles, …) are
+ * display-only and safe to apply mid-turn: which is what a self-styling widget
+ * needs when a `webmcp:*` theme tool re-renders the widget while the agent's
+ * turn is still streaming.
  *
  * Compared by identity (`!==`): primitives by value, functions/objects by
  * reference. A consumer that rebuilds these objects on every render simply
@@ -2983,15 +2985,15 @@ export class AgentWidgetSession {
       // indefinitely: `resolveWebMcpToolCall` translates the missing-bridge
       // case into an isError result that resumes the flow cleanly.
       // `suggest_replies`, by contrast, is gated on its feature flag: when
-      // `features.suggestReplies.enabled === false` the widget neither
-      // renders chips nor resumes: the same parked-execution posture as a
-      // server-declared ask_user_question with its sheet disabled.
+      // the resolved `enabled` is false the widget neither renders chips nor
+      // resumes: the same parked-execution posture as a server-declared
+      // ask_user_question with its sheet disabled.
       const tc = event.message.toolCall;
       const autoResolvable =
         !!tc?.name &&
         (isWebMcpToolName(tc.name) ||
           (tc.name === SUGGEST_REPLIES_TOOL_NAME &&
-            this.config.features?.suggestReplies?.enabled !== false));
+            resolveFollowUpsFeature(this.config).enabled));
       if (
         event.message.agentMetadata?.awaitingLocalTool === true &&
         autoResolvable

@@ -208,6 +208,7 @@ export function renderDemoScaffold(
   // Pin the demo layout to the viewport (desktop) so the preview owns a fixed,
   // full-height right column and only the left rail scrolls. See `.demo-shell`.
   root.classList.add("demo-shell");
+  root.dataset.demoSlug = slug;
   const stage = root.querySelector<HTMLElement>(".stage-widget");
   if (!stage) {
     throw new Error("[demo-scaffold] No `.stage-widget` found on the page.");

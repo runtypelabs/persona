@@ -195,7 +195,12 @@ export function buildSrcdoc(
 
 // ─── Preview Messages ───────────────────────────────────────────
 
-export type PreviewScene = 'home' | 'conversation' | 'minimized' | 'artifact';
+export type PreviewScene =
+  | 'home'
+  | 'conversation'
+  | 'follow-ups'
+  | 'minimized'
+  | 'artifact';
 
 export type PreviewTranscriptEntryPreset =
   | 'user-message'
@@ -543,8 +548,78 @@ export function createPreviewMessages(
   config?: Partial<AgentWidgetConfig>,
   appendedMessages: AgentWidgetMessage[] = []
 ): AgentWidgetMessage[] {
+  if (scene === 'follow-ups') {
+    const now = Date.now();
+    return [
+      {
+        id: 'preview-follow-up-user',
+        role: 'user',
+        content: 'What can Persona help me build?',
+        createdAt: new Date(now - 120000).toISOString(),
+      },
+      {
+        id: 'preview-follow-up-assistant',
+        role: 'assistant',
+        content:
+          'Persona gives you a themeable streaming chat interface with flexible integrations and interaction patterns. Where would you like to go next?',
+        createdAt: new Date(now - 60000).toISOString(),
+      },
+      {
+        id: 'preview-follow-up-suggestions',
+        role: 'assistant',
+        content: '',
+        createdAt: new Date(now - 59000).toISOString(),
+        streaming: false,
+        variant: 'tool',
+        toolCall: {
+          id: 'preview-follow-up-suggestions',
+          name: 'suggest_replies',
+          status: 'complete',
+          args: {
+            suggestions: [
+              {
+                id: 'preview-implementation',
+                label: 'Show me an implementation',
+                prompt: 'Show me a practical implementation',
+                description: 'See a complete integration example',
+                icon: 'code-2',
+                emphasis: 'primary',
+              },
+              {
+                id: 'preview-theming',
+                label: 'Explore theming',
+                prompt: 'Tell me how theming works',
+                description: 'Customize colors, type, and component styles',
+                icon: 'palette',
+              },
+              {
+                id: 'preview-security',
+                label: 'Review security',
+                prompt: 'Explain the security model',
+                description: 'Learn about isolation and safe rendering',
+                icon: 'shield-check',
+              },
+              {
+                id: 'preview-support',
+                label: 'Talk to support',
+                prompt: 'Help me contact support',
+                description: 'Get help choosing the right approach',
+                icon: 'messages-square',
+              },
+            ],
+          },
+          chunks: [],
+        },
+      },
+      ...appendedMessages,
+    ];
+  }
   if (scene === 'home') {
-    return [{ id: 'preview-home-1', role: 'assistant', content: 'Hi there! How can we help today?', createdAt: new Date().toISOString() }];
+    // Home is the pre-conversation state: welcome copy + starter suggestions
+    // already provide the greeting and entry points. Seeding an assistant
+    // bubble here creates a duplicate greeting that the default runtime never
+    // enters unless a host explicitly configures its own initialMessages.
+    return [];
   }
   if (scene === 'minimized') {
     return [{ id: 'preview-min-1', role: 'assistant', content: 'We are here whenever you are ready.', createdAt: new Date().toISOString() }];

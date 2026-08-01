@@ -495,12 +495,68 @@ initAgentWidget({
 
 For a direct AI SDK backend that translates WebMCP calls into Persona-compatible `step_await` / `/resume` traffic, see the repo-level [WebMCP without Runtype guide](../../../docs/webmcp-without-runtype.md).
 
-### Suggestion Chips
+### Suggestions
 
 | Option | Type | Description |
 | --- | --- | --- |
-| `suggestionChips` | `string[]` | Render quick reply buttons above the composer. |
-| `suggestionChipsConfig` | `AgentWidgetSuggestionChipsConfig` | Chip styling: `fontFamily` (`'sans-serif' \| 'serif' \| 'mono'`), `fontWeight`, `paddingX`, `paddingY`. |
+| `suggestions` | `AgentWidgetSuggestionsConfig` | Structured starter and follow-up surfaces. |
+| `suggestionChips` | `string[]` | Deprecated shorthand for starter chips above the composer. |
+| `suggestionChipsConfig` | `AgentWidgetSuggestionChipsConfig` | Deprecated chip styling: `fontFamily`, `fontWeight`, `paddingX`, `paddingY`. Prefer suggestion theme tokens. |
+
+`suggestions.starters` accepts rich items (`label`, optional `prompt`,
+`description`, `icon`, per-item `behavior`, and `emphasis`).
+`suggestions.followUps` applies the same presentation keys to the latest agent
+`suggest_replies` result, and also owns the two capability keys for that
+built-in tool.
+
+**`suggestions.starters`**: `AgentWidgetStarterSuggestionsConfig`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `items` | `AgentWidgetSuggestion[]?` | Rich items or plain strings. Falls back to the deprecated `suggestionChips`. |
+| `variant` | `'chip' \| 'card' \| 'list'?` | Item density. Default: `'card'`. |
+| `placement` | `'auto' \| 'welcome' \| 'composer'?` | `auto` uses the welcome surface when the welcome card renders and the composer otherwise. Explicit values are literal: pinned `welcome` renders nothing when `copy.showWelcomeCard` is `false` (with a debug-mode warning). Default: `'auto'`. |
+| `behavior` | `'send' \| 'fill'?` | Default click behavior, overridable per item. Default: `'send'`. |
+| `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Applies to the `chip` variant only; `card` and `list` layouts manage their own stacking. Default: `'wrap'`. |
+| `maxItems` | `number?` | Cap applied after the plugin transform chain. Default: `4`. |
+
+**`suggestions.followUps`**: `AgentWidgetFollowUpSuggestionsConfig`
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `enabled` | `boolean?` | Render follow-ups and auto-resume `suggest_replies`. Default: `true`. When `false`, the tool falls through to a generic tool bubble and does not auto-resume. |
+| `expose` | `boolean?` | Advertise the built-in LOCAL tool on `clientTools[]`. Default: `false`; leave off when the flow already declares the tool server-side. Forced off when `enabled` is `false`. |
+| `variant` | `'chip' \| 'card' \| 'list'?` | Item density. Default: `'chip'`. |
+| `placement` | `'auto' \| 'after-message' \| 'composer'?` | `auto` renders after the transcript in regular panels and above the composer in composer-bar mode. Default: `'auto'`. |
+| `behavior` | `'send' \| 'fill'?` | Default click behavior, overridable per item. Default: `'send'`. |
+| `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Applies to the `chip` variant only; `card` and `list` layouts manage their own stacking. Default: `'scroll'`. |
+| `maxItems` | `number?` | Cap applied after the plugin transform chain. Default: `4`. |
+
+`enabled: true` on its own renders nothing: the model also has to be given the
+tool, either server-side or via `expose`. The
+[integration paths table](./UI-COMPONENTS.md#integration-paths) maps each backend
+setup (hosted flow declaration, `expose`, BYO adapter, host-set items) to the
+config it needs and whether the execution pauses, and covers the instruction
+wording that drives how often the model calls the tool. Declaring the tool both
+server-side and via `expose` is benign: the API dedupes by name with
+`clientTools[]` winning, though the effective type then becomes `local`, so the
+execution pauses for the widget's auto-resume.
+
+There is no `followUps.items`: follow-up items come from the agent's
+`suggest_replies` call or from `controller.setFollowUpSuggestions()`, an
+ephemeral host overlay that is never persisted or sent on the wire. Static
+lists belong in `starters`. Any backend can drive the surface by emitting a
+`suggest_replies` tool call on the wire; see
+[Follow-up suggestions from any backend](./UI-COMPONENTS.md#follow-up-suggestions-from-any-backend).
+
+`features.suggestReplies.enabled` / `.expose` are deprecated aliases of
+`suggestions.followUps.enabled` / `.expose`. Resolution is per key with
+`suggestions.followUps` winning; the aliases are removed in 5.0.
+
+Plugins can fully customize the pipeline with `transformSuggestions`,
+`renderSuggestion`, and `onSuggestionSelect`. See
+[Authoring Persona plugins](./PLUGINS.md#suggestion-hooks) and the
+[`suggestions-demo.html`](../../../apps/web/suggestions-demo.html) showcase.
 
 ### Input & Composer
 
@@ -589,7 +645,7 @@ See [Menu behavior and positioning](./CONTEXT-MENTIONS.md#menu-behavior-and-posi
 | `eventStream` | `EventStreamConfig?` | Event stream inspector configuration: `badgeColors`, `timestampFormat`, `showSequenceNumbers`, `maxEvents`, `descriptionFields`, `classNames`. |
 | `artifacts` | `AgentWidgetArtifactsFeature?` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (see below). |
 | `askUserQuestion` | `AgentWidgetAskUserQuestionFeature?` | Built-in `ask_user_question` answer sheet. `enabled` defaults to `true`; set `expose: true` to advertise the LOCAL tool via `clientTools[]`. |
-| `suggestReplies` | `AgentWidgetSuggestRepliesFeature?` | Built-in `suggest_replies` chips. `enabled` defaults to `true`; set `expose: true` to advertise the LOCAL tool via `clientTools[]` and auto-resume when called. |
+| `suggestReplies` | `AgentWidgetSuggestRepliesFeature?` | **Deprecated.** Alias of `suggestions.followUps.enabled` / `.expose`; see [Suggestions](#suggestions). |
 
 **`features.scrollBehavior`**: `AgentWidgetScrollBehaviorFeature`
 
@@ -649,12 +705,17 @@ See [Menu behavior and positioning](./CONTEXT-MENTIONS.md#menu-behavior-and-posi
 | `layout` | `'rows' \| 'pills'?` | Option layout. `rows` is the default full-width layout; `pills` is the legacy compact wrap layout. |
 | `slideInMs`, `freeTextLabel`, `freeTextPlaceholder`, `submitLabel`, `nextLabel`, `backLabel`, `submitAllLabel`, `skipLabel`, `groupedAutoAdvance`, `styles` | various | Sheet animation, copy, multi-question navigation, and CSS variable overrides. See [UI Features & Components](./UI-COMPONENTS.md#ask-user-question). |
 
-**`features.suggestReplies`**: `AgentWidgetSuggestRepliesFeature`
+**`features.suggestReplies`**: `AgentWidgetSuggestRepliesFeature` (deprecated)
+
+Both keys moved to [`suggestions.followUps`](#suggestions), which also owns
+presentation, placement, and send/fill behavior for the same surface. The alias
+keeps working per key, with `suggestions.followUps` winning and a console warning
+when the two homes disagree, in debug mode or not. Removal waits for 5.0.
 
 | Property | Type | Description |
 | --- | --- | --- |
-| `enabled` | `boolean?` | Render chips and auto-resume `suggest_replies`. Default: `true`. When `false`, it falls through to a generic tool bubble and does not auto-resume. |
-| `expose` | `boolean?` | Advertise the built-in LOCAL tool definition on `clientTools[]`. Default: `false`; leave off when the flow already declares the tool server-side. |
+| `enabled` | `boolean?` | Deprecated alias of `suggestions.followUps.enabled`. |
+| `expose` | `boolean?` | Deprecated alias of `suggestions.followUps.expose`. |
 
 **`features.artifacts`**: `AgentWidgetArtifactsFeature`
 
@@ -730,4 +791,3 @@ Reconnect lifecycle is also surfaced as controller events (`stream:paused`, `str
 | `requestMiddleware` | `AgentWidgetRequestMiddleware` | Transform the request payload before it is sent. |
 | `actionParsers` | `AgentWidgetActionParser[]` | Parse structured directives from assistant messages. |
 | `actionHandlers` | `AgentWidgetActionHandler[]` | Handle parsed actions (navigation, UI updates, etc.). |
-

@@ -44,7 +44,7 @@
       <code>+server.ts</code> route. SvelteKit speaks Web
       <code>Request</code>/<code>Response</code>, so the route is one line:
       <code>export const POST = (event) =&gt; dispatch(event.request)</code>. The
-      <code>persona-wire.ts</code> file is byte-identical to every other host in the matrix.
+      <code>persona-wire.ts</code> file is the same file in every other host in the matrix.
     </p>
     <p>Active backend: <code>POST /api/dispatch</code> (zero-dependency echo agent)</p>
     <div bind:this={host} class="widget-host"></div>

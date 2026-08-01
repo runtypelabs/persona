@@ -1082,6 +1082,11 @@ describe('theme configurator shell', () => {
     // Configure tab: content, layout, widget, features, developer sub-groups
     expect(document.querySelector('#configure-group [data-section-id="copy"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="suggestions"]')).not.toBeNull();
+    expect(
+      document.querySelector(
+        '#configure-group [data-section-id="suggestions"] .suggestions-preview-btn'
+      )
+    ).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="header-layout"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="messages-layout"]')).not.toBeNull();
     expect(document.querySelector('#configure-group [data-section-id="launcher-basics"]')).not.toBeNull();
@@ -1099,5 +1104,17 @@ describe('theme configurator shell', () => {
     // Export is in toolbar, not a tab panel
     expect(document.getElementById('export-btn')).not.toBeNull();
     expect(document.getElementById('export-dropdown')).not.toBeNull();
+  });
+
+  test('suggestions shortcut selects the follow-ups preview scene', async () => {
+    const state = await import('./state');
+    await import('./index');
+
+    const shortcut = document.querySelector<HTMLButtonElement>('.suggestions-preview-btn');
+    expect(shortcut).not.toBeNull();
+
+    shortcut!.click();
+
+    expect(state.getPreviewScene()).toBe('follow-ups');
   });
 });

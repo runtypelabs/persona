@@ -1829,5 +1829,13 @@ body.is-fullscreen .fullscreen-exit { display: inline-flex !important; }
   .shell-main { padding: 1rem 0.9rem 2.5rem; }
   .title-strip h1 { font-size: 1.5rem; }
   .preview { height: 65vh; min-height: 420px; }
+  /* These demos put multi-row controls in the preview toolbar and need enough
+     remaining canvas for a transcript, follow-up strip, and composer. A fixed
+     page-scrollable preview is preferable to collapsing the widget body. */
+  .demo-shell[data-demo-slug="suggestions-demo"] .preview,
+  .demo-shell[data-demo-slug="ask-user-question-demo"] .preview {
+    height: 720px;
+    min-height: 720px;
+  }
   .shell-picker-menu { min-width: calc(100vw - 1.5rem); }
 }

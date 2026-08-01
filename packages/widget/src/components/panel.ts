@@ -1,6 +1,7 @@
 import { createElement, createNode } from "../utils/dom";
 import { DEFAULT_FLOATING_LAUNCHER_WIDTH } from "../defaults";
-import { AgentWidgetConfig } from "../types";
+import { AgentWidgetConfig, AgentWidgetSuggestionSurface } from "../types";
+import { suggestionSurfaceAttr } from "./suggestions";
 import { positionMap } from "../utils/positioning";
 import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
 import { DEFAULT_OVERLAY_Z_INDEX } from "../utils/constants";
@@ -132,6 +133,10 @@ export interface PanelElements {
   container: HTMLElement;
   body: HTMLElement;
   messagesWrapper: HTMLElement;
+  /** Starter prompts rendered inside the welcome card. */
+  starterSuggestions: HTMLElement;
+  /** Follow-up suggestions rendered after the transcript. */
+  transcriptSuggestions: HTMLElement;
   /**
    * Absolute-positioned slot above the composer footer. Interactive sheets
    * (e.g. the answer-pill sheet for the ask_user_question tool) mount here
@@ -177,6 +182,17 @@ export interface PanelElements {
   peekBanner?: HTMLButtonElement;
   peekTextNode?: HTMLElement;
 }
+
+const createSuggestionHost = (
+  surface: AgentWidgetSuggestionSurface
+): HTMLElement => {
+  const host = createNode("div", {
+    className: "persona-suggestions",
+    attrs: { "data-persona-suggestions": suggestionSurfaceAttr(surface) },
+  });
+  host.hidden = true;
+  return host;
+};
 
 /**
  * Composer-bar panel: minimal close-only header (× in the top-right of the
@@ -276,6 +292,7 @@ const buildComposerBarPanel = (
       config?.copy?.welcomeSubtitle ??
       "Ask anything about your account or products.",
   });
+  const starterSuggestions = createSuggestionHost("starter");
   const introCard = createNode(
     "div",
     {
@@ -287,13 +304,15 @@ const buildComposerBarPanel = (
       },
     },
     introTitle,
-    introSubtitle
+    introSubtitle,
+    starterSuggestions
   );
 
   const messagesWrapper = createElement(
     "div",
     "persona-flex persona-flex-col persona-gap-3"
   );
+  const transcriptSuggestions = createSuggestionHost("followUp");
   const contentMaxWidth = config?.layout?.contentMaxWidth;
   if (contentMaxWidth) {
     messagesWrapper.style.maxWidth = contentMaxWidth;
@@ -308,7 +327,7 @@ const buildComposerBarPanel = (
     body.classList.remove("persona-gap-6");
     body.classList.add("persona-gap-3");
   }
-  body.append(introCard, messagesWrapper);
+  body.append(introCard, messagesWrapper, transcriptSuggestions);
 
   // Composer overlay (interactive sheets like ask_user_question slide up here).
   // Anchored to the bottom of the container (which is `position: relative`),
@@ -338,6 +357,8 @@ const buildComposerBarPanel = (
     container,
     body,
     messagesWrapper,
+    starterSuggestions,
+    transcriptSuggestions,
     composerOverlay,
     suggestions: composerElements.suggestions,
     textarea: composerElements.textarea,
@@ -413,6 +434,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
       config?.copy?.welcomeSubtitle ??
       "Ask anything about your account or products.",
   });
+  const starterSuggestions = createSuggestionHost("starter");
   // Background and box-shadow flow through the themable `components.introCard`
   // tokens (--persona-intro-card-bg / --persona-intro-card-shadow); both
   // default to flat (transparent / none). Docked mode always stays flat,
@@ -430,13 +452,15 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
       },
     },
     introTitle,
-    introSubtitle
+    introSubtitle,
+    starterSuggestions
   );
 
   const messagesWrapper = createElement(
     "div",
     "persona-flex persona-flex-col persona-gap-3"
   );
+  const transcriptSuggestions = createSuggestionHost("followUp");
 
   const contentMaxWidth = config?.layout?.contentMaxWidth;
   if (contentMaxWidth) {
@@ -452,7 +476,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     body.classList.remove("persona-gap-6");
     body.classList.add("persona-gap-3");
   }
-  body.append(introCard, messagesWrapper);
+  body.append(introCard, messagesWrapper, transcriptSuggestions);
 
   // composer-bar mode early-returned above with its own pill builder; this
   // path always uses the standard column-stacked composer card.
@@ -500,6 +524,8 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     container,
     body,
     messagesWrapper,
+    starterSuggestions,
+    transcriptSuggestions,
     composerOverlay,
     suggestions: composerElements.suggestions,
     textarea: composerElements.textarea,
