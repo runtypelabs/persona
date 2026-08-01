@@ -170,10 +170,13 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
       borderWidth: sendButtonConfig.borderWidth || undefined,
       borderStyle: sendButtonConfig.borderWidth ? "solid" : undefined,
       borderColor: sendButtonConfig.borderColor || undefined,
-      paddingLeft: sendButtonConfig.paddingX || undefined,
-      paddingRight: sendButtonConfig.paddingX || undefined,
-      paddingTop: sendButtonConfig.paddingY || undefined,
-      paddingBottom: sendButtonConfig.paddingY || undefined,
+      // Padding is text-mode-only: icon mode is a fixed `size` box with the
+      // glyph drawn at that size, so padding just crushes the SVG (the
+      // always-present defaults squeezed a 40px glyph into 16x20).
+      paddingLeft: useIcon ? "0" : sendButtonConfig.paddingX || undefined,
+      paddingRight: useIcon ? "0" : sendButtonConfig.paddingX || undefined,
+      paddingTop: useIcon ? "0" : sendButtonConfig.paddingY || undefined,
+      paddingBottom: useIcon ? "0" : sendButtonConfig.paddingY || undefined,
     },
   });
 
@@ -182,11 +185,18 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
   let stopIcon: SVGElement | null = null;
 
   if (useIcon) {
-    const iconSize = parseFloat(buttonSize) || 24;
+    // Default glyph box is half the button, the closest clean ratio to the
+    // pre-fix live rendering (a 40px glyph crushed to a ~16px content box).
+    // Dense glyphs like the default "send" plane fill most of their viewBox;
+    // sparse ones (arrow-up) may want a larger explicit `iconSize`.
+    const iconSize =
+      parseFloat(sendButtonConfig.iconSize ?? "") ||
+      Math.round((parseFloat(buttonSize) || 24) * 0.5);
+    const iconStroke = sendButtonConfig.iconStrokeWidth ?? 2;
     const iconColor = textColor?.trim() || "currentColor";
 
     if (iconName) {
-      sendIcon = renderLucideIcon(iconName, iconSize, iconColor, 2);
+      sendIcon = renderLucideIcon(iconName, iconSize, iconColor, iconStroke);
       if (sendIcon) {
         button.appendChild(sendIcon);
       } else {
@@ -196,7 +206,7 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
       button.textContent = iconText;
     }
 
-    stopIcon = renderLucideIcon(stopIconName, iconSize, iconColor, 2);
+    stopIcon = renderLucideIcon(stopIconName, iconSize, iconColor, iconStroke);
   } else {
     button.textContent = sendLabel;
   }

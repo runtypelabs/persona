@@ -75,6 +75,8 @@ const chatgpt = (): AgentWidgetConfig => ({
     useIcon: true,
     iconName: "arrow-up",
     size: "36px",
+    // Sparse arrow glyph: the 50% default box reads lost; 25px matches the ref.
+    iconSize: "20px",
     showTooltip: false,
   },
   suggestions: {
@@ -169,6 +171,10 @@ const claude = (): AgentWidgetConfig => ({
     useIcon: true,
     iconName: "arrow-up",
     size: "32px",
+    // Sparse arrow glyph: the 50% default box reads lost; 20px matches the ref.
+    // Stroke is lighter for the icon
+    iconSize: "20px",
+    iconStrokeWidth: 1.25,
     showTooltip: false,
   },
   suggestions: {
@@ -203,18 +209,20 @@ const claude = (): AgentWidgetConfig => ({
     },
     components: {
       panel: { borderRadius: "0" },
-      input: { background: "#ffffff", borderRadius: "0.75rem" },
+      input: { background: "#ffffff", borderRadius: "1rem" },
       // Claude's card is the roomiest of the five: 16px type on 24px, and a
-      // deep top inset so the caret sits well below the card edge.
+      // deep top inset so the caret sits well below the card edge. The card
+      // floats on a diffuse warm shadow; the hairline border barely registers.
       composer: {
-        shadow: "0 1px 2px rgba(61, 57, 41, 0.08)",
+        shadow:
+          "0 8px 24px rgba(61, 57, 41, 0.07), 0 1px 2px rgba(61, 57, 41, 0.05)",
         padding: "18px 16px 14px",
         gap: "14px",
         fontSize: "16px",
         lineHeight: "24px",
       },
       button: {
-        primary: { background: "#c96442", foreground: "#ffffff", borderRadius: "0.5rem" },
+        primary: { background: "#c96442", foreground: "#ffffff", borderRadius: "10px" },
       },
     },
   },
@@ -246,6 +254,8 @@ const gemini = (): AgentWidgetConfig => ({
     useIcon: true,
     iconName: "arrow-up",
     size: "36px",
+    // Sparse arrow glyph: the 50% default box reads lost; 25px matches the ref.
+    iconSize: "22px",
     showTooltip: false,
   },
   suggestions: {
@@ -339,6 +349,8 @@ const copilot = (): AgentWidgetConfig => ({
     useIcon: true,
     iconName: "arrow-up",
     size: "32px",
+    // Sparse arrow glyph: the 50% default box reads lost; 22px matches the ref.
+    iconSize: "22px",
     showTooltip: false,
   },
   suggestions: {
@@ -440,6 +452,9 @@ const perplexity = (): AgentWidgetConfig => ({
     useIcon: true,
     iconName: "arrow-right",
     size: "36px",
+    // Sparse arrow glyph: the 50% default box reads lost; 25px matches the ref.
+    iconSize: "25px",
+    iconStrokeWidth: 1.25,
     showTooltip: false,
   },
   suggestions: {

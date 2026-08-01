@@ -2924,6 +2924,10 @@ export type AgentWidgetSendButtonConfig = {
   paddingY?: string;
   iconText?: string;
   iconName?: string;
+  /** Icon glyph box in icon mode, e.g. "20px". Defaults to half of `size`. */
+  iconSize?: string;
+  /** Stroke width for the icon glyph, in viewBox units. Default 2. */
+  iconStrokeWidth?: number;
   useIcon?: boolean;
   tooltipText?: string;
   showTooltip?: boolean;

@@ -148,10 +148,12 @@ describe("createSendButton", () => {
     expect(s.borderWidth).toBe("2px");
     expect(s.borderStyle).toBe("solid");
     expect(s.borderColor).toBe("rgb(7, 8, 9)");
-    expect(s.paddingLeft).toBe("6px");
-    expect(s.paddingRight).toBe("6px");
-    expect(s.paddingTop).toBe("4px");
-    expect(s.paddingBottom).toBe("4px");
+    // Icon mode zeroes padding even when configured: the glyph is drawn at
+    // the button size, so padding would crush it.
+    expect(s.paddingLeft).toBe("0px");
+    expect(s.paddingRight).toBe("0px");
+    expect(s.paddingTop).toBe("0px");
+    expect(s.paddingBottom).toBe("0px");
     // An explicit backgroundColor means the fallback class is not added.
     expect(send.button.classList.contains("persona-bg-persona-primary")).toBe(false);
   });
@@ -191,6 +193,52 @@ describe("createSendButton", () => {
       expect(iconCount(send.button)).toBe(1);
       send.setMode("send");
       expect(iconCount(send.button)).toBe(1);
+    });
+
+    it("zeroes padding so configured padding cannot crush the glyph", () => {
+      const send = createSendButton({
+        ...baseConfig,
+        sendButton: {
+          useIcon: true,
+          iconName: "send",
+          size: "40px",
+          paddingX: "12px",
+          paddingY: "10px",
+        },
+      });
+      expect(send.button.style.paddingLeft).toBe("0px");
+      expect(send.button.style.paddingTop).toBe("0px");
+    });
+
+    it("draws the glyph at half the button by default and honors iconSize", () => {
+      const send = createSendButton({
+        ...baseConfig,
+        sendButton: { useIcon: true, iconName: "send", size: "32px" },
+      });
+      expect(send.button.querySelector("svg")?.getAttribute("width")).toBe("16");
+
+      const sized = createSendButton({
+        ...baseConfig,
+        sendButton: {
+          useIcon: true,
+          iconName: "send",
+          size: "32px",
+          iconSize: "26px",
+          iconStrokeWidth: 2.5,
+        },
+      });
+      const svg = sized.button.querySelector("svg");
+      expect(svg?.getAttribute("width")).toBe("26");
+      expect(svg?.getAttribute("stroke-width")).toBe("2.5");
+    });
+
+    it("keeps configured padding in text mode", () => {
+      const send = createSendButton({
+        ...baseConfig,
+        sendButton: { useIcon: false, paddingX: "12px", paddingY: "10px" },
+      });
+      expect(send.button.style.paddingLeft).toBe("12px");
+      expect(send.button.style.paddingTop).toBe("10px");
     });
 
     it("does not stack a stale icon when an external re-render swapped the live icon node", () => {
