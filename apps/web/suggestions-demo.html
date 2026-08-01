@@ -14,7 +14,9 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
     }
-    .suggestion-example-buttons {
+    .suggestion-example-buttons,
+    .suggestion-welcome-buttons {
+      display: grid;
       grid-template-columns: repeat(3, 1fr);
     }
     .suggestion-example-control {
@@ -36,11 +38,20 @@
             <button class="suggestion-state-button mount-toggle-button" type="button" data-state="follow-up" aria-pressed="false">Follow-ups</button>
           </div>
           <div class="suggestion-example-control">
+            <span class="mount-toggle-label">Welcome</span>
+            <div class="suggestion-welcome-buttons mount-toggle-group" role="group" aria-label="Welcome surface">
+              <button class="suggestion-welcome-button mount-toggle-button" type="button" data-welcome="card" aria-pressed="true" title="Intro card above the transcript. The back-compatible default.">Card</button>
+              <button class="suggestion-welcome-button mount-toggle-button" type="button" data-welcome="hero" aria-pressed="false" title="Centered in the empty conversation, dismissed on the first message.">Hero</button>
+              <button class="suggestion-welcome-button mount-toggle-button" type="button" data-welcome="greeting" aria-pressed="false" title="Card plus a display-only greeting bubble at transcript position zero.">Greeting</button>
+            </div>
+          </div>
+          <div class="suggestion-example-control">
             <span class="mount-toggle-label">Example</span>
             <div class="suggestion-example-buttons mount-toggle-group" role="group" aria-label="Example">
               <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="built-in" aria-pressed="true" title="Structured suggestions using Persona's default renderer.">Built-in</button>
               <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="transform" aria-pressed="false" title="Enrich and rank data while keeping the default UI.">Transform</button>
               <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="custom" aria-pressed="false" title="Replace every suggestion with a plugin-rendered element.">Custom UI</button>
+              <button class="suggestion-example-button mount-toggle-button" type="button" data-variant="welcome" aria-pressed="false" title="Own the whole welcome surface with renderWelcome, including a home button that overlays the transcript.">Home screen</button>
             </div>
           </div>
         </div>
@@ -53,6 +64,19 @@
 
     <section class="notes">
       <h2 class="notes-heading">Suggestion customization</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Pick a welcome surface</h3>
+        <p>The <code>welcome</code> namespace owns the first-open surface: <code>variant: "card"</code> keeps the intro card above the transcript, <code>"hero"</code> centers it in the empty conversation and dismisses it on the first user message, and <code>"none"</code> turns it off. <code>welcome.message</code> adds a display-only greeting bubble at transcript position zero: it is config-derived chrome, so it never reaches <code>getMessages()</code>, the model, or storage, and it survives <code>clearChat()</code>. Starters with <code>placement: "welcome"</code> render inside whichever surface is active.</p>
+        <div class="code-block">
+<span class="prop">welcome</span>: {
+  <span class="prop">variant</span>: <span class="string">"hero"</span>,
+  <span class="prop">icon</span>: { <span class="prop">type</span>: <span class="string">"lucide"</span>, <span class="prop">name</span>: <span class="string">"sparkles"</span> },
+  <span class="prop">title</span>: <span class="string">"What should we explore?"</span>,
+  <span class="prop">subtitle</span>: <span class="string">"I can help you configure, theme, and extend Persona."</span>,
+}
+        </div>
+      </div>
 
       <div class="notes-section">
         <h3 class="notes-section-title">Transform the data</h3>

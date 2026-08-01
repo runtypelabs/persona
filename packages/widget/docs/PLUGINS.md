@@ -49,9 +49,10 @@ Every render hook follows the same protocol:
 | --- | --- | --- |
 | `renderSuggestion` | One starter or follow-up suggestion | `suggestion`, `surface`, `source`, `variant`, `defaultRenderer`, `select` |
 | `renderMessage` | A message bubble | `message`, `defaultRenderer` |
+| `renderWelcome` | The welcome surface (card, hero, home screen) | `config` (resolved), `variant`, `visible`, `defaultRenderer`, `sendMessage`, `requestRender`, `renderStarter`, `storage`, `onCleanup` |
 | `renderLauncher` | The collapsed launcher button | `defaultRenderer`, `onToggle` |
 | `renderHeader` | The panel header | `defaultRenderer`, `onClose?` |
-| `renderComposer` | The input area | `defaultRenderer`, `onSubmit`, `streaming`, `openAttachmentPicker`, model controls, `onVoiceToggle?` |
+| `renderComposer` | The input area | `defaultRenderer`, `onSubmit`, `streaming`, `openAttachmentPicker`, model controls, `onVoiceToggle?`, `requestRender`, `storage` |
 | `renderReasoning` | A reasoning / chain-of-thought bubble | `message`, `defaultRenderer` |
 | `renderToolCall` | A tool-call bubble | `message`, `defaultRenderer` |
 | `renderAskUserQuestion` | The `ask_user_question` sheet | `payload`, `complete`, `resolve`, `dismiss` |
@@ -157,6 +158,123 @@ transformSuggestions: ({ suggestions, source }) =>
 Unknown icon names degrade gracefully: `renderLucideIcon` warns and the item
 renders without an icon.
 
+### `renderWelcome`
+
+The welcome surface is the first-open experience: greeting, starters, and
+whatever a home screen, pre-chat form, or help-search card needs. The first
+plugin returning an element wins; returning `null` falls through to Persona's
+default welcome, same contract as `renderSuggestion`.
+
+The core owns the welcome host. It stays mounted for the panel's lifetime and
+content is swapped inside it, so plugins never remove or re-create it:
+
+- `requestRender()` runs your registered cleanups, drops the previous plugin
+  element, and re-runs arbitration with a fresh context. Attach listeners to the
+  element you return (they go away with it) or register teardown via
+  `onCleanup(fn)`.
+- `visible` is the derived visibility for this render (welcome visibility is
+  derived from the session, never stored). It governs the **default renderer
+  only**: a plugin element renders regardless, and while it is active the host
+  carries `data-persona-welcome-overlay` and covers the messages area. That is
+  what makes "return to home over an existing transcript" work: after a user
+  message `visible` is `false`, but your `requestRender()` still renders your
+  stack over the conversation until you return `null` again.
+- `defaultRenderer()` returns the live default card, so composing is
+  `const card = ctx.defaultRenderer(); card.appendChild(mySearchBox); return card;`.
+  Composition is not a takeover: derived visibility still applies and no overlay
+  is set. Remove what you appended in `onCleanup` so a re-render doesn't stack
+  duplicates.
+- `renderStarter(suggestion)` builds a starter through the full select pipeline:
+  `onSuggestionSelect` hooks, the cancelable `persona:suggestion:*` events, and
+  send/fill semantics. Use it instead of wiring your own click handler to
+  `sendMessage`.
+- `config` is the alias-resolved welcome config (`welcome.*` wins per field,
+  then the legacy `copy.welcome*`, then the built-in default), never the raw
+  `copy` shape.
+
+```ts
+const homeScreen: AgentWidgetPlugin = {
+  id: "home-screen",
+  renderWelcome: ({ config, renderStarter, requestRender, storage, onCleanup }) => {
+    if (storage.get("view") === "chat") return null; // transcript is visible
+
+    const root = document.createElement("div");
+    const title = document.createElement("h2");
+    title.textContent = config.title;
+    root.appendChild(title);
+
+    for (const prompt of ["Track my order", "Start a return"]) {
+      root.appendChild(renderStarter(prompt));
+    }
+
+    const startChat = document.createElement("button");
+    startChat.textContent = "Start a conversation";
+    startChat.addEventListener("click", () => {
+      storage.set("view", "chat");
+      requestRender();
+    });
+    root.appendChild(startChat);
+
+    onCleanup(() => startChat.remove());
+    return root;
+  },
+};
+```
+
+### `ctx.storage`
+
+`renderWelcome` and `renderComposer` both receive the same synchronous store,
+keyed `` `${persistState.keyPrefix ?? "persona-"}plugin:<plugin.id>:<key>` ``. It
+is backed by `localStorage` directly: the async `storageAdapter` cannot back a
+synchronous API, and `persistState` is not a general key-value surface.
+`persistState: false` downgrades it to a per-instance in-memory map, and blocked
+storage (Safari private mode, partitioned iframes) does the same rather than
+throwing.
+
+Values land in plain `localStorage`. A plugin handling data it considers
+sensitive should take its own storage implementation as a plugin option instead
+of defaulting into `ctx.storage`.
+
+### Reaching the controller from a plugin
+
+No render context carries the controller: plugins are host-instantiated, so the
+sanctioned pattern is a factory that closes over the init handle.
+
+```ts
+import { initAgentWidget, type AgentWidgetPlugin } from "@runtypelabs/persona";
+
+const createPreChatPlugin = (options: { fields: string[] }) => {
+  let controller: ReturnType<typeof initAgentWidget> | null = null;
+
+  const plugin: AgentWidgetPlugin & {
+    attach: (handle: ReturnType<typeof initAgentWidget>) => void;
+  } = {
+    id: "pre-chat",
+    attach: (handle) => {
+      controller = handle;
+    },
+    renderWelcome: ({ storage, requestRender }) => {
+      if (storage.get("identity")) return null;
+      const form = document.createElement("form");
+      // ...build `options.fields`...
+      form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        storage.set("identity", JSON.stringify({ name: "Ada" }));
+        controller?.injectSystemMessage("Visitor: Ada");
+        requestRender();
+      });
+      return form;
+    },
+  };
+
+  return plugin;
+};
+
+const plugin = createPreChatPlugin({ fields: ["name", "email"] });
+const controller = initAgentWidget({ plugins: [plugin], apiUrl: "/api/chat" });
+plugin.attach(controller);
+```
+
 ### `renderComposer`
 
 `streaming` is `true` exactly when the assistant stream is active (the same
@@ -168,6 +286,16 @@ deprecated alias for the legacy single-submit-button behavior.) The context also
 hands you `openAttachmentPicker()`, the model list / `selectedModelId` /
 `onModelChange` from `config.composer`, and `onVoiceToggle()` when
 `config.voiceRecognition.enabled` is true.
+
+The hook runs once when the panel is constructed, so `requestRender()` is how a
+composer plugin re-renders later: it re-runs arbitration and swaps the footer in
+place. Returning `null` on that second pass hands the composer back to Persona,
+which is how a pre-chat gate unlocks. The core re-binds everything attached to
+the footer: composer listeners, the submit handler, the mic, the attachment
+input (pending attachments and their previews survive), the mention context row
+and affordance buttons, and the composer suggestion row; the composer text is
+carried over. Uncommitted mention chips are cleared, because the mention runtime
+is bound to the outgoing input element.
 
 ### `renderAskUserQuestion`
 

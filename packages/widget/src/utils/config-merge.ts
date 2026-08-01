@@ -25,6 +25,8 @@ const REPLACE_LEAF_PATHS = new Set<string>([
   "features.artifacts.display",
   "features.streamAnimation.plugins",
   "preferences",
+  // Discriminated union: recursive merge would splice two icon variants.
+  "welcome.icon",
 ]);
 
 // Recursive patch merge. A key merges recursively iff both previous and patch

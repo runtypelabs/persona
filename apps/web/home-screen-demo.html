@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Home Screen Plugin Demo</title>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <div class="info-section">
+          <h3>Home stack</h3>
+          <p>Plugin options are read on every render, so toggling a section updates the stack in place without remounting the widget.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-home-toggle="cards" aria-pressed="true">What is new cards</button>
+            <button class="btn" type="button" data-home-toggle="links" aria-pressed="true">Link list</button>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>Navigation</h3>
+          <p>The house icon in the panel header calls <code>showHome()</code>. These buttons drive the same plugin from outside the widget.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-home-action="show">Back to home</button>
+            <button class="btn" type="button" data-home-action="rename">Rename the greeting</button>
+          </div>
+          <p class="hint">Renaming calls <code>controller.update({ welcome: { title } })</code>, which re-runs welcome arbitration so the plugin's own header picks up the new title.</p>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Home screen, built on public surface</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">The stack owns the welcome host</h3>
+        <p><code>renderWelcome</code> returns a card stack instead of the intro card: a greeting header with an avatar, a "start a conversation" card, starter cards, static content cards, and a link list. The first plugin returning an element wins, so <code>defaultRenderer()</code> is simply never called here. Config is <code>welcome: { variant: "hero", dismiss: "on-first-message" }</code>: that hero is what the panel falls back to once the user leaves home without sending anything.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Leaving and returning</h3>
+        <p>"Start a conversation" writes the view flag and calls <code>requestRender()</code>; the plugin then returns null, the overlay clears, and the transcript is visible underneath. The header action calls <code>showHome()</code>, which flips the flag back and re-renders. A plugin element renders regardless of derived <code>visible</code> and the host overlays the transcript while it is mounted, so home comes back over an existing conversation.</p>
+        <div class="code-block">
+<span class="prop">layout</span>: {
+  <span class="prop">header</span>: {
+    <span class="prop">trailingActions</span>: [home.<span class="prop">headerAction</span>],
+    <span class="function">onAction</span>: (id) =&gt; { <span class="keyword">if</span> (id === <span class="string">"home"</span>) home.<span class="function">showHome</span>(); },
+  },
+}
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Starters keep the pipeline</h3>
+        <p>Each starter is rendered with <code>ctx.renderStarter(suggestion)</code>, so <code>onSuggestionSelect</code>, the cancelable <code>persona:suggestion:*</code> events, and send/fill semantics all still apply. The plugin leaves home from its own <code>onSuggestionSelect</code> hook at a low priority, so a hook that cancels the selection keeps the user on home.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">View state</h3>
+        <p>Whether the user has left home lives in <code>ctx.storage</code>, the synchronous per-plugin store namespaced by <code>persistState.keyPrefix</code> plus the plugin id. Under <code>persistState: false</code> (this demo) it degrades to memory, so every reload starts on home. With storage on, a returning visitor lands where they left off, and a restored transcript never gets covered: an unset flag plus derived <code>visible: false</code> means the conversation wins.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Plugin sketch</h3>
+        <div class="code-block">
+<span class="keyword">const</span> home = <span class="function">createHomeScreenPlugin</span>({
+  <span class="prop">avatar</span>: { <span class="prop">text</span>: <span class="string">"🛍️"</span> },
+  <span class="prop">starters</span>: [{ <span class="prop">id</span>: <span class="string">"order"</span>, <span class="prop">label</span>: <span class="string">"Track my latest order"</span> }],
+  <span class="prop">cards</span>: [{ <span class="prop">id</span>: <span class="string">"release"</span>, <span class="prop">title</span>: <span class="string">"Same-day delivery is live"</span>, <span class="prop">prompt</span>: <span class="string">"What changed?"</span> }],
+  <span class="prop">links</span>: [{ <span class="prop">id</span>: <span class="string">"docs"</span>, <span class="prop">label</span>: <span class="string">"Read the documentation"</span>, <span class="prop">href</span>: <span class="string">"/docs"</span> }],
+});
+
+<span class="function">initAgentWidget</span>({ <span class="prop">plugins</span>: [home], <span class="prop">welcome</span>: { <span class="prop">variant</span>: <span class="string">"hero"</span> } });
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/home-screen-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("home-screen-demo");
+  </script>
+</body>
+</html>

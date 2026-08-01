@@ -260,6 +260,35 @@ describe("suggest_replies chips UI", () => {
     controller.destroy();
   });
 
+  it("swaps starters in through controller.update (async starters recipe)", () => {
+    const { mount, controller } = makeController({
+      suggestions: { starters: { items: ["Loading suggestions"] } },
+    });
+
+    controller.update({
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      suggestions: {
+        starters: {
+          items: [
+            { id: "reset", label: "Reset my password", prompt: "How do I reset my password?" },
+            "Check my order status",
+          ],
+        },
+      },
+    } as unknown as Parameters<typeof controller.update>[0]);
+
+    const surface = mount.querySelector('[data-persona-suggestions="starter"]');
+    expect(surface?.textContent).not.toContain("Loading suggestions");
+    expect(surface?.textContent).toContain("Reset my password");
+    expect(surface?.textContent).toContain("Check my order status");
+    expect(
+      surface?.querySelector('[data-suggestion-id="reset"]'),
+    ).not.toBeNull();
+
+    controller.destroy();
+  });
+
   it("places structured follow-ups after the transcript", () => {
     const { mount, controller } = makeController({
       suggestions: {

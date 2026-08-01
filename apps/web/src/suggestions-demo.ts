@@ -18,13 +18,16 @@ import {
 import {
   createCuratedSuggestionsPlugin,
   createCustomSuggestionsPlugin,
+  createWelcomeHomePlugin,
 } from "./plugins/suggestion-showcase-plugins";
 
-type DemoVariant = "built-in" | "transform" | "custom";
+type DemoVariant = "built-in" | "transform" | "custom" | "welcome";
 type PreviewState = "starter" | "follow-up";
+type WelcomeMode = "card" | "hero" | "greeting";
 
 let variant: DemoVariant = "built-in";
 let previewState: PreviewState = "starter";
+let welcomeMode: WelcomeMode = "card";
 let activeMode: Mode = "inline";
 let activeStage: HTMLElement | null = null;
 let activeController: AgentWidgetController | null = null;
@@ -129,9 +132,45 @@ const followUpMessages = (): AgentWidgetMessage[] => [
   },
 ];
 
+// Config only: the same welcome namespace expresses the transient centered
+// hero and the conversation-first greeting bubble.
+// Voice layering: the subtitle states scope in the assistant's voice, the
+// starter labels state tasks in the user's voice.
+const welcomeForMode = (): AgentWidgetConfig["welcome"] => {
+  const base = {
+    title: "What should we explore?",
+    subtitle:
+      "I can help you configure, theme, and extend Persona's suggestion surfaces.",
+  };
+  if (welcomeMode === "hero") {
+    return {
+      ...base,
+      variant: "hero",
+      icon: { type: "lucide", name: "sparkles" },
+    };
+  }
+  if (welcomeMode === "greeting") {
+    return {
+      ...base,
+      message:
+        "Hi, I'm the suggestions demo. Pick a starter below or ask your own question.",
+    };
+  }
+  return base;
+};
+
+// Rebuilt per mount so the home plugin's `showHome` closure belongs to the
+// widget instance the header action is wired to.
+let welcomeHomePlugin: ReturnType<typeof createWelcomeHomePlugin> | null = null;
+
 const pluginsForVariant = (): AgentWidgetPlugin[] => {
   if (variant === "transform") return [createCuratedSuggestionsPlugin()];
   if (variant === "custom") return [createCustomSuggestionsPlugin()];
+  if (variant === "welcome") {
+    welcomeHomePlugin = createWelcomeHomePlugin();
+    return [welcomeHomePlugin];
+  }
+  welcomeHomePlugin = null;
   return [];
 };
 
@@ -164,13 +203,24 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => ({
     width: mode === "launcher" ? "min(440px, 94vw)" : "100%",
     title: mode === "launcher" ? "Suggestion Hooks" : undefined,
   },
+  welcome: welcomeForMode(),
+  layout:
+    variant === "welcome"
+      ? {
+          header: {
+            trailingActions: [
+              { id: "home", icon: "house", ariaLabel: "Back to home" },
+            ],
+            // The home stack overlays the transcript: plugin content renders
+            // regardless of derived welcome visibility.
+            onAction: (actionId: string) => {
+              if (actionId === "home") welcomeHomePlugin?.showHome();
+            },
+          },
+        }
+      : undefined,
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    // Voice layering: the subtitle states scope in the assistant's voice, the
-    // starter labels state tasks in the user's voice.
-    welcomeTitle: "What should we explore?",
-    welcomeSubtitle:
-      "I can help you configure, theme, and extend Persona's suggestion surfaces.",
     inputPlaceholder: "Choose a suggestion or write your own…",
   },
 });
@@ -217,6 +267,25 @@ document
           candidate.setAttribute(
             "aria-pressed",
             candidate.dataset.state === previewState ? "true" : "false",
+          ),
+        );
+      remount();
+    });
+  });
+
+document
+  .querySelectorAll<HTMLButtonElement>(".suggestion-welcome-button")
+  .forEach((button) => {
+    button.addEventListener("click", () => {
+      const next = button.dataset.welcome as WelcomeMode | undefined;
+      if (!next || next === welcomeMode) return;
+      welcomeMode = next;
+      document
+        .querySelectorAll<HTMLButtonElement>(".suggestion-welcome-button")
+        .forEach((candidate) =>
+          candidate.setAttribute(
+            "aria-pressed",
+            candidate.dataset.welcome === welcomeMode ? "true" : "false",
           ),
         );
       remount();

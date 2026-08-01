@@ -27,24 +27,27 @@ describe("createAgentExperience docked mode", () => {
     });
 
     const wrapper = mount.firstElementChild as HTMLElement | null;
-    const launcherButton = mount.lastElementChild as HTMLButtonElement | null;
+    // The launcher mounts inside its surface wrapper; visibility is driven on
+    // the wrapper so a teaser bubble hides with the button.
+    const launcherSurface = mount.lastElementChild as HTMLElement | null;
+    const launcherButton = launcherSurface?.querySelector("button") ?? null;
 
     expect(wrapper).not.toBeNull();
     expect(wrapper?.style.display).toBe("flex");
     expect(launcherButton).not.toBeNull();
     expect(launcherButton?.tagName).toBe("BUTTON");
-    expect(launcherButton?.style.display).toBe("none");
+    expect(launcherSurface?.style.display).toBe("none");
     expect(launcherButton?.className).toContain("persona-mt-4");
 
     controller.close();
 
     expect(wrapper?.style.display).toBe("none");
-    expect(launcherButton?.style.display).toBe("none");
+    expect(launcherSurface?.style.display).toBe("none");
 
     controller.open();
 
     expect(wrapper?.style.display).toBe("flex");
-    expect(launcherButton?.style.display).toBe("none");
+    expect(launcherSurface?.style.display).toBe("none");
 
     controller.destroy();
   });

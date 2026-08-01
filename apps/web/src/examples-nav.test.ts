@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+import viteConfigSource from "../vite.config.ts?raw";
 import { ADVANCED_EXAMPLES, renderExamplesShell } from "./examples-nav";
 
 describe("examples command palette", () => {
@@ -81,4 +82,40 @@ describe("examples command palette", () => {
       }),
     );
   });
+
+  test.each([
+    ["help-search-demo", "Help Search"],
+    ["pre-chat-demo", "Pre-chat Form"],
+    ["home-screen-demo", "Home Screen"],
+  ])("lists the %s welcome blueprint under patterns", (slug, title) => {
+    expect(ADVANCED_EXAMPLES).toContainEqual(
+      expect.objectContaining({
+        slug,
+        href: `/${slug}.html`,
+        title,
+        tier: "patterns",
+        tags: expect.arrayContaining(["plugins", "welcome"]),
+        modes: ["inline", "launcher"],
+      }),
+    );
+  });
+});
+
+// A gallery entry whose page is missing from the rollup input map builds to a
+// 404: vite.config.ts filters inputs by existsSync, so nothing fails loudly.
+describe("examples build registration", () => {
+  const pages = import.meta.glob("../*.html", {
+    query: "?raw",
+    import: "default",
+    eager: true,
+  });
+
+  test.each(ADVANCED_EXAMPLES.map((entry) => [entry.slug, entry.href] as const))(
+    "%s has an html page and a rollup input",
+    (_slug, href) => {
+      const file = href.replace(/^\//, "");
+      expect(Object.keys(pages)).toContain(`../${file}`);
+      expect(viteConfigSource).toContain(`'${file}'`);
+    },
+  );
 });

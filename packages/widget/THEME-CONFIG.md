@@ -441,8 +441,9 @@ tracks your theme), not the old warning/success/error palette:
 ### Intro Card (`components.introCard.*`)
 
 The welcome panel rendered above the message list when no messages exist.
-Set `copy.showWelcomeCard: false` to hide it entirely, or use
-`layout.slots["body-top"]` to replace it with a custom element.
+Set `welcome.variant: "none"` to hide it entirely, `welcome.variant: "hero"` to
+center it in the empty conversation, or use `layout.slots["body-top"]` to
+replace it with a custom element.
 
 | Token | Default Reference |
 |-------|-------------------|
@@ -1096,6 +1097,41 @@ that clears on the next user message and is never persisted. The deprecated
 `features.suggestReplies.enabled` / `.expose` aliases still resolve per key,
 with `suggestions.followUps` winning.
 
+### Async starters
+
+Starters are static config, but the starter surface re-renders on every
+`controller.update()`, so fetched or personalized starters are a two-step
+recipe: paint with a static set, then swap in the fetched one.
+
+```ts
+const chat = initAgentWidget({
+  target: "#launcher-root",
+  config: {
+    apiUrl: "/api/chat/dispatch",
+    // Rendered immediately, so the welcome surface is never empty.
+    suggestions: { starters: { items: ["Track an order", "Start a return"] } },
+  },
+});
+
+const items = await fetch("/api/starters").then((r) => r.json());
+chat.update({ suggestions: { starters: { items } } });
+```
+
+Notes:
+
+- `items` is an array, so it replaces wholesale. Pass the full list on every
+  update rather than a delta.
+- Presentation keys merge, so an update carrying only `items` keeps the
+  `variant`, `placement`, `behavior`, and `maxItems` set at init.
+- Starters still dismiss on the first user message. An update that lands after
+  the user has sent something renders nothing, which is the intended behavior:
+  resolve the fetch early and let the static set cover the gap.
+- Plugin `transformSuggestions` hooks run on the updated set too, so ranking and
+  enrichment stay in one place.
+
+A first-class async provider (`starters.items` as a promise-returning function)
+is deliberately not offered: this recipe covers it with no new config surface.
+
 ### Suggestion theme tokens
 
 Each variant under `theme.components.suggestion` supports:
@@ -1217,6 +1253,28 @@ remaining after the avatar and gap.
 
 ### Slots (`layout.slots.*`)
 Available: `header-left`, `header-center`, `header-right`, `body-top`, `messages`, `body-bottom`, `footer-top`, `composer`, `footer-bottom`
+
+Each renderer receives `{ config, defaultContent }`. Returning an element
+replaces the slot's default content; returning `null` leaves it alone.
+`body-top` is the welcome surface: its `defaultContent()` is the intro card
+(title, subtitle, and any starters placed there), so a custom welcome can either
+replace it or wrap it.
+
+```ts
+layout: {
+  slots: {
+    "body-top": ({ defaultContent }) => {
+      const wrapper = document.createElement("div");
+      const banner = document.createElement("p");
+      banner.textContent = "Support replies in about 2 minutes.";
+      wrapper.append(banner);
+      const card = defaultContent();
+      if (card) wrapper.append(card);
+      return wrapper;
+    },
+  },
+}
+```
 
 ## Markdown (`config.markdown.*`)
 
@@ -1400,8 +1458,8 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
 
 | Property | Description |
 |----------|-------------|
-| `welcomeTitle` | Welcome message title |
-| `welcomeSubtitle` | Welcome message subtitle |
+| `welcomeTitle` | Welcome message title. Deprecated: use `welcome.title` |
+| `welcomeSubtitle` | Welcome message subtitle. Deprecated: use `welcome.subtitle` |
 | `inputPlaceholder` | Input placeholder text |
 | `sendButtonLabel` | Send button label |
 

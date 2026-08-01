@@ -106,6 +106,36 @@ describe("suggestion interaction styles", () => {
     expect(rule).toContain("max-width: 600px");
   });
 
+  it("centers label-only items and top-aligns only description cards", () => {
+    const cardStart = widgetCss.indexOf(".persona-suggestion--card {");
+    const cardRule = widgetCss.slice(
+      cardStart,
+      widgetCss.indexOf("\n}", cardStart),
+    );
+    expect(cardRule).toContain("align-items: center");
+
+    const listStart = widgetCss.indexOf(".persona-suggestion--list {");
+    const listRule = widgetCss.slice(
+      listStart,
+      widgetCss.indexOf("\n}", listStart),
+    );
+    expect(listRule).toContain("align-items: center");
+
+    // Only content that actually wraps to two lines earns the top alignment.
+    const hasStart = widgetCss.indexOf(
+      ".persona-suggestion--card:has(.persona-suggestion__description)",
+    );
+    const hasRule = widgetCss.slice(
+      hasStart,
+      widgetCss.indexOf("\n}", hasStart),
+    );
+    expect(hasStart).toBeGreaterThan(-1);
+    expect(hasRule).toContain(
+      ".persona-suggestion--list:has(.persona-suggestion__description)",
+    );
+    expect(hasRule).toContain("align-items: flex-start");
+  });
+
   it("masks only the scrollable chip edges that still contain content", () => {
     expect(widgetCss).toContain(
       '[data-overflow="scroll"][data-scroll-right]:not(',
@@ -158,5 +188,57 @@ describe("composer spacing styles", () => {
     expect(start).toBeGreaterThan(-1);
     expect(rule).toContain("padding: 6px 14px");
     expect(rule).toContain("gap: 8px");
+  });
+});
+
+describe("launcher teaser styles", () => {
+  it("keeps the [hidden] dismiss control hidden despite its own display: grid", () => {
+    // dismissible: false sets the hidden property; without this companion
+    // rule the block's display: grid outranks the UA [hidden] stylesheet.
+    expect(widgetCss).toContain(
+      ".persona-launcher-teaser-dismiss[hidden] {\n  display: none;\n}",
+    );
+  });
+});
+
+describe("plugin welcome styles", () => {
+  it("hides the default welcome content while a plugin element owns the host", () => {
+    const selector =
+      '.persona-welcome[data-persona-welcome-content="plugin"]\n  > :not([data-persona-welcome-plugin]) {';
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("display: none !important");
+  });
+
+  it("centers the welcome column at wide widths but never the overlay", () => {
+    const start = widgetCss.indexOf(
+      ".persona-welcome:not([data-persona-welcome-overlay]) {",
+    );
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("max-width: 640px");
+    expect(rule).toContain("margin-inline: auto");
+  });
+
+  it("overlays the messages area while plugin content is active", () => {
+    const start = widgetCss.indexOf(
+      ".persona-welcome[data-persona-welcome-overlay] {",
+    );
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("position: absolute");
+    expect(rule).toContain("inset: 0");
+    // !important: only way to beat the host's inline intro-card background
+    // (default transparent), which otherwise lets the transcript bleed
+    // through the overlay.
+    expect(rule).toMatch(/background:[\s\S]*!important/);
+    // Two classes so it outranks the body's own overflow utility.
+    expect(widgetCss).toContain(
+      ".persona-widget-body.persona-welcome-overlay-active {\n  overflow: hidden;\n}",
+    );
   });
 });

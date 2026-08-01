@@ -79,8 +79,8 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   colorScheme: "light",
   launcher: DEFAULT_LAUNCHER_CONFIG,
   copy: {
-    welcomeTitle: "Hello 👋",
-    welcomeSubtitle: "Ask anything about your account or products.",
+    // No welcomeTitle / welcomeSubtitle here on purpose: `resolveWelcomeConfig`
+    // owns those defaults so presence still means "the host set this".
     inputPlaceholder: "How can I help...",
     sendButtonLabel: "Send",
   },

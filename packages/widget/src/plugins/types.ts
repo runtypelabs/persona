@@ -1,3 +1,5 @@
+import type { ResolvedWelcomeConfig } from "../welcome";
+import type { AgentWidgetPluginStorage } from "../utils/plugin-storage";
 import {
   AgentWidgetMessage,
   AgentWidgetConfig,
@@ -13,7 +15,8 @@ import {
   AgentWidgetResolvedSuggestion,
   AgentWidgetSuggestionSource,
   AgentWidgetSuggestionSurface,
-  AgentWidgetSuggestionVariant
+  AgentWidgetSuggestionVariant,
+  AgentWidgetWelcomeVariant
 } from "../types";
 
 export type AgentWidgetTransformSuggestionsContext = {
@@ -43,6 +46,28 @@ export type AgentWidgetRenderSuggestionContext = {
    * send or fill. Custom renderers should call this instead of sending directly.
    */
   select: () => void;
+};
+
+export type AgentWidgetRenderWelcomeContext = {
+  /** Alias-resolved welcome config; never the raw `copy.welcome*` shape. */
+  config: ResolvedWelcomeConfig;
+  variant: AgentWidgetWelcomeVariant;
+  /** Derived visibility for this render; governs the default renderer only. */
+  visible: boolean;
+  /** The core-owned welcome card, live-updated by `controller.update()`. */
+  defaultRenderer: () => HTMLElement;
+  sendMessage: (text: string) => void;
+  /** Re-run welcome arbitration: cleanups run, previous content is removed. */
+  requestRender: () => void;
+  /**
+   * Persona's starter renderer, wired through the full select pipeline:
+   * `onSuggestionSelect`, cancelable `persona:suggestion:*` events, send/fill.
+   */
+  renderStarter: (suggestion: AgentWidgetSuggestion) => HTMLElement;
+  /** Sync store namespaced by `persistState.keyPrefix` plus the plugin id. */
+  storage: AgentWidgetPluginStorage;
+  /** Teardown for this render; runs before the next one and on destroy. */
+  onCleanup: (fn: () => void) => void;
 };
 
 export type AgentWidgetSuggestionSelectContext = {
@@ -116,6 +141,37 @@ export interface AgentWidgetPlugin {
   }) => HTMLElement | null;
 
   /**
+   * Custom renderer for the welcome surface (card, hero, greeting stack).
+   * First plugin returning an element wins; null falls through to the default,
+   * same contract as `renderSuggestion`.
+   *
+   * The core owns the welcome host: it stays mounted for the panel's lifetime
+   * and content is swapped inside it. A plugin element renders regardless of
+   * `ctx.visible` (derived visibility governs the default renderer only) and
+   * the host overlays the transcript while that element is active, so a home
+   * screen can return over an existing conversation. Return null again to
+   * clear the overlay.
+   *
+   * The ctx carries no controller: plugins are host-instantiated, so close a
+   * factory over the init handle (`plugin.attach(controller)`).
+   *
+   * @example
+   * ```typescript
+   * renderWelcome: ({ config, renderStarter, requestRender, onCleanup }) => {
+   *   const root = document.createElement("div");
+   *   root.textContent = config.title;
+   *   root.appendChild(renderStarter({ label: "Track my order" }));
+   *   const timer = setInterval(requestRender, 60_000);
+   *   onCleanup(() => clearInterval(timer));
+   *   return root;
+   * }
+   * ```
+   */
+  renderWelcome?: (
+    context: AgentWidgetRenderWelcomeContext
+  ) => HTMLElement | null;
+
+  /**
    * Custom renderer for panel header
    * Return null to use default renderer
    */
@@ -157,6 +213,15 @@ export interface AgentWidgetPlugin {
      * Omitted when `config.voiceRecognition.enabled` is not true.
      */
     onVoiceToggle?: () => void;
+    /**
+     * Re-run composer arbitration and swap the footer in place. The hook runs
+     * once at panel construction, so this is how a composer plugin unlocks
+     * (returns null) or re-renders later. Pending attachments, the mention
+     * affordances, and the composer listener registry are re-wired by the core.
+     */
+    requestRender: () => void;
+    /** Same sync store as the `renderWelcome` ctx, namespaced per plugin id. */
+    storage: AgentWidgetPluginStorage;
   }) => HTMLElement | null;
 
   /**

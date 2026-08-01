@@ -36,7 +36,8 @@ import {
   AgentWidgetContentSegment,
   AgentWidgetContextMentionRef,
   AgentWidgetSuggestion,
-  AgentWidgetSuggestionSource
+  AgentWidgetSuggestionSource,
+  AgentWidgetWelcomeIcon
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import {
@@ -85,9 +86,20 @@ import {
 import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
 import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./utils/dock";
-import { LauncherButton } from "./components/launcher";
+import { LauncherSurface } from "./components/launcher";
 import { buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import { buildPillComposer } from "./components/pill-composer-builder";
 import { createWidgetView, resolveLauncher } from "./components/widget-view";
+import {
+  animateWelcomeOut,
+  applyWelcomeConfig,
+  applyWelcomeVisibility,
+  clearWelcomePluginContent,
+  mountWelcomePluginContent,
+  renderWelcomeGreeting,
+} from "./components/welcome";
+import { createPluginStorageFactory } from "./utils/plugin-storage";
+import { isWelcomeVisible, resolveWelcomeConfig } from "./welcome";
 import { HEADER_THEME_CSS } from "./components/header-builder";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
@@ -118,7 +130,11 @@ import {
 import { formatElapsedMs } from "./utils/formatting";
 import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
 import { createBuiltInApprovalPlugin } from "./components/approval-actions";
-import { createSuggestions } from "./components/suggestions";
+import {
+  createSuggestionElement,
+  createSuggestions,
+  normalizeSuggestion,
+} from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
 import { ThroughputTracker } from "./utils/throughput-tracker";
@@ -624,6 +640,14 @@ export const createAgentExperience = (
   // Get plugins for this instance
   const plugins = pluginRegistry.getForInstance(config.plugins);
 
+  // Guards the composer/welcome hooks, which can run before `session` exists
+  // (its `let` is declared far below and is in the temporal dead zone here).
+  let sessionInitialized = false;
+
+  // One store per widget instance, namespaced per plugin id. Shared by the
+  // `renderWelcome` and `renderComposer` contexts.
+  const pluginStorageFor = createPluginStorageFactory(() => config);
+
   // The built-in approval renderer, shaped as a plugin. Resolved as a FALLBACK
   // (not pushed into `plugins`) so a user `renderApproval` plugin always wins
   // and a later config-update plugin push can't reorder ahead of it.
@@ -896,6 +920,9 @@ export const createAgentExperience = (
     sendButtonWrapper,
     composerForm,
     statusText,
+    welcomeHost,
+    welcomeIconHolder,
+    greetingHost,
     introTitle,
     introSubtitle,
     closeButton,
@@ -1213,16 +1240,21 @@ export const createAgentExperience = (
     }
   };
 
-  // Plugin hook: renderComposer - allow plugins to provide custom composer
+  // Plugin hook: renderComposer - allow plugins to provide custom composer.
+  // Arbitration is a function so `rebuildComposer()` can re-run it with a
+  // fresh ctx and swap the footer in place.
   const composerPlugin = plugins.find(p => p.renderComposer);
-  if (composerPlugin?.renderComposer) {
+  const renderComposerFromPlugins = (
+    defaultRenderer: () => HTMLElement
+  ): HTMLElement | null => {
+    if (!composerPlugin?.renderComposer) return null;
     const composerCfg = config.composer;
-    const customComposer = composerPlugin.renderComposer({
+    const streaming = sessionInitialized ? session.isStreaming() : false;
+    return composerPlugin.renderComposer({
       config,
-      defaultRenderer: () => {
-        const composerElements = buildComposer({ config });
-        return composerElements.footer;
-      },
+      defaultRenderer,
+      requestRender: () => rebuildComposer(),
+      storage: pluginStorageFor(composerPlugin.id),
       onSubmit: (text: string) => {
         if (!session || session.isStreaming()) return;
         const value = text.trim();
@@ -1244,8 +1276,8 @@ export const createAgentExperience = (
           attachmentManager!.clearAttachments();
         }
       },
-      streaming: false,
-      disabled: false,
+      streaming,
+      disabled: streaming,
       openAttachmentPicker: () => {
         attachmentInput?.click();
       },
@@ -1265,11 +1297,15 @@ export const createAgentExperience = (
             }
           : undefined
     });
-    if (customComposer) {
-      // Replace the default footer with custom composer (keeps view.composer.footer in sync).
-      view.replaceComposer(customComposer);
-      footer = view.composer.footer;
-    }
+  };
+
+  const customComposer = renderComposerFromPlugins(
+    () => buildComposer({ config }).footer
+  );
+  if (customComposer) {
+    // Replace the default footer with custom composer (keeps view.composer.footer in sync).
+    view.replaceComposer(customComposer);
+    footer = view.composer.footer;
   }
 
   const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
@@ -1344,6 +1380,11 @@ export const createAgentExperience = (
     messagesWrapper.style.marginLeft = "auto";
     messagesWrapper.style.marginRight = "auto";
     messagesWrapper.style.width = "100%";
+    // The greeting bubble is a transcript sibling: same column geometry.
+    greetingHost.style.maxWidth = contentMaxWidth;
+    greetingHost.style.marginLeft = "auto";
+    greetingHost.style.marginRight = "auto";
+    greetingHost.style.width = "100%";
     starterSuggestions.style.maxWidth = contentMaxWidth;
     transcriptSuggestions.style.maxWidth = contentMaxWidth;
     transcriptSuggestions.style.marginLeft = "auto";
@@ -1354,41 +1395,60 @@ export const createAgentExperience = (
   // wrapper's responsive width (50vw / 70vw / 90vw), not be capped by
   // contentMaxWidth (which is a centered-column convention for the
   // expanded panel's body, not the pill input itself).
-  if (contentMaxWidth && composerForm && !isComposerBar()) {
-    composerForm.style.maxWidth = contentMaxWidth;
-    composerForm.style.marginLeft = "auto";
-    composerForm.style.marginRight = "auto";
-  }
-  if (contentMaxWidth && suggestions && !isComposerBar()) {
-    suggestions.style.maxWidth = contentMaxWidth;
-    suggestions.style.marginLeft = "auto";
-    suggestions.style.marginRight = "auto";
-  }
-  if (contentMaxWidth && attachmentPreviewsContainer && !isComposerBar()) {
-    attachmentPreviewsContainer.style.maxWidth = contentMaxWidth;
-    attachmentPreviewsContainer.style.marginLeft = "auto";
-    attachmentPreviewsContainer.style.marginRight = "auto";
-  }
+  // Re-run after a composer rebuild: the footer's elements are new.
+  const applyComposerContentMaxWidth = () => {
+    const max =
+      config.layout?.contentMaxWidth ??
+      (isComposerBar()
+        ? config.launcher?.composerBar?.contentMaxWidth ?? "720px"
+        : undefined);
+    if (!max || isComposerBar()) return;
+    for (const element of [composerForm, suggestions, attachmentPreviewsContainer]) {
+      if (!element) continue;
+      element.style.maxWidth = max;
+      element.style.marginLeft = "auto";
+      element.style.marginRight = "auto";
+    }
+  };
+  applyComposerContentMaxWidth();
 
-  if (config.attachments?.enabled && attachmentInput && attachmentPreviewsContainer) {
-    attachmentManager = AttachmentManager.fromConfig(config.attachments);
-    attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
+  /**
+   * Bind the attachment surface of the CURRENT footer. On a rebuild the manager
+   * survives and its pending previews are repainted into the new container.
+   */
+  const setupComposerAttachments = () => {
+    if (!config.attachments?.enabled || !attachmentInput || !attachmentPreviewsContainer) {
+      return;
+    }
+    if (!attachmentManager) {
+      attachmentManager = AttachmentManager.fromConfig(config.attachments);
+      attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
+    } else {
+      attachmentManager.remountPreviews(attachmentPreviewsContainer);
+    }
     attachmentInput.addEventListener("change", (e) => {
       const target = e.target as HTMLInputElement;
       attachmentManager?.handleFileSelect(target.files);
       target.value = "";
     });
 
-    const dropCfg = config.attachments.dropOverlay;
-    const overlay = buildDropOverlay(dropCfg);
-    container.appendChild(overlay);
-  }
+    if (!container.querySelector(".persona-attachment-drop-overlay")) {
+      container.appendChild(buildDropOverlay(config.attachments.dropOverlay));
+    }
+  };
+  setupComposerAttachments();
 
   // Context mentions: render the affordance button + chip row eagerly (so the
   // feature is discoverable) and lazy-load the heavy runtime on first use. The
   // orchestrator returns null when disabled or sourceless.
   const mentionPrefetch = () => mentionOrchestrator?.prefetch();
-  if (config.contextMentions?.enabled && textarea) {
+  /**
+   * Create the orchestrator for the CURRENT composer input. A rebuild destroys
+   * the previous one (its bindings point at the detached textarea), so any
+   * uncommitted mention chips are cleared with it.
+   */
+  const setupMentionOrchestrator = () => {
+    if (!config.contextMentions?.enabled || !textarea) return;
     // Slash-command dispatch (prompt macros write text / submit; client actions
     // read/replace the value) and submission are owned by the composer input
     // surface itself — the mention runtime builds a textarea (chip) or
@@ -1425,7 +1485,8 @@ export const createAgentExperience = (
       // `@` is instant) is registered through the shared `composerListeners`
       // registry below, so it survives the inline contenteditable swap too.
     }
-  }
+  };
+  setupMentionOrchestrator();
 
   // Slot system: allow custom content injection into specific regions
   const renderSlots = () => {
@@ -1435,8 +1496,9 @@ export const createAgentExperience = (
     const getDefaultSlotContent = (slot: WidgetLayoutSlot): HTMLElement | null => {
       switch (slot) {
         case "body-top":
-          // Default: the intro card
-          return container.querySelector(".persona-rounded-2xl.persona-bg-persona-surface.persona-p-6") as HTMLElement || null;
+          // Intro card is identified by its data attribute; its utility classes
+          // are themable and must never be used as a selector.
+          return body.querySelector("[data-persona-intro-card]") as HTMLElement | null;
         case "messages":
           return messagesWrapper;
         case "footer-top":
@@ -1473,7 +1535,7 @@ export const createAgentExperience = (
           break;
         case "body-top": {
           // Replace or prepend to body
-          const introCard = body.querySelector(".persona-rounded-2xl.persona-bg-persona-surface.persona-p-6");
+          const introCard = body.querySelector("[data-persona-intro-card]");
           if (introCard) {
             introCard.replaceWith(element);
           } else {
@@ -3469,7 +3531,8 @@ export const createAgentExperience = (
     }
   }
 
-  const composerSuggestionsManager = createSuggestions(suggestions);
+  // Reassignable: a composer rebuild swaps the row this manager renders into.
+  let composerSuggestionsManager = createSuggestions(suggestions);
   const starterSuggestionsManager = createSuggestions(starterSuggestions);
   const transcriptSuggestionsManager = createSuggestions(transcriptSuggestions);
   const suggestionManagers = [
@@ -3524,7 +3587,7 @@ export const createAgentExperience = (
     if (warnedPinnedStarterPlacement || config.debug !== true) return;
     warnedPinnedStarterPlacement = true;
     console.warn(
-      '[persona] suggestions.starters.placement is pinned to "welcome" but copy.showWelcomeCard is false, so no starters render. Use "auto" or "composer".',
+      '[persona] suggestions.starters.placement is pinned to "welcome" but the welcome surface is hidden (welcome.variant: "none" or copy.showWelcomeCard: false), so no starters render. Use "auto" or "composer".',
     );
   };
   // Debug-only setup hint: a stream this session ended without the agent ever
@@ -3624,9 +3687,12 @@ export const createAgentExperience = (
 
     const starters = config.suggestions?.starters;
     if (starters) {
-      // The starter host lives inside the welcome card, so a pinned "welcome"
-      // placement has nowhere to render when that card is hidden.
-      const welcomeCardVisible = config.copy?.showWelcomeCard !== false;
+      // The starter host lives inside the welcome surface, so a pinned
+      // "welcome" placement has nowhere to render when that surface is hidden.
+      const welcomeCardVisible = isWelcomeVisible(
+        resolveWelcomeConfig(config),
+        current
+      );
       const requestedPlacement = starters.placement ?? "auto";
       const placement =
         requestedPlacement === "auto"
@@ -5972,8 +6038,9 @@ export const createAgentExperience = (
       panel.classList.remove("persona-scale-95", "persona-opacity-0");
       panel.classList.add("persona-scale-100", "persona-opacity-100");
       // Hide launcher button when widget is open
-      if (launcherButtonInstance) {
-        launcherButtonInstance.element.style.display = "none";
+      if (launcherSurfaceInstance) {
+        launcherSurfaceInstance.setPanelOpen(true);
+        launcherSurfaceInstance.element.style.display = "none";
       } else if (customLauncherElement) {
         customLauncherElement.style.display = "none";
       }
@@ -5998,8 +6065,9 @@ export const createAgentExperience = (
         panel.classList.add("persona-scale-95", "persona-opacity-0");
       }
       // Show launcher when closed, except docked mode (0px column: use controller.open()).
-      if (launcherButtonInstance) {
-        launcherButtonInstance.element.style.display = dockedMode ? "none" : "";
+      if (launcherSurfaceInstance) {
+        launcherSurfaceInstance.setPanelOpen(false);
+        launcherSurfaceInstance.element.style.display = dockedMode ? "none" : "";
       } else if (customLauncherElement) {
         customLauncherElement.style.display = dockedMode ? "none" : "";
       }
@@ -6110,6 +6178,19 @@ export const createAgentExperience = (
         button.disabled = disabled;
       });
     });
+    // Plugin renderStarter output: created with the streaming flag of its
+    // render moment, so a stream ending must re-enable it here.
+    welcomeStarterElements.forEach((element) => {
+      element.toggleAttribute("data-disabled", disabled);
+      if (element instanceof HTMLButtonElement) {
+        element.disabled = disabled;
+      } else {
+        element.setAttribute("aria-disabled", disabled ? "true" : "false");
+      }
+      element.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
+        button.disabled = disabled;
+      });
+    });
     footer.dataset.personaComposerStreaming = disabled ? "true" : "false";
     footer.querySelectorAll<HTMLElement>("[data-persona-composer-disable-when-streaming]").forEach((el) => {
       if (
@@ -6133,26 +6214,216 @@ export const createAgentExperience = (
     if (config.autoFocusInput) setTimeout(() => maybeFocusInput(), 200);
   });
 
-  const updateCopy = () => {
-    introTitle.textContent = config.copy?.welcomeTitle ?? "Hello 👋";
-    introSubtitle.textContent =
-      config.copy?.welcomeSubtitle ??
-      "Ask anything about your account or products.";
-    textarea.placeholder = config.copy?.inputPlaceholder ?? "How can I help...";
+  // Welcome visibility is derived, never stored: `resolveWelcomeConfig` owns
+  // the config and the session's user messages own the dismissal.
+  let welcomeShown = !welcomeHost.hidden;
+  // The dismiss runs across many renders (assistant placeholder, every
+  // streaming chunk), so the in-flight animation owns the host until it settles.
+  let welcomeDismissAnimation: Animation | null = null;
+  // Restored history must hide the hero outright, not animate it out.
+  let welcomeHydrated = !pendingStoredState;
+  // Content is re-applied only when the resolved config changes: this runs on
+  // every message change, including each streaming chunk.
+  let lastWelcomeKey: string | null = null;
+  let lastWelcomeIcon: AgentWidgetWelcomeIcon | undefined;
+  let lastGreetingKey: string | null = null;
+  // Element returned by a `renderWelcome` plugin, or null when the default
+  // renderer owns the host. A plugin element ignores derived visibility.
+  let welcomePluginContent: HTMLElement | null = null;
+  const updateWelcome = (messages?: AgentWidgetMessage[]) => {
+    const resolved = resolveWelcomeConfig(config);
+    const welcomeKey = `${resolved.variant}|${resolved.dismiss}|${resolved.title}|${resolved.subtitle}`;
+    if (welcomeKey !== lastWelcomeKey || resolved.icon !== lastWelcomeIcon) {
+      lastWelcomeKey = welcomeKey;
+      lastWelcomeIcon = resolved.icon;
+      applyWelcomeConfig(
+        {
+          host: welcomeHost,
+          iconHolder: welcomeIconHolder,
+          title: introTitle,
+          subtitle: introSubtitle,
+          starterSuggestions,
+        },
+        resolved
+      );
+    }
+    const greetingKey =
+      resolved.message === undefined
+        ? null
+        : `${config.layout?.messages?.layout ?? "bubble"}|${resolved.message}`;
+    if (greetingKey !== lastGreetingKey) {
+      lastGreetingKey = greetingKey;
+      renderWelcomeGreeting(greetingHost, resolved.message, config);
+    }
 
-    // Toggle welcome card visibility
-    const introCard = body.querySelector("[data-persona-intro-card]") as HTMLElement | null;
-    if (introCard) {
-      const showCard = config.copy?.showWelcomeCard !== false;
-      introCard.style.display = showCard ? "" : "none";
-      if (showCard) {
-        body.classList.remove("persona-gap-3");
-        body.classList.add("persona-gap-6");
-      } else {
-        body.classList.remove("persona-gap-6");
-        body.classList.add("persona-gap-3");
+    const current =
+      messages ?? (session ? session.getMessages() : config.initialMessages);
+    const visible = isWelcomeVisible(resolved, current);
+    const flipped = visible !== welcomeShown;
+    welcomeShown = visible;
+    // Plugin content renders regardless of derived visibility and owns the
+    // host until the plugin returns null again.
+    if (welcomePluginContent) {
+      welcomeDismissAnimation?.cancel();
+      welcomeDismissAnimation = null;
+      applyWelcomeVisibility(body, welcomeHost, true);
+      return;
+    }
+    if (
+      flipped &&
+      !visible &&
+      resolved.dismiss === "on-first-message" &&
+      welcomeHydrated
+    ) {
+      welcomeDismissAnimation = animateWelcomeOut(welcomeHost, (animation) => {
+        if (welcomeDismissAnimation === animation) {
+          welcomeDismissAnimation = null;
+        }
+        // A re-show (clearChat, or plugin content claiming the host
+        // mid-animation) wins the race.
+        if (!welcomeShown && !welcomePluginContent) {
+          applyWelcomeVisibility(body, welcomeHost, false);
+        }
+        // The forwards fill would pin opacity 0 across a later re-show.
+        animation?.cancel();
+      });
+      return;
+    }
+    if (welcomeDismissAnimation) {
+      // Later renders must not hide the host out from under the animation.
+      if (!visible) return;
+      welcomeDismissAnimation.cancel();
+      welcomeDismissAnimation = null;
+    }
+    applyWelcomeVisibility(body, welcomeHost, visible);
+  };
+
+  // `renderWelcome` arbitration. The core owns the host; a re-render runs the
+  // registered cleanups, drops the previous plugin element, and re-arbitrates
+  // with a fresh ctx.
+  const welcomeCleanups: Array<() => void> = [];
+  // renderStarter output is one-shot DOM the suggestion managers never see;
+  // tracked here so setComposerDisabled can sync it on streaming flips.
+  const welcomeStarterElements: HTMLElement[] = [];
+  let welcomeArbitrating = false;
+  let lastWelcomeArbitrationKey: string | null = null;
+  let lastWelcomeArbitrationIcon: AgentWidgetWelcomeIcon | undefined;
+
+  const runWelcomeCleanups = () => {
+    welcomeStarterElements.length = 0;
+    const callbacks = welcomeCleanups.splice(0, welcomeCleanups.length);
+    for (const callback of callbacks) {
+      try {
+        callback();
+      } catch (error) {
+        console.warn("[persona] renderWelcome cleanup threw", error);
       }
     }
+  };
+  destroyCallbacks.push(runWelcomeCleanups);
+
+  /** Default starter renderer for plugins: full select pipeline, welcome geometry. */
+  const renderWelcomeStarter = (
+    suggestion: AgentWidgetSuggestion,
+    index: number
+  ): HTMLElement => {
+    const normalized = normalizeSuggestion(suggestion, index);
+    // An unlabeled suggestion has nothing to render or send.
+    if (!normalized) {
+      if (config.debug === true) {
+        console.warn("[persona] renderStarter received a suggestion with no label");
+      }
+      return createElement("span");
+    }
+    const starters = config.suggestions?.starters;
+    const element = createSuggestionElement({
+      item: {
+        ...normalized,
+        behavior: normalized.behavior ?? starters?.behavior ?? "send",
+      },
+      index,
+      surface: "starter",
+      source: "config",
+      variant: starters?.variant ?? "card",
+      streaming: sessionInitialized ? session.isStreaming() : false,
+      config,
+      plugins,
+      chipsConfig: config.suggestionChipsConfig,
+      session,
+      getTextarea: () => textarea,
+      eventTarget: welcomeHost,
+    });
+    welcomeStarterElements.push(element);
+    return element;
+  };
+
+  const renderWelcomeSurface = () => {
+    // A plugin calling requestRender() from inside its own render would recurse.
+    if (welcomeArbitrating) return;
+    welcomeArbitrating = true;
+    const resolved = resolveWelcomeConfig(config);
+    lastWelcomeArbitrationKey = `${resolved.variant}|${resolved.dismiss}|${resolved.title}|${resolved.subtitle}|${resolved.message ?? ""}`;
+    lastWelcomeArbitrationIcon = resolved.icon;
+    try {
+      runWelcomeCleanups();
+      clearWelcomePluginContent(body, welcomeHost, welcomePluginContent);
+      welcomePluginContent = null;
+
+      const current = session ? session.getMessages() : config.initialMessages;
+      const visible = isWelcomeVisible(resolved, current);
+      let starterIndex = 0;
+      let element: HTMLElement | null = null;
+      for (const plugin of plugins) {
+        if (!plugin.renderWelcome) continue;
+        element = plugin.renderWelcome({
+          config: resolved,
+          variant: resolved.variant,
+          visible,
+          defaultRenderer: () => welcomeHost,
+          sendMessage: (text: string) => {
+            if (!session || session.isStreaming()) return;
+            const value = text.trim();
+            if (!value) return;
+            session.sendMessage(value);
+          },
+          requestRender: () => renderWelcomeSurface(),
+          renderStarter: (suggestion) =>
+            renderWelcomeStarter(suggestion, starterIndex++),
+          storage: pluginStorageFor(plugin.id),
+          onCleanup: (fn) => {
+            welcomeCleanups.push(fn);
+          },
+        });
+        if (element) break;
+      }
+      // Returning `defaultRenderer()` is composition, not a takeover: the
+      // default content stays and derived visibility still governs.
+      if (element && element !== welcomeHost) {
+        welcomePluginContent = element;
+        mountWelcomePluginContent(body, welcomeHost, element);
+      }
+    } finally {
+      welcomeArbitrating = false;
+    }
+    updateWelcome();
+  };
+
+  /** Re-arbitrate only when the resolved welcome config actually changed. */
+  const refreshWelcomePlugins = () => {
+    const resolved = resolveWelcomeConfig(config);
+    const key = `${resolved.variant}|${resolved.dismiss}|${resolved.title}|${resolved.subtitle}|${resolved.message ?? ""}`;
+    if (
+      key === lastWelcomeArbitrationKey &&
+      resolved.icon === lastWelcomeArbitrationIcon
+    ) {
+      return;
+    }
+    renderWelcomeSurface();
+  };
+
+  const updateCopy = () => {
+    updateWelcome();
+    textarea.placeholder = config.copy?.inputPlaceholder ?? "How can I help...";
 
     // Only update send button text if NOT using icon mode. Skip while
     // streaming so we don't stomp on the "Stop" label.
@@ -6299,6 +6570,7 @@ export const createAgentExperience = (
       suppressTransition: isStreaming,
     });
     ensureToolElapsedTimer();
+    updateWelcome(messages);
     renderSuggestions(messages);
     scheduleAutoScroll(!isStreaming);
     trackMessages(messages);
@@ -6546,6 +6818,8 @@ export const createAgentExperience = (
     if (state === "idle") lastReadAloudId = null;
   });
 
+  sessionInitialized = true;
+
   // The constructor only emits onMessagesChanged when it has initial
   // messages, so seed send-detection explicitly for the empty-session case:  // otherwise the user's very first send would be mistaken for the seed.
   scrollSendSeeded = true;
@@ -6629,7 +6903,10 @@ export const createAgentExperience = (
           console.error("[AgentWidget] Failed to hydrate stored state:", error);
         }
       })
-      .finally(() => maybeBootResume());
+      .finally(() => {
+        welcomeHydrated = true;
+        maybeBootResume();
+      });
   } else {
     maybeBootResume();
   }
@@ -6649,7 +6926,7 @@ export const createAgentExperience = (
   // Combine `@`-chip mentions with an inline server-command's context bundle so
   // both reach the message in one `mentions` payload. Either side may be null.
   type SubmitMentions = NonNullable<
-    ReturnType<NonNullable<typeof mentionOrchestrator>["collectForSubmit"]>
+    ReturnType<ContextMentionOrchestrator["collectForSubmit"]>
   >;
   const mergeSubmitMentions = (
     a: SubmitMentions | null,
@@ -7489,27 +7766,28 @@ export const createAgentExperience = (
   };
 
   // Plugin hook: renderLauncher - allow plugins to provide custom launcher
-  let launcherButtonInstance: LauncherButton | null = null;
+  let launcherSurfaceInstance: LauncherSurface | null = null;
   let customLauncherElement: HTMLElement | null = null;
   
   // Composer-bar mode is launcher-less by design: the persistent pill IS the
   // entry point, so skip creating any launcher button (default or plugin).
   if (launcherEnabled && !isComposerBar()) {
     const { instance, element } = resolveLauncher({ config, plugins, onToggle: toggleOpen });
-    launcherButtonInstance = instance;
+    launcherSurfaceInstance = instance;
     // A plugin-provided launcher returns no controller instance; track its
     // element separately so the update path can manage it.
     if (!instance) customLauncherElement = element;
   }
 
-  if (launcherButtonInstance) {
-    mount.appendChild(launcherButtonInstance.element);
+  if (launcherSurfaceInstance) {
+    mount.appendChild(launcherSurfaceInstance.element);
   } else if (customLauncherElement) {
     mount.appendChild(customLauncherElement);
   }
   updateOpenState();
   renderSuggestions();
   updateCopy();
+  renderWelcomeSurface();
   setComposerDisabled(session.isStreaming());
   // Reopen-where-left-off takes precedence when opted in (Principle 11);
   // otherwise fall back to the historical per-mode positioning.
@@ -7958,11 +8236,86 @@ export const createAgentExperience = (
   // lazily). When that happens, move the composer listeners onto the new element
   // and repoint `textarea` (the swapped element shims the textarea API the rest of
   // the composer code relies on). Fires immediately if the swap already occurred.
-  mentionOrchestrator?.onComposerSwap((next, prev) => {
-    detachComposerListeners(prev);
-    textarea = next as unknown as HTMLTextAreaElement;
-    attachComposerListeners(next);
-  });
+  const registerComposerSwapHandler = () => {
+    mentionOrchestrator?.onComposerSwap((next, prev) => {
+      detachComposerListeners(prev);
+      textarea = next as unknown as HTMLTextAreaElement;
+      attachComposerListeners(next);
+    });
+  };
+  registerComposerSwapHandler();
+
+  /**
+   * Re-run composer plugin arbitration and swap the footer in place. Exposed to
+   * composer plugins as `requestRender()`. Everything bound to the old footer
+   * (listeners, attachment previews, mention affordances, the composer
+   * suggestion row) is torn down and re-bound to the new one.
+   */
+  let composerRebuilding = false;
+  function rebuildComposer(): void {
+    if (composerRebuilding) return;
+    composerRebuilding = true;
+    try {
+      const previousValue = textarea?.value ?? "";
+      const activeDoc = footer.ownerDocument ?? document;
+      const hadFocus = textarea ? activeDoc.activeElement === textarea : false;
+
+      detachComposerListeners(textarea);
+      composerForm?.removeEventListener("submit", handleSubmit);
+      micButton?.removeEventListener("click", handleMicButtonClick);
+      // Its bindings point at the outgoing textarea; the new footer gets a new one.
+      mentionOrchestrator?.destroy();
+      mentionOrchestrator = null;
+
+      let defaultElements: _ComposerElements | null = null;
+      const defaultRenderer = () => {
+        defaultElements = isComposerBar()
+          ? buildPillComposer({ config })
+          : buildComposer({ config });
+        return defaultElements.footer;
+      };
+      const nextFooter =
+        renderComposerFromPlugins(defaultRenderer) ?? defaultRenderer();
+
+      view.replaceComposer(nextFooter);
+      footer = view.composer.footer;
+      // A plugin composer owns its own send affordance, so the built-in
+      // send/stop swap has nothing to drive.
+      setSendButtonMode =
+        defaultElements && nextFooter === (defaultElements as _ComposerElements).footer
+          ? (defaultElements as _ComposerElements).setSendButtonMode
+          : () => {};
+
+      ensureComposerAttachmentSurface(footer);
+      bindComposerRefsFromFooter(footer);
+      applyComposerContentMaxWidth();
+      setupComposerAttachments();
+      setupMentionOrchestrator();
+      registerComposerSwapHandler();
+
+      if (composerForm) composerForm.addEventListener("submit", handleSubmit);
+      attachComposerListeners(textarea);
+      micButton?.addEventListener("click", handleMicButtonClick);
+
+      // The composer suggestion manager is bound to its container element, and
+      // the new footer ships a new one.
+      const managerIndex = suggestionManagers.indexOf(composerSuggestionsManager);
+      composerSuggestionsManager.destroy();
+      composerSuggestionsManager = createSuggestions(suggestions);
+      if (managerIndex >= 0) suggestionManagers[managerIndex] = composerSuggestionsManager;
+
+      if (textarea) textarea.value = previousValue;
+      updateCopy();
+      renderSuggestions();
+      setComposerDisabled(session.isStreaming());
+      // The new footer carries none of the per-mode inline styles.
+      applyFullHeightStyles();
+      updateScrollToBottomButtonOffset();
+      if (hadFocus) textarea?.focus();
+    } finally {
+      composerRebuilding = false;
+    }
+  }
 
   const escStopDoc = mount.ownerDocument ?? document;
   escStopDoc.addEventListener("keydown", handleEscStop, true);
@@ -8062,9 +8415,9 @@ export const createAgentExperience = (
     session.cancel();
   });
 
-  if (launcherButtonInstance) {
+  if (launcherSurfaceInstance) {
     destroyCallbacks.push(() => {
-      launcherButtonInstance?.destroy();
+      launcherSurfaceInstance?.destroy();
     });
   } else if (customLauncherElement) {
     destroyCallbacks.push(() => {
@@ -8191,25 +8544,25 @@ export const createAgentExperience = (
         throughputTracker = null;
       }
 
-      if (config.launcher?.enabled === false && launcherButtonInstance) {
-        launcherButtonInstance.destroy();
-        launcherButtonInstance = null;
+      if (config.launcher?.enabled === false && launcherSurfaceInstance) {
+        launcherSurfaceInstance.destroy();
+        launcherSurfaceInstance = null;
       }
       if (config.launcher?.enabled === false && customLauncherElement) {
         customLauncherElement.remove();
         customLauncherElement = null;
       }
 
-      if (config.launcher?.enabled !== false && !launcherButtonInstance && !customLauncherElement) {
+      if (config.launcher?.enabled !== false && !launcherSurfaceInstance && !customLauncherElement) {
         // Resolve the launcher again when re-enabling (honors renderLauncher plugin).
         const { instance, element } = resolveLauncher({ config, plugins, onToggle: toggleOpen });
-        launcherButtonInstance = instance;
+        launcherSurfaceInstance = instance;
         if (!instance) customLauncherElement = element;
         mount.appendChild(element);
       }
 
-      if (launcherButtonInstance) {
-        launcherButtonInstance.update(config);
+      if (launcherSurfaceInstance) {
+        launcherSurfaceInstance.update(config);
       }
       // Note: Custom launcher updates are handled by the plugin's own logic
 
@@ -8787,8 +9140,11 @@ export const createAgentExperience = (
       );
       renderSuggestions();
       updateCopy();
+      // Live `welcome` updates reach `renderWelcome` plugins; unrelated
+      // update() calls leave plugin-owned content (and its state) alone.
+      refreshWelcomePlugins();
       setComposerDisabled(session.isStreaming());
-      
+
       // Update voice recognition mic button visibility
       const voiceRecognitionEnabled = config.voiceRecognition?.enabled === true;
       const hasSpeechRecognition =
@@ -9223,6 +9579,10 @@ export const createAgentExperience = (
         messagesWrapper.style.marginLeft = "auto";
         messagesWrapper.style.marginRight = "auto";
         messagesWrapper.style.width = "100%";
+        greetingHost.style.maxWidth = updatedContentMaxWidth;
+        greetingHost.style.marginLeft = "auto";
+        greetingHost.style.marginRight = "auto";
+        greetingHost.style.width = "100%";
         if (composerForm) {
           composerForm.style.maxWidth = updatedContentMaxWidth;
           composerForm.style.marginLeft = "auto";
@@ -9238,6 +9598,10 @@ export const createAgentExperience = (
         messagesWrapper.style.marginLeft = "";
         messagesWrapper.style.marginRight = "";
         messagesWrapper.style.width = "";
+        greetingHost.style.maxWidth = "";
+        greetingHost.style.marginLeft = "";
+        greetingHost.style.marginRight = "";
+        greetingHost.style.width = "";
         if (composerForm) {
           composerForm.style.maxWidth = "";
           composerForm.style.marginLeft = "";
@@ -9736,7 +10100,7 @@ export const createAgentExperience = (
       destroyCallbacks.forEach((cb) => cb());
       wrapper.remove();
       pillRoot?.remove();
-      launcherButtonInstance?.destroy();
+      launcherSurfaceInstance?.destroy();
       customLauncherElement?.remove();
       if (closeHandler) {
         closeButton.removeEventListener("click", closeHandler);
@@ -9872,6 +10236,9 @@ export const createAgentExperience = (
       const wasInVoiceMode = persistConfig.persist?.voiceState && storage.getItem(voiceModeKey) === 'true';
 
       if (wasOpen) {
+        // The teaser's own timer is already queued, so suppress it synchronously
+        // here: the deferred open below would otherwise run one task too late.
+        launcherSurfaceInstance?.setPanelOpen(true, "auto");
         // Use setTimeout to ensure DOM is ready
         setTimeout(() => {
           controller.open();
@@ -9938,6 +10305,8 @@ export const createAgentExperience = (
   // Mirrors the same setTimeout(0) pattern used by persistState restore so both
   // can fire independently without interfering with each other.
   if (shouldOpenAfterStateLoaded && isPanelToggleable()) {
+    // Same one-task-early suppression as the persistState restore above.
+    launcherSurfaceInstance?.setPanelOpen(true, "auto");
     setTimeout(() => { controller.open(); }, 0);
   }
 

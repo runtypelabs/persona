@@ -2915,6 +2915,58 @@ export type AgentWidgetLauncherConfig = {
    * @example "min(380px, calc(100vw - 48px))"
    */
   collapsedMaxWidth?: string;
+  /**
+   * Proactive nudge bubble anchored above the collapsed floating launcher.
+   * Omit it (the default) and no teaser renders.
+   */
+  teaser?: AgentWidgetLauncherTeaserConfig;
+};
+
+/**
+ * Launcher teaser: a small bubble above the collapsed launcher. Clicking it
+ * opens the panel and consumes the teaser exactly like an explicit dismissal.
+ * Within a single page load the teaser appears at most once under either
+ * frequency.
+ *
+ * @example
+ * ```typescript
+ * launcher: {
+ *   teaser: { text: "Need a hand picking a plan?", delayMs: 3000 }
+ * }
+ * ```
+ */
+export type AgentWidgetLauncherTeaserConfig = {
+  /** Bubble copy. An empty string renders no teaser. */
+  text: string;
+  /**
+   * Delay before the bubble appears, in milliseconds.
+   * @default 0
+   */
+  delayMs?: number;
+  /**
+   * How often the teaser may return.
+   *
+   * `"once"`: a dismissal or a click-through is remembered in `localStorage`
+   * under `` `${persistState.keyPrefix ?? "persona-"}teaser-dismissed` `` and
+   * the teaser never returns on that browser. `"always"`: shows on every page
+   * load, tracked in memory only. `persistState: false` downgrades `"once"` to
+   * in-memory too, so the teaser reappears each load.
+   *
+   * Custom `storageAdapter` implementations do not participate in teaser state.
+   *
+   * @default "once"
+   */
+  frequency?: "once" | "always";
+  /**
+   * Render an x affordance that dismisses the teaser without opening the panel.
+   * @default true
+   */
+  dismissible?: boolean;
+  /**
+   * Accessible label for the dismiss affordance.
+   * @default "Dismiss message"
+   */
+  dismissLabel?: string;
 };
 
 export type AgentWidgetSendButtonConfig = {
@@ -3859,6 +3911,66 @@ export type AgentWidgetSuggestionsConfig = {
   starters?: AgentWidgetStarterSuggestionsConfig;
   followUps?: AgentWidgetFollowUpSuggestionsConfig;
 };
+
+/**
+ * Which welcome surface renders.
+ * `"card"` is the top-of-scroll intro card (default, back-compatible),
+ * `"hero"` centers it in the empty conversation, `"none"` renders no surface.
+ */
+export type AgentWidgetWelcomeVariant = "card" | "hero" | "none";
+
+/**
+ * When the welcome surface goes away. `"never"` is the default for `"card"`;
+ * `"on-first-message"` is the default for `"hero"` and cannot be overridden
+ * there.
+ */
+export type AgentWidgetWelcomeDismiss = "never" | "on-first-message";
+
+/**
+ * Avatar or logo shown above the welcome title. Discriminated union; the
+ * function form is the escape hatch for custom markup. There is deliberately
+ * no raw HTML string variant (sanitization surface plus accessibility hole).
+ */
+export type AgentWidgetWelcomeIcon =
+  | { type: "lucide"; name: IconName }
+  /** `alt` is required, and may be `""` for a decorative logo. */
+  | { type: "image"; url: string; alt: string }
+  /** Emoji or short text glyph. */
+  | { type: "text"; text: string }
+  | (() => HTMLElement | SVGElement);
+
+/**
+ * First-open welcome surface. Consolidates the deprecated
+ * `copy.welcomeTitle` / `copy.welcomeSubtitle` / `copy.showWelcomeCard`
+ * options; a field present here wins over its legacy alias.
+ *
+ * All defaults live in the resolver (`resolveWelcomeConfig`), never in
+ * `DEFAULT_WIDGET_CONFIG`: presence on this object is what distinguishes a
+ * host-set value from a filled-in default.
+ */
+export interface AgentWidgetWelcomeConfig {
+  /** Card or hero title. Defaults to "Hello 👋". */
+  title?: string;
+  /** Scope statement in the assistant's voice. Empty string omits it. */
+  subtitle?: string;
+  /** Avatar or logo shown above the title. */
+  icon?: AgentWidgetWelcomeIcon;
+  /** @default "card" */
+  variant?: AgentWidgetWelcomeVariant;
+  /** @default "never" for `card`, always `"on-first-message"` for `hero`. */
+  dismiss?: AgentWidgetWelcomeDismiss;
+  /**
+   * Display-only greeting bubble pinned at transcript position zero. It is UI
+   * chrome derived from config, never a session message: it does not appear in
+   * `getMessages()`, is never persisted or sent to the model, `onMessage` does
+   * not fire for it, and it survives `clearChat()`. Use an assistant
+   * `initialMessages` entry instead when the model should see the greeting.
+   *
+   * Ignored (with a debug-mode warning) when `variant` is `"hero"`: the hero
+   * is the greeting.
+   */
+  message?: string;
+}
 
 /**
  * Interface for pluggable stream parsers that extract text from streaming responses.
@@ -5108,7 +5220,9 @@ export type AgentWidgetConfig = {
    */
   getHeaders?: AgentWidgetHeadersFunction;
   copy?: {
+    /** @deprecated Use `welcome.title`. */
     welcomeTitle?: string;
+    /** @deprecated Use `welcome.subtitle`. */
     welcomeSubtitle?: string;
     inputPlaceholder?: string;
     sendButtonLabel?: string;
@@ -5116,6 +5230,7 @@ export type AgentWidgetConfig = {
     stopButtonLabel?: string;
     /**
      * When false, the welcome / intro card is not shown above the message list.
+     * @deprecated Use `welcome.variant: "none"`.
      * @default true
      */
     showWelcomeCard?: boolean;
@@ -5182,6 +5297,12 @@ export type AgentWidgetConfig = {
   initialSelectedArtifactId?: string | null;
   /** Rich starter and follow-up suggestion surfaces. */
   suggestions?: AgentWidgetSuggestionsConfig;
+  /**
+   * First-open welcome surface (card, hero, or none) plus the optional
+   * display-only greeting bubble. Supersedes `copy.welcomeTitle`,
+   * `copy.welcomeSubtitle`, and `copy.showWelcomeCard`.
+   */
+  welcome?: AgentWidgetWelcomeConfig;
   /** @deprecated Prefer `suggestions.starters.items`. */
   suggestionChips?: string[];
   /** @deprecated Prefer semantic tokens under `theme.components.suggestion`. */

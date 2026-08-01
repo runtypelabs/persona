@@ -236,6 +236,91 @@
   border-radius: var(--persona-button-radius);
 }
 
+/* Launcher surface + teaser --------------------------------------------- */
+
+/* Without a teaser the wrapper generates no box, so the launcher button keeps
+   its own fixed placement exactly as it did before the wrapper existed. */
+.persona-launcher-surface {
+  display: contents;
+}
+
+.persona-launcher-surface[data-teaser] {
+  display: flex;
+  position: fixed;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.persona-launcher-surface[data-teaser^="top"] {
+  flex-direction: column-reverse;
+}
+
+.persona-launcher-surface[data-teaser$="left"] {
+  align-items: flex-start;
+}
+
+.persona-launcher-teaser {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: min(260px, calc(100vw - 48px));
+  padding: 2px;
+  border: 1px solid var(--persona-border, #e5e7eb);
+  border-radius: var(--persona-radius-lg, 1rem);
+  background-color: var(--persona-surface, #ffffff);
+  box-shadow: var(
+    --persona-launcher-shadow,
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1)
+  );
+}
+
+.persona-launcher-teaser[hidden] {
+  display: none;
+}
+
+.persona-launcher-teaser-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--persona-text, #111827);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.persona-launcher-teaser-dismiss {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--persona-launcher-radius, 9999px);
+  background: transparent;
+  color: var(--persona-muted, #6b7280);
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.persona-launcher-teaser-dismiss:hover {
+  background-color: var(--persona-border, #e5e7eb);
+}
+
+/* display: grid above beats the UA [hidden] rule; dismissible: false relies on this. */
+.persona-launcher-teaser-dismiss[hidden] {
+  display: none;
+}
+
 /* Suggestions ----------------------------------------------------------- */
 
 .persona-suggestions {
@@ -398,7 +483,7 @@
 }
 
 .persona-suggestion--card {
-  align-items: flex-start;
+  align-items: center;
   min-height: var(--persona-components-suggestion-card-minHeight, 72px);
   gap: var(--persona-components-suggestion-card-gap, 0.625rem);
   padding: var(--persona-components-suggestion-card-padding, 1rem);
@@ -422,7 +507,7 @@
 }
 
 .persona-suggestion--list {
-  align-items: flex-start;
+  align-items: center;
   width: 100%;
   min-height: var(--persona-components-suggestion-list-minHeight, 44px);
   gap: var(--persona-components-suggestion-list-gap, 0.625rem);
@@ -443,6 +528,13 @@
   );
   font-size: var(--persona-components-suggestion-list-fontSize, 0.875rem);
   line-height: var(--persona-components-suggestion-list-lineHeight, 1.35);
+}
+
+/* Title + description content reads top-aligned; a lone label centers in
+   the min-height instead of leaving dead space under the text. */
+.persona-suggestion--card:has(.persona-suggestion__description),
+.persona-suggestion--list:has(.persona-suggestion__description) {
+  align-items: flex-start;
 }
 
 .persona-suggestion__icon,
@@ -646,6 +738,103 @@
   .persona-suggestion__arrow {
     transition: none;
   }
+}
+
+/* Welcome surface ------------------------------------------------------- */
+
+.persona-welcome[hidden],
+.persona-welcome-greeting[hidden] {
+  display: none !important;
+}
+
+.persona-welcome-icon {
+  display: flex;
+  margin-bottom: 12px;
+  color: var(--persona-accent, currentColor);
+}
+
+.persona-welcome-icon[hidden] {
+  display: none !important;
+}
+
+.persona-welcome-icon-image {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.persona-welcome-icon-text {
+  font-size: 32px;
+  line-height: 1;
+}
+
+/* Plugin-owned welcome (`renderWelcome`): the host keeps its position and the
+   default children are hidden by selector, so nothing about their own hidden
+   state has to be saved and restored when the plugin returns null again. */
+.persona-welcome[data-persona-welcome-content="plugin"]
+  > :not([data-persona-welcome-plugin]) {
+  display: none !important;
+}
+
+.persona-welcome[data-persona-welcome-content="plugin"] {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Overlay state: a plugin element covers the messages area while it is active.
+   The body stops scrolling underneath so the absolute box maps to the visible
+   transcript rather than scrolling away with the content. */
+/* Wide panels: the welcome is a centered, width-capped column with its text
+   still left-aligned inside (the Vercel-template pattern); at launcher width
+   the cap never bites. The plugin overlay stays full-bleed via the :not(). */
+.persona-welcome:not([data-persona-welcome-overlay]) {
+  width: 100%;
+  max-width: 640px;
+  margin-inline: auto;
+}
+
+.persona-welcome[data-persona-welcome-overlay] {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow-y: auto;
+  /* !important: the host doubles as the intro card and carries an inline
+     background (--persona-intro-card-bg, default transparent); the overlay
+     must stay opaque or the transcript bleeds through the plugin stack. */
+  background: var(
+    --persona-container,
+    var(--persona-surface, #ffffff)
+  ) !important;
+}
+
+.persona-widget-body.persona-welcome-overlay-active {
+  overflow: hidden;
+}
+
+/* Hero: auto block margins center the surface in the empty conversation
+   without `justify-content`, which would make overflowing content
+   unreachable in the scroll body. */
+.persona-welcome[data-persona-welcome-variant="hero"] {
+  margin-block: auto;
+  text-align: center;
+}
+
+.persona-welcome[data-persona-welcome-variant="hero"] .persona-welcome-icon {
+  justify-content: center;
+}
+
+.persona-welcome[data-persona-welcome-variant="hero"] .persona-suggestions {
+  margin-inline: auto;
+  justify-content: center;
+}
+
+.persona-welcome[data-persona-welcome-variant="hero"]
+  .persona-suggestions[data-variant="card"],
+.persona-welcome[data-persona-welcome-variant="hero"]
+  .persona-suggestions[data-variant="list"] {
+  text-align: start;
+  width: 100%;
 }
 
 /* Composer ghost icon buttons (attachment + mention): transparent, neutral

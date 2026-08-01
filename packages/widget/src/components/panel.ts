@@ -10,6 +10,15 @@ import { buildHeaderWithLayout } from "./header-layouts";
 import { createCloseButton, createClearChatButton } from "./header-parts";
 import { buildComposer, ComposerElements } from "./composer-builder";
 import { buildPillComposer, buildPillPeekBanner } from "./pill-composer-builder";
+import {
+  applyWelcomeConfig,
+  applyWelcomeVisibility,
+  buildGreetingHost,
+  buildWelcomeHost,
+  renderWelcomeGreeting,
+  WelcomeHostElements,
+} from "./welcome";
+import { isWelcomeVisible, resolveWelcomeConfig } from "../welcome";
 
 export interface PanelWrapper {
   wrapper: HTMLElement;
@@ -151,6 +160,11 @@ export interface PanelElements {
   micButtonWrapper: HTMLElement | null;
   composerForm: HTMLFormElement;
   statusText: HTMLElement;
+  /** Permanent welcome host: variant and visibility change on it in place. */
+  welcomeHost: HTMLElement;
+  welcomeIconHolder: HTMLElement;
+  /** Display-only greeting bubble host, pinned above the transcript. */
+  greetingHost: HTMLElement;
   introTitle: HTMLElement;
   introSubtitle: HTMLElement;
   closeButton: HTMLButtonElement;
@@ -192,6 +206,30 @@ const createSuggestionHost = (
   });
   host.hidden = true;
   return host;
+};
+
+/**
+ * Welcome surface for either panel builder: permanent host plus the greeting
+ * host that sits between it and the transcript.
+ */
+const buildWelcomeSurface = (
+  config: AgentWidgetConfig | undefined,
+  body: HTMLElement
+): { welcome: WelcomeHostElements; greetingHost: HTMLElement } => {
+  const starterSuggestions = createSuggestionHost("starter");
+  const welcome = buildWelcomeHost(config, starterSuggestions, {
+    flatShadow: isDockedMountMode(config),
+  });
+  const resolved = resolveWelcomeConfig(config);
+  applyWelcomeConfig(welcome, resolved);
+  applyWelcomeVisibility(
+    body,
+    welcome.host,
+    isWelcomeVisible(resolved, config?.initialMessages)
+  );
+  const greetingHost = buildGreetingHost();
+  renderWelcomeGreeting(greetingHost, resolved.message, config);
+  return { welcome, greetingHost };
 };
 
 /**
@@ -282,31 +320,10 @@ const buildComposerBarPanel = (
   // when streaming content first overflows and the scrollbar appears.
   body.style.setProperty("scrollbar-gutter", "stable");
 
-  const introTitle = createNode("h2", {
-    className: "persona-text-lg persona-font-semibold persona-text-persona-primary",
-    text: config?.copy?.welcomeTitle ?? "Hello 👋",
-  });
-  const introSubtitle = createNode("p", {
-    className: "persona-mt-2 persona-text-sm persona-text-persona-muted",
-    text:
-      config?.copy?.welcomeSubtitle ??
-      "Ask anything about your account or products.",
-  });
-  const starterSuggestions = createSuggestionHost("starter");
-  const introCard = createNode(
-    "div",
-    {
-      className: "persona-rounded-2xl persona-p-6",
-      attrs: { "data-persona-intro-card": "" },
-      style: {
-        background: "var(--persona-intro-card-bg, transparent)",
-        boxShadow: "var(--persona-intro-card-shadow, none)",
-      },
-    },
-    introTitle,
-    introSubtitle,
-    starterSuggestions
-  );
+  const { welcome, greetingHost } = buildWelcomeSurface(config, body);
+  const { host: welcomeHost, title: introTitle, subtitle: introSubtitle } =
+    welcome;
+  const starterSuggestions = welcome.starterSuggestions;
 
   const messagesWrapper = createElement(
     "div",
@@ -321,13 +338,12 @@ const buildComposerBarPanel = (
     messagesWrapper.style.width = "100%";
   }
 
-  const showWelcomeCard = config?.copy?.showWelcomeCard !== false;
-  if (!showWelcomeCard) {
-    introCard.style.display = "none";
-    body.classList.remove("persona-gap-6");
-    body.classList.add("persona-gap-3");
-  }
-  body.append(introCard, messagesWrapper, transcriptSuggestions);
+  body.append(
+    welcomeHost,
+    greetingHost,
+    messagesWrapper,
+    transcriptSuggestions
+  );
 
   // Composer overlay (interactive sheets like ask_user_question slide up here).
   // Anchored to the bottom of the container (which is `position: relative`),
@@ -368,6 +384,9 @@ const buildComposerBarPanel = (
     micButtonWrapper: composerElements.micButtonWrapper,
     composerForm: composerElements.composerForm,
     statusText: composerElements.statusText,
+    welcomeHost,
+    welcomeIconHolder: welcome.iconHolder,
+    greetingHost,
     introTitle,
     introSubtitle,
     closeButton,
@@ -424,37 +443,10 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   // when streaming content first overflows and the scrollbar appears.
   body.style.setProperty("scrollbar-gutter", "stable");
 
-  const introTitle = createNode("h2", {
-    className: "persona-text-lg persona-font-semibold persona-text-persona-primary",
-    text: config?.copy?.welcomeTitle ?? "Hello 👋",
-  });
-  const introSubtitle = createNode("p", {
-    className: "persona-mt-2 persona-text-sm persona-text-persona-muted",
-    text:
-      config?.copy?.welcomeSubtitle ??
-      "Ask anything about your account or products.",
-  });
-  const starterSuggestions = createSuggestionHost("starter");
-  // Background and box-shadow flow through the themable `components.introCard`
-  // tokens (--persona-intro-card-bg / --persona-intro-card-shadow); both
-  // default to flat (transparent / none). Docked mode always stays flat,
-  // even when a theme sets an introCard shadow.
-  const introCard = createNode(
-    "div",
-    {
-      className: "persona-rounded-2xl persona-p-6",
-      attrs: { "data-persona-intro-card": "" },
-      style: {
-        background: "var(--persona-intro-card-bg, transparent)",
-        boxShadow: isDockedMountMode(config)
-          ? "none"
-          : "var(--persona-intro-card-shadow, none)",
-      },
-    },
-    introTitle,
-    introSubtitle,
-    starterSuggestions
-  );
+  const { welcome, greetingHost } = buildWelcomeSurface(config, body);
+  const { host: welcomeHost, title: introTitle, subtitle: introSubtitle } =
+    welcome;
+  const starterSuggestions = welcome.starterSuggestions;
 
   const messagesWrapper = createElement(
     "div",
@@ -470,13 +462,12 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     messagesWrapper.style.width = "100%";
   }
 
-  const showWelcomeCard = config?.copy?.showWelcomeCard !== false;
-  if (!showWelcomeCard) {
-    introCard.style.display = "none";
-    body.classList.remove("persona-gap-6");
-    body.classList.add("persona-gap-3");
-  }
-  body.append(introCard, messagesWrapper, transcriptSuggestions);
+  body.append(
+    welcomeHost,
+    greetingHost,
+    messagesWrapper,
+    transcriptSuggestions
+  );
 
   // composer-bar mode early-returned above with its own pill builder; this
   // path always uses the standard column-stacked composer card.
@@ -535,6 +526,9 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     micButtonWrapper: composerElements.micButtonWrapper,
     composerForm: composerElements.composerForm,
     statusText: composerElements.statusText,
+    welcomeHost,
+    welcomeIconHolder: welcome.iconHolder,
+    greetingHost,
     introTitle,
     introSubtitle,
     closeButton: headerElements.closeButton,

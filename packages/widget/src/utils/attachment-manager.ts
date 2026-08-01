@@ -99,6 +99,21 @@ export class AttachmentManager {
   }
 
   /**
+   * Re-point previews at a new container and repaint from state. A composer
+   * rebuild swaps the footer, so pending attachments must follow it.
+   */
+  remountPreviews(container: HTMLElement | null): void {
+    this.previewsContainer = container;
+    if (container) {
+      container.innerHTML = "";
+      for (const attachment of this.attachments) {
+        this.renderPreview(attachment);
+      }
+    }
+    this.updatePreviewsVisibility();
+  }
+
+  /**
    * Update the configuration (e.g., when allowed types change)
    */
   updateConfig(config: Partial<AttachmentManagerConfig>): void {

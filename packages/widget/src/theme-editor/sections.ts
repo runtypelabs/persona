@@ -609,7 +609,7 @@ const copySectionDef: SectionDef = {
   fields: [
     { id: 'copy-show-welcome-card', label: 'Show Welcome Card', type: 'toggle', path: 'copy.showWelcomeCard', defaultValue: true },
     { id: 'copy-welcome-title', label: 'Welcome Title', type: 'text', path: 'copy.welcomeTitle', defaultValue: 'Hello 👋' },
-    { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'copy.welcomeSubtitle', defaultValue: 'Ask anything about your account or products.' },
+    { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'copy.welcomeSubtitle', defaultValue: 'I can answer questions and help you get things done here.' },
     { id: 'copy-placeholder', label: 'Input Placeholder', type: 'text', path: 'copy.inputPlaceholder', defaultValue: 'Type your message…' },
     { id: 'copy-send-label', label: 'Send Button Label', type: 'text', path: 'copy.sendButtonLabel', defaultValue: 'Send' },
   ],

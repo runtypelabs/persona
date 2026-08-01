@@ -245,7 +245,7 @@ export interface MessageTokens {
 
 /**
  * Welcome / intro card rendered above the message list when no messages exist.
- * Set `copy.showWelcomeCard: false` to hide it; use `layout.slots["body-top"]`
+ * Set `welcome.variant: "none"` to hide it; use `layout.slots["body-top"]`
  * to replace it wholesale.
  */
 export interface IntroCardTokens extends ComponentTokenSet {

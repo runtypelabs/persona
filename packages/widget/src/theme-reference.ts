@@ -235,7 +235,7 @@ export const THEME_TOKEN_DOCS = {
     copy: {
       description: 'Widget text content.',
       properties:
-        'showWelcomeCard (boolean), welcomeTitle, welcomeSubtitle, inputPlaceholder, sendButtonLabel.',
+        'inputPlaceholder, sendButtonLabel, stopButtonLabel. (showWelcomeCard, welcomeTitle, welcomeSubtitle are deprecated aliases of the welcome namespace.)',
     },
     voiceRecognition: {
       description: 'Voice input configuration.',
@@ -251,6 +251,12 @@ export const THEME_TOKEN_DOCS = {
         'Rich starter and follow-up suggestion surfaces. Strings remain valid item shorthand.',
       properties:
         'starters.items, starters.variant ("card" | "chip" | "list"), starters.placement ("auto" | "welcome" | "composer"), starters.behavior ("send" | "fill"), starters.overflow ("scroll" | "wrap"), starters.maxItems, followUps.enabled, followUps.expose, followUps.variant, followUps.placement ("auto" | "after-message" | "composer"), followUps.behavior, followUps.overflow ("scroll" | "wrap"), followUps.maxItems.',
+    },
+    welcome: {
+      description:
+        'First-open welcome surface. Supersedes copy.welcomeTitle / welcomeSubtitle / showWelcomeCard.',
+      properties:
+        'title, subtitle, icon ({ type: "lucide", name } | { type: "image", url, alt } | { type: "text", text } | function), variant ("card" | "hero" | "none"), dismiss ("never" | "on-first-message"), message (display-only greeting bubble, ignored under "hero").',
     },
     suggestionChips:
       'Deprecated string[] shorthand for starter prompts. Prefer suggestions.starters.items.',
