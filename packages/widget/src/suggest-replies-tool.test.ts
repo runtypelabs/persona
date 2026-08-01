@@ -257,6 +257,7 @@ describe("resolveFollowUpsFeature", () => {
   });
 
   it("lets suggestions.followUps win on conflict", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     expect(
       resolveFollowUpsFeature(
         cfg({
@@ -273,6 +274,7 @@ describe("resolveFollowUpsFeature", () => {
         }),
       ),
     ).toEqual({ enabled: false, expose: false });
+    warn.mockRestore();
   });
 
   it("forces expose off when enabled resolves false", () => {
@@ -285,28 +287,77 @@ describe("resolveFollowUpsFeature", () => {
     ).toEqual({ enabled: false, expose: false });
   });
 
-  it("warns once per key on conflict, and only in debug mode", () => {
+});
+
+describe("resolveFollowUpsFeature conflict warnings", () => {
+  const cfg = (config: Partial<AgentWidgetConfig>): AgentWidgetConfig =>
+    config as AgentWidgetConfig;
+
+  // The dedupe Set is module-level, so a shared conflict signature would let
+  // one test mask another. Each case gets a fresh module.
+  const freshResolve = async () => {
+    vi.resetModules();
+    return (await import("./suggest-replies-tool")).resolveFollowUpsFeature;
+  };
+
+  it("warns once per key without debug", async () => {
+    const resolve = await freshResolve();
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-    const quiet = cfg({
+    const production = cfg({
       features: { suggestReplies: { enabled: true, expose: false } },
       suggestions: { followUps: { enabled: false, expose: true } },
     });
-    resolveFollowUpsFeature(quiet);
-    expect(warn).not.toHaveBeenCalled();
-
-    const loud = cfg({
-      debug: true,
-      features: { suggestReplies: { enabled: true, expose: false } },
-      suggestions: { followUps: { enabled: false, expose: true } },
-    });
-    resolveFollowUpsFeature(loud);
-    resolveFollowUpsFeature(loud);
+    resolve(production);
+    resolve(production);
     expect(warn).toHaveBeenCalledTimes(2);
     expect(warn.mock.calls.map((call) => String(call[0]))).toEqual([
       expect.stringContaining("suggestions.followUps.enabled"),
       expect.stringContaining("suggestions.followUps.expose"),
     ]);
+
+    warn.mockRestore();
+  });
+
+  it("warns with debug on too", async () => {
+    const resolve = await freshResolve();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const debug = cfg({
+      debug: true,
+      features: { suggestReplies: { enabled: true, expose: false } },
+      suggestions: { followUps: { enabled: false, expose: true } },
+    });
+    resolve(debug);
+    resolve(debug);
+    expect(warn).toHaveBeenCalledTimes(2);
+
+    warn.mockRestore();
+  });
+
+  it("stays silent when a rebuilt config object repeats the same conflict", async () => {
+    const resolve = await freshResolve();
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const conflicting = () =>
+      cfg({
+        features: { suggestReplies: { enabled: true } },
+        suggestions: { followUps: { enabled: false } },
+      });
+
+    // `controller.update()` rebuilds the config object on every call.
+    resolve(conflicting());
+    resolve(conflicting());
+    resolve(conflicting());
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // A different conflict is still a distinct developer error.
+    resolve(
+      cfg({
+        features: { suggestReplies: { expose: true } },
+        suggestions: { followUps: { expose: false } },
+      }),
+    );
+    expect(warn).toHaveBeenCalledTimes(2);
 
     warn.mockRestore();
   });

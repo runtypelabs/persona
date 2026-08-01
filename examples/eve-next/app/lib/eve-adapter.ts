@@ -8,6 +8,11 @@ import { createPersonaSSEStream, type ChatMessage } from "./persona-wire";
  * `message.appended` events as `data.messageDelta`. Each becomes a
  * `text_delta`.
  *
+ * Tool calls arrive on `actions.requested` as `{ kind: "tool-call", callId,
+ * toolName, input }`. eve runs the tool itself, so each one is re-emitted
+ * fire-and-forget (`tool_start` + `tool_complete`) with no `/resume` endpoint.
+ * That is how `agent/tools/suggest_replies.ts` reaches the widget as chips.
+ *
  * The session stream is an **injected dependency** (`session`), so tests drive
  * the adapter with a fake event stream, with no running eve server and no model key.
  * In production it defaults to connecting to the eve agent via the `eve/client` SDK.
@@ -23,9 +28,28 @@ import { createPersonaSSEStream, type ChatMessage } from "./persona-wire";
  * settles. The validation path does not depend on it.
  */
 
+const SUGGEST_REPLIES_TOOL_NAME = "suggest_replies";
+
+/** eve runs the tool; the result only confirms the chips were shown. */
+const SUGGEST_REPLIES_RESULT = {
+  content: [{ type: "text", text: "Suggestions shown to the user." }],
+};
+
+/** One entry of an `actions.requested` batch; only `tool-call` actions cross the wire. */
+export type EveActionRequest = {
+  kind?: string;
+  callId?: string;
+  toolName?: string;
+  input?: unknown;
+};
+
 export type EveSessionEvent = {
   type?: string;
-  data?: { messageDelta?: string; [key: string]: unknown };
+  data?: {
+    messageDelta?: string;
+    actions?: readonly EveActionRequest[];
+    [key: string]: unknown;
+  };
 };
 
 export type EveSessionStream = (args: {
@@ -60,6 +84,20 @@ export function createEvePersonaHandler({
       for await (const event of events) {
         if (event.type === "message.appended" && event.data?.messageDelta) {
           emit.textDelta(event.data.messageDelta);
+          continue;
+        }
+        if (event.type === "actions.requested") {
+          for (const action of event.data?.actions ?? []) {
+            if (action.kind !== "tool-call" || !action.toolName) continue;
+            // eve already executes the tool, so the widget gets the call only.
+            emit.toolCall(action.toolName, action.input ?? {}, {
+              toolCallId: action.callId,
+              // Same canned payload every Persona example puts on tool_complete.
+              ...(action.toolName === SUGGEST_REPLIES_TOOL_NAME
+                ? { result: SUGGEST_REPLIES_RESULT }
+                : {}),
+            });
+          }
         }
       }
 

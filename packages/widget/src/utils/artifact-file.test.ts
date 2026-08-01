@@ -10,7 +10,7 @@ import {
 // Canonical cross-repo fixture. The zero-width space is written as a
 // backslash-u200b escape sequence (not a literal invisible char) so the bytes
 // are unambiguous in source.
-// Mirrors core/packages/shared/src/file-artifact.ts escapeFenceTerminators fixture — keep byte-identical.
+// Mirrors core/packages/shared/src/file-artifact.ts escapeFenceTerminators fixture — keep in sync.
 const ZWSP = "\u200b";
 const FIXTURE_RAW = "# Title\n\n```js\nconsole.log('hi')\n```\n";
 const FIXTURE_ESCAPED =

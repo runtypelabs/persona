@@ -85,6 +85,13 @@ Suggestions expose a three-stage plugin pipeline:
    plugins, the bubbling `persona:suggestion:selected` DOM event is also
    cancelable with `event.preventDefault()`.
 
+`persona:suggestion:shown` and `persona:suggestion:selected` are the events to
+build against: they cover both surfaces and carry the normalized item. The
+legacy `persona:suggestReplies:shown` / `persona:suggestReplies:selected` pair
+still fires on the follow-up surface, but carries string payloads only, is not
+cancelable, and is removed in 5.0. See
+[DOM events](./UI-COMPONENTS.md#dom-events-1).
+
 ```ts
 const suggestionsPlugin: AgentWidgetPlugin = {
   id: "product-suggestions",

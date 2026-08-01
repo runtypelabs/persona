@@ -6,9 +6,9 @@ import {
   type AgentWidgetMessage,
   type AgentWidgetPlugin,
 } from "@runtypelabs/persona";
-import { createMockSSEResponse } from "@runtypelabs/persona/testing";
 
 import { createDemoConfigInspector } from "./demo-config-inspector";
+import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { renderDemoScaffold } from "./demo-scaffold";
 import type { Mode } from "./examples-nav";
 import {
@@ -128,6 +128,13 @@ const followUpItems = [
   },
 ];
 
+const suggestionsDemoFetch = createDemoEchoFetch({
+  chunkSize: 7,
+  delayMs: 24,
+  reply: (userText) =>
+    `You chose “${userText}”. This mock reply streams through Persona’s normal text pipeline so the starter and follow-up selection states are easy to verify.`,
+});
+
 const followUpMessages = (): AgentWidgetMessage[] => [
   {
     id: "demo-user",
@@ -191,8 +198,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => ({
       maxItems: 4,
     },
   },
-  customFetch: async () =>
-    createMockSSEResponse([{ type: "done" }], { delayMs: 0 }),
+  customFetch: suggestionsDemoFetch,
   launcher: {
     ...DEFAULT_WIDGET_CONFIG.launcher,
     enabled: mode === "launcher",

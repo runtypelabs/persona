@@ -29,11 +29,46 @@ type WireFrame = {
   id?: string;
   iteration?: number;
   delta?: string;
+  // tool (tool_start, tool_complete)
+  toolCallId?: string;
+  toolName?: string;
+  toolType?: string;
+  parameters?: unknown;
+  result?: unknown;
 };
+
+/** The item shape `suggestReplies` accepts; a bare string is shorthand for `{ label }`. */
+export type PersonaSuggestion = string | { label: string; prompt?: string; description?: string };
 
 export type PersonaStreamEmitter = {
   /** Stream a chunk of assistant text (`text_delta`). */
   textDelta(text: string): void;
+  /**
+   * Emit a completed tool call (`tool_start` → `tool_complete`), fire-and-forget:
+   * the widget renders the call and the run continues without pausing.
+   *
+   * Arguments must ride `tool_start.parameters`, which this does by construction.
+   * No `origin` field is ever emitted. The widget reads `origin` on `await`
+   * frames only, where `origin: "webmcp"` renames the tool to `webmcp:<name>`
+   * and routes it to the page-tool bridge; omitting it is safe on every frame.
+   *
+   * There is deliberately no `await`/resume support here. A real pause needs a
+   * `POST ${apiUrl}/resume` endpoint and server-side state; see
+   * `examples/ai-sdk-webmcp` for that pattern.
+   */
+  toolCall(
+    name: string,
+    parameters: unknown,
+    options?: { toolCallId?: string; toolType?: string; result?: unknown },
+  ): void;
+  /**
+   * Offer 1-4 tappable quick replies via the built-in `suggest_replies` tool.
+   *
+   * Call it after the final `textDelta` and before `complete()`: the chips stay
+   * disabled until the stream terminates. Max 4 items; the widget drops extras
+   * with a console warning.
+   */
+  suggestReplies(items: PersonaSuggestion[]): void;
   /** Finalize the turn successfully (`text_complete` → `turn_complete` → `execution_complete`). */
   complete(): void;
   /** Abort the run with a terminal error (`execution_error`). */
@@ -61,8 +96,13 @@ const encoder = new TextEncoder();
  *   event: text_delta        { executionId, id:"text_…", delta, iteration:1 }
  *   …more deltas…
  *   event: text_complete     { executionId, id:"text_…" }
+ *   event: tool_start        { executionId, toolCallId:"call_…", toolName, toolType, parameters }
+ *   event: tool_complete     { executionId, toolCallId:"call_…", success:true, result }
  *   event: turn_complete     { executionId, id:"turn_…", iteration:1, stopReason, completedAt }
  *   event: execution_complete{ executionId, kind:"agent", success:true, completedAt }
+ *
+ * The tool frames are optional; a text-only turn simply omits them. They are
+ * what `emit.toolCall` and `emit.suggestReplies` put on the wire.
  *
  * The streamed deltas are authoritative. You don't need to re-send the full
  * text at the end. One `executionId` (`exec_…`) and `kind:"agent"` are carried
@@ -121,6 +161,33 @@ export function createPersonaSSEStream(
         textDelta(text) {
           openTextBlock();
           send("text_delta", { id: textBlockId!, delta: text, iteration: 1 });
+        },
+        toolCall(name, parameters, options) {
+          // Blocks don't nest: close any open text block first. A later
+          // `textDelta` lazily opens a fresh one.
+          closeTextBlock();
+          openTurn();
+          const toolCallId = options?.toolCallId ?? `call_${crypto.randomUUID()}`;
+          send("tool_start", {
+            toolCallId,
+            toolName: name,
+            toolType: options?.toolType ?? "local",
+            parameters,
+            iteration: 1,
+          });
+          send("tool_complete", {
+            toolCallId,
+            success: true,
+            result: options?.result ?? {},
+            completedAt: new Date().toISOString(),
+          });
+        },
+        suggestReplies(items) {
+          emit.toolCall(
+            "suggest_replies",
+            { suggestions: items },
+            { result: { content: [{ type: "text", text: "Suggestions shown to the user." }] } },
+          );
         },
         complete() {
           if (finished) return;

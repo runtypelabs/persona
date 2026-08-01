@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
 import express from "express";
@@ -14,8 +14,6 @@ const dispatch = createEchoPersonaHandler();
 
 // Resolve the local workspace widget build so the page mounts with no network.
 const distDir = dirname(createRequire(import.meta.url).resolve("@runtypelabs/persona"));
-const widgetGlobalJs = readFileSync(join(distDir, "index.global.js"), "utf8");
-
 const app = express();
 app.use(express.json());
 
@@ -41,14 +39,26 @@ app.post("/dispatch", async (req, res) => {
   }
 });
 
-// Serve the widget's self-contained IIFE build for the `<script>` tag in page.ts.
-app.get("/persona/index.global.js", (_req, res) => {
-  res.type("text/javascript").send(widgetGlobalJs);
+// Serve the IIFE and any sibling runtime chunks it imports. `basename` keeps
+// the route inside the package dist directory.
+app.get("/persona/:asset", (req, res) => {
+  try {
+    const asset = readFileSync(join(distDir, basename(req.params.asset)));
+    res.type(contentTypeFor(req.path)).send(asset);
+  } catch {
+    res.status(404).send("not found");
+  }
 });
 
 app.get("/", (_req, res) => {
   res.type("html").send(PAGE);
 });
+
+function contentTypeFor(pathname: string): string {
+  if (pathname.endsWith(".js")) return "text/javascript";
+  if (pathname.endsWith(".css")) return "text/css";
+  return "application/octet-stream";
+}
 
 const port = Number(process.env.PORT ?? 3120);
 app.listen(port, () => {

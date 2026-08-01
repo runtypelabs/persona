@@ -670,7 +670,7 @@ export function renderArtifactPreviewBody(
 
   // Render the syntax-highlighted source. On the inline path the <pre> lives in
   // a scroll window (`fixed` → reserved height + internal scroll + follow/fade);
-  // on the pane path it is a bare child of `el`, byte-identical to before.
+  // on the pane path it is a bare child of `el`, unchanged from before.
   const renderSource = (
     text: string,
     opts: { language?: string; path?: string } | undefined,

@@ -88,7 +88,9 @@
 plugins: [{
   <span class="prop">id</span>: <span class="string">"custom-suggestions"</span>,
   <span class="function">transformSuggestions</span>: ({ suggestions, source }) =&gt;
-    suggestions.map((s, i) =&gt; ({
+    [...suggestions]
+    .sort((a, b) =&gt; b.label.length - a.label.length)
+    .map((s, i) =&gt; ({
       ...s,
       <span class="prop">icon</span>: s.icon ?? iconFor(s.label),
       <span class="prop">emphasis</span>: i === 0 ? <span class="string">"primary"</span> : s.emphasis,

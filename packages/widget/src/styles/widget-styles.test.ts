@@ -8,6 +8,16 @@ const widgetCss = readFileSync(
 );
 
 describe("suggestion interaction styles", () => {
+  it("keeps suggestion surfaces from collapsing inside constrained transcripts", () => {
+    const selector = ".persona-suggestions {";
+    const start = widgetCss.indexOf(selector);
+    const end = widgetCss.indexOf("\n}", start);
+    const surfaceRule = widgetCss.slice(start, end);
+
+    expect(start).toBeGreaterThan(-1);
+    expect(surfaceRule).toContain("flex-shrink: 0");
+  });
+
   it("preserves the primary treatment when an emphasized suggestion is hovered", () => {
     const selector =
       '.persona-suggestion[data-emphasis="primary"]:hover {';

@@ -779,13 +779,17 @@
         const { toolCallId } = e.detail ?? {};
         log(`dismissed (toolCallId=${toolCallId})`, "dismissed");
       });
-      window.addEventListener("persona:suggestReplies:shown", (e) => {
-        const { suggestions } = e.detail ?? {};
-        log(`chips shown → ${JSON.stringify(suggestions)}`, "info");
+      // The current events. `persona:suggestReplies:*` still fire but are
+      // frozen for back-compat; these carry the normalized suggestion objects.
+      window.addEventListener("persona:suggestion:shown", (e) => {
+        const { suggestions = [], surface } = e.detail ?? {};
+        const labels = suggestions.map((item) => item.label);
+        log(`${surface} shown → ${JSON.stringify(labels)}`, "info");
       });
-      window.addEventListener("persona:suggestReplies:selected", (e) => {
-        const { suggestion } = e.detail ?? {};
-        log(`chip selected → "${suggestion}"`, "answered");
+      window.addEventListener("persona:suggestion:selected", (e) => {
+        const { suggestion, surface } = e.detail ?? {};
+        const prompt = suggestion?.prompt ?? suggestion?.label;
+        log(`${surface} selected → "${suggestion?.label}" (sends: "${prompt}")`, "answered");
       });
 
       // Initial mount. Sync the persist toggle to its stored preference before

@@ -9,7 +9,9 @@ into Persona's SSE protocol without writing Persona frames in every route:
 The adapters emit Persona's SSE event vocabulary
 (`execution_start` / `turn_start` / `text_start`·`text_delta`·`text_complete` /
 `turn_complete` / `execution_complete`). Any backend can speak this protocol, and it matches the
-wire the Runtype API emits. The widget consumes the wire natively.
+wire the Runtype API emits. The widget consumes the wire natively. The AI SDK
+route adds the optional `tool_start` / `tool_complete` pair for follow-up
+suggestions.
 
 The local adapter helpers live in `app/lib/` so they are easy to lift into a
 future package export such as `@runtypelabs/persona-proxy/adapters`.
@@ -24,6 +26,12 @@ pnpm --filter ai-sdk-next dev
 ```
 
 Open `http://localhost:3000`.
+
+The adapter tests run offline against a mocked model, so they need no API key:
+
+```bash
+pnpm --filter ai-sdk-next test
+```
 
 ## Routes
 
@@ -68,6 +76,50 @@ data: {"type":"turn_complete","executionId":"exec_...","seq":5,"id":"turn_...","
 event: execution_complete
 data: {"type":"execution_complete","executionId":"exec_...","seq":6,"kind":"agent","success":true,"completedAt":"..."}
 ```
+
+## Follow-up suggestions
+
+The AI SDK route also shows the model-driven path to Persona's quick-reply
+chips. Three pieces, all in `app/lib/ai-sdk-adapter.ts`:
+
+1. A tool named `suggest_replies`, defined with the AI SDK's
+   `tool({ inputSchema: jsonSchema(...) })` using the same parameters schema the
+   widget ships: 1 to 4 items of `{ label, prompt?, description? }`. Its
+   `execute` returns a canned "Suggestions shown to the user." result, because
+   nothing actually runs.
+2. A steering line appended to the system prompt: "after answering, offer 2-3
+   follow-up suggestions with the suggest_replies tool, phrased in the user's
+   voice". The tool description is passive; this instruction is what drives how
+   often the model calls it.
+3. A branch in the `fullStream` loop that maps the `tool-call` part onto
+   `emit.toolCall(...)`, which writes `tool_start` (carrying the arguments on
+   `parameters`) followed immediately by `tool_complete`.
+
+The call is fire-and-forget: no pause, no `/resume` endpoint, and no widget
+config. Chip rendering is transcript-derived, so any `suggest_replies` tool call
+on the wire renders chips while `suggestions.followUps` is at its default
+(`enabled: true`).
+
+Four things worth knowing:
+
+- Arguments must ride `tool_start.parameters`. The `tool_input_delta` frames are
+  display-only, so streaming arguments incrementally never fills them in.
+- Omit `origin` on these frames. The widget reads it on `await` frames only,
+  where `origin: "webmcp"` renames the tool to `webmcp:suggest_replies` and
+  routes it to the page-tool bridge; `tool_start` ignores the field, so omitting
+  it is the rule that holds either way.
+- The stream must reach `execution_complete`, otherwise the chips render but
+  stay permanently disabled.
+- `stopWhen: stepCountIs(1)` is `streamText`'s documented default. Passing it
+  explicitly only makes the single-step loop visible: a fire-and-forget result
+  has nothing to feed back to the model, so there is no second step to stop.
+
+To let the widget advertise the tool instead (`suggestions.followUps.expose:
+true`), read `body.clientTools` and build the tool set from it. See the comment
+above `createAISDKPersonaHandler` and `buildTools()` in
+`examples/ai-sdk-webmcp/app/api/chat/shim.ts`, minus its `origin: "webmcp"`
+hardcode. For a keyless, offline version of the same wire, see
+`examples/echo-hono`.
 
 ## Choosing a model/assistant with `target`
 
@@ -146,9 +198,9 @@ Notes:
 
 ## What this intentionally does not show
 
-This example is plain streaming chat. It does not include WebMCP, local tools,
-the `await` pause, or `/resume`. Those belong in the advanced example at
-`examples/ai-sdk-webmcp`.
+This example is streaming chat plus one fire-and-forget tool call. It does not
+include WebMCP, browser-executed tools, the `await` pause, or `/resume`. Those
+belong in the advanced example at `examples/ai-sdk-webmcp`.
 
 The split is deliberate:
 

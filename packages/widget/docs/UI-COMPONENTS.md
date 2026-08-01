@@ -256,7 +256,7 @@ features: {
 }
 ```
 
-`expose` defaults to `false`: flows that already declare the tool would otherwise present it to the model twice. It is also ignored when `enabled: false`, so the agent is never offered a question tool the widget can't render an answer UI for.
+`expose` defaults to `false` because flows that already declare the tool do not need it. Declaring it in both places is benign: the API dedupes by tool name with the `clientTools[]` entry winning, so exactly one tool reaches the model, using the widget's description and schema. Still declare it in one place. `expose` is also ignored when `enabled: false`, so the agent is never offered a question tool the widget can't render an answer UI for.
 
 The alternative is declaring the tool server-side in your `RuntypeFlowConfig` (a `runtimeTools` LOCAL tool entry); the exported `ASK_USER_QUESTION_CLIENT_TOOL` / `ASK_USER_QUESTION_PARAMETERS_SCHEMA` constants give you the same description and schema to reuse there. Either way, pair your proxy with a `POST` handler that forwards to the upstream `/resume` endpoint (see `@runtypelabs/persona-proxy` and your deployment’s `resume` route).
 
@@ -409,9 +409,23 @@ For plugins that want to re-parse a tool message outside the hook context, the w
 
 ## Suggested Replies
 
-The `suggest_replies` feature lets the agent offer tappable next actions for the user's next message. When the agent calls the `suggest_replies` tool, the widget renders the latest suggestions using `config.suggestions.followUps` and **immediately** resumes the paused execution with a canned "shown" result. Unlike `ask_user_question`, nothing blocks on the user: the agent's turn completes, and selecting an item sends or fills its prompt according to configuration.
+The `suggest_replies` feature lets the agent offer tappable next actions for the user's next message. Rendering is transcript-derived: whenever a `suggest_replies` tool call appears in the message list, the widget renders its suggestions using `config.suggestions.followUps`. Unlike `ask_user_question`, nothing blocks on the user: the agent's turn completes, and selecting an item sends or fills its prompt according to configuration.
+
+The **immediate** auto-resume applies to the hosted parked-execution path: a `local` tool declaration parks the execution server-side, and the widget resumes it right away with a canned "shown" result. Backends that emit the tool call fire-and-forget (a `tool_start`/`tool_complete` pair, no pause) need no resume at all, and the widget never POSTs one. See [Integration paths](#integration-paths).
 
 This is the recommended pattern for follow-up discovery: teaching users what to ask next without forcing typing.
+
+### One feature, three vocabularies
+
+The same feature is named differently at each layer, and each name is load-bearing where it lives:
+
+| Layer | Name | Why |
+| --- | --- | --- |
+| Config | `suggestions.followUps` | Names the user-facing intent, and pairs with `suggestions.starters`. |
+| Wire, tool, events | `suggest_replies` (tool name), `features.suggestReplies` (deprecated config alias), `persona:suggestReplies:*` (legacy events) | A released wire contract and shipped event names, so they stay frozen. |
+| DOM | `follow-up` (attribute values such as `data-persona-suggestion-surface="follow-up"`) | Follows kebab-case DOM convention. |
+
+There is one feature behind all three spellings, so `suggestions.followUps`, the `suggest_replies` tool call, and the `follow-up` DOM attributes always describe the same surface.
 
 ### Where suggestion things live
 
@@ -426,6 +440,82 @@ This is the recommended pattern for follow-up discovery: teaching users what to 
 `suggestions.followUps` owns the agent-produced one, including the two
 capability keys (`enabled`, `expose`) described below.
 
+### Integration paths
+
+Chips render whenever a `suggest_replies` tool call reaches the transcript, so
+the question is only how the model gets the tool and whether the execution
+pauses. Pick the row that matches your setup:
+
+| Your setup | How the model gets the tool | Config | Resume? |
+| --- | --- | --- | --- |
+| Hosted Runtype, flow/agent declares it | `runtimeTools` entry with `toolType: "local"` | default (`enabled: true, expose: false`) | Yes: execution parks, widget auto-resumes |
+| Hosted Runtype, zero backend changes | Widget advertises it on `clientTools[]` | `expose: true` | Yes: same parked-execution and auto-resume path |
+| Hosted Runtype, no-pause variant (advanced) | `runtimeTools` entry with a server-executed type (for example a `custom` no-op) | default | No: `tool_start` carries the arguments and the loop continues |
+| BYO backend (AI SDK, LangGraph, and similar) | Your framework's `tools:` parameter (no `execute`) plus your system prompt | default (`expose` irrelevant) | No: emit fire-and-forget `tool_start`/`tool_complete` |
+| BYO backend, prompt-only | System prompt asks for structured output, your adapter parses it and synthesizes the `tool_start` frame | default | No |
+| No model at all | `controller.setFollowUpSuggestions(items)` | `enabled` may even be `false`: it gates the tool, not the host surface | n/a |
+| Feature off | n/a | `enabled: false` | Tool renders as a plain bubble and is not auto-resumed; on the hosted path with a `local` declaration the execution parks |
+
+On the hosted path nothing server-side injects steering for client tools, so the
+tool description is the only automatic lever on how often the model calls it.
+Instruction-level guidance is the primary knob: a line such as "offer 2-3
+follow-up suggestions via `suggest_replies` after each answer" in the agent
+instructions does more for call frequency than any widget setting. On BYO paths
+you own both the system prompt and the tool description.
+
+Declaration is required on the hosted lane: providers reject unknown tool names,
+and nothing parses narrated tool calls out of the model's text. The prompt-only
+row above works because your own adapter, not the API, turns the model's output
+into a tool frame.
+
+### Follow-up suggestions from any backend
+
+No part of the render path inspects declarations, `expose`, execution ids, or
+Runtype metadata, so any backend that puts a `suggest_replies` tool call on the
+wire gets chips. The minimal fire-and-forget sequence is four frames:
+
+```text
+execution_start
+tool_start      { toolCallId: "call_1", toolName: "suggest_replies",
+                  parameters: { suggestions: [ { label: "Track my order" } ] } }
+tool_complete   { toolCallId: "call_1", success: true }
+execution_complete
+```
+
+No `/resume` endpoint is involved, and the widget's default config
+(`enabled: true, expose: false`) is already correct: `expose` only matters when
+you want the widget to advertise the tool for you.
+
+Gotchas, all verified against the client:
+
+- Arguments must ride `tool_start.parameters` (or `.args`), as an object or a
+  JSON string. `tool_input_delta` and `tool_input_complete` are display-only, so
+  streaming the arguments incrementally never populates the tool call and the
+  chips never appear.
+- The stream must terminate with `execution_complete`. Chips are disabled while
+  the widget considers itself streaming and re-enable on the idle flip, so an
+  unterminated stream renders chips that stay permanently dead.
+- Omit `origin` on frames carrying `suggest_replies` (or send `"sdk"`). The
+  client reads `origin` on `await` frames only, where `origin: "webmcp"` renames
+  the tool to `webmcp:suggest_replies` and routes it to the page-tool bridge;
+  `tool_start` ignores the field entirely. Omitting it is the rule that holds for
+  both frame kinds. The `ai-sdk-webmcp` shim hardcodes `origin: "webmcp"` for
+  every tool call, so it needs a branch if you reuse it.
+- Items may be plain strings or `{ label, prompt?, description? }`. `id`, `icon`,
+  `behavior`, and `emphasis` are stripped from agent payloads; reclaim them with
+  the `transformSuggestions` plugin hook. The cap is 4 items, extras are dropped
+  with a warning.
+- Emit an `await` frame instead of the `tool_start`/`tool_complete` pair only if
+  your backend genuinely parks. That arms the widget's auto-resume, which POSTs
+  to `${apiUrl}/resume`, so you have to implement that endpoint or the POST hits
+  a 404.
+
+Runnable references: [`examples/echo-hono`](../../../examples/echo-hono) is the
+minimal keyless one (deterministic suggestions, no model, runs offline), and
+[`examples/ai-sdk-next`](../../../examples/ai-sdk-next) is the model-driven one
+(tool defined in the AI SDK, steering line in the system prompt, `tool-call`
+stream parts mapped onto tool frames).
+
 ### Exposing the tool to the agent
 
 ```ts
@@ -434,13 +524,27 @@ suggestions: {
 }
 ```
 
-`expose` defaults to `false`: flows that already declare the tool via `runtimeTools` would otherwise present it to the model twice. It is also ignored when `enabled: false`: a disabled feature neither renders chips nor auto-resumes, so exposing the tool alongside it would park the execution on a generic tool bubble forever. (The same applies to a server-declared `suggest_replies` with `enabled: false`: treat that combination as a configuration error.)
+`expose` defaults to `false` because flows that already declare the tool via
+`runtimeTools` do not need it. Declaring it in both places is benign, not a
+double presentation: the API dedupes by tool name with the `clientTools[]` entry
+winning, so exactly one tool reaches the model. The consequences are that the
+widget's description and schema win over the flow's, and the effective type
+becomes `local`, so the execution pauses and waits for the widget's auto-resume
+even if the flow declared a server-executed type. Declare the tool in one place
+so the description and pause behavior are obvious from one file.
+
+`expose` is also ignored when `enabled: false`: a disabled feature neither
+renders chips nor auto-resumes, so exposing the tool alongside it would park the
+execution on a generic tool bubble forever. (The same applies to a
+server-declared `suggest_replies` with `enabled: false`: treat that combination
+as a configuration error.)
 
 `features.suggestReplies.enabled` and `features.suggestReplies.expose` keep
 working as deprecated aliases. Resolution is per key, and `suggestions.followUps`
 wins: an embed that disables the feature under `features` and then adds
-presentation-only `suggestions.followUps` keys is not silently re-enabled. In
-`debug: true` mode the widget warns once per key when the two homes disagree.
+presentation-only `suggestions.followUps` keys is not silently re-enabled. When
+the two homes disagree the widget warns, in debug mode or not: a config conflict
+is a developer error. The warning fires once per distinct conflict per page load.
 The aliases are removed in 5.0.
 
 For server-side declaration, the exported `SUGGEST_REPLIES_CLIENT_TOOL` / `SUGGEST_REPLIES_PARAMETERS_SCHEMA` constants provide the same description and schema to reuse in a flow's `runtimeTools`.
@@ -474,8 +578,8 @@ Plain strings stay tolerated on the parse side for older flows that emit
 Chip visibility is derived from the transcript, not toggled imperatively: the widget shows the chips of the **last** `suggest_replies` tool message that has **no user message after it**. That one rule covers everything:
 
 - Chips soft-dismiss the moment any user message lands: typed, voice, or a chip tap (which itself sends a user message).
-- Chips survive panel close/reopen and page reload (the tool message persists in history and the rule re-evaluates on hydrate). If the page reloads before the automatic resume fired, the execution stays paused server-side; tapping a chip starts a fresh dispatch and the conversation recovers naturally.
-- When one turn carries several `suggest_replies` calls, every call is resumed but only the latest renders (latest wins).
+- Chips survive panel close/reopen and page reload (the tool message persists in history and the rule re-evaluates on hydrate). On the parked-execution path, if the page reloads before the automatic resume fired, the execution stays paused server-side; tapping a chip starts a fresh dispatch and the conversation recovers naturally.
+- When one turn carries several `suggest_replies` calls, every parked call is resumed but only the latest renders (latest wins).
 - Chips are disabled while a response is streaming, like all composer controls.
 
 No transcript bubble is rendered for the tool message: the chips are the entire UI. When `enabled: false`, the message falls through to the generic tool bubble instead.
@@ -507,7 +611,7 @@ suggestions: {
 | `variant` | `"chip"` | Item density: `chip`, `card`, or `list`. |
 | `placement` | `"auto"` | `auto` renders after the transcript in regular panels and above the composer in composer-bar mode. Explicit `after-message` and `composer` are literal. |
 | `behavior` | `"send"` | `send` sends the prompt immediately; `fill` drafts it in the composer. Per-item `behavior` overrides the surface. |
-| `overflow` | `"scroll"` | Layout for items past the surface width: `scroll` or `wrap`. |
+| `overflow` | `"scroll"` | Layout for items past the surface width: `scroll` or `wrap`. Applies to the `chip` variant only; `card` and `list` layouts manage their own stacking. |
 | `maxItems` | `4` | Cap applied after the plugin transform chain. |
 
 There is no `followUps.items`: follow-ups are contextual, so they come from the
@@ -517,6 +621,26 @@ static list belongs in `suggestions.starters`.
 Styling comes from the semantic suggestion theme tokens under
 `theme.components.suggestion`. The legacy `suggestionChipsConfig` remains
 supported for backwards-compatible font and padding overrides.
+
+### Presentation pairings
+
+`variant` and `placement` are independent axes, so every combination renders.
+These are the pairings the styles were designed around:
+
+| Surface | Variant | Placement | Notes |
+| --- | --- | --- | --- |
+| Starters | `card` | `welcome` | The default welcome layout: room for `description` and `icon`. |
+| Starters | `chip` | `composer` | Compact row above the input for a returning user. |
+| Follow-ups | `chip` (`overflow: "scroll"`) | `composer` or `after-message` | The default, and the tuned case for horizontal overflow. |
+| Follow-ups | `list` | `after-message` | Stacked full-width rows for longer labels. |
+
+These render but are not tuned for, so choose them knowingly rather than by
+accident:
+
+- `card` in the composer slot: wide cards in a narrow row, so labels wrap and the
+  row grows taller than the composer.
+- `list` starters on `welcome`: works, but loses the card layout's icon and
+  description treatment that the welcome surface is sized for.
 
 ### Programmatic follow-ups
 
@@ -547,16 +671,25 @@ Semantics:
 
 ### DOM events
 
+Build against the unified events. They cover both surfaces and carry the full
+item:
+
 | Event | Detail |
+|---|---|
+| `persona:suggestion:shown` | `{ suggestions, surface, source, variant }`: normalized items, surface `"starter"` or `"followUp"`, source `"config"`, `"agent"`, or `"host"`. Fires once per distinct set. |
+| `persona:suggestion:selected` | `{ suggestion, surface, source, behavior }`: fires before the action, and is cancelable with `preventDefault()`. |
+
+The `suggestReplies` pair is frozen for back-compat. It fires only on the
+follow-up surface, carries string payloads, is not cancelable, and is removed in
+5.0:
+
+| Legacy event | Detail |
 |---|---|
 | `persona:suggestReplies:shown` | `{ suggestions: string[] }`: fires once per distinct chip set |
 | `persona:suggestReplies:selected` | `{ suggestion: string }`: fires before the chip text is sent |
 
-Both legacy events fire for host-set follow-ups too. The unified
-`persona:suggestion:shown` and `persona:suggestion:selected` events include the
-normalized item, surface (`"starter"` or `"followUp"`), source (`"config"`,
-`"agent"`, or `"host"`), and variant/behavior metadata.
-`persona:suggestion:selected` is cancelable.
+Both families keep dispatching, for agent-produced and host-set follow-ups
+alike.
 
 ## Dropdown Menu
 

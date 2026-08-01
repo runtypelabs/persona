@@ -105,6 +105,10 @@ const fontFamilyValue = (
   }
 };
 
+// Module-level, keyed on the widget config: one widget owns several suggestion
+// managers, so a per-instance flag hints once per surface instead of once.
+const hintedOverflowVariant = new WeakSet<AgentWidgetConfig>();
+
 export const createSuggestions = (container: HTMLElement): SuggestionButtons => {
   const suggestionButtons: HTMLButtonElement[] = [];
   const suggestionElements: HTMLElement[] = [];
@@ -196,6 +200,21 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
       typeof opts?.maxItems === "number"
         ? Math.max(0, Math.floor(opts.maxItems))
         : undefined;
+
+    // `data-overflow` is styled under the chip variant only; hint once so the
+    // no-op is discoverable without reading the CSS.
+    const surfaceKey = isFollowUp ? "followUps" : "starters";
+    if (
+      !hintedOverflowVariant.has(widgetConfig) &&
+      widgetConfig.debug === true &&
+      variant !== "chip" &&
+      widgetConfig.suggestions?.[surfaceKey]?.overflow !== undefined
+    ) {
+      hintedOverflowVariant.add(widgetConfig);
+      console.info(
+        `[persona] suggestions.${surfaceKey}.overflow applies to the "chip" variant only; the "${variant}" variant manages its own stacking.`
+      );
+    }
 
     // Normalize before transform: hooks see resolved items and may return the
     // loose shape, so re-resolution only fills a missing per-item behavior.

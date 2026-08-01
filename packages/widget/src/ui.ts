@@ -3494,6 +3494,10 @@ export const createAgentExperience = (
   // Host-set follow-ups (`setFollowUpSuggestions`) are an ephemeral UI overlay:
   // never appended to the session, never sent on the wire, never persisted.
   let hostFollowUps: AgentWidgetSuggestion[] | null = null;
+  // Latches: a host that drives the surface itself is a legitimate no-tool
+  // integration, so the never-called hint must stay off even after the overlay
+  // expires.
+  let hostFollowUpsEverSet = false;
   // Latest-writer-wins bookkeeping captured at set time: the overlay is dropped
   // once another user message appends or a newer suggest_replies message lands.
   let hostFollowUpsUserCount = 0;
@@ -3523,6 +3527,28 @@ export const createAgentExperience = (
       '[persona] suggestions.starters.placement is pinned to "welcome" but copy.showWelcomeCard is false, so no starters render. Use "auto" or "composer".',
     );
   };
+  // Debug-only setup hint: a stream this session ended without the agent ever
+  // calling suggest_replies, so the model never got the tool. Gated on a
+  // COMPLETED stream, not on transcript shape: a restored transcript
+  // (initialMessages/onStateLoaded) proves nothing about this session's wiring.
+  let hintedFollowUpsNeverCalled = false;
+  let completedStreamThisSession = false;
+  const hintFollowUpsNeverCalled = (
+    messages: AgentWidgetMessage[],
+    feature: ReturnType<typeof resolveFollowUpsFeature>
+  ) => {
+    if (hintedFollowUpsNeverCalled || config.debug !== true) return;
+    if (!feature.enabled || feature.expose) return;
+    if (hostFollowUpsEverSet) return;
+    if (!completedStreamThisSession) return;
+    if (session.isStreaming()) return;
+    if (messages.some(isSuggestRepliesMessage)) return;
+    hintedFollowUpsNeverCalled = true;
+    console.info(
+      "[persona] Follow-up suggestions are enabled but the agent has not called suggest_replies. The model needs the tool declared (runtimeTools server-side, suggestions.followUps.expose: true from the widget, or your own backend's tool definition) and benefits from instructions telling it when to offer follow-ups. See the integration paths table in UI-COMPONENTS.md."
+    );
+  };
+
   const renderSuggestions = (messages?: AgentWidgetMessage[]) => {
     if (!session) return;
     const current = messages ?? session.getMessages();
@@ -3546,7 +3572,9 @@ export const createAgentExperience = (
 
     // `enabled: false` disables the tool, not the surface: host-set follow-ups
     // still render.
-    const agentSuggestions = resolveFollowUpsFeature(config).enabled
+    const followUpsFeature = resolveFollowUpsFeature(config);
+    hintFollowUpsNeverCalled(current, followUpsFeature);
+    const agentSuggestions = followUpsFeature.enabled
       ? latestAgentSuggestions(current)
       : null;
     const followUpSuggestions = hostFollowUps ?? agentSuggestions;
@@ -3667,6 +3695,7 @@ export const createAgentExperience = (
     }
     const current = session ? session.getMessages() : [];
     hostFollowUps = list;
+    hostFollowUpsEverSet = true;
     hostFollowUpsUserCount = countUserMessages(current);
     hostFollowUpsAgentId = latestSuggestRepliesId(current);
     renderSuggestions(current);
@@ -6390,6 +6419,16 @@ export const createAgentExperience = (
       }
       if (!streaming) {
         scheduleAutoScroll(true);
+        // setStreaming only fires on a change, so this is always a real stream
+        // ending. Evaluate the never-called hint here: no later render is
+        // guaranteed on a settled transcript.
+        completedStreamThisSession = true;
+        if (session) {
+          hintFollowUpsNeverCalled(
+            session.getMessages(),
+            resolveFollowUpsFeature(config)
+          );
+        }
       }
       // Keep the "streaming below" hint and its announcement in sync with the
       // streaming lifecycle (Principles 8 + 15).

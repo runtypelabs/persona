@@ -517,7 +517,7 @@ built-in tool.
 | `variant` | `'chip' \| 'card' \| 'list'?` | Item density. Default: `'card'`. |
 | `placement` | `'auto' \| 'welcome' \| 'composer'?` | `auto` uses the welcome surface when the welcome card renders and the composer otherwise. Explicit values are literal: pinned `welcome` renders nothing when `copy.showWelcomeCard` is `false` (with a debug-mode warning). Default: `'auto'`. |
 | `behavior` | `'send' \| 'fill'?` | Default click behavior, overridable per item. Default: `'send'`. |
-| `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Default: `'wrap'`. |
+| `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Applies to the `chip` variant only; `card` and `list` layouts manage their own stacking. Default: `'wrap'`. |
 | `maxItems` | `number?` | Cap applied after the plugin transform chain. Default: `4`. |
 
 **`suggestions.followUps`**: `AgentWidgetFollowUpSuggestionsConfig`
@@ -529,13 +529,25 @@ built-in tool.
 | `variant` | `'chip' \| 'card' \| 'list'?` | Item density. Default: `'chip'`. |
 | `placement` | `'auto' \| 'after-message' \| 'composer'?` | `auto` renders after the transcript in regular panels and above the composer in composer-bar mode. Default: `'auto'`. |
 | `behavior` | `'send' \| 'fill'?` | Default click behavior, overridable per item. Default: `'send'`. |
-| `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Default: `'scroll'`. |
+| `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Applies to the `chip` variant only; `card` and `list` layouts manage their own stacking. Default: `'scroll'`. |
 | `maxItems` | `number?` | Cap applied after the plugin transform chain. Default: `4`. |
+
+`enabled: true` on its own renders nothing: the model also has to be given the
+tool, either server-side or via `expose`. The
+[integration paths table](./UI-COMPONENTS.md#integration-paths) maps each backend
+setup (hosted flow declaration, `expose`, BYO adapter, host-set items) to the
+config it needs and whether the execution pauses, and covers the instruction
+wording that drives how often the model calls the tool. Declaring the tool both
+server-side and via `expose` is benign: the API dedupes by name with
+`clientTools[]` winning, though the effective type then becomes `local`, so the
+execution pauses for the widget's auto-resume.
 
 There is no `followUps.items`: follow-up items come from the agent's
 `suggest_replies` call or from `controller.setFollowUpSuggestions()`, an
 ephemeral host overlay that is never persisted or sent on the wire. Static
-lists belong in `starters`.
+lists belong in `starters`. Any backend can drive the surface by emitting a
+`suggest_replies` tool call on the wire; see
+[Follow-up suggestions from any backend](./UI-COMPONENTS.md#follow-up-suggestions-from-any-backend).
 
 `features.suggestReplies.enabled` / `.expose` are deprecated aliases of
 `suggestions.followUps.enabled` / `.expose`. Resolution is per key with
@@ -697,8 +709,8 @@ See [Menu behavior and positioning](./CONTEXT-MENTIONS.md#menu-behavior-and-posi
 
 Both keys moved to [`suggestions.followUps`](#suggestions), which also owns
 presentation, placement, and send/fill behavior for the same surface. The alias
-keeps working per key, with `suggestions.followUps` winning and a debug-mode
-warning when the two homes disagree. Removal waits for 5.0.
+keeps working per key, with `suggestions.followUps` winning and a console warning
+when the two homes disagree, in debug mode or not. Removal waits for 5.0.
 
 | Property | Type | Description |
 | --- | --- | --- |

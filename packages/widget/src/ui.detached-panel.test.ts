@@ -907,7 +907,7 @@ describe("createAgentExperience welded artifact split chrome", () => {
 
     controller.hideArtifacts();
 
-    // Byte-identical to pane-closed: container carries the border, panel does not.
+    // Same as pane-closed: container carries the border, panel does not.
     expect(mount.classList.contains("persona-artifact-welded-split")).toBe(false);
     expect(container?.style.border).toContain("--persona-panel-border");
     expect(panel?.style.border).toBe("");

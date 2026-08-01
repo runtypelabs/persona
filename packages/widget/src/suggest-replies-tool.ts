@@ -4,11 +4,11 @@
  * The widget can advertise this tool to the agent on every dispatch via
  * `clientTools[]` (set `suggestions.followUps.expose: true`): the same
  * wire surface as `ask_user_question` and WebMCP page tools. When the model
- * calls it, the execution pauses with a `step_await`
- * (`awaitReason: "local_tool_required"`); unlike `ask_user_question`, the
- * widget resolves it FIRE-AND-FORGET: it renders the configured follow-up
- * suggestion surface and immediately resumes the execution with a canned
- * "shown" result, so the agent's turn completes without waiting on the user.
+ * calls it, the execution pauses with a `step_await` (a local-tool pause
+ * carries no `awaitReason`; that discriminator is internal). Unlike
+ * `ask_user_question`, the widget resolves it FIRE-AND-FORGET: it renders the
+ * configured follow-up surface and immediately resumes the execution with a
+ * canned "shown" result, so the turn completes without waiting on the user.
  *
  * Chip visibility is DERIVED state, not imperative show/hide: the chips of
  * the last `suggest_replies` tool message with no user message after it are
@@ -177,21 +177,21 @@ export type ResolvedFollowUpsFeature = {
   expose: boolean;
 };
 
-// One warning per config object per key: the resolver runs on every render.
-const conflictWarnings = new WeakMap<AgentWidgetConfig, Set<string>>();
+// Keyed on the conflict itself, not the config object: `controller.update()`
+// rebuilds the config on every call, so an object-keyed dedupe re-warns
+// forever. Trade-off: two widgets with the identical conflict warn once total
+// per page load.
+const conflictWarnings = new Set<string>();
 
+/** Always warns, debug or not: a config conflict is a developer error. */
 const warnConflict = (
-  config: AgentWidgetConfig,
   key: "enabled" | "expose",
+  legacyValue: boolean,
+  newValue: boolean,
 ): void => {
-  if (config.debug !== true) return;
-  let warned = conflictWarnings.get(config);
-  if (!warned) {
-    warned = new Set<string>();
-    conflictWarnings.set(config, warned);
-  }
-  if (warned.has(key)) return;
-  warned.add(key);
+  const signature = `${key}:${legacyValue}:${newValue}`;
+  if (conflictWarnings.has(signature)) return;
+  conflictWarnings.add(signature);
   console.warn(
     `[persona] suggestions.followUps.${key} and features.suggestReplies.${key} disagree; suggestions.followUps.${key} wins.`,
   );
@@ -209,13 +209,16 @@ export const resolveFollowUpsFeature = (
 ): ResolvedFollowUpsFeature => {
   const followUps = config?.suggestions?.followUps;
   const legacy = config?.features?.suggestReplies;
-  const conflicts = (key: "enabled" | "expose"): boolean =>
-    followUps?.[key] !== undefined &&
-    legacy?.[key] !== undefined &&
-    followUps[key] !== legacy[key];
+  const warnIfConflicting = (key: "enabled" | "expose"): void => {
+    const newValue = followUps?.[key];
+    const legacyValue = legacy?.[key];
+    if (newValue === undefined || legacyValue === undefined) return;
+    if (newValue === legacyValue) return;
+    warnConflict(key, legacyValue, newValue);
+  };
   if (config) {
-    if (conflicts("enabled")) warnConflict(config, "enabled");
-    if (conflicts("expose")) warnConflict(config, "expose");
+    warnIfConflicting("enabled");
+    warnIfConflicting("expose");
   }
   const enabled = followUps?.enabled ?? legacy?.enabled ?? true;
   const expose = enabled

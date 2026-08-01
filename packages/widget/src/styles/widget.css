@@ -245,6 +245,7 @@
   );
   display: flex;
   align-items: stretch;
+  flex-shrink: 0;
   gap: 8px;
   min-width: 0;
 }

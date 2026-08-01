@@ -1,7 +1,7 @@
 /**
  * The demo page. Mounts the real Persona widget from a plain `<script>` tag,
  * no bundler, no framework. The widget's IIFE build attaches the public API to
- * `window.AgentWidgetBrowser`; we serve it from the local workspace build (see
+ * `window.AgentWidget`; we serve it from the local workspace build (see
  * `index.ts`) so the page works fully offline.
  *
  * The widget points at `/dispatch` in proxy mode and auto-detects Persona's
@@ -13,6 +13,7 @@ export const PAGE = /* html */ `<!doctype html>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Persona × Hono</title>
+    <link rel="stylesheet" href="/persona/widget.css" />
     <style>
       :root { color-scheme: light; }
       body {
@@ -33,6 +34,7 @@ export const PAGE = /* html */ `<!doctype html>
         margin-top: 28px; height: 520px; border: 1px solid #e3e6ee;
         border-radius: 14px; overflow: hidden; background: #fff;
       }
+      #persona-root { width: 100%; height: 100%; }
     </style>
   </head>
   <body>
@@ -42,18 +44,19 @@ export const PAGE = /* html */ `<!doctype html>
       <p>
         The same <code>(Request) =&gt; Response</code> adapter, mounted into Hono with one line
         (<code>app.post("/dispatch", (c) =&gt; dispatch(c.req.raw))</code>). The
-        <code>persona-wire.ts</code> file is byte-identical to every other host in the matrix.
+        <code>persona-wire.ts</code> file is the same file in every other host in the matrix.
       </p>
       <p>Active backend: <code>POST /dispatch</code> (zero-dependency echo agent)</p>
-      <div id="persona-root" class="widget-host"></div>
+      <div class="widget-host"><div id="persona-root"></div></div>
     </div>
 
     <script src="/persona/index.global.js"></script>
     <script>
-      const { createAgentExperience, markdownPostprocessor } = window.AgentWidgetBrowser;
+      const { createAgentExperience } = window.AgentWidget;
       createAgentExperience(document.getElementById("persona-root"), {
         apiUrl: "/dispatch",
-        launcher: { enabled: false },
+        persistState: false,
+        launcher: { enabled: false, width: "100%" },
         copy: {
           welcomeTitle: "Persona × Hono",
           welcomeSubtitle: "Ask anything. The echo agent streams it back over the Persona wire.",
@@ -74,7 +77,6 @@ export const PAGE = /* html */ `<!doctype html>
           "What does this adapter demonstrate?",
           "Explain the Persona wire",
         ],
-        postprocessMessage: ({ text }) => markdownPostprocessor(text),
       });
     </script>
   </body>

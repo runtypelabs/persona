@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "pnpm --filter @runtypelabs/persona build && next build",
     "start": "next start",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.71",
@@ -19,9 +20,11 @@
     "react-dom": "^19.2.7"
   },
   "devDependencies": {
+    "@ai-sdk/provider": "^3.0.10",
     "@types/node": "^25.9.3",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
   }
 }

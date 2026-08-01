@@ -2349,9 +2349,11 @@ export type AgentWidgetSuggestRepliesFeature = {
   /**
    * Advertise the built-in `suggest_replies` tool to the agent on every
    * dispatch via `clientTools[]`: no server-side `runtimeTools` declaration
-   * needed. Defaults to `false`: flows that already declare the tool via
-   * `runtimeTools` would otherwise present it to the model twice. Ignored
-   * when `enabled` is `false`.
+   * needed. Defaults to `false`. Declare the tool in one place: the API
+   * dedupes a double declaration by name with `clientTools[]` winning, so the
+   * model still sees exactly one tool, but the widget's description and schema
+   * win and the effective tool type becomes `local` (the execution pauses and
+   * the widget auto-resumes it). Ignored when `enabled` is `false`.
    * @deprecated Use `suggestions.followUps.expose`.
    */
   expose?: boolean;
@@ -2427,10 +2429,13 @@ export type AgentWidgetAskUserQuestionFeature = {
    * matching {@link AskUserQuestionPayload}; when the model calls it, the
    * existing answer-pill sheet renders and the answer resumes the execution.
    *
-   * Defaults to `false`: flows that already declare `ask_user_question` via
-   * `runtimeTools` would otherwise present the tool to the model twice.
-   * Ignored when `enabled` is `false`: never offer the agent a question
-   * tool the widget can't render an answer UI for.
+   * Defaults to `false`. Declare the tool in one place: the API dedupes a
+   * double declaration by name with `clientTools[]` winning, so the model
+   * still sees exactly one tool, but the widget's description and schema win
+   * and the effective tool type becomes `local` (the execution pauses and the
+   * widget resumes it with the user's answer). Ignored when `enabled` is
+   * `false`: never offer the agent a question tool the widget can't render an
+   * answer UI for.
    */
   expose?: boolean;
   /** Slide-in animation duration in ms. Defaults to 180. */
@@ -3785,7 +3790,8 @@ export type AgentWidgetSuggestionSurfaceConfig = {
   behavior?: AgentWidgetSuggestionBehavior;
   /**
    * Layout for items past the surface width. Defaults to `wrap` for starters
-   * and `scroll` for follow-ups.
+   * and `scroll` for follow-ups. Applies to the `chip` variant only; the
+   * `card` and `list` layouts manage their own stacking.
    */
   overflow?: "scroll" | "wrap";
   /** Maximum visible items. Defaults to 4. */
@@ -3816,9 +3822,12 @@ export type AgentWidgetFollowUpSuggestionsConfig =
     /**
      * Advertise the built-in `suggest_replies` tool to the agent on every
      * dispatch via `clientTools[]`: no server-side `runtimeTools` declaration
-     * needed. Defaults to `false`: flows that already declare the tool via
-     * `runtimeTools` would otherwise present it to the model twice. Ignored
-     * when `enabled` is `false`.
+     * needed. Defaults to `false`. Declare the tool in one place: the API
+     * dedupes a double declaration by name with `clientTools[]` winning, so
+     * the model still sees exactly one tool, but the widget's description and
+     * schema win and the effective tool type becomes `local` (the execution
+     * pauses and the widget auto-resumes it). Ignored when `enabled` is
+     * `false`.
      */
     expose?: boolean;
     /**

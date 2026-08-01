@@ -11,25 +11,32 @@ type SelectionLogger = (message: string) => void;
 export const createCuratedSuggestionsPlugin = (): AgentWidgetPlugin => ({
   id: "demo-suggestion-curation",
   transformSuggestions: ({ suggestions, surface }) =>
-    suggestions.map((suggestion, index) => ({
-      ...suggestion,
-      label:
-        index === 0 ? `Recommended · ${suggestion.label}` : suggestion.label,
-      description: `${surface === "starter" ? "Context-ranked" : "Based on this answer"} · ${
-        suggestion.description ??
-        (surface === "starter"
-          ? "Personalized from account and product context"
-          : "Recommended from the latest assistant response")
-      }`,
-      icon:
-        suggestion.icon ??
-        (index === 0
-          ? "sparkles"
-          : surface === "starter"
-            ? "globe"
-            : "arrow-up-right"),
-      emphasis: index === 0 ? "primary" : suggestion.emphasis,
-    })),
+    suggestions
+      .map((suggestion, originalIndex) => ({ suggestion, originalIndex }))
+      .sort(
+        (a, b) =>
+          b.suggestion.label.length - a.suggestion.label.length ||
+          a.originalIndex - b.originalIndex,
+      )
+      .map(({ suggestion }, index) => ({
+        ...suggestion,
+        label:
+          index === 0 ? `Recommended · ${suggestion.label}` : suggestion.label,
+        description: `${surface === "starter" ? "Context-ranked" : "Based on this answer"} · ${
+          suggestion.description ??
+          (surface === "starter"
+            ? "Personalized from account and product context"
+            : "Recommended from the latest assistant response")
+        }`,
+        icon:
+          suggestion.icon ??
+          (index === 0
+            ? "sparkles"
+            : surface === "starter"
+              ? "globe"
+              : "arrow-up-right"),
+        emphasis: index === 0 ? "primary" : suggestion.emphasis,
+      })),
 });
 
 const CUSTOM_SUGGESTION_CSS = `

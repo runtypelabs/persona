@@ -41,6 +41,23 @@ const injectUserMessage = (
   });
 };
 
+const injectAssistantMessage = (
+  controller: ReturnType<typeof createAgentExperience>,
+  id = "a1",
+  createdAt = "2026-06-10T00:00:01.000Z",
+) => {
+  controller.injectTestMessage({
+    type: "message",
+    message: {
+      id,
+      role: "assistant",
+      content: "Here is the answer.",
+      createdAt,
+      streaming: false,
+    },
+  });
+};
+
 const injectSuggestReplies = (
   controller: ReturnType<typeof createAgentExperience>,
   {
@@ -70,6 +87,25 @@ const injectSuggestReplies = (
     },
   });
 };
+
+/** SSE body in the wire's data-only shape: one JSON frame per event. */
+const sseStream = (frames: Record<string, unknown>[]) => {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const frame of frames) {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(frame)}\n\n`));
+      }
+      controller.close();
+    },
+  });
+};
+
+/** Drives a real stream to completion so the session flips back to idle. */
+const completeStream = (
+  controller: ReturnType<typeof createAgentExperience>,
+  frames: Record<string, unknown>[] = [{ type: "done" }],
+) => controller.connectStream(sseStream(frames));
 
 const chipButtons = (mount: HTMLElement, label: string): HTMLButtonElement[] =>
   Array.from(mount.querySelectorAll("button")).filter(
@@ -894,6 +930,179 @@ describe("suggest_replies chips UI", () => {
     );
     chipButtons(mount, "DOM guarded")[0]!.click();
     expect(textarea.value).toBe("");
+
+    controller.destroy();
+  });
+});
+
+describe("minimal BYO wire sequence", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  // Pins the four-frame sequence documented in UI-COMPONENTS.md: no
+  // turn_start, no text frames, no await/resume. Args ride tool_start.
+  it("renders chips from execution_start, tool_start, tool_complete, execution_complete", async () => {
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+
+    await completeStream(controller, [
+      { type: "execution_start", executionId: "exec-byo" },
+      {
+        type: "tool_start",
+        executionId: "exec-byo",
+        toolCallId: "call_byo_1",
+        toolName: SUGGEST_REPLIES_TOOL_NAME,
+        toolType: "local",
+        parameters: {
+          suggestions: [
+            { label: "Tell me more" },
+            { label: "Show pricing", prompt: "Show me the pricing tiers" },
+          ],
+        },
+      },
+      {
+        type: "tool_complete",
+        executionId: "exec-byo",
+        toolCallId: "call_byo_1",
+        success: true,
+        result: { content: [{ type: "text", text: "Suggestions shown to the user." }] },
+      },
+      { type: "execution_complete", executionId: "exec-byo" },
+    ]);
+
+    const toolMessage = controller
+      .getMessages()
+      .find((message) => message.toolCall?.name === SUGGEST_REPLIES_TOOL_NAME);
+    expect(toolMessage?.variant).toBe("tool");
+    expect(toolMessage?.toolCall?.args).toEqual({
+      suggestions: [
+        { label: "Tell me more" },
+        { label: "Show pricing", prompt: "Show me the pricing tiers" },
+      ],
+    });
+
+    const chips = chipButtons(mount, "Tell me more");
+    expect(chips).toHaveLength(1);
+    expect(chips[0]!.disabled).toBe(false);
+    expect(chipButtons(mount, "Show pricing")).toHaveLength(1);
+
+    controller.destroy();
+  });
+});
+
+describe("follow-ups never called debug hint", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    if (typeof localStorage !== "undefined") localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const spyHints = () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    info.mockClear();
+    return () =>
+      info.mock.calls.filter((call) =>
+        String(call[0]).includes("has not called suggest_replies"),
+      );
+  };
+
+  it("fires once after a stream completes with the default flags", async () => {
+    const hints = spyHints();
+    const { controller } = makeController({ debug: true });
+    injectUserMessage(controller);
+    injectAssistantMessage(controller);
+
+    await completeStream(controller);
+    expect(hints()).toHaveLength(1);
+    expect(String(hints()[0]![0])).toContain("suggestions.followUps.expose");
+
+    await completeStream(controller);
+    expect(hints()).toHaveLength(1);
+
+    controller.destroy();
+  });
+
+  it("does not fire on a restored transcript with no dispatch this session", () => {
+    const hints = spyHints();
+    const { controller } = makeController({ debug: true });
+    injectUserMessage(controller);
+    injectAssistantMessage(controller);
+    injectAssistantMessage(controller, "a2", "2026-06-10T00:00:03.000Z");
+
+    expect(hints()).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("does not fire when the host drives follow-ups itself", async () => {
+    const hints = spyHints();
+    const { controller } = makeController({ debug: true });
+    injectUserMessage(controller);
+    injectAssistantMessage(controller);
+    controller.setFollowUpSuggestions(["Book a demo"]);
+
+    await completeStream(controller);
+    // The overlay expires on the next user message; the hint stays off anyway.
+    injectUserMessage(controller, "u2", "2026-06-10T00:00:04.000Z");
+    await completeStream(controller);
+    expect(hints()).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("does not fire when the widget exposes the tool itself", async () => {
+    const hints = spyHints();
+    const { controller } = makeController({
+      debug: true,
+      suggestions: { followUps: { expose: true } },
+    });
+    injectUserMessage(controller);
+    injectAssistantMessage(controller);
+    await completeStream(controller);
+
+    expect(hints()).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("does not fire once a suggest_replies message exists", async () => {
+    const hints = spyHints();
+    const { controller } = makeController({ debug: true });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    await completeStream(controller);
+
+    expect(hints()).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("does not fire when the feature is disabled", async () => {
+    const hints = spyHints();
+    const { controller } = makeController({
+      debug: true,
+      suggestions: { followUps: { enabled: false } },
+    });
+    injectUserMessage(controller);
+    injectAssistantMessage(controller);
+    await completeStream(controller);
+
+    expect(hints()).toHaveLength(0);
+
+    controller.destroy();
+  });
+
+  it("does not fire without debug", async () => {
+    const hints = spyHints();
+    const { controller } = makeController();
+    injectUserMessage(controller);
+    injectAssistantMessage(controller);
+    await completeStream(controller);
+
+    expect(hints()).toHaveLength(0);
 
     controller.destroy();
   });

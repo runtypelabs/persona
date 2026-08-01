@@ -12,7 +12,7 @@ import {
  * `createEchoPersonaHandler` returns a standard Web handler, `(Request) =>
  * Promise<Response>`. Every host in the matrix (Hono, Express, SvelteKit, bare
  * Node) mounts THIS exact function; only the thin host wrapper around it
- * changes. `persona-wire.ts` and this file are byte-identical across all four.
+ * changes. `persona-wire.ts` and this file are exact copies across all four.
  * Diff the examples and the wire never moves.
  *
  * By default it streams a zero-dependency echo, so the example runs with no API
@@ -23,6 +23,13 @@ import {
 /** Streams assistant text for one turn, given the conversation so far. */
 export type Responder = (messages: ChatMessage[]) => AsyncIterable<string>;
 
+/** Fixed follow-up chips, phrased in the user's voice. `prompt` overrides the sent text. */
+const FOLLOW_UP_SUGGESTIONS = [
+  { label: "Say that again" },
+  { label: "Swap in a real model", prompt: "How do I swap in a real model?" },
+  { label: "Show me the wire", prompt: "Which SSE frames did that turn emit?" },
+];
+
 export function createEchoPersonaHandler(options: { respond?: Responder } = {}) {
   const respond = options.respond ?? echoResponder;
 
@@ -32,6 +39,9 @@ export function createEchoPersonaHandler(options: { respond?: Responder } = {}) 
 
     return createPersonaSSEStream(async ({ emit }) => {
       for await (const chunk of respond(messages)) emit.textDelta(chunk);
+      // Follow-up chips must be emitted after the last delta and before the run
+      // terminates. A real backend maps its model's tool call here instead.
+      emit.suggestReplies(FOLLOW_UP_SUGGESTIONS);
       emit.complete();
     });
   };
@@ -45,7 +55,12 @@ async function* echoResponder(messages: ChatMessage[]): AsyncIterable<string> {
       "swap in a real model by passing your own `respond`."
     : "Send a message and the echo agent will stream it back.";
 
-  for (const word of reply.split(" ")) yield word + " ";
+  for (const word of reply.split(" ")) {
+    yield word + " ";
+    // Keep the keyless demo visibly streaming instead of completing in one
+    // browser task; production responders naturally inherit model latency.
+    await new Promise((resolve) => setTimeout(resolve, 35));
+  }
 }
 
 /**
