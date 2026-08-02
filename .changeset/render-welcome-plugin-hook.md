@@ -23,3 +23,5 @@ to an in-memory map under `persistState: false` or blocked storage.
 
 Also adds `AttachmentManager.remountPreviews()` so pending attachments survive a
 composer rebuild.
+
+Plugin-rendered composers now own their copy: the core no longer stamps `copy.inputPlaceholder` / `copy.sendButtonLabel` onto composer content a plugin returned, so gates can keep their lock reason in the placeholder. Default and composed composers are unchanged.

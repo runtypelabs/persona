@@ -331,6 +331,41 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
     }
   });
 
+  it("does not stamp copy onto a plugin-owned composer's input", () => {
+    const plugin: AgentWidgetPlugin = {
+      id: "gate",
+      renderComposer: () => {
+        const footer = document.createElement("div");
+        const input = document.createElement("textarea");
+        input.setAttribute("data-persona-composer-input", "");
+        input.placeholder = "Submit the form above to start.";
+        footer.appendChild(input);
+        return footer;
+      },
+    };
+    const { mount, controller } = makeController({
+      plugins: [plugin],
+      copy: { inputPlaceholder: "Ask a question" },
+    });
+
+    const input = textareaOf(mount)!;
+    expect(input.placeholder).toBe("Submit the form above to start.");
+
+    controller.update({ copy: { inputPlaceholder: "Changed" } });
+    expect(input.placeholder).toBe("Submit the form above to start.");
+  });
+
+  it("stamps copy onto the default composer once a plugin falls through", () => {
+    const { plugin, state } = createGatePlugin();
+    const { mount, controller } = makeController({ plugins: [plugin] });
+
+    state.gated = false;
+    state.ctx!.requestRender();
+
+    controller.update({ copy: { inputPlaceholder: "Changed" } });
+    expect(textareaOf(mount)!.placeholder).toBe("Changed");
+  });
+
   it("rebuilds the pill composer in composer-bar mode", () => {
     const { plugin, state } = createGatePlugin();
     const { mount } = makeController({

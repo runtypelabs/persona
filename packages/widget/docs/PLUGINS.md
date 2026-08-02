@@ -297,6 +297,11 @@ hands you `openAttachmentPicker()`, the model list / `selectedModelId` /
 `onModelChange` from `config.composer`, and `onVoiceToggle()` when
 `config.voiceRecognition.enabled` is true.
 
+A plugin-returned composer owns its copy: the core does not stamp
+`copy.inputPlaceholder` or `copy.sendButtonLabel` onto plugin-rendered content,
+so set your own placeholder (the pre-chat gate keeps its lock reason there).
+Composition via `defaultRenderer()` still receives the configured copy.
+
 The hook runs once when the panel is constructed, so `requestRender()` is how a
 composer plugin re-renders later: it re-runs arbitration and swaps the footer in
 place. Returning `null` on that second pass hands the composer back to Persona,

@@ -1245,6 +1245,10 @@ export const createAgentExperience = (
   // Arbitration is a function so `rebuildComposer()` can re-run it with a
   // fresh ctx and swap the footer in place.
   const composerPlugin = plugins.find(p => p.renderComposer);
+  // True while the footer content came from a plugin (not composition via
+  // defaultRenderer). Plugin composers own their copy: updateCopy must not
+  // stamp inputPlaceholder/sendButtonLabel onto DOM the core did not build.
+  let composerIsPluginOwned = false;
   const renderComposerFromPlugins = (
     defaultRenderer: () => HTMLElement
   ): HTMLElement | null => {
@@ -1307,6 +1311,7 @@ export const createAgentExperience = (
     // Replace the default footer with custom composer (keeps view.composer.footer in sync).
     view.replaceComposer(customComposer);
     footer = view.composer.footer;
+    composerIsPluginOwned = true;
   }
 
   const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
@@ -6427,13 +6432,18 @@ export const createAgentExperience = (
 
   const updateCopy = () => {
     updateWelcome();
-    textarea.placeholder = config.copy?.inputPlaceholder ?? "How can I help...";
+    // Plugin-owned composers set their own placeholder and send label (the
+    // pre-chat gate keeps its lock reason in the placeholder, for example).
+    if (!composerIsPluginOwned) {
+      textarea.placeholder =
+        config.copy?.inputPlaceholder ?? "How can I help...";
 
-    // Only update send button text if NOT using icon mode. Skip while
-    // streaming so we don't stomp on the "Stop" label.
-    const useIcon = config.sendButton?.useIcon ?? false;
-    if (!useIcon && !session?.isStreaming()) {
-      sendButton.textContent = config.copy?.sendButtonLabel ?? "Send";
+      // Only update send button text if NOT using icon mode. Skip while
+      // streaming so we don't stomp on the "Stop" label.
+      const useIcon = config.sendButton?.useIcon ?? false;
+      if (!useIcon && !session?.isStreaming()) {
+        sendButton.textContent = config.copy?.sendButtonLabel ?? "Send";
+      }
     }
 
     textarea.style.fontFamily =
@@ -8285,10 +8295,13 @@ export const createAgentExperience = (
       footer = view.composer.footer;
       // A plugin composer owns its own send affordance, so the built-in
       // send/stop swap has nothing to drive.
-      setSendButtonMode =
-        defaultElements && nextFooter === (defaultElements as _ComposerElements).footer
-          ? (defaultElements as _ComposerElements).setSendButtonMode
-          : () => {};
+      const isDefaultFooter =
+        defaultElements !== null &&
+        nextFooter === (defaultElements as _ComposerElements).footer;
+      composerIsPluginOwned = !isDefaultFooter;
+      setSendButtonMode = isDefaultFooter
+        ? (defaultElements as unknown as _ComposerElements).setSendButtonMode
+        : () => {};
 
       ensureComposerAttachmentSurface(footer);
       bindComposerRefsFromFooter(footer);

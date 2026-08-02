@@ -46,7 +46,7 @@ export type PreChatPluginOptions = {
   title?: string;
   description?: string;
   submitLabel?: string;
-  /** Note rendered under the gated composer. */
+  /** Placeholder shown in the locked composer while the form is unsubmitted. */
   gateNote?: string;
   /** Key the identity lands under in the request `context`. */
   contextKey?: string;
@@ -212,10 +212,6 @@ const PRE_CHAT_CSS = `
   color: var(--persona-text-muted, #6b7280);
 }
 
-.pre-chat-gate__note {
-  font-size: 12px;
-  color: var(--persona-text-muted, #6b7280);
-}
 `;
 
 const isEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
@@ -430,8 +426,11 @@ export const createPreChatPlugin = (
     input.className = "pre-chat-gate__input";
     input.rows = 1;
     input.disabled = true;
+    // The gate reason lives in the placeholder: it sits exactly where the
+    // eye goes to type, instead of inviting input ("How can I help...")
+    // while a separate note below refuses it.
     input.placeholder =
-      config.copy?.inputPlaceholder ?? "How can I help...";
+      options.gateNote ?? "Submit the form above to start the conversation.";
 
     const send = document.createElement("button");
     send.type = "button";
@@ -439,13 +438,8 @@ export const createPreChatPlugin = (
     send.disabled = true;
     send.textContent = config.copy?.sendButtonLabel ?? "Send";
 
-    const note = document.createElement("p");
-    note.className = "pre-chat-gate__note";
-    note.textContent =
-      options.gateNote ?? "Submit the form above to start the conversation.";
-
     row.append(input, send);
-    shell.append(row, note);
+    shell.append(row);
     footer.appendChild(shell);
     return footer;
   };
