@@ -6010,8 +6010,9 @@ export const createAgentExperience = (
 
       // Re-run chrome application now that data-state has flipped: collapsed
       // clears container chrome (pill stands alone), expanded paints it via
-      // the same theme.components.panel.* contract as floating mode.
-      applyFullHeightStyles();
+      // the same theme.components.panel.* contract as floating mode. Full
+      // sync: applyFullHeightStyles alone wipes the theme vars with cssText.
+      syncPanelChrome();
 
       // Outside-click dismiss: while expanded, clicking anywhere outside the
       // wrapper (panel chrome + pill) collapses back to just the pill.
@@ -8325,8 +8326,10 @@ export const createAgentExperience = (
       updateCopy();
       renderSuggestions();
       setComposerDisabled(session.isStreaming());
-      // The new footer carries none of the per-mode inline styles.
-      applyFullHeightStyles();
+      // The new footer carries none of the per-mode inline styles. Full
+      // chrome sync, not bare applyFullHeightStyles: the latter resets
+      // mount.style.cssText, which silently drops every theme variable.
+      syncPanelChrome();
       updateScrollToBottomButtonOffset();
       if (hadFocus) textarea?.focus();
     } finally {

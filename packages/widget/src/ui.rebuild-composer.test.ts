@@ -331,6 +331,20 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
     }
   });
 
+  it("keeps theme variables on the mount across a rebuild", () => {
+    // applyFullHeightStyles resets mount.style.cssText; a rebuild must go
+    // through syncPanelChrome or every theme var silently disappears
+    // (white header, borderless suggestion cards).
+    const { plugin, state } = createGatePlugin();
+    const { mount } = makeController({ plugins: [plugin] });
+
+    expect(mount.style.getPropertyValue("--persona-border")).not.toBe("");
+
+    state.ctx!.requestRender();
+
+    expect(mount.style.getPropertyValue("--persona-border")).not.toBe("");
+  });
+
   it("does not stamp copy onto a plugin-owned composer's input", () => {
     const plugin: AgentWidgetPlugin = {
       id: "gate",
