@@ -4,6 +4,10 @@
   font-size: var(--persona-font-size, 1rem);
   font-weight: var(--persona-font-weight, 400);
   line-height: var(--persona-line-height, 1.5);
+
+  /* Column widths plugin content can consume; --persona-content-max-width is
+     re-set inline from layout.contentMaxWidth (default 768px). */
+  --persona-welcome-max-width: 640px;
   
   /* Theme-aware markdown variables - inherit from theme colors set by JavaScript */
   --persona-md-code-block-bg: var(--persona-container, #f3f4f6);
@@ -790,7 +794,7 @@
    the cap never bites. The plugin overlay stays full-bleed via the :not(). */
 .persona-welcome:not([data-persona-welcome-overlay]) {
   width: 100%;
-  max-width: 640px;
+  max-width: var(--persona-welcome-max-width, 640px);
   margin-inline: auto;
 }
 

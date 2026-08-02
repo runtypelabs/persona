@@ -50,6 +50,7 @@ import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./util
 import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement } from "./utils/dom";
+import { resolveContentMaxWidth } from "./utils/content-width";
 import { attachTooltip } from "./utils/tooltip";
 import { downloadInfoFor } from "./utils/artifact-file";
 import { artifactCopyText } from "./components/artifact-preview";
@@ -1367,14 +1368,10 @@ export const createAgentExperience = (
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
 
-  // Apply contentMaxWidth to composer form, suggestions, and attachment
-  // previews if configured. In composer-bar mode, fall back to
-  // `composerBar.contentMaxWidth` (default `720px`) when no explicit
-  // `layout.contentMaxWidth` is set, so the expanded panel's content
-  // centers horizontally without the host having to wire it up.
-  const contentMaxWidth =
-    config.layout?.contentMaxWidth ??
-    (isComposerBar() ? config.launcher?.composerBar?.contentMaxWidth ?? "720px" : undefined);
+  // Center the content column. Defaults: 768px panels, 720px composer-bar
+  // (resolveContentMaxWidth); "none" opts out. Only engages on panels wider
+  // than the cap, so launcher-width panels are unaffected.
+  const contentMaxWidth = resolveContentMaxWidth(config, isComposerBar());
   if (contentMaxWidth) {
     messagesWrapper.style.maxWidth = contentMaxWidth;
     messagesWrapper.style.marginLeft = "auto";
@@ -1397,11 +1394,7 @@ export const createAgentExperience = (
   // expanded panel's body, not the pill input itself).
   // Re-run after a composer rebuild: the footer's elements are new.
   const applyComposerContentMaxWidth = () => {
-    const max =
-      config.layout?.contentMaxWidth ??
-      (isComposerBar()
-        ? config.launcher?.composerBar?.contentMaxWidth ?? "720px"
-        : undefined);
+    const max = resolveContentMaxWidth(config, isComposerBar());
     if (!max || isComposerBar()) return;
     for (const element of [composerForm, suggestions, attachmentPreviewsContainer]) {
       if (!element) continue;
@@ -3409,11 +3402,21 @@ export const createAgentExperience = (
 
     restoreBodyScrollTop();
   };
+  // Column var for plugin-rendered content (renderWelcome overlay stacks,
+  // custom composers): resolved config value, matched without config access.
+  // Must land after applyFullHeightStyles, which wipes mount.style.cssText.
+  const applyContentMaxWidthVar = () => {
+    mount.style.setProperty(
+      "--persona-content-max-width",
+      resolveContentMaxWidth(config, isComposerBar())
+    );
+  };
   applyFullHeightStyles();
   // Apply theme variables after applyFullHeightStyles since it resets mount.style.cssText
   applyThemeVariables(mount, config);
   applyArtifactLayoutCssVars(mount, config);
   applyArtifactPaneAppearance(mount, config);
+  applyContentMaxWidthVar();
 
   // applyFullHeightStyles wipes mount.style.cssText, so re-apply the theme +
   // artifact layout vars after it, mirroring the init sequence above.
@@ -3422,6 +3425,7 @@ export const createAgentExperience = (
     applyThemeVariables(mount, config);
     applyArtifactLayoutCssVars(mount, config);
     applyArtifactPaneAppearance(mount, config);
+    applyContentMaxWidthVar();
     // Owned here so it lands after applyArtifactPaneAppearance and derives from
     // the same resolved panel radius the chat card uses (see applyFullHeightStyles).
     if (weldedOuterRadius) {
@@ -9569,11 +9573,11 @@ export const createAgentExperience = (
       
       // Update contentMaxWidth on messages wrapper and composer. Same
       // composer-bar fallback as the initial read above.
-      const updatedContentMaxWidth =
-        config.layout?.contentMaxWidth ??
-        (isComposerBar()
-          ? config.launcher?.composerBar?.contentMaxWidth ?? "720px"
-          : undefined);
+      const updatedContentMaxWidth = resolveContentMaxWidth(
+        config,
+        isComposerBar()
+      );
+      applyContentMaxWidthVar();
       if (updatedContentMaxWidth) {
         messagesWrapper.style.maxWidth = updatedContentMaxWidth;
         messagesWrapper.style.marginLeft = "auto";

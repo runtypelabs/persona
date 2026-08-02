@@ -219,8 +219,10 @@ describe("plugin welcome styles", () => {
     const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
 
     expect(start).toBeGreaterThan(-1);
-    expect(rule).toContain("max-width: 640px");
+    expect(rule).toContain("max-width: var(--persona-welcome-max-width, 640px)");
     expect(rule).toContain("margin-inline: auto");
+    // The var is published on the root so plugin content can consume it.
+    expect(widgetCss).toContain("--persona-welcome-max-width: 640px");
   });
 
   it("overlays the messages area while plugin content is active", () => {

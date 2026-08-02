@@ -85,6 +85,10 @@ const PRE_CHAT_CSS = `
   display: grid;
   gap: 14px;
   width: 100%;
+  /* Plugin welcome content is full-bleed (overlay host); the widget root
+     publishes the column vars so plugins match without config access. */
+  max-width: var(--persona-welcome-max-width, 640px);
+  margin-inline: auto;
   text-align: left;
 }
 
@@ -169,6 +173,10 @@ const PRE_CHAT_CSS = `
 .pre-chat-gate {
   display: grid;
   gap: 8px;
+  /* Match the default composer's centered content column. */
+  width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
+  margin-inline: auto;
 }
 
 .pre-chat-gate__row {

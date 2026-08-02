@@ -19,6 +19,7 @@ import {
   WelcomeHostElements,
 } from "./welcome";
 import { isWelcomeVisible, resolveWelcomeConfig } from "../welcome";
+import { resolveContentMaxWidth } from "../utils/content-width";
 
 export interface PanelWrapper {
   wrapper: HTMLElement;
@@ -330,7 +331,7 @@ const buildComposerBarPanel = (
     "persona-flex persona-flex-col persona-gap-3"
   );
   const transcriptSuggestions = createSuggestionHost("followUp");
-  const contentMaxWidth = config?.layout?.contentMaxWidth;
+  const contentMaxWidth = resolveContentMaxWidth(config, true);
   if (contentMaxWidth) {
     messagesWrapper.style.maxWidth = contentMaxWidth;
     messagesWrapper.style.marginLeft = "auto";
@@ -454,7 +455,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   );
   const transcriptSuggestions = createSuggestionHost("followUp");
 
-  const contentMaxWidth = config?.layout?.contentMaxWidth;
+  const contentMaxWidth = resolveContentMaxWidth(config, false);
   if (contentMaxWidth) {
     messagesWrapper.style.maxWidth = contentMaxWidth;
     messagesWrapper.style.marginLeft = "auto";

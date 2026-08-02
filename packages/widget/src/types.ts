@@ -4460,7 +4460,11 @@ export type AgentWidgetLayoutConfig = {
   /**
    * Max width for the content area (messages + composer).
    * Applied with `margin: 0 auto` for centering.
-   * Accepts any CSS width value (e.g. "90ch", "720px", "80%").
+   * Accepts any CSS width value (e.g. "90ch", "720px", "80%"), or "none"
+   * for a full-width column. Only engages on panels wider than the cap,
+   * so launcher-width panels are unaffected.
+   * @default "768px" ("720px" in composer-bar mode via
+   * `launcher.composerBar.contentMaxWidth`)
    */
   contentMaxWidth?: string;
 };

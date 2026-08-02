@@ -179,6 +179,16 @@ content is swapped inside it, so plugins never remove or re-create it:
   what makes "return to home over an existing transcript" work: after a user
   message `visible` is `false`, but your `requestRender()` still renders your
   stack over the conversation until you return `null` again.
+- The overlay host is full-bleed, so your element owns its own column, and
+  wide panels stretch it edge to edge unless you cap it. The widget root
+  publishes the resolved columns as CSS variables, so match them without any
+  config access: `max-width: var(--persona-welcome-max-width, 640px);
+  margin-inline: auto` for welcome-shaped content, and
+  `var(--persona-content-max-width, 768px)` for composer or transcript-shaped
+  content (it tracks `layout.contentMaxWidth`, including `controller.update()`
+  changes). The pre-chat and home screen example plugins show the pattern.
+  The same applies to `renderComposer` content, which bypasses the default
+  form's column styling.
 - `defaultRenderer()` returns the live default card, so composing is
   `const card = ctx.defaultRenderer(); card.appendChild(mySearchBox); return card;`.
   Composition is not a takeover: derived visibility still applies and no overlay
