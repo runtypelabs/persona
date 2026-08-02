@@ -3416,6 +3416,27 @@ export const createAgentExperience = (
       resolveContentMaxWidth(config, isComposerBar())
     );
   };
+  // Floating launcher panels get a fixed pixel height (recalcPanelHeight owns
+  // it on resize), but applyFullHeightStyles wipes panel.style.cssText and only
+  // restores width — so every chrome sync must re-stamp the height or the panel
+  // grows to fit its content. Guards mirror recalcPanelHeight's path.
+  const applyFloatingPanelFixedHeight = () => {
+    if (isComposerBar()) return;
+    const dockedMode = isDockedMountMode(config);
+    const sidebarMode = config.launcher?.sidebarMode ?? false;
+    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
+    if (fullHeight || !launcherEnabled) return;
+    const ownerWindow = mount.ownerDocument.defaultView ?? window;
+    const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+    const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+    if (mobileFullscreen && ownerWindow.innerWidth <= mobileBreakpoint) return;
+    const viewportHeight = ownerWindow.innerHeight;
+    const verticalMargin = 64; // leave space for launcher's offset
+    const heightOffset = config.launcher?.heightOffset ?? 0;
+    const available = Math.max(200, viewportHeight - verticalMargin);
+    const clamped = Math.min(640, available);
+    panel.style.height = `${Math.max(200, clamped - heightOffset)}px`;
+  };
   applyFullHeightStyles();
   // Apply theme variables after applyFullHeightStyles since it resets mount.style.cssText
   applyThemeVariables(mount, config);
@@ -3427,6 +3448,7 @@ export const createAgentExperience = (
   // artifact layout vars after it, mirroring the init sequence above.
   syncPanelChrome = () => {
     applyFullHeightStyles();
+    applyFloatingPanelFixedHeight();
     applyThemeVariables(mount, config);
     applyArtifactLayoutCssVars(mount, config);
     applyArtifactPaneAppearance(mount, config);
@@ -7838,7 +7860,6 @@ export const createAgentExperience = (
 
     const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
 
     // Mobile fullscreen: re-apply fullscreen styles on resize (handles orientation changes)
     const ownerWindow = mount.ownerDocument.defaultView ?? window;
@@ -7895,15 +7916,7 @@ export const createAgentExperience = (
       applyLauncherArtifactPanelWidth();
 
       // In fullHeight mode, don't set a fixed height
-      if (!fullHeight) {
-        const viewportHeight = ownerWindow.innerHeight;
-        const verticalMargin = 64; // leave space for launcher's offset
-        const heightOffset = config.launcher?.heightOffset ?? 0;
-        const available = Math.max(200, viewportHeight - verticalMargin);
-        const clamped = Math.min(640, available);
-        const finalHeight = Math.max(200, clamped - heightOffset);
-        panel.style.height = `${finalHeight}px`;
-      }
+      applyFloatingPanelFixedHeight();
     } finally {
       // applyFullHeightStyles() assigns wrapper.style.cssText (e.g. display:flex !important), which
       // overwrites updateOpenState()'s display:none when docked+closed. Re-sync after every recalc.

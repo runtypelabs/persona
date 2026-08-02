@@ -345,6 +345,25 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
     expect(mount.style.getPropertyValue("--persona-border")).not.toBe("");
   });
 
+  it("keeps the floating panel's fixed height across a rebuild", () => {
+    // applyFullHeightStyles wipes panel.style.cssText and only restores width;
+    // the fixed height belongs to recalcPanelHeight. Without a re-stamp in
+    // syncPanelChrome, a rebuild leaves the floating panel height-less and it
+    // grows to fit its content (pre-chat submit stretched to the viewport).
+    const { plugin, state } = createGatePlugin();
+    const { mount } = makeController({
+      plugins: [plugin],
+      launcher: { enabled: true },
+    });
+
+    const panel = mount.querySelector<HTMLElement>(".persona-widget-panel")!;
+    expect(panel.style.height).toBe("640px");
+
+    state.ctx!.requestRender();
+
+    expect(panel.style.height).toBe("640px");
+  });
+
   it("does not stamp copy onto a plugin-owned composer's input", () => {
     const plugin: AgentWidgetPlugin = {
       id: "gate",
