@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { createAgentExperience } from "@runtypelabs/persona";
 import type {
-  AgentWidgetController,
   AgentWidgetPluginStorage,
   AgentWidgetRenderWelcomeContext,
 } from "@runtypelabs/persona";
@@ -35,8 +34,6 @@ const createHarness = (
 ) => {
   const plugin = overrides.plugin ?? createPreChatPlugin(options);
   const storage = overrides.storage ?? createMemoryStorage();
-  const injectSystemMessage = vi.fn();
-  plugin.attach({ injectSystemMessage } as unknown as AgentWidgetController);
 
   const cleanups: Array<() => void> = [];
   let welcome: HTMLElement | null = null;
@@ -107,7 +104,6 @@ const createHarness = (
   return {
     plugin,
     storage,
-    injectSystemMessage,
     renderWelcome,
     renderComposer,
     fill,
@@ -147,10 +143,10 @@ describe("createPreChatPlugin", () => {
     expect(harness.welcome()?.textContent).toContain(
       "Enter a valid email address.",
     );
-    expect(harness.injectSystemMessage).not.toHaveBeenCalled();
+    expect(harness.plugin.getIdentity()).toBeNull();
   });
 
-  it("stores identity, injects the identity line, and falls through both hooks on submit", () => {
+  it("stores identity and falls through both hooks on submit", () => {
     const harness = createHarness();
     harness.renderComposer();
     harness.renderWelcome();
@@ -163,10 +159,6 @@ describe("createPreChatPlugin", () => {
       name: "Ada Lovelace",
       email: "ada@example.com",
       topic: "Billing",
-    });
-    expect(harness.injectSystemMessage).toHaveBeenCalledWith({
-      content:
-        "Visitor details: name Ada Lovelace, email ada@example.com, topic Billing",
     });
     // Both hooks re-ran through their own requestRender and returned null.
     expect(harness.welcome()).toBeNull();
@@ -231,10 +223,9 @@ describe("createPreChatPlugin", () => {
     expect(ctxStore.get("identity")).toBeNull();
   });
 
-  it("honors host-declared fields and a custom identity line", () => {
+  it("honors host-declared fields", () => {
     const harness = createHarness({
       fields: [{ name: "email", label: "Email", type: "email", required: true }],
-      identityLine: (identity) => `Visitor ${identity.email}`,
     });
     harness.renderWelcome();
 
@@ -246,9 +237,7 @@ describe("createPreChatPlugin", () => {
 
     harness.fill("email", "ada@example.com");
     harness.submit();
-    expect(harness.injectSystemMessage).toHaveBeenCalledWith({
-      content: "Visitor ada@example.com",
-    });
+    expect(harness.plugin.getIdentity()).toEqual({ email: "ada@example.com" });
   });
 });
 
@@ -267,7 +256,6 @@ describe("createPreChatPlugin against a live widget", () => {
       contextProviders: [plugin.contextProvider],
       launcher: { enabled: false },
     });
-    plugin.attach(controller);
     controller.open();
 
     const form = mount.querySelector<HTMLFormElement>(".pre-chat");
@@ -293,9 +281,9 @@ describe("createPreChatPlugin against a live widget", () => {
       mount.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]")
         ?.disabled,
     ).toBe(false);
-    expect(controller.getMessages().map((message) => message.role)).toContain(
-      "system",
-    );
+    // No transcript injection: identity travels only as request context, so
+    // the transcript stays empty and the welcome surface remains a welcome.
+    expect(controller.getMessages()).toHaveLength(0);
     // The default welcome card owns the host again.
     expect(mount.querySelector("[data-persona-welcome]")?.textContent).toContain(
       "Hello",

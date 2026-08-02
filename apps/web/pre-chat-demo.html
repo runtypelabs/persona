@@ -83,14 +83,13 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Where the identity goes</h3>
-        <p>Submit does three things: writes the identity through <code>ctx.storage</code>, injects a compact identity line with <code>controller.injectSystemMessage()</code> so the transcript context reflects it, and exposes a <code>contextProviders</code> entry so every dispatch carries the fields. Context providers run on both the agent and flow paths, so the backend sees the identity with no change to the wire format.</p>
+        <p>Submit does two things: writes the identity through <code>ctx.storage</code> and exposes a <code>contextProviders</code> entry so every dispatch carries the fields. Context providers run on both the agent and flow paths, so the backend sees the identity with no change to the wire format. Nothing is injected into the transcript: like the commercial widgets, form answers travel as visitor metadata, not messages, so the welcome greeting and starters stay up until the first real turn.</p>
         <div class="code-block">
 <span class="keyword">const</span> plugin = createPreChatPlugin({ <span class="prop">fields</span> });
-<span class="keyword">const</span> controller = initAgentWidget({
+initAgentWidget({
   <span class="prop">plugins</span>: [plugin],
   <span class="prop">contextProviders</span>: [plugin.contextProvider],
 });
-plugin.attach(controller);  <span class="comment">// host-closure controller pattern</span>
         </div>
       </div>
 

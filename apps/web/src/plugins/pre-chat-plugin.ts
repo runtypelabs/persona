@@ -3,13 +3,17 @@
  *
  * First open shows a short identity form in place of the welcome card and a
  * disabled composer underneath it. On submit the plugin stores the identity,
- * injects a compact identity line into the transcript, unlocks the composer,
- * and hands the welcome surface back to Persona's default renderer. Returning
- * visitors skip the form.
+ * unlocks the composer, and hands the welcome surface back to Persona's
+ * default renderer. Returning visitors skip the form.
+ *
+ * The identity never appears in the transcript: it travels as request context
+ * via the `contextProvider` on every dispatch, matching the commercial
+ * widgets where form answers are visitor metadata, not
+ * messages. The transcript stays empty so the standard welcome (greeting +
+ * starters) takes over after submit.
  *
  * Built purely on public surface: `renderWelcome`, `renderComposer` (with its
- * `requestRender()` re-entry), `ctx.storage`, `contextProviders`, and the
- * host-closure controller pattern (`plugin.attach(controller)`).
+ * `requestRender()` re-entry), `ctx.storage`, and `contextProviders`.
  *
  * Privacy: `ctx.storage` is plain `localStorage`. A host capturing data it
  * considers sensitive passes its own `storage` implementation instead.
@@ -18,7 +22,6 @@
 import type {
   AgentWidgetConfig,
   AgentWidgetContextProvider,
-  AgentWidgetController,
   AgentWidgetPlugin,
   AgentWidgetPluginStorage,
 } from "@runtypelabs/persona";
@@ -50,16 +53,12 @@ export type PreChatPluginOptions = {
   gateNote?: string;
   /** Key the identity lands under in the request `context`. */
   contextKey?: string;
-  /** Compact transcript line. Defaults to "Visitor details: name …, email …". */
-  identityLine?: (identity: PreChatIdentity) => string;
   /** Escape hatch for hosts that will not put identity in `localStorage`. */
   storage?: AgentWidgetPluginStorage;
   onSubmit?: (identity: PreChatIdentity) => void;
 };
 
 export type PreChatPlugin = AgentWidgetPlugin & {
-  /** Host-closure controller pattern: call once with the init handle. */
-  attach: (controller: AgentWidgetController) => void;
   /** Register in `config.contextProviders` so every dispatch carries identity. */
   contextProvider: AgentWidgetContextProvider;
   getIdentity: () => PreChatIdentity | null;
@@ -230,25 +229,12 @@ const parseIdentity = (raw: string | null): PreChatIdentity | null => {
   }
 };
 
-const defaultIdentityLine = (
-  identity: PreChatIdentity,
-  fields: PreChatField[],
-): string => {
-  const parts = fields
-    .filter((field) => identity[field.name])
-    .map((field) => `${field.label.toLowerCase()} ${identity[field.name]}`);
-  return parts.length
-    ? `Visitor details: ${parts.join(", ")}`
-    : "Visitor details captured";
-};
-
 export const createPreChatPlugin = (
   options: PreChatPluginOptions = {},
 ): PreChatPlugin => {
   const fields = options.fields ?? DEFAULT_PRE_CHAT_FIELDS;
   const contextKey = options.contextKey ?? "visitor";
 
-  let controller: AgentWidgetController | null = null;
   // Captured on the first hook call; `options.storage` wins when the host
   // supplied its own store.
   let store: AgentWidgetPluginStorage | null = options.storage ?? null;
@@ -267,12 +253,12 @@ export const createPreChatPlugin = (
     return identity;
   };
 
+  // No transcript injection here: the contextProvider already carries the
+  // identity on every dispatch, and an injected line would start the
+  // transcript, dismissing the welcome starters the visitor hasn't used yet.
   const submit = (values: PreChatIdentity) => {
     identity = values;
     store?.set(IDENTITY_KEY, JSON.stringify(values));
-    const line =
-      options.identityLine?.(values) ?? defaultIdentityLine(values, fields);
-    controller?.injectSystemMessage({ content: line });
     options.onSubmit?.(values);
     composerRequestRender?.();
     welcomeRequestRender?.();
@@ -446,10 +432,6 @@ export const createPreChatPlugin = (
 
   return {
     id: "demo-pre-chat",
-
-    attach: (next: AgentWidgetController) => {
-      controller = next;
-    },
 
     contextProvider: () => {
       const current = readIdentity();

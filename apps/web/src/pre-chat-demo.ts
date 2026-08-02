@@ -75,8 +75,7 @@ const preChatFetch = createDemoEchoFetch({
 });
 
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
-  // One plugin instance per mount: `attach()` closes over the controller the
-  // form submits through.
+  // One plugin instance per mount.
   const plugin = createPreChatPlugin({
     fields: FIELD_PRESETS[fieldPreset],
     title: "Before we start",
@@ -137,9 +136,6 @@ function remount(): void {
     buildConfig,
   );
   activeController = mounted.controller;
-  // Host-closure controller pattern: the ctx carries no controller, so the
-  // host hands the init handle back to the plugin.
-  activePlugin?.attach(mounted.controller);
   teardownActive = mounted.teardown;
 }
 
