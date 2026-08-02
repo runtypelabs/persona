@@ -23,13 +23,24 @@ const makeController = (config: Record<string, unknown> = {}) => {
 };
 
 const wrapper = (mount: HTMLElement) =>
-  mount.querySelector<HTMLElement>("#persona-scroll-container > .persona-flex.persona-flex-col.persona-gap-3")!;
+  mount.querySelector<HTMLElement>("#persona-scroll-container > .persona-widget-messages")!;
 
 describe("default content column", () => {
   afterEach(() => {
     controllers.splice(0).forEach((controller) => controller.destroy());
     mounts.splice(0).forEach((mount) => mount.remove());
     document.body.innerHTML = "";
+  });
+
+  it("keeps the transcript wrapper :empty pre-conversation so CSS drops it from the flex flow", () => {
+    // The stylesheet's .persona-widget-messages:empty { display: none } only
+    // works if nothing seeds the wrapper with placeholder nodes.
+    const { mount, controller } = makeController();
+    const messagesWrapper = wrapper(mount);
+    expect(messagesWrapper.matches(":empty")).toBe(true);
+
+    controller.injectUserMessage({ content: "hi" });
+    expect(messagesWrapper.matches(":empty")).toBe(false);
   });
 
   it("caps and centers the transcript at 768px by default", () => {

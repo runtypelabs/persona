@@ -325,6 +325,12 @@
   display: none;
 }
 
+/* An empty transcript still counts as a flex child, so the body's gap
+   inserts phantom space below the welcome and fakes scrollable height. */
+.persona-widget-messages:empty {
+  display: none;
+}
+
 /* Suggestions ----------------------------------------------------------- */
 
 .persona-suggestions {

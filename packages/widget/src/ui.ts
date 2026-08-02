@@ -1008,6 +1008,9 @@ export const createAgentExperience = (
   anchorSpacer.style.flexShrink = "0";
   anchorSpacer.style.pointerEvents = "none";
   anchorSpacer.style.height = "0px";
+  // Hidden while unsized: at 0px it still counts as a flex child, so the
+  // body's gap would add phantom scrollable space below the transcript.
+  anchorSpacer.style.display = "none";
   body.appendChild(anchorSpacer);
 
   // Visually-hidden polite live region for screen-reader announcements
@@ -4082,6 +4085,12 @@ export const createAgentExperience = (
       ? !autoFollow.isFollowing()
       : !isElementNearBottom(body, BOTTOM_THRESHOLD);
 
+  // Empty transcript = welcome-only view: there is no "latest message" to
+  // follow, jump to, or badge, and bottom-scrolling clips the greeting when
+  // the welcome content slightly overflows the viewport.
+  const transcriptHasMessages = () =>
+    !!session && session.getMessages().length > 0;
+
   const syncScrollToBottomButton = () => {
     if (!isScrollToBottomEnabled() || eventStreamVisible) {
       if (scrollToBottomButton.parentNode) {
@@ -4095,7 +4104,7 @@ export const createAgentExperience = (
     }
     updateScrollToBottomButtonOffset();
     const hasOverflow = getScrollBottomOffset(body) > 0;
-    const show = hasOverflow && isAwayFromLatest();
+    const show = hasOverflow && isAwayFromLatest() && transcriptHasMessages();
     if (!show) {
       resetNewMessagesCount();
     } else {
@@ -4122,6 +4131,7 @@ export const createAgentExperience = (
     // no-anchor fallback turn (see `isFollowEffective`). Anchored anchor-top
     // turns and "none" never chase the bottom during streaming.
     if (!isFollowEffective()) return;
+    if (!transcriptHasMessages()) return;
 
     if (!autoFollow.isFollowing()) return;
 
@@ -4256,6 +4266,10 @@ export const createAgentExperience = (
   // Instant jump used for initial mount / panel open in non-follow scroll
   // modes (where scheduleAutoScroll is inert).
   const jumpToBottomInstant = () => {
+    if (!transcriptHasMessages()) {
+      syncScrollToBottomButton();
+      return;
+    }
     const element = getScrollableContainer();
     isAutoScrolling = true;
     element.scrollTop = getScrollBottomOffset(element);
@@ -4338,7 +4352,9 @@ export const createAgentExperience = (
   };
 
   const setAnchorSpacerHeight = (height: number) => {
-    anchorSpacer.style.height = `${Math.max(0, Math.round(height))}px`;
+    const rounded = Math.max(0, Math.round(height));
+    anchorSpacer.style.height = `${rounded}px`;
+    anchorSpacer.style.display = rounded > 0 ? "" : "none";
     if (anchorState) {
       anchorState.spacerHeight = Math.max(0, height);
     }
@@ -4355,6 +4371,7 @@ export const createAgentExperience = (
     cancelSmoothScroll();
     anchorState = null;
     anchorSpacer.style.height = "0px";
+    anchorSpacer.style.display = "none";
   };
 
   // Anchor-top mode: scroll `messageId` to rest `anchorTopOffset` px below the

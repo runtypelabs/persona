@@ -328,7 +328,7 @@ const buildComposerBarPanel = (
 
   const messagesWrapper = createElement(
     "div",
-    "persona-flex persona-flex-col persona-gap-3"
+    "persona-widget-messages persona-flex persona-flex-col persona-gap-3"
   );
   const transcriptSuggestions = createSuggestionHost("followUp");
   const contentMaxWidth = resolveContentMaxWidth(config, true);
@@ -451,7 +451,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
 
   const messagesWrapper = createElement(
     "div",
-    "persona-flex persona-flex-col persona-gap-3"
+    "persona-widget-messages persona-flex persona-flex-col persona-gap-3"
   );
   const transcriptSuggestions = createSuggestionHost("followUp");
 

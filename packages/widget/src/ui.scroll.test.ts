@@ -1027,6 +1027,9 @@ describe("createAgentExperience streaming scroll", () => {
       "[data-persona-anchor-spacer]"
     );
     expect(spacer?.style.height).toBe("84px");
+    // Sized means visible: unsized it stays display:none so the body's flex
+    // gap doesn't add phantom scrollable space below the transcript.
+    expect(spacer?.style.display).toBe("");
 
     // The spacer's height is invisible to the mocked scroll metrics: apply
     // it manually so the anchor target is reachable, as in a real browser.
@@ -1063,6 +1066,7 @@ describe("createAgentExperience streaming scroll", () => {
     getScrollToBottomButton(mount)!.click();
     raf.flush();
     expect(spacer?.style.height).toBe("0px");
+    expect(spacer?.style.display).toBe("none");
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
     controller.destroy();
@@ -1141,6 +1145,47 @@ describe("createAgentExperience streaming scroll", () => {
       "[data-persona-scroll-to-bottom-count]"
     );
     expect(badge?.textContent).toBe("1");
+
+    controller.destroy();
+  });
+
+  it("keeps a welcome-only transcript at the top on open with no jump affordance", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      persistState: false,
+      launcher: { enabled: true },
+      welcome: { title: "How can we help?" }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>(
+      "#persona-scroll-container"
+    );
+    // Welcome content slightly taller than the viewport: pre-fix, opening
+    // scrolled to the bottom (clipping the greeting) and the >24px overflow
+    // surfaced the scroll-to-bottom arrow with no messages to jump to.
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 430,
+      clientHeight: 400
+    });
+
+    controller.open();
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(0);
+    const button = getScrollToBottomButton(mount);
+    expect(!button || button.style.display === "none").toBe(true);
+
+    // A real message restores the historical open behavior: land on latest.
+    // Flush first so the inject-time anchor animation settles before reopen.
+    controller.injectUserMessage({ content: "hi" });
+    raf.flush();
+    metrics.setScrollHeight(800);
+    controller.close();
+    controller.open();
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
 
     controller.destroy();
   });

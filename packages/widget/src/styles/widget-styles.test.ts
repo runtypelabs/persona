@@ -191,6 +191,17 @@ describe("composer spacing styles", () => {
   });
 });
 
+describe("transcript layout styles", () => {
+  it("drops the empty messages wrapper from the flex flow", () => {
+    // A zero-height flex child still triggers the body's gap, so an empty
+    // transcript added phantom scrollable space below the welcome (and a
+    // scroll-to-bottom arrow with nothing to scroll to).
+    expect(widgetCss).toContain(
+      ".persona-widget-messages:empty {\n  display: none;\n}",
+    );
+  });
+});
+
 describe("launcher teaser styles", () => {
   it("keeps the [hidden] dismiss control hidden despite its own display: grid", () => {
     // dismissible: false sets the hidden property; without this companion
