@@ -1404,7 +1404,7 @@ export const createAgentExperience = (
   const applyComposerContentMaxWidth = () => {
     const max = resolveContentMaxWidth(config, isComposerBar());
     if (!max || isComposerBar()) return;
-    for (const element of [composerForm, suggestions, attachmentPreviewsContainer]) {
+    for (const element of [composerForm, suggestions, attachmentPreviewsContainer, statusText]) {
       if (!element) continue;
       element.style.maxWidth = max;
       element.style.marginLeft = "auto";
@@ -9728,6 +9728,9 @@ export const createAgentExperience = (
           suggestions.style.marginLeft = "auto";
           suggestions.style.marginRight = "auto";
         }
+        statusText.style.maxWidth = updatedContentMaxWidth;
+        statusText.style.marginLeft = "auto";
+        statusText.style.marginRight = "auto";
       } else {
         messagesWrapper.style.maxWidth = "";
         messagesWrapper.style.marginLeft = "";
@@ -9747,6 +9750,9 @@ export const createAgentExperience = (
           suggestions.style.marginLeft = "";
           suggestions.style.marginRight = "";
         }
+        statusText.style.maxWidth = "";
+        statusText.style.marginLeft = "";
+        statusText.style.marginRight = "";
       }
 
       // Update status indicator visibility and text

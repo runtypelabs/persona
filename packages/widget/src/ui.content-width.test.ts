@@ -62,6 +62,21 @@ describe("default content column", () => {
     expect(wrapper(mount).style.maxWidth).toBe("none");
   });
 
+  it("caps the composer status text to the same column as the composer form", () => {
+    const { mount, controller } = makeController();
+    const statusText = mount.querySelector<HTMLElement>("[data-persona-composer-status]")!;
+    expect(statusText.style.maxWidth).toBe("768px");
+    expect(statusText.style.marginLeft).toBe("auto");
+    expect(statusText.style.marginRight).toBe("auto");
+
+    controller.update({ layout: { contentMaxWidth: "90ch" } });
+    expect(statusText.style.maxWidth).toBe("90ch");
+
+    controller.update({ layout: { contentMaxWidth: "" } });
+    expect(statusText.style.maxWidth).toBe("");
+    expect(statusText.style.marginLeft).toBe("");
+  });
+
   it("publishes the resolved column as a CSS var for plugin content", () => {
     const { mount, controller } = makeController();
     expect(
