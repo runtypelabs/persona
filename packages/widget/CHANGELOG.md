@@ -1,5 +1,40 @@
 # @runtypelabs/persona
 
+## 4.15.0
+
+### Minor Changes
+
+- d0608ee: Add `lightbulb`, `chart-column`, `image`, and `pen-line` to the bundled lucide icon registry.
+- 2a8aa8d: Add rich, themeable starter and follow-up suggestions under a single `suggestions.*` home, with card, chip, and list variants, welcome/transcript/composer placement, `send` or `fill` click behavior, scroll or wrap overflow, `maxItems` caps, and plugin hooks for transforming data, replacing item UI, and intercepting selection.
+
+  `suggestions.followUps.enabled` and `suggestions.followUps.expose` are now the canonical keys for the built-in `suggest_replies` tool. `features.suggestReplies` keeps working as a deprecated alias: resolution is per key with `suggestions.followUps` winning, so adding presentation keys never silently re-enables a disabled feature, and debug mode warns once per key when the two homes disagree. The alias is removed in 5.0.
+
+  Starters gained `overflow` and a `placement: "auto"` default that uses the welcome surface when the welcome card renders and the composer otherwise. Explicit `welcome` and `composer` are literal, so a pinned `welcome` with a hidden welcome card renders nothing and warns in debug mode.
+
+  `transformSuggestions` hooks now receive resolved suggestions (string shorthand already expanded, effective `behavior` filled in) and may still return the loose shape, which is re-normalized after each hook before `maxItems` applies. The `suggest_replies` parameter schema is a single object type with `label`, `prompt`, and `description` only: `id`, `icon`, `behavior`, and `emphasis` are stripped from agent payloads and belong to the host, which sets them through `transformSuggestions`. The parser stays tolerant of `suggestions: string[]` payloads from older flows.
+
+  New `controller.setFollowUpSuggestions(items)` and `controller.clearFollowUpSuggestions()` push follow-ups from host code as an ephemeral overlay with source `"host"`: never added to the transcript, the wire payload, or persistence, cleared on the next user message, latest writer wins against agent payloads, and rendered through the same config, plugin, and DOM-event pipeline even when the tool itself is disabled.
+
+- ab4694e: Add composer spacing and typography theme tokens. `theme.components.composer` now accepts `padding`, `gap`, `fontSize`, and `lineHeight` alongside the existing `shadow`, exposed as `--persona-composer-padding`, `--persona-composer-gap`, `--persona-composer-font-size`, and `--persona-composer-line-height`. The composer form's inset, the space between its textarea row and actions row, and the textarea type scale were previously hardcoded utility classes. Defaults are unchanged (`0.75rem 1rem`, `0.5rem`, `0.875rem`, `1.25rem`); the composer-bar pill keeps its own single-row padding and gap.
+- b968abd: Fix icon-mode send button glyph sizing. Icon mode no longer applies `sendButton.paddingX`/`paddingY` (the always-present padding defaults were crushing and distorting the SVG), and the glyph now renders in a box half the button `size`, the closest clean ratio to the previous effective rendering. New `sendButton.iconSize` sets the glyph box explicitly (sparse glyphs like `arrow-up` often want more than half), and `sendButton.iconStrokeWidth` sets the glyph stroke weight (default 2). Text-mode buttons keep their configured padding.
+- d0608ee: Add `iconColor` to rich suggestion items. Any CSS color tints that item's glyph alone, leaving the label, border, and background neutral, so a set can be color-coded without promoting one item through `emphasis: "primary"`.
+- 58e947c: Redesign the default starter suggestion cards. `emphasis: "primary"` is now a
+  quiet accent (accent border, faint accent wash, accent icon) instead of a solid
+  fill, the trailing arrow is revealed on hover and keyboard focus and hidden on
+  coarse pointers, cards rest without a shadow and gain a shadow plus a 1px lift
+  on hover, the card grid caps starters at two columns on wide panels, a new set
+  of suggestions fades up with a 60ms stagger (skipped under
+  `prefers-reduced-motion`), and the placeholder `suggestionChips` copy is now
+  verb-first, user-voice, one-line prompts.
+
+### Patch Changes
+
+- d0608ee: Composer auto-resize now caps the textarea at 3 lines of the rendered line height instead of a hardcoded 20px, so a themed `theme.components.composer.lineHeight` no longer clips the input below 3 visible lines. Post-construction max-height overrides (pill composer) still win.
+- 9169dd5: Keep starter and follow-up suggestion surfaces from collapsing when a widget transcript has constrained vertical space.
+- 9169dd5: Suggestions DX: the follow-ups config conflict warning now fires outside debug mode, once per distinct conflict per page load so a live `controller.update()` cannot spam it. Debug builds hint when a completed turn never produced a `suggest_replies` call and when `overflow` is set on a non-chip variant, and the `expose` doc comment now describes the real double-declaration behavior. The never-called hint stays quiet on restored transcripts with no dispatch yet and when the host drives the surface with `setFollowUpSuggestions`.
+- ab4694e: Scope legacy `suggestionChipsConfig` inline font and padding styles to the chip variant. They previously applied to card and list suggestions too, where the always-present defaults (12px/6px) silently overrode the variants' padding tokens.
+- 58e947c: Top-align icon and arrow content in suggestion card and list variants so multi-line descriptions read correctly in equal-height grid rows.
+
 ## 4.14.0
 
 ### Minor Changes
