@@ -4360,6 +4360,47 @@ export const createAgentExperience = (
     }
   };
 
+  // True scroll-content height, excluding the anchor spacer. Never derive
+  // this from `scrollHeight - spacer`: scrollHeight floors at clientHeight,
+  // so content shorter than the viewport reads as viewport-sized and the
+  // spacer comes up short by exactly the empty space below the content — the
+  // anchor target then sits past maxScrollTop, the ease clamps early, and
+  // every transient content dip during streaming bounces the viewport.
+  // Layoutless environments (jsdom) measure 0; fall back to the naive value.
+  const measureContentHeight = (previousSpacerHeight: number): number => {
+    const paddingBottom =
+      parseFloat(getComputedStyle(body).paddingBottom) || 0;
+    let bottom = 0;
+    for (const child of Array.from(body.children) as HTMLElement[]) {
+      if (child === anchorSpacer || child.offsetHeight === 0) continue;
+      const childBottom = offsetTopWithinBody(child) + child.offsetHeight;
+      if (childBottom > bottom) bottom = childBottom;
+    }
+    const naive = body.scrollHeight - previousSpacerHeight;
+    return bottom > 0 ? Math.min(bottom + paddingBottom, naive) : naive;
+  };
+
+  // Stream-end spacer trim: the ResizeObserver drain is growth-driven, so it
+  // stops the moment content stops growing and can leave leftover reserve —
+  // dead scrollable air below the last message, plus a scroll-to-bottom
+  // arrow pointing at nothing. Trim to what the reader's current position
+  // actually needs plus the anti-bounce slack (shrink-only, like the drain).
+  const trimAnchorSpacerToRest = () => {
+    if (!anchorState || anchorState.spacerHeight <= 0) return;
+    const contentHeight = measureContentHeight(anchorState.spacerHeight);
+    const required = Math.max(
+      0,
+      Math.round(body.scrollTop) +
+        body.clientHeight -
+        contentHeight +
+        BOTTOM_THRESHOLD
+    );
+    if (required < anchorState.spacerHeight) {
+      setAnchorSpacerHeight(required);
+      syncScrollToBottomButton();
+    }
+  };
+
   const resetAnchorState = () => {
     if (anchorRAF !== null) {
       cancelAnimationFrame(anchorRAF);
@@ -4374,6 +4415,16 @@ export const createAgentExperience = (
     anchorSpacer.style.display = "none";
   };
 
+  const escapeMessageId = (messageId: string): string =>
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(messageId)
+      : messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
+  const queryMessageBubble = (messageId: string): HTMLElement | null =>
+    body.querySelector<HTMLElement>(
+      `[data-message-id="${escapeMessageId(messageId)}"]`
+    );
+
   // Anchor-top mode: scroll `messageId` to rest `anchorTopOffset` px below the
   // viewport top and hold it there while the response streams in beneath it.
   // Deferred one frame so the message bubble has been rendered and laid out.
@@ -4383,10 +4434,7 @@ export const createAgentExperience = (
     }
     anchorRAF = requestAnimationFrame(() => {
       anchorRAF = null;
-      const escapedId =
-        typeof CSS !== "undefined" && typeof CSS.escape === "function"
-          ? CSS.escape(messageId)
-          : messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const escapedId = escapeMessageId(messageId);
       const bubble = body.querySelector<HTMLElement>(
         `[data-message-id="${escapedId}"]`
       );
@@ -4398,12 +4446,17 @@ export const createAgentExperience = (
       const anchorOffsetTop = offsetTopWithinBody(bubble);
 
       const previousSpacerHeight = anchorState?.spacerHeight ?? 0;
-      const contentHeight = body.scrollHeight - previousSpacerHeight;
+      const contentHeight = measureContentHeight(previousSpacerHeight);
       const { targetScrollTop, spacerHeight } = computeAnchorScrollState({
         anchorOffsetTop,
         topOffset: getAnchorTopOffset(),
         viewportHeight: body.clientHeight,
-        contentHeight
+        contentHeight,
+        // Slack past the held position so transient content dips during
+        // streaming (indicator swaps) never clamp scrollTop and bounce the
+        // viewport. Capped at BOTTOM_THRESHOLD so the slack region still
+        // counts as "near bottom" and never surfaces the jump affordance.
+        slack: BOTTOM_THRESHOLD
       });
 
       anchorState = {
@@ -4502,6 +4555,33 @@ export const createAgentExperience = (
   // Anchoring to the first unread (not the newest) block means this fires at
   // most once per turn in practice, and later blocks stream in below the
   // anchor exactly as they do today.
+
+  // Minimum readable slice of the first unread block that must fit under the
+  // pinned user message for the anchor to stay put. Below this, the block is
+  // "stranded" and the anchor hands off to it.
+  const ANCHOR_HANDOFF_MIN_VISIBLE = 96;
+
+  // Market pattern (ChatGPT/Claude/Gemini): the sent user message stays
+  // pinned at the top as the visible header of the streaming reply. The
+  // handoff to the first unread block exists for the stranded case — a long
+  // user message or a tall tool-call prelude pushing the reply below the
+  // fold — so it only fires when the block's start is not readably within
+  // the viewport while the user message holds the anchor.
+  const isFirstUnreadStranded = (messageId: string): boolean => {
+    if (lastSentUserMessageId === null) return true;
+    const userBubble = queryMessageBubble(lastSentUserMessageId);
+    const blockBubble = queryMessageBubble(messageId);
+    // Unmeasurable geometry: fall back to handing off (pre-conditional
+    // behavior) rather than risking an answer parked below the fold.
+    if (!userBubble || !blockBubble) return true;
+    const delta =
+      offsetTopWithinBody(blockBubble) - offsetTopWithinBody(userBubble);
+    return (
+      getAnchorTopOffset() + delta >
+      body.clientHeight - ANCHOR_HANDOFF_MIN_VISIBLE
+    );
+  };
+
   const maybeAnchorToFirstUnread = (messages: AgentWidgetMessage[]) => {
     if (getScrollMode() !== "anchor-top") return;
     if (!currentTurnAnchored) return;
@@ -4517,6 +4597,10 @@ export const createAgentExperience = (
       if (!isAttentionWorthyMessage(message)) continue;
       // Already parked on it: hold still while it streams.
       if (message.id === anchoredMessageId) return;
+      // Block starts within view under the pinned user message: keep the
+      // user message anchored. Re-evaluated every render, so a tool prelude
+      // that later pushes the block below the fold still hands off.
+      if (!isFirstUnreadStranded(message.id)) return;
       anchoredMessageId = message.id;
       scheduleAnchorToMessage(message.id);
       return;
@@ -6745,6 +6829,7 @@ export const createAgentExperience = (
       }
       if (!streaming) {
         scheduleAutoScroll(true);
+        trimAnchorSpacerToRest();
         // setStreaming only fires on a change, so this is always a real stream
         // ending. Evaluate the never-called hint here: no later render is
         // guaranteed on a settled transcript.

@@ -160,6 +160,29 @@ describe("auto-follow utilities", () => {
         contentHeight: 2000
       }).spacerHeight
     ).toBe(0);
+
+    // Slack pads the reserve so the held position never sits exactly at
+    // maxScrollTop, where a transient content dip would clamp and bounce it.
+    expect(
+      computeAnchorScrollState({
+        anchorOffsetTop: 700,
+        topOffset: 16,
+        viewportHeight: 400,
+        contentHeight: 1000,
+        slack: 24
+      }).spacerHeight
+    ).toBe(108);
+
+    // Plenty of natural room already: slack never forces a spacer.
+    expect(
+      computeAnchorScrollState({
+        anchorOffsetTop: 500,
+        topOffset: 16,
+        viewportHeight: 400,
+        contentHeight: 2000,
+        slack: 24
+      }).spacerHeight
+    ).toBe(0);
   });
 
   it("shrinks the anchor spacer as content grows, never below zero or above initial", () => {

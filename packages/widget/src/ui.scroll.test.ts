@@ -991,7 +991,7 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
-  it("anchor-top mode pins the turn's first unread block near the viewport top and never follows the stream", () => {
+  it("anchor-top keeps the sent user message pinned while the reply starts in view", () => {
     const raf = installRafMock();
     const resize = installResizeObserverMock();
     const mount = createMount();
@@ -1022,24 +1022,27 @@ describe("createAgentExperience streaming scroll", () => {
     // Run just the anchor frame: it sizes the spacer and starts the scroll.
     raf.step(1);
 
-    // target = 700 - 16 = 684; spacer = 684 + 400 - 1000 = 84.
+    // target = 700 - 16 = 684; spacer = 684 + 400 - 1000 + 24 slack = 108.
+    // The 24px slack keeps the held position off the clamp boundary so
+    // transient content dips during streaming can't bounce the viewport.
     const spacer = scrollContainer!.querySelector<HTMLElement>(
       "[data-persona-anchor-spacer]"
     );
-    expect(spacer?.style.height).toBe("84px");
+    expect(spacer?.style.height).toBe("108px");
     // Sized means visible: unsized it stays display:none so the body's flex
     // gap doesn't add phantom scrollable space below the transcript.
     expect(spacer?.style.display).toBe("");
 
     // The spacer's height is invisible to the mocked scroll metrics: apply
     // it manually so the anchor target is reachable, as in a real browser.
-    metrics.setScrollHeight(1084);
+    metrics.setScrollHeight(1108);
     raf.flush();
     expect(metrics.getScrollTop()).toBe(684);
 
-    // The response's first block is the turn's first unread output, so the
-    // anchor hands off to it: target = 900 - 16 = 884, and with content at
-    // 1284 - 84 = 1200 the spacer re-sizes to 884 + 400 - 1200 = 84.
+    // The reply's first block starts 200px below the pinned user message —
+    // well within the 400px viewport — so the anchor STAYS on the user
+    // message (market pattern: the sent message remains visible as the
+    // header of the streaming reply). No handoff.
     metrics.setScrollHeight(1284);
     emitStreamingMessage(controller, "Streaming response");
     const streamBubble = scrollContainer!.querySelector<HTMLElement>(
@@ -1047,19 +1050,15 @@ describe("createAgentExperience streaming scroll", () => {
     );
     expect(streamBubble).not.toBeNull();
     Object.defineProperty(streamBubble!, "offsetTop", { value: 900 });
-    raf.flush();
-    expect(metrics.getScrollTop()).toBe(884);
-
-    // Continuing to stream below that anchor never moves the viewport again.
     metrics.setScrollHeight(1324);
     emitStreamingMessage(controller, "Streaming response, now longer");
     raf.flush();
-    expect(metrics.getScrollTop()).toBe(884);
+    expect(metrics.getScrollTop()).toBe(684);
 
     // As real content grows, the spacer gives room back (shrink-only):
-    // content grew from 1200 to 1324 - 84 = 1240, so spacer 84 - 40 = 44.
+    // content grew from 1000 to 1324 - 108 = 1216, past the 108px reserve.
     resize.trigger();
-    expect(spacer?.style.height).toBe("44px");
+    expect(spacer?.style.height).toBe("0px");
 
     // Jumping to the latest abandons the anchor: the spacer is dropped so
     // "bottom" is the real end of content.
@@ -1068,6 +1067,98 @@ describe("createAgentExperience streaming scroll", () => {
     expect(spacer?.style.height).toBe("0px");
     expect(spacer?.style.display).toBe("none");
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
+  it("trims leftover anchor spacer air when the stream ends", () => {
+    const raf = installRafMock();
+    installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitUserMessage(controller, "user-trim", "Long question");
+    const bubble = scrollContainer!.querySelector<HTMLElement>(
+      '[data-message-id="user-trim"]'
+    );
+    Object.defineProperty(bubble!, "offsetTop", { value: 700 });
+    raf.step(1);
+    const spacer = scrollContainer!.querySelector<HTMLElement>(
+      "[data-persona-anchor-spacer]"
+    );
+    expect(spacer?.style.height).toBe("108px");
+    metrics.setScrollHeight(1108);
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(684);
+
+    // Reply streams in-view (anchor stays on the user message); content grows
+    // but the ResizeObserver drain never fires — the real-browser failure
+    // shape where the growth-driven shrink stops before converging.
+    emitStreamingMessage(controller, "Streaming response");
+    metrics.setScrollHeight(1174);
+
+    // Stream end: the spacer trims to what the held position needs plus the
+    // 24px anti-bounce slack (684 + 400 - 1066 + 24 = 42). The remaining
+    // below-fold air equals the near-bottom threshold, so the
+    // scroll-to-bottom arrow stays hidden.
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    expect(spacer?.style.height).toBe("42px");
+
+    controller.destroy();
+  });
+
+  it("anchor-top hands off to the first unread block only when it starts below the fold", () => {
+    const raf = installRafMock();
+    installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1600,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitUserMessage(controller, "user-strand", "Very long question");
+    const bubble = scrollContainer!.querySelector<HTMLElement>(
+      '[data-message-id="user-strand"]'
+    );
+    Object.defineProperty(bubble!, "offsetTop", { value: 100 });
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(84);
+
+    // The reply's first block starts 500px below the user message: with the
+    // user message pinned it would sit past the fold (16 + 500 > 400 - 96),
+    // so the anchor hands off to the block: target = 600 - 16 = 584. This is
+    // the stranded case the handoff exists for (tall send / tool prelude).
+    emitStreamingMessage(controller, "Streaming response");
+    const streamBubble = scrollContainer!.querySelector<HTMLElement>(
+      `[data-message-id="${STREAM_MESSAGE_ID}"]`
+    );
+    Object.defineProperty(streamBubble!, "offsetTop", { value: 600 });
+    emitStreamingMessage(controller, "Streaming response, longer");
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(584);
 
     controller.destroy();
   });

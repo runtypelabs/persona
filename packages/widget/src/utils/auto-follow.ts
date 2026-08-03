@@ -177,6 +177,13 @@ export type AnchorScrollInput = {
   viewportHeight: number;
   /** scrollHeight of the scroll container, excluding any anchor spacer. */
   contentHeight: number;
+  /**
+   * Minimum scrollable room kept past the held position. Without it the
+   * anchor sits precisely at maxScrollTop, so any transient content shrink
+   * during streaming (a typing-indicator swap, a collapsing skeleton) clamps
+   * scrollTop and the viewport visibly bounces by that amount.
+   */
+  slack?: number;
 };
 
 /**
@@ -192,7 +199,10 @@ export function computeAnchorScrollState(input: AnchorScrollInput): {
   const targetScrollTop = Math.max(0, input.anchorOffsetTop - input.topOffset);
   const spacerHeight = Math.max(
     0,
-    targetScrollTop + input.viewportHeight - input.contentHeight
+    targetScrollTop +
+      input.viewportHeight -
+      input.contentHeight +
+      (input.slack ?? 0)
   );
   return { targetScrollTop, spacerHeight };
 }
