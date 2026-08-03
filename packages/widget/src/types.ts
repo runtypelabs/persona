@@ -4264,7 +4264,9 @@ export type AgentWidgetHeaderLayoutConfig = {
    */
   render?: (context: HeaderRenderContext) => HTMLElement;
   /**
-   * Shown after the title in `minimal` header layout (e.g. chevron menu affordance).
+   * Icon action buttons at the trailing edge of the `minimal` header layout,
+   * clustered with the close button and sharing its chrome. For a menu
+   * affordance next to the title, use `titleMenu` instead.
    */
   trailingActions?: AgentWidgetHeaderTrailingAction[];
   /** Called when a `trailingActions` button is clicked. */

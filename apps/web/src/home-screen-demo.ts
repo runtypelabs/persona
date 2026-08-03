@@ -27,7 +27,7 @@ const scaffold = renderDemoScaffold({
   slug: "home-screen-demo",
   title: "Home Screen Plugin",
   blurb:
-    "An Intercom-style home stack built on renderWelcome, with a header action that returns to it over an existing conversation.",
+    "An Intercom-style home stack built on renderWelcome and renderComposer: the composer stays hidden until a conversation starts, and a header action returns home over an existing conversation.",
 });
 
 const configInspector = createDemoConfigInspector({

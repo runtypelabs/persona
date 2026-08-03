@@ -53,7 +53,27 @@ const createWelcomeHarness = (
   const starters: string[] = [];
   const sent: string[] = [];
   let content: HTMLElement | null = null;
+  let composerContent: HTMLElement | null = null;
   let visible = true;
+
+  // Mirrors the core's composer arbitration: same storage facade, and
+  // `requestRender` re-runs the hook like `rebuildComposer()` does.
+  const renderComposer = (): HTMLElement | null => {
+    composerContent =
+      plugin.renderComposer?.({
+        config: {},
+        defaultRenderer: () => document.createElement("div"),
+        onSubmit: () => {},
+        streaming: false,
+        disabled: false,
+        openAttachmentPicker: () => {},
+        requestRender: () => {
+          renderComposer();
+        },
+        storage,
+      }) ?? null;
+    return composerContent;
+  };
 
   const render = (): HTMLElement | null => {
     cleanups.splice(0, cleanups.length).forEach((fn) => fn());
@@ -96,10 +116,12 @@ const createWelcomeHarness = (
 
   return {
     render,
+    renderComposer,
     starters,
     sent,
     storage,
     current: () => content,
+    composer: () => composerContent,
     setVisible: (next: boolean) => {
       visible = next;
     },
@@ -226,5 +248,58 @@ describe("createHomeScreenPlugin", () => {
 
     plugin.showHome();
     expect(harness.current()?.className).toBe("persona-home");
+  });
+
+  it("hides the composer while home is shown and restores it on start", async () => {
+    const plugin = createHomeScreenPlugin(OPTIONS);
+    const harness = createWelcomeHarness(plugin);
+
+    // Construction order: the composer hook runs before the first welcome render.
+    harness.renderComposer();
+    harness.render();
+    expect(
+      harness.composer()?.hasAttribute("data-persona-home-composer-hidden"),
+    ).toBe(true);
+
+    harness.current()?.querySelector<HTMLButtonElement>(".persona-home__start")?.click();
+    await Promise.resolve();
+
+    // Null falls through to the default composer.
+    expect(harness.composer()).toBeNull();
+  });
+
+  it("keeps the composer for a restored conversation, corrected before paint", async () => {
+    const plugin = createHomeScreenPlugin(OPTIONS);
+    const harness = createWelcomeHarness(plugin);
+    harness.setVisible(false);
+
+    // The composer hook alone cannot see `visible`, so it guesses home ...
+    harness.renderComposer();
+    expect(
+      harness.composer()?.hasAttribute("data-persona-home-composer-hidden"),
+    ).toBe(true);
+
+    // ... and the welcome render corrects it in a microtask.
+    expect(harness.render()).toBeNull();
+    await Promise.resolve();
+    expect(harness.composer()).toBeNull();
+  });
+
+  it("hides the composer again when showHome returns over the transcript", async () => {
+    const plugin = createHomeScreenPlugin(OPTIONS);
+    const harness = createWelcomeHarness(plugin);
+    harness.renderComposer();
+    harness.render();
+
+    harness.current()?.querySelector<HTMLButtonElement>(".persona-home__start")?.click();
+    await Promise.resolve();
+    expect(harness.composer()).toBeNull();
+
+    harness.setVisible(false);
+    plugin.showHome();
+    await Promise.resolve();
+    expect(
+      harness.composer()?.hasAttribute("data-persona-home-composer-hidden"),
+    ).toBe(true);
   });
 });

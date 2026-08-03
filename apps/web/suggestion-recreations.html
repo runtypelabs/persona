@@ -147,36 +147,6 @@
         </div>
       </article>
     </div>
-
-    <section class="notes">
-      <h2 class="notes-heading">What this page is testing</h2>
-
-      <div class="notes-section">
-        <h3 class="notes-section-title">Every trait is config</h3>
-        <p>The three presentation variants (<code>chip</code>, <code>card</code>, <code>list</code>), the two click behaviors (<code>send</code>, <code>fill</code>), <code>maxItems</code>, <code>overflow</code>, and per-instance <code>theme.components.suggestion.*</code> tokens cover the whole surveyed market. The five panels here differ only in their config object.</p>
-      </div>
-
-      <div class="notes-section">
-        <h3 class="notes-section-title">Zero starters is a real answer</h3>
-        <p>Claude and ChatGPT have both been deleting starters. They can afford it because the brand communicates capability. An embedded widget cannot, so a strong default starter set plus a one-line scope statement stays load-bearing. Set <code>suggestions.starters.items</code> to an empty array to opt out: omitting it falls back to the legacy <code>suggestionChips</code> defaults.</p>
-      </div>
-
-      <div class="notes-section">
-        <h3 class="notes-section-title">Token gaps found</h3>
-        <ul>
-          <li>The welcome title has no typography token of its own, so a serif greeting over sans body copy is not expressible.</li>
-          <li><code>copy.welcomeSubtitle</code> cannot be omitted: an empty string still renders the paragraph and its top margin.</li>
-          <li>The gap between suggestion items is a fixed 8px. The <code>gap</code> token sets the space between a row's icon and its copy, not the space between rows.</li>
-          <li><code>semantic.colors.primary</code> does not reach the send button: <code>components.button.primary.background</code> has to be branded separately.</li>
-        </ul>
-        <h3 class="notes-section-title">Gaps this page already closed</h3>
-        <ul>
-          <li>Per-item icon color: rich items now take <code>iconColor</code>, tinting only the glyph. The ChatGPT pills above use it.</li>
-          <li><code>lightbulb</code>, <code>chart-column</code>, and <code>pen-line</code> joined the bundled icon registry.</li>
-          <li>Composer spacing: <code>components.composer.padding</code> / <code>gap</code> / <code>fontSize</code> / <code>lineHeight</code>, used by every composer on this page.</li>
-        </ul>
-      </div>
-    </section>
   </main>
 
   <script type="module" src="/src/suggestion-recreations.ts"></script>

@@ -14,6 +14,12 @@ import { injectStyles } from "@runtypelabs/persona/plugin-kit";
  * `showHome()` to render the stack back over an existing conversation, which
  * works because a plugin element ignores derived visibility and the host
  * overlays the transcript while it is mounted.
+ *
+ * The composer is hidden while home is shown (Intercom's Home tab has no
+ * composer; it belongs to the conversation view). Welcome arbitration owns
+ * that decision: `renderComposer` follows the last welcome render, and a
+ * disagreement (the composer hook runs first at panel construction) is
+ * corrected through `requestRender()` in a microtask, before paint.
  */
 
 /** Avatar for the greeting header. `url` wins; `text` is the emoji fallback. */
@@ -298,10 +304,28 @@ export const createHomeScreenPlugin = (
 ): HomeScreenPlugin => {
   let options: HomeScreenOptions = { ...initialOptions };
   let requestRender: (() => void) | null = null;
+  let composerRequestRender: (() => void) | null = null;
   // `ctx.storage` is the only view state: a second flag would desync from it.
   let viewStorage: AgentWidgetPluginStorage | null = null;
+  // Welcome arbitration's last decision (null until it has run once). The
+  // composer hook follows this rather than re-deriving it: only the welcome
+  // ctx carries `visible`, which decides the restored-conversation case.
+  let homeShown: boolean | null = null;
+  // What the composer hook last rendered (true = hidden footer).
+  let composerHidden: boolean | null = null;
 
   const isHome = () => viewStorage?.get(VIEW_KEY) !== "chat";
+
+  // The composer hook runs before the first welcome render at panel
+  // construction, so it can guess wrong for restored conversations. Both
+  // arbitrations run in the same synchronous construction pass, so a
+  // microtask correction lands before paint.
+  const syncComposer = () => {
+    queueMicrotask(() => {
+      if (composerHidden === null || homeShown === null) return;
+      if (composerHidden !== homeShown) composerRequestRender?.();
+    });
+  };
 
   const showHome = () => {
     viewStorage?.set(VIEW_KEY, "home");
@@ -334,6 +358,22 @@ export const createHomeScreenPlugin = (
       // send happens after this hook returns.
       queueMicrotask(leaveHome);
     },
+    // No composer on home, matching Intercom: the composer belongs to the
+    // conversation view. Returns a hidden footer while home is shown and
+    // falls through to the default composer otherwise; `syncComposer()`
+    // rebuilds it whenever welcome arbitration flips the view.
+    renderComposer: ({ storage, requestRender: request }) => {
+      composerRequestRender = request;
+      if (!viewStorage) viewStorage = storage;
+      const hide = homeShown ?? isHome();
+      composerHidden = hide;
+      if (!hide) return null;
+      const footer = document.createElement("div");
+      footer.className = "persona-widget-footer";
+      footer.style.display = "none";
+      footer.setAttribute("data-persona-home-composer-hidden", "");
+      return footer;
+    },
     renderWelcome: ({
       config,
       visible,
@@ -348,7 +388,13 @@ export const createHomeScreenPlugin = (
       const view = storage.get(VIEW_KEY);
       // Restored history opens on the transcript: home never covers a
       // conversation it did not start. `showHome()` overrides by writing "home".
-      if (view === "chat" || (view === null && !visible)) return null;
+      if (view === "chat" || (view === null && !visible)) {
+        homeShown = false;
+        syncComposer();
+        return null;
+      }
+      homeShown = true;
+      syncComposer();
 
       const root = el("div", "persona-home");
       injectStyles(root, "persona-home-screen-plugin", HOME_SCREEN_CSS);
