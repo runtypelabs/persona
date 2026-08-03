@@ -262,6 +262,53 @@ describe("scrollBehavior.showActivityWhilePinned (Principle 8)", () => {
   });
 });
 
+describe("anchor-top scroll-to-bottom affordance ignores spacer air", () => {
+  let raf: ReturnType<typeof installRafMock>;
+  beforeEach(() => {
+    raf = installRafMock();
+  });
+
+  it("stays hidden while the whole transcript is in view above the spacer, then shows once content grows past the viewport", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(
+      mount,
+      baseConfig({ features: { scrollBehavior: { mode: "anchor-top" } } })
+    );
+    const sc = getScrollContainer(mount);
+    // Short transcript (300px of content) in a 400px viewport.
+    const metrics = installScrollMetrics(sc, { scrollHeight: 300, clientHeight: 400 });
+
+    anchorUserTurn(controller);
+    // Give the anchored user bubble a real offset so the anchor computation
+    // produces a spacer (jsdom offsets are otherwise all 0).
+    const bubble = sc.querySelector<HTMLElement>('[data-message-id="u1"]')!;
+    Object.defineProperty(bubble, "offsetTop", { configurable: true, get: () => 200 });
+    raf.flush();
+
+    // Reflect the spacer in the mocked scroll metrics, as a browser would.
+    const spacer = sc.querySelector<HTMLElement>("[data-persona-anchor-spacer]")!;
+    const spacerHeight = parseFloat(spacer.style.height);
+    expect(spacerHeight).toBeGreaterThan(0);
+    metrics.setScrollHeight(300 + spacerHeight);
+
+    emitStreamingAssistant(controller, "a1", "Streaming reply");
+
+    // All 300px of real content fit in the [60, 460] viewport; the only
+    // scrollable space below is spacer air, so no jump affordance.
+    metrics.setScrollTop(60);
+    sc.dispatchEvent(new Event("scroll"));
+    expect(getScrollToBottomButton(mount).style.display).toBe("none");
+
+    // Content streams past the viewport bottom (300px -> 900px): now there is
+    // real content below the fold and the affordance appears.
+    metrics.setScrollHeight(900 + spacerHeight);
+    sc.dispatchEvent(new Event("scroll"));
+    expect(getScrollToBottomButton(mount).style.display).toBe("");
+
+    controller.destroy();
+  });
+});
+
 describe("scrollBehavior anchor-top no-anchor fallback", () => {
   let raf: ReturnType<typeof installRafMock>;
   beforeEach(() => {

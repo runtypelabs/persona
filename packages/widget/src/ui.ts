@@ -4076,14 +4076,27 @@ export const createAgentExperience = (
     updateScrollToBottomCountBadge();
   };
 
+  // "Near the latest content", ignoring anchor-spacer air: while a turn is
+  // anchored, the spacer keeps scrollable space below the last message, so
+  // container-bottom distance reads "away" even with the whole reply on
+  // screen (and flickers as the spacer drains). Measure against the real
+  // content bottom instead; the button only appears once content actually
+  // extends below the viewport.
+  const isNearLatestContent = () => {
+    const spacerHeight = anchorState?.spacerHeight ?? 0;
+    if (spacerHeight <= 0) return isElementNearBottom(body, BOTTOM_THRESHOLD);
+    const contentHeight = measureContentHeight(spacerHeight);
+    return (
+      contentHeight - body.scrollTop - body.clientHeight <= BOTTOM_THRESHOLD
+    );
+  };
+
   // Whether the user is currently away from the latest content: drives both
   // the scroll-to-bottom affordance and the new-messages badge. When following
   // the bottom (follow mode, or a no-anchor anchor-top fallback turn) that's
   // "auto-follow paused"; otherwise it's simply "not near the bottom".
   const isAwayFromLatest = () =>
-    isFollowEffective()
-      ? !autoFollow.isFollowing()
-      : !isElementNearBottom(body, BOTTOM_THRESHOLD);
+    isFollowEffective() ? !autoFollow.isFollowing() : !isNearLatestContent();
 
   // Empty transcript = welcome-only view: there is no "latest message" to
   // follow, jump to, or badge, and bottom-scrolling clips the greeting when
