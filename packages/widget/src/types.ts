@@ -3805,7 +3805,10 @@ export type AgentWidgetSuggestion =
       label: string;
       /** Text placed in the composer or sent. Defaults to `label`. */
       prompt?: string;
-      /** Optional supporting copy, most useful with the `card` variant. */
+      /**
+       * Optional supporting copy, most useful with the `card` variant. The
+       * `chip` variant ignores it and renders the label alone.
+       */
       description?: string;
       /** Optional icon from Persona's bundled Lucide registry. */
       icon?: IconName;
@@ -3852,9 +3855,10 @@ export type AgentWidgetSuggestionSurfaceConfig = {
   /** Default click behavior, overridable per item. Defaults to `send`. */
   behavior?: AgentWidgetSuggestionBehavior;
   /**
-   * Layout for items past the surface width. Defaults to `wrap` for starters
-   * and `scroll` for follow-ups. Applies to the `chip` variant only; the
-   * `card` and `list` layouts manage their own stacking.
+   * Layout for items past the surface width. Defaults to `wrap` on every
+   * surface; `scroll` opts into a horizontal strip for large sets. Applies
+   * to the `chip` variant only; the `card` and `list` layouts manage their
+   * own stacking.
    */
   overflow?: "scroll" | "wrap";
   /** Maximum visible items. Defaults to 4. */

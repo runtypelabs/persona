@@ -71,6 +71,8 @@ const starterItems = [
   },
 ];
 
+// Descriptions only render in the list and card variants: chips are
+// single-line labels, so the Custom UI mode is where these rows show.
 const followUpItems = [
   {
     id: "copy-plugin",
@@ -198,7 +200,6 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => ({
       variant: variant === "custom" ? "list" : "chip",
       placement: "after-message",
       behavior: variant === "custom" ? "fill" : "send",
-      overflow: "scroll",
       maxItems: 4,
     },
   },

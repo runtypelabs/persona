@@ -288,7 +288,8 @@ export const createSuggestionElement = (
         text: item.label,
       })
     );
-    if (item.description) {
+    // Chips are single-line labels; descriptions belong to card and list.
+    if (item.description && variant !== "chip") {
       copy.appendChild(
         createNode("span", {
           className: "persona-suggestion__description",

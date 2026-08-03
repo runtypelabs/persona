@@ -3705,7 +3705,10 @@ export const createAgentExperience = (
           surface: "followUp",
           variant: followUps?.variant ?? "chip",
           behavior: followUps?.behavior ?? "send",
-          overflow: followUps?.overflow ?? "scroll",
+          // Wrap by default: 2-4 compact chips always fit at widget width,
+          // and a scroll strip hides most of the set behind a fade. Hosts
+          // with large sets opt back in with overflow: "scroll".
+          overflow: followUps?.overflow ?? "wrap",
           maxItems: followUps?.maxItems ?? 4,
           config,
           plugins,

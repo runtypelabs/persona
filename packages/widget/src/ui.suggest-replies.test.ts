@@ -189,6 +189,23 @@ describe("suggest_replies chips UI", () => {
     scrolling.controller.destroy();
   });
 
+  it("wraps follow-ups by default", () => {
+    // 2-4 compact chips always fit at widget width; a scroll strip hides
+    // most of the set behind a fade, so scroll is opt-in for large sets.
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+
+    // No followUps config: agent chips land on the composer surface.
+    expect(
+      mount
+        .querySelector("[data-persona-composer-suggestions]")
+        ?.getAttribute("data-overflow"),
+    ).toBe("wrap");
+
+    controller.destroy();
+  });
+
   it("auto placement follows welcome-card visibility", () => {
     const withCard = makeController({
       suggestions: { starters: { items: ["Compare plans"] } },

@@ -367,9 +367,10 @@
   margin-top: 16px;
 }
 
-[data-persona-suggestions="follow-up"] {
-  /* The transcript body uses a roomy 24px section gap; pull contextual
-     follow-ups closer to the answer they belong to. */
+/* Follow-ups sit 12px from their answer. The body gap is 24px with the
+   welcome host visible and already 12px when it is hidden, so the pull-up
+   only applies in the roomy case. */
+.persona-gap-6 > [data-persona-suggestions="follow-up"] {
   margin-top: -12px;
 }
 
@@ -459,6 +460,15 @@
 
 .persona-suggestions[data-variant="chip"][data-overflow="wrap"] {
   flex-wrap: wrap;
+}
+
+/* Composer surface only: transcript follow-ups and welcome rows stay
+   left-aligned. fit-content centers a single row while wrapped rows keep a
+   shared left edge; per-row `justify-content: center` would rag them. */
+[data-persona-composer-suggestions].persona-suggestions[data-variant="chip"] {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
 }
 
 .persona-suggestion {

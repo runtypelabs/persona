@@ -79,6 +79,11 @@
       </div>
 
       <div class="notes-section">
+        <h3 class="notes-section-title">Shape the follow-ups</h3>
+        <p>Follow-ups carry less weight than starters: keep them to a handful of items and let them stay compact. The <code>chip</code> variant renders single-line labels and wraps at the widget's width, which is the default; <code>overflow: "scroll"</code> stays available as an opt-in horizontal strip for large sets. A suggestion's <code>description</code> renders in the <code>list</code> and <code>card</code> variants, so the same follow-up data reads as a bare chip in the built-in modes and as a label plus description row under Custom UI.</p>
+      </div>
+
+      <div class="notes-section">
         <h3 class="notes-section-title">Transform the data</h3>
         <p><code>transformSuggestions</code> can filter, rank, reorder, or enrich both configured starters and agent-produced follow-ups. Hooks receive resolved items, so string shorthand is already expanded and every item has an effective <code>behavior</code>: a plain object spread is all it takes to add an <code>icon</code>, promote one item to <code>primary</code>, or switch a long prompt to <code>fill</code>. Transform hooks compose in plugin priority order and run before <code>maxItems</code>.</p>
       </div>

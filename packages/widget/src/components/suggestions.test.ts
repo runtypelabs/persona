@@ -198,6 +198,46 @@ describe("per-item icon color", () => {
   });
 });
 
+describe("description rendering per variant", () => {
+  const items = [
+    {
+      label: "Track an order",
+      description: "Look up status by order number",
+    },
+  ];
+
+  it("keeps the chip variant to a single-line label", () => {
+    const { manager, session, textarea, container } = setup();
+
+    manager.render(items, session, textarea, [], undefined, {
+      variant: "chip",
+    });
+
+    expect(
+      container.querySelector(".persona-suggestion__description")
+    ).toBeNull();
+    expect(
+      (container.querySelector(".persona-suggestion__label") as HTMLElement)
+        .textContent
+    ).toBe("Track an order");
+  });
+
+  it("renders the description in the card and list variants", () => {
+    const { manager, session, textarea, container } = setup();
+
+    for (const variant of ["card", "list"] as const) {
+      manager.render(items, session, textarea, [], undefined, { variant });
+      expect(
+        (
+          container.querySelector(
+            ".persona-suggestion__description"
+          ) as HTMLElement
+        ).textContent
+      ).toBe("Look up status by order number");
+    }
+  });
+});
+
 describe("legacy suggestionChipsConfig scoping", () => {
   const chipsConfig = {
     fontFamily: "sans-serif" as const,

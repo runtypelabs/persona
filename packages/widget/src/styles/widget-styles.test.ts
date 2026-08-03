@@ -150,6 +150,43 @@ describe("suggestion interaction styles", () => {
       "--persona-suggestion-scroll-fade-size: 32px",
     );
   });
+
+  it("centers the chip row on the composer surface only", () => {
+    const selector =
+      '[data-persona-composer-suggestions].persona-suggestions[data-variant="chip"] {';
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    // fit-content + auto margins center a single row while wrapped rows keep
+    // a shared left edge; per-row justify-content would rag them.
+    expect(rule).toContain("width: fit-content");
+    expect(rule).toContain("max-width: 100%");
+    expect(rule).toContain("margin-inline: auto");
+    expect(rule).not.toContain("justify-content");
+
+    // Transcript follow-ups and welcome rows keep the default left alignment.
+    const sharedStart = widgetCss.indexOf(
+      '.persona-suggestions[data-variant="chip"] {',
+    );
+    const sharedRule = widgetCss.slice(
+      sharedStart,
+      widgetCss.indexOf("\n}", sharedStart),
+    );
+    expect(sharedStart).toBeGreaterThan(-1);
+    expect(sharedRule).not.toContain("justify-content");
+  });
+
+  it("only pulls follow-ups up against the roomy welcome-visible body gap", () => {
+    // Unscoped, the -12px offset would zero out the tightened 12px gap that
+    // applies when the welcome host is hidden, gluing follow-ups to the answer.
+    expect(widgetCss).toContain(
+      '.persona-gap-6 > [data-persona-suggestions="follow-up"] {',
+    );
+    expect(widgetCss).not.toMatch(
+      /\n\[data-persona-suggestions="follow-up"\] \{/,
+    );
+  });
 });
 
 describe("composer spacing styles", () => {
