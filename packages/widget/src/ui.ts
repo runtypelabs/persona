@@ -4481,8 +4481,54 @@ export const createAgentExperience = (
         spacerHeight
       };
       setAnchorSpacerHeight(spacerHeight);
-      animateScrollTo(body, () => targetScrollTop, 220);
+      // Live target: layout above the bubble can shrink mid-ease (the welcome
+      // starter row hides right after this measurement frame), and a frozen
+      // snapshot would carry the bubble past the offset and under the header.
+      // animateScrollTo re-resolves per frame, so re-derive the pin from the
+      // bubble's current position.
+      animateScrollTo(
+        body,
+        () =>
+          bubble.isConnected
+            ? Math.max(0, offsetTopWithinBody(bubble) - getAnchorTopOffset())
+            : targetScrollTop,
+        220
+      );
     });
+  };
+
+  // Welcome dismissal removes the host's layout (and the roomier body gap) in
+  // a single frame after its fade-out — after the anchor ease already scrolled
+  // against the pre-collapse layout, so the browser would clamp scrollTop and
+  // visibly yank the pinned message. Recompute the anchor against the
+  // collapsed layout and jump instead of easing: the bubble is already
+  // resting at the offset, so the re-pin is visually a no-op.
+  const repinAnchoredMessage = () => {
+    if (getScrollMode() !== "anchor-top") return;
+    if (!anchorState || !anchoredMessageId) return;
+    const bubble = queryMessageBubble(anchoredMessageId);
+    if (!bubble) return;
+    cancelSmoothScroll();
+    const previousSpacerHeight = anchorState.spacerHeight;
+    const contentHeight = measureContentHeight(previousSpacerHeight);
+    const { targetScrollTop, spacerHeight } = computeAnchorScrollState({
+      anchorOffsetTop: offsetTopWithinBody(bubble),
+      topOffset: getAnchorTopOffset(),
+      viewportHeight: body.clientHeight,
+      contentHeight,
+      slack: BOTTOM_THRESHOLD
+    });
+    anchorState = {
+      initialSpacerHeight: spacerHeight,
+      contentHeightAtAnchor: contentHeight,
+      spacerHeight
+    };
+    setAnchorSpacerHeight(spacerHeight);
+    isAutoScrolling = true;
+    body.scrollTop = targetScrollTop;
+    lastScrollTop = body.scrollTop;
+    isAutoScrolling = false;
+    syncScrollToBottomButton();
   };
 
   // Content growth handler (ResizeObserver-driven). In follow mode this is
@@ -6432,6 +6478,7 @@ export const createAgentExperience = (
         // mid-animation) wins the race.
         if (!welcomeShown && !welcomePluginContent) {
           applyWelcomeVisibility(body, welcomeHost, false);
+          repinAnchoredMessage();
         }
         // The forwards fill would pin opacity 0 across a later re-show.
         animation?.cancel();
@@ -6445,6 +6492,7 @@ export const createAgentExperience = (
       welcomeDismissAnimation = null;
     }
     applyWelcomeVisibility(body, welcomeHost, visible);
+    if (flipped && !visible) repinAnchoredMessage();
   };
 
   // `renderWelcome` arbitration. The core owns the host; a re-render runs the

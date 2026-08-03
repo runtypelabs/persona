@@ -1120,6 +1120,91 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  it("re-pins the anchored message when the hero welcome collapses mid-stream", async () => {
+    // Hero dismissal fades via WAAPI while still occupying layout, then drops
+    // display (and the roomier empty-state body gap) in one frame — after the
+    // anchor ease already scrolled against the old layout. Without a re-pin
+    // the browser clamps scrollTop by the removed height and visibly yanks
+    // the pinned user message.
+    const raf = installRafMock();
+    installResizeObserverMock();
+    let resolveFinished: () => void = () => {};
+    const finished = new Promise<void>((resolve) => {
+      resolveFinished = resolve;
+    });
+    const animate = vi.fn(
+      () => ({ finished, cancel: vi.fn() }) as unknown as Animation
+    );
+    const originalAnimate = (Element.prototype as { animate?: unknown })
+      .animate;
+    (Element.prototype as { animate?: unknown }).animate = animate;
+
+    try {
+      const mount = createMount();
+      const controller = createAgentExperience(mount, {
+        apiUrl: "https://api.example.com/chat",
+        launcher: { enabled: false },
+        welcome: { variant: "hero" },
+        features: {
+          scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
+        }
+      } as any);
+
+      const scrollContainer = mount.querySelector<HTMLElement>(
+        "#persona-scroll-container"
+      );
+      const metrics = installScrollMetrics(scrollContainer!, {
+        scrollHeight: 1000,
+        clientHeight: 400
+      });
+
+      emitStreamingStatus(controller);
+      emitUserMessage(controller, "user-hero", "Long question");
+
+      const bubble = scrollContainer!.querySelector<HTMLElement>(
+        '[data-message-id="user-hero"]'
+      );
+      expect(bubble).not.toBeNull();
+      Object.defineProperty(bubble!, "offsetTop", {
+        value: 700,
+        configurable: true
+      });
+      raf.step(1);
+      const spacer = scrollContainer!.querySelector<HTMLElement>(
+        "[data-persona-anchor-spacer]"
+      );
+      expect(spacer?.style.height).toBe("108px");
+      metrics.setScrollHeight(1108);
+      raf.flush();
+      expect(metrics.getScrollTop()).toBe(684);
+
+      // The dismiss animation completes: 300px of hero layout leaves in one
+      // frame, shifting the bubble up and shrinking scroll content. The
+      // clamp alone would drop scrollTop to 808 - 400 = 408.
+      Object.defineProperty(bubble!, "offsetTop", {
+        value: 400,
+        configurable: true
+      });
+      metrics.setScrollHeight(808);
+      resolveFinished();
+      await finished;
+      await Promise.resolve();
+
+      // Re-pinned: the bubble rests at the anchor offset again (400 - 16)
+      // with the spacer recomputed for the collapsed layout, not left stale.
+      expect(metrics.getScrollTop()).toBe(384);
+      expect(spacer?.style.height).toBe("108px");
+
+      controller.destroy();
+    } finally {
+      if (originalAnimate === undefined) {
+        delete (Element.prototype as { animate?: unknown }).animate;
+      } else {
+        (Element.prototype as { animate?: unknown }).animate = originalAnimate;
+      }
+    }
+  });
+
   it("anchor-top hands off to the first unread block only when it starts below the fold", () => {
     const raf = installRafMock();
     installResizeObserverMock();
