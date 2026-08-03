@@ -457,6 +457,7 @@ export type {
   SemanticSpacing,
   SemanticTypography,
   ComponentTokens,
+  TextStyleTokens,
   ArtifactToolbarTokens,
   ArtifactTabTokens,
   ArtifactPaneTokens,

@@ -91,14 +91,10 @@ export const buildWelcomeHost = (
   });
   iconHolder.hidden = true;
 
-  const title = createElement(
-    "h2",
-    "persona-text-lg persona-font-semibold persona-text-persona-primary"
-  );
-  const subtitle = createElement(
-    "p",
-    "persona-mt-2 persona-text-sm persona-text-persona-muted"
-  );
+  // Typography flows through `components.introCard.title` / `.subtitle`;
+  // the CSS fallbacks reproduce the utility classes these replaced.
+  const title = createElement("h2", "persona-welcome-title");
+  const subtitle = createElement("p", "persona-welcome-subtitle");
 
   // Background and box-shadow flow through the themable `components.introCard`
   // tokens; both default to flat. Docked mode always stays flat.

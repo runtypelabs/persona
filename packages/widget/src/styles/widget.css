@@ -349,6 +349,20 @@
   display: none !important;
 }
 
+/* `itemGap` is the space between items; the variant-less 8px above stays the
+   fallback for containers rendered before a variant is assigned. */
+.persona-suggestions[data-variant="chip"] {
+  gap: var(--persona-components-suggestion-chip-itemGap, 8px);
+}
+
+.persona-suggestions[data-variant="card"] {
+  gap: var(--persona-components-suggestion-card-itemGap, 8px);
+}
+
+.persona-suggestions[data-variant="list"] {
+  gap: var(--persona-components-suggestion-list-itemGap, 8px);
+}
+
 .persona-suggestions[data-persona-suggestion-surface="starter"] {
   margin-top: 16px;
 }
@@ -777,6 +791,28 @@
 .persona-welcome-icon-text {
   font-size: 32px;
   line-height: 1;
+}
+
+/* Welcome copy: `components.introCard.title` / `.subtitle` typography.
+   Fallbacks reproduce the utility classes these rules replaced, so an
+   unset token renders pixel-identically. Margins stay untokenized. */
+.persona-welcome-title {
+  font-family: var(--persona-components-introCard-title-fontFamily, inherit);
+  font-size: var(--persona-components-introCard-title-fontSize, 1.125rem);
+  font-weight: var(--persona-components-introCard-title-fontWeight, 600);
+  line-height: var(--persona-components-introCard-title-lineHeight, 1.75rem);
+  letter-spacing: var(--persona-components-introCard-title-letterSpacing, normal);
+  color: var(--persona-components-introCard-title-color, var(--persona-primary, #171717));
+}
+
+.persona-welcome-subtitle {
+  margin-top: 0.5rem;
+  font-family: var(--persona-components-introCard-subtitle-fontFamily, inherit);
+  font-size: var(--persona-components-introCard-subtitle-fontSize, 0.875rem);
+  font-weight: var(--persona-components-introCard-subtitle-fontWeight, inherit);
+  line-height: var(--persona-components-introCard-subtitle-lineHeight, 1.25rem);
+  letter-spacing: var(--persona-components-introCard-subtitle-letterSpacing, normal);
+  color: var(--persona-components-introCard-subtitle-color, var(--persona-muted, #6b7280));
 }
 
 /* Plugin-owned welcome (`renderWelcome`): the host keeps its position and the

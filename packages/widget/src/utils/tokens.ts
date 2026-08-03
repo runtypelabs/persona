@@ -344,6 +344,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       borderRadius: 'palette.radius.full',
       padding: '0.5rem 0.875rem',
       gap: '0.5rem',
+      itemGap: '8px',
       minHeight: '36px',
       fontSize: '0.8125rem',
       lineHeight: '1.25',
@@ -362,6 +363,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       padding: '1rem',
       shadow: 'palette.shadows.sm',
       gap: '0.625rem',
+      itemGap: '8px',
       minHeight: '72px',
       fontSize: '0.875rem',
       lineHeight: '1.35',
@@ -379,6 +381,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       borderRadius: 'palette.radius.md',
       padding: '0.75rem',
       gap: '0.625rem',
+      itemGap: '8px',
       minHeight: '44px',
       fontSize: '0.875rem',
       lineHeight: '1.35',
@@ -851,10 +854,15 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-header-iconBackground'] ?? cssVars['--persona-primary'];
   cssVars['--persona-header-icon-fg'] =
     cssVars['--persona-components-header-iconForeground'] ?? cssVars['--persona-text-inverse'];
+  // `title.color` / `subtitle.color` supersede the legacy *Foreground tokens.
   cssVars['--persona-header-title-fg'] =
-    cssVars['--persona-components-header-titleForeground'] ?? cssVars['--persona-primary'];
+    cssVars['--persona-components-header-title-color'] ??
+    cssVars['--persona-components-header-titleForeground'] ??
+    cssVars['--persona-primary'];
   cssVars['--persona-header-subtitle-fg'] =
-    cssVars['--persona-components-header-subtitleForeground'] ?? cssVars['--persona-text-muted'];
+    cssVars['--persona-components-header-subtitle-color'] ??
+    cssVars['--persona-components-header-subtitleForeground'] ??
+    cssVars['--persona-text-muted'];
   cssVars['--persona-header-action-icon-fg'] =
     cssVars['--persona-components-header-actionIconForeground'] ?? cssVars['--persona-muted'];
 

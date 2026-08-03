@@ -10,6 +10,7 @@ import {
 import {
   buildHeader,
   HEADER_THEME_CSS,
+  HEADER_TITLE_TYPOGRAPHY,
   HeaderElements,
   attachHeaderToContainer as _attachHeaderToContainer,
 } from "./header-builder";
@@ -156,6 +157,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     // Title only (no icon, no subtitle)
     headerTitle = createElement("span", "persona-text-base persona-font-semibold persona-truncate");
     headerTitle.style.color = HEADER_THEME_CSS.titleColor;
+    Object.assign(headerTitle.style, HEADER_TITLE_TYPOGRAPHY);
     headerTitle.textContent = launcher.title ?? "Chat Assistant";
 
     titleRow.appendChild(headerTitle);

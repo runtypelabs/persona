@@ -12,10 +12,10 @@
     /* Page chrome only. Nothing here styles the widget: every panel is themed
        through tokens in suggestion-recreations.ts. The one widget-facing rule
        is the reset below, which undoes this site's own global heading font so
-       each recreation's typography tokens are what actually decide. */
-    [data-persona-root] h1,
-    [data-persona-root] h2,
-    [data-persona-root] h3 {
+       each recreation's typography tokens are what actually decide. The
+       welcome title is exempt: `introCard.title` owns it, and the widget's own
+       rule already falls back to `inherit`. */
+    [data-persona-root] :is(h1, h2, h3):not(.persona-welcome-title) {
       font-family: inherit;
       letter-spacing: normal;
     }
@@ -107,7 +107,7 @@
         <div class="recreation-head">
           <span class="recreation-kicker">No starters</span>
           <h2 class="recreation-name">Claude.ai</h2>
-          <p class="recreation-note">The minimalist school. Warm cream paper, a serif time-of-day greeting, and zero starter prompts: the strongest brands ship none, because the name already communicates capability. The recreation is the welcome tone itself.</p>
+          <p class="recreation-note">The minimalist school. Warm cream paper, a terracotta sparkle over a single serif question centered above the composer, and zero starter prompts: the strongest brands ship none, because the name already communicates capability. The recreation is the welcome tone itself.</p>
         </div>
         <div class="recreation-frame">
           <div class="recreation-stage" data-recreation="claude"></div>

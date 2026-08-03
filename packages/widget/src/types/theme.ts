@@ -202,6 +202,16 @@ export interface PanelTokens extends ComponentTokenSet {
   canvasBackground?: string;
 }
 
+/** Per-element text styling shared by themable text surfaces. */
+export interface TextStyleTokens {
+  fontFamily?: string;
+  fontSize?: string;
+  fontWeight?: string;
+  lineHeight?: string;
+  letterSpacing?: string;
+  color?: TokenReference<'color'>;
+}
+
 export interface HeaderTokens extends ComponentTokenSet {
   background: TokenReference<'color'>;
   border: TokenReference<'color'>;
@@ -210,10 +220,14 @@ export interface HeaderTokens extends ComponentTokenSet {
   iconBackground: TokenReference<'color'>;
   /** Foreground (glyph stroke or emoji text) on the header avatar tile. */
   iconForeground: TokenReference<'color'>;
-  /** Header title line (next to the icon, or minimal layout title). */
+  /** Legacy alias of `title.color`; `title.color` wins when both are set. */
   titleForeground: TokenReference<'color'>;
-  /** Header subtitle line under the title. */
+  /** Legacy alias of `subtitle.color`; `subtitle.color` wins when both are set. */
   subtitleForeground: TokenReference<'color'>;
+  /** Header title typography (next to the icon, or minimal layout title). */
+  title?: TextStyleTokens;
+  /** Header subtitle typography, for the line under the title. */
+  subtitle?: TextStyleTokens;
   /** Default color for clear / close icon buttons when launcher overrides are unset. */
   actionIconForeground: TokenReference<'color'>;
   /** Box-shadow on the header (e.g., a fade shadow to replace the default border). */
@@ -254,6 +268,10 @@ export interface IntroCardTokens extends ComponentTokenSet {
   padding?: TokenReference<'spacing'>;
   /** Box-shadow on the intro card (token ref or raw CSS, e.g. `none`). */
   shadow?: string;
+  /** Welcome title typography. */
+  title?: TextStyleTokens;
+  /** Welcome subtitle typography. */
+  subtitle?: TextStyleTokens;
 }
 
 /** Collapsible widget chrome (tool bubbles, reasoning bubbles, approval bubbles). */
@@ -534,7 +552,10 @@ export interface ScrollToBottomTokens extends ComponentTokenSet {
 
 /** Visual tokens shared by one suggestion presentation variant. */
 export interface SuggestionVariantTokens extends ComponentTokenSet {
+  /** Space inside one item, between its icon and its copy. */
   gap?: string;
+  /** Space between suggestion items in the container. */
+  itemGap?: string;
   minHeight?: string;
   fontSize?: string;
   lineHeight?: string;

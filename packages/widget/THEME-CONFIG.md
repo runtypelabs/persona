@@ -376,6 +376,26 @@ Panel and seamless carry `persona-artifact-welded-split` on the mount root while
 | `borderRadius` | `palette.radius.xl palette.radius.xl 0 0` |
 | `padding` | `semantic.spacing.md` |
 
+`title` and `subtitle` take the shared `TextStyleTokens` shape
+(`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`,
+`color`). Unset keys fall back to the built-in header type: the title renders
+at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
+
+| Token | Default |
+|-------|---------|
+| `title.fontFamily` / `subtitle.fontFamily` | inherited from the widget font |
+| `title.fontSize` | `"1rem"` |
+| `title.fontWeight` | `"600"` |
+| `title.lineHeight` | `"1.5rem"` |
+| `title.color` | `semantic.colors.primary` |
+| `subtitle.fontSize` | `"0.75rem"` |
+| `subtitle.lineHeight` | `"1rem"` |
+| `subtitle.color` | `semantic.colors.textMuted` |
+
+> `titleForeground` and `subtitleForeground` are legacy aliases of
+> `title.color` and `subtitle.color`. Both still work; the `title`/`subtitle`
+> color wins when both are set.
+
 ### Message (`components.message.*`)
 
 | Token | Default Reference |
@@ -451,6 +471,32 @@ replace it with a custom element.
 | `borderRadius` | `palette.radius.2xl` |
 | `padding` | `semantic.spacing.lg` |
 | `shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` *(matches the legacy `persona-shadow-sm` look)* |
+
+`title` and `subtitle` take the shared `TextStyleTokens` shape
+(`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`,
+`color`). They have no token defaults: unset keys fall back in CSS to the
+built-in welcome type.
+
+| Token | Default |
+|-------|---------|
+| `title.fontFamily` / `subtitle.fontFamily` | inherited from the widget font |
+| `title.fontSize` | `"1.125rem"` |
+| `title.fontWeight` | `"600"` |
+| `title.lineHeight` | `"1.75rem"` |
+| `title.color` | `--persona-primary` |
+| `subtitle.fontSize` | `"0.875rem"` |
+| `subtitle.lineHeight` | `"1.25rem"` |
+| `subtitle.color` | `--persona-muted` |
+
+### Suggestion (`components.suggestion.*`)
+
+Three variants (`chip`, `card`, `list`), each a full chrome set. Two spacing
+tokens are easy to confuse:
+
+| Token | Default | Meaning |
+|-------|---------|---------|
+| `gap` | `"0.5rem"` (chip), `"0.625rem"` (card, list) | Space inside one item, between its icon and its copy |
+| `itemGap` | `"8px"` | Space between suggestion items in the container |
 
 ### Composer (`components.composer.*`)
 

@@ -73,6 +73,24 @@ export const editorialWidgetTheme: NonNullable<AgentWidgetConfig["theme"]> = {
       background: "#fef9f1",
       borderRadius: "0px",
       shadow: "none",
+      // The page's `.editorial-h` voice (Syne 500, 0.04em) on the greeting
+      // only; body copy and composer stay on Geist.
+      title: {
+        fontFamily: "'Syne', sans-serif",
+        fontSize: "1.375rem",
+        fontWeight: "500",
+        lineHeight: "1.9rem",
+        letterSpacing: "0.04em",
+      },
+    },
+    header: {
+      // Same headline voice on the panel title (floating/mobile launcher);
+      // the subtitle stays Geist so the bar keeps one accent, not two.
+      title: {
+        fontFamily: "'Syne', sans-serif",
+        fontWeight: "500",
+        letterSpacing: "0.04em",
+      },
     },
     message: {
       user: { background: "#fef9f1", text: "#1d1c17", borderRadius: "0px" },

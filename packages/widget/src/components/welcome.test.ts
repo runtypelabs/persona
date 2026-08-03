@@ -25,6 +25,14 @@ describe("welcome host", () => {
     expect(host.hasAttribute("data-persona-intro-card")).toBe(true);
   });
 
+  it("gives the title and subtitle their tokenized typography classes", () => {
+    const { title, subtitle } = makeHost();
+    expect(title.tagName).toBe("H2");
+    expect(title.className).toBe("persona-welcome-title");
+    expect(subtitle.tagName).toBe("P");
+    expect(subtitle.className).toBe("persona-welcome-subtitle");
+  });
+
   it("applies resolved config in place", () => {
     const elements = makeHost();
     applyWelcomeConfig(

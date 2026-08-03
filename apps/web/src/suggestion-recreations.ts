@@ -52,8 +52,7 @@ const chatgpt = (): AgentWidgetConfig => ({
   ...base(),
   copy: {
     welcomeTitle: "What can I help with?",
-    // Token gap: there is no way to omit the subtitle element. An empty string
-    // still renders the <p>, so the greeting keeps ~8px of dead space under it.
+    // An empty string omits the subtitle paragraph, its margin included.
     welcomeSubtitle: "",
     inputPlaceholder: "Ask anything",
   },
@@ -156,13 +155,25 @@ const chatgpt = (): AgentWidgetConfig => ({
 });
 
 // ── 2. Claude.ai ────────────────────────────────────────────────────────
-// The minimalist school: warm cream paper, a time-of-day greeting set in a
-// serif, and zero starters. The welcome tone is the entire recreation.
+// The minimalist school: warm cream paper, a single serif question centered
+// over the composer, and zero starters. The welcome tone is the recreation.
+
+// Greeting face only. Claude's composer and body copy stay on the sans stack.
+const CLAUDE_SERIF =
+  'Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif';
+
 const claude = (): AgentWidgetConfig => ({
   ...base(),
+  // Hero variant: one centered serif question over the composer, sparkle
+  // above, no subtitle. This is the current claude.ai composition, not the
+  // older top-left "Good evening" block.
+  welcome: {
+    variant: "hero",
+    title: "What shall we think through?",
+    subtitle: "",
+    icon: { type: "text", text: "✳" },
+  },
   copy: {
-    welcomeTitle: "Good evening",
-    welcomeSubtitle: "What are we working on?",
     inputPlaceholder: "How can I help you today?",
   },
   // Claude's submit is a small terracotta arrow-up, not a paper plane. No
@@ -183,17 +194,6 @@ const claude = (): AgentWidgetConfig => ({
     starters: { items: [] },
   },
   theme: {
-    palette: {
-      typography: {
-        fontFamily: {
-          // Token gap: the greeting has no font token of its own, so matching
-          // Claude's serif headline means setting the family for the whole
-          // widget (their composer and body copy are sans). A per-element
-          // welcome typography token would fix this.
-          sans: 'Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif',
-        },
-      },
-    },
     semantic: {
       colors: {
         background: "#faf9f5",
@@ -204,12 +204,29 @@ const claude = (): AgentWidgetConfig => ({
         text: "#3d3929",
         textMuted: "#83827d",
         border: "#e5e2d9",
+        // No rule between transcript and composer: greeting and card float on
+        // one cream field.
+        divider: "transparent",
         primary: "#c96442",
+        // The welcome icon holder reads `--persona-accent`: terracotta sparkle.
+        accent: "#c96442",
       },
     },
     components: {
       panel: { borderRadius: "0" },
-      input: { background: "#ffffff", borderRadius: "1rem" },
+      // `introCard.title` scopes the serif to the greeting, off the composer.
+      // The greeting is warm ink; `color` overrides the `primary` default.
+      // 1.625rem holds the question to one line at the 460px stage width.
+      introCard: {
+        title: {
+          fontFamily: CLAUDE_SERIF,
+          fontSize: "1.625rem",
+          fontWeight: "400",
+          lineHeight: "2.125rem",
+          color: "#3d3929",
+        },
+      },
+      input: { background: "#ffffff", borderRadius: "1.5rem" },
       // Claude's card is the roomiest of the five: 16px type on 24px, and a
       // deep top inset so the caret sits well below the card edge. The card
       // floats on a diffuse warm shadow; the hairline border barely registers.
@@ -305,9 +322,10 @@ const gemini = (): AgentWidgetConfig => ({
       },
       suggestion: {
         list: {
-          // Token gap: the space BETWEEN rows is a fixed 8px. `gap` here is the
-          // icon-to-copy gap inside a row, so Gemini's tighter stack is out of
-          // reach through config.
+          // `itemGap` is the space BETWEEN rows (`gap` is icon-to-copy inside
+          // one row). 4px gives Gemini's near-flush stack instead of the 8px
+          // default.
+          itemGap: "4px",
           background: "transparent",
           foreground: "#1f1f1f",
           border: "transparent",
@@ -402,6 +420,9 @@ const copilot = (): AgentWidgetConfig => ({
     },
     components: {
       panel: { borderRadius: "0" },
+      // The greeting is neutral ink in M365; the title color otherwise
+      // defaults to `semantic.colors.primary`, which is the Copilot blue.
+      introCard: { title: { color: "#242424" } },
       input: { background: "#ffffff", borderRadius: "0.75rem" },
       // Roomier than the Persona default but tighter than Claude's card:
       // Copilot's box is a soft rectangle with 16px type on 24px.
@@ -423,6 +444,8 @@ const copilot = (): AgentWidgetConfig => ({
           borderRadius: "0.75rem",
           padding: "0.875rem",
           gap: "0.625rem",
+          // Grid gutter between the four cards, matching M365's roomier 2x2.
+          itemGap: "12px",
           minHeight: "84px",
           fontSize: "0.875rem",
           iconSize: "18px",
@@ -491,6 +514,9 @@ const perplexity = (): AgentWidgetConfig => ({
     },
     components: {
       panel: { borderRadius: "0" },
+      // The headline is dark ink, not the teal accent the title color
+      // otherwise inherits from `semantic.colors.primary`.
+      introCard: { title: { color: "#13343b" } },
       input: { background: "#ffffff", borderRadius: "0.75rem" },
       // Search-field proportions: a tall box with 16px type on 24px and the
       // submit control dropped onto its own row below the query.
@@ -506,6 +532,9 @@ const perplexity = (): AgentWidgetConfig => ({
       },
       suggestion: {
         list: {
+          // Perplexity's true look is a hairline-divided stack. `itemGap: 0`
+          // cannot produce it: `border` is the whole row box, so touching rows
+          // double their shared rule. Bordered rows at the 8px default stay.
           background: "transparent",
           foreground: "#13343b",
           border: "#e8e8e3",

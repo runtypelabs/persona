@@ -287,6 +287,61 @@ describe('theme utils', () => {
     expect(customVars['--persona-header-action-icon-fg']).toBe('#9ca3af');
   });
 
+  it('emits full-path CSS variables for header and welcome text style tokens', () => {
+    const theme = createTheme({
+      components: {
+        introCard: {
+          title: { fontFamily: 'Georgia, serif', fontSize: '1.5rem' },
+        },
+        header: {
+          title: {
+            fontFamily: 'Inter, sans-serif',
+            color: 'palette.colors.secondary.500',
+          },
+        },
+      },
+    } as any);
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-components-introCard-title-fontFamily']).toBe(
+      'Georgia, serif'
+    );
+    expect(cssVars['--persona-components-introCard-title-fontSize']).toBe('1.5rem');
+    expect(cssVars['--persona-components-header-title-fontFamily']).toBe(
+      'Inter, sans-serif'
+    );
+    // title.color supersedes the legacy titleForeground alias.
+    expect(cssVars['--persona-header-title-fg']).toBe('#8b5cf6');
+  });
+
+  it('keeps titleForeground working when no header.title.color is set', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: {
+          header: { titleForeground: 'palette.colors.gray.500' },
+        },
+      } as any)
+    );
+
+    expect(cssVars['--persona-header-title-fg']).toBe('#6b7280');
+  });
+
+  it('emits suggestion itemGap for every variant, defaulting to 8px', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-components-suggestion-chip-itemGap']).toBe('8px');
+    expect(defaults['--persona-components-suggestion-card-itemGap']).toBe('8px');
+    expect(defaults['--persona-components-suggestion-list-itemGap']).toBe('8px');
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: { suggestion: { list: { itemGap: '20px' } } },
+      } as any)
+    );
+    expect(custom['--persona-components-suggestion-list-itemGap']).toBe('20px');
+    // Sibling variants keep the default.
+    expect(custom['--persona-components-suggestion-chip-itemGap']).toBe('8px');
+  });
+
   it('maps button.ghost tokens to the composer ghost icon-button CSS variables', () => {
     const cssVars = themeToCssVariables(createTheme());
 

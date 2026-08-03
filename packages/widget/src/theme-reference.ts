@@ -120,7 +120,9 @@ export const THEME_TOKEN_DOCS = {
       header: {
         description: 'Chat panel header.',
         properties:
-          'background, border, borderRadius, padding, iconBackground, iconForeground, titleForeground, subtitleForeground, actionIconForeground, shadow, borderBottom.',
+          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, shadow, borderBottom, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+        legacy:
+          'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set.',
       },
       message: {
         description: 'Chat message bubbles.',
@@ -132,6 +134,18 @@ export const THEME_TOKEN_DOCS = {
         description: 'Markdown rendering in messages and artifact pane.',
         properties:
           'inlineCode (background, foreground), link.foreground, prose.fontFamily, heading.h1/h2 (fontSize, fontWeight).',
+      },
+      introCard: {
+        description:
+          'Welcome surface above the message list. Flat by default (transparent, no shadow).',
+        properties:
+          'background, borderRadius, padding, shadow, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+      },
+      suggestion: {
+        description:
+          'Starter prompt and follow-up suggestion chrome. Three variants: chip, card, list.',
+        properties:
+          'background, foreground, border, borderRadius, padding, shadow, gap (icon to copy inside one item), itemGap (space between items, default 8px), minHeight, fontSize, lineHeight, iconSize, hoverBackground, hoverForeground, hoverBorder, pressedBackground, focusRing, disabledOpacity.',
       },
       voice:
         'recording (indicator, background, border), processing (icon, background), speaking (icon).',
