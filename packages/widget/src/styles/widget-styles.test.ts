@@ -230,10 +230,51 @@ describe("plugin welcome styles", () => {
     const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
 
     expect(start).toBeGreaterThan(-1);
-    expect(rule).toContain("max-width: var(--persona-welcome-max-width, 640px)");
+    // The card variant shares the transcript column so its left-aligned
+    // text lines up with messages and composer.
+    expect(rule).toContain("max-width: var(--persona-content-max-width, 768px)");
     expect(rule).toContain("margin-inline: auto");
     // The var is published on the root so plugin content can consume it.
     expect(widgetCss).toContain("--persona-welcome-max-width: 640px");
+  });
+
+  it("keeps the narrower centered column for the hero variant only", () => {
+    const start = widgetCss.indexOf(
+      '.persona-welcome[data-persona-welcome-variant="hero"]:not(',
+    );
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("max-width: var(--persona-welcome-max-width, 640px)");
+  });
+
+  it("aligns the greeting bubble to the transcript column", () => {
+    const start = widgetCss.indexOf(".persona-welcome-greeting {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("max-width: var(--persona-content-max-width, 768px)");
+    expect(rule).toContain("margin-inline: auto");
+  });
+
+  it("pads the welcome host from the intro-card alias, full padding on overlays", () => {
+    // Flat default resolves the alias to `1.5rem 0` (tokens.ts), aligning
+    // the text with the content column; overlays are opaque surfaces and
+    // keep a fixed symmetric inset.
+    const start = widgetCss.indexOf(".persona-welcome {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("padding: var(--persona-intro-card-padding, 1.5rem)");
+
+    const overlayStart = widgetCss.indexOf(
+      ".persona-welcome[data-persona-welcome-overlay] {",
+    );
+    const overlayRule = widgetCss.slice(
+      overlayStart,
+      widgetCss.indexOf("\n}", overlayStart),
+    );
+    expect(overlayRule).toContain("padding: 1.5rem");
   });
 
   it("overlays the messages area while plugin content is active", () => {

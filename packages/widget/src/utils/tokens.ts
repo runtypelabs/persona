@@ -878,8 +878,21 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-introCard-background'] ?? 'transparent';
   cssVars['--persona-intro-card-radius'] =
     cssVars['--persona-components-introCard-borderRadius'] ?? '1rem';
-  cssVars['--persona-intro-card-padding'] =
+  // Flat cards (transparent background, no shadow) drop the horizontal
+  // component of the stock padding so the welcome text shares the content
+  // column's left edge instead of carrying an invisible card inset. Compared
+  // by resolved value, not key presence: DEFAULT_COMPONENTS materializes the
+  // introCard tokens into every theme. A non-stock padding is emitted as-is;
+  // '1.5rem 1.5rem' forces the symmetric inset on a flat card.
+  const introBg = cssVars['--persona-components-introCard-background'];
+  const introShadow = cssVars['--persona-components-introCard-shadow'];
+  const introCardFlat =
+    (!introBg || introBg === 'transparent' || introBg === 'none') &&
+    (!introShadow || introShadow === 'none');
+  const introPadding =
     cssVars['--persona-components-introCard-padding'] ?? '1.5rem';
+  cssVars['--persona-intro-card-padding'] =
+    introCardFlat && introPadding === '1.5rem' ? '1.5rem 0' : introPadding;
   cssVars['--persona-intro-card-shadow'] =
     cssVars['--persona-components-introCard-shadow'] ?? 'none';
 

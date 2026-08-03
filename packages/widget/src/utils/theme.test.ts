@@ -137,6 +137,36 @@ describe('theme utils', () => {
     expect(cssVars['--persona-button-radius']).toBe('6px');
   });
 
+  it('zeroes horizontal intro-card padding when the card resolves flat', () => {
+    const cssVars = themeToCssVariables(createTheme({} as any));
+    expect(cssVars['--persona-intro-card-padding']).toBe('1.5rem 0');
+  });
+
+  it('keeps full intro-card padding when a background or shadow makes it a card', () => {
+    const withBackground = themeToCssVariables(
+      createTheme({
+        components: { introCard: { background: '#ffffff' } },
+      } as any)
+    );
+    expect(withBackground['--persona-intro-card-padding']).toBe('1.5rem');
+
+    const withShadow = themeToCssVariables(
+      createTheme({
+        components: { introCard: { shadow: '0 1px 2px rgba(0,0,0,0.1)' } },
+      } as any)
+    );
+    expect(withShadow['--persona-intro-card-padding']).toBe('1.5rem');
+  });
+
+  it('lets an explicit intro-card padding token win over the flat default', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: { introCard: { padding: '2rem' } },
+      } as any)
+    );
+    expect(cssVars['--persona-intro-card-padding']).toBe('2rem');
+  });
+
   it.each([
     {
       role: 'surface',

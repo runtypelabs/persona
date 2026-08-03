@@ -660,6 +660,8 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-intro-card-shadow
 ```
 
+The intro card is flat by default (transparent background, no shadow), and a flat card drops the horizontal component of its stock padding (`--persona-intro-card-padding` resolves to `1.5rem 0`) so the welcome text lines up with the transcript and composer column. Setting `components.introCard.background` or `.shadow` restores the full `1.5rem` interior inset, and any explicit `components.introCard.padding` value is used as-is (`1.5rem 1.5rem` forces the symmetric inset on a flat card).
+
 ### Artifact Card Aliases
 
 ```css

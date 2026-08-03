@@ -97,11 +97,14 @@ export const buildWelcomeHost = (
   const subtitle = createElement("p", "persona-welcome-subtitle");
 
   // Background and box-shadow flow through the themable `components.introCard`
-  // tokens; both default to flat. Docked mode always stays flat.
+  // tokens; both default to flat. Docked mode always stays flat. Padding comes
+  // from `--persona-intro-card-padding` (see widget.css), which zeroes its
+  // horizontal component when the card resolves flat so the text shares the
+  // content column's left edge instead of carrying a phantom card inset.
   const host = createNode(
     "div",
     {
-      className: "persona-welcome persona-rounded-2xl persona-p-6",
+      className: "persona-welcome persona-rounded-2xl",
       attrs: {
         "data-persona-welcome": "",
         "data-persona-intro-card": "",

@@ -766,6 +766,14 @@
 
 /* Welcome surface ------------------------------------------------------- */
 
+/* Interior padding rides the intro-card alias: the tokens layer zeroes the
+   horizontal component when the card resolves flat (no background, no
+   shadow), so default installs align the title with the content column
+   instead of indenting it by an invisible card inset. */
+.persona-welcome {
+  padding: var(--persona-intro-card-padding, 1.5rem);
+}
+
 .persona-welcome[hidden],
 .persona-welcome-greeting[hidden] {
   display: none !important;
@@ -831,12 +839,30 @@
 /* Overlay state: a plugin element covers the messages area while it is active.
    The body stops scrolling underneath so the absolute box maps to the visible
    transcript rather than scrolling away with the content. */
-/* Wide panels: the welcome is a centered, width-capped column with its text
-   still left-aligned inside (the Vercel-template pattern); at launcher width
-   the cap never bites. The plugin overlay stays full-bleed via the :not(). */
+/* Wide panels: the card variant shares the transcript column
+   (--persona-content-max-width, re-set inline from layout.contentMaxWidth)
+   so its left-aligned text lines up with messages and composer; at launcher
+   width the cap never bites. The plugin overlay stays full-bleed via the
+   :not(). */
 .persona-welcome:not([data-persona-welcome-overlay]) {
   width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
+  margin-inline: auto;
+}
+
+/* The centered hero keeps the narrower consumer-product column, where
+   centered text makes the split against the transcript read as intended. */
+.persona-welcome[data-persona-welcome-variant="hero"]:not(
+    [data-persona-welcome-overlay]
+  ) {
   max-width: var(--persona-welcome-max-width, 640px);
+}
+
+/* The greeting bubble is a sibling of the transcript wrapper, outside its
+   inline width cap; mirror the cap so it shares the same column. */
+.persona-welcome-greeting {
+  width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
   margin-inline: auto;
 }
 
@@ -845,6 +871,9 @@
   inset: 0;
   z-index: 5;
   overflow-y: auto;
+  /* Plugin overlays are opaque surfaces regardless of the intro-card theme,
+     so they keep full interior padding even when the card resolves flat. */
+  padding: 1.5rem;
   /* !important: the host doubles as the intro card and carries an inline
      background (--persona-intro-card-bg, default transparent); the overlay
      must stay opaque or the transcript bleeds through the plugin stack. */
