@@ -42,7 +42,7 @@
             <div class="suggestion-welcome-buttons mount-toggle-group" role="group" aria-label="Welcome surface">
               <button class="suggestion-welcome-button mount-toggle-button" type="button" data-welcome="card" aria-pressed="true" title="Intro card above the transcript. The back-compatible default.">Card</button>
               <button class="suggestion-welcome-button mount-toggle-button" type="button" data-welcome="hero" aria-pressed="false" title="Centered in the empty conversation, dismissed on the first message.">Hero</button>
-              <button class="suggestion-welcome-button mount-toggle-button" type="button" data-welcome="greeting" aria-pressed="false" title="Card plus a display-only greeting bubble at transcript position zero.">Greeting</button>
+              <button class="suggestion-welcome-button mount-toggle-button" type="button" data-welcome="greeting" aria-pressed="false" title="Conversation-first: no intro card, just a display-only greeting bubble plus composer chips.">Greeting</button>
             </div>
           </div>
           <div class="suggestion-example-control">
@@ -67,7 +67,7 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Pick a welcome surface</h3>
-        <p>The <code>welcome</code> namespace owns the first-open surface: <code>variant: "card"</code> keeps the intro card above the transcript, <code>"hero"</code> centers it in the empty conversation and dismisses it on the first user message, and <code>"none"</code> turns it off. <code>welcome.message</code> adds a display-only greeting bubble at transcript position zero: it is config-derived chrome, so it never reaches <code>getMessages()</code>, the model, or storage, and it survives <code>clearChat()</code>. Starters with <code>placement: "welcome"</code> render inside whichever surface is active.</p>
+        <p>The <code>welcome</code> namespace owns the first-open surface: <code>variant: "card"</code> keeps the intro card above the transcript, <code>"hero"</code> centers it in the empty conversation and dismisses it on the first user message, and <code>"none"</code> turns it off. <code>welcome.message</code> adds a display-only greeting bubble at transcript position zero: it is config-derived chrome, so it never reaches <code>getMessages()</code>, the model, or storage, and it survives <code>clearChat()</code>. Starters with <code>placement: "welcome"</code> render inside whichever surface is active. The Greeting toggle pairs <code>variant: "none"</code> with <code>welcome.message</code> and moves the starters to composer chips: the conversation-first shape (Intercom, Crisp), where nothing dismisses because there is no card to dismiss.</p>
         <div class="code-block">
 <span class="prop">welcome</span>: {
   <span class="prop">variant</span>: <span class="string">"hero"</span>,

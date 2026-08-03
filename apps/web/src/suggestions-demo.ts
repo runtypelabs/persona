@@ -150,8 +150,12 @@ const welcomeForMode = (): AgentWidgetConfig["welcome"] => {
     };
   }
   if (welcomeMode === "greeting") {
+    // Conversation-first (Intercom's shape): no intro card at all, just a
+    // display-only greeting bubble at transcript position zero. Starters move
+    // to the composer as quick-reply chips (see buildConfig), so each toggle
+    // shows a genuinely distinct welcome philosophy.
     return {
-      ...base,
+      variant: "none",
       message:
         "Hi, I'm the suggestions demo. Pick a starter below or ask your own question.",
     };
@@ -183,8 +187,10 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => ({
   suggestions: {
     starters: {
       items: starterItems,
-      variant: "card",
-      placement: "welcome",
+      // Greeting mode hides the welcome surface (variant "none"), so its
+      // starters ride the composer as quick-reply chips instead.
+      variant: welcomeMode === "greeting" ? "chip" : "card",
+      placement: welcomeMode === "greeting" ? "composer" : "welcome",
       behavior: variant === "custom" ? "fill" : "send",
       maxItems: 4,
     },

@@ -209,6 +209,10 @@ export const createCustomSuggestionsPlugin = (): AgentWidgetPlugin => ({
 const WELCOME_HOME_CSS = `
 .suggestion-home {
   width: 100%;
+  /* Plugin welcome content is full-bleed (overlay host); the widget root
+     publishes the column vars so plugins match without config access. */
+  max-width: var(--persona-welcome-max-width, 640px);
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -267,9 +271,22 @@ export const createWelcomeHomePlugin = (): AgentWidgetPlugin & {
 
   return {
     id: "demo-welcome-home",
+    // Runs last, so a hook that cancels the selection keeps the user on home.
+    priority: -10,
     showHome: () => {
       viewStorage?.remove("view");
       requestRender?.();
+    },
+    // Picking a starter starts the conversation, so the home stack must hand
+    // the surface back or the reply streams invisibly behind the overlay.
+    // Deferred a microtask: re-rendering mid-dispatch would drop the element
+    // being clicked, and the send happens after this hook returns.
+    onSuggestionSelect: ({ surface }) => {
+      if (surface !== "starter" || viewStorage?.get("view") === "chat") return;
+      queueMicrotask(() => {
+        viewStorage?.set("view", "chat");
+        requestRender?.();
+      });
     },
     renderWelcome: ({ config, renderStarter, requestRender: request, storage, onCleanup }) => {
       requestRender = request;
