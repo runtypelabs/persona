@@ -4511,13 +4511,17 @@
 }
 
 @media (min-width: 641px) {
+  /* Drawer width is its own knob (`layout.drawerWidth`), not the split's
+     pane vars: those are always materialized with split defaults, so reading
+     them here would resize every host's drawer. The outer min() keeps an
+     oversized value inside the panel. */
   [data-persona-root].persona-artifact-narrow-host .persona-artifact-pane {
     position: absolute;
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(calc(100% - 1rem), 22rem) !important;
-    max-width: 22rem !important;
+    width: min(100%, var(--persona-artifact-drawer-width, min(calc(100% - 1rem), 22rem))) !important;
+    max-width: var(--persona-artifact-drawer-width, 22rem) !important;
     z-index: 60;
     transform: translateX(100%);
     transition: transform 0.2s ease;
@@ -4534,7 +4538,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(100vw - 1.5rem, 22rem);
+    width: min(100vw, var(--persona-artifact-drawer-width, min(100vw - 1.5rem, 22rem)));
     z-index: 60;
     transform: translateX(100%);
     transition: transform 0.2s ease;

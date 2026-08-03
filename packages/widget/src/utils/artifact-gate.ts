@@ -65,6 +65,7 @@ export function applyArtifactLayoutCssVars(mount: HTMLElement, config: AgentWidg
     mount.style.removeProperty("--persona-artifact-pane-width");
     mount.style.removeProperty("--persona-artifact-pane-max-width");
     mount.style.removeProperty("--persona-artifact-pane-min-width");
+    mount.style.removeProperty("--persona-artifact-drawer-width");
     mount.style.removeProperty("--persona-artifact-pane-bg");
     mount.style.removeProperty("--persona-artifact-pane-padding");
     clearDocumentToolbarLayoutVars(mount);
@@ -80,6 +81,14 @@ export function applyArtifactLayoutCssVars(mount: HTMLElement, config: AgentWidg
   mount.style.setProperty("--persona-artifact-split-gap", l?.splitGap ?? gapDefault);
   mount.style.setProperty("--persona-artifact-pane-width", l?.paneWidth ?? "40%");
   mount.style.setProperty("--persona-artifact-pane-max-width", l?.paneMaxWidth ?? "28rem");
+  // Set only when configured: the drawer CSS carries its own default and the
+  // var must not exist otherwise, or it would also widen hosts that only
+  // sized the desktop split.
+  if (l?.drawerWidth) {
+    mount.style.setProperty("--persona-artifact-drawer-width", l.drawerWidth);
+  } else {
+    mount.style.removeProperty("--persona-artifact-drawer-width");
+  }
   if (l?.paneMinWidth) {
     mount.style.setProperty("--persona-artifact-pane-min-width", l.paneMinWidth);
   } else {

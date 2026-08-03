@@ -13,9 +13,19 @@ export interface CreateMockSSEStreamOptions {
    * Omit for bare `data: ...\n\n` form (both are valid SSE and the widget parser accepts either).
    */
   eventName?: string;
+  /**
+   * Abort signal, typically the `RequestInit.signal` a `customFetch` receives.
+   * A real `fetch` rejects its reads when the dispatch is aborted (cancel,
+   * clearChat, a superseding send); without this the mock keeps emitting into
+   * the client's read loop after the widget thinks the turn is dead.
+   */
+  signal?: AbortSignal | null;
 }
 
 const encoder = new TextEncoder();
+
+const abortError = () =>
+  new DOMException("The operation was aborted.", "AbortError");
 
 export function createMockSSEStream(
   frames: ReadonlyArray<MockSSEFrame>,
@@ -23,6 +33,7 @@ export function createMockSSEStream(
 ): ReadableStream<Uint8Array> {
   const delayMs = options?.delayMs ?? 100;
   const prefix = options?.eventName ? `event: ${options.eventName}\n` : "";
+  const signal = options?.signal ?? null;
   let index = 0;
 
   return new ReadableStream<Uint8Array>({
@@ -31,7 +42,16 @@ export function createMockSSEStream(
         controller.close();
         return;
       }
+      // Check on both sides of the delay: the abort usually lands mid-wait.
+      if (signal?.aborted) {
+        controller.error(abortError());
+        return;
+      }
       await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      if (signal?.aborted) {
+        controller.error(abortError());
+        return;
+      }
       const payload = JSON.stringify(frames[index]);
       controller.enqueue(encoder.encode(`${prefix}data: ${payload}\n\n`));
       index += 1;

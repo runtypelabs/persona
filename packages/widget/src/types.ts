@@ -1252,6 +1252,13 @@ export type AgentWidgetArtifactsLayoutConfig = {
    */
   narrowHostMaxWidth?: number;
   /**
+   * Width of the slide-over artifact drawer (the narrow-host and mobile
+   * presentations; `paneWidth`/`paneMaxWidth` only size the desktop split).
+   * CSS length; `"100%"` makes the drawer cover the whole panel.
+   * @default min(calc(100% - 1rem), 22rem)
+   */
+  drawerWidth?: string;
+  /**
    * When true (default), widen the launcher panel while artifacts are visible and not user-dismissed.
    * No-op for inline embed (`launcher.enabled === false`).
    */

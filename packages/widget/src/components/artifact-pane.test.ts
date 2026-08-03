@@ -345,6 +345,33 @@ describe("artifact-pane view/source toggle", () => {
     expect(pre?.textContent).toBe(HTML_RAW);
   });
 
+  it("hides the toggle for non-previewable file kinds, where both views are the source", () => {
+    const jsonRaw = '{ "a": 1 }\n';
+    const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
+    pane.update({
+      artifacts: [
+        fileRecord({
+          markdown: wireFor(jsonRaw, "json"),
+          file: { path: "persona.config.json", mimeType: "application/json", language: "json" },
+        }),
+      ],
+      selectedId: "a1",
+    });
+
+    expect(toggleBtn(pane, "Rendered view")).toBeNull();
+    expect(toggleBtn(pane, "Source")).toBeNull();
+    // The content itself is the source view.
+    expect(contentEl(pane).querySelector("pre")?.textContent).toBe(jsonRaw);
+
+    // Selection moving to a previewable file mounts the toggle again.
+    pane.update({
+      artifacts: [fileRecord()],
+      selectedId: "a1",
+    });
+    expect(toggleBtn(pane, "Rendered view")).toBeTruthy();
+    expect(toggleBtn(pane, "Source")).toBeTruthy();
+  });
+
   it("drops the content padding (flush class) in source view and restores it when rendered", () => {
     const pane = createArtifactPane(makeConfig(), { onSelect: () => {} });
     pane.update({ artifacts: [fileRecord()], selectedId: "a1" });

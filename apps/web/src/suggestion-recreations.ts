@@ -1,7 +1,9 @@
 /**
  * Five commercial welcome states, recreated with nothing but public Persona
- * config: `suggestions.starters`, `copy.welcome*`, and theme tokens. No plugin
- * hooks, no CSS reaching into widget internals.
+ * config: `suggestions.starters`, the `welcome` namespace, and theme tokens.
+ * No plugin hooks, no CSS reaching into widget internals. Every panel uses
+ * `variant: "hero"`: all five products center their empty state and dismiss
+ * it on the first message, which is exactly the hero contract.
  *
  * Each recreation is a separate widget instance
  * with its own theme, so the page also doubles as a multi-instance test.
@@ -50,10 +52,13 @@ const base = (): AgentWidgetConfig => ({
 // are 2 to 3 word categories and `prompt` carries the stem.
 const chatgpt = (): AgentWidgetConfig => ({
   ...base(),
-  copy: {
-    welcomeTitle: "What can I help with?",
+  welcome: {
+    variant: "hero",
+    title: "What can I help with?",
     // An empty string omits the subtitle paragraph, its margin included.
-    welcomeSubtitle: "",
+    subtitle: "",
+  },
+  copy: {
     inputPlaceholder: "Ask anything",
   },
   // Composer tune-up: the closest available config to ChatGPT's pill.
@@ -250,9 +255,12 @@ const claude = (): AgentWidgetConfig => ({
 // simplification. Rows are transparent until hover; blue accent, pill composer.
 const gemini = (): AgentWidgetConfig => ({
   ...base(),
+  welcome: {
+    variant: "hero",
+    title: "Hello, there",
+    subtitle: "",
+  },
   copy: {
-    welcomeTitle: "Hello, there",
-    welcomeSubtitle: "",
     inputPlaceholder: "Ask Gemini",
   },
   // Gemini's bar carries a leading "+" and a trailing mic; the labeled "Tools"
@@ -347,9 +355,12 @@ const gemini = (): AgentWidgetConfig => ({
 // the two-line pattern M365 kept when everyone else dropped it. Click sends.
 const copilot = (): AgentWidgetConfig => ({
   ...base(),
+  welcome: {
+    variant: "hero",
+    title: "How can I help you today?",
+    subtitle: "I can work across your mail, meetings, and documents.",
+  },
   copy: {
-    welcomeTitle: "How can I help you today?",
-    welcomeSubtitle: "I can work across your mail, meetings, and documents.",
     inputPlaceholder: "Message Copilot",
   },
   // M365 Copilot's box shows a leading "+" and a trailing mic.
@@ -464,9 +475,12 @@ const copilot = (): AgentWidgetConfig => ({
 // accent, offwhite paper.
 const perplexity = (): AgentWidgetConfig => ({
   ...base(),
+  welcome: {
+    variant: "hero",
+    title: "Where knowledge begins",
+    subtitle: "Ask anything and get an answer with sources.",
+  },
   copy: {
-    welcomeTitle: "Where knowledge begins",
-    welcomeSubtitle: "Ask anything and get an answer with sources.",
     inputPlaceholder: "Ask anything...",
   },
   // Search-box submit: a teal circle with a right-pointing arrow. No attachment
@@ -563,13 +577,129 @@ const RECREATIONS: ReadonlyArray<{ id: string; build: () => AgentWidgetConfig }>
 
 const controllers: AgentWidgetController[] = [];
 
+/**
+ * Per-panel utility row: reset the transcript (welcome visibility is derived,
+ * so clearing brings the hero back) and a config view rendered through
+ * Persona's own artifact pane: the JSON opens as a file-backed code artifact
+ * that takes over the whole widget (the narrow-host drawer is forced on the
+ * mounted config below), with the pane's built-in copy control. `file` meta
+ * is what makes copy extract the raw JSON instead of the fenced markdown.
+ * The JSON comes from a fresh `build()` so it shows the authored shape.
+ */
+const attachPanelControls = (
+  article: HTMLElement,
+  build: () => AgentWidgetConfig,
+  controller: AgentWidgetController
+): void => {
+  // Demo plumbing, not part of the recreation: an integrator's embed already
+  // carries its own dispatch target, and the echo `customFetch` (a function,
+  // unserializable anyway) exists only to fake a backend on this page.
+  const shareable = build();
+  delete shareable.apiUrl;
+  delete shareable.customFetch;
+  const json = JSON.stringify(
+    shareable,
+    (_key, value) => (typeof value === "function" ? "[function]" : value),
+    2
+  );
+
+  const makeAction = (label: string): HTMLButtonElement => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "recreation-action";
+    button.textContent = label;
+    return button;
+  };
+
+  const resetButton = makeAction("Reset chat");
+  resetButton.addEventListener("click", () => controller.clearChat());
+
+  const viewButton = makeAction("View config");
+  const setConfigOpen = (open: boolean) => {
+    viewButton.textContent = open ? "Hide config" : "View config";
+  };
+  // The label must track every close path, including the drawer's own X:
+  // the drawer signals open purely through its classes, so observe them.
+  let paneSynced = false;
+  const ensurePaneSync = () => {
+    if (paneSynced) return;
+    const pane = article.querySelector<HTMLElement>(".persona-artifact-pane");
+    if (!pane) return;
+    paneSynced = true;
+    new MutationObserver(() => {
+      setConfigOpen(
+        pane.classList.contains("persona-artifact-drawer-open") &&
+          !pane.classList.contains("persona-hidden")
+      );
+    }).observe(pane, { attributes: true, attributeFilter: ["class"] });
+  };
+  viewButton.addEventListener("click", () => {
+    if (viewButton.textContent === "Hide config") {
+      controller.hideArtifacts();
+      setConfigOpen(false);
+      return;
+    }
+    // Idempotent: a stable id updates the record in place, and the explicit
+    // showArtifacts() reopens the drawer after the user closed it.
+    controller.upsertArtifact({
+      id: "recreation-config",
+      artifactType: "markdown",
+      title: "persona.config.json",
+      content: "```json\n" + json + "\n```",
+      file: {
+        path: "persona.config.json",
+        mimeType: "application/json",
+        language: "json",
+      },
+      transcript: false,
+    });
+    // Deferred: showArtifacts() force-opens the drawer only when the pane
+    // already sees an artifact, and the upsert's state callback lands async.
+    window.setTimeout(() => {
+      controller.showArtifacts();
+      ensurePaneSync();
+    }, 0);
+    setConfigOpen(true);
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "recreation-actions";
+  actions.append(resetButton, viewButton);
+  article.appendChild(actions);
+};
+
 RECREATIONS.forEach(({ id, build }) => {
   const mount = document.querySelector<HTMLElement>(`[data-recreation="${id}"]`);
   if (!mount) {
     console.warn(`[suggestion-recreations] No mount found for "${id}".`);
     return;
   }
-  controllers.push(createAgentExperience(mount, build()));
+  const config = build();
+  // Demo-only augmentation, kept out of `build()` so the config export stays
+  // the pure recreation: artifacts power the config viewer, and the huge
+  // narrow-host threshold forces the in-panel drawer at any stage width so
+  // the JSON takes over the widget instead of opening a cramped side split.
+  const controller = createAgentExperience(mount, {
+    ...config,
+    features: {
+      ...config.features,
+      artifacts: {
+        enabled: true,
+        layout: {
+          // Force the drawer at any stage width, and let it cover the whole
+          // widget: the config viewer is a takeover, not a side split. The
+          // toolbar copy control is the export's copy affordance (file meta
+          // makes it copy the raw JSON, not the fenced markdown).
+          narrowHostMaxWidth: 10000,
+          drawerWidth: "100%",
+          showCopyButton: true,
+        },
+      },
+    },
+  });
+  controllers.push(controller);
+  const article = mount.closest<HTMLElement>(".recreation");
+  if (article) attachPanelControls(article, build, controller);
 });
 
 window.addEventListener("beforeunload", () => {
