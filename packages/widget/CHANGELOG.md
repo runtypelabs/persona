@@ -1,5 +1,84 @@
 # @runtypelabs/persona
 
+## 4.16.0
+
+### Minor Changes
+
+- 0c7132a: The transcript, greeting, composer, and suggestion surfaces now default to a centered 768px content column on wide panels, matching the column every surveyed product ships (ChatGPT, Claude, Gemini, Copilot, Perplexity, and the reference libraries all cap between 704 and 896px). `layout.contentMaxWidth` still overrides it, `"none"` restores the previous full-width behavior, and composer-bar mode keeps its own 720px fallback. Launcher-width panels are unaffected because the cap only engages above 768px.
+
+  The resolved column is also published as CSS variables on the widget root for plugin-rendered content: `--persona-content-max-width` (tracks `layout.contentMaxWidth`, live-updated) and `--persona-welcome-max-width` (640px welcome column), so `renderWelcome` and `renderComposer` elements can match the layout without config access. The composer status text ("Online") receives the same cap as the composer form, so right-aligned status text lines up with the composer's edge instead of the panel edge.
+
+- cdc1058: Move minimal-header `trailingActions` from beside the title to the trailing edge, clustered with the close button. The buttons now share the close button's chrome (32px round hit area, hover fill) and use the header zone's action-icon color token instead of the muted body-text token, so they stay visible on themed headers. Action dropdown menus now open right-aligned to match the new position. Use `titleMenu` for a menu affordance next to the title.
+- f03102b: Add `launcher.teaser`: a proactive nudge bubble above the collapsed floating launcher, with `text`, `delayMs` (default 0), `frequency` (`"once"` default | `"always"`), `dismissible` (default true), and `dismissLabel`.
+
+  - Clicking the teaser opens the panel and consumes it exactly like an explicit dismissal; a launcher click consumes a teaser the user has already seen. Within one page load the teaser appears at most once under either frequency, and closing the panel never brings it back. Non-user opens (restored `persistState` open state, an `onStateLoaded` hook returning `open: true`) suppress the teaser and consume it in memory only, so an automatic open can never flash the bubble or burn the persisted `"once"` flag for a teaser the visitor never saw.
+  - `"once"` writes a dismissed flag to `localStorage` under `` `${persistState.keyPrefix ?? "persona-"}teaser-dismissed` ``; `"always"` tracks consumption in memory for the page load only. `persistState: false` downgrades `"once"` to in-memory too, and storage that throws (Safari private mode, partitioned iframes) falls back to the same in-memory path instead of breaking the launcher. Custom `storageAdapter` implementations do not participate in teaser state.
+  - The launcher now mounts inside a `createLauncherSurface` wrapper that owns the teaser as a sibling element, with the dismiss control as its own button. The wrapper is `display: contents` until a teaser is configured, so launchers without one render exactly as before. Both the critical `launcher.global.js` bundle and the full widget build the launcher through it, so the deferred and eager paths behave identically and the installer handoff clears any pending teaser timer.
+  - `controller.update({ launcher: { teaser } })` adds, retitles, or removes the teaser in place.
+
+- f03102b: Add the `renderWelcome` plugin hook and a re-entrant composer hook.
+
+  `renderWelcome(ctx)` owns the welcome surface: first plugin returning an element
+  wins, `null` falls through to the default (same contract as `renderSuggestion`).
+  The core owns the welcome host and swaps content inside it. The ctx carries the
+  alias-resolved `config`, `variant`, derived `visible`, `defaultRenderer()`,
+  `sendMessage()`, `requestRender()`, `renderStarter()` (wired through the full
+  suggestion select pipeline), a synchronous `storage` facade, and `onCleanup()`.
+  Derived visibility governs the default renderer only: a plugin element renders
+  regardless and overlays the transcript via `data-persona-welcome-overlay`, so a
+  home screen can return over an existing conversation.
+
+  `renderComposer` gains `requestRender()` (re-runs composer arbitration and swaps
+  the footer in place, re-binding listeners, attachments, mentions, voice, and the
+  composer suggestion row) plus the same `storage` facade, available from its
+  first invocation. `ctx.storage` is `localStorage` keyed
+  `${persistState.keyPrefix ?? "persona-"}plugin:<plugin.id>:<key>`, downgrading
+  to an in-memory map under `persistState: false` or blocked storage.
+
+  Also adds `AttachmentManager.remountPreviews()` so pending attachments survive a
+  composer rebuild.
+
+  Plugin-rendered composers now own their copy: the core no longer stamps `copy.inputPlaceholder` / `copy.sendButtonLabel` onto composer content a plugin returned, so gates can keep their lock reason in the placeholder. Default and composed composers are unchanged.
+
+  Fixed a theme wipe on composer rebuild: `rebuildComposer()` (composer `requestRender()`) and the composer-bar expand/collapse toggle called the panel sizing pass directly, which resets the mount inline styles and silently dropped every theme variable (white header, borderless suggestion cards) until the next full re-render. Both now run the full chrome sync that re-applies theme, artifact, and column variables.
+
+  Fixed floating-panel height loss on composer rebuild: the panel sizing pass also wipes the panel's inline styles, and the fixed pixel height (owned by the resize recalc) was never restored, so a composer rebuild in floating launcher mode let the panel grow to fit its content, past the configured height until close/reopen. The chrome sync now re-stamps the floating height.
+
+- 13ec26e: Every scroller in the widget now shares one themed scrollbar (thin, rounded thumb from `--persona-scrollbar-thumb`, transparent track via `--persona-scrollbar-track`) and a single visibility policy: `features.scrollBehavior.scrollbar`. The default, `"on-scroll"`, hides bars at rest and reveals the transcript bar on genuine reader input, keeping it visible while the reader is scrolled away from the latest content: overlay-scrollbar semantics on every platform, so Windows and always-show macOS match what trackpad and mobile users already see. During streaming, widget-driven scrolling never reveals the bar. Inner scrollers (artifact tabs, suggestion strips) hide at rest and reveal on hover. `"auto"` restores native visibility semantics with the themed appearance, and `"hidden"` removes the indicator entirely; a reserved scrollbar gutter keeps classic-scrollbar platforms from reflowing when the bar toggles. This changes the default look on platforms with persistent scrollbars; pass `scrollbar: "auto"` to keep a permanently visible bar.
+- 92c4cfb: Add per-surface typography tokens: welcome title and subtitle (components.introCard.title/subtitle), header title and subtitle (components.header.title/subtitle) via a shared TextStyleTokens shape, plus a suggestion itemGap token controlling the space between suggestion items. Defaults are pixel-identical to the previous hardcoded styles.
+- d639f6a: New theme tokens closing gaps that previously forced page CSS overrides: `components.scrollbar.{thumb,track}` themes the shared scrollbar appearance (surfacing as `--persona-scrollbar-thumb`/`--persona-scrollbar-track`), `components.introCard.border` puts a full border shorthand on the welcome card (default `none`), `components.composer.borderColor` colors the composer form's border, and `components.markdown.codeBlock.borderRadius` sizes code block corners and now follows `palette.radius.md` by default, so square-corner themes get square code blocks without a separate override. All defaults are pixel-identical to the previous hardcoded values.
+- f03102b: Add the `welcome` config namespace: `title`, `subtitle`, `icon` (lucide, image, text, or function), `variant` (`card` | `hero` | `none`), `dismiss` (`never` | `on-first-message`), and a display-only `message` greeting bubble.
+
+  - `resolveWelcomeConfig` is the single source of truth. Precedence is per field and presence-based: `welcome.*` wins, else the legacy `copy.welcomeTitle` / `copy.welcomeSubtitle` / `copy.showWelcomeCard` alias, else the resolver default. Those legacy fields still work and are now marked deprecated.
+  - The welcome defaults moved out of `DEFAULT_WIDGET_CONFIG` and into the resolver, so an explicit-`undefined` patch resets a field instead of resolving to a materialized default. The default subtitle copy changed to "I can answer questions and help you get things done here."
+  - `variant: "hero"` centers the surface in the empty conversation and dismisses it on the first user message (WAAPI, so morph re-renders cannot cancel it). Visibility is derived from the transcript and never stored, so it returns after `clearChat()`.
+  - `welcome.message` renders an assistant-styled bubble pinned above the transcript. It is config-derived chrome: never in `getMessages()`, never sent to the model, never persisted, and it survives `clearChat()`. It is suppressed under `variant: "hero"`.
+  - Every field responds to `controller.update({ welcome })`. Starter cards render inside whichever surface is active, capped at two columns and centered under `hero`.
+  - An empty subtitle now omits the paragraph and its top margin instead of rendering an empty one.
+  - The default flat welcome aligns with the conversation column: the card variant shares the transcript's content width (`layout.contentMaxWidth`) and drops the invisible card's horizontal padding so the title lines up with messages and composer. Themed intro cards (`components.introCard.background`/`.shadow`) keep their full interior padding, and the centered hero keeps a 640px column (left-aligned text inside; at launcher width the cap never engages). The greeting bubble follows the same width cap. The plugin overlay stays full-bleed.
+  - A welcome-only (empty) transcript rests at the top with no phantom scrollable space: the empty messages wrapper and zero-height anchor spacer no longer add flex-gap height below the welcome content, and the open/render auto-scroll plus the scroll-to-bottom affordance are gated on the transcript having messages.
+  - The hero dismiss fade plays to completion: post-send renders (assistant placeholder, streaming chunks) no longer hide the host mid-animation, the fade fills forwards instead of flashing back to full opacity, `clearChat()` cancels it before re-showing, and a reload restoring user messages hides the hero outright instead of animating it away after hydration.
+  - `layout.slots["body-top"]` resolves against `[data-persona-intro-card]` instead of a stale utility-class chain, so `defaultContent()` returns the intro card again and custom welcome content replaces it rather than stacking above it.
+
+### Patch Changes
+
+- 3a47cf3: Anchor-top streaming stability: the sent user message now pins at the top and stays put, with no jolts, bounces, or stray affordances while the reply streams beneath it.
+
+  - The sent message stays pinned as the header of the streaming response, matching ChatGPT, Claude, and Gemini. The handoff to the turn's first unread block still fires, but only when that block would actually start below the fold (a long user message or a tall tool prelude) instead of on every turn, which was sliding the user's message off the top as soon as a text reply began.
+  - Fixed viewport bounce and spacer sizing for short-content turns. The spacer derived content height from `scrollHeight`, which floors at the viewport height, so short transcripts left the spacer undersized: the anchor animation clamped early, and, pinned exactly on the clamp boundary, every transient content dip during streaming (typing-indicator swaps) visibly bounced the viewport. Content height is now measured from the scroll container's children, the spacer reserves 24px of slack past the held position, and stream end trims the spacer back so no dead scrollable air or stray scroll-to-bottom arrow is left below the last message.
+  - The scroll-to-bottom affordance no longer flickers during streaming: visibility measures distance to the real content bottom instead of the scroll container bottom, so the spacer's empty air can't surface a jump arrow while the whole reply is in view.
+  - The anchor ease re-derives its target from the bubble's live position each frame instead of chasing a stale snapshot, and a welcome surface collapsing mid-turn (the hero's dismiss fade removing its layout in one frame) re-pins the anchored message against the new layout instead of letting the browser clamp the scroll position. The pinned message rises once, settles at the anchor offset, and never moves again.
+
+- 6d1fd06: New `features.artifacts.layout.drawerWidth` option sizes the slide-over artifact drawer (the narrow-host and mobile presentations, which previously hardcoded a 22rem width). Accepts any CSS length; `"100%"` makes the drawer cover the whole panel. The desktop split's `paneWidth`/`paneMaxWidth` are unaffected, and the default drawer width is unchanged.
+- d6cf5e9: Chip suggestions are now single-line. The `chip` variant ignores an item's `description` and renders the label alone, matching the chip pattern used across ChatGPT, Gemini, and Google's chip guidance. Use the `list` or `card` variant when items need supporting copy. Composer-placed chip rows also center as a block within the content column: a single row sits centered while wrapped rows keep a shared left edge, and transcript follow-ups and welcome rows stay left-aligned.
+
+  Follow-up suggestions now wrap by default instead of horizontally scrolling: two to four compact chips always fit at widget width, while a scroll strip hid most of the set behind a fade. Pass `suggestions.followUps.overflow: "scroll"` to opt back into the strip for large sets. Follow-ups also keep a 12px gap from the answer they belong to when the welcome card is hidden; the pull-up written for the roomier welcome-visible spacing had been collapsing that gap to zero.
+
+  Card and list alignment now follows content: items with a description top-align their icon and arrow so multi-line copy reads correctly in equal-height grid rows, while label-only items center vertically instead of leaving dead space inside the card min-height.
+
+- 6d1fd06: The artifact pane's rendered/source toggle now appears only for previewable file kinds (HTML, SVG, markdown). Non-previewable files (JSON, CSS, TS, …) have no rendered form, so both toggle states painted the identical source view; the dead control is hidden instead, matching the pane's documented intent. The document-toolbar preset keeps its permanent toggle.
+- 6d1fd06: The testing module's `createMockSSEStream` / `createMockSSEResponse` accept an optional `signal` (pass the `RequestInit.signal` a `customFetch` receives). Once the signal aborts, reads reject with `AbortError`, matching real fetch behavior, so cancel/clearChat during a mock stream tears the turn down instead of letting the client's read loop keep consuming frames after the session was cleared.
+
 ## 4.15.0
 
 ### Minor Changes
