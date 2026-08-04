@@ -129,15 +129,17 @@ describe("createWidgetView: replacement helpers", () => {
 describe("resolveLauncher", () => {
   const config: AgentWidgetConfig = { apiUrl: "/api" };
 
-  it("builds the default launcher controller and wires onToggle", () => {
+  it("builds the default launcher surface and wires onToggle", () => {
     const onToggle = vi.fn();
     const { instance, element } = resolveLauncher({ config, plugins: [], onToggle });
 
     expect(instance).not.toBeNull();
     expect(element).toBe(instance?.element);
-    expect(element.tagName).toBe("BUTTON");
+    // The mounted element is the surface wrapper; the button is inside it.
+    expect(element.tagName).toBe("DIV");
+    expect(instance?.launcher.element.tagName).toBe("BUTTON");
 
-    element.dispatchEvent(new Event("click"));
+    instance!.launcher.element.dispatchEvent(new Event("click"));
     expect(onToggle).toHaveBeenCalledTimes(1);
   });
 

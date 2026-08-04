@@ -928,3 +928,59 @@ initAgentWidget({
 
 The hook receives the loaded state and must return the (potentially modified) state synchronously.
 
+### Recipe: proactive open with a greeting
+
+Auto-opening the panel with an assistant greeting is the sanctioned proactive
+pattern, and it stays a hook rather than a config flag: it is only ever correct
+under host-owned conditions (a first visit, a specific route, a returning
+checkout), never as a default. `onStateLoaded` is the one place that can inject
+the greeting and request the open in the same synchronous pass, before the
+widget paints, so nothing pops in after the fact.
+
+```ts
+const greeting = (text: string) => ({
+  id: `greeting-${Date.now()}`,
+  role: "assistant" as const,
+  content: text,
+  createdAt: new Date().toISOString(),
+});
+
+initAgentWidget({
+  target: "#launcher-root",
+  config: {
+    apiUrl: "/api/chat/dispatch",
+    onStateLoaded: (state) => {
+      const hasHistory = (state.messages?.length ?? 0) > 0;
+      // Only greet a fresh conversation on the page that warrants it.
+      if (hasHistory || !location.pathname.startsWith("/pricing")) return state;
+      return {
+        state: {
+          ...state,
+          messages: [greeting("Comparing plans? I can size one for your team.")],
+        },
+        open: true,
+      };
+    },
+  },
+});
+```
+
+Notes:
+
+- Guard on `state.messages`. The hook runs on every load, so an unguarded
+  greeting re-opens the panel and re-greets on every navigation, the behavior
+  users read as spam.
+- Returning `{ state, open: true }` opens the panel; returning plain `state`
+  injects the greeting without opening, which is the quieter variant.
+- The greeting here is a real session message: it persists, appears in
+  `getMessages()`, and is visible to the model on the next turn. For a
+  display-only greeting that never reaches the payload, inject nothing here and
+  use the welcome card copy instead.
+- With `persistState: false` there is no storage adapter, so the hook receives
+  an empty state on every load and the guard above always passes. Track the
+  greeting yourself in that mode.
+- Configuring `onStateLoaded` opts the script-tag install out of deferred
+  launcher loading (the hook can request open, so the full bundle has to load up
+  front). See the deferred launcher notes in
+  [Script Tag Installation](./INSTALLATION-FRAMEWORKS.md).
+

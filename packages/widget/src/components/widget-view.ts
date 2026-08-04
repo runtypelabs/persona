@@ -2,7 +2,7 @@ import { AgentWidgetConfig } from "../types";
 import { AgentWidgetPlugin } from "../plugins/types";
 import { createWrapper, buildPanel, PanelElements } from "./panel";
 import { HeaderElements } from "./header-builder";
-import { createLauncherButton, LauncherButton } from "./launcher";
+import { createLauncherButton, createLauncherSurface, LauncherSurface } from "./launcher";
 
 /**
  * Widget view assembly layer.
@@ -34,6 +34,9 @@ export interface WidgetTranscriptRefs {
   transcriptSuggestions: HTMLElement;
   /** Absolute slot above the composer where interactive sheets mount. */
   composerOverlay: HTMLElement;
+  welcomeHost: HTMLElement;
+  welcomeIconHolder: HTMLElement;
+  greetingHost: HTMLElement;
   introTitle: HTMLElement;
   introSubtitle: HTMLElement;
 }
@@ -124,6 +127,9 @@ export const createWidgetView = ({
     starterSuggestions: panelElements.starterSuggestions,
     transcriptSuggestions: panelElements.transcriptSuggestions,
     composerOverlay: panelElements.composerOverlay,
+    welcomeHost: panelElements.welcomeHost,
+    welcomeIconHolder: panelElements.welcomeIconHolder,
+    greetingHost: panelElements.greetingHost,
     introTitle: panelElements.introTitle,
     introSubtitle: panelElements.introSubtitle,
   };
@@ -199,11 +205,11 @@ export interface ResolveLauncherOptions {
 
 export interface ResolvedLauncher {
   /**
-   * The default launcher controller (with `update`/`destroy`), or null when a
+   * The default launcher surface (with `update`/`destroy`), or null when a
    * plugin supplied a custom launcher element.
    */
-  instance: LauncherButton | null;
-  /** The element to mount: either the default button or the plugin's element. */
+  instance: LauncherSurface | null;
+  /** The element to mount: either the default surface or the plugin's element. */
   element: HTMLElement;
 }
 
@@ -213,8 +219,9 @@ export interface ResolvedLauncher {
  * both the initial-build and re-enable call sites in ui.ts.
  *
  * When a plugin returns a custom element, `instance` is null (the plugin owns
- * its own updates); otherwise the default `LauncherButton` controller is
- * returned so the caller can drive `update()`/`destroy()`.
+ * its own updates, including any teaser); otherwise the default
+ * `LauncherSurface` controller is returned so the caller can drive
+ * `update()`/`destroy()`.
  */
 export const resolveLauncher = ({
   config,
@@ -233,6 +240,6 @@ export const resolveLauncher = ({
     }
   }
 
-  const instance = createLauncherButton(config, onToggle);
+  const instance = createLauncherSurface(config, onToggle);
   return { instance, element: instance.element };
 };

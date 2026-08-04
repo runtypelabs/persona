@@ -189,6 +189,23 @@ describe("suggest_replies chips UI", () => {
     scrolling.controller.destroy();
   });
 
+  it("wraps follow-ups by default", () => {
+    // 2-4 compact chips always fit at widget width; a scroll strip hides
+    // most of the set behind a fade, so scroll is opt-in for large sets.
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+
+    // No followUps config: agent chips land on the composer surface.
+    expect(
+      mount
+        .querySelector("[data-persona-composer-suggestions]")
+        ?.getAttribute("data-overflow"),
+    ).toBe("wrap");
+
+    controller.destroy();
+  });
+
   it("auto placement follows welcome-card visibility", () => {
     const withCard = makeController({
       suggestions: { starters: { items: ["Compare plans"] } },
@@ -256,6 +273,35 @@ describe("suggest_replies chips UI", () => {
     expect(
       mount.querySelector('[data-persona-suggestions="starter"]')?.textContent,
     ).not.toContain("Compare plans");
+
+    controller.destroy();
+  });
+
+  it("swaps starters in through controller.update (async starters recipe)", () => {
+    const { mount, controller } = makeController({
+      suggestions: { starters: { items: ["Loading suggestions"] } },
+    });
+
+    controller.update({
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      suggestions: {
+        starters: {
+          items: [
+            { id: "reset", label: "Reset my password", prompt: "How do I reset my password?" },
+            "Check my order status",
+          ],
+        },
+      },
+    } as unknown as Parameters<typeof controller.update>[0]);
+
+    const surface = mount.querySelector('[data-persona-suggestions="starter"]');
+    expect(surface?.textContent).not.toContain("Loading suggestions");
+    expect(surface?.textContent).toContain("Reset my password");
+    expect(surface?.textContent).toContain("Check my order status");
+    expect(
+      surface?.querySelector('[data-suggestion-id="reset"]'),
+    ).not.toBeNull();
 
     controller.destroy();
   });

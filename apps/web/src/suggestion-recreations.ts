@@ -1,7 +1,9 @@
 /**
  * Five commercial welcome states, recreated with nothing but public Persona
- * config: `suggestions.starters`, `copy.welcome*`, and theme tokens. No plugin
- * hooks, no CSS reaching into widget internals.
+ * config: `suggestions.starters`, the `welcome` namespace, and theme tokens.
+ * No plugin hooks, no CSS reaching into widget internals. Every panel uses
+ * `variant: "hero"`: all five products center their empty state and dismiss
+ * it on the first message, which is exactly the hero contract.
  *
  * Each recreation is a separate widget instance
  * with its own theme, so the page also doubles as a multi-instance test.
@@ -50,11 +52,13 @@ const base = (): AgentWidgetConfig => ({
 // are 2 to 3 word categories and `prompt` carries the stem.
 const chatgpt = (): AgentWidgetConfig => ({
   ...base(),
+  welcome: {
+    variant: "hero",
+    title: "What can I help with?",
+    // An empty string omits the subtitle paragraph, its margin included.
+    subtitle: "",
+  },
   copy: {
-    welcomeTitle: "What can I help with?",
-    // Token gap: there is no way to omit the subtitle element. An empty string
-    // still renders the <p>, so the greeting keeps ~8px of dead space under it.
-    welcomeSubtitle: "",
     inputPlaceholder: "Ask anything",
   },
   // Composer tune-up: the closest available config to ChatGPT's pill.
@@ -156,13 +160,25 @@ const chatgpt = (): AgentWidgetConfig => ({
 });
 
 // ── 2. Claude.ai ────────────────────────────────────────────────────────
-// The minimalist school: warm cream paper, a time-of-day greeting set in a
-// serif, and zero starters. The welcome tone is the entire recreation.
+// The minimalist school: warm cream paper, a single serif question centered
+// over the composer, and zero starters. The welcome tone is the recreation.
+
+// Greeting face only. Claude's composer and body copy stay on the sans stack.
+const CLAUDE_SERIF =
+  'Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif';
+
 const claude = (): AgentWidgetConfig => ({
   ...base(),
+  // Hero variant: one centered serif question over the composer, sparkle
+  // above, no subtitle. This is the current claude.ai composition, not the
+  // older top-left "Good evening" block.
+  welcome: {
+    variant: "hero",
+    title: "What shall we think through?",
+    subtitle: "",
+    icon: { type: "text", text: "✳" },
+  },
   copy: {
-    welcomeTitle: "Good evening",
-    welcomeSubtitle: "What are we working on?",
     inputPlaceholder: "How can I help you today?",
   },
   // Claude's submit is a small terracotta arrow-up, not a paper plane. No
@@ -183,17 +199,6 @@ const claude = (): AgentWidgetConfig => ({
     starters: { items: [] },
   },
   theme: {
-    palette: {
-      typography: {
-        fontFamily: {
-          // Token gap: the greeting has no font token of its own, so matching
-          // Claude's serif headline means setting the family for the whole
-          // widget (their composer and body copy are sans). A per-element
-          // welcome typography token would fix this.
-          sans: 'Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif',
-        },
-      },
-    },
     semantic: {
       colors: {
         background: "#faf9f5",
@@ -204,12 +209,29 @@ const claude = (): AgentWidgetConfig => ({
         text: "#3d3929",
         textMuted: "#83827d",
         border: "#e5e2d9",
+        // No rule between transcript and composer: greeting and card float on
+        // one cream field.
+        divider: "transparent",
         primary: "#c96442",
+        // The welcome icon holder reads `--persona-accent`: terracotta sparkle.
+        accent: "#c96442",
       },
     },
     components: {
       panel: { borderRadius: "0" },
-      input: { background: "#ffffff", borderRadius: "1rem" },
+      // `introCard.title` scopes the serif to the greeting, off the composer.
+      // The greeting is warm ink; `color` overrides the `primary` default.
+      // 1.625rem holds the question to one line at the 460px stage width.
+      introCard: {
+        title: {
+          fontFamily: CLAUDE_SERIF,
+          fontSize: "1.625rem",
+          fontWeight: "400",
+          lineHeight: "2.125rem",
+          color: "#3d3929",
+        },
+      },
+      input: { background: "#ffffff", borderRadius: "1.5rem" },
       // Claude's card is the roomiest of the five: 16px type on 24px, and a
       // deep top inset so the caret sits well below the card edge. The card
       // floats on a diffuse warm shadow; the hairline border barely registers.
@@ -233,9 +255,12 @@ const claude = (): AgentWidgetConfig => ({
 // simplification. Rows are transparent until hover; blue accent, pill composer.
 const gemini = (): AgentWidgetConfig => ({
   ...base(),
+  welcome: {
+    variant: "hero",
+    title: "Hello, there",
+    subtitle: "",
+  },
   copy: {
-    welcomeTitle: "Hello, there",
-    welcomeSubtitle: "",
     inputPlaceholder: "Ask Gemini",
   },
   // Gemini's bar carries a leading "+" and a trailing mic; the labeled "Tools"
@@ -305,9 +330,10 @@ const gemini = (): AgentWidgetConfig => ({
       },
       suggestion: {
         list: {
-          // Token gap: the space BETWEEN rows is a fixed 8px. `gap` here is the
-          // icon-to-copy gap inside a row, so Gemini's tighter stack is out of
-          // reach through config.
+          // `itemGap` is the space BETWEEN rows (`gap` is icon-to-copy inside
+          // one row). 4px gives Gemini's near-flush stack instead of the 8px
+          // default.
+          itemGap: "4px",
           background: "transparent",
           foreground: "#1f1f1f",
           border: "transparent",
@@ -329,9 +355,12 @@ const gemini = (): AgentWidgetConfig => ({
 // the two-line pattern M365 kept when everyone else dropped it. Click sends.
 const copilot = (): AgentWidgetConfig => ({
   ...base(),
+  welcome: {
+    variant: "hero",
+    title: "How can I help you today?",
+    subtitle: "I can work across your mail, meetings, and documents.",
+  },
   copy: {
-    welcomeTitle: "How can I help you today?",
-    welcomeSubtitle: "I can work across your mail, meetings, and documents.",
     inputPlaceholder: "Message Copilot",
   },
   // M365 Copilot's box shows a leading "+" and a trailing mic.
@@ -402,6 +431,9 @@ const copilot = (): AgentWidgetConfig => ({
     },
     components: {
       panel: { borderRadius: "0" },
+      // The greeting is neutral ink in M365; the title color otherwise
+      // defaults to `semantic.colors.primary`, which is the Copilot blue.
+      introCard: { title: { color: "#242424" } },
       input: { background: "#ffffff", borderRadius: "0.75rem" },
       // Roomier than the Persona default but tighter than Claude's card:
       // Copilot's box is a soft rectangle with 16px type on 24px.
@@ -423,6 +455,8 @@ const copilot = (): AgentWidgetConfig => ({
           borderRadius: "0.75rem",
           padding: "0.875rem",
           gap: "0.625rem",
+          // Grid gutter between the four cards, matching M365's roomier 2x2.
+          itemGap: "12px",
           minHeight: "84px",
           fontSize: "0.875rem",
           iconSize: "18px",
@@ -441,9 +475,12 @@ const copilot = (): AgentWidgetConfig => ({
 // accent, offwhite paper.
 const perplexity = (): AgentWidgetConfig => ({
   ...base(),
+  welcome: {
+    variant: "hero",
+    title: "Where knowledge begins",
+    subtitle: "Ask anything and get an answer with sources.",
+  },
   copy: {
-    welcomeTitle: "Where knowledge begins",
-    welcomeSubtitle: "Ask anything and get an answer with sources.",
     inputPlaceholder: "Ask anything...",
   },
   // Search-box submit: a teal circle with a right-pointing arrow. No attachment
@@ -491,6 +528,9 @@ const perplexity = (): AgentWidgetConfig => ({
     },
     components: {
       panel: { borderRadius: "0" },
+      // The headline is dark ink, not the teal accent the title color
+      // otherwise inherits from `semantic.colors.primary`.
+      introCard: { title: { color: "#13343b" } },
       input: { background: "#ffffff", borderRadius: "0.75rem" },
       // Search-field proportions: a tall box with 16px type on 24px and the
       // submit control dropped onto its own row below the query.
@@ -506,6 +546,9 @@ const perplexity = (): AgentWidgetConfig => ({
       },
       suggestion: {
         list: {
+          // Perplexity's true look is a hairline-divided stack. `itemGap: 0`
+          // cannot produce it: `border` is the whole row box, so touching rows
+          // double their shared rule. Bordered rows at the 8px default stay.
           background: "transparent",
           foreground: "#13343b",
           border: "#e8e8e3",
@@ -534,13 +577,129 @@ const RECREATIONS: ReadonlyArray<{ id: string; build: () => AgentWidgetConfig }>
 
 const controllers: AgentWidgetController[] = [];
 
+/**
+ * Per-panel utility row: reset the transcript (welcome visibility is derived,
+ * so clearing brings the hero back) and a config view rendered through
+ * Persona's own artifact pane: the JSON opens as a file-backed code artifact
+ * that takes over the whole widget (the narrow-host drawer is forced on the
+ * mounted config below), with the pane's built-in copy control. `file` meta
+ * is what makes copy extract the raw JSON instead of the fenced markdown.
+ * The JSON comes from a fresh `build()` so it shows the authored shape.
+ */
+const attachPanelControls = (
+  article: HTMLElement,
+  build: () => AgentWidgetConfig,
+  controller: AgentWidgetController
+): void => {
+  // Demo plumbing, not part of the recreation: an integrator's embed already
+  // carries its own dispatch target, and the echo `customFetch` (a function,
+  // unserializable anyway) exists only to fake a backend on this page.
+  const shareable = build();
+  delete shareable.apiUrl;
+  delete shareable.customFetch;
+  const json = JSON.stringify(
+    shareable,
+    (_key, value) => (typeof value === "function" ? "[function]" : value),
+    2
+  );
+
+  const makeAction = (label: string): HTMLButtonElement => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "recreation-action";
+    button.textContent = label;
+    return button;
+  };
+
+  const resetButton = makeAction("Reset chat");
+  resetButton.addEventListener("click", () => controller.clearChat());
+
+  const viewButton = makeAction("View config");
+  const setConfigOpen = (open: boolean) => {
+    viewButton.textContent = open ? "Hide config" : "View config";
+  };
+  // The label must track every close path, including the drawer's own X:
+  // the drawer signals open purely through its classes, so observe them.
+  let paneSynced = false;
+  const ensurePaneSync = () => {
+    if (paneSynced) return;
+    const pane = article.querySelector<HTMLElement>(".persona-artifact-pane");
+    if (!pane) return;
+    paneSynced = true;
+    new MutationObserver(() => {
+      setConfigOpen(
+        pane.classList.contains("persona-artifact-drawer-open") &&
+          !pane.classList.contains("persona-hidden")
+      );
+    }).observe(pane, { attributes: true, attributeFilter: ["class"] });
+  };
+  viewButton.addEventListener("click", () => {
+    if (viewButton.textContent === "Hide config") {
+      controller.hideArtifacts();
+      setConfigOpen(false);
+      return;
+    }
+    // Idempotent: a stable id updates the record in place, and the explicit
+    // showArtifacts() reopens the drawer after the user closed it.
+    controller.upsertArtifact({
+      id: "recreation-config",
+      artifactType: "markdown",
+      title: "persona.config.json",
+      content: "```json\n" + json + "\n```",
+      file: {
+        path: "persona.config.json",
+        mimeType: "application/json",
+        language: "json",
+      },
+      transcript: false,
+    });
+    // Deferred: showArtifacts() force-opens the drawer only when the pane
+    // already sees an artifact, and the upsert's state callback lands async.
+    window.setTimeout(() => {
+      controller.showArtifacts();
+      ensurePaneSync();
+    }, 0);
+    setConfigOpen(true);
+  });
+
+  const actions = document.createElement("div");
+  actions.className = "recreation-actions";
+  actions.append(resetButton, viewButton);
+  article.appendChild(actions);
+};
+
 RECREATIONS.forEach(({ id, build }) => {
   const mount = document.querySelector<HTMLElement>(`[data-recreation="${id}"]`);
   if (!mount) {
     console.warn(`[suggestion-recreations] No mount found for "${id}".`);
     return;
   }
-  controllers.push(createAgentExperience(mount, build()));
+  const config = build();
+  // Demo-only augmentation, kept out of `build()` so the config export stays
+  // the pure recreation: artifacts power the config viewer, and the huge
+  // narrow-host threshold forces the in-panel drawer at any stage width so
+  // the JSON takes over the widget instead of opening a cramped side split.
+  const controller = createAgentExperience(mount, {
+    ...config,
+    features: {
+      ...config.features,
+      artifacts: {
+        enabled: true,
+        layout: {
+          // Force the drawer at any stage width, and let it cover the whole
+          // widget: the config viewer is a takeover, not a side split. The
+          // toolbar copy control is the export's copy affordance (file meta
+          // makes it copy the raw JSON, not the fenced markdown).
+          narrowHostMaxWidth: 10000,
+          drawerWidth: "100%",
+          showCopyButton: true,
+        },
+      },
+    },
+  });
+  controllers.push(controller);
+  const article = mount.closest<HTMLElement>(".recreation");
+  if (article) attachPanelControls(article, build, controller);
 });
 
 window.addEventListener("beforeunload", () => {

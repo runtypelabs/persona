@@ -58,7 +58,9 @@ export const editorialWidgetTheme: NonNullable<AgentWidgetConfig["theme"]> = {
       accent: "#006b5b",
       surface: "#fef9f1",
       background: "#fef9f1",
-      container: "#f2ede5",
+      // Paper, not tan: the transcript body reads this. The assistant bubble
+      // keeps its tan via the component token below.
+      container: "#fef9f1",
       text: "#1d1c17",
       textMuted: "#6f6b62",
       border: "rgba(29, 28, 23, 0.18)",
@@ -73,6 +75,25 @@ export const editorialWidgetTheme: NonNullable<AgentWidgetConfig["theme"]> = {
       background: "#fef9f1",
       borderRadius: "0px",
       shadow: "none",
+      border: "1px solid rgba(0, 0, 0, 0.1)",
+      // The page's `.editorial-h` voice (Syne 500, 0.04em) on the greeting
+      // only; body copy and composer stay on Geist.
+      title: {
+        fontFamily: "'Syne', sans-serif",
+        fontSize: "1.375rem",
+        fontWeight: "500",
+        lineHeight: "1.9rem",
+        letterSpacing: "0.04em",
+      },
+    },
+    header: {
+      // Same headline voice on the panel title (floating/mobile launcher);
+      // the subtitle stays Geist so the bar keeps one accent, not two.
+      title: {
+        fontFamily: "'Syne', sans-serif",
+        fontWeight: "500",
+        letterSpacing: "0.04em",
+      },
     },
     message: {
       user: { background: "#fef9f1", text: "#1d1c17", borderRadius: "0px" },
@@ -80,5 +101,18 @@ export const editorialWidgetTheme: NonNullable<AgentWidgetConfig["theme"]> = {
     },
     input: { background: "#fef9f1" },
     panel: { border: "none", borderRadius: "0px", shadow: "none" },
+    composer: { borderColor: "rgba(29, 28, 23, 0.25)" },
+    // Teal thumb on every scroller; track stays transparent.
+    scrollbar: { thumb: "#00dfc1" },
+    markdown: {
+      // Terminal code blocks: dark ground, warm text, no border of their own
+      // (the page's code-copy wrapper draws the black frame). Corner radius
+      // follows the zeroed palette radius automatically.
+      codeBlock: {
+        background: "#0c0c0a",
+        textColor: "#d8d3c8",
+        borderColor: "transparent",
+      },
+    },
   },
 };

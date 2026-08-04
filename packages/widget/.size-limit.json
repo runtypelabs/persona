@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "165 kB",
+    "limit": "169.5 kB",
     "gzip": true
   },
   {
@@ -14,19 +14,19 @@
   {
     "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
-    "limit": "16.5 kB",
+    "limit": "17.5 kB",
     "gzip": true
   },
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "165 kB",
+    "limit": "169.5 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "166 kB",
+    "limit": "170.5 kB",
     "gzip": true
   },
   {
@@ -38,13 +38,13 @@
   {
     "name": "Opt-in · theme-editor headless subpath (theme-editor.js)",
     "path": "dist/theme-editor.js",
-    "limit": "35 kB",
+    "limit": "35.5 kB",
     "gzip": true
   },
   {
     "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "144 kB",
+    "limit": "148.5 kB",
     "gzip": true
   },
   {

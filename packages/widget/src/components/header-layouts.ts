@@ -10,6 +10,7 @@ import {
 import {
   buildHeader,
   HEADER_THEME_CSS,
+  HEADER_TITLE_TYPOGRAPHY,
   HeaderElements,
   attachHeaderToContainer as _attachHeaderToContainer,
 } from "./header-builder";
@@ -70,14 +71,20 @@ function appendTrailingHeaderActions(
 ): void {
   if (!actions?.length) return;
   for (const a of actions) {
+    // Same chrome as the close button beside them: 32px round hit area,
+    // hover fill, and the header zone's action-icon color (the muted body
+    // token disappears on themed headers).
     const btn = createElement(
       "button",
-      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-md persona-border-none persona-bg-transparent persona-p-0 persona-text-persona-muted hover:persona-opacity-80"
+      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-0"
     ) as HTMLButtonElement;
     btn.type = "button";
+    btn.style.height = "32px";
+    btn.style.width = "32px";
+    btn.style.color = HEADER_THEME_CSS.actionIconColor;
     btn.setAttribute("aria-label", a.ariaLabel ?? a.label ?? a.id);
     if (a.icon) {
-      const ic = renderLucideIcon(a.icon, 14, "currentColor", 2);
+      const ic = renderLucideIcon(a.icon, 16, "currentColor", 2);
       if (ic) btn.appendChild(ic);
     } else if (a.label) {
       btn.textContent = a.label;
@@ -91,7 +98,9 @@ function appendTrailingHeaderActions(
         items: a.menuItems,
         onSelect: (itemId) => onAction?.(itemId),
         anchor: wrapper,
-        position: 'bottom-left',
+        // The cluster sits at the trailing edge; a left-aligned menu would
+        // extend past it.
+        position: 'bottom-right',
       });
       wrapper.appendChild(dropdown.element);
       btn.addEventListener("click", (e) => {
@@ -148,14 +157,10 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     // Title only (no icon, no subtitle)
     headerTitle = createElement("span", "persona-text-base persona-font-semibold persona-truncate");
     headerTitle.style.color = HEADER_THEME_CSS.titleColor;
+    Object.assign(headerTitle.style, HEADER_TITLE_TYPOGRAPHY);
     headerTitle.textContent = launcher.title ?? "Chat Assistant";
 
     titleRow.appendChild(headerTitle);
-    appendTrailingHeaderActions(
-      titleRow,
-      layoutHeaderConfig?.trailingActions,
-      layoutHeaderConfig?.onAction ?? onHeaderAction
-    );
 
     // Make title row clickable when onTitleClick is provided
     if (layoutHeaderConfig?.onTitleClick) {
@@ -229,7 +234,22 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   }
 
   closeButtonWrapper.appendChild(closeButton);
-  header.appendChild(closeButtonWrapper);
+
+  // Trailing edge: action buttons cluster with the close button, matching
+  // its chrome. `titleMenu` still ignores `trailingActions` (documented).
+  const trailingCluster = createElement(
+    "div",
+    "persona-flex persona-items-center persona-gap-1"
+  );
+  if (!titleMenuConfig) {
+    appendTrailingHeaderActions(
+      trailingCluster,
+      layoutHeaderConfig?.trailingActions,
+      layoutHeaderConfig?.onAction ?? onHeaderAction
+    );
+  }
+  trailingCluster.appendChild(closeButtonWrapper);
+  header.appendChild(trailingCluster);
 
   // title was moved into titleRow; keep headerTitle ref pointing at title for updateController
 

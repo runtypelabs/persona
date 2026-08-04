@@ -13,6 +13,28 @@ export const HEADER_THEME_CSS = {
     "var(--persona-header-action-icon-fg, var(--persona-muted, #9ca3af))",
 } as const;
 
+/**
+ * Inline typography for the header title/subtitle, from
+ * `theme.components.header.title` / `.subtitle`. Fallbacks reproduce the
+ * `persona-text-base persona-font-semibold` / `persona-text-xs` utilities.
+ */
+export const HEADER_TITLE_TYPOGRAPHY = {
+  fontFamily: "var(--persona-components-header-title-fontFamily, inherit)",
+  fontSize: "var(--persona-components-header-title-fontSize, 1rem)",
+  fontWeight: "var(--persona-components-header-title-fontWeight, 600)",
+  lineHeight: "var(--persona-components-header-title-lineHeight, 1.5rem)",
+  letterSpacing: "var(--persona-components-header-title-letterSpacing, normal)",
+} as const;
+
+export const HEADER_SUBTITLE_TYPOGRAPHY = {
+  fontFamily: "var(--persona-components-header-subtitle-fontFamily, inherit)",
+  fontSize: "var(--persona-components-header-subtitle-fontSize, 0.75rem)",
+  fontWeight: "var(--persona-components-header-subtitle-fontWeight, inherit)",
+  lineHeight: "var(--persona-components-header-subtitle-lineHeight, 1rem)",
+  letterSpacing:
+    "var(--persona-components-header-subtitle-letterSpacing, normal)",
+} as const;
+
 export interface HeaderElements {
   header: HTMLElement;
   iconHolder: HTMLElement;
@@ -99,12 +121,15 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
   const title = createNode("span", {
     className: "persona-text-base persona-font-semibold",
     text: config?.launcher?.title ?? "Chat Assistant",
-    style: { color: HEADER_THEME_CSS.titleColor },
+    style: { color: HEADER_THEME_CSS.titleColor, ...HEADER_TITLE_TYPOGRAPHY },
   });
   const subtitle = createNode("span", {
     className: "persona-text-xs",
     text: config?.launcher?.subtitle ?? "Here to help you get answers fast",
-    style: { color: HEADER_THEME_CSS.subtitleColor },
+    style: {
+      color: HEADER_THEME_CSS.subtitleColor,
+      ...HEADER_SUBTITLE_TYPOGRAPHY,
+    },
   });
 
   headerCopy.append(title, subtitle);

@@ -39,6 +39,25 @@ describe("createMockSSEStream", () => {
     );
     expect(text.startsWith("event: message\n")).toBe(true);
   });
+
+  it("rejects reads with AbortError once the signal aborts, like a real fetch", async () => {
+    const abort = new AbortController();
+    const frames = Array.from({ length: 5 }, (_, i) => ({
+      type: "agent_turn_delta",
+      delta: `chunk-${i}`,
+    }));
+    const reader = createMockSSEStream(frames, {
+      delayMs: 0,
+      signal: abort.signal,
+    }).getReader();
+
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+
+    abort.abort();
+
+    await expect(reader.read()).rejects.toMatchObject({ name: "AbortError" });
+  });
 });
 
 describe("buildAssistantTurnFrames", () => {

@@ -376,6 +376,26 @@ Panel and seamless carry `persona-artifact-welded-split` on the mount root while
 | `borderRadius` | `palette.radius.xl palette.radius.xl 0 0` |
 | `padding` | `semantic.spacing.md` |
 
+`title` and `subtitle` take the shared `TextStyleTokens` shape
+(`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`,
+`color`). Unset keys fall back to the built-in header type: the title renders
+at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
+
+| Token | Default |
+|-------|---------|
+| `title.fontFamily` / `subtitle.fontFamily` | inherited from the widget font |
+| `title.fontSize` | `"1rem"` |
+| `title.fontWeight` | `"600"` |
+| `title.lineHeight` | `"1.5rem"` |
+| `title.color` | `semantic.colors.primary` |
+| `subtitle.fontSize` | `"0.75rem"` |
+| `subtitle.lineHeight` | `"1rem"` |
+| `subtitle.color` | `semantic.colors.textMuted` |
+
+> `titleForeground` and `subtitleForeground` are legacy aliases of
+> `title.color` and `subtitle.color`. Both still work; the `title`/`subtitle`
+> color wins when both are set.
+
 ### Message (`components.message.*`)
 
 | Token | Default Reference |
@@ -441,8 +461,9 @@ tracks your theme), not the old warning/success/error palette:
 ### Intro Card (`components.introCard.*`)
 
 The welcome panel rendered above the message list when no messages exist.
-Set `copy.showWelcomeCard: false` to hide it entirely, or use
-`layout.slots["body-top"]` to replace it with a custom element.
+Set `welcome.variant: "none"` to hide it entirely, `welcome.variant: "hero"` to
+center it in the empty conversation, or use `layout.slots["body-top"]` to
+replace it with a custom element.
 
 | Token | Default Reference |
 |-------|-------------------|
@@ -450,6 +471,33 @@ Set `copy.showWelcomeCard: false` to hide it entirely, or use
 | `borderRadius` | `palette.radius.2xl` |
 | `padding` | `semantic.spacing.lg` |
 | `shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` *(matches the legacy `persona-shadow-sm` look)* |
+| `border` | `"none"` *(full CSS border shorthand, e.g. `"1px solid rgba(0,0,0,0.1)"`)* |
+
+`title` and `subtitle` take the shared `TextStyleTokens` shape
+(`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`,
+`color`). They have no token defaults: unset keys fall back in CSS to the
+built-in welcome type.
+
+| Token | Default |
+|-------|---------|
+| `title.fontFamily` / `subtitle.fontFamily` | inherited from the widget font |
+| `title.fontSize` | `"1.125rem"` |
+| `title.fontWeight` | `"600"` |
+| `title.lineHeight` | `"1.75rem"` |
+| `title.color` | `--persona-primary` |
+| `subtitle.fontSize` | `"0.875rem"` |
+| `subtitle.lineHeight` | `"1.25rem"` |
+| `subtitle.color` | `--persona-muted` |
+
+### Suggestion (`components.suggestion.*`)
+
+Three variants (`chip`, `card`, `list`), each a full chrome set. Two spacing
+tokens are easy to confuse:
+
+| Token | Default | Meaning |
+|-------|---------|---------|
+| `gap` | `"0.5rem"` (chip), `"0.625rem"` (card, list) | Space inside one item, between its icon and its copy |
+| `itemGap` | `"8px"` | Space between suggestion items in the container |
 
 ### Composer (`components.composer.*`)
 
@@ -566,6 +614,31 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-muted           /* alias for --persona-text-muted */
 ```
 
+### Scrollbars
+
+Every scroller in the widget shares one thin scrollbar appearance, themed
+through `components.scrollbar.*`:
+
+```typescript
+theme: {
+  components: {
+    scrollbar: {
+      thumb: "#00dfc1",      // default: semantic.colors.border
+      track: "transparent",  // default: transparent
+    },
+  },
+}
+```
+
+The resolved values surface as `--persona-scrollbar-thumb` /
+`--persona-scrollbar-track` for plain-CSS overrides. Visibility is a policy,
+not a style: `features.scrollBehavior.scrollbar` accepts `"on-scroll"`
+(default: hidden at rest, revealed by reader input, pinned visible while
+scrolled away from the latest), `"auto"` (native visibility semantics), or
+`"hidden"`. The artifact tab strip keeps its existing
+`--persona-artifact-tab-list-scrollbar` variable as an alias layered on the
+shared thumb token.
+
 ### Voice Aliases
 
 ```css
@@ -612,6 +685,8 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-intro-card-padding
 --persona-intro-card-shadow
 ```
+
+The intro card is flat by default (transparent background, no shadow), and a flat card drops the horizontal component of its stock padding (`--persona-intro-card-padding` resolves to `1.5rem 0`) so the welcome text lines up with the transcript and composer column. Setting `components.introCard.background` or `.shadow` restores the full `1.5rem` interior inset, and any explicit `components.introCard.padding` value is used as-is (`1.5rem 1.5rem` forces the symmetric inset on a flat card).
 
 ### Artifact Card Aliases
 
@@ -1096,6 +1171,41 @@ that clears on the next user message and is never persisted. The deprecated
 `features.suggestReplies.enabled` / `.expose` aliases still resolve per key,
 with `suggestions.followUps` winning.
 
+### Async starters
+
+Starters are static config, but the starter surface re-renders on every
+`controller.update()`, so fetched or personalized starters are a two-step
+recipe: paint with a static set, then swap in the fetched one.
+
+```ts
+const chat = initAgentWidget({
+  target: "#launcher-root",
+  config: {
+    apiUrl: "/api/chat/dispatch",
+    // Rendered immediately, so the welcome surface is never empty.
+    suggestions: { starters: { items: ["Track an order", "Start a return"] } },
+  },
+});
+
+const items = await fetch("/api/starters").then((r) => r.json());
+chat.update({ suggestions: { starters: { items } } });
+```
+
+Notes:
+
+- `items` is an array, so it replaces wholesale. Pass the full list on every
+  update rather than a delta.
+- Presentation keys merge, so an update carrying only `items` keeps the
+  `variant`, `placement`, `behavior`, and `maxItems` set at init.
+- Starters still dismiss on the first user message. An update that lands after
+  the user has sent something renders nothing, which is the intended behavior:
+  resolve the fetch early and let the static set cover the gap.
+- Plugin `transformSuggestions` hooks run on the updated set too, so ranking and
+  enrichment stay in one place.
+
+A first-class async provider (`starters.items` as a promise-returning function)
+is deliberately not offered: this recipe covers it with no new config surface.
+
 ### Suggestion theme tokens
 
 Each variant under `theme.components.suggestion` supports:
@@ -1217,6 +1327,28 @@ remaining after the avatar and gap.
 
 ### Slots (`layout.slots.*`)
 Available: `header-left`, `header-center`, `header-right`, `body-top`, `messages`, `body-bottom`, `footer-top`, `composer`, `footer-bottom`
+
+Each renderer receives `{ config, defaultContent }`. Returning an element
+replaces the slot's default content; returning `null` leaves it alone.
+`body-top` is the welcome surface: its `defaultContent()` is the intro card
+(title, subtitle, and any starters placed there), so a custom welcome can either
+replace it or wrap it.
+
+```ts
+layout: {
+  slots: {
+    "body-top": ({ defaultContent }) => {
+      const wrapper = document.createElement("div");
+      const banner = document.createElement("p");
+      banner.textContent = "Support replies in about 2 minutes.";
+      wrapper.append(banner);
+      const card = defaultContent();
+      if (card) wrapper.append(card);
+      return wrapper;
+    },
+  },
+}
+```
 
 ## Markdown (`config.markdown.*`)
 
@@ -1400,8 +1532,8 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
 
 | Property | Description |
 |----------|-------------|
-| `welcomeTitle` | Welcome message title |
-| `welcomeSubtitle` | Welcome message subtitle |
+| `welcomeTitle` | Welcome message title. Deprecated: use `welcome.title` |
+| `welcomeSubtitle` | Welcome message subtitle. Deprecated: use `welcome.subtitle` |
 | `inputPlaceholder` | Input placeholder text |
 | `sendButtonLabel` | Send button label |
 

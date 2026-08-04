@@ -669,6 +669,10 @@ export default defineConfig({
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
         'suggestions-demo': path.resolve(__dirname, 'suggestions-demo.html'),
         'suggestion-recreations': path.resolve(__dirname, 'suggestion-recreations.html'),
+        // Welcome-state plugin blueprints (renderWelcome / renderComposer hooks)
+        'help-search-demo': path.resolve(__dirname, 'help-search-demo.html'),
+        'pre-chat-demo': path.resolve(__dirname, 'pre-chat-demo.html'),
+        'home-screen-demo': path.resolve(__dirname, 'home-screen-demo.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
         'stream-animations-demo': path.resolve(__dirname, 'stream-animations-demo.html'),
         'streaming-table-demo': path.resolve(__dirname, 'streaming-table-demo.html'),

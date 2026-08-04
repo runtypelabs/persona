@@ -17,5 +17,15 @@ initAgentWidget({
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: proxyUrl,
     storageAdapter: createLocalStorageAdapter("persona-state-launcher-demo"),
+    launcher: {
+      ...DEFAULT_WIDGET_CONFIG.launcher,
+      // "always" so the teaser returns on every reload of this demo; the
+      // shipped default is "once" per browser.
+      teaser: {
+        text: "Hi, need a hand finding anything?",
+        delayMs: 2500,
+        frequency: "always",
+      },
+    },
   },
 });

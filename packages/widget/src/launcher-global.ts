@@ -1,7 +1,8 @@
 /**
  * Critical-path launcher entry: built to `launcher.global.js` (IIFE).
  *
- * Ships ONLY the real collapsed launcher (`createLauncherButton`) plus the
+ * Ships ONLY the real collapsed launcher surface (`createLauncherSurface`,
+ * which carries the optional launcher teaser) plus the
  * theme application path, so the launcher paints pixel-identically to the full
  * widget from a tiny bundle. The heavy conversation panel is deferred until
  * first open by the installer (Phase 2).
@@ -16,7 +17,7 @@
  *   window.AgentWidgetLauncher.mount({ target, config, onOpen })
  *     → { root, element, update, destroy }
  */
-import { createLauncherButton } from "./components/launcher";
+import { createLauncherSurface } from "./components/launcher";
 import { applyThemeVariables } from "./utils/theme";
 import { DEFAULT_LAUNCHER_CONFIG } from "./defaults";
 import type { AgentWidgetConfig } from "./types";
@@ -100,20 +101,22 @@ export const mount = (
   root.setAttribute(CRITICAL_LAUNCHER_ATTR, "true");
   applyThemeVariables(root, config);
 
-  const launcher = createLauncherButton(config, onOpen);
-  root.appendChild(launcher.element);
+  const surface = createLauncherSurface(config, onOpen);
+  root.appendChild(surface.element);
   target.appendChild(root);
 
   return {
     root,
-    element: launcher.element,
+    element: surface.launcher.element,
     update: (next: AgentWidgetConfig) => {
       const merged = mergeCriticalLauncherConfig(next);
       applyThemeVariables(root, merged);
-      launcher.update(merged);
+      surface.update(merged);
     },
+    // Handoff destroys the whole surface, so a pending teaser timer cannot
+    // outlive the critical launcher.
     destroy: () => {
-      launcher.destroy();
+      surface.destroy();
       root.remove();
     },
   };

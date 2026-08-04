@@ -991,7 +991,7 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
-  it("anchor-top mode pins the turn's first unread block near the viewport top and never follows the stream", () => {
+  it("anchor-top keeps the sent user message pinned while the reply starts in view", () => {
     const raf = installRafMock();
     const resize = installResizeObserverMock();
     const mount = createMount();
@@ -1022,21 +1022,27 @@ describe("createAgentExperience streaming scroll", () => {
     // Run just the anchor frame: it sizes the spacer and starts the scroll.
     raf.step(1);
 
-    // target = 700 - 16 = 684; spacer = 684 + 400 - 1000 = 84.
+    // target = 700 - 16 = 684; spacer = 684 + 400 - 1000 + 24 slack = 108.
+    // The 24px slack keeps the held position off the clamp boundary so
+    // transient content dips during streaming can't bounce the viewport.
     const spacer = scrollContainer!.querySelector<HTMLElement>(
       "[data-persona-anchor-spacer]"
     );
-    expect(spacer?.style.height).toBe("84px");
+    expect(spacer?.style.height).toBe("108px");
+    // Sized means visible: unsized it stays display:none so the body's flex
+    // gap doesn't add phantom scrollable space below the transcript.
+    expect(spacer?.style.display).toBe("");
 
     // The spacer's height is invisible to the mocked scroll metrics: apply
     // it manually so the anchor target is reachable, as in a real browser.
-    metrics.setScrollHeight(1084);
+    metrics.setScrollHeight(1108);
     raf.flush();
     expect(metrics.getScrollTop()).toBe(684);
 
-    // The response's first block is the turn's first unread output, so the
-    // anchor hands off to it: target = 900 - 16 = 884, and with content at
-    // 1284 - 84 = 1200 the spacer re-sizes to 884 + 400 - 1200 = 84.
+    // The reply's first block starts 200px below the pinned user message —
+    // well within the 400px viewport — so the anchor STAYS on the user
+    // message (market pattern: the sent message remains visible as the
+    // header of the streaming reply). No handoff.
     metrics.setScrollHeight(1284);
     emitStreamingMessage(controller, "Streaming response");
     const streamBubble = scrollContainer!.querySelector<HTMLElement>(
@@ -1044,26 +1050,200 @@ describe("createAgentExperience streaming scroll", () => {
     );
     expect(streamBubble).not.toBeNull();
     Object.defineProperty(streamBubble!, "offsetTop", { value: 900 });
-    raf.flush();
-    expect(metrics.getScrollTop()).toBe(884);
-
-    // Continuing to stream below that anchor never moves the viewport again.
     metrics.setScrollHeight(1324);
     emitStreamingMessage(controller, "Streaming response, now longer");
     raf.flush();
-    expect(metrics.getScrollTop()).toBe(884);
+    expect(metrics.getScrollTop()).toBe(684);
 
     // As real content grows, the spacer gives room back (shrink-only):
-    // content grew from 1200 to 1324 - 84 = 1240, so spacer 84 - 40 = 44.
+    // content grew from 1000 to 1324 - 108 = 1216, past the 108px reserve.
     resize.trigger();
-    expect(spacer?.style.height).toBe("44px");
+    expect(spacer?.style.height).toBe("0px");
 
     // Jumping to the latest abandons the anchor: the spacer is dropped so
     // "bottom" is the real end of content.
     getScrollToBottomButton(mount)!.click();
     raf.flush();
     expect(spacer?.style.height).toBe("0px");
+    expect(spacer?.style.display).toBe("none");
     expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
+  it("trims leftover anchor spacer air when the stream ends", () => {
+    const raf = installRafMock();
+    installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitUserMessage(controller, "user-trim", "Long question");
+    const bubble = scrollContainer!.querySelector<HTMLElement>(
+      '[data-message-id="user-trim"]'
+    );
+    Object.defineProperty(bubble!, "offsetTop", { value: 700 });
+    raf.step(1);
+    const spacer = scrollContainer!.querySelector<HTMLElement>(
+      "[data-persona-anchor-spacer]"
+    );
+    expect(spacer?.style.height).toBe("108px");
+    metrics.setScrollHeight(1108);
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(684);
+
+    // Reply streams in-view (anchor stays on the user message); content grows
+    // but the ResizeObserver drain never fires — the real-browser failure
+    // shape where the growth-driven shrink stops before converging.
+    emitStreamingMessage(controller, "Streaming response");
+    metrics.setScrollHeight(1174);
+
+    // Stream end: the spacer trims to what the held position needs plus the
+    // 24px anti-bounce slack (684 + 400 - 1066 + 24 = 42). The remaining
+    // below-fold air equals the near-bottom threshold, so the
+    // scroll-to-bottom arrow stays hidden.
+    controller.injectTestMessage({ type: "status", status: "idle" });
+    expect(spacer?.style.height).toBe("42px");
+
+    controller.destroy();
+  });
+
+  it("re-pins the anchored message when the hero welcome collapses mid-stream", async () => {
+    // Hero dismissal fades via WAAPI while still occupying layout, then drops
+    // display (and the roomier empty-state body gap) in one frame — after the
+    // anchor ease already scrolled against the old layout. Without a re-pin
+    // the browser clamps scrollTop by the removed height and visibly yanks
+    // the pinned user message.
+    const raf = installRafMock();
+    installResizeObserverMock();
+    let resolveFinished: () => void = () => {};
+    const finished = new Promise<void>((resolve) => {
+      resolveFinished = resolve;
+    });
+    const animate = vi.fn(
+      () => ({ finished, cancel: vi.fn() }) as unknown as Animation
+    );
+    const originalAnimate = (Element.prototype as { animate?: unknown })
+      .animate;
+    (Element.prototype as { animate?: unknown }).animate = animate;
+
+    try {
+      const mount = createMount();
+      const controller = createAgentExperience(mount, {
+        apiUrl: "https://api.example.com/chat",
+        launcher: { enabled: false },
+        welcome: { variant: "hero" },
+        features: {
+          scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
+        }
+      } as any);
+
+      const scrollContainer = mount.querySelector<HTMLElement>(
+        "#persona-scroll-container"
+      );
+      const metrics = installScrollMetrics(scrollContainer!, {
+        scrollHeight: 1000,
+        clientHeight: 400
+      });
+
+      emitStreamingStatus(controller);
+      emitUserMessage(controller, "user-hero", "Long question");
+
+      const bubble = scrollContainer!.querySelector<HTMLElement>(
+        '[data-message-id="user-hero"]'
+      );
+      expect(bubble).not.toBeNull();
+      Object.defineProperty(bubble!, "offsetTop", {
+        value: 700,
+        configurable: true
+      });
+      raf.step(1);
+      const spacer = scrollContainer!.querySelector<HTMLElement>(
+        "[data-persona-anchor-spacer]"
+      );
+      expect(spacer?.style.height).toBe("108px");
+      metrics.setScrollHeight(1108);
+      raf.flush();
+      expect(metrics.getScrollTop()).toBe(684);
+
+      // The dismiss animation completes: 300px of hero layout leaves in one
+      // frame, shifting the bubble up and shrinking scroll content. The
+      // clamp alone would drop scrollTop to 808 - 400 = 408.
+      Object.defineProperty(bubble!, "offsetTop", {
+        value: 400,
+        configurable: true
+      });
+      metrics.setScrollHeight(808);
+      resolveFinished();
+      await finished;
+      await Promise.resolve();
+
+      // Re-pinned: the bubble rests at the anchor offset again (400 - 16)
+      // with the spacer recomputed for the collapsed layout, not left stale.
+      expect(metrics.getScrollTop()).toBe(384);
+      expect(spacer?.style.height).toBe("108px");
+
+      controller.destroy();
+    } finally {
+      if (originalAnimate === undefined) {
+        delete (Element.prototype as { animate?: unknown }).animate;
+      } else {
+        (Element.prototype as { animate?: unknown }).animate = originalAnimate;
+      }
+    }
+  });
+
+  it("anchor-top hands off to the first unread block only when it starts below the fold", () => {
+    const raf = installRafMock();
+    installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      features: {
+        scrollBehavior: { mode: "anchor-top", anchorTopOffset: 16 }
+      }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>("#persona-scroll-container");
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 1600,
+      clientHeight: 400
+    });
+
+    emitStreamingStatus(controller);
+    emitUserMessage(controller, "user-strand", "Very long question");
+    const bubble = scrollContainer!.querySelector<HTMLElement>(
+      '[data-message-id="user-strand"]'
+    );
+    Object.defineProperty(bubble!, "offsetTop", { value: 100 });
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(84);
+
+    // The reply's first block starts 500px below the user message: with the
+    // user message pinned it would sit past the fold (16 + 500 > 400 - 96),
+    // so the anchor hands off to the block: target = 600 - 16 = 584. This is
+    // the stranded case the handoff exists for (tall send / tool prelude).
+    emitStreamingMessage(controller, "Streaming response");
+    const streamBubble = scrollContainer!.querySelector<HTMLElement>(
+      `[data-message-id="${STREAM_MESSAGE_ID}"]`
+    );
+    Object.defineProperty(streamBubble!, "offsetTop", { value: 600 });
+    emitStreamingMessage(controller, "Streaming response, longer");
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(584);
 
     controller.destroy();
   });
@@ -1143,6 +1323,114 @@ describe("createAgentExperience streaming scroll", () => {
     expect(badge?.textContent).toBe("1");
 
     controller.destroy();
+  });
+
+  it("keeps a welcome-only transcript at the top on open with no jump affordance", () => {
+    const raf = installRafMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      persistState: false,
+      launcher: { enabled: true },
+      welcome: { title: "How can we help?" }
+    } as any);
+
+    const scrollContainer = mount.querySelector<HTMLElement>(
+      "#persona-scroll-container"
+    );
+    // Welcome content slightly taller than the viewport: pre-fix, opening
+    // scrolled to the bottom (clipping the greeting) and the >24px overflow
+    // surfaced the scroll-to-bottom arrow with no messages to jump to.
+    const metrics = installScrollMetrics(scrollContainer!, {
+      scrollHeight: 430,
+      clientHeight: 400
+    });
+
+    controller.open();
+    raf.flush();
+
+    expect(metrics.getScrollTop()).toBe(0);
+    const button = getScrollToBottomButton(mount);
+    expect(!button || button.style.display === "none").toBe(true);
+
+    // A real message restores the historical open behavior: land on latest.
+    // Flush first so the inject-time anchor animation settles before reopen.
+    controller.injectUserMessage({ content: "hi" });
+    raf.flush();
+    metrics.setScrollHeight(800);
+    controller.close();
+    controller.open();
+    raf.flush();
+    expect(metrics.getScrollTop()).toBe(metrics.getBottomScrollTop());
+
+    controller.destroy();
+  });
+
+  it("stamps the on-scroll scrollbar policy and reveals only on reader input", () => {
+    vi.useFakeTimers();
+    installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    } as any);
+
+    expect(mount.getAttribute("data-persona-scrollbar")).toBe("on-scroll");
+    const scrollContainer = mount.querySelector<HTMLElement>(
+      "#persona-scroll-container"
+    )!;
+    // At rest, and during widget-driven scrolling (which never routes through
+    // markReaderEngaged), the bar stays hidden.
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      false
+    );
+
+    // A wheel tick is reader input: reveal, then hide after the idle delay
+    // because the reader sits at the resting position (jsdom measures the
+    // body as scrolled to the bottom).
+    scrollContainer.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 5, bubbles: true })
+    );
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      true
+    );
+    vi.advanceTimersByTime(1000);
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      false
+    );
+
+    // Away from the resting position the bar survives the idle delay: it is
+    // the positional affordance while the reader is scrolled up.
+    const metrics = installScrollMetrics(scrollContainer, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+    metrics.setScrollTop(100);
+    scrollContainer.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -5, bubbles: true })
+    );
+    vi.advanceTimersByTime(1000);
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      true
+    );
+
+    // Switching policy clears the reveal state and restamps the root.
+    controller.update({
+      features: { scrollBehavior: { scrollbar: "hidden" } }
+    });
+    expect(mount.getAttribute("data-persona-scrollbar")).toBe("hidden");
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      false
+    );
+    scrollContainer.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 5, bubbles: true })
+    );
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      false
+    );
+
+    controller.destroy();
+    vi.useRealTimers();
   });
 
 });

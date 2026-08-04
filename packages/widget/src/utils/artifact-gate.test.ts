@@ -288,6 +288,33 @@ describe("applyArtifactLayoutCssVars", () => {
     expect(mount.style.getPropertyValue("--persona-artifact-pane-padding").trim()).toBe("24px");
   });
 
+  it("sets the drawer width var only when drawerWidth is configured", () => {
+    const configured = createFakeMount();
+    applyArtifactLayoutCssVars(
+      configured,
+      baseConfig({
+        features: {
+          artifacts: { enabled: true, layout: { drawerWidth: "100%" } },
+        },
+      })
+    );
+    expect(
+      configured.style.getPropertyValue("--persona-artifact-drawer-width").trim()
+    ).toBe("100%");
+
+    // Unset must remove the var: the drawer CSS owns the default, and a
+    // lingering var would also resize hosts that only sized the split.
+    const unset = createFakeMount();
+    unset.style.setProperty("--persona-artifact-drawer-width", "100%");
+    applyArtifactLayoutCssVars(
+      unset,
+      baseConfig({ features: { artifacts: { enabled: true } } })
+    );
+    expect(
+      unset.style.getPropertyValue("--persona-artifact-drawer-width").trim()
+    ).toBe("");
+  });
+
   it("defaults split gap to panel inset when detached, explicit splitGap wins", () => {
     const detached = createFakeMount();
     applyArtifactLayoutCssVars(

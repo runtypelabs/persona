@@ -120,7 +120,9 @@ export const THEME_TOKEN_DOCS = {
       header: {
         description: 'Chat panel header.',
         properties:
-          'background, border, borderRadius, padding, iconBackground, iconForeground, titleForeground, subtitleForeground, actionIconForeground, shadow, borderBottom.',
+          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, shadow, borderBottom, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+        legacy:
+          'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set.',
       },
       message: {
         description: 'Chat message bubbles.',
@@ -131,7 +133,19 @@ export const THEME_TOKEN_DOCS = {
       markdown: {
         description: 'Markdown rendering in messages and artifact pane.',
         properties:
-          'inlineCode (background, foreground), link.foreground, prose.fontFamily, heading.h1/h2 (fontSize, fontWeight).',
+          'inlineCode (background, foreground), link.foreground, prose.fontFamily, heading.h1/h2 (fontSize, fontWeight), codeBlock (background, borderColor, textColor, borderRadius: follows palette.radius.md), table (headerBackground, borderColor), hr.color, blockquote (borderColor, background, textColor).',
+      },
+      introCard: {
+        description:
+          'Welcome surface above the message list. Flat by default (transparent, no shadow).',
+        properties:
+          'background, borderRadius, padding, shadow, border (full CSS shorthand, default none), title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+      },
+      suggestion: {
+        description:
+          'Starter prompt and follow-up suggestion chrome. Three variants: chip, card, list.',
+        properties:
+          'background, foreground, border, borderRadius, padding, shadow, gap (icon to copy inside one item), itemGap (space between items, default 8px), minHeight, fontSize, lineHeight, iconSize, hoverBackground, hoverForeground, hoverBorder, pressedBackground, focusRing, disabledOpacity.',
       },
       voice:
         'recording (indicator, background, border), processing (icon, background), speaking (icon).',
@@ -141,9 +155,11 @@ export const THEME_TOKEN_DOCS = {
       scrollToBottom:
         'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize.',
       toolBubble: 'shadow: tool call row box-shadow.',
+      scrollbar:
+        'Shared scrollbar appearance for every scroller: thumb (default semantic.colors.border), track (default transparent).',
       reasoningBubble: 'shadow: reasoning/thinking row box-shadow.',
       composer:
-        'Message input form: shadow (box-shadow), padding (form inset), gap (textarea row to actions row), fontSize and lineHeight (textarea type).',
+        'Message input form: shadow (box-shadow), borderColor, padding (form inset), gap (textarea row to actions row), fontSize and lineHeight (textarea type).',
       artifact:
         'toolbar (icon styling, copy menu), tab (background, active states), pane (background, toolbarBackground).',
     },
@@ -235,7 +251,7 @@ export const THEME_TOKEN_DOCS = {
     copy: {
       description: 'Widget text content.',
       properties:
-        'showWelcomeCard (boolean), welcomeTitle, welcomeSubtitle, inputPlaceholder, sendButtonLabel.',
+        'inputPlaceholder, sendButtonLabel, stopButtonLabel. (showWelcomeCard, welcomeTitle, welcomeSubtitle are deprecated aliases of the welcome namespace.)',
     },
     voiceRecognition: {
       description: 'Voice input configuration.',
@@ -251,6 +267,12 @@ export const THEME_TOKEN_DOCS = {
         'Rich starter and follow-up suggestion surfaces. Strings remain valid item shorthand.',
       properties:
         'starters.items, starters.variant ("card" | "chip" | "list"), starters.placement ("auto" | "welcome" | "composer"), starters.behavior ("send" | "fill"), starters.overflow ("scroll" | "wrap"), starters.maxItems, followUps.enabled, followUps.expose, followUps.variant, followUps.placement ("auto" | "after-message" | "composer"), followUps.behavior, followUps.overflow ("scroll" | "wrap"), followUps.maxItems.',
+    },
+    welcome: {
+      description:
+        'First-open welcome surface. Supersedes copy.welcomeTitle / welcomeSubtitle / showWelcomeCard.',
+      properties:
+        'title, subtitle, icon ({ type: "lucide", name } | { type: "image", url, alt } | { type: "text", text } | function), variant ("card" | "hero" | "none"), dismiss ("never" | "on-first-message"), message (display-only greeting bubble, ignored under "hero").',
     },
     suggestionChips:
       'Deprecated string[] shorthand for starter prompts. Prefer suggestions.starters.items.',

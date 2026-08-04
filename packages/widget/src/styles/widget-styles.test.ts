@@ -106,6 +106,36 @@ describe("suggestion interaction styles", () => {
     expect(rule).toContain("max-width: 600px");
   });
 
+  it("centers label-only items and top-aligns only description cards", () => {
+    const cardStart = widgetCss.indexOf(".persona-suggestion--card {");
+    const cardRule = widgetCss.slice(
+      cardStart,
+      widgetCss.indexOf("\n}", cardStart),
+    );
+    expect(cardRule).toContain("align-items: center");
+
+    const listStart = widgetCss.indexOf(".persona-suggestion--list {");
+    const listRule = widgetCss.slice(
+      listStart,
+      widgetCss.indexOf("\n}", listStart),
+    );
+    expect(listRule).toContain("align-items: center");
+
+    // Only content that actually wraps to two lines earns the top alignment.
+    const hasStart = widgetCss.indexOf(
+      ".persona-suggestion--card:has(.persona-suggestion__description)",
+    );
+    const hasRule = widgetCss.slice(
+      hasStart,
+      widgetCss.indexOf("\n}", hasStart),
+    );
+    expect(hasStart).toBeGreaterThan(-1);
+    expect(hasRule).toContain(
+      ".persona-suggestion--list:has(.persona-suggestion__description)",
+    );
+    expect(hasRule).toContain("align-items: flex-start");
+  });
+
   it("masks only the scrollable chip edges that still contain content", () => {
     expect(widgetCss).toContain(
       '[data-overflow="scroll"][data-scroll-right]:not(',
@@ -118,6 +148,43 @@ describe("suggestion interaction styles", () => {
     );
     expect(widgetCss).toContain(
       "--persona-suggestion-scroll-fade-size: 32px",
+    );
+  });
+
+  it("centers the chip row on the composer surface only", () => {
+    const selector =
+      '[data-persona-composer-suggestions].persona-suggestions[data-variant="chip"] {';
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    // fit-content + auto margins center a single row while wrapped rows keep
+    // a shared left edge; per-row justify-content would rag them.
+    expect(rule).toContain("width: fit-content");
+    expect(rule).toContain("max-width: 100%");
+    expect(rule).toContain("margin-inline: auto");
+    expect(rule).not.toContain("justify-content");
+
+    // Transcript follow-ups and welcome rows keep the default left alignment.
+    const sharedStart = widgetCss.indexOf(
+      '.persona-suggestions[data-variant="chip"] {',
+    );
+    const sharedRule = widgetCss.slice(
+      sharedStart,
+      widgetCss.indexOf("\n}", sharedStart),
+    );
+    expect(sharedStart).toBeGreaterThan(-1);
+    expect(sharedRule).not.toContain("justify-content");
+  });
+
+  it("only pulls follow-ups up against the roomy welcome-visible body gap", () => {
+    // Unscoped, the -12px offset would zero out the tightened 12px gap that
+    // applies when the welcome host is hidden, gluing follow-ups to the answer.
+    expect(widgetCss).toContain(
+      '.persona-gap-6 > [data-persona-suggestions="follow-up"] {',
+    );
+    expect(widgetCss).not.toMatch(
+      /\n\[data-persona-suggestions="follow-up"\] \{/,
     );
   });
 });
@@ -158,5 +225,158 @@ describe("composer spacing styles", () => {
     expect(start).toBeGreaterThan(-1);
     expect(rule).toContain("padding: 6px 14px");
     expect(rule).toContain("gap: 8px");
+  });
+});
+
+describe("transcript layout styles", () => {
+  it("drops the empty messages wrapper from the flex flow", () => {
+    // A zero-height flex child still triggers the body's gap, so an empty
+    // transcript added phantom scrollable space below the welcome (and a
+    // scroll-to-bottom arrow with nothing to scroll to).
+    expect(widgetCss).toContain(
+      ".persona-widget-messages:empty {\n  display: none;\n}",
+    );
+  });
+});
+
+describe("launcher teaser styles", () => {
+  it("keeps the [hidden] dismiss control hidden despite its own display: grid", () => {
+    // dismissible: false sets the hidden property; without this companion
+    // rule the block's display: grid outranks the UA [hidden] stylesheet.
+    expect(widgetCss).toContain(
+      ".persona-launcher-teaser-dismiss[hidden] {\n  display: none;\n}",
+    );
+  });
+});
+
+describe("plugin welcome styles", () => {
+  it("hides the default welcome content while a plugin element owns the host", () => {
+    const selector =
+      '.persona-welcome[data-persona-welcome-content="plugin"]\n  > :not([data-persona-welcome-plugin]) {';
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("display: none !important");
+  });
+
+  it("centers the welcome column at wide widths but never the overlay", () => {
+    const start = widgetCss.indexOf(
+      ".persona-welcome:not([data-persona-welcome-overlay]) {",
+    );
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    // The card variant shares the transcript column so its left-aligned
+    // text lines up with messages and composer.
+    expect(rule).toContain("max-width: var(--persona-content-max-width, 768px)");
+    expect(rule).toContain("margin-inline: auto");
+    // The var is published on the root so plugin content can consume it.
+    expect(widgetCss).toContain("--persona-welcome-max-width: 640px");
+  });
+
+  it("keeps the narrower centered column for the hero variant only", () => {
+    const start = widgetCss.indexOf(
+      '.persona-welcome[data-persona-welcome-variant="hero"]:not(',
+    );
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("max-width: var(--persona-welcome-max-width, 640px)");
+  });
+
+  it("aligns the greeting bubble to the transcript column", () => {
+    const start = widgetCss.indexOf(".persona-welcome-greeting {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("max-width: var(--persona-content-max-width, 768px)");
+    expect(rule).toContain("margin-inline: auto");
+  });
+
+  it("pads the welcome host from the intro-card alias, full padding on overlays", () => {
+    // Flat default resolves the alias to `1.5rem 0` (tokens.ts), aligning
+    // the text with the content column; overlays are opaque surfaces and
+    // keep a fixed symmetric inset.
+    const start = widgetCss.indexOf(".persona-welcome {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("padding: var(--persona-intro-card-padding, 1.5rem)");
+
+    const overlayStart = widgetCss.indexOf(
+      ".persona-welcome[data-persona-welcome-overlay] {",
+    );
+    const overlayRule = widgetCss.slice(
+      overlayStart,
+      widgetCss.indexOf("\n}", overlayStart),
+    );
+    expect(overlayRule).toContain("padding: 1.5rem");
+  });
+
+  it("overlays the messages area while plugin content is active", () => {
+    const start = widgetCss.indexOf(
+      ".persona-welcome[data-persona-welcome-overlay] {",
+    );
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("position: absolute");
+    expect(rule).toContain("inset: 0");
+    // !important: only way to beat the host's inline intro-card background
+    // (default transparent), which otherwise lets the transcript bleed
+    // through the overlay.
+    expect(rule).toMatch(/background:[\s\S]*!important/);
+    // Two classes so it outranks the body's own overflow utility.
+    expect(widgetCss).toContain(
+      ".persona-widget-body.persona-welcome-overlay-active {\n  overflow: hidden;\n}",
+    );
+  });
+});
+
+describe("scrollbar policy styles", () => {
+  it("themes every scroller from the shared tokens", () => {
+    // scrollbar-color inherits from the root; scrollbar-width does not, so
+    // the width needs the descendant star.
+    expect(widgetCss).toMatch(
+      /\[data-persona-root\] \{\n {2}scrollbar-color: var\(\n\s+--persona-scrollbar-thumb,/,
+    );
+    expect(widgetCss).toContain("var(--persona-scrollbar-track, transparent)");
+    expect(widgetCss).toContain(
+      "[data-persona-root],\n[data-persona-root] * {\n  scrollbar-width: thin;\n}",
+    );
+    // The artifact tab strip keeps its own token as an alias layered on the
+    // shared thumb token.
+    expect(widgetCss).toContain(
+      "--persona-artifact-tab-list-scrollbar,\n    var(--persona-scrollbar-thumb, var(--persona-border, #e5e7eb))",
+    );
+  });
+
+  it("hides the transcript bar at rest under the on-scroll policy without reflow", () => {
+    // Rest state keys off the ui.ts-owned attributes; the reveal attribute
+    // must appear as a :not() so flipping it shows the bar again.
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="on-scroll"]\n  .persona-widget-body:not([data-persona-scrollbar-visible]),\n[data-persona-scrollbar="hidden"] .persona-widget-body {\n  scrollbar-width: none;\n}',
+    );
+    // Old-Safari fallback: webkit hiding agrees with the standard property.
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="hidden"] .persona-widget-body::-webkit-scrollbar {\n  display: none;\n}',
+    );
+    // Classic-scrollbar platforms must not reflow the transcript on toggle.
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="on-scroll"] .persona-widget-body {\n  scrollbar-gutter: stable;\n}',
+    );
+  });
+
+  it("hover-reveals inner scroller bars under the on-scroll policy", () => {
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="on-scroll"] .persona-artifact-list:not(:hover)',
+    );
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="on-scroll"]\n  .persona-suggestions[data-overflow="scroll"]:not(:hover)',
+    );
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="hidden"] .persona-artifact-list,',
+    );
   });
 });

@@ -31,6 +31,7 @@ export type {
   AgentWidgetInitOptions,
   AgentWidgetMessage,
   AgentWidgetLauncherConfig,
+  AgentWidgetLauncherTeaserConfig,
   AgentWidgetDockConfig,
   AgentWidgetEvent,
   AgentWidgetStreamParser,
@@ -151,7 +152,11 @@ export type {
   AgentWidgetSuggestionSurfaceConfig,
   AgentWidgetStarterSuggestionsConfig,
   AgentWidgetFollowUpSuggestionsConfig,
-  AgentWidgetSuggestionsConfig
+  AgentWidgetSuggestionsConfig,
+  AgentWidgetWelcomeConfig,
+  AgentWidgetWelcomeIcon,
+  AgentWidgetWelcomeVariant,
+  AgentWidgetWelcomeDismiss
 } from "./types";
 
 export {
@@ -341,8 +346,13 @@ export type {
   AgentWidgetPlugin,
   AgentWidgetTransformSuggestionsContext,
   AgentWidgetRenderSuggestionContext,
+  AgentWidgetRenderWelcomeContext,
   AgentWidgetSuggestionSelectContext
 } from "./plugins/types";
+// Welcome resolver: `renderWelcome` receives the resolved shape.
+export { resolveWelcomeConfig, isWelcomeVisible } from "./welcome";
+export type { ResolvedWelcomeConfig } from "./welcome";
+export type { AgentWidgetPluginStorage } from "./utils/plugin-storage";
 export { pluginRegistry } from "./plugins/registry";
 
 // Stream animation plugin API: lets consumers register custom animations
@@ -447,6 +457,7 @@ export type {
   SemanticSpacing,
   SemanticTypography,
   ComponentTokens,
+  TextStyleTokens,
   ArtifactToolbarTokens,
   ArtifactTabTokens,
   ArtifactPaneTokens,

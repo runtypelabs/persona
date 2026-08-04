@@ -116,10 +116,16 @@ export function createDemoEchoFetch(
 
   // Named so the config inspector's "Code" tab renders a readable label
   // (`/* function */ demoEchoFetch()`) instead of "anonymous".
-  return async function demoEchoFetch(_url, _init, payload) {
+  return async function demoEchoFetch(_url, init, payload) {
     turn += 1;
     const executionId = `demo-echo-${turn}`;
     const reply = buildReply(latestUserText(payload), payload);
-    return createMockSSEResponse(echoFrames(executionId, reply, chunkSize), { delayMs });
+    // Pass the dispatch's abort signal through: cancel/clearChat must kill
+    // the mock stream exactly like a real network fetch, or the client's
+    // read loop keeps consuming frames after the session was cleared.
+    return createMockSSEResponse(echoFrames(executionId, reply, chunkSize), {
+      delayMs,
+      signal: init?.signal,
+    });
   };
 }

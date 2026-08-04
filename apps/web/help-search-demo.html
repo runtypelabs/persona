@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Help Search Plugin Demo</title>
+  <style>
+    .help-search-control {
+      display: grid;
+      gap: 0.45rem;
+      margin-top: 1rem;
+    }
+    .help-search-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <div class="info-section">
+          <h3>Help search</h3>
+          <p>A search card composed into the default welcome surface by a <code>renderWelcome</code> plugin. Type “billing”, “theme”, or “upload” to query the demo's static article index.</p>
+
+          <div class="help-search-control">
+            <span class="mount-toggle-label">Welcome</span>
+            <div class="help-search-buttons mount-toggle-group" role="group" aria-label="Welcome surface">
+              <button class="help-search-welcome-button mount-toggle-button" type="button" data-welcome="card" aria-pressed="true" title="Intro card above the transcript. Updated live through controller.update().">Card</button>
+              <button class="help-search-welcome-button mount-toggle-button" type="button" data-welcome="hero" aria-pressed="false" title="Centered in the empty conversation, dismissed on the first message.">Hero</button>
+            </div>
+          </div>
+
+          <div class="help-search-control">
+            <span class="mount-toggle-label">Result click</span>
+            <div class="help-search-buttons mount-toggle-group" role="group" aria-label="Result click behavior">
+              <button class="help-search-action-button mount-toggle-button" type="button" data-action="open" aria-pressed="true" title="Anchor with target=_blank: the article opens in a new tab.">Open article</button>
+              <button class="help-search-action-button mount-toggle-button" type="button" data-action="ask" aria-pressed="false" title="Sends a templated prompt through ctx.sendMessage so the agent answers from the article.">Ask the agent</button>
+            </div>
+          </div>
+
+          <div class="help-search-control">
+            <span class="mount-toggle-label">Starters</span>
+            <div class="help-search-buttons mount-toggle-group" role="group" aria-label="Starter behavior">
+              <button class="help-search-starters-button mount-toggle-button" type="button" data-starters="static" aria-pressed="true" title="Configured starters stay put while the search runs.">Configured</button>
+              <button class="help-search-starters-button mount-toggle-button" type="button" data-starters="promote" aria-pressed="false" title="transformSuggestions swaps the starters for the current results, and restores them when the query clears.">Promote results</button>
+            </div>
+          </div>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Help search as a plugin</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Compose, do not replace</h3>
+        <p>The hook renders <code>ctx.defaultRenderer()</code> and appends the search card into it, so the greeting, icon, and starters keep rendering and derived visibility still governs the surface. Returning the default host is composition rather than a takeover: only a different element becomes plugin-owned content that overlays the transcript.</p>
+        <div class="code-block">
+<span class="prop">renderWelcome</span>: ({ defaultRenderer, sendMessage, onCleanup }) => {
+  <span class="keyword">const</span> host = <span class="function">defaultRenderer</span>();
+  host.<span class="function">appendChild</span>(card);
+  <span class="function">onCleanup</span>(() => card.<span class="function">remove</span>());
+  <span class="keyword">return</span> host;
+}
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Provider agnostic</h3>
+        <p>The plugin takes a <code>search: (query, signal) =&gt; Promise&lt;Article[]&gt;</code> option, so Zendesk Guide, Algolia, or a static index all work the same way. Debounce, abort, and stale-response rejection live in the plugin: the core is not involved. This demo passes <code>createStaticArticleSearch()</code>, a filtered in-memory index with simulated latency.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Two click behaviors</h3>
+        <p><code>resultAction: "open"</code> renders each result as an anchor with <code>target="_blank"</code> and <code>rel="noopener noreferrer"</code>. <code>resultAction: "ask"</code> renders a button that calls <code>ctx.sendMessage()</code> with a templated prompt carrying the article title and URL, so the agent answers from it. <code>askPrompt</code> overrides the template.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Header entry point</h3>
+        <p>The search icon in the header is <code>layout.header.trailingActions</code> plus <code>onAction</code>, calling the plugin's <code>focusSearch()</code>. The plugin is built before <code>initAgentWidget</code> and handed the controller afterwards, the host-closure pattern the hook docs describe. Trailing actions render in the <code>minimal</code> header layout.</p>
+        <div class="code-block">
+<span class="keyword">const</span> plugin = <span class="function">createHelpSearchPlugin</span>({ search });
+<span class="keyword">const</span> controller = <span class="function">initAgentWidget</span>({ config: { plugins: [plugin] } });
+plugin.<span class="function">attach</span>(controller);
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Optional starter promotion</h3>
+        <p>With <code>promoteResultsToStarters</code>, the plugin also implements <code>transformSuggestions</code>: while results exist they stand in for the configured starters, and the originals return when the query clears. Starters re-render on config updates rather than on <code>ctx.requestRender()</code>, so the plugin asks the attached controller for a no-op <code>update({})</code> when the result set changes.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">No persisted state</h3>
+        <p>Query and results are ephemeral UI, held in the plugin closure so a live <code>controller.update()</code> does not wipe what the visitor typed. Nothing reaches <code>ctx.storage</code>. Switching the welcome variant above re-runs arbitration: the old card is removed by the registered cleanup and a fresh one is built with the query intact.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/help-search-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("help-search-demo");
+  </script>
+</body>
+</html>

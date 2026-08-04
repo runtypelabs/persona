@@ -1252,6 +1252,13 @@ export type AgentWidgetArtifactsLayoutConfig = {
    */
   narrowHostMaxWidth?: number;
   /**
+   * Width of the slide-over artifact drawer (the narrow-host and mobile
+   * presentations; `paneWidth`/`paneMaxWidth` only size the desktop split).
+   * CSS length; `"100%"` makes the drawer cover the whole panel.
+   * @default min(calc(100% - 1rem), 22rem)
+   */
+  drawerWidth?: string;
+  /**
    * When true (default), widen the launcher panel while artifacts are visible and not user-dismissed.
    * No-op for inline embed (`launcher.enabled === false`).
    */
@@ -1894,6 +1901,19 @@ export type AgentWidgetScrollMode = "follow" | "anchor-top" | "none";
  */
 export type AgentWidgetScrollRestorePosition = "bottom" | "last-user-turn";
 
+/**
+ * Scrollbar visibility policy for every scroll surface in the widget.
+ *
+ * - `"on-scroll"` hides bars at rest and reveals them on genuine reader
+ *   input, keeping them visible while the reader is away from the resting
+ *   position: overlay-scrollbar semantics on every platform.
+ * - `"auto"` keeps the themed bar under native visibility semantics: overlay
+ *   platforms still auto-hide, classic-scrollbar platforms (Windows,
+ *   always-show macOS) show it persistently.
+ * - `"hidden"` never shows an indicator. Scrolling itself is unaffected.
+ */
+export type AgentWidgetScrollbarPolicy = "on-scroll" | "auto" | "hidden";
+
 export type AgentWidgetScrollBehaviorFeature = {
   /** Scroll behavior during streamed responses. @default "anchor-top" */
   mode?: AgentWidgetScrollMode;
@@ -1938,6 +1958,13 @@ export type AgentWidgetScrollBehaviorFeature = {
    * @default false
    */
   announce?: boolean;
+  /**
+   * Scrollbar visibility policy, applied to the transcript and every inner
+   * scroller through one root attribute. Themable via
+   * `--persona-scrollbar-thumb` and `--persona-scrollbar-track`.
+   * @default "on-scroll"
+   */
+  scrollbar?: AgentWidgetScrollbarPolicy;
 };
 
 export type AgentWidgetScrollToBottomFeature = {
@@ -2915,6 +2942,58 @@ export type AgentWidgetLauncherConfig = {
    * @example "min(380px, calc(100vw - 48px))"
    */
   collapsedMaxWidth?: string;
+  /**
+   * Proactive nudge bubble anchored above the collapsed floating launcher.
+   * Omit it (the default) and no teaser renders.
+   */
+  teaser?: AgentWidgetLauncherTeaserConfig;
+};
+
+/**
+ * Launcher teaser: a small bubble above the collapsed launcher. Clicking it
+ * opens the panel and consumes the teaser exactly like an explicit dismissal.
+ * Within a single page load the teaser appears at most once under either
+ * frequency.
+ *
+ * @example
+ * ```typescript
+ * launcher: {
+ *   teaser: { text: "Need a hand picking a plan?", delayMs: 3000 }
+ * }
+ * ```
+ */
+export type AgentWidgetLauncherTeaserConfig = {
+  /** Bubble copy. An empty string renders no teaser. */
+  text: string;
+  /**
+   * Delay before the bubble appears, in milliseconds.
+   * @default 0
+   */
+  delayMs?: number;
+  /**
+   * How often the teaser may return.
+   *
+   * `"once"`: a dismissal or a click-through is remembered in `localStorage`
+   * under `` `${persistState.keyPrefix ?? "persona-"}teaser-dismissed` `` and
+   * the teaser never returns on that browser. `"always"`: shows on every page
+   * load, tracked in memory only. `persistState: false` downgrades `"once"` to
+   * in-memory too, so the teaser reappears each load.
+   *
+   * Custom `storageAdapter` implementations do not participate in teaser state.
+   *
+   * @default "once"
+   */
+  frequency?: "once" | "always";
+  /**
+   * Render an x affordance that dismisses the teaser without opening the panel.
+   * @default true
+   */
+  dismissible?: boolean;
+  /**
+   * Accessible label for the dismiss affordance.
+   * @default "Dismiss message"
+   */
+  dismissLabel?: string;
 };
 
 export type AgentWidgetSendButtonConfig = {
@@ -3753,7 +3832,10 @@ export type AgentWidgetSuggestion =
       label: string;
       /** Text placed in the composer or sent. Defaults to `label`. */
       prompt?: string;
-      /** Optional supporting copy, most useful with the `card` variant. */
+      /**
+       * Optional supporting copy, most useful with the `card` variant. The
+       * `chip` variant ignores it and renders the label alone.
+       */
       description?: string;
       /** Optional icon from Persona's bundled Lucide registry. */
       icon?: IconName;
@@ -3800,9 +3882,10 @@ export type AgentWidgetSuggestionSurfaceConfig = {
   /** Default click behavior, overridable per item. Defaults to `send`. */
   behavior?: AgentWidgetSuggestionBehavior;
   /**
-   * Layout for items past the surface width. Defaults to `wrap` for starters
-   * and `scroll` for follow-ups. Applies to the `chip` variant only; the
-   * `card` and `list` layouts manage their own stacking.
+   * Layout for items past the surface width. Defaults to `wrap` on every
+   * surface; `scroll` opts into a horizontal strip for large sets. Applies
+   * to the `chip` variant only; the `card` and `list` layouts manage their
+   * own stacking.
    */
   overflow?: "scroll" | "wrap";
   /** Maximum visible items. Defaults to 4. */
@@ -3859,6 +3942,66 @@ export type AgentWidgetSuggestionsConfig = {
   starters?: AgentWidgetStarterSuggestionsConfig;
   followUps?: AgentWidgetFollowUpSuggestionsConfig;
 };
+
+/**
+ * Which welcome surface renders.
+ * `"card"` is the top-of-scroll intro card (default, back-compatible),
+ * `"hero"` centers it in the empty conversation, `"none"` renders no surface.
+ */
+export type AgentWidgetWelcomeVariant = "card" | "hero" | "none";
+
+/**
+ * When the welcome surface goes away. `"never"` is the default for `"card"`;
+ * `"on-first-message"` is the default for `"hero"` and cannot be overridden
+ * there.
+ */
+export type AgentWidgetWelcomeDismiss = "never" | "on-first-message";
+
+/**
+ * Avatar or logo shown above the welcome title. Discriminated union; the
+ * function form is the escape hatch for custom markup. There is deliberately
+ * no raw HTML string variant (sanitization surface plus accessibility hole).
+ */
+export type AgentWidgetWelcomeIcon =
+  | { type: "lucide"; name: IconName }
+  /** `alt` is required, and may be `""` for a decorative logo. */
+  | { type: "image"; url: string; alt: string }
+  /** Emoji or short text glyph. */
+  | { type: "text"; text: string }
+  | (() => HTMLElement | SVGElement);
+
+/**
+ * First-open welcome surface. Consolidates the deprecated
+ * `copy.welcomeTitle` / `copy.welcomeSubtitle` / `copy.showWelcomeCard`
+ * options; a field present here wins over its legacy alias.
+ *
+ * All defaults live in the resolver (`resolveWelcomeConfig`), never in
+ * `DEFAULT_WIDGET_CONFIG`: presence on this object is what distinguishes a
+ * host-set value from a filled-in default.
+ */
+export interface AgentWidgetWelcomeConfig {
+  /** Card or hero title. Defaults to "Hello 👋". */
+  title?: string;
+  /** Scope statement in the assistant's voice. Empty string omits it. */
+  subtitle?: string;
+  /** Avatar or logo shown above the title. */
+  icon?: AgentWidgetWelcomeIcon;
+  /** @default "card" */
+  variant?: AgentWidgetWelcomeVariant;
+  /** @default "never" for `card`, always `"on-first-message"` for `hero`. */
+  dismiss?: AgentWidgetWelcomeDismiss;
+  /**
+   * Display-only greeting bubble pinned at transcript position zero. It is UI
+   * chrome derived from config, never a session message: it does not appear in
+   * `getMessages()`, is never persisted or sent to the model, `onMessage` does
+   * not fire for it, and it survives `clearChat()`. Use an assistant
+   * `initialMessages` entry instead when the model should see the greeting.
+   *
+   * Ignored (with a debug-mode warning) when `variant` is `"hero"`: the hero
+   * is the greeting.
+   */
+  message?: string;
+}
 
 /**
  * Interface for pluggable stream parsers that extract text from streaming responses.
@@ -4152,7 +4295,9 @@ export type AgentWidgetHeaderLayoutConfig = {
    */
   render?: (context: HeaderRenderContext) => HTMLElement;
   /**
-   * Shown after the title in `minimal` header layout (e.g. chevron menu affordance).
+   * Icon action buttons at the trailing edge of the `minimal` header layout,
+   * clustered with the close button and sharing its chrome. For a menu
+   * affordance next to the title, use `titleMenu` instead.
    */
   trailingActions?: AgentWidgetHeaderTrailingAction[];
   /** Called when a `trailingActions` button is clicked. */
@@ -4348,7 +4493,11 @@ export type AgentWidgetLayoutConfig = {
   /**
    * Max width for the content area (messages + composer).
    * Applied with `margin: 0 auto` for centering.
-   * Accepts any CSS width value (e.g. "90ch", "720px", "80%").
+   * Accepts any CSS width value (e.g. "90ch", "720px", "80%"), or "none"
+   * for a full-width column. Only engages on panels wider than the cap,
+   * so launcher-width panels are unaffected.
+   * @default "768px" ("720px" in composer-bar mode via
+   * `launcher.composerBar.contentMaxWidth`)
    */
   contentMaxWidth?: string;
 };
@@ -5108,7 +5257,9 @@ export type AgentWidgetConfig = {
    */
   getHeaders?: AgentWidgetHeadersFunction;
   copy?: {
+    /** @deprecated Use `welcome.title`. */
     welcomeTitle?: string;
+    /** @deprecated Use `welcome.subtitle`. */
     welcomeSubtitle?: string;
     inputPlaceholder?: string;
     sendButtonLabel?: string;
@@ -5116,6 +5267,7 @@ export type AgentWidgetConfig = {
     stopButtonLabel?: string;
     /**
      * When false, the welcome / intro card is not shown above the message list.
+     * @deprecated Use `welcome.variant: "none"`.
      * @default true
      */
     showWelcomeCard?: boolean;
@@ -5182,6 +5334,12 @@ export type AgentWidgetConfig = {
   initialSelectedArtifactId?: string | null;
   /** Rich starter and follow-up suggestion surfaces. */
   suggestions?: AgentWidgetSuggestionsConfig;
+  /**
+   * First-open welcome surface (card, hero, or none) plus the optional
+   * display-only greeting bubble. Supersedes `copy.welcomeTitle`,
+   * `copy.welcomeSubtitle`, and `copy.showWelcomeCard`.
+   */
+  welcome?: AgentWidgetWelcomeConfig;
   /** @deprecated Prefer `suggestions.starters.items`. */
   suggestionChips?: string[];
   /** @deprecated Prefer semantic tokens under `theme.components.suggestion`. */

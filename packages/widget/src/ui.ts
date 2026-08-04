@@ -36,7 +36,8 @@ import {
   AgentWidgetContentSegment,
   AgentWidgetContextMentionRef,
   AgentWidgetSuggestion,
-  AgentWidgetSuggestionSource
+  AgentWidgetSuggestionSource,
+  AgentWidgetWelcomeIcon
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import {
@@ -49,6 +50,7 @@ import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./util
 import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement } from "./utils/dom";
+import { resolveContentMaxWidth } from "./utils/content-width";
 import { attachTooltip } from "./utils/tooltip";
 import { downloadInfoFor } from "./utils/artifact-file";
 import { artifactCopyText } from "./components/artifact-preview";
@@ -85,9 +87,20 @@ import {
 import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
 import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./utils/dock";
-import { LauncherButton } from "./components/launcher";
+import { LauncherSurface } from "./components/launcher";
 import { buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import { buildPillComposer } from "./components/pill-composer-builder";
 import { createWidgetView, resolveLauncher } from "./components/widget-view";
+import {
+  animateWelcomeOut,
+  applyWelcomeConfig,
+  applyWelcomeVisibility,
+  clearWelcomePluginContent,
+  mountWelcomePluginContent,
+  renderWelcomeGreeting,
+} from "./components/welcome";
+import { createPluginStorageFactory } from "./utils/plugin-storage";
+import { isWelcomeVisible, resolveWelcomeConfig } from "./welcome";
 import { HEADER_THEME_CSS } from "./components/header-builder";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
@@ -118,7 +131,11 @@ import {
 import { formatElapsedMs } from "./utils/formatting";
 import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
 import { createBuiltInApprovalPlugin } from "./components/approval-actions";
-import { createSuggestions } from "./components/suggestions";
+import {
+  createSuggestionElement,
+  createSuggestions,
+  normalizeSuggestion,
+} from "./components/suggestions";
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
 import { ThroughputTracker } from "./utils/throughput-tracker";
@@ -624,6 +641,14 @@ export const createAgentExperience = (
   // Get plugins for this instance
   const plugins = pluginRegistry.getForInstance(config.plugins);
 
+  // Guards the composer/welcome hooks, which can run before `session` exists
+  // (its `let` is declared far below and is in the temporal dead zone here).
+  let sessionInitialized = false;
+
+  // One store per widget instance, namespaced per plugin id. Shared by the
+  // `renderWelcome` and `renderComposer` contexts.
+  const pluginStorageFor = createPluginStorageFactory(() => config);
+
   // The built-in approval renderer, shaped as a plugin. Resolved as a FALLBACK
   // (not pushed into `plugins`) so a user `renderApproval` plugin always wins
   // and a later config-update plugin push can't reorder ahead of it.
@@ -896,6 +921,9 @@ export const createAgentExperience = (
     sendButtonWrapper,
     composerForm,
     statusText,
+    welcomeHost,
+    welcomeIconHolder,
+    greetingHost,
     introTitle,
     introSubtitle,
     closeButton,
@@ -951,6 +979,7 @@ export const createAgentExperience = (
   const isActivityWhilePinnedEnabled = () =>
     scrollBehaviorFeature.showActivityWhilePinned !== false;
   const isAnnounceEnabled = () => scrollBehaviorFeature.announce === true;
+  const getScrollbarPolicy = () => scrollBehaviorFeature.scrollbar ?? "on-scroll";
   const scrollToBottomButton = createElement(
     "button",
     "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-z-10 persona-flex persona-items-center persona-gap-1 persona-text-xs persona-transform persona--translate-x-1/2 persona-cursor-pointer"
@@ -980,6 +1009,9 @@ export const createAgentExperience = (
   anchorSpacer.style.flexShrink = "0";
   anchorSpacer.style.pointerEvents = "none";
   anchorSpacer.style.height = "0px";
+  // Hidden while unsized: at 0px it still counts as a flex child, so the
+  // body's gap would add phantom scrollable space below the transcript.
+  anchorSpacer.style.display = "none";
   body.appendChild(anchorSpacer);
 
   // Visually-hidden polite live region for screen-reader announcements
@@ -1213,16 +1245,25 @@ export const createAgentExperience = (
     }
   };
 
-  // Plugin hook: renderComposer - allow plugins to provide custom composer
+  // Plugin hook: renderComposer - allow plugins to provide custom composer.
+  // Arbitration is a function so `rebuildComposer()` can re-run it with a
+  // fresh ctx and swap the footer in place.
   const composerPlugin = plugins.find(p => p.renderComposer);
-  if (composerPlugin?.renderComposer) {
+  // True while the footer content came from a plugin (not composition via
+  // defaultRenderer). Plugin composers own their copy: updateCopy must not
+  // stamp inputPlaceholder/sendButtonLabel onto DOM the core did not build.
+  let composerIsPluginOwned = false;
+  const renderComposerFromPlugins = (
+    defaultRenderer: () => HTMLElement
+  ): HTMLElement | null => {
+    if (!composerPlugin?.renderComposer) return null;
     const composerCfg = config.composer;
-    const customComposer = composerPlugin.renderComposer({
+    const streaming = sessionInitialized ? session.isStreaming() : false;
+    return composerPlugin.renderComposer({
       config,
-      defaultRenderer: () => {
-        const composerElements = buildComposer({ config });
-        return composerElements.footer;
-      },
+      defaultRenderer,
+      requestRender: () => rebuildComposer(),
+      storage: pluginStorageFor(composerPlugin.id),
       onSubmit: (text: string) => {
         if (!session || session.isStreaming()) return;
         const value = text.trim();
@@ -1244,8 +1285,8 @@ export const createAgentExperience = (
           attachmentManager!.clearAttachments();
         }
       },
-      streaming: false,
-      disabled: false,
+      streaming,
+      disabled: streaming,
       openAttachmentPicker: () => {
         attachmentInput?.click();
       },
@@ -1265,11 +1306,16 @@ export const createAgentExperience = (
             }
           : undefined
     });
-    if (customComposer) {
-      // Replace the default footer with custom composer (keeps view.composer.footer in sync).
-      view.replaceComposer(customComposer);
-      footer = view.composer.footer;
-    }
+  };
+
+  const customComposer = renderComposerFromPlugins(
+    () => buildComposer({ config }).footer
+  );
+  if (customComposer) {
+    // Replace the default footer with custom composer (keeps view.composer.footer in sync).
+    view.replaceComposer(customComposer);
+    footer = view.composer.footer;
+    composerIsPluginOwned = true;
   }
 
   const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
@@ -1331,19 +1377,20 @@ export const createAgentExperience = (
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
 
-  // Apply contentMaxWidth to composer form, suggestions, and attachment
-  // previews if configured. In composer-bar mode, fall back to
-  // `composerBar.contentMaxWidth` (default `720px`) when no explicit
-  // `layout.contentMaxWidth` is set, so the expanded panel's content
-  // centers horizontally without the host having to wire it up.
-  const contentMaxWidth =
-    config.layout?.contentMaxWidth ??
-    (isComposerBar() ? config.launcher?.composerBar?.contentMaxWidth ?? "720px" : undefined);
+  // Center the content column. Defaults: 768px panels, 720px composer-bar
+  // (resolveContentMaxWidth); "none" opts out. Only engages on panels wider
+  // than the cap, so launcher-width panels are unaffected.
+  const contentMaxWidth = resolveContentMaxWidth(config, isComposerBar());
   if (contentMaxWidth) {
     messagesWrapper.style.maxWidth = contentMaxWidth;
     messagesWrapper.style.marginLeft = "auto";
     messagesWrapper.style.marginRight = "auto";
     messagesWrapper.style.width = "100%";
+    // The greeting bubble is a transcript sibling: same column geometry.
+    greetingHost.style.maxWidth = contentMaxWidth;
+    greetingHost.style.marginLeft = "auto";
+    greetingHost.style.marginRight = "auto";
+    greetingHost.style.width = "100%";
     starterSuggestions.style.maxWidth = contentMaxWidth;
     transcriptSuggestions.style.maxWidth = contentMaxWidth;
     transcriptSuggestions.style.marginLeft = "auto";
@@ -1354,41 +1401,56 @@ export const createAgentExperience = (
   // wrapper's responsive width (50vw / 70vw / 90vw), not be capped by
   // contentMaxWidth (which is a centered-column convention for the
   // expanded panel's body, not the pill input itself).
-  if (contentMaxWidth && composerForm && !isComposerBar()) {
-    composerForm.style.maxWidth = contentMaxWidth;
-    composerForm.style.marginLeft = "auto";
-    composerForm.style.marginRight = "auto";
-  }
-  if (contentMaxWidth && suggestions && !isComposerBar()) {
-    suggestions.style.maxWidth = contentMaxWidth;
-    suggestions.style.marginLeft = "auto";
-    suggestions.style.marginRight = "auto";
-  }
-  if (contentMaxWidth && attachmentPreviewsContainer && !isComposerBar()) {
-    attachmentPreviewsContainer.style.maxWidth = contentMaxWidth;
-    attachmentPreviewsContainer.style.marginLeft = "auto";
-    attachmentPreviewsContainer.style.marginRight = "auto";
-  }
+  // Re-run after a composer rebuild: the footer's elements are new.
+  const applyComposerContentMaxWidth = () => {
+    const max = resolveContentMaxWidth(config, isComposerBar());
+    if (!max || isComposerBar()) return;
+    for (const element of [composerForm, suggestions, attachmentPreviewsContainer, statusText]) {
+      if (!element) continue;
+      element.style.maxWidth = max;
+      element.style.marginLeft = "auto";
+      element.style.marginRight = "auto";
+    }
+  };
+  applyComposerContentMaxWidth();
 
-  if (config.attachments?.enabled && attachmentInput && attachmentPreviewsContainer) {
-    attachmentManager = AttachmentManager.fromConfig(config.attachments);
-    attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
+  /**
+   * Bind the attachment surface of the CURRENT footer. On a rebuild the manager
+   * survives and its pending previews are repainted into the new container.
+   */
+  const setupComposerAttachments = () => {
+    if (!config.attachments?.enabled || !attachmentInput || !attachmentPreviewsContainer) {
+      return;
+    }
+    if (!attachmentManager) {
+      attachmentManager = AttachmentManager.fromConfig(config.attachments);
+      attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
+    } else {
+      attachmentManager.remountPreviews(attachmentPreviewsContainer);
+    }
     attachmentInput.addEventListener("change", (e) => {
       const target = e.target as HTMLInputElement;
       attachmentManager?.handleFileSelect(target.files);
       target.value = "";
     });
 
-    const dropCfg = config.attachments.dropOverlay;
-    const overlay = buildDropOverlay(dropCfg);
-    container.appendChild(overlay);
-  }
+    if (!container.querySelector(".persona-attachment-drop-overlay")) {
+      container.appendChild(buildDropOverlay(config.attachments.dropOverlay));
+    }
+  };
+  setupComposerAttachments();
 
   // Context mentions: render the affordance button + chip row eagerly (so the
   // feature is discoverable) and lazy-load the heavy runtime on first use. The
   // orchestrator returns null when disabled or sourceless.
   const mentionPrefetch = () => mentionOrchestrator?.prefetch();
-  if (config.contextMentions?.enabled && textarea) {
+  /**
+   * Create the orchestrator for the CURRENT composer input. A rebuild destroys
+   * the previous one (its bindings point at the detached textarea), so any
+   * uncommitted mention chips are cleared with it.
+   */
+  const setupMentionOrchestrator = () => {
+    if (!config.contextMentions?.enabled || !textarea) return;
     // Slash-command dispatch (prompt macros write text / submit; client actions
     // read/replace the value) and submission are owned by the composer input
     // surface itself — the mention runtime builds a textarea (chip) or
@@ -1425,7 +1487,8 @@ export const createAgentExperience = (
       // `@` is instant) is registered through the shared `composerListeners`
       // registry below, so it survives the inline contenteditable swap too.
     }
-  }
+  };
+  setupMentionOrchestrator();
 
   // Slot system: allow custom content injection into specific regions
   const renderSlots = () => {
@@ -1435,8 +1498,9 @@ export const createAgentExperience = (
     const getDefaultSlotContent = (slot: WidgetLayoutSlot): HTMLElement | null => {
       switch (slot) {
         case "body-top":
-          // Default: the intro card
-          return container.querySelector(".persona-rounded-2xl.persona-bg-persona-surface.persona-p-6") as HTMLElement || null;
+          // Intro card is identified by its data attribute; its utility classes
+          // are themable and must never be used as a selector.
+          return body.querySelector("[data-persona-intro-card]") as HTMLElement | null;
         case "messages":
           return messagesWrapper;
         case "footer-top":
@@ -1473,7 +1537,7 @@ export const createAgentExperience = (
           break;
         case "body-top": {
           // Replace or prepend to body
-          const introCard = body.querySelector(".persona-rounded-2xl.persona-bg-persona-surface.persona-p-6");
+          const introCard = body.querySelector("[data-persona-intro-card]");
           if (introCard) {
             introCard.replaceWith(element);
           } else {
@@ -3347,19 +3411,52 @@ export const createAgentExperience = (
 
     restoreBodyScrollTop();
   };
+  // Column var for plugin-rendered content (renderWelcome overlay stacks,
+  // custom composers): resolved config value, matched without config access.
+  // Must land after applyFullHeightStyles, which wipes mount.style.cssText.
+  const applyContentMaxWidthVar = () => {
+    mount.style.setProperty(
+      "--persona-content-max-width",
+      resolveContentMaxWidth(config, isComposerBar())
+    );
+  };
+  // Floating launcher panels get a fixed pixel height (recalcPanelHeight owns
+  // it on resize), but applyFullHeightStyles wipes panel.style.cssText and only
+  // restores width — so every chrome sync must re-stamp the height or the panel
+  // grows to fit its content. Guards mirror recalcPanelHeight's path.
+  const applyFloatingPanelFixedHeight = () => {
+    if (isComposerBar()) return;
+    const dockedMode = isDockedMountMode(config);
+    const sidebarMode = config.launcher?.sidebarMode ?? false;
+    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
+    if (fullHeight || !launcherEnabled) return;
+    const ownerWindow = mount.ownerDocument.defaultView ?? window;
+    const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
+    const mobileBreakpoint = config.launcher?.mobileBreakpoint ?? 640;
+    if (mobileFullscreen && ownerWindow.innerWidth <= mobileBreakpoint) return;
+    const viewportHeight = ownerWindow.innerHeight;
+    const verticalMargin = 64; // leave space for launcher's offset
+    const heightOffset = config.launcher?.heightOffset ?? 0;
+    const available = Math.max(200, viewportHeight - verticalMargin);
+    const clamped = Math.min(640, available);
+    panel.style.height = `${Math.max(200, clamped - heightOffset)}px`;
+  };
   applyFullHeightStyles();
   // Apply theme variables after applyFullHeightStyles since it resets mount.style.cssText
   applyThemeVariables(mount, config);
   applyArtifactLayoutCssVars(mount, config);
   applyArtifactPaneAppearance(mount, config);
+  applyContentMaxWidthVar();
 
   // applyFullHeightStyles wipes mount.style.cssText, so re-apply the theme +
   // artifact layout vars after it, mirroring the init sequence above.
   syncPanelChrome = () => {
     applyFullHeightStyles();
+    applyFloatingPanelFixedHeight();
     applyThemeVariables(mount, config);
     applyArtifactLayoutCssVars(mount, config);
     applyArtifactPaneAppearance(mount, config);
+    applyContentMaxWidthVar();
     // Owned here so it lands after applyArtifactPaneAppearance and derives from
     // the same resolved panel radius the chat card uses (see applyFullHeightStyles).
     if (weldedOuterRadius) {
@@ -3469,7 +3566,8 @@ export const createAgentExperience = (
     }
   }
 
-  const composerSuggestionsManager = createSuggestions(suggestions);
+  // Reassignable: a composer rebuild swaps the row this manager renders into.
+  let composerSuggestionsManager = createSuggestions(suggestions);
   const starterSuggestionsManager = createSuggestions(starterSuggestions);
   const transcriptSuggestionsManager = createSuggestions(transcriptSuggestions);
   const suggestionManagers = [
@@ -3524,7 +3622,7 @@ export const createAgentExperience = (
     if (warnedPinnedStarterPlacement || config.debug !== true) return;
     warnedPinnedStarterPlacement = true;
     console.warn(
-      '[persona] suggestions.starters.placement is pinned to "welcome" but copy.showWelcomeCard is false, so no starters render. Use "auto" or "composer".',
+      '[persona] suggestions.starters.placement is pinned to "welcome" but the welcome surface is hidden (welcome.variant: "none" or copy.showWelcomeCard: false), so no starters render. Use "auto" or "composer".',
     );
   };
   // Debug-only setup hint: a stream this session ended without the agent ever
@@ -3608,7 +3706,10 @@ export const createAgentExperience = (
           surface: "followUp",
           variant: followUps?.variant ?? "chip",
           behavior: followUps?.behavior ?? "send",
-          overflow: followUps?.overflow ?? "scroll",
+          // Wrap by default: 2-4 compact chips always fit at widget width,
+          // and a scroll strip hides most of the set behind a fade. Hosts
+          // with large sets opt back in with overflow: "scroll".
+          overflow: followUps?.overflow ?? "wrap",
           maxItems: followUps?.maxItems ?? 4,
           config,
           plugins,
@@ -3624,9 +3725,12 @@ export const createAgentExperience = (
 
     const starters = config.suggestions?.starters;
     if (starters) {
-      // The starter host lives inside the welcome card, so a pinned "welcome"
-      // placement has nowhere to render when that card is hidden.
-      const welcomeCardVisible = config.copy?.showWelcomeCard !== false;
+      // The starter host lives inside the welcome surface, so a pinned
+      // "welcome" placement has nowhere to render when that surface is hidden.
+      const welcomeCardVisible = isWelcomeVisible(
+        resolveWelcomeConfig(config),
+        current
+      );
       const requestedPlacement = starters.placement ?? "auto";
       const placement =
         requestedPlacement === "auto"
@@ -3776,6 +3880,7 @@ export const createAgentExperience = (
   let readerEngagedThisTurn = false;
   const markReaderEngaged = () => {
     readerEngagedThisTurn = true;
+    revealTranscriptScrollbar();
   };
   // Dedupes assistant-turn detection across token-by-token re-renders.
   let lastHandledAssistantId: string | null = null;
@@ -3787,6 +3892,40 @@ export const createAgentExperience = (
   const USER_SCROLL_THRESHOLD = 4;
   const BOTTOM_THRESHOLD = 24;
   const AUTO_SCROLL_SNAP_THRESHOLD = 80;
+
+  // Scrollbar visibility policy (features.scrollBehavior.scrollbar). The
+  // resolved policy is stamped on the root once and CSS scopes every
+  // scroller off it. Under "on-scroll" the transcript bar reveals here on
+  // genuine reader input (markReaderEngaged is the funnel for wheel, touch,
+  // pointer, and nav keys, so widget-driven scrolling never reveals it) and
+  // hides again after an idle delay, but only at the resting position: away
+  // from rest the bar is the positional affordance and stays. The scroll
+  // back down re-enters through markReaderEngaged and re-arms the timer.
+  const SCROLLBAR_IDLE_MS = 1000;
+  let scrollbarIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  const applyScrollbarPolicy = () => {
+    mount.setAttribute("data-persona-scrollbar", getScrollbarPolicy());
+    if (getScrollbarPolicy() !== "on-scroll") {
+      if (scrollbarIdleTimer !== null) clearTimeout(scrollbarIdleTimer);
+      scrollbarIdleTimer = null;
+      body.removeAttribute("data-persona-scrollbar-visible");
+    }
+  };
+  const revealTranscriptScrollbar = () => {
+    if (getScrollbarPolicy() !== "on-scroll") return;
+    body.setAttribute("data-persona-scrollbar-visible", "");
+    if (scrollbarIdleTimer !== null) clearTimeout(scrollbarIdleTimer);
+    scrollbarIdleTimer = setTimeout(() => {
+      scrollbarIdleTimer = null;
+      if (isElementNearBottom(body, BOTTOM_THRESHOLD)) {
+        body.removeAttribute("data-persona-scrollbar-visible");
+      }
+    }, SCROLLBAR_IDLE_MS);
+  };
+  applyScrollbarPolicy();
+  destroyCallbacks.push(() => {
+    if (scrollbarIdleTimer !== null) clearTimeout(scrollbarIdleTimer);
+  });
   const messageState = new Map<
     string,
     { streaming?: boolean; role: AgentWidgetMessage["role"] }
@@ -3976,14 +4115,33 @@ export const createAgentExperience = (
     updateScrollToBottomCountBadge();
   };
 
+  // "Near the latest content", ignoring anchor-spacer air: while a turn is
+  // anchored, the spacer keeps scrollable space below the last message, so
+  // container-bottom distance reads "away" even with the whole reply on
+  // screen (and flickers as the spacer drains). Measure against the real
+  // content bottom instead; the button only appears once content actually
+  // extends below the viewport.
+  const isNearLatestContent = () => {
+    const spacerHeight = anchorState?.spacerHeight ?? 0;
+    if (spacerHeight <= 0) return isElementNearBottom(body, BOTTOM_THRESHOLD);
+    const contentHeight = measureContentHeight(spacerHeight);
+    return (
+      contentHeight - body.scrollTop - body.clientHeight <= BOTTOM_THRESHOLD
+    );
+  };
+
   // Whether the user is currently away from the latest content: drives both
   // the scroll-to-bottom affordance and the new-messages badge. When following
   // the bottom (follow mode, or a no-anchor anchor-top fallback turn) that's
   // "auto-follow paused"; otherwise it's simply "not near the bottom".
   const isAwayFromLatest = () =>
-    isFollowEffective()
-      ? !autoFollow.isFollowing()
-      : !isElementNearBottom(body, BOTTOM_THRESHOLD);
+    isFollowEffective() ? !autoFollow.isFollowing() : !isNearLatestContent();
+
+  // Empty transcript = welcome-only view: there is no "latest message" to
+  // follow, jump to, or badge, and bottom-scrolling clips the greeting when
+  // the welcome content slightly overflows the viewport.
+  const transcriptHasMessages = () =>
+    !!session && session.getMessages().length > 0;
 
   const syncScrollToBottomButton = () => {
     if (!isScrollToBottomEnabled() || eventStreamVisible) {
@@ -3998,7 +4156,7 @@ export const createAgentExperience = (
     }
     updateScrollToBottomButtonOffset();
     const hasOverflow = getScrollBottomOffset(body) > 0;
-    const show = hasOverflow && isAwayFromLatest();
+    const show = hasOverflow && isAwayFromLatest() && transcriptHasMessages();
     if (!show) {
       resetNewMessagesCount();
     } else {
@@ -4025,6 +4183,7 @@ export const createAgentExperience = (
     // no-anchor fallback turn (see `isFollowEffective`). Anchored anchor-top
     // turns and "none" never chase the bottom during streaming.
     if (!isFollowEffective()) return;
+    if (!transcriptHasMessages()) return;
 
     if (!autoFollow.isFollowing()) return;
 
@@ -4159,6 +4318,10 @@ export const createAgentExperience = (
   // Instant jump used for initial mount / panel open in non-follow scroll
   // modes (where scheduleAutoScroll is inert).
   const jumpToBottomInstant = () => {
+    if (!transcriptHasMessages()) {
+      syncScrollToBottomButton();
+      return;
+    }
     const element = getScrollableContainer();
     isAutoScrolling = true;
     element.scrollTop = getScrollBottomOffset(element);
@@ -4241,9 +4404,52 @@ export const createAgentExperience = (
   };
 
   const setAnchorSpacerHeight = (height: number) => {
-    anchorSpacer.style.height = `${Math.max(0, Math.round(height))}px`;
+    const rounded = Math.max(0, Math.round(height));
+    anchorSpacer.style.height = `${rounded}px`;
+    anchorSpacer.style.display = rounded > 0 ? "" : "none";
     if (anchorState) {
       anchorState.spacerHeight = Math.max(0, height);
+    }
+  };
+
+  // True scroll-content height, excluding the anchor spacer. Never derive
+  // this from `scrollHeight - spacer`: scrollHeight floors at clientHeight,
+  // so content shorter than the viewport reads as viewport-sized and the
+  // spacer comes up short by exactly the empty space below the content — the
+  // anchor target then sits past maxScrollTop, the ease clamps early, and
+  // every transient content dip during streaming bounces the viewport.
+  // Layoutless environments (jsdom) measure 0; fall back to the naive value.
+  const measureContentHeight = (previousSpacerHeight: number): number => {
+    const paddingBottom =
+      parseFloat(getComputedStyle(body).paddingBottom) || 0;
+    let bottom = 0;
+    for (const child of Array.from(body.children) as HTMLElement[]) {
+      if (child === anchorSpacer || child.offsetHeight === 0) continue;
+      const childBottom = offsetTopWithinBody(child) + child.offsetHeight;
+      if (childBottom > bottom) bottom = childBottom;
+    }
+    const naive = body.scrollHeight - previousSpacerHeight;
+    return bottom > 0 ? Math.min(bottom + paddingBottom, naive) : naive;
+  };
+
+  // Stream-end spacer trim: the ResizeObserver drain is growth-driven, so it
+  // stops the moment content stops growing and can leave leftover reserve —
+  // dead scrollable air below the last message, plus a scroll-to-bottom
+  // arrow pointing at nothing. Trim to what the reader's current position
+  // actually needs plus the anti-bounce slack (shrink-only, like the drain).
+  const trimAnchorSpacerToRest = () => {
+    if (!anchorState || anchorState.spacerHeight <= 0) return;
+    const contentHeight = measureContentHeight(anchorState.spacerHeight);
+    const required = Math.max(
+      0,
+      Math.round(body.scrollTop) +
+        body.clientHeight -
+        contentHeight +
+        BOTTOM_THRESHOLD
+    );
+    if (required < anchorState.spacerHeight) {
+      setAnchorSpacerHeight(required);
+      syncScrollToBottomButton();
     }
   };
 
@@ -4258,7 +4464,18 @@ export const createAgentExperience = (
     cancelSmoothScroll();
     anchorState = null;
     anchorSpacer.style.height = "0px";
+    anchorSpacer.style.display = "none";
   };
+
+  const escapeMessageId = (messageId: string): string =>
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(messageId)
+      : messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
+  const queryMessageBubble = (messageId: string): HTMLElement | null =>
+    body.querySelector<HTMLElement>(
+      `[data-message-id="${escapeMessageId(messageId)}"]`
+    );
 
   // Anchor-top mode: scroll `messageId` to rest `anchorTopOffset` px below the
   // viewport top and hold it there while the response streams in beneath it.
@@ -4269,10 +4486,7 @@ export const createAgentExperience = (
     }
     anchorRAF = requestAnimationFrame(() => {
       anchorRAF = null;
-      const escapedId =
-        typeof CSS !== "undefined" && typeof CSS.escape === "function"
-          ? CSS.escape(messageId)
-          : messageId.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      const escapedId = escapeMessageId(messageId);
       const bubble = body.querySelector<HTMLElement>(
         `[data-message-id="${escapedId}"]`
       );
@@ -4284,12 +4498,17 @@ export const createAgentExperience = (
       const anchorOffsetTop = offsetTopWithinBody(bubble);
 
       const previousSpacerHeight = anchorState?.spacerHeight ?? 0;
-      const contentHeight = body.scrollHeight - previousSpacerHeight;
+      const contentHeight = measureContentHeight(previousSpacerHeight);
       const { targetScrollTop, spacerHeight } = computeAnchorScrollState({
         anchorOffsetTop,
         topOffset: getAnchorTopOffset(),
         viewportHeight: body.clientHeight,
-        contentHeight
+        contentHeight,
+        // Slack past the held position so transient content dips during
+        // streaming (indicator swaps) never clamp scrollTop and bounce the
+        // viewport. Capped at BOTTOM_THRESHOLD so the slack region still
+        // counts as "near bottom" and never surfaces the jump affordance.
+        slack: BOTTOM_THRESHOLD
       });
 
       anchorState = {
@@ -4298,8 +4517,54 @@ export const createAgentExperience = (
         spacerHeight
       };
       setAnchorSpacerHeight(spacerHeight);
-      animateScrollTo(body, () => targetScrollTop, 220);
+      // Live target: layout above the bubble can shrink mid-ease (the welcome
+      // starter row hides right after this measurement frame), and a frozen
+      // snapshot would carry the bubble past the offset and under the header.
+      // animateScrollTo re-resolves per frame, so re-derive the pin from the
+      // bubble's current position.
+      animateScrollTo(
+        body,
+        () =>
+          bubble.isConnected
+            ? Math.max(0, offsetTopWithinBody(bubble) - getAnchorTopOffset())
+            : targetScrollTop,
+        220
+      );
     });
+  };
+
+  // Welcome dismissal removes the host's layout (and the roomier body gap) in
+  // a single frame after its fade-out — after the anchor ease already scrolled
+  // against the pre-collapse layout, so the browser would clamp scrollTop and
+  // visibly yank the pinned message. Recompute the anchor against the
+  // collapsed layout and jump instead of easing: the bubble is already
+  // resting at the offset, so the re-pin is visually a no-op.
+  const repinAnchoredMessage = () => {
+    if (getScrollMode() !== "anchor-top") return;
+    if (!anchorState || !anchoredMessageId) return;
+    const bubble = queryMessageBubble(anchoredMessageId);
+    if (!bubble) return;
+    cancelSmoothScroll();
+    const previousSpacerHeight = anchorState.spacerHeight;
+    const contentHeight = measureContentHeight(previousSpacerHeight);
+    const { targetScrollTop, spacerHeight } = computeAnchorScrollState({
+      anchorOffsetTop: offsetTopWithinBody(bubble),
+      topOffset: getAnchorTopOffset(),
+      viewportHeight: body.clientHeight,
+      contentHeight,
+      slack: BOTTOM_THRESHOLD
+    });
+    anchorState = {
+      initialSpacerHeight: spacerHeight,
+      contentHeightAtAnchor: contentHeight,
+      spacerHeight
+    };
+    setAnchorSpacerHeight(spacerHeight);
+    isAutoScrolling = true;
+    body.scrollTop = targetScrollTop;
+    lastScrollTop = body.scrollTop;
+    isAutoScrolling = false;
+    syncScrollToBottomButton();
   };
 
   // Content growth handler (ResizeObserver-driven). In follow mode this is
@@ -4388,6 +4653,33 @@ export const createAgentExperience = (
   // Anchoring to the first unread (not the newest) block means this fires at
   // most once per turn in practice, and later blocks stream in below the
   // anchor exactly as they do today.
+
+  // Minimum readable slice of the first unread block that must fit under the
+  // pinned user message for the anchor to stay put. Below this, the block is
+  // "stranded" and the anchor hands off to it.
+  const ANCHOR_HANDOFF_MIN_VISIBLE = 96;
+
+  // Market pattern (ChatGPT/Claude/Gemini): the sent user message stays
+  // pinned at the top as the visible header of the streaming reply. The
+  // handoff to the first unread block exists for the stranded case — a long
+  // user message or a tall tool-call prelude pushing the reply below the
+  // fold — so it only fires when the block's start is not readably within
+  // the viewport while the user message holds the anchor.
+  const isFirstUnreadStranded = (messageId: string): boolean => {
+    if (lastSentUserMessageId === null) return true;
+    const userBubble = queryMessageBubble(lastSentUserMessageId);
+    const blockBubble = queryMessageBubble(messageId);
+    // Unmeasurable geometry: fall back to handing off (pre-conditional
+    // behavior) rather than risking an answer parked below the fold.
+    if (!userBubble || !blockBubble) return true;
+    const delta =
+      offsetTopWithinBody(blockBubble) - offsetTopWithinBody(userBubble);
+    return (
+      getAnchorTopOffset() + delta >
+      body.clientHeight - ANCHOR_HANDOFF_MIN_VISIBLE
+    );
+  };
+
   const maybeAnchorToFirstUnread = (messages: AgentWidgetMessage[]) => {
     if (getScrollMode() !== "anchor-top") return;
     if (!currentTurnAnchored) return;
@@ -4403,6 +4695,10 @@ export const createAgentExperience = (
       if (!isAttentionWorthyMessage(message)) continue;
       // Already parked on it: hold still while it streams.
       if (message.id === anchoredMessageId) return;
+      // Block starts within view under the pinned user message: keep the
+      // user message anchored. Re-evaluated every render, so a tool prelude
+      // that later pushes the block below the fold still hands off.
+      if (!isFirstUnreadStranded(message.id)) return;
       anchoredMessageId = message.id;
       scheduleAnchorToMessage(message.id);
       return;
@@ -5935,8 +6231,9 @@ export const createAgentExperience = (
 
       // Re-run chrome application now that data-state has flipped: collapsed
       // clears container chrome (pill stands alone), expanded paints it via
-      // the same theme.components.panel.* contract as floating mode.
-      applyFullHeightStyles();
+      // the same theme.components.panel.* contract as floating mode. Full
+      // sync: applyFullHeightStyles alone wipes the theme vars with cssText.
+      syncPanelChrome();
 
       // Outside-click dismiss: while expanded, clicking anywhere outside the
       // wrapper (panel chrome + pill) collapses back to just the pill.
@@ -5972,8 +6269,9 @@ export const createAgentExperience = (
       panel.classList.remove("persona-scale-95", "persona-opacity-0");
       panel.classList.add("persona-scale-100", "persona-opacity-100");
       // Hide launcher button when widget is open
-      if (launcherButtonInstance) {
-        launcherButtonInstance.element.style.display = "none";
+      if (launcherSurfaceInstance) {
+        launcherSurfaceInstance.setPanelOpen(true);
+        launcherSurfaceInstance.element.style.display = "none";
       } else if (customLauncherElement) {
         customLauncherElement.style.display = "none";
       }
@@ -5998,8 +6296,9 @@ export const createAgentExperience = (
         panel.classList.add("persona-scale-95", "persona-opacity-0");
       }
       // Show launcher when closed, except docked mode (0px column: use controller.open()).
-      if (launcherButtonInstance) {
-        launcherButtonInstance.element.style.display = dockedMode ? "none" : "";
+      if (launcherSurfaceInstance) {
+        launcherSurfaceInstance.setPanelOpen(false);
+        launcherSurfaceInstance.element.style.display = dockedMode ? "none" : "";
       } else if (customLauncherElement) {
         customLauncherElement.style.display = dockedMode ? "none" : "";
       }
@@ -6110,6 +6409,19 @@ export const createAgentExperience = (
         button.disabled = disabled;
       });
     });
+    // Plugin renderStarter output: created with the streaming flag of its
+    // render moment, so a stream ending must re-enable it here.
+    welcomeStarterElements.forEach((element) => {
+      element.toggleAttribute("data-disabled", disabled);
+      if (element instanceof HTMLButtonElement) {
+        element.disabled = disabled;
+      } else {
+        element.setAttribute("aria-disabled", disabled ? "true" : "false");
+      }
+      element.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
+        button.disabled = disabled;
+      });
+    });
     footer.dataset.personaComposerStreaming = disabled ? "true" : "false";
     footer.querySelectorAll<HTMLElement>("[data-persona-composer-disable-when-streaming]").forEach((el) => {
       if (
@@ -6133,32 +6445,229 @@ export const createAgentExperience = (
     if (config.autoFocusInput) setTimeout(() => maybeFocusInput(), 200);
   });
 
-  const updateCopy = () => {
-    introTitle.textContent = config.copy?.welcomeTitle ?? "Hello 👋";
-    introSubtitle.textContent =
-      config.copy?.welcomeSubtitle ??
-      "Ask anything about your account or products.";
-    textarea.placeholder = config.copy?.inputPlaceholder ?? "How can I help...";
-
-    // Toggle welcome card visibility
-    const introCard = body.querySelector("[data-persona-intro-card]") as HTMLElement | null;
-    if (introCard) {
-      const showCard = config.copy?.showWelcomeCard !== false;
-      introCard.style.display = showCard ? "" : "none";
-      if (showCard) {
-        body.classList.remove("persona-gap-3");
-        body.classList.add("persona-gap-6");
-      } else {
-        body.classList.remove("persona-gap-6");
-        body.classList.add("persona-gap-3");
-      }
+  // Welcome visibility is derived, never stored: `resolveWelcomeConfig` owns
+  // the config and the session's user messages own the dismissal.
+  let welcomeShown = !welcomeHost.hidden;
+  // The dismiss runs across many renders (assistant placeholder, every
+  // streaming chunk), so the in-flight animation owns the host until it settles.
+  let welcomeDismissAnimation: Animation | null = null;
+  // Restored history must hide the hero outright, not animate it out.
+  let welcomeHydrated = !pendingStoredState;
+  // Content is re-applied only when the resolved config changes: this runs on
+  // every message change, including each streaming chunk.
+  let lastWelcomeKey: string | null = null;
+  let lastWelcomeIcon: AgentWidgetWelcomeIcon | undefined;
+  let lastGreetingKey: string | null = null;
+  // Element returned by a `renderWelcome` plugin, or null when the default
+  // renderer owns the host. A plugin element ignores derived visibility.
+  let welcomePluginContent: HTMLElement | null = null;
+  const updateWelcome = (messages?: AgentWidgetMessage[]) => {
+    const resolved = resolveWelcomeConfig(config);
+    const welcomeKey = `${resolved.variant}|${resolved.dismiss}|${resolved.title}|${resolved.subtitle}`;
+    if (welcomeKey !== lastWelcomeKey || resolved.icon !== lastWelcomeIcon) {
+      lastWelcomeKey = welcomeKey;
+      lastWelcomeIcon = resolved.icon;
+      applyWelcomeConfig(
+        {
+          host: welcomeHost,
+          iconHolder: welcomeIconHolder,
+          title: introTitle,
+          subtitle: introSubtitle,
+          starterSuggestions,
+        },
+        resolved
+      );
+    }
+    const greetingKey =
+      resolved.message === undefined
+        ? null
+        : `${config.layout?.messages?.layout ?? "bubble"}|${resolved.message}`;
+    if (greetingKey !== lastGreetingKey) {
+      lastGreetingKey = greetingKey;
+      renderWelcomeGreeting(greetingHost, resolved.message, config);
     }
 
-    // Only update send button text if NOT using icon mode. Skip while
-    // streaming so we don't stomp on the "Stop" label.
-    const useIcon = config.sendButton?.useIcon ?? false;
-    if (!useIcon && !session?.isStreaming()) {
-      sendButton.textContent = config.copy?.sendButtonLabel ?? "Send";
+    const current =
+      messages ?? (session ? session.getMessages() : config.initialMessages);
+    const visible = isWelcomeVisible(resolved, current);
+    const flipped = visible !== welcomeShown;
+    welcomeShown = visible;
+    // Plugin content renders regardless of derived visibility and owns the
+    // host until the plugin returns null again.
+    if (welcomePluginContent) {
+      welcomeDismissAnimation?.cancel();
+      welcomeDismissAnimation = null;
+      applyWelcomeVisibility(body, welcomeHost, true);
+      return;
+    }
+    if (
+      flipped &&
+      !visible &&
+      resolved.dismiss === "on-first-message" &&
+      welcomeHydrated
+    ) {
+      welcomeDismissAnimation = animateWelcomeOut(welcomeHost, (animation) => {
+        if (welcomeDismissAnimation === animation) {
+          welcomeDismissAnimation = null;
+        }
+        // A re-show (clearChat, or plugin content claiming the host
+        // mid-animation) wins the race.
+        if (!welcomeShown && !welcomePluginContent) {
+          applyWelcomeVisibility(body, welcomeHost, false);
+          repinAnchoredMessage();
+        }
+        // The forwards fill would pin opacity 0 across a later re-show.
+        animation?.cancel();
+      });
+      return;
+    }
+    if (welcomeDismissAnimation) {
+      // Later renders must not hide the host out from under the animation.
+      if (!visible) return;
+      welcomeDismissAnimation.cancel();
+      welcomeDismissAnimation = null;
+    }
+    applyWelcomeVisibility(body, welcomeHost, visible);
+    if (flipped && !visible) repinAnchoredMessage();
+  };
+
+  // `renderWelcome` arbitration. The core owns the host; a re-render runs the
+  // registered cleanups, drops the previous plugin element, and re-arbitrates
+  // with a fresh ctx.
+  const welcomeCleanups: Array<() => void> = [];
+  // renderStarter output is one-shot DOM the suggestion managers never see;
+  // tracked here so setComposerDisabled can sync it on streaming flips.
+  const welcomeStarterElements: HTMLElement[] = [];
+  let welcomeArbitrating = false;
+  let lastWelcomeArbitrationKey: string | null = null;
+  let lastWelcomeArbitrationIcon: AgentWidgetWelcomeIcon | undefined;
+
+  const runWelcomeCleanups = () => {
+    welcomeStarterElements.length = 0;
+    const callbacks = welcomeCleanups.splice(0, welcomeCleanups.length);
+    for (const callback of callbacks) {
+      try {
+        callback();
+      } catch (error) {
+        console.warn("[persona] renderWelcome cleanup threw", error);
+      }
+    }
+  };
+  destroyCallbacks.push(runWelcomeCleanups);
+
+  /** Default starter renderer for plugins: full select pipeline, welcome geometry. */
+  const renderWelcomeStarter = (
+    suggestion: AgentWidgetSuggestion,
+    index: number
+  ): HTMLElement => {
+    const normalized = normalizeSuggestion(suggestion, index);
+    // An unlabeled suggestion has nothing to render or send.
+    if (!normalized) {
+      if (config.debug === true) {
+        console.warn("[persona] renderStarter received a suggestion with no label");
+      }
+      return createElement("span");
+    }
+    const starters = config.suggestions?.starters;
+    const element = createSuggestionElement({
+      item: {
+        ...normalized,
+        behavior: normalized.behavior ?? starters?.behavior ?? "send",
+      },
+      index,
+      surface: "starter",
+      source: "config",
+      variant: starters?.variant ?? "card",
+      streaming: sessionInitialized ? session.isStreaming() : false,
+      config,
+      plugins,
+      chipsConfig: config.suggestionChipsConfig,
+      session,
+      getTextarea: () => textarea,
+      eventTarget: welcomeHost,
+    });
+    welcomeStarterElements.push(element);
+    return element;
+  };
+
+  const renderWelcomeSurface = () => {
+    // A plugin calling requestRender() from inside its own render would recurse.
+    if (welcomeArbitrating) return;
+    welcomeArbitrating = true;
+    const resolved = resolveWelcomeConfig(config);
+    lastWelcomeArbitrationKey = `${resolved.variant}|${resolved.dismiss}|${resolved.title}|${resolved.subtitle}|${resolved.message ?? ""}`;
+    lastWelcomeArbitrationIcon = resolved.icon;
+    try {
+      runWelcomeCleanups();
+      clearWelcomePluginContent(body, welcomeHost, welcomePluginContent);
+      welcomePluginContent = null;
+
+      const current = session ? session.getMessages() : config.initialMessages;
+      const visible = isWelcomeVisible(resolved, current);
+      let starterIndex = 0;
+      let element: HTMLElement | null = null;
+      for (const plugin of plugins) {
+        if (!plugin.renderWelcome) continue;
+        element = plugin.renderWelcome({
+          config: resolved,
+          variant: resolved.variant,
+          visible,
+          defaultRenderer: () => welcomeHost,
+          sendMessage: (text: string) => {
+            if (!session || session.isStreaming()) return;
+            const value = text.trim();
+            if (!value) return;
+            session.sendMessage(value);
+          },
+          requestRender: () => renderWelcomeSurface(),
+          renderStarter: (suggestion) =>
+            renderWelcomeStarter(suggestion, starterIndex++),
+          storage: pluginStorageFor(plugin.id),
+          onCleanup: (fn) => {
+            welcomeCleanups.push(fn);
+          },
+        });
+        if (element) break;
+      }
+      // Returning `defaultRenderer()` is composition, not a takeover: the
+      // default content stays and derived visibility still governs.
+      if (element && element !== welcomeHost) {
+        welcomePluginContent = element;
+        mountWelcomePluginContent(body, welcomeHost, element);
+      }
+    } finally {
+      welcomeArbitrating = false;
+    }
+    updateWelcome();
+  };
+
+  /** Re-arbitrate only when the resolved welcome config actually changed. */
+  const refreshWelcomePlugins = () => {
+    const resolved = resolveWelcomeConfig(config);
+    const key = `${resolved.variant}|${resolved.dismiss}|${resolved.title}|${resolved.subtitle}|${resolved.message ?? ""}`;
+    if (
+      key === lastWelcomeArbitrationKey &&
+      resolved.icon === lastWelcomeArbitrationIcon
+    ) {
+      return;
+    }
+    renderWelcomeSurface();
+  };
+
+  const updateCopy = () => {
+    updateWelcome();
+    // Plugin-owned composers set their own placeholder and send label (the
+    // pre-chat gate keeps its lock reason in the placeholder, for example).
+    if (!composerIsPluginOwned) {
+      textarea.placeholder =
+        config.copy?.inputPlaceholder ?? "How can I help...";
+
+      // Only update send button text if NOT using icon mode. Skip while
+      // streaming so we don't stomp on the "Stop" label.
+      const useIcon = config.sendButton?.useIcon ?? false;
+      if (!useIcon && !session?.isStreaming()) {
+        sendButton.textContent = config.copy?.sendButtonLabel ?? "Send";
+      }
     }
 
     textarea.style.fontFamily =
@@ -6299,6 +6808,7 @@ export const createAgentExperience = (
       suppressTransition: isStreaming,
     });
     ensureToolElapsedTimer();
+    updateWelcome(messages);
     renderSuggestions(messages);
     scheduleAutoScroll(!isStreaming);
     trackMessages(messages);
@@ -6419,6 +6929,7 @@ export const createAgentExperience = (
       }
       if (!streaming) {
         scheduleAutoScroll(true);
+        trimAnchorSpacerToRest();
         // setStreaming only fires on a change, so this is always a real stream
         // ending. Evaluate the never-called hint here: no later render is
         // guaranteed on a settled transcript.
@@ -6546,6 +7057,8 @@ export const createAgentExperience = (
     if (state === "idle") lastReadAloudId = null;
   });
 
+  sessionInitialized = true;
+
   // The constructor only emits onMessagesChanged when it has initial
   // messages, so seed send-detection explicitly for the empty-session case:  // otherwise the user's very first send would be mistaken for the seed.
   scrollSendSeeded = true;
@@ -6629,7 +7142,10 @@ export const createAgentExperience = (
           console.error("[AgentWidget] Failed to hydrate stored state:", error);
         }
       })
-      .finally(() => maybeBootResume());
+      .finally(() => {
+        welcomeHydrated = true;
+        maybeBootResume();
+      });
   } else {
     maybeBootResume();
   }
@@ -6649,7 +7165,7 @@ export const createAgentExperience = (
   // Combine `@`-chip mentions with an inline server-command's context bundle so
   // both reach the message in one `mentions` payload. Either side may be null.
   type SubmitMentions = NonNullable<
-    ReturnType<NonNullable<typeof mentionOrchestrator>["collectForSubmit"]>
+    ReturnType<ContextMentionOrchestrator["collectForSubmit"]>
   >;
   const mergeSubmitMentions = (
     a: SubmitMentions | null,
@@ -7489,27 +8005,28 @@ export const createAgentExperience = (
   };
 
   // Plugin hook: renderLauncher - allow plugins to provide custom launcher
-  let launcherButtonInstance: LauncherButton | null = null;
+  let launcherSurfaceInstance: LauncherSurface | null = null;
   let customLauncherElement: HTMLElement | null = null;
   
   // Composer-bar mode is launcher-less by design: the persistent pill IS the
   // entry point, so skip creating any launcher button (default or plugin).
   if (launcherEnabled && !isComposerBar()) {
     const { instance, element } = resolveLauncher({ config, plugins, onToggle: toggleOpen });
-    launcherButtonInstance = instance;
+    launcherSurfaceInstance = instance;
     // A plugin-provided launcher returns no controller instance; track its
     // element separately so the update path can manage it.
     if (!instance) customLauncherElement = element;
   }
 
-  if (launcherButtonInstance) {
-    mount.appendChild(launcherButtonInstance.element);
+  if (launcherSurfaceInstance) {
+    mount.appendChild(launcherSurfaceInstance.element);
   } else if (customLauncherElement) {
     mount.appendChild(customLauncherElement);
   }
   updateOpenState();
   renderSuggestions();
   updateCopy();
+  renderWelcomeSurface();
   setComposerDisabled(session.isStreaming());
   // Reopen-where-left-off takes precedence when opted in (Principle 11);
   // otherwise fall back to the historical per-mode positioning.
@@ -7545,7 +8062,6 @@ export const createAgentExperience = (
 
     const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
 
     // Mobile fullscreen: re-apply fullscreen styles on resize (handles orientation changes)
     const ownerWindow = mount.ownerDocument.defaultView ?? window;
@@ -7602,15 +8118,7 @@ export const createAgentExperience = (
       applyLauncherArtifactPanelWidth();
 
       // In fullHeight mode, don't set a fixed height
-      if (!fullHeight) {
-        const viewportHeight = ownerWindow.innerHeight;
-        const verticalMargin = 64; // leave space for launcher's offset
-        const heightOffset = config.launcher?.heightOffset ?? 0;
-        const available = Math.max(200, viewportHeight - verticalMargin);
-        const clamped = Math.min(640, available);
-        const finalHeight = Math.max(200, clamped - heightOffset);
-        panel.style.height = `${finalHeight}px`;
-      }
+      applyFloatingPanelFixedHeight();
     } finally {
       // applyFullHeightStyles() assigns wrapper.style.cssText (e.g. display:flex !important), which
       // overwrites updateOpenState()'s display:none when docked+closed. Re-sync after every recalc.
@@ -7958,11 +8466,91 @@ export const createAgentExperience = (
   // lazily). When that happens, move the composer listeners onto the new element
   // and repoint `textarea` (the swapped element shims the textarea API the rest of
   // the composer code relies on). Fires immediately if the swap already occurred.
-  mentionOrchestrator?.onComposerSwap((next, prev) => {
-    detachComposerListeners(prev);
-    textarea = next as unknown as HTMLTextAreaElement;
-    attachComposerListeners(next);
-  });
+  const registerComposerSwapHandler = () => {
+    mentionOrchestrator?.onComposerSwap((next, prev) => {
+      detachComposerListeners(prev);
+      textarea = next as unknown as HTMLTextAreaElement;
+      attachComposerListeners(next);
+    });
+  };
+  registerComposerSwapHandler();
+
+  /**
+   * Re-run composer plugin arbitration and swap the footer in place. Exposed to
+   * composer plugins as `requestRender()`. Everything bound to the old footer
+   * (listeners, attachment previews, mention affordances, the composer
+   * suggestion row) is torn down and re-bound to the new one.
+   */
+  let composerRebuilding = false;
+  function rebuildComposer(): void {
+    if (composerRebuilding) return;
+    composerRebuilding = true;
+    try {
+      const previousValue = textarea?.value ?? "";
+      const activeDoc = footer.ownerDocument ?? document;
+      const hadFocus = textarea ? activeDoc.activeElement === textarea : false;
+
+      detachComposerListeners(textarea);
+      composerForm?.removeEventListener("submit", handleSubmit);
+      micButton?.removeEventListener("click", handleMicButtonClick);
+      // Its bindings point at the outgoing textarea; the new footer gets a new one.
+      mentionOrchestrator?.destroy();
+      mentionOrchestrator = null;
+
+      let defaultElements: _ComposerElements | null = null;
+      const defaultRenderer = () => {
+        defaultElements = isComposerBar()
+          ? buildPillComposer({ config })
+          : buildComposer({ config });
+        return defaultElements.footer;
+      };
+      const nextFooter =
+        renderComposerFromPlugins(defaultRenderer) ?? defaultRenderer();
+
+      view.replaceComposer(nextFooter);
+      footer = view.composer.footer;
+      // A plugin composer owns its own send affordance, so the built-in
+      // send/stop swap has nothing to drive.
+      const isDefaultFooter =
+        defaultElements !== null &&
+        nextFooter === (defaultElements as _ComposerElements).footer;
+      composerIsPluginOwned = !isDefaultFooter;
+      setSendButtonMode = isDefaultFooter
+        ? (defaultElements as unknown as _ComposerElements).setSendButtonMode
+        : () => {};
+
+      ensureComposerAttachmentSurface(footer);
+      bindComposerRefsFromFooter(footer);
+      applyComposerContentMaxWidth();
+      setupComposerAttachments();
+      setupMentionOrchestrator();
+      registerComposerSwapHandler();
+
+      if (composerForm) composerForm.addEventListener("submit", handleSubmit);
+      attachComposerListeners(textarea);
+      micButton?.addEventListener("click", handleMicButtonClick);
+
+      // The composer suggestion manager is bound to its container element, and
+      // the new footer ships a new one.
+      const managerIndex = suggestionManagers.indexOf(composerSuggestionsManager);
+      composerSuggestionsManager.destroy();
+      composerSuggestionsManager = createSuggestions(suggestions);
+      if (managerIndex >= 0) suggestionManagers[managerIndex] = composerSuggestionsManager;
+
+      if (textarea) textarea.value = previousValue;
+      updateCopy();
+      renderSuggestions();
+      setComposerDisabled(session.isStreaming());
+      // The new footer carries none of the per-mode inline styles. Full
+      // chrome sync, not bare applyFullHeightStyles: the latter resets
+      // mount.style.cssText, which silently drops every theme variable.
+      syncPanelChrome();
+      updateScrollToBottomButtonOffset();
+      if (hadFocus) textarea?.focus();
+    } finally {
+      composerRebuilding = false;
+    }
+  }
 
   const escStopDoc = mount.ownerDocument ?? document;
   escStopDoc.addEventListener("keydown", handleEscStop, true);
@@ -8062,9 +8650,9 @@ export const createAgentExperience = (
     session.cancel();
   });
 
-  if (launcherButtonInstance) {
+  if (launcherSurfaceInstance) {
     destroyCallbacks.push(() => {
-      launcherButtonInstance?.destroy();
+      launcherSurfaceInstance?.destroy();
     });
   } else if (customLauncherElement) {
     destroyCallbacks.push(() => {
@@ -8122,6 +8710,7 @@ export const createAgentExperience = (
         resetAnchorState();
         resumeAutoScroll();
       }
+      applyScrollbarPolicy();
       renderScrollToBottomButton();
       syncScrollToBottomButton();
       const prevShowEventStreamToggle = showEventStreamToggle;
@@ -8191,25 +8780,25 @@ export const createAgentExperience = (
         throughputTracker = null;
       }
 
-      if (config.launcher?.enabled === false && launcherButtonInstance) {
-        launcherButtonInstance.destroy();
-        launcherButtonInstance = null;
+      if (config.launcher?.enabled === false && launcherSurfaceInstance) {
+        launcherSurfaceInstance.destroy();
+        launcherSurfaceInstance = null;
       }
       if (config.launcher?.enabled === false && customLauncherElement) {
         customLauncherElement.remove();
         customLauncherElement = null;
       }
 
-      if (config.launcher?.enabled !== false && !launcherButtonInstance && !customLauncherElement) {
+      if (config.launcher?.enabled !== false && !launcherSurfaceInstance && !customLauncherElement) {
         // Resolve the launcher again when re-enabling (honors renderLauncher plugin).
         const { instance, element } = resolveLauncher({ config, plugins, onToggle: toggleOpen });
-        launcherButtonInstance = instance;
+        launcherSurfaceInstance = instance;
         if (!instance) customLauncherElement = element;
         mount.appendChild(element);
       }
 
-      if (launcherButtonInstance) {
-        launcherButtonInstance.update(config);
+      if (launcherSurfaceInstance) {
+        launcherSurfaceInstance.update(config);
       }
       // Note: Custom launcher updates are handled by the plugin's own logic
 
@@ -8787,8 +9376,11 @@ export const createAgentExperience = (
       );
       renderSuggestions();
       updateCopy();
+      // Live `welcome` updates reach `renderWelcome` plugins; unrelated
+      // update() calls leave plugin-owned content (and its state) alone.
+      refreshWelcomePlugins();
       setComposerDisabled(session.isStreaming());
-      
+
       // Update voice recognition mic button visibility
       const voiceRecognitionEnabled = config.voiceRecognition?.enabled === true;
       const hasSpeechRecognition =
@@ -9213,16 +9805,20 @@ export const createAgentExperience = (
       
       // Update contentMaxWidth on messages wrapper and composer. Same
       // composer-bar fallback as the initial read above.
-      const updatedContentMaxWidth =
-        config.layout?.contentMaxWidth ??
-        (isComposerBar()
-          ? config.launcher?.composerBar?.contentMaxWidth ?? "720px"
-          : undefined);
+      const updatedContentMaxWidth = resolveContentMaxWidth(
+        config,
+        isComposerBar()
+      );
+      applyContentMaxWidthVar();
       if (updatedContentMaxWidth) {
         messagesWrapper.style.maxWidth = updatedContentMaxWidth;
         messagesWrapper.style.marginLeft = "auto";
         messagesWrapper.style.marginRight = "auto";
         messagesWrapper.style.width = "100%";
+        greetingHost.style.maxWidth = updatedContentMaxWidth;
+        greetingHost.style.marginLeft = "auto";
+        greetingHost.style.marginRight = "auto";
+        greetingHost.style.width = "100%";
         if (composerForm) {
           composerForm.style.maxWidth = updatedContentMaxWidth;
           composerForm.style.marginLeft = "auto";
@@ -9233,11 +9829,18 @@ export const createAgentExperience = (
           suggestions.style.marginLeft = "auto";
           suggestions.style.marginRight = "auto";
         }
+        statusText.style.maxWidth = updatedContentMaxWidth;
+        statusText.style.marginLeft = "auto";
+        statusText.style.marginRight = "auto";
       } else {
         messagesWrapper.style.maxWidth = "";
         messagesWrapper.style.marginLeft = "";
         messagesWrapper.style.marginRight = "";
         messagesWrapper.style.width = "";
+        greetingHost.style.maxWidth = "";
+        greetingHost.style.marginLeft = "";
+        greetingHost.style.marginRight = "";
+        greetingHost.style.width = "";
         if (composerForm) {
           composerForm.style.maxWidth = "";
           composerForm.style.marginLeft = "";
@@ -9248,6 +9851,9 @@ export const createAgentExperience = (
           suggestions.style.marginLeft = "";
           suggestions.style.marginRight = "";
         }
+        statusText.style.maxWidth = "";
+        statusText.style.marginLeft = "";
+        statusText.style.marginRight = "";
       }
 
       // Update status indicator visibility and text
@@ -9736,7 +10342,7 @@ export const createAgentExperience = (
       destroyCallbacks.forEach((cb) => cb());
       wrapper.remove();
       pillRoot?.remove();
-      launcherButtonInstance?.destroy();
+      launcherSurfaceInstance?.destroy();
       customLauncherElement?.remove();
       if (closeHandler) {
         closeButton.removeEventListener("click", closeHandler);
@@ -9872,6 +10478,9 @@ export const createAgentExperience = (
       const wasInVoiceMode = persistConfig.persist?.voiceState && storage.getItem(voiceModeKey) === 'true';
 
       if (wasOpen) {
+        // The teaser's own timer is already queued, so suppress it synchronously
+        // here: the deferred open below would otherwise run one task too late.
+        launcherSurfaceInstance?.setPanelOpen(true, "auto");
         // Use setTimeout to ensure DOM is ready
         setTimeout(() => {
           controller.open();
@@ -9938,6 +10547,8 @@ export const createAgentExperience = (
   // Mirrors the same setTimeout(0) pattern used by persistState restore so both
   // can fire independently without interfering with each other.
   if (shouldOpenAfterStateLoaded && isPanelToggleable()) {
+    // Same one-task-early suppression as the persistState restore above.
+    launcherSurfaceInstance?.setPanelOpen(true, "auto");
     setTimeout(() => { controller.open(); }, 0);
   }
 

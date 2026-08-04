@@ -4,6 +4,10 @@
   font-size: var(--persona-font-size, 1rem);
   font-weight: var(--persona-font-weight, 400);
   line-height: var(--persona-line-height, 1.5);
+
+  /* Column widths plugin content can consume; --persona-content-max-width is
+     re-set inline from layout.contentMaxWidth (default 768px). */
+  --persona-welcome-max-width: 640px;
   
   /* Theme-aware markdown variables - inherit from theme colors set by JavaScript */
   --persona-md-code-block-bg: var(--persona-container, #f3f4f6);
@@ -236,6 +240,157 @@
   border-radius: var(--persona-button-radius);
 }
 
+/* Launcher surface + teaser --------------------------------------------- */
+
+/* Without a teaser the wrapper generates no box, so the launcher button keeps
+   its own fixed placement exactly as it did before the wrapper existed. */
+.persona-launcher-surface {
+  display: contents;
+}
+
+.persona-launcher-surface[data-teaser] {
+  display: flex;
+  position: fixed;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.persona-launcher-surface[data-teaser^="top"] {
+  flex-direction: column-reverse;
+}
+
+.persona-launcher-surface[data-teaser$="left"] {
+  align-items: flex-start;
+}
+
+.persona-launcher-teaser {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: min(260px, calc(100vw - 48px));
+  padding: 2px;
+  border: 1px solid var(--persona-border, #e5e7eb);
+  border-radius: var(--persona-radius-lg, 1rem);
+  background-color: var(--persona-surface, #ffffff);
+  box-shadow: var(
+    --persona-launcher-shadow,
+    0 10px 15px -3px rgba(0, 0, 0, 0.1),
+    0 4px 6px -4px rgba(0, 0, 0, 0.1)
+  );
+}
+
+.persona-launcher-teaser[hidden] {
+  display: none;
+}
+
+.persona-launcher-teaser-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: var(--persona-text, #111827);
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.persona-launcher-teaser-dismiss {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--persona-launcher-radius, 9999px);
+  background: transparent;
+  color: var(--persona-muted, #6b7280);
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.persona-launcher-teaser-dismiss:hover {
+  background-color: var(--persona-border, #e5e7eb);
+}
+
+/* display: grid above beats the UA [hidden] rule; dismissible: false relies on this. */
+.persona-launcher-teaser-dismiss[hidden] {
+  display: none;
+}
+
+/* An empty transcript still counts as a flex child, so the body's gap
+   inserts phantom space below the welcome and fakes scrollable height. */
+.persona-widget-messages:empty {
+  display: none;
+}
+
+/* Scrollbars ------------------------------------------------------------- */
+
+/* One appearance for every scroller in the widget: thin, themed thumb, bare
+   track. Standard properties only: mixing ::-webkit-scrollbar styling with
+   them makes Chromium drop the pseudo-element rules, so webkit selectors are
+   reserved for the hidden states below, where both mechanisms agree.
+   scrollbar-color inherits from the root; scrollbar-width does not, hence
+   the descendant rule. */
+[data-persona-root] {
+  scrollbar-color: var(
+      --persona-scrollbar-thumb,
+      var(--persona-border, #e5e7eb)
+    )
+    var(--persona-scrollbar-track, transparent);
+}
+[data-persona-root],
+[data-persona-root] * {
+  scrollbar-width: thin;
+}
+
+/* "on-scroll" policy (the default): bars hide at rest. ui.ts stamps the
+   resolved policy on the root and flips data-persona-scrollbar-visible on
+   the transcript while the reader is scrolling or away from the resting
+   position. The reserved gutter keeps classic scrollbars (Windows,
+   always-show macOS) from reflowing the transcript on toggle. */
+[data-persona-scrollbar="on-scroll"] .persona-widget-body {
+  scrollbar-gutter: stable;
+}
+[data-persona-scrollbar="on-scroll"]
+  .persona-widget-body:not([data-persona-scrollbar-visible]),
+[data-persona-scrollbar="hidden"] .persona-widget-body {
+  scrollbar-width: none;
+}
+[data-persona-scrollbar="on-scroll"]
+  .persona-widget-body:not([data-persona-scrollbar-visible])::-webkit-scrollbar,
+[data-persona-scrollbar="hidden"] .persona-widget-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Inner scrollers under the same policy: hidden at rest, hover reveals for
+   pointer users. Edge fades stay the primary overflow affordance there, and
+   morph re-renders make per-element JS wiring fragile, so hover is the whole
+   reveal story for these surfaces. */
+[data-persona-scrollbar="on-scroll"] .persona-artifact-list:not(:hover),
+[data-persona-scrollbar="on-scroll"]
+  .persona-suggestions[data-overflow="scroll"]:not(:hover),
+[data-persona-scrollbar="hidden"] .persona-artifact-list,
+[data-persona-scrollbar="hidden"] .persona-suggestions[data-overflow="scroll"] {
+  scrollbar-width: none;
+}
+[data-persona-scrollbar="on-scroll"]
+  .persona-artifact-list:not(:hover)::-webkit-scrollbar,
+[data-persona-scrollbar="on-scroll"]
+  .persona-suggestions[data-overflow="scroll"]:not(:hover)::-webkit-scrollbar,
+[data-persona-scrollbar="hidden"] .persona-artifact-list::-webkit-scrollbar,
+[data-persona-scrollbar="hidden"]
+  .persona-suggestions[data-overflow="scroll"]::-webkit-scrollbar {
+  display: none;
+}
+
 /* Suggestions ----------------------------------------------------------- */
 
 .persona-suggestions {
@@ -254,13 +409,28 @@
   display: none !important;
 }
 
+/* `itemGap` is the space between items; the variant-less 8px above stays the
+   fallback for containers rendered before a variant is assigned. */
+.persona-suggestions[data-variant="chip"] {
+  gap: var(--persona-components-suggestion-chip-itemGap, 8px);
+}
+
+.persona-suggestions[data-variant="card"] {
+  gap: var(--persona-components-suggestion-card-itemGap, 8px);
+}
+
+.persona-suggestions[data-variant="list"] {
+  gap: var(--persona-components-suggestion-list-itemGap, 8px);
+}
+
 .persona-suggestions[data-persona-suggestion-surface="starter"] {
   margin-top: 16px;
 }
 
-[data-persona-suggestions="follow-up"] {
-  /* The transcript body uses a roomy 24px section gap; pull contextual
-     follow-ups closer to the answer they belong to. */
+/* Follow-ups sit 12px from their answer. The body gap is 24px with the
+   welcome host visible and already 12px when it is hidden, so the pull-up
+   only applies in the roomy case. */
+.persona-gap-6 > [data-persona-suggestions="follow-up"] {
   margin-top: -12px;
 }
 
@@ -352,6 +522,15 @@
   flex-wrap: wrap;
 }
 
+/* Composer surface only: transcript follow-ups and welcome rows stay
+   left-aligned. fit-content centers a single row while wrapped rows keep a
+   shared left edge; per-row `justify-content: center` would rag them. */
+[data-persona-composer-suggestions].persona-suggestions[data-variant="chip"] {
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+}
+
 .persona-suggestion {
   appearance: none;
   display: flex;
@@ -398,7 +577,7 @@
 }
 
 .persona-suggestion--card {
-  align-items: flex-start;
+  align-items: center;
   min-height: var(--persona-components-suggestion-card-minHeight, 72px);
   gap: var(--persona-components-suggestion-card-gap, 0.625rem);
   padding: var(--persona-components-suggestion-card-padding, 1rem);
@@ -422,7 +601,7 @@
 }
 
 .persona-suggestion--list {
-  align-items: flex-start;
+  align-items: center;
   width: 100%;
   min-height: var(--persona-components-suggestion-list-minHeight, 44px);
   gap: var(--persona-components-suggestion-list-gap, 0.625rem);
@@ -443,6 +622,13 @@
   );
   font-size: var(--persona-components-suggestion-list-fontSize, 0.875rem);
   line-height: var(--persona-components-suggestion-list-lineHeight, 1.35);
+}
+
+/* Title + description content reads top-aligned; a lone label centers in
+   the min-height instead of leaving dead space under the text. */
+.persona-suggestion--card:has(.persona-suggestion__description),
+.persona-suggestion--list:has(.persona-suggestion__description) {
+  align-items: flex-start;
 }
 
 .persona-suggestion__icon,
@@ -646,6 +832,154 @@
   .persona-suggestion__arrow {
     transition: none;
   }
+}
+
+/* Welcome surface ------------------------------------------------------- */
+
+/* Interior padding rides the intro-card alias: the tokens layer zeroes the
+   horizontal component when the card resolves flat (no background, no
+   shadow), so default installs align the title with the content column
+   instead of indenting it by an invisible card inset. */
+.persona-welcome {
+  padding: var(--persona-intro-card-padding, 1.5rem);
+}
+
+.persona-welcome[hidden],
+.persona-welcome-greeting[hidden] {
+  display: none !important;
+}
+
+.persona-welcome-icon {
+  display: flex;
+  margin-bottom: 12px;
+  color: var(--persona-accent, currentColor);
+}
+
+.persona-welcome-icon[hidden] {
+  display: none !important;
+}
+
+.persona-welcome-icon-image {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  object-fit: cover;
+}
+
+.persona-welcome-icon-text {
+  font-size: 32px;
+  line-height: 1;
+}
+
+/* Welcome copy: `components.introCard.title` / `.subtitle` typography.
+   Fallbacks reproduce the utility classes these rules replaced, so an
+   unset token renders pixel-identically. Margins stay untokenized. */
+.persona-welcome-title {
+  font-family: var(--persona-components-introCard-title-fontFamily, inherit);
+  font-size: var(--persona-components-introCard-title-fontSize, 1.125rem);
+  font-weight: var(--persona-components-introCard-title-fontWeight, 600);
+  line-height: var(--persona-components-introCard-title-lineHeight, 1.75rem);
+  letter-spacing: var(--persona-components-introCard-title-letterSpacing, normal);
+  color: var(--persona-components-introCard-title-color, var(--persona-primary, #171717));
+}
+
+.persona-welcome-subtitle {
+  margin-top: 0.5rem;
+  font-family: var(--persona-components-introCard-subtitle-fontFamily, inherit);
+  font-size: var(--persona-components-introCard-subtitle-fontSize, 0.875rem);
+  font-weight: var(--persona-components-introCard-subtitle-fontWeight, inherit);
+  line-height: var(--persona-components-introCard-subtitle-lineHeight, 1.25rem);
+  letter-spacing: var(--persona-components-introCard-subtitle-letterSpacing, normal);
+  color: var(--persona-components-introCard-subtitle-color, var(--persona-muted, #6b7280));
+}
+
+/* Plugin-owned welcome (`renderWelcome`): the host keeps its position and the
+   default children are hidden by selector, so nothing about their own hidden
+   state has to be saved and restored when the plugin returns null again. */
+.persona-welcome[data-persona-welcome-content="plugin"]
+  > :not([data-persona-welcome-plugin]) {
+  display: none !important;
+}
+
+.persona-welcome[data-persona-welcome-content="plugin"] {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Overlay state: a plugin element covers the messages area while it is active.
+   The body stops scrolling underneath so the absolute box maps to the visible
+   transcript rather than scrolling away with the content. */
+/* Wide panels: the card variant shares the transcript column
+   (--persona-content-max-width, re-set inline from layout.contentMaxWidth)
+   so its left-aligned text lines up with messages and composer; at launcher
+   width the cap never bites. The plugin overlay stays full-bleed via the
+   :not(). */
+.persona-welcome:not([data-persona-welcome-overlay]) {
+  width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
+  margin-inline: auto;
+}
+
+/* The centered hero keeps the narrower consumer-product column, where
+   centered text makes the split against the transcript read as intended. */
+.persona-welcome[data-persona-welcome-variant="hero"]:not(
+    [data-persona-welcome-overlay]
+  ) {
+  max-width: var(--persona-welcome-max-width, 640px);
+}
+
+/* The greeting bubble is a sibling of the transcript wrapper, outside its
+   inline width cap; mirror the cap so it shares the same column. */
+.persona-welcome-greeting {
+  width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
+  margin-inline: auto;
+}
+
+.persona-welcome[data-persona-welcome-overlay] {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow-y: auto;
+  /* Plugin overlays are opaque surfaces regardless of the intro-card theme,
+     so they keep full interior padding even when the card resolves flat. */
+  padding: 1.5rem;
+  /* !important: the host doubles as the intro card and carries an inline
+     background (--persona-intro-card-bg, default transparent); the overlay
+     must stay opaque or the transcript bleeds through the plugin stack. */
+  background: var(
+    --persona-container,
+    var(--persona-surface, #ffffff)
+  ) !important;
+}
+
+.persona-widget-body.persona-welcome-overlay-active {
+  overflow: hidden;
+}
+
+/* Hero: auto block margins center the surface in the empty conversation
+   without `justify-content`, which would make overflowing content
+   unreachable in the scroll body. */
+.persona-welcome[data-persona-welcome-variant="hero"] {
+  margin-block: auto;
+  text-align: center;
+}
+
+.persona-welcome[data-persona-welcome-variant="hero"] .persona-welcome-icon {
+  justify-content: center;
+}
+
+.persona-welcome[data-persona-welcome-variant="hero"] .persona-suggestions {
+  margin-inline: auto;
+  justify-content: center;
+}
+
+.persona-welcome[data-persona-welcome-variant="hero"]
+  .persona-suggestions[data-variant="card"],
+.persona-welcome[data-persona-welcome-variant="hero"]
+  .persona-suggestions[data-variant="list"] {
+  text-align: start;
+  width: 100%;
 }
 
 /* Composer ghost icon buttons (attachment + mention): transparent, neutral
@@ -1410,6 +1744,9 @@
 [data-persona-root] .persona-widget-composer:not(.persona-pill-composer) {
   padding: var(--persona-composer-padding, 0.75rem 1rem);
   gap: var(--persona-composer-gap, 0.5rem);
+  /* `components.composer.borderColor`; the fallback matches the
+     `persona-border-persona-border` utility the form carries. */
+  border-color: var(--persona-composer-border-color, var(--persona-border, #e5e7eb));
 }
 
 /* Composer type scale, themeable via `components.composer.fontSize` /
@@ -3176,7 +3513,10 @@
 }
 
 [data-persona-root] .persona-artifact-list::-webkit-scrollbar-thumb {
-  background: var(--persona-artifact-tab-list-scrollbar, var(--persona-border, #e5e7eb));
+  background: var(
+    --persona-artifact-tab-list-scrollbar,
+    var(--persona-scrollbar-thumb, var(--persona-border, #e5e7eb))
+  );
   border-radius: 9999px;
 }
 
@@ -4237,13 +4577,17 @@
 }
 
 @media (min-width: 641px) {
+  /* Drawer width is its own knob (`layout.drawerWidth`), not the split's
+     pane vars: those are always materialized with split defaults, so reading
+     them here would resize every host's drawer. The outer min() keeps an
+     oversized value inside the panel. */
   [data-persona-root].persona-artifact-narrow-host .persona-artifact-pane {
     position: absolute;
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(calc(100% - 1rem), 22rem) !important;
-    max-width: 22rem !important;
+    width: min(100%, var(--persona-artifact-drawer-width, min(calc(100% - 1rem), 22rem))) !important;
+    max-width: var(--persona-artifact-drawer-width, 22rem) !important;
     z-index: 60;
     transform: translateX(100%);
     transition: transform 0.2s ease;
@@ -4260,7 +4604,7 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(100vw - 1.5rem, 22rem);
+    width: min(100vw, var(--persona-artifact-drawer-width, min(100vw - 1.5rem, 22rem)));
     z-index: 60;
     transform: translateX(100%);
     transition: transform 0.2s ease;

@@ -501,6 +501,9 @@ const suggestionStyleSectionDef: SectionDef = {
     ] },
     { id: 'suggestion-list-bg', label: 'List Background', type: 'color', path: 'theme.components.suggestion.list.background', defaultValue: 'transparent' },
     { id: 'suggestion-list-border', label: 'List Border', type: 'token-ref', path: 'theme.components.suggestion.list.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
+    { id: 'suggestion-chip-item-gap', label: 'Chip Spacing', description: 'Space between chips', type: 'text', path: 'theme.components.suggestion.chip.itemGap', defaultValue: '8px' },
+    { id: 'suggestion-card-item-gap', label: 'Card Spacing', description: 'Space between cards', type: 'text', path: 'theme.components.suggestion.card.itemGap', defaultValue: '8px' },
+    { id: 'suggestion-list-item-gap', label: 'List Spacing', description: 'Space between list rows', type: 'text', path: 'theme.components.suggestion.list.itemGap', defaultValue: '8px' },
   ],
 };
 
@@ -535,6 +538,31 @@ const componentShadowsSectionDef: SectionDef = {
 };
 
 /** Shared shape sections (not scoped to light/dark) */
+// Blank keeps the built-in fallback: parseOptionalCssValue drops the path so
+// the CSS variable never emits.
+const TEXT_FONT_WEIGHT_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: 'Default' },
+  { value: '400', label: 'Normal (400)' },
+  { value: '500', label: 'Medium (500)' },
+  { value: '600', label: 'Semibold (600)' },
+  { value: '700', label: 'Bold (700)' },
+];
+
+const textStylesSectionDef: SectionDef = {
+  id: 'comp-text-styles',
+  title: 'Header & Welcome Text',
+  description: 'Typography for the header title and the welcome greeting. Leave blank to keep the built-in defaults.',
+  collapsed: true,
+  fields: [
+    { id: 'header-title-font-family', label: 'Header Title Font', description: 'CSS font-family, e.g. Georgia, serif', type: 'text', path: 'theme.components.header.title.fontFamily', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'header-title-font-size', label: 'Header Title Size', description: 'CSS length, e.g. 1.125rem', type: 'text', path: 'theme.components.header.title.fontSize', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'header-title-font-weight', label: 'Header Title Weight', type: 'select', path: 'theme.components.header.title.fontWeight', defaultValue: '', options: TEXT_FONT_WEIGHT_OPTIONS, parseValue: parseOptionalCssValue },
+    { id: 'welcome-title-font-family', label: 'Welcome Title Font', description: 'CSS font-family, e.g. Georgia, serif', type: 'text', path: 'theme.components.introCard.title.fontFamily', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'welcome-title-font-size', label: 'Welcome Title Size', description: 'CSS length, e.g. 1.5rem', type: 'text', path: 'theme.components.introCard.title.fontSize', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'welcome-title-font-weight', label: 'Welcome Title Weight', type: 'select', path: 'theme.components.introCard.title.fontWeight', defaultValue: '', options: TEXT_FONT_WEIGHT_OPTIONS, parseValue: parseOptionalCssValue },
+  ],
+};
+
 export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   panelLayoutSectionDef,
   launcherLayoutSectionDef,
@@ -542,6 +570,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   inputShapeSectionDef,
   composerSpacingSectionDef,
   buttonShapeSectionDef,
+  textStylesSectionDef,
   componentShadowsSectionDef,
 ];
 
@@ -609,7 +638,7 @@ const copySectionDef: SectionDef = {
   fields: [
     { id: 'copy-show-welcome-card', label: 'Show Welcome Card', type: 'toggle', path: 'copy.showWelcomeCard', defaultValue: true },
     { id: 'copy-welcome-title', label: 'Welcome Title', type: 'text', path: 'copy.welcomeTitle', defaultValue: 'Hello 👋' },
-    { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'copy.welcomeSubtitle', defaultValue: 'Ask anything about your account or products.' },
+    { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'copy.welcomeSubtitle', defaultValue: 'I can answer questions and help you get things done here.' },
     { id: 'copy-placeholder', label: 'Input Placeholder', type: 'text', path: 'copy.inputPlaceholder', defaultValue: 'Type your message…' },
     { id: 'copy-send-label', label: 'Send Button Label', type: 'text', path: 'copy.sendButtonLabel', defaultValue: 'Send' },
   ],

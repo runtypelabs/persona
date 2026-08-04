@@ -175,9 +175,27 @@ config: {
 | `theme` | `DeepPartial<PersonaTheme>` | Semantic tokens (`palette`, `semantic`, `components`). See [THEME-CONFIG.md](../THEME-CONFIG.md). The flat v1 shape (`{ primary, accent, surface, ... }`) is **not** supported: there is no runtime migration; port themes to the token tree. |
 | `darkTheme` | `DeepPartial<PersonaTheme>` | Dark-mode token overrides, merged over `theme` when the active scheme is dark. |
 | `colorScheme` | `'light' \| 'dark' \| 'auto'` | Color scheme mode. `'auto'` detects from `<html class="dark">` or `prefers-color-scheme`. Default: `'light'`. |
-| `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel?, stopButtonLabel?, showWelcomeCard?, stopReasonNotice? }` | Customize user-facing text strings, hide the welcome card, or override per-stop-reason notices. |
+| `welcome` | `{ title?, subtitle?, icon?, variant?, dismiss?, message? }` | First-open welcome surface. See [Welcome](#welcome) below. |
+| `copy` | `{ welcomeTitle?, welcomeSubtitle?, inputPlaceholder?, sendButtonLabel?, stopButtonLabel?, showWelcomeCard?, stopReasonNotice? }` | Customize user-facing text strings, hide the welcome card, or override per-stop-reason notices. `welcomeTitle`, `welcomeSubtitle`, and `showWelcomeCard` are deprecated aliases of `welcome.title`, `welcome.subtitle`, and `welcome.variant: 'none'`. |
 | `autoFocusInput` | `boolean` | Focus the chat input after the panel opens. Skips when voice is active. Default: `false`. |
 | `launcherWidth` | `string` | CSS width for the floating launcher panel (e.g. `'320px'`). Default: `'min(440px, calc(100vw - 24px))'`. |
+
+### Welcome
+
+The first-open surface. Every field is live-updatable through `controller.update({ welcome })`, and an explicit `undefined` resets a field to its default.
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `title` | `string?` | Surface title. Default: `'Hello 👋'`. |
+| `subtitle` | `string?` | Scope statement in the assistant's voice. An empty string omits the paragraph. |
+| `icon` | `AgentWidgetWelcomeIcon?` | Avatar or logo above the title: `{ type: 'lucide', name }`, `{ type: 'image', url, alt }`, `{ type: 'text', text }`, or a `() => HTMLElement \| SVGElement` function. |
+| `variant` | `'card' \| 'hero' \| 'none'?` | `card` renders the intro card above the transcript (default). `hero` centers the same surface in the empty conversation. `none` renders no surface. |
+| `dismiss` | `'never' \| 'on-first-message'?` | When the surface goes away. Default `never` for `card`; always `on-first-message` for `hero`. Visibility is derived from the transcript, never stored. |
+| `message` | `string?` | Display-only greeting bubble pinned at transcript position zero. It is config-derived chrome: never in `getMessages()`, never sent to the model, never persisted, no `onMessage`, and it survives `clearChat()`. Use an assistant entry in `initialMessages` when the model should see the greeting. Ignored under `variant: 'hero'`. |
+
+Precedence is per field: a key set on `welcome` wins, else the deprecated `copy` alias, else the built-in default.
+
+Known limitation: `variant: "hero"` centers the welcome surface only. The composer stays docked at the footer, so this is not the consumer-product layout where the composer rides up with the greeting and docks after the first message. Composer docking is deferred to a later phase.
 
 ### Launcher
 
@@ -208,6 +226,27 @@ Controls the floating launcher button and panel.
 | `border` | `string?` | Border style for the launcher button. Default: `'1px solid #e5e7eb'`. |
 | `shadow` | `string?` | Box shadow for the launcher button. |
 | `collapsedMaxWidth` | `string?` | CSS `max-width` for the floating launcher pill when the panel is closed (title/subtitle truncate with ellipsis; full text in `title` tooltip). Does not affect the open panel (`width`). |
+| `teaser` | `AgentWidgetLauncherTeaserConfig?` | Proactive nudge bubble above the collapsed launcher (see below). Omitted by default. |
+
+**`AgentWidgetLauncherTeaserConfig`**
+
+| Property | Type | Description |
+| --- | --- | --- |
+| `text` | `string` | Bubble copy. An empty string renders no teaser. |
+| `delayMs` | `number?` | Delay before the bubble appears. Default: `0`. |
+| `frequency` | `'once' \| 'always'?` | `'once'` remembers a dismissal or click-through in `localStorage` and never shows the teaser again on that browser. `'always'` shows on every page load, tracked in memory only. Default: `'once'`. |
+| `dismissible` | `boolean?` | Render an x affordance that hides the teaser without opening the panel. Default: `true`. |
+| `dismissLabel` | `string?` | Accessible label for that affordance. Default: `'Dismiss message'`. |
+
+```js
+launcher: {
+  teaser: { text: "Questions about pricing?", delayMs: 4000 }
+}
+```
+
+Clicking the teaser opens the panel and consumes it exactly like an explicit dismissal, so `'once'` will not re-sell an already-sold click on the next visit. Within a single page load the teaser appears at most once under either frequency: it is suppressed while the panel is open, and closing the panel never brings it back. It is also suppressed when the panel starts open through `launcher.autoExpand`, restored `persistState` open state, or an `onStateLoaded` hook returning `open: true`; none of those automatic opens write the `'once'` flag, so the teaser is still waiting on a later visit. Everything responds to `controller.update({ launcher: { teaser } })`.
+
+The dismissed flag is stored synchronously under `` `${persistState.keyPrefix ?? 'persona-'}teaser-dismissed` `` so the deferred `launcher.global.js` bundle can decide visibility before paint. Custom `storageAdapter` implementations do not participate in teaser state; `persistState: false` downgrades the flag to memory, so the teaser reappears each load. Storage that throws (Safari private mode, partitioned third-party iframes) falls back to the same in-memory path.
 
 In docked mode, `position`, `fullHeight`, and `sidebarMode` are ignored because the widget fills the dock slot created around the target container.
 
@@ -515,7 +554,7 @@ built-in tool.
 | --- | --- | --- |
 | `items` | `AgentWidgetSuggestion[]?` | Rich items or plain strings. Falls back to the deprecated `suggestionChips`. |
 | `variant` | `'chip' \| 'card' \| 'list'?` | Item density. Default: `'card'`. |
-| `placement` | `'auto' \| 'welcome' \| 'composer'?` | `auto` uses the welcome surface when the welcome card renders and the composer otherwise. Explicit values are literal: pinned `welcome` renders nothing when `copy.showWelcomeCard` is `false` (with a debug-mode warning). Default: `'auto'`. |
+| `placement` | `'auto' \| 'welcome' \| 'composer'?` | `auto` uses the welcome surface when the welcome card renders and the composer otherwise. Explicit values are literal: pinned `welcome` renders nothing when the welcome surface is hidden (`welcome.variant: 'none'`, or dismissed) (with a debug-mode warning). Default: `'auto'`. |
 | `behavior` | `'send' \| 'fill'?` | Default click behavior, overridable per item. Default: `'send'`. |
 | `overflow` | `'scroll' \| 'wrap'?` | Layout past the surface width. Applies to the `chip` variant only; `card` and `list` layouts manage their own stacking. Default: `'wrap'`. |
 | `maxItems` | `number?` | Cap applied after the plugin transform chain. Default: `4`. |
@@ -552,6 +591,11 @@ lists belong in `starters`. Any backend can drive the surface by emitting a
 `features.suggestReplies.enabled` / `.expose` are deprecated aliases of
 `suggestions.followUps.enabled` / `.expose`. Resolution is per key with
 `suggestions.followUps` winning; the aliases are removed in 5.0.
+
+Fetched or personalized starters use `controller.update({ suggestions: {
+starters: { items } } })` after the fetch resolves; the starter surface
+re-renders on every update. See
+[Async starters](../THEME-CONFIG.md#async-starters).
 
 Plugins can fully customize the pipeline with `transformSuggestions`,
 `renderSuggestion`, and `onSuggestionSelect`. See

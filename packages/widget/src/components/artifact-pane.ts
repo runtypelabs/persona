@@ -4,7 +4,7 @@ import type {
   PersonaArtifactRecord,
   PersonaArtifactCustomAction,
 } from "../types";
-import { fileTypeLabel, basenameOf } from "../utils/artifact-file";
+import { fileKindOf, fileTypeLabel, basenameOf } from "../utils/artifact-file";
 import {
   buildArtifactActionButton,
   artifactRecordActionContext,
@@ -621,8 +621,12 @@ export function createArtifactPane(
     const selFile = sel.artifactType === "markdown" ? sel.file : undefined;
 
     // Expose the rendered/source toggle for previewable file artifacts even
-    // outside the document toolbar preset.
-    updateFileToggleVisibility(Boolean(selFile));
+    // outside the document toolbar preset. Kind "other" (json, css, ts, …)
+    // has no rendered form — preview falls back to the source view — so the
+    // toggle would be a visible no-op there.
+    updateFileToggleVisibility(
+      Boolean(selFile) && fileKindOf(selFile!) !== "other"
+    );
 
     if (documentChrome) {
       const kind = selFile

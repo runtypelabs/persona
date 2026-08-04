@@ -202,6 +202,16 @@ export interface PanelTokens extends ComponentTokenSet {
   canvasBackground?: string;
 }
 
+/** Per-element text styling shared by themable text surfaces. */
+export interface TextStyleTokens {
+  fontFamily?: string;
+  fontSize?: string;
+  fontWeight?: string;
+  lineHeight?: string;
+  letterSpacing?: string;
+  color?: TokenReference<'color'>;
+}
+
 export interface HeaderTokens extends ComponentTokenSet {
   background: TokenReference<'color'>;
   border: TokenReference<'color'>;
@@ -210,10 +220,14 @@ export interface HeaderTokens extends ComponentTokenSet {
   iconBackground: TokenReference<'color'>;
   /** Foreground (glyph stroke or emoji text) on the header avatar tile. */
   iconForeground: TokenReference<'color'>;
-  /** Header title line (next to the icon, or minimal layout title). */
+  /** Legacy alias of `title.color`; `title.color` wins when both are set. */
   titleForeground: TokenReference<'color'>;
-  /** Header subtitle line under the title. */
+  /** Legacy alias of `subtitle.color`; `subtitle.color` wins when both are set. */
   subtitleForeground: TokenReference<'color'>;
+  /** Header title typography (next to the icon, or minimal layout title). */
+  title?: TextStyleTokens;
+  /** Header subtitle typography, for the line under the title. */
+  subtitle?: TextStyleTokens;
   /** Default color for clear / close icon buttons when launcher overrides are unset. */
   actionIconForeground: TokenReference<'color'>;
   /** Box-shadow on the header (e.g., a fade shadow to replace the default border). */
@@ -245,7 +259,7 @@ export interface MessageTokens {
 
 /**
  * Welcome / intro card rendered above the message list when no messages exist.
- * Set `copy.showWelcomeCard: false` to hide it; use `layout.slots["body-top"]`
+ * Set `welcome.variant: "none"` to hide it; use `layout.slots["body-top"]`
  * to replace it wholesale.
  */
 export interface IntroCardTokens extends ComponentTokenSet {
@@ -254,6 +268,12 @@ export interface IntroCardTokens extends ComponentTokenSet {
   padding?: TokenReference<'spacing'>;
   /** Box-shadow on the intro card (token ref or raw CSS, e.g. `none`). */
   shadow?: string;
+  /** Full border shorthand on the intro card (raw CSS, e.g. `"1px solid rgba(0,0,0,0.1)"`). @default "none" */
+  border?: string;
+  /** Welcome title typography. */
+  title?: TextStyleTokens;
+  /** Welcome subtitle typography. */
+  subtitle?: TextStyleTokens;
 }
 
 /** Collapsible widget chrome (tool bubbles, reasoning bubbles, approval bubbles). */
@@ -298,6 +318,8 @@ export interface MarkdownTokens {
     background?: TokenReference<'color'>;
     borderColor?: TokenReference<'color'>;
     textColor?: TokenReference<'color'>;
+    /** Corner radius; follows `palette.radius.md` by default so square-corner themes get square code blocks. */
+    borderRadius?: TokenReference<'radius'>;
   };
   /** Table styling. */
   table?: {
@@ -361,10 +383,20 @@ export interface ReasoningBubbleTokens {
   shadow: string;
 }
 
+/** Scrollbar appearance shared by every scroller in the widget. */
+export interface ScrollbarTokens {
+  /** Thumb color. @default semantic.colors.border */
+  thumb?: TokenReference<'color'>;
+  /** Track color. @default "transparent" */
+  track?: TokenReference<'color'>;
+}
+
 /** Composer (message input) chrome. */
 export interface ComposerChromeTokens {
   /** Box-shadow on the composer form (raw CSS, e.g. `none`). */
   shadow: string;
+  /** Border color of the composer form. @default semantic.colors.border */
+  borderColor?: TokenReference<'color'>;
   /** Inner padding of the composer form (raw CSS shorthand). @default "0.75rem 1rem" */
   padding?: string;
   /** Gap between the textarea row and the actions row. @default "0.5rem" */
@@ -534,7 +566,10 @@ export interface ScrollToBottomTokens extends ComponentTokenSet {
 
 /** Visual tokens shared by one suggestion presentation variant. */
 export interface SuggestionVariantTokens extends ComponentTokenSet {
+  /** Space inside one item, between its icon and its copy. */
   gap?: string;
+  /** Space between suggestion items in the container. */
+  itemGap?: string;
   minHeight?: string;
   fontSize?: string;
   lineHeight?: string;
@@ -579,6 +614,8 @@ export interface ComponentTokens {
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
   composer: ComposerChromeTokens;
+  /** Scrollbar appearance for every scroller in the widget. */
+  scrollbar?: ScrollbarTokens;
   /** Icon button styling tokens. */
   iconButton?: IconButtonTokens;
   /** Label button styling tokens. */

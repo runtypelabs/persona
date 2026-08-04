@@ -1,4 +1,7 @@
-import type { AgentWidgetPlugin } from "@runtypelabs/persona";
+import type {
+  AgentWidgetPlugin,
+  AgentWidgetPluginStorage,
+} from "@runtypelabs/persona";
 import { injectStyles } from "@runtypelabs/persona/plugin-kit";
 
 /**
@@ -202,3 +205,129 @@ export const createCustomSuggestionsPlugin = (): AgentWidgetPlugin => ({
     return button;
   },
 });
+
+const WELCOME_HOME_CSS = `
+.suggestion-home {
+  width: 100%;
+  /* Plugin welcome content is full-bleed (overlay host); the widget root
+     publishes the column vars so plugins match without config access. */
+  max-width: var(--persona-welcome-max-width, 640px);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.suggestion-home__title {
+  font-size: 18px;
+  font-weight: 640;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.suggestion-home__subtitle {
+  color: var(--persona-text-muted, #6b7280);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.suggestion-home__starters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.suggestion-home__start {
+  appearance: none;
+  align-self: flex-start;
+  border: none;
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--persona-button-primary-bg, var(--persona-accent, #171717));
+  color: var(--persona-button-primary-fg, #ffffff);
+}
+`;
+
+/**
+ * `renderWelcome` showcase: an Intercom-style home stack that owns the welcome
+ * surface, then hands it back to the transcript. Starters go through
+ * `ctx.renderStarter` so the normal select pipeline (events, hooks, send/fill)
+ * still applies, and the view flag lives in `ctx.storage`.
+ *
+ * `showHome()` is the host-closure pattern: the host wires it to a header
+ * action, and the returned stack overlays the transcript even after the
+ * conversation has started.
+ */
+export const createWelcomeHomePlugin = (): AgentWidgetPlugin & {
+  showHome: () => void;
+} => {
+  let requestRender: (() => void) | null = null;
+  // `ctx.storage` is the only view state: a second flag would desync from it.
+  let viewStorage: AgentWidgetPluginStorage | null = null;
+
+  return {
+    id: "demo-welcome-home",
+    // Runs last, so a hook that cancels the selection keeps the user on home.
+    priority: -10,
+    showHome: () => {
+      viewStorage?.remove("view");
+      requestRender?.();
+    },
+    // Picking a starter starts the conversation, so the home stack must hand
+    // the surface back or the reply streams invisibly behind the overlay.
+    // Deferred a microtask: re-rendering mid-dispatch would drop the element
+    // being clicked, and the send happens after this hook returns.
+    onSuggestionSelect: ({ surface }) => {
+      if (surface !== "starter" || viewStorage?.get("view") === "chat") return;
+      queueMicrotask(() => {
+        viewStorage?.set("view", "chat");
+        requestRender?.();
+      });
+    },
+    renderWelcome: ({ config, renderStarter, requestRender: request, storage, onCleanup }) => {
+      requestRender = request;
+      viewStorage = storage;
+      if (storage.get("view") === "chat") return null;
+
+      const root = document.createElement("div");
+      root.className = "suggestion-home";
+      injectStyles(root, "persona-welcome-home-plugin", WELCOME_HOME_CSS);
+
+      const title = document.createElement("h2");
+      title.className = "suggestion-home__title";
+      title.textContent = config.title;
+
+      const subtitle = document.createElement("p");
+      subtitle.className = "suggestion-home__subtitle";
+      subtitle.textContent = config.subtitle;
+
+      const starters = document.createElement("div");
+      starters.className = "suggestion-home__starters";
+      for (const prompt of [
+        "Show me what you can do",
+        "Write starter prompts for my app",
+        "Theme suggestions to match my brand",
+      ]) {
+        starters.appendChild(renderStarter(prompt));
+      }
+
+      const start = document.createElement("button");
+      start.type = "button";
+      start.className = "suggestion-home__start";
+      start.textContent = "Start a conversation";
+      const leaveHome = () => {
+        storage.set("view", "chat");
+        request();
+      };
+      start.addEventListener("click", leaveHome);
+      onCleanup(() => start.removeEventListener("click", leaveHome));
+
+      root.append(title, subtitle, starters, start);
+      return root;
+    },
+  };
+};

@@ -138,6 +138,205 @@ const animateEntrance = (elements: readonly HTMLElement[]): void => {
   });
 };
 
+export interface SuggestionElementContext {
+  /** Fully normalized item, including the effective send/fill behavior. */
+  item: AgentWidgetResolvedSuggestion;
+  index: number;
+  surface: AgentWidgetSuggestionSurface;
+  source: AgentWidgetSuggestionSource;
+  variant: AgentWidgetSuggestionVariant;
+  streaming: boolean;
+  config: AgentWidgetConfig;
+  plugins: readonly AgentWidgetPlugin[];
+  chipsConfig?: AgentWidgetSuggestionChipsConfig;
+  session: AgentWidgetSession;
+  /** Read live: inline mentions and composer rebuilds swap the input element. */
+  getTextarea: () => HTMLTextAreaElement;
+  /** Node the cancelable `persona:suggestion:*` events dispatch from. */
+  eventTarget: HTMLElement;
+}
+
+/**
+ * Build one suggestion element with the full select pipeline attached:
+ * cancelable DOM events, `onSuggestionSelect` hooks, then send or fill. The
+ * suggestion rows and the `renderWelcome` ctx's `renderStarter` share this, so
+ * a plugin-rendered starter behaves identically to a built-in one.
+ */
+export const createSuggestionElement = (
+  context: SuggestionElementContext
+): HTMLElement => {
+  const {
+    item,
+    index,
+    surface,
+    source,
+    variant,
+    streaming,
+    config,
+    plugins,
+    chipsConfig,
+    session,
+    getTextarea,
+    eventTarget,
+  } = context;
+  const isFollowUp = surface === "followUp";
+  const itemBehavior = item.behavior;
+
+  const select = () => {
+    if (session.isStreaming()) return;
+    const detail = {
+      suggestion: { ...item },
+      surface,
+      source,
+      behavior: itemBehavior,
+    };
+    const shouldContinue = eventTarget.dispatchEvent(
+      new CustomEvent("persona:suggestion:selected", {
+        detail,
+        bubbles: true,
+        composed: true,
+        cancelable: true,
+      })
+    );
+    if (isFollowUp) {
+      eventTarget.dispatchEvent(
+        new CustomEvent("persona:suggestReplies:selected", {
+          detail: { suggestion: item.prompt },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }
+    if (!shouldContinue) return;
+
+    for (const plugin of plugins) {
+      if (
+        plugin.onSuggestionSelect?.({
+          suggestion: { ...item },
+          surface,
+          source,
+          variant,
+          config,
+        }) === false
+      ) {
+        return;
+      }
+    }
+
+    const textarea = getTextarea();
+    if (itemBehavior === "fill") {
+      textarea.value = item.prompt;
+      textarea.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+      textarea.focus();
+      return;
+    }
+
+    textarea.value = "";
+    session.sendMessage(item.prompt);
+  };
+
+  const defaultRenderer = (): HTMLElement => {
+    const button = createElement(
+      "button",
+      `persona-suggestion persona-suggestion--${variant}`
+    ) as HTMLButtonElement;
+    button.type = "button";
+    button.disabled = streaming;
+    button.dataset.suggestionId = item.id;
+    button.dataset.emphasis = item.emphasis;
+    button.dataset.behavior = itemBehavior;
+
+    // Legacy `suggestionChipsConfig` compat is chip-only: its inline
+    // styles would otherwise override the card/list padding tokens.
+    if (variant === "chip") {
+      if (chipsConfig?.fontFamily) {
+        button.style.fontFamily = fontFamilyValue(chipsConfig.fontFamily);
+      }
+      if (chipsConfig?.fontWeight) {
+        button.style.fontWeight = chipsConfig.fontWeight;
+      }
+      if (chipsConfig?.paddingX) {
+        button.style.paddingLeft = chipsConfig.paddingX;
+        button.style.paddingRight = chipsConfig.paddingX;
+      }
+      if (chipsConfig?.paddingY) {
+        button.style.paddingTop = chipsConfig.paddingY;
+        button.style.paddingBottom = chipsConfig.paddingY;
+      }
+    }
+
+    if (item.icon) {
+      const icon = renderLucideIcon(
+        item.icon,
+        "var(--persona-suggestion-icon-size)",
+        "currentColor",
+        1.8
+      );
+      if (icon) {
+        icon.classList.add("persona-suggestion__icon");
+        // The glyph strokes in currentColor, so this tints it alone; inline
+        // also beats the emphasis-primary icon rule.
+        if (item.iconColor) icon.style.color = item.iconColor;
+        button.appendChild(icon);
+      }
+    }
+
+    const copy = createElement("span", "persona-suggestion__copy");
+    copy.appendChild(
+      createNode("span", {
+        className: "persona-suggestion__label",
+        text: item.label,
+      })
+    );
+    // Chips are single-line labels; descriptions belong to card and list.
+    if (item.description && variant !== "chip") {
+      copy.appendChild(
+        createNode("span", {
+          className: "persona-suggestion__description",
+          text: item.description,
+        })
+      );
+    }
+    button.appendChild(copy);
+
+    if (variant !== "chip") {
+      const arrow = renderLucideIcon("arrow-right", 16, "currentColor", 1.8);
+      if (arrow) {
+        arrow.classList.add("persona-suggestion__arrow");
+        button.appendChild(arrow);
+      }
+    }
+
+    button.addEventListener("click", select);
+    return button;
+  };
+
+  let element: HTMLElement | null = null;
+  for (const plugin of plugins) {
+    if (!plugin.renderSuggestion) continue;
+    element = plugin.renderSuggestion({
+      suggestion: { ...item },
+      index,
+      surface,
+      source,
+      variant,
+      streaming,
+      config,
+      defaultRenderer,
+      select,
+    });
+    if (element) break;
+  }
+  element ??= defaultRenderer();
+  element.dataset.suggestionId ||= item.id;
+  element.dataset.behavior ||= itemBehavior;
+  element.dataset.emphasis ||= item.emphasis;
+  if (!(element instanceof HTMLButtonElement)) {
+    element.setAttribute("aria-disabled", streaming ? "true" : "false");
+  }
+  return element;
+};
+
 export const createSuggestions = (container: HTMLElement): SuggestionButtons => {
   const suggestionButtons: HTMLButtonElement[] = [];
   const suggestionElements: HTMLElement[] = [];
@@ -298,159 +497,20 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     const streaming = session.isStreaming();
 
     normalized.forEach((item, index) => {
-      const itemBehavior = item.behavior;
-      const select = () => {
-        if (session.isStreaming()) return;
-        const detail = {
-          suggestion: { ...item },
-          surface,
-          source,
-          behavior: itemBehavior,
-        };
-        const shouldContinue = container.dispatchEvent(
-          new CustomEvent("persona:suggestion:selected", {
-            detail,
-            bubbles: true,
-            composed: true,
-            cancelable: true,
-          })
-        );
-        if (isFollowUp) {
-          container.dispatchEvent(
-            new CustomEvent("persona:suggestReplies:selected", {
-              detail: { suggestion: item.prompt },
-              bubbles: true,
-              composed: true,
-            })
-          );
-        }
-        if (!shouldContinue) return;
-
-        for (const plugin of plugins) {
-          if (
-            plugin.onSuggestionSelect?.({
-              suggestion: { ...item },
-              surface,
-              source,
-              variant,
-              config: widgetConfig,
-            }) === false
-          ) {
-            return;
-          }
-        }
-
-        if (itemBehavior === "fill") {
-          textarea.value = item.prompt;
-          textarea.dispatchEvent(
-            new Event("input", { bubbles: true, composed: true })
-          );
-          textarea.focus();
-          return;
-        }
-
-        textarea.value = "";
-        session.sendMessage(item.prompt);
-      };
-
-      const defaultRenderer = (): HTMLElement => {
-        const button = createElement(
-          "button",
-          `persona-suggestion persona-suggestion--${variant}`
-        ) as HTMLButtonElement;
-        button.type = "button";
-        button.disabled = streaming;
-        button.dataset.suggestionId = item.id;
-        button.dataset.emphasis = item.emphasis;
-        button.dataset.behavior = itemBehavior;
-
-        // Legacy `suggestionChipsConfig` compat is chip-only: its inline
-        // styles would otherwise override the card/list padding tokens.
-        if (variant === "chip") {
-          if (chipsConfig?.fontFamily) {
-            button.style.fontFamily = fontFamilyValue(chipsConfig.fontFamily);
-          }
-          if (chipsConfig?.fontWeight) {
-            button.style.fontWeight = chipsConfig.fontWeight;
-          }
-          if (chipsConfig?.paddingX) {
-            button.style.paddingLeft = chipsConfig.paddingX;
-            button.style.paddingRight = chipsConfig.paddingX;
-          }
-          if (chipsConfig?.paddingY) {
-            button.style.paddingTop = chipsConfig.paddingY;
-            button.style.paddingBottom = chipsConfig.paddingY;
-          }
-        }
-
-        if (item.icon) {
-          const icon = renderLucideIcon(
-            item.icon,
-            "var(--persona-suggestion-icon-size)",
-            "currentColor",
-            1.8
-          );
-          if (icon) {
-            icon.classList.add("persona-suggestion__icon");
-            // The glyph strokes in currentColor, so this tints it alone; inline
-            // also beats the emphasis-primary icon rule.
-            if (item.iconColor) icon.style.color = item.iconColor;
-            button.appendChild(icon);
-          }
-        }
-
-        const copy = createElement("span", "persona-suggestion__copy");
-        copy.appendChild(
-          createNode("span", {
-            className: "persona-suggestion__label",
-            text: item.label,
-          })
-        );
-        if (item.description) {
-          copy.appendChild(
-            createNode("span", {
-              className: "persona-suggestion__description",
-              text: item.description,
-            })
-          );
-        }
-        button.appendChild(copy);
-
-        if (variant !== "chip") {
-          const arrow = renderLucideIcon("arrow-right", 16, "currentColor", 1.8);
-          if (arrow) {
-            arrow.classList.add("persona-suggestion__arrow");
-            button.appendChild(arrow);
-          }
-        }
-
-        button.addEventListener("click", select);
-        return button;
-      };
-
-      let element: HTMLElement | null = null;
-      for (const plugin of plugins) {
-        if (!plugin.renderSuggestion) continue;
-        element = plugin.renderSuggestion({
-          suggestion: { ...item },
-          index,
-          surface,
-          source,
-          variant,
-          streaming,
-          config: widgetConfig,
-          defaultRenderer,
-          select,
-        });
-        if (element) break;
-      }
-      element ??= defaultRenderer();
-      element.dataset.suggestionId ||= item.id;
-      element.dataset.behavior ||= itemBehavior;
-      element.dataset.emphasis ||= item.emphasis;
-      if (!(element instanceof HTMLButtonElement)) {
-        element.setAttribute("aria-disabled", streaming ? "true" : "false");
-      }
+      const element = createSuggestionElement({
+        item,
+        index,
+        surface,
+        source,
+        variant,
+        streaming,
+        config: widgetConfig,
+        plugins,
+        chipsConfig,
+        session,
+        getTextarea: () => textarea,
+        eventTarget: container,
+      });
 
       fragment.appendChild(element);
       suggestionElements.push(element);

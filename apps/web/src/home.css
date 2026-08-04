@@ -1536,18 +1536,11 @@ section[id], aside[id] {
 
 /* Widget terminal skin -------------------------------------------------------------
    The home widget renders without Shadow DOM, so the page can finish what the
-   theme tokens (set in main.ts) can't express: role labels, accent borders,
-   and the terminal code blocks. Scoped to .chat-rail. */
-
-.chat-rail .persona-widget-body {
-  background: var(--paper);
-  scrollbar-width: thin;
-  scrollbar-color: var(--teal-dim) transparent;
-}
-
-.chat-rail [data-persona-intro-card] {
-  border: 1px solid var(--hairline);
-}
+   theme tokens (editorial-widget-theme.ts) can't express: role labels and
+   per-side accent borders. Everything tokenizable lives in the theme —
+   body background (semantic container), scrollbar (components.scrollbar),
+   intro card border, composer border, and code block colors. Scoped to
+   .chat-rail. */
 
 .chat-rail .persona-message-assistant-bubble,
 .chat-rail .persona-message-user-bubble {
@@ -1590,10 +1583,6 @@ section[id], aside[id] {
 .chat-rail .persona-widget-footer button.persona-rounded-button {
   font-family: var(--font-mono);
   font-size: 11px;
-}
-
-.chat-rail form.persona-widget-composer {
-  border-color: rgba(29, 28, 23, 0.25);
 }
 
 /* Base styles for the code-copy wrapper markup. */
@@ -1676,6 +1665,11 @@ section[id], aside[id] {
   font-size: 9px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+  /* The base header rule above keeps its own light border and rounded top
+     corners; unreset they show as a cream notch inside the wrapper's square
+     black border. */
+  border: none;
+  border-radius: 0;
 }
 
 .chat-rail .persona-code-copy-btn {
@@ -1695,16 +1689,15 @@ section[id], aside[id] {
   color: #fff;
 }
 
+/* Colors, radius, and border come from components.markdown.codeBlock in the
+   theme; only the page metrics stay here. */
 .chat-rail .persona-code-block-wrapper pre {
   margin: 0;
   padding: 12px 14px;
-  background: #0c0c0a;
-  color: #d8d3c8;
   font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.6;
   overflow-x: auto;
-  border-radius: 0;
 }
 
 .chat-rail .persona-code-block-wrapper pre code {

@@ -137,6 +137,36 @@ describe('theme utils', () => {
     expect(cssVars['--persona-button-radius']).toBe('6px');
   });
 
+  it('zeroes horizontal intro-card padding when the card resolves flat', () => {
+    const cssVars = themeToCssVariables(createTheme({} as any));
+    expect(cssVars['--persona-intro-card-padding']).toBe('1.5rem 0');
+  });
+
+  it('keeps full intro-card padding when a background or shadow makes it a card', () => {
+    const withBackground = themeToCssVariables(
+      createTheme({
+        components: { introCard: { background: '#ffffff' } },
+      } as any)
+    );
+    expect(withBackground['--persona-intro-card-padding']).toBe('1.5rem');
+
+    const withShadow = themeToCssVariables(
+      createTheme({
+        components: { introCard: { shadow: '0 1px 2px rgba(0,0,0,0.1)' } },
+      } as any)
+    );
+    expect(withShadow['--persona-intro-card-padding']).toBe('1.5rem');
+  });
+
+  it('lets an explicit intro-card padding token win over the flat default', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: { introCard: { padding: '2rem' } },
+      } as any)
+    );
+    expect(cssVars['--persona-intro-card-padding']).toBe('2rem');
+  });
+
   it.each([
     {
       role: 'surface',
@@ -285,6 +315,61 @@ describe('theme utils', () => {
     expect(customVars['--persona-header-title-fg']).toBe('#8b5cf6');
     expect(customVars['--persona-header-subtitle-fg']).toBe('#6b7280');
     expect(customVars['--persona-header-action-icon-fg']).toBe('#9ca3af');
+  });
+
+  it('emits full-path CSS variables for header and welcome text style tokens', () => {
+    const theme = createTheme({
+      components: {
+        introCard: {
+          title: { fontFamily: 'Georgia, serif', fontSize: '1.5rem' },
+        },
+        header: {
+          title: {
+            fontFamily: 'Inter, sans-serif',
+            color: 'palette.colors.secondary.500',
+          },
+        },
+      },
+    } as any);
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-components-introCard-title-fontFamily']).toBe(
+      'Georgia, serif'
+    );
+    expect(cssVars['--persona-components-introCard-title-fontSize']).toBe('1.5rem');
+    expect(cssVars['--persona-components-header-title-fontFamily']).toBe(
+      'Inter, sans-serif'
+    );
+    // title.color supersedes the legacy titleForeground alias.
+    expect(cssVars['--persona-header-title-fg']).toBe('#8b5cf6');
+  });
+
+  it('keeps titleForeground working when no header.title.color is set', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: {
+          header: { titleForeground: 'palette.colors.gray.500' },
+        },
+      } as any)
+    );
+
+    expect(cssVars['--persona-header-title-fg']).toBe('#6b7280');
+  });
+
+  it('emits suggestion itemGap for every variant, defaulting to 8px', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-components-suggestion-chip-itemGap']).toBe('8px');
+    expect(defaults['--persona-components-suggestion-card-itemGap']).toBe('8px');
+    expect(defaults['--persona-components-suggestion-list-itemGap']).toBe('8px');
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: { suggestion: { list: { itemGap: '20px' } } },
+      } as any)
+    );
+    expect(custom['--persona-components-suggestion-list-itemGap']).toBe('20px');
+    // Sibling variants keep the default.
+    expect(custom['--persona-components-suggestion-chip-itemGap']).toBe('8px');
   });
 
   it('maps button.ghost tokens to the composer ghost icon-button CSS variables', () => {
@@ -573,5 +658,57 @@ describe('theme utils', () => {
     });
     const cssVars = themeToCssVariables(theme);
     expect(cssVars['--persona-code-bg']).toBe('#fafafa');
+  });
+
+  it('derives the shared scrollbar variables from components.scrollbar with border fallback', () => {
+    const defaults = themeToCssVariables(createTheme({} as any));
+    expect(defaults['--persona-scrollbar-thumb']).toBe(defaults['--persona-border']);
+    expect(defaults['--persona-scrollbar-track']).toBe('transparent');
+
+    const themed = themeToCssVariables(
+      createTheme({
+        components: { scrollbar: { thumb: '#00dfc1', track: '#111111' } },
+      } as any)
+    );
+    expect(themed['--persona-scrollbar-thumb']).toBe('#00dfc1');
+    expect(themed['--persona-scrollbar-track']).toBe('#111111');
+  });
+
+  it('exposes intro card border and composer border color tokens', () => {
+    const defaults = themeToCssVariables(createTheme({} as any));
+    expect(defaults['--persona-intro-card-border']).toBe('none');
+    expect(defaults['--persona-composer-border-color']).toBe(defaults['--persona-border']);
+
+    const themed = themeToCssVariables(
+      createTheme({
+        components: {
+          introCard: { border: '1px solid rgba(0, 0, 0, 0.1)' },
+          composer: { borderColor: 'rgba(29, 28, 23, 0.25)' },
+        },
+      } as any)
+    );
+    expect(themed['--persona-intro-card-border']).toBe('1px solid rgba(0, 0, 0, 0.1)');
+    expect(themed['--persona-composer-border-color']).toBe('rgba(29, 28, 23, 0.25)');
+  });
+
+  it('follows the palette radius for markdown code blocks so square themes get square code', () => {
+    const defaults = themeToCssVariables(createTheme({} as any));
+    expect(defaults['--persona-md-code-block-border-radius']).toBe('0.375rem');
+
+    const square = themeToCssVariables(
+      createTheme({
+        palette: {
+          radius: { sm: '0px', md: '0px', lg: '0px', xl: '0px', '2xl': '0px' },
+        },
+      } as any)
+    );
+    expect(square['--persona-md-code-block-border-radius']).toBe('0px');
+
+    const explicit = themeToCssVariables(
+      createTheme({
+        components: { markdown: { codeBlock: { borderRadius: '2px' } } },
+      } as any)
+    );
+    expect(explicit['--persona-md-code-block-border-radius']).toBe('2px');
   });
 });

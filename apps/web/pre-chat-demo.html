@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Pre-chat Form Demo</title>
+  <style>
+    .pre-chat-control {
+      display: grid;
+      gap: 0.45rem;
+      margin-top: 1rem;
+    }
+    .pre-chat-fields-buttons,
+    .pre-chat-persist-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+    .pre-chat-actions {
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <div class="info-section">
+          <h3>Form and storage</h3>
+          <p>The form gates the first turn. Submit it once, then reload: the identity comes back from storage and the form is skipped.</p>
+
+          <div class="pre-chat-control">
+            <span class="mount-toggle-label">Fields</span>
+            <div class="pre-chat-fields-buttons mount-toggle-group" role="group" aria-label="Field set">
+              <button class="pre-chat-fields-button mount-toggle-button" type="button" data-fields="standard" aria-pressed="true" title="Name, email, and an optional topic dropdown.">Standard</button>
+              <button class="pre-chat-fields-button mount-toggle-button" type="button" data-fields="email-only" aria-pressed="false" title="A single required email field.">Email only</button>
+            </div>
+          </div>
+
+          <div class="pre-chat-control">
+            <span class="mount-toggle-label">Persist identity</span>
+            <div class="pre-chat-persist-buttons mount-toggle-group" role="group" aria-label="Persist identity">
+              <button class="pre-chat-persist-button mount-toggle-button" type="button" data-persist="on" aria-pressed="true" title="ctx.storage writes to localStorage, so returning visitors skip the form.">On</button>
+              <button class="pre-chat-persist-button mount-toggle-button" type="button" data-persist="off" aria-pressed="false" title="persistState: false downgrades ctx.storage to memory, so the form re-asks every load.">Off</button>
+            </div>
+          </div>
+
+          <div class="pre-chat-actions btn-group">
+            <button class="pre-chat-reset-button" type="button" title="Clears the transcript and the stored identity, so the form gates the next turn again.">Clear saved identity</button>
+            <button class="pre-chat-update-button" type="button" title="Live controller.update(): welcome arbitration re-runs, and the form keeps whatever is already typed.">Update welcome copy</button>
+          </div>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Pre-chat form</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">What the plugin owns</h3>
+        <p>One plugin implements two hooks. <code>renderWelcome</code> returns the form while identity is missing and <code>null</code> once it exists, so Persona's own welcome card takes the surface back. <code>renderComposer</code> returns a disabled composer while gated and <code>null</code> after submit. Nothing in the widget package changes: this is example code in <code>apps/web/src/plugins/pre-chat-plugin.ts</code>.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Unlocking the composer</h3>
+        <p>The composer hook runs once at panel construction, so the unlock rides its <code>requestRender()</code>: the core re-runs composer arbitration and swaps the footer in place, re-wiring attachments, mentions, and the listener registry. The welcome hook's own <code>requestRender()</code> drops the form in the same tick.</p>
+        <div class="code-block">
+<span class="function">renderComposer</span>: ({ config, storage, requestRender }) =&gt; {
+  adoptStorage(storage);
+  composerRequestRender = requestRender;
+  <span class="keyword">if</span> (readIdentity()) <span class="keyword">return</span> <span class="keyword">null</span>;  <span class="comment">// default composer</span>
+  <span class="keyword">return</span> buildGatedComposer(config);
+}
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Where the identity goes</h3>
+        <p>Submit does two things: writes the identity through <code>ctx.storage</code> and exposes a <code>contextProviders</code> entry so every dispatch carries the fields. Context providers run on both the agent and flow paths, so the backend sees the identity with no change to the wire format. Nothing is injected into the transcript: like the commercial widgets, form answers travel as visitor metadata, not messages, so the welcome greeting and starters stay up until the first real turn.</p>
+        <div class="code-block">
+<span class="keyword">const</span> plugin = createPreChatPlugin({ <span class="prop">fields</span> });
+initAgentWidget({
+  <span class="prop">plugins</span>: [plugin],
+  <span class="prop">contextProviders</span>: [plugin.contextProvider],
+});
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Storage and privacy</h3>
+        <p><code>ctx.storage</code> is synchronous <code>localStorage</code>, namespaced by <code>persistState.keyPrefix</code> and the plugin id. With <code>persistState: false</code> it downgrades to an in-memory map, so the form re-asks on every load, which is the right privacy-mode behavior. Values land in plain <code>localStorage</code>, so a plugin capturing anything it considers sensitive should take its own store as an option; this one accepts <code>storage</code> for exactly that.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Fields are host-declared</h3>
+        <p>Validation stays client-side and minimal: required fields and an email shape check. Hosts declare their own set, mirroring the commercial widgets' field pickers.</p>
+        <div class="code-block">
+createPreChatPlugin({
+  <span class="prop">fields</span>: [
+    { <span class="prop">name</span>: <span class="string">"name"</span>, <span class="prop">label</span>: <span class="string">"Name"</span>, <span class="prop">type</span>: <span class="string">"text"</span>, <span class="prop">required</span>: <span class="keyword">true</span> },
+    { <span class="prop">name</span>: <span class="string">"email"</span>, <span class="prop">label</span>: <span class="string">"Email"</span>, <span class="prop">type</span>: <span class="string">"email"</span>, <span class="prop">required</span>: <span class="keyword">true</span> },
+    { <span class="prop">name</span>: <span class="string">"topic"</span>, <span class="prop">label</span>: <span class="string">"Topic"</span>, <span class="prop">type</span>: <span class="string">"select"</span>, <span class="prop">options</span>: [<span class="string">"Billing"</span>, <span class="string">"Technical help"</span>] },
+  ],
+})
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/pre-chat-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("pre-chat-demo");
+  </script>
+</body>
+</html>
