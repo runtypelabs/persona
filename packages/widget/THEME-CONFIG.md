@@ -471,6 +471,7 @@ replace it with a custom element.
 | `borderRadius` | `palette.radius.2xl` |
 | `padding` | `semantic.spacing.lg` |
 | `shadow` | `"0 5px 15px rgba(15, 23, 42, 0.08)"` *(matches the legacy `persona-shadow-sm` look)* |
+| `border` | `"none"` *(full CSS border shorthand, e.g. `"1px solid rgba(0,0,0,0.1)"`)* |
 
 `title` and `subtitle` take the shared `TextStyleTokens` shape
 (`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`,
@@ -615,20 +616,28 @@ Common tokens have short aliases for easier use in custom CSS:
 
 ### Scrollbars
 
-Every scroller in the widget shares one thin scrollbar appearance, themed by
-two variables (set them on the widget root or any ancestor):
+Every scroller in the widget shares one thin scrollbar appearance, themed
+through `components.scrollbar.*`:
 
-```css
---persona-scrollbar-thumb   /* defaults to --persona-border */
---persona-scrollbar-track   /* defaults to transparent */
+```typescript
+theme: {
+  components: {
+    scrollbar: {
+      thumb: "#00dfc1",      // default: semantic.colors.border
+      track: "transparent",  // default: transparent
+    },
+  },
+}
 ```
 
-Visibility is a policy, not a style: `features.scrollBehavior.scrollbar`
-accepts `"on-scroll"` (default: hidden at rest, revealed by reader input,
-pinned visible while scrolled away from the latest), `"auto"` (native
-visibility semantics), or `"hidden"`. The artifact tab strip keeps its
-existing `--persona-artifact-tab-list-scrollbar` variable as an alias layered
-on the shared thumb token.
+The resolved values surface as `--persona-scrollbar-thumb` /
+`--persona-scrollbar-track` for plain-CSS overrides. Visibility is a policy,
+not a style: `features.scrollBehavior.scrollbar` accepts `"on-scroll"`
+(default: hidden at rest, revealed by reader input, pinned visible while
+scrolled away from the latest), `"auto"` (native visibility semantics), or
+`"hidden"`. The artifact tab strip keeps its existing
+`--persona-artifact-tab-list-scrollbar` variable as an alias layered on the
+shared thumb token.
 
 ### Voice Aliases
 

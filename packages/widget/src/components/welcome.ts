@@ -115,6 +115,7 @@ export const buildWelcomeHost = (
         boxShadow: options.flatShadow
           ? "none"
           : "var(--persona-intro-card-shadow, none)",
+        border: "var(--persona-intro-card-border, none)",
       },
     },
     iconHolder,

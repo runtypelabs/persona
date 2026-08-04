@@ -659,4 +659,56 @@ describe('theme utils', () => {
     const cssVars = themeToCssVariables(theme);
     expect(cssVars['--persona-code-bg']).toBe('#fafafa');
   });
+
+  it('derives the shared scrollbar variables from components.scrollbar with border fallback', () => {
+    const defaults = themeToCssVariables(createTheme({} as any));
+    expect(defaults['--persona-scrollbar-thumb']).toBe(defaults['--persona-border']);
+    expect(defaults['--persona-scrollbar-track']).toBe('transparent');
+
+    const themed = themeToCssVariables(
+      createTheme({
+        components: { scrollbar: { thumb: '#00dfc1', track: '#111111' } },
+      } as any)
+    );
+    expect(themed['--persona-scrollbar-thumb']).toBe('#00dfc1');
+    expect(themed['--persona-scrollbar-track']).toBe('#111111');
+  });
+
+  it('exposes intro card border and composer border color tokens', () => {
+    const defaults = themeToCssVariables(createTheme({} as any));
+    expect(defaults['--persona-intro-card-border']).toBe('none');
+    expect(defaults['--persona-composer-border-color']).toBe(defaults['--persona-border']);
+
+    const themed = themeToCssVariables(
+      createTheme({
+        components: {
+          introCard: { border: '1px solid rgba(0, 0, 0, 0.1)' },
+          composer: { borderColor: 'rgba(29, 28, 23, 0.25)' },
+        },
+      } as any)
+    );
+    expect(themed['--persona-intro-card-border']).toBe('1px solid rgba(0, 0, 0, 0.1)');
+    expect(themed['--persona-composer-border-color']).toBe('rgba(29, 28, 23, 0.25)');
+  });
+
+  it('follows the palette radius for markdown code blocks so square themes get square code', () => {
+    const defaults = themeToCssVariables(createTheme({} as any));
+    expect(defaults['--persona-md-code-block-border-radius']).toBe('0.375rem');
+
+    const square = themeToCssVariables(
+      createTheme({
+        palette: {
+          radius: { sm: '0px', md: '0px', lg: '0px', xl: '0px', '2xl': '0px' },
+        },
+      } as any)
+    );
+    expect(square['--persona-md-code-block-border-radius']).toBe('0px');
+
+    const explicit = themeToCssVariables(
+      createTheme({
+        components: { markdown: { codeBlock: { borderRadius: '2px' } } },
+      } as any)
+    );
+    expect(explicit['--persona-md-code-block-border-radius']).toBe('2px');
+  });
 });

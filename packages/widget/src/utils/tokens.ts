@@ -402,6 +402,10 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
   composer: {
     shadow: 'palette.shadows.none',
   },
+  scrollbar: {
+    thumb: 'semantic.colors.border',
+    track: 'transparent',
+  },
   markdown: {
     inlineCode: {
       background: 'palette.colors.gray.50',
@@ -418,6 +422,7 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
       background: 'semantic.colors.container',
       borderColor: 'semantic.colors.border',
       textColor: 'inherit',
+      borderRadius: 'palette.radius.md',
     },
     table: {
       headerBackground: 'semantic.colors.container',
@@ -895,6 +900,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     introCardFlat && introPadding === '1.5rem' ? '1.5rem 0' : introPadding;
   cssVars['--persona-intro-card-shadow'] =
     cssVars['--persona-components-introCard-shadow'] ?? 'none';
+  cssVars['--persona-intro-card-border'] =
+    cssVars['--persona-components-introCard-border'] ?? 'none';
 
   cssVars['--persona-input-background'] =
     cssVars['--persona-components-input-background'] ?? cssVars['--persona-surface'];
@@ -968,6 +975,18 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-composer-fontSize'] ?? '0.875rem';
   cssVars['--persona-composer-line-height'] =
     cssVars['--persona-components-composer-lineHeight'] ?? '1.25rem';
+  cssVars['--persona-composer-border-color'] =
+    cssVars['--persona-components-composer-borderColor'] ??
+    cssVars['--persona-border'] ??
+    '#e5e7eb';
+
+  // Scrollbars (every scroller in the widget consumes these two)
+  cssVars['--persona-scrollbar-thumb'] =
+    cssVars['--persona-components-scrollbar-thumb'] ??
+    cssVars['--persona-border'] ??
+    '#e5e7eb';
+  cssVars['--persona-scrollbar-track'] =
+    cssVars['--persona-components-scrollbar-track'] ?? 'transparent';
 
   cssVars['--persona-md-inline-code-bg'] =
     cssVars['--persona-components-markdown-inlineCode-background'] ?? cssVars['--persona-container'];
@@ -1000,6 +1019,12 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-markdown-codeBlock-borderColor'] ?? cssVars['--persona-border'];
   cssVars['--persona-md-code-block-text-color'] =
     cssVars['--persona-components-markdown-codeBlock-textColor'] ?? 'inherit';
+  // Follows the palette radius so square-corner themes get square code blocks;
+  // the 0.375rem fallback matches palette.radius.md's default.
+  cssVars['--persona-md-code-block-border-radius'] =
+    cssVars['--persona-components-markdown-codeBlock-borderRadius'] ??
+    cssVars['--persona-radius-md'] ??
+    '0.375rem';
 
   // Markdown table
   cssVars['--persona-md-table-header-bg'] =

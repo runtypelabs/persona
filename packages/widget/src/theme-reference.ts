@@ -133,13 +133,13 @@ export const THEME_TOKEN_DOCS = {
       markdown: {
         description: 'Markdown rendering in messages and artifact pane.',
         properties:
-          'inlineCode (background, foreground), link.foreground, prose.fontFamily, heading.h1/h2 (fontSize, fontWeight).',
+          'inlineCode (background, foreground), link.foreground, prose.fontFamily, heading.h1/h2 (fontSize, fontWeight), codeBlock (background, borderColor, textColor, borderRadius: follows palette.radius.md), table (headerBackground, borderColor), hr.color, blockquote (borderColor, background, textColor).',
       },
       introCard: {
         description:
           'Welcome surface above the message list. Flat by default (transparent, no shadow).',
         properties:
-          'background, borderRadius, padding, shadow, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+          'background, borderRadius, padding, shadow, border (full CSS shorthand, default none), title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
       },
       suggestion: {
         description:
@@ -155,9 +155,11 @@ export const THEME_TOKEN_DOCS = {
       scrollToBottom:
         'Floating scroll-to-bottom affordance shared by transcript and event stream: background, foreground, border, size, borderRadius, shadow, padding, gap, fontSize, iconSize.',
       toolBubble: 'shadow: tool call row box-shadow.',
+      scrollbar:
+        'Shared scrollbar appearance for every scroller: thumb (default semantic.colors.border), track (default transparent).',
       reasoningBubble: 'shadow: reasoning/thinking row box-shadow.',
       composer:
-        'Message input form: shadow (box-shadow), padding (form inset), gap (textarea row to actions row), fontSize and lineHeight (textarea type).',
+        'Message input form: shadow (box-shadow), borderColor, padding (form inset), gap (textarea row to actions row), fontSize and lineHeight (textarea type).',
       artifact:
         'toolbar (icon styling, copy menu), tab (background, active states), pane (background, toolbarBackground).',
     },

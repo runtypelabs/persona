@@ -268,6 +268,8 @@ export interface IntroCardTokens extends ComponentTokenSet {
   padding?: TokenReference<'spacing'>;
   /** Box-shadow on the intro card (token ref or raw CSS, e.g. `none`). */
   shadow?: string;
+  /** Full border shorthand on the intro card (raw CSS, e.g. `"1px solid rgba(0,0,0,0.1)"`). @default "none" */
+  border?: string;
   /** Welcome title typography. */
   title?: TextStyleTokens;
   /** Welcome subtitle typography. */
@@ -316,6 +318,8 @@ export interface MarkdownTokens {
     background?: TokenReference<'color'>;
     borderColor?: TokenReference<'color'>;
     textColor?: TokenReference<'color'>;
+    /** Corner radius; follows `palette.radius.md` by default so square-corner themes get square code blocks. */
+    borderRadius?: TokenReference<'radius'>;
   };
   /** Table styling. */
   table?: {
@@ -379,10 +383,20 @@ export interface ReasoningBubbleTokens {
   shadow: string;
 }
 
+/** Scrollbar appearance shared by every scroller in the widget. */
+export interface ScrollbarTokens {
+  /** Thumb color. @default semantic.colors.border */
+  thumb?: TokenReference<'color'>;
+  /** Track color. @default "transparent" */
+  track?: TokenReference<'color'>;
+}
+
 /** Composer (message input) chrome. */
 export interface ComposerChromeTokens {
   /** Box-shadow on the composer form (raw CSS, e.g. `none`). */
   shadow: string;
+  /** Border color of the composer form. @default semantic.colors.border */
+  borderColor?: TokenReference<'color'>;
   /** Inner padding of the composer form (raw CSS shorthand). @default "0.75rem 1rem" */
   padding?: string;
   /** Gap between the textarea row and the actions row. @default "0.5rem" */
@@ -600,6 +614,8 @@ export interface ComponentTokens {
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
   composer: ComposerChromeTokens;
+  /** Scrollbar appearance for every scroller in the widget. */
+  scrollbar?: ScrollbarTokens;
   /** Icon button styling tokens. */
   iconButton?: IconButtonTokens;
   /** Label button styling tokens. */
