@@ -979,6 +979,7 @@ export const createAgentExperience = (
   const isActivityWhilePinnedEnabled = () =>
     scrollBehaviorFeature.showActivityWhilePinned !== false;
   const isAnnounceEnabled = () => scrollBehaviorFeature.announce === true;
+  const getScrollbarPolicy = () => scrollBehaviorFeature.scrollbar ?? "on-scroll";
   const scrollToBottomButton = createElement(
     "button",
     "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-z-10 persona-flex persona-items-center persona-gap-1 persona-text-xs persona-transform persona--translate-x-1/2 persona-cursor-pointer"
@@ -3879,6 +3880,7 @@ export const createAgentExperience = (
   let readerEngagedThisTurn = false;
   const markReaderEngaged = () => {
     readerEngagedThisTurn = true;
+    revealTranscriptScrollbar();
   };
   // Dedupes assistant-turn detection across token-by-token re-renders.
   let lastHandledAssistantId: string | null = null;
@@ -3890,6 +3892,40 @@ export const createAgentExperience = (
   const USER_SCROLL_THRESHOLD = 4;
   const BOTTOM_THRESHOLD = 24;
   const AUTO_SCROLL_SNAP_THRESHOLD = 80;
+
+  // Scrollbar visibility policy (features.scrollBehavior.scrollbar). The
+  // resolved policy is stamped on the root once and CSS scopes every
+  // scroller off it. Under "on-scroll" the transcript bar reveals here on
+  // genuine reader input (markReaderEngaged is the funnel for wheel, touch,
+  // pointer, and nav keys, so widget-driven scrolling never reveals it) and
+  // hides again after an idle delay, but only at the resting position: away
+  // from rest the bar is the positional affordance and stays. The scroll
+  // back down re-enters through markReaderEngaged and re-arms the timer.
+  const SCROLLBAR_IDLE_MS = 1000;
+  let scrollbarIdleTimer: ReturnType<typeof setTimeout> | null = null;
+  const applyScrollbarPolicy = () => {
+    mount.setAttribute("data-persona-scrollbar", getScrollbarPolicy());
+    if (getScrollbarPolicy() !== "on-scroll") {
+      if (scrollbarIdleTimer !== null) clearTimeout(scrollbarIdleTimer);
+      scrollbarIdleTimer = null;
+      body.removeAttribute("data-persona-scrollbar-visible");
+    }
+  };
+  const revealTranscriptScrollbar = () => {
+    if (getScrollbarPolicy() !== "on-scroll") return;
+    body.setAttribute("data-persona-scrollbar-visible", "");
+    if (scrollbarIdleTimer !== null) clearTimeout(scrollbarIdleTimer);
+    scrollbarIdleTimer = setTimeout(() => {
+      scrollbarIdleTimer = null;
+      if (isElementNearBottom(body, BOTTOM_THRESHOLD)) {
+        body.removeAttribute("data-persona-scrollbar-visible");
+      }
+    }, SCROLLBAR_IDLE_MS);
+  };
+  applyScrollbarPolicy();
+  destroyCallbacks.push(() => {
+    if (scrollbarIdleTimer !== null) clearTimeout(scrollbarIdleTimer);
+  });
   const messageState = new Map<
     string,
     { streaming?: boolean; role: AgentWidgetMessage["role"] }
@@ -8674,6 +8710,7 @@ export const createAgentExperience = (
         resetAnchorState();
         resumeAutoScroll();
       }
+      applyScrollbarPolicy();
       renderScrollToBottomButton();
       syncScrollToBottomButton();
       const prevShowEventStreamToggle = showEventStreamToggle;

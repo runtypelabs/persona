@@ -613,6 +613,23 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-muted           /* alias for --persona-text-muted */
 ```
 
+### Scrollbars
+
+Every scroller in the widget shares one thin scrollbar appearance, themed by
+two variables (set them on the widget root or any ancestor):
+
+```css
+--persona-scrollbar-thumb   /* defaults to --persona-border */
+--persona-scrollbar-track   /* defaults to transparent */
+```
+
+Visibility is a policy, not a style: `features.scrollBehavior.scrollbar`
+accepts `"on-scroll"` (default: hidden at rest, revealed by reader input,
+pinned visible while scrolled away from the latest), `"auto"` (native
+visibility semantics), or `"hidden"`. The artifact tab strip keeps its
+existing `--persona-artifact-tab-list-scrollbar` variable as an alias layered
+on the shared thumb token.
+
 ### Voice Aliases
 
 ```css

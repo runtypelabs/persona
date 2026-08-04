@@ -331,6 +331,66 @@
   display: none;
 }
 
+/* Scrollbars ------------------------------------------------------------- */
+
+/* One appearance for every scroller in the widget: thin, themed thumb, bare
+   track. Standard properties only: mixing ::-webkit-scrollbar styling with
+   them makes Chromium drop the pseudo-element rules, so webkit selectors are
+   reserved for the hidden states below, where both mechanisms agree.
+   scrollbar-color inherits from the root; scrollbar-width does not, hence
+   the descendant rule. */
+[data-persona-root] {
+  scrollbar-color: var(
+      --persona-scrollbar-thumb,
+      var(--persona-border, #e5e7eb)
+    )
+    var(--persona-scrollbar-track, transparent);
+}
+[data-persona-root],
+[data-persona-root] * {
+  scrollbar-width: thin;
+}
+
+/* "on-scroll" policy (the default): bars hide at rest. ui.ts stamps the
+   resolved policy on the root and flips data-persona-scrollbar-visible on
+   the transcript while the reader is scrolling or away from the resting
+   position. The reserved gutter keeps classic scrollbars (Windows,
+   always-show macOS) from reflowing the transcript on toggle. */
+[data-persona-scrollbar="on-scroll"] .persona-widget-body {
+  scrollbar-gutter: stable;
+}
+[data-persona-scrollbar="on-scroll"]
+  .persona-widget-body:not([data-persona-scrollbar-visible]),
+[data-persona-scrollbar="hidden"] .persona-widget-body {
+  scrollbar-width: none;
+}
+[data-persona-scrollbar="on-scroll"]
+  .persona-widget-body:not([data-persona-scrollbar-visible])::-webkit-scrollbar,
+[data-persona-scrollbar="hidden"] .persona-widget-body::-webkit-scrollbar {
+  display: none;
+}
+
+/* Inner scrollers under the same policy: hidden at rest, hover reveals for
+   pointer users. Edge fades stay the primary overflow affordance there, and
+   morph re-renders make per-element JS wiring fragile, so hover is the whole
+   reveal story for these surfaces. */
+[data-persona-scrollbar="on-scroll"] .persona-artifact-list:not(:hover),
+[data-persona-scrollbar="on-scroll"]
+  .persona-suggestions[data-overflow="scroll"]:not(:hover),
+[data-persona-scrollbar="hidden"] .persona-artifact-list,
+[data-persona-scrollbar="hidden"] .persona-suggestions[data-overflow="scroll"] {
+  scrollbar-width: none;
+}
+[data-persona-scrollbar="on-scroll"]
+  .persona-artifact-list:not(:hover)::-webkit-scrollbar,
+[data-persona-scrollbar="on-scroll"]
+  .persona-suggestions[data-overflow="scroll"]:not(:hover)::-webkit-scrollbar,
+[data-persona-scrollbar="hidden"] .persona-artifact-list::-webkit-scrollbar,
+[data-persona-scrollbar="hidden"]
+  .persona-suggestions[data-overflow="scroll"]::-webkit-scrollbar {
+  display: none;
+}
+
 /* Suggestions ----------------------------------------------------------- */
 
 .persona-suggestions {
@@ -3450,7 +3510,10 @@
 }
 
 [data-persona-root] .persona-artifact-list::-webkit-scrollbar-thumb {
-  background: var(--persona-artifact-tab-list-scrollbar, var(--persona-border, #e5e7eb));
+  background: var(
+    --persona-artifact-tab-list-scrollbar,
+    var(--persona-scrollbar-thumb, var(--persona-border, #e5e7eb))
+  );
   border-radius: 9999px;
 }
 

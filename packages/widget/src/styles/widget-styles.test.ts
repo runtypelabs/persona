@@ -333,3 +333,50 @@ describe("plugin welcome styles", () => {
     );
   });
 });
+
+describe("scrollbar policy styles", () => {
+  it("themes every scroller from the shared tokens", () => {
+    // scrollbar-color inherits from the root; scrollbar-width does not, so
+    // the width needs the descendant star.
+    expect(widgetCss).toMatch(
+      /\[data-persona-root\] \{\n {2}scrollbar-color: var\(\n\s+--persona-scrollbar-thumb,/,
+    );
+    expect(widgetCss).toContain("var(--persona-scrollbar-track, transparent)");
+    expect(widgetCss).toContain(
+      "[data-persona-root],\n[data-persona-root] * {\n  scrollbar-width: thin;\n}",
+    );
+    // The artifact tab strip keeps its own token as an alias layered on the
+    // shared thumb token.
+    expect(widgetCss).toContain(
+      "--persona-artifact-tab-list-scrollbar,\n    var(--persona-scrollbar-thumb, var(--persona-border, #e5e7eb))",
+    );
+  });
+
+  it("hides the transcript bar at rest under the on-scroll policy without reflow", () => {
+    // Rest state keys off the ui.ts-owned attributes; the reveal attribute
+    // must appear as a :not() so flipping it shows the bar again.
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="on-scroll"]\n  .persona-widget-body:not([data-persona-scrollbar-visible]),\n[data-persona-scrollbar="hidden"] .persona-widget-body {\n  scrollbar-width: none;\n}',
+    );
+    // Old-Safari fallback: webkit hiding agrees with the standard property.
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="hidden"] .persona-widget-body::-webkit-scrollbar {\n  display: none;\n}',
+    );
+    // Classic-scrollbar platforms must not reflow the transcript on toggle.
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="on-scroll"] .persona-widget-body {\n  scrollbar-gutter: stable;\n}',
+    );
+  });
+
+  it("hover-reveals inner scroller bars under the on-scroll policy", () => {
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="on-scroll"] .persona-artifact-list:not(:hover)',
+    );
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="on-scroll"]\n  .persona-suggestions[data-overflow="scroll"]:not(:hover)',
+    );
+    expect(widgetCss).toContain(
+      '[data-persona-scrollbar="hidden"] .persona-artifact-list,',
+    );
+  });
+});

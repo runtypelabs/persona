@@ -1,0 +1,5 @@
+---
+"@runtypelabs/persona": minor
+---
+
+Every scroller in the widget now shares one themed scrollbar (thin, rounded thumb from `--persona-scrollbar-thumb`, transparent track via `--persona-scrollbar-track`) and a single visibility policy: `features.scrollBehavior.scrollbar`. The default, `"on-scroll"`, hides bars at rest and reveals the transcript bar on genuine reader input, keeping it visible while the reader is scrolled away from the latest content: overlay-scrollbar semantics on every platform, so Windows and always-show macOS match what trackpad and mobile users already see. During streaming, widget-driven scrolling never reveals the bar. Inner scrollers (artifact tabs, suggestion strips) hide at rest and reveal on hover. `"auto"` restores native visibility semantics with the themed appearance, and `"hidden"` removes the indicator entirely; a reserved scrollbar gutter keeps classic-scrollbar platforms from reflowing when the bar toggles. This changes the default look on platforms with persistent scrollbars; pass `scrollbar: "auto"` to keep a permanently visible bar.

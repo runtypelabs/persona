@@ -1901,6 +1901,19 @@ export type AgentWidgetScrollMode = "follow" | "anchor-top" | "none";
  */
 export type AgentWidgetScrollRestorePosition = "bottom" | "last-user-turn";
 
+/**
+ * Scrollbar visibility policy for every scroll surface in the widget.
+ *
+ * - `"on-scroll"` hides bars at rest and reveals them on genuine reader
+ *   input, keeping them visible while the reader is away from the resting
+ *   position: overlay-scrollbar semantics on every platform.
+ * - `"auto"` keeps the themed bar under native visibility semantics: overlay
+ *   platforms still auto-hide, classic-scrollbar platforms (Windows,
+ *   always-show macOS) show it persistently.
+ * - `"hidden"` never shows an indicator. Scrolling itself is unaffected.
+ */
+export type AgentWidgetScrollbarPolicy = "on-scroll" | "auto" | "hidden";
+
 export type AgentWidgetScrollBehaviorFeature = {
   /** Scroll behavior during streamed responses. @default "anchor-top" */
   mode?: AgentWidgetScrollMode;
@@ -1945,6 +1958,13 @@ export type AgentWidgetScrollBehaviorFeature = {
    * @default false
    */
   announce?: boolean;
+  /**
+   * Scrollbar visibility policy, applied to the transcript and every inner
+   * scroller through one root attribute. Themable via
+   * `--persona-scrollbar-thumb` and `--persona-scrollbar-track`.
+   * @default "on-scroll"
+   */
+  scrollbar?: AgentWidgetScrollbarPolicy;
 };
 
 export type AgentWidgetScrollToBottomFeature = {

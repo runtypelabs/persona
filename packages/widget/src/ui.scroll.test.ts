@@ -1366,4 +1366,71 @@ describe("createAgentExperience streaming scroll", () => {
     controller.destroy();
   });
 
+  it("stamps the on-scroll scrollbar policy and reveals only on reader input", () => {
+    vi.useFakeTimers();
+    installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false }
+    } as any);
+
+    expect(mount.getAttribute("data-persona-scrollbar")).toBe("on-scroll");
+    const scrollContainer = mount.querySelector<HTMLElement>(
+      "#persona-scroll-container"
+    )!;
+    // At rest, and during widget-driven scrolling (which never routes through
+    // markReaderEngaged), the bar stays hidden.
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      false
+    );
+
+    // A wheel tick is reader input: reveal, then hide after the idle delay
+    // because the reader sits at the resting position (jsdom measures the
+    // body as scrolled to the bottom).
+    scrollContainer.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 5, bubbles: true })
+    );
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      true
+    );
+    vi.advanceTimersByTime(1000);
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      false
+    );
+
+    // Away from the resting position the bar survives the idle delay: it is
+    // the positional affordance while the reader is scrolled up.
+    const metrics = installScrollMetrics(scrollContainer, {
+      scrollHeight: 1000,
+      clientHeight: 400
+    });
+    metrics.setScrollTop(100);
+    scrollContainer.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -5, bubbles: true })
+    );
+    vi.advanceTimersByTime(1000);
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      true
+    );
+
+    // Switching policy clears the reveal state and restamps the root.
+    controller.update({
+      features: { scrollBehavior: { scrollbar: "hidden" } }
+    });
+    expect(mount.getAttribute("data-persona-scrollbar")).toBe("hidden");
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      false
+    );
+    scrollContainer.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: 5, bubbles: true })
+    );
+    expect(scrollContainer.hasAttribute("data-persona-scrollbar-visible")).toBe(
+      false
+    );
+
+    controller.destroy();
+    vi.useRealTimers();
+  });
+
 });
