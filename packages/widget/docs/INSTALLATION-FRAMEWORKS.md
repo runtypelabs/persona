@@ -37,8 +37,8 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 
 **Installer options:**
 
-- `version` - Package version to load from an npm CDN (setting it switches asset loading to npm-CDN URLs; `"latest"` when only `cdn` is set)
-- `cdn` - npm CDN provider: `"jsdelivr"` or `"unpkg"`. By default the installer loads `widget.css` / `index.global.js` / `launcher.global.js` from the same directory it was itself served from, so self-hosted and first-party CDN copies work with no extra config (and satisfy the same CSP that allowed the installer). Setting `cdn` or `version` opts into npm-CDN URLs instead; jsDelivr `@latest` is the fallback when the installer's own URL can't be determined (e.g. bundled/module usage).
+- `version` - Asset version to pin. On the first-party CDN (`cdn.runtype.com`) this stays first-party and resolves to `/persona/<version>/`; on other origins it switches asset loading to npm-CDN URLs (`"latest"` when only `cdn` is set). **Prefer pinning via the installer script URL itself** (e.g. `https://cdn.runtype.com/persona/4.13.0/install.global.js`) — the sibling assets follow the installer's own directory automatically.
+- `cdn` - npm CDN provider: `"jsdelivr"` or `"unpkg"`. By default the installer loads `widget.css` / `index.global.js` / `launcher.global.js` from the same directory it was itself served from, so self-hosted and first-party CDN copies work with no extra config (and satisfy the same CSP that allowed the installer). Setting `cdn` opts into npm-CDN URLs instead; jsDelivr `@latest` is the fallback when the installer's own URL can't be determined (e.g. bundled/module usage). The installer logs a `console.warn` whenever resolved assets would load from a different origin than the installer itself, since a strict CSP (e.g. Runtype-hosted apps) silently blocks cross-origin assets.
 - `cssUrl` - Custom CSS URL (overrides CDN)
 - `jsUrl` - Custom JS URL (overrides CDN)
 - `target` - CSS selector or element where widget mounts (default: `"body"`)
@@ -55,19 +55,19 @@ The easiest way is to use the automatic installer script. It handles loading CSS
 - `onChatReady` - Fired when the widget is initialized and its controller API is callable (after first open in a deferred install); signature: `(handle) => void`
 - `onError` - Fired when a load step fails (`css` / `bundle` / `init`), so ad-blocked / timed-out installs don't fail silently; signature: `({ phase, error }) => void`
 
-**Example with version pinning:**
+**Example with version pinning** (pin the installer script URL — sibling assets follow its directory, so no `version` key is needed):
 
 ```html
 <script>
   window.siteAgentConfig = {
-    version: '0.1.0', // Pin to specific version
     config: {
       apiUrl: '/api/chat/dispatch',
       launcher: { enabled: true, title: 'Support Chat' }
     }
   };
 </script>
-<script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@0.1.0/dist/install.global.js"></script>
+<script src="https://cdn.runtype.com/persona/4.13.0/install.global.js"></script>
+<!-- or from an npm CDN: https://cdn.jsdelivr.net/npm/@runtypelabs/persona@4.13.0/dist/install.global.js -->
 ```
 
 ### Programmatic access with the installer
@@ -176,6 +176,8 @@ Replace `VERSION` with `latest` for auto-updates, or a specific version like `0.
 - `widget.css` - Stylesheet (required)
 - `index.global.js` - Widget JavaScript (IIFE format)
 - `install.global.js` - Automatic installer script
+
+> **Do NOT load `dist/index.js` (the ESM build) directly in a browser.** It keeps dependencies like `marked` as bare import specifiers, so `<script type="module" src=".../index.js">` fails with `Failed to resolve module specifier "marked"` and leaves an empty mount. The ESM build is for bundlers (npm install) only. In a browser, use `install.global.js` (recommended) or `index.global.js` + `window.AgentWidget.initAgentWidget()` — both are self-contained, and function-valued config (theme callbacks, `postprocessMessage`, …) works fine with either via `window.siteAgentConfig` / direct `initAgentWidget` calls.
 
 The script build exposes a `window.AgentWidget` global with `initAgentWidget()` and other exports, including parser functions:
 
