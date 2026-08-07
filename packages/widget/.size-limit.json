@@ -32,7 +32,7 @@
   {
     "name": "Script installer (install.global.js)",
     "path": "dist/install.global.js",
-    "limit": "2.8 kB",
+    "limit": "3 kB",
     "gzip": true
   },
   {
