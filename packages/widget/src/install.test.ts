@@ -404,10 +404,44 @@ describe("install.ts: CDN base derivation", () => {
     expect(cssHref).toBe("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/widget.css");
   });
 
-  it("an explicit `version` opts back into npm-CDN URLs even when the src is derivable", async () => {
+  it("an explicit `version` on the first-party CDN stays first-party (versioned path)", async () => {
     setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    const { cssHref, scripts } = await installedUrls({ version: "1.2.3" });
+    expect(cssHref).toBe("https://cdn.runtype.com/persona/1.2.3/widget.css");
+    expect(scripts).toContain("https://cdn.runtype.com/persona/1.2.3/launcher.global.js");
+  });
+
+  it("an explicit `version` on a non-first-party src opts into npm-CDN URLs", async () => {
+    setCurrentScript("https://assets.example.com/vendor/persona/install.global.js");
     const { cssHref } = await installedUrls({ version: "1.2.3" });
     expect(cssHref).toBe("https://cdn.jsdelivr.net/npm/@runtypelabs/persona@1.2.3/dist/widget.css");
+  });
+
+  it("warns when resolved assets leave the installer's origin (silent-CSP guard)", async () => {
+    setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await installedUrls({ cdn: "jsdelivr" });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("strict CSP may silently block"));
+    warn.mockRestore();
+  });
+
+  it("does not warn when assets resolve to the installer's own origin", async () => {
+    setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await installedUrls({ version: "1.2.3" });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("does not warn for explicit cssUrl + jsUrl overrides on another origin", async () => {
+    setCurrentScript("https://cdn.runtype.com/persona/latest/install.global.js");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await installedUrls({
+      cssUrl: "https://assets.example.com/persona/widget.css",
+      jsUrl: "https://assets.example.com/persona/index.global.js",
+    });
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("an explicit `cdn` opts back into npm-CDN URLs even when the src is derivable", async () => {

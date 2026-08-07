@@ -7,9 +7,12 @@
 export {};
 
 interface SiteAgentInstallConfig {
-  // Setting `version` or `cdn` explicitly opts into npm-CDN asset URLs
-  // (jsDelivr/unpkg). When neither is set, assets load from the directory the
-  // installer script itself was served from — see getCdnBase().
+  // Setting `cdn` explicitly opts into npm-CDN asset URLs (jsDelivr/unpkg),
+  // and `version` pins the asset version. When neither is set, assets load
+  // from the directory the installer script itself was served from. On the
+  // first-party CDN (cdn.runtype.com) a `version` stays first-party
+  // (…/persona/<version>/); elsewhere it opts into npm-CDN URLs. Prefer
+  // pinning via the installer script URL itself — see getCdnBase().
   version?: string;
   cdn?: "unpkg" | "jsdelivr";
   cssUrl?: string;
@@ -239,16 +242,30 @@ declare global {
 
     // Default: load assets from wherever the installer was served, so a page
     // whose CSP allows only its own CDN (e.g. cdn.runtype.com) never has
-    // sibling requests fan out to a third-party host. An explicit `cdn` or
-    // `version` keeps the documented npm-CDN behavior.
-    if (!config.cdn && !config.version) {
+    // sibling requests fan out to a third-party host. An explicit `cdn`
+    // keeps the documented npm-CDN behavior.
+    if (!config.cdn) {
       const selfBase = getInstallerBase();
       if (selfBase) {
-        return {
-          cssUrl: `${selfBase}/widget.css`,
-          jsUrl: `${selfBase}/index.global.js`,
-          launcherUrl: `${selfBase}/launcher.global.js` as string | null,
-        };
+        if (!config.version) {
+          return {
+            cssUrl: `${selfBase}/widget.css`,
+            jsUrl: `${selfBase}/index.global.js`,
+            launcherUrl: `${selfBase}/launcher.global.js` as string | null,
+          };
+        }
+        // A `version` on the first-party CDN stays first-party: the bucket
+        // mirrors every release at /persona/<version>/, and rerouting to a
+        // npm CDN would be blocked by the CSP that allowed the installer.
+        const selfOrigin = new URL(selfBase).origin;
+        if (selfOrigin === "https://cdn.runtype.com") {
+          const base = `${selfOrigin}/persona/${config.version}`;
+          return {
+            cssUrl: `${base}/widget.css`,
+            jsUrl: `${base}/index.global.js`,
+            launcherUrl: `${base}/launcher.global.js` as string | null,
+          };
+        }
       }
     }
 
@@ -267,6 +284,25 @@ declare global {
   };
 
   const { cssUrl, jsUrl, launcherUrl } = getCdnBase();
+
+  // Surface silent CSP breakage: when `cdn`/`version` reroutes assets to a
+  // different origin than the one that served the installer, a strict CSP
+  // (e.g. Runtype-hosted apps) blocks them with no visible error. Explicit
+  // cssUrl/jsUrl overrides are a deliberate choice, so they don't warn.
+  if (!(config.cssUrl && config.jsUrl)) {
+    const selfBase = getInstallerBase();
+    try {
+      if (selfBase && new URL(selfBase).origin !== new URL(jsUrl, document.baseURI).origin) {
+        console.warn(
+          `[persona] Widget assets resolve to ${new URL(jsUrl, document.baseURI).origin}, but the installer loaded from ${new URL(selfBase).origin}. ` +
+          "A strict CSP may silently block them. To pin a version, put it in the installer script URL " +
+          "(e.g. https://cdn.runtype.com/persona/<version>/install.global.js) instead of the `version`/`cdn` config keys.",
+        );
+      }
+    } catch {
+      // URL parsing is best-effort; never let diagnostics break installation.
+    }
+  }
 
   // Check if CSS is already loaded
   const isCssLoaded = () => {
