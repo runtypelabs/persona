@@ -1,5 +1,15 @@
 # @runtypelabs/persona
 
+## 4.17.0
+
+### Minor Changes
+
+- 84ed232: Installer: a `version` in `window.siteAgentConfig` on the first-party CDN (cdn.runtype.com) now stays first-party and resolves to `/persona/<version>/` instead of silently rerouting all widget assets to jsDelivr — which strict-CSP pages (e.g. Runtype-hosted apps) block with no visible error. On other origins `version` keeps the documented npm-CDN behavior. The installer also logs a `console.warn` whenever resolved assets would load from a different origin than the installer itself (explicit `cssUrl`/`jsUrl` overrides excepted), so CSP-blocked installs are diagnosable from the console.
+
+### Patch Changes
+
+- 18b2913: Bump `dompurify` to 3.4.13 to fix GHSA-55q2-fjhq-7xh7 (IN_PLACE hook-removal XSS, affects ≤3.4.12) and GHSA-c2j3-45gr-mqc4 (`CUSTOM_ELEMENT_HANDLING` bypass, affects ≤3.4.11).
+
 ## 4.16.0
 
 ### Minor Changes
