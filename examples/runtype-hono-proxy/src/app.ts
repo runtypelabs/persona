@@ -11,6 +11,7 @@ import {
   WEBMCP_SLIDES_FLOW,
   WEBMCP_PAINT_FLOW,
   WEBMCP_DOCKED_FLOW,
+  WEBMCP_FLIGHTS_FLOW,
   PAGE_CONTEXT_AGENT,
   THEME_ASSISTANT_AGENT,
   TRAVEL_PLANNER_AGENT,
@@ -190,6 +191,21 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
     upstreamUrl,
   });
 
+  // WebMCP flights proxy - for the Skylark Air flight-booking demo. Same pattern
+  // as the storefront/calendar: the page registers booking tools (search, seat
+  // map, passengers, seat assignment, the approval-gated confirm) on
+  // document.modelContext, the widget forwards them as clientTools[], and the
+  // in-code WEBMCP_FLIGHTS_FLOW drives them. Live booking state rides along as
+  // {{booking_context}}.
+  const webmcpFlightsApp = createChatProxyApp({
+    path: "/api/chat/dispatch-flights",
+    apiKey,
+    allowedOrigins,
+    flowId: env.FLOW_ID_FLIGHTS || undefined,
+    flowConfig: env.FLOW_ID_FLIGHTS ? undefined : WEBMCP_FLIGHTS_FLOW,
+    upstreamUrl,
+  });
+
   const pageContextApp = createChatProxyApp({
     ...proxyProtection,
     path: "/api/chat/dispatch-page-context",
@@ -271,6 +287,7 @@ export function createRuntypeProxyApp(env: ProxyEnv): Hono {
   app.route("/", webmcpSlidesApp);
   app.route("/", webmcpPaintApp);
   app.route("/", webmcpDockedApp);
+  app.route("/", webmcpFlightsApp);
   app.route("/", pageContextApp);
   app.route("/", themeAssistantApp);
   app.route("/", agentLoopApp);

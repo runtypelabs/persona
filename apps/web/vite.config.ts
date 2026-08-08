@@ -647,6 +647,8 @@ export default defineConfig({
         'litert-shop': path.resolve(__dirname, 'litert-shop.html'),
         // WebMCP: voice/paste intake form copilot, driven by Gemma 4 on-device
         'litert-intake': path.resolve(__dirname, 'litert-intake.html'),
+        // WebMCP — Skylark Air (multi-step booking form; array-of-arrays seat map)
+        'webmcp-flights': path.resolve(__dirname, 'webmcp-flights.html'),
         // Bakery demo pages
         'bakery': path.resolve(__dirname, 'bakery.html'),
         'bakery-story': path.resolve(__dirname, 'bakery-story.html'),
