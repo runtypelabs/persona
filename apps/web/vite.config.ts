@@ -669,6 +669,8 @@ export default defineConfig({
         'custom-loading-indicator': path.resolve(__dirname, 'custom-loading-indicator.html'),
         'suggestions-demo': path.resolve(__dirname, 'suggestions-demo.html'),
         'suggestion-recreations': path.resolve(__dirname, 'suggestion-recreations.html'),
+        // Editorial pattern study: the four chat shapes, each as a live embed.
+        'chat-patterns': path.resolve(__dirname, 'chat-patterns.html'),
         // Welcome-state plugin blueprints (renderWelcome / renderComposer hooks)
         'help-search-demo': path.resolve(__dirname, 'help-search-demo.html'),
         'pre-chat-demo': path.resolve(__dirname, 'pre-chat-demo.html'),
@@ -677,6 +679,8 @@ export default defineConfig({
         'history-demo': path.resolve(__dirname, 'history-demo.html'),
         // Internal fixture for the Playwright history suite (e2e/); not in examples-nav.
         'history-e2e': path.resolve(__dirname, 'history-e2e.html'),
+        'composer-actions-demo': path.resolve(__dirname, 'composer-actions-demo.html'),
+        'composer-suite': path.resolve(__dirname, 'composer-suite.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
         'stream-animations-demo': path.resolve(__dirname, 'stream-animations-demo.html'),
         'streaming-table-demo': path.resolve(__dirname, 'streaming-table-demo.html'),

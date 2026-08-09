@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Composer Suite Demo</title>
+  <style>
+    .cs-readout {
+      margin: 0;
+      padding: 0.6rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--paper);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      line-height: 1.5;
+      color: var(--foreground);
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+    .cs-state-details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--paper);
+    }
+    .cs-state-details > summary {
+      cursor: pointer;
+      padding: 0.5rem 0.75rem;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    .cs-state-details[open] > summary { border-bottom: 1px solid var(--border); }
+    .cs-state-details .cs-readout {
+      border: 0;
+      border-radius: 0;
+      max-height: 320px;
+      overflow: auto;
+    }
+    .cs-status {
+      margin: 0.5rem 0 0;
+      font-size: 0.78rem;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+    .cs-status[data-tone="blocked"] { color: var(--danger); }
+    .cs-status[data-tone="sent"] { color: var(--ok); }
+    .cs-qa-list {
+      margin: 0.4rem 0 0;
+      padding-left: 1.1rem;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      color: var(--muted);
+    }
+    .cs-qa-list li + li { margin-top: 0.3rem; }
+    .cs-section-index {
+      display: inline-block;
+      margin-right: 0.45rem;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--faint);
+    }
+  </style>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">01</span>Modes and model picker</h3>
+          <p>Three fake models feed <code>composer.models</code>. Two exclusive modes share a single-selection group, one of them clears itself after a send, and a third mode toggles independently. Each mode swaps the placeholder while it is active, so the pre-send contract is readable before you type.</p>
+          <p class="hint">Selections live in composer state, never in config. This is the <code>composerOptions</code> that would ship with the next send:</p>
+          <pre class="cs-readout" id="cs-composer-options">{}</pre>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">02</span>Overflow menu</h3>
+          <p>Three icon-only host actions ship with <code>presentation: "auto"</code>, as do the three mode toggles, and one action ships with <code>presentation: "overflow"</code> so it always lives in the menu. Narrow the composer below the collapse width and every auto control folds into the <code>+</code> trigger.</p>
+          <div class="config-field">
+            <label for="cs-overflow-width">collapseAutoActionsBelow</label>
+            <select id="cs-overflow-width">
+              <option value="">Unset (auto actions stay in the bar)</option>
+              <option value="420">420px</option>
+              <option value="560" selected>560px</option>
+              <option value="1200">1200px (folds right away on most screens)</option>
+            </select>
+          </div>
+          <p class="hint">The threshold is measured against the composer footer's content box, not the window, and it is re-evaluated by a resize observer. Narrow the browser window, or switch the preview to launcher mode where the panel is about 420px, to watch the fold happen live.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">03</span>onBeforeSend</h3>
+          <div class="toggle-section">
+            <label for="cs-before-send">Intercept every send</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="cs-before-send" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="hint">With the interceptor on: any draft containing the word <code>blocked</code> is refused and your draft survives; everything else gets a signature appended to the outgoing snapshot only.</p>
+          <p class="cs-status" id="cs-before-send-status">No send intercepted yet.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">04</span>Locked versus send blocked</h3>
+          <div class="toggle-section">
+            <label for="cs-input-disabled">inputDisabled</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="cs-input-disabled">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="toggle-section">
+            <label for="cs-send-disabled">sendDisabled</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="cs-send-disabled">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="hint">Each lock carries a reason that renders in the composer status region. <code>inputDisabled</code> freezes composition entirely; <code>sendDisabled</code> leaves typing, attachments, and dictation fully available and blocks only the submission paths.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">05</span>submitKey</h3>
+          <div class="config-field">
+            <label for="cs-submit-key">Which combination submits</label>
+            <select id="cs-submit-key">
+              <option value="enter" selected>enter (shift and enter inserts a newline)</option>
+              <option value="mod-enter">mod-enter (plain enter inserts a newline)</option>
+              <option value="none">none (send button only)</option>
+            </select>
+          </div>
+          <p class="hint">Applied live through <code>controller.update()</code>, with no remount. The editor's <code>enterKeyHint</code> follows it, so a mobile keyboard relabels its return key.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">05b</span>Control size</h3>
+          <div class="config-field">
+            <label for="cs-control-size">theme.components.composer.controlSize</label>
+            <select id="cs-control-size">
+              <option value="32px">32px</option>
+              <option value="36px">36px</option>
+              <option value="40px" selected>40px (default)</option>
+            </select>
+          </div>
+          <p class="hint">One token sizes every icon control in the action row: attachment, mention, the host action buttons, the overflow trigger, the mic, and the send button. Applied live through <code>controller.update()</code>. Per-control keys such as <code>sendButton.size</code> still win, and coarse-pointer devices floor the hit area at 40px.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">06</span>Attachment upload adapter</h3>
+          <div class="toggle-section">
+            <label for="cs-fail-upload">Fail the next upload</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="cs-fail-upload">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="hint">The fake adapter takes about 2.5 seconds and reports progress the whole way, so the tile sits in its uploading state and the send button stays gated until it settles. Turn the switch on, attach a file, and the tile flips to an error state with a retry affordance; the switch clears itself so the retry succeeds.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">07</span>Draft persistence</h3>
+          <p>Type something, optionally pick a model and a mode, then reload this page. The draft, the model, the modes, and any quote come back. Sending clears the stored draft.</p>
+          <button class="btn" type="button" id="cs-clear-draft">Clear the stored draft and reload</button>
+          <p class="hint">Attachments are never part of a persisted draft: no file handles and no upload credentials go to storage.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">08</span>Submitting while streaming</h3>
+          <p>This page runs <code>streamingSubmitBehavior: "defer-one"</code>. Send a message, then keep typing while the reply streams and press enter. The draft clears, a pending card appears above the composer, and it sends itself when the turn completes. A second queued submit is refused rather than replacing the first.</p>
+          <p class="hint">The demo backend streams slowly on purpose so the pending card is easy to reach.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">09</span>Edit, regenerate, and quote</h3>
+          <p>Send a message, then hover it. A user bubble offers edit and quote; the last assistant reply offers regenerate. Editing resubmits from that message and replaces the tail: this release keeps no branches.</p>
+          <p class="hint">Edit is offered on text-only user messages. A message with attachments, mentions, or hidden model content is left alone rather than silently losing that context in a textarea.</p>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">10</span>Mentions and commands</h3>
+          <div class="toggle-section">
+            <label for="cs-mentions">Enable mentions and commands</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="cs-mentions">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="hint">Off removes <code>contextMentions</code> from the config entirely, so the mention runtime is never loaded. On registers five fake docs behind <code>@</code> and three commands behind <code>/</code> at the start of a line.</p>
+
+          <div class="config-field">
+            <label for="cs-mentions-display">contextMentions.display</label>
+            <select id="cs-mentions-display" disabled>
+              <option value="chip" selected>chip (removable pills above the input)</option>
+              <option value="inline">inline (atomic tokens in the sentence)</option>
+            </select>
+          </div>
+
+          <div class="checkbox-row">
+            <input type="checkbox" id="cs-mentions-fold" disabled>
+            <label for="cs-mentions-fold">Fold the mention button into the + menu</label>
+          </div>
+          <p class="hint">Adds <code>"mentions"</code> to <code>actionOverflow.includeBuiltIns</code>. Folding a built-in is always explicit: turning the menu on never moves the mention or attachment affordance by itself.</p>
+
+          <p class="hint">What to check:</p>
+          <ul class="cs-qa-list">
+            <li>The mention button appears leftmost in the start cluster, ahead of the paperclip.</li>
+            <li>The <code>@</code> and <code>/</code> menus take enter, tab, and escape before the composer does, under every <code>submitKey</code> mode including <code>none</code>.</li>
+            <li>A slash prompt expands before the <code>onBeforeSend</code> signature runs, so with the interceptor on the echo payload shows the expanded macro plus the signature.</li>
+            <li>Mention chips share the composer header row with mode chips and the quote banner.</li>
+            <li>A draft keeps its mentions across a reload, and degrades to plain text if you turn this section off before reloading.</li>
+            <li>Under defer-one, a submit during a stream captures the mentions into the pending card.</li>
+            <li>Edit is hidden on a sent message that carried mentions, while regenerate still replays it.</li>
+          </ul>
+        </div>
+
+        <div class="info-section">
+          <h3><span class="cs-section-index">11</span>Composer state inspector</h3>
+          <details class="cs-state-details" open>
+            <summary>controller.getComposerState()</summary>
+            <pre class="cs-readout" id="cs-state">{}</pre>
+          </details>
+          <p class="hint">Re-read on every <code>persona:composer:state</code> event. No session, no DOM nodes, no file handles, no mention finalizers.</p>
+        </div>
+
+        <div class="info-section">
+          <h3>Event log</h3>
+          <div class="event-log" id="cs-log"></div>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Composer suite</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">One submission path</h3>
+        <p>Every send, whether it comes from the form, the enter key, a suggestion, dictation, a plugin composer, or the controller, runs the same steps against one immutable snapshot. <code>onBeforeSend</code> sees that frozen snapshot after eligibility checks and before the user message is appended. Returning <code>false</code>, throwing, or aborting leaves the draft, the attachments, and the mention chips intact for a retry.</p>
+        <div class="code-block">
+initAgentWidget({
+  <span class="prop">composer</span>: {
+    <span class="function">onBeforeSend</span>: (snapshot, { signal }) =&gt; {
+      <span class="keyword">if</span> (snapshot.text.<span class="function">includes</span>(<span class="string">"blocked"</span>)) <span class="keyword">return</span> <span class="keyword">false</span>;
+      <span class="keyword">return</span> { <span class="prop">text</span>: `${snapshot.text}\n\n(signed)` };
+    },
+  },
+});
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Selection is state, not authority</h3>
+        <p>The model list and the mode list are a catalog in config; the live selection lives in composer state. Choosing a model never writes back to config and never mutates <code>config.agent</code>. Each send snapshots the selection into <code>composerOptions</code> on the wire, and each transport decides what it means: a custom backend sees the field as-is, the proxy strips it unless the route opts in, and client-token mode does not send it at all because that route's agent is pinned server side.</p>
+        <div class="code-block">
+<span class="prop">composer</span>: {
+  <span class="prop">models</span>: [{ <span class="prop">id</span>: <span class="string">"atlas-2"</span>, <span class="prop">label</span>: <span class="string">"Atlas 2"</span> }],
+  <span class="prop">selectedModelId</span>: <span class="string">"atlas-2"</span>,  <span class="comment">// initial only</span>
+  <span class="prop">modeGroups</span>: [{ <span class="prop">id</span>: <span class="string">"answer-style"</span>, <span class="prop">selection</span>: <span class="string">"single"</span> }],
+  <span class="prop">modes</span>: [
+    { <span class="prop">id</span>: <span class="string">"concise"</span>, <span class="prop">groupId</span>: <span class="string">"answer-style"</span>, <span class="prop">label</span>: <span class="string">"Concise"</span> },
+    { <span class="prop">id</span>: <span class="string">"deep-dive"</span>, <span class="prop">groupId</span>: <span class="string">"answer-style"</span>,
+      <span class="prop">label</span>: <span class="string">"Deep dive"</span>, <span class="prop">persistence</span>: <span class="string">"once"</span> },
+  ],
+}
+        </div>
+        <p>Persona attaches no meaning to a mode id. A tool, a persona, a reasoning setting, and a vendor effort level are all the same thing here: an id the backend maps.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">The overflow menu is a presentation</h3>
+        <p>The <code>+</code> menu is never a second registry. Every item in it was already contributed by core, host config, or a plugin. <code>bar</code> stays in the row, <code>overflow</code> always lives in the menu, and <code>auto</code> starts in the row and folds in under the width policy. Folding built-ins is always explicit: enabling the menu does not move the attachment or mention affordances by itself.</p>
+        <div class="code-block">
+<span class="prop">actionOverflow</span>: {
+  <span class="prop">enabled</span>: <span class="keyword">true</span>,
+  <span class="prop">collapseAutoActionsBelow</span>: <span class="string">560</span>,
+  <span class="prop">includeBuiltIns</span>: [<span class="string">"attachments"</span>],
+}
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Locked is not send blocked</h3>
+        <p><code>inputDisabled</code> locks composition: text editing, attachment intake through the button, paste and drop, mention triggers, dictation, suggestion selection, and every submission path. <code>sendDisabled</code> leaves all of that available and blocks only submission, so dictation still lands a transcript in the composer without auto sending. Streaming sets neither: the send button becomes stop, which is not a submission.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">The upload adapter owns the file</h3>
+        <p>Without an adapter, Persona converts a picked file to a base64 content part in the browser. With one, the host takes ownership: <code>add</code> resolves with the content part that gets sent, reporting progress along the way, and the tile shows an uploading state until it settles or an error state with a retry if it rejects. The signal aborts when the tile is removed, the composer is cleared, or the widget is destroyed.</p>
+        <div class="code-block">
+<span class="prop">attachments</span>: {
+  <span class="prop">enabled</span>: <span class="keyword">true</span>,
+  <span class="prop">adapter</span>: {
+    <span class="function">add</span>: <span class="keyword">async</span> (file, { signal, onProgress }) =&gt; {
+      <span class="keyword">const</span> url = <span class="keyword">await</span> <span class="function">upload</span>(file, { signal, onProgress });
+      <span class="keyword">return</span> { <span class="prop">type</span>: <span class="string">"image"</span>, <span class="prop">image</span>: url, <span class="prop">mimeType</span>: file.type };
+    },
+    <span class="function">remove</span>: (part) =&gt; <span class="function">releaseRemoteFile</span>(part),
+  },
+}
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Drafts ride the conversation payload</h3>
+        <p>An unsent draft is written debounced and flushed on destroy and on page hide, through the same storage adapter that owns conversation scoping. Text, mention tokens, inline segments, the model and mode selection, and the quote all restore. Attachments do not: a persisted draft never holds file handles or upload credentials.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Defer, do not drop</h3>
+        <p>Under <code>defer-one</code>, a submit during a stream captures one immutable snapshot, clears the draft, and shows a pending card. It auto sends when the assistant turn completes. An explicit stop or a stream error leaves it pending so nothing is lost, and a second submit while one is queued is refused rather than replacing it. The <code>interrupt</code> policy is a client-token capability; every other transport falls back to <code>block</code> with a debug warning.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Public state, private internals</h3>
+        <p><code>controller.getComposerState()</code> and the <code>persona:composer:state</code> event carry the same readonly snapshot: text, attachments, mention refs, model and mode selection, quote, any pending submission, phase, and the two lock flags. It never exposes the session, the attachment manager, DOM nodes, unresolved files, or mention finalizers, so a host can observe the composer without holding anything it should not.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Mentions and commands ride the same composer</h3>
+        <p>Context mentions are nouns and slash commands are verbs, but they share one menu engine and one composer. The <code>@</code> channel adds removable context whose resolved body reaches the model through <code>llmAppend</code>; the <code>/</code> channel dispatches a prompt macro, a client action, or a server skill. Both channels are ordinary composer actions at order 100, so they land leftmost in the start cluster and obey the overflow policy like everything else.</p>
+        <div class="code-block">
+<span class="prop">contextMentions</span>: {
+  <span class="prop">enabled</span>: <span class="keyword">true</span>,
+  <span class="prop">display</span>: <span class="string">"chip"</span>,
+  <span class="prop">sources</span>: [<span class="function">createStaticMentionSource</span>({ <span class="prop">id</span>: <span class="string">"docs"</span>, … })],
+  <span class="prop">triggers</span>: [{
+    <span class="prop">trigger</span>: <span class="string">"/"</span>,
+    <span class="prop">triggerPosition</span>: <span class="string">"line-start"</span>,
+    <span class="prop">allowSpaces</span>: <span class="keyword">true</span>,
+    <span class="prop">sources</span>: [<span class="function">createSlashCommandsSource</span>({ <span class="prop">id</span>: <span class="string">"commands"</span>, commands })],
+  }],
+}
+        </div>
+        <p>Ordering matters at send time. A slash prompt expands into the draft first, then the snapshot is frozen, then <code>onBeforeSend</code> patches it, then mention bodies resolve into the model-visible content. With the interceptor on, the echo's payload dump shows all three layers in one string.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">This page is keyless</h3>
+        <p>Every reply comes from an in-browser echo <code>customFetch</code> that emits Persona's unified streaming frames, so there is no backend, no key, and no cost. It streams slowly on purpose. The echo prints the payload it received, which is how the <code>composerOptions</code> and the <code>onBeforeSend</code> patch are proved rather than asserted.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/composer-suite.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("composer-suite");
+  </script>
+</body>
+</html>
