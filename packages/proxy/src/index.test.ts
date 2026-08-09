@@ -600,3 +600,169 @@ describe("request guards and JSON body limits", () => {
     expect(consoleError).toHaveBeenCalledOnce();
   });
 });
+
+describe("dispatch: composerOptions authority", () => {
+  const realFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  const captureUpstream = () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> | null }> = [];
+    globalThis.fetch = vi.fn(async (url: unknown, init?: { body?: unknown }) => {
+      calls.push({
+        url: String(url),
+        body:
+          typeof init?.body === "string"
+            ? (JSON.parse(init.body) as Record<string, unknown>)
+            : null,
+      });
+      return new Response("data: {}\n\n", {
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+      });
+    }) as unknown as typeof fetch;
+    return calls;
+  };
+
+  const dispatch = (
+    app: ReturnType<typeof createChatProxyApp>,
+    body: Record<string, unknown>,
+  ) =>
+    app.request("/api/chat/dispatch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Origin: "https://example.com" },
+      body: JSON.stringify(body),
+    });
+
+  const agentConfig = {
+    name: "Server Agent",
+    model: "pinned-model",
+    systemPrompt: "Server prompt",
+  };
+
+  const flowConfig = {
+    name: "Flow",
+    description: "",
+    steps: [
+      {
+        id: "prompt",
+        name: "Prompt",
+        type: "prompt",
+        enabled: true,
+        config: { model: "pinned-model", userPrompt: "{{user_message}}" },
+      },
+      {
+        id: "disabled",
+        name: "Disabled",
+        type: "prompt",
+        enabled: false,
+        config: { model: "pinned-model" },
+      },
+    ],
+  };
+
+  it("always strips composerOptions when composerModels is not configured", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({ apiKey: "test-key", agentConfig });
+    await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+      composerOptions: { selectedModelId: "fast", activeModeIds: ["deep"] },
+    });
+    expect(calls[0]!.body).not.toHaveProperty("composerOptions");
+    expect(calls[0]!.body?.agent).toMatchObject({ model: "pinned-model" });
+    expect(calls[0]!.body).not.toHaveProperty("context");
+  });
+
+  it("applies an allowlisted model to a server-pinned agentConfig", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      agentConfig,
+      composerModels: { allowed: ["fast", "smart"] },
+    });
+    await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+      composerOptions: { selectedModelId: "fast" },
+    });
+    expect(calls[0]!.body?.agent).toMatchObject({
+      name: "Server Agent",
+      model: "fast",
+    });
+    expect(calls[0]!.body).not.toHaveProperty("composerOptions");
+  });
+
+  it("ignores a disallowed model instead of rejecting the turn", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      agentConfig,
+      composerModels: { allowed: ["fast"] },
+    });
+    const res = await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+      composerOptions: { selectedModelId: "expensive" },
+    });
+    expect(res.status).toBe(200);
+    expect(calls[0]!.body?.agent).toMatchObject({ model: "pinned-model" });
+  });
+
+  it("leaves an agentId route's pinned model alone", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      agentId: "agent_123",
+      composerModels: { allowed: ["fast"] },
+    });
+    await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+      composerOptions: { selectedModelId: "fast" },
+    });
+    expect(calls[0]!.body?.agent).toEqual({ agentId: "agent_123" });
+  });
+
+  it("rewrites the model on enabled flowConfig steps only", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      flowConfig,
+      composerModels: { allowed: ["fast"] },
+    });
+    await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+      composerOptions: { selectedModelId: "fast" },
+    });
+    const flow = calls[0]!.body?.flow as typeof flowConfig;
+    expect(flow.steps[0]!.config.model).toBe("fast");
+    expect(flow.steps[1]!.config.model).toBe("pinned-model");
+  });
+
+  it("forwards active modes as context.composerModes only with the flag", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({
+      apiKey: "test-key",
+      agentConfig,
+      forwardComposerModes: true,
+    });
+    await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+      context: { locale: "en" },
+      composerOptions: { activeModeIds: ["research", "concise"] },
+    });
+    expect(calls[0]!.body?.context).toEqual({
+      locale: "en",
+      composerModes: ["research", "concise"],
+    });
+  });
+
+  it("strips modes when forwardComposerModes is off", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({ apiKey: "test-key", agentConfig });
+    await dispatch(app, {
+      messages: [{ role: "user", content: "hi" }],
+      composerOptions: { activeModeIds: ["research"] },
+    });
+    expect(calls[0]!.body).not.toHaveProperty("context");
+  });
+});
