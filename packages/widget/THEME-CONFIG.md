@@ -755,6 +755,8 @@ form itself; `fontSize` and `lineHeight` set the textarea's type.
 | `gap` | `"0.5rem"` *(textarea row to actions row)* | `--persona-composer-gap` |
 | `fontSize` | `"0.875rem"` | `--persona-composer-font-size` |
 | `lineHeight` | `"1.25rem"` | `--persona-composer-line-height` |
+| `controlSize` | `"40px"` | `--persona-composer-control-size` |
+| `controlIconSize` | `"24px"` | `--persona-composer-control-icon-size` |
 
 ```typescript
 const theme = createTheme({
@@ -764,15 +766,271 @@ const theme = createTheme({
       gap: '0.75rem',
       fontSize: '1rem',
       lineHeight: '1.5rem',
+      controlSize: '32px',
     },
   },
 });
 ```
 
+#### Control size (`controlSize` / `controlIconSize`)
+
+`controlSize` is the edge of every icon control in the composer action row, and
+`controlIconSize` the glyph inside it. One token moves all of them together:
+
+| Control | Class / attribute |
+|---------|-------------------|
+| Attachment button | `.persona-attachment-button` |
+| Mention "add context" button | `.persona-mention-button` |
+| Registry action buttons (`composer.actions`, plugin contributions) | `.persona-composer-action-button` |
+| Overflow `+` trigger | `.persona-composer-overflow-trigger` |
+| Mic button | `[data-persona-composer-mic]` |
+| Send button, icon mode only | `[data-persona-composer-submit]` |
+
+Every one of them carries `.persona-composer-control`, and the glyph-token
+consumers also carry `.persona-composer-control--glyph`, so a host stylesheet
+can target the whole set at once.
+
+Precedence, narrowest first:
+
+1. **Per-control config** wins. `sendButton.size` sizes the send button;
+   `voiceRecognition.iconSize` sizes the mic (box and glyph). Either one writes
+   an inline style, which outranks the token. Both are unset by default.
+2. **The token** (`controlSize`, i.e. `--persona-composer-control-size`) sizes
+   every control that has no per-control override.
+3. **The stylesheet fallback**, `40px` box and `24px` glyph, applies when no
+   theme variables are on the element at all.
+
+Two related config keys are not sizes and keep working on top of whichever box
+wins: `voiceRecognition.paddingX` / `paddingY` pad the mic, and a registry
+action with a `shortLabel` keeps the token *height* while its width comes from
+its own padding.
+
+**Coarse-pointer floor.** Under `@media (pointer: coarse)` the controls floor at
+a 40px `min-width` / `min-height`, so a small `controlSize` never shrinks a touch
+target below the accessible minimum. A per-control config size is inline and
+therefore opts out of the floor deliberately: set it only when you want the
+exact box you named on every device.
+
 `padding` and `gap` do not apply to the collapsed pill in
 `launcher.mountMode: "composer-bar"`, which keeps its own single-row geometry.
 `fontSize` and `lineHeight` apply to both. On coarse-pointer devices the
 textarea is still pinned to `1rem` so iOS Safari does not zoom on focus.
+
+#### Compact state (`data-persona-composer-compact`)
+
+The composer footer carries `data-persona-composer-compact` while the composer
+is idle: the draft is empty or a single line, and there are no attachments, no
+mention chips, no active mode chips, no quote, no pending submission, and no
+live dictation.
+
+Core CSS attaches no layout to it. It is a hook for your own theme:
+
+```css
+[data-persona-composer-compact] .persona-widget-composer {
+  padding-block: 0.5rem;
+}
+```
+
+Wrapping is latched to avoid oscillation at the boundary: once the editor grew
+past one line, the composer stays expanded until the draft is cleared or sent,
+even if the text shrinks back.
+
+#### Overflow menu (`composer.actionOverflow`)
+
+With `composer.actionOverflow.enabled`, composer controls whose `presentation`
+is `"overflow"` (always) or `"auto"` (below `collapseAutoActionsBelow`) render
+in a `+` menu instead of the action row. Built-in controls fold in only when
+`includeBuiltIns` names them.
+
+| Class / attribute | What it is |
+|-------------------|------------|
+| `.persona-composer-overflow-trigger` | The `+` button in the start cluster |
+| `.persona-composer-overflow-menu` | The menu panel (`role="menu"`) |
+| `.persona-composer-overflow-menu__item` | One button row (`role="menuitem"`) |
+| `.persona-composer-overflow-menu__icon` | Icon holder inside a row |
+| `.persona-composer-overflow-menu__label` | Row text |
+| `.persona-composer-overflow-menu__slot` | Wrapper around a folded built-in or custom control |
+| `[data-persona-composer-overflow-menu]` | Stable selector for the panel |
+
+The trigger inherits the ghost button tokens (`--persona-button-ghost-*`); the
+panel uses `--persona-surface`, `--persona-border`, and `--persona-shadow-md`.
+
+#### Mode chips (`composer.modes`)
+
+Active modes render as removable chips in the composer header, reusing the
+mention chip geometry with their own color tokens:
+
+| CSS Variable | Falls back to |
+|--------------|---------------|
+| `--persona-mode-chip-bg` | `--persona-container` |
+| `--persona-mode-chip-border` | `--persona-border` |
+| `--persona-mode-chip-fg` | `--persona-text` |
+
+Chips carry `data-persona-composer-mode="<id>"`.
+
+#### Shared chip row
+
+Mode chips and context-mention chips share one wrapping row in the header
+region, `.persona-composer-chip-row` / `data-persona-composer-chip-row`: mode
+chips lead, mention chips follow. The row is hidden while it holds no chips.
+Spacing follows `--persona-mention-chip-gap` (between chips) and
+`--persona-mention-row-gap` (below the row). The quote banner and the deferred
+submission card are separate full-width rows below it.
+
+The model picker (`composer.models`) renders as
+`.persona-composer-model-picker` in the end cluster and inherits the same ghost
+button tokens.
+
+#### Quote banner (`controller.setQuote`)
+
+The quote/reply-to banner sits in the composer header above the editor and
+carries `data-persona-composer-quote`; its dismiss button carries
+`data-persona-composer-quote-dismiss`.
+
+| CSS Variable | Falls back to |
+|--------------|---------------|
+| `--persona-composer-quote-bg` | `--persona-container` |
+| `--persona-composer-quote-fg` | `--persona-text` |
+| `--persona-composer-quote-accent` | `--persona-accent` |
+| `--persona-composer-quote-radius` | `8px` |
+| `--persona-composer-quote-padding` | `6px 8px` |
+| `--persona-composer-quote-font-size` | `12px` |
+
+#### Deferred submission card (`composer.streamingSubmitBehavior: "defer-one"`)
+
+The queued-submission card shares the header region and carries
+`data-persona-composer-pending`, with
+`data-persona-composer-pending-edit` / `-remove` on its two controls.
+
+| CSS Variable | Falls back to |
+|--------------|---------------|
+| `--persona-composer-pending-bg` | `transparent` |
+| `--persona-composer-pending-fg` | `--persona-text` |
+| `--persona-composer-pending-border` | `--persona-border` |
+| `--persona-composer-pending-radius` | `8px` |
+| `--persona-composer-pending-padding` | `6px 8px` |
+| `--persona-composer-pending-font-size` | `12px` |
+
+#### Inline message editor (`messageActions.showEdit`)
+
+The edit-and-resend editor replaces a user bubble and carries
+`data-persona-message-edit="<messageId>"`, with
+`data-persona-message-edit-input` / `-save` / `-cancel` inside it.
+
+| CSS Variable | Falls back to |
+|--------------|---------------|
+| `--persona-message-edit-bg` | `--persona-container` |
+| `--persona-message-edit-fg` | `--persona-text` |
+| `--persona-message-edit-border` | `--persona-border` |
+| `--persona-message-edit-radius` | `12px` |
+| `--persona-message-edit-padding` | `10px` |
+| `--persona-message-edit-font-size` | `14px` |
+| `--persona-message-edit-button-radius` | `6px` |
+| `--persona-message-edit-save-bg` | `--persona-accent` |
+| `--persona-message-edit-save-fg` | `#ffffff` |
+
+### Motion (`components.motion.*`)
+
+Shared timing for every composer animation.
+
+| Token | Default | CSS Variable |
+|-------|---------|--------------|
+| `durationFast` | `"120ms"` *(state flips: pressed ticks, glyph crossfades)* | `--persona-motion-duration-fast` |
+| `durationBase` | `"200ms"` *(enter and exit: chips, rings)* | `--persona-motion-duration-base` |
+| `easing` | `"cubic-bezier(0.2, 0, 0, 1)"` | `--persona-motion-easing` |
+
+```typescript
+const theme = createTheme({
+  components: { motion: { durationFast: '0ms', durationBase: '0ms' } },
+});
+```
+
+Setting a duration to `0ms` is a kill switch: every transition and keyframe
+reads these tokens, so nothing else has to change.
+
+**Reduced motion.** Every animation is nested under
+`@media (prefers-reduced-motion: no-preference)`, which no token can re-enable.
+Outside it, states still swap instantly and visibly: colors, attributes, and
+opacity toggles are unconditional, only the tweening is dropped.
+
+**Where motion is allowed.** The composer footer is never morphed by
+`idiomorph`, so CSS transitions there are safe. The transcript IS morphed, and
+attributes or inline styles applied after a render are stripped on the next one,
+so transcript motion must use the Web Animations API instead. Never CSS
+transition a transcript-rendered element.
+
+#### State hooks
+
+Motion is keyed off data attributes the widget stamps, never off class-name
+guessing:
+
+| Attribute | On | Values |
+|-----------|----|--------|
+| `data-state` | the mic button | `idle` / `recording` / `processing` / `speaking` |
+| `data-mode` | `.persona-composer-glyph-stack` | `send` / `stop` |
+| `data-persona-chip-enter` | a newly added chip | present while entering |
+| `data-persona-chip-exit` | a chip being removed | present while leaving |
+| `aria-pressed` | mode toggle actions | `true` / `false` |
+
+The mic ships a pulsing ring while recording and a rotating glyph while
+processing. The send button keeps both glyphs stacked in one cell and crossfades
+them, so no swap can leave two visible. Chips fade and rise in, and fade out
+before their node is removed; the composer's own state changes immediately
+either way.
+
+#### Live voice level (`--persona-voice-level`)
+
+While the mic is recording, the widget publishes a `0` to `1` capture amplitude
+as `--persona-voice-level`, on both the mic button's wrapper and the composer
+footer. The footer copy exists so a waveform can sit anywhere in the composer
+without having to descend from the mic.
+
+The value updates on one animation frame loop that starts when recording begins
+and stops on recording end, composer rebuild, and widget destroy. Writes are
+quantized to `0.01` and skipped when unchanged, so a steady voice costs a
+handful of style writes per second rather than one per frame.
+
+The default recording ring already modulates with it, so the feature is visible
+with no theme work. A theme can drive its own meter from the same variable:
+
+```css
+.my-waveform {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.my-waveform span {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--persona-accent);
+  /* 4px at silence, 20px at full scale. */
+  height: calc(4px + (var(--persona-voice-level, 0) * 16px));
+  transition: height var(--persona-motion-duration-fast, 120ms)
+    var(--persona-motion-easing, ease-out);
+}
+
+/* Stagger the bars so they read as a waveform, not one block. */
+.my-waveform span:nth-child(2) {
+  height: calc(4px + (var(--persona-voice-level, 0) * 24px));
+}
+```
+
+**The variable is data, not motion.** It keeps updating under
+`prefers-reduced-motion: reduce`, because a level meter is information rather
+than decoration. Only the default ring's animation is gated. If your own
+consumption of it animates, gate that yourself.
+
+**Per-path support.** Only a provider that owns an audio graph can report a real
+level. The rest fall back to a fixed midpoint of `0.5`, so a meter reads as
+present rather than dead:
+
+| Voice path | Live level | Why |
+|------------|-----------|-----|
+| `provider.type: "runtype"` | yes | Owns a `getUserMedia` capture graph; the level is computed from the same buffer it already streams, with no extra node |
+| `provider.type: "browser"` | no, fixed `0.5` | Web Speech API only, which exposes no audio stream |
+| Legacy in-widget recognition | no, fixed `0.5` | Same Web Speech limitation; a second parallel capture was rejected as a second recording indicator and teardown path |
+| `provider.type: "custom"` | yes, if implemented | Implement the optional `onLevel(callback)` on your `VoiceProvider` and call it with a `0` to `1` value |
 
 ### Scroll To Bottom (`components.scrollToBottom.*`)
 
@@ -1800,7 +2058,14 @@ layout: {
 remaining after the avatar and gap.
 
 ### Slots (`layout.slots.*`)
-Available: `header-left`, `header-center`, `header-right`, `body-top`, `messages`, `body-bottom`, `footer-top`, `composer`, `footer-bottom`
+Available: `header-left`, `header-center`, `header-right`, `body-top`, `body-bottom`, `footer-top`, `footer-bottom`
+
+`messages` and `composer` are deprecated and unsupported. They are still
+accepted by the types but the renderer never runs (a warning is logged when
+`debug: true`). Use `layout.messages.renderUserMessage` /
+`layout.messages.renderAssistantMessage` for the transcript and the
+`renderComposer` plugin hook for the composer. The names stay in the union
+until the next major release.
 
 Each renderer receives `{ config, defaultContent }`. Returning an element
 replaces the slot's default content; returning `null` leaves it alone.

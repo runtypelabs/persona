@@ -93,3 +93,68 @@ describe("layout.slots['body-top']", () => {
     expect(wrapper!.querySelector("[data-persona-intro-card]")).not.toBeNull();
   });
 });
+
+describe("deprecated layout slots", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+
+  const mountWithSlots = (
+    slots: Record<string, () => HTMLElement | null>,
+    debug = true
+  ) => {
+    window.scrollTo = vi.fn();
+    const mount = createMount();
+    createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      debug,
+      layout: { slots },
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+    return mount;
+  };
+
+  it("never renders the inert composer/messages slots", () => {
+    const composerSlot = vi.fn(() => {
+      const el = document.createElement("div");
+      el.setAttribute("data-test-composer-slot", "");
+      return el;
+    });
+    const messagesSlot = vi.fn(() => {
+      const el = document.createElement("div");
+      el.setAttribute("data-test-messages-slot", "");
+      return el;
+    });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const mount = mountWithSlots({ composer: composerSlot, messages: messagesSlot });
+
+    expect(mount.querySelector("[data-test-composer-slot]")).toBeNull();
+    expect(mount.querySelector("[data-test-messages-slot]")).toBeNull();
+  });
+
+  it("warns once in debug mode, naming every inert slot configured", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    mountWithSlots({ composer: () => null, messages: () => null });
+
+    const messages = warn.mock.calls
+      .map((call) => String(call[0]))
+      .filter((message) => message.includes("layout.slots."));
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain("layout.slots.messages");
+    expect(messages[0]).toContain("layout.slots.composer");
+  });
+
+  it("stays quiet outside debug mode and for supported slots", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    mountWithSlots({ composer: () => null }, false);
+    mountWithSlots({ "footer-top": () => null });
+
+    expect(
+      warn.mock.calls.filter((call) => String(call[0]).includes("layout.slots."))
+    ).toHaveLength(0);
+  });
+});

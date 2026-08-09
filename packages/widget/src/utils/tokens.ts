@@ -1048,6 +1048,15 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['composer-gap', 'components-composer-gap', '=0.5rem'],
     ['composer-font-size', 'components-composer-fontSize', '=0.875rem'],
     ['composer-line-height', 'components-composer-lineHeight', '=1.25rem'],
+    // Unified composer control box. Every icon control in the action row reads
+    // these two from the stylesheet; per-control config keys stay inline and win.
+    ['composer-control-size', 'components-composer-controlSize', '=40px'],
+    ['composer-control-icon-size', 'components-composer-controlIconSize', '=24px'],
+    // Motion: one timing pair + easing for every composer animation. A `0ms`
+    // duration is a kill switch; reduced-motion is enforced in CSS on top.
+    ['motion-duration-fast', 'components-motion-durationFast', '=120ms'],
+    ['motion-duration-base', 'components-motion-durationBase', '=200ms'],
+    ['motion-easing', 'components-motion-easing', '=cubic-bezier(0.2, 0, 0, 1)'],
     ['composer-border-color', 'components-composer-borderColor', 'border', '=#e5e7eb'],
     ['scrollbar-thumb', 'components-scrollbar-thumb', 'border', '=#e5e7eb'],
     ['scrollbar-track', 'components-scrollbar-track', '=transparent'],

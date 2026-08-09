@@ -750,15 +750,30 @@ export const createMessageActions = (
   message: AgentWidgetMessage,
   actionsConfig: AgentWidgetMessageActionsConfig,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _callbacks?: MessageActionCallbacks
+  _callbacks?: MessageActionCallbacks,
+  eligibility?: MessageActionEligibility
 ): HTMLElement => {
   const showCopy = actionsConfig.showCopy ?? true;
   const showUpvote = actionsConfig.showUpvote ?? true;
   const showDownvote = actionsConfig.showDownvote ?? true;
   const showReadAloud = actionsConfig.showReadAloud ?? false;
+  // Retry and edit are per-message: the config flag only opts in, the caller's
+  // eligibility decides which single message actually shows the control.
+  const showRegenerate =
+    (actionsConfig.showRegenerate ?? false) && eligibility?.canRegenerate === true;
+  const showEdit = (actionsConfig.showEdit ?? false) && eligibility?.canEdit === true;
+  const showQuote = (actionsConfig.showQuote ?? false) && eligibility?.canQuote !== false;
 
   // Don't render the container at all when no actions are visible
-  if (!showCopy && !showUpvote && !showDownvote && !showReadAloud) {
+  if (
+    !showCopy &&
+    !showUpvote &&
+    !showDownvote &&
+    !showReadAloud &&
+    !showRegenerate &&
+    !showEdit &&
+    !showQuote
+  ) {
     const empty = createElement("div");
     empty.style.display = "none";
     empty.id = `actions-${message.id}`;
@@ -829,13 +844,42 @@ export const createMessageActions = (
     container.appendChild(createActionButton("thumbs-down", "Downvote", "downvote"));
   }
 
+  // Regenerate: only the final retryable assistant turn (caller-decided).
+  if (showRegenerate) {
+    container.appendChild(
+      createActionButton("refresh-cw", "Regenerate response", "regenerate")
+    );
+  }
+
+  // Edit: only text-only user messages (caller-decided).
+  if (showEdit) {
+    container.appendChild(createActionButton("pencil", "Edit message", "edit"));
+  }
+
+  if (showQuote) {
+    container.appendChild(createActionButton("quote", "Quote message", "quote"));
+  }
+
   return container;
 };
 
 /**
  * Options for creating a standard message bubble
  */
+/**
+ * Which history actions this ONE message may show. Retry lives on a single
+ * assistant message and edit on qualifying user messages, so the decision is
+ * made by the transcript (which sees the whole list), not per bubble.
+ */
+export type MessageActionEligibility = {
+  canRegenerate?: boolean;
+  canEdit?: boolean;
+  canQuote?: boolean;
+};
+
 export type CreateStandardBubbleOptions = {
+  /** Per-message gate for the regenerate/edit/quote controls. */
+  actionEligibility?: MessageActionEligibility;
   /**
    * Custom loading indicator renderer for inline location
    */
@@ -1157,15 +1201,33 @@ export const createStandardBubble = (
   }
 
   // Add message actions for assistant messages (only when not streaming and has content)
-  const shouldShowActions = 
-    message.role === "assistant" && 
-    !message.streaming && 
-    message.content && 
+  const shouldShowActions =
+    message.role === "assistant" &&
+    !message.streaming &&
+    message.content &&
     message.content.trim() &&
     actionsConfig?.enabled !== false;
 
-  if (shouldShowActions && actionsConfig) {
-    const actions = createMessageActions(message, actionsConfig, actionCallbacks);
+  // User bubbles carry actions only when this message is edit- or quote-eligible;
+  // nothing else about a user bubble changes.
+  const eligibility = options?.actionEligibility;
+  const shouldShowUserActions =
+    message.role === "user" &&
+    !message.streaming &&
+    actionsConfig?.enabled !== false &&
+    ((actionsConfig?.showEdit === true && eligibility?.canEdit === true) ||
+      (actionsConfig?.showQuote === true && eligibility?.canQuote === true));
+
+  if ((shouldShowActions || shouldShowUserActions) && actionsConfig) {
+    const actions = createMessageActions(
+      message,
+      shouldShowUserActions
+        ? // A user bubble never hosts the assistant-only controls.
+          { ...actionsConfig, showCopy: false, showUpvote: false, showDownvote: false, showReadAloud: false }
+        : actionsConfig,
+      actionCallbacks,
+      eligibility
+    );
     bubble.appendChild(actions);
   }
 

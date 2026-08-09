@@ -25,7 +25,9 @@ import {
   AgentWidgetRenderHistoryStateContext,
   AgentWidgetHistoryRailSection,
   AgentWidgetHistoryRenderActions,
-  ResolvedHistoryPresentation
+  ResolvedHistoryPresentation,
+  ComposerAction,
+  ComposerActionContributionContext
 } from "../types";
 
 export type AgentWidgetTransformSuggestionsContext = {
@@ -223,6 +225,37 @@ export interface AgentWidgetPlugin {
     defaultRenderer: () => HTMLElement;
     onClose?: () => void;
   }) => HTMLElement | null;
+
+  /**
+   * Contribute controls to the composer action row.
+   *
+   * Unlike `renderComposer` (first match wins), EVERY active plugin's hook
+   * runs, so independent plugins coexist without either replacing the
+   * composer. Ids are namespaced `<pluginId>:<id>` unless they already contain
+   * a colon; a duplicate final id is rejected in favor of the earlier
+   * contributor (core, then host config, then plugins in registry order).
+   *
+   * Re-runs on `controller.update()`, plugin changes, and composer rebuilds;
+   * `visible` / `disabled` predicates additionally re-evaluate on every
+   * composer-state change without re-running this hook.
+   *
+   * @example
+   * ```typescript
+   * contributeComposerActions: () => [
+   *   {
+   *     id: "clear",            // renders as "my-plugin:clear"
+   *     placement: "start",
+   *     label: "Clear draft",
+   *     iconName: "eraser",
+   *     visible: (state) => state.text.length > 0,
+   *     onSelect: (ctx) => ctx.setValue(""),
+   *   },
+   * ]
+   * ```
+   */
+  contributeComposerActions?: (
+    context: ComposerActionContributionContext
+  ) => ComposerAction[];
 
   /**
    * Custom renderer for composer/input area

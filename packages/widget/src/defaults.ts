@@ -16,6 +16,12 @@ export const DEFAULT_FLOATING_LAUNCHER_WIDTH = "min(440px, calc(100vw - 24px))";
 /** Max width cap paired with {@link DEFAULT_FLOATING_LAUNCHER_WIDTH} for theme defaults. */
 export const DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH = "440px";
 
+/**
+ * Canonical composer placeholder. The low-level builders fall back to this so
+ * they cannot drift from `DEFAULT_WIDGET_CONFIG.copy.inputPlaceholder`.
+ */
+export const DEFAULT_INPUT_PLACEHOLDER = "How can I help...";
+
 export const DEFAULT_LAUNCHER_CONFIG: AgentWidgetLauncherConfig = {
   enabled: true,
   mountMode: "floating",
@@ -89,7 +95,7 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   copy: {
     // No welcomeTitle / welcomeSubtitle here on purpose: `resolveWelcomeConfig`
     // owns those defaults so presence still means "the host set this".
-    inputPlaceholder: "How can I help...",
+    inputPlaceholder: DEFAULT_INPUT_PLACEHOLDER,
     sendButtonLabel: "Send",
   },
   sendButton: {
@@ -99,7 +105,8 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
     borderColor: undefined,
     useIcon: true,
     iconText: "↑",
-    size: "40px",
+    // No `size`: unset means "follow --persona-composer-control-size"
+    // (theme.components.composer.controlSize), which defaults to 40px.
     showTooltip: true,
     tooltipText: "Send message",
     iconName: "send",
@@ -115,10 +122,10 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
     enabled: true,
     pauseDuration: 2000,
     iconName: "mic",
-    iconSize: "39px",
+    // No `iconSize` / `paddingX` / `paddingY`: the mic sizes from
+    // --persona-composer-control-size like every other composer control, so it
+    // no longer needs the hand-tuned box that squeezed a 39px glyph.
     borderWidth: "0px",
-    paddingX: "9px",
-    paddingY: "14px",
     iconColor: undefined,
     backgroundColor: "transparent",
     borderColor: "transparent",

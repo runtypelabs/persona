@@ -63,6 +63,8 @@ export interface SuggestionRenderOptions {
   config?: AgentWidgetConfig;
   /** Priority-sorted plugins active for this widget instance. */
   plugins?: readonly AgentWidgetPlugin[];
+  /** Send through the composer submission pipeline instead of the session. */
+  submitPrompt?: (prompt: string) => void;
 }
 
 export const normalizeSuggestion = (
@@ -156,6 +158,12 @@ export interface SuggestionElementContext {
   getTextarea: () => HTMLTextAreaElement;
   /** Node the cancelable `persona:suggestion:*` events dispatch from. */
   eventTarget: HTMLElement;
+  /**
+   * Send through the widget's composer submission pipeline (snapshot +
+   * `onBeforeSend`). Falls back to a direct `session.sendMessage` when absent,
+   * which keeps standalone renders of this element working.
+   */
+  submitPrompt?: (prompt: string) => void;
 }
 
 /**
@@ -180,6 +188,7 @@ export const createSuggestionElement = (
     session,
     getTextarea,
     eventTarget,
+    submitPrompt,
   } = context;
   const isFollowUp = surface === "followUp";
   const itemBehavior = item.behavior;
@@ -233,6 +242,10 @@ export const createSuggestionElement = (
       return;
     }
 
+    if (submitPrompt) {
+      submitPrompt(item.prompt);
+      return;
+    }
     textarea.value = "";
     session.sendMessage(item.prompt);
   };
@@ -512,6 +525,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
         session,
         getTextarea: () => textarea,
         eventTarget: container,
+        submitPrompt: opts?.submitPrompt,
       });
 
       fragment.appendChild(element);

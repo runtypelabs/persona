@@ -42,6 +42,7 @@ import {
   PersonaArtifactActionContext,
   AgentWidgetContentSegment,
   AgentWidgetContextMentionRef,
+  AgentWidgetStoredDraft,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionSource,
   AgentWidgetWelcomeIcon,
@@ -51,9 +52,87 @@ import {
   HistoryReturnSurface,
   HistoryScope,
   PendingDisplayProjections,
-  ResolvedHistoryPresentation
+  ResolvedHistoryPresentation,
+  ComposerAction,
+  ComposerActionContext,
+  ComposerAttachmentState,
+  ComposerMode,
+  ComposerOptionsPayload,
+  ComposerQuote,
+  ComposerState,
+  ComposerStreamingSubmitBehavior,
+  ComposerSubmissionSnapshot
 } from "./types";
-import { AttachmentManager } from "./utils/attachment-manager";
+import { AttachmentManager, type PendingAttachment } from "./utils/attachment-manager";
+import { createComposerStore } from "./utils/composer-store";
+import {
+  bindComposerSurface,
+  type ComposerSurfaceBindings,
+} from "./components/composer-bindings";
+import {
+  COMPOSER_ACTION_ORDER,
+  createComposerActionRenderer,
+  type ComposerActionRenderer,
+  type ComposerBuiltInDescriptor,
+} from "./components/composer-actions";
+import {
+  createComposerModelPickerAction,
+  type ComposerModelPicker,
+} from "./components/composer-model-picker";
+import { createComposerModeChipRow } from "./components/composer-mode-chips";
+import {
+  COMPOSER_CHIP_ROW_SELECTOR,
+  ensureComposerChipRow,
+} from "./components/composer-chip-row";
+import { createComposerQuoteBanner } from "./components/composer-quote-banner";
+import { createComposerPendingCard } from "./components/composer-pending-card";
+import {
+  createMessageEditEditor,
+  type MessageEditEditor
+} from "./components/message-edit-editor";
+import {
+  findPrecedingUserMessageId,
+  findRetryableAssistantMessageId,
+  isEditableUserMessage
+} from "./utils/resubmit-turn";
+import {
+  buildStoredDraft,
+  createDraftWriter,
+  rehydrateStoredDraft,
+  type DraftWriter
+} from "./utils/composer-draft";
+import {
+  clearOnceComposerModes,
+  composerModeActionId,
+  composerModeOrder,
+  pruneComposerModes,
+  resolveComposerModePlaceholder,
+  toggleComposerMode,
+} from "./utils/composer-modes";
+import {
+  createComposerCompactLatch,
+  isComposerCompact,
+  isEditorWrapped,
+} from "./utils/composer-compact";
+import { requestFormSubmit } from "./utils/composer-input";
+import {
+  DEFAULT_COMPOSER_MAX_LINES,
+  PILL_COMPOSER_MAX_LINES,
+  applyComposerEnterKeyHint,
+  applyComposerInputAttributes,
+  applyComposerMaxLines,
+  isCoarsePointer,
+  isSubmitKeydown,
+  resolveComposerLock,
+  resolveMaxLines,
+} from "./utils/composer-input-config";
+import {
+  canSubmitComposer,
+  runBeforeSend,
+  toPublicSubmissionSnapshot,
+  type BeforeSendOutcome,
+  type InternalSubmissionSnapshot,
+} from "./utils/composer-submission";
 import {
   createContextMentionOrchestrator,
   type ContextMentionOrchestrator,
@@ -130,7 +209,14 @@ import {
   COMPOSER_BAR_CLOSE_ICON_SIZE,
 } from "./components/panel";
 import { buildPillComposer } from "./components/pill-composer-builder";
-import { createMicButton } from "./components/composer-parts";
+import {
+  COMPOSER_CONTROL_CLASS,
+  COMPOSER_CONTROL_FALLBACK_PX,
+  COMPOSER_CONTROL_GLYPH_CLASS,
+  COMPOSER_CONTROL_ICON_FALLBACK_PX,
+  buildSendGlyphStack,
+  createMicButton,
+} from "./components/composer-parts";
 import { createWidgetView, resolveLauncher } from "./components/widget-view";
 import {
   animateWelcomeOut,
@@ -150,7 +236,7 @@ import {
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
-import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer } from "./components/message-bubble";
+import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer, MessageActionEligibility } from "./components/message-bubble";
 import { createStandardBubble, createTypingIndicator, getBubbleClasses } from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
@@ -263,6 +349,9 @@ const DEFAULT_CHAT_HISTORY_STORAGE_KEY = "persona-chat-history";
 const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
 // Split desktop boundary; must match widget.css artifact media queries (min-width:641px).
 const ARTIFACT_SPLIT_DESKTOP_MIN = 641;
+
+/** Marks the status region while a composer lock reason owns it. */
+const COMPOSER_REASON_ATTR = "data-persona-composer-reason";
 
 const IMAGE_FILE_EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   "image/png": "png",
@@ -418,6 +507,20 @@ type Controller = {
   clearChat: () => void;
   setMessage: (message: string) => boolean;
   submitMessage: (message?: string) => boolean;
+  /**
+   * Frozen snapshot of composer state (text, attachments, mentions, phase).
+   * The same payload rides the `persona:composer:state` DOM event.
+   */
+  getComposerState: () => Readonly<ComposerState>;
+  /**
+   * Set the composer quote/reply-to. Renders a dismissible banner above the
+   * editor; the next send carries the quote as a delimited block ahead of the
+   * user's text and keeps the structured source on the sent message. A blank
+   * `text` is ignored.
+   */
+  setQuote: (quote: ComposerQuote) => void;
+  /** Drop the active quote without sending. */
+  clearQuote: () => void;
   /**
    * Manually retry a dropped durable stream (e.g. from a "Reconnect" button).
    * No-op unless a resumable durable turn dropped and `reconnectStream` is set.
@@ -917,6 +1020,8 @@ export const createAgentExperience = (
   const historyBootstrapReady = new Promise<void>((resolve) => {
     resolveHistoryBootstrap = resolve;
   });
+  /** Synchronously loaded draft, replayed into the composer after it mounts. */
+  let loadedStoredDraft: AgentWidgetStoredDraft | undefined;
 
   let shouldOpenAfterStateLoaded = false;
 
@@ -970,6 +1075,8 @@ export const createAgentExperience = (
             initialSelectedArtifactId: processedState.selectedArtifactId ?? null
           };
         }
+        // Applied once the composer exists (see `restoreComposerDraft`).
+        loadedStoredDraft = processedState.draft;
       }
     } catch (error) {
       if (typeof console !== "undefined") {
@@ -1213,6 +1320,8 @@ export const createAgentExperience = (
 
   /** Update statusText element, rendering a link for idle status when idleLink is configured. */
   function applyStatusToElement(el: HTMLElement, text: string, statusCfg: typeof statusConfig, status: string): void {
+    // A composer lock reason owns the status region until the lock clears.
+    if (el.hasAttribute(COMPOSER_REASON_ATTR)) return;
     if (status === "idle" && statusCfg.idleLink) {
       el.textContent = "";
       const link = document.createElement("a");
@@ -1244,7 +1353,6 @@ export const createAgentExperience = (
     suggestions,
     textarea,
     sendButton,
-    sendButtonWrapper,
     composerForm,
     statusText,
     welcomeHost,
@@ -1258,14 +1366,15 @@ export const createAgentExperience = (
     headerSubtitle,
     header,
     footer,
-    actionsRow: _actionsRow,
-    rightActions
+    actionsRow: _actionsRow
   } = panelElements;
   // Nullable + reassignable: a plugin `replaceComposer` swaps the footer, and
-  // `bindComposerRefsFromFooter` must repoint this at the NEW left-action
-  // cluster (or null it so the composerForm fallback fires) — a stale ref would
-  // insert the mention/attachment buttons into the detached old subtree.
+  // `bindComposerRefsFromFooter` must repoint these at the NEW clusters (or
+  // null them so the fallbacks fire) — a stale ref would insert the
+  // mention/attachment/mic buttons into the detached old subtree.
   let leftActions: HTMLElement | null = panelElements.leftActions;
+  let rightActions: HTMLElement | null = panelElements.rightActions;
+  let sendButtonWrapper: HTMLElement | null = panelElements.sendButtonWrapper;
   let setSendButtonMode = panelElements.setSendButtonMode;
 
   // Use mutable references for mic button so we can update them dynamically
@@ -1411,6 +1520,186 @@ export const createAgentExperience = (
   // Context mentions orchestrator (core, tiny); lazy-loads the heavy runtime on
   // first use. Null when `contextMentions` is disabled / has no sources.
   let mentionOrchestrator: ContextMentionOrchestrator | null = null;
+
+  // --- Composer state store -------------------------------------------------
+  // Single source of truth for composer text/attachments/mentions/phase. Mirrors
+  // are pushed in from the input adapter and the attachment manager; nothing
+  // re-reads the DOM to answer `getComposerState()`.
+  const composerStore = createComposerStore();
+  const emitComposerStateEvent = (state: Readonly<ComposerState>): void => {
+    try {
+      container.dispatchEvent(
+        new CustomEvent("persona:composer:state", {
+          detail: state,
+          bubbles: true,
+          composed: true,
+        })
+      );
+    } catch {
+      /* CustomEvent unavailable — ignore */
+    }
+  };
+  composerStore.subscribe(emitComposerStateEvent);
+
+  /** Mirror the live input value into the store (textarea or inline adapter). */
+  const syncComposerText = (): void => {
+    composerStore.setText(textarea?.value ?? "");
+  };
+  const syncComposerMentions = (): void => {
+    composerStore.setMentionRefs(mentionOrchestrator?.getMentionRefs() ?? []);
+  };
+  /**
+   * Public projection of one pending attachment: no `File` handle, no content
+   * part, no DOM node. The default base64 adapter reports `processing` then
+   * `ready`; a host adapter also reports `uploading` with progress and `error`.
+   */
+  const toComposerAttachmentState = (
+    attachment: PendingAttachment
+  ): ComposerAttachmentState => ({
+    id: attachment.id,
+    name: attachment.file.name,
+    mimeType: attachment.file.type,
+    size: attachment.file.size,
+    status: attachment.status,
+    progress: attachment.progress,
+    error: attachment.error,
+  });
+  const syncComposerAttachments = (attachments: PendingAttachment[]): void => {
+    const states = Object.freeze(attachments.map(toComposerAttachmentState));
+    composerStore.setAttachments(states);
+    // The public change event fires on exactly the attachment transitions, not
+    // on every composer-state change.
+    try {
+      config.attachments?.onChange?.(states);
+    } catch (error) {
+      console.error("[AgentWidget] attachments.onChange failed:", error);
+    }
+    syncComposerSendAvailability();
+  };
+
+  // --- Model + mode selection (roadmap section 9) ---------------------------
+  // Both live in composer state, never in config: config carries the catalog
+  // (`composer.models`, `composer.modes`) and the INITIAL selection only.
+  composerStore.setSelectedModelId(config.composer?.selectedModelId);
+
+  const composerModes = (): readonly ComposerMode[] => config.composer?.modes ?? [];
+
+  /** Write a selection to the store and notify the host. Config is untouched. */
+  function selectComposerModel(modelId: string): void {
+    if (composerStore.getState().selectedModelId === modelId) return;
+    composerStore.setSelectedModelId(modelId);
+    composerModelPicker?.repaint();
+    try {
+      config.composer?.onModelChange?.(modelId);
+    } catch (error) {
+      console.error("[AgentWidget] composer.onModelChange failed:", error);
+    }
+  }
+
+  function setActiveComposerModes(ids: readonly string[]): void {
+    composerStore.setActiveModeIds(ids);
+    composerModeChips?.render(ids, composerModes());
+    // `pressed` is read off config at resolve time, so the row must re-resolve.
+    composerActionRenderer?.resolve();
+    updateCopy();
+    syncComposerCompact();
+  }
+
+  function toggleComposerModeById(modeId: string): void {
+    setActiveComposerModes(
+      toggleComposerMode(
+        composerStore.getState().activeModeIds,
+        modeId,
+        composerModes(),
+        config.composer?.modeGroups
+      )
+    );
+  }
+
+  /** Model picker + one toggle per configured mode, as ordinary actions. */
+  let composerModelPicker: ComposerModelPicker | null = null;
+  let composerModeChips: ReturnType<typeof createComposerModeChipRow> | null = null;
+
+  // --- Quote / reply-to (roadmap section 13) --------------------------------
+  let composerQuoteBanner: ReturnType<typeof createComposerQuoteBanner> | null = null;
+
+  function setComposerQuote(quote: ComposerQuote | undefined): void {
+    composerStore.setQuote(quote);
+    composerQuoteBanner?.render(composerStore.getState().quote);
+    syncComposerCompact();
+    scheduleDraftPersist();
+  }
+
+  // --- Submit during streaming (roadmap section 11) -------------------------
+  let warnedInterruptFallback = false;
+
+  /**
+   * Effective policy. `interrupt` is a client-token capability (decision 19.1):
+   * only that endpoint accepts `turnId` / `submitMode`, so every other transport
+   * falls back to `block`.
+   */
+  function resolveStreamingSubmitBehavior(): ComposerStreamingSubmitBehavior {
+    const configured = config.composer?.streamingSubmitBehavior ?? "block";
+    if (configured !== "interrupt") return configured;
+    if (config.clientToken) return "interrupt";
+    if (!warnedInterruptFallback && config.debug === true) {
+      warnedInterruptFallback = true;
+      if (typeof console !== "undefined") {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[persona] composer.streamingSubmitBehavior "interrupt" requires the client-token transport; falling back to "block".'
+        );
+      }
+    }
+    return "block";
+  }
+
+  // --- Deferred submission (roadmap section 11) -----------------------------
+  let composerPendingCard: ReturnType<typeof createComposerPendingCard> | null = null;
+
+  function setPendingSubmission(
+    snapshot: Readonly<ComposerSubmissionSnapshot> | undefined
+  ): void {
+    composerStore.setPendingSubmission(snapshot);
+    composerPendingCard?.render(composerStore.getState().pendingSubmission);
+    syncComposerCompact();
+  }
+
+  const collectComposerCoreActions = (): ComposerAction[] => {
+    const actions: ComposerAction[] = [];
+    const active = composerStore.getState().activeModeIds;
+    composerModes().forEach((mode, index) => {
+      actions.push({
+        id: composerModeActionId(mode.id),
+        kind: "button",
+        placement: "start",
+        order: composerModeOrder(index),
+        presentation: mode.presentation ?? "auto",
+        label: mode.label,
+        shortLabel: mode.shortLabel,
+        iconName: mode.iconName,
+        pressed: active.includes(mode.id),
+        onSelect: () => toggleComposerModeById(mode.id),
+      });
+    });
+    // Exactly symmetric with the plugin handoff: a `renderComposer` plugin
+    // already receives `models`/`selectedModelId`/`onModelChange` and owns the
+    // control, so the built-in picker would be a second affordance.
+    if (
+      config.composer?.models?.length &&
+      !plugins.some((plugin) => plugin.renderComposer)
+    ) {
+      if (!composerModelPicker) {
+        composerModelPicker = createComposerModelPickerAction({
+          getModels: () => config.composer?.models ?? [],
+          getSelectedModelId: () => composerStore.getState().selectedModelId,
+          onSelect: (modelId) => selectComposerModel(modelId),
+        });
+      }
+      actions.push(composerModelPicker.action);
+    }
+    return actions;
+  };
 
   /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
   let composerVoiceBridge: (() => void) | null = null;
@@ -1595,9 +1884,8 @@ export const createAgentExperience = (
   };
 
   // Plugin hook: renderComposer - allow plugins to provide custom composer.
-  // Arbitration is a function so `rebuildComposer()` can re-run it with a
-  // fresh ctx and swap the footer in place.
-  const composerPlugin = plugins.find(p => p.renderComposer);
+  // Arbitration runs inside this function so every rebuild re-arbitrates
+  // against the CURRENT registry (`update()` mutates `plugins` in place).
   // True while the footer content came from a plugin (not composition via
   // defaultRenderer). Plugin composers own their copy: updateCopy must not
   // stamp inputPlaceholder/sendButtonLabel onto DOM the core did not build.
@@ -1605,6 +1893,7 @@ export const createAgentExperience = (
   const renderComposerFromPlugins = (
     defaultRenderer: () => HTMLElement
   ): HTMLElement | null => {
+    const composerPlugin = plugins.find(p => p.renderComposer);
     if (!composerPlugin?.renderComposer) return null;
     const composerCfg = config.composer;
     const streaming = sessionInitialized ? session.isStreaming() : false;
@@ -1615,39 +1904,23 @@ export const createAgentExperience = (
       storage: pluginStorageFor(composerPlugin.id),
       onSubmit: (text: string) => {
         if (!session || session.isStreaming()) return;
-        const value = text.trim();
-        const hasAttachments = attachmentManager?.hasAttachments() ?? false;
-        if (!value && !hasAttachments) return;
-        // Mirror the default composer's auto-expand behavior so plugin
-        // composers do not silently submit while the panel stays collapsed.
-        maybeExpandComposerBar();
-        let contentParts: ContentPart[] | undefined;
-        if (hasAttachments) {
-          contentParts = [];
-          contentParts.push(...attachmentManager!.getContentParts());
-          if (value) {
-            contentParts.push(createTextPart(value));
-          }
-        }
-        session.sendMessage(value, { contentParts });
-        if (hasAttachments) {
-          attachmentManager!.clearAttachments();
-        }
+        // The shared submission path (snapshot + onBeforeSend + dispatch). A
+        // plugin composer owns its own input, so the draft is left alone.
+        submitText(text.trim(), { consumeDraft: false });
       },
       streaming,
       disabled: streaming,
       openAttachmentPicker: () => {
+        if (isComposerInputDisabled()) return;
         attachmentInput?.click();
       },
       models: composerCfg?.models,
-      selectedModelId: composerCfg?.selectedModelId,
-      onModelChange: (modelId: string) => {
-        config.composer = { ...config.composer, selectedModelId: modelId };
-        // Sync to agent config so the next request uses the selected model
-        if (config.agent) {
-          config.agent = { ...config.agent, model: modelId };
-        }
-      },
+      selectedModelId:
+        composerStore.getState().selectedModelId ?? composerCfg?.selectedModelId,
+      // UI state is not authority: the selection lands in composer state and is
+      // snapshotted per send. It writes neither `config.composer` nor
+      // `config.agent` — an inline agent takes the model per request instead.
+      onModelChange: (modelId: string) => selectComposerModel(modelId),
       onVoiceToggle:
         config.voiceRecognition?.enabled === true
           ? () => {
@@ -1667,64 +1940,85 @@ export const createAgentExperience = (
     composerIsPluginOwned = true;
   }
 
-  const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
-    // Prefer stable `data-persona-composer-*` refs (set by the default and
-    // pill builders); fall back to the legacy class selectors so custom
-    // plugin composers built before these refs existed still bind.
-    const pick = <T extends HTMLElement>(...selectors: string[]): T | null => {
-      for (const selector of selectors) {
-        const found = rootFooter.querySelector<T>(selector);
-        if (found) return found;
-      }
-      return null;
-    };
+  /**
+   * The live composer surface: one object, swapped atomically. Null when the
+   * mounted footer has no bindable form/input (a gating plugin composer), in
+   * which case nothing composer-scoped stays wired.
+   */
+  let composerBindings: ComposerSurfaceBindings | null = null;
 
-    const form = rootFooter.querySelector<HTMLFormElement>("[data-persona-composer-form]");
-    const ta = rootFooter.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]");
-    const sb = rootFooter.querySelector<HTMLButtonElement>("[data-persona-composer-submit]");
-    const mic = rootFooter.querySelector<HTMLButtonElement>("[data-persona-composer-mic]");
-    const st = rootFooter.querySelector<HTMLElement>("[data-persona-composer-status]");
-    if (form) composerForm = form;
-    if (ta) textarea = ta;
-    if (sb) sendButton = sb;
-    if (mic) {
-      micButton = mic;
-      micButtonWrapper = mic.parentElement as HTMLElement | null;
+  /**
+   * Legacy locals mirror the binding for the ~200 call sites that still read
+   * them. Only FOUND regions are mirrored: a synthesized region must not become
+   * the insertion target for controls that previously fell back to the form.
+   */
+  const mirrorComposerBindings = (next: ComposerSurfaceBindings): void => {
+    composerForm = next.form;
+    textarea = next.input as HTMLTextAreaElement;
+    sendButtonWrapper = next.sendButton
+      ? (next.sendButton.parentElement as HTMLElement | null)
+      : null;
+    if (next.sendButton) sendButton = next.sendButton;
+    if (next.micButton) {
+      micButton = next.micButton;
+      micButtonWrapper = next.micButton.parentElement as HTMLElement | null;
     }
-    if (st) statusText = st;
-    const sug = pick<HTMLElement>(
-      "[data-persona-composer-suggestions]",
-      ".persona-mb-3.persona-flex.persona-flex-wrap.persona-gap-2"
-    );
-    if (sug) suggestions = sug;
-    const attBtn = pick<HTMLButtonElement>(
-      "[data-persona-composer-attachment-button]",
-      ".persona-attachment-button"
-    );
-    if (attBtn) {
-      attachmentButton = attBtn;
-      attachmentButtonWrapper = attBtn.parentElement as HTMLElement | null;
+    if (next.found.status) statusText = next.found.status;
+    if (next.found.suggestions) suggestions = next.found.suggestions;
+    if (next.attachmentButton) {
+      attachmentButton = next.attachmentButton;
+      attachmentButtonWrapper =
+        next.attachmentButton.parentElement as HTMLElement | null;
     }
-    attachmentInput = pick<HTMLInputElement>(
-      "[data-persona-composer-attachment-input]",
-      'input[type="file"]'
+    attachmentInput = next.attachmentInput ?? null;
+    attachmentPreviewsContainer = next.attachmentPreviews ?? null;
+    if (next.found.actionsRow) _actionsRow = next.found.actionsRow;
+    leftActions = next.found.actionsStart;
+    rightActions = next.found.actionsEnd;
+  };
+
+  /**
+   * Push `composer.submitKey`, `composer.inputAttributes`, and
+   * `composer.maxLines` onto the live editor. Config read at build time must
+   * re-sync, so this runs on mount, on every rebuild, after the inline
+   * contenteditable swap, and from `controller.update()`.
+   */
+  function applyComposerInputConfig(): void {
+    const el = textarea as unknown as HTMLElement | null;
+    if (!el) return;
+    const attributes = config.composer?.inputAttributes;
+    // The inline editor derives its accessible name from the placeholder when
+    // the host sets none; re-applying the allowlist must not strip that.
+    const derivedLabel =
+      !attributes?.ariaLabel && !(el instanceof HTMLTextAreaElement)
+        ? el.getAttribute("aria-label")
+        : null;
+    applyComposerInputAttributes(el, attributes);
+    if (derivedLabel) el.setAttribute("aria-label", derivedLabel);
+    applyComposerEnterKeyHint(el, {
+      submitKey: config.composer?.submitKey,
+      insertNewlineOnTouchEnter: config.composer?.insertNewlineOnTouchEnter,
+      coarsePointer: isCoarsePointer(el),
+    });
+    applyComposerMaxLines(
+      el,
+      resolveMaxLines(
+        config.composer?.maxLines,
+        isComposerBar() ? PILL_COMPOSER_MAX_LINES : DEFAULT_COMPOSER_MAX_LINES
+      )
     );
-    attachmentPreviewsContainer = pick<HTMLElement>(
-      "[data-persona-composer-attachment-previews]",
-      ".persona-attachment-previews"
-    );
-    const ar = pick<HTMLElement>(
-      "[data-persona-composer-actions]",
-      ".persona-widget-composer .persona-flex.persona-items-center.persona-justify-between"
-    );
-    if (ar) _actionsRow = ar;
-    // Rebind the left-action cluster to the NEW footer (both composer builders
-    // ship this class). Assign unconditionally: when a custom plugin composer
-    // has no left cluster, null lets the button-insert fall back to the form.
-    leftActions = pick<HTMLElement>(".persona-widget-composer__left-actions");
+  }
+
+  const bindComposerRefsFromFooter = (rootFooter: HTMLElement) => {
+    composerBindings = bindComposerSurface(rootFooter, {
+      debug: config.debug === true,
+    });
+    if (composerBindings) mirrorComposerBindings(composerBindings);
+    applyComposerInputConfig();
   };
   ensureComposerAttachmentSurface(footer);
   bindComposerRefsFromFooter(footer);
+  syncComposerText();
 
   // Center the content column. Defaults: 768px panels, 720px composer-bar
   // (resolveContentMaxWidth); "none" opts out. Only engages on panels wider
@@ -1775,12 +2069,15 @@ export const createAgentExperience = (
       return;
     }
     if (!attachmentManager) {
-      attachmentManager = AttachmentManager.fromConfig(config.attachments);
+      attachmentManager = AttachmentManager.fromConfig(
+        config.attachments,
+        syncComposerAttachments
+      );
       attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
     } else {
       attachmentManager.remountPreviews(attachmentPreviewsContainer);
     }
-    attachmentInput.addEventListener("change", (e) => {
+    composerBindings?.addListener(attachmentInput, "change", (e) => {
       const target = e.target as HTMLInputElement;
       attachmentManager?.handleFileSelect(target.files);
       target.value = "";
@@ -1808,6 +2105,12 @@ export const createAgentExperience = (
     // surface itself — the mention runtime builds a textarea (chip) or
     // contenteditable (inline) adapter from this textarea. Broader host actions
     // (clear transcript, theme) are still wired via closures over the controller.
+    // Mention chips share the header chip row with the mode chips: one rail,
+    // modes first. Without a header region (a plugin surface that binds none)
+    // the orchestrator falls back to its own row, placed above the editor.
+    const header = composerBindings?.header ?? null;
+    const chipRow = header ? ensureComposerChipRow(header) : undefined;
+
     mentionOrchestrator = createContextMentionOrchestrator({
       config,
       textarea,
@@ -1816,12 +2119,14 @@ export const createAgentExperience = (
       // The engine chunk creates the mention live regions in this container on
       // mount, keeping the live-region helper out of the core bundle.
       liveRegionHost: container,
+      chipRow,
     });
 
     if (mentionOrchestrator) {
-      // Chip row sits directly above the textarea.
-      const ta = textarea;
-      ta.parentElement?.insertBefore(mentionOrchestrator.contextRow, ta);
+      if (!chipRow) {
+        const ta = textarea;
+        ta.parentElement?.insertBefore(mentionOrchestrator.contextRow, ta);
+      }
       // Each channel's "add context" affordance is a secondary control that
       // augments the outgoing message, so it joins the LEFT action cluster
       // (beside the attachment button) — never the right cluster with mic +
@@ -1829,12 +2134,10 @@ export const createAgentExperience = (
       // "add to my message" and stay clear of the primary send action. Both
       // composer builders (full + pill) always ship `leftActions`; the form
       // fallback is purely defensive.
-      const buttons = mentionOrchestrator.affordanceButtons;
-      for (let i = buttons.length - 1; i >= 0; i--) {
-        const btn = buttons[i];
-        if (leftActions) leftActions.insertBefore(btn, leftActions.firstChild);
-        else composerForm?.appendChild(btn);
-      }
+      // Placement is the action registry's job (order 100 + channel index):
+      // `setupComposerActions` inserts them leftmost, in channel order. This
+      // function stays the source of their click behavior.
+      //
       // The focus-prefetch listener (warm the chunk on first focus so the first
       // `@` is instant) is registered through the shared `composerListeners`
       // registry below, so it survives the inline contenteditable swap too.
@@ -1842,10 +2145,237 @@ export const createAgentExperience = (
   };
   setupMentionOrchestrator();
 
+  // --- Composer action registry (roadmap section 6) --------------------------
+  // One ordered row from three contributors: core built-ins, host
+  // `composer.actions`, and every plugin's `contributeComposerActions`.
+  let composerActionRenderer: ComposerActionRenderer | null = null;
+
+  const composerActionContext: ComposerActionContext = {
+    getState: () => composerStore.getState(),
+    getValue: () => textarea?.value ?? "",
+    setValue: (value: string) => {
+      if (!textarea) return;
+      textarea.value = value;
+      // Same programmatic-edit shape as history recall: auto-resize and the
+      // mention parser both listen for `input`.
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      syncComposerText();
+    },
+    submit: () => {
+      requestFormSubmit(composerBindings?.form ?? null);
+    },
+    openAttachmentPicker: () => {
+      if (isComposerInputDisabled()) return;
+      attachmentInput?.click();
+    },
+    toggleVoice: () => {
+      composerVoiceBridge?.();
+    },
+    requestRender: () => composerActionRenderer?.resolve(),
+  };
+
+  /**
+   * Core controls, in documented order. Only the mention affordances are
+   * `managed` (the registry inserts them); attachment, mic, and send are
+   * positional placeholders whose elements the composer builders already
+   * mounted, so built-in DOM is byte-identical to before.
+   */
+  const collectComposerBuiltIns = (): ComposerBuiltInDescriptor[] => {
+    const builtIns: ComposerBuiltInDescriptor[] = [];
+    const affordances = mentionOrchestrator?.affordanceButtons ?? [];
+    affordances.forEach((element, index) => {
+      builtIns.push({
+        id: `core:mention-${index}`,
+        placement: "start",
+        order: COMPOSER_ACTION_ORDER.mention + index,
+        element,
+        managed: true,
+      });
+    });
+    if (attachmentButtonWrapper) {
+      builtIns.push({
+        id: "core:attachment",
+        placement: "start",
+        order: COMPOSER_ACTION_ORDER.attachment,
+        element: attachmentButtonWrapper,
+      });
+    }
+    if (micButtonWrapper) {
+      builtIns.push({
+        id: "core:mic",
+        placement: "end",
+        order: COMPOSER_ACTION_ORDER.mic,
+        element: micButtonWrapper,
+      });
+    }
+    if (sendButtonWrapper) {
+      builtIns.push({
+        id: "core:send",
+        placement: "end",
+        order: COMPOSER_ACTION_ORDER.send,
+        element: sendButtonWrapper,
+      });
+    }
+    return builtIns;
+  };
+
+  /** Rebuild the renderer against the CURRENT bindings and resolve once. */
+  const setupComposerActions = (): void => {
+    composerActionRenderer?.destroy();
+    composerActionRenderer = createComposerActionRenderer({
+      getBindings: () => composerBindings,
+      collect: () => ({
+        builtIns: collectComposerBuiltIns(),
+        // Core-contributed controls (modes, model picker) first, so a host
+        // action reusing one of their ids loses the claim deterministically.
+        configActions: [
+          ...collectComposerCoreActions(),
+          ...(config.composer?.actions ?? []),
+        ],
+        plugins,
+        contributionContext: {
+          config,
+          getState: () => composerStore.getState(),
+          requestRender: () => composerActionRenderer?.resolve(),
+        },
+        debug: config.debug === true,
+      }),
+      actionContext: composerActionContext,
+      getState: () => composerStore.getState(),
+      // No getButtonSize: registry buttons and the overflow trigger size from
+      // `--persona-composer-control-size` like every other composer control.
+      getOverflow: () => config.composer?.actionOverflow,
+      reportError: (error, info) => {
+        if (typeof console !== "undefined") {
+          // eslint-disable-next-line no-console
+          console.error(
+            `[AgentWidget] composer action "${info.actionId}" failed:`,
+            error
+          );
+        }
+      },
+    });
+    composerActionRenderer.resolve();
+  };
+  setupComposerActions();
+
+  /**
+   * Mount the active-mode chips into the CURRENT header's shared chip row (the
+   * one mention chips also render into). Rebuilt with the composer: the
+   * outgoing header is detached with the old footer.
+   */
+  const setupComposerModeChips = (): void => {
+    composerModeChips?.destroy();
+    composerModeChips = null;
+    if (!config.composer?.modes?.length) return;
+    const header = composerBindings?.header;
+    if (!header) return;
+    composerModeChips = createComposerModeChipRow({
+      row: ensureComposerChipRow(header),
+      onRemove: (modeId) => toggleComposerModeById(modeId),
+      // A rebuild hands the new row the chips the user is already looking at;
+      // those must not replay their entrance.
+      initialIds: composerStore.getState().activeModeIds,
+    });
+    composerModeChips.render(composerStore.getState().activeModeIds, composerModes());
+  };
+  setupComposerModeChips();
+
+  /**
+   * Quote banner + deferred-submission card share the header region with the
+   * mode chips, and are rebuilt with the composer for the same reason: the
+   * outgoing header is detached with the old footer.
+   */
+  const setupComposerHeaderCards = (): void => {
+    composerQuoteBanner?.destroy();
+    composerQuoteBanner = null;
+    composerPendingCard?.destroy();
+    composerPendingCard = null;
+    const header = composerBindings?.header;
+    if (!header) return;
+    composerQuoteBanner = createComposerQuoteBanner({
+      onDismiss: () => setComposerQuote(undefined),
+    });
+    header.appendChild(composerQuoteBanner.element);
+    composerQuoteBanner.render(composerStore.getState().quote);
+
+    if (resolveStreamingSubmitBehavior() === "defer-one") {
+      composerPendingCard = createComposerPendingCard({
+        onEdit: () => restorePendingSubmissionToDraft(),
+        onRemove: () => setPendingSubmission(undefined),
+      });
+      header.appendChild(composerPendingCard.element);
+      composerPendingCard.render(composerStore.getState().pendingSubmission);
+    }
+  };
+  setupComposerHeaderCards();
+
+  // --- Compact state (roadmap section 14) ------------------------------------
+  // The attribute is the only contract; core CSS changes no layout with it.
+  const composerCompactLatch = createComposerCompactLatch();
+  /**
+   * Chips of either kind, read from the one shared header row. Falls back to
+   * composer state on a surface that binds no header (no row to read).
+   */
+  const hasComposerChips = (): boolean => {
+    const row = composerBindings?.header?.querySelector<HTMLElement>(
+      COMPOSER_CHIP_ROW_SELECTOR
+    );
+    if (row) return row.childElementCount > 0;
+    const state = composerStore.getState();
+    return state.mentionRefs.length > 0 || state.activeModeIds.length > 0;
+  };
+  // Bound once `voiceState` exists (further down this closure); the compact
+  // sweep can run before then only via a microtask, which is later still.
+  let isDictationActive: () => boolean = () => false;
+  function syncComposerCompact(): void {
+    const state = composerStore.getState();
+    const wrapped = composerCompactLatch.observe(
+      isEditorWrapped(textarea as unknown as HTMLElement | null),
+      state.text
+    );
+    footer.toggleAttribute(
+      "data-persona-composer-compact",
+      isComposerCompact({
+        text: state.text,
+        wrapped,
+        hasAttachments: state.attachments.length > 0,
+        hasChips: hasComposerChips(),
+        hasQuote: state.quote !== undefined,
+        hasPendingSubmission: state.pendingSubmission !== undefined,
+        dictationActive: isDictationActive(),
+      })
+    );
+  }
+
+  // `visible`/`disabled` predicates re-evaluate on every composer-state change,
+  // and the send button follows the same state (locks + attachment readiness).
+  composerStore.subscribe(() => {
+    composerActionRenderer?.sync();
+    syncComposerSendAvailability();
+    syncComposerCompact();
+    scheduleDraftPersist();
+  });
+
+  // `messages` and `composer` are public but have never been implemented;
+  // insertSlotContent drops them. Warn once per widget instead of silently
+  // ignoring a configured renderer.
+  let warnedInertSlots = false;
+  const warnInertSlots = (slots: Partial<Record<WidgetLayoutSlot, SlotRenderer>>) => {
+    if (warnedInertSlots || config.debug !== true) return;
+    const inert = (["messages", "composer"] as const).filter((slot) => slots[slot]);
+    if (!inert.length) return;
+    warnedInertSlots = true;
+    console.warn(
+      `[persona] layout.slots.${inert.join(" and layout.slots.")} ${inert.length > 1 ? "are" : "is"} deprecated and unsupported: the renderer never runs. Use the message render hooks for the transcript and the renderComposer plugin hook for the composer.`
+    );
+  };
+
   // Slot system: allow custom content injection into specific regions
   const renderSlots = () => {
     const slots = config.layout?.slots ?? {};
-    
+    warnInertSlots(slots);
+
     // Helper to get default slot content
     const getDefaultSlotContent = (slot: WidgetLayoutSlot): HTMLElement | null => {
       switch (slot) {
@@ -1910,7 +2440,8 @@ export const createAgentExperience = (
           statusText.replaceWith(element);
           break;
         default:
-          // For other slots, just append to appropriate container
+          // "messages" / "composer": deprecated and unsupported, never rendered
+          // (warnInertSlots reports them in debug mode).
           break;
       }
     };
@@ -2173,8 +2704,25 @@ export const createAgentExperience = (
           });
         }
       }
+    } else if (action === 'regenerate') {
+      historyActions?.regenerate(messageId);
+    } else if (action === 'edit') {
+      historyActions?.edit(messageId);
+    } else if (action === 'quote') {
+      historyActions?.quote(messageId);
     }
   });
+
+  /**
+   * Retry / edit / quote handlers. Bound later in this closure (they need the
+   * composer and the edit renderer), so the delegated listener above reaches
+   * them through this slot instead of a forward reference.
+   */
+  let historyActions: {
+    regenerate: (messageId: string) => void;
+    edit: (messageId: string) => void;
+    quote: (messageId: string) => void;
+  } | null = null;
 
   // Add event delegation for approval action buttons (approve/deny)
   messagesWrapper.addEventListener('click', (event) => {
@@ -4176,6 +4724,7 @@ export const createAgentExperience = (
           maxItems: followUps?.maxItems ?? 4,
           config,
           plugins,
+          submitPrompt: submitSuggestionPrompt,
         }
       );
       return;
@@ -4225,6 +4774,7 @@ export const createAgentExperience = (
           maxItems: starters.maxItems ?? 4,
           config,
           plugins,
+          submitPrompt: submitSuggestionPrompt,
         }
       );
       return;
@@ -4244,6 +4794,7 @@ export const createAgentExperience = (
         overflow: "wrap",
         config,
         plugins,
+        submitPrompt: submitSuggestionPrompt,
       }
     );
   };
@@ -4287,6 +4838,30 @@ export const createAgentExperience = (
   // a collapsed accordion) is not reset on every pass while the approval is
   // pending.
   const lastApprovalBubbleFingerprint = new Map<string, string>();
+
+  // --- Edit-and-resend (roadmap section 10) ---------------------------------
+  // "Editing message X" is UI state consumed BY the render path, never a
+  // post-hoc DOM swap: the transcript morphs on every render and would strip an
+  // externally-inserted editor (and reset its textarea value). The render pass
+  // appends a `data-preserve-runtime` stub for the edited message and the live
+  // editor is grafted back afterwards, the same stub-and-hydrate contract the
+  // plugin ask/approval bubbles use.
+  let editingMessageId: string | null = null;
+  let messageEditEditor: MessageEditEditor | null = null;
+
+  function cancelMessageEdit(): void {
+    if (!editingMessageId) return;
+    const id = editingMessageId;
+    editingMessageId = null;
+    messageEditEditor?.destroy();
+    messageEditEditor = null;
+    // The stub carried no bubble, so the cached wrapper for this message is
+    // stale: drop it and let the next pass rebuild the real bubble.
+    messageCache.delete(id);
+    container.querySelector(`#wrapper-${id}`)?.removeAttribute("data-preserve-runtime");
+    if (session) renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+  }
+
   let configVersion = 0;
   // Whether the markdown parsers (marked + dompurify) were already loaded when
   // this widget mounted. False only on the IIFE/CDN lazy path before the
@@ -4399,6 +4974,10 @@ export const createAgentExperience = (
     lastUserMessageWasVoice: false,
     lastUserMessageId: null as string | null
   };
+  isDictationActive = () => voiceState.active;
+  // First stamp: an untouched composer emits no store change, so the attribute
+  // would otherwise not appear until the first keystroke.
+  syncComposerCompact();
   const voiceAutoResumeMode = config.voiceRecognition?.autoResume ?? false;
   const emitVoiceState = (source: AgentWidgetVoiceStateEvent["source"]) => {
     eventBus.emit("voice:state", {
@@ -4498,16 +5077,100 @@ export const createAgentExperience = (
         ? getMessagesForPersistence()
         : [];
 
-    const payload = {
+    const payload: AgentWidgetStoredState = {
       messages,
       metadata: persistentMetadata,
       artifacts: lastArtifactsState.artifacts,
-      selectedArtifactId: lastArtifactsState.selectedId
+      selectedArtifactId: lastArtifactsState.selectedId,
+      ...(currentStoredDraft ? { draft: currentStoredDraft } : {})
     };
     runStorageMutation(
       () => storageAdapter.save!(payload),
       "[AgentWidget] Failed to persist state:"
     );
+  }
+
+  // --- Draft persistence (roadmap section 12) --------------------------------
+  // The draft rides the conversation storage payload, so the host-owned adapter
+  // keeps owning conversation scoping. No `File` objects: attachments are not
+  // part of a persisted draft in v1.
+  let currentStoredDraft: AgentWidgetStoredDraft | undefined;
+
+  const draftPersistenceEnabled = (): boolean => {
+    if (!storageAdapter?.save) return false;
+    if (config.persistState === false) return false;
+    if (typeof config.persistState === "object") {
+      return config.persistState.persist?.draft !== false;
+    }
+    return true;
+  };
+
+  const draftWriter: DraftWriter = createDraftWriter({
+    write: () => {
+      if (!draftPersistenceEnabled()) return;
+      const state = composerStore.getState();
+      const next = buildStoredDraft({
+        text: state.text,
+        mentionRefs: state.mentionRefs,
+        contentSegments: readInlineContentSegments(),
+        selectedModelId: state.selectedModelId,
+        activeModeIds: state.activeModeIds,
+        quote: state.quote
+      });
+      // Composer state changes for many reasons (phase, locks, send
+      // availability). Only a real draft change is worth a storage write.
+      if (JSON.stringify(next) === JSON.stringify(currentStoredDraft)) return;
+      currentStoredDraft = next;
+      persistState();
+    }
+  });
+
+  function scheduleDraftPersist(): void {
+    if (!draftPersistenceEnabled()) return;
+    draftWriter.schedule();
+  }
+
+  function flushDraftPersist(): void {
+    draftWriter.flush();
+  }
+
+  /**
+   * Replay a stored draft into the live composer. Text always restores; mention
+   * tokens only while their source id still exists in the current config (they
+   * degrade to the plain text otherwise, with the unresolved structured context
+   * omitted); a stale model id or mode id is dropped.
+   */
+  function restoreComposerDraft(draft: AgentWidgetStoredDraft | undefined): void {
+    if (!draftPersistenceEnabled()) return;
+    const restored = rehydrateStoredDraft(draft, {
+      mentionSourceIds: (config.contextMentions?.sources ?? []).map((s) => s.id),
+      modelIds: (config.composer?.models ?? []).map((model) => model.id),
+      modes: config.composer?.modes ?? []
+    });
+    if (!restored) return;
+    currentStoredDraft = draft;
+    if (textarea && !textarea.value) {
+      textarea.value = restored.text;
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      syncComposerText();
+    }
+    if (restored.selectedModelId) {
+      composerStore.setSelectedModelId(restored.selectedModelId);
+      composerModelPicker?.repaint();
+    }
+    if (restored.activeModeIds?.length) setActiveComposerModes(restored.activeModeIds);
+    if (restored.quote) setComposerQuote(restored.quote);
+    // The replay itself is not a new edit: it must not immediately rewrite the
+    // stored payload it came from.
+    draftWriter.cancel();
+  }
+
+  /** Send acceptance and clear-chat both drop the draft immediately. */
+  function clearPersistedDraft(): void {
+    draftWriter.cancel();
+    if (!currentStoredDraft) return;
+    currentStoredDraft = undefined;
+    if (draftPersistenceEnabled()) persistState();
   }
 
   // Track ongoing smooth scroll animation
@@ -5364,9 +6027,37 @@ export const createAgentExperience = (
     };
     const approvalPluginHydrate: ApprovalPluginHydrate[] = [];
 
+    // History actions are per-transcript decisions, resolved once per pass: the
+    // regenerate control lives on exactly one message and only while the thread
+    // is settled.
+    const actionsCfg = config.messageActions;
+    const retryableAssistantId =
+      actionsCfg?.showRegenerate === true &&
+      actionsCfg.enabled !== false &&
+      // The first pass paints restored history before the session exists.
+      sessionRef.current?.isStreaming() !== true
+        ? findRetryableAssistantMessageId(messages)
+        : null;
+    const editEnabled = actionsCfg?.showEdit === true && actionsCfg.enabled !== false;
+    const quoteEnabled = actionsCfg?.showQuote === true && actionsCfg.enabled !== false;
+    /** The live editor, re-grafted into its morphed wrapper after the pass. */
+    let editHydrate: { messageId: string; element: HTMLElement } | null = null;
+
     messages.forEach((message) => {
       activeMessageIds.add(message.id);
       messageRolesById.set(message.id, message.role);
+
+      // Edited message: append a runtime-preserved stub now and graft the live
+      // editor in post-morph. The editor element is built once per edit session,
+      // so the typed value and its listeners outlive every render.
+      if (editingMessageId === message.id && messageEditEditor) {
+        const stub = createMessageRow(message.id, message.role);
+        stub.setAttribute("data-persona-message-edit-stub", "true");
+        stub.setAttribute("data-preserve-runtime", "true");
+        tempContainer.appendChild(stub);
+        editHydrate = { messageId: message.id, element: messageEditEditor.element };
+        return;
+      }
 
       const askWithPlugin = hasAskPlugin && isAskUserQuestionMessage(message);
       const approvalWithPlugin =
@@ -5406,7 +6097,20 @@ export const createAgentExperience = (
               : 0
           }`
         : "";
-      const fingerprint = computeMessageFingerprint(message, configVersion) + askMeta;
+      const actionEligibility: MessageActionEligibility = {
+        canRegenerate: retryableAssistantId === message.id,
+        canEdit: editEnabled && isEditableUserMessage(message),
+        canQuote:
+          quoteEnabled && !message.variant && (message.content?.trim().length ?? 0) > 0,
+      };
+      // Eligibility is config- and position-derived, so it must bust the wrapper
+      // cache: the same message can gain or lose the retry control as the
+      // transcript grows.
+      const eligibilityKey = `${actionEligibility.canRegenerate ? "r" : ""}${
+        actionEligibility.canEdit ? "e" : ""
+      }${actionEligibility.canQuote ? "q" : ""}`;
+      const fingerprint =
+        computeMessageFingerprint(message, configVersion) + askMeta + `:${eligibilityKey}`;
       const cachedWrapper = (askWithPlugin || approvalWithPlugin || hasDirectiveBubble)
         ? null
         : getCachedWrapper(messageCache, message.id, fingerprint);
@@ -5666,7 +6370,8 @@ export const createAgentExperience = (
                 messageActionCallbacks,
                 {
                   loadingIndicatorRenderer: inlineLoadingRenderer,
-                  widgetConfig: config
+                  widgetConfig: config,
+                  actionEligibility
                 }
               );
               if (message.role !== "user") {
@@ -5851,7 +6556,8 @@ export const createAgentExperience = (
               messageActionCallbacks,
               {
                 loadingIndicatorRenderer: inlineLoadingRenderer,
-                widgetConfig: config
+                widgetConfig: config,
+                actionEligibility
               }
             );
           }
@@ -6138,6 +6844,21 @@ export const createAgentExperience = (
     // Set initial edge-fade state on the live table wrappers and attach the
     // delegated scroll listener (once) that keeps the fades in sync.
     refreshTableScrollFades(container);
+
+    // Graft the live edit editor back into its morphed wrapper. It is the same
+    // element across every pass, so the typed value, caret, and listeners are
+    // never rebuilt (and never handed to idiomorph's `importNode`).
+    if (editHydrate) {
+      const { messageId, element } = editHydrate as {
+        messageId: string;
+        element: HTMLElement;
+      };
+      const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+      if (wrapper && element.parentElement !== wrapper) {
+        applyMessageRowLayout(wrapper, messageRolesById.get(messageId) ?? "user");
+        wrapper.replaceChildren(element);
+      }
+    }
 
     // Hydrate plugin-rendered ask-question bubbles into their stub wrappers.
     // Idiomorph imports new nodes via `document.importNode`, which strips
@@ -6886,39 +7607,147 @@ export const createAgentExperience = (
     });
   };
 
-  const setComposerDisabled = (disabled: boolean) => {
-    // The send button stays enabled while streaming: it doubles as a stop
-    // button. Ancillary controls (mic, suggestions, opt-in targets) still
-    // disable so the user can't race a send against an in-flight stream.
-    setSendButtonMode(disabled ? "stop" : "send");
-    if (micButton) {
-      micButton.disabled = disabled;
+  // --- Composer locks (docs/composer-gap-analysis.md section 7.4) ------------
+  // Streaming is NOT a lock: it turns the primary button into Stop and keeps
+  // the input editable. `inputDisabled` locks composition; `sendDisabled`
+  // blocks every submission path while composition stays available.
+  type ComposerLockState = {
+    inputDisabled: boolean;
+    inputReason?: string;
+    sendDisabled: boolean;
+    sendReason?: string;
+  };
+  let composerLock: ComposerLockState = {
+    inputDisabled: false,
+    sendDisabled: false,
+  };
+
+  const isComposerInputDisabled = (): boolean => composerLock.inputDisabled;
+  /** Any submission path is blocked; stop is not a submission. */
+  const isComposerSendBlocked = (): boolean =>
+    composerLock.inputDisabled || composerLock.sendDisabled;
+
+  /** inputDisabled's reason wins; a bare `true` falls through to sendDisabled. */
+  const composerLockReason = (): string | undefined =>
+    (composerLock.inputDisabled ? composerLock.inputReason : undefined) ??
+    (composerLock.sendDisabled ? composerLock.sendReason : undefined);
+
+  /**
+   * Send stays live while streaming (it is Stop), and is otherwise gated by the
+   * locks plus attachment readiness.
+   */
+  function syncComposerSendAvailability(): void {
+    if (!sendButton) return;
+    if (composerStore.getState().phase === "streaming") {
+      sendButton.disabled = false;
+      return;
     }
+    const attachmentsBlocked = attachmentManager
+      ? !attachmentManager.isReady()
+      : false;
+    sendButton.disabled = isComposerSendBlocked() || attachmentsBlocked;
+  }
+
+  /** Render the active reason. Pill mode has no status row, so it gets a title. */
+  function renderComposerLockReason(): void {
+    const reason = composerLockReason();
+    if (isComposerBar()) {
+      const root = composerForm ?? footer;
+      if (reason) root.setAttribute("title", reason);
+      else root.removeAttribute("title");
+      footer.toggleAttribute(COMPOSER_REASON_ATTR, Boolean(reason));
+      return;
+    }
+    if (reason) {
+      statusText.setAttribute("role", "status");
+      statusText.setAttribute("aria-live", "polite");
+      statusText.setAttribute(COMPOSER_REASON_ATTR, "");
+      statusText.textContent = reason;
+      return;
+    }
+    if (!statusText.hasAttribute(COMPOSER_REASON_ATTR)) return;
+    statusText.removeAttribute("role");
+    statusText.removeAttribute("aria-live");
+    statusText.removeAttribute(COMPOSER_REASON_ATTR);
+    if (sessionInitialized) {
+      const status = session.getStatus();
+      applyStatusToElement(
+        statusText,
+        _getStatusText(status),
+        config.statusIndicator ?? {},
+        status
+      );
+    }
+  }
+
+  /**
+   * Re-read the locks from config and push them across every control. Called on
+   * mount, every streaming flip, composer rebuild, and `controller.update()`.
+   */
+  function applyComposerLock(): void {
+    const input = resolveComposerLock(config.composer?.inputDisabled);
+    const send = resolveComposerLock(config.composer?.sendDisabled);
+    composerLock = {
+      inputDisabled: input.disabled,
+      inputReason: input.reason,
+      sendDisabled: send.disabled,
+      sendReason: send.reason,
+    };
+    composerStore.setInputDisabled(input.disabled);
+    composerStore.setSendDisabled(send.disabled);
+
+    const streaming = composerStore.getState().phase === "streaming";
+    const locked = input.disabled;
+    // Ancillary controls also disable while streaming so the user can't race a
+    // send against an in-flight stream.
+    const blocked = streaming || locked;
+
+    if (textarea) {
+      if (textarea instanceof HTMLTextAreaElement) textarea.disabled = locked;
+      // Inline contenteditable: `disabled` is not a thing, editability is.
+      else (textarea as HTMLElement).setAttribute("contenteditable", locked ? "false" : "true");
+      (textarea as HTMLElement).setAttribute("aria-disabled", locked ? "true" : "false");
+    }
+    if (attachmentButton) attachmentButton.disabled = locked;
+    if (attachmentInput) attachmentInput.disabled = locked;
+    // Affordance entries are wrappers around their button.
+    for (const wrapper of mentionOrchestrator?.affordanceButtons ?? []) {
+      wrapper.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
+        button.disabled = locked;
+      });
+    }
+    if (micButton) micButton.disabled = blocked;
+
     suggestionManagers.forEach((manager) => {
       manager.elements.forEach((element) => {
-        element.toggleAttribute("data-disabled", disabled);
+        element.toggleAttribute("data-disabled", blocked);
         if (!(element instanceof HTMLButtonElement)) {
-          element.setAttribute("aria-disabled", disabled ? "true" : "false");
+          element.setAttribute("aria-disabled", blocked ? "true" : "false");
         }
       });
       manager.buttons.forEach((button) => {
-        button.disabled = disabled;
+        button.disabled = blocked;
       });
     });
     // Plugin renderStarter output: created with the streaming flag of its
     // render moment, so a stream ending must re-enable it here.
     welcomeStarterElements.forEach((element) => {
-      element.toggleAttribute("data-disabled", disabled);
+      element.toggleAttribute("data-disabled", blocked);
       if (element instanceof HTMLButtonElement) {
-        element.disabled = disabled;
+        element.disabled = blocked;
       } else {
-        element.setAttribute("aria-disabled", disabled ? "true" : "false");
+        element.setAttribute("aria-disabled", blocked ? "true" : "false");
       }
       element.querySelectorAll<HTMLButtonElement>("button").forEach((button) => {
-        button.disabled = disabled;
+        button.disabled = blocked;
       });
     });
-    footer.dataset.personaComposerStreaming = disabled ? "true" : "false";
+
+    footer.dataset.personaComposerStreaming = streaming ? "true" : "false";
+    footer.dataset.personaComposerInputDisabled = locked ? "true" : "false";
+    footer.dataset.personaComposerSendDisabled = isComposerSendBlocked()
+      ? "true"
+      : "false";
     footer.querySelectorAll<HTMLElement>("[data-persona-composer-disable-when-streaming]").forEach((el) => {
       if (
         el instanceof HTMLButtonElement ||
@@ -6926,9 +7755,22 @@ export const createAgentExperience = (
         el instanceof HTMLTextAreaElement ||
         el instanceof HTMLSelectElement
       ) {
-        el.disabled = disabled;
+        el.disabled = streaming;
       }
     });
+
+    syncComposerSendAvailability();
+    renderComposerLockReason();
+  }
+
+  const setComposerDisabled = (disabled: boolean) => {
+    // `disabled` is the session's streaming flag at every call site; the store's
+    // phase derives from it.
+    composerStore.setStreaming(disabled);
+    // The send button stays enabled while streaming: it doubles as a stop
+    // button.
+    setSendButtonMode(disabled ? "stop" : "send");
+    applyComposerLock();
   };
 
   const maybeFocusInput = () => {
@@ -7109,6 +7951,7 @@ export const createAgentExperience = (
       session,
       getTextarea: () => textarea,
       eventTarget: welcomeHost,
+      submitPrompt: submitSuggestionPrompt,
     });
     welcomeStarterElements.push(element);
     return element;
@@ -7184,8 +8027,15 @@ export const createAgentExperience = (
     // Plugin-owned composers set their own placeholder and send label (the
     // pre-chat gate keeps its lock reason in the placeholder, for example).
     if (!composerIsPluginOwned) {
+      // An active mode may override the placeholder; priority is `composer.modes`
+      // order, and clearing every such mode restores the configured copy.
       textarea.placeholder =
-        config.copy?.inputPlaceholder ?? "How can I help...";
+        resolveComposerModePlaceholder(
+          composerStore.getState().activeModeIds,
+          config.composer?.modes
+        ) ??
+        config.copy?.inputPlaceholder ??
+        "How can I help...";
 
       // Only update send button text if NOT using icon mode. Skip while
       // streaming so we don't stomp on the "Stop" label.
@@ -10174,6 +11024,7 @@ export const createAgentExperience = (
             state.selectedArtifactId ?? null
           );
         }
+        restoreComposerDraft(state.draft);
       })
       .catch((error) => {
         if (typeof console !== "undefined") {
@@ -10187,6 +11038,7 @@ export const createAgentExperience = (
         maybeBootResume();
       });
   } else {
+    restoreComposerDraft(loadedStoredDraft);
     maybeBootResume();
   }
 
@@ -10255,89 +11107,451 @@ export const createAgentExperience = (
   // Re-entrancy guard for the async submit path: `takeInlineCommand` awaits (a
   // lazy chunk load + host resolve) before the composer clears, and
   // `isStreaming()` is still false in that window, so a second Enter would
-  // otherwise dispatch the same text/command twice.
+  // otherwise dispatch the same text/command twice. It also covers an async
+  // `onBeforeSend` (the `preparing` phase).
   let submitInFlight = false;
+  /** Aborts the in-flight preparation on destroy or a superseding stop. */
+  let submissionAbort: AbortController | null = null;
 
-  const performSubmit = async (submitOptions?: { viaVoice?: boolean }) => {
-    const value = textarea.value.trim();
-    const hasAttachments = attachmentManager?.hasAttachments() ?? false;
+  /** One send. `overrideText` sends something other than the live draft. */
+  type SubmissionIntent = {
+    overrideText?: string;
+    /** Clear the draft once the message is accepted locally. Default true. */
+    consumeDraft?: boolean;
+    /** Resolve a leading inline slash command first (draft sends only). */
+    resolveInlineCommand?: boolean;
+    viaVoice?: boolean;
+    /** Replays a captured `defer-one` snapshot; never re-captures. */
+    pending?: Readonly<ComposerSubmissionSnapshot>;
+  };
 
-    // Inline slash command (Slack-style): every `command:"server"` plus any
-    // arg-bearing prompt/action. Resolve FIRST — a prompt command changes the
-    // text to send, and an action sends nothing at all.
-    const inline = value
-      ? await (mentionOrchestrator?.takeInlineCommand(value) ?? Promise.resolve(null))
-      : null;
-
-    if (inline?.kind === "action") {
-      // Ran in the browser; nothing to send. Clear the composer + any chips.
-      textarea.value = "";
-      textarea.style.height = "auto";
-      resetHistoryNavigation();
-      mentionOrchestrator?.clear();
-      return;
-    }
-
-    // Gather `@`-chip mentions synchronously (detaches chips + captures composer
-    // text before clearing); `finalize()` resolves them inside `sendMessage`.
-    const chipMentions = mentionOrchestrator?.collectForSubmit() ?? null;
-    const serverMentions = inline?.kind === "server" ? inline.mentions : null;
-    const mentions = mergeSubmitMentions(chipMentions, serverMentions);
-    // A prompt command replaces the outgoing text with its resolved macro.
-    const sendText = inline?.kind === "prompt" ? inline.sendText : value;
-
-    const hasChips = !!chipMentions && chipMentions.refs.length > 0;
-    // Must have text, attachments, chips, or an inline server command's context.
-    if (!sendText && !hasAttachments && !hasChips && !serverMentions) return;
-
-    maybeExpandComposerBar();
-
-    // Build content parts if there are attachments
-    let contentParts: ContentPart[] | undefined;
-    if (hasAttachments) {
-      contentParts = [];
-      // Add image parts first
-      contentParts.push(...attachmentManager!.getContentParts());
-      // Add text part if there's text
-      if (sendText) {
-        contentParts.push(createTextPart(sendText));
-      }
-    }
-
-    // Capture the inline display segments BEFORE clearing the composer (clearing
-    // rebuilds the document as empty text). Only set when a `prompt` macro didn't
-    // replace the outgoing text — a macro's segments no longer match `sendText`.
-    const contentSegments =
-      inline?.kind === "prompt" ? undefined : readInlineContentSegments();
-
+  const clearComposerDraft = () => {
     textarea.value = "";
     textarea.style.height = "auto"; // Reset height after clearing
+    syncComposerText();
     resetHistoryNavigation();
+  };
 
-    // Send message with optional content parts + mentions
-    session.sendMessage(sendText, {
-      contentParts,
-      mentions: mentions ?? undefined,
-      contentSegments,
-      viaVoice: submitOptions?.viaVoice,
-    });
+  const COMPOSER_NOTICE_ATTR = "data-persona-composer-notice";
+  let composerNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // Clear attachments + mention chips after sending
-    if (hasAttachments) {
-      attachmentManager!.clearAttachments();
+  /** Transient message in the status region; a lock reason always outranks it. */
+  function showComposerNotice(text: string): void {
+    announce(text);
+    if (isComposerBar() || !statusText) return;
+    if (statusText.hasAttribute(COMPOSER_REASON_ATTR)) return;
+    statusText.setAttribute(COMPOSER_NOTICE_ATTR, "");
+    statusText.setAttribute("role", "status");
+    statusText.setAttribute("aria-live", "polite");
+    statusText.textContent = text;
+    if (composerNoticeTimer) clearTimeout(composerNoticeTimer);
+    composerNoticeTimer = setTimeout(() => {
+      composerNoticeTimer = null;
+      if (!statusText?.hasAttribute(COMPOSER_NOTICE_ATTR)) return;
+      statusText.removeAttribute(COMPOSER_NOTICE_ATTR);
+      statusText.removeAttribute("role");
+      statusText.removeAttribute("aria-live");
+      if (sessionInitialized) {
+        const status = session.getStatus();
+        applyStatusToElement(
+          statusText,
+          _getStatusText(status),
+          config.statusIndicator ?? {},
+          status
+        );
+      }
+    }, 4000);
+  }
+
+  /** Put the deferred submission back in the editable draft and drop the card. */
+  function restorePendingSubmissionToDraft(): void {
+    const pending = composerStore.getState().pendingSubmission;
+    if (!pending) return;
+    setPendingSubmission(undefined);
+    if (textarea) {
+      textarea.value = pending.text;
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      syncComposerText();
     }
-    if (chipMentions) {
-      mentionOrchestrator?.clear();
+    if (pending.options.selectedModelId) {
+      composerStore.setSelectedModelId(pending.options.selectedModelId);
+      composerModelPicker?.repaint();
+    }
+    if (pending.options.activeModeIds?.length) {
+      setActiveComposerModes(pending.options.activeModeIds);
+    }
+    if (pending.options.quote) setComposerQuote(pending.options.quote);
+    textarea?.focus();
+  }
+
+  const reportSubmissionError = (error: unknown) => {
+    if (typeof console !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[AgentWidget] composer.onBeforeSend failed; the draft was preserved:",
+        error
+      );
     }
   };
 
-  const doSubmit = async (submitOptions?: { viaVoice?: boolean }) => {
+  /**
+   * The one submission path (docs/composer-gap-analysis.md section 4). Every
+   * send — form submit, Enter, suggestion, dictation, plugin composer,
+   * controller — runs these steps against a single immutable snapshot:
+   *
+   *   1 read the draft without mutating it
+   *   2 resolve an inline slash command
+   *   3 verify attachment readiness + send eligibility
+   *   4 run `onBeforeSend` on the frozen public snapshot
+   *   5 cancel / abort / throw leaves the draft, attachments, and chips intact
+   *   6 resolve mention bodies and async prep while `phase === "preparing"`
+   *   7 append the user message, consume the draft, dispatch
+   *   8 clear one-shot state only after local acceptance
+   *
+   * Returns synchronously unless step 2 or step 4 actually needs to await, so
+   * send paths that never awaited before still don't.
+   */
+  const performSubmit = (intent: SubmissionIntent = {}): void | Promise<void> => {
+    const draft = (intent.overrideText ?? textarea?.value ?? "").trim();
+    if (intent.resolveInlineCommand && draft) {
+      return (
+        mentionOrchestrator?.takeInlineCommand(draft) ?? Promise.resolve(null)
+      ).then((inline) => continueSubmit(intent, draft, inline));
+    }
+    return continueSubmit(intent, draft, null);
+  };
+
+  const continueSubmit = (
+    intent: SubmissionIntent,
+    draft: string,
+    inline: Awaited<ReturnType<ContextMentionOrchestrator["takeInlineCommand"]>>
+  ): void | Promise<void> => {
+    if (inline?.kind === "action") {
+      // Ran in the browser; nothing to send. Clear the composer + any chips.
+      clearComposerDraft();
+      mentionOrchestrator?.clear();
+      syncComposerMentions();
+      return;
+    }
+
+    const serverMentions = inline?.kind === "server" ? inline.mentions : null;
+    // A prompt command replaces the outgoing text with its resolved macro.
+    const sendText = inline?.kind === "prompt" ? inline.sendText : draft;
+    // A replayed pending item carries its own already-resolved parts: the live
+    // attachment manager was cleared at capture time.
+    const pendingParts = intent.pending?.contentParts;
+    const hasAttachments =
+      (attachmentManager?.hasAttachments() ?? false) || (pendingParts?.length ?? 0) > 0;
+
+    if (
+      !canSubmitComposer({
+        text: sendText,
+        hasAttachments,
+        attachmentsReady: attachmentManager?.isReady() ?? true,
+        hasMentions: mentionOrchestrator?.hasMentions() ?? false,
+        hasServerMentions: !!serverMentions,
+        inputDisabled: isComposerInputDisabled(),
+        sendDisabled: isComposerSendBlocked(),
+      })
+    ) {
+      return;
+    }
+
+    // Submit while a response streams (roadmap section 11). `block` never gets
+    // here: the Enter path stays inert and the button is Stop. A replay of an
+    // already-captured pending item is not a new capture.
+    const streamingBehavior = session.isStreaming()
+      ? resolveStreamingSubmitBehavior()
+      : "block";
+    if (streamingBehavior === "defer-one" && !intent.pending) {
+      if (composerStore.getState().pendingSubmission) {
+        // Never a silent replace: the queued item is edited or removed first.
+        showComposerNotice("One message is already queued. Edit or remove it first.");
+        return;
+      }
+      capturePendingSubmission({ intent, sendText, serverMentions });
+      return;
+    }
+
+    // The snapshot: built once, never re-read from the DOM below. Chips are
+    // still attached here (they are only detached after acceptance), so their
+    // refs are read non-destructively.
+    const snapshot: InternalSubmissionSnapshot = {
+      text: sendText,
+      mentionRefs: [
+        ...(mentionOrchestrator?.getMentionRefs() ?? []),
+        ...(serverMentions?.refs ?? []),
+      ],
+      // Inline display segments must be captured before the composer clears
+      // (clearing rebuilds the document as empty text). A `prompt` macro
+      // replaced the text, so its segments no longer match.
+      contentSegments:
+        inline?.kind === "prompt" ? undefined : readInlineContentSegments(),
+      // Step 2 of section 9: each send snapshots the current model/mode
+      // selection. `onBeforeSend` may patch it; the live selection is unchanged.
+      options: {
+        ...(composerStore.getState().selectedModelId && {
+          selectedModelId: composerStore.getState().selectedModelId,
+        }),
+        ...(composerStore.getState().activeModeIds.length > 0 && {
+          activeModeIds: [...composerStore.getState().activeModeIds],
+        }),
+        ...(composerStore.getState().quote && {
+          quote: { ...composerStore.getState().quote! },
+        }),
+      },
+      viaVoice: intent.viaVoice,
+    };
+    // A replayed pending item sends exactly what was captured, including the
+    // model/mode/quote selection at capture time.
+    if (intent.pending) {
+      snapshot.options = { ...intent.pending.options };
+      snapshot.contentSegments = intent.pending.contentSegments;
+      snapshot.mentionRefs = [...intent.pending.mentionRefs];
+      snapshot.viaVoice = intent.pending.viaVoice;
+    }
+    // Rebuilt after a patch: the trailing text part must match the sent text.
+    const buildContentParts = (): ContentPart[] | undefined => {
+      if (pendingParts?.length) return [...pendingParts];
+      if (!attachmentManager?.hasAttachments()) return undefined;
+      const parts: ContentPart[] = [...attachmentManager.getContentParts()];
+      if (snapshot.text) parts.push(createTextPart(snapshot.text));
+      return parts;
+    };
+    snapshot.contentParts = buildContentParts();
+
+    const dispatchSubmission = () => {
+      // Editing is independent of the composer, but a send supersedes it.
+      cancelMessageEdit();
+      maybeExpandComposerBar();
+      // Detaches the chips and captures the composer text; `finalize()` resolves
+      // the mention bodies inside `sendMessage`.
+      const chipMentions = mentionOrchestrator?.collectForSubmit() ?? null;
+      const mentions = mergeSubmitMentions(chipMentions, serverMentions);
+      const contentParts = buildContentParts();
+      if (intent.consumeDraft !== false) clearComposerDraft();
+      const composerOptions: ComposerOptionsPayload = {
+        selectedModelId: snapshot.options.selectedModelId,
+        activeModeIds: snapshot.options.activeModeIds,
+      };
+      // Interrupt supersedes the in-flight run instead of queueing behind it.
+      const interrupt = streamingBehavior === "interrupt";
+      if (interrupt) session.cancel();
+      session.sendMessage(snapshot.text, {
+        contentParts,
+        mentions: mentions ?? undefined,
+        contentSegments: snapshot.contentSegments,
+        viaVoice: snapshot.viaVoice,
+        composerOptions,
+        ...(snapshot.options.quote && { quote: snapshot.options.quote }),
+        ...(interrupt && { interrupt: true }),
+      });
+      if (attachmentManager?.hasAttachments()) attachmentManager.clearAttachments();
+      if (chipMentions) mentionOrchestrator?.clear();
+      syncComposerMentions();
+      // Step 8: one-shot modes and the quote clear only after local acceptance.
+      const activeModes = composerStore.getState().activeModeIds;
+      const remaining = clearOnceComposerModes(activeModes, config.composer?.modes);
+      if (remaining.length !== activeModes.length) setActiveComposerModes(remaining);
+      if (composerStore.getState().quote) setComposerQuote(undefined);
+      // The accepted draft is no longer worth restoring on the next mount.
+      clearPersistedDraft();
+      // A sent draft releases the wrap latch: the next single line is compact.
+      composerCompactLatch.release();
+      syncComposerCompact();
+    };
+
+    const hook = config.composer?.onBeforeSend;
+    if (!hook) {
+      dispatchSubmission();
+      return;
+    }
+
+    const abort = new AbortController();
+    submissionAbort = abort;
+    const settle = (outcome: BeforeSendOutcome): void => {
+      submissionAbort = null;
+      if (outcome.status === "error") {
+        reportSubmissionError(outcome.error);
+        return;
+      }
+      if (outcome.status !== "proceed") return;
+      dispatchSubmission();
+    };
+
+    const outcome = runBeforeSend(hook, snapshot, abort.signal);
+    if (!(outcome instanceof Promise)) {
+      settle(outcome);
+      return;
+    }
+    composerStore.setPreparing(true);
+    return outcome
+      .then(settle)
+      .finally(() => composerStore.setPreparing(false));
+  };
+
+  /**
+   * `defer-one` capture: one full immutable snapshot (text, attachment parts,
+   * mentions, inline segments, model, modes, quote), then the editable draft is
+   * cleared. Nothing typed afterwards can reach the captured item, so what
+   * eventually sends is exactly what the user submitted.
+   */
+  function capturePendingSubmission(input: {
+    intent: SubmissionIntent;
+    sendText: string;
+    serverMentions: { refs: AgentWidgetContextMentionRef[] } | null;
+  }): void {
+    const state = composerStore.getState();
+    const hasAttachments = attachmentManager?.hasAttachments() ?? false;
+    const parts: ContentPart[] = hasAttachments
+      ? [...attachmentManager!.getContentParts()]
+      : [];
+    if (hasAttachments && input.sendText) parts.push(createTextPart(input.sendText));
+    const captured = toPublicSubmissionSnapshot({
+      text: input.sendText,
+      contentParts: parts.length ? parts : undefined,
+      mentionRefs: [
+        ...(mentionOrchestrator?.getMentionRefs() ?? []),
+        ...(input.serverMentions?.refs ?? []),
+      ],
+      contentSegments: readInlineContentSegments(),
+      options: {
+        ...(state.selectedModelId && { selectedModelId: state.selectedModelId }),
+        ...(state.activeModeIds.length > 0 && {
+          activeModeIds: [...state.activeModeIds],
+        }),
+        ...(state.quote && { quote: { ...state.quote } }),
+      },
+      viaVoice: input.intent.viaVoice,
+    });
+    setPendingSubmission(captured);
+    if (input.intent.consumeDraft !== false) clearComposerDraft();
+    if (hasAttachments) attachmentManager!.clearAttachments();
+    mentionOrchestrator?.clear();
+    syncComposerMentions();
+    if (state.quote) setComposerQuote(undefined);
+    clearPersistedDraft();
+    composerCompactLatch.release();
+    syncComposerCompact();
+    announce("Message queued. It sends when the response finishes.");
+  }
+
+  /** Send the captured item through the normal pipeline (hooks included). */
+  function sendPendingSubmission(): void {
+    const pending = composerStore.getState().pendingSubmission;
+    if (!pending) return;
+    setPendingSubmission(undefined);
+    submitText(pending.text, { consumeDraft: false, pending });
+  }
+
+  // --- Retry / edit / quote (roadmap section 10 + 13) ------------------------
+
+  /** Open the mini editor on a text-only user message. */
+  function beginMessageEdit(messageId: string): void {
+    if (config.messageActions?.showEdit !== true) return;
+    const message = session.getMessages().find((m) => m.id === messageId);
+    if (!message || !isEditableUserMessage(message)) return;
+    if (editingMessageId === messageId) return;
+    cancelMessageEdit();
+    editingMessageId = messageId;
+    messageEditEditor = createMessageEditEditor({
+      messageId,
+      initialText: message.content,
+      onSave: (text) => saveMessageEdit(messageId, text),
+      onCancel: () => cancelMessageEdit(),
+    });
+    messageCache.delete(messageId);
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+    messageEditEditor.focus();
+  }
+
+  /** Commit the edit: resubmit from that turn with the edited text. */
+  function saveMessageEdit(messageId: string, text: string): void {
+    const editor = messageEditEditor;
+    editingMessageId = null;
+    messageEditEditor = null;
+    editor?.destroy();
+    messageCache.delete(messageId);
+    const accepted = session.resubmitFrom(messageId, {
+      reason: "edit",
+      replacement: {
+        text,
+        mentionRefs: [],
+        options: {},
+      },
+    });
+    if (!accepted) {
+      renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+      return;
+    }
+    // The tail collapsed above the anchor; re-pin against the new layout.
+    repinAnchoredMessage();
+  }
+
+  function regenerateFromAssistantMessage(messageId: string): void {
+    if (session.isStreaming()) return;
+    const userMessageId = findPrecedingUserMessageId(session.getMessages(), messageId);
+    if (!userMessageId) return;
+    cancelMessageEdit();
+    if (!session.resubmitFrom(userMessageId, { reason: "retry" })) return;
+    repinAnchoredMessage();
+  }
+
+  historyActions = {
+    regenerate: regenerateFromAssistantMessage,
+    edit: beginMessageEdit,
+    quote: (messageId) => {
+      const message = session.getMessages().find((m) => m.id === messageId);
+      const text = message?.content?.trim();
+      if (!text) return;
+      setComposerQuote({ text, messageId });
+      textarea?.focus();
+    },
+  };
+
+  const doSubmit = async (submitOptions?: SubmissionIntent) => {
     if (submitInFlight) return;
     submitInFlight = true;
     try {
-      await performSubmit(submitOptions);
+      await performSubmit({ resolveInlineCommand: true, ...submitOptions });
     } finally {
       submitInFlight = false;
+    }
+  };
+
+  /**
+   * Suggestion "send" behavior: drop the current draft, then send the chip's
+   * prompt through the shared pipeline. A function declaration so the
+   * suggestion renderers (defined earlier in this closure) can reference it.
+   */
+  function submitSuggestionPrompt(prompt: string): void {
+    // A blocked send must not destroy the draft on its way to being refused.
+    if (isComposerSendBlocked()) return;
+    clearComposerDraft();
+    submitText(prompt, { consumeDraft: false });
+  }
+
+  /**
+   * Sends that carry their own text (suggestion chips, plugin composers, the
+   * controller) join the same pipeline; they skip inline-command resolution,
+   * which belongs to what the user typed.
+   */
+  const submitText = (
+    text: string,
+    options?: Omit<SubmissionIntent, "overrideText" | "resolveInlineCommand">
+  ): void => {
+    if (submitInFlight) return;
+    submitInFlight = true;
+    const finish = () => {
+      submitInFlight = false;
+    };
+    try {
+      const result = performSubmit({ ...options, overrideText: text });
+      if (result instanceof Promise) void result.finally(finish);
+      else finish();
+    } catch (error) {
+      finish();
+      throw error;
     }
   };
 
@@ -10411,8 +11625,18 @@ export const createAgentExperience = (
     resetHistoryNavigation();
   };
 
+  /** Current submit-key policy, re-read per event so `update()` takes effect. */
+  const composerSubmitKeyOptions = () => ({
+    submitKey: config.composer?.submitKey,
+    insertNewlineOnTouchEnter: config.composer?.insertNewlineOnTouchEnter,
+    coarsePointer: isCoarsePointer(textarea),
+  });
+
   const handleComposerKeydown = (event: KeyboardEvent) => {
     if (!textarea) return;
+    // A locked input takes no mention trigger, history recall, or submit. The
+    // element itself is disabled / non-editable, so nothing is typed either.
+    if (isComposerInputDisabled()) return;
 
     // Mention menu takes precedence when open (↑/↓ nav, Enter/Tab select, Esc
     // close) and handles Backspace-removes-last-chip on an empty composer. One
@@ -10450,23 +11674,40 @@ export const createAgentExperience = (
       // Not handled: fall through to default cursor movement.
     }
 
-    // Enter: send, unless a response is streaming. While streaming, Enter is
-    // inert (never a stop trigger): the visible Stop button / Esc stop it.
-    if (event.key === "Enter" && !event.shiftKey) {
-      if (session.isStreaming()) {
-        event.preventDefault();
-        return;
-      }
-      // A submit is already awaiting its async pre-send work; a second Enter in
-      // that window would dispatch the same text twice.
-      if (submitInFlight) {
-        event.preventDefault();
-        return;
-      }
-      resetHistoryNavigation();
+    // The submit combination follows `composer.submitKey`. Anything that is not
+    // the submit combination (Shift+Enter, plain Enter under "mod-enter" or
+    // "none", Enter on a coarse pointer with insertNewlineOnTouchEnter) falls
+    // through to native editing, which inserts a newline in both the textarea
+    // and the inline contenteditable adapter.
+    if (!isSubmitKeydown(event, composerSubmitKeyOptions())) return;
+
+    // While streaming, the submit key is inert under the default `block`
+    // policy (never a stop trigger): the visible Stop button / Esc stop it.
+    // `defer-one` and `interrupt` route it into the submission pipeline instead;
+    // the button stays Stop either way.
+    if (session.isStreaming()) {
       event.preventDefault();
-      sendButton.click();
+      if (resolveStreamingSubmitBehavior() === "block") return;
+      if (submitInFlight || isComposerSendBlocked()) return;
+      resetHistoryNavigation();
+      void doSubmit();
+      return;
     }
+    // A submit is already awaiting its async pre-send work; a second Enter in
+    // that window would dispatch the same text twice.
+    if (submitInFlight) {
+      event.preventDefault();
+      return;
+    }
+    // Send is blocked but composition is not: swallow the key rather than
+    // inserting a stray newline the user did not ask for.
+    if (isComposerSendBlocked()) {
+      event.preventDefault();
+      return;
+    }
+    resetHistoryNavigation();
+    event.preventDefault();
+    sendButton.click();
   };
 
   // Esc-to-stop: while a response streams, Escape within this widget aborts it.
@@ -10476,8 +11717,16 @@ export const createAgentExperience = (
   // page-wide Escape elsewhere doesn't hijack.
   const handleEscStop = (event: KeyboardEvent) => {
     if (event.key !== "Escape" || event.isComposing) return;
-    if (!session.isStreaming()) return;
     if (!event.composedPath().includes(container)) return;
+    // Escape while a send is still preparing supersedes it: the draft survives.
+    if (submissionAbort) {
+      submissionAbort.abort();
+      submissionAbort = null;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (!session.isStreaming()) return;
     session.cancel();
     // Cancelling emits no terminal/error SSE frame: reset throughput so the
     // Events row doesn't keep showing a live rate from the stopped stream.
@@ -10490,6 +11739,7 @@ export const createAgentExperience = (
 
   const handleInputPaste = async (event: ClipboardEvent) => {
     if (config.attachments?.enabled !== true || !attachmentManager) return;
+    if (isComposerInputDisabled()) return;
 
     const clipboardImageFiles = getClipboardImageFiles(event.clipboardData);
     if (clipboardImageFiles.length === 0) return;
@@ -10511,6 +11761,104 @@ export const createAgentExperience = (
     iconSize: number;
   } | null = null;
 
+  /**
+   * `voiceRecognition.completionBehavior` (roadmap section 14). Default stays
+   * `"send"`; `"review"` leaves the transcript in the composer. Read per call
+   * so `controller.update()` takes effect mid-session. Browser (Web Speech)
+   * path only: the realtime `runtype` provider owns its own turn taking.
+   */
+  const dictationReviewMode = (): boolean =>
+    config.voiceRecognition?.completionBehavior === "review";
+
+  /**
+   * Publish the mic's animatable state (roadmap: every animatable state is a
+   * data attribute, all motion is CSS keyed off it). Stamped at every site that
+   * swaps the mic's icon or colors, on both the builder-created and the
+   * runtime-created mic, so CSS never has to infer state from styling.
+   */
+  function setMicState(
+    state: "idle" | "recording" | "processing" | "speaking"
+  ): void {
+    micButton?.setAttribute("data-state", state);
+    if (state === "recording") startVoiceLevelLoop();
+    else stopVoiceLevelLoop();
+  }
+
+  // --- Live voice level (`--persona-voice-level`) ----------------------------
+  // One rAF loop, alive only while the mic is recording. It publishes a 0..1
+  // amplitude so a theme can drive waveforms and pulse intensity in pure CSS.
+  //
+  // The variable is DATA, not motion, so it keeps updating under
+  // prefers-reduced-motion; only the default visual that consumes it is gated.
+  const VOICE_LEVEL_PROPERTY = "--persona-voice-level";
+  /** Providers with no audio graph report nothing; assume a steady midpoint. */
+  const VOICE_LEVEL_FALLBACK = 0.5;
+  let voiceLevelFrame: number | null = null;
+  let voiceLevelPublished = -1;
+  let voiceLevelSmoothed = 0;
+
+  /** Every element the property is written to. */
+  const voiceLevelTargets = (): HTMLElement[] => {
+    const targets: HTMLElement[] = [];
+    // The wrapper, not the button: the recording ring is a ::after on the
+    // button, and a theme's own waveform usually sits beside the glyph.
+    const wrapper = micButtonWrapper ?? micButton?.parentElement ?? null;
+    if (wrapper) targets.push(wrapper);
+    // Mirrored on the footer so a theme can place a waveform anywhere in the
+    // composer without having to descend from the mic.
+    if (footer) targets.push(footer);
+    return targets;
+  };
+
+  const writeVoiceLevel = (value: number): void => {
+    // Quantized to 0.01 and skipped when unchanged: at 60fps this turns a
+    // continuous signal into at most a handful of style writes per second.
+    const quantized = Math.round(Math.max(0, Math.min(1, value)) * 100) / 100;
+    if (quantized === voiceLevelPublished) return;
+    voiceLevelPublished = quantized;
+    for (const target of voiceLevelTargets()) {
+      target.style.setProperty(VOICE_LEVEL_PROPERTY, String(quantized));
+    }
+  };
+
+  const clearVoiceLevel = (): void => {
+    voiceLevelPublished = -1;
+    voiceLevelSmoothed = 0;
+    for (const target of voiceLevelTargets()) {
+      target.style.removeProperty(VOICE_LEVEL_PROPERTY);
+    }
+  };
+
+  function startVoiceLevelLoop(): void {
+    if (voiceLevelFrame !== null) return;
+    if (typeof requestAnimationFrame !== "function") {
+      // No frame loop available: publish once so the property still exists.
+      writeVoiceLevel(sessionInitialized ? (session.getVoiceLevel() ?? VOICE_LEVEL_FALLBACK) : VOICE_LEVEL_FALLBACK);
+      return;
+    }
+    const tick = (): void => {
+      voiceLevelFrame = requestAnimationFrame(tick);
+      const raw = sessionInitialized ? session.getVoiceLevel() : null;
+      if (raw === null) {
+        writeVoiceLevel(VOICE_LEVEL_FALLBACK);
+        return;
+      }
+      // Providers report at their capture cadence (~85ms), far slower than a
+      // frame, so the published value eases toward the latest sample.
+      voiceLevelSmoothed += (raw - voiceLevelSmoothed) * 0.3;
+      writeVoiceLevel(voiceLevelSmoothed);
+    };
+    voiceLevelFrame = requestAnimationFrame(tick);
+  }
+
+  function stopVoiceLevelLoop(): void {
+    if (voiceLevelFrame !== null) {
+      cancelAnimationFrame(voiceLevelFrame);
+      voiceLevelFrame = null;
+    }
+    clearVoiceLevel();
+  }
+
   const getSpeechRecognitionClass = (): any => {
     if (typeof window === 'undefined') return null;
     return (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition || null;
@@ -10528,9 +11876,11 @@ export const createAgentExperience = (
     const voiceConfig = config.voiceRecognition ?? {};
     const pauseDuration = voiceConfig.pauseDuration ?? 2000;
 
-    speechRecognition.continuous = true;
+    // Both honor `provider.browser`; the fallbacks preserve the historical
+    // hardcoded values.
+    speechRecognition.continuous = voiceConfig.provider?.browser?.continuous ?? true;
     speechRecognition.interimResults = true;
-    speechRecognition.lang = 'en-US';
+    speechRecognition.lang = voiceConfig.provider?.browser?.language ?? 'en-US';
 
     // Store the initial text that was in the textarea
     const initialText = textarea.value;
@@ -10556,6 +11906,8 @@ export const createAgentExperience = (
       // Update textarea with initial text + full transcript + interim
       const newValue = initialText + fullTranscript + interimTranscript;
       textarea.value = newValue;
+      // Programmatic write: no input event fires, so mirror it explicitly.
+      syncComposerText();
 
       // Reset pause timer on each result
       if (pauseTimer) {
@@ -10568,6 +11920,9 @@ export const createAgentExperience = (
           const finalValue = textarea.value.trim();
           if (finalValue && speechRecognition && isRecording) {
             stopVoiceRecognition();
+            // `review`: the transcript is already in the composer (and the
+            // store); leave it there for the user to edit and send.
+            if (dictationReviewMode()) return;
             // Route through the normal submit path so mentions are collected +
             // cleared like a manual send (the transcript already lives in the
             // composer). Sending directly would leave stale tracked mention
@@ -10589,7 +11944,11 @@ export const createAgentExperience = (
       // If recognition ended naturally (not manually stopped), submit if there's text
       if (isRecording) {
         const finalValue = textarea.value.trim();
-        if (finalValue && finalValue !== initialText.trim()) {
+        if (
+          !dictationReviewMode() &&
+          finalValue &&
+          finalValue !== initialText.trim()
+        ) {
           // Route through the normal submit path (mentions collect + clear), same
           // as the pause-timer branch above.
           void doSubmit({ viaVoice: true });
@@ -10607,6 +11966,8 @@ export const createAgentExperience = (
       }
       emitVoiceState(source);
       persistVoiceMetadata();
+      // Live dictation is a composer occupant; the store emits nothing for it.
+      syncComposerCompact();
       if (micButton) {
         // Store original styles (including icon info for restoration)
         const voiceConfig = config.voiceRecognition ?? {};
@@ -10615,7 +11976,7 @@ export const createAgentExperience = (
           color: micButton.style.color,
           borderColor: micButton.style.borderColor,
           iconName: voiceConfig.iconName ?? "mic",
-          iconSize: parseFloat(voiceConfig.iconSize ?? config.sendButton?.size ?? "40") || 24,
+          iconSize: parseFloat(voiceConfig.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX,
         };
 
         // Apply recording state styles from config or theme tokens
@@ -10624,6 +11985,7 @@ export const createAgentExperience = (
         const recordingBorderColor = voiceConfig.recordingBorderColor;
 
         micButton.classList.add("persona-voice-recording");
+        setMicState("recording");
         micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
         micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
 
@@ -10668,10 +12030,12 @@ export const createAgentExperience = (
     voiceState.active = false;
     emitVoiceState(source);
     persistVoiceMetadata();
+    syncComposerCompact();
 
     if (micButton) {
       micButton.classList.remove("persona-voice-recording");
-      
+      setMicState("idle");
+
       // Restore original styles
       if (originalMicStyles) {
         micButton.style.backgroundColor = originalMicStyles.backgroundColor;
@@ -10702,7 +12066,7 @@ export const createAgentExperience = (
       color: micButton.style.color,
       borderColor: micButton.style.borderColor,
       iconName: voiceConfig.iconName ?? "mic",
-      iconSize: parseFloat(voiceConfig.iconSize ?? config.sendButton?.size ?? "40") || 24,
+      iconSize: parseFloat(voiceConfig.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX,
     };
   };
 
@@ -10711,7 +12075,7 @@ export const createAgentExperience = (
     if (!micButton) return;
     const existingSvg = micButton.querySelector("svg");
     if (existingSvg) existingSvg.remove();
-    const size = originalMicStyles?.iconSize ?? (parseFloat(config.voiceRecognition?.iconSize ?? config.sendButton?.size ?? "40") || 24);
+    const size = originalMicStyles?.iconSize ?? (parseFloat(config.voiceRecognition?.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX);
     const newSvg = renderLucideIcon(iconName, size, color, 1.5);
     if (newSvg) micButton.appendChild(newSvg);
   };
@@ -10733,6 +12097,7 @@ export const createAgentExperience = (
     const recordingBorderColor = voiceConfig.recordingBorderColor;
     removeAllVoiceStateClasses();
     micButton.classList.add("persona-voice-recording");
+    setMicState("recording");
     micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
     micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
     if (recordingIconColor) {
@@ -10755,6 +12120,7 @@ export const createAgentExperience = (
 
     removeAllVoiceStateClasses();
     micButton.classList.add("persona-voice-processing");
+    setMicState("processing");
     micButton.style.backgroundColor = bgColor;
     micButton.style.borderColor = borderColor;
     const resolvedColor = iconColor || "currentColor";
@@ -10787,6 +12153,7 @@ export const createAgentExperience = (
 
     removeAllVoiceStateClasses();
     micButton.classList.add("persona-voice-speaking");
+    setMicState("speaking");
     micButton.style.backgroundColor = bgColor;
     micButton.style.borderColor = borderColor;
     const resolvedColor = iconColor || "currentColor";
@@ -10814,6 +12181,7 @@ export const createAgentExperience = (
   const removeRuntypeMicStateStyles = () => {
     if (!micButton) return;
     removeAllVoiceStateClasses();
+    setMicState("idle");
     if (originalMicStyles) {
       micButton.style.backgroundColor = originalMicStyles.backgroundColor ?? "";
       micButton.style.color = originalMicStyles.color ?? "";
@@ -10827,6 +12195,8 @@ export const createAgentExperience = (
 
   // Wire up mic button click handler
   const handleMicButtonClick = () => {
+    // Dictation is composition: a locked input takes none of it.
+    if (isComposerInputDisabled()) return;
     // Runtype provider: use session.toggleVoice() (WebSocket-based STT)
     if (config.voiceRecognition?.provider?.type === 'runtype') {
       const voiceStatus = session.getVoiceStatus();
@@ -10880,10 +12250,10 @@ export const createAgentExperience = (
       voiceState.manuallyDeactivated = true;
       persistVoiceMetadata();
       stopVoiceRecognition("user");
-      if (finalValue) {
-        textarea.value = "";
-        textarea.style.height = "auto"; // Reset height after clearing
-        session.sendMessage(finalValue);
+      if (finalValue && !dictationReviewMode()) {
+        // Same submission path as every other send; the transcript already
+        // lives in the composer, so the draft is the snapshot source.
+        void doSubmit();
       }
     } else {
       // Start recording
@@ -10896,8 +12266,8 @@ export const createAgentExperience = (
   composerVoiceBridge = handleMicButtonClick;
 
   if (micButton) {
-    micButton.addEventListener("click", handleMicButtonClick);
-
+    // The click listener itself is registered by `wireComposerSurface`, so a
+    // composer rebuild unwires it with the rest of the surface.
     destroyCallbacks.push(() => {
       if (config.voiceRecognition?.provider?.type === 'runtype') {
         if (session.isVoiceActive()) session.toggleVoice();
@@ -10905,11 +12275,20 @@ export const createAgentExperience = (
       } else {
         stopVoiceRecognition("system");
       }
-      if (micButton) {
-        micButton.removeEventListener("click", handleMicButtonClick);
-      }
     });
   }
+
+  // `defer-one` auto-send: a turn that COMPLETED releases the queued item. An
+  // explicit Stop or a stream error never reaches this seam, so the item stays
+  // pending for the user to send, edit, or remove.
+  const pendingSubmissionUnsub = eventBus.on("assistant:complete", () => {
+    if (!composerStore.getState().pendingSubmission) return;
+    setTimeout(() => {
+      if (session.isStreaming()) return;
+      sendPendingSubmission();
+    }, 0);
+  });
+  destroyCallbacks.push(pendingSubmissionUnsub);
 
   const autoResumeUnsub = eventBus.on("assistant:complete", () => {
     if (!voiceAutoResumeMode) return;
@@ -11389,6 +12768,14 @@ export const createAgentExperience = (
       }
       persistentMetadata = {};
       actionManager.syncFromMetadata();
+      // Pending attachments belong to the cleared conversation: drop the tiles
+      // and abort anything still uploading.
+      attachmentManager?.clearAttachments();
+      // The draft, quote, and any deferred submission belong to it too.
+      clearPersistedDraft();
+      setPendingSubmission(undefined);
+      setComposerQuote(undefined);
+      cancelMessageEdit();
 
       // Clear event stream buffer and store, and reset throughput tracking
       eventStreamBuffer?.clear();
@@ -11399,18 +12786,26 @@ export const createAgentExperience = (
 
   setupClearChatButton();
 
-  if (composerForm) {
-    composerForm.addEventListener("submit", handleSubmit);
-  }
-
   // Single registry of composer listeners. The initial attach and the inline
   // contenteditable swap-reattach both consume this array, so a listener added
   // here is mechanically included in both — no hand-maintained enumeration to
   // drift. Add new composer listeners here, not as ad-hoc addEventListener calls.
+  // Every registration goes through the active bindings, so one
+  // `composerBindings.destroy()` unwires the whole surface.
   type ComposerListener = [event: string, handler: (event: Event) => void];
   const composerListeners: ComposerListener[] = [
     ["keydown", handleComposerKeydown as unknown as (event: Event) => void],
     ["input", handleComposerInput as (event: Event) => void],
+    // Mirror the input adapter's value into the store. Separate from
+    // `handleComposerInput` (which ignores synthetic history-recall input) and
+    // IME-agnostic: the store is a mirror, never a gate.
+    ["input", syncComposerText as (event: Event) => void],
+    // Committing a mention strips the `@query` and fires `input`, so this is the
+    // only signal a MOUSE selection produces: the menu is portaled outside the
+    // footer, and no keyup follows a click. The store drops an unchanged ref
+    // list, so per-keystroke cost is a comparison and no extra state event.
+    ["input", syncComposerMentions as (event: Event) => void],
+    ["keyup", syncComposerMentions as (event: Event) => void],
     ["paste", handleInputPaste as unknown as (event: Event) => void],
     // Warm the mention chunk on first focus so the first `@` is instant.
     ["focus", mentionPrefetch as (event: Event) => void],
@@ -11418,17 +12813,34 @@ export const createAgentExperience = (
   const attachComposerListeners = (el: HTMLElement | null): void => {
     if (!el) return;
     for (const [event, handler] of composerListeners) {
-      el.addEventListener(event, handler);
+      composerBindings?.addListener(el, event, handler);
     }
   };
   const detachComposerListeners = (el: HTMLElement | null): void => {
     if (!el) return;
     for (const [event, handler] of composerListeners) {
-      el.removeEventListener(event, handler);
+      composerBindings?.removeListener(el, event, handler);
     }
   };
 
-  attachComposerListeners(textarea);
+  /** Attach every composer-scoped listener to the freshly bound surface. */
+  const wireComposerSurface = (): void => {
+    if (!composerBindings) return;
+    composerBindings.addListener(composerBindings.form, "submit", handleSubmit);
+    // Chip removal happens inside the composer subtree; resync after the chip's
+    // own click handler has run.
+    composerBindings.addListener(
+      composerBindings.footer,
+      "click",
+      syncComposerMentions
+    );
+    attachComposerListeners(textarea);
+    if (micButton) {
+      composerBindings.addListener(micButton, "click", handleMicButtonClick);
+    }
+  };
+
+  wireComposerSurface();
 
   // Inline mention mode swaps the textarea for a contenteditable surface (loaded
   // lazily). When that happens, move the composer listeners onto the new element
@@ -11438,33 +12850,46 @@ export const createAgentExperience = (
     mentionOrchestrator?.onComposerSwap((next, prev) => {
       detachComposerListeners(prev);
       textarea = next as unknown as HTMLTextAreaElement;
+      if (composerBindings) composerBindings.input = next;
       attachComposerListeners(next);
+      // The swapped surface is a fresh element: sizing, attributes, submit-key
+      // hint, and the input lock all have to land on it too.
+      applyComposerInputConfig();
+      applyComposerLock();
+      syncComposerText();
     });
   };
   registerComposerSwapHandler();
 
   /**
    * Re-run composer plugin arbitration and swap the footer in place. Exposed to
-   * composer plugins as `requestRender()`. Everything bound to the old footer
-   * (listeners, attachment previews, mention affordances, the composer
-   * suggestion row) is torn down and re-bound to the new one.
+   * composer plugins as `requestRender()`. The seven-step lifecycle from section
+   * 5 of the composer roadmap: snapshot state, destroy the outgoing bindings,
+   * re-arbitrate against the current registry, build and bind, remount previews
+   * and mention UI, render contributions (none yet), restore focus and sync.
    */
   let composerRebuilding = false;
   function rebuildComposer(): void {
     if (composerRebuilding) return;
     composerRebuilding = true;
     try {
+      // 1. Snapshot text/focus/state.
       const previousValue = textarea?.value ?? "";
       const activeDoc = footer.ownerDocument ?? document;
       const hadFocus = textarea ? activeDoc.activeElement === textarea : false;
 
-      detachComposerListeners(textarea);
-      composerForm?.removeEventListener("submit", handleSubmit);
-      micButton?.removeEventListener("click", handleMicButtonClick);
+      // The loop writes to the OUTGOING footer and mic wrapper; both are about
+      // to be detached, so it is stopped here and re-armed by `setMicState`
+      // when the rebuilt mic re-enters recording.
+      stopVoiceLevelLoop();
+      // 2. Destroy the outgoing bindings and every composer-scoped listener.
+      composerBindings?.destroy();
+      composerBindings = null;
       // Its bindings point at the outgoing textarea; the new footer gets a new one.
       mentionOrchestrator?.destroy();
       mentionOrchestrator = null;
 
+      // 3. Re-arbitrate plugins against the CURRENT registry.
       let defaultElements: _ComposerElements | null = null;
       const defaultRenderer = () => {
         defaultElements = isComposerBar()
@@ -11487,16 +12912,20 @@ export const createAgentExperience = (
         ? (defaultElements as unknown as _ComposerElements).setSendButtonMode
         : () => {};
 
+      // 4. Build and bind the new surface.
       ensureComposerAttachmentSurface(footer);
       bindComposerRefsFromFooter(footer);
       applyComposerContentMaxWidth();
+      // 5. Remount attachment previews + mention UI from composer state.
       setupComposerAttachments();
       setupMentionOrchestrator();
       registerComposerSwapHandler();
-
-      if (composerForm) composerForm.addEventListener("submit", handleSubmit);
-      attachComposerListeners(textarea);
-      micButton?.addEventListener("click", handleMicButtonClick);
+      // 6. Render action contributions against the new bindings. Custom-action
+      //    cleanups run as the previous renderer is destroyed.
+      setupComposerActions();
+      setupComposerModeChips();
+      setupComposerHeaderCards();
+      wireComposerSurface();
 
       // The composer suggestion manager is bound to its container element, and
       // the new footer ships a new one.
@@ -11505,15 +12934,23 @@ export const createAgentExperience = (
       composerSuggestionsManager = createSuggestions(suggestions);
       if (managerIndex >= 0) suggestionManagers[managerIndex] = composerSuggestionsManager;
 
+      // 7. Restore focus and synchronize state.
       if (textarea) textarea.value = previousValue;
+      syncComposerText();
+      syncComposerMentions();
       updateCopy();
       renderSuggestions();
       setComposerDisabled(session.isStreaming());
+      // The rebuilt mic is stamped idle by its builder. A rebuild mid-recording
+      // has to restore the live state, which also re-arms the level loop
+      // against the new footer and wrapper.
+      if (voiceState.active) setMicState("recording");
       // The new footer carries none of the per-mode inline styles. Full
       // chrome sync, not bare applyFullHeightStyles: the latter resets
       // mount.style.cssText, which silently drops every theme variable.
       syncPanelChrome();
       updateScrollToBottomButtonOffset();
+      syncComposerCompact();
       if (hadFocus) textarea?.focus();
     } finally {
       composerRebuilding = false;
@@ -11522,6 +12959,24 @@ export const createAgentExperience = (
 
   const escStopDoc = mount.ownerDocument ?? document;
   escStopDoc.addEventListener("keydown", handleEscStop, true);
+
+  // A debounced draft write must not be lost to a navigation or a bfcache
+  // freeze. `pagehide` covers navigation and bfcache; `visibilitychange` covers
+  // the mobile tab/app switch that never fires `pagehide`.
+  const handleDraftLifecycleFlush = () => {
+    flushDraftPersist();
+  };
+  const handleDraftVisibilityFlush = () => {
+    if (escStopDoc.visibilityState === "hidden") flushDraftPersist();
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", handleDraftLifecycleFlush);
+    escStopDoc.addEventListener("visibilitychange", handleDraftVisibilityFlush);
+    destroyCallbacks.push(() => {
+      window.removeEventListener("pagehide", handleDraftLifecycleFlush);
+      escStopDoc.removeEventListener("visibilitychange", handleDraftVisibilityFlush);
+    });
+  }
 
   const ATTACHMENT_DROP_ACTIVE_CLASS = "persona-attachment-drop-active";
   let attachmentFileDragDepth = 0;
@@ -11532,7 +12987,9 @@ export const createAgentExperience = (
   };
 
   const attachmentDropHandlingActive = (): boolean =>
-    config.attachments?.enabled === true && attachmentManager !== null;
+    config.attachments?.enabled === true &&
+    attachmentManager !== null &&
+    !isComposerInputDisabled();
 
   // Visual highlight tracked on `container` (the chat column).
   const handleAttachmentDragEnterCapture = (e: DragEvent) => {
@@ -11596,10 +13053,32 @@ export const createAgentExperience = (
   ownerDoc.addEventListener("drop", handleDocDrop);
 
   destroyCallbacks.push(() => {
-    if (composerForm) {
-      composerForm.removeEventListener("submit", handleSubmit);
-    }
-    detachComposerListeners(textarea);
+    // One object owns every composer-scoped listener.
+    composerBindings?.destroy();
+    composerBindings = null;
+    // No rAF may outlive the widget.
+    stopVoiceLevelLoop();
+    // Runs every custom action's `destroy()` and tears down the overflow menu.
+    composerActionRenderer?.destroy();
+    composerActionRenderer = null;
+    composerModeChips?.destroy();
+    composerModeChips = null;
+    composerQuoteBanner?.destroy();
+    composerQuoteBanner = null;
+    composerPendingCard?.destroy();
+    composerPendingCard = null;
+    composerModelPicker = null;
+    // Flush before the store is destroyed: the pending write reads its state.
+    flushDraftPersist();
+    draftWriter.destroy();
+    if (composerNoticeTimer) clearTimeout(composerNoticeTimer);
+    cancelMessageEdit();
+    submissionAbort?.abort();
+    submissionAbort = null;
+    // Aborts every in-flight upload; late completions write no state.
+    attachmentManager?.destroy();
+    attachmentManager = null;
+    composerStore.destroy();
     escStopDoc.removeEventListener("keydown", handleEscStop, true);
     mentionOrchestrator?.destroy();
   });
@@ -11647,6 +13126,10 @@ export const createAgentExperience = (
       const previousHistoryProvider = config.features?.history?.provider;
       const previousIdentityProof = config.getIdentityProof;
       const previousClientToken = config.clientToken;
+      // The mention orchestrator is built once from the whole config object, so
+      // any live edit needs a composer rebuild. The merge keeps this reference
+      // when the patch never mentioned it, so unrelated updates never rebuild.
+      const previousContextMentions = config.contextMentions;
       // One consistent recursive patch policy across the live controller and the
       // init handle. See utils/config-merge.ts for the replace-leaf list and
       // explicit-undefined reset semantics. The patch merges over the
@@ -12368,6 +13851,16 @@ export const createAgentExperience = (
       refreshWelcomePlugins();
       setComposerDisabled(session.isStreaming());
 
+      // A live `contextMentions` edit (enable/disable, display mode, sources,
+      // trigger channels) only reaches the composer through a rebuild: the
+      // orchestrator, its affordance buttons, and the inline contenteditable
+      // swap are all built at construction. Runs before the composer work
+      // below so the mic button, send button, mode chips, and action row all
+      // land on the new footer.
+      if (previousContextMentions !== config.contextMentions) {
+        rebuildComposer();
+      }
+
       // Update voice recognition mic button visibility
       const voiceRecognitionEnabled = config.voiceRecognition?.enabled === true;
       const hasSpeechRecognition =
@@ -12388,12 +13881,26 @@ export const createAgentExperience = (
             micButton = micButtonResult.button;
             micButtonWrapper = micButtonResult.wrapper;
             
-            // Insert into right actions before send button wrapper
-            rightActions.insertBefore(micButtonWrapper, sendButtonWrapper);
-            
+            // Insert into the CURRENT right-action cluster, before the send
+            // button; fall back to the form when a plugin composer has neither.
+            const micAnchor =
+              sendButtonWrapper && sendButtonWrapper.parentElement === rightActions
+                ? sendButtonWrapper
+                : null;
+            if (rightActions) rightActions.insertBefore(micButtonWrapper, micAnchor);
+            else composerForm?.appendChild(micButtonWrapper);
+
+
             // Wire up click handler
-            micButton.addEventListener("click", handleMicButtonClick);
-            
+            // Through the bindings so a later rebuild unwires it, and keep the
+            // binding object coherent with the locals it mirrors.
+            if (composerBindings) composerBindings.micButton = micButton;
+            composerBindings?.addListener(
+              micButton,
+              "click",
+              handleMicButtonClick
+            );
+
             // Set disabled state
             micButton.disabled = session.isStreaming();
           }
@@ -12404,15 +13911,19 @@ export const createAgentExperience = (
           
           // Update icon name and size
           const micIconName = voiceConfig.iconName ?? "mic";
-          const buttonSize = sendButtonConfig.size ?? "40px";
-          const micIconSize = voiceConfig.iconSize ?? buttonSize;
-          const micIconSizeNum = parseFloat(micIconSize) || 24;
-          
-          micButton.style.width = micIconSize;
-          micButton.style.height = micIconSize;
-          micButton.style.minWidth = micIconSize;
-          micButton.style.minHeight = micIconSize;
-          
+          // Unset clears the inline box so the control-size token takes over.
+          const micIconSize = voiceConfig.iconSize;
+          const micIconSizeNum =
+            parseFloat(micIconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX;
+
+          micButton.classList.add(COMPOSER_CONTROL_CLASS);
+          micButton.classList.toggle(COMPOSER_CONTROL_GLYPH_CLASS, !micIconSize);
+          micButton.style.width = micIconSize ?? "";
+          micButton.style.height = micIconSize ?? "";
+          micButton.style.minWidth = micIconSize ?? "";
+          micButton.style.minHeight = micIconSize ?? "";
+
+
           // Update icon; color chain and stroke 1.5 match the mount-time
           // builder (composer-parts.ts) so an unrelated update cannot restyle.
           const iconColor = voiceConfig.iconColor ?? sendButtonConfig.textColor;
@@ -12509,14 +14020,15 @@ export const createAgentExperience = (
         if (!attachmentButtonWrapper || !attachmentButton) {
           // Need to create the attachment elements dynamically
           const attachmentsConfig = config.attachments ?? {};
-          const sendButtonConfig = config.sendButton ?? {};
-          const buttonSize = sendButtonConfig.size ?? "40px";
 
           // Create previews container if not exists
           if (!attachmentPreviewsContainer) {
             attachmentPreviewsContainer = createElement("div", "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2");
             attachmentPreviewsContainer.style.display = "none";
-            composerForm.insertBefore(attachmentPreviewsContainer, textarea);
+            (textarea.parentElement ?? composerForm).insertBefore(
+              attachmentPreviewsContainer,
+              textarea
+            );
           }
 
           // Create file input if not exists
@@ -12527,7 +14039,10 @@ export const createAgentExperience = (
             attachmentInput.multiple = (attachmentsConfig.maxFiles ?? 4) > 1;
             attachmentInput.style.display = "none";
             attachmentInput.setAttribute("aria-label", "Attach files");
-            composerForm.insertBefore(attachmentInput, textarea);
+            (textarea.parentElement ?? composerForm).insertBefore(
+              attachmentInput,
+              textarea
+            );
           }
 
           // Create attachment button wrapper
@@ -12536,31 +14051,29 @@ export const createAgentExperience = (
           // Create attachment button
           attachmentButton = createElement(
             "button",
-            "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button"
+            `persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button ${COMPOSER_CONTROL_CLASS} ${COMPOSER_CONTROL_GLYPH_CLASS}`
           ) as HTMLButtonElement;
           attachmentButton.type = "button";
           attachmentButton.setAttribute("aria-label", attachmentsConfig.buttonTooltipText ?? "Attach file");
 
           // Default to paperclip icon
           const attachIconName = attachmentsConfig.buttonIconName ?? "paperclip";
-          const attachIconSize = buttonSize;
-          const buttonSizeNum = parseFloat(attachIconSize) || 40;
-          // Icon should be ~60% of button size to match other icons visually
-          const attachIconSizeNum = Math.round(buttonSizeNum * 0.6);
 
-          attachmentButton.style.width = attachIconSize;
-          attachmentButton.style.height = attachIconSize;
-          attachmentButton.style.minWidth = attachIconSize;
-          attachmentButton.style.minHeight = attachIconSize;
           attachmentButton.style.fontSize = "18px";
           attachmentButton.style.lineHeight = "1";
           // Appearance (bg / fg / border / radius / hover) is themed from the
           // shared `.persona-attachment-button` CSS rule via the
-          // `--persona-button-ghost-*` tokens — matching the static
-          // createAttachmentControls path. Only sizing stays inline here so
-          // this runtime-created button restyles identically to the built-in one.
+          // `--persona-button-ghost-*` tokens, and the box from
+          // `--persona-composer-control-size` — matching the static
+          // createAttachmentControls path, so this runtime-created button
+          // restyles identically to the built-in one.
 
-          const attachIconSvg = renderLucideIcon(attachIconName, attachIconSizeNum, "currentColor", 1.5);
+          const attachIconSvg = renderLucideIcon(
+            attachIconName,
+            COMPOSER_CONTROL_ICON_FALLBACK_PX,
+            "currentColor",
+            1.5
+          );
           if (attachIconSvg) {
             attachmentButton.appendChild(attachIconSvg);
           } else {
@@ -12587,12 +14100,22 @@ export const createAgentExperience = (
           if (leftActions) leftActions.append(attachmentButtonWrapper);
           else composerForm.appendChild(attachmentButtonWrapper);
 
+          if (composerBindings) {
+            composerBindings.attachmentButton = attachmentButton;
+            composerBindings.attachmentInput = attachmentInput ?? undefined;
+            composerBindings.attachmentPreviews =
+              attachmentPreviewsContainer ?? undefined;
+          }
+
           // Initialize attachment manager
           if (!attachmentManager && attachmentInput && attachmentPreviewsContainer) {
-            attachmentManager = AttachmentManager.fromConfig(attachmentsConfig);
+            attachmentManager = AttachmentManager.fromConfig(
+              attachmentsConfig,
+              syncComposerAttachments
+            );
             attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
 
-            attachmentInput.addEventListener("change", async () => {
+            composerBindings?.addListener(attachmentInput, "change", async () => {
               if (attachmentManager && attachmentInput?.files) {
                 await attachmentManager.handleFileSelect(attachmentInput.files);
                 attachmentInput.value = "";
@@ -12616,7 +14139,8 @@ export const createAgentExperience = (
             attachmentManager.updateConfig({
               allowedTypes: attachmentsConfig.allowedTypes,
               maxFileSize: attachmentsConfig.maxFileSize,
-              maxFiles: attachmentsConfig.maxFiles
+              maxFiles: attachmentsConfig.maxFiles,
+              adapter: attachmentsConfig.adapter
             });
           }
         }
@@ -12633,10 +14157,9 @@ export const createAgentExperience = (
           const tooltipText = attCfg.buttonTooltipText ?? "Attach file";
           attachmentButton.setAttribute("aria-label", tooltipText);
           attachmentButton.textContent = "";
-          const btnSize = parseFloat(config.sendButton?.size ?? "40px") || 40;
           const iconSvg = renderLucideIcon(
             attCfg.buttonIconName ?? "paperclip",
-            Math.round(btnSize * 0.6),
+            COMPOSER_CONTROL_ICON_FALLBACK_PX,
             "currentColor",
             1.5
           );
@@ -12671,17 +14194,20 @@ export const createAgentExperience = (
       const iconName = sendButtonConfig.iconName;
       const tooltipText = sendButtonConfig.tooltipText ?? "Send message";
       const showTooltip = sendButtonConfig.showTooltip ?? false;
-      const buttonSize = sendButtonConfig.size ?? "40px";
+      // Unset clears the inline box so the control-size token takes over.
+      const buttonSize = sendButtonConfig.size;
+      const buttonSizeNum =
+        parseFloat(buttonSize ?? "") || COMPOSER_CONTROL_FALLBACK_PX;
       const backgroundColor = sendButtonConfig.backgroundColor;
       const textColor = sendButtonConfig.textColor;
 
       // Update button content and styling based on mode
       if (useIcon) {
         // Icon mode: circular button
-        sendButton.style.width = buttonSize;
-        sendButton.style.height = buttonSize;
-        sendButton.style.minWidth = buttonSize;
-        sendButton.style.minHeight = buttonSize;
+        sendButton.style.width = buttonSize ?? "";
+        sendButton.style.height = buttonSize ?? "";
+        sendButton.style.minWidth = buttonSize ?? "";
+        sendButton.style.minHeight = buttonSize ?? "";
         sendButton.style.fontSize = "18px";
         sendButton.style.lineHeight = "1";
         
@@ -12698,10 +14224,27 @@ export const createAgentExperience = (
         if (!session.isStreaming()) {
           sendButton.innerHTML = "";
           if (iconName) {
-            const iconSize = parseFloat(buttonSize) || 24;
+            // Same derivation as the mount-time builder (composer-parts.ts):
+            // half the box unless `iconSize` names a glyph explicitly.
+            const iconSize =
+              parseFloat(sendButtonConfig.iconSize ?? "") ||
+              Math.round(buttonSizeNum * 0.5);
             const iconColor = textColor?.trim() || "currentColor";
-            const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, 2);
-            if (iconSvg) {
+            const iconStroke = sendButtonConfig.iconStrokeWidth ?? 2;
+            const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, iconStroke);
+            // Rebuild the crossfade stack, not a bare glyph: `setSendButtonMode`
+            // resolves it from the DOM, so a single-glyph rebuild here would
+            // leave the stop state with nothing to reveal.
+            const stopSvg = renderLucideIcon(
+              sendButtonConfig.stopIconName ?? "square",
+              iconSize,
+              iconColor,
+              iconStroke
+            );
+            if (iconSvg && stopSvg) {
+              // Not streaming, so send is the live mode by definition.
+              sendButton.appendChild(buildSendGlyphStack(iconSvg, stopSvg));
+            } else if (iconSvg) {
               sendButton.appendChild(iconSvg);
             } else {
               sendButton.textContent = iconText;
@@ -12712,8 +14255,8 @@ export const createAgentExperience = (
         }
 
         // Update classes
-        sendButton.className = "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer";
-        
+        sendButton.className = `persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer ${COMPOSER_CONTROL_CLASS}`;
+
         if (backgroundColor) {
           sendButton.style.backgroundColor = backgroundColor;
           sendButton.classList.remove("persona-bg-persona-primary");
@@ -12790,6 +14333,25 @@ export const createAgentExperience = (
         });
       }
       
+      // Modes can be added or removed live: drop selections whose mode is gone
+      // before anything reads `activeModeIds`, and mount/unmount the mode chips.
+      const prunedModes = pruneComposerModes(
+        composerStore.getState().activeModeIds,
+        config.composer?.modes
+      );
+      composerStore.setActiveModeIds(prunedModes);
+      const wantsModeChips = Boolean(config.composer?.modes?.length);
+      if (wantsModeChips !== Boolean(composerModeChips)) setupComposerModeChips();
+      composerModeChips?.render(prunedModes, composerModes());
+      // A live `composer.models` edit changes options the picker built once.
+      composerModelPicker?.repaint();
+
+      // Re-resolve the action row LAST of the composer work: `composer.actions`,
+      // the plugin list, and the built-in elements above have all settled, so
+      // added/removed/changed actions re-render and every `visible`/`disabled`
+      // predicate is re-evaluated against the current state.
+      composerActionRenderer?.resolve();
+
       // Update contentMaxWidth on messages wrapper and composer. Same
       // composer-bar fallback as the initial read above.
       const updatedContentMaxWidth = resolveContentMaxWidth(
@@ -12806,19 +14368,21 @@ export const createAgentExperience = (
         greetingHost.style.marginLeft = "auto";
         greetingHost.style.marginRight = "auto";
         greetingHost.style.width = "100%";
-        if (composerForm) {
-          composerForm.style.maxWidth = updatedContentMaxWidth;
-          composerForm.style.marginLeft = "auto";
-          composerForm.style.marginRight = "auto";
+        // Same four targets, and the same `width: 100%`, as the mount-time
+        // `applyComposerContentMaxWidth`: the previews row is a flex item, so
+        // auto margins alone shrink-wrap it instead of centering the column.
+        for (const element of [
+          composerForm,
+          suggestions,
+          attachmentPreviewsContainer,
+          statusText,
+        ]) {
+          if (!element) continue;
+          element.style.maxWidth = updatedContentMaxWidth;
+          element.style.marginLeft = "auto";
+          element.style.marginRight = "auto";
+          element.style.width = "100%";
         }
-        if (suggestions) {
-          suggestions.style.maxWidth = updatedContentMaxWidth;
-          suggestions.style.marginLeft = "auto";
-          suggestions.style.marginRight = "auto";
-        }
-        statusText.style.maxWidth = updatedContentMaxWidth;
-        statusText.style.marginLeft = "auto";
-        statusText.style.marginRight = "auto";
       } else {
         messagesWrapper.style.maxWidth = "";
         messagesWrapper.style.marginLeft = "";
@@ -12828,19 +14392,18 @@ export const createAgentExperience = (
         greetingHost.style.marginLeft = "";
         greetingHost.style.marginRight = "";
         greetingHost.style.width = "";
-        if (composerForm) {
-          composerForm.style.maxWidth = "";
-          composerForm.style.marginLeft = "";
-          composerForm.style.marginRight = "";
+        for (const element of [
+          composerForm,
+          suggestions,
+          attachmentPreviewsContainer,
+          statusText,
+        ]) {
+          if (!element) continue;
+          element.style.maxWidth = "";
+          element.style.marginLeft = "";
+          element.style.marginRight = "";
+          element.style.width = "";
         }
-        if (suggestions) {
-          suggestions.style.maxWidth = "";
-          suggestions.style.marginLeft = "";
-          suggestions.style.marginRight = "";
-        }
-        statusText.style.maxWidth = "";
-        statusText.style.marginLeft = "";
-        statusText.style.marginRight = "";
       }
 
       // Update status indicator visibility and text
@@ -12867,6 +14430,13 @@ export const createAgentExperience = (
         : statusIndicatorConfig.align === "center" ? "persona-text-center"
         : "persona-text-right";
       statusText.classList.add(alignClass);
+
+      // Composer baseline config is read at build time, so it re-syncs here.
+      // After the control updates above, so controls this update created (mic,
+      // attachment button) are already mounted when the locks sweep them.
+      applyComposerInputConfig();
+      applyComposerLock();
+      syncComposerCompact();
       // Last: this pass rebuilds the header and rewrites header/footer
       // visibility, any of which would expose an open panel host's chrome.
       reapplyHistoryHostChrome();
@@ -12929,6 +14499,14 @@ export const createAgentExperience = (
       }
       persistentMetadata = {};
       actionManager.syncFromMetadata();
+      // Pending attachments belong to the cleared conversation: drop the tiles
+      // and abort anything still uploading.
+      attachmentManager?.clearAttachments();
+      // The draft, quote, and any deferred submission belong to it too.
+      clearPersistedDraft();
+      setPendingSubmission(undefined);
+      setComposerQuote(undefined);
+      cancelMessageEdit();
 
       // Clear event stream buffer and store, and reset throughput tracking
       eventStreamBuffer?.clear();
@@ -12938,7 +14516,8 @@ export const createAgentExperience = (
     setMessage(message: string): boolean {
       if (!textarea) return false;
       if (session.isStreaming()) return false;
-      
+      if (isComposerInputDisabled()) return false;
+
       // Auto-open widget if closed and the panel is toggleable
       if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
@@ -12951,19 +14530,35 @@ export const createAgentExperience = (
     },
     submitMessage(message?: string): boolean {
       if (session.isStreaming()) return false;
-      
+      // Every submission path is blocked, including the programmatic one.
+      if (isComposerSendBlocked()) return false;
+
       const valueToSubmit = message?.trim() || textarea.value.trim();
       if (!valueToSubmit) return false;
-      
+
       // Auto-open widget if closed and the panel is toggleable
       if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
-      
+
+      // Composer submission (no explicit text) runs the full snapshot pipeline;
+      // an explicit message is a programmatic send that still consumes the draft.
       textarea.value = "";
       textarea.style.height = "auto"; // Reset height after clearing
-      session.sendMessage(valueToSubmit);
+      syncComposerText();
+      submitText(valueToSubmit, { consumeDraft: false });
       return true;
+    },
+    getComposerState(): Readonly<ComposerState> {
+      return composerStore.getState();
+    },
+    setQuote(quote: ComposerQuote): void {
+      const text = quote?.text?.trim();
+      if (!text) return;
+      setComposerQuote({ ...quote, text });
+    },
+    clearQuote(): void {
+      setComposerQuote(undefined);
     },
     startVoiceRecognition(): boolean {
       if (session.isStreaming()) return false;

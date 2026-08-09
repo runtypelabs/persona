@@ -4,6 +4,7 @@ import type { SectionDef, TabDef, SubGroupDef, FieldDef } from './types';
 import {
   DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH,
   DEFAULT_FLOATING_LAUNCHER_WIDTH,
+  DEFAULT_INPUT_PLACEHOLDER,
 } from '../defaults';
 import {
   DEFAULT_PANEL_CANVAS_BACKGROUND,
@@ -496,6 +497,8 @@ const composerSpacingSectionDef: SectionDef = {
     { id: 'composer-gap', label: 'Row Gap', description: 'Space between the textarea row and the actions row', type: 'text', path: 'theme.components.composer.gap', defaultValue: '0.5rem' },
     { id: 'composer-font-size', label: 'Font Size', type: 'text', path: 'theme.components.composer.fontSize', defaultValue: '0.875rem' },
     { id: 'composer-line-height', label: 'Line Height', type: 'text', path: 'theme.components.composer.lineHeight', defaultValue: '1.25rem' },
+    { id: 'composer-control-size', label: 'Control Size', description: 'Edge of every icon control in the action row', type: 'slider', path: 'theme.components.composer.controlSize', defaultValue: '40px', slider: { min: 24, max: 64, step: 2 } },
+    { id: 'composer-control-icon-size', label: 'Control Icon Size', description: 'Glyph inside those controls', type: 'slider', path: 'theme.components.composer.controlIconSize', defaultValue: '24px', slider: { min: 12, max: 40, step: 1 } },
   ],
 };
 
@@ -768,7 +771,7 @@ const copySectionDef: SectionDef = {
     { id: 'copy-show-welcome-card', label: 'Show Welcome Card', type: 'toggle', path: 'copy.showWelcomeCard', defaultValue: true },
     { id: 'copy-welcome-title', label: 'Welcome Title', type: 'text', path: 'copy.welcomeTitle', defaultValue: 'Hello 👋' },
     { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'copy.welcomeSubtitle', defaultValue: 'I can answer questions and help you get things done here.' },
-    { id: 'copy-placeholder', label: 'Input Placeholder', type: 'text', path: 'copy.inputPlaceholder', defaultValue: 'Type your message…' },
+    { id: 'copy-placeholder', label: 'Input Placeholder', type: 'text', path: 'copy.inputPlaceholder', defaultValue: DEFAULT_INPUT_PLACEHOLDER },
     { id: 'copy-send-label', label: 'Send Button Label', type: 'text', path: 'copy.sendButtonLabel', defaultValue: 'Send' },
   ],
 };

@@ -37,10 +37,17 @@ describe("send button icon stability across a mid-stream update", () => {
     const btn = Array.from(mount.querySelectorAll("button")).find(
       (b) => b.getAttribute("aria-label") === "Send message"
     )!;
-    const glyph = () => btn.querySelector("svg")?.querySelector("rect, path")?.tagName.toLowerCase() ?? null;
+    // Both glyphs stay mounted and stacked; the live mode is the attribute, and
+    // it is what a rebuild of the stack has to preserve.
+    const stack = () => btn.querySelector("[data-persona-glyph-stack]");
+    const glyph = () => stack()?.getAttribute("data-mode") ?? null;
+    const mountedGlyphs = () =>
+      Array.from(stack()?.querySelectorAll("svg") ?? []).map(
+        (svg) => svg.getAttribute("data-glyph")
+      );
 
-    // Send icon (arrow-up) is a <path>; stop icon (square) is a <rect>.
-    expect(glyph()).toBe("path");
+    expect(glyph()).toBe("send");
+    expect(mountedGlyphs()).toEqual(["send", "stop"]);
 
     const frames = buildAssistantTurnFrames({
       executionId: "e1",
@@ -51,18 +58,22 @@ describe("send button icon stability across a mid-stream update", () => {
 
     await sleep(80); // stop mode engages
     expect(btn.getAttribute("aria-label")).toBe("Stop generating");
-    expect(glyph()).toBe("rect");
+    expect(glyph()).toBe("stop");
 
     // Unrelated update mid-stream must not revert the stop icon.
     controller.update({ attachments: { enabled: true } });
     expect(btn.getAttribute("aria-label")).toBe("Stop generating");
-    expect(glyph()).toBe("rect");
+    expect(glyph()).toBe("stop");
+    expect(mountedGlyphs()).toEqual(["send", "stop"]);
 
     await done;
     await sleep(20);
     // Completion returns the button to send mode.
     expect(btn.getAttribute("aria-label")).toBe("Send message");
-    expect(glyph()).toBe("path");
+    expect(glyph()).toBe("send");
+    // The completion path rebuilt the stack; both glyphs are still stacked, so
+    // the next stop has something to reveal.
+    expect(mountedGlyphs()).toEqual(["send", "stop"]);
 
     controller.destroy();
   });

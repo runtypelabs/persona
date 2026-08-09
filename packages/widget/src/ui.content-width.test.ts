@@ -77,6 +77,66 @@ describe("default content column", () => {
     expect(statusText.style.marginLeft).toBe("");
   });
 
+  it("left-aligns the attachment preview strip inside the capped column", () => {
+    // The repro: a stage wider than the 768px cap. The previews row lives in
+    // the composer header, which is `display: contents`, so it is really a flex
+    // ITEM of the column-flex form. Auto cross margins on a flex item shrink it
+    // to its content, which centered a single 48px tile.
+    const { mount } = makeController({ attachments: { enabled: true } });
+    mount.style.width = "1200px";
+    const previews = mount.querySelector<HTMLElement>(
+      "[data-persona-composer-attachment-previews]"
+    )!;
+    const form = mount.querySelector<HTMLElement>("[data-persona-composer-form]")!;
+
+    // Capped to the same column as the composer form...
+    expect(previews.style.maxWidth).toBe("768px");
+    expect(form.style.maxWidth).toBe("768px");
+    // ...and told to fill it, so tiles start at the column's leading edge
+    // instead of the row shrink-wrapping around them.
+    expect(previews.style.width).toBe("100%");
+    expect(previews.style.marginLeft).toBe("auto");
+    expect(previews.style.marginRight).toBe("auto");
+  });
+
+  it("gives every centered composer child an explicit width", () => {
+    const { mount } = makeController({ attachments: { enabled: true } });
+    const selectors = [
+      "[data-persona-composer-form]",
+      "[data-persona-composer-suggestions]",
+      "[data-persona-composer-attachment-previews]",
+      "[data-persona-composer-status]",
+    ];
+    for (const selector of selectors) {
+      const element = mount.querySelector<HTMLElement>(selector)!;
+      expect(element, selector).toBeTruthy();
+      expect(element.style.width, selector).toBe("100%");
+      expect(element.style.maxWidth, selector).toBe("768px");
+    }
+  });
+
+  it("keeps the previews strip in sync through controller.update()", () => {
+    const { mount, controller } = makeController({ attachments: { enabled: true } });
+    const previews = mount.querySelector<HTMLElement>(
+      "[data-persona-composer-attachment-previews]"
+    )!;
+
+    controller.update({ layout: { contentMaxWidth: "90ch" } });
+    expect(previews.style.maxWidth).toBe("90ch");
+    expect(previews.style.width).toBe("100%");
+
+    // "none" opts out of the cap but still fills the row.
+    controller.update({ layout: { contentMaxWidth: "none" } });
+    expect(previews.style.maxWidth).toBe("none");
+    expect(previews.style.width).toBe("100%");
+
+    // An unresolvable value clears the centering entirely.
+    controller.update({ layout: { contentMaxWidth: "" } });
+    expect(previews.style.maxWidth).toBe("");
+    expect(previews.style.width).toBe("");
+    expect(previews.style.marginLeft).toBe("");
+  });
+
   it("publishes the resolved column as a CSS var for plugin content", () => {
     const { mount, controller } = makeController();
     expect(

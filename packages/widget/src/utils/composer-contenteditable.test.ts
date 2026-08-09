@@ -139,6 +139,11 @@ describe("createContentEditableComposerInput", () => {
     expect(input.getLogicalText()).toBe("");
   });
 
+  it("sets dir=auto so mixed-direction drafts resolve per paragraph", () => {
+    const { input } = make();
+    expect(input.element.getAttribute("dir")).toBe("auto");
+  });
+
   it("renders a document with an atomic token and projects text", () => {
     const { input } = make();
     const id = seedToken(input, "Check ", " now");

@@ -114,9 +114,8 @@ The widget uses a layered architecture:
    - `ask-user-question-tool.ts` / `suggest-replies-tool.ts` - Built-in LOCAL client tool definitions advertised via `features.*.expose`
 
 5. **Voice** (`voice/`)
-   - `browser-voice-provider.ts` - Web Audio API voice input
-   - `runtype-voice-provider.ts` - Runtype-hosted voice service
-   - `voice-activity-detector.ts` - VAD implementation
+   - `browser-voice-provider.ts` - SpeechRecognition (Web Speech API) input; no audio graph, so no live level data
+   - `runtype-voice-provider.ts` - Runtype-hosted voice service; its capture loop also feeds `--persona-voice-level`
    - `voice-factory.ts` - Provider factory
 
 6. **Extensibility**

@@ -230,6 +230,8 @@ export function createContentEditableComposerInput(
   root.setAttribute("data-persona-composer-input", "");
   root.setAttribute("role", "textbox");
   root.setAttribute("aria-multiline", "true");
+  // Mixed-direction drafts resolve per paragraph instead of inheriting the host.
+  root.setAttribute("dir", "auto");
   root.classList.add("persona-composer-contenteditable");
   if (options.placeholder != null) {
     root.setAttribute("data-placeholder", options.placeholder);

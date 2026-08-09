@@ -36,6 +36,16 @@ describe("buildComposer (full column-stacked composer)", () => {
     expect(typeof elements.setSendButtonMode).toBe("function");
   });
 
+  it("spaces both action clusters on the same 8px rhythm", () => {
+    const elements = buildComposer({
+      config: { apiUrl: "/api", attachments: { enabled: true } },
+    });
+    // An end cluster at gap-1 crowded the model picker against send.
+    expect(elements.leftActions.classList.contains("persona-gap-2")).toBe(true);
+    expect(elements.rightActions.classList.contains("persona-gap-2")).toBe(true);
+    expect(elements.rightActions.classList.contains("persona-gap-1")).toBe(false);
+  });
+
   it("returns null for optional controls when their features are disabled", () => {
     const elements = buildComposer({ config: { apiUrl: "/api" } });
     expect(elements.micButton).toBeNull();
@@ -43,6 +53,30 @@ describe("buildComposer (full column-stacked composer)", () => {
     expect(elements.attachmentButton).toBeNull();
     expect(elements.attachmentInput).toBeNull();
     expect(elements.attachmentPreviewsContainer).toBeNull();
+  });
+
+  it("ships a header region hosting the attachment previews", () => {
+    const elements = buildComposer({
+      config: { apiUrl: "/api", attachments: { enabled: true } },
+    });
+    expect(elements.header.getAttribute("data-persona-composer-header")).toBe("");
+    // `display: contents`: the region adds no box, so the column layout is
+    // exactly what it was before the region existed.
+    expect(elements.header.style.display).toBe("contents");
+    expect(elements.header.parentElement).toBe(elements.composerForm);
+    expect(elements.header.contains(elements.attachmentPreviewsContainer!)).toBe(
+      true
+    );
+  });
+
+  it("marks the action clusters with stable region attributes", () => {
+    const elements = buildComposer({ config: { apiUrl: "/api" } });
+    expect(
+      elements.leftActions.getAttribute("data-persona-composer-actions-start")
+    ).toBe("");
+    expect(
+      elements.rightActions.getAttribute("data-persona-composer-actions-end")
+    ).toBe("");
   });
 
   it("attaches the suggestions row, composer form, and status text to the footer in order", () => {

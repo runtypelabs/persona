@@ -16,7 +16,7 @@ This file defines the curated ~100-icon registry. **Verified against `lucide@0.5
 
 These icons are referenced in `packages/widget/src/` as string literals or as documented default values for configurable icon-name fields. Removing any of them breaks the widget out of the box.
 
-**Running total: 34**
+**Running total: 35**
 
 | Icon | Where used |
 |---|---|
@@ -41,6 +41,7 @@ These icons are referenced in `packages/widget/src/` as string literals or as do
 | `loader` | default `voiceRecognition.processingIconName` (`ui.ts:4332`) |
 | `mic` | default `voiceRecognition.iconName` (`defaults.ts:104`) |
 | `paperclip` | default `attachments.buttonIconName` (`composer-builder.ts:412`, `ui.ts:5910`) |
+| `quote` | message-actions quote button (`message-bubble.ts:860`, `messageActions.showQuote`) |
 | `refresh-cw` | default `launcher.clearChat.iconName` (`defaults.ts:65`) |
 | `search` | event-stream search input icon (`event-stream-view.ts:556`) |
 | `send` | default `sendButton.iconName` (`defaults.ts:92`) |
@@ -215,11 +216,11 @@ Wait: actually that's 110 unique icons. Recount confirms **110 total** (33 manda
 
 ## Final count
 
-- **Mandatory:** 34
+- **Mandatory:** 35
 - **Curated additions:** 77
-- **Total:** 111 (within the 90-110 target band)
+- **Total:** 112 (within the 90-110 target band)
 
-All 111 names verified to exist as files under `lucide@0.552.0/dist/esm/icons/*.js`.
+All 112 names verified to exist as files under `lucide@0.552.0/dist/esm/icons/*.js`.
 
 ---
 

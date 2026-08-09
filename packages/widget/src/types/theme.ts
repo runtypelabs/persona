@@ -605,6 +605,33 @@ export interface ComposerChromeTokens {
   fontSize?: string;
   /** Composer textarea line-height. @default "1.25rem" */
   lineHeight?: string;
+  /**
+   * Edge of every icon control in the composer action row: attachment, mention,
+   * mic, registry action buttons, the overflow `+` trigger, and the icon-mode
+   * send button. Per-control config keys (`sendButton.size`,
+   * `voiceRecognition.iconSize`) still win. Coarse pointers floor the hit area
+   * at 40px regardless. @default "40px"
+   */
+  controlSize?: string;
+  /** Glyph box inside those controls. @default "24px" */
+  controlIconSize?: string;
+}
+
+/**
+ * Motion timing shared by every composer animation.
+ *
+ * Setting either duration to `0ms` is a kill switch: the transitions and
+ * keyframes that consume these tokens complete instantly, with no other config
+ * change. Motion is additionally suppressed wholesale under
+ * `prefers-reduced-motion: reduce`, which no token can re-enable.
+ */
+export interface MotionTokens {
+  /** State flips: pressed ticks, glyph crossfades. @default "120ms" */
+  durationFast?: string;
+  /** Enter and exit: chips, rings. @default "200ms" */
+  durationBase?: string;
+  /** @default "cubic-bezier(0.2, 0, 0, 1)" */
+  easing?: string;
 }
 
 /** Artifact toolbar chrome. */
@@ -820,6 +847,8 @@ export interface ComponentTokens {
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
   composer: ComposerChromeTokens;
+  /** Shared motion timing for composer chrome animation. */
+  motion?: MotionTokens;
   /** Scrollbar appearance for every scroller in the widget. */
   scrollbar?: ScrollbarTokens;
   /** Icon button styling tokens. */

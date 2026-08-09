@@ -31,6 +31,7 @@ import {
   HistoryConversationPage,
   HistoryConversationDetail,
   HistoryDisplayProjection,
+  ComposerOptionsPayload,
   WebMcpConfirmHandler
 } from "./types";
 import {
@@ -47,6 +48,7 @@ import {
   resolveArtifactDisplayMode
 } from "./utils/artifact-display";
 import { resolveTarget } from "./utils/target";
+import { generateTurnId } from "./utils/message-id";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import {
   extractTextFromJson,
@@ -68,6 +70,18 @@ type DispatchOptions = {
   signal?: AbortSignal;
   /** Pre-generated ID for the expected assistant response (for feedback tracking) */
   assistantMessageId?: string;
+  /**
+   * Per-turn composer selections. Rides the proxy/custom-backend and agent
+   * payloads as `composerOptions`; on the inline-agent path a selected model
+   * that `composer.models` declares also maps to that turn's `agent.model`.
+   * Client-token mode drops it: that route's agent is pinned server side.
+   */
+  composerOptions?: ComposerOptionsPayload;
+  /**
+   * Client-token only: this turn supersedes the in-flight one. Sends
+   * `submitMode: "interrupt"` so the server cancels the prior run.
+   */
+  interrupt?: boolean;
 };
 
 type SSEHandler = (event: AgentWidgetEvent) => void;
@@ -279,6 +293,11 @@ export class AgentWidgetClient {
   private onSSEEvent?: SSEEventCallback;
   
   // Client token mode properties
+  /**
+   * Turn id of the newest client-token dispatch. A dispatch whose id no longer
+   * matches is superseded, and every SSE frame it still receives is dropped
+   */
+  private currentClientTurnId: string | null = null;
   private clientSession: ClientSession | null = null;
   private sessionInitPromise: Promise<ClientSession> | null = null;
 
@@ -1705,6 +1724,18 @@ export class AgentWidgetClient {
    * Client token mode dispatch
    */
   private async dispatchClientToken(options: DispatchOptions, onEvent: SSEHandler) {
+    // Claim the turn before any await: a later dispatch that interrupts this one
+    // takes the claim, and every event this call still receives is then stale.
+    const turnId = generateTurnId();
+    this.currentClientTurnId = turnId;
+    const isCurrentTurn = () => this.currentClientTurnId === turnId;
+    // Terminal frames of a superseded run must not reopen the composer or paint
+    // into the new turn's bubble; status frames are equally misleading.
+    const forward: SSEHandler = (event) => {
+      if (!isCurrentTurn()) return;
+      onEvent(event);
+    };
+
     onEvent({ type: "status", status: "connecting" });
 
     try {
@@ -1717,7 +1748,7 @@ export class AgentWidgetClient {
         this.clearClientSession();
         this.config.onSessionExpired?.();
         const error = new Error('Session expired. Please refresh to continue.');
-        onEvent({ type: "error", error });
+        forward({ type: "error", error });
         throw error;
       }
 
@@ -1757,6 +1788,10 @@ export class AgentWidgetClient {
         ...(sanitizedMetadata && Object.keys(sanitizedMetadata).length > 0 && { metadata: sanitizedMetadata }),
         ...(basePayload.inputs && Object.keys(basePayload.inputs).length > 0 && { inputs: basePayload.inputs }),
         ...(basePayload.context && { context: basePayload.context }),
+        // Every client-token turn carries a turnId so the server can suppress a
+        // superseded run and this client can drop its stale events below.
+        turnId,
+        ...(options.interrupt && { submitMode: 'interrupt' as const }),
       };
 
       // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already
@@ -1792,13 +1827,13 @@ export class AgentWidgetClient {
           this.clearClientSession();
           this.config.onSessionExpired?.();
           const error = new Error('Session expired. Please refresh to continue.');
-          onEvent({ type: "error", error });
+          forward({ type: "error", error });
           throw error;
         }
 
         if (response.status === 429) {
           const error = new Error(data.hint || 'Message limit reached for this session.');
-          onEvent({ type: "error", error });
+          forward({ type: "error", error });
           throw error;
         }
 
@@ -1810,18 +1845,18 @@ export class AgentWidgetClient {
             'conversation_deleted',
             'This conversation was deleted'
           );
-          onEvent({ type: "error", error });
+          forward({ type: "error", error });
           throw error;
         }
 
         const error = new Error(data.error || 'Failed to send message');
-        onEvent({ type: "error", error });
+        forward({ type: "error", error });
         throw error;
       }
 
       if (!response.body) {
         const error = new Error('No response body received');
-        onEvent({ type: "error", error });
+        forward({ type: "error", error });
         throw error;
       }
 
@@ -1830,13 +1865,13 @@ export class AgentWidgetClient {
       // turns can send fingerprint-only.
       commitClientToolsFingerprint();
 
-      onEvent({ type: "status", status: "connected" });
-      
+      forward({ type: "status", status: "connected" });
+
       // Stream the response (same SSE handling as proxy mode)
       try {
-        await this.streamResponse(response.body, onEvent, options.assistantMessageId);
+        await this.streamResponse(response.body, forward, options.assistantMessageId);
       } finally {
-        onEvent({ type: "status", status: "idle" });
+        forward({ type: "status", status: "idle" });
       }
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
@@ -1846,7 +1881,7 @@ export class AgentWidgetClient {
         !err.message.includes('Session expired') &&
         !err.message.includes('Message limit')
       ) {
-        onEvent({ type: "error", error: err });
+        forward({ type: "error", error: err });
       }
       throw err;
     }
@@ -1858,7 +1893,10 @@ export class AgentWidgetClient {
   private async dispatchProxy(options: DispatchOptions, onEvent: SSEHandler) {
     onEvent({ type: "status", status: "connecting" });
 
-    const payload = await this.buildPayload(options.messages);
+    const payload = await this.buildPayload(
+      options.messages,
+      options.composerOptions
+    );
 
     if (this.debug) {
       // eslint-disable-next-line no-console
@@ -1929,7 +1967,10 @@ export class AgentWidgetClient {
   private async dispatchAgent(options: DispatchOptions, onEvent: SSEHandler) {
     onEvent({ type: "status", status: "connecting" });
 
-    const payload = await this.buildAgentPayload(options.messages);
+    const payload = await this.buildAgentPayload(
+      options.messages,
+      options.composerOptions
+    );
 
     if (this.debug) {
       // eslint-disable-next-line no-console
@@ -2326,8 +2367,43 @@ export class AgentWidgetClient {
     return Object.keys(contextAggregate).length ? contextAggregate : null;
   }
 
+  /**
+   * Non-empty composer selections only. An empty snapshot leaves the field off
+   * the wire entirely, so a widget with no picker and no modes sends exactly
+   * what it sent before.
+   */
+  private normalizeComposerOptions(
+    options: ComposerOptionsPayload | undefined
+  ): ComposerOptionsPayload | undefined {
+    if (!options) return undefined;
+    const normalized: ComposerOptionsPayload = {};
+    if (options.selectedModelId) normalized.selectedModelId = options.selectedModelId;
+    if (options.activeModeIds?.length) {
+      normalized.activeModeIds = [...options.activeModeIds];
+    }
+    return Object.keys(normalized).length > 0 ? normalized : undefined;
+  }
+
+  /**
+   * Rule 4: an inline client-defined agent may take the turn's model from the
+   * composer, but only for an id the host actually declared in
+   * `composer.models`. Config is untouched; the mapping is per request.
+   */
+  private applyInlineAgentModel(
+    agent: AgentWidgetAgentRequestPayload["agent"],
+    composerOptions: ComposerOptionsPayload | undefined
+  ): AgentWidgetAgentRequestPayload["agent"] {
+    const selected = composerOptions?.selectedModelId;
+    if (!selected || !("model" in agent)) return agent;
+    const declared = this.config.composer?.models?.some(
+      (model) => model.id === selected
+    );
+    return declared ? { ...agent, model: selected } : agent;
+  }
+
   private async buildAgentPayload(
-    messages: AgentWidgetMessage[]
+    messages: AgentWidgetMessage[],
+    composerOptions?: ComposerOptionsPayload
   ): Promise<AgentWidgetAgentRequestPayload> {
     const routedAgentId = this.routing().agentId;
     if (!this.config.agent && !routedAgentId) {
@@ -2351,8 +2427,12 @@ export class AgentWidgetClient {
         createdAt: message.createdAt
       }));
 
+    const composer = this.normalizeComposerOptions(composerOptions);
     const payload: AgentWidgetAgentRequestPayload = {
-      agent: this.config.agent ?? { agentId: routedAgentId! },
+      agent: this.applyInlineAgentModel(
+        this.config.agent ?? { agentId: routedAgentId! },
+        composer
+      ),
       messages: normalizedMessages,
       options: {
         streamResponse: true,
@@ -2360,6 +2440,7 @@ export class AgentWidgetClient {
         ...this.config.agentOptions
       }
     };
+    if (composer) payload.composerOptions = composer;
 
     // Client tools: built-in widget tools (ask_user_question, when exposed)
     // plus the per-turn WebMCP page-registry snapshot. Name collisions are
@@ -2383,7 +2464,8 @@ export class AgentWidgetClient {
   }
 
   private async buildPayload(
-    messages: AgentWidgetMessage[]
+    messages: AgentWidgetMessage[],
+    composerOptions?: ComposerOptionsPayload
   ): Promise<AgentWidgetRequestPayload> {
     // Filter out messages with empty content to prevent validation errors
     const normalizedMessages = messages
@@ -2434,6 +2516,12 @@ export class AgentWidgetClient {
 
     const contextAggregate = await this.buildContextAggregate(messages);
     if (contextAggregate) payload.context = contextAggregate;
+
+    // Its own field, never folded into `context`: a value in generic context
+    // does not change inference, and each transport must decide explicitly.
+    // Set before the middleware runs so hosts can read, rewrite, or drop it.
+    const composer = this.normalizeComposerOptions(composerOptions);
+    if (composer) payload.composerOptions = composer;
 
     if (this.requestMiddleware) {
       try {

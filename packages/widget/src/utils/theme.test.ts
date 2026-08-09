@@ -1009,6 +1009,63 @@ describe('theme utils', () => {
     expect(cssVars['--persona-composer-line-height']).toBe('1.5rem');
   });
 
+  it('defaults the composer control-size tokens to 40px and 24px', () => {
+    const cssVars = themeToCssVariables(createTheme());
+
+    expect(cssVars['--persona-composer-control-size']).toBe('40px');
+    expect(cssVars['--persona-composer-control-icon-size']).toBe('24px');
+  });
+
+  it('maps composer controlSize/controlIconSize to dedicated CSS variables', () => {
+    const theme = createTheme({
+      components: {
+        composer: { controlSize: '32px', controlIconSize: '18px' },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-composer-control-size']).toBe('32px');
+    expect(cssVars['--persona-composer-control-icon-size']).toBe('18px');
+  });
+
+  it('defaults the motion tokens', () => {
+    const cssVars = themeToCssVariables(createTheme());
+
+    expect(cssVars['--persona-motion-duration-fast']).toBe('120ms');
+    expect(cssVars['--persona-motion-duration-base']).toBe('200ms');
+    expect(cssVars['--persona-motion-easing']).toBe('cubic-bezier(0.2, 0, 0, 1)');
+  });
+
+  it('maps motion tokens to dedicated CSS variables', () => {
+    const theme = createTheme({
+      components: {
+        motion: {
+          durationFast: '80ms',
+          durationBase: '260ms',
+          easing: 'linear',
+        },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-motion-duration-fast']).toBe('80ms');
+    expect(cssVars['--persona-motion-duration-base']).toBe('260ms');
+    expect(cssVars['--persona-motion-easing']).toBe('linear');
+  });
+
+  it('accepts 0ms durations as a motion kill switch', () => {
+    const theme = createTheme({
+      components: { motion: { durationFast: '0ms', durationBase: '0ms' } },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-motion-duration-fast']).toBe('0ms');
+    expect(cssVars['--persona-motion-duration-base']).toBe('0ms');
+  });
+
   it('maps scroll-to-bottom component tokens to dedicated CSS variables', () => {
     const theme = createTheme({
       components: {

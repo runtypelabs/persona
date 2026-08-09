@@ -293,6 +293,58 @@ describe("launcher icon styles", () => {
   });
 });
 
+describe("composer control size styles", () => {
+  it("sizes every composer control box from the control-size token with a 40px fallback", () => {
+    const start = widgetCss.indexOf(".persona-composer-control {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    for (const property of ["width", "height", "min-width", "min-height"]) {
+      expect(rule).toContain(
+        `${property}: var(--persona-composer-control-size, 40px)`,
+      );
+    }
+  });
+
+  it("sizes control glyphs from the control-icon-size token with a 24px fallback", () => {
+    const start = widgetCss.indexOf(".persona-composer-control--glyph > svg {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "width: var(--persona-composer-control-icon-size, 24px)",
+    );
+    expect(rule).toContain(
+      "height: var(--persona-composer-control-icon-size, 24px)",
+    );
+  });
+
+  it("keeps text-label action buttons on the token height while width follows padding", () => {
+    const selector =
+      ".persona-composer-control.persona-composer-action-button--text {";
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("width: auto");
+    expect(rule).toContain("min-width: 0");
+    // Height is deliberately absent: the base rule's token height still wins.
+    expect(rule).not.toContain("height:");
+  });
+
+  it("floors the hit area at 40px on coarse pointers", () => {
+    const start = widgetCss.indexOf(
+      "@media (pointer: coarse) {\n  .persona-composer-control {",
+    );
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n  }", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("min-width: 40px");
+    expect(rule).toContain("min-height: 40px");
+  });
+});
+
+
 describe("transcript layout styles", () => {
   it("drops the empty messages wrapper from the flex flow", () => {
     // A zero-height flex child still triggers the body's gap, so an empty
@@ -511,5 +563,295 @@ describe("conversation-open skeleton styles", () => {
     expect(trailingRule).toContain(
       "border-radius: var(--persona-message-user-radius, var(--persona-radius-lg, 0.5rem))",
     );
+  });
+});
+
+describe("overflow menu row shading", () => {
+  it("shades a folded built-in row on a focus attribute, never on plain focus-within", () => {
+    // `:focus-within` matches the programmatic focus `open()` puts on the first
+    // row, so a mouse-opened menu would shade whichever row sorts first.
+    expect(widgetCss).toContain(
+      ".persona-composer-overflow-menu__slot[data-persona-menu-focus]"
+    );
+    expect(widgetCss).not.toContain(
+      ".persona-composer-overflow-menu__slot:focus-within"
+    );
+  });
+
+  it("keeps both row kinds on the same hover plus visible-focus pair", () => {
+    expect(widgetCss).toContain(".persona-composer-overflow-menu__item:hover");
+    expect(widgetCss).toContain(
+      ".persona-composer-overflow-menu__item:focus-visible"
+    );
+    expect(widgetCss).toContain(".persona-composer-overflow-menu__slot:hover");
+  });
+});
+
+describe("composer control focus rings", () => {
+  /** The rule body following a selector, up to its closing brace. */
+  const ruleFor = (selector: string): string => {
+    const at = widgetCss.indexOf(selector);
+    expect(at, `selector not found: ${selector}`).toBeGreaterThan(-1);
+    return widgetCss.slice(at, widgetCss.indexOf("}", at));
+  };
+
+  it("draws the composer focus ring inside the border box", () => {
+    // Composer controls sit in fixed-gap clusters, so an outward ring grows the
+    // control's footprint and fuses it with its neighbour.
+    const rule = ruleFor(
+      "[data-persona-root] .persona-composer-control:focus-visible"
+    );
+    expect(rule).toContain(".persona-composer-model-picker:focus-visible");
+    expect(rule).toContain("outline-offset: -2px");
+    expect(rule).not.toContain("outline-offset: 2px");
+  });
+
+  it("hangs the composer focus ring off the input focus-ring token", () => {
+    expect(
+      ruleFor("[data-persona-root] .persona-composer-control:focus-visible")
+    ).toContain("--persona-components-input-focus-ring");
+  });
+
+  it("suppresses the control ring inside a menu row, where the row shades", () => {
+    expect(
+      ruleFor(
+        ".persona-composer-overflow-menu__slot .persona-composer-control:focus-visible"
+      )
+    ).toContain("outline: none");
+  });
+});
+
+describe("model picker chevron", () => {
+  const ruleFor = (selector: string): string => {
+    const at = widgetCss.indexOf(selector);
+    expect(at, `selector not found: ${selector}`).toBeGreaterThan(-1);
+    return widgetCss.slice(at, widgetCss.indexOf("}", at));
+  };
+
+  it("drops the platform chevron", () => {
+    // Chrome draws the UA arrow flush against the trailing edge and ignores
+    // padding-inline-end, so padding alone cannot clear it.
+    const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    expect(rule).toContain("appearance: none");
+    expect(rule).toContain("-webkit-appearance: none");
+  });
+
+  it("reserves a logical gutter for the chevron and keeps text start-aligned", () => {
+    const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    expect(rule).toContain("padding-inline-start: 0.625rem");
+    expect(rule).toContain("padding-inline-end: 1.75rem");
+    // Zero: the control-size token owns the height, not padding math.
+    expect(rule).toContain("padding-block: 0;");
+    expect(rule).toContain("text-align: start");
+    // Physical padding would not flip under RTL.
+    expect(rule).not.toContain("padding-right:");
+    expect(rule).not.toContain("padding-left:");
+  });
+
+  it("truncates a long label instead of running it under the chevron", () => {
+    const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    expect(rule).toContain("text-overflow: ellipsis");
+    expect(rule).toContain("overflow: hidden");
+    expect(rule).toContain("white-space: nowrap");
+    expect(rule).toContain("max-width");
+  });
+
+  it("colors the chevron from the theme token, never a baked-in hex", () => {
+    const rule = ruleFor(".persona-composer-model-picker-chevron");
+    expect(rule).toContain("background-color: var(--persona-button-ghost-fg");
+    // The mask only needs opaque alpha, so the SVG's own stroke is not a color.
+    expect(rule).toContain("mask-image");
+    expect(rule).toContain("-webkit-mask-image");
+    expect(rule).not.toMatch(/stroke='%23[0-9a-fA-F]{3,6}'/);
+  });
+
+  it("uses the same lucide chevron-down geometry as the icon registry", () => {
+    expect(ruleFor(".persona-composer-model-picker-chevron")).toContain(
+      "m6 9 6 6 6-6"
+    );
+  });
+
+  it("positions the chevron logically so it flips under RTL", () => {
+    const rule = ruleFor(".persona-composer-model-picker-chevron");
+    // `end` and `margin-inline-end` resolve against the inline axis, so dir=rtl
+    // moves the chevron to the left edge with no physical override.
+    expect(rule).toContain("justify-self: end");
+    expect(rule).toContain("margin-inline-end: 0.625rem");
+    expect(rule).not.toContain("right:");
+    expect(rule).not.toContain("margin-right");
+  });
+
+  it("stacks the chevron over the select without stealing its clicks", () => {
+    expect(ruleFor(".persona-composer-model-picker-wrapper {")).toContain(
+      "display: inline-grid"
+    );
+    expect(ruleFor(".persona-composer-model-picker-wrapper > *")).toContain(
+      "grid-area: 1 / 1"
+    );
+    expect(ruleFor(".persona-composer-model-picker-chevron")).toContain(
+      "pointer-events: none"
+    );
+  });
+
+  it("keeps the focus ring on the select, which paints the visible pill", () => {
+    const rule = ruleFor(
+      "[data-persona-root] .persona-composer-control:focus-visible"
+    );
+    expect(rule).toContain(".persona-composer-model-picker:focus-visible");
+    expect(rule).toContain("outline-offset: -2px");
+  });
+});
+
+describe("model picker height", () => {
+  const ruleFor = (selector: string): string => {
+    const at = widgetCss.indexOf(selector);
+    expect(at, `selector not found: ${selector}`).toBeGreaterThan(-1);
+    return widgetCss.slice(at, widgetCss.indexOf("}", at));
+  };
+
+  const TOKEN = "var(--persona-composer-control-size, 40px)";
+
+  it("rides the control-size token with a 40px fallback", () => {
+    const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    expect(rule).toContain(`height: ${TOKEN}`);
+    expect(rule).toContain(`min-height: ${TOKEN}`);
+  });
+
+  it("keeps its width intrinsic, like a shortLabel action button", () => {
+    const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    expect(rule).toContain("width: auto");
+    expect(rule).toContain("min-width: 0");
+    expect(rule).toContain("max-width");
+  });
+
+  it("centers the label with a full-height line box, not padding", () => {
+    const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    expect(rule).toContain(`line-height: ${TOKEN}`);
+    expect(rule).toContain("padding-block: 0;");
+    // The dropdown rows must not inherit the tall line box.
+    expect(
+      ruleFor("[data-persona-root] .persona-composer-model-picker option")
+    ).toContain("line-height: normal");
+  });
+
+  it("computes the same height as a text-label action button at any token value", () => {
+    // Parity is the expression, not a pixel: both read the same token with the
+    // same fallback, and both take their width from their label.
+    const picker = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    const control = ruleFor(".persona-composer-control {");
+    const textButton = ruleFor(
+      ".persona-composer-control.persona-composer-action-button--text"
+    );
+    expect(control).toContain(`height: ${TOKEN}`);
+    expect(control).toContain(`min-height: ${TOKEN}`);
+    expect(picker).toContain(`height: ${TOKEN}`);
+    expect(picker).toContain(`min-height: ${TOKEN}`);
+    expect(textButton).toContain("width: auto");
+    expect(textButton).toContain("min-width: 0");
+    expect(picker).toContain("width: auto");
+    expect(picker).toContain("min-width: 0");
+  });
+
+  it("floors the picker at a 40px hit area on a coarse pointer", () => {
+    const block = widgetCss.match(
+      /@media \(pointer: coarse\) \{\s*\[data-persona-root\] \.persona-composer-model-picker \{[^}]*\}/
+    );
+    expect(block, "no coarse-pointer floor for the model picker").not.toBeNull();
+    expect(block![0]).toContain("min-height: 40px");
+    expect(block![0]).toContain("min-width: 40px");
+  });
+
+  it("centers the chevron at any token value from the wrapper, not a fixed offset", () => {
+    // The row is as tall as the select (the token), so centering follows the
+    // token at 32px or 44px with no per-size rule.
+    const wrapper = ruleFor(".persona-composer-model-picker-wrapper {");
+    expect(wrapper).toContain("align-items: center");
+    const chevron = ruleFor(".persona-composer-model-picker-chevron");
+    expect(chevron).not.toContain("top:");
+    expect(chevron).not.toContain("margin-block");
+  });
+});
+
+describe("composer motion", () => {
+  /** Every `@media (prefers-reduced-motion: no-preference)` block, joined. */
+  const reducedMotionSafeCss = (): string => {
+    const out: string[] = [];
+    const marker = "@media (prefers-reduced-motion: no-preference)";
+    let from = widgetCss.indexOf(marker);
+    while (from !== -1) {
+      // Brace-match the block so nested rules are captured whole.
+      let depth = 0;
+      let i = widgetCss.indexOf("{", from);
+      const start = i;
+      for (; i < widgetCss.length; i += 1) {
+        if (widgetCss[i] === "{") depth += 1;
+        else if (widgetCss[i] === "}") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+      }
+      out.push(widgetCss.slice(start, i + 1));
+      from = widgetCss.indexOf(marker, i);
+    }
+    return out.join("\n");
+  };
+
+  const safe = reducedMotionSafeCss();
+
+  it("gates every new animation behind prefers-reduced-motion", () => {
+    for (const marker of [
+      "persona-mic-pulse",
+      "persona-mic-spin",
+      "persona-chip-enter",
+      "persona-chip-exit",
+    ]) {
+      // The keyframes themselves are global (a keyframes block cannot live in a
+      // media query and still be referenced outside it); what matters is that
+      // nothing REFERENCES them outside the guarded block.
+      const references = widgetCss
+        .split(new RegExp(`animation:\\s*${marker}`))
+        .length - 1;
+      const guarded = safe.split(new RegExp(`animation:\\s*${marker}`)).length - 1;
+      expect(references, `${marker} referenced`).toBeGreaterThan(0);
+      expect(guarded, `${marker} guarded`).toBe(references);
+    }
+  });
+
+  it("gates the composer transitions behind prefers-reduced-motion", () => {
+    expect(safe).toContain(".persona-composer-action-button {");
+    expect(safe).toContain("transition:");
+    expect(safe).toContain("transform: scale(0.97)");
+    expect(safe).toContain(".persona-composer-glyph-stack > [data-glyph]");
+  });
+
+  it("drives every composer animation off the motion tokens", () => {
+    // A 0ms token is the documented kill switch, so nothing may hardcode a
+    // duration or curve.
+    for (const rule of safe.split("transition:").slice(1)) {
+      const decl = rule.split(";")[0];
+      expect(decl).toContain("var(--persona-motion-duration-");
+      expect(decl).toContain("var(--persona-motion-easing");
+    }
+    expect(safe).toContain("var(--persona-motion-duration-base, 200ms)");
+    expect(safe).toContain("var(--persona-motion-duration-fast, 120ms)");
+  });
+
+  it("keeps exactly one stacked glyph visible by attribute", () => {
+    // Visibility is opacity keyed off data-mode, and it is NOT inside the
+    // reduced-motion block: the state must swap visibly either way.
+    expect(widgetCss).toContain(".persona-composer-glyph-stack > [data-glyph] {");
+    expect(widgetCss).toContain(
+      '.persona-composer-glyph-stack[data-mode="send"] > [data-glyph="send"]'
+    );
+    const at = widgetCss.indexOf(
+      '.persona-composer-glyph-stack[data-mode="send"] > [data-glyph="send"]'
+    );
+    expect(widgetCss.slice(at, widgetCss.indexOf("}", at))).toContain("opacity: 1");
+  });
+
+  it("colors the recording pulse from the voice token chain", () => {
+    const at = widgetCss.indexOf("@keyframes persona-mic-pulse");
+    const block = widgetCss.slice(at, widgetCss.indexOf("\n}", at));
+    expect(block).toContain("var(--persona-voice-recording-bg");
   });
 });

@@ -173,7 +173,7 @@ export const THEME_TOKEN_DOCS = {
         'Shared scrollbar appearance for every scroller: thumb (default semantic.colors.border), track (default transparent).',
       reasoningBubble: 'shadow: reasoning/thinking row box-shadow.',
       composer:
-        'Message input form: shadow (box-shadow), borderColor, padding (form inset), gap (textarea row to actions row), fontSize and lineHeight (textarea type).',
+        'Message input form: shadow (box-shadow), borderColor, padding (form inset), gap (textarea row to actions row), fontSize and lineHeight (textarea type), controlSize (edge of every icon control in the action row: attachment, mention, mic, action buttons, overflow trigger, icon-mode send; default 40px) and controlIconSize (glyph inside them, default 24px). Per-control config keys (sendButton.size, voiceRecognition.iconSize) override controlSize; coarse-pointer devices floor the hit area at 40px.',
       artifact:
         'toolbar (icon styling, copy menu), tab (background, active states), pane (background, toolbarBackground).',
     },
@@ -291,9 +291,10 @@ export const THEME_TOKEN_DOCS = {
     suggestionChips:
       'Deprecated string[] shorthand for starter prompts. Prefer suggestions.starters.items.',
     messageActions: {
-      description: 'Message action buttons (copy, upvote, downvote).',
+      description:
+        'Message action buttons (copy, upvote, downvote, read aloud, regenerate, edit, quote).',
       properties:
-        'enabled, showCopy, showUpvote, showDownvote, visibility ("hover" | "always"), align ("left" | "center" | "right"), layout ("pill-inside" | "row-inside").',
+        'enabled, showCopy, showUpvote, showDownvote, showReadAloud, showRegenerate (final retryable assistant turn only), showEdit (text-only user messages only), showQuote, visibility ("hover" | "always"), align ("left" | "center" | "right"), layout ("pill-inside" | "row-inside").',
     },
     attachments: {
       description: 'File attachment configuration.',

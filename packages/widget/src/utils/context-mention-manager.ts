@@ -9,6 +9,7 @@ import type {
   ContentPart,
 } from "../types";
 import { createMentionChip, type MentionChipParts } from "../components/context-mention-chip";
+import { syncComposerChipRow } from "../components/composer-chip-row";
 import { formatMentionBlock } from "./mention-llm-format";
 
 interface PendingMention {
@@ -65,7 +66,10 @@ export interface MentionSubmitBundle {
 
 export interface ContextMentionManagerOptions {
   mentionConfig: AgentWidgetContextMentionConfig;
-  /** The composer context row chips render into (created by the core orchestrator). */
+  /**
+   * The composer chip row chips render into (passed down by the core
+   * orchestrator). Shared with the mode chips, which lead the row.
+   */
   contextRow: HTMLElement;
   getMessages: () => AgentWidgetMessage[];
   getConfig: () => AgentWidgetConfig;
@@ -137,6 +141,14 @@ export class ContextMentionManager {
       config: this.opts.mentionConfig,
       onRemove: () => this.remove(key),
     });
+    // Mention chips are always new when appended (a rebuild clears them with
+    // the orchestrator), so the entrance is unconditional here.
+    pending.chip.el.setAttribute("data-persona-chip-enter", "");
+    pending.chip.el.addEventListener(
+      "animationend",
+      () => pending.chip?.el.removeAttribute("data-persona-chip-enter"),
+      { once: true }
+    );
     this.opts.contextRow.appendChild(pending.chip.el);
     // startPending pushes into this.mentions, which updateRowVisibility reads —
     // reversed order left the row hidden until the second chip.
@@ -281,6 +293,11 @@ export class ContextMentionManager {
     this.opts.announce(`Removed ${pending.ref.label} from context`);
   }
 
+  /** Currently tracked refs, in order. Read-only: does not detach anything. */
+  getRefs(): AgentWidgetContextMentionRef[] {
+    return this.mentions.map((m) => m.ref);
+  }
+
   /** Remove the most recently added chip (Backspace on an empty composer). */
   removeLast(): boolean {
     const last = this.mentions[this.mentions.length - 1];
@@ -404,7 +421,11 @@ export class ContextMentionManager {
     return { refs, finalize };
   }
 
+  /**
+   * The row is shared with the composer's mode chips, so visibility follows the
+   * row's children, never this manager's mention count.
+   */
   private updateRowVisibility(): void {
-    this.opts.contextRow.style.display = this.mentions.length > 0 ? "flex" : "none";
+    syncComposerChipRow(this.opts.contextRow);
   }
 }

@@ -55,14 +55,19 @@ describe("buildPillComposer (single-row pill composer)", () => {
     expect(elements.rightActions.contains(elements.micButtonWrapper!)).toBe(true);
   });
 
-  it("places the previews container ABOVE the pill (in the footer, before the form)", () => {
+  it("places the previews container ABOVE the pill, inside the header region", () => {
     const elements = buildPillComposer({
       config: { apiUrl: "/api", attachments: { enabled: true } },
     });
     const footerChildren = Array.from(elements.footer.children);
-    expect(footerChildren.indexOf(elements.attachmentPreviewsContainer!)).toBeLessThan(
+    expect(footerChildren.indexOf(elements.header)).toBeLessThan(
       footerChildren.indexOf(elements.composerForm)
     );
+    expect(elements.header.contains(elements.attachmentPreviewsContainer!)).toBe(
+      true
+    );
+    // `display: contents`, so an empty header adds no row to the footer stack.
+    expect(elements.header.style.display).toBe("contents");
     expect(elements.attachmentPreviewsContainer!.classList.contains("persona-pill-composer__previews")).toBe(true);
   });
 
@@ -79,12 +84,13 @@ describe("buildPillComposer (single-row pill composer)", () => {
     expect(formChildren[2]).toBe(elements.rightActions);
   });
 
-  it("keeps its 100px max-height cap, even under a themed line height", () => {
+  it("caps growth at 5 lines, re-derived from the themed line height", () => {
     const elements = buildPillComposer({ config: { apiUrl: "/api" } });
+    // 5 lines at the 20px fallback, before the element can be measured.
     expect(elements.textarea.style.maxHeight).toBe("100px");
 
-    // A themed line height must not re-derive the cap: the pill's explicit
-    // post-construction override wins over the 3-line default.
+    // A themed line height re-derives the cap: the pill is line-based now, not
+    // a hardcoded 100px.
     elements.textarea.style.lineHeight = "24px";
     document.body.appendChild(elements.textarea);
     Object.defineProperty(elements.textarea, "scrollHeight", {
@@ -92,9 +98,16 @@ describe("buildPillComposer (single-row pill composer)", () => {
       value: 10000,
     });
     elements.textarea.dispatchEvent(new Event("input"));
-    expect(elements.textarea.style.maxHeight).toBe("100px");
-    expect(elements.textarea.style.height).toBe("100px");
+    expect(elements.textarea.style.maxHeight).toBe("120px");
+    expect(elements.textarea.style.height).toBe("120px");
     document.body.removeChild(elements.textarea);
+  });
+
+  it("honors composer.maxLines in the pill", () => {
+    const elements = buildPillComposer({
+      config: { apiUrl: "/api", composer: { maxLines: 2 } },
+    });
+    expect(elements.textarea.style.maxHeight).toBe("40px");
   });
 
   it("returns null for optional controls when disabled (matching ComposerElements contract)", () => {

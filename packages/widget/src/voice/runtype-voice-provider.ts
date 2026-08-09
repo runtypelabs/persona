@@ -30,6 +30,12 @@ import { AudioPlaybackManager } from "./audio-playback-manager";
 const CAPTURE_SAMPLE_RATE = 16000;
 const PLAYBACK_SAMPLE_RATE = 24000;
 const CAPTURE_BUFFER_SIZE = 4096;
+/**
+ * RMS-to-0..1 gain for the published capture level. Conversational speech sits
+ * around 0.05 to 0.3 RMS, so the raw value would never leave the bottom of the
+ * range; this maps a normal voice to roughly the middle.
+ */
+const LEVEL_RMS_SCALE = 4;
 const RIFF_MAGIC = 0x52494646; // "RIFF"
 
 /**
@@ -62,6 +68,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   private ws: WebSocket | null = null;
   private captureContext: AudioContext | null = null;
+  private levelCallbacks: ((level: number) => void)[] = [];
   private mediaStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private processor: ScriptProcessorNode | null = null;
@@ -242,6 +249,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /** "Hang up" the always-on mic. */
+  onLevel(callback: (level: number) => void): void {
+    this.levelCallbacks.push(callback);
+  }
+
   async deactivateBargeIn(): Promise<void> {
     this.cleanup();
     this.emitStatus("idle");
@@ -265,11 +276,21 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       if (ws.readyState !== WebSocket.OPEN) return;
       const input = e.inputBuffer.getChannelData(0);
       const pcm16 = new Int16Array(input.length);
+      let sumSquares = 0;
       for (let i = 0; i < input.length; i++) {
         const s = Math.max(-1, Math.min(1, input[i]));
+        sumSquares += s * s;
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
       ws.send(pcm16.buffer);
+      // Amplitude comes free from the buffer we already walked: no analyser
+      // node, no second capture. RMS is scaled because speech rarely exceeds
+      // ~0.3 RMS, so raw values would sit near the bottom of the 0..1 range.
+      if (this.levelCallbacks.length > 0) {
+        const rms = Math.sqrt(sumSquares / input.length);
+        const level = Math.max(0, Math.min(1, rms * LEVEL_RMS_SCALE));
+        for (const cb of this.levelCallbacks) cb(level);
+      }
     };
 
     source.connect(processor);

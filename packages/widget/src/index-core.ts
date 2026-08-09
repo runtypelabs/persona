@@ -72,6 +72,41 @@ export type {
   // Attachment config type
   AgentWidgetAttachmentsConfig,
   AgentWidgetComposerConfig,
+  // Composer state + submission snapshot (controller.getComposerState,
+  // persona:composer:state, composer.onBeforeSend)
+  ComposerState,
+  ComposerPhase,
+  ComposerAttachmentState,
+  ComposerQuote,
+  ComposerSubmissionSnapshot,
+  ComposerSubmissionOptions,
+  ComposerBeforeSendResult,
+  // History + asynchronous interaction (session.resubmitFrom,
+  // composer.streamingSubmitBehavior, persisted drafts)
+  ComposerResubmitOptions,
+  ComposerStreamingSubmitBehavior,
+  AgentWidgetStoredDraft,
+  // Composer action registry (composer.actions, contributeComposerActions)
+  ComposerAction,
+  ComposerActionBase,
+  ComposerActionPlacement,
+  ComposerActionPresentation,
+  ComposerButtonAction,
+  ComposerCustomAction,
+  ComposerActionContext,
+  ComposerActionRenderContext,
+  ComposerActionContributionContext,
+  ComposerActionOverflowConfig,
+  // Composer modes + mode groups (composer.modes, composer.modeGroups)
+  ComposerMode,
+  ComposerModeGroup,
+  // Composer baseline configuration (submit keys, sizing, locks)
+  ComposerSubmitKey,
+  ComposerInputAttributes,
+  ComposerDisabledOption,
+  // Attachment upload adapter (attachments.adapter)
+  AgentWidgetAttachmentAdapter,
+  AttachmentUploadContext,
   // Layout types
   AgentWidgetLayoutConfig,
   AgentWidgetHeaderLayoutConfig,

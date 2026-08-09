@@ -53,6 +53,16 @@ describe("createMentionButton", () => {
     expect(button.querySelector("svg")!.innerHTML).toBe(refIcon("at-sign"));
   });
 
+  it("leaves the box to the control-size token instead of an inline 40px square", () => {
+    const { button } = createMentionButton({ config: config(), onOpen: vi.fn() });
+    expect(button.classList.contains("persona-composer-control")).toBe(true);
+    expect(button.classList.contains("persona-composer-control--glyph")).toBe(true);
+    expect(button.style.width).toBe("");
+    expect(button.style.height).toBe("");
+    expect(button.style.minWidth).toBe("");
+    expect(button.style.minHeight).toBe("");
+  });
+
   it("stops the click from bubbling so the composer's focus-textarea handler never runs", () => {
     const parent = document.createElement("form");
     const parentClick = vi.fn();
