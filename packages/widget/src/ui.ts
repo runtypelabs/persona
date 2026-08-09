@@ -441,7 +441,7 @@ function normalizePersistStateConfig(
   config: boolean | { storage?: 'local' | 'session'; keyPrefix?: string; persist?: { openState?: boolean; voiceState?: boolean; focusInput?: boolean }; clearOnChatClear?: boolean } | undefined
 ): NormalizedPersistConfig | null {
   if (!config) return null;
-  
+
   if (config === true) {
     // Use defaults
     return {
@@ -455,7 +455,7 @@ function normalizePersistStateConfig(
       clearOnChatClear: true
     };
   }
-  
+
   // Object config - merge with defaults
   return {
     storage: config.storage ?? 'session',
@@ -1305,7 +1305,7 @@ export const createAgentExperience = (
       config.messageActions?.onFeedback?.(feedback);
     }
   };
-  
+
   // Get status indicator config
   const statusConfig = config.statusIndicator ?? {};
   const _getStatusText = (status: AgentWidgetSessionStatus): string => {
@@ -2474,21 +2474,21 @@ export const createAgentExperience = (
   // This handles clicks even after idiomorph morphs the DOM
   const handleBubbleExpansion = (event: Event) => {
     const target = event.target as HTMLElement;
-    
+
     // Check if the click/keypress is on an expand header button
     const headerButton = target.closest('button[data-expand-header="true"]') as HTMLElement;
     if (!headerButton) return;
-    
+
     // Find the parent bubble element
     const bubble = headerButton.closest('.persona-reasoning-bubble, .persona-tool-bubble, .persona-approval-bubble') as HTMLElement;
     if (!bubble) return;
-    
+
     // Get message ID from bubble
     const messageId = bubble.getAttribute('data-message-id');
     if (!messageId) return;
-    
+
     const bubbleType = headerButton.getAttribute('data-bubble-type');
-    
+
     // Toggle expansion state
     if (bubbleType === 'reasoning') {
       if (reasoningExpansionState.has(messageId)) {
@@ -4036,7 +4036,7 @@ export const createAgentExperience = (
         body.scrollTop = Math.min(prevBodyScrollTop, maxScrollTop);
       });
     };
-    
+
     // Mobile fullscreen: fill entire viewport with no radius/shadow/margins
     if (shouldGoFullscreen) {
       // Remove position offset classes
@@ -4196,7 +4196,7 @@ export const createAgentExperience = (
       if (isInlineEmbed) {
         mount.style.width = '100%';
       }
-      
+
       // Wrapper
       // - Inline embed: needs overflow:hidden to contain the flex layout
       // - Launcher mode: no overflow:hidden to allow panel's box-shadow to render fully
@@ -4209,7 +4209,7 @@ export const createAgentExperience = (
       if (isInlineEmbed) {
         wrapper.style.overflow = 'hidden';
       }
-      
+
       // Panel
       panel.style.display = 'flex';
       panel.style.flexDirection = 'column';
@@ -4228,12 +4228,12 @@ export const createAgentExperience = (
       container.style.minHeight = '0';
       container.style.maxHeight = '100%';
       container.style.overflow = 'hidden';
-      
+
       // Body (scrollable messages area)
       body.style.flex = '1 1 0%';
       body.style.minHeight = '0';
       body.style.overflowY = 'auto';
-      
+
       // Footer (composer) - should not shrink
       footer.style.flexShrink = '0';
     }
@@ -4256,13 +4256,13 @@ export const createAgentExperience = (
       'persona-bottom-6', 'persona-right-6', 'persona-left-6', 'persona-top-6',
       'persona-bottom-4', 'persona-right-4', 'persona-left-4', 'persona-top-4'
     );
-    
+
     if (!sidebarMode && !isInlineEmbed && !dockedMode) {
       // Restore positioning classes when not in sidebar mode (launcher mode only)
       const positionClasses = positionMap[position as keyof typeof positionMap] ?? positionMap['bottom-right'];
       positionClasses.split(' ').forEach(cls => wrapper.classList.add(cls));
     }
-    
+
     // Apply sidebar-specific styles
     if (sidebarMode) {
       const sidebarWidth = config.launcher?.sidebarWidth ?? '420px';
@@ -4300,7 +4300,7 @@ export const createAgentExperience = (
           ${isLeftSidebar ? 'left: 0 !important; right: auto !important;' : 'left: auto !important; right: 0 !important;'}
         `;
       }
-      
+
       // Panel - fill wrapper (override inline width/max-width from panel.ts)
       // Box-shadow is on panel to avoid rendering artifacts with container's overflow:hidden
       // Border-radius on panel ensures shadow follows rounded corners
@@ -4339,7 +4339,7 @@ export const createAgentExperience = (
         ${detachedSplitActive && !chatFlush ? `box-shadow: ${chatCardShadow} !important;` : ''}
         ${chatFlush ? 'background: transparent !important;' : ''}
       `;
-      
+
       // Remove footer border in sidebar mode (never on a plugin footer: see
       // the cssText reset above)
       if (!composerIsPluginOwned) footer.style.cssText = `
@@ -4349,7 +4349,7 @@ export const createAgentExperience = (
         ${chatFlush ? 'background: transparent !important;' : ''}
       `;
     }
-    
+
     // Apply max-height constraints to wrapper to prevent expanding past viewport top
     // Use both -moz-available (Firefox) and stretch (standard) for cross-browser support
     // Append to cssText to allow multiple fallback values for the same property
@@ -5021,7 +5021,7 @@ export const createAgentExperience = (
   };
 
   const getMessagesForPersistence = () =>
-    session 
+    session
       ? stripStreamingFromMessages(session.getMessages()).filter(msg => !(msg as any).__skipPersist)
       : [];
 
@@ -6703,7 +6703,7 @@ export const createAgentExperience = (
     const hasStreamingAssistantMessage = messages.some(
       (msg) => msg.role === "assistant" && msg.streaming
     );
-    
+
     // Also check if there's a recently completed assistant message (streaming just ended)
     // This prevents flicker when the message completes but isStreaming hasn't updated yet
     // Approval-variant messages are UI controls, not content: exclude them so the typing
@@ -7525,7 +7525,7 @@ export const createAgentExperience = (
   const setOpenState = (nextOpen: boolean, source: "user" | "auto" | "api" | "system" = "user") => {
     if (!isPanelToggleable()) return;
     if (open === nextOpen) return;
-    
+
     const prevOpen = open;
     open = nextOpen;
     updateOpenState();
@@ -7591,13 +7591,13 @@ export const createAgentExperience = (
       source,
       timestamp: Date.now()
     };
-    
+
     if (open && !prevOpen) {
       eventBus.emit("widget:opened", stateEvent);
     } else if (!open && prevOpen) {
       eventBus.emit("widget:closed", stateEvent);
     }
-    
+
     // Emit general state snapshot
     eventBus.emit("widget:state", {
       open,
@@ -7607,7 +7607,7 @@ export const createAgentExperience = (
     });
   };
 
-  // --- Composer locks (docs/composer-gap-analysis.md section 7.4) ------------
+  // --- Composer locks ------------
   // Streaming is NOT a lock: it turns the primary button into Stop and keeps
   // the input editable. `inputDisabled` locks composition; `sendDisabled`
   // blocks every submission path while composition stays available.
@@ -11195,7 +11195,7 @@ export const createAgentExperience = (
   };
 
   /**
-   * The one submission path (docs/composer-gap-analysis.md section 4). Every
+   * The one submission path. Every
    * send — form submit, Enter, suggestion, dictation, plugin composer,
    * controller — runs these steps against a single immutable snapshot:
    *
@@ -11889,12 +11889,12 @@ export const createAgentExperience = (
       // Build the complete transcript from all results
       let fullTranscript = "";
       let interimTranscript = "";
-      
+
       // Process all results from the beginning
       for (let i = 0; i < event.results.length; i++) {
         const result = event.results[i];
         const transcript = result[0].transcript;
-        
+
         if (result.isFinal) {
           fullTranscript += transcript + " ";
         } else {
@@ -11902,7 +11902,7 @@ export const createAgentExperience = (
           interimTranscript = transcript;
         }
       }
-      
+
       // Update textarea with initial text + full transcript + interim
       const newValue = initialText + fullTranscript + interimTranscript;
       textarea.value = newValue;
@@ -11995,11 +11995,11 @@ export const createAgentExperience = (
             svg.setAttribute("stroke", recordingIconColor);
           }
         }
-        
+
         if (recordingBorderColor) {
           micButton.style.borderColor = recordingBorderColor;
         }
-        
+
         micButton.setAttribute("aria-label", "Stop voice recognition");
       }
     } catch (error) {
@@ -12041,16 +12041,16 @@ export const createAgentExperience = (
         micButton.style.backgroundColor = originalMicStyles.backgroundColor;
         micButton.style.color = originalMicStyles.color;
         micButton.style.borderColor = originalMicStyles.borderColor;
-        
+
         // Restore SVG stroke color if present
         const svg = micButton.querySelector("svg");
         if (svg) {
           svg.setAttribute("stroke", originalMicStyles.color || "currentColor");
         }
-        
+
         originalMicStyles = null;
       }
-      
+
       micButton.setAttribute("aria-label", "Start voice recognition");
     }
   };
@@ -12333,7 +12333,7 @@ export const createAgentExperience = (
   // Plugin hook: renderLauncher - allow plugins to provide custom launcher
   let launcherSurfaceInstance: LauncherSurface | null = null;
   let customLauncherElement: HTMLElement | null = null;
-  
+
   // Composer-bar mode is launcher-less by design: the persistent pill IS the
   // entry point, so skip creating any launcher button (default or plugin).
   if (launcherEnabled && !isComposerBar()) {
@@ -13438,7 +13438,7 @@ export const createAgentExperience = (
           iconHolder.style.display = "";
           iconHolder.style.height = headerIconSize;
           iconHolder.style.width = headerIconSize;
-          
+
           // Ensure iconHolder is before headerCopy in header
           if (headerEl && headerCopy) {
             if (!headerEl.contains(iconHolder)) {
@@ -13449,7 +13449,7 @@ export const createAgentExperience = (
               headerEl.insertBefore(iconHolder, headerCopy);
             }
           }
-          
+
           // Update icon content based on priority: Lucide icon > iconUrl > agentIconText
           if (headerIconName) {
             // Use Lucide icon. Stroke `currentColor` (not a hardcoded white) so the
@@ -13491,7 +13491,7 @@ export const createAgentExperience = (
             }
             iconHolder.textContent = launcher.agentIconText ?? "💬";
           }
-          
+
           // Update image size if present
           const img = iconHolder.querySelector("img");
           if (img) {
@@ -13529,16 +13529,16 @@ export const createAgentExperience = (
           closeButton.style.minHeight = closeButtonSize;
         }
         const closeButtonPlacement = launcher.closeButtonPlacement ?? "inline";
-        
+
         // Update placement if changed - move the wrapper (not just the button) to preserve tooltip
         const { closeButtonWrapper } = panelElements;
         const isTopRight = closeButtonPlacement === "top-right";
         const currentlyTopRight = closeButtonWrapper?.classList.contains("persona-absolute");
-        
+
         if (closeButtonWrapper && isTopRight !== currentlyTopRight) {
           // Placement changed - need to move wrapper and update classes
           closeButtonWrapper.remove();
-          
+
           // Update wrapper classes
           if (isTopRight) {
             closeButtonWrapper.className = "persona-absolute persona-top-4 persona-right-4 persona-z-50";
@@ -13557,11 +13557,11 @@ export const createAgentExperience = (
             }
           }
         }
-        
+
         // Close icon: launcher color wins; else theme.components.header.actionIconForeground
         closeButton.style.color =
           launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
-        
+
         if (launcher.closeButtonBackgroundColor) {
           closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
           closeButton.classList.remove("hover:persona-bg-gray-100");
@@ -13569,7 +13569,7 @@ export const createAgentExperience = (
           closeButton.style.backgroundColor = "";
           closeButton.classList.add("hover:persona-bg-gray-100");
         }
-        
+
         // Apply border if width and/or color are provided
         if (launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor) {
           const borderWidth = launcher.closeButtonBorderWidth || "0px";
@@ -13580,7 +13580,7 @@ export const createAgentExperience = (
           closeButton.style.border = "";
           closeButton.classList.add("persona-border-none");
         }
-        
+
         if (launcher.closeButtonBorderRadius) {
           closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
           closeButton.classList.remove("persona-rounded-full");
@@ -13880,7 +13880,7 @@ export const createAgentExperience = (
             // Update the mutable references
             micButton = micButtonResult.button;
             micButtonWrapper = micButtonResult.wrapper;
-            
+
             // Insert into the CURRENT right-action cluster, before the send
             // button; fall back to the form when a plugin composer has neither.
             const micAnchor =
@@ -13908,7 +13908,7 @@ export const createAgentExperience = (
           // Update existing mic button with new config
           const voiceConfig = config.voiceRecognition ?? {};
           const sendButtonConfig = config.sendButton ?? {};
-          
+
           // Update icon name and size
           const micIconName = voiceConfig.iconName ?? "mic";
           // Unset clears the inline box so the control-size token takes over.
@@ -13939,7 +13939,7 @@ export const createAgentExperience = (
           } else {
             micButton.textContent = "🎤";
           }
-          
+
           // Update colors from config or theme tokens
           const backgroundColor = voiceConfig.backgroundColor ?? sendButtonConfig.backgroundColor;
           if (backgroundColor) {
@@ -13953,7 +13953,7 @@ export const createAgentExperience = (
           } else {
             micButton.style.color = "var(--persona-text, #111827)";
           }
-          
+
           // Update border styling
           if (voiceConfig.borderWidth) {
             micButton.style.borderWidth = voiceConfig.borderWidth;
@@ -13967,7 +13967,7 @@ export const createAgentExperience = (
           } else {
             micButton.style.borderColor = "";
           }
-          
+
           // Update padding styling
           if (voiceConfig.paddingX) {
             micButton.style.paddingLeft = voiceConfig.paddingX;
@@ -13983,7 +13983,7 @@ export const createAgentExperience = (
             micButton.style.paddingTop = "";
             micButton.style.paddingBottom = "";
           }
-          
+
           const tooltipText = voiceConfig.tooltipText ?? "Start voice recognition";
           const showTooltip = voiceConfig.showTooltip ?? false;
           micButton.setAttribute("aria-label", tooltipText);
@@ -13995,7 +13995,7 @@ export const createAgentExperience = (
               enabled: showTooltip,
             });
           }
-          
+
           // Show and update disabled state
           micButtonWrapper.style.display = "";
           micButton.disabled = session.isStreaming();
@@ -14210,7 +14210,7 @@ export const createAgentExperience = (
         sendButton.style.minHeight = buttonSize ?? "";
         sendButton.style.fontSize = "18px";
         sendButton.style.lineHeight = "1";
-        
+
         // Set foreground color from config or theme token
         if (textColor) {
           sendButton.style.color = textColor;
@@ -14273,17 +14273,17 @@ export const createAgentExperience = (
         sendButton.style.minHeight = "";
         sendButton.style.fontSize = "";
         sendButton.style.lineHeight = "";
-        
+
         // Update classes
         sendButton.className = "persona-rounded-button persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold persona-text-white disabled:persona-opacity-50 persona-cursor-pointer";
-        
+
         if (backgroundColor) {
           sendButton.style.backgroundColor = backgroundColor;
           sendButton.classList.remove("persona-bg-persona-accent");
         } else {
           sendButton.classList.add("persona-bg-persona-accent");
         }
-        
+
         if (textColor) {
           sendButton.style.color = textColor;
         } else {
@@ -14332,7 +14332,7 @@ export const createAgentExperience = (
           enabled: showTooltip,
         });
       }
-      
+
       // Modes can be added or removed live: drop selections whose mode is gone
       // before anything reads `activeModeIds`, and mount/unmount the mode chips.
       const prunedModes = pruneComposerModes(
@@ -14410,7 +14410,7 @@ export const createAgentExperience = (
       const statusIndicatorConfig = config.statusIndicator ?? {};
       const isVisible = statusIndicatorConfig.visible ?? true;
       statusText.style.display = isVisible ? "" : "none";
-      
+
       // Update status text if status is currently set
       if (session) {
         const currentStatus = session.getStatus();
@@ -14522,7 +14522,7 @@ export const createAgentExperience = (
       if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
-      
+
       textarea.value = message;
       // Trigger input event for any listeners
       textarea.dispatchEvent(new Event('input', { bubbles: true }));
@@ -14910,13 +14910,13 @@ export const createAgentExperience = (
       if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
-      
+
       // Remove any existing feedback forms
       const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
       if (existingFeedback) {
         existingFeedback.remove();
       }
-      
+
       const feedbackEl = createCSATFeedback({
         onSubmit: async (rating, comment) => {
           if (session.isClientTokenMode()) {
@@ -14927,7 +14927,7 @@ export const createAgentExperience = (
         onDismiss: options?.onDismiss,
         ...options,
       });
-      
+
       // Append to messages area at the bottom
       messagesWrapper.appendChild(feedbackEl);
       feedbackEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -14937,13 +14937,13 @@ export const createAgentExperience = (
       if (!open && isPanelToggleable()) {
         setOpenState(true, "system");
       }
-      
+
       // Remove any existing feedback forms
       const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
       if (existingFeedback) {
         existingFeedback.remove();
       }
-      
+
       const feedbackEl = createNPSFeedback({
         onSubmit: async (rating, comment) => {
           if (session.isClientTokenMode()) {
@@ -14954,7 +14954,7 @@ export const createAgentExperience = (
         onDismiss: options?.onDismiss,
         ...options,
       });
-      
+
       // Append to messages area at the bottom
       messagesWrapper.appendChild(feedbackEl);
       feedbackEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -15119,7 +15119,7 @@ export const createAgentExperience = (
   // STATE PERSISTENCE ACROSS PAGE NAVIGATIONS
   // ============================================================================
   const persistConfig = normalizePersistStateConfig(config.persistState);
-  
+
   if (persistConfig && isPanelToggleable()) {
     const storage = getPersistStorage(persistConfig.storage!);
     const openKey = `${persistConfig.keyPrefix}widget-open`;
