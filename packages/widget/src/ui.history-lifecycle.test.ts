@@ -229,6 +229,84 @@ describe("history controller lifecycle", () => {
     });
   });
 
+  describe("external credential change (D3)", () => {
+    /** Exactly what a sibling tab's write looks like: jsdom fires no event. */
+    const externalClear = (storageKey: string) => {
+      window.localStorage.removeItem(storageKey);
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: storageKey, newValue: null })
+      );
+    };
+
+    it("wipes the mounted transcript when a sibling revokes the credential", async () => {
+      const keys = await visitorStoreKeys(TOKEN_A, KEY_PREFIX);
+      window.localStorage.setItem(keys.storageKey, "cvt_alpha");
+      const { controller } = mount({
+        clientToken: TOKEN_A,
+        persistState: { keyPrefix: KEY_PREFIX },
+      });
+      await vi.waitFor(() => expect(recorder.instances.length).toBe(1));
+      await recorder.instances[0]!.store.ready;
+      await flush(20);
+
+      controller.injectAssistantMessage({ content: "before the reset" });
+      expect(controller.getMessages()).toHaveLength(1);
+
+      externalClear(keys.storageKey);
+      await flush(20);
+
+      expect(controller.getMessages()).toHaveLength(0);
+    });
+
+    it("follows the store across an update() re-key", async () => {
+      const keysA = await visitorStoreKeys(TOKEN_A, KEY_PREFIX);
+      const keysB = await visitorStoreKeys(TOKEN_B, KEY_PREFIX);
+      window.localStorage.setItem(keysA.storageKey, "cvt_alpha");
+      window.localStorage.setItem(keysB.storageKey, "cvt_beta");
+      const { controller } = mount({
+        clientToken: TOKEN_A,
+        persistState: { keyPrefix: KEY_PREFIX },
+      });
+      await vi.waitFor(() => expect(recorder.instances.length).toBe(1));
+
+      controller.update({ clientToken: TOKEN_B });
+      await vi.waitFor(() => expect(recorder.instances.length).toBe(2));
+      await recorder.instances[1]!.store.ready;
+      await flush(20);
+
+      controller.injectAssistantMessage({ content: "still here" });
+      // The detached alpha store no longer reaches the session.
+      externalClear(keysA.storageKey);
+      await flush(20);
+      expect(controller.getMessages()).toHaveLength(1);
+
+      externalClear(keysB.storageKey);
+      await flush(20);
+      expect(controller.getMessages()).toHaveLength(0);
+    });
+
+    it("is inert after destroy()", async () => {
+      const keys = await visitorStoreKeys(TOKEN_A, KEY_PREFIX);
+      window.localStorage.setItem(keys.storageKey, "cvt_alpha");
+      const { controller } = mount({
+        clientToken: TOKEN_A,
+        persistState: { keyPrefix: KEY_PREFIX },
+      });
+      await vi.waitFor(() => expect(recorder.instances.length).toBe(1));
+      await recorder.instances[0]!.store.ready;
+      await flush(20);
+
+      controller.injectAssistantMessage({ content: "before the reset" });
+      controller.destroy();
+
+      externalClear(keys.storageKey);
+      await flush(20);
+
+      // Nothing observes it: the message state is left exactly as destroyed.
+      expect(controller.getMessages()).toHaveLength(1);
+    });
+  });
+
   describe("destroy()", () => {
     it("removes the storage listener and releases a held first-init lease", async () => {
       const keys = await visitorStoreKeys(TOKEN_A, KEY_PREFIX);

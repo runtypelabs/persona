@@ -9,15 +9,13 @@ import {
 } from "../fixtures/history-page";
 
 /**
- * NOT YET IMPLEMENTED IN THE WIDGET — kept as an executable specification.
- *
- * Revoking a visitor credential does not revoke an already-minted chat session,
- * so D3 requires the sibling to block dispatch until it has re-inited. Today
- * `dispatchClientToken` only calls `initSession()`, which returns the cached
- * session: nothing consults the visitor store, so B keeps sending through the
- * session that existed before the reset. See spec 02 for the same missing seam.
+ * Gate 9, third clause: revoking a visitor credential does not revoke an
+ * already-minted chat session, so D3 requires the sibling to block dispatch
+ * until it has re-inited. The external-change transition clears the client's
+ * cached session, and `sendMessage` awaits the re-init before dispatching, so
+ * no request can carry the formerly live session id.
  */
-test.fixme(
+test(
   "after a sibling reset, a send cannot go through the formerly live session",
   async ({ context }) => {
     const api = await installFakeHistoryApi(context);

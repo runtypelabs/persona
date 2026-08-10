@@ -18,7 +18,11 @@ import {
 import { createDemoHistoryProvider } from './internal/demo-history-provider';
 import { createRuntypeHistoryProvider } from './internal/runtype-history-provider';
 import type { HistoryProvider } from './internal/history-provider';
-import { createVisitorStore, type VisitorStore } from './utils/visitor-store';
+import {
+  createVisitorStore,
+  visitorStoreKeys,
+  type VisitorStore,
+} from './utils/visitor-store';
 import type {
   AgentWidgetMessage,
   ClientChatRequest,
@@ -369,6 +373,9 @@ type Harness = {
   meta: Record<string, unknown>;
   failNext: (operation: FailableOperation) => void;
   backend: Backend | null;
+  store: VisitorStore | null;
+  /** The RAW internals bag; re-composing an already-composed one double-wraps. */
+  rawInternals: WidgetHistoryInternals;
   destroy: () => void;
 };
 
@@ -466,13 +473,19 @@ async function createRuntypeHarness(): Promise<Harness> {
       shell.session.bindActivatedSession(clientSession),
     getClient: () => shell.session.getClient(),
   });
-  shell.session.setHistoryInternals({ ...internals, historyProvider: provider });
+  const rawInternals: WidgetHistoryInternals = {
+    ...internals,
+    historyProvider: provider,
+  };
+  shell.session.setHistoryInternals(rawInternals);
 
   return {
     ...shell,
     provider,
     meta: seam.meta,
     backend,
+    store,
+    rawInternals,
     failNext: (operation) => backend.failNext(operation),
     destroy: () => {
       store.destroy();
@@ -512,6 +525,8 @@ async function createDemoHarness(): Promise<Harness> {
     provider,
     meta: seam.meta,
     backend: null,
+    store: null,
+    rawInternals: internals,
     failNext: (operation) =>
       provider.failNext(operation, { code: 'unavailable' }),
     destroy: () => {},
@@ -1150,5 +1165,214 @@ describe('session history (Runtype transport specifics)', () => {
       expect(chats[chats.length - 1].messages[0].content).toBe('after the wipe');
       expect(harness.session.getHistoryState().sendBlocked).toBe(false);
     });
+  });
+});
+
+// ── External visitor-credential change (D3 privacy boundary) ──────────────
+
+const OTHER_CLIENT_TOKEN = 'ct_session_history_sibling';
+
+/** Store wrapper that counts how often the session binds/releases it. */
+function countingStore(base: VisitorStore) {
+  const counts = { subscribes: 0, unsubscribes: 0 };
+  const store: VisitorStore = {
+    ...base,
+    subscribe(callback) {
+      counts.subscribes += 1;
+      const off = base.subscribe(callback);
+      return () => {
+        counts.unsubscribes += 1;
+        off();
+      };
+    },
+  };
+  return { store, counts };
+}
+
+describe('external visitor-credential change', () => {
+  let harness: Harness;
+  let backend: Backend;
+  let store: VisitorStore;
+
+  /** What a sibling tab's write looks like here: jsdom fires no storage event. */
+  const externalWrite = async (
+    value: string | null,
+    clientToken = CLIENT_TOKEN
+  ) => {
+    const { storageKey } = await visitorStoreKeys(clientToken, 'persona-');
+    if (value === null) window.localStorage.removeItem(storageKey);
+    else window.localStorage.setItem(storageKey, value);
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: storageKey, newValue: value })
+    );
+    await Promise.resolve();
+  };
+
+  const initBodies = () =>
+    backend.requests
+      .filter((request) => request.url.endsWith('/v1/client/init'))
+      .map((request) => request.body ?? {});
+
+  beforeEach(async () => {
+    window.localStorage.clear();
+    harness = await createRuntypeHarness();
+    backend = harness.backend as Backend;
+    store = harness.store as VisitorStore;
+    await store.ready;
+  });
+
+  afterEach(() => {
+    harness.destroy();
+    vi.restoreAllMocks();
+  });
+
+  it('wipes local state, drops the cached session, and blocks the next dispatch on a re-init', async () => {
+    await harness.session.openConversation('conv-a');
+    harness.meta.pendingProjections = {
+      conversationId: 'conv-a',
+      messageIds: ['a2'],
+    };
+    const staleSessionId = harness.session.getClientSession()?.sessionId;
+    expect(staleSessionId).toBeTruthy();
+    expect(harness.messages()).toHaveLength(2);
+
+    await externalWrite(null);
+
+    expect(harness.messages()).toHaveLength(0);
+    expect(harness.session.getActiveConversationId()).toBeNull();
+    expect(harness.meta.conversationId).toBeUndefined();
+    expect(harness.meta.sessionId).toBeUndefined();
+    expect(harness.meta.conversationRevision).toBeUndefined();
+    expect(harness.meta.pendingProjections).toBeUndefined();
+    // No dispatch can reuse the session minted under the revoked credential.
+    expect(harness.session.getClient().getClientSession()).toBeNull();
+    expect(
+      harness.notices.some((notice) => notice.code === 'history_continuity_reset')
+    ).toBe(true);
+
+    const initsBefore = initBodies().length;
+    await harness.session.sendMessage('after the reset');
+
+    expect(initBodies().length).toBeGreaterThan(initsBefore);
+    const chat = backend.chatRequests().at(-1);
+    expect(chat?.sessionId).not.toBe(staleSessionId);
+    expect(
+      chat?.messages.some((message) => message.content === 'after the reset')
+    ).toBe(true);
+    // The wiped transcript never leaks into the replacement conversation.
+    expect(JSON.stringify(chat?.messages)).not.toContain('Where is my order?');
+  });
+
+  it('re-inits before the chat request rather than after it', async () => {
+    await harness.session.openConversation('conv-a');
+    await externalWrite(null);
+
+    await harness.session.sendMessage('after the reset');
+
+    const order = backend.requests.map((request) => request.url);
+    const chatIndex = order.lastIndexOf(`${API_URL}/v1/client/chat`);
+    const initIndex = order.lastIndexOf(`${API_URL}/v1/client/init`);
+    expect(initIndex).toBeGreaterThan(-1);
+    expect(initIndex).toBeLessThan(chatIndex);
+  });
+
+  it('adopts the sibling token when the credential is replaced', async () => {
+    await harness.session.listConversations();
+
+    await externalWrite('cvt_sibling');
+    await harness.session.sendMessage('hello again');
+
+    expect(initBodies().at(-1)?.visitorToken).toBe('cvt_sibling');
+  });
+
+  it('ignores this tab own mint or write', async () => {
+    await harness.session.openConversation('conv-a');
+    const live = harness.session.getClientSession();
+    const renders = harness.renderCount();
+
+    await store.set('cvt_local_mint');
+
+    expect(harness.messages().map((message) => message.id)).toEqual(['a1', 'a2']);
+    expect(harness.renderCount()).toBe(renders);
+    expect(harness.session.getClientSession()).toBe(live);
+    expect(harness.session.getActiveConversationId()).toBe('conv-a');
+    expect(harness.session.getClient().getClientSession()).not.toBeNull();
+  });
+
+  it('ignores adoption out of an empty store (first-init convergence)', async () => {
+    // No credential yet: the sibling's mint is convergence, not a break.
+    await store.clear();
+    await harness.session.sendMessage('first turn');
+    const live = harness.session.getClient().getClientSession();
+    const before = harness.messages().length;
+    expect(before).toBeGreaterThan(0);
+
+    await externalWrite('cvt_winner');
+
+    expect(harness.messages()).toHaveLength(before);
+    expect(harness.session.getClient().getClientSession()).toBe(live);
+    expect(harness.meta.sessionId).toBeTruthy();
+  });
+
+  it('reconciles a tab with no conversation without a visible wipe', async () => {
+    await harness.session.listConversations();
+    expect(harness.session.getClient().getClientSession()).not.toBeNull();
+
+    await externalWrite(null);
+
+    expect(harness.messages()).toHaveLength(0);
+    expect(
+      harness.notices.some((notice) => notice.code === 'history_continuity_reset')
+    ).toBe(false);
+    // The cache and the revoked visitor's ids still go.
+    expect(harness.session.getClient().getClientSession()).toBeNull();
+    expect(harness.meta.sessionId).toBeUndefined();
+    expect(harness.meta.conversationId).toBeUndefined();
+  });
+
+  it('keeps exactly one subscription across a re-key and releases it on destroy', async () => {
+    const first = countingStore(store);
+    harness.session.setHistoryInternals({
+      ...harness.rawInternals,
+      visitorStore: first.store,
+    });
+    // Re-threading the same store must not bind a second subscription.
+    harness.session.setHistoryInternals({
+      ...harness.rawInternals,
+      visitorStore: first.store,
+    });
+    expect(first.counts.subscribes).toBe(1);
+    expect(first.counts.unsubscribes).toBe(0);
+
+    const replacement = countingStore(
+      createVisitorStore(OTHER_CLIENT_TOKEN, 'persona-', false)
+    );
+    await replacement.store.set('cvt_other');
+    harness.session.setHistoryInternals({
+      ...harness.rawInternals,
+      visitorStore: replacement.store,
+    });
+    expect(first.counts.unsubscribes).toBe(1);
+    expect(replacement.counts.subscribes).toBe(1);
+
+    await harness.session.openConversation('conv-a');
+
+    // The detached store no longer reaches the session.
+    await externalWrite(null);
+    expect(harness.messages()).toHaveLength(2);
+    expect(harness.notices).toHaveLength(0);
+
+    // The current one does, exactly once.
+    await externalWrite(null, OTHER_CLIENT_TOKEN);
+    expect(harness.messages()).toHaveLength(0);
+    expect(
+      harness.notices.filter(
+        (notice) => notice.code === 'history_continuity_reset'
+      )
+    ).toHaveLength(1);
+
+    harness.session.destroy();
+    expect(replacement.counts.unsubscribes).toBe(1);
+    replacement.store.destroy();
   });
 });

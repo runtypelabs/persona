@@ -912,6 +912,18 @@ export class AgentWidgetClient {
   }
 
   /**
+   * D3 privacy boundary: a sibling tab replaced or revoked the shared visitor
+   * credential. Revoking it does not revoke an already-minted chat session, so
+   * the cache must go, and whatever this visitor was bound to is gone with it.
+   */
+  public handleExternalCredentialChange(): void {
+    this.clearClientSession();
+    if (this.isHistoryCapable()) {
+      this.setHistoryIdentityStatus(this.derivedBrowserOnly());
+    }
+  }
+
+  /**
    * Clear the current client session
    */
   public clearClientSession(): void {

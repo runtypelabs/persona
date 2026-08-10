@@ -51,6 +51,7 @@ import type {
   WidgetHistoryInternals
 } from "./types";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
+import type { VisitorStore, VisitorStoreChange } from "./utils/visitor-store";
 import { HistoryProviderError } from "./internal/history-provider";
 import type {
   HistoryConversationSummary,
@@ -400,6 +401,12 @@ export class AgentWidgetSession {
   /** Persisted revision as it stood before boot init overwrote it. */
   private bootConversationRevision: string | null = null;
   private bootRevisionCaptured = false;
+  /** Exactly one visitor-store subscription per instance; re-keyed with the store. */
+  private visitorStoreUnsubscribe: (() => void) | null = null;
+  private subscribedVisitorStore: VisitorStore | null = null;
+  /** An external credential change happened; the next dispatch must re-init. */
+  private credentialReinitPending = false;
+  private credentialReinitPromise: Promise<void> | null = null;
 
   constructor(
     private config: AgentWidgetConfig = {},
@@ -413,6 +420,7 @@ export class AgentWidgetSession {
     }));
     this.messages = this.sortMessages(this.messages);
     this.client = new AgentWidgetClient(config, this.historyInternals);
+    this.syncVisitorStoreSubscription();
     this.wireDefaultWebMcpConfirm();
 
     // Hydrate artifacts from config (mirrors `initialMessages`). Restored
@@ -991,6 +999,14 @@ export class AgentWidgetSession {
   public setHistoryInternals(internals: WidgetHistoryInternals): void {
     this.historyInternals = this.composeHistoryInternals(internals);
     this.client.setHistoryInternals(this.historyInternals);
+    this.syncVisitorStoreSubscription();
+  }
+
+  /** Widget teardown: release the visitor-store subscription. */
+  public destroy(): void {
+    this.visitorStoreUnsubscribe?.();
+    this.visitorStoreUnsubscribe = null;
+    this.subscribedVisitorStore = null;
   }
 
   // ==========================================================================
@@ -1484,6 +1500,99 @@ export class AgentWidgetSession {
   }
 
   /**
+   * One subscription per widget instance, re-keyed when the controller swaps
+   * the store. Owned here so the transition sits beside the continuity wipe it
+   * reuses.
+   */
+  private syncVisitorStoreSubscription(): void {
+    const store = this.historyInternals.visitorStore ?? null;
+    if (store === this.subscribedVisitorStore) return;
+    this.visitorStoreUnsubscribe?.();
+    this.visitorStoreUnsubscribe = null;
+    this.subscribedVisitorStore = store;
+    if (!store) return;
+    this.visitorStoreUnsubscribe = store.subscribe((change) =>
+      this.handleExternalCredentialChange(change)
+    );
+  }
+
+  /**
+   * D3 privacy boundary: a sibling tab cleared or replaced the shared visitor
+   * credential. Privacy wins over turn continuity, so a live turn is cancelled.
+   * A "local" change is this tab's own mint/write and owns its init path; a
+   * change out of an empty store is first-init convergence, not a break.
+   */
+  private handleExternalCredentialChange(change: VisitorStoreChange): void {
+    if (change.source !== "external" || change.previousToken === null) return;
+
+    // Nothing may reuse the session minted under the revoked credential.
+    this.clientSession = null;
+    this.client.handleExternalCredentialChange();
+    this.historyOpenEpoch += 1;
+    this.projectionFinalizationPromise = null;
+    this.credentialReinitPending = true;
+    this.credentialReinitPromise = null;
+
+    const hadVisibleTranscript = this.messages.length > 0;
+    const hadConversationState =
+      hadVisibleTranscript ||
+      this.activeConversationId !== null ||
+      (this.config.getStoredConversationId?.() ?? null) !== null;
+    if (hadConversationState) {
+      this.discardConversationState();
+    } else {
+      // No conversation to wipe, but the revoked visitor's ids must not survive.
+      this.config.clearStoredSessionId?.();
+      this.config.clearStoredConversationId?.();
+      this.olderPageRequests.clear();
+      this.setPendingProjections(null);
+    }
+    this.activeConversationId = null;
+    this.activeConversationRevision = null;
+    this.historyNextMessageCursor = null;
+    this.historyRecovery = null;
+    this.emitHistoryState();
+    // Only a visible wipe announces: a silent reconcile must not push the open
+    // history view into a refetch that would immediately re-mint a credential.
+    if (hadVisibleTranscript) {
+      this.notifyHistory(
+        "history_continuity_reset",
+        "This browser's conversation history was reset in another tab, so the previous messages were cleared."
+      );
+    }
+  }
+
+  /**
+   * Dispatch may not proceed until a session exists under the NEW credential.
+   * Deliberately lazy: re-initializing on the storage event itself would hand
+   * an idle tab a fresh credential the visitor just deleted elsewhere.
+   */
+  private completeCredentialReinit(): Promise<void> {
+    if (!this.credentialReinitPending) return Promise.resolve();
+    if (!this.credentialReinitPromise) {
+      this.credentialReinitPromise = this.runCredentialReinit().finally(() => {
+        this.credentialReinitPromise = null;
+      });
+    }
+    return this.credentialReinitPromise;
+  }
+
+  private async runCredentialReinit(): Promise<void> {
+    if (!this.isClientTokenMode()) {
+      this.credentialReinitPending = false;
+      return;
+    }
+    try {
+      // Reads the store again: a clear mints fresh, a replacement adopts the
+      // sibling's token.
+      this.bindActivatedSession(await this.client.initSession());
+      this.credentialReinitPending = false;
+    } catch {
+      // Still pending: the dispatch's own init reports the failure normally.
+    }
+  }
+
+  /**
    * Authoritative boot reconciliation (D4). Runs after a `conversationId` boot
    * resume and before chat becomes sendable: an unchanged revision needs no
    * detail fetch; a changed or absent one refreshes from the server's newest
@@ -1752,6 +1861,7 @@ export class AgentWidgetSession {
   /** Blocks a send until the owning history transition finishes. */
   private async awaitHistorySendable(): Promise<void> {
     await this.awaitHistorySettled();
+    await this.completeCredentialReinit();
     if (this.historyRecovery === "new_conversation_required") {
       await this.retryRequiredConversation();
     }
@@ -2225,11 +2335,13 @@ export class AgentWidgetSession {
       return;
 
     // History transitions (continuity wipe, boot reconciliation, projection
-    // finalization, replacement init) own the record this turn would land in.
+    // finalization, replacement init, external credential change) own the
+    // record this turn would land in.
     if (
       this.historyGate ||
       this.projectionFinalizationPromise ||
-      this.historySendBlocked
+      this.historySendBlocked ||
+      this.credentialReinitPending
     ) {
       await this.awaitHistorySendable();
     }
@@ -2382,6 +2494,17 @@ export class AgentWidgetSession {
   public async continueConversation() {
     // Don't continue if already streaming
     if (this.streaming) return;
+
+    // Same ownership rule as sendMessage: a pending history transition owns the
+    // record this turn would land in.
+    if (
+      this.historyGate ||
+      this.projectionFinalizationPromise ||
+      this.historySendBlocked ||
+      this.credentialReinitPending
+    ) {
+      await this.awaitHistorySendable();
+    }
 
     this.abortController?.abort();
     this.teardownReconnect();

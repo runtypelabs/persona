@@ -9,19 +9,17 @@ import {
 } from "../fixtures/history-page";
 
 /**
- * NOT YET IMPLEMENTED IN THE WIDGET — kept as an executable specification.
+ * Gate 9, first clause: D3 of docs/visitor-history-implementation-plan.md makes
+ * the sibling tab act on the `storage` event itself. The session subscribes to
+ * the visitor store, and an external clear/replacement drops the cached chat
+ * session, wipes visible + persisted state, and blocks dispatch until a re-init
+ * under the new store value succeeds.
  *
- * D3 of docs/visitor-history-implementation-plan.md requires the sibling tab to
- * act on the `storage` event itself: clear its cached chat session, wipe
- * visible state, and block dispatch until it re-inits. `utils/visitor-store.ts`
- * exposes `subscribe()` and advances its revision on the event, but nothing in
- * `client.ts` / `session.ts` / `ui.ts` consumes it, so today only responses
- * captured across the change are rejected (spec 03) — the sibling keeps its
- * transcript and keeps sending through the formerly live session.
- *
- * Un-fixme this once the external-change transition lands.
+ * The re-init is deliberately lazy (it runs on the blocked send, not on the
+ * event): an idle tab must not silently re-mint a credential the visitor just
+ * deleted elsewhere.
  */
-test.fixme(
+test(
   "a reset in one tab wipes the sibling and forces a fresh init",
   async ({ context }) => {
     const api = await installFakeHistoryApi(context);

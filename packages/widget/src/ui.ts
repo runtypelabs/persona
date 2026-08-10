@@ -7252,8 +7252,12 @@ export const createAgentExperience = (
   // reconnect's backoff timer and focus/online listeners don't outlive the
   // widget (cancel() → teardownReconnect()).
   destroyCallbacks.push(() => session.cancel());
-  // Drop the visitor store's `storage` listener; a client rebuild must not leak one.
-  destroyCallbacks.push(() => visitorStore?.destroy());
+  // Drop the visitor store's `storage` listener and the session's subscription
+  // to it; a client rebuild must not leak either.
+  destroyCallbacks.push(() => {
+    session.destroy();
+    visitorStore?.destroy();
+  });
 
   // Mirror read-aloud playback state into the action buttons, and surface it as
   // a controller event (parallel to message:copy / message:feedback).
