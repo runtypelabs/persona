@@ -996,6 +996,22 @@ describe('session history (Runtype transport specifics)', () => {
       expect(projectionCalls()).toHaveLength(1);
     });
 
+    it('collapses duplicate terminal scans queued before the first PATCH resolves', async () => {
+      await harness.session.openConversation('conv-a');
+      streamDivergentAssistant();
+      // Second terminal before the first PATCH acknowledges: both scans see the
+      // projection unacknowledged and chain identical batches.
+      harness.session.injectTestEvent({
+        type: 'status',
+        status: 'idle',
+        terminal: true,
+      });
+      await harness.session.awaitHistorySettled();
+
+      expect(projectionCalls()).toHaveLength(1);
+      expect(harness.meta.pendingProjections).toBeUndefined();
+    });
+
     it('serializes finalization against the next conversation switch', async () => {
       await harness.session.openConversation('conv-a');
       streamDivergentAssistant();

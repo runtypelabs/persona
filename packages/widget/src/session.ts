@@ -1768,10 +1768,21 @@ export class AgentWidgetSession {
   ): Promise<void> {
     // A switch/reset/delete already invalidated this marker.
     if (this.activeConversationId !== conversationId) return;
+    // Two terminal scans can enqueue the same batch before the first PATCH
+    // acknowledges; the chain serializes them, so re-filter at run time.
+    const unacknowledged = batch.filter(
+      (item) => this.acknowledgedProjections.get(item.id) !== item.displayContent
+    );
+    if (unacknowledged.length === 0) {
+      this.clearFinalizedMarker(conversationId, batch);
+      return;
+    }
     try {
-      const { conversationRevision } =
-        await this.client.finalizeDisplayProjections(conversationId, batch);
-      for (const item of batch) {
+      const { conversationRevision } = await this.client.finalizeDisplayProjections(
+        conversationId,
+        unacknowledged
+      );
+      for (const item of unacknowledged) {
         this.acknowledgedProjections.set(item.id, item.displayContent);
       }
       if (this.activeConversationId === conversationId && conversationRevision) {
@@ -1780,7 +1791,7 @@ export class AgentWidgetSession {
       this.clearFinalizedMarker(conversationId, batch);
     } catch (error) {
       if (!retried && this.isTransientProjectionError(error)) {
-        await this.finalizeProjections(conversationId, batch, true);
+        await this.finalizeProjections(conversationId, unacknowledged, true);
         return;
       }
       if (
