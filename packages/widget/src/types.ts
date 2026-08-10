@@ -6,6 +6,7 @@ import type {
   RuntypeStopReasonKind,
 } from "./generated/runtype-openapi-contract";
 import type { TargetResolver } from "./utils/target";
+import type { VisitorStore } from "./utils/visitor-store";
 import type { IconName } from "./utils/icons";
 
 export type { TargetResolver, ResolvedTarget } from "./utils/target";
@@ -4328,6 +4329,33 @@ export type ClientInitResponse = {
     theme: Record<string, unknown> | null;
   };
 };
+
+/**
+ * Transactional init handle. `commit()` installs only the client's session
+ * cache; `discard()` is an idempotent no-op. Neither writes persisted ids.
+ */
+export type PreparedClientSession = {
+  session: ClientSession;
+  commit(): void;
+  discard(): void;
+};
+
+/**
+ * Internal history dependencies the controller injects into the session and
+ * every client it builds. Not part of the public config surface.
+ */
+export interface WidgetHistoryInternals {
+  visitorStore?: VisitorStore;
+  /** Resolves once stored state has been applied; gates history-capable init. */
+  historyBootstrapReady?: Promise<void>;
+  /** Persist the revision beside the active conversation id (internal only). */
+  setStoredConversationRevision?: (revision: string | null) => void;
+  onHistoryAvailabilityChanged?: (available: boolean) => void;
+  onHistoryContinuityChanged?: (info: {
+    previousConversationId: string | null;
+    conversationId: string;
+  }) => void;
+}
 
 /**
  * Request payload for /v1/client/chat endpoint

@@ -93,6 +93,7 @@ export type {
   // Client token types
   ClientSession,
   ClientInitResponse,
+  PreparedClientSession,
   ClientChatRequest,
   ClientFeedbackRequest,
   ClientFeedbackType,

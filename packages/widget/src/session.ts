@@ -40,7 +40,8 @@ import type {
   ReadAloudState,
   SpeechEngine,
   AgentWidgetContentSegment,
-  AgentWidgetContextMentionRef
+  AgentWidgetContextMentionRef,
+  WidgetHistoryInternals
 } from "./types";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import {
@@ -304,14 +305,15 @@ export class AgentWidgetSession {
 
   constructor(
     private config: AgentWidgetConfig = {},
-    private callbacks: SessionCallbacks
+    private callbacks: SessionCallbacks,
+    private historyInternals: WidgetHistoryInternals = {}
   ) {
     this.messages = [...(config.initialMessages ?? [])].map((message) => ({
       ...message,
       sequence: message.sequence ?? this.nextSequence()
     }));
     this.messages = this.sortMessages(this.messages);
-    this.client = new AgentWidgetClient(config);
+    this.client = new AgentWidgetClient(config, this.historyInternals);
     this.wireDefaultWebMcpConfirm();
 
     // Hydrate artifacts from config (mirrors `initialMessages`). Restored
@@ -765,7 +767,13 @@ export class AgentWidgetSession {
     if (!this.isClientTokenMode()) {
       return null;
     }
-    
+
+    // Belt-and-braces with the client-side gate: no init request may observe
+    // stored ids before the controller has applied restored state.
+    if (this.config.features?.history?.enabled) {
+      await this.historyInternals.historyBootstrapReady;
+    }
+
     try {
       const session = await this.client.initSession();
       this.setClientSession(session);
@@ -864,6 +872,16 @@ export class AgentWidgetSession {
     return this.client.submitNPSFeedback(rating, comment);
   }
 
+  /**
+   * Re-thread the controller-owned history dependencies. Called before
+   * `updateConfig` when the visitor-store identity tuple changed, so the live
+   * client and any rebuilt one share the same store.
+   */
+  public setHistoryInternals(internals: WidgetHistoryInternals): void {
+    this.historyInternals = internals;
+    this.client.setHistoryInternals(internals);
+  }
+
   public updateConfig(next: AgentWidgetConfig) {
     const previousArtifactDisplay = this.config.features?.artifacts?.display;
     const merged = { ...this.config, ...next };
@@ -897,7 +915,7 @@ export class AgentWidgetSession {
     this.webMcpResolvedKeys.clear();
     const prevSSECallback = this.client.getSSEEventCallback();
     this.config = merged;
-    this.client = new AgentWidgetClient(this.config);
+    this.client = new AgentWidgetClient(this.config, this.historyInternals);
     if (artifactDisplayChanged) this.refreshArtifactReferenceBlocks();
     this.wireDefaultWebMcpConfirm();
     if (prevSSECallback) {

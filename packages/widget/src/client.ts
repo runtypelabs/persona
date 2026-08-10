@@ -23,6 +23,8 @@ import {
   PersonaArtifactKind,
   PersonaArtifactFileMeta,
   ContentPart,
+  PreparedClientSession,
+  WidgetHistoryInternals,
   WebMcpConfirmHandler
 } from "./types";
 import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
@@ -54,6 +56,27 @@ type SSEHandler = (event: AgentWidgetEvent) => void;
 
 const DEFAULT_ENDPOINT = "https://api.runtype.com/v1/dispatch";
 const DEFAULT_CLIENT_API_BASE = "https://api.runtype.com";
+
+/** Branch on `code`, never on message text. */
+export type HistoryClientErrorCode =
+  | "visitor_required"
+  | "not_found"
+  | "conversation_credential_missing"
+  | "history_disabled";
+
+export class HistoryClientError extends Error {
+  public readonly code: HistoryClientErrorCode;
+  constructor(code: HistoryClientErrorCode, message: string) {
+    super(message);
+    this.name = "HistoryClientError";
+    this.code = code;
+  }
+}
+
+const isHistoryClientError = (
+  error: unknown,
+  code: HistoryClientErrorCode
+): boolean => error instanceof HistoryClientError && error.code === code;
 
 /**
  * Derive a download filename for `agent_media` parts that are delivered
@@ -195,11 +218,21 @@ export class AgentWidgetClient {
   // a session change, or a conversation reset.
   private sentNonEmptyClientToolsSessionId: string | null = null;
 
+  // Visitor history (client-token mode ONLY). `historyUnavailable` latches for
+  // the client's lifetime on a 403 `visitor_history_disabled`; `claimInFlight`
+  // bounds the immediate first-conversation claim to one extra init.
+  private historyUnavailable = false;
+  private historyUnavailableWarned = false;
+  private claimInFlight = false;
+
   // WebMCP: page-discovered tool consumption (see ./webmcp-bridge).
   // Constructed lazily: null when `config.webmcp?.enabled !== true`.
   private readonly webMcpBridge: WebMcpBridge | null;
 
-  constructor(private config: AgentWidgetConfig = {}) {
+  constructor(
+    private config: AgentWidgetConfig = {},
+    private historyInternals: WidgetHistoryInternals = {}
+  ) {
     if (config.target && (config.agentId || config.flowId || config.agent)) {
       throw new Error(
         "[Persona] `target` is mutually exclusive with `agentId`, `flowId`, and `agent`. Set only one routing field.",
@@ -243,6 +276,11 @@ export class AgentWidgetClient {
    */
   public updateConfig(next: AgentWidgetConfig): void {
     this.config = next;
+  }
+
+  /** Re-thread the controller-owned history dependencies (store rebuild). */
+  public setHistoryInternals(internals: WidgetHistoryInternals): void {
+    this.historyInternals = internals;
   }
 
   /**
@@ -396,16 +434,71 @@ export class AgentWidgetClient {
     }
   }
 
-  private async _doInitSession(): Promise<ClientSession> {
-    // Get stored session_id if available (for session resumption)
-    const storedSessionId = this.config.getStoredSessionId?.() || null;
-    
+  /** Visitor history rides on client-token init only, and latches off after a 403 degrade. */
+  private isHistoryCapable(): boolean {
+    return (
+      this.config.features?.history?.enabled === true &&
+      this.isClientTokenMode() &&
+      !this.historyUnavailable
+    );
+  }
+
+  private async readVisitorToken(): Promise<string | null> {
+    const store = this.historyInternals.visitorStore;
+    if (!store) return null;
+    await store.ready;
+    return (await store.get()) ?? null;
+  }
+
+  /** One-way, client-lifetime latch: chat keeps working without history. */
+  private markHistoryUnavailable(): void {
+    if (this.historyUnavailable) return;
+    this.historyUnavailable = true;
+    if (!this.historyUnavailableWarned && typeof console !== 'undefined') {
+      this.historyUnavailableWarned = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[Persona] Visitor history is disabled for this surface; continuing without it.'
+      );
+    }
+    this.historyInternals.onHistoryAvailabilityChanged?.(false);
+  }
+
+  /**
+   * The single uncached init primitive: builds one body, performs one fetch.
+   * `conversationId` and `sessionId` are mutually exclusive on the wire (strict
+   * server union), so a resume never carries the stored session id.
+   */
+  private async createClientSession(opts: {
+    conversationId?: string;
+    identityProof?: string | null;
+    storedSessionId?: string | null;
+    omitVisitorFields?: boolean;
+  }): Promise<ClientSession> {
+    const historyCapable = this.isHistoryCapable() && !opts.omitVisitorFields;
+    let visitorToken: string | null = null;
+    if (historyCapable) {
+      // Never read persisted state before the controller's stored-state gate.
+      await this.historyInternals.historyBootstrapReady;
+      visitorToken = await this.readVisitorToken();
+    }
+
     const routed = this.routing();
     const sessionTargetId = routed.agentId ?? routed.flowId;
+    const resumeConversationId = historyCapable ? opts.conversationId : undefined;
     const requestBody: Record<string, unknown> = {
       token: this.config.clientToken,
       ...(sessionTargetId && { flowId: sessionTargetId }),
-      ...(storedSessionId && { sessionId: storedSessionId }),
+      ...(historyCapable && { visitorHistory: true }),
+      ...(historyCapable && visitorToken ? { visitorToken } : {}),
+      ...(resumeConversationId
+        ? {
+            conversationId: resumeConversationId,
+            ...(opts.identityProof ? { identityProof: opts.identityProof } : {}),
+          }
+        : opts.storedSessionId
+          ? { sessionId: opts.storedSessionId }
+          : {}),
     };
 
     const response = await fetch(this.getClientApiUrl('init'), {
@@ -419,6 +512,23 @@ export class AgentWidgetClient {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Session initialization failed' }));
+      if (historyCapable && response.status === 403 && error.error === 'visitor_history_disabled') {
+        this.markHistoryUnavailable();
+        // A resume must not silently degrade into some other conversation.
+        if (resumeConversationId) {
+          throw new HistoryClientError(
+            'history_disabled',
+            'Visitor history is disabled for this surface'
+          );
+        }
+        return this.createClientSession({ ...opts, omitVisitorFields: true });
+      }
+      if (historyCapable && response.status === 401 && error.error === 'visitor_required') {
+        throw new HistoryClientError('visitor_required', 'Visitor credential no longer resolves');
+      }
+      if (resumeConversationId && response.status === 404) {
+        throw new HistoryClientError('not_found', 'Conversation not found');
+      }
       if (response.status === 401) {
         throw new Error(`Invalid client token: ${error.hint || error.error}`);
       }
@@ -430,21 +540,185 @@ export class AgentWidgetClient {
 
     const data: ClientInitResponse = await response.json();
 
-    // Store the new sessionId for future resumption
-    if (this.config.setStoredSessionId) {
-      this.config.setStoredSessionId(data.sessionId);
+    // First awaited op after parse: the server cannot re-issue a minted secret.
+    if (data.visitor?.token) {
+      await this.historyInternals.visitorStore?.set(data.visitor.token);
     }
 
     return {
       sessionId: data.sessionId,
       expiresAt: new Date(data.expiresAt),
       flow: data.flow,
+      ...(data.conversationId ? { conversationId: data.conversationId } : {}),
+      // New history code reads only the normalized field; `flow` stays untouched.
+      ...(data.targetId ?? data.flow?.id
+        ? { targetId: data.targetId ?? data.flow?.id }
+        : {}),
+      ...(data.conversationRevision
+        ? { conversationRevision: data.conversationRevision }
+        : {}),
+      ...(data.visitor ? { visitor: data.visitor } : {}),
       config: {
         welcomeMessage: data.config.welcomeMessage,
         placeholder: data.config.placeholder,
         theme: data.config.theme,
       },
     };
+  }
+
+  private async _doInitSession(): Promise<ClientSession> {
+    if (!this.isHistoryCapable()) {
+      const storedSessionId = this.config.getStoredSessionId?.() || null;
+      const session = await this.createClientSession({ storedSessionId });
+      this.config.setStoredSessionId?.(session.sessionId);
+      return session;
+    }
+
+    await this.historyInternals.historyBootstrapReady;
+    const previousConversationId = this.config.getStoredConversationId?.() || null;
+    const storedToken = await this.readVisitorToken();
+
+    // Boot resume: reopening the record beats replaying a possibly idle-expired
+    // session id, so benign expiry never forks or wipes the conversation.
+    if (previousConversationId && storedToken) {
+      try {
+        const resumed = await this.createClientSession({
+          conversationId: previousConversationId,
+        });
+        return this.finishInit(resumed, previousConversationId, false);
+      } catch (error) {
+        if (
+          !isHistoryClientError(error, 'not_found') &&
+          !isHistoryClientError(error, 'visitor_required')
+        ) {
+          throw error;
+        }
+        // Record gone or credential dead: exactly one ordinary fallback, never a loop.
+        return this.ordinaryInit(previousConversationId, true);
+      }
+    }
+
+    return this.ordinaryInit(previousConversationId, false);
+  }
+
+  private async ordinaryInit(
+    previousConversationId: string | null,
+    continuityBroken: boolean
+  ): Promise<ClientSession> {
+    const storedSessionId = this.config.getStoredSessionId?.() || null;
+    const first = await this.createClientSession({ storedSessionId });
+    const session = await this.claimFirstConversation(first);
+    return this.finishInit(session, previousConversationId, continuityBroken);
+  }
+
+  /**
+   * A minted visitor means the record this session just created is still
+   * unowned; one immediate re-init with `{visitorToken, sessionId}` claims it.
+   */
+  private async claimFirstConversation(first: ClientSession): Promise<ClientSession> {
+    if (!first.visitor?.token || this.claimInFlight || !this.isHistoryCapable()) {
+      return first;
+    }
+    this.claimInFlight = true;
+    try {
+      return await this.createClientSession({ storedSessionId: first.sessionId });
+    } catch {
+      // Non-fatal: the next page load claims through the normal backend path.
+      return first;
+    } finally {
+      this.claimInFlight = false;
+    }
+  }
+
+  /**
+   * Continuity guard + id persistence. A different record than the persisted
+   * one is a privacy transition, announced before the new id is written.
+   */
+  private finishInit(
+    session: ClientSession,
+    previousConversationId: string | null,
+    continuityBroken: boolean
+  ): ClientSession {
+    const conversationId = session.conversationId;
+    if (
+      conversationId &&
+      previousConversationId &&
+      (continuityBroken || conversationId !== previousConversationId)
+    ) {
+      this.historyInternals.onHistoryContinuityChanged?.({
+        previousConversationId,
+        conversationId,
+      });
+    }
+    this.config.setStoredSessionId?.(session.sessionId);
+    if (conversationId) {
+      this.config.setStoredConversationId?.(conversationId);
+      this.historyInternals.setStoredConversationRevision?.(
+        session.conversationRevision ?? null
+      );
+    }
+    return session;
+  }
+
+  /** Wrap an uncached init so nothing installs until the winner commits. */
+  private prepared(session: ClientSession): PreparedClientSession {
+    let settled = false;
+    return {
+      session,
+      commit: () => {
+        if (settled) return;
+        settled = true;
+        this.clientSession = session;
+        this.resetClientToolsFingerprint();
+      },
+      discard: () => {
+        settled = true;
+      },
+    };
+  }
+
+  /**
+   * Transactional reopen of a known conversation. Always bypasses the session
+   * cache, never sends the stored session id, and needs a credential the server
+   * will accept (stored visitor token or a caller-supplied proof).
+   */
+  public async prepareConversationSession(
+    conversationId: string,
+    opts?: { proof?: string | null }
+  ): Promise<PreparedClientSession> {
+    if (!this.isClientTokenMode()) {
+      throw new Error('prepareConversationSession() only available in client token mode');
+    }
+    if (!this.isHistoryCapable()) {
+      throw new HistoryClientError(
+        'history_disabled',
+        'Visitor history is disabled for this surface'
+      );
+    }
+    await this.historyInternals.historyBootstrapReady;
+    const proof = opts?.proof ?? null;
+    const visitorToken = await this.readVisitorToken();
+    if (!visitorToken && !proof) {
+      throw new HistoryClientError(
+        'conversation_credential_missing',
+        'Reopening a conversation requires a stored visitor token or an identity proof'
+      );
+    }
+    const session = await this.createClientSession({
+      conversationId,
+      identityProof: proof,
+    });
+    return this.prepared(session);
+  }
+
+  /** Transactional new conversation: no stored session id, no conversation id. */
+  public async prepareNewConversationSession(): Promise<PreparedClientSession> {
+    if (!this.isClientTokenMode()) {
+      throw new Error('prepareNewConversationSession() only available in client token mode');
+    }
+    await this.historyInternals.historyBootstrapReady;
+    const session = await this.createClientSession({});
+    return this.prepared(session);
   }
 
   /**

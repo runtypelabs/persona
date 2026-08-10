@@ -12,6 +12,7 @@ import {
   AgentWidgetEvent,
   AgentWidgetStorageAdapter,
   AgentWidgetStoredState,
+  WidgetHistoryInternals,
   AgentWidgetControllerEventMap,
   AgentWidgetVoiceStateEvent,
   AgentWidgetStateEvent,
@@ -166,6 +167,7 @@ import {
   defaultJsonActionParser
 } from "./utils/actions";
 import { createLocalStorageAdapter } from "./utils/storage";
+import { createVisitorStore, type VisitorStore } from "./utils/visitor-store";
 import { componentRegistry } from "./components/registry";
 import {
   renderComponentDirective,
@@ -671,6 +673,13 @@ export const createAgentExperience = (
       : (config.storageAdapter ?? createLocalStorageAdapter());
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
+  // Resolves once stored state has been applied (or its load failed). Every
+  // history-capable init path waits on it, so a fast network can never race an
+  // async storage adapter. Always resolves, never rejects.
+  let resolveHistoryBootstrap!: () => void;
+  const historyBootstrapReady = new Promise<void>((resolve) => {
+    resolveHistoryBootstrap = resolve;
+  });
 
   let shouldOpenAfterStateLoaded = false;
 
@@ -745,6 +754,10 @@ export const createAgentExperience = (
       }
     }
   }
+
+  // Only the async adapter path defers the gate (resolved with hydration
+  // below); every synchronous exit above, including a load throw, is done here.
+  if (!pendingStoredState) resolveHistoryBootstrap();
 
   const getSessionMetadata = () => persistentMetadata;
   const updateSessionMetadata = (
@@ -822,7 +835,11 @@ export const createAgentExperience = (
   let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
   let scrollToBottomFeature = config.features?.scrollToBottom ?? {};
   let scrollBehaviorFeature = config.features?.scrollBehavior ?? {};
-  const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
+  // Live-read: `update()` may change the persistState shape, which re-keys the
+  // visitor store.
+  const currentKeyPrefix = () =>
+    (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
+  const persistKeyPrefix = currentKeyPrefix();
   const eventStreamDbName = `${persistKeyPrefix}event-stream`;
   let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
   const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 2000;
@@ -6677,21 +6694,90 @@ export const createAgentExperience = (
 
   // Add session ID persistence callbacks for client token mode
   // These allow the widget to resume conversations by passing session_id to /client/init
+  // Conversation-id callbacks defer to host-supplied ones; only the internal
+  // revision writer is synthesized alongside a synthesized id writer.
+  const hostOwnsConversationId = Boolean(config.setStoredConversationId);
+  const dropMetadataKey = (key: string) =>
+    updateSessionMetadata((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  const readMetadataString = (key: string): string | null => {
+    const stored = persistentMetadata[key];
+    return typeof stored === 'string' ? stored : null;
+  };
   if (config.clientToken) {
     config = {
       ...config,
-      getStoredSessionId: () => {
-        const storedId = persistentMetadata['sessionId'];
-        return typeof storedId === 'string' ? storedId : null;
-      },
+      getStoredSessionId: () => readMetadataString('sessionId'),
       setStoredSessionId: (sessionId: string) => {
         updateSessionMetadata((prev) => ({
           ...prev,
           sessionId: sessionId,
         }));
       },
+      clearStoredSessionId:
+        config.clearStoredSessionId ?? (() => dropMetadataKey('sessionId')),
+      getStoredConversationId:
+        config.getStoredConversationId ?? (() => readMetadataString('conversationId')),
+      setStoredConversationId:
+        config.setStoredConversationId ??
+        ((conversationId: string) => {
+          updateSessionMetadata((prev) => ({ ...prev, conversationId }));
+        }),
+      clearStoredConversationId:
+        config.clearStoredConversationId ?? (() => dropMetadataKey('conversationId')),
     };
   }
+
+  // Visitor-history credential store, keyed on (clientToken, keyPrefix,
+  // persistence-disabled). Owned here and injected into every client the
+  // session builds; `update()` rebuilds it when that tuple changes.
+  const historyStoreToken = (): string | null =>
+    config.features?.history?.enabled === true ? (config.clientToken ?? null) : null;
+  const buildVisitorStore = (token: string) =>
+    createVisitorStore(token, currentKeyPrefix(), config.persistState === false);
+  const initialStoreToken = historyStoreToken();
+  let visitorStore: VisitorStore | null = initialStoreToken
+    ? buildVisitorStore(initialStoreToken)
+    : null;
+  let historyInternals: WidgetHistoryInternals = {
+    ...(visitorStore ? { visitorStore } : {}),
+    historyBootstrapReady,
+    ...(hostOwnsConversationId
+      ? {}
+      : {
+          setStoredConversationRevision: (revision: string | null) => {
+            if (revision === null) {
+              dropMetadataKey('conversationRevision');
+              return;
+            }
+            updateSessionMetadata((prev) => ({
+              ...prev,
+              conversationRevision: revision,
+            }));
+          },
+        }),
+  };
+  const syncVisitorStore = () => {
+    const token = historyStoreToken();
+    if (
+      token &&
+      visitorStore?.matches(token, currentKeyPrefix(), config.persistState === false)
+    ) {
+      return;
+    }
+    if (!token && !visitorStore) return;
+    // Never clear the old namespace: it belongs to the prior surface/config.
+    visitorStore?.destroy();
+    visitorStore = token ? buildVisitorStore(token) : null;
+    const nextInternals: WidgetHistoryInternals = { ...historyInternals };
+    if (visitorStore) nextInternals.visitorStore = visitorStore;
+    else delete nextInternals.visitorStore;
+    historyInternals = nextInternals;
+    session.setHistoryInternals(historyInternals);
+  };
 
   // Global timer for live-updating tool elapsed time spans.
   // Runs at 100ms while any [data-tool-elapsed] span exists in the message area,
@@ -7024,7 +7110,7 @@ export const createAgentExperience = (
         eventBus.emit("stream:resumed", { executionId, after: lastEventId });
       }
     }
-  });
+  }, historyInternals);
 
   sessionRef.current = session;
 
@@ -7032,6 +7118,8 @@ export const createAgentExperience = (
   // reconnect's backoff timer and focus/online listeners don't outlive the
   // widget (cancel() → teardownReconnect()).
   destroyCallbacks.push(() => session.cancel());
+  // Drop the visitor store's `storage` listener; a client rebuild must not leak one.
+  destroyCallbacks.push(() => visitorStore?.destroy());
 
   // Mirror read-aloud playback state into the action buttons, and surface it as
   // a controller event (parallel to message:copy / message:feedback).
@@ -7144,6 +7232,7 @@ export const createAgentExperience = (
       })
       .finally(() => {
         welcomeHydrated = true;
+        resolveHistoryBootstrap();
         maybeBootResume();
       });
   } else {
@@ -9368,6 +9457,8 @@ export const createAgentExperience = (
       });
 
       postprocess = buildPostprocessor(config, actionManager, handleResubmitRequested);
+      // Re-key the visitor store before any client rebuild sees the new config.
+      syncVisitorStore();
       session.updateConfig(config);
       renderMessagesWithPlugins(
         messagesWrapper,
