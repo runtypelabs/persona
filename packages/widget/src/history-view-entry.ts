@@ -14,4 +14,19 @@ export { createHistoryView } from "./components/history-view";
 export type {
   HistoryViewOptions,
   HistoryViewHandle,
+  HistoryViewPresentation,
+  HistoryViewPendingAction,
 } from "./components/history-view";
+export {
+  HISTORY_VIEW_COPY_DEFAULTS,
+  resolveHistoryViewCopy,
+} from "./components/history-view/copy";
+export type {
+  HistoryViewCopyInput,
+  HistoryViewExtraCopy,
+  ResolvedHistoryViewCopy,
+} from "./components/history-view/copy";
+export type {
+  HistoryListState,
+  HistoryListErrorReason,
+} from "./components/history-view/state";

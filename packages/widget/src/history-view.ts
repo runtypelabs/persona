@@ -12,4 +12,18 @@
  */
 
 export { createHistoryView } from "./history-view-entry";
-export type { HistoryViewOptions, HistoryViewHandle } from "./history-view-entry";
+export {
+  HISTORY_VIEW_COPY_DEFAULTS,
+  resolveHistoryViewCopy,
+} from "./history-view-entry";
+export type {
+  HistoryViewOptions,
+  HistoryViewHandle,
+  HistoryViewPresentation,
+  HistoryViewPendingAction,
+  HistoryViewCopyInput,
+  HistoryViewExtraCopy,
+  ResolvedHistoryViewCopy,
+  HistoryListState,
+  HistoryListErrorReason,
+} from "./history-view-entry";
