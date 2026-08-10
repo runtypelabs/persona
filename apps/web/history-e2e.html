@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <title>History e2e fixture</title>
+  <style>
+    /* Internal fixture: deliberately plain so nothing competes with the widget. */
+    html, body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { padding: 16px; background: #f6f6f6; }
+    #e2e-host {
+      width: 960px;
+      height: 640px;
+      max-width: 100%;
+      display: flex;
+      background: #fff;
+      border: 1px solid #ddd;
+      box-sizing: border-box;
+    }
+    #e2e-status { font: 12px/1.6 ui-monospace, monospace; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <!--
+    Internal end-to-end fixture for the Playwright history suite (e2e/).
+    Deliberately absent from examples-nav: it is a test surface, not a demo.
+    The shipped demos are history-demo.html and home-screen-demo.html.
+
+    Query parameters:
+      mode=demo|intercepted   demo mounts the in-memory provider; intercepted
+                              mounts a clientToken widget whose /v1/client/*
+                              traffic the suite fakes with route interception.
+      presentation=panel|rail|auto
+      width=<css px>          initial host container width
+      throwRenderView=1       registers a plugin whose renderHistoryView throws
+      persist=0|1             persistState (intercepted mode defaults to on)
+      keyPrefix=<prefix>      persistState key prefix
+  -->
+  <div id="e2e-status">booting</div>
+  <div id="e2e-host"></div>
+  <script type="module" src="/src/history-e2e.ts"></script>
+</body>
+</html>

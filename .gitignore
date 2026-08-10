@@ -8,6 +8,12 @@ dist
 build
 coverage
 
+# Playwright
+test-results
+playwright-report
+blob-report
+.playwright
+
 # Logs
 npm-debug.log*
 yarn-debug.log*
