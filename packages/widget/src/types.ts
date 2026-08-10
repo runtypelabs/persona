@@ -8,6 +8,8 @@ import type {
 import type { TargetResolver } from "./utils/target";
 import type { VisitorStore } from "./utils/visitor-store";
 import type { HistoryWireMessage } from "./utils/history-messages";
+// Internal seam (not exported from any entry); type-only, so the cycle is erased.
+import type { HistoryProvider } from "./internal/history-provider";
 import type { IconName } from "./utils/icons";
 
 export type { TargetResolver, ResolvedTarget } from "./utils/target";
@@ -4381,6 +4383,15 @@ export type HistoryDisplayProjection = {
 };
 
 /**
+ * Pending projection marker. Only ids are stored: the display strings already
+ * live in the persisted messages and are never duplicated.
+ */
+export type PendingDisplayProjections = {
+  conversationId: string;
+  messageIds: string[];
+};
+
+/**
  * Internal history dependencies the controller injects into the session and
  * every client it builds. Not part of the public config surface.
  */
@@ -4388,8 +4399,26 @@ export interface WidgetHistoryInternals {
   visitorStore?: VisitorStore;
   /** Resolves once stored state has been applied; gates history-capable init. */
   historyBootstrapReady?: Promise<void>;
+  /**
+   * The one production provider is built by the shell from client-token config
+   * (or taken from the internal demo registry). Session/UI history code depends
+   * on this seam, never on `AgentWidgetClient`.
+   */
+  historyProvider?: HistoryProvider;
   /** Persist the revision beside the active conversation id (internal only). */
   setStoredConversationRevision?: (revision: string | null) => void;
+  getStoredConversationRevision?: () => string | null;
+  /** "Show earlier messages" cursor for the persisted transcript. */
+  setStoredMessageCursor?: (cursor: string | null) => void;
+  getStoredMessageCursor?: () => string | null;
+  /**
+   * Display projections finalized in the browser but not yet acknowledged by
+   * the server. Absent callbacks mean memory-only (persistence disabled).
+   */
+  setPendingDisplayProjections?: (
+    pending: PendingDisplayProjections | null
+  ) => void;
+  getPendingDisplayProjections?: () => PendingDisplayProjections | null;
   onHistoryAvailabilityChanged?: (available: boolean) => void;
   /** Deduped status changes; carries no token, proof, or identity value. */
   onHistoryIdentityStatusChanged?: (status: HistoryIdentityStatus) => void;
@@ -4408,6 +4437,11 @@ export type ClientChatRequest = {
     id?: string;
     role: 'user' | 'assistant' | 'system';
     content: MessageContent;
+    /**
+     * Visitor-visible projection, sent only where it diverges from the model
+     * channel above (contract fact #15). Never model input or merge authority.
+     */
+    displayContent?: string;
   }>;
   /** ID for the expected assistant response message */
   assistantMessageId?: string;

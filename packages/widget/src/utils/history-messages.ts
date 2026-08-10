@@ -234,6 +234,22 @@ export function mapWireMessages(
   return mapped;
 }
 
+/**
+ * The visitor-visible projection when it diverges from the model channel that
+ * `/client/chat` stores (contract fact #15). `undefined` means the stored model
+ * content already IS the projection, so nothing extra needs sending.
+ */
+export function divergentDisplayProjection(
+  message: AgentWidgetMessage
+): string | undefined {
+  const display = message.content;
+  if (typeof display !== "string" || display === "") return undefined;
+  const model =
+    message.contentParts ?? message.llmContent ?? message.rawContent ?? display;
+  if (typeof model === "string" && model === display) return undefined;
+  return display;
+}
+
 /** True when the server withheld this history message's content. */
 export function isHistoryDisplayUnavailable(
   message: AgentWidgetMessage

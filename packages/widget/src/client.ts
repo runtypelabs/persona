@@ -51,6 +51,7 @@ import { VERSION } from "./version";
 
 /** History transcripts stay on the wire shape; `utils/history-messages.ts` maps them. */
 export type { HistoryWireMessage } from "./utils/history-messages";
+import { divergentDisplayProjection } from "./utils/history-messages";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
@@ -298,6 +299,12 @@ export class AgentWidgetClient {
   // Evidence-based identity state. Null means "never moved off the resting
   // state", which is recomputed from config so `update()` stays honest.
   private historyIdentityStatus: HistoryIdentityStatus | null = null;
+  // Fan-out beside the single internals callback: the Runtype history provider
+  // bridges these into the generic seam. Cleared with the client instance.
+  private historyIdentitySubscribers = new Set<
+    (status: HistoryIdentityStatus) => void
+  >();
+  private historyAvailabilitySubscribers = new Set<(available: boolean) => void>();
 
   // WebMCP: page-discovered tool consumption (see ./webmcp-bridge).
   // Constructed lazily: null when `config.webmcp?.enabled !== true`.
@@ -538,11 +545,35 @@ export class AgentWidgetClient {
       );
     }
     this.historyInternals.onHistoryAvailabilityChanged?.(false);
+    for (const subscriber of [...this.historyAvailabilitySubscribers]) {
+      subscriber(false);
+    }
   }
 
   /** Public, secret-free view of the current identity state. */
   public getHistoryIdentityStatus(): HistoryIdentityStatus {
     return this.historyIdentityStatus ?? this.restingIdentityStatus();
+  }
+
+  /** Deduped status notifications; carries no token, proof, or identity value. */
+  public subscribeHistoryIdentityStatus(
+    callback: (status: HistoryIdentityStatus) => void
+  ): () => void {
+    this.historyIdentitySubscribers.add(callback);
+    return () => {
+      this.historyIdentitySubscribers.delete(callback);
+    };
+  }
+
+  /** Fires only on the one-way 403 degrade; availability never returns. */
+  public subscribeHistoryAvailability(
+    callback: (available: boolean) => void
+  ): () => void {
+    this.historyAvailabilitySubscribers.add(callback);
+    if (this.historyUnavailable) callback(false);
+    return () => {
+      this.historyAvailabilitySubscribers.delete(callback);
+    };
   }
 
   /** Config-derived state before any per-operation evidence exists. */
@@ -581,6 +612,7 @@ export class AgentWidgetClient {
     this.historyIdentityStatus = next;
     if (unchanged) return;
     this.historyInternals.onHistoryIdentityStatusChanged?.(next);
+    for (const subscriber of [...this.historyIdentitySubscribers]) subscriber(next);
   }
 
   /**
@@ -1621,15 +1653,24 @@ export class AgentWidgetClient {
         : undefined;
       
       // Common (tools-independent) fields for the chat request.
+      const historyCapable = this.isHistoryCapable();
       const baseChatRequest: Omit<ClientChatRequest, 'clientTools' | 'clientToolsFingerprint'> = {
         sessionId: session.sessionId,
         // Filter out messages with empty content to prevent validation errors
-        messages: options.messages.filter(hasValidContent).map(m => ({
-          id: m.id, // Include message ID for tracking
-          role: m.role,
-          // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
-          content: m.contentParts ?? m.llmContent ?? m.rawContent ?? m.content,
-        })),
+        messages: options.messages.filter(hasValidContent).map(m => {
+          // The visitor-visible projection rides along only where it diverges
+          // from the model channel, and only on the history-capable plane.
+          const displayContent = historyCapable
+            ? divergentDisplayProjection(m)
+            : undefined;
+          return {
+            id: m.id, // Include message ID for tracking
+            role: m.role,
+            // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
+            content: m.contentParts ?? m.llmContent ?? m.rawContent ?? m.content,
+            ...(displayContent !== undefined && { displayContent }),
+          };
+        }),
         // Include pre-generated assistant message ID if provided
         ...(options.assistantMessageId && { assistantMessageId: options.assistantMessageId }),
         // Include metadata/context from middleware if present (excluding sessionId)

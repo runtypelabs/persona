@@ -1,4 +1,8 @@
-import { AgentWidgetClient, type SSEEventCallback } from "./client";
+import {
+  AgentWidgetClient,
+  HistoryClientError,
+  type SSEEventCallback,
+} from "./client";
 import { isWebMcpToolName } from "./webmcp-bridge";
 import {
   SUGGEST_REPLIES_TOOL_NAME,
@@ -22,7 +26,10 @@ import {
   InjectSystemMessageOptions,
   InjectComponentDirectiveOptions,
   PersonaArtifactRecord,
-  PersonaArtifactManualUpsert
+  PersonaArtifactManualUpsert,
+  HistoryDisplayProjection,
+  HistoryScope,
+  PendingDisplayProjections
 } from "./types";
 import {
   generateUserMessageId,
@@ -44,6 +51,17 @@ import type {
   WidgetHistoryInternals
 } from "./types";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
+import { HistoryProviderError } from "./internal/history-provider";
+import type {
+  HistoryConversationSummary,
+  HistoryOperationContext,
+  HistoryProvider,
+  PreparedHistoryActivation,
+} from "./internal/history-provider";
+import {
+  divergentDisplayProjection,
+  mergeWireMessagesById,
+} from "./utils/history-messages";
 import {
   createVoiceProvider,
   isVoiceSupported,
@@ -147,7 +165,63 @@ type SessionCallbacks = {
     handle: ResumableHandle;
     attempt?: number;
   }) => void;
+  /** Active-record/sendability changes the history UI renders. */
+  onHistoryStateChanged?: (state: SessionHistoryState) => void;
+  /** Non-error, secret-free status notices (recovery, continuity, diagnostics). */
+  onHistoryNotice?: (notice: SessionHistoryNotice) => void;
 };
+
+/** Session-owned history state; carries no credential or identity value. */
+export type SessionHistoryState = {
+  activeConversationId: string | null;
+  conversationRevision: string | null;
+  /** Cursor for "show earlier messages"; `null` at the start of the transcript. */
+  nextMessageCursor: string | null;
+  /** Sending is refused until the recoverable state clears. */
+  recovery: "new_conversation_required" | null;
+  sendBlocked: boolean;
+};
+
+/** One prepended history page, plus the cursor for the next older one. */
+export type HistoryOlderPage = {
+  messages: AgentWidgetMessage[];
+  nextMessageCursor: string | null;
+};
+
+export type SessionHistoryNoticeCode =
+  /** A 410 was recovered into a fresh conversation carrying only the new turn. */
+  | "conversation_deleted_recovered"
+  /** The replacement conversation could not be prepared; Retry is required. */
+  | "new_conversation_required"
+  /** A boot/continuity transition invalidated the local transcript. */
+  | "history_continuity_reset"
+  /** Projection finalization failed after its one retry; the marker is kept. */
+  | "projection_finalization_failed";
+
+export type SessionHistoryNotice = {
+  code: SessionHistoryNoticeCode;
+  message: string;
+};
+
+/** Session-layer history failures. Provider I/O failures use `HistoryProviderError`. */
+export type SessionHistoryErrorCode =
+  /** A turn is streaming or resuming; switching would abandon a live answer. */
+  | "conversation_busy"
+  /** No history provider is installed for this widget. */
+  | "history_unavailable"
+  /** A later selection won; this result was discarded without side effects. */
+  | "superseded"
+  /** The active record is gone and a replacement could not be prepared. */
+  | "new_conversation_required";
+
+export class SessionHistoryError extends Error {
+  public readonly code: SessionHistoryErrorCode;
+  constructor(code: SessionHistoryErrorCode, message: string) {
+    super(message);
+    this.name = "SessionHistoryError";
+    this.code = code;
+  }
+}
 
 /**
  * Build the user-facing content shown when a dispatch fails before any
@@ -303,11 +377,36 @@ export class AgentWidgetSession {
   private voiceActive = false;
   private voiceStatus: VoiceStatus = 'disconnected';
 
+  // ── Visitor conversation history (D5) ──────────────────────────
+  // Identity of the ONE currently open record; not a conversation→session map.
+  private activeConversationId: string | null = null;
+  private activeConversationRevision: string | null = null;
+  private historyNextMessageCursor: string | null = null;
+  /** Monotonic: a later selection supersedes every earlier fetch/prepare. */
+  private historyOpenEpoch = 0;
+  /** Blocks `setClientSession`'s welcome branch across a reopen re-init. */
+  private suppressWelcomeInjection = false;
+  private historyRecovery: "new_conversation_required" | null = null;
+  private historySendBlocked = false;
+  /** Continuity wipe / boot reconciliation; dispatch waits on it. */
+  private historyGate: Promise<void> | null = null;
+  /** Deduped by `(id, cursor)` so repeated clicks issue one request. */
+  private olderPageRequests = new Map<string, Promise<HistoryOlderPage>>();
+  /** Serializes projection finalization against every other operation. */
+  private projectionFinalizationPromise: Promise<void> | null = null;
+  /** Message id → projection the server has acknowledged (sent or finalized). */
+  private acknowledgedProjections = new Map<string, string>();
+  private pendingProjections: PendingDisplayProjections | null = null;
+  /** Persisted revision as it stood before boot init overwrote it. */
+  private bootConversationRevision: string | null = null;
+  private bootRevisionCaptured = false;
+
   constructor(
     private config: AgentWidgetConfig = {},
     private callbacks: SessionCallbacks,
     private historyInternals: WidgetHistoryInternals = {}
   ) {
+    this.historyInternals = this.composeHistoryInternals(historyInternals);
     this.messages = [...(config.initialMessages ?? [])].map((message) => ({
       ...message,
       sequence: message.sequence ?? this.nextSequence()
@@ -772,6 +871,11 @@ export class AgentWidgetSession {
     // stored ids before the controller has applied restored state.
     if (this.config.features?.history?.enabled) {
       await this.historyInternals.historyBootstrapReady;
+      // Snapshot before init overwrites it: boot reconciliation compares the
+      // init revision against what the LAST page load persisted.
+      this.bootConversationRevision =
+        this.historyInternals.getStoredConversationRevision?.() ?? null;
+      this.bootRevisionCaptured = true;
     }
 
     try {
@@ -791,18 +895,25 @@ export class AgentWidgetSession {
    */
   public setClientSession(session: ClientSession): void {
     this.clientSession = session;
-    
-    // Optionally add welcome message from session config
-    if (session.config.welcomeMessage && this.messages.length === 0) {
-      const welcomeMessage: AgentWidgetMessage = {
-        id: `welcome-${Date.now()}`,
-        role: "assistant",
-        content: session.config.welcomeMessage,
-        createdAt: new Date().toISOString(),
-        sequence: this.nextSequence()
-      };
-      this.appendMessage(welcomeMessage);
-    }
+    this.injectWelcomeMessage(session);
+  }
+
+  /**
+   * Welcome injection is skipped while `suppressWelcomeInjection` is latched:
+   * reopening a stored conversation is not a new thread, and the hydrated
+   * transcript would otherwise race a welcome bubble.
+   */
+  private injectWelcomeMessage(session: ClientSession): void {
+    if (this.suppressWelcomeInjection) return;
+    if (!session.config.welcomeMessage || this.messages.length !== 0) return;
+    const welcomeMessage: AgentWidgetMessage = {
+      id: `welcome-${Date.now()}`,
+      role: "assistant",
+      content: session.config.welcomeMessage,
+      createdAt: new Date().toISOString(),
+      sequence: this.nextSequence()
+    };
+    this.appendMessage(welcomeMessage);
   }
 
   /**
@@ -878,8 +989,871 @@ export class AgentWidgetSession {
    * client and any rebuilt one share the same store.
    */
   public setHistoryInternals(internals: WidgetHistoryInternals): void {
-    this.historyInternals = internals;
-    this.client.setHistoryInternals(internals);
+    this.historyInternals = this.composeHistoryInternals(internals);
+    this.client.setHistoryInternals(this.historyInternals);
+  }
+
+  // ==========================================================================
+  // Visitor conversation history (docs/visitor-history-implementation-plan D5)
+  // ==========================================================================
+
+  /**
+   * The session always owns the continuity transition, whether or not the shell
+   * supplied its own observer: a credential/record break must wipe local state
+   * before the replacement session becomes sendable.
+   */
+  private composeHistoryInternals(
+    internals: WidgetHistoryInternals
+  ): WidgetHistoryInternals {
+    const hostContinuity = internals.onHistoryContinuityChanged;
+    return {
+      ...internals,
+      onHistoryContinuityChanged: (info) => {
+        this.handleHistoryContinuityChanged(info);
+        hostContinuity?.(info);
+      },
+    };
+  }
+
+  private get historyProvider(): HistoryProvider | null {
+    return this.historyInternals.historyProvider ?? null;
+  }
+
+  private requireHistoryProvider(): HistoryProvider {
+    const provider = this.historyProvider;
+    if (!provider) {
+      throw new SessionHistoryError(
+        "history_unavailable",
+        "No conversation history provider is installed"
+      );
+    }
+    return provider;
+  }
+
+  /**
+   * One resolved scope per logical action. An explicitly requested scope the
+   * provider cannot serve fails locally rather than silently downgrading.
+   */
+  private historyContext(scope?: HistoryScope): HistoryOperationContext {
+    const provider = this.requireHistoryProvider();
+    const resolved =
+      scope ??
+      this.config.features?.history?.scope ??
+      (this.config.getIdentityProof ? "verified-user" : "browser");
+    if (!provider.capabilities.scopes.includes(resolved)) {
+      throw new HistoryProviderError(
+        "unsupported_scope",
+        "This history scope is not supported."
+      );
+    }
+    return { scope: resolved };
+  }
+
+  public getHistoryState(): SessionHistoryState {
+    return {
+      activeConversationId: this.activeConversationId,
+      conversationRevision: this.activeConversationRevision,
+      nextMessageCursor: this.historyNextMessageCursor,
+      recovery: this.historyRecovery,
+      sendBlocked: this.historySendBlocked,
+    };
+  }
+
+  public getActiveConversationId(): string | null {
+    return this.activeConversationId;
+  }
+
+  private emitHistoryState(): void {
+    this.callbacks.onHistoryStateChanged?.(this.getHistoryState());
+  }
+
+  private notifyHistory(
+    code: SessionHistoryNoticeCode,
+    message: string
+  ): void {
+    this.callbacks.onHistoryNotice?.({ code, message });
+  }
+
+  /** Pending destructive/reconciliation work every other operation waits on. */
+  public async awaitHistorySettled(): Promise<void> {
+    const gate = this.historyGate;
+    if (gate) await gate.catch(() => {});
+    const finalization = this.projectionFinalizationPromise;
+    if (finalization) await finalization.catch(() => {});
+  }
+
+  private assertHistoryIdle(): void {
+    if (this.streaming || this.status === "paused" || this.status === "resuming") {
+      throw new SessionHistoryError(
+        "conversation_busy",
+        "Finish or stop the current turn before switching conversations"
+      );
+    }
+  }
+
+  public listConversations(opts?: {
+    cursor?: string;
+    limit?: number;
+    targetId?: string;
+    scope?: HistoryScope;
+  }) {
+    const provider = this.requireHistoryProvider();
+    return provider.list({
+      ...(opts?.cursor ? { cursor: opts.cursor } : {}),
+      ...(opts?.limit !== undefined ? { limit: opts.limit } : {}),
+      ...(opts?.targetId !== undefined ? { targetId: opts.targetId } : {}),
+      context: this.historyContext(opts?.scope),
+    });
+  }
+
+  /**
+   * Transactional reopen: read the newest page, prepare an authorized
+   * activation, then commit only if this selection still wins. Nothing mutates
+   * the active conversation before `commit()`.
+   */
+  public async openConversation(
+    id: string,
+    opts?: { scope?: HistoryScope }
+  ): Promise<{
+    summary: HistoryConversationSummary;
+    nextMessageCursor: string | null;
+  }> {
+    const provider = this.requireHistoryProvider();
+    this.assertHistoryIdle();
+    const context = this.historyContext(opts?.scope);
+    await this.awaitHistorySettled();
+    const epoch = ++this.historyOpenEpoch;
+
+    const page = await provider.getPage(id, { context });
+    if (epoch !== this.historyOpenEpoch) {
+      throw new SessionHistoryError("superseded", "A later selection won");
+    }
+
+    const prepared = await provider.prepareOpen(id, { context });
+    if (epoch !== this.historyOpenEpoch) {
+      prepared.discard();
+      throw new SessionHistoryError("superseded", "A later selection won");
+    }
+
+    // The reopened transcript is not a new conversation: never inject welcome.
+    this.suppressWelcomeInjection = true;
+    try {
+      await this.commitActivation(prepared);
+    } finally {
+      this.suppressWelcomeInjection = false;
+    }
+
+    this.activeConversationId = prepared.conversationId || id;
+    this.activeConversationRevision =
+      prepared.conversationRevision || page.conversationRevision || null;
+    this.historyNextMessageCursor = page.nextCursor;
+    this.historyRecovery = null;
+    this.historySendBlocked = false;
+    this.resetConversationScopedState();
+    // Server projections are by definition acknowledged.
+    for (const message of page.messages) {
+      this.acknowledgedProjections.set(message.id, message.content);
+    }
+    // Metadata first, transcript last: the transcript emit is what persists.
+    this.persistConversationMetadata();
+    this.hydrateMessages(page.messages);
+    this.emitHistoryState();
+    return { summary: page.summary, nextMessageCursor: page.nextCursor };
+  }
+
+  /**
+   * Prepend one older page. Deduped by `(id, cursor)`; merges by id and repaints
+   * once (the `injectMessageBatch` single-render pattern).
+   */
+  public loadOlderMessages(
+    id: string,
+    cursor?: string | null,
+    opts?: { scope?: HistoryScope }
+  ): Promise<HistoryOlderPage> {
+    const provider = this.requireHistoryProvider();
+    const context = this.historyContext(opts?.scope);
+    const resolvedCursor = cursor ?? this.historyNextMessageCursor;
+    if (!resolvedCursor) {
+      return Promise.resolve({ messages: [], nextMessageCursor: null });
+    }
+    const key = `${id} ${resolvedCursor}`;
+    const inflight = this.olderPageRequests.get(key);
+    if (inflight) return inflight;
+
+    const request = this.fetchOlderPage(provider, id, resolvedCursor, context)
+      .finally(() => {
+        this.olderPageRequests.delete(key);
+      });
+    this.olderPageRequests.set(key, request);
+    return request;
+  }
+
+  private async fetchOlderPage(
+    provider: HistoryProvider,
+    id: string,
+    cursor: string,
+    context: HistoryOperationContext
+  ): Promise<HistoryOlderPage> {
+    const oldest = this.messages[0]?.createdAt;
+    const page = await provider.getPage(id, {
+      cursor,
+      ...(oldest ? { beforeCreatedAt: oldest } : {}),
+      context,
+    });
+    // A conversation switch during the fetch retires this page.
+    if (this.activeConversationId && this.activeConversationId !== id) {
+      return { messages: [], nextMessageCursor: page.nextCursor };
+    }
+    const merged = mergeWireMessagesById(this.messages, page.messages);
+    this.messages = this.sortMessages(
+      merged.map((message) => this.ensureSequence(message))
+    );
+    this.historyNextMessageCursor = page.nextCursor;
+    for (const message of page.messages) {
+      this.acknowledgedProjections.set(message.id, message.content);
+    }
+    this.historyInternals.setStoredMessageCursor?.(page.nextCursor);
+    this.callbacks.onMessagesChanged([...this.messages]);
+    this.emitHistoryState();
+    return { messages: page.messages, nextMessageCursor: page.nextCursor };
+  }
+
+  /**
+   * The canonical new-thread operation. A failed prepare leaves the current
+   * conversation completely intact.
+   */
+  public async startNewConversation(opts?: {
+    scope?: HistoryScope;
+  }): Promise<void> {
+    const provider = this.requireHistoryProvider();
+    const context = this.historyContext(opts?.scope);
+    await this.awaitHistorySettled();
+    const epoch = ++this.historyOpenEpoch;
+    const prepared = await provider.prepareStartNew({ context });
+    if (epoch !== this.historyOpenEpoch) {
+      prepared.discard();
+      throw new SessionHistoryError("superseded", "A later action won");
+    }
+    await this.installFreshConversation(prepared);
+  }
+
+  /**
+   * Clear local + persisted conversation state, then commit the replacement.
+   * Welcome injection is deliberately allowed once the transcript is empty.
+   */
+  private async installFreshConversation(
+    prepared: PreparedHistoryActivation
+  ): Promise<void> {
+    this.discardConversationState();
+    await this.commitActivation(prepared);
+    this.activeConversationId = prepared.conversationId || null;
+    this.activeConversationRevision = prepared.conversationRevision || null;
+    this.historyNextMessageCursor = null;
+    this.historyRecovery = null;
+    this.historySendBlocked = false;
+    this.persistConversationMetadata();
+    this.emitHistoryState();
+  }
+
+  /**
+   * Deleting the active record (or everything) is already irreversible: the
+   * transcript is destroyed first, then a replacement session is prepared.
+   */
+  public async deleteConversation(
+    id: string,
+    opts?: { scope?: HistoryScope }
+  ): Promise<void> {
+    const provider = this.requireHistoryProvider();
+    const context = this.historyContext(opts?.scope);
+    await this.awaitHistorySettled();
+    await provider.delete(id, { context });
+    if (id !== this.activeConversationId) return;
+    await this.recoverFromDestroyedConversation(context);
+  }
+
+  public async clearConversationHistory(opts?: {
+    targetId?: string;
+    scope?: HistoryScope;
+  }): Promise<{ deleted: number }> {
+    const provider = this.requireHistoryProvider();
+    const context = this.historyContext(opts?.scope);
+    await this.awaitHistorySettled();
+    const result = await provider.deleteAll({
+      ...(opts?.targetId !== undefined ? { targetId: opts.targetId } : {}),
+      context,
+    });
+    await this.recoverFromDestroyedConversation(context);
+    return result;
+  }
+
+  /**
+   * Revoke this browser's history credential. Resolves (never rejects) on
+   * remote failure; the local wipe is unconditional either way.
+   */
+  public async resetHistoryDevice(): Promise<{
+    remoteRevocationConfirmed: boolean;
+  }> {
+    const provider = this.requireHistoryProvider();
+    if (!provider.resetDevice) {
+      throw new SessionHistoryError(
+        "history_unavailable",
+        "This history provider cannot reset the device"
+      );
+    }
+    this.historyOpenEpoch += 1;
+    this.projectionFinalizationPromise = null;
+    try {
+      return await provider.resetDevice();
+    } finally {
+      this.discardConversationState();
+      this.activeConversationId = null;
+      this.activeConversationRevision = null;
+      this.historyNextMessageCursor = null;
+      this.historyRecovery = null;
+      this.historySendBlocked = false;
+      this.emitHistoryState();
+    }
+  }
+
+  private async recoverFromDestroyedConversation(
+    context: HistoryOperationContext
+  ): Promise<void> {
+    // Supersede anything still in flight for the record being destroyed.
+    this.historyOpenEpoch += 1;
+    this.projectionFinalizationPromise = null;
+    this.discardConversationState();
+    this.activeConversationId = null;
+    this.activeConversationRevision = null;
+    this.historyNextMessageCursor = null;
+    this.historySendBlocked = true;
+    this.historyRecovery = null;
+    this.emitHistoryState();
+    await this.prepareReplacementConversation(context);
+  }
+
+  /**
+   * Never reinstalls the deleted session. A failed preparation leaves an
+   * explicit recoverable state instead of the old transcript.
+   */
+  private async prepareReplacementConversation(
+    context: HistoryOperationContext
+  ): Promise<void> {
+    const provider = this.historyProvider;
+    if (!provider) {
+      this.historySendBlocked = false;
+      this.emitHistoryState();
+      return;
+    }
+    try {
+      const prepared = await provider.prepareStartNew({ context });
+      await this.installFreshConversation(prepared);
+    } catch {
+      this.historySendBlocked = true;
+      this.historyRecovery = "new_conversation_required";
+      this.emitHistoryState();
+      this.notifyHistory(
+        "new_conversation_required",
+        "That conversation was deleted. Start a new conversation to continue."
+      );
+    }
+  }
+
+  /** The next explicit action retries a failed replacement preparation. */
+  private async retryRequiredConversation(): Promise<void> {
+    if (this.historyRecovery !== "new_conversation_required") return;
+    const provider = this.historyProvider;
+    if (!provider) return;
+    this.historyRecovery = null;
+    await this.prepareReplacementConversation(this.historyContext());
+    if (this.historyRecovery === "new_conversation_required") {
+      throw new SessionHistoryError(
+        "new_conversation_required",
+        "A new conversation is required before sending"
+      );
+    }
+  }
+
+  /**
+   * Install a prepared activation. The provider's commit also invokes the
+   * session binding (`bindActivatedSession`); the fallback covers a shell that
+   * has not wired that callback yet.
+   */
+  private async commitActivation(
+    prepared: PreparedHistoryActivation
+  ): Promise<void> {
+    await prepared.commit();
+    const installed = this.client.getClientSession();
+    if (installed && installed.sessionId !== this.clientSession?.sessionId) {
+      this.bindActivatedSession(installed);
+    }
+  }
+
+  /**
+   * Session-owned binding for a winning prepared activation. Installs the
+   * client session WITHOUT the ordinary welcome branch while the reopen latch
+   * is set, and persists the replacement ids through the normal storage path.
+   */
+  public bindActivatedSession(session: ClientSession): void {
+    this.clientSession = session;
+    this.config.setStoredSessionId?.(session.sessionId);
+    if (session.conversationId) {
+      this.activeConversationId = session.conversationId;
+      this.activeConversationRevision = session.conversationRevision ?? null;
+      this.config.setStoredConversationId?.(session.conversationId);
+      this.historyInternals.setStoredConversationRevision?.(
+        session.conversationRevision ?? null
+      );
+    }
+    if (!this.suppressWelcomeInjection) this.injectWelcomeMessage(session);
+  }
+
+  private persistConversationMetadata(): void {
+    if (this.activeConversationId) {
+      this.config.setStoredConversationId?.(this.activeConversationId);
+    } else {
+      this.config.clearStoredConversationId?.();
+    }
+    this.historyInternals.setStoredConversationRevision?.(
+      this.activeConversationRevision
+    );
+    this.historyInternals.setStoredMessageCursor?.(
+      this.historyNextMessageCursor
+    );
+  }
+
+  /** Conversation-scoped caches that must not leak across records. */
+  private resetConversationScopedState(): void {
+    this.agentExecution = null;
+    this.clearArtifactState();
+    this.webMcpInflightKeys.clear();
+    this.webMcpResolvedKeys.clear();
+    this.client.resetClientToolsFingerprint();
+    this.acknowledgedProjections.clear();
+    this.setPendingProjections(null);
+  }
+
+  /**
+   * Irreversible local + persisted clear. Used by new-conversation, active
+   * deletion, 410 recovery, reset, and the continuity wipe.
+   */
+  private discardConversationState(): void {
+    this.stopSpeaking();
+    this.abortController?.abort();
+    this.abortController = null;
+    this.teardownReconnect();
+    this.abortWebMcpResolves();
+    this.messages = [];
+    this.resetConversationScopedState();
+    this.olderPageRequests.clear();
+    this.config.clearStoredSessionId?.();
+    this.config.clearStoredConversationId?.();
+    this.historyInternals.setStoredConversationRevision?.(null);
+    this.historyInternals.setStoredMessageCursor?.(null);
+    this.setStreaming(false);
+    this.setStatus("idle");
+    this.callbacks.onMessagesChanged([...this.messages]);
+  }
+
+  /**
+   * D6 continuity wipe (session side): a replacement visitor, identity rebind,
+   * cross-tab convergence, or credential expiry selected a different record.
+   * Invalidate synchronously; dispatch stays blocked until cleanup completes.
+   */
+  private handleHistoryContinuityChanged(info: {
+    previousConversationId: string | null;
+    conversationId: string;
+  }): void {
+    this.historyOpenEpoch += 1;
+    this.projectionFinalizationPromise = null;
+    this.historySendBlocked = true;
+    this.discardConversationState();
+    this.activeConversationId = info.conversationId;
+    this.activeConversationRevision = null;
+    this.historyNextMessageCursor = null;
+    this.historyRecovery = null;
+    this.emitHistoryState();
+    this.notifyHistory(
+      "history_continuity_reset",
+      "This browser was reconnected to a different conversation, so the previous messages were cleared."
+    );
+    this.historyGate = Promise.resolve().then(() => {
+      this.historySendBlocked = false;
+      this.historyGate = null;
+      this.emitHistoryState();
+    });
+  }
+
+  /**
+   * Authoritative boot reconciliation (D4). Runs after a `conversationId` boot
+   * resume and before chat becomes sendable: an unchanged revision needs no
+   * detail fetch; a changed or absent one refreshes from the server's newest
+   * page under the same scope.
+   */
+  public reconcileBootConversation(opts?: {
+    scope?: HistoryScope;
+  }): Promise<void> {
+    const provider = this.historyProvider;
+    const conversationId =
+      this.clientSession?.conversationId ??
+      this.config.getStoredConversationId?.() ??
+      this.activeConversationId;
+    if (!provider || !conversationId) return Promise.resolve();
+
+    const context = this.historyContext(opts?.scope);
+    this.historySendBlocked = true;
+    this.emitHistoryState();
+    const run = this.runBootReconciliation(
+      provider,
+      conversationId,
+      context
+    ).finally(() => {
+      this.historySendBlocked = this.historyRecovery !== null;
+      if (this.historyGate === run) this.historyGate = null;
+      this.emitHistoryState();
+    });
+    this.historyGate = run;
+    return run;
+  }
+
+  private async runBootReconciliation(
+    provider: HistoryProvider,
+    conversationId: string,
+    context: HistoryOperationContext
+  ): Promise<void> {
+    this.activeConversationId = conversationId;
+    const initRevision =
+      this.clientSession?.conversationRevision ??
+      this.activeConversationRevision ??
+      null;
+    const persistedRevision = this.bootRevisionCaptured
+      ? this.bootConversationRevision
+      : (this.historyInternals.getStoredConversationRevision?.() ?? null);
+    this.bootRevisionCaptured = false;
+    this.historyNextMessageCursor =
+      this.historyInternals.getStoredMessageCursor?.() ??
+      this.historyNextMessageCursor;
+
+    // Any locally finalized projection still owed to the server goes first, so
+    // display reconciliation cannot complete against a stale server record.
+    await this.replayPendingProjections();
+
+    if (initRevision && persistedRevision && initRevision === persistedRevision) {
+      this.activeConversationRevision = initRevision;
+      return;
+    }
+
+    const page = await provider.getPage(conversationId, { context });
+    const serverIds = new Set(page.messages.map((message) => message.id));
+    const overlaps = this.messages.some((message) => serverIds.has(message.id));
+    const pageOldest = page.messages[0]?.createdAt;
+
+    let reconciled: AgentWidgetMessage[];
+    if (!overlaps) {
+      // No shared id: the local transcript is not this record's newest window.
+      reconciled = page.messages.map((message) => this.ensureSequence(message));
+    } else {
+      const durableId = this.resumable ? this.activeAssistantMessageId : null;
+      const survivors = this.messages.filter((message) => {
+        if (serverIds.has(message.id)) return true;
+        if (message.id === durableId) return true;
+        // Older than the server window is legitimately absent from this page.
+        return pageOldest !== undefined && message.createdAt < pageOldest;
+      });
+      reconciled = mergeWireMessagesById(survivors, page.messages).map(
+        (message) => this.ensureSequence(message)
+      );
+    }
+
+    this.historyNextMessageCursor = page.nextCursor;
+    this.activeConversationRevision =
+      page.conversationRevision || initRevision || null;
+    this.acknowledgedProjections.clear();
+    for (const message of page.messages) {
+      this.acknowledgedProjections.set(message.id, message.content);
+    }
+    // Metadata first, transcript last: one persist covers both.
+    this.persistConversationMetadata();
+    this.messages = this.sortMessages(reconciled);
+    this.callbacks.onMessagesChanged([...this.messages]);
+  }
+
+  // ── Display-projection finalization ────────────────────────────
+
+  /** Runtype transport op: active session + browser scope, never a proof. */
+  private projectionFinalizationEnabled(): boolean {
+    return (
+      this.config.features?.history?.enabled === true &&
+      this.isClientTokenMode()
+    );
+  }
+
+  private setPendingProjections(pending: PendingDisplayProjections | null): void {
+    this.pendingProjections = pending;
+    // Memory-only when the shell supplies no persistence seam.
+    this.historyInternals.setPendingDisplayProjections?.(pending);
+  }
+
+  private readPendingProjections(): PendingDisplayProjections | null {
+    return (
+      this.historyInternals.getPendingDisplayProjections?.() ??
+      this.pendingProjections
+    );
+  }
+
+  /** Record what the dispatch payload carried as each message's projection. */
+  private recordDispatchedProjections(messages: AgentWidgetMessage[]): void {
+    if (!this.projectionFinalizationEnabled()) return;
+    for (const message of messages) {
+      const projection = divergentDisplayProjection(message);
+      if (projection !== undefined) {
+        this.acknowledgedProjections.set(message.id, projection);
+      }
+    }
+  }
+
+  /**
+   * After a terminal assistant message, finalize any browser-derived projection
+   * the server cannot have. Painting is never delayed by this.
+   */
+  private scheduleProjectionFinalization(): void {
+    if (!this.projectionFinalizationEnabled()) return;
+    const conversationId = this.activeConversationId;
+    if (!conversationId) return;
+    const batch: HistoryDisplayProjection[] = [];
+    for (const message of this.messages) {
+      if (message.role !== "assistant" || message.streaming) continue;
+      const projection = divergentDisplayProjection(message);
+      if (projection === undefined) continue;
+      if (this.acknowledgedProjections.get(message.id) === projection) continue;
+      batch.push({ id: message.id, displayContent: projection });
+    }
+    if (batch.length === 0) return;
+    this.setPendingProjections({
+      conversationId,
+      messageIds: batch.map((item) => item.id),
+    });
+    this.enqueueProjectionFinalization(conversationId, batch);
+  }
+
+  /** Serialized: operations await this chain instead of racing it. */
+  private enqueueProjectionFinalization(
+    conversationId: string,
+    batch: HistoryDisplayProjection[]
+  ): void {
+    const previous = this.projectionFinalizationPromise ?? Promise.resolve();
+    const chain = previous
+      .catch(() => {})
+      .then(() => this.finalizeProjections(conversationId, batch, false))
+      .finally(() => {
+        if (this.projectionFinalizationPromise === chain) {
+          this.projectionFinalizationPromise = null;
+        }
+      });
+    this.projectionFinalizationPromise = chain;
+  }
+
+  private async finalizeProjections(
+    conversationId: string,
+    batch: HistoryDisplayProjection[],
+    retried: boolean
+  ): Promise<void> {
+    // A switch/reset/delete already invalidated this marker.
+    if (this.activeConversationId !== conversationId) return;
+    try {
+      const { conversationRevision } =
+        await this.client.finalizeDisplayProjections(conversationId, batch);
+      for (const item of batch) {
+        this.acknowledgedProjections.set(item.id, item.displayContent);
+      }
+      if (this.activeConversationId === conversationId && conversationRevision) {
+        this.activeConversationRevision = conversationRevision;
+      }
+      this.clearFinalizedMarker(conversationId, batch);
+    } catch (error) {
+      if (!retried && this.isTransientProjectionError(error)) {
+        await this.finalizeProjections(conversationId, batch, true);
+        return;
+      }
+      if (
+        error instanceof HistoryClientError &&
+        (error.code === "not_found" || error.code === "conversation_deleted")
+      ) {
+        // The record is gone: drop the projection instead of retrying forever.
+        this.clearFinalizedMarker(conversationId, batch);
+        return;
+      }
+      // Marker retained for the next boot/dispatch; the turn itself succeeded.
+      this.notifyHistory(
+        "projection_finalization_failed",
+        "Some message formatting could not be saved for history; it will be retried."
+      );
+    }
+  }
+
+  /** Transport-shaped failures only; a contract failure is not retried. */
+  private isTransientProjectionError(error: unknown): boolean {
+    if (error instanceof HistoryClientError) return error.code === "request_failed";
+    return error instanceof Error;
+  }
+
+  private clearFinalizedMarker(
+    conversationId: string,
+    batch: HistoryDisplayProjection[]
+  ): void {
+    const pending = this.readPendingProjections();
+    if (!pending || pending.conversationId !== conversationId) return;
+    const done = new Set(batch.map((item) => item.id));
+    const remaining = pending.messageIds.filter((id) => !done.has(id));
+    this.setPendingProjections(
+      remaining.length ? { conversationId, messageIds: remaining } : null
+    );
+  }
+
+  /**
+   * Boot replay: rebuild the batch from the persisted ids plus the local
+   * message content, then finalize before display reconciliation completes.
+   */
+  public async replayPendingProjections(): Promise<void> {
+    if (!this.projectionFinalizationEnabled()) return;
+    const pending = this.readPendingProjections();
+    if (!pending) return;
+    if (
+      this.activeConversationId &&
+      pending.conversationId !== this.activeConversationId
+    ) {
+      // Stale marker from another record: never replay it into this one.
+      this.setPendingProjections(null);
+      return;
+    }
+    const batch: HistoryDisplayProjection[] = [];
+    for (const id of pending.messageIds) {
+      const message = this.messages.find((candidate) => candidate.id === id);
+      if (!message || typeof message.content !== "string") continue;
+      batch.push({ id, displayContent: message.content });
+    }
+    if (batch.length === 0) {
+      this.setPendingProjections(null);
+      return;
+    }
+    this.enqueueProjectionFinalization(pending.conversationId, batch);
+    await this.projectionFinalizationPromise?.catch(() => {});
+  }
+
+  /**
+   * A local transcript mutation whose response carries no new revision: clear
+   * the persisted one rather than guessing, so the next boot refreshes safely.
+   */
+  private invalidateConversationRevision(): void {
+    if (!this.activeConversationId) return;
+    this.activeConversationRevision = null;
+    this.historyInternals.setStoredConversationRevision?.(null);
+  }
+
+  /** Blocks a send until the owning history transition finishes. */
+  private async awaitHistorySendable(): Promise<void> {
+    await this.awaitHistorySettled();
+    if (this.historyRecovery === "new_conversation_required") {
+      await this.retryRequiredConversation();
+    }
+  }
+
+  private static isConversationDeleted(error: unknown): boolean {
+    return (
+      error instanceof HistoryClientError &&
+      error.code === "conversation_deleted"
+    );
+  }
+
+  /**
+   * Safe 410 recovery (D5). The old payload would recreate the transcript that
+   * was just deleted, so the retry carries ONLY the just-submitted user turn.
+   */
+  private async dispatchWithDeletedRecovery(
+    snapshot: AgentWidgetMessage[],
+    controller: AbortController,
+    assistantMessageId: string,
+    userMessageId: string
+  ): Promise<void> {
+    this.recordDispatchedProjections(snapshot);
+    try {
+      await this.client.dispatch(
+        { messages: snapshot, signal: controller.signal, assistantMessageId },
+        this.handleEvent
+      );
+      return;
+    } catch (error) {
+      if (!AgentWidgetSession.isConversationDeleted(error)) throw error;
+      const replacement = await this.recoverFromDeletedConversation(userMessageId);
+      // No recoverable turn (or no fresh record): surface the original 410.
+      if (!replacement) throw error;
+      // A second 410 propagates: exactly one recovery attempt per turn.
+      this.recordDispatchedProjections([replacement]);
+      await this.client.dispatch(
+        {
+          messages: [replacement],
+          signal: controller.signal,
+          assistantMessageId,
+        },
+        this.handleEvent
+      );
+    }
+  }
+
+  /**
+   * Capture only the newly submitted user message, destroy the deleted record's
+   * local state, and initialize a fresh owned conversation to retry into.
+   */
+  private async recoverFromDeletedConversation(
+    userMessageId: string
+  ): Promise<AgentWidgetMessage | null> {
+    const submitted = this.messages.find(
+      (message) => message.id === userMessageId
+    );
+    if (!submitted) return null;
+    const captured: AgentWidgetMessage = { ...submitted };
+
+    this.historyOpenEpoch += 1;
+    this.projectionFinalizationPromise = null;
+    this.discardConversationState();
+    this.activeConversationId = null;
+    this.activeConversationRevision = null;
+    this.historyNextMessageCursor = null;
+
+    // The recovered turn is the whole transcript: no welcome bubble in front.
+    this.suppressWelcomeInjection = true;
+    try {
+      const provider = this.historyProvider;
+      if (provider) {
+        const prepared = await provider.prepareStartNew({
+          context: this.historyContext(),
+        });
+        await this.installFreshConversation(prepared);
+      } else {
+        this.client.clearClientSession();
+        const session = await this.client.initSession();
+        this.bindActivatedSession(session);
+      }
+    } catch {
+      this.historySendBlocked = true;
+      this.historyRecovery = "new_conversation_required";
+      this.emitHistoryState();
+      this.notifyHistory(
+        "new_conversation_required",
+        "That conversation was deleted. Start a new conversation to continue."
+      );
+      return null;
+    } finally {
+      this.suppressWelcomeInjection = false;
+    }
+
+    // Restore only the user's own turn: it is the entire new transcript.
+    this.appendMessage(captured);
+    this.setStreaming(true);
+    this.notifyHistory(
+      "conversation_deleted_recovered",
+      "That conversation was deleted. Started a new conversation."
+    );
+    return this.messages.find((message) => message.id === captured.id) ?? captured;
   }
 
   public updateConfig(next: AgentWidgetConfig) {
@@ -1250,6 +2224,16 @@ export class AgentWidgetSession {
     )
       return;
 
+    // History transitions (continuity wipe, boot reconciliation, projection
+    // finalization, replacement init) own the record this turn would land in.
+    if (
+      this.historyGate ||
+      this.projectionFinalizationPromise ||
+      this.historySendBlocked
+    ) {
+      await this.awaitHistorySendable();
+    }
+
     this.stopSpeaking();
     this.abortController?.abort();
     // A new user turn supersedes any in-flight WebMCP resolve from the prior
@@ -1329,13 +2313,11 @@ export class AgentWidgetSession {
     const snapshot = [...this.messages];
 
     try {
-      await this.client.dispatch(
-        {
-          messages: snapshot,
-          signal: controller.signal,
-          assistantMessageId // Pass expected assistant message ID for tracking
-        },
-        this.handleEvent
+      await this.dispatchWithDeletedRecovery(
+        snapshot,
+        controller,
+        assistantMessageId,
+        userMessageId
       );
     } catch (error) {
       // A durable drop fired the dispatch wrapper's `finally` (plain `idle`)
@@ -3071,6 +4053,10 @@ export class AgentWidgetSession {
         if (this.webMcpResolveControllers.size === 0) {
           this.setStreaming(false);
           this.abortController = null;
+          // The turn mutated the record and the chat response carries no
+          // revision; finalize any browser-only projection right after.
+          this.invalidateConversationRevision();
+          this.scheduleProjectionFinalization();
         }
         // Mark agent execution as complete when streaming ends: UNLESS local
         // tools are still outstanding. A batched WebMCP resume is deferred to
