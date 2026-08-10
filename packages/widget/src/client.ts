@@ -334,11 +334,23 @@ export class AgentWidgetClient {
   }
 
   /**
+   * Base URL for Runtype client-surface routes (`/v1/client/*`,
+   * `/v1/agents/*`). Strips a configured `/v1/dispatch` suffix so an apiUrl
+   * pointed at the dispatch endpoint still resolves its sibling routes. Not
+   * used for proxy-mode URLs, whose resume route is `${apiUrl}/resume`.
+   */
+  private clientApiBase(): string {
+    return (
+      this.config.apiUrl?.replace(/\/+$/, '').replace(/\/v1\/dispatch$/, '') ||
+      DEFAULT_CLIENT_API_BASE
+    );
+  }
+
+  /**
    * Get the appropriate API URL based on mode
    */
   private getClientApiUrl(endpoint: 'init' | 'chat' | 'resume'): string {
-    const baseUrl = this.config.apiUrl?.replace(/\/+$/, '').replace(/\/v1\/dispatch$/, '') || DEFAULT_CLIENT_API_BASE;
-    return `${baseUrl}/v1/client/${endpoint}`;
+    return `${this.clientApiBase()}/v1/client/${endpoint}`;
   }
 
   /**
@@ -459,8 +471,7 @@ export class AgentWidgetClient {
    * Get the feedback API URL
    */
   private getFeedbackApiUrl(): string {
-    const baseUrl = this.config.apiUrl?.replace(/\/+$/, '').replace(/\/v1\/dispatch$/, '') || DEFAULT_CLIENT_API_BASE;
-    return `${baseUrl}/v1/client/feedback`;
+    return `${this.clientApiBase()}/v1/client/feedback`;
   }
 
   /**
@@ -934,10 +945,7 @@ export class AgentWidgetClient {
     approval: { agentId: string; executionId: string; approvalId: string },
     decision: 'approved' | 'denied'
   ): Promise<Response> {
-    const baseUrl = this.config.apiUrl
-      ?.replace(/\/+$/, '')
-      .replace(/\/v1\/dispatch$/, '') || DEFAULT_CLIENT_API_BASE;
-    const url = `${baseUrl}/v1/agents/${approval.agentId}/approve`;
+    const url = `${this.clientApiBase()}/v1/agents/${approval.agentId}/approve`;
 
     let headers: Record<string, string> = {
       'Content-Type': 'application/json',

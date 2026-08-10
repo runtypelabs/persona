@@ -168,6 +168,11 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       freeTextPlaceholder: "Type your answer…",
       submitLabel: "Send",
     },
+    history: {
+      enabled: false,
+      presentation: "panel",
+      showScopeStatus: true,
+    },
   },
   // Placeholder copy that models the right shape: verb-first, user-voice,
   // one line. Integrators should swap in domain prompts.
@@ -290,6 +295,8 @@ export function mergeWithDefaults(
       const csa = config.features?.streamAnimation;
       const dau = DEFAULT_WIDGET_CONFIG.features?.askUserQuestion;
       const cau = config.features?.askUserQuestion;
+      const dh = DEFAULT_WIDGET_CONFIG.features?.history;
+      const ch = config.features?.history;
       const mergedArtifacts =
         da === undefined && ca === undefined
           ? undefined
@@ -333,6 +340,17 @@ export function mergeWithDefaults(
                 ...cau?.styles,
               },
             };
+      const mergedHistory =
+        dh === undefined && ch === undefined
+          ? undefined
+          : {
+              ...dh,
+              ...ch,
+              copy: {
+                ...dh?.copy,
+                ...ch?.copy,
+              },
+            };
       return {
         ...DEFAULT_WIDGET_CONFIG.features,
         ...config.features,
@@ -341,6 +359,7 @@ export function mergeWithDefaults(
         ...(mergedArtifacts !== undefined ? { artifacts: mergedArtifacts } : {}),
         ...(mergedStreamAnimation !== undefined ? { streamAnimation: mergedStreamAnimation } : {}),
         ...(mergedAskUserQuestion !== undefined ? { askUserQuestion: mergedAskUserQuestion } : {}),
+        ...(mergedHistory !== undefined ? { history: mergedHistory } : {}),
       };
     })(),
     suggestionChips: config.suggestionChips ?? DEFAULT_WIDGET_CONFIG.suggestionChips,

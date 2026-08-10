@@ -2284,6 +2284,11 @@ export type AgentWidgetFeatureFlags = {
    */
   askUserQuestion?: AgentWidgetAskUserQuestionFeature;
   /**
+   * Per-visitor conversation history. Client token mode only; disabled by
+   * default so no capability flag is sent on init and no UI mounts.
+   */
+  history?: AgentWidgetHistoryFeature;
+  /**
    * Built-in `suggest_replies` follow-ups. When the assistant invokes the
    * tool, the widget shows the suggestions using `suggestions.followUps` and
    * immediately resumes the execution: fire-and-forget, no user input awaited.
@@ -2507,6 +2512,141 @@ export type AgentWidgetAskUserQuestionFeature = {
   /** Style overrides for the sheet and pills. */
   styles?: AgentWidgetAskUserQuestionStyles;
 };
+
+/**
+ * Copy overrides for the visitor-facing conversation history surface. These are
+ * the widget's only localization mechanism for history, so every user-visible
+ * history string is listed here.
+ */
+export interface AgentWidgetHistoryCopy {
+  /** Title of the history view. Defaults to "Messages". */
+  viewTitle?: string;
+  /** Heading shown when the visitor has no stored conversations. */
+  emptyTitle?: string;
+  /** Body text shown when the visitor has no stored conversations. */
+  emptyDescription?: string;
+  /** Heading shown when a history request fails. */
+  errorTitle?: string;
+  /** Body text shown when a history request fails. */
+  errorDescription?: string;
+  /** Label for the retry action on the error state. */
+  retryLabel?: string;
+  /** Heading shown after a 429 rate-limited history response. */
+  rateLimitedTitle?: string;
+  /** Body text shown after a 429 rate-limited history response. */
+  rateLimitedDescription?: string;
+  /** Confirmation prompt before deleting a single conversation. */
+  deleteConversationConfirm?: string;
+  /** Confirmation prompt before deleting every conversation in the active scope. */
+  clearHistoryConfirm?: string;
+  /** Confirmation prompt before detaching this browser from its history identity. */
+  resetIdentityConfirm?: string;
+  /** Label for the action that starts a new server conversation. */
+  newConversationLabel?: string;
+  /** Label for the action that prepends the previous transcript page. */
+  showEarlierMessagesLabel?: string;
+  /** Status notice after a deleted conversation was recovered into a fresh one. */
+  conversationDeletedNotice?: string;
+  /** Status notice after this browser was detached from its history identity. */
+  identityResetNotice?: string;
+  /** Status notice when a local reset succeeded but server revocation was unconfirmed. */
+  identityResetUnconfirmedNotice?: string;
+  /** Time-group heading for conversations updated today. */
+  groupToday?: string;
+  /** Time-group heading for conversations updated yesterday. */
+  groupYesterday?: string;
+  /** Time-group heading for the trailing 7-day window. */
+  groupPrevious7Days?: string;
+  /** Time-group heading for the trailing 30-day window. */
+  groupPrevious30Days?: string;
+  /** Time-group heading for older conversations, grouped by month and year. */
+  groupMonthYear?: string;
+  /** Scope title when history is limited to this browser. */
+  browserOnlyTitle?: string;
+  /** Scope description when history is limited to this browser. */
+  browserOnlyDescription?: string;
+  /** Scope title while an identity proof is being resolved. */
+  verifyingTitle?: string;
+  /** Scope description while an identity proof is being resolved. */
+  verifyingDescription?: string;
+  /** Scope title when history is available across signed-in devices. */
+  verifiedTitle?: string;
+  /** Scope description when history is available across signed-in devices. */
+  verifiedDescription?: string;
+  /** Scope title when the visitor must sign in again to view account history. */
+  authenticationRequiredTitle?: string;
+  /** Scope description when the visitor must sign in again to view account history. */
+  authenticationRequiredDescription?: string;
+  /** Scope title when the host identity provider threw or rejected. */
+  identityProviderFailedTitle?: string;
+  /** Scope description when the host identity provider threw or rejected. */
+  identityProviderFailedDescription?: string;
+  /** Scope title when the server did not admit a supplied identity proof. */
+  proofNotAdmittedTitle?: string;
+  /** Scope description when the server did not admit a supplied identity proof. */
+  proofNotAdmittedDescription?: string;
+  /** Label for the action that retries identity resolution. */
+  retryIdentityLabel?: string;
+}
+
+/**
+ * Feature config for per-visitor conversation history. Client token mode only:
+ * the UI never renders for proxy/agent sessions.
+ */
+export interface AgentWidgetHistoryFeature {
+  /** Master switch. Default false: no capability flag on init, no UI. */
+  enabled?: boolean;
+  /** Page size for the conversation list (default 25, server max 100). */
+  pageSize?: number;
+  /**
+   * Default history placement. "panel" replaces the conversation surface;
+   * "rail" requests a side navigation host whenever it is at least 720px wide
+   * and collapses to panel below that; "auto" uses rail only for a wide inline
+   * or docked shell and keeps floating launchers panel-based at every width.
+   * Default "panel".
+   */
+  presentation?: "panel" | "rail" | "auto";
+  /**
+   * History scope. Defaults to "verified-user" when getIdentityProof exists,
+   * otherwise "browser". Before this browser has been identity-bound, a null
+   * proof falls back to browser scope for that operation. Once visitor.endUserId
+   * is non-null, a null proof fails closed until the host resets history identity.
+   */
+  scope?: HistoryScope;
+  /** Copy overrides. Every user-visible history string must be here. */
+  copy?: AgentWidgetHistoryCopy;
+  /** Show the evidence-based history scope/status beneath the Messages heading. Default true. */
+  showScopeStatus?: boolean;
+}
+
+/** Resolved scope for a logical history operation. */
+export type HistoryScope = "browser" | "verified-user";
+
+/**
+ * Evidence-based history identity state. Never inferred from the mere presence
+ * of `getIdentityProof`, and never carries token, visitor, or end-user values.
+ */
+export type HistoryIdentityStatus =
+  | {
+      state: "browser_only";
+      reason:
+        | "configured_browser_scope"
+        | "no_identity_provider"
+        | "proof_unavailable_before_binding";
+    }
+  | { state: "verifying" }
+  | { state: "verified" }
+  | {
+      state: "authentication_required";
+      reason: "proof_unavailable_after_binding" | "invalid_identity_proof";
+    }
+  | { state: "identity_provider_failed" }
+  | { state: "configuration_error"; reason: "proof_not_admitted" }
+  | { state: "resetting" }
+  | {
+      state: "unavailable";
+      reason: "history_disabled" | "ineligible_mode";
+    };
 
 export type SSEEventRecord = {
   id: string;
@@ -4128,12 +4268,42 @@ export type ClientSession = {
     name: string;
     description: string | null;
   };
+  /**
+   * Active conversation record for this session. Optional only for rolling-deploy
+   * compatibility with servers that predate the visitor history contract.
+   */
+  conversationId?: string;
+  /**
+   * Canonical resolved chat target (flow or agent). Normalized from the response
+   * `targetId`, falling back to `flow.id` during rolling deployment. History code
+   * reads this, never widget config.
+   */
+  targetId?: string;
+  /** Opaque change token; differs whenever the conversation transcript mutated. */
+  conversationRevision?: string;
+  /** Visitor grant backing history. `token` appears only at mint. */
+  visitor?: ClientVisitorGrant;
   /** Configuration from the server */
   config: {
     welcomeMessage: string | null;
     placeholder: string;
     theme: Record<string, unknown> | null;
   };
+};
+
+/**
+ * Visitor credential and identity acknowledgement returned by /v1/client/init.
+ * `expiresAt` stays the wire string: it is a server-slid idle window the widget
+ * never evaluates locally.
+ */
+export type ClientVisitorGrant = {
+  id: string;
+  /** Replacement secret. Present only at mint; persist it before anything else. */
+  token?: string;
+  expiresAt: string;
+  endUserId: string | null;
+  /** Server acknowledgement of the supplied identity proof. Status metadata only. */
+  identityStatus?: "not_provided" | "admitted" | "ignored";
 };
 
 /**
@@ -4147,6 +4317,11 @@ export type ClientInitResponse = {
     name: string;
     description: string | null;
   };
+  /** Additive visitor history fields; optional for rolling-deploy compatibility. */
+  conversationId?: string;
+  targetId?: string;
+  conversationRevision?: string;
+  visitor?: ClientVisitorGrant;
   config: {
     welcomeMessage: string | null;
     placeholder: string;
@@ -5240,6 +5415,28 @@ export type AgentWidgetConfig = {
    * ```
    */
   setStoredSessionId?: (sessionId: string) => void;
+  /**
+   * Called immediately before any cross-device history request and before a
+   * conversationId resume of a conversation discovered on another device.
+   * Return a fresh end-user access token (rt_eu_… / JWT). Null uses exact-browser
+   * scope only for a never-bound visitor; a previously bound visitor fails closed
+   * until resetHistoryIdentity() runs. Never cached by the widget.
+   */
+  getIdentityProof?: () => string | null | Promise<string | null>;
+  /**
+   * Read the persisted active conversation id (client token mode only).
+   * Called only after the internal stored-state bootstrap gate resolves.
+   */
+  getStoredConversationId?: () => string | null;
+  /** Persist the active conversation id so a later boot reopens the same record. */
+  setStoredConversationId?: (conversationId: string) => void;
+  /** Drop the persisted active conversation id (new conversation, deletion, reset). */
+  clearStoredConversationId?: () => void;
+  /**
+   * Drop the persisted session id. Dedicated clear seam: it avoids widening
+   * `setStoredSessionId` and its existing host call sites.
+   */
+  clearStoredSessionId?: () => void;
   /**
    * Static headers to include with each request.
    * For dynamic headers (e.g., auth tokens), use `getHeaders` instead.

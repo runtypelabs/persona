@@ -111,6 +111,11 @@ const CONNECTION_CONFIG_KEYS = [
   "onSessionExpired",
   "getStoredSessionId",
   "setStoredSessionId",
+  "getIdentityProof",
+  "getStoredConversationId",
+  "setStoredConversationId",
+  "clearStoredConversationId",
+  "clearStoredSessionId",
 ] as const satisfies ReadonlyArray<keyof AgentWidgetConfig>;
 
 function connectionConfigChanged(

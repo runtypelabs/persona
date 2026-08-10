@@ -142,6 +142,12 @@ export type {
   AskUserQuestionOption,
   AgentWidgetAskUserQuestionFeature,
   AgentWidgetAskUserQuestionStyles,
+  // Visitor conversation history (client-token mode) types
+  AgentWidgetHistoryFeature,
+  AgentWidgetHistoryCopy,
+  HistoryScope,
+  HistoryIdentityStatus,
+  ClientVisitorGrant,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionChipsConfig,
   AgentWidgetResolvedSuggestion,
