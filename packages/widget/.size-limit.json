@@ -88,5 +88,11 @@
     "path": "dist/context-mentions-inline.js",
     "limit": "6 kB",
     "gzip": true
+  },
+  {
+    "name": "Lazy · history (Messages) view chunk (history-view.js)",
+    "path": "dist/history-view.js",
+    "limit": "1 kB",
+    "gzip": true
   }
 ]

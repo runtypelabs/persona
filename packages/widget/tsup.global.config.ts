@@ -60,5 +60,12 @@ export default defineConfig({
     // standalone `context-mentions-inline.js` chunk. Only loaded on composer mount
     // when `display: "inline"`, so chip-only pages never fetch it.
     options.external.push("@runtypelabs/persona/context-mentions-inline");
+
+    // Keep the history ("Messages") view out of the CDN payload. Same scheme:
+    // the loader's fallback `import("@runtypelabs/persona/history-view")` is a
+    // dead external import here; `index-global.ts` registers a sibling-URL
+    // loader for the standalone `history-view.js` chunk, fetched only when the
+    // visitor first opens history.
+    options.external.push("@runtypelabs/persona/history-view");
   },
 });

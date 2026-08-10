@@ -188,3 +188,31 @@ setContextMentionsInlineLoader(() => {
   }
   return import(/* @vite-ignore */ chunkUrl);
 });
+
+// ---------------------------------------------------------------------------
+// Deferred history-view loading.
+//
+// This bundle is built with `@runtypelabs/persona/history-view` external (see
+// `tsup.global.config.ts`): the Messages navigation surface is kept out of the
+// CDN payload and fetched only when the visitor first opens history. Same
+// sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setHistoryViewLoader } from "./history-view-loader";
+
+setHistoryViewLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "history-view.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the history-view.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host history-view.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});

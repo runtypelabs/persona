@@ -16,6 +16,10 @@ export default defineConfig({
       '@runtypelabs/persona/context-mentions-inline': fileURLToPath(
         new URL('./src/context-mentions-inline.ts', import.meta.url)
       ),
+      // Same for the lazy history-view chunk subpath.
+      '@runtypelabs/persona/history-view': fileURLToPath(
+        new URL('./src/history-view.ts', import.meta.url)
+      ),
     },
   },
   test: {
