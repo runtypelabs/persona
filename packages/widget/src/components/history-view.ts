@@ -237,6 +237,15 @@ function scopeCopy(
   }
 }
 
+/**
+ * Ambient states are stable information, not a call to action: the title alone
+ * shows as a quiet subtitle and the sentence attaches via `aria-describedby`.
+ * Everything else is actionable and keeps the visible block.
+ */
+function scopeAmbient(status: HistoryIdentityStatus): boolean {
+  return status.state === "verified" || status.state === "browser_only";
+}
+
 /** Identity states whose failure copy offers a retry. */
 function identityRetryable(status: HistoryIdentityStatus): boolean {
   return (
@@ -337,10 +346,14 @@ export function createHistoryView(
     newIconButton
   );
 
-  /** Explanatory scope text + identity retry; below the bar, above the list. */
+  /**
+   * Explanatory scope text + identity retry. Visible below the bar only for
+   * actionable states; ambient states keep it sr-only (see `scopeAmbient`).
+   */
   const scopeBlock = createNode("div", {
     className: "persona-history-scope-alert",
   });
+  const scopeDescriptionId = `${headingId}-scope`;
 
   const newConversationButton = createNode(
     "button",
@@ -464,8 +477,17 @@ export function createHistoryView(
       createNode("span", {
         className: "persona-history-scope-description",
         text: resolved.description,
+        attrs: { id: scopeDescriptionId },
       })
     );
+    const ambient = scopeAmbient(identityStatus);
+    scopeBlock.setAttribute(
+      "data-persona-history-scope-tone",
+      ambient ? "ambient" : "attention"
+    );
+    // Described-by only while the block is sr-only; a visible one would repeat.
+    if (ambient) scopeLine.setAttribute("aria-describedby", scopeDescriptionId);
+    else scopeLine.removeAttribute("aria-describedby");
     if (resolved.pending) scopeBlock.setAttribute("role", "status");
     else scopeBlock.removeAttribute("role");
     scopeBlock.setAttribute("data-persona-history-identity", identityStatus.state);

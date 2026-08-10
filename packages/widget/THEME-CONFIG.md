@@ -869,7 +869,10 @@ plugins can target them:
 .persona-history-scope                /* evidence-based scope line */
 .persona-history-scope-title
 .persona-history-scope-description
-.persona-history-scope-alert          /* identity block replacing the list */
+.persona-history-scope-alert          /* identity block; sr-only under
+                                         [data-persona-history-scope-tone="ambient"]
+                                         (verified / browser-only), visible for
+                                         actionable identity states */
 .persona-history-scope-alert-title
 
 /* Body, groups, rows */

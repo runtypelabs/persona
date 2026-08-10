@@ -116,6 +116,21 @@ export const HISTORY_VIEW_CSS = `
   font-size: 12px;
   color: var(--persona-text-muted, #6b7280);
 }
+/* Ambient identity states collapse to the top-bar subtitle; the sentence stays
+   in the accessibility tree for the subtitle's aria-describedby. */
+.persona-history-view
+  .persona-history-scope-alert[data-persona-history-scope-tone="ambient"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 .persona-history-view .persona-history-scope-alert-title {
   display: block;
   font-weight: 600;

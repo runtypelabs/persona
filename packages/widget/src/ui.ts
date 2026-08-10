@@ -7444,17 +7444,27 @@ export const createAgentExperience = (
   /**
    * Panel presentation obscures the conversation, so the transcript AND the
    * composer must be unreachable: a visitor must never send into a conversation
-   * they cannot see. Restores exactly what it captured.
+   * they cannot see. The shell header goes with them so the view's top bar is
+   * the single header (rail keeps it: the conversation stays primary).
+   *
+   * The widget's close (×) usually lives inside that header, but no trap
+   * results: the view's back control is the initial focus target, Escape exits,
+   * and both restore the header before focus lands. `top-right` close placement
+   * parents the × to the container, so it stays reachable either way.
+   *
+   * Restores exactly what it captured.
    */
   let restorePanelHost: (() => void) | null = null;
   const enforcePanelHost = (): void => {
     if (!restorePanelHost) return;
     body.style.display = "none";
     setHistoryHostInert(body, true);
-    // Live `footer` binding: a composer-plugin rebuild swaps it and calls
-    // syncPanelChrome, which routes back here for the replacement.
+    // Live `footer` / `header` bindings: a composer-plugin rebuild or a
+    // header-layout rebuild swaps them and re-enters here for the replacement.
     footer.hidden = true;
     setHistoryHostInert(footer, true);
+    header.style.display = "none";
+    setHistoryHostInert(header, true);
   };
   reapplyHistoryHostChrome = enforcePanelHost;
 
@@ -7462,6 +7472,8 @@ export const createAgentExperience = (
     const previousDisplay = body.style.display;
     const previousFooterHidden = footer.hidden;
     const capturedFooter = footer;
+    const capturedHeader = header;
+    const previousHeaderDisplay = header.style.display;
     restorePanelHost = () => {
       restorePanelHost = null;
       body.style.display = previousDisplay;
@@ -7471,6 +7483,13 @@ export const createAgentExperience = (
       if (footer !== capturedFooter) {
         footer.hidden = false;
         setHistoryHostInert(footer, false);
+      }
+      capturedHeader.style.display = previousHeaderDisplay;
+      setHistoryHostInert(capturedHeader, false);
+      if (header !== capturedHeader) {
+        // A replacement carries no captured state; only config decides it.
+        header.style.display = config.layout?.showHeader === false ? "none" : "";
+        setHistoryHostInert(header, false);
       }
     };
     footer.parentNode?.insertBefore(element, footer);
@@ -7691,6 +7710,8 @@ export const createAgentExperience = (
     const returnSurface = historyReturnSurface;
     const invoker = historyInvoker;
     historyVisible = false;
+    // Before focus restoration below: the invoker lives in the shell header,
+    // which is inert until this restores it.
     unmountHistoryHosts();
     // Dispose before destroy: cleanups belong to the render being torn down.
     historySurface?.dispose();
@@ -8033,6 +8054,11 @@ export const createAgentExperience = (
       historyButton?.remove();
       historyButton = null;
       return;
+    }
+    // A header rebuild detaches the old button; a stale ref must not block
+    // recreation into the replacement header.
+    if (historyButton && !historyButton.isConnected) {
+      historyButton = null;
     }
     if (!historyButton && header) {
       historyButton = buildHistoryButton();
@@ -10991,6 +11017,9 @@ export const createAgentExperience = (
         : statusIndicatorConfig.align === "center" ? "persona-text-center"
         : "persona-text-right";
       statusText.classList.add(alignClass);
+      // Last: this pass rebuilds the header and rewrites header/footer
+      // visibility, any of which would expose an open panel host's chrome.
+      reapplyHistoryHostChrome();
     },
     open() {
       if (!isPanelToggleable()) return;

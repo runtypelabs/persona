@@ -563,7 +563,7 @@ describe("history view list states", () => {
 });
 
 describe("history view scope status", () => {
-  it("shows the browser-only scope with its explanation", async () => {
+  it("collapses the browser-only scope to one subtitle with an sr-only description", async () => {
     const { root } = mount();
     await flush();
 
@@ -574,6 +574,39 @@ describe("history view scope status", () => {
     expect(block?.dataset.personaHistoryIdentity).toBe("browser_only");
     expect(block?.textContent).toContain("separate history");
     expect(block?.hasAttribute("role")).toBe(false);
+    // No second visual band: the sentence is reachable only through the subtitle.
+    expect(block?.dataset.personaHistoryScopeTone).toBe("ambient");
+    const line = root.querySelector<HTMLElement>(".persona-history-scope")!;
+    const describedBy = line.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(
+      root.querySelector(`#${describedBy}`)?.classList.contains(
+        "persona-history-scope-description"
+      )
+    ).toBe(true);
+  });
+
+  it("keeps the verified scope ambient and restores the band for attention states", async () => {
+    const { root, provider } = mount();
+    await flush();
+    const block = root.querySelector<HTMLElement>(".persona-history-scope-alert")!;
+    const line = root.querySelector<HTMLElement>(".persona-history-scope")!;
+
+    provider.setIdentityStatus({ state: "verified" });
+    await flush();
+    expect(block.dataset.personaHistoryScopeTone).toBe("ambient");
+    expect(line.hasAttribute("aria-describedby")).toBe(true);
+
+    // Actionable states stay prominent and drop the duplicate description link.
+    provider.setIdentityStatus({ state: "verifying" });
+    await flush();
+    expect(block.dataset.personaHistoryScopeTone).toBe("attention");
+    expect(line.hasAttribute("aria-describedby")).toBe(false);
+
+    provider.setIdentityStatus({ state: "identity_provider_failed" });
+    await flush();
+    expect(block.dataset.personaHistoryScopeTone).toBe("attention");
+    expect(line.hasAttribute("aria-describedby")).toBe(false);
   });
 
   it("announces an identity transition once and not on re-render", async () => {
@@ -613,6 +646,7 @@ describe("history view scope status", () => {
       reason: "invalid_identity_proof",
     });
     const block = root.querySelector<HTMLElement>(".persona-history-scope-alert");
+    expect(block?.dataset.personaHistoryScopeTone).toBe("attention");
     expect(block?.textContent).toContain("Sign in again to load account history.");
     expect(
       block?.querySelector<HTMLElement>(

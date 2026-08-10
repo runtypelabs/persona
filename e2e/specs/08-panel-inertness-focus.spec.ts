@@ -4,7 +4,8 @@ import { sel } from "../fixtures/history-page";
 /**
  * Gate 10: in panel presentation a visitor browsing Messages must not be able
  * to see or reach the composer that would send into the conversation hidden
- * underneath, and closing must return focus to the control that opened it.
+ * underneath, nor the shell header the view's top bar replaces, and closing
+ * must return focus to the control that opened it.
  * jsdom can assert the attributes; only a browser can prove real focusability.
  */
 test("panel Messages makes the conversation unreachable and returns focus", async ({
@@ -16,6 +17,7 @@ test("panel Messages makes the conversation unreachable and returns focus", asyn
   const toggle = page.locator(sel.historyToggle);
   const transcript = page.locator(sel.transcript);
   const footer = page.locator(sel.footer);
+  const header = page.locator(sel.shellHeader);
 
   await toggle.focus();
   await toggle.click();
@@ -33,6 +35,11 @@ test("panel Messages makes the conversation unreachable and returns focus", asyn
   await expect(footer).toHaveAttribute("inert", /.*/);
   expect(await footer.evaluate((el) => (el as HTMLElement).hidden)).toBe(true);
 
+  // Single header: the shell's goes with them.
+  await expect(header).toHaveAttribute("aria-hidden", "true");
+  await expect(header).toHaveAttribute("inert", /.*/);
+  expect(await header.evaluate((el) => getComputedStyle(el).display)).toBe("none");
+
   // Focus entered the view.
   await expect(page.locator(sel.close)).toBeFocused();
 
@@ -47,12 +54,14 @@ test("panel Messages makes the conversation unreachable and returns focus", asyn
         if (active.closest(".persona-widget-footer")) return "footer";
         if (active.closest("#persona-scroll-container")) return "transcript";
         if (active.closest(".persona-history-view")) return "view";
+        if (active.closest('[data-persona-theme-zone="header"]')) return "header";
         return "outside";
       })
     );
   }
   expect(reached).not.toContain("footer");
   expect(reached).not.toContain("transcript");
+  expect(reached).not.toContain("header");
   expect(reached).toContain("view");
 
   // A direct programmatic focus attempt is refused too: inert, not just hidden.
@@ -72,4 +81,7 @@ test("panel Messages makes the conversation unreachable and returns focus", asyn
   await expect(transcript).not.toHaveAttribute("inert", /.*/);
   await expect(transcript).not.toHaveAttribute("aria-hidden", /.*/);
   await expect(footer).toBeVisible();
+  await expect(header).toBeVisible();
+  await expect(header).not.toHaveAttribute("inert", /.*/);
+  await expect(header).not.toHaveAttribute("aria-hidden", /.*/);
 });
