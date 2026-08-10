@@ -20,6 +20,15 @@ import { injectStyles } from "@runtypelabs/persona/plugin-kit";
  * that decision: `renderComposer` follows the last welcome render, and a
  * disagreement (the composer hook runs first at panel construction) is
  * corrected through `requestRender()` in a microtask, before paint.
+ *
+ * History composition is optional and additive. Supply recent-conversation
+ * rows plus the async `onStartConversation` / `onOpenConversation` /
+ * `onShowConversations` callbacks and the stack grows a "Recent conversations"
+ * section between the start card and the starters. The plugin owns the pending
+ * and error rendering around those callbacks; it never touches a history
+ * provider or the internal provider registry, and the host wires the callbacks
+ * to public controller methods. With the callbacks absent, every existing
+ * behavior is unchanged.
  */
 
 /** Avatar for the greeting header. `url` wins; `text` is the emoji fallback. */
@@ -46,6 +55,25 @@ export type HomeScreenLink = {
   href: string;
 };
 
+/**
+ * One Home teaser row. The host maps a `HistoryConversationSummary` onto this
+ * shape; the plugin renders `title` and `preview` verbatim and never derives
+ * either locally.
+ */
+export type HomeScreenRecentConversation = {
+  id: string;
+  title: string;
+  preview?: string | null;
+  /** ISO timestamp, rendered as relative time inside a `<time datetime>`. */
+  updatedAt: string;
+};
+
+/**
+ * Teaser load state. `undefined` (the default) means no history composition at
+ * all, so the section is omitted and the stack behaves exactly as before.
+ */
+export type HomeScreenRecentStatus = "ready" | "loading" | "error";
+
 export type HomeScreenOptions = {
   avatar?: HomeScreenAvatar;
   /** Rendered through `ctx.renderStarter`, so the select pipeline still applies. */
@@ -57,6 +85,34 @@ export type HomeScreenOptions = {
   startersLabel?: string;
   cardsLabel?: string;
   linksLabel?: string;
+
+  // --- history composition (all optional) ----------------------------------
+
+  /** Newest first. At most three rows render, matching the Home teaser spec. */
+  recentConversations?: HomeScreenRecentConversation[];
+  /** Set it to render the section at all. Default `undefined` (no section). */
+  recentStatus?: HomeScreenRecentStatus;
+  recentLabel?: string;
+  seeAllLabel?: string;
+  recentErrorLabel?: string;
+  retryLabel?: string;
+  startErrorLabel?: string;
+  openErrorLabel?: string;
+  seeAllErrorLabel?: string;
+  /**
+   * Awaited. On success the plugin shows the conversation surface; on failure
+   * it stays on home, restores focus to the action, and shows an inline error.
+   * "Start a conversation" stays enabled even when the teaser failed to load.
+   */
+  onStartConversation?: () => void | Promise<void>;
+  /** Awaited. Same transactional rules as `onStartConversation`. */
+  onOpenConversation?: (conversationId: string) => void | Promise<void>;
+  /** Awaited. "See all" opens the host's Messages surface; home stays put. */
+  onShowConversations?: () => void | Promise<void>;
+  /** Retry control for the failed teaser. Omit it to render the message only. */
+  onRetryRecent?: () => void | Promise<void>;
+  /** Fired after the plugin switches to the conversation surface. */
+  onConversationShown?: () => void;
 };
 
 export type HomeScreenPlugin = AgentWidgetPlugin & {
@@ -64,6 +120,8 @@ export type HomeScreenPlugin = AgentWidgetPlugin & {
   headerAction: { id: string; icon: string; ariaLabel: string };
   /** Re-show the stack over the transcript. */
   showHome: () => void;
+  /** Leave home and show the conversation surface. */
+  showConversation: () => void;
   /** Merge new options and re-render, so option changes are live like config. */
   update: (next: Partial<HomeScreenOptions>) => void;
   isHome: () => boolean;
@@ -234,6 +292,156 @@ const HOME_SCREEN_CSS = `
 .persona-home__link {
   padding: 11px 14px;
 }
+
+/* Recent conversations: teaser rows only. No message count, active marker,
+   overflow menu, or delete; those live in the full Messages surface. */
+.persona-home__recent-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.persona-home__recent-all {
+  appearance: none;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--persona-accent, #171717);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 620;
+  cursor: pointer;
+}
+
+.persona-home__recent-all:hover {
+  text-decoration: underline;
+}
+
+.persona-home__recent-all:focus-visible,
+.persona-home__recent:focus-visible,
+.persona-home__recent-retry:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--persona-accent, #171717) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.persona-home__recent {
+  appearance: none;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--persona-border, #e5e7eb) 80%, transparent);
+  border-radius: 14px;
+  background: var(--persona-surface, #ffffff);
+  color: var(--persona-text, #111827);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.persona-home__recent:hover {
+  border-color: var(--persona-accent, #171717);
+}
+
+.persona-home__recent[aria-busy="true"],
+.persona-home__recent:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.persona-home__recent-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.persona-home__recent-title {
+  font-size: 14px;
+  font-weight: 620;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persona-home__recent-preview {
+  color: var(--persona-text-muted, #6b7280);
+  font-size: 12px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.persona-home__recent-time {
+  color: var(--persona-text-muted, #6b7280);
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* Shape-matched with a real row so the swap does not reflow the stack. */
+.persona-home__recent-skeleton {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--persona-border, #e5e7eb) 55%, transparent);
+  border-radius: 14px;
+}
+
+.persona-home__recent-skeleton-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--persona-text-muted, #6b7280) 18%, transparent);
+  animation: persona-home-pulse 1400ms ease-in-out infinite;
+}
+
+.persona-home__recent-skeleton-bar--title { width: 45%; }
+.persona-home__recent-skeleton-bar--preview { width: 80%; }
+
+@keyframes persona-home-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-home__recent-skeleton-bar { animation: none; }
+}
+
+.persona-home__recent-error,
+.persona-home__error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--persona-text-muted, #6b7280);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.persona-home__recent-retry {
+  appearance: none;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--persona-border, #e5e7eb) 80%, transparent);
+  border-radius: 999px;
+  background: var(--persona-surface, #ffffff);
+  color: var(--persona-text, #111827);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.persona-home__recent-retry:hover {
+  border-color: var(--persona-accent, #171717);
+}
 `;
 
 const el = <K extends keyof HTMLElementTagNameMap>(
@@ -299,6 +507,222 @@ const buildRow = (
   return row;
 };
 
+/** The Home teaser shows at most three rows; "See all" owns the rest. */
+const MAX_RECENT_ROWS = 3;
+
+/** Whole-row button: title, preview, relative time. Nothing else by contract. */
+const buildRecentRow = (
+  conversation: HomeScreenRecentConversation,
+): HTMLButtonElement => {
+  const row = el("button", "persona-home__recent");
+  row.type = "button";
+  row.dataset.conversationId = conversation.id;
+  const copy = el("span", "persona-home__recent-copy");
+  copy.appendChild(
+    el("span", "persona-home__recent-title", conversation.title),
+  );
+  if (conversation.preview) {
+    copy.appendChild(
+      el("span", "persona-home__recent-preview", conversation.preview),
+    );
+  }
+  const time = el(
+    "time",
+    "persona-home__recent-time",
+    relativeTime(conversation.updatedAt),
+  );
+  time.setAttribute("datetime", conversation.updatedAt);
+  row.append(copy, time);
+  return row;
+};
+
+const RELATIVE_UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
+  ["year", 365 * 24 * 60 * 60 * 1000],
+  ["month", 30 * 24 * 60 * 60 * 1000],
+  ["week", 7 * 24 * 60 * 60 * 1000],
+  ["day", 24 * 60 * 60 * 1000],
+  ["hour", 60 * 60 * 1000],
+  ["minute", 60 * 1000],
+];
+
+/** Localized relative time. Empty string for a value that will not parse. */
+const relativeTime = (iso: string): string => {
+  const then = Date.parse(iso);
+  if (Number.isNaN(then)) return "";
+  const diff = then - Date.now();
+  const absolute = Math.abs(diff);
+  const format = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  for (const [unit, ms] of RELATIVE_UNITS) {
+    if (absolute >= ms) return format.format(Math.round(diff / ms), unit);
+  }
+  return format.format(0, "second");
+};
+
+/**
+ * Await a host callback with the plugin's own busy/error rendering. Failure
+ * re-enables the control, returns focus to it, and leaves the surface alone.
+ */
+const runAction = (
+  control: HTMLButtonElement,
+  action: () => void | Promise<void>,
+  onSuccess: () => void,
+  onFailure: () => void,
+): void => {
+  if (control.disabled) return;
+  control.disabled = true;
+  control.setAttribute("aria-busy", "true");
+  void Promise.resolve()
+    .then(action)
+    .then(onSuccess)
+    .catch(() => {
+      control.disabled = false;
+      control.removeAttribute("aria-busy");
+      control.focus();
+      onFailure();
+    });
+};
+
+/** One-line status with an optional retry, reused by every failed callback. */
+const buildErrorNote = (
+  className: string,
+  message: string,
+  retry?: { label: string; onRetry: () => void },
+): HTMLElement => {
+  const note = el("p", className);
+  note.setAttribute("role", "status");
+  note.appendChild(document.createTextNode(message));
+  if (retry) {
+    const button = el("button", "persona-home__recent-retry", retry.label);
+    (button as HTMLButtonElement).type = "button";
+    button.addEventListener("click", retry.onRetry);
+    note.appendChild(button);
+  }
+  return note;
+};
+
+/**
+ * Recent conversations section, or null when there is nothing to show:
+ * no history composition at all, or a confirmed empty result.
+ */
+const buildRecentSection = (
+  options: HomeScreenOptions,
+  showConversation: () => void,
+): HTMLElement | null => {
+  const status = options.recentStatus;
+  if (!status) return null;
+  const rows = (options.recentConversations ?? []).slice(0, MAX_RECENT_ROWS);
+  // A confirmed empty result omits the whole section, heading included.
+  if (status === "ready" && rows.length === 0) return null;
+
+  const section = el("section", "persona-home__section");
+  const header = el("div", "persona-home__recent-header");
+  header.appendChild(
+    el(
+      "p",
+      "persona-home__section-label",
+      options.recentLabel ?? "Recent conversations",
+    ),
+  );
+  const onShowAll = options.onShowConversations;
+  if (onShowAll && status !== "error") {
+    const seeAll = el(
+      "button",
+      "persona-home__recent-all",
+      options.seeAllLabel ?? "See all",
+    );
+    seeAll.type = "button";
+    seeAll.addEventListener("click", () =>
+      runAction(
+        seeAll,
+        onShowAll,
+        () => {
+          // Messages replaces the panel body; home stays the return surface.
+          seeAll.disabled = false;
+          seeAll.removeAttribute("aria-busy");
+        },
+        () => {
+          section.querySelector(".persona-home__error")?.remove();
+          section.appendChild(
+            buildErrorNote(
+              "persona-home__error",
+              options.seeAllErrorLabel ?? "Couldn't open messages. Try again.",
+            ),
+          );
+        },
+      ),
+    );
+    header.appendChild(seeAll);
+  }
+  section.appendChild(header);
+
+  if (status === "loading") {
+    const list = el("div", "persona-home__starters");
+    list.setAttribute("role", "status");
+    list.setAttribute("aria-label", "Loading recent conversations");
+    [0, 1].forEach(() => {
+      const skeleton = el("div", "persona-home__recent-skeleton");
+      skeleton.setAttribute("aria-hidden", "true");
+      skeleton.append(
+        el(
+          "span",
+          "persona-home__recent-skeleton-bar persona-home__recent-skeleton-bar--title",
+        ),
+        el(
+          "span",
+          "persona-home__recent-skeleton-bar persona-home__recent-skeleton-bar--preview",
+        ),
+      );
+      list.appendChild(skeleton);
+    });
+    section.appendChild(list);
+    return section;
+  }
+
+  if (status === "error") {
+    const retry = options.onRetryRecent;
+    section.appendChild(
+      buildErrorNote(
+        "persona-home__recent-error",
+        options.recentErrorLabel ?? "Couldn't load recent conversations",
+        retry
+          ? { label: options.retryLabel ?? "Retry", onRetry: () => void retry() }
+          : undefined,
+      ),
+    );
+    return section;
+  }
+
+  const list = el("div", "persona-home__starters");
+  const onOpen = options.onOpenConversation;
+  rows.forEach((conversation) => {
+    const row = buildRecentRow(conversation);
+    row.addEventListener("click", () => {
+      if (!onOpen) {
+        showConversation();
+        return;
+      }
+      runAction(
+        row,
+        () => onOpen(conversation.id),
+        showConversation,
+        () => {
+          list.querySelector(".persona-home__error")?.remove();
+          row.after(
+            buildErrorNote(
+              "persona-home__error",
+              options.openErrorLabel ??
+                "Couldn't open that conversation. Try again.",
+            ),
+          );
+        },
+      );
+    });
+    list.appendChild(row);
+  });
+  section.appendChild(list);
+  return section;
+};
+
 export const createHomeScreenPlugin = (
   initialOptions: HomeScreenOptions = {},
 ): HomeScreenPlugin => {
@@ -337,6 +761,13 @@ export const createHomeScreenPlugin = (
     requestRender?.();
   };
 
+  // Explicit navigation to the conversation surface. Starter/card selections
+  // keep using `leaveHome`: their send owns the focus, not this hook.
+  const showConversation = () => {
+    leaveHome();
+    options.onConversationShown?.();
+  };
+
   return {
     id: "demo-home-screen",
     // Runs last, so a hook that cancels the selection keeps the user on home.
@@ -347,6 +778,7 @@ export const createHomeScreenPlugin = (
       ariaLabel: "Back to home",
     },
     showHome,
+    showConversation,
     isHome,
     update: (next) => {
       options = { ...options, ...next };
@@ -415,11 +847,35 @@ export const createHomeScreenPlugin = (
         options.startLabel ?? "Start a conversation",
         options.startHint ?? "We usually reply in a few minutes",
         "→",
-      );
-      start.addEventListener("click", leaveHome);
-      onCleanup(() => start.removeEventListener("click", leaveHome));
+      ) as HTMLButtonElement;
+      // A teaser that failed to load never blocks starting a conversation.
+      const startSection = el("section", "persona-home__section");
+      startSection.appendChild(start);
+      const onStart = options.onStartConversation;
+      // The re-enabled, refocused start card is the retry affordance, so the
+      // error note is a status line rather than a competing button.
+      const handleStart = onStart
+        ? () =>
+            runAction(start, onStart, showConversation, () => {
+              startSection.querySelector(".persona-home__error")?.remove();
+              startSection.appendChild(
+                buildErrorNote(
+                  "persona-home__error",
+                  options.startErrorLabel ??
+                    "Couldn't start a conversation. Try again.",
+                ),
+              );
+            })
+        : leaveHome;
+      start.addEventListener("click", handleStart);
+      onCleanup(() => start.removeEventListener("click", handleStart));
 
-      const sections: HTMLElement[] = [greeting, start];
+      const sections: HTMLElement[] = [greeting, startSection];
+
+      // Recent conversations sit directly below the start card and before the
+      // starter/card/link sections.
+      const recentSection = buildRecentSection(options, showConversation);
+      if (recentSection) sections.push(recentSection);
 
       const starters = options.starters ?? [];
       if (starters.length) {
