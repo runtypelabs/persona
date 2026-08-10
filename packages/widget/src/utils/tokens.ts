@@ -505,7 +505,11 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
   },
 };
 
-export function resolveTokenValue(theme: PersonaTheme, path: string): string | undefined {
+export function resolveTokenValue(
+  theme: PersonaTheme,
+  path: string,
+  visited: ReadonlySet<string> = new Set()
+): string | undefined {
   if (
     !path.startsWith('palette.') &&
     !path.startsWith('semantic.') &&
@@ -513,6 +517,10 @@ export function resolveTokenValue(theme: PersonaTheme, path: string): string | u
   ) {
     return path;
   }
+
+  if (visited.has(path)) return undefined;
+  const nextVisited = new Set(visited);
+  nextVisited.add(path);
 
   const parts = path.split('.');
   let current: any = theme;
@@ -530,7 +538,7 @@ export function resolveTokenValue(theme: PersonaTheme, path: string): string | u
       current.startsWith('semantic.') ||
       current.startsWith('components.'))
   ) {
-    return resolveTokenValue(theme, current);
+    return resolveTokenValue(theme, current, nextVisited);
   }
 
   return current;

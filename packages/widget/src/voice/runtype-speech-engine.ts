@@ -141,6 +141,7 @@ export class RuntypeSpeechEngine implements SpeechEngine {
       )}/speak`;
       const res = await fetch(url, {
         method: "POST",
+        redirect: "error",
         headers: {
           "Content-Type": "application/json",
           // Match Runtype's client-token auth convention. Never placed in the

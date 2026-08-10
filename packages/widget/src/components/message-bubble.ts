@@ -117,17 +117,27 @@ export const isSafeImageSrc = (src: string): boolean => {
  * with those mime types render as download links instead of vanishing.
  */
 export const isSafeMediaSrc = (src: string): boolean => {
-  const lower = src.toLowerCase();
+  const lower = src.trim().toLowerCase();
   if (lower.startsWith("javascript:")) return false;
-  if (lower.startsWith("data:text/html")) return false;
-  if (lower.startsWith("data:text/javascript")) return false;
-  if (lower.startsWith("data:text/xml")) return false;
-  if (lower.startsWith("data:application/xhtml")) return false;
-  if (lower.startsWith("data:image/svg+xml")) return false;
-  if (/^(?:https?|blob):/i.test(src)) return true;
-  if (lower.startsWith("data:")) return true;
+  if (/^(?:https?|blob):/i.test(lower)) return true;
+  if (lower.startsWith("data:")) {
+    const encodedHeader = lower.slice(5).split(",", 1)[0];
+    let header: string;
+    try {
+      header = Array.from(decodeURIComponent(encodedHeader))
+        .filter((character) => character.charCodeAt(0) > 0x20)
+        .join("");
+    } catch {
+      return false;
+    }
+    const mimeType = header.split(";", 1)[0];
+    // Fail closed for executable/markup MIME families, including legacy JS
+    // aliases and structured XML suffixes—not only the handful of exact types
+    // that prompted the original percent-encoding bypass report.
+    return !/(?:html|javascript|ecmascript|xml|svg)/i.test(mimeType);
+  }
   // Relative URLs are safe
-  if (!src.includes(":")) return true;
+  if (!lower.includes(":")) return true;
   return false;
 };
 

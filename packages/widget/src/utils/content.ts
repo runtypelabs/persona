@@ -144,7 +144,6 @@ export const IMAGE_MIME_TYPES = [
   'image/jpeg',
   'image/gif',
   'image/webp',
-  'image/svg+xml',
   'image/bmp',
 ];
 
@@ -172,7 +171,9 @@ export const ALL_SUPPORTED_MIME_TYPES = [...IMAGE_MIME_TYPES, ...DOCUMENT_MIME_T
  * Check if a MIME type is an image
  */
 export function isImageMimeType(mimeType: string): boolean {
-  return IMAGE_MIME_TYPES.includes(mimeType) || mimeType.startsWith('image/');
+  const normalizedMimeType = mimeType.split(';', 1)[0].trim().toLowerCase();
+  return normalizedMimeType !== 'image/svg+xml' &&
+    (IMAGE_MIME_TYPES.includes(normalizedMimeType) || normalizedMimeType.startsWith('image/'));
 }
 
 /**
@@ -243,6 +244,13 @@ export function validateFile(
   acceptedTypes: string[] = ALL_SUPPORTED_MIME_TYPES,
   maxSizeBytes: number = 10 * 1024 * 1024
 ): { valid: boolean; error?: string } {
+  const normalizedMimeType = file.type.split(';', 1)[0].trim().toLowerCase();
+  if (normalizedMimeType === 'image/svg+xml') {
+    return {
+      valid: false,
+      error: 'SVG files are not supported because they can contain executable content.',
+    };
+  }
   if (!acceptedTypes.includes(file.type)) {
     return {
       valid: false,

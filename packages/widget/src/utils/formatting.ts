@@ -5,13 +5,27 @@ import { parse as parsePartialJson, STR, OBJ } from "partial-json";
  * Unescapes JSON string escape sequences that LLMs often double-escape.
  * Converts literal \n, \r, \t sequences to actual control characters.
  */
-const unescapeJsonString = (str: string): string => {
-  return str
-    .replace(/\\n/g, '\n')
-    .replace(/\\r/g, '\r')
-    .replace(/\\t/g, '\t')
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\');
+export const unescapeJsonString = (str: string): string => {
+  let result = "";
+  for (let index = 0; index < str.length; index += 1) {
+    const char = str[index];
+    if (char !== "\\" || index === str.length - 1) {
+      result += char;
+      continue;
+    }
+
+    const escaped = str[index + 1];
+    if (escaped === "n") result += "\n";
+    else if (escaped === "r") result += "\r";
+    else if (escaped === "t") result += "\t";
+    else if (escaped === '"') result += '"';
+    else if (escaped === "\\") result += "\\";
+    else {
+      result += `\\${escaped}`;
+    }
+    index += 1;
+  }
+  return result;
 };
 
 export const formatUnknownValue = (value: unknown): string => {
@@ -606,8 +620,6 @@ export const createXmlParser = (): AgentWidgetStreamParser => {
     }
   };
 };
-
-
 
 
 

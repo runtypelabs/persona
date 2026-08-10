@@ -44,7 +44,10 @@ let truncateWarned = false;
  * Escape a tool-call id for safe use inside a CSS attribute selector.
  * `CSS.escape` would work but isn't available in all test environments (jsdom).
  */
-const escapeAttrValue = (value: string): string => value.replace(/["\\]/g, "\\$&");
+const findSheet = (overlay: HTMLElement, toolCallId: string): HTMLElement | null =>
+  Array.from(overlay.querySelectorAll<HTMLElement>(`[${SHEET_SENTINEL}]`)).find(
+    (sheet) => sheet.getAttribute(SHEET_SENTINEL) === toolCallId
+  ) ?? null;
 
 export const isAskUserQuestionMessage = (message: AgentWidgetMessage): boolean => {
   return (
@@ -820,9 +823,7 @@ export const ensureAskUserQuestionSheet = (
     }
   });
 
-  const existing = overlay.querySelector<HTMLElement>(
-    `[${SHEET_SENTINEL}="${escapeAttrValue(toolCallId)}"]`
-  );
+  const existing = findSheet(overlay, toolCallId);
   if (existing) {
     syncSheetFromMessage(existing, message, config);
     return;
@@ -843,10 +844,9 @@ export const removeAskUserQuestionSheet = (
 ): void => {
   if (!overlay) return;
 
-  const selector = toolCallId
-    ? `[${SHEET_SENTINEL}="${escapeAttrValue(toolCallId)}"]`
-    : `[${SHEET_SENTINEL}]`;
-  const sheets = overlay.querySelectorAll<HTMLElement>(selector);
+  const sheets = toolCallId
+    ? ([findSheet(overlay, toolCallId)].filter(Boolean) as HTMLElement[])
+    : Array.from(overlay.querySelectorAll<HTMLElement>(`[${SHEET_SENTINEL}]`));
 
   sheets.forEach((sheet) => {
     sheet.classList.add("persona-ask-sheet-leave");

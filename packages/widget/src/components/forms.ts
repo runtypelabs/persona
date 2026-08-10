@@ -2,6 +2,37 @@ import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { AgentWidgetSession } from "../session";
 
+const MAX_FORM_RESPONSE_BYTES = 64 * 1024;
+const MAX_FORM_STATUS_LENGTH = 1_000;
+const MAX_FORM_NEXT_PROMPT_LENGTH = 4_000;
+
+type SafeFormResponse = {
+  success: boolean;
+  message?: string;
+  nextPrompt?: string;
+};
+
+export const parseFormResponse = (raw: string): SafeFormResponse => {
+  if (new TextEncoder().encode(raw).byteLength > MAX_FORM_RESPONSE_BYTES) {
+    throw new Error("Form response was too large.");
+  }
+  const value: unknown = JSON.parse(raw);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Form endpoint returned an invalid response.");
+  }
+  const record = value as Record<string, unknown>;
+  return {
+    success: record.success === true,
+    ...(typeof record.message === "string" && {
+      message: record.message.slice(0, MAX_FORM_STATUS_LENGTH)
+    }),
+    ...(typeof record.nextPrompt === "string" &&
+      record.nextPrompt.length <= MAX_FORM_NEXT_PROMPT_LENGTH && {
+        nextPrompt: record.nextPrompt
+      })
+  };
+};
+
 export const formDefinitions: Record<
   string,
   {
@@ -137,6 +168,7 @@ export const enhanceWithForms = (
         try {
           const response = await fetch(formEndpoint, {
             method: "POST",
+            redirect: "error",
             headers: {
               "Content-Type": "application/json"
             },
@@ -145,9 +177,17 @@ export const enhanceWithForms = (
           if (!response.ok) {
             throw new Error(`Form submission failed (${response.status})`);
           }
-          const data = await response.json();
+          const contentLength = Number(response.headers.get("content-length"));
+          if (Number.isFinite(contentLength) && contentLength > MAX_FORM_RESPONSE_BYTES) {
+            throw new Error("Form response was too large.");
+          }
+          const data = parseFormResponse(await response.text());
           status.textContent = data.message ?? "Thanks! We'll be in touch soon.";
-          if (data.success && data.nextPrompt) {
+          if (
+            data.success &&
+            data.nextPrompt &&
+            config.formNextPromptAllowlist?.includes(data.nextPrompt)
+          ) {
             await session.sendMessage(String(data.nextPrompt));
           }
         } catch (error) {
@@ -160,8 +200,6 @@ export const enhanceWithForms = (
     });
   }
 };
-
-
 
 
 

@@ -15,7 +15,12 @@ import {
   type MentionMenuGroup,
   type MentionMenuParts,
 } from "../components/context-mention-menu";
-import { refFromItem, type MentionSubmitBundle } from "./context-mention-manager";
+import {
+  createMentionContextMap,
+  refFromItem,
+  setMentionContextValue,
+  type MentionSubmitBundle
+} from "./context-mention-manager";
 import type { ComposerInputCapability } from "./composer-input";
 import type { ComposerMentionId } from "./composer-document";
 import type {
@@ -1050,8 +1055,10 @@ export class ContextMentionController {
     // server: resolve at submit; refs empty (no chip), context namespaced.
     const finalize = async (): Promise<MentionSubmitBundle> => {
       const payload = await source.resolve(item, this.resolveContext(args, text));
-      const context: Record<string, Record<string, unknown>> = {};
-      if (payload.context) context[source.id] = { [item.id]: payload.context };
+      const context = createMentionContextMap();
+      if (payload.context) {
+        setMentionContextValue(context, source.id, item.id, payload.context);
+      }
       return {
         blocks: [],
         contentParts: payload.contentParts ?? [],
@@ -1096,8 +1103,8 @@ export class ContextMentionController {
 
   /**
    * Snapshot the trigger span for an insert-at-caret prompt macro: the LOGICAL
-   * range `[triggerIndex, caret)` to rewrite, plus the display `value` at select
-   * time for the textarea fallback (where DISPLAY === LOGICAL).
+   * range `[triggerIndex, caret)` to rewrite, plus the logical text at select
+   * time so an async resolve cannot overwrite subsequent user edits.
    */
   private captureStripTarget(): {
     value: string;
@@ -1106,7 +1113,7 @@ export class ContextMentionController {
   } | null {
     if (!this.triggerMatch) return null;
     return {
-      value: this.input.getValue(),
+      value: this.input.getLogicalText(),
       start: this.triggerMatch.triggerIndex,
       end: this.input.getSelection().start,
     };
@@ -1120,6 +1127,7 @@ export class ContextMentionController {
     target: { value: string; start: number; end: number } | null
   ): Promise<void> {
     const composer = this.input;
+    const originalLogical = composer.getLogicalText();
     let payload;
     try {
       payload = await source.resolve(item, {
@@ -1136,19 +1144,25 @@ export class ContextMentionController {
       return;
     }
     const text = payload.insertText ?? payload.llmAppend ?? "";
+    const liveLogical = composer.getLogicalText();
     if (item.insertMode === "insert-at-caret" && target) {
+      const expected = target.value.slice(target.start, target.end);
+      if (liveLogical.slice(target.start, target.end) !== expected) return;
       if (composer.replaceLogicalRange) {
         // Inline: splice the `/command` span in logical space, preserving tokens
         // elsewhere in the prose. `setValue` would flatten the whole document.
         composer.replaceLogicalRange(target.start, target.end, text);
         composer.dispatchInput();
       } else {
-        // Textarea: DISPLAY === LOGICAL, so splice the display snapshot.
+        // Textarea: splice the LIVE value so typing outside the command range
+        // that happened while resolve() was pending is preserved.
+        const liveValue = composer.getValue();
         composer.setValue(
-          target.value.slice(0, target.start) + text + target.value.slice(target.end)
+          liveValue.slice(0, target.start) + text + liveValue.slice(target.end)
         );
       }
     } else {
+      if (liveLogical !== originalLogical) return;
       composer.setValue(text);
     }
     if (item.submitOnSelect) composer.submit();

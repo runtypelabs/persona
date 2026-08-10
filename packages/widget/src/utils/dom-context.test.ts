@@ -128,6 +128,36 @@ describe("collectEnrichedPageContext", () => {
     expect(btn!.attributes["data-price"]).toBe("1200");
   });
 
+  it("redacts credential fields, sensitive autocomplete values, and secret data attributes", () => {
+    document.body.innerHTML = `
+      <main data-api-token="top-secret" data-product="bread">
+        <input type="password" value="hunter2" />
+        <input type="hidden" name="csrf_token" value="csrf-secret" />
+        <textarea autocomplete="one-time-code">123456</textarea>
+        <input name="query" value="sourdough" />
+        <p>Public product copy</p>
+      </main>
+    `;
+    const serialized = JSON.stringify(collectEnrichedPageContext({ visibleOnly: false }));
+    expect(serialized).not.toContain("hunter2");
+    expect(serialized).not.toContain("csrf-secret");
+    expect(serialized).not.toContain("123456");
+    expect(serialized).not.toContain("top-secret");
+    expect(serialized).toContain("sourdough");
+    expect(serialized).toContain("Public product copy");
+  });
+
+  it("does not mistake benign author metadata for authentication secrets", () => {
+    document.body.innerHTML =
+      '<main><label for="author">Author</label><input id="author" name="author" value="Octavia Butler" /></main>';
+
+    const serialized = JSON.stringify(
+      collectEnrichedPageContext({ visibleOnly: false })
+    );
+
+    expect(serialized).toContain("Octavia Butler");
+  });
+
   it("collects aria-label", () => {
     document.body.innerHTML = `<button aria-label="Close dialog">X</button>`;
     const result = collectEnrichedPageContext();

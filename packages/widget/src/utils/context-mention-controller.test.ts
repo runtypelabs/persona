@@ -500,6 +500,40 @@ describe("ContextMentionController — slash-commands", () => {
     expect(onSelect).not.toHaveBeenCalled();
   });
 
+  it("prompt macro preserves typing outside its command span while resolve is pending", async () => {
+    const { controller, textarea, submit } = slashSetup([
+      {
+        name: "insert",
+        kind: "prompt",
+        prompt: "RESOLVED",
+        insertMode: "insert-at-caret",
+        submitOnSelect: true,
+      },
+    ]);
+    textarea.value = "/insert";
+    textarea.setSelectionRange(7, 7);
+    controller.onInput();
+    pressEnter(controller);
+    textarea.value += " user typing";
+    await tick();
+    expect(textarea.value).toBe("RESOLVED user typing");
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it("replace-mode prompt macro does not overwrite a composer edited during resolve", async () => {
+    const { controller, textarea, submit } = slashSetup([
+      { name: "replace", kind: "prompt", prompt: "RESOLVED", submitOnSelect: true },
+    ]);
+    textarea.value = "/replace";
+    textarea.setSelectionRange(8, 8);
+    controller.onInput();
+    pressEnter(controller);
+    textarea.value = "user changed this";
+    await tick();
+    expect(textarea.value).toBe("user changed this");
+    expect(submit).not.toHaveBeenCalled();
+  });
+
   it("client action: runs with parsed args, adds no chip, clears the token", () => {
     const action = vi.fn();
     const { controller, textarea, onSelect } = slashSetup([

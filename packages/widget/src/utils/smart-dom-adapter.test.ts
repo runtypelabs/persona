@@ -166,6 +166,38 @@ describe("smartDomResultToEnriched", () => {
     expect(enriched.map((e) => e.selector)).toEqual(["button.page"]);
   });
 
+  it("does not confuse similarly-prefixed classes with the host guard", () => {
+    const result = makeResult({
+      buttons: [makeEl({
+        tag: "button",
+        text: "Allowed",
+        selector: makeSelector({ css: "button.allowed" }),
+        context: { parentChain: ["div.persona-hostile"] },
+      })],
+    });
+    expect(smartDomResultToEnriched(result)).toHaveLength(1);
+  });
+
+  it("drops sensitive inputs and credential-like data attributes", () => {
+    const result = makeResult({
+      inputs: [makeEl({
+        tag: "input",
+        text: "secret",
+        selector: makeSelector({ css: "input.password" }),
+        attributes: { type: "password", value: "hunter2", "data-api-token": "token" },
+      })],
+      buttons: [makeEl({
+        tag: "button",
+        text: "Buy",
+        selector: makeSelector({ css: "button.buy" }),
+        attributes: { "data-api-token": "secret", "data-product": "shoe" },
+      })],
+    });
+    const enriched = smartDomResultToEnriched(result);
+    expect(enriched).toHaveLength(1);
+    expect(enriched[0].attributes).toEqual({ "data-product": "shoe" });
+  });
+
   it("includes semantic elements only when present and not disabled", () => {
     const semantic: SmartDOMResult["semantic"] = {
       headings: [

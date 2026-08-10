@@ -398,6 +398,7 @@ export class AgentWidgetClient {
 
     const response = await fetch(this.getClientApiUrl('init'), {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         'X-Persona-Version': VERSION,
@@ -540,6 +541,7 @@ export class AgentWidgetClient {
 
     const response = await fetch(this.getFeedbackApiUrl(), {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         'X-Persona-Version': VERSION,
@@ -704,6 +706,7 @@ export class AgentWidgetClient {
 
           return fetch(this.getClientApiUrl('chat'), {
             method: 'POST',
+            redirect: 'error',
             headers: {
               'Content-Type': 'application/json',
               'X-Persona-Version': VERSION,
@@ -814,6 +817,7 @@ export class AgentWidgetClient {
     } else {
       response = await fetch(this.apiUrl, {
         method: "POST",
+        redirect: "error",
         headers,
         body: JSON.stringify(payload),
         signal: options.signal
@@ -885,6 +889,7 @@ export class AgentWidgetClient {
     } else {
       response = await fetch(this.apiUrl, {
         method: "POST",
+        redirect: "error",
         headers,
         body: JSON.stringify(payload),
         signal: options.signal
@@ -949,6 +954,7 @@ export class AgentWidgetClient {
 
     return fetch(url, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: JSON.stringify({
         executionId: approval.executionId,
@@ -1157,6 +1163,7 @@ export class AgentWidgetClient {
           }
           return fetch(url, {
             method: 'POST',
+            redirect: 'error',
             headers,
             body: JSON.stringify(resumeRequest),
             signal: options?.signal,
@@ -1176,6 +1183,7 @@ export class AgentWidgetClient {
 
     return fetch(url, {
       method: 'POST',
+      redirect: 'error',
       headers,
       body: JSON.stringify(body),
       signal: options?.signal,

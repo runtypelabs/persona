@@ -256,6 +256,7 @@ export {
 export { createLocalStorageAdapter } from "./utils/storage";
 export {
   createActionManager,
+  createMessageAndClickActionHandler,
   defaultActionHandlers,
   defaultJsonActionParser
 } from "./utils/actions";

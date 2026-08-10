@@ -102,6 +102,41 @@ function buildFieldIndex(): Map<string, FieldDef> {
   return index;
 }
 
+const hasUnsafePathSegment = (path: string): boolean =>
+  path.split('.').some((part) =>
+    part === '__proto__' || part === 'prototype' || part === 'constructor'
+  );
+
+const isThemeOnlyPath = (path: string): boolean =>
+  (path.startsWith('theme.') || path.startsWith('darkTheme.')) &&
+  !hasUnsafePathSegment(path);
+
+function exportModelSafeSnapshot(state: ThemeEditorLike): Record<string, unknown> {
+  const config = state.getConfig();
+  return {
+    version: 2,
+    theme: state.getTheme(),
+    config: {
+      darkTheme: config.darkTheme,
+      colorScheme: config.colorScheme,
+      copy: config.copy,
+      suggestionChips: config.suggestionChips,
+      suggestions: config.suggestions,
+      layout: config.layout,
+      launcher: config.launcher && {
+        enabled: config.launcher.enabled,
+        mountMode: config.launcher.mountMode,
+        position: config.launcher.position,
+        width: config.launcher.width,
+      },
+      sendButton: config.sendButton,
+      statusIndicator: config.statusIndicator,
+      attachments: config.attachments && { enabled: config.attachments.enabled },
+      voiceRecognition: config.voiceRecognition && { enabled: config.voiceRecognition.enabled },
+    },
+  };
+}
+
 // ─── Config-tool path maps ──────────────────────────────────────
 
 const FEATURE_PATHS: Record<string, string> = {
@@ -214,20 +249,22 @@ export function createThemeEditorTools(
           { tool: 'apply_preset', hint: 'Apply a built-in preset.' },
           { tool: 'configure_widget', hint: 'Toggle launcher position, features, and layout.' },
           { tool: 'set_copy_and_suggestions', hint: 'Set welcome copy, placeholder, and suggestion chips.' },
-          { tool: 'set_theme_fields', hint: 'Set any field by id or dot-path.' },
+          { tool: 'set_theme_fields', hint: 'Set theme tokens by field id or theme dot-path.' },
           { tool: 'check_contrast', hint: 'Audit WCAG contrast.' },
           { tool: 'manage_session', hint: 'Undo, redo, reset, or export the theme.' },
         ],
       };
       if (verbosity === 'full') {
         fieldIndex ??= buildFieldIndex();
-        payload.fieldIndex = Array.from(fieldIndex.values()).map((f) => ({
-          id: f.id,
-          path: f.path,
-          type: f.type,
-          label: f.label,
-          options: f.options?.map((o) => o.value),
-        }));
+        payload.fieldIndex = Array.from(fieldIndex.values())
+          .filter((field) => isThemeOnlyPath(field.path))
+          .map((field) => ({
+            id: field.id,
+            path: field.path,
+            type: field.type,
+            label: field.label,
+            options: field.options?.map((option) => option.value),
+          }));
       }
       return toolResult(payload);
     },
@@ -610,9 +647,9 @@ export function createThemeEditorTools(
 
   const setThemeFields: WebMcpTool = {
     name: 'set_theme_fields',
-    title: 'Set theme fields by id or path (advanced)',
+    title: 'Set theme tokens by id or path (advanced)',
     description:
-      'Advanced escape hatch: set fields by id or raw dot-path. Values are validated when metadata exists.',
+      'Advanced theme-only escape hatch: set known theme field ids or raw theme.* and darkTheme.* paths.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -653,13 +690,14 @@ export function createThemeEditorTools(
         try {
           const def = fieldIndex.get(fieldKey);
           const path = def ? def.path : fieldKey;
-          if (!def && !/^(theme|darkTheme)\.|\./.test(path)) {
-            // A bare token with no field def and no dotted path is ambiguous.
+          if (!isThemeOnlyPath(path)) {
             throw new Error(
-              `Unknown field "${fieldKey}". Pass a known field id or a dot-path (e.g. theme.palette.radius.md).`
+              `Field "${fieldKey}" is not a theme token. Use a theme.* or darkTheme.* path.`
             );
           }
-          const value = coerceFieldValue(def, entry.value);
+          const value = !def && path.includes('.radius.')
+            ? coerceRadius(entry.value)
+            : coerceFieldValue(def, entry.value);
           if (def && path.startsWith('theme.')) {
             // Field ids resolve to light-theme paths; honor the active edit
             // target so dark-only / both edits are reachable by id (not only by
@@ -741,7 +779,7 @@ export function createThemeEditorTools(
           state.resetToDefaults();
           return result({ action: 'reset' });
         case 'export':
-          return toolResult({ ok: true, snapshot: state.exportSnapshot() });
+          return toolResult({ ok: true, snapshot: exportModelSafeSnapshot(state) });
         default:
           throw new Error(`Unknown action "${action}". Valid: undo, redo, reset, export.`);
       }

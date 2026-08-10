@@ -165,6 +165,62 @@ const INTERACTIVE_ROLES = new Set([
   "textbox",
 ]);
 
+const SENSITIVE_FIELD_HINT =
+  /(?:^|[^a-z0-9])(?:password|passwd|pwd|secret|token|api[-_ ]?key|auth(?:entication|orization)?|credential|csrf|card[-_ ]?(?:number|no)|cvc|cvv|security[-_ ]?code|one[-_ ]?time(?:[-_ ]?code)?|otp)(?:$|[^a-z0-9])/i;
+const SENSITIVE_AUTOCOMPLETE_TOKENS = new Set([
+  "current-password",
+  "new-password",
+  "one-time-code",
+  "cc-number",
+  "cc-csc",
+  "cc-exp",
+  "cc-exp-month",
+  "cc-exp-year",
+]);
+
+export function isSensitiveAttributeName(name: string): boolean {
+  return name.startsWith("data-") && looksSensitiveFieldHint(name.slice(5));
+}
+
+function looksSensitiveFieldHint(value: string): boolean {
+  // Preserve camelCase word boundaries before normalizing so `apiToken` is
+  // recognized without treating benign words such as `author` as `auth`.
+  const normalized = value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+  return SENSITIVE_FIELD_HINT.test(normalized);
+}
+
+export function isSensitiveFieldMetadata(
+  tagName: string,
+  attributes: Readonly<Record<string, string>>
+): boolean {
+  const tag = tagName.toLowerCase();
+  const type = (attributes.type ?? "").toLowerCase();
+  if (tag === "input" && (type === "password" || type === "hidden")) return true;
+  const hasSensitiveAutocomplete = (attributes.autocomplete ?? "")
+    .toLowerCase()
+    .split(/\s+/)
+    .some((token) => SENSITIVE_AUTOCOMPLETE_TOKENS.has(token));
+  if (hasSensitiveAutocomplete) return true;
+  return [attributes.name, attributes.id, attributes["aria-label"]].some(
+    (value) => typeof value === "string" && looksSensitiveFieldHint(value)
+  );
+}
+
+function isSensitiveElement(el: HTMLElement): boolean {
+  const attributes: Record<string, string> = {};
+  for (const attr of Array.from(el.attributes)) attributes[attr.name] = attr.value;
+  return isSensitiveFieldMetadata(el.tagName, attributes);
+}
+
+function safeTextContent(el: HTMLElement): string {
+  if (isSensitiveElement(el)) return "";
+  const clone = el.cloneNode(true) as HTMLElement;
+  for (const child of Array.from(clone.querySelectorAll<HTMLElement>("*"))) {
+    if (isSensitiveElement(child)) child.remove();
+  }
+  return clone.textContent ?? "";
+}
+
 /** Class / id / data-* value hints for card-like containers */
 const CARD_HINT_RE = /\b(product|card|item|listing|result)\b/i;
 
@@ -187,7 +243,7 @@ function hasCardHint(el: HTMLElement): boolean {
 }
 
 function subtreeHasCurrency(el: HTMLElement): boolean {
-  return CURRENCY_RE.test((el.textContent ?? "").trim());
+  return CURRENCY_RE.test(safeTextContent(el).trim());
 }
 
 function subtreeHasNonTrivialLink(el: HTMLElement): boolean {
@@ -239,7 +295,9 @@ function extractCtaLabels(el: HTMLElement): string[] {
   el.querySelectorAll("button").forEach((b) => push(b.textContent ?? ""));
   el.querySelectorAll('[role="button"]').forEach((b) => push(b.textContent ?? ""));
   el.querySelectorAll('input[type="submit"], input[type="button"]').forEach((inp) => {
-    push((inp as HTMLInputElement).value ?? "");
+    if (!isSensitiveElement(inp as HTMLElement)) {
+      push((inp as HTMLInputElement).value ?? "");
+    }
   });
   return labels.slice(0, 6);
 }
@@ -258,7 +316,7 @@ function resultCardScore(el: HTMLElement): number {
   if (!hasCardHint(el)) return 0;
   if (subtreeHasCurrency(el)) return 0;
   if (!subtreeHasNonTrivialLink(el)) return 0;
-  const text = (el.textContent ?? "").trim();
+  const text = safeTextContent(el).trim();
   if (text.length < 20) return 0;
   const hasTitle =
     !!el.querySelector("h1, h2, h3, h4, h5, h6, .title") ||
@@ -288,7 +346,7 @@ export const defaultParseRules: ParseRule[] = [
       if (commerceCardScore(el) === 0) return null;
       const { title, href } = extractTitleAndHref(el);
       const price =
-        extractFirstPrice((el.textContent ?? "").trim()) ??
+        extractFirstPrice(safeTextContent(el).trim()) ??
         extractFirstPrice(enriched.text) ??
         "";
       const ctas = extractCtaLabels(el);
@@ -471,7 +529,7 @@ function collectAttributes(el: HTMLElement): Record<string, string> {
   if (type) attrs["type"] = type;
 
   const value = el.getAttribute("value");
-  if (value) attrs["value"] = value;
+  if (value && !isSensitiveElement(el)) attrs["value"] = value;
 
   const name = el.getAttribute("name");
   if (name) attrs["name"] = name;
@@ -481,7 +539,7 @@ function collectAttributes(el: HTMLElement): Record<string, string> {
 
   for (let i = 0; i < el.attributes.length; i++) {
     const attr = el.attributes[i];
-    if (attr.name.startsWith("data-")) {
+    if (attr.name.startsWith("data-") && !isSensitiveAttributeName(attr.name)) {
       attrs[attr.name] = attr.value;
     }
   }
@@ -575,7 +633,7 @@ function buildEnriched(
   maxTextLength: number
 ): EnrichedPageElement {
   const tag = el.tagName.toLowerCase();
-  const text = (el.textContent ?? "").trim().substring(0, maxTextLength);
+  const text = safeTextContent(el).trim().substring(0, maxTextLength);
   return {
     selector: generateStableSelector(el),
     tagName: tag,
@@ -646,6 +704,11 @@ function collectStructured(
       const tag = el.tagName.toLowerCase();
 
       if (SKIP_TAGS.has(tag)) {
+        node = walker.nextNode();
+        continue;
+      }
+
+      if (isSensitiveElement(el)) {
         node = walker.nextNode();
         continue;
       }
@@ -746,6 +809,11 @@ function collectSimple(
       const tag = el.tagName.toLowerCase();
 
       if (SKIP_TAGS.has(tag)) {
+        node = walker.nextNode();
+        continue;
+      }
+
+      if (isSensitiveElement(el)) {
         node = walker.nextNode();
         continue;
       }

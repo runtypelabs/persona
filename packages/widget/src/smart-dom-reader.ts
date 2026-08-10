@@ -242,15 +242,12 @@ export function createSmartDomMentionSource(
       return defaultMentionFilter(snapshot, query);
     },
     resolve: (item) => {
-      const doc =
-        opts.document ?? (typeof document !== "undefined" ? document : undefined);
-      let text = "";
-      try {
-        const el = doc?.querySelector(item.id);
-        text = el?.textContent?.trim() ?? "";
-      } catch {
-        /* invalid selector at resolve time — fall through to label only */
-      }
+      // Re-run the same redacting adapter used for search rather than trusting
+      // the page-provided selector in a fresh raw querySelector/textContent read.
+      const current = collectSmartDomContext(opts).find(
+        (element) => element.selector === item.id
+      );
+      const text = current?.text.trim() ?? "";
       return {
         llmAppend: `Page element "${item.label}" (${item.id}):\n${text || "(no text)"}`,
         context: { selector: item.id },

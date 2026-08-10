@@ -485,7 +485,8 @@ describe("WebMcpBridge.executeToolCall", () => {
       const pending = bridge.executeToolCall("webmcp:slow", {});
       await vi.advanceTimersByTimeAsync(30_000);
       const r = await pending;
-      expect(r.isError).toBe(true);
+      expect(r.isError).toBeUndefined();
+      expect(r.outcomeUncertain).toBe(true);
       expect((r.content[0] as { text: string }).text).toMatch(/timed out/);
     } finally {
       vi.useRealTimers();
@@ -507,7 +508,8 @@ describe("WebMcpBridge.executeToolCall", () => {
       controller.signal,
     );
     expect(r.isError).toBe(true);
-    expect((r.content[0] as { text: string }).text).toMatch(/abort/i);
+    expect(r.outcomeUncertain).toBeUndefined();
+    expect((r.content[0] as { text: string }).text).toMatch(/cancel|unknown/i);
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(executeSpy).not.toHaveBeenCalled();
   });
@@ -530,8 +532,9 @@ describe("WebMcpBridge.executeToolCall", () => {
     await vi.waitFor(() => expect(executeSpy).toHaveBeenCalledTimes(1));
     controller.abort();
     const r = await pending;
-    expect(r.isError).toBe(true);
-    expect((r.content[0] as { text: string }).text).toMatch(/abort/i);
+    expect(r.isError).toBeUndefined();
+    expect(r.outcomeUncertain).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/cancel|unknown/i);
     // Late resolve from the page side: must not poison anything.
     resolveStuck?.("late");
   });

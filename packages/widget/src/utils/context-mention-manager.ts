@@ -63,6 +63,21 @@ export interface MentionSubmitBundle {
   context: Record<string, Record<string, unknown>>;
 }
 
+export const createMentionContextMap = (): MentionSubmitBundle["context"] =>
+  Object.create(null) as MentionSubmitBundle["context"];
+
+export const setMentionContextValue = (
+  context: MentionSubmitBundle["context"],
+  sourceId: string,
+  itemId: string,
+  value: unknown
+): void => {
+  if (!Object.prototype.hasOwnProperty.call(context, sourceId)) {
+    context[sourceId] = Object.create(null) as Record<string, unknown>;
+  }
+  context[sourceId][itemId] = value;
+};
+
 export interface ContextMentionManagerOptions {
   mentionConfig: AgentWidgetContextMentionConfig;
   /** The composer context row chips render into (created by the core orchestrator). */
@@ -355,7 +370,7 @@ export class ContextMentionManager {
 
       const blocks: string[] = [];
       const contentParts: ContentPart[] = [];
-      const context: Record<string, Record<string, unknown>> = {};
+      const context = createMentionContextMap();
       // Assemble in original selection order (mentions-first block), deduping the
       // resolved payload by (source, item): inline mode allows the same item to
       // appear as multiple prose tokens (Slack/Cursor/Claude), but its content
@@ -394,7 +409,7 @@ export class ContextMentionManager {
           contentParts.push(...payload.contentParts);
         }
         if (payload.context) {
-          (context[m.source.id] ??= {})[m.item.id] = payload.context;
+          setMentionContextValue(context, m.source.id, m.item.id, payload.context);
         }
       }
 

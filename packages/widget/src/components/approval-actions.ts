@@ -425,6 +425,19 @@ export const createBuiltInApprovalPlugin = (): {
           if (isEditableEventTarget(e)) return;
           if (message.id !== state.latestPendingApprovalId) return;
           if (e.key !== "Escape" && e.key !== "Enter") return;
+          if (e.key === "Enter" && e.target instanceof Element) {
+            const focusedAction = e.target.closest<HTMLElement>(
+              "button, a[href], input, select, textarea, [role='button'], [role='menuitem']"
+            );
+            if (focusedAction) {
+              if (card.contains(focusedAction)) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                focusedAction.click();
+              }
+              return;
+            }
+          }
           e.preventDefault();
           // Resolving here promotes the next-newest pending approval to owner.
           // Stop immediate propagation so the SAME keypress doesn't then reach

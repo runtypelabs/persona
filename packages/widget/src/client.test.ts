@@ -83,6 +83,20 @@ describe('AgentWidgetClient - dispatch abort signals', () => {
     expect(requestSignal).toBe(abortController.signal);
     expect(requestSignal?.aborted).toBe(true);
   });
+
+  it('rejects redirects for credential-bearing dispatch requests', async () => {
+    const fetchSpy = vi.fn(async (_input: Parameters<typeof fetch>[0], _init?: RequestInit) =>
+      new Response('', { status: 200, headers: { 'Content-Type': 'text/event-stream' } })
+    );
+    global.fetch = fetchSpy;
+    const client = new AgentWidgetClient({
+      apiUrl: 'https://api.example.com/chat',
+      getHeaders: () => ({ Authorization: 'Bearer secret' }),
+    });
+    await client.dispatch({ messages: [message] }, () => undefined);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
+  });
 });
 
 describe('AgentWidgetClient - Empty Message Filtering', () => {

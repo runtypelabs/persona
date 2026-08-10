@@ -5,6 +5,7 @@ export class EventStreamStore {
   private pendingWrites: SSEEventRecord[] = [];
   private flushScheduled = false;
   private isDestroyed = false;
+  private openPromise: Promise<void> | null = null;
   private readonly dbName: string;
   private readonly storeName: string;
 
@@ -14,7 +15,8 @@ export class EventStreamStore {
   }
 
   open(): Promise<void> {
-    return new Promise((resolve, reject) => {
+    if (this.openPromise) return this.openPromise;
+    this.openPromise = new Promise((resolve, reject) => {
       try {
         const request = indexedDB.open(this.dbName, 1);
 
@@ -27,7 +29,13 @@ export class EventStreamStore {
         };
 
         request.onsuccess = () => {
+          if (this.isDestroyed) {
+            request.result.close();
+            resolve();
+            return;
+          }
           this.db = request.result;
+          this.scheduleFlush();
           resolve();
         };
 
@@ -38,28 +46,19 @@ export class EventStreamStore {
         reject(err);
       }
     });
+    return this.openPromise;
   }
 
   put(event: SSEEventRecord): void {
-    if (!this.db || this.isDestroyed) return;
+    if (this.isDestroyed) return;
     this.pendingWrites.push(event);
-    if (!this.flushScheduled) {
-      this.flushScheduled = true;
-      queueMicrotask(() => this.flushWrites());
-    }
+    this.scheduleFlush();
   }
 
   putBatch(events: SSEEventRecord[]): void {
-    if (!this.db || this.isDestroyed || events.length === 0) return;
-    try {
-      const tx = this.db.transaction(this.storeName, "readwrite");
-      const store = tx.objectStore(this.storeName);
-      for (const event of events) {
-        store.put(event);
-      }
-    } catch {
-      // Silently fail - IndexedDB writes are best-effort
-    }
+    if (this.isDestroyed || events.length === 0) return;
+    this.pendingWrites.push(...events);
+    this.scheduleFlush();
   }
 
   getAll(): Promise<SSEEventRecord[]> {
@@ -112,12 +111,12 @@ export class EventStreamStore {
   }
 
   clear(): Promise<void> {
+    this.pendingWrites = [];
     return new Promise((resolve, reject) => {
       if (!this.db) {
         resolve();
         return;
       }
-      this.pendingWrites = [];
       try {
         const tx = this.db.transaction(this.storeName, "readwrite");
         const store = tx.objectStore(this.storeName);
@@ -176,7 +175,14 @@ export class EventStreamStore {
         store.put(event);
       }
     } catch {
-      // Silently fail - IndexedDB writes are best-effort
+      // Keep failed writes for a later best-effort retry.
+      this.pendingWrites.unshift(...toWrite);
     }
+  }
+
+  private scheduleFlush(): void {
+    if (!this.db || this.flushScheduled || this.pendingWrites.length === 0) return;
+    this.flushScheduled = true;
+    queueMicrotask(() => this.flushWrites());
   }
 }

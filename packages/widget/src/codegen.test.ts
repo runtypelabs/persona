@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { generateCodeSnippet as fromSubpath } from "./codegen";
 import { generateCodeSnippet as fromInternal } from "./utils/code-generators";
 import { VERSION } from "./version";
+import type { AgentWidgetConfig } from "./types";
 
 // The `@runtypelabs/persona/codegen` subpath is the server/Worker-safe entry for
 // snippet generation. It must expose the exact same generator as the internal
@@ -44,8 +45,8 @@ describe("codegen subpath", () => {
     });
 
     it("percent-encodes characters that could break the emitted JS/HTML contexts", () => {
-      const hostile = "https://cdn.example.com/x'\"\\`/persona";
-      const encoded = "https://cdn.example.com/x%27%22%5C%60/persona";
+      const hostile = "https://cdn.example.com/x'\"\\`/persona\nnext";
+      const encoded = "https://cdn.example.com/x%27%22%5C%60/persona%0Anext";
       // script-advanced emits into a single-quoted JS literal
       expect(fromSubpath(config, "script-advanced", { cdnBase: hostile })).toContain(
         `var CDN_BASE = '${encoded}';`
@@ -106,6 +107,59 @@ describe("codegen subpath", () => {
     it("escapes single quotes in the selector so it can't break the literal", () => {
       const code = fromSubpath(config, "react-component", { target: "[data-x='y']" });
       expect(code).toContain("target: '[data-x=\\'y\\']'");
+    });
+  });
+
+  describe("untrusted config serialization", () => {
+    it("keeps hostile values as data and prevents script/attribute breakouts", () => {
+      const hostile = `x";globalThis.PWNED=true;//</script><script>globalThis.PWNED=true</script>`;
+      const hostileConfig = {
+        apiUrl: hostile,
+        copy: { ['bad-key};globalThis.PWNED=true;//']: hostile },
+      } as AgentWidgetConfig;
+
+      const esm = fromSubpath(hostileConfig, "esm");
+      expect(esm).toContain("\\u003c/script\\u003e");
+      expect(esm).toContain('["bad-key};globalThis.PWNED=true;//"]');
+      let received: unknown;
+      const executable = esm.split("\n").filter((line) => !line.startsWith("import ")).join("\n");
+      new Function("initAgentWidget", "markdownPostprocessor", executable)(
+        (value: unknown) => { received = value; },
+        (value: string) => value,
+      );
+      expect((received as { config: AgentWidgetConfig }).config.apiUrl).toBe(hostile);
+      expect((globalThis as { PWNED?: boolean }).PWNED).toBeUndefined();
+
+      const installer = fromSubpath(hostileConfig, "script-installer");
+      expect(installer).toContain("&lt;/script&gt;");
+      expect(installer).not.toContain("</script><script>globalThis.PWNED");
+      for (const format of ["script-manual", "script-advanced"] as const) {
+        expect(fromSubpath(hostileConfig, format)).not.toContain(
+          "</script><script>globalThis.PWNED"
+        );
+      }
+    });
+
+    it("escapes hostile window keys in single-quoted script output", () => {
+      const code = fromSubpath(config, "script-manual", {
+        windowKey: "x';globalThis.PWNED=true;//",
+      });
+      expect(code).toContain("windowKey: 'x\\';globalThis.PWNED=true;//'");
+    });
+
+    it("preserves the explicit click allowlist in advanced generated handlers", () => {
+      const secured = {
+        ...config,
+        actionClickAllowlist: ["#catalog"],
+      } as AgentWidgetConfig;
+      const react = fromSubpath(secured, "react-advanced");
+      expect(react).toContain("createMessageAndClickActionHandler");
+      expect(react).toContain('createMessageAndClickActionHandler(["#catalog"])');
+
+      const script = fromSubpath(secured, "script-advanced");
+      expect(script).toContain(
+        "agentWidget.createMessageAndClickActionHandler(widgetConfig.actionClickAllowlist || [])"
+      );
     });
   });
 });

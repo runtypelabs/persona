@@ -96,6 +96,7 @@ describe("RuntypeSpeechEngine", () => {
     // Trailing slash on host must not double up.
     expect(url).toBe("https://api.runtype.com/v1/agents/agent_123/speak");
     expect(init.method).toBe("POST");
+    expect(init.redirect).toBe("error");
     expect(init.headers.Authorization).toBe("Bearer ct_live_abc");
     expect(JSON.parse(init.body)).toEqual({
       text: "hello there",

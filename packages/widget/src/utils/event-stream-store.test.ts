@@ -97,6 +97,16 @@ describe("EventStreamStore", () => {
     closedStore.put(makeEvent("a", 1));
   });
 
+  it("persists writes queued before open completes", async () => {
+    const early = new EventStreamStore("early-db-" + Math.random(), "events");
+    early.put(makeEvent("early", 1));
+    early.putBatch([makeEvent("early", 2)]);
+    await early.open();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(await early.getAll()).toEqual([makeEvent("early", 1), makeEvent("early", 2)]);
+    await early.destroy();
+  });
+
   it("should handle putBatch gracefully when db is not open", () => {
     const closedStore = new EventStreamStore("closed-db", "events");
     // Should not throw

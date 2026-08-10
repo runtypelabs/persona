@@ -1,8 +1,10 @@
+// @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
 import {
   defaultJsonActionParser,
   defaultActionHandlers,
   createActionManager,
+  createMessageAndClickActionHandler,
 } from "./actions";
 import type { AgentWidgetMessage } from "../types";
 
@@ -12,6 +14,33 @@ const makeMessage = (overrides: Partial<AgentWidgetMessage> = {}): AgentWidgetMe
   content: "",
   createdAt: new Date().toISOString(),
   ...overrides,
+});
+
+describe("message_and_click security", () => {
+  it("does not click by default and only clicks inside an explicit allowlist", () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = `
+      <section id="safe"><button id="allowed">Allowed</button></section>
+      <button id="dangerous">Dangerous</button>
+    `;
+    const allowed = vi.spyOn(document.querySelector<HTMLButtonElement>("#allowed")!, "click");
+    const dangerous = vi.spyOn(document.querySelector<HTMLButtonElement>("#dangerous")!, "click");
+    const action = { type: "message_and_click", payload: { element: "#dangerous", text: "Done" } };
+    const context = { document } as never;
+
+    defaultActionHandlers.messageAndClick(action, context);
+    createMessageAndClickActionHandler(["#safe"])(action, context);
+    vi.runAllTimers();
+    expect(dangerous).not.toHaveBeenCalled();
+
+    createMessageAndClickActionHandler(["#safe"])(
+      { ...action, payload: { element: "#allowed", text: "Done" } },
+      context
+    );
+    vi.runAllTimers();
+    expect(allowed).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
 });
 
 describe("defaultJsonActionParser", () => {

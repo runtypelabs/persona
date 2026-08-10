@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { createJsonStreamParser, parseFormattedTemplate, computeReasoningElapsed } from "./formatting";
+import { createJsonStreamParser, parseFormattedTemplate, computeReasoningElapsed, unescapeJsonString } from "./formatting";
+
+describe("unescapeJsonString", () => {
+  it("distinguishes escaped newlines from literal backslash-n text", () => {
+    expect(unescapeJsonString(String.raw`line\nnext`)).toBe("line\nnext");
+    expect(unescapeJsonString(String.raw`line\\nnext`)).toBe(String.raw`line\nnext`);
+  });
+});
 
 describe("JSON Stream Parser", () => {
   it("should extract text field incrementally as JSON streams in", () => {

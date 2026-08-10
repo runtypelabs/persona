@@ -44,7 +44,11 @@ import {
   createContextMentionOrchestrator,
   type ContextMentionOrchestrator,
 } from "./utils/context-mention-orchestrator";
-import type { MentionSubmitBundle } from "./utils/context-mention-manager";
+import {
+  createMentionContextMap,
+  setMentionContextValue,
+  type MentionSubmitBundle
+} from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
@@ -162,6 +166,7 @@ import { mergeConfigUpdate } from "./utils/config-merge";
 import { createEventBus } from "./utils/events";
 import {
   createActionManager,
+  createMessageAndClickActionHandler,
   defaultActionHandlers,
   defaultJsonActionParser
 } from "./utils/actions";
@@ -184,6 +189,31 @@ const DEFAULT_CHAT_HISTORY_STORAGE_KEY = "persona-chat-history";
 const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
 // Split desktop boundary; must match widget.css artifact media queries (min-width:641px).
 const ARTIFACT_SPLIT_DESKTOP_MIN = 641;
+
+const hashStorageScope = (value: string): string => {
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b1;
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code ^ index, 0x85ebca6b);
+  }
+  return `${(first >>> 0).toString(36)}-${(second >>> 0).toString(36)}`;
+};
+
+export const createEventStreamStorageName = (
+  keyPrefix: string,
+  scope: string
+): string => `${keyPrefix}event-stream-${hashStorageScope(scope)}`;
+
+/** Find a message wrapper without interpolating wire-controlled ids into CSS. */
+export const findMessageWrapperById = (
+  container: HTMLElement,
+  messageId: string
+): HTMLElement | null =>
+  Array.from(container.querySelectorAll<HTMLElement>("[data-wrapper-id]")).find(
+    (wrapper) => wrapper.getAttribute("data-wrapper-id") === messageId
+  ) ?? null;
 
 const IMAGE_FILE_EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   "image/png": "png",
@@ -588,10 +618,13 @@ export const mergeMentionContext = (
   a: MentionSubmitBundle["context"],
   b: MentionSubmitBundle["context"]
 ): MentionSubmitBundle["context"] => {
-  const out: MentionSubmitBundle["context"] = { ...a };
-  for (const [sourceId, items] of Object.entries(b)) {
-    const existing = out[sourceId];
-    out[sourceId] = existing ? { ...existing, ...items } : items;
+  const out = createMentionContextMap();
+  for (const context of [a, b]) {
+    for (const [sourceId, items] of Object.entries(context)) {
+      for (const [itemId, value] of Object.entries(items)) {
+        setMentionContextValue(out, sourceId, itemId, value);
+      }
+    }
   }
   return out;
 };
@@ -607,7 +640,7 @@ export const mergeFinalizedMentions = (
       contentParts: [...acc.contentParts, ...b.contentParts],
       context: mergeMentionContext(acc.context, b.context),
     }),
-    { blocks: [], contentParts: [], context: {} }
+    { blocks: [], contentParts: [], context: createMentionContextMap() }
   );
 
 export const createAgentExperience = (
@@ -763,7 +796,10 @@ export const createAgentExperience = (
   const resolvedActionHandlers =
     config.actionHandlers && config.actionHandlers.length
       ? config.actionHandlers
-      : [defaultActionHandlers.message, defaultActionHandlers.messageAndClick];
+      : [
+          defaultActionHandlers.message,
+          createMessageAndClickActionHandler(config.actionClickAllowlist ?? [])
+        ];
 
   let actionManager = createActionManager({
     parsers: resolvedActionParsers,
@@ -823,7 +859,19 @@ export const createAgentExperience = (
   let scrollToBottomFeature = config.features?.scrollToBottom ?? {};
   let scrollBehaviorFeature = config.features?.scrollBehavior ?? {};
   const persistKeyPrefix = (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
-  const eventStreamDbName = `${persistKeyPrefix}event-stream`;
+  const stableMountScope = mount.getAttribute("data-persona-instance") || mount.id;
+  const anonymousMountScope = stableMountScope
+    ? ""
+    : (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`);
+  const eventStreamScope = config.features?.eventStream?.storageKey ?? JSON.stringify({
+    mount: stableMountScope || anonymousMountScope,
+    page: typeof location !== "undefined" ? `${location.origin}${location.pathname}` : "",
+    apiUrl: config.apiUrl,
+    agentId: config.agentId,
+    flowId: config.flowId,
+    clientToken: config.clientToken,
+  });
+  const eventStreamDbName = createEventStreamStorageName(persistKeyPrefix, eventStreamScope);
   let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
   const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 2000;
   let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore) : null;
@@ -4918,7 +4966,7 @@ export const createAgentExperience = (
       // If a message stops being an approval-plugin bubble, strip
       // `data-preserve-runtime` so the next morph can replace the live wrapper.
       if (!approvalWithPlugin && lastApprovalBubbleFingerprint.has(message.id)) {
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageWrapperById(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
         lastApprovalBubbleFingerprint.delete(message.id);
       }
@@ -4927,7 +4975,7 @@ export const createAgentExperience = (
       // does (e.g. content was rewritten), strip `data-preserve-runtime` from
       // the live wrapper so the next morph can replace it.
       if (!hasDirectiveBubble && lastComponentDirectiveFingerprint.has(message.id)) {
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageWrapperById(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
         lastComponentDirectiveFingerprint.delete(message.id);
       }
@@ -5010,7 +5058,7 @@ export const createAgentExperience = (
         // Drop any previously-mounted plugin bubble so the morph pass
         // removes the now-stale interactive sheet.
         lastAskBubbleFingerprint.delete(message.id);
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageWrapperById(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
         return;
       }
@@ -5151,7 +5199,7 @@ export const createAgentExperience = (
           // the built-in bubble: it resolves via the delegated `messagesWrapper`
           // handler and morphs normally, and drop any preserved live wrapper so
           // morph can replace the now-stale pending bubble.
-          const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+          const existing = findMessageWrapperById(container, message.id);
           existing?.removeAttribute("data-preserve-runtime");
           lastApprovalBubbleFingerprint.delete(message.id);
           bubble = createApprovalBubble(message, config);
@@ -5254,8 +5302,7 @@ export const createAgentExperience = (
                   ? CSS.escape(artifactId)
                   : artifactId;
               const live = artifactId
-                ? (container
-                    .querySelector<HTMLElement>(`#wrapper-${message.id}`)
+                ? (findMessageWrapperById(container, message.id)
                     ?.querySelector<HTMLElement>(
                       `[data-artifact-inline="${escapedId}"]`
                     ) ?? null)
@@ -5673,7 +5720,7 @@ export const createAgentExperience = (
     // the real, listener-bearing bubble directly into the live DOM.
     if (askPluginHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of askPluginHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+        const wrapper = findMessageWrapperById(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -5704,7 +5751,7 @@ export const createAgentExperience = (
     // the ask-question hydration above.
     if (componentDirectiveHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of componentDirectiveHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+        const wrapper = findMessageWrapperById(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -5732,7 +5779,7 @@ export const createAgentExperience = (
     // mirroring the ask-question / component-directive hydration above.
     if (approvalPluginHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of approvalPluginHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+        const wrapper = findMessageWrapperById(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -9356,7 +9403,10 @@ export const createAgentExperience = (
       const nextHandlers =
         config.actionHandlers && config.actionHandlers.length
           ? config.actionHandlers
-          : [defaultActionHandlers.message, defaultActionHandlers.messageAndClick];
+          : [
+              defaultActionHandlers.message,
+              createMessageAndClickActionHandler(config.actionClickAllowlist ?? [])
+            ];
 
       actionManager = createActionManager({
         parsers: nextParsers,

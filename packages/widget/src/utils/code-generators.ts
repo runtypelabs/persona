@@ -173,10 +173,52 @@ export type CodeGeneratorOptions = {
 function resolveCdnBase(options?: CodeGeneratorOptions): string {
   const base = options?.cdnBase
     ?.trim()
-    .replace(/\/+$/, "")
-    .replace(/[\\'"<>`]/g, (ch) => `%${ch.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
-  return base || `https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist`;
+    .replace(/\/+$/, "");
+  const encodedBase = base
+    ? Array.from(base)
+        .map((character) => {
+          const code = character.charCodeAt(0);
+          if (
+            code > 0x20 &&
+            code !== 0x7f &&
+            !"\\'\"<>`".includes(character) &&
+            character !== "\u2028" &&
+            character !== "\u2029"
+          ) {
+            return character;
+          }
+          return encodeURIComponent(character).replace(/[!'()*]/g, (unsafe) =>
+            `%${unsafe.charCodeAt(0).toString(16).toUpperCase()}`
+          );
+        })
+        .join("")
+    : "";
+  return encodedBase || `https://cdn.jsdelivr.net/npm/@runtypelabs/persona@${VERSION}/dist`;
 }
+
+/** Serialize data as JavaScript while also making it safe inside HTML script text. */
+function serializeJsValue(value: unknown, space?: number): string {
+  const serialized = JSON.stringify(value, null, space);
+  if (serialized === undefined) return "undefined";
+  return serialized
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
+const serializeJsString = (value: unknown): string => serializeJsValue(String(value));
+const serializeJsKey = (value: string): string =>
+  /^[A-Za-z_$][\w$]*$/.test(value) &&
+  value !== "__proto__" &&
+  value !== "prototype" &&
+  value !== "constructor"
+    ? value
+    : `[${serializeJsString(value)}]`;
+const jsStringContent = (value: unknown): string => serializeJsString(value).slice(1, -1);
+const singleQuotedJsContent = (value: unknown): string =>
+  jsStringContent(value).replace(/'/g, "\\'");
 
 // Internal type for normalized hooks (always strings)
 type NormalizedHooks = {
@@ -353,7 +395,7 @@ function generateToolCallConfig(config: any, indent: string): string[] {
     lines.push(`${indent}toolCall: {`);
     Object.entries(config.toolCall).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`${indent}  ${key}: "${value}",`);
+        lines.push(`${indent}  ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       }
     });
     lines.push(`${indent}},`);
@@ -378,9 +420,9 @@ function generateMessageActionsConfig(config: any, indent: string, hooks?: CodeG
         // Skip function callbacks - we'll add from hooks if provided
         if (key === "onFeedback" || key === "onCopy") return;
         if (typeof value === "string") {
-          lines.push(`${indent}  ${key}: "${value}",`);
+          lines.push(`${indent}  ${serializeJsKey(key)}: ${serializeJsString(value)},`);
         } else if (typeof value === "boolean") {
-          lines.push(`${indent}  ${key}: ${value},`);
+          lines.push(`${indent}  ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
         }
       });
     }
@@ -412,16 +454,16 @@ function generateMarkdownConfig(config: any, indent: string): string[] {
         lines.push(`${indent}  options: {`);
         Object.entries(config.markdown.options).forEach(([key, value]) => {
           if (typeof value === "string") {
-            lines.push(`${indent}    ${key}: "${value}",`);
+            lines.push(`${indent}    ${serializeJsKey(key)}: ${serializeJsString(value)},`);
           } else if (typeof value === "boolean") {
-            lines.push(`${indent}    ${key}: ${value},`);
+            lines.push(`${indent}    ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
           }
         });
         lines.push(`${indent}  },`);
       }
       
       if (hasDisableDefaultStyles) {
-        lines.push(`${indent}  disableDefaultStyles: ${config.markdown.disableDefaultStyles},`);
+        lines.push(`${indent}  disableDefaultStyles: ${serializeJsValue(config.markdown.disableDefaultStyles)},`);
       }
       
       lines.push(`${indent}},`);
@@ -435,12 +477,23 @@ function generateMarkdownConfig(config: any, indent: string): string[] {
 // duplicating every leaf in each output-format generator.
 function generateSuggestionsConfig(config: any, indent: string): string[] {
   if (!config.suggestions) return [];
-  const serialized = JSON.stringify(config.suggestions, null, 2).split("\n");
+  const serialized = serializeJsValue(config.suggestions, 2).split("\n");
   return serialized.map((line, index) => {
     const prefix = index === 0 ? `${indent}suggestions: ` : indent;
     const suffix = index === serialized.length - 1 ? "," : "";
     return `${prefix}${line}${suffix}`;
   });
+}
+
+function generateSecurityOptInConfig(config: any, indent: string): string[] {
+  const lines: string[] = [];
+  if (Array.isArray(config.actionClickAllowlist)) {
+    lines.push(`${indent}actionClickAllowlist: ${serializeJsValue(config.actionClickAllowlist)},`);
+  }
+  if (Array.isArray(config.formNextPromptAllowlist)) {
+    lines.push(`${indent}formNextPromptAllowlist: ${serializeJsValue(config.formNextPromptAllowlist)},`);
+  }
+  return lines;
 }
 
 // Helper to generate layout config (excluding render functions and slots)
@@ -463,9 +516,9 @@ function generateLayoutConfig(config: any, indent: string): string[] {
         Object.entries(config.layout.header).forEach(([key, value]) => {
           if (key === "render") return; // Skip render function
           if (typeof value === "string") {
-            lines.push(`${indent}    ${key}: "${value}",`);
+            lines.push(`${indent}    ${serializeJsKey(key)}: ${serializeJsString(value)},`);
           } else if (typeof value === "boolean") {
-            lines.push(`${indent}    ${key}: ${value},`);
+            lines.push(`${indent}    ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
           }
         });
         lines.push(`${indent}  },`);
@@ -482,9 +535,9 @@ function generateLayoutConfig(config: any, indent: string): string[] {
             lines.push(`${indent}    avatar: {`);
             Object.entries(value as Record<string, unknown>).forEach(([avatarKey, avatarValue]) => {
               if (typeof avatarValue === "string") {
-                lines.push(`${indent}      ${avatarKey}: "${avatarValue}",`);
+                lines.push(`${indent}      ${serializeJsKey(avatarKey)}: ${serializeJsString(avatarValue)},`);
               } else if (typeof avatarValue === "boolean") {
-                lines.push(`${indent}      ${avatarKey}: ${avatarValue},`);
+                lines.push(`${indent}      ${serializeJsKey(avatarKey)}: ${serializeJsValue(avatarValue)},`);
               }
             });
             lines.push(`${indent}    },`);
@@ -498,17 +551,17 @@ function generateLayoutConfig(config: any, indent: string): string[] {
               Object.entries(value as Record<string, unknown>).forEach(([tsKey, tsValue]) => {
                 if (tsKey === "format") return; // Skip format function
                 if (typeof tsValue === "string") {
-                  lines.push(`${indent}      ${tsKey}: "${tsValue}",`);
+                  lines.push(`${indent}      ${serializeJsKey(tsKey)}: ${serializeJsString(tsValue)},`);
                 } else if (typeof tsValue === "boolean") {
-                  lines.push(`${indent}      ${tsKey}: ${tsValue},`);
+                  lines.push(`${indent}      ${serializeJsKey(tsKey)}: ${serializeJsValue(tsValue)},`);
                 }
               });
               lines.push(`${indent}    },`);
             }
           } else if (typeof value === "string") {
-            lines.push(`${indent}    ${key}: "${value}",`);
+            lines.push(`${indent}    ${serializeJsKey(key)}: ${serializeJsString(value)},`);
           } else if (typeof value === "boolean") {
-            lines.push(`${indent}    ${key}: ${value},`);
+            lines.push(`${indent}    ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
           }
         });
         lines.push(`${indent}  },`);
@@ -561,18 +614,18 @@ function appendSerializableObjectEntries(
     if (entryValue === undefined || typeof entryValue === "function") return;
 
     if (Array.isArray(entryValue)) {
-      lines.push(`${indent}${key}: ${JSON.stringify(entryValue)},`);
+      lines.push(`${indent}${serializeJsKey(key)}: ${serializeJsValue(entryValue)},`);
       return;
     }
 
     if (entryValue && typeof entryValue === "object") {
-      lines.push(`${indent}${key}: {`);
+      lines.push(`${indent}${serializeJsKey(key)}: {`);
       appendSerializableObjectEntries(lines, entryValue as Record<string, unknown>, `${indent}  `);
       lines.push(`${indent}},`);
       return;
     }
 
-    lines.push(`${indent}${key}: ${JSON.stringify(entryValue)},`);
+    lines.push(`${indent}${serializeJsKey(key)}: ${serializeJsValue(entryValue)},`);
   });
 }
 
@@ -583,7 +636,7 @@ function appendSerializableObjectBlock(
   indent: string
 ): void {
   if (!value) return;
-  lines.push(`${indent}${key}: {`);
+  lines.push(`${indent}${serializeJsKey(key)}: {`);
   appendSerializableObjectEntries(lines, value, `${indent}  `);
   lines.push(`${indent}},`);
 }
@@ -594,7 +647,7 @@ function appendSerializableObjectBlock(
  * selector can't break out of the emitted `target: '...'` literal.
  */
 function emitTargetSelector(options?: CodeGeneratorOptions): string {
-  return (options?.target ?? "body").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  return singleQuotedJsContent(options?.target ?? "body");
 }
 
 export function generateCodeSnippet(
@@ -641,12 +694,12 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
     "  config: {"
   ];
 
-  if (config.apiUrl) lines.push(`    apiUrl: "${config.apiUrl}",`);
-  if (config.clientToken) lines.push(`    clientToken: "${config.clientToken}",`);
-  if (config.agentId) lines.push(`    agentId: "${config.agentId}",`);
-  if (config.target) lines.push(`    target: "${config.target}",`);
-  if (config.flowId) lines.push(`    flowId: "${config.flowId}",`);
-  if (shouldEmitParserType) lines.push(`    parserType: "${parserType}",`);
+  if (config.apiUrl) lines.push(`    apiUrl: ${serializeJsString(config.apiUrl)},`);
+  if (config.clientToken) lines.push(`    clientToken: ${serializeJsString(config.clientToken)},`);
+  if (config.agentId) lines.push(`    agentId: ${serializeJsString(config.agentId)},`);
+  if (config.target) lines.push(`    target: ${serializeJsString(config.target)},`);
+  if (config.flowId) lines.push(`    flowId: ${serializeJsString(config.flowId)},`);
+  if (shouldEmitParserType) lines.push(`    parserType: ${serializeJsString(parserType)},`);
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "    ");
@@ -659,7 +712,7 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
   if (config.copy) {
     lines.push("    copy: {");
     Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`      ${key}: "${value}",`);
+      lines.push(`      ${serializeJsKey(key)}: ${serializeJsString(value)},`);
     });
     lines.push("    },");
   }
@@ -668,9 +721,9 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
     lines.push("    sendButton: {");
     Object.entries(config.sendButton).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`      ${key}: "${value}",`);
+        lines.push(`      ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`      ${key}: ${value},`);
+        lines.push(`      ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("    },");
@@ -680,11 +733,11 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
     lines.push("    voiceRecognition: {");
     Object.entries(config.voiceRecognition).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`      ${key}: "${value}",`);
+        lines.push(`      ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`      ${key}: ${value},`);
+        lines.push(`      ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       } else if (typeof value === "number") {
-        lines.push(`      ${key}: ${value},`);
+        lines.push(`      ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("    },");
@@ -694,9 +747,9 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
     lines.push("    statusIndicator: {");
     Object.entries(config.statusIndicator).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`      ${key}: "${value}",`);
+        lines.push(`      ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`      ${key}: ${value},`);
+        lines.push(`      ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("    },");
@@ -705,17 +758,18 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
   if (config.features) {
     lines.push("    features: {");
     Object.entries(config.features).forEach(([key, value]) => {
-      lines.push(`      ${key}: ${value},`);
+      lines.push(`      ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
     });
     lines.push("    },");
   }
 
+  lines.push(...generateSecurityOptInConfig(config, "    "));
   lines.push(...generateSuggestionsConfig(config, "    "));
 
   if (config.suggestionChips && config.suggestionChips.length > 0) {
     lines.push("    suggestionChips: [");
     config.suggestionChips.forEach((chip: string) => {
-      lines.push(`      "${chip}",`);
+      lines.push(`      ${serializeJsString(chip)},`);
     });
     lines.push("    ],");
   }
@@ -723,16 +777,16 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
   if (config.suggestionChipsConfig) {
     lines.push("    suggestionChipsConfig: {");
     if (config.suggestionChipsConfig.fontFamily) {
-      lines.push(`      fontFamily: "${config.suggestionChipsConfig.fontFamily}",`);
+      lines.push(`      fontFamily: ${serializeJsString(config.suggestionChipsConfig.fontFamily)},`);
     }
     if (config.suggestionChipsConfig.fontWeight) {
-      lines.push(`      fontWeight: "${config.suggestionChipsConfig.fontWeight}",`);
+      lines.push(`      fontWeight: ${serializeJsString(config.suggestionChipsConfig.fontWeight)},`);
     }
     if (config.suggestionChipsConfig.paddingX) {
-      lines.push(`      paddingX: "${config.suggestionChipsConfig.paddingX}",`);
+      lines.push(`      paddingX: ${serializeJsString(config.suggestionChipsConfig.paddingX)},`);
     }
     if (config.suggestionChipsConfig.paddingY) {
-      lines.push(`      paddingY: "${config.suggestionChipsConfig.paddingY}",`);
+      lines.push(`      paddingY: ${serializeJsString(config.suggestionChipsConfig.paddingY)},`);
     }
     lines.push("    },");
   }
@@ -753,7 +807,7 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
   lines.push(...generateHooksConfig(hooks, "    "));
 
   if (config.debug) {
-    lines.push(`    debug: ${config.debug},`);
+    lines.push(`    debug: ${serializeJsValue(config.debug)},`);
   }
 
   // Use custom postprocessMessage if provided, otherwise default
@@ -791,12 +845,12 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
     "      config: {"
   ];
 
-  if (config.apiUrl) lines.push(`        apiUrl: "${config.apiUrl}",`);
-  if (config.clientToken) lines.push(`        clientToken: "${config.clientToken}",`);
-  if (config.agentId) lines.push(`        agentId: "${config.agentId}",`);
-  if (config.target) lines.push(`        target: "${config.target}",`);
-  if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
-  if (shouldEmitParserType) lines.push(`        parserType: "${parserType}",`);
+  if (config.apiUrl) lines.push(`        apiUrl: ${serializeJsString(config.apiUrl)},`);
+  if (config.clientToken) lines.push(`        clientToken: ${serializeJsString(config.clientToken)},`);
+  if (config.agentId) lines.push(`        agentId: ${serializeJsString(config.agentId)},`);
+  if (config.target) lines.push(`        target: ${serializeJsString(config.target)},`);
+  if (config.flowId) lines.push(`        flowId: ${serializeJsString(config.flowId)},`);
+  if (shouldEmitParserType) lines.push(`        parserType: ${serializeJsString(parserType)},`);
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "        ");
@@ -809,7 +863,7 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
   if (config.copy) {
     lines.push("        copy: {");
     Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`          ${key}: "${value}",`);
+      lines.push(`          ${serializeJsKey(key)}: ${serializeJsString(value)},`);
     });
     lines.push("        },");
   }
@@ -818,9 +872,9 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
     lines.push("        sendButton: {");
     Object.entries(config.sendButton).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`          ${key}: "${value}",`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`          ${key}: ${value},`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("        },");
@@ -830,11 +884,11 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
     lines.push("        voiceRecognition: {");
     Object.entries(config.voiceRecognition).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`          ${key}: "${value}",`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`          ${key}: ${value},`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       } else if (typeof value === "number") {
-        lines.push(`          ${key}: ${value},`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("        },");
@@ -844,9 +898,9 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
     lines.push("        statusIndicator: {");
     Object.entries(config.statusIndicator).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`          ${key}: "${value}",`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`          ${key}: ${value},`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("        },");
@@ -855,17 +909,18 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
   if (config.features) {
     lines.push("        features: {");
     Object.entries(config.features).forEach(([key, value]) => {
-      lines.push(`          ${key}: ${value},`);
+      lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
     });
     lines.push("        },");
   }
 
+  lines.push(...generateSecurityOptInConfig(config, "        "));
   lines.push(...generateSuggestionsConfig(config, "        "));
 
   if (config.suggestionChips && config.suggestionChips.length > 0) {
     lines.push("        suggestionChips: [");
     config.suggestionChips.forEach((chip: string) => {
-      lines.push(`          "${chip}",`);
+      lines.push(`          ${serializeJsString(chip)},`);
     });
     lines.push("        ],");
   }
@@ -873,16 +928,16 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
   if (config.suggestionChipsConfig) {
     lines.push("        suggestionChipsConfig: {");
     if (config.suggestionChipsConfig.fontFamily) {
-      lines.push(`          fontFamily: "${config.suggestionChipsConfig.fontFamily}",`);
+      lines.push(`          fontFamily: ${serializeJsString(config.suggestionChipsConfig.fontFamily)},`);
     }
     if (config.suggestionChipsConfig.fontWeight) {
-      lines.push(`          fontWeight: "${config.suggestionChipsConfig.fontWeight}",`);
+      lines.push(`          fontWeight: ${serializeJsString(config.suggestionChipsConfig.fontWeight)},`);
     }
     if (config.suggestionChipsConfig.paddingX) {
-      lines.push(`          paddingX: "${config.suggestionChipsConfig.paddingX}",`);
+      lines.push(`          paddingX: ${serializeJsString(config.suggestionChipsConfig.paddingX)},`);
     }
     if (config.suggestionChipsConfig.paddingY) {
-      lines.push(`          paddingY: "${config.suggestionChipsConfig.paddingY}",`);
+      lines.push(`          paddingY: ${serializeJsString(config.suggestionChipsConfig.paddingY)},`);
     }
     lines.push("        },");
   }
@@ -903,7 +958,7 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
   lines.push(...generateHooksConfig(hooks, "        "));
 
   if (config.debug) {
-    lines.push(`        debug: ${config.debug},`);
+    lines.push(`        debug: ${serializeJsValue(config.debug)},`);
   }
 
   // Use custom postprocessMessage if provided, otherwise default
@@ -954,6 +1009,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     "  createFlexibleJsonStreamParser,",
     "  defaultJsonActionParser,",
     "  defaultActionHandlers,",
+    "  createMessageAndClickActionHandler,",
     "  markdownPostprocessor",
     "} from '@runtypelabs/persona';",
     "import type { AgentWidgetInitHandle } from '@runtypelabs/persona';",
@@ -1059,11 +1115,11 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     "      config: {"
   ];
 
-  if (config.apiUrl) lines.push(`        apiUrl: "${config.apiUrl}",`);
-  if (config.clientToken) lines.push(`        clientToken: "${config.clientToken}",`);
-  if (config.agentId) lines.push(`        agentId: "${config.agentId}",`);
-  if (config.target) lines.push(`        target: "${config.target}",`);
-  if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
+  if (config.apiUrl) lines.push(`        apiUrl: ${serializeJsString(config.apiUrl)},`);
+  if (config.clientToken) lines.push(`        clientToken: ${serializeJsString(config.clientToken)},`);
+  if (config.agentId) lines.push(`        agentId: ${serializeJsString(config.agentId)},`);
+  if (config.target) lines.push(`        target: ${serializeJsString(config.target)},`);
+  if (config.flowId) lines.push(`        flowId: ${serializeJsString(config.flowId)},`);
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "        ");
@@ -1076,7 +1132,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
   if (config.copy) {
     lines.push("        copy: {");
     Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`          ${key}: "${value}",`);
+      lines.push(`          ${serializeJsKey(key)}: ${serializeJsString(value)},`);
     });
     lines.push("        },");
   }
@@ -1085,9 +1141,9 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     lines.push("        sendButton: {");
     Object.entries(config.sendButton).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`          ${key}: "${value}",`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`          ${key}: ${value},`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("        },");
@@ -1097,11 +1153,11 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     lines.push("        voiceRecognition: {");
     Object.entries(config.voiceRecognition).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`          ${key}: "${value}",`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`          ${key}: ${value},`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       } else if (typeof value === "number") {
-        lines.push(`          ${key}: ${value},`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("        },");
@@ -1111,9 +1167,9 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     lines.push("        statusIndicator: {");
     Object.entries(config.statusIndicator).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`          ${key}: "${value}",`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`          ${key}: ${value},`);
+        lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("        },");
@@ -1122,17 +1178,18 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
   if (config.features) {
     lines.push("        features: {");
     Object.entries(config.features).forEach(([key, value]) => {
-      lines.push(`          ${key}: ${value},`);
+      lines.push(`          ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
     });
     lines.push("        },");
   }
 
+  lines.push(...generateSecurityOptInConfig(config, "        "));
   lines.push(...generateSuggestionsConfig(config, "        "));
 
   if (config.suggestionChips && config.suggestionChips.length > 0) {
     lines.push("        suggestionChips: [");
     config.suggestionChips.forEach((chip: string) => {
-      lines.push(`          "${chip}",`);
+      lines.push(`          ${serializeJsString(chip)},`);
     });
     lines.push("        ],");
   }
@@ -1140,16 +1197,16 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
   if (config.suggestionChipsConfig) {
     lines.push("        suggestionChipsConfig: {");
     if (config.suggestionChipsConfig.fontFamily) {
-      lines.push(`          fontFamily: "${config.suggestionChipsConfig.fontFamily}",`);
+      lines.push(`          fontFamily: ${serializeJsString(config.suggestionChipsConfig.fontFamily)},`);
     }
     if (config.suggestionChipsConfig.fontWeight) {
-      lines.push(`          fontWeight: "${config.suggestionChipsConfig.fontWeight}",`);
+      lines.push(`          fontWeight: ${serializeJsString(config.suggestionChipsConfig.fontWeight)},`);
     }
     if (config.suggestionChipsConfig.paddingX) {
-      lines.push(`          paddingX: "${config.suggestionChipsConfig.paddingX}",`);
+      lines.push(`          paddingX: ${serializeJsString(config.suggestionChipsConfig.paddingX)},`);
     }
     if (config.suggestionChipsConfig.paddingY) {
-      lines.push(`          paddingY: "${config.suggestionChipsConfig.paddingY}",`);
+      lines.push(`          paddingY: ${serializeJsString(config.suggestionChipsConfig.paddingY)},`);
     }
     lines.push("        },");
   }
@@ -1177,7 +1234,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
   }
 
   if (config.debug) {
-    lines.push(`        debug: ${config.debug},`);
+    lines.push(`        debug: ${serializeJsValue(config.debug)},`);
   }
 
   lines.push("        initialMessages: loadSavedMessages(),");
@@ -1211,7 +1268,9 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     lines.push("        // Action handlers (custom merged with defaults)");
     lines.push(`        actionHandlers: [...(${hooks.actionHandlers}),`);
     lines.push("          defaultActionHandlers.message,");
-    lines.push("          defaultActionHandlers.messageAndClick,");
+    lines.push(
+      `          createMessageAndClickActionHandler(${serializeJsValue(config.actionClickAllowlist ?? [])}),`
+    );
     lines.push(`          // Built-in handler for nav_then_click action`);
     lines.push(`          ${TEMPLATE_NAV_THEN_CLICK_HANDLER_TS}`);
     lines.push("        ],");
@@ -1219,7 +1278,9 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     lines.push("        // Action handlers for navigation and other actions");
     lines.push("        actionHandlers: [");
     lines.push("          defaultActionHandlers.message,");
-    lines.push("          defaultActionHandlers.messageAndClick,");
+    lines.push(
+      `          createMessageAndClickActionHandler(${serializeJsValue(config.actionClickAllowlist ?? [])}),`
+    );
     lines.push(`          // Handler for nav_then_click action`);
     lines.push(`          ${TEMPLATE_NAV_THEN_CLICK_HANDLER_TS}`);
     lines.push("        ],");
@@ -1331,6 +1392,12 @@ function buildSerializableConfig(config: any): Record<string, any> {
   if (config.voiceRecognition) serializableConfig.voiceRecognition = config.voiceRecognition;
   if (config.statusIndicator) serializableConfig.statusIndicator = config.statusIndicator;
   if (config.features) serializableConfig.features = config.features;
+  if (Array.isArray(config.actionClickAllowlist)) {
+    serializableConfig.actionClickAllowlist = config.actionClickAllowlist;
+  }
+  if (Array.isArray(config.formNextPromptAllowlist)) {
+    serializableConfig.formNextPromptAllowlist = config.formNextPromptAllowlist;
+  }
   if (config.suggestions) serializableConfig.suggestions = config.suggestions;
   if (config.suggestionChips?.length > 0) serializableConfig.suggestionChips = config.suggestionChips;
   if (config.suggestionChipsConfig) serializableConfig.suggestionChipsConfig = config.suggestionChipsConfig;
@@ -1444,8 +1511,13 @@ function generateScriptInstallerCode(config: any, options?: CodeGeneratorOptions
       }
     : serializableConfig;
 
-  // Escape single quotes in JSON for HTML attribute
-  const configJson = JSON.stringify(payload, null, 0).replace(/'/g, "&#39;");
+  // Escape the complete HTML attribute context. Ampersand must be first so a
+  // config value cannot smuggle an entity that decodes into the quote delimiter.
+  const configJson = JSON.stringify(payload, null, 0)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/'/g, "&#39;");
 
   return `<script src="${resolveCdnBase(options)}/install.global.js" data-config='${configJson}'></script>`;
 }
@@ -1467,16 +1539,16 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     "<script>",
     "  var handle = window.AgentWidget.initAgentWidget({",
     `    target: '${emitTargetSelector(options)}',`,
-    ...(options?.windowKey ? [`    windowKey: '${options.windowKey}',`] : []),
+    ...(options?.windowKey ? [`    windowKey: '${singleQuotedJsContent(options.windowKey)}',`] : []),
     "    config: {"
   ];
 
-  if (config.apiUrl) lines.push(`      apiUrl: "${config.apiUrl}",`);
-  if (config.clientToken) lines.push(`      clientToken: "${config.clientToken}",`);
-  if (config.agentId) lines.push(`      agentId: "${config.agentId}",`);
-  if (config.target) lines.push(`      target: "${config.target}",`);
-  if (config.flowId) lines.push(`      flowId: "${config.flowId}",`);
-  if (shouldEmitParserType) lines.push(`      parserType: "${parserType}",`);
+  if (config.apiUrl) lines.push(`      apiUrl: ${serializeJsString(config.apiUrl)},`);
+  if (config.clientToken) lines.push(`      clientToken: ${serializeJsString(config.clientToken)},`);
+  if (config.agentId) lines.push(`      agentId: ${serializeJsString(config.agentId)},`);
+  if (config.target) lines.push(`      target: ${serializeJsString(config.target)},`);
+  if (config.flowId) lines.push(`      flowId: ${serializeJsString(config.flowId)},`);
+  if (shouldEmitParserType) lines.push(`      parserType: ${serializeJsString(parserType)},`);
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "      ");
@@ -1489,7 +1561,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   if (config.copy) {
     lines.push("      copy: {");
     Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`        ${key}: "${value}",`);
+      lines.push(`        ${serializeJsKey(key)}: ${serializeJsString(value)},`);
     });
     lines.push("      },");
   }
@@ -1498,9 +1570,9 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     lines.push("      sendButton: {");
     Object.entries(config.sendButton).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`        ${key}: "${value}",`);
+        lines.push(`        ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`        ${key}: ${value},`);
+        lines.push(`        ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("      },");
@@ -1510,11 +1582,11 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     lines.push("      voiceRecognition: {");
     Object.entries(config.voiceRecognition).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`        ${key}: "${value}",`);
+        lines.push(`        ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`        ${key}: ${value},`);
+        lines.push(`        ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       } else if (typeof value === "number") {
-        lines.push(`        ${key}: ${value},`);
+        lines.push(`        ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("      },");
@@ -1524,9 +1596,9 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     lines.push("      statusIndicator: {");
     Object.entries(config.statusIndicator).forEach(([key, value]) => {
       if (typeof value === "string") {
-        lines.push(`        ${key}: "${value}",`);
+        lines.push(`        ${serializeJsKey(key)}: ${serializeJsString(value)},`);
       } else if (typeof value === "boolean") {
-        lines.push(`        ${key}: ${value},`);
+        lines.push(`        ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
       }
     });
     lines.push("      },");
@@ -1535,17 +1607,18 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   if (config.features) {
     lines.push("      features: {");
     Object.entries(config.features).forEach(([key, value]) => {
-      lines.push(`        ${key}: ${value},`);
+      lines.push(`        ${serializeJsKey(key)}: ${serializeJsValue(value)},`);
     });
     lines.push("      },");
   }
 
+  lines.push(...generateSecurityOptInConfig(config, "      "));
   lines.push(...generateSuggestionsConfig(config, "      "));
 
   if (config.suggestionChips && config.suggestionChips.length > 0) {
     lines.push("      suggestionChips: [");
     config.suggestionChips.forEach((chip: string) => {
-      lines.push(`        "${chip}",`);
+      lines.push(`        ${serializeJsString(chip)},`);
     });
     lines.push("      ],");
   }
@@ -1553,16 +1626,16 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   if (config.suggestionChipsConfig) {
     lines.push("      suggestionChipsConfig: {");
     if (config.suggestionChipsConfig.fontFamily) {
-      lines.push(`        fontFamily: "${config.suggestionChipsConfig.fontFamily}",`);
+      lines.push(`        fontFamily: ${serializeJsString(config.suggestionChipsConfig.fontFamily)},`);
     }
     if (config.suggestionChipsConfig.fontWeight) {
-      lines.push(`        fontWeight: "${config.suggestionChipsConfig.fontWeight}",`);
+      lines.push(`        fontWeight: ${serializeJsString(config.suggestionChipsConfig.fontWeight)},`);
     }
     if (config.suggestionChipsConfig.paddingX) {
-      lines.push(`        paddingX: "${config.suggestionChipsConfig.paddingX}",`);
+      lines.push(`        paddingX: ${serializeJsString(config.suggestionChipsConfig.paddingX)},`);
     }
     if (config.suggestionChipsConfig.paddingY) {
-      lines.push(`        paddingY: "${config.suggestionChipsConfig.paddingY}",`);
+      lines.push(`        paddingY: ${serializeJsString(config.suggestionChipsConfig.paddingY)},`);
     }
     lines.push("      },");
   }
@@ -1583,7 +1656,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   lines.push(...generateHooksConfig(hooks, "      "));
 
   if (config.debug) {
-    lines.push(`      debug: ${config.debug},`);
+    lines.push(`      debug: ${serializeJsValue(config.debug)},`);
   }
 
   // Use custom postprocessMessage if provided, otherwise default
@@ -1602,7 +1675,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
 function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions): string {
   const hooks = options?.hooks;
   const serializableConfig = buildSerializableConfig(config);
-  const configJson = JSON.stringify(serializableConfig, null, 2);
+  const configJson = serializeJsValue(serializableConfig, 2);
 
   const lines: string[] = [
     "<script>",
@@ -1742,14 +1815,18 @@ function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions)
     lines.push(`    var customHandlers = ${hooks.actionHandlers};`);
     lines.push("    widgetConfig.actionHandlers = customHandlers.concat([");
     lines.push("      agentWidget.defaultActionHandlers.message,");
-    lines.push("      agentWidget.defaultActionHandlers.messageAndClick,");
+    lines.push(
+      "      agentWidget.createMessageAndClickActionHandler(widgetConfig.actionClickAllowlist || []),"
+    );
     lines.push(`      ${TEMPLATE_NAV_THEN_CLICK_HANDLER_ES5}`);
     lines.push("    ]);");
   } else {
     lines.push("    // Action handlers for navigation and other actions");
     lines.push("    widgetConfig.actionHandlers = [");
     lines.push("      agentWidget.defaultActionHandlers.message,");
-    lines.push("      agentWidget.defaultActionHandlers.messageAndClick,");
+    lines.push(
+      "      agentWidget.createMessageAndClickActionHandler(widgetConfig.actionClickAllowlist || []),"
+    );
     lines.push(`      ${TEMPLATE_NAV_THEN_CLICK_HANDLER_ES5}`);
     lines.push("    ];");
   }
@@ -1824,7 +1901,7 @@ function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions)
     "    var handle = agentWidget.initAgentWidget({",
     `      target: '${emitTargetSelector(options)}',`,
     "      useShadowDom: false,",
-    ...(options?.windowKey ? [`      windowKey: '${options.windowKey}',`] : []),
+    ...(options?.windowKey ? [`      windowKey: '${singleQuotedJsContent(options.windowKey)}',`] : []),
     "      config: widgetConfig",
     "    });",
     "",

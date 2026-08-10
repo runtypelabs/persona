@@ -10,7 +10,6 @@
 import {
   normalizeColorValue,
   isValidHex,
-  parseCssValue,
   formatCssValue,
 } from '../color-utils';
 import { ROLE_FAMILIES } from '../role-mappings';
@@ -204,14 +203,19 @@ export function coerceRoundnessStyle(input: unknown): RoundnessStyle {
 
 /** Coerce a radius value: numbers become `${n}px`; CSS strings are normalized. */
 export function coerceRadius(input: unknown): string {
-  if (typeof input === 'number' && Number.isFinite(input)) {
+  if (typeof input === 'number' && Number.isFinite(input) && input >= 0 && input <= 9999) {
     return `${input}px`;
   }
   if (typeof input === 'string' && input.trim() !== '') {
-    const trimmed = input.trim();
-    if (trimmed === '9999px' || /^(100%|9999px)$/.test(trimmed)) return '9999px';
-    const parsed = parseCssValue(trimmed);
-    return formatCssValue(parsed.value, parsed.unit);
+    const trimmed = input.trim().toLowerCase();
+    if (trimmed === '100%') return '9999px';
+    const match = /^(?:\d+(?:\.\d+)?|\.\d+)(px|rem)$/.exec(trimmed);
+    if (match) {
+      const value = Number.parseFloat(trimmed);
+      if (Number.isFinite(value) && value <= 9999) {
+        return formatCssValue(value, match[1] as 'px' | 'rem');
+      }
+    }
   }
   throw new Error('Radius must be a number (px) or a CSS length string like "0.5rem".');
 }

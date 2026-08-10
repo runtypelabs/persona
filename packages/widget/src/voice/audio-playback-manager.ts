@@ -140,6 +140,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    */
   flush(): void {
     for (const source of this.activeSources) {
+      source.onended = null;
       try {
         source.stop();
         source.disconnect();
@@ -260,7 +261,8 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
     source.onended = () => {
       const idx = this.activeSources.indexOf(source);
-      if (idx !== -1) this.activeSources.splice(idx, 1);
+      if (idx === -1) return;
+      this.activeSources.splice(idx, 1);
       this.pendingCount--;
       this.checkFinished();
     };

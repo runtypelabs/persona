@@ -121,6 +121,7 @@ export function createDropdownMenu(options: CreateDropdownOptions): DropdownMenu
   }
 
   let cleanupClickOutside: (() => void) | null = null;
+  let destroyed = false;
 
   /** Reposition a portaled menu based on the anchor's current bounding rect. */
   function reposition() {
@@ -137,18 +138,19 @@ export function createDropdownMenu(options: CreateDropdownOptions): DropdownMenu
   }
 
   function show() {
+    if (destroyed) return;
     reposition();
     menu.classList.remove("persona-hidden");
-    // Defer click-outside listener to avoid catching the triggering click
-    requestAnimationFrame(() => {
-      const handler = (e: MouseEvent) => {
-        if (!menu.contains(e.target as Node) && !anchor.contains(e.target as Node)) {
-          hide();
-        }
-      };
-      document.addEventListener("click", handler, true);
-      cleanupClickOutside = () => document.removeEventListener("click", handler, true);
-    });
+    cleanupClickOutside?.();
+    const handler = (e: MouseEvent) => {
+      if (!menu.contains(e.target as Node) && !anchor.contains(e.target as Node)) {
+        hide();
+      }
+    };
+    // The capture phase of the triggering click has already run by the time a
+    // normal click handler calls show(), so this can be installed synchronously.
+    document.addEventListener("click", handler, true);
+    cleanupClickOutside = () => document.removeEventListener("click", handler, true);
   }
 
   function hide() {
@@ -166,6 +168,7 @@ export function createDropdownMenu(options: CreateDropdownOptions): DropdownMenu
   }
 
   function destroy() {
+    destroyed = true;
     hide();
     menu.remove();
   }

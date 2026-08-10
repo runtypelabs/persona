@@ -173,6 +173,16 @@ const buildWebMcpErrorResult = (message: string) => ({
   content: [{ type: "text" as const, text: message }],
 });
 
+const buildWebMcpUncertainResult = (message: string) => ({
+  outcomeUncertain: true,
+  content: [
+    {
+      type: "text" as const,
+      text: `${message} The page tool may have completed; do not retry it automatically.`,
+    },
+  ],
+});
+
 const getWebMcpErrorMessage = (
   error: unknown,
   fallback = "WebMCP tool execution failed.",
@@ -250,6 +260,8 @@ export class AgentWidgetSession {
   // subsequent re-emit will re-trigger.
   private webMcpInflightKeys: Set<string> = new Set();
   private webMcpResolvedKeys: Set<string> = new Set();
+  /** Executed page-tool outputs awaiting a successful `/resume` POST. */
+  private webMcpExecutedOutputs: Map<string, unknown> = new Map();
   // Per-resolve AbortControllers, kept in a set so multiple `webmcp:*`
   // step_await resolves in one turn never abort one another. The shared
   // `this.abortController` is intentionally NOT used by resolveWebMcpToolCall:
@@ -890,6 +902,7 @@ export class AgentWidgetSession {
     this.abortWebMcpResolves();
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
+    this.webMcpExecutedOutputs.clear();
     const prevSSECallback = this.client.getSSEEventCallback();
     this.config = merged;
     this.client = new AgentWidgetClient(this.config);
@@ -2195,6 +2208,7 @@ export class AgentWidgetSession {
         }
         this.webMcpInflightKeys.add(dedupeKey);
         claimedKeys.push(dedupeKey);
+        const hasCachedOutput = this.webMcpExecutedOutputs.has(dedupeKey);
 
         // Clear the awaiting flag and keep the tool bubble running while the
         // browser-side WebMCP promise is in flight. The initial `step_await`
@@ -2214,6 +2228,17 @@ export class AgentWidgetSession {
             dedupeKey,
             resumeKey,
             output: suggestRepliesToolResult(),
+            toolMessage,
+            startedAt,
+            completedAt: Date.now(),
+          };
+        }
+
+        if (hasCachedOutput) {
+          return {
+            dedupeKey,
+            resumeKey,
+            output: this.webMcpExecutedOutputs.get(dedupeKey),
             toolMessage,
             startedAt,
             completedAt: Date.now(),
@@ -2254,22 +2279,27 @@ export class AgentWidgetSession {
             }
             this.markWebMcpToolComplete(
               toolMessage,
-              buildWebMcpErrorResult(
-                isAbortError
-                  ? "Aborted by cancel()"
-                  : getWebMcpErrorMessage(error),
-              ),
+              isAbortError
+                ? buildWebMcpUncertainResult("Cancelled after execution started.")
+                : buildWebMcpErrorResult(getWebMcpErrorMessage(error)),
               startedAt,
             );
-            // Release the dedupe claim so a re-emit can retry this call.
+            if (isAbortError) {
+              this.webMcpResolvedKeys.add(dedupeKey);
+              this.webMcpExecutedOutputs.delete(dedupeKey);
+            }
+            // Non-abort execution failures remain retryable.
             this.webMcpInflightKeys.delete(dedupeKey);
             return null;
           }
         }
+        this.webMcpExecutedOutputs.set(dedupeKey, output);
         if (controller.signal.aborted) {
+          this.webMcpResolvedKeys.add(dedupeKey);
+          this.webMcpExecutedOutputs.delete(dedupeKey);
           this.markWebMcpToolComplete(
             toolMessage,
-            buildWebMcpErrorResult("Aborted by cancel()"),
+            output,
             startedAt,
           );
           this.webMcpInflightKeys.delete(dedupeKey);
@@ -2312,6 +2342,7 @@ export class AgentWidgetSession {
       // may still be paused and the retry path must not show a final result.
       for (const r of ready) {
         this.webMcpResolvedKeys.add(r.dedupeKey);
+        this.webMcpExecutedOutputs.delete(r.dedupeKey);
         this.markWebMcpToolComplete(
           r.toolMessage,
           r.output,
@@ -2337,9 +2368,11 @@ export class AgentWidgetSession {
         );
       } else {
         for (const r of ready) {
+          this.webMcpResolvedKeys.add(r.dedupeKey);
+          this.webMcpExecutedOutputs.delete(r.dedupeKey);
           this.markWebMcpToolComplete(
             r.toolMessage,
-            buildWebMcpErrorResult("Aborted by cancel()"),
+            buildWebMcpUncertainResult("Cancelled after execution started."),
             r.startedAt,
           );
         }
@@ -2450,6 +2483,7 @@ export class AgentWidgetSession {
       return;
     }
     this.webMcpInflightKeys.add(dedupeKey);
+    const hasCachedOutput = this.webMcpExecutedOutputs.has(dedupeKey);
 
     // Mark resolved on the message so the UI's local-tool sheet (if any
     // generic one ever lands) does not show: this is a fully-automatic
@@ -2483,7 +2517,7 @@ export class AgentWidgetSession {
     // Thread the signal INTO the bridge: short-circuits the confirm bubble
     // and the execute() race on cancel(), so a late confirm-approval after
     // cancel() cannot fire a host-page side effect with no matching /resume.
-    const execPromise = isSuggestReplies
+    const execPromise = isSuggestReplies || hasCachedOutput
       ? null
       : this.client.executeWebMcpToolCall(wireToolName, args, signal);
 
@@ -2493,6 +2527,8 @@ export class AgentWidgetSession {
       let resumeOutput: unknown;
       if (isSuggestReplies) {
         resumeOutput = suggestRepliesToolResult();
+      } else if (hasCachedOutput) {
+        resumeOutput = this.webMcpExecutedOutputs.get(dedupeKey);
       } else if (!execPromise) {
         // Client has no bridge (config.webmcp.enabled !== true). Resume with
         // an error so the dispatch can advance instead of hanging.
@@ -2504,6 +2540,7 @@ export class AgentWidgetSession {
         };
       } else {
         resumeOutput = await execPromise;
+        this.webMcpExecutedOutputs.set(dedupeKey, resumeOutput);
       }
       completedAt = Date.now();
       // If cancel() fired during execute, the bridge returned an aborted
@@ -2513,9 +2550,11 @@ export class AgentWidgetSession {
       // the resolve set) so we don't clobber a sibling resolve or a live
       // dispatch's controller here.
       if (signal.aborted) {
+        this.webMcpResolvedKeys.add(dedupeKey);
+        this.webMcpExecutedOutputs.delete(dedupeKey);
         this.markWebMcpToolComplete(
           toolMessage,
-          buildWebMcpErrorResult("Aborted by cancel()"),
+          buildWebMcpUncertainResult("Cancelled after execution started."),
           startedAt,
         );
         return;
@@ -2537,6 +2576,7 @@ export class AgentWidgetSession {
       await this.resumeWithToolOutput(executionId, resumeKey, resumeOutput, {
         onHttpOk: () => {
           this.webMcpResolvedKeys.add(dedupeKey);
+          this.webMcpExecutedOutputs.delete(dedupeKey);
           this.markWebMcpToolComplete(
             toolMessage,
             resumeOutput,
@@ -2557,13 +2597,15 @@ export class AgentWidgetSession {
       // resolve set): do NOT null the shared `this.abortController` here; it
       // may belong to a live dispatch or sibling resolve, not to us.
       if (phase === "execute" || isAbortError || signal.aborted) {
+        if (isAbortError || signal.aborted) {
+          this.webMcpResolvedKeys.add(dedupeKey);
+          this.webMcpExecutedOutputs.delete(dedupeKey);
+        }
         this.markWebMcpToolComplete(
           toolMessage,
-          buildWebMcpErrorResult(
-            isAbortError || signal.aborted
-              ? "Aborted by cancel()"
-              : getWebMcpErrorMessage(error),
-          ),
+          isAbortError || signal.aborted
+            ? buildWebMcpUncertainResult("Cancelled after execution started.")
+            : buildWebMcpErrorResult(getWebMcpErrorMessage(error)),
           startedAt,
         );
       }
@@ -2671,11 +2713,10 @@ export class AgentWidgetSession {
     // A user stop also cancels any pending/in-flight durable reconnect and
     // clears the resume handle (the abort above already killed its fetch).
     this.teardownReconnect();
-    // Tear down every in-flight WebMCP resolve (each owns its own controller,
-    // independent of the shared one above). Clear the inflight set so retries
-    // are possible if the user re-issues the same step_await context.
+    // Tear down every in-flight WebMCP resolve. Keep its in-flight claim until
+    // the aborted bridge promise settles; otherwise a stale re-emit could start
+    // the same side-effectful page tool during that cancellation race.
     this.abortWebMcpResolves();
-    this.webMcpInflightKeys.clear();
     // Stop any in-progress audio too: when the user hits "stop", they want
     // the assistant to actually stop talking, not just stop generating tokens.
     // Both helpers are safe no-ops when audio isn't configured.
@@ -2701,6 +2742,7 @@ export class AgentWidgetSession {
     // a tool with the same key resolved in the prior conversation.
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
+    this.webMcpExecutedOutputs.clear();
     // A fresh conversation must resend the full WebMCP tool list on its next
     // turn: drop the diff-only fingerprint cache (server keys by recordId, so
     // a new conversation has no stored set to match).
@@ -2924,6 +2966,7 @@ export class AgentWidgetSession {
     // incoming snapshot is treated as a fresh conversation context.
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
+    this.webMcpExecutedOutputs.clear();
     this.messages = this.sortMessages(
       messages.map((message) => ({
         ...message,

@@ -85,6 +85,18 @@ describe("isAskUserQuestionMessage", () => {
   });
 });
 
+describe("sheet lookup", () => {
+  it("handles a tool-call id containing selector syntax and a newline", () => {
+    const overlay = makeOverlay();
+    const toolCall = { ...makeMessage().toolCall!, id: 'tool\n[id="crafted"]' };
+    const message = makeMessage({ toolCall });
+    expect(() => ensureAskUserQuestionSheet(message, {} as AgentWidgetConfig, overlay)).not.toThrow();
+    const sheet = overlay.querySelector<HTMLElement>("[data-persona-ask-sheet-for]");
+    expect(sheet?.getAttribute("data-persona-ask-sheet-for")).toBe(toolCall.id);
+    expect(() => removeAskUserQuestionSheet(overlay, toolCall.id)).not.toThrow();
+  });
+});
+
 describe("createAskUserQuestionBubble", () => {
   it("renders a compact transcript stub carrying the message id", () => {
     const bubble = createAskUserQuestionBubble(makeMessage());

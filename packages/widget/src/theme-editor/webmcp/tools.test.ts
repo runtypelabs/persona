@@ -166,10 +166,10 @@ describe('createThemeEditorTools', () => {
         { field: 'totally-unknown', value: 'x' },
       ],
     });
-    expect(state.get('launcher.enabled')).toBe(false);
+    expect(state.get('launcher.enabled')).toBe(true);
     expect(state.get('theme.palette.radius.md')).toBe('20px');
     const reports = out.applied.updates;
-    expect(reports.find((r: any) => r.field === 'launch-enabled').ok).toBe(true);
+    expect(reports.find((r: any) => r.field === 'launch-enabled').ok).toBe(false);
     expect(reports.find((r: any) => r.field === 'totally-unknown').ok).toBe(false);
   });
 
@@ -214,5 +214,29 @@ describe('createThemeEditorTools', () => {
     const out = await call(tools.get('manage_session')!, { action: 'export' });
     expect(out.snapshot.version).toBe(2);
     expect(out.snapshot.theme).toBeDefined();
+  });
+
+  it('manage_session export redacts credentials and set_theme_fields rejects config paths', async () => {
+    const darkTheme = { semantic: { colors: { text: '#fefefe' } } };
+    const secretState = new ThemeEditorState(undefined, {
+      clientToken: 'secret-token',
+      headers: { Authorization: 'Bearer secret' },
+      darkTheme,
+    });
+    const secretTools = toolMap(secretState);
+    const exported = await call(secretTools.get('manage_session')!, { action: 'export' });
+    const serialized = JSON.stringify(exported);
+    expect(serialized).not.toContain('secret-token');
+    expect(serialized).not.toContain('Bearer secret');
+    expect(exported.snapshot.config.darkTheme).toEqual(darkTheme);
+
+    const out = await call(secretTools.get('set_theme_fields')!, {
+      updates: [
+        { field: 'headers.Authorization', value: 'attacker' },
+        { field: 'theme.__proto__.polluted', value: 'yes' },
+      ],
+    });
+    expect(out.applied.updates.every((update: { ok: boolean }) => !update.ok)).toBe(true);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
   });
 });

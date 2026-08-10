@@ -80,6 +80,11 @@ export const defaultJsonActionParser: AgentWidgetActionParser = ({ text }) => {
 const asString = (value: unknown) =>
   typeof value === "string" ? value : value == null ? "" : String(value);
 
+const displayMessageAndClick = (action: AgentWidgetParsedAction) => ({
+  handled: true,
+  displayText: asString((action.payload as Record<string, unknown>).text)
+});
+
 export const defaultActionHandlers: Record<
   string,
   AgentWidgetActionHandler
@@ -92,26 +97,44 @@ export const defaultActionHandlers: Record<
       displayText: text
     };
   },
-  messageAndClick: (action, context) => {
+  messageAndClick: (action) => {
     if (action.type !== "message_and_click") return;
-    const payload = action.payload as Record<string, unknown>;
-    const selector = asString(payload.element);
-    if (selector && context.document?.querySelector) {
+    return displayMessageAndClick(action);
+  }
+};
+
+/**
+ * Opt-in handler for legacy `message_and_click` actions. A model-selected
+ * element is clicked only when it falls within an integrator-owned allowlist.
+ */
+export const createMessageAndClickActionHandler = (
+  allowedSelectors: readonly string[]
+): AgentWidgetActionHandler => (action, context) => {
+  if (action.type !== "message_and_click") return;
+  const payload = action.payload as Record<string, unknown>;
+  const selector = asString(payload.element);
+  if (selector && context.document?.querySelector && allowedSelectors.length > 0) {
+    try {
       const element = context.document.querySelector<HTMLElement>(selector);
-      if (element) {
-        setTimeout(() => {
-          element.click();
-        }, 400);
+      const allowed = element && allowedSelectors.some((allowedSelector) => {
+        try {
+          return element.matches(allowedSelector) || Boolean(element.closest(allowedSelector));
+        } catch {
+          return false;
+        }
+      });
+      if (element && allowed) {
+        setTimeout(() => element.click(), 400);
       } else if (typeof console !== "undefined") {
-        // eslint-disable-next-line no-console
-        console.warn("[AgentWidget] Element not found for selector:", selector);
+        console.warn("[AgentWidget] Blocked model-controlled click selector:", selector);
+      }
+    } catch {
+      if (typeof console !== "undefined") {
+        console.warn("[AgentWidget] Invalid model-controlled click selector:", selector);
       }
     }
-    return {
-      handled: true,
-      displayText: asString(payload.text)
-    };
   }
+  return displayMessageAndClick(action);
 };
 
 const ensureArrayOfStrings = (value: unknown): string[] => {
@@ -233,4 +256,3 @@ export const createActionManager = (options: ActionManagerOptions) => {
     syncFromMetadata
   };
 };
-

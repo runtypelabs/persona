@@ -161,11 +161,7 @@ describe("AgentWidgetSession: WebMCP resolve", () => {
     expect(resumeSpy).toHaveBeenCalledTimes(1);
   });
 
-  it("allows retry on the same toolCall.id when /resume fails", async () => {
-    // BugBot finding #4: a permanent handled-set would block the only retry
-    // path when `/resume` itself fails (network / server). The dedupe should
-    // promote to "resolved" only AFTER /resume succeeds; failures stay
-    // retryable on the next step_await re-emit.
+  it("retries /resume without re-executing the page tool when /resume fails", async () => {
     const { session, executeSpy, resumeSpy, client } = makeSession();
     // First attempt: resume throws.
     (client.resumeFlow as ReturnType<typeof vi.fn>).mockImplementationOnce(
@@ -193,7 +189,7 @@ describe("AgentWidgetSession: WebMCP resolve", () => {
     await session.resolveWebMcpToolCall(msg); // retry: must be allowed
     await session.resolveWebMcpToolCall(msg); // post-success: must be blocked
 
-    expect(executeSpy).toHaveBeenCalledTimes(2);
+    expect(executeSpy).toHaveBeenCalledTimes(1);
     expect(resumeSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -255,8 +251,8 @@ describe("AgentWidgetSession: WebMCP resolve", () => {
     ).messages.find((m) => m.toolCall?.id === "tool-1");
     expect(stored?.toolCall?.status).toBe("complete");
     expect(stored?.toolCall?.result).toMatchObject({
-      isError: true,
-      content: [{ type: "text", text: "Aborted by cancel()" }],
+      outcomeUncertain: true,
+      content: [{ type: "text", text: expect.stringMatching(/do not retry/i) }],
     });
   });
 

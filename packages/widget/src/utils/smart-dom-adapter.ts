@@ -19,7 +19,11 @@ import type {
   ExtractedElement,
   ElementSelectorCandidate
 } from "../vendor/smart-dom-reader";
-import type { EnrichedPageElement } from "./dom-context";
+import {
+  isSensitiveAttributeName,
+  isSensitiveFieldMetadata,
+  type EnrichedPageElement
+} from "./dom-context";
 
 /** Options for {@link smartDomResultToEnriched}. */
 export interface SmartDomAdapterOptions {
@@ -108,7 +112,10 @@ function classifyInteractivity(
 
 /** Build the relevant-attribute bag, mirroring `dom-context.collectAttributes`. */
 function collectAttributes(el: ExtractedElement): Record<string, string> {
-  const attrs: Record<string, string> = { ...el.attributes };
+  const attrs: Record<string, string> = {};
+  for (const [name, value] of Object.entries(el.attributes)) {
+    if (!isSensitiveAttributeName(name)) attrs[name] = value;
+  }
   const role = el.interaction.role;
   if (role && !attrs.role) attrs.role = role;
   return attrs;
@@ -122,7 +129,8 @@ function collectAttributes(el: ExtractedElement): Record<string, string> {
  * `.persona-host` class guard.
  */
 function isExcluded(el: ExtractedElement, excludeSelector: string): boolean {
-  if (!excludeSelector) return false;
+  const guard = excludeSelector.trim();
+  if (!guard) return false;
   const haystacks: Array<string | undefined> = [
     el.selector.css,
     el.selector.xpath,
@@ -133,7 +141,9 @@ function isExcluded(el: ExtractedElement, excludeSelector: string): boolean {
     ...(el.selector.candidates?.map((c) => c.value) ?? []),
     ...el.context.parentChain
   ];
-  return haystacks.some((h) => !!h && h.includes(excludeSelector));
+  const escaped = guard.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const exactSelector = new RegExp(`${escaped}(?![\\w-])`);
+  return haystacks.some((h) => !!h && exactSelector.test(h));
 }
 
 /**
@@ -182,6 +192,7 @@ export function smartDomResultToEnriched(
   // maxElements cap is reached.
   const visit = (el: ExtractedElement): boolean => {
     if (isExcluded(el, excludeSelector)) return true;
+    if (isSensitiveFieldMetadata(el.tag, el.attributes)) return true;
 
     const selector = bestPlainCssSelector(el);
     if (selector && !seen.has(selector)) {

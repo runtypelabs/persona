@@ -434,12 +434,12 @@ export class WebMcpBridge {
       return normalizeSerializedResult(raw);
     } catch (err) {
       if (timedOut) {
-        return errorResult(
+        return uncertainResult(
           `WebMCP tool '${bareName}' timed out after ${this.timeoutMs}ms`,
         );
       }
       if (signal?.aborted) {
-        return errorResult("Aborted by cancel()");
+        return uncertainResult("Cancelled after the page tool started; its outcome is unknown.");
       }
       const message = err instanceof Error ? err.message : String(err);
       return errorResult(message);
@@ -637,6 +637,16 @@ const normalizeSerializedResult = (raw: string | null): WebMcpToolResult => {
 const errorResult = (message: string): WebMcpToolResult => ({
   isError: true,
   content: [{ type: "text", text: message }],
+});
+
+const uncertainResult = (message: string): WebMcpToolResult => ({
+  outcomeUncertain: true,
+  content: [
+    {
+      type: "text",
+      text: `${message} Do not retry this side-effectful call automatically.`,
+    },
+  ],
 });
 
 /**

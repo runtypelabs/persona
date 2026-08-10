@@ -837,6 +837,11 @@ export type WebMcpToolResult = {
     | { type: string;[key: string]: unknown }
   >;
   isError?: boolean;
+  /**
+   * The page tool started, but cancellation/timeout made its final outcome
+   * unknowable. Consumers must not automatically execute the call again.
+   */
+  outcomeUncertain?: boolean;
   /** Pass-through of the tool's `annotations.untrustedContentHint`. */
   annotations?: {
     untrustedContentHint?: boolean;
@@ -2533,6 +2538,13 @@ export type EventStreamBadgeColor = {
  * Configuration for the Event Stream inspector view.
  */
 export type EventStreamConfig = {
+  /**
+   * Stable, non-secret namespace for persisted raw event history. Set this
+   * when an anonymous mount must restore across reloads. By default Persona
+   * scopes storage to the mount and backend identity; anonymous mounts receive
+   * an ephemeral per-instance scope to prevent cross-widget disclosure.
+   */
+  storageKey?: string;
   /**
    * Custom badge color mappings by event type prefix or exact type.
    * Keys are matched as exact match first, then prefix match (keys ending with "_").
@@ -5346,6 +5358,12 @@ export type AgentWidgetConfig = {
   suggestionChipsConfig?: AgentWidgetSuggestionChipsConfig;
   debug?: boolean;
   formEndpoint?: string;
+  /**
+   * Exact endpoint-provided follow-up prompts the built-in form may submit to
+   * the active agent session. Empty by default; endpoint text remains display
+   * only unless explicitly trusted by the integrator.
+   */
+  formNextPromptAllowlist?: string[];
   launcherWidth?: string;
   sendButton?: AgentWidgetSendButtonConfig;
   statusIndicator?: AgentWidgetStatusIndicatorConfig;
@@ -5429,6 +5447,12 @@ export type AgentWidgetConfig = {
   requestMiddleware?: AgentWidgetRequestMiddleware;
   actionParsers?: AgentWidgetActionParser[];
   actionHandlers?: AgentWidgetActionHandler[];
+  /**
+   * Host-page selector roots within which the legacy `message_and_click`
+   * action may click. Empty by default, so model-controlled clicks are disabled
+   * unless the integrator explicitly opts in.
+   */
+  actionClickAllowlist?: string[];
   storageAdapter?: AgentWidgetStorageAdapter;
   /**
    * Called after state is loaded from the storage adapter, but before the widget

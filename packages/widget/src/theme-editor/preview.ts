@@ -36,6 +36,12 @@ export type { PreviewScene } from './preview-utils';
 export type PreviewShellMode = 'light' | 'dark';
 export type CompareMode = 'off' | 'baseline' | 'themes';
 
+export const normalizePreviewDevice = (value: unknown): PreviewDevice =>
+  value === 'mobile' ? 'mobile' : 'desktop';
+
+export const normalizePreviewShellMode = (value: unknown): PreviewShellMode =>
+  value === 'dark' ? 'dark' : 'light';
+
 /** Context passed to lifecycle hooks after mounting or updating */
 export interface PreviewLifecycleContext {
   iframes: HTMLIFrameElement[];
@@ -115,7 +121,7 @@ interface PreviewSpec {
 
 function buildSpecs(options: ThemePreviewOptions): PreviewSpec[] {
   const compare = options.compareMode ?? 'off';
-  const shellMode = options.shellMode ?? 'light';
+  const shellMode = normalizePreviewShellMode(options.shellMode);
 
   if (compare === 'themes') {
     return [
@@ -158,7 +164,7 @@ export function createThemePreview(
   let renderToken = 0;
 
   function getDevice(): PreviewDevice {
-    return options.device ?? 'desktop';
+    return normalizePreviewDevice(options.device);
   }
 
   function getZoom(): number {

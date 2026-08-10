@@ -133,6 +133,14 @@ describe("built-in approval — flag on (enableAlwaysAllow)", () => {
     expect(approve).toHaveBeenCalledWith({ remember: true });
   });
 
+  it("Enter on the focused Deny control denies instead of always allowing", () => {
+    const { el, approve, deny } = render(cfg);
+    const denyButton = el!.querySelector<HTMLButtonElement>('[data-action="deny"]')!;
+    denyButton.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(deny).toHaveBeenCalledTimes(1);
+    expect(approve).not.toHaveBeenCalled();
+  });
+
   it("Escape denies", () => {
     const { deny } = render(cfg);
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));

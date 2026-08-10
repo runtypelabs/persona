@@ -542,7 +542,9 @@ describe("isSafeMediaSrc", () => {
 
   it("blocks other executable data: types", () => {
     expect(isSafeMediaSrc("data:text/javascript,alert(1)")).toBe(false);
+    expect(isSafeMediaSrc("data:text/x-javascript,alert(1)")).toBe(false);
     expect(isSafeMediaSrc("data:text/xml,<svg onload=alert(1)/>")).toBe(false);
+    expect(isSafeMediaSrc("data:application/xhtml,<html>")).toBe(false);
     expect(isSafeMediaSrc("data:application/xhtml+xml,<html>")).toBe(false);
   });
 
@@ -550,6 +552,13 @@ describe("isSafeMediaSrc", () => {
     expect(isSafeMediaSrc("data:image/svg+xml,<svg onload=alert(1)>")).toBe(false);
     expect(isSafeMediaSrc("data:image/svg+xml;base64,PHN2Zz4=")).toBe(false);
     expect(isSafeMediaSrc("data:image/SVG+XML;base64,PHN2Zz4=")).toBe(false);
+  });
+
+  it("blocks percent-encoded executable MIME headers", () => {
+    expect(isSafeMediaSrc("data:text%2Fhtml,<script>alert(1)</script>")).toBe(false);
+    expect(isSafeMediaSrc("data:image%2Fsvg%2Bxml;base64,PHN2Zz4=")).toBe(false);
+    expect(isSafeMediaSrc("data:application%2Fjavascript,alert(1)")).toBe(false);
+    expect(isSafeMediaSrc("data:text%ZZhtml,broken")).toBe(false);
   });
 
   it("allows inert data:text/* payloads (plain, csv, markdown)", () => {

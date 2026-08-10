@@ -26,8 +26,15 @@ function longestLeadingBacktickRun(text: string): number {
  */
 function fencedBlock(label: string, text: string): string {
   const fence = "`".repeat(Math.max(3, longestLeadingBacktickRun(text) + 1));
-  return `${fence}${label}\n${text}\n${fence}`;
+  const safeLabel = label
+    .replace(/`/g, "\\u0060")
+    .replace(/\r/g, "\\r")
+    .replace(/\n/g, "\\n");
+  return `${fence}${safeLabel}\n${text}\n${fence}`;
 }
+
+const escapeXmlText = (value: string): string =>
+  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 /**
  * Anthropic's documented long-context document shape. `index` is 0-based here
@@ -40,7 +47,7 @@ function documentBlock(label: string, text: string, index: number): string {
   if (text.includes("</document_content>")) return fencedBlock(label, text);
   return (
     `<document index="${index + 1}">\n` +
-    `<source>${label}</source>\n` +
+    `<source>${escapeXmlText(label)}</source>\n` +
     `<document_content>\n${text}\n</document_content>\n` +
     `</document>`
   );

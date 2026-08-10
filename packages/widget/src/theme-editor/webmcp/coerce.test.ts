@@ -72,6 +72,12 @@ describe('coerceRadius', () => {
     expect(coerceRadius('0.5rem')).toBe('0.5rem');
     expect(coerceRadius('9999px')).toBe('9999px');
   });
+
+  it('rejects negative, non-finite, unitless, and oversized values', () => {
+    for (const value of [-1, Infinity, '-1px', '10', '1e3px', '10000px', '10000rem']) {
+      expect(() => coerceRadius(value)).toThrow();
+    }
+  });
 });
 
 describe('coerceTypographyRef', () => {

@@ -156,4 +156,21 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
     m.enqueue(pcm(100));
     expect(startedAgain).toHaveBeenCalledTimes(1);
   });
+
+  it("ignores a stale onended callback after flush", () => {
+    const manager = new AudioPlaybackManager(24000);
+    manager.enqueue(pcm(100));
+    const first = MockAudioContext.instances[0].sources[0];
+    const stale = first.onended;
+    manager.flush();
+
+    const finished = vi.fn();
+    manager.onFinished(finished);
+    manager.enqueue(pcm(100));
+    manager.markStreamEnd();
+    stale?.();
+    expect(finished).not.toHaveBeenCalled();
+    MockAudioContext.instances[0].sources[1].onended?.();
+    expect(finished).toHaveBeenCalledTimes(1);
+  });
 });

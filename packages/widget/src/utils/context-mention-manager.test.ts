@@ -59,6 +59,23 @@ describe("ContextMentionManager", () => {
     expect(bundle.blocks).toEqual(["```App.tsx\nFILE BODY\n```"]);
   });
 
+  it("assembles attacker-controlled source/item ids in null-prototype maps", async () => {
+    const { manager } = makeManager();
+    const source: AgentWidgetContextMentionSource = {
+      id: "__proto__",
+      label: "Hostile",
+      search: () => [],
+      resolve: async () => ({ context: { safe: true } }),
+    };
+    manager.add(source, item("constructor"));
+    await tick();
+    const context = (await manager.collectForSubmit().finalize()).context;
+    expect(Object.getPrototypeOf(context)).toBeNull();
+    expect(Object.getPrototypeOf(context.__proto__)).toBeNull();
+    expect(context.__proto__.constructor).toEqual({ safe: true });
+    expect(({} as Record<string, unknown>).safe).toBeUndefined();
+  });
+
   it("shows the context row on the first add (visibility computed after tracking)", () => {
     const { manager, contextRow, source } = makeManager();
     expect(manager.add(source, item("App.tsx"))).toBe(true);

@@ -571,6 +571,7 @@ var init_traversal = __esmMin((() => {
 		* Extract element information
 		*/
 		static extractElement(element, options, depth = 0) {
+			if (DOMTraversal.isSensitiveElement(element)) return null;
 			if (options.maxDepth && depth > options.maxDepth) return null;
 			if (!options.includeHidden && !DOMTraversal.isVisible(element)) return null;
 			if (options.viewportOnly && !DOMTraversal.isInViewport(element)) return null;
@@ -658,11 +659,26 @@ var init_traversal = __esmMin((() => {
 			const attrTruncate = options.attributeTruncateLength ?? 100;
 			const dataAttrTruncate = options.dataAttributeTruncateLength ?? 50;
 			for (const attr of relevant) {
+				if (attr === "value" && DOMTraversal.isSensitiveElement(element)) continue;
 				const value = element.getAttribute(attr);
 				if (value) attributes[attr] = value.length > attrTruncate ? `${value.substring(0, attrTruncate)}...` : value;
 			}
-			for (const attr of element.attributes) if (attr.name.startsWith("data-") && !relevant.includes(attr.name)) attributes[attr.name] = attr.value.length > dataAttrTruncate ? `${attr.value.substring(0, dataAttrTruncate)}...` : attr.value;
+			for (const attr of element.attributes) if (attr.name.startsWith("data-") && !relevant.includes(attr.name) && !DOMTraversal.isSensitiveAttributeName(attr.name)) attributes[attr.name] = attr.value.length > dataAttrTruncate ? `${attr.value.substring(0, dataAttrTruncate)}...` : attr.value;
 			return attributes;
+		}
+		static isSensitiveAttributeName(name) {
+			return name.startsWith("data-") && DOMTraversal.looksSensitiveFieldHint(name.slice(5));
+		}
+		static looksSensitiveFieldHint(value) {
+			const normalized = value.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+			return /(?:^|[^a-z0-9])(?:password|passwd|pwd|secret|token|api[-_ ]?key|auth(?:entication|orization)?|credential|csrf|card[-_ ]?(?:number|no)|cvc|cvv|security[-_ ]?code|one[-_ ]?time(?:[-_ ]?code)?|otp)(?:$|[^a-z0-9])/i.test(normalized);
+		}
+		static isSensitiveElement(element) {
+			const type = (element.getAttribute("type") || "").toLowerCase();
+			if (element.matches("input") && (type === "password" || type === "hidden")) return true;
+			const autocomplete = (element.getAttribute("autocomplete") || "").toLowerCase().split(/\s+/);
+			if (autocomplete.some((token) => ["current-password", "new-password", "one-time-code", "cc-number", "cc-csc", "cc-exp", "cc-exp-month", "cc-exp-year"].includes(token))) return true;
+			return ["name", "id", "aria-label"].some((name) => DOMTraversal.looksSensitiveFieldHint(element.getAttribute(name) || ""));
 		}
 		/**
 		* Get element context information
@@ -703,12 +719,15 @@ var init_traversal = __esmMin((() => {
 		* Get text content of an element (limited length)
 		*/
 		static getElementText(element, options) {
+			if (DOMTraversal.isSensitiveElement(element)) return "";
 			if (element.matches("input, textarea")) {
 				const input = element;
 				return input.value || input.placeholder || "";
 			}
 			if (element.matches("img")) return element.alt || "";
-			const text = element.textContent?.trim() || "";
+			const clone = element.cloneNode(true);
+			for (const child of Array.from(clone.querySelectorAll?.("*") || [])) if (DOMTraversal.isSensitiveElement(child)) child.remove();
+			const text = clone.textContent?.trim() || "";
 			const maxLength = options?.textTruncateLength;
 			if (maxLength && text.length > maxLength) return `${text.substring(0, maxLength)}...`;
 			return text;
@@ -1615,4 +1634,3 @@ var init_src = __esmMin((() => {
 //#endregion
 init_src();
 export { ContentDetection, MarkdownFormatter, ProgressiveExtractor, SelectorGenerator, SmartDOMReader, SmartDOMReader as default };
-
