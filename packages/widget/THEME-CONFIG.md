@@ -820,6 +820,173 @@ Returning `null` (or throwing) falls back to the default spinner, mirroring the
 is used, the escalation-label logic is skipped (the host owns the content); the
 overlay backdrop, timing, and dismissal stay widget-owned either way.
 
+### Conversation History (Messages) Variables
+
+The Messages surface (`features.history.enabled`) ships its styles inside the
+lazy `history-view.js` chunk and injects them on mount, so it costs nothing in
+`widget.css`. Every rule is scoped under `.persona-history-view` (interactive
+elements additionally by tag, e.g. `button.persona-history-row`), which keeps a
+host reset such as `[data-persona-root] h2` from outranking it.
+
+Eleven history-specific variables are declared on the view root, each with a
+fallback chain into the ordinary theme aliases. Set any of them on the host page
+(or on `[data-persona-root]`) to restyle the surface without touching a class:
+
+| CSS var | Fallback chain | Description |
+|---------|----------------|-------------|
+| `--persona-history-surface-bg` | `--persona-surface` → `#ffffff` | List/background surface and the row overflow menu |
+| `--persona-history-topbar-bg` | `--persona-header-bg` → `--persona-surface` → `#ffffff` | Top bar background |
+| `--persona-history-border` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Hairlines: top bar, row dividers, footer, rail edge |
+| `--persona-history-row-hover-bg` | `--persona-button-ghost-hover-bg` → `rgba(0, 0, 0, 0.04)` | Row hover and active-press wash |
+| `--persona-history-row-active-bg` | `--persona-container` → `#f3f4f6` | Selected conversation wash |
+| `--persona-history-active-marker` | `--persona-primary` → `#2563eb` | Selected conversation edge marker |
+| `--persona-history-skeleton-bg` | `--persona-container` → `#eef0f3` | Loading placeholder blocks |
+| `--persona-history-danger-fg` | `--persona-palette-colors-error-600` → `#b91c1c` | Destructive action text (delete, delete all, forget device) |
+| `--persona-history-focus-ring` | `--persona-primary` → `#2563eb` | `:focus-visible` outline color |
+| `--persona-history-row-min-height` | `72px` | Row and skeleton-row minimum height |
+| `--persona-history-topbar-min-height` | `56px` | Top bar minimum height |
+
+Copy is separate from styling: every user-visible string is overridable through
+`features.history.copy` (see `AgentWidgetHistoryCopy`), never through CSS.
+
+#### Stable classes
+
+These class names are part of the public surface, so custom CSS and render-hook
+plugins can target them:
+
+```css
+/* Root and placement */
+.persona-history-view                 /* view root; carries the variables above */
+.persona-history-view--panel          /* panel presentation */
+.persona-history-view--rail           /* rail presentation (adds the right edge) */
+.persona-history-view--enter          /* one-shot entry animation */
+
+/* Top bar */
+.persona-history-topbar
+.persona-history-back                 /* back (panel) / close (rail) control */
+.persona-history-heading-group
+.persona-history-title
+.persona-history-scope                /* evidence-based scope line */
+.persona-history-scope-title
+.persona-history-scope-description
+.persona-history-scope-alert          /* identity block replacing the list */
+.persona-history-scope-alert-title
+
+/* Body, groups, rows */
+.persona-history-body
+.persona-history-new                  /* primary "New conversation" action */
+.persona-history-new-icon             /* its icon-button form in the top bar */
+.persona-history-list-region
+.persona-history-group                /* one time bucket (Today, Yesterday, …) */
+.persona-history-group-heading
+.persona-history-list
+.persona-history-item                 /* row wrapper (<li>) */
+.persona-history-row                  /* whole-row button */
+.persona-history-row--active
+.persona-history-row--opening
+.persona-history-row--deleting
+.persona-history-row-head
+.persona-history-row-title
+.persona-history-row-time
+.persona-history-row-preview
+.persona-history-row-count            /* screen-reader message count */
+.persona-history-row-menu-button      /* overflow trigger; a sibling, not nested */
+.persona-history-menu
+.persona-history-menu-item
+.persona-history-row-error            /* row-adjacent failure with retry */
+
+/* States and skeletons */
+.persona-history-state
+.persona-history-state-title
+.persona-history-state-description
+.persona-history-state-action
+.persona-history-view-loading
+.persona-history-skeleton-row
+.persona-history-skeleton-bar
+.persona-history-skeleton-bar--short
+.persona-history-skeleton-bar--medium
+.persona-history-skeleton-bar--wide
+
+/* Pagination and footer */
+.persona-history-secondary            /* shared outline button */
+.persona-history-load-more
+.persona-history-footer
+.persona-history-destructive
+.persona-history-clear                /* delete all in the active scope */
+.persona-history-reset                /* forget this device (provider-gated) */
+
+/* Shared controls and utilities */
+.persona-history-icon-button
+.persona-history-truncate
+.persona-history-clamp
+.persona-history-sr-only
+```
+
+A further set is owned by the shell rather than the chunk, because it exists
+before and around the lazy view:
+
+```css
+.persona-history-toggle               /* header control that opens Messages */
+.persona-history-rail-shell           /* row wrapper created for rail placement */
+.persona-history-rail-conversation    /* the still-operable conversation column */
+.persona-history-rail-host            /* the navigation column the view mounts into */
+.persona-history-confirm__dialog      /* destructive confirmation (alertdialog) */
+.persona-history-confirm__title
+.persona-history-confirm__description
+.persona-history-confirm__actions
+.persona-history-confirm__cancel
+.persona-history-confirm__confirm
+```
+
+The rail hosts and the confirmation dialog are styled inline from theme
+variables so they cost no bytes in `widget.css`; the class names are still
+stable selectors for host overrides.
+
+#### Stable data attributes
+
+Useful when styling by state rather than by class, and the selectors the widget's
+own tests use:
+
+| Attribute | Values | On |
+|-----------|--------|----|
+| `data-persona-history-toggle` | (present) | The header control that opens Messages |
+| `data-persona-history-presentation` | `panel` \| `rail` | View root; updated live on a rail/panel flip |
+| `data-persona-history-identity` | `HistoryIdentityStatus["state"]` | The scope alert block |
+| `data-persona-history-state` | `loading` \| `empty` \| `identity` \| `error` \| `rate_limited` \| `new_conversation_required` | The list state block |
+| `data-persona-history-group` | group key | One time bucket |
+| `data-persona-history-item` | conversation id | Row wrapper |
+| `data-persona-history-conversation` | conversation id | Row button |
+| `data-persona-history-focus` | focus key | Any element the view can restore focus to |
+| `data-persona-history-live-region` | (present) | The shell's polite announcer |
+
+#### Home Screen recent-conversation classes (showcase)
+
+The Home Screen composition in the showcase (`apps/web/src/plugins/home-screen-plugin.ts`)
+renders an optional "Recent conversations" teaser above the starters. It is a
+demo plugin, not part of the published package, so these classes live with the
+plugin and are documented here only because the blueprint is meant to be copied:
+
+```css
+.persona-home__recent-header
+.persona-home__recent-all              /* "See all" → controller.showHistory() */
+.persona-home__recent                  /* one teaser row (whole-row button) */
+.persona-home__recent-copy
+.persona-home__recent-title
+.persona-home__recent-preview
+.persona-home__recent-time
+.persona-home__recent-skeleton
+.persona-home__recent-skeleton-bar
+.persona-home__recent-skeleton-bar--title
+.persona-home__recent-skeleton-bar--preview
+.persona-home__recent-error
+.persona-home__recent-retry
+```
+
+A teaser row deliberately renders less than a full Messages row: title, preview,
+and relative time only, with no message count, active marker, overflow menu, or
+delete. The plugin never touches a history provider; the host wires its
+callbacks to the public controller methods.
+
 ---
 
 ## Launcher (`config.launcher.*`)

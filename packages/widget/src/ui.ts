@@ -7764,6 +7764,10 @@ export const createAgentExperience = (
     }
   };
 
+  /**
+   * The single commit path behind the header action, the view's `onStartNew`,
+   * and `controller.startNewConversation()`, so one emit covers all three.
+   */
   const startNewConversation = async (): Promise<void> => {
     await session.startNewConversation({ scope: historyOperationScope() });
     messageCache.clear();
@@ -7771,7 +7775,13 @@ export const createAgentExperience = (
     resumeAutoScroll();
     jumpToBottomInstant();
     syncEarlierMessagesPill();
-    historySurface?.view.setActiveConversationId(session.getActiveConversationId());
+    const conversationId = session.getActiveConversationId();
+    historySurface?.view.setActiveConversationId(conversationId);
+    // Emitted before the close so a host can tell a commit from a plain close.
+    eventBus.emit("history:conversationStarted", {
+      conversationId,
+      timestamp: Date.now(),
+    });
     if (historyVisible && historyPresentation === "panel") {
       closeHistory({ restoreFocus: false });
     }

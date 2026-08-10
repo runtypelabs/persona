@@ -283,6 +283,63 @@ describe("history controller API", () => {
       expect(serialized).not.toMatch(/token|proof|visitor|endUser/i);
     });
 
+    it("emits a sanitized conversationStarted from the controller method", async () => {
+      const { controller, provider } = setup();
+      const started: Array<Record<string, unknown>> = [];
+      controller.on("history:conversationStarted", (payload) =>
+        started.push(payload as unknown as Record<string, unknown>)
+      );
+
+      await controller.openConversation("conv-a");
+      await flush();
+      await controller.startNewConversation();
+      await flush();
+
+      const active = (provider as DemoHistoryProvider).getActiveConversationId();
+      expect(started).toEqual([
+        { conversationId: active, timestamp: expect.any(Number) },
+      ]);
+      expect(started[0]!.conversationId).not.toBe("conv-a");
+      expect(JSON.stringify(started)).not.toMatch(/token|proof|visitor|endUser/i);
+    });
+
+    it("emits conversationStarted from the header new-conversation action", async () => {
+      const { mount, controller, provider } = setup();
+      const started: Array<Record<string, unknown>> = [];
+      controller.on("history:conversationStarted", (payload) =>
+        started.push(payload as unknown as Record<string, unknown>)
+      );
+
+      // With history available the clear-chat affordance IS "New conversation".
+      const headerAction = mount.querySelector<HTMLButtonElement>(
+        ".persona-clear-chat-button-wrapper button"
+      )!;
+      expect(headerAction.getAttribute("aria-label")).toBe("New conversation");
+      headerAction.click();
+      await flush(20);
+
+      expect(started.length).toBe(1);
+      expect(started[0]!.conversationId).toBe(
+        (provider as DemoHistoryProvider).getActiveConversationId()
+      );
+    });
+
+    it("emits conversationStarted before history:closed for the in-panel action", async () => {
+      const { mount, controller } = setup();
+      const order: string[] = [];
+      controller.on("history:conversationStarted", () => order.push("started"));
+      controller.on("history:closed", () => order.push("closed"));
+
+      await controller.showHistory();
+      await flush();
+      mount.querySelector<HTMLButtonElement>("button.persona-history-new")!.click();
+      await flush(20);
+
+      // The commit is distinguishable from a plain close: it precedes it.
+      expect(order).toEqual(["started", "closed"]);
+      expect(controller.isHistoryVisible()).toBe(false);
+    });
+
     it("dedupes identity status changes and carries a timestamp", async () => {
       const provider = createDemoHistoryProvider({ conversations: SEEDS });
       const { controller } = setup({ provider });

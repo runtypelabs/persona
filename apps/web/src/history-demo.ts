@@ -21,21 +21,8 @@ import { createDemoConfigInspector } from "./demo-config-inspector";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { renderDemoScaffold } from "./demo-scaffold";
 import { runWidgetMountWithInspector, setupMountMode } from "./mount-mode";
+import { createThreadRailPlugin } from "./plugins/thread-rail-plugin";
 import type { Mode } from "./examples-nav";
-
-// ---------------------------------------------------------------------------
-// TODO (history render hooks): `renderHistoryView` / `renderHistoryHeader` /
-// `renderHistoryConversation` / `renderHistoryState` are specified in D7 of
-// docs/visitor-history-implementation-plan.md but are not on
-// `AgentWidgetPlugin` yet. When they land, add a fourth source variant here
-// that keeps `presentation: "auto"` and returns a custom ChatGPT-style rail
-// from `renderHistoryView`, reflowing to a drawer when the same renderer is
-// handed `presentation: "panel"`. Everything else on this page already
-// exercises the shell, so the hook demo is additive: a plugin in `plugins: []`
-// plus a note that Persona still owns orchestration, epochs, confirmations,
-// focus, and placement. Until then the rail below is the built-in view under
-// `features.history.presentation`.
-// ---------------------------------------------------------------------------
 
 type Source = "demo" | "staging";
 type Presentation = "panel" | "rail" | "auto";
@@ -51,6 +38,8 @@ const PRODUCTION_API_HOST = "api.runtype.com";
 
 let source: Source = "demo";
 let presentation: Presentation = "panel";
+/** Swaps Persona's Messages view for the demo `renderHistoryView` plugin. */
+let customView = false;
 let activeStage: HTMLElement | null = null;
 let activeController: AgentWidgetController | null = null;
 let teardownActive: (() => void) | null = null;
@@ -130,10 +119,14 @@ const stagingConfigured = Boolean(STAGING_API_URL && STAGING_CLIENT_TOKEN);
 const stagingPointsAtProduction = STAGING_API_URL.includes(PRODUCTION_API_HOST);
 const stagingUsable = stagingConfigured && !stagingPointsAtProduction;
 
+const threadRailPlugin = createThreadRailPlugin();
+
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const base: AgentWidgetConfig = {
     ...DEFAULT_WIDGET_CONFIG,
     features: { history: { enabled: true, presentation } },
+    // Public hooks only: the plugin returns DOM, Persona keeps orchestration.
+    ...(customView ? { plugins: [threadRailPlugin] } : {}),
     // The page is about the Messages surface, so the transcript stays quiet.
     suggestionChips: [],
     launcher: {
@@ -227,6 +220,8 @@ function wireEvents(controller: AgentWidgetController): () => void {
     log("info", `closed, returned to ${p.returnSurface}`);
   const onConversationOpened = (p: { conversationId: string }) =>
     log("answered", `opened ${p.conversationId}`);
+  const onConversationStarted = (p: { conversationId: string | null }) =>
+    log("answered", `started ${p.conversationId ?? "(no id)"}`);
   const onDeleted = (p: { conversationId: string; wasActive: boolean }) =>
     log(
       "dismissed",
@@ -250,6 +245,7 @@ function wireEvents(controller: AgentWidgetController): () => void {
   controller.on("history:opened", onOpened);
   controller.on("history:closed", onClosed);
   controller.on("history:conversationOpened", onConversationOpened);
+  controller.on("history:conversationStarted", onConversationStarted);
   controller.on("history:conversationDeleted", onDeleted);
   controller.on("history:cleared", onCleared);
   controller.on("history:identityReset", onReset);
@@ -259,6 +255,7 @@ function wireEvents(controller: AgentWidgetController): () => void {
     controller.off("history:opened", onOpened);
     controller.off("history:closed", onClosed);
     controller.off("history:conversationOpened", onConversationOpened);
+    controller.off("history:conversationStarted", onConversationStarted);
     controller.off("history:conversationDeleted", onDeleted);
     controller.off("history:cleared", onCleared);
     controller.off("history:identityReset", onReset);
@@ -303,7 +300,9 @@ function remount(): void {
   };
   log(
     "session",
-    `mounted ${stagingSelected ? "live staging" : "in-memory"} source, presentation ${presentation}`,
+    `mounted ${stagingSelected ? "live staging" : "in-memory"} source, presentation ${presentation}, ${
+      customView ? "custom renderHistoryView plugin" : "built-in Messages view"
+    }`,
   );
 }
 
@@ -336,6 +335,18 @@ presentationSelect?.addEventListener("change", () => {
   presentation = presentationSelect.value as Presentation;
   remount();
 });
+
+// Plugins are read at construction, so switching renderers is a remount.
+document
+  .querySelector<HTMLButtonElement>("[data-history-toggle='custom-view']")
+  ?.addEventListener("click", (event) => {
+    customView = !customView;
+    (event.currentTarget as HTMLButtonElement).setAttribute(
+      "aria-pressed",
+      String(customView),
+    );
+    remount();
+  });
 
 on("[data-history-action='open']", () => {
   void activeController?.showHistory();

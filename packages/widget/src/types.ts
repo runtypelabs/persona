@@ -1240,6 +1240,16 @@ export type AgentWidgetControllerEventMap = {
     scope: HistoryScope;
     timestamp: number;
   };
+  /**
+   * A replacement conversation was committed (header action, in-panel "New
+   * conversation", or `startNewConversation()`). `history:closed` alone cannot
+   * distinguish this commit from a plain close.
+   */
+  "history:conversationStarted": {
+    /** `null` when the provider committed without returning a record id. */
+    conversationId: string | null;
+    timestamp: number;
+  };
   "history:conversationDeleted": {
     conversationId: string;
     scope: HistoryScope;

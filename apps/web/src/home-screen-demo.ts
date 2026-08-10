@@ -240,18 +240,11 @@ function wireHistoryEvents(controller: AgentWidgetController): () => void {
 
   // Back and Escape return to the invoking surface, which is Home here. A
   // committed selection or new conversation ALSO closes the panel, and those
-  // must land on Conversation. The selection is observable as an event; an
-  // in-panel new conversation is observable as a transcript change.
-  const transcriptKey = () =>
-    controller
-      .getMessages()
-      .map((message) => message.id)
-      .join("|");
-  let transcriptOnOpen: string | null = null;
+  // must land on Conversation. Both commits are observable as events, so the
+  // close handler only has to know whether one fired while the panel was open.
   let committedWhileOpen = false;
 
   const onPanelOpened = () => {
-    transcriptOnOpen = transcriptKey();
     committedWhileOpen = false;
   };
   const onOpened = () => {
@@ -259,11 +252,13 @@ function wireHistoryEvents(controller: AgentWidgetController): () => void {
     homePlugin.showConversation();
     refresh();
   };
+  const onStarted = () => {
+    committedWhileOpen = true;
+    homePlugin.showConversation();
+    refresh();
+  };
   const onClosed = (payload: { returnSurface: string }) => {
-    const committed =
-      committedWhileOpen ||
-      (transcriptOnOpen !== null && transcriptOnOpen !== transcriptKey());
-    transcriptOnOpen = null;
+    const committed = committedWhileOpen;
     committedWhileOpen = false;
     if (committed || payload.returnSurface !== "home") return;
     homePlugin.showHome();
@@ -272,6 +267,7 @@ function wireHistoryEvents(controller: AgentWidgetController): () => void {
 
   controller.on("history:opened", onPanelOpened);
   controller.on("history:conversationOpened", onOpened);
+  controller.on("history:conversationStarted", onStarted);
   controller.on("history:closed", onClosed);
   controller.on("history:conversationDeleted", invalidate);
   controller.on("history:cleared", invalidate);
@@ -281,6 +277,7 @@ function wireHistoryEvents(controller: AgentWidgetController): () => void {
   return () => {
     controller.off("history:opened", onPanelOpened);
     controller.off("history:conversationOpened", onOpened);
+    controller.off("history:conversationStarted", onStarted);
     controller.off("history:closed", onClosed);
     controller.off("history:conversationDeleted", invalidate);
     controller.off("history:cleared", invalidate);
@@ -376,10 +373,9 @@ document
 document
   .querySelector<HTMLButtonElement>("[data-home-action='new']")
   ?.addEventListener("click", () => {
-    void activeController?.startNewConversation().then(() => {
-      homePlugin.showConversation();
-      void refreshRecent();
-    });
+    // `history:conversationStarted` lands the stack on Conversation and
+    // refreshes the teaser, so the caller only has to commit.
+    void activeController?.startNewConversation();
   });
 
 // `controller.update()` re-runs welcome arbitration, so the plugin's greeting

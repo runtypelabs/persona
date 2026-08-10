@@ -54,6 +54,15 @@
           </div>
         </div>
 
+        <div class="info-section">
+          <h3>Custom rendering</h3>
+          <p>A plugin whose <code>renderHistoryView</code> returns an element wins arbitration outright, so Persona's Messages view never renders. The demo plugin is a ChatGPT-style thread rail built on public hooks only: no provider, no controller, no chunk internals. One renderer covers both placements, reflowing when <code>context.presentation</code> is handed <code>panel</code> instead of <code>rail</code>.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-toggle="custom-view" aria-pressed="false">Custom thread rail</button>
+          </div>
+          <p class="hint">Persona still owns orchestration with the plugin mounted: chunk loading, placement, presentation resolution, Escape and focus, the destructive confirmations, and the selection epochs behind <code>context.actions</code>. Switch presentation to <code>rail</code> to see the same renderer beside an operable transcript.</p>
+        </div>
+
         <div class="info-section" data-history-demo-only>
           <h3>Identity status</h3>
           <p>Injected through the demo provider, exactly as the Runtype provider would report it from init and per-response acknowledgement. The scope line under the Messages heading is evidence-based: it never infers verification from a configured callback.</p>
@@ -172,7 +181,8 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Custom rendering</h3>
-        <p>The plan's public render hooks (<code>renderHistoryView</code>, <code>renderHistoryHeader</code>, <code>renderHistoryConversation</code>, <code>renderHistoryState</code>) are not on the plugin interface yet, so the ChatGPT-style rail here is the built-in view under <code>presentation: "rail"</code>. When those hooks land, a custom full-view renderer becomes a fourth source on this page. A host that wants navigation outside Persona's shell can already build it headlessly today with the controller methods and <code>history:*</code> events.</p>
+        <p>Four public render hooks arbitrate around the default view: <code>renderHistoryView</code> replaces it entirely, and <code>renderHistoryHeader</code>, <code>renderHistoryConversation</code>, and <code>renderHistoryState</code> replace the top bar, one row, and a non-ready list state. Every hook may return <code>null</code> to fall through to the next plugin and then to Persona, and a hook that throws is reported and falls back rather than losing the surface.</p>
+        <p>The "Custom thread rail" toggle mounts a plugin that returns its own DOM from <code>renderHistoryView</code>. It reads the frozen <code>context</code> snapshot (conversations, active id, list state, pending action, resolved presentation, copy) and calls <code>context.actions</code> for every operation, so busy gating, selection epochs, and the accessible destructive confirmations behave exactly as they do for the built-in view. The snapshot carries no provider, no credential, and no transport detail. A host that wants navigation entirely outside Persona's shell can still build it headlessly with the controller methods and <code>history:*</code> events.</p>
       </div>
     </section>
   </main>
