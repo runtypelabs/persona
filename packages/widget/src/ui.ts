@@ -7312,6 +7312,8 @@ export const createAgentExperience = (
 
   /** Rail needs this much HOST CONTAINER width; below it, rail collapses to panel. */
   const RAIL_MIN_CONTAINER_WIDTH = 720;
+  /** Ceiling on the view's ~160ms exit before the close proceeds regardless. */
+  const HISTORY_EXIT_TIMEOUT_MS = 250;
 
   let historyShellCopy: ResolvedHistoryShellCopy = resolveHistoryShellCopy(
     config.features?.history?.copy
@@ -7625,6 +7627,9 @@ export const createAgentExperience = (
     if (!historyAvailable() || historyVisible) return;
     const provider = historyProvider;
     if (!provider) return;
+    // A reopen mid-exit finishes the outgoing teardown first: never two
+    // surfaces, never a restore that lands after this one mounts.
+    settleHistoryExit();
     const token = ++historyOpenToken;
     historyReturnSurface = opts?.returnSurface ?? "conversation";
     historyInvoker = opts?.invoker ?? historyButton;
@@ -7704,33 +7709,72 @@ export const createAgentExperience = (
     });
   };
 
+  /**
+   * Close is: exit animation -> unmount and restore the hidden chrome ->
+   * restore focus. The teardown half is deferred behind the view's `playExit()`
+   * promise, so it is exposed here for whoever preempts it (a reopen, a widget
+   * teardown). Idempotent, and a no-op while nothing is leaving.
+   */
+  let settleHistoryExit: () => void = () => {};
+
   const closeHistory = (opts?: { restoreFocus?: boolean }): void => {
     if (!historyVisible) return;
     historyOpenToken += 1;
     const returnSurface = historyReturnSurface;
     const invoker = historyInvoker;
+    const surface = historySurface;
+    const restoreInvokerFocus = opts?.restoreFocus !== false;
+    // Flipped before the animation: a second close is a no-op and a reopen
+    // mounts fresh rather than re-entering the surface that is leaving.
     historyVisible = false;
-    // Before focus restoration below: the invoker lives in the shell header,
-    // which is inert until this restores it.
-    unmountHistoryHosts();
-    // Dispose before destroy: cleanups belong to the render being torn down.
-    historySurface?.dispose();
-    historySurface?.view.destroy();
-    historySurface?.element.remove();
-    historySurface = null;
-    historyPresentation = null;
-    historyOperationContext = null;
-    historyInvoker = null;
-    syncScrollToBottomButton();
-    // Removing a full-height host above the anchored message clamps scrollTop.
-    repinAnchoredMessage();
-    syncHistoryChromeImpl();
-    if (opts?.restoreFocus !== false) {
-      const target = invoker ?? historyButton;
-      if (target?.isConnected) target.focus();
-      else maybeFocusInput();
+
+    let done = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      settleHistoryExit = () => {};
+      if (timer !== null) clearTimeout(timer);
+      // Before focus restoration below: the invoker lives in the shell header,
+      // which is inert until this restores it.
+      unmountHistoryHosts();
+      // Dispose before destroy: cleanups belong to the render being torn down.
+      surface?.dispose();
+      surface?.view.destroy();
+      surface?.element.remove();
+      // A reopen that preempted this exit already owns the shell state.
+      if (historySurface === surface) {
+        historySurface = null;
+        historyPresentation = null;
+        historyOperationContext = null;
+        historyInvoker = null;
+      }
+      syncScrollToBottomButton();
+      // Removing a full-height host above the anchored message clamps scrollTop.
+      repinAnchoredMessage();
+      syncHistoryChromeImpl();
+      if (restoreInvokerFocus) {
+        const target = invoker ?? historyButton;
+        if (target?.isConnected) target.focus();
+        else maybeFocusInput();
+      }
+      eventBus.emit("history:closed", { returnSurface, timestamp: Date.now() });
+    };
+
+    // Only the arbitrated default view animates: a plugin full view owns its
+    // own element and never got an entrance either.
+    const exit =
+      surface && surface.element === surface.view.element
+        ? surface.view.playExit()
+        : null;
+    if (!exit) {
+      finish();
+      return;
     }
-    eventBus.emit("history:closed", { returnSurface, timestamp: Date.now() });
+    settleHistoryExit = finish;
+    // A cancelled or never-settling animation must never wedge the close.
+    timer = setTimeout(finish, HISTORY_EXIT_TIMEOUT_MS);
+    void exit.then(finish);
   };
 
   /** Escape returns to the recorded invoking surface, like the back control. */
@@ -8155,6 +8199,8 @@ export const createAgentExperience = (
   destroyCallbacks.push(() => {
     unsubscribeHistoryAvailability?.();
     unsubscribeHistoryIdentity?.();
+    // A pending exit still owns a mounted surface and a live timer.
+    settleHistoryExit();
     historySurface?.dispose();
     historySurface?.view.destroy();
     historySurface = null;

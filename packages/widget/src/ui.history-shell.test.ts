@@ -520,6 +520,215 @@ describe("history shell", () => {
     });
   });
 
+  /**
+   * Close sequencing: exit animation -> unmount and restore chrome -> focus.
+   * jsdom has no Web Animations API, so every other test in this file exercises
+   * the synchronous fallback; these install a controllable fake.
+   */
+  describe("exit animation", () => {
+    type FakeAnimation = { settle(): void; cancelled: boolean; cancel(): void };
+
+    const installWaapi = () => {
+      const animations: FakeAnimation[] = [];
+      Element.prototype.animate = function (): Animation {
+        let resolve!: () => void;
+        let reject!: () => void;
+        const finished = new Promise<Animation>((onDone, onFail) => {
+          resolve = () => onDone(animation as unknown as Animation);
+          reject = () => onFail(new Error("cancelled"));
+        });
+        finished.catch(() => undefined);
+        const animation: FakeAnimation & { finished: Promise<Animation> } = {
+          finished,
+          cancelled: false,
+          cancel: () => {
+            animation.cancelled = true;
+            reject();
+          },
+          settle: resolve,
+        };
+        animations.push(animation);
+        return animation as unknown as Animation;
+      } as unknown as Element["animate"];
+      return {
+        animations,
+        settleAll: () => animations.forEach((animation) => animation.settle()),
+        restore: () => {
+          delete (Element.prototype as Partial<Element>).animate;
+        },
+      };
+    };
+
+    const back = (mount: HTMLElement) =>
+      mount.querySelector<HTMLButtonElement>(
+        '[data-persona-history-focus="close"]'
+      )!;
+
+    afterEach(() => {
+      delete (Element.prototype as Partial<Element>).animate;
+    });
+
+    it("keeps the chrome hidden until the exit finishes, then restores it and focus", async () => {
+      const waapi = installWaapi();
+      try {
+        const { mount } = setup();
+        const header = headerOf(mount);
+        const body = bodyOf(mount);
+        await openHistoryUI(mount);
+        const view = historyRoot(mount)!;
+
+        back(mount).click();
+        await flush();
+        // Still leaving: the surface is mounted and the conversation is hidden.
+        expect(historyRoot(mount)).toBe(view);
+        expect(header.style.display).toBe("none");
+        expect(body.style.display).toBe("none");
+        expect(view.style.pointerEvents).toBe("none");
+        expect(document.activeElement).not.toBe(historyButton(mount));
+
+        waapi.settleAll();
+        await flush();
+        expect(historyRoot(mount)).toBeNull();
+        expect(header.style.display).not.toBe("none");
+        expect(header.hasAttribute("inert")).toBe(false);
+        expect(body.style.display).not.toBe("none");
+        // Chrome first, focus second: the invoker lives in that header.
+        expect(document.activeElement).toBe(historyButton(mount));
+      } finally {
+        waapi.restore();
+      }
+    });
+
+    it("cancels an unfinished entrance instead of replaying it on the way out", async () => {
+      const waapi = installWaapi();
+      try {
+        const { mount } = setup();
+        await openHistoryUI(mount);
+        const view = historyRoot(mount)!;
+        expect(view.classList.contains("persona-history-view--enter")).toBe(true);
+
+        back(mount).click();
+        await flush();
+        expect(view.classList.contains("persona-history-view--enter")).toBe(false);
+        expect(waapi.animations).toHaveLength(2);
+
+        waapi.settleAll();
+        await flush();
+        expect(historyRoot(mount)).toBeNull();
+      } finally {
+        waapi.restore();
+      }
+    });
+
+    it("closes on the timeout fallback when the exit never settles", async () => {
+      const waapi = installWaapi();
+      try {
+        const { mount } = setup();
+        await openHistoryUI(mount);
+        back(mount).click();
+        await flush();
+        expect(historyRoot(mount)).not.toBeNull();
+
+        // The 250ms ceiling is wall-clock, so wait for the effect, not the time.
+        await vi.waitFor(() => expect(historyRoot(mount)).toBeNull(), {
+          timeout: 3_000,
+        });
+        await flush();
+        expect(bodyOf(mount).style.display).not.toBe("none");
+        expect(document.activeElement).toBe(historyButton(mount));
+      } finally {
+        waapi.restore();
+      }
+    });
+
+    it("mounts exactly one fresh surface when a reopen preempts the exit", async () => {
+      const waapi = installWaapi();
+      try {
+        const { mount } = setup();
+        await openHistoryUI(mount);
+        const first = historyRoot(mount)!;
+
+        back(mount).click();
+        await flush();
+        expect(historyRoot(mount)).toBe(first);
+
+        historyButton(mount)!.click();
+        await flush();
+        const views = mount.querySelectorAll(".persona-history-view");
+        expect(views).toHaveLength(1);
+        expect(views[0]).not.toBe(first);
+        expect(first.isConnected).toBe(false);
+
+        // The preempted exit settling late must not tear the new surface down.
+        waapi.settleAll();
+        await flush(20);
+        expect(historyRoot(mount)).toBe(views[0]);
+        expect(bodyOf(mount).style.display).toBe("none");
+        expect(mount.querySelectorAll(".persona-history-rail-shell")).toHaveLength(0);
+      } finally {
+        waapi.restore();
+      }
+    });
+
+    it("survives toggle spam with one close per open and no double restore", async () => {
+      const waapi = installWaapi();
+      try {
+        const { mount, controller } = setup();
+        const closed: unknown[] = [];
+        controller.on("history:closed", (payload) => closed.push(payload));
+        const body = bodyOf(mount);
+        await openHistoryUI(mount);
+
+        const button = historyButton(mount)!;
+        back(mount).click();
+        back(mount).click();
+        controller.hideHistory();
+        button.click();
+        button.click();
+        await flush(20);
+
+        expect(mount.querySelectorAll(".persona-history-view")).toHaveLength(1);
+        expect(closed).toHaveLength(1);
+        expect(body.style.display).toBe("none");
+
+        waapi.settleAll();
+        await flush(20);
+        // The surviving surface is the reopened one, still open.
+        expect(historyRoot(mount)).not.toBeNull();
+        expect(closed).toHaveLength(1);
+
+        back(mount).click();
+        waapi.settleAll();
+        await flush(20);
+        expect(historyRoot(mount)).toBeNull();
+        expect(closed).toHaveLength(2);
+        expect(body.style.display).not.toBe("none");
+        expect(body.hasAttribute("inert")).toBe(false);
+      } finally {
+        waapi.restore();
+      }
+    });
+
+    it("tears a leaving surface down when the widget is destroyed mid-exit", async () => {
+      const waapi = installWaapi();
+      try {
+        const { mount, controller } = setup();
+        await openHistoryUI(mount);
+        back(mount).click();
+        await flush();
+        expect(historyRoot(mount)).not.toBeNull();
+
+        controller.destroy();
+        expect(mount.querySelectorAll(".persona-history-view")).toHaveLength(0);
+        waapi.settleAll();
+        await flush();
+        expect(mount.querySelectorAll(".persona-history-view")).toHaveLength(0);
+      } finally {
+        waapi.restore();
+      }
+    });
+  });
+
   describe("destructive confirmations", () => {
     const openRowMenu = async (mount: HTMLElement, id: string) => {
       mount

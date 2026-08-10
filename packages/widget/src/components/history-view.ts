@@ -177,10 +177,40 @@ export interface HistoryViewHandle {
   setActiveConversationId(conversationId: string | null): void;
   /** Enter/leave the post-deletion replacement-init recovery state. */
   setNewConversationRequired(required: boolean): void;
+  /**
+   * Mirrored exit for the shell's close sequence. Resolves once the surface has
+   * visually left; never rejects, and repeat calls join the running exit.
+   * `null` means nothing to wait for (motion off, or no WAAPI): the caller must
+   * tear down synchronously rather than deferring by a microtask.
+   */
+  playExit(): Promise<void> | null;
   destroy(): void;
 }
 
 const DEFAULT_PAGE_SIZE = 25;
+
+/** Motion. The entrance is CSS (`css.ts`); the exit below mirrors it. */
+const ENTRANCE_MS = 180;
+const EXIT_MS = 160;
+const EXIT_EASING = "cubic-bezier(0.4, 0, 1, 1)";
+const EXIT_SLIDE_PX: Record<HistoryViewPresentation, number> = {
+  panel: 20,
+  rail: 12,
+};
+
+const prefersReducedMotion = (): boolean =>
+  typeof window !== "undefined" &&
+  typeof window.matchMedia === "function" &&
+  window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** A cancelled animation resolves like a finished one: the shell must proceed. */
+const settled = (animation: Animation): Promise<void> =>
+  animation.finished
+    ? animation.finished.then(
+        () => undefined,
+        () => undefined
+      )
+    : Promise.resolve();
 
 function identityKey(status: HistoryIdentityStatus): string {
   return `${status.state}:${"reason" in status ? status.reason : ""}`;
@@ -422,6 +452,59 @@ export function createHistoryView(
   );
 
   injectStyles(element, "persona-history-view", HISTORY_VIEW_CSS);
+
+  // --- entrance / exit ----------------------------------------------------
+
+  /**
+   * The entrance is a one-shot mount animation. Re-parenting a node restarts a
+   * CSS animation, so the class is dropped the moment it can no longer be
+   * needed: the shell's live rail <-> panel move must not replay it.
+   */
+  let entranceTimer: ReturnType<typeof setTimeout> | null = null;
+  const endEntrance = (): void => {
+    if (entranceTimer !== null) {
+      clearTimeout(entranceTimer);
+      entranceTimer = null;
+    }
+    element.removeEventListener("animationend", endEntrance);
+    element.classList.remove("persona-history-view--enter");
+  };
+  element.addEventListener("animationend", endEntrance);
+  entranceTimer = setTimeout(endEntrance, ENTRANCE_MS + 60);
+
+  let exitAnimations: Animation[] = [];
+  let exitPromise: Promise<void> | null = null;
+
+  const playExit = (): Promise<void> | null => {
+    if (exitPromise) return exitPromise;
+    if (destroyed || prefersReducedMotion() || typeof element.animate !== "function") {
+      endEntrance();
+      return null;
+    }
+    // Closing mid-entrance: start from wherever the entrance got to rather than
+    // popping back to full opacity first.
+    const from =
+      element.ownerDocument.defaultView?.getComputedStyle(element).opacity ?? "1";
+    endEntrance();
+    // A leaving surface is no longer a target, but focus stays put until the
+    // shell restores it.
+    element.style.pointerEvents = "none";
+    const timing = {
+      duration: EXIT_MS,
+      easing: EXIT_EASING,
+      fill: "forwards",
+    } as const;
+    const distance = EXIT_SLIDE_PX[presentation];
+    exitAnimations = [
+      element.animate([{ opacity: from }, { opacity: 0 }], timing),
+      body.animate(
+        [{ transform: "none" }, { transform: `translateX(${distance}px)` }],
+        timing
+      ),
+    ];
+    exitPromise = Promise.all(exitAnimations.map(settled)).then(() => undefined);
+    return exitPromise;
+  };
 
   // --- rendering ----------------------------------------------------------
 
@@ -1030,6 +1113,9 @@ export function createHistoryView(
     },
     setPresentation: (next) => {
       if (next === presentation) return;
+      // The shell re-parents the element around this call; a live entrance
+      // would replay on re-insertion.
+      endEntrance();
       presentation = next;
       headerRenderedKey = null;
       const rail = next === "rail";
@@ -1057,9 +1143,13 @@ export function createHistoryView(
       }
       render();
     },
+    playExit,
     destroy: () => {
       destroyed = true;
       listEpoch += 1;
+      endEntrance();
+      exitAnimations.forEach((animation) => animation.cancel());
+      exitAnimations = [];
       unsubscribeIdentity();
       unsubscribeAvailability?.();
       document.removeEventListener("pointerdown", onDocumentPointerDown, true);

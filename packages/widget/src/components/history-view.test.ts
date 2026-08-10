@@ -821,3 +821,238 @@ describe("history view unsupported affordances and lifecycle", () => {
     expect(rows(root)).toHaveLength(4);
   });
 });
+
+/**
+ * Entrance/exit motion. jsdom has no Web Animations API, so the fallback path
+ * (no `element.animate`) is the default here and WAAPI is installed explicitly
+ * for the animated path.
+ */
+describe("history view entrance and exit motion", () => {
+  /** Structural stand-ins: the DOM keyframe types are not eslint globals. */
+  type Frame = Record<string, string | number>;
+  type FakeAnimation = {
+    target: Element;
+    keyframes: Frame[];
+    options: { duration?: number };
+    finished: Promise<Animation>;
+    cancelled: boolean;
+    cancel(): void;
+    settle(): void;
+  };
+
+  const installWaapi = (): {
+    animations: FakeAnimation[];
+    restore: () => void;
+  } => {
+    const animations: FakeAnimation[] = [];
+    const animate = function (
+      this: Element,
+      keyframes: Frame[],
+      options: { duration?: number }
+    ): Animation {
+      let resolve!: () => void;
+      let reject!: () => void;
+      const finished = new Promise<Animation>((onDone, onFail) => {
+        resolve = () => onDone(animation as unknown as Animation);
+        reject = () => onFail(new Error("cancelled"));
+      });
+      const animation: FakeAnimation = {
+        target: this,
+        keyframes,
+        options,
+        finished,
+        cancelled: false,
+        cancel: () => {
+          animation.cancelled = true;
+          reject();
+        },
+        settle: resolve,
+      };
+      // Nothing observes an unsettled rejection until the view awaits it.
+      finished.catch(() => undefined);
+      animations.push(animation);
+      return animation as unknown as Animation;
+    } as unknown as Element["animate"];
+    Element.prototype.animate = animate;
+    return {
+      animations,
+      restore: () => {
+        delete (Element.prototype as Partial<Element>).animate;
+      },
+    };
+  };
+
+  const injectedCss = (): string =>
+    document.querySelector(
+      'style[data-persona-plugin-style="persona-history-view"]'
+    )?.textContent ?? "";
+
+  const rootOf = (animations: FakeAnimation[]): FakeAnimation =>
+    animations.find((animation) =>
+      (animation.target as HTMLElement).classList.contains("persona-history-view")
+    )!;
+  const bodyOf = (animations: FakeAnimation[]): FakeAnimation =>
+    animations.find((animation) =>
+      (animation.target as HTMLElement).classList.contains("persona-history-body")
+    )!;
+
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).animate;
+  });
+
+  it("enters with a class that fades the root and slides only the body", async () => {
+    const { root } = mount();
+    await flush();
+    expect(root.classList.contains("persona-history-view--enter")).toBe(true);
+
+    const css = injectedCss();
+    const enterFrames = css.slice(
+      css.indexOf("@keyframes persona-history-enter {"),
+      css.indexOf("@keyframes persona-history-enter-body {")
+    );
+    // The top bar must read as persistent chrome: nothing above the body moves.
+    expect(enterFrames).not.toContain("transform");
+    expect(css).toContain(".persona-history-view--enter .persona-history-body");
+    expect(css).toContain("translateX(var(--persona-history-slide))");
+    // Each presentation slides from its own edge; the rail travels less.
+    expect(css).toContain("--persona-history-slide: 20px;");
+    expect(css).toContain("--persona-history-slide: 12px;");
+    expect(css).not.toContain(".persona-history-view--enter .persona-history-topbar");
+  });
+
+  it("drops the entrance before a host move so re-parenting cannot replay it", async () => {
+    const { root, handle } = mount();
+    await flush();
+    expect(root.classList.contains("persona-history-view--enter")).toBe(true);
+
+    handle.setPresentation("rail");
+    expect(root.classList.contains("persona-history-view--enter")).toBe(false);
+    expect(root.classList.contains("persona-history-view--rail")).toBe(true);
+
+    // Re-inserting the element (what the shell does to move hosts) adds nothing.
+    root.remove();
+    document.body.appendChild(root);
+    expect(root.classList.contains("persona-history-view--enter")).toBe(false);
+  });
+
+  it("reports nothing to await when the platform has no animation support", async () => {
+    const { root, handle } = mount();
+    await flush();
+    expect(handle.playExit()).toBeNull();
+    expect(root.classList.contains("persona-history-view--enter")).toBe(false);
+  });
+
+  it("mirrors the entrance on exit and resolves when the animation finishes", async () => {
+    const waapi = installWaapi();
+    try {
+      const { root, handle } = mount();
+      await flush();
+
+      let resolved = false;
+      const exit = handle.playExit()!;
+      void exit.then(() => {
+        resolved = true;
+      });
+      expect(exit).not.toBeNull();
+      expect(root.classList.contains("persona-history-view--enter")).toBe(false);
+      expect(root.style.pointerEvents).toBe("none");
+
+      const rootAnimation = rootOf(waapi.animations);
+      const bodyAnimation = bodyOf(waapi.animations);
+      expect(rootAnimation.keyframes.map((frame) => frame.opacity)).toEqual(["1", 0]);
+      expect(rootAnimation.keyframes.some((frame) => "transform" in frame)).toBe(false);
+      expect(bodyAnimation.keyframes.map((frame) => frame.transform)).toEqual([
+        "none",
+        "translateX(20px)",
+      ]);
+      expect(rootAnimation.options.duration).toBe(160);
+
+      await flush();
+      expect(resolved).toBe(false);
+      waapi.animations.forEach((animation) => animation.settle());
+      await exit;
+      expect(resolved).toBe(true);
+    } finally {
+      waapi.restore();
+    }
+  });
+
+  it("slides a shorter distance from the rail's own trailing edge", async () => {
+    const waapi = installWaapi();
+    try {
+      const { handle } = mount({ presentation: "rail" });
+      await flush();
+      handle.playExit();
+      expect(bodyOf(waapi.animations).keyframes[1]!.transform).toBe("translateX(12px)");
+    } finally {
+      waapi.restore();
+    }
+  });
+
+  it("joins the running exit instead of restarting it", async () => {
+    const waapi = installWaapi();
+    try {
+      const { handle } = mount();
+      await flush();
+      const first = handle.playExit();
+      const second = handle.playExit();
+      expect(second).toBe(first);
+      expect(waapi.animations).toHaveLength(2);
+    } finally {
+      waapi.restore();
+    }
+  });
+
+  it("resolves a cancelled exit rather than leaving the caller waiting", async () => {
+    const waapi = installWaapi();
+    try {
+      const { handle } = mount();
+      await flush();
+      const exit = handle.playExit()!;
+      waapi.animations.forEach((animation) => animation.cancel());
+      await expect(exit).resolves.toBeUndefined();
+    } finally {
+      waapi.restore();
+    }
+  });
+
+  it("skips both entrance and exit under prefers-reduced-motion", async () => {
+    const waapi = installWaapi();
+    const previousMatchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) =>
+      ({
+        matches: query.includes("prefers-reduced-motion"),
+        media: query,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }) as unknown as MediaQueryList) as typeof window.matchMedia;
+    try {
+      const { root, handle } = mount();
+      await flush();
+      expect(handle.playExit()).toBeNull();
+      expect(waapi.animations).toHaveLength(0);
+      expect(root.classList.contains("persona-history-view--enter")).toBe(false);
+      // The skeleton's own reduced-motion handling stays in CSS, untouched.
+      expect(injectedCss()).toContain(
+        ".persona-history-view .persona-history-skeleton-bar { animation: none; }"
+      );
+    } finally {
+      window.matchMedia = previousMatchMedia;
+      waapi.restore();
+    }
+  });
+
+  it("cancels a running exit on destroy", async () => {
+    const waapi = installWaapi();
+    try {
+      const record = mount();
+      await flush();
+      record.handle.playExit();
+      record.handle.destroy();
+      mounted.splice(mounted.indexOf(record), 1);
+      expect(waapi.animations.every((animation) => animation.cancelled)).toBe(true);
+    } finally {
+      waapi.restore();
+    }
+  });
+});

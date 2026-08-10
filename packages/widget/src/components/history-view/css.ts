@@ -18,6 +18,7 @@
  *   --persona-history-skeleton-bg   loading placeholder blocks
  *   --persona-history-danger-fg     destructive action text
  *   --persona-history-focus-ring    focus-visible outline color
+ *   --persona-history-slide         entrance/exit horizontal travel
  *   --persona-history-row-min-height / --persona-history-topbar-min-height
  */
 
@@ -32,6 +33,7 @@ export const HISTORY_VIEW_CSS = `
   --persona-history-skeleton-bg: var(--persona-container, #eef0f3);
   --persona-history-danger-fg: var(--persona-palette-colors-error-600, #b91c1c);
   --persona-history-focus-ring: var(--persona-primary, #2563eb);
+  --persona-history-slide: 20px;
   --persona-history-row-min-height: 72px;
   --persona-history-topbar-min-height: 56px;
   box-sizing: border-box;
@@ -54,12 +56,22 @@ export const HISTORY_VIEW_CSS = `
 .persona-history-view *::after {
   box-sizing: border-box;
 }
+/* In-panel navigation, not a sheet: only the body slides in from the trailing
+   edge (matching the back arrow), so the top bar arrives in place and reads as
+   persistent chrome. The mirrored exit is playExit() in history-view.ts. */
 .persona-history-view--enter {
-  animation: persona-history-enter 180ms ease-out both;
+  animation: persona-history-enter 180ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+.persona-history-view--enter .persona-history-body {
+  animation: persona-history-enter-body 180ms cubic-bezier(0, 0, 0.2, 1) both;
 }
 @keyframes persona-history-enter {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: none; }
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes persona-history-enter-body {
+  from { transform: translateX(var(--persona-history-slide)); }
+  to { transform: none; }
 }
 .persona-history-view .persona-history-sr-only {
   position: absolute;
@@ -432,11 +444,14 @@ export const HISTORY_VIEW_CSS = `
 
 /* --- rail presentation --------------------------------------------------- */
 .persona-history-view--rail {
-  border-right: 1px solid var(--persona-history-border);
+  --persona-history-slide: 12px;
+  /* The rail occupies the trailing edge; the divider faces the conversation. */
+  border-left: 1px solid var(--persona-history-border);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .persona-history-view--enter { animation: none; }
+  .persona-history-view--enter,
+  .persona-history-view--enter .persona-history-body { animation: none; }
   .persona-history-view .persona-history-skeleton-bar { animation: none; }
 }
 `;
