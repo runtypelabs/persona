@@ -25,6 +25,12 @@ import {
   ContentPart,
   PreparedClientSession,
   WidgetHistoryInternals,
+  HistoryScope,
+  HistoryIdentityStatus,
+  HistoryConversationSummary,
+  HistoryConversationPage,
+  HistoryConversationDetail,
+  HistoryDisplayProjection,
   WebMcpConfirmHandler
 } from "./types";
 import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
@@ -42,6 +48,9 @@ import {
   createXmlParser
 } from "./utils/formatting";
 import { VERSION } from "./version";
+
+/** History transcripts stay on the wire shape; `utils/history-messages.ts` maps them. */
+export type { HistoryWireMessage } from "./utils/history-messages";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
@@ -62,16 +71,78 @@ export type HistoryClientErrorCode =
   | "visitor_required"
   | "not_found"
   | "conversation_credential_missing"
-  | "history_disabled";
+  | "history_disabled"
+  /** No stored visitor credential; a retry cannot repair a missing header. */
+  | "visitor_token_missing"
+  /** The store changed under the request: the response must not be committed. */
+  | "credential_changed"
+  /** A bound visitor lost its proof, or the server rejected the one we sent. */
+  | "authentication_required"
+  /** The host's `getIdentityProof` threw or rejected. */
+  | "identity_provider_failed"
+  | "invalid_identity_proof"
+  | "visitor_identity_mismatch"
+  /** Admission gate off: verified scope is a misconfiguration, not an outage. */
+  | "proof_not_admitted"
+  /** Server acknowledgement contradicts what the request actually sent. */
+  | "identity_contract_violation"
+  | "unauthorized"
+  | "rate_limited"
+  | "payload_too_large"
+  /** Chat 410: the active conversation record was deleted elsewhere. */
+  | "conversation_deleted"
+  | "request_failed";
 
 export class HistoryClientError extends Error {
   public readonly code: HistoryClientErrorCode;
-  constructor(code: HistoryClientErrorCode, message: string) {
+  /** Present on `rate_limited` when the server sent `Retry-After`. */
+  public readonly retryAfterSeconds?: number;
+  constructor(
+    code: HistoryClientErrorCode,
+    message: string,
+    opts?: { retryAfterSeconds?: number }
+  ) {
     super(message);
     this.name = "HistoryClientError";
     this.code = code;
+    if (opts?.retryAfterSeconds !== undefined) {
+      this.retryAfterSeconds = opts.retryAfterSeconds;
+    }
   }
 }
+
+/** Per-message / per-batch display-projection caps (contract facts #5, #15). */
+const DISPLAY_PROJECTION_MESSAGE_CAP = 32768;
+const DISPLAY_PROJECTION_BATCH_CAP = 49152;
+
+/** Deprecated wire `flowId` is consumed here and never propagated onward. */
+const normalizeHistorySummary = (raw: unknown): HistoryConversationSummary => {
+  const row = (raw ?? {}) as Record<string, unknown>;
+  const targetId =
+    typeof row.targetId === "string"
+      ? row.targetId
+      : typeof row.flowId === "string"
+        ? row.flowId
+        : null;
+  return {
+    id: typeof row.id === "string" ? row.id : "",
+    title: typeof row.title === "string" ? row.title : "",
+    targetId,
+    preview: typeof row.preview === "string" ? row.preview : null,
+    messageCount: typeof row.messageCount === "number" ? row.messageCount : 0,
+    createdAt: typeof row.createdAt === "string" ? row.createdAt : "",
+    updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : "",
+  };
+};
+
+const identityReason = (status: HistoryIdentityStatus): string | undefined =>
+  "reason" in status ? status.reason : undefined;
+
+const PROOF_NOT_ADMITTED_MESSAGE =
+  "The identity proof was not admitted; account history is unavailable";
+const PROOF_REJECTED_MESSAGE = "The identity proof was rejected";
+const NO_VISITOR_CREDENTIAL_MESSAGE = "The request carried no visitor credential";
+const IDENTITY_MISMATCH_MESSAGE = "The stored visitor belongs to a different signed-in user";
 
 const isHistoryClientError = (
   error: unknown,
@@ -224,6 +295,9 @@ export class AgentWidgetClient {
   private historyUnavailable = false;
   private historyUnavailableWarned = false;
   private claimInFlight = false;
+  // Evidence-based identity state. Null means "never moved off the resting
+  // state", which is recomputed from config so `update()` stays honest.
+  private historyIdentityStatus: HistoryIdentityStatus | null = null;
 
   // WebMCP: page-discovered tool consumption (see ./webmcp-bridge).
   // Constructed lazily: null when `config.webmcp?.enabled !== true`.
@@ -453,6 +527,8 @@ export class AgentWidgetClient {
   /** One-way, client-lifetime latch: chat keeps working without history. */
   private markHistoryUnavailable(): void {
     if (this.historyUnavailable) return;
+    // Announce before the latch flips, or the resting state already matches.
+    this.setHistoryIdentityStatus({ state: 'unavailable', reason: 'history_disabled' });
     this.historyUnavailable = true;
     if (!this.historyUnavailableWarned && typeof console !== 'undefined') {
       this.historyUnavailableWarned = true;
@@ -462,6 +538,49 @@ export class AgentWidgetClient {
       );
     }
     this.historyInternals.onHistoryAvailabilityChanged?.(false);
+  }
+
+  /** Public, secret-free view of the current identity state. */
+  public getHistoryIdentityStatus(): HistoryIdentityStatus {
+    return this.historyIdentityStatus ?? this.restingIdentityStatus();
+  }
+
+  /** Config-derived state before any per-operation evidence exists. */
+  private restingIdentityStatus(): HistoryIdentityStatus {
+    if (!this.isClientTokenMode()) {
+      return { state: 'unavailable', reason: 'ineligible_mode' };
+    }
+    if (this.config.features?.history?.enabled !== true || this.historyUnavailable) {
+      return { state: 'unavailable', reason: 'history_disabled' };
+    }
+    return this.browserOnlyStatus();
+  }
+
+  /** Keeps an already-observed browser_only reason; otherwise derives one. */
+  private browserOnlyStatus(): HistoryIdentityStatus {
+    const current = this.historyIdentityStatus;
+    if (current?.state === 'browser_only') return current;
+    return this.derivedBrowserOnly();
+  }
+
+  private derivedBrowserOnly(): HistoryIdentityStatus {
+    if (this.config.features?.history?.scope === 'browser') {
+      return { state: 'browser_only', reason: 'configured_browser_scope' };
+    }
+    if (!this.config.getIdentityProof) {
+      return { state: 'browser_only', reason: 'no_identity_provider' };
+    }
+    return { state: 'browser_only', reason: 'proof_unavailable_before_binding' };
+  }
+
+  /** Identical consecutive states are not re-announced. */
+  private setHistoryIdentityStatus(next: HistoryIdentityStatus): void {
+    const current = this.getHistoryIdentityStatus();
+    const unchanged =
+      current.state === next.state && identityReason(current) === identityReason(next);
+    this.historyIdentityStatus = next;
+    if (unchanged) return;
+    this.historyInternals.onHistoryIdentityStatusChanged?.(next);
   }
 
   /**
@@ -491,11 +610,13 @@ export class AgentWidgetClient {
       ...(sessionTargetId && { flowId: sessionTargetId }),
       ...(historyCapable && { visitorHistory: true }),
       ...(historyCapable && visitorToken ? { visitorToken } : {}),
+      // Independent of the strict conversationId/sessionId union: a proof also
+      // binds the visitor on an ordinary init.
+      ...(historyCapable && opts.identityProof
+        ? { identityProof: opts.identityProof }
+        : {}),
       ...(resumeConversationId
-        ? {
-            conversationId: resumeConversationId,
-            ...(opts.identityProof ? { identityProof: opts.identityProof } : {}),
-          }
+        ? { conversationId: resumeConversationId }
         : opts.storedSessionId
           ? { sessionId: opts.storedSessionId }
           : {}),
@@ -601,7 +722,25 @@ export class AgentWidgetClient {
     return this.ordinaryInit(previousConversationId, false);
   }
 
+  /**
+   * An empty store means this init may mint a visitor, so it runs under the
+   * cross-tab first-init lock: a waiter re-reads inside the lock and joins the
+   * winner's visitor instead of minting a second one.
+   */
   private async ordinaryInit(
+    previousConversationId: string | null,
+    continuityBroken: boolean
+  ): Promise<ClientSession> {
+    const store = this.historyInternals.visitorStore;
+    if (store && this.isHistoryCapable() && !(await this.readVisitorToken())) {
+      return store.withFirstInitLock(() =>
+        this.doOrdinaryInit(previousConversationId, continuityBroken)
+      );
+    }
+    return this.doOrdinaryInit(previousConversationId, continuityBroken);
+  }
+
+  private async doOrdinaryInit(
     previousConversationId: string | null,
     continuityBroken: boolean
   ): Promise<ClientSession> {
@@ -609,6 +748,25 @@ export class AgentWidgetClient {
     const first = await this.createClientSession({ storedSessionId });
     const session = await this.claimFirstConversation(first);
     return this.finishInit(session, previousConversationId, continuityBroken);
+  }
+
+  /**
+   * Ordinary init carrying an identity proof: binds/rebinds the visitor,
+   * persists any replacement token (inside `createClientSession`), and installs
+   * the result as the live session.
+   */
+  private async reinitWithProof(proof: string): Promise<ClientSession> {
+    const storedSessionId = this.config.getStoredSessionId?.() || null;
+    const previousConversationId = this.config.getStoredConversationId?.() || null;
+    const session = await this.createClientSession({
+      storedSessionId,
+      identityProof: proof,
+    });
+    const installed = this.finishInit(session, previousConversationId, false);
+    this.clientSession = installed;
+    this.sessionInitPromise = null;
+    this.resetClientToolsFingerprint();
+    return installed;
   }
 
   /**
@@ -910,6 +1068,513 @@ export class AgentWidgetClient {
     });
   }
 
+  // ==========================================================================
+  // Visitor conversation history REST (client token mode only)
+  // ==========================================================================
+
+  /** `/v1/client/<path>` with a query string; credentials ride in headers. */
+  private historyUrl(
+    path: string,
+    query: Record<string, string | number | undefined>
+  ): string {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === '') continue;
+      params.set(key, String(value));
+    }
+    const search = params.toString();
+    return `${this.clientApiBase()}/v1/client/${path}${search ? `?${search}` : ''}`;
+  }
+
+  /** Explicit per-operation scope wins; otherwise config, then evidence. */
+  private resolveHistoryScope(requested?: HistoryScope): HistoryScope {
+    if (requested) return requested;
+    const configured = this.config.features?.history?.scope;
+    if (configured) return configured;
+    return this.config.getIdentityProof ? 'verified-user' : 'browser';
+  }
+
+  /**
+   * Resolve the proof for one logical request. `null` is an intentional
+   * browser-scope fallback only while the visitor has never been bound.
+   */
+  private async resolveIdentityProof(
+    session: ClientSession,
+    track: boolean
+  ): Promise<string | null> {
+    const provider = this.config.getIdentityProof;
+    if (!provider) {
+      if (track) this.setHistoryIdentityStatus(this.browserOnlyStatus());
+      return null;
+    }
+    if (track) this.setHistoryIdentityStatus({ state: 'verifying' });
+    let proof: string | null;
+    try {
+      proof = (await provider()) ?? null;
+    } catch {
+      if (track) this.setHistoryIdentityStatus({ state: 'identity_provider_failed' });
+      throw new HistoryClientError(
+        'identity_provider_failed',
+        'The identity proof provider failed'
+      );
+    }
+    if (proof) return proof;
+    if (session.visitor?.endUserId != null) {
+      // Never downgrade a bound visitor into its own browser scope.
+      if (track) {
+        this.setHistoryIdentityStatus({
+          state: 'authentication_required',
+          reason: 'proof_unavailable_after_binding',
+        });
+      }
+      throw new HistoryClientError(
+        'authentication_required',
+        'This browser is bound to a signed-in user and needs a fresh identity proof'
+      );
+    }
+    if (track) {
+      this.setHistoryIdentityStatus({
+        state: 'browser_only',
+        reason: 'proof_unavailable_before_binding',
+      });
+    }
+    return null;
+  }
+
+  /** Bind the visitor before the first verified request; admitted proofs only. */
+  private async bindIdentity(
+    session: ClientSession,
+    proof: string,
+    track: boolean
+  ): Promise<ClientSession> {
+    if (session.visitor?.endUserId != null) return session;
+    const bound = await this.reinitWithProof(proof);
+    const admitted =
+      bound.visitor?.identityStatus === 'admitted' && bound.visitor?.endUserId != null;
+    if (!admitted) {
+      // "ignored", or a pre-acknowledgement server that left endUserId null.
+      if (track) {
+        this.setHistoryIdentityStatus({
+          state: 'configuration_error',
+          reason: 'proof_not_admitted',
+        });
+      }
+      throw new HistoryClientError(
+        'proof_not_admitted',
+        PROOF_NOT_ADMITTED_MESSAGE
+      );
+    }
+    return bound;
+  }
+
+  private async readErrorCode(response: Response): Promise<string> {
+    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (typeof body.error === 'string') return body.error;
+    if (typeof body.message === 'string') return body.message;
+    return '';
+  }
+
+  /**
+   * Selective one-shot 401 recovery. Returns the session to retry under;
+   * anything unrecoverable throws typed and is never retried.
+   */
+  private async recoverFromUnauthorized(
+    reason: string,
+    proof: string | null,
+    track: boolean
+  ): Promise<ClientSession> {
+    const text = reason.toLowerCase();
+    if (text.includes('invalid_identity_proof')) {
+      if (track) {
+        this.setHistoryIdentityStatus({
+          state: 'authentication_required',
+          reason: 'invalid_identity_proof',
+        });
+      }
+      throw new HistoryClientError('invalid_identity_proof', PROOF_REJECTED_MESSAGE);
+    }
+    if (text.includes('visitor token required')) {
+      throw new HistoryClientError('visitor_token_missing', NO_VISITOR_CREDENTIAL_MESSAGE);
+    }
+    if (text.includes('visitor_identity_mismatch')) {
+      if (!proof) {
+        if (track) {
+          this.setHistoryIdentityStatus({
+            state: 'authentication_required',
+            reason: 'proof_unavailable_after_binding',
+          });
+        }
+        throw new HistoryClientError('visitor_identity_mismatch', IDENTITY_MISMATCH_MESSAGE);
+      }
+      // Same proof: binds this visitor, or gives a different person a clean one.
+      return this.reinitWithProof(proof);
+    }
+    if (text.includes('expired') || text.includes('not found')) {
+      this.clearClientSession();
+      return this.initSession();
+    }
+    throw new HistoryClientError('unauthorized', reason || 'History request was not authorized');
+  }
+
+  private async historyErrorFor(
+    response: Response,
+    track: boolean
+  ): Promise<HistoryClientError> {
+    const code = await this.readErrorCode(response);
+    if (response.status === 404) {
+      return new HistoryClientError('not_found', 'Conversation not found');
+    }
+    if (response.status === 429) {
+      const header = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
+      return new HistoryClientError('rate_limited', 'Too many history requests', {
+        ...(Number.isFinite(header) ? { retryAfterSeconds: header } : {}),
+      });
+    }
+    if (response.status === 503 && code.includes('identity_proof_not_admitted')) {
+      if (track) {
+        this.setHistoryIdentityStatus({
+          state: 'configuration_error',
+          reason: 'proof_not_admitted',
+        });
+      }
+      return new HistoryClientError(
+        'proof_not_admitted',
+        PROOF_NOT_ADMITTED_MESSAGE
+      );
+    }
+    if (response.status === 401) {
+      const text = code.toLowerCase();
+      if (text.includes('invalid_identity_proof')) {
+        if (track) {
+          this.setHistoryIdentityStatus({
+            state: 'authentication_required',
+            reason: 'invalid_identity_proof',
+          });
+        }
+        return new HistoryClientError('invalid_identity_proof', PROOF_REJECTED_MESSAGE);
+      }
+      if (text.includes('visitor token required')) {
+        return new HistoryClientError('visitor_token_missing', NO_VISITOR_CREDENTIAL_MESSAGE);
+      }
+      if (text.includes('visitor_identity_mismatch')) {
+        return new HistoryClientError('visitor_identity_mismatch', IDENTITY_MISMATCH_MESSAGE);
+      }
+      return new HistoryClientError('unauthorized', code || 'History request was not authorized');
+    }
+    return new HistoryClientError(
+      'request_failed',
+      code || `History request failed (${response.status})`
+    );
+  }
+
+  /**
+   * Validate `X-History-Identity-Status` before any body is committed: the
+   * per-operation acknowledgement, not a prior init, is what proves scope.
+   */
+  private commitIdentityAcknowledgement(
+    header: string | null,
+    proofSent: boolean,
+    track: boolean
+  ): void {
+    const value = header?.toLowerCase() ?? null;
+    if (proofSent) {
+      if (value === 'admitted') {
+        if (track) this.setHistoryIdentityStatus({ state: 'verified' });
+        return;
+      }
+      if (track) {
+        this.setHistoryIdentityStatus({
+          state: 'configuration_error',
+          reason: 'proof_not_admitted',
+        });
+      }
+      if (value === 'ignored') {
+        // The gate-off path must fail before I/O; a 2xx here is a broken server.
+        throw new HistoryClientError(
+          'identity_contract_violation',
+          'Server reported an ignored identity proof on a success response'
+        );
+      }
+      throw new HistoryClientError(
+        'proof_not_admitted',
+        'The response did not acknowledge the identity proof this request sent'
+      );
+    }
+    if (value === 'admitted') {
+      throw new HistoryClientError(
+        'identity_contract_violation',
+        'Server admitted an identity proof that was never sent'
+      );
+    }
+    // "not_provided", a missing header (rolling deploy), or an unknown value:
+    // no verified claim was made either way.
+    if (track) this.setHistoryIdentityStatus(this.browserOnlyStatus());
+  }
+
+  /**
+   * Shared history transport: live session, `sessionId` query param,
+   * `X-Visitor-Token` header, one resolved proof, one-shot 401 recovery, and a
+   * credential-revision guard that discards a response the store outran.
+   */
+  private async historyFetch<T>(
+    path: string,
+    opts: {
+      method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+      query?: Record<string, string | number | undefined>;
+      scope?: HistoryScope;
+      body?: unknown;
+      /** Reset tolerates a missing credential; every other route requires one. */
+      visitorTokenOptional?: boolean;
+      keepalive?: boolean;
+      /** Transport ops validate the acknowledgement but publish no status. */
+      trackIdentity?: boolean;
+    }
+  ): Promise<T> {
+    this.assertHistoryUsable();
+    const track = opts.trackIdentity !== false;
+    let session = await this.initSession();
+
+    // Resolved once per logical request: a recovery retry reuses the same proof
+    // so one action cannot switch identities midway.
+    let proof: string | null = null;
+    if (this.resolveHistoryScope(opts.scope) === 'verified-user') {
+      proof = await this.resolveIdentityProof(session, track);
+      if (proof) session = await this.bindIdentity(session, proof, track);
+    }
+
+    const store = this.historyInternals.visitorStore;
+    let recovered = false;
+    for (;;) {
+      const capturedRevision = store?.revision() ?? 0;
+      const visitorToken = await this.readVisitorToken();
+      if (!visitorToken && !opts.visitorTokenOptional) {
+        throw new HistoryClientError(
+          'visitor_token_missing',
+          'No visitor credential is stored for this browser'
+        );
+      }
+      const response = await fetch(
+        this.historyUrl(path, { ...opts.query, sessionId: session.sessionId }),
+        {
+          method: opts.method,
+          headers: {
+            'X-Persona-Version': VERSION,
+            ...(visitorToken ? { 'X-Visitor-Token': visitorToken } : {}),
+            ...(proof ? { 'X-Identity-Proof': proof } : {}),
+            ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+          },
+          ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
+          ...(opts.keepalive ? { keepalive: true } : {}),
+        }
+      );
+
+      if (response.status === 401 && !recovered) {
+        recovered = true;
+        session = await this.recoverFromUnauthorized(
+          await this.readErrorCode(response),
+          proof,
+          track
+        );
+        continue;
+      }
+      if (!response.ok) {
+        throw await this.historyErrorFor(response, track);
+      }
+
+      const acknowledgement = response.headers.get('X-History-Identity-Status');
+      const data = (await response.json().catch(() => undefined)) as T;
+      if (store && store.revision() !== capturedRevision) {
+        // Another tab reset or replaced the credential: this body is stale.
+        throw new HistoryClientError(
+          'credential_changed',
+          'The visitor credential changed while the request was in flight'
+        );
+      }
+      this.commitIdentityAcknowledgement(acknowledgement, proof !== null, track);
+      return data;
+    }
+  }
+
+  private assertHistoryUsable(): void {
+    if (!this.isClientTokenMode()) {
+      throw new Error('Conversation history is only available in client token mode');
+    }
+    if (!this.isHistoryCapable()) {
+      throw new HistoryClientError(
+        'history_disabled',
+        'Visitor history is disabled for this surface'
+      );
+    }
+  }
+
+  /** One page of the visitor's conversations, newest first. */
+  public async listConversations(opts?: {
+    cursor?: string;
+    limit?: number;
+    targetId?: string;
+    scope?: HistoryScope;
+  }): Promise<HistoryConversationPage> {
+    const page = await this.historyFetch<{
+      data?: unknown[];
+      nextCursor?: string | null;
+    }>('conversations', {
+      method: 'GET',
+      query: {
+        ...(opts?.cursor ? { cursor: opts.cursor } : {}),
+        ...(opts?.limit !== undefined ? { limit: opts.limit } : {}),
+        ...(opts?.targetId ? { targetId: opts.targetId } : {}),
+      },
+      ...(opts?.scope ? { scope: opts.scope } : {}),
+    });
+    return {
+      data: (Array.isArray(page?.data) ? page.data : []).map(normalizeHistorySummary),
+      nextCursor: typeof page?.nextCursor === 'string' ? page.nextCursor : null,
+    };
+  }
+
+  /**
+   * One transcript page (newest first, oldest-first within the page). Messages
+   * stay on the wire shape: `utils/history-messages.ts` owns the mapping.
+   */
+  public async getConversation(
+    conversationId: string,
+    opts?: { messageCursor?: string; scope?: HistoryScope }
+  ): Promise<HistoryConversationDetail> {
+    const detail = await this.historyFetch<Record<string, unknown>>(
+      `conversations/${encodeURIComponent(conversationId)}`,
+      {
+        method: 'GET',
+        query: {
+          ...(opts?.messageCursor ? { messageCursor: opts.messageCursor } : {}),
+        },
+        ...(opts?.scope ? { scope: opts.scope } : {}),
+      }
+    );
+    const summarySource =
+      detail && typeof detail.conversation === 'object' && detail.conversation !== null
+        ? detail.conversation
+        : detail;
+    return {
+      summary: normalizeHistorySummary(summarySource),
+      messages: Array.isArray(detail?.messages)
+        ? (detail.messages as HistoryConversationDetail['messages'])
+        : [],
+      nextMessageCursor:
+        typeof detail?.nextMessageCursor === 'string' ? detail.nextMessageCursor : null,
+      conversationRevision:
+        typeof detail?.conversationRevision === 'string' ? detail.conversationRevision : null,
+    };
+  }
+
+  /**
+   * Finalize browser-derived visitor-visible projections for the ACTIVE
+   * conversation. Transport op, not a history read: current session + browser
+   * scope, never an identity proof.
+   */
+  public async finalizeDisplayProjections(
+    conversationId: string,
+    messages: HistoryDisplayProjection[]
+  ): Promise<{ conversationRevision: string | null }> {
+    this.assertHistoryUsable();
+    let total = 0;
+    for (const message of messages) {
+      const size = message.displayContent.length;
+      if (size > DISPLAY_PROJECTION_MESSAGE_CAP) {
+        throw new HistoryClientError(
+          'payload_too_large',
+          `displayContent exceeds the ${DISPLAY_PROJECTION_MESSAGE_CAP} character limit`
+        );
+      }
+      total += size;
+    }
+    if (total > DISPLAY_PROJECTION_BATCH_CAP) {
+      throw new HistoryClientError(
+        'payload_too_large',
+        `Display projection batch exceeds the ${DISPLAY_PROJECTION_BATCH_CAP} character limit`
+      );
+    }
+
+    await this.initSession();
+    const store = this.historyInternals.visitorStore;
+    const capturedRevision = store?.revision() ?? 0;
+    const result = await this.historyFetch<{ conversationRevision?: string }>(
+      `conversations/${encodeURIComponent(conversationId)}/display-projections`,
+      {
+        method: 'PATCH',
+        body: { messages },
+        scope: 'browser',
+        keepalive: total <= DISPLAY_PROJECTION_BATCH_CAP,
+        trackIdentity: false,
+      }
+    );
+    const conversationRevision =
+      typeof result?.conversationRevision === 'string' ? result.conversationRevision : null;
+    // Install only while the same record and the same credential are still live.
+    if (
+      conversationRevision &&
+      this.clientSession?.conversationId === conversationId &&
+      (store?.revision() ?? 0) === capturedRevision
+    ) {
+      this.historyInternals.setStoredConversationRevision?.(conversationRevision);
+    }
+    return { conversationRevision };
+  }
+
+  public async deleteConversation(
+    conversationId: string,
+    opts?: { scope?: HistoryScope }
+  ): Promise<{ deleted: number }> {
+    const result = await this.historyFetch<{ deleted?: number }>(
+      `conversations/${encodeURIComponent(conversationId)}`,
+      {
+        method: 'DELETE',
+        ...(opts?.scope ? { scope: opts.scope } : {}),
+      }
+    );
+    return { deleted: typeof result?.deleted === 'number' ? result.deleted : 0 };
+  }
+
+  /**
+   * Delete every conversation matching `targetId`. An omitted filter means the
+   * whole authorized visitor/client-token scope: headless callers own that
+   * choice, the UI always passes the active `ClientSession.targetId`.
+   */
+  public async deleteAllConversations(opts?: {
+    targetId?: string;
+    scope?: HistoryScope;
+  }): Promise<{ deleted: number }> {
+    const result = await this.historyFetch<{ deleted?: number }>('conversations', {
+      method: 'DELETE',
+      query: {
+        ...(opts?.targetId !== undefined ? { targetId: opts.targetId } : {}),
+      },
+      ...(opts?.scope ? { scope: opts.scope } : {}),
+    });
+    return { deleted: typeof result?.deleted === 'number' ? result.deleted : 0 };
+  }
+
+  /**
+   * Revoke this browser's visitor credential. Always browser scope (the route
+   * accepts no proof) and the local clear is unconditional: a failed remote
+   * revocation still detaches this device.
+   */
+  public async resetVisitor(): Promise<{ reset: true }> {
+    this.assertHistoryUsable();
+    this.setHistoryIdentityStatus({ state: 'resetting' });
+    try {
+      await this.historyFetch<{ reset?: boolean }>('visitor/reset', {
+        method: 'POST',
+        scope: 'browser',
+        visitorTokenOptional: true,
+      });
+    } finally {
+      await this.historyInternals.visitorStore?.clear();
+      // Post-reset resting state: this browser is a never-bound visitor again.
+      this.setHistoryIdentityStatus(this.derivedBrowserOnly());
+    }
+    return { reset: true };
+  }
+
   /**
    * Send a message - handles both proxy and client token modes
    */
@@ -1016,6 +1681,18 @@ export class AgentWidgetClient {
           throw error;
         }
 
+        // The active record was deleted elsewhere. No client-level retry: the
+        // old payload would recreate the transcript in a fresh record, so
+        // WidgetSession owns recovery.
+        if (response.status === 410 && data.error === 'conversation_deleted') {
+          const error = new HistoryClientError(
+            'conversation_deleted',
+            'This conversation was deleted'
+          );
+          onEvent({ type: "error", error });
+          throw error;
+        }
+
         const error = new Error(data.error || 'Failed to send message');
         onEvent({ type: "error", error });
         throw error;
@@ -1043,7 +1720,11 @@ export class AgentWidgetClient {
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       // Only emit error if it wasn't already emitted
-      if (!err.message.includes('Session expired') && !err.message.includes('Message limit')) {
+      if (
+        !(err instanceof HistoryClientError) &&
+        !err.message.includes('Session expired') &&
+        !err.message.includes('Message limit')
+      ) {
         onEvent({ type: "error", error: err });
       }
       throw err;

@@ -7,6 +7,7 @@ import type {
 } from "./generated/runtype-openapi-contract";
 import type { TargetResolver } from "./utils/target";
 import type { VisitorStore } from "./utils/visitor-store";
+import type { HistoryWireMessage } from "./utils/history-messages";
 import type { IconName } from "./utils/icons";
 
 export type { TargetResolver, ResolvedTarget } from "./utils/target";
@@ -4341,6 +4342,45 @@ export type PreparedClientSession = {
 };
 
 /**
+ * One conversation row, normalized at the Runtype boundary. The deprecated wire
+ * `flowId` alias never escapes that boundary: history code reads `targetId`.
+ */
+export type HistoryConversationSummary = {
+  id: string;
+  /** Server-generated; rendered verbatim, never derived locally. */
+  title: string;
+  /** Resolved chat target (flow or agent); `null` when the server omits it. */
+  targetId: string | null;
+  /** Server-produced plain-text preview; `null` when unavailable. */
+  preview: string | null;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type HistoryConversationPage = {
+  data: HistoryConversationSummary[];
+  nextCursor: string | null;
+};
+
+/**
+ * Conversation detail. Messages stay on the wire shape: mapping to widget
+ * messages belongs to `utils/history-messages.ts`.
+ */
+export type HistoryConversationDetail = {
+  summary: HistoryConversationSummary;
+  messages: HistoryWireMessage[];
+  nextMessageCursor: string | null;
+  conversationRevision: string | null;
+};
+
+/** One finalized visitor-visible projection for an already-stored message. */
+export type HistoryDisplayProjection = {
+  id: string;
+  displayContent: string;
+};
+
+/**
  * Internal history dependencies the controller injects into the session and
  * every client it builds. Not part of the public config surface.
  */
@@ -4351,6 +4391,8 @@ export interface WidgetHistoryInternals {
   /** Persist the revision beside the active conversation id (internal only). */
   setStoredConversationRevision?: (revision: string | null) => void;
   onHistoryAvailabilityChanged?: (available: boolean) => void;
+  /** Deduped status changes; carries no token, proof, or identity value. */
+  onHistoryIdentityStatusChanged?: (status: HistoryIdentityStatus) => void;
   onHistoryContinuityChanged?: (info: {
     previousConversationId: string | null;
     conversationId: string;
