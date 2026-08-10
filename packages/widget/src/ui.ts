@@ -180,10 +180,11 @@ import {
 import { createLocalStorageAdapter } from "./utils/storage";
 import { createVisitorStore, type VisitorStore } from "./utils/visitor-store";
 import { loadHistoryView } from "./history-view-loader";
-import type {
-  HistoryViewHandle,
-  HistoryViewOptions,
-} from "./history-view-entry";
+import type { HistoryViewOptions } from "./history-view-entry";
+import {
+  createHistoryRenderSurface,
+  type HistoryRenderSurface,
+} from "./history-render";
 import { getHistoryProviderFactory } from "./internal/history-provider-registry";
 import type {
   HistoryOperationContext,
@@ -7313,7 +7314,8 @@ export const createAgentExperience = (
   );
   let historyProvider: HistoryProvider | null = null;
   let historyUnavailable = false;
-  let historyView: HistoryViewHandle | null = null;
+  /** Default view + plugin render-hook arbitration. Null while closed. */
+  let historySurface: HistoryRenderSurface | null = null;
   let historyOperationContext: HistoryOperationContext | null = null;
   let historyReturnSurface: HistoryReturnSurface = "conversation";
   let historyInvoker: HTMLElement | null = null;
@@ -7524,34 +7526,47 @@ export const createAgentExperience = (
     }
   };
 
-  /** The chunk owns its own classes/labels; the shell only picks the host. */
-  const mountHistoryView = (view: HistoryViewHandle): void => {
-    view.element.id = historyRegionId;
-    view.setPresentation(historyPresentation ?? "panel");
+  /** Shell-owned chrome applied to whatever element arbitration produced. */
+  const prepareHistoryElement = (element: HTMLElement): void => {
+    element.id = historyRegionId;
     // Host-side flex sizing: the chunk sizes itself to 100%, the shell decides
     // how it participates in the column/row it was just dropped into.
-    view.element.style.flex = "1 1 auto";
-    view.element.style.minHeight = "0";
-    if (historyPresentation === "rail") mountRailHost(view.element);
-    else mountPanelHost(view.element);
+    element.style.flex = "1 1 auto";
+    element.style.minHeight = "0";
+  };
+
+  /** The chunk owns its own classes/labels; the shell only picks the host. */
+  const mountHistoryElement = (element: HTMLElement): void => {
+    prepareHistoryElement(element);
+    if (historyPresentation === "rail") mountRailHost(element);
+    else mountPanelHost(element);
   };
 
   /**
    * Live rail <-> panel transition. ONE view instance survives the move, so the
-   * list, its fixed operation context, and any pending work are preserved.
+   * list, its fixed operation context, and any pending work are preserved. A
+   * custom full view is re-invoked with the new presentation value.
    */
   const syncHistoryPresentation = (): void => {
-    if (!historyVisible || !historyView) return;
+    if (!historyVisible || !historySurface) return;
     const next = resolveHistoryPresentation();
     if (next === historyPresentation) return;
     const focusKey = document.activeElement;
     const refocus =
-      focusKey instanceof HTMLElement && historyView.element.contains(focusKey)
+      focusKey instanceof HTMLElement &&
+      historySurface.element.contains(focusKey)
         ? focusKey
         : null;
     unmountHistoryHosts();
+    // Detach before re-hosting so a mid-move re-arbitration cannot re-insert
+    // the surface into the host it is being moved out of.
+    historySurface.element.remove();
     historyPresentation = next;
-    mountHistoryView(historyView);
+    historySurface.view.setPresentation(next);
+    historySurface.requestRender();
+    if (!historySurface.element.isConnected) {
+      mountHistoryElement(historySurface.element);
+    }
     if (refocus?.isConnected) refocus.focus();
     else focusHistoryEntry();
     syncScrollToBottomButton();
@@ -7563,7 +7578,7 @@ export const createAgentExperience = (
   // --- open / close --------------------------------------------------------
 
   const focusHistoryEntry = (): void => {
-    const element = historyView?.element;
+    const element = historySurface?.element;
     if (!element) return;
     const close = element.querySelector<HTMLElement>(
       '[data-persona-history-focus="close"]'
@@ -7572,8 +7587,10 @@ export const createAgentExperience = (
       close.focus();
       return;
     }
-    const heading = element.querySelector<HTMLElement>(".persona-history-title");
-    if (!heading) return;
+    const heading =
+      element.querySelector<HTMLElement>(".persona-history-title") ??
+      // Custom contents may expose neither: the region itself is the fallback.
+      element;
     heading.tabIndex = -1;
     heading.focus();
   };
@@ -7604,7 +7621,7 @@ export const createAgentExperience = (
     historyPresentation = resolveHistoryPresentation();
     historyVisible = true;
 
-    const viewOptions: HistoryViewOptions = {
+    const baseViewOptions: HistoryViewOptions = {
       provider,
       context: historyOperationContext,
       targetId: activeHistoryTargetId(),
@@ -7628,9 +7645,29 @@ export const createAgentExperience = (
         : {}),
     };
 
-    historyView = module.createHistoryView(viewOptions);
-    mountHistoryView(historyView);
-    historyView.setNewConversationRequired(
+    // Plugin hooks arbitrate around the default view; the shell keeps placement,
+    // open/close, Escape, confirmations, announcements, and focus.
+    historySurface = createHistoryRenderSurface({
+      plugins,
+      config,
+      getPresentation: () => historyPresentation ?? "panel",
+      getReturnSurface: () => historyReturnSurface,
+      close: () => closeHistory(),
+      createView: ({ slots, renderDom, onModelChange }) =>
+        module.createHistoryView({
+          ...baseViewOptions,
+          slots,
+          renderDom,
+          onModelChange,
+          onAnnounce: announceHistory,
+        }),
+      onElementChanged: (next, previous) => {
+        if (!previous?.isConnected) return mountHistoryElement(next);
+        prepareHistoryElement(next);
+        previous.replaceWith(next);
+      },
+    });
+    historySurface.view.setNewConversationRequired(
       historySessionState.recovery === "new_conversation_required"
     );
     focusHistoryEntry();
@@ -7651,8 +7688,11 @@ export const createAgentExperience = (
     const invoker = historyInvoker;
     historyVisible = false;
     unmountHistoryHosts();
-    historyView?.destroy();
-    historyView = null;
+    // Dispose before destroy: cleanups belong to the render being torn down.
+    historySurface?.dispose();
+    historySurface?.view.destroy();
+    historySurface?.element.remove();
+    historySurface = null;
     historyPresentation = null;
     historyOperationContext = null;
     historyInvoker = null;
@@ -7670,11 +7710,14 @@ export const createAgentExperience = (
 
   /** Escape returns to the recorded invoking surface, like the back control. */
   const handleHistoryKeydown = (event: KeyboardEvent): void => {
-    if (event.key !== "Escape" || !historyVisible || !historyView) return;
+    if (event.key !== "Escape" || !historyVisible || !historySurface) return;
     // Rail leaves the conversation operable: only its own focus closes it.
     if (historyPresentation === "rail") {
       const target = event.target;
-      if (!(target instanceof Node) || !historyView.element.contains(target)) {
+      if (
+        !(target instanceof Node) ||
+        !historySurface.element.contains(target)
+      ) {
         return;
       }
     }
@@ -7708,7 +7751,7 @@ export const createAgentExperience = (
     resumeAutoScroll();
     if (!restoreScrollPosition()) jumpToBottomInstant();
     syncEarlierMessagesPill();
-    historyView?.setActiveConversationId(conversationId);
+    historySurface?.view.setActiveConversationId(conversationId);
     eventBus.emit("history:conversationOpened", {
       conversationId,
       scope,
@@ -7728,7 +7771,7 @@ export const createAgentExperience = (
     resumeAutoScroll();
     jumpToBottomInstant();
     syncEarlierMessagesPill();
-    historyView?.setActiveConversationId(session.getActiveConversationId());
+    historySurface?.view.setActiveConversationId(session.getActiveConversationId());
     if (historyVisible && historyPresentation === "panel") {
       closeHistory({ restoreFocus: false });
     }
@@ -8046,7 +8089,7 @@ export const createAgentExperience = (
 
   historyStateHandler = (state) => {
     historySessionState = state;
-    historyView?.setNewConversationRequired(
+    historySurface?.view.setNewConversationRequired(
       state.recovery === "new_conversation_required"
     );
     // Sending stays blocked through a destructive/continuity transition.
@@ -8064,7 +8107,7 @@ export const createAgentExperience = (
       resumeAutoScroll();
     }
     announceHistory(notice.message);
-    historyView?.refresh();
+    historySurface?.view.refresh();
   };
 
   installHistoryProvider();
@@ -8072,8 +8115,9 @@ export const createAgentExperience = (
   destroyCallbacks.push(() => {
     unsubscribeHistoryAvailability?.();
     unsubscribeHistoryIdentity?.();
-    historyView?.destroy();
-    historyView = null;
+    historySurface?.dispose();
+    historySurface?.view.destroy();
+    historySurface = null;
   });
 
   // Pre-initialize client session when in client token mode so feedback works

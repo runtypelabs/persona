@@ -16,6 +16,12 @@ export type {
   HistoryViewHandle,
   HistoryViewPresentation,
   HistoryViewPendingAction,
+  HistoryViewModel,
+  HistoryViewOperations,
+  HistoryViewSlotRenderers,
+  HistoryHeaderSlotContext,
+  HistoryConversationSlotContext,
+  HistoryStateSlotContext,
 } from "./components/history-view";
 export {
   HISTORY_VIEW_COPY_DEFAULTS,

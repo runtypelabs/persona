@@ -16,7 +16,11 @@ import {
   AgentWidgetSuggestionSource,
   AgentWidgetSuggestionSurface,
   AgentWidgetSuggestionVariant,
-  AgentWidgetWelcomeVariant
+  AgentWidgetWelcomeVariant,
+  AgentWidgetRenderHistoryViewContext,
+  AgentWidgetRenderHistoryHeaderContext,
+  AgentWidgetRenderHistoryConversationContext,
+  AgentWidgetRenderHistoryStateContext
 } from "../types";
 
 export type AgentWidgetTransformSuggestionsContext = {
@@ -416,6 +420,67 @@ export interface AgentWidgetPlugin {
    * Return null to use default renderer.
    */
   renderEventStreamPayload?: (context: EventStreamPayloadRenderContext) => HTMLElement | null;
+
+  /**
+   * Replace the complete history ("Messages") navigation contents in either
+   * host. Plugins run by priority and the first non-null element wins; null
+   * falls through to the default full view, which then applies the first
+   * non-null header/row/state hook at each slot.
+   *
+   * Calling `defaultRenderer()` bypasses this hook only: the default view is
+   * built and its lower-level slots still arbitrate, including this plugin's.
+   * Return it (or an element containing it) to compose rather than replace.
+   *
+   * The hook replaces contents, not orchestration. Persona keeps placement,
+   * open/close, responsive rail <-> panel movement, inertness, Escape, the
+   * confirmation dialogs, live announcements, and focus fallback. Fetch nothing
+   * directly: `actions.refresh()` is the only way to reload the list.
+   *
+   * @example
+   * ```typescript
+   * renderHistoryView: ({ conversations, actions, presentation, onCleanup }) => {
+   *   const rail = document.createElement("nav");
+   *   rail.dataset.presentation = presentation;
+   *   for (const conversation of conversations) {
+   *     const row = document.createElement("button");
+   *     row.textContent = conversation.title;
+   *     row.addEventListener("click", () => void actions.openConversation(conversation.id));
+   *     rail.appendChild(row);
+   *   }
+   *   const timer = setInterval(() => void actions.refresh(), 60_000);
+   *   onCleanup(() => clearInterval(timer));
+   *   return rail;
+   * }
+   * ```
+   */
+  renderHistoryView?: (
+    context: AgentWidgetRenderHistoryViewContext
+  ) => HTMLElement | null;
+
+  /**
+   * Replace the standard Messages header while retaining its list/state UI.
+   * Return null to use the default top bar. A custom header may not remove the
+   * keyboard close path or falsify the resolved open state.
+   */
+  renderHistoryHeader?: (
+    context: AgentWidgetRenderHistoryHeaderContext
+  ) => HTMLElement | null;
+
+  /**
+   * Replace one conversation row while retaining standard paging/grouping.
+   * Return null to use the default row.
+   */
+  renderHistoryConversation?: (
+    context: AgentWidgetRenderHistoryConversationContext
+  ) => HTMLElement | null;
+
+  /**
+   * Replace loading, empty, error, authentication, rate-limit, or recovery
+   * content in the list region. Return null to use the default block.
+   */
+  renderHistoryState?: (
+    context: AgentWidgetRenderHistoryStateContext
+  ) => HTMLElement | null;
 
   /**
    * Called when plugin is registered

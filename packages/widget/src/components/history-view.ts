@@ -41,7 +41,10 @@ import {
   type HistoryOperationContext,
   type HistoryProvider,
 } from "../internal/history-provider";
-import type { HistoryIdentityStatus } from "../types";
+import type {
+  AgentWidgetHistoryRenderActions,
+  HistoryIdentityStatus,
+} from "../types";
 
 export type HistoryViewPresentation = "panel" | "rail";
 
@@ -49,6 +52,63 @@ export type HistoryViewPendingAction =
   | { kind: "refresh" | "load-more" | "start-new" | "clear" | "reset" }
   | { kind: "open" | "delete"; conversationId: string }
   | null;
+
+/**
+ * Slot seams for the core arbitration layer (`history-render.ts`). The public
+ * plugin contexts are built there: the view only supplies the slot's data and
+ * its own default DOM, and never sees a plugin.
+ */
+export interface HistoryHeaderSlotContext {
+  identityStatus: HistoryIdentityStatus;
+  pendingAction: HistoryViewPendingAction;
+  copy: ResolvedHistoryViewCopy;
+  defaultRenderer: () => HTMLElement;
+}
+
+export interface HistoryConversationSlotContext {
+  conversation: HistoryConversationSummary;
+  active: boolean;
+  pending: RowPending;
+  open: () => Promise<void>;
+  requestDelete: () => Promise<"deleted" | "cancelled">;
+  defaultRenderer: () => HTMLElement;
+}
+
+export interface HistoryStateSlotContext {
+  state: Exclude<HistoryListState, { kind: "ready" }>;
+  identityStatus: HistoryIdentityStatus;
+  copy: ResolvedHistoryViewCopy;
+  retry?: () => Promise<void>;
+  startNewConversation?: () => Promise<void>;
+  defaultRenderer: () => HTMLElement;
+}
+
+export interface HistoryViewSlotRenderers {
+  header?: (context: HistoryHeaderSlotContext) => HTMLElement | null;
+  conversation?: (
+    context: HistoryConversationSlotContext
+  ) => HTMLElement | null;
+  state?: (context: HistoryStateSlotContext) => HTMLElement | null;
+}
+
+/** Snapshot source for the core arbitration layer. Read-only by contract. */
+export interface HistoryViewModel {
+  conversations: readonly HistoryConversationSummary[];
+  activeConversationId: string | null;
+  state: HistoryListState;
+  pendingAction: HistoryViewPendingAction;
+  identityStatus: HistoryIdentityStatus;
+  nextCursor: string | null;
+}
+
+/**
+ * The operations the default DOM invokes. Shaped as the public render actions
+ * minus `close` (the shell owns that) so the core can forward them verbatim.
+ */
+export type HistoryViewOperations = Omit<
+  AgentWidgetHistoryRenderActions,
+  "close"
+>;
 
 export interface HistoryViewOptions {
   /** Internal seam (D9). The view never touches `AgentWidgetClient`. */
@@ -82,10 +142,30 @@ export interface HistoryViewOptions {
   onRequestResetIdentity?: () => Promise<
     { outcome: "cancelled" } | { outcome: "reset"; remoteRevocationConfirmed: boolean }
   >;
+
+  /** Core-owned plugin slots. Absent means the default DOM everywhere. */
+  slots?: HistoryViewSlotRenderers;
+  /**
+   * Start with DOM rendering suspended so the core can arbitrate a full-view
+   * hook before any slot runs. Default true.
+   */
+  renderDom?: boolean;
+  /** Model-change signal, emitted only while DOM rendering is suspended. */
+  onModelChange?: () => void;
+  /** Shell live region, used while this view's own one is detached. */
+  onAnnounce?: (message: string) => void;
 }
 
 export interface HistoryViewHandle {
   element: HTMLElement;
+  /** Resolved copy, defaults included. The defaults live in this chunk. */
+  copy: ResolvedHistoryViewCopy;
+  /** Immutable-by-contract model snapshot for the core arbitration layer. */
+  getModel(): HistoryViewModel;
+  /** The same operations the default DOM invokes, for public render hooks. */
+  operations: HistoryViewOperations;
+  /** Suspend/resume this view's DOM while a plugin owns the full surface. */
+  setDomRenderEnabled(enabled: boolean): void;
   /** Re-fetch and re-render the list in place, preserving list/focus state. */
   refresh(): void;
   /**
@@ -186,10 +266,17 @@ export function createHistoryView(
   let destroyed = false;
   let listEpoch = 0;
   let presentation = options.presentation;
+  let domRenderEnabled = options.renderDom !== false;
   const rowErrors = new Map<string, { message: string; retry: () => void }>();
   let actionError: { message: string; retry: () => void } | null = null;
 
   const announcer = createHistoryAnnouncer();
+
+  /** A suspended view is detached: its live region cannot speak, the shell's can. */
+  const announce = (message: string): void => {
+    if (!domRenderEnabled && options.onAnnounce) options.onAnnounce(message);
+    else announcer.announce(message);
+  };
 
   const busy = (): boolean => pending !== null;
 
@@ -332,6 +419,35 @@ export function createHistoryView(
     else target.removeAttribute("aria-disabled");
   };
 
+  // --- header slot --------------------------------------------------------
+
+  let headerContent: HTMLElement = topbar;
+  let headerRenderedKey: string | null = null;
+
+  /**
+   * Re-run only when the header's own inputs change: a custom header must not
+   * lose focus every time the list below it re-renders.
+   */
+  const renderHeader = (): void => {
+    const slot = options.slots?.header;
+    if (!slot) return;
+    const key = `${presentation}|${identityKey(identityStatus)}|${
+      pending ? `${pending.kind}:${"conversationId" in pending ? pending.conversationId : ""}` : ""
+    }`;
+    if (key === headerRenderedKey) return;
+    headerRenderedKey = key;
+    const next =
+      slot({
+        identityStatus,
+        pendingAction: pending,
+        copy,
+        defaultRenderer: () => topbar,
+      }) ?? topbar;
+    if (next === headerContent) return;
+    headerContent.replaceWith(next);
+    headerContent = next;
+  };
+
   let scopeRenderedKey: string | null = null;
 
   const renderScope = (): void => {
@@ -426,7 +542,7 @@ export function createHistoryView(
         attrs: { "aria-labelledby": groupHeadingId },
       });
       for (const conversation of group.items) {
-        list.appendChild(
+        const defaultRow = (): HTMLElement =>
           buildConversationRow({
             conversation,
             active: conversation.id === activeConversationId,
@@ -440,7 +556,21 @@ export function createHistoryView(
             onToggleMenu: () => toggleMenu(conversation.id),
             onCloseMenu: (opts) => closeMenu(opts),
             onDelete: () => void deleteConversation(conversation.id),
-          })
+          });
+        const custom = options.slots?.conversation?.({
+          conversation,
+          active: conversation.id === activeConversationId,
+          pending: rowPendingFor(conversation.id),
+          open: () => openConversation(conversation.id),
+          requestDelete: () => deleteConversation(conversation.id),
+          defaultRenderer: defaultRow,
+        });
+        const row = custom ?? defaultRow();
+        // The list stays a real list even when a plugin returns loose markup.
+        list.appendChild(
+          row instanceof HTMLLIElement
+            ? row
+            : createNode("li", { className: "persona-history-item" }, row)
         );
       }
       return createNode(
@@ -496,20 +626,31 @@ export function createHistoryView(
       listState.kind !== "ready" &&
       !(listState.kind === "loading" && listState.phase !== "initial" && hasRows);
     if (stateNeedsBlock) {
-      children.push(
+      const state = listState as Exclude<HistoryListState, { kind: "ready" }>;
+      // Recovery affordances exist only where they are safe for this state.
+      const retry = state.kind === "loading" ? undefined : () => loadList("refresh");
+      const startNewConversation =
+        state.kind === "new_conversation_required" ? () => startNew() : undefined;
+      const defaultState = (): HTMLElement =>
         buildStateBlock({
-          state: listState as Exclude<HistoryListState, { kind: "ready" }>,
+          state,
           copy,
           identityStatus,
           busy: busy(),
-          onRetry:
-            listState.kind === "loading" ? undefined : () => void loadList("refresh"),
-          onStartNew:
-            listState.kind === "new_conversation_required"
-              ? () => void startNew()
-              : undefined,
-        })
-      );
+          ...(retry ? { onRetry: () => void retry() } : {}),
+          ...(startNewConversation
+            ? { onStartNew: () => void startNewConversation() }
+            : {}),
+        });
+      const custom = options.slots?.state?.({
+        state,
+        identityStatus,
+        copy,
+        ...(retry ? { retry } : {}),
+        ...(startNewConversation ? { startNewConversation } : {}),
+        defaultRenderer: defaultState,
+      });
+      children.push(custom ?? defaultState());
     }
 
     listRegion.replaceChildren(...children.filter((node): node is Node => !!node));
@@ -528,6 +669,13 @@ export function createHistoryView(
 
   const render = (): void => {
     if (destroyed) return;
+    // Suspended means a plugin owns the whole surface: build nothing, just tell
+    // the arbitration layer the model moved.
+    if (!domRenderEnabled) {
+      options.onModelChange?.();
+      return;
+    }
+    renderHeader();
     renderScope();
     renderChrome();
     renderList();
@@ -651,20 +799,24 @@ export function createHistoryView(
     }
   }
 
-  async function deleteConversation(conversationId: string): Promise<void> {
-    if (busy() || destroyed) return;
+  /** A failed delete resolves "cancelled"; the failure surfaces as a row error. */
+  async function deleteConversation(
+    conversationId: string
+  ): Promise<"deleted" | "cancelled"> {
+    if (busy() || destroyed) return "cancelled";
     rowErrors.delete(conversationId);
     pending = { kind: "delete", conversationId };
     render();
     try {
       const outcome = await options.onRequestDeleteConversation(conversationId);
-      if (destroyed) return;
+      if (destroyed) return outcome;
       if (outcome === "deleted") {
         removeConversation(conversationId);
-        announcer.announce(copy.conversationRemovedNotice);
+        announce(copy.conversationRemovedNotice);
       }
+      return outcome;
     } catch (error) {
-      if (destroyed) return;
+      if (destroyed) return "cancelled";
       // A 404 means the row is already gone: remove it without an error.
       if (isHistoryProviderError(error) && error.code === "not_found") {
         removeConversation(conversationId);
@@ -674,6 +826,7 @@ export function createHistoryView(
           retry: () => void deleteConversation(conversationId),
         });
       }
+      return "cancelled";
     } finally {
       if (!destroyed) {
         pending = null;
@@ -708,28 +861,31 @@ export function createHistoryView(
     }
   }
 
-  async function clearHistory(): Promise<void> {
-    if (busy() || destroyed) return;
+  /** A failed clear resolves "cancelled"; the failure surfaces as an action error. */
+  async function clearHistory(): Promise<"cleared" | "cancelled"> {
+    if (busy() || destroyed) return "cancelled";
     actionError = null;
     closeMenu();
     pending = { kind: "clear" };
     render();
     try {
       const outcome = await options.onRequestClearHistory();
-      if (destroyed) return;
+      if (destroyed) return outcome;
       if (outcome === "cleared") {
         items = [];
         nextCursor = null;
         activeConversationId = null;
         listState = { kind: "empty" };
-        announcer.announce(copy.historyClearedNotice);
+        announce(copy.historyClearedNotice);
       }
+      return outcome;
     } catch {
-      if (destroyed) return;
+      if (destroyed) return "cancelled";
       actionError = {
         message: copy.errorDescription,
         retry: () => void clearHistory(),
       };
+      return "cancelled";
     } finally {
       if (!destroyed) {
         pending = null;
@@ -738,31 +894,39 @@ export function createHistoryView(
     }
   }
 
-  async function resetIdentity(): Promise<void> {
-    if (busy() || destroyed || !options.onRequestResetIdentity) return;
+  type ResetOutcome =
+    | { outcome: "cancelled" }
+    | { outcome: "reset"; remoteRevocationConfirmed: boolean };
+
+  const CANCELLED: ResetOutcome = { outcome: "cancelled" };
+
+  async function resetIdentity(): Promise<ResetOutcome> {
+    if (busy() || destroyed || !options.onRequestResetIdentity) return CANCELLED;
     actionError = null;
     closeMenu();
     pending = { kind: "reset" };
     render();
     try {
       const result = await options.onRequestResetIdentity();
-      if (destroyed) return;
+      if (destroyed) return result;
       if (result.outcome === "reset") {
-        announcer.announce(
+        announce(
           result.remoteRevocationConfirmed
             ? copy.identityResetNotice
             : copy.identityResetUnconfirmedNotice
         );
         pending = null;
         await loadList("refresh");
-        return;
+        return result;
       }
+      return result;
     } catch {
-      if (destroyed) return;
+      if (destroyed) return CANCELLED;
       actionError = {
         message: copy.errorDescription,
         retry: () => void resetIdentity(),
       };
+      return CANCELLED;
     } finally {
       if (!destroyed && pending?.kind === "reset") {
         pending = null;
@@ -784,7 +948,7 @@ export function createHistoryView(
       // Announce only real transitions, and let `verifying` speak through its
       // own role="status" block instead of announcing twice.
       if (changed && status.state !== "verifying") {
-        announcer.announce(scopeCopy(status, copy).title);
+        announce(scopeCopy(status, copy).title);
       }
     }
   );
@@ -808,12 +972,44 @@ export function createHistoryView(
 
   return {
     element,
+    copy,
+    getModel: () => ({
+      conversations: items,
+      activeConversationId,
+      state: listState,
+      pendingAction: pending,
+      identityStatus,
+      nextCursor,
+    }),
+    // Busy gating matches the default controls, which are inert while pending.
+    operations: {
+      refresh: async () => {
+        if (busy()) return;
+        await loadList("refresh");
+      },
+      loadMore: async () => {
+        if (busy()) return;
+        await loadList("load-more");
+      },
+      openConversation: (conversationId) => openConversation(conversationId),
+      startNewConversation: () => startNew(),
+      requestDeleteConversation: (conversationId) =>
+        deleteConversation(conversationId),
+      requestClearConversationHistory: () => clearHistory(),
+      requestResetHistoryIdentity: () => resetIdentity(),
+    },
+    setDomRenderEnabled: (enabled) => {
+      if (enabled === domRenderEnabled) return;
+      domRenderEnabled = enabled;
+      if (enabled) render();
+    },
     refresh: () => {
       void loadList("refresh");
     },
     setPresentation: (next) => {
       if (next === presentation) return;
       presentation = next;
+      headerRenderedKey = null;
       const rail = next === "rail";
       element.classList.toggle("persona-history-view--panel", !rail);
       element.classList.toggle("persona-history-view--rail", rail);
@@ -823,6 +1019,8 @@ export function createHistoryView(
         rail ? copy.closeLabel : copy.backLabel
       );
       backButton.replaceChildren(historyIcon(rail ? "x" : "arrow-left"));
+      // A header slot is presentation-aware, so it re-arbitrates on the move.
+      render();
     },
     setActiveConversationId: (conversationId) => {
       if (activeConversationId === conversationId) return;

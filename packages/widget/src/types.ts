@@ -2778,6 +2778,127 @@ export type HistoryIdentityStatus =
       reason: "history_disabled" | "ineligible_mode";
     };
 
+// ----------------------------------------------------------------------------
+// History rendering customization (plan D7, "Public rendering customization
+// contract"). Types only: the implementation stays in the lazy view chunk and
+// the core arbitration layer.
+// ----------------------------------------------------------------------------
+
+/** Fully defaulted history copy. Every user-visible history string. */
+export type ResolvedHistoryCopy = Required<AgentWidgetHistoryCopy>;
+
+/** List-region state handed to render hooks. */
+export type HistoryViewState =
+  | { kind: "loading"; phase: "initial" | "refresh" | "load-more" }
+  | { kind: "ready" }
+  | { kind: "empty" }
+  | {
+      kind: "error";
+      reason:
+        | "unavailable"
+        | "authentication_failed"
+        | "authentication_required"
+        | "identity_provider_failed"
+        | "proof_not_admitted"
+        | "unsupported_scope"
+        | "unknown";
+      retryable: boolean;
+    }
+  | { kind: "rate_limited"; retryAfterSeconds: number }
+  | { kind: "new_conversation_required" };
+
+/** The single in-flight history operation, or `null` when idle. */
+export type HistoryPendingAction =
+  | { kind: "refresh" | "load-more" | "start-new" | "clear" | "reset" }
+  | { kind: "open" | "delete"; conversationId: string }
+  | null;
+
+/**
+ * Every history operation a render hook may invoke. Each routes through the
+ * same controller/session path as the default renderer, so busy gating,
+ * selection epochs, and confirmations behave identically.
+ */
+export type AgentWidgetHistoryRenderActions = {
+  refresh(): Promise<void>;
+  loadMore(): Promise<void>;
+  openConversation(conversationId: string): Promise<void>;
+  startNewConversation(): Promise<void>;
+  /** Each request method opens Persona's accessible confirmation first. */
+  requestDeleteConversation(
+    conversationId: string
+  ): Promise<"deleted" | "cancelled">;
+  requestClearConversationHistory(): Promise<"cleared" | "cancelled">;
+  requestResetHistoryIdentity(): Promise<
+    | { outcome: "cancelled" }
+    | { outcome: "reset"; remoteRevocationConfirmed: boolean }
+  >;
+  close(): void;
+};
+
+/** Context for `renderHistoryView`. Frozen snapshot; no provider or credentials. */
+export type AgentWidgetRenderHistoryViewContext = {
+  conversations: readonly HistoryConversationSummary[];
+  activeConversationId: string | null;
+  state: HistoryViewState;
+  pendingAction: HistoryPendingAction;
+  identityStatus: HistoryIdentityStatus;
+  nextCursor: string | null;
+  presentation: ResolvedHistoryPresentation;
+  returnSurface: HistoryReturnSurface;
+  config: AgentWidgetConfig;
+  copy: ResolvedHistoryCopy;
+  actions: AgentWidgetHistoryRenderActions;
+  /** The default full view. Bypasses this hook only; lower slots still apply. */
+  defaultRenderer(): HTMLElement;
+  /** Re-run arbitration with the current snapshot. Inert after close/destroy. */
+  requestRender(): void;
+  /** Teardown for this render; runs before the next one and on close. */
+  onCleanup(callback: () => void): void;
+};
+
+/** Context for `renderHistoryConversation` (one list row). */
+export type AgentWidgetRenderHistoryConversationContext = {
+  conversation: HistoryConversationSummary;
+  active: boolean;
+  pending: "opening" | "deleting" | null;
+  presentation: ResolvedHistoryPresentation;
+  config: AgentWidgetConfig;
+  open(): Promise<void>;
+  requestDelete(): Promise<"deleted" | "cancelled">;
+  defaultRenderer(): HTMLElement;
+};
+
+/** Context for `renderHistoryHeader` (the Messages top bar). */
+export type AgentWidgetRenderHistoryHeaderContext = {
+  presentation: ResolvedHistoryPresentation;
+  returnSurface: HistoryReturnSurface;
+  identityStatus: HistoryIdentityStatus;
+  pendingAction: HistoryPendingAction;
+  config: AgentWidgetConfig;
+  copy: ResolvedHistoryCopy;
+  actions: Pick<
+    AgentWidgetHistoryRenderActions,
+    "close" | "startNewConversation"
+  >;
+  defaultRenderer(): HTMLElement;
+};
+
+/**
+ * Context for `renderHistoryState`. Invoked only for non-ready list states;
+ * `retry`/`startNewConversation` are present only where they are safe, so
+ * custom DOM never infers recovery behavior.
+ */
+export type AgentWidgetRenderHistoryStateContext = {
+  state: Exclude<HistoryViewState, { kind: "ready" }>;
+  identityStatus: HistoryIdentityStatus;
+  presentation: ResolvedHistoryPresentation;
+  config: AgentWidgetConfig;
+  copy: ResolvedHistoryCopy;
+  retry?: () => Promise<void>;
+  startNewConversation?: () => Promise<void>;
+  defaultRenderer(): HTMLElement;
+};
+
 export type SSEEventRecord = {
   id: string;
   type: string;
