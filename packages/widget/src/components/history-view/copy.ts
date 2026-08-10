@@ -1,60 +1,23 @@
 /**
  * Resolved copy for the history ("Messages") view.
  *
- * `AgentWidgetHistoryCopy` (types.ts) is the public, host-overridable surface.
- * The view needs a handful of additional labels that the public interface does
- * not carry yet; they live in `HistoryViewExtraCopy` and are accepted through
- * the same `copy` option, so a later types.ts addition is a pure move.
+ * `AgentWidgetHistoryCopy` (types.ts) is the single authoritative
+ * host-overridable type; the defaults live here, in the chunk. The handful of
+ * strings the shell must render before this chunk loads come from
+ * `components/history-shell-copy.ts` so each key still has one default.
  *
  * House style: sentence case, no em-dashes, no all-caps.
  */
 
 import type { AgentWidgetHistoryCopy } from "../../types";
+import { HISTORY_SHELL_COPY_DEFAULTS } from "../history-shell-copy";
 
-/** View-local labels not yet present in `AgentWidgetHistoryCopy`. */
-export interface HistoryViewExtraCopy {
-  /** Panel back control (returns to the invoking surface). */
-  backLabel: string;
-  /** Rail close control. */
-  closeLabel: string;
-  loadingLabel: string;
-  loadMoreLabel: string;
-  loadingMoreLabel: string;
-  /** Accessible name of the per-row overflow trigger and its menu. */
-  rowActionsLabel: string;
-  deleteConversationLabel: string;
-  clearHistoryLabel: string;
-  resetIdentityLabel: string;
-  /** `{count}` placeholder. */
-  messageCountLabel: string;
-  messageCountLabelOne: string;
-  conversationRemovedNotice: string;
-  historyClearedNotice: string;
-  unavailableTitle: string;
-  unavailableDescription: string;
-  newConversationRequiredTitle: string;
-  newConversationRequiredDescription: string;
-  /** `{seconds}` placeholder. */
-  rateLimitedWaitDescription: string;
-  openFailedLabel: string;
-  deleteFailedLabel: string;
-  relativeNow: string;
-  /** `{value}` placeholder on each relative-time unit. */
-  relativeMinutes: string;
-  relativeHours: string;
-  relativeDays: string;
-  relativeWeeks: string;
-  relativeYears: string;
-}
+export type HistoryViewCopyInput = AgentWidgetHistoryCopy;
 
-export type HistoryViewCopyInput = AgentWidgetHistoryCopy &
-  Partial<HistoryViewExtraCopy>;
-
-export type ResolvedHistoryViewCopy = Required<AgentWidgetHistoryCopy> &
-  HistoryViewExtraCopy;
+export type ResolvedHistoryViewCopy = Required<AgentWidgetHistoryCopy>;
 
 export const HISTORY_VIEW_COPY_DEFAULTS: ResolvedHistoryViewCopy = {
-  viewTitle: "Messages",
+  ...HISTORY_SHELL_COPY_DEFAULTS,
   emptyTitle: "No conversations yet",
   emptyDescription: "Start a conversation and it will show up here.",
   errorTitle: "Could not load conversations",
@@ -62,18 +25,6 @@ export const HISTORY_VIEW_COPY_DEFAULTS: ResolvedHistoryViewCopy = {
   retryLabel: "Retry",
   rateLimitedTitle: "Too many requests",
   rateLimitedDescription: "Please wait a moment before trying again.",
-  deleteConversationConfirm: "Delete this conversation? This cannot be undone.",
-  clearHistoryConfirm:
-    "Delete all conversations for this assistant on this browser? This cannot be undone.",
-  resetIdentityConfirm:
-    "Forget this device? All Persona data stored in this browser is cleared. Records are not deleted elsewhere.",
-  newConversationLabel: "New conversation",
-  showEarlierMessagesLabel: "Show earlier messages",
-  conversationDeletedNotice:
-    "That conversation was deleted. You are now in a new conversation.",
-  identityResetNotice: "This device was forgotten.",
-  identityResetUnconfirmedNotice:
-    "This device was cleared here, but the server could not confirm it.",
   groupToday: "Today",
   groupYesterday: "Yesterday",
   groupPrevious7Days: "Previous 7 days",
@@ -97,7 +48,6 @@ export const HISTORY_VIEW_COPY_DEFAULTS: ResolvedHistoryViewCopy = {
   proofNotAdmittedDescription:
     "This assistant is not set up to accept your account identity.",
   retryIdentityLabel: "Try again",
-
   backLabel: "Back to conversation",
   closeLabel: "Close conversation list",
   loadingLabel: "Loading conversations",

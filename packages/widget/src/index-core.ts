@@ -148,6 +148,8 @@ export type {
   AgentWidgetHistoryCopy,
   HistoryScope,
   HistoryIdentityStatus,
+  ResolvedHistoryPresentation,
+  HistoryReturnSurface,
   HistoryConversationSummary,
   HistoryConversationPage,
   HistoryConversationDetail,

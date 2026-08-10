@@ -3,7 +3,12 @@ import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
 import { onMarkdownParsersReady, getMarkdownParsersSync } from "./markdown-parsers-loader";
-import { AgentWidgetSession, AgentWidgetSessionStatus } from "./session";
+import {
+  AgentWidgetSession,
+  AgentWidgetSessionStatus,
+  type SessionHistoryNotice,
+  type SessionHistoryState
+} from "./session";
 import {
   AgentWidgetConfig,
   AgentWidgetConfigPatch,
@@ -38,7 +43,13 @@ import {
   AgentWidgetContextMentionRef,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionSource,
-  AgentWidgetWelcomeIcon
+  AgentWidgetWelcomeIcon,
+  HistoryConversationSummary,
+  HistoryIdentityStatus,
+  HistoryReturnSurface,
+  HistoryScope,
+  PendingDisplayProjections,
+  ResolvedHistoryPresentation
 } from "./types";
 import { AttachmentManager } from "./utils/attachment-manager";
 import {
@@ -168,6 +179,22 @@ import {
 } from "./utils/actions";
 import { createLocalStorageAdapter } from "./utils/storage";
 import { createVisitorStore, type VisitorStore } from "./utils/visitor-store";
+import { loadHistoryView } from "./history-view-loader";
+import type {
+  HistoryViewHandle,
+  HistoryViewOptions,
+} from "./history-view-entry";
+import { getHistoryProviderFactory } from "./internal/history-provider-registry";
+import type {
+  HistoryOperationContext,
+  HistoryProvider,
+} from "./internal/history-provider";
+import { createRuntypeHistoryProvider } from "./internal/runtype-history-provider";
+import {
+  resolveHistoryShellCopy,
+  type ResolvedHistoryShellCopy,
+} from "./components/history-shell-copy";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { componentRegistry } from "./components/registry";
 import {
   renderComponentDirective,
@@ -469,6 +496,45 @@ type Controller = {
     decision: 'approved' | 'denied',
     options?: AgentWidgetApprovalDecisionOptions
   ) => Promise<void>;
+
+  // --- Conversation history (client-token mode; see D8) ---------------------
+
+  /** Pass-through list, for headless hosts rendering their own navigation. */
+  listConversations: (opts?: {
+    cursor?: string;
+    limit?: number;
+    targetId?: string;
+    scope?: HistoryScope;
+  }) => Promise<{
+    items: HistoryConversationSummary[];
+    nextCursor: string | null;
+  }>;
+  /** Full open flow: transactional resume, hydration, and scroll restore. */
+  openConversation: (conversationId: string) => Promise<void>;
+  /** Clean local state plus a new owned server conversation. */
+  startNewConversation: () => Promise<void>;
+  /** Permanently delete one server record; the active one is replaced. */
+  deleteConversation: (conversationId: string) => Promise<void>;
+  /**
+   * Permanently delete every record in the resolved scope. Defaults to the
+   * active target filter; `allTargets` is a deliberate client-token-wide delete.
+   */
+  clearConversationHistory: (opts?: {
+    targetId?: string;
+    allTargets?: boolean;
+    scope?: HistoryScope;
+  }) => Promise<{ deleted: number }>;
+  /**
+   * Revoke this browser's history credential and wipe it locally. Resolves
+   * (never rejects) on remote failure; rejection is reserved for misuse.
+   * Required host logout wiring.
+   */
+  resetHistoryIdentity: () => Promise<{ remoteRevocationConfirmed: boolean }>;
+  /** Latest sanitized identity state; carries no token, proof, or identity id. */
+  getHistoryIdentityStatus: () => HistoryIdentityStatus;
+  showHistory: (opts?: { returnSurface?: HistoryReturnSurface }) => Promise<void>;
+  hideHistory: () => void;
+  isHistoryVisible: () => boolean;
 };
 
 export const buildPostprocessor = (
@@ -850,6 +916,21 @@ export const createAgentExperience = (
   let eventStreamVisible = false;
   let eventStreamRAF: number | null = null;
   let eventStreamLastUpdate = 0;
+
+  // --- history (Messages) shell state ---------------------------------------
+  // Declared here because the scroll-affordance gate, `syncPanelChrome`, and the
+  // session callbacks all run before the history block installs its behavior.
+  let historyVisible = false;
+  let historyPresentation: ResolvedHistoryPresentation | null = null;
+  /** Re-asserts panel-host inert state after a chrome pass. */
+  let reapplyHistoryHostChrome: () => void = () => {};
+  let historyStateHandler: (state: SessionHistoryState) => void = () => {};
+  let historyNoticeHandler: (notice: SessionHistoryNotice) => void = () => {};
+  /** Header button/affordance refresh; a turn's busy state gates the button. */
+  let historyChromeSync: () => void = () => {};
+  /** A surface that replaces the whole panel body: no scroll affordance over it. */
+  const fullPanelOverlayVisible = (): boolean =>
+    eventStreamVisible || (historyVisible && historyPresentation === "panel");
 
   // Open IndexedDB store and restore persisted events into the buffer
   eventStreamStore?.open().then(() => {
@@ -3481,6 +3562,8 @@ export const createAgentExperience = (
     } else {
       mount.style.removeProperty("--persona-artifact-welded-outer-radius");
     }
+    // A chrome pass can restyle the panel out from under an open history host.
+    reapplyHistoryHostChrome();
   };
 
   const destroyCallbacks: Array<() => void> = [];
@@ -4161,7 +4244,7 @@ export const createAgentExperience = (
     !!session && session.getMessages().length > 0;
 
   const syncScrollToBottomButton = () => {
-    if (!isScrollToBottomEnabled() || eventStreamVisible) {
+    if (!isScrollToBottomEnabled() || fullPanelOverlayVisible()) {
       if (scrollToBottomButton.parentNode) {
         scrollToBottomButton.remove();
       }
@@ -6742,12 +6825,52 @@ export const createAgentExperience = (
   let visitorStore: VisitorStore | null = initialStoreToken
     ? buildVisitorStore(initialStoreToken)
     : null;
+  // Internal history metadata rides the same serialized persistence path as the
+  // transcript, so a reload reconstructs revision, prepend cursor, and any
+  // display projection still owed to the server.
+  const readPendingProjections = (): PendingDisplayProjections | null => {
+    const stored = persistentMetadata.pendingDisplayProjections;
+    if (!stored || typeof stored !== 'object') return null;
+    const candidate = stored as Partial<PendingDisplayProjections>;
+    if (typeof candidate.conversationId !== 'string') return null;
+    if (!Array.isArray(candidate.messageIds)) return null;
+    return {
+      conversationId: candidate.conversationId,
+      messageIds: candidate.messageIds.filter(
+        (id): id is string => typeof id === 'string'
+      ),
+    };
+  };
   let historyInternals: WidgetHistoryInternals = {
     ...(visitorStore ? { visitorStore } : {}),
     historyBootstrapReady,
+    getStoredMessageCursor: () => readMetadataString('historyMessageCursor'),
+    setStoredMessageCursor: (cursor: string | null) => {
+      if (cursor === null) {
+        dropMetadataKey('historyMessageCursor');
+        return;
+      }
+      updateSessionMetadata((prev) => ({
+        ...prev,
+        historyMessageCursor: cursor,
+      }));
+    },
+    getPendingDisplayProjections: readPendingProjections,
+    setPendingDisplayProjections: (pending) => {
+      if (!pending) {
+        dropMetadataKey('pendingDisplayProjections');
+        return;
+      }
+      updateSessionMetadata((prev) => ({
+        ...prev,
+        pendingDisplayProjections: pending,
+      }));
+    },
     ...(hostOwnsConversationId
       ? {}
       : {
+          getStoredConversationRevision: () =>
+            readMetadataString('conversationRevision'),
           setStoredConversationRevision: (revision: string | null) => {
             if (revision === null) {
               dropMetadataKey('conversationRevision');
@@ -6998,6 +7121,8 @@ export const createAgentExperience = (
         return statusCopy[s];
       };
       applyStatusToElement(statusText, getCurrentStatusText(status), currentStatusConfig, status);
+      // A paused/resuming durable turn gates the history button too.
+      historyChromeSync();
     },
     onStreamingChanged(streaming) {
       if (!streaming) {
@@ -7009,6 +7134,7 @@ export const createAgentExperience = (
       }
       isStreaming = streaming;
       setComposerDisabled(streaming);
+      historyChromeSync();
       // Re-render messages to show/hide typing indicator
       if (session) {
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
@@ -7095,6 +7221,13 @@ export const createAgentExperience = (
       syncArtifactPane();
       persistState();
     },
+    // Late-bound: the history block installs the real handlers below.
+    onHistoryStateChanged(state) {
+      historyStateHandler(state);
+    },
+    onHistoryNotice(notice) {
+      historyNoticeHandler(notice);
+    },
     onReconnect(event) {
       // Map the durable-reconnect lifecycle to public controller events.
       const { executionId, lastEventId } = event.handle;
@@ -7163,15 +7296,806 @@ export const createAgentExperience = (
     }
   }
 
+  // ==========================================================================
+  // Visitor conversation history shell
+  // (docs/visitor-history-implementation-plan.md D6/D7/D8)
+  //
+  // The shell owns placement, open/close, inertness of the obscured
+  // conversation, focus orchestration, confirmations, and every session
+  // mutation. The lazily loaded Messages view owns the list itself.
+  // ==========================================================================
+
+  /** Rail needs this much HOST CONTAINER width; below it, rail collapses to panel. */
+  const RAIL_MIN_CONTAINER_WIDTH = 720;
+
+  let historyShellCopy: ResolvedHistoryShellCopy = resolveHistoryShellCopy(
+    config.features?.history?.copy
+  );
+  let historyProvider: HistoryProvider | null = null;
+  let historyUnavailable = false;
+  let historyView: HistoryViewHandle | null = null;
+  let historyOperationContext: HistoryOperationContext | null = null;
+  let historyReturnSurface: HistoryReturnSurface = "conversation";
+  let historyInvoker: HTMLElement | null = null;
+  let historyButton: HTMLButtonElement | null = null;
+  let historySessionState: SessionHistoryState = session.getHistoryState();
+  let historyIdentityKey: string | null = null;
+  let historyOpenToken = 0;
+  let clearChatDefaultLabel: string | null = null;
+  let unsubscribeHistoryAvailability: (() => void) | null = null;
+  let unsubscribeHistoryIdentity: (() => void) | null = null;
+  const historyRegionId = `persona-history-${Math.random().toString(36).slice(2, 8)}`;
+
+  const historyFeatureEnabled = (): boolean =>
+    config.features?.history?.enabled === true;
+  const historyAvailable = (): boolean =>
+    historyFeatureEnabled() && !!historyProvider && !historyUnavailable;
+  /** Switching conversations mid-turn would abandon a live answer. */
+  const historyTurnBusy = (): boolean => {
+    const status = session.getStatus();
+    return isStreaming || status === "paused" || status === "resuming";
+  };
+  const historyScope = (): HistoryScope =>
+    config.features?.history?.scope ??
+    (config.getIdentityProof ? "verified-user" : "browser");
+  const historyOperationScope = (): HistoryScope =>
+    historyOperationContext?.scope ?? historyScope();
+  const activeHistoryTargetId = (): string | null =>
+    session.getClientSession()?.targetId ?? null;
+
+  const identityStatusKey = (status: HistoryIdentityStatus): string =>
+    `${status.state}:${"reason" in status ? status.reason : ""}`;
+
+  /** Instance-scoped only: authentication state is never broadcast page-wide. */
+  const emitHistoryIdentityStatus = (status: HistoryIdentityStatus): void => {
+    const key = identityStatusKey(status);
+    if (key === historyIdentityKey) return;
+    historyIdentityKey = key;
+    eventBus.emit("history:identityStatusChanged", {
+      status,
+      timestamp: Date.now(),
+    });
+  };
+
+  /** Unconditional: `announce()` is gated on an unrelated scroll opt-in. */
+  const announceHistory = (message: string): void => {
+    if (!message) return;
+    liveRegion.textContent = "";
+    liveRegion.textContent = message;
+  };
+
+  // --- provider ------------------------------------------------------------
+
+  const buildHistoryProvider = (): HistoryProvider | null => {
+    if (!historyFeatureEnabled()) return null;
+    // Demo override first; production builds the Runtype provider from
+    // client-token config.
+    const override = getHistoryProviderFactory();
+    if (override) return override();
+    if (!session.isClientTokenMode()) return null;
+    return createRuntypeHistoryProvider({
+      client: session.getClient(),
+      getIdentityProofConfigured: () =>
+        typeof config.getIdentityProof === "function",
+      onActivationCommitted: (clientSession) =>
+        session.bindActivatedSession(clientSession),
+      // Connection-config rebuilds replace the client under the provider.
+      getClient: () => session.getClient(),
+    });
+  };
+
+  const installHistoryProvider = (): void => {
+    unsubscribeHistoryAvailability?.();
+    unsubscribeHistoryAvailability = null;
+    unsubscribeHistoryIdentity?.();
+    unsubscribeHistoryIdentity = null;
+    historyUnavailable = false;
+    historyProvider = buildHistoryProvider();
+    const next: WidgetHistoryInternals = { ...historyInternals };
+    if (historyProvider) next.historyProvider = historyProvider;
+    else delete next.historyProvider;
+    historyInternals = next;
+    session.setHistoryInternals(historyInternals);
+    if (!historyProvider) return;
+    unsubscribeHistoryAvailability =
+      historyProvider.subscribeAvailability?.((available) => {
+        historyUnavailable = !available;
+        // A degrade must remove an ALREADY-rendered surface, not just a flag.
+        if (!available) closeHistory({ restoreFocus: false });
+        syncHistoryChromeImpl();
+      }) ?? null;
+    unsubscribeHistoryIdentity = historyProvider.subscribeIdentityStatus(
+      (status) => emitHistoryIdentityStatus(status)
+    );
+    historyIdentityKey = identityStatusKey(historyProvider.getIdentityStatus());
+  };
+
+  // --- presentation hosts --------------------------------------------------
+
+  /** Resolved against the history host CONTAINER width, never the viewport. */
+  const resolveHistoryPresentation = (): ResolvedHistoryPresentation => {
+    const configured = config.features?.history?.presentation ?? "panel";
+    if (configured === "panel") return "panel";
+    if (configured === "auto") {
+      // Floating launchers stay panel-based at every width.
+      const inlineOrDocked = !launcherEnabled || isDockedMountMode(config);
+      if (!inlineOrDocked) return "panel";
+    }
+    const width = container.getBoundingClientRect().width || container.clientWidth;
+    return width >= RAIL_MIN_CONTAINER_WIDTH ? "rail" : "panel";
+  };
+
+  const setHistoryHostInert = (element: HTMLElement, inert: boolean): void => {
+    if (inert) {
+      element.setAttribute("aria-hidden", "true");
+      element.setAttribute("inert", "");
+    } else {
+      element.removeAttribute("aria-hidden");
+      element.removeAttribute("inert");
+    }
+  };
+
+  /**
+   * Panel presentation obscures the conversation, so the transcript AND the
+   * composer must be unreachable: a visitor must never send into a conversation
+   * they cannot see. Restores exactly what it captured.
+   */
+  let restorePanelHost: (() => void) | null = null;
+  const enforcePanelHost = (): void => {
+    if (!restorePanelHost) return;
+    body.style.display = "none";
+    setHistoryHostInert(body, true);
+    // Live `footer` binding: a composer-plugin rebuild swaps it and calls
+    // syncPanelChrome, which routes back here for the replacement.
+    footer.hidden = true;
+    setHistoryHostInert(footer, true);
+  };
+  reapplyHistoryHostChrome = enforcePanelHost;
+
+  const mountPanelHost = (element: HTMLElement): void => {
+    const previousDisplay = body.style.display;
+    const previousFooterHidden = footer.hidden;
+    const capturedFooter = footer;
+    restorePanelHost = () => {
+      restorePanelHost = null;
+      body.style.display = previousDisplay;
+      setHistoryHostInert(body, false);
+      capturedFooter.hidden = previousFooterHidden;
+      setHistoryHostInert(capturedFooter, false);
+      if (footer !== capturedFooter) {
+        footer.hidden = false;
+        setHistoryHostInert(footer, false);
+      }
+    };
+    footer.parentNode?.insertBefore(element, footer);
+    enforcePanelHost();
+  };
+
+  let railShell: HTMLElement | null = null;
+
+  /**
+   * Rail is a shell-owned navigation column BESIDE a still-operable
+   * conversation: `body` (and the in-container composer) move into a row
+   * wrapper next to the host.
+   */
+  const mountRailHost = (element: HTMLElement): void => {
+    const shell = createElement("div", "persona-history-rail-shell");
+    Object.assign(shell.style, {
+      display: "flex",
+      flexDirection: "row",
+      flex: "1 1 auto",
+      minHeight: "0",
+    } satisfies Partial<CSSStyleDeclaration>);
+    const column = createElement("div", "persona-history-rail-conversation");
+    Object.assign(column.style, {
+      display: "flex",
+      flexDirection: "column",
+      flex: "1 1 auto",
+      minWidth: "0",
+      minHeight: "0",
+    } satisfies Partial<CSSStyleDeclaration>);
+    const host = createElement("div", "persona-history-rail-host");
+    Object.assign(host.style, {
+      display: "flex",
+      flex: "0 0 320px",
+      maxWidth: "360px",
+      minHeight: "0",
+      overflow: "hidden",
+    } satisfies Partial<CSSStyleDeclaration>);
+
+    container.insertBefore(shell, body);
+    column.appendChild(body);
+    // Composer-bar mode keeps the footer outside the container; leave it alone.
+    if (footer.parentNode === container) column.appendChild(footer);
+    shell.append(column, host);
+    host.appendChild(element);
+    railShell = shell;
+  };
+
+  const unmountHistoryHosts = (): void => {
+    restorePanelHost?.();
+    if (railShell) {
+      container.insertBefore(body, railShell);
+      if (footer.parentNode === railShell.firstElementChild) {
+        container.insertBefore(footer, railShell);
+      }
+      railShell.remove();
+      railShell = null;
+    }
+  };
+
+  /** The chunk owns its own classes/labels; the shell only picks the host. */
+  const mountHistoryView = (view: HistoryViewHandle): void => {
+    view.element.id = historyRegionId;
+    view.setPresentation(historyPresentation ?? "panel");
+    // Host-side flex sizing: the chunk sizes itself to 100%, the shell decides
+    // how it participates in the column/row it was just dropped into.
+    view.element.style.flex = "1 1 auto";
+    view.element.style.minHeight = "0";
+    if (historyPresentation === "rail") mountRailHost(view.element);
+    else mountPanelHost(view.element);
+  };
+
+  /**
+   * Live rail <-> panel transition. ONE view instance survives the move, so the
+   * list, its fixed operation context, and any pending work are preserved.
+   */
+  const syncHistoryPresentation = (): void => {
+    if (!historyVisible || !historyView) return;
+    const next = resolveHistoryPresentation();
+    if (next === historyPresentation) return;
+    const focusKey = document.activeElement;
+    const refocus =
+      focusKey instanceof HTMLElement && historyView.element.contains(focusKey)
+        ? focusKey
+        : null;
+    unmountHistoryHosts();
+    historyPresentation = next;
+    mountHistoryView(historyView);
+    if (refocus?.isConnected) refocus.focus();
+    else focusHistoryEntry();
+    syncScrollToBottomButton();
+    // A one-frame layout removal above the anchored message clamps scrollTop.
+    repinAnchoredMessage();
+    syncHistoryChromeImpl();
+  };
+
+  // --- open / close --------------------------------------------------------
+
+  const focusHistoryEntry = (): void => {
+    const element = historyView?.element;
+    if (!element) return;
+    const close = element.querySelector<HTMLElement>(
+      '[data-persona-history-focus="close"]'
+    );
+    if (close) {
+      close.focus();
+      return;
+    }
+    const heading = element.querySelector<HTMLElement>(".persona-history-title");
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus();
+  };
+
+  const openHistory = async (opts?: {
+    returnSurface?: HistoryReturnSurface;
+    invoker?: HTMLElement | null;
+  }): Promise<void> => {
+    if (!historyAvailable() || historyVisible) return;
+    const provider = historyProvider;
+    if (!provider) return;
+    const token = ++historyOpenToken;
+    historyReturnSurface = opts?.returnSurface ?? "conversation";
+    historyInvoker = opts?.invoker ?? historyButton;
+
+    let module: Awaited<ReturnType<typeof loadHistoryView>>;
+    try {
+      module = await loadHistoryView();
+    } catch {
+      // Lazy-chunk failure keeps the invoking surface interactive and retryable.
+      announceHistory(historyShellCopy.openHistoryLabel);
+      return;
+    }
+    if (token !== historyOpenToken || historyVisible) return;
+
+    // One scope for the whole opened view; every operation reuses it.
+    historyOperationContext = { scope: historyScope() };
+    historyPresentation = resolveHistoryPresentation();
+    historyVisible = true;
+
+    const viewOptions: HistoryViewOptions = {
+      provider,
+      context: historyOperationContext,
+      targetId: activeHistoryTargetId(),
+      presentation: historyPresentation,
+      showScopeStatus: config.features?.history?.showScopeStatus !== false,
+      activeConversationId: session.getActiveConversationId(),
+      ...(config.features?.history?.copy
+        ? { copy: config.features.history.copy }
+        : {}),
+      ...(config.features?.history?.pageSize !== undefined
+        ? { pageSize: config.features.history.pageSize }
+        : {}),
+      onSelect: (conversationId) => openHistoryConversation(conversationId),
+      onStartNew: () => startNewConversation(),
+      onClose: () => closeHistory(),
+      onRequestDeleteConversation: (conversationId) =>
+        requestDeleteConversation(conversationId),
+      onRequestClearHistory: () => requestClearConversationHistory(),
+      ...(provider.resetDevice
+        ? { onRequestResetIdentity: () => requestResetHistoryIdentity() }
+        : {}),
+    };
+
+    historyView = module.createHistoryView(viewOptions);
+    mountHistoryView(historyView);
+    historyView.setNewConversationRequired(
+      historySessionState.recovery === "new_conversation_required"
+    );
+    focusHistoryEntry();
+    syncScrollToBottomButton();
+    repinAnchoredMessage();
+    syncHistoryChromeImpl();
+    eventBus.emit("history:opened", {
+      presentation: historyPresentation,
+      returnSurface: historyReturnSurface,
+      timestamp: Date.now(),
+    });
+  };
+
+  const closeHistory = (opts?: { restoreFocus?: boolean }): void => {
+    if (!historyVisible) return;
+    historyOpenToken += 1;
+    const returnSurface = historyReturnSurface;
+    const invoker = historyInvoker;
+    historyVisible = false;
+    unmountHistoryHosts();
+    historyView?.destroy();
+    historyView = null;
+    historyPresentation = null;
+    historyOperationContext = null;
+    historyInvoker = null;
+    syncScrollToBottomButton();
+    // Removing a full-height host above the anchored message clamps scrollTop.
+    repinAnchoredMessage();
+    syncHistoryChromeImpl();
+    if (opts?.restoreFocus !== false) {
+      const target = invoker ?? historyButton;
+      if (target?.isConnected) target.focus();
+      else maybeFocusInput();
+    }
+    eventBus.emit("history:closed", { returnSurface, timestamp: Date.now() });
+  };
+
+  /** Escape returns to the recorded invoking surface, like the back control. */
+  const handleHistoryKeydown = (event: KeyboardEvent): void => {
+    if (event.key !== "Escape" || !historyVisible || !historyView) return;
+    // Rail leaves the conversation operable: only its own focus closes it.
+    if (historyPresentation === "rail") {
+      const target = event.target;
+      if (!(target instanceof Node) || !historyView.element.contains(target)) {
+        return;
+      }
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    closeHistory();
+  };
+  container.addEventListener("keydown", handleHistoryKeydown);
+  destroyCallbacks.push(() =>
+    container.removeEventListener("keydown", handleHistoryKeydown)
+  );
+
+  // --- session operations --------------------------------------------------
+
+  /**
+   * Transactional reopen. `suppressScrollSend` covers the hydration: otherwise
+   * the last restored user message triggers the anchor-top send scroll.
+   */
+  const openHistoryConversation = async (
+    conversationId: string
+  ): Promise<void> => {
+    const scope = historyOperationScope();
+    suppressScrollSend = true;
+    try {
+      await session.openConversation(conversationId, { scope });
+    } finally {
+      suppressScrollSend = false;
+    }
+    messageCache.clear();
+    resetAnchorState();
+    resumeAutoScroll();
+    if (!restoreScrollPosition()) jumpToBottomInstant();
+    syncEarlierMessagesPill();
+    historyView?.setActiveConversationId(conversationId);
+    eventBus.emit("history:conversationOpened", {
+      conversationId,
+      scope,
+      timestamp: Date.now(),
+    });
+    // Only a committed activation closes the panel; the rail stays open.
+    if (historyVisible && historyPresentation === "panel") {
+      closeHistory({ restoreFocus: false });
+      maybeFocusInput();
+    }
+  };
+
+  const startNewConversation = async (): Promise<void> => {
+    await session.startNewConversation({ scope: historyOperationScope() });
+    messageCache.clear();
+    resetAnchorState();
+    resumeAutoScroll();
+    jumpToBottomInstant();
+    syncEarlierMessagesPill();
+    historyView?.setActiveConversationId(session.getActiveConversationId());
+    if (historyVisible && historyPresentation === "panel") {
+      closeHistory({ restoreFocus: false });
+    }
+    maybeFocusInput();
+  };
+
+  const deleteHistoryConversation = async (
+    conversationId: string
+  ): Promise<void> => {
+    const scope = historyOperationScope();
+    const wasActive = session.getActiveConversationId() === conversationId;
+    await session.deleteConversation(conversationId, { scope });
+    if (wasActive) {
+      messageCache.clear();
+      resetAnchorState();
+      resumeAutoScroll();
+      syncEarlierMessagesPill();
+    }
+    eventBus.emit("history:conversationDeleted", {
+      conversationId,
+      scope,
+      wasActive,
+      timestamp: Date.now(),
+    });
+  };
+
+  const clearConversationHistory = async (opts?: {
+    targetId?: string;
+    /** Deliberate headless opt-in to the whole authorized client-token scope. */
+    allTargets?: boolean;
+    scope?: HistoryScope;
+  }): Promise<{ deleted: number }> => {
+    const scope = opts?.scope ?? historyOperationScope();
+    // Default to the same filter the visible list uses; only an explicit
+    // headless opt-in deletes conversations the visitor was never shown.
+    const targetId = opts?.allTargets
+      ? null
+      : (opts?.targetId ?? activeHistoryTargetId());
+    const result = await session.clearConversationHistory({
+      ...(targetId ? { targetId } : {}),
+      scope,
+    });
+    messageCache.clear();
+    resetAnchorState();
+    resumeAutoScroll();
+    syncEarlierMessagesPill();
+    eventBus.emit("history:cleared", {
+      deleted: result.deleted,
+      scope,
+      targetId,
+      timestamp: Date.now(),
+    });
+    return result;
+  };
+
+  /**
+   * D6: the local wipe is UNCONDITIONAL. Records survive on the server; this
+   * browser is detached from them whether or not revocation was confirmed.
+   */
+  const resetHistoryIdentity = async (): Promise<{
+    remoteRevocationConfirmed: boolean;
+  }> => {
+    // Rejection is reserved for misuse; remote failure resolves false.
+    if (!historyProvider?.resetDevice) {
+      throw new Error(
+        "[Persona] resetHistoryIdentity() requires a history provider that can reset this device"
+      );
+    }
+    let remoteRevocationConfirmed = false;
+    try {
+      const result = await session.resetHistoryDevice();
+      remoteRevocationConfirmed = result.remoteRevocationConfirmed;
+    } finally {
+      session.clearArtifacts();
+      messageCache.clear();
+      lastAppliedMessages = null;
+      config.clearStoredSessionId?.();
+      config.clearStoredConversationId?.();
+      persistentMetadata = {};
+      actionManager.syncFromMetadata();
+      if (storageAdapter?.clear) {
+        runStorageMutation(
+          () => storageAdapter.clear!(),
+          "[AgentWidget] Failed to clear storage adapter:"
+        );
+      }
+      resetAnchorState();
+      resumeAutoScroll();
+      syncEarlierMessagesPill();
+      closeHistory({ restoreFocus: false });
+      maybeFocusInput();
+      if (!open) launcherSurfaceInstance?.launcher.element.focus();
+    }
+    announceHistory(
+      remoteRevocationConfirmed
+        ? historyShellCopy.identityResetNotice
+        : historyShellCopy.identityResetUnconfirmedNotice
+    );
+    eventBus.emit("history:identityReset", {
+      remoteRevocationConfirmed,
+      timestamp: Date.now(),
+    });
+    return { remoteRevocationConfirmed };
+  };
+
+  // --- confirmations (shell-owned alert dialogs) ---------------------------
+
+  const requestDeleteConversation = async (
+    conversationId: string
+  ): Promise<"deleted" | "cancelled"> => {
+    const confirmed = await showHistoryConfirm({
+      host: container,
+      title: historyShellCopy.deleteConversationConfirmTitle,
+      description: historyShellCopy.deleteConversationConfirm,
+      confirmLabel: historyShellCopy.deleteConversationConfirmLabel,
+      cancelLabel: historyShellCopy.confirmCancelLabel,
+    });
+    if (!confirmed) return "cancelled";
+    await deleteHistoryConversation(conversationId);
+    return "deleted";
+  };
+
+  const requestClearConversationHistory = async (): Promise<
+    "cleared" | "cancelled"
+  > => {
+    // Scope-aware copy: never imply the delete is limited to the rendered page.
+    const verified = historyOperationScope() === "verified-user";
+    const confirmed = await showHistoryConfirm({
+      host: container,
+      title: historyShellCopy.clearHistoryConfirmTitle,
+      description: verified
+        ? historyShellCopy.clearHistoryVerifiedConfirm
+        : historyShellCopy.clearHistoryConfirm,
+      confirmLabel: historyShellCopy.clearHistoryConfirmLabel,
+      cancelLabel: historyShellCopy.confirmCancelLabel,
+    });
+    if (!confirmed) return "cancelled";
+    await clearConversationHistory();
+    return "cleared";
+  };
+
+  const requestResetHistoryIdentity = async (): Promise<
+    { outcome: "cancelled" } | { outcome: "reset"; remoteRevocationConfirmed: boolean }
+  > => {
+    const confirmed = await showHistoryConfirm({
+      host: container,
+      title: historyShellCopy.resetIdentityConfirmTitle,
+      description: historyShellCopy.resetIdentityConfirm,
+      confirmLabel: historyShellCopy.resetIdentityConfirmLabel,
+      cancelLabel: historyShellCopy.confirmCancelLabel,
+    });
+    if (!confirmed) return { outcome: "cancelled" };
+    const { remoteRevocationConfirmed } = await resetHistoryIdentity();
+    return { outcome: "reset", remoteRevocationConfirmed };
+  };
+
+  // --- "show earlier messages" prepend -------------------------------------
+
+  const earlierMessagesButton = createElement(
+    "button",
+    "persona-history-earlier"
+  ) as HTMLButtonElement;
+  earlierMessagesButton.type = "button";
+  earlierMessagesButton.textContent = historyShellCopy.showEarlierMessagesLabel;
+  earlierMessagesButton.setAttribute("data-persona-history-earlier", "");
+  Object.assign(earlierMessagesButton.style, {
+    alignSelf: "center",
+    minHeight: "44px",
+    padding: "0 16px",
+    borderRadius: "999px",
+    border: "1px solid var(--persona-border, rgba(0,0,0,0.12))",
+    background: "transparent",
+    color: "inherit",
+    font: "inherit",
+    cursor: "pointer",
+    flexShrink: "0",
+  } satisfies Partial<CSSStyleDeclaration>);
+
+  const syncEarlierMessagesPill = (): void => {
+    const show =
+      historyAvailable() &&
+      !!historySessionState.nextMessageCursor &&
+      !!session.getActiveConversationId();
+    if (!show) {
+      earlierMessagesButton.remove();
+      return;
+    }
+    earlierMessagesButton.textContent = historyShellCopy.showEarlierMessagesLabel;
+    if (earlierMessagesButton.parentNode !== body) {
+      body.insertBefore(earlierMessagesButton, body.firstChild);
+    }
+  };
+
+  earlierMessagesButton.addEventListener("click", () => {
+    const conversationId = session.getActiveConversationId();
+    const cursor = historySessionState.nextMessageCursor;
+    if (!conversationId || !cursor || earlierMessagesButton.disabled) return;
+    earlierMessagesButton.disabled = true;
+    // Capture before the prepend so the reader's viewport stays put.
+    const previousHeight = body.scrollHeight;
+    const previousTop = body.scrollTop;
+    void session
+      .loadOlderMessages(conversationId, cursor, { scope: historyOperationScope() })
+      .then(() => {
+        body.scrollTop = previousTop + (body.scrollHeight - previousHeight);
+        // Prepending shifts everything below the anchor.
+        repinAnchoredMessage();
+      })
+      .catch(() => {})
+      .finally(() => {
+        earlierMessagesButton.disabled = false;
+        syncEarlierMessagesPill();
+      });
+  });
+
+  // --- header chrome -------------------------------------------------------
+
+  const buildHistoryButton = (): HTMLButtonElement => {
+    const button = createElement(
+      "button",
+      "persona-history-toggle persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-opacity-80 persona-cursor-pointer persona-border-none persona-bg-transparent"
+    ) as HTMLButtonElement;
+    button.type = "button";
+    // 44x44 pointer target even though the glyph is 20px.
+    Object.assign(button.style, {
+      width: "44px",
+      height: "44px",
+      minWidth: "44px",
+      minHeight: "44px",
+      color: HEADER_THEME_CSS.actionIconColor,
+    } satisfies Partial<CSSStyleDeclaration>);
+    button.setAttribute("data-persona-history-toggle", "");
+    const icon = renderLucideIcon("history", "20px", "currentColor", 1.5);
+    if (icon) button.appendChild(icon);
+    button.addEventListener("click", () => {
+      if (!historyAvailable() || historyTurnBusy()) return;
+      if (historyVisible) closeHistory();
+      else void openHistory({ invoker: button });
+    });
+    return button;
+  };
+
+  const syncHistoryButton = (): void => {
+    if (!historyAvailable()) {
+      historyButton?.remove();
+      historyButton = null;
+      return;
+    }
+    if (!historyButton && header) {
+      historyButton = buildHistoryButton();
+      const insertBefore =
+        panelElements.clearChatButtonWrapper || panelElements.closeButtonWrapper;
+      if (insertBefore && insertBefore.parentNode === header) {
+        header.insertBefore(historyButton, insertBefore);
+      } else {
+        header.appendChild(historyButton);
+      }
+    }
+    if (!historyButton) return;
+    const busy = historyTurnBusy();
+    historyButton.disabled = busy;
+    historyButton.setAttribute("aria-disabled", busy ? "true" : "false");
+    const label = busy
+      ? historyShellCopy.openHistoryBusyLabel
+      : historyShellCopy.openHistoryLabel;
+    historyButton.setAttribute("aria-label", label);
+    historyButton.title = label;
+    // Rail/auto toggles a navigation region; panel navigates to a surface.
+    if ((config.features?.history?.presentation ?? "panel") === "panel") {
+      historyButton.removeAttribute("aria-expanded");
+      historyButton.removeAttribute("aria-controls");
+    } else {
+      historyButton.setAttribute("aria-expanded", historyVisible ? "true" : "false");
+      historyButton.setAttribute("aria-controls", historyRegionId);
+    }
+  };
+
+  /**
+   * With history available the visible start-over affordance becomes
+   * "New conversation" (`clearChat()` stays programmatic-only).
+   */
+  let clearChatRelabelled = false;
+  const syncClearChatAffordance = (): void => {
+    const button = panelElements.clearChatButton;
+    if (!button) return;
+    if (historyAvailable()) {
+      if (!clearChatRelabelled) {
+        clearChatDefaultLabel = button.getAttribute("aria-label") ?? "";
+        clearChatRelabelled = true;
+      }
+      button.setAttribute("aria-label", historyShellCopy.newConversationLabel);
+      button.title = historyShellCopy.newConversationLabel;
+      button.style.minWidth = "44px";
+      button.style.minHeight = "44px";
+      return;
+    }
+    // Only undo a relabel we performed; never clobber host-configured copy.
+    if (!clearChatRelabelled) return;
+    clearChatRelabelled = false;
+    if (clearChatDefaultLabel) {
+      button.setAttribute("aria-label", clearChatDefaultLabel);
+      button.title = clearChatDefaultLabel;
+    }
+  };
+
+  const syncHistoryChromeImpl = (): void => {
+    historyShellCopy = resolveHistoryShellCopy(config.features?.history?.copy);
+    syncHistoryButton();
+    syncClearChatAffordance();
+    syncEarlierMessagesPill();
+  };
+  historyChromeSync = syncHistoryChromeImpl;
+
+  // --- session-driven state ------------------------------------------------
+
+  historyStateHandler = (state) => {
+    historySessionState = state;
+    historyView?.setNewConversationRequired(
+      state.recovery === "new_conversation_required"
+    );
+    // Sending stays blocked through a destructive/continuity transition.
+    setComposerDisabled(state.sendBlocked || isStreaming);
+    syncEarlierMessagesPill();
+  };
+
+  historyNoticeHandler = (notice) => {
+    if (
+      notice.code === "history_continuity_reset" ||
+      notice.code === "conversation_deleted_recovered"
+    ) {
+      messageCache.clear();
+      resetAnchorState();
+      resumeAutoScroll();
+    }
+    announceHistory(notice.message);
+    historyView?.refresh();
+  };
+
+  installHistoryProvider();
+  syncHistoryChromeImpl();
+  destroyCallbacks.push(() => {
+    unsubscribeHistoryAvailability?.();
+    unsubscribeHistoryIdentity?.();
+    historyView?.destroy();
+    historyView = null;
+  });
+
   // Pre-initialize client session when in client token mode so feedback works
   // before the user sends their first message (e.g. on restored/persisted messages)
   if (config.clientToken) {
-    session.initClientSession().catch((err) => {
-      if (config.debug) {
-        // eslint-disable-next-line no-console
-        console.warn("[AgentWidget] Pre-init client session failed:", err);
-      }
-    });
+    session
+      .initClientSession()
+      .then(() => {
+        // Boot resume is authoritative only after reconciliation; the client
+        // already gated its init on `historyBootstrapReady`.
+        if (!historyAvailable()) return undefined;
+        return session.reconcileBootConversation({ scope: historyScope() });
+      })
+      .then(() => {
+        syncEarlierMessagesPill();
+      })
+      .catch((err) => {
+        if (config.debug) {
+          // eslint-disable-next-line no-console
+          console.warn("[AgentWidget] Pre-init client session failed:", err);
+        }
+      });
   }
 
   // Wire up optional SSE tap (host) + event stream buffer to capture SSE events
@@ -8255,7 +9179,17 @@ export const createAgentExperience = (
     });
     footerResizeObserver.observe(footer);
     destroyCallbacks.push(() => footerResizeObserver.disconnect());
+    // Rail/panel resolves against the host container, not the viewport.
+    const historyHostObserver = new ResizeObserver(() => {
+      syncHistoryPresentation();
+    });
+    historyHostObserver.observe(container);
+    destroyCallbacks.push(() => historyHostObserver.disconnect());
   }
+  ownerWindow.addEventListener("resize", syncHistoryPresentation);
+  destroyCallbacks.push(() =>
+    ownerWindow.removeEventListener("resize", syncHistoryPresentation)
+  );
 
   lastScrollTop = body.scrollTop;
   let lastBottomOffset = getScrollBottomOffset(body);
@@ -8466,6 +9400,17 @@ export const createAgentExperience = (
     if (!clearChatButton) return;
 
     clearChatButton.addEventListener("click", () => {
+      // With history available this affordance is "New conversation": a local
+      // view clear would leave the server record open and unreachable.
+      if (historyAvailable()) {
+        void startNewConversation().catch((error) => {
+          if (config.debug) {
+            // eslint-disable-next-line no-console
+            console.warn("[AgentWidget] New conversation failed:", error);
+          }
+        });
+        return;
+      }
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
       session.clearMessages();
       messageCache.clear();
@@ -8762,6 +9707,11 @@ export const createAgentExperience = (
       const previousToolCallDisplay = config.features?.toolCallDisplay;
       const previousReasoningDisplay = config.features?.reasoningDisplay;
       const previousStreamAnimationType = config.features?.streamAnimation?.type;
+      // History provider identity: enablement, eligibility, and advertised
+      // scopes are all resolved at construction, so a change rebuilds it.
+      const previousHistoryEnabled = config.features?.history?.enabled === true;
+      const previousIdentityProof = config.getIdentityProof;
+      const previousClientToken = config.clientToken;
       // One consistent recursive patch policy across the live controller and the
       // init handle. See utils/config-merge.ts for the replace-leaf list and
       // explicit-undefined reset semantics. The patch merges over the
@@ -9460,6 +10410,18 @@ export const createAgentExperience = (
       // Re-key the visitor store before any client rebuild sees the new config.
       syncVisitorStore();
       session.updateConfig(config);
+      if (
+        (config.features?.history?.enabled === true) !== previousHistoryEnabled ||
+        config.getIdentityProof !== previousIdentityProof ||
+        config.clientToken !== previousClientToken
+      ) {
+        closeHistory({ restoreFocus: false });
+        installHistoryProvider();
+      }
+      syncHistoryChromeImpl();
+      // Presentation may have flipped between panel and rail; the open view
+      // instance moves hosts rather than being recreated.
+      syncHistoryPresentation();
       renderMessagesWithPlugins(
         messagesWrapper,
         session.getMessages(),
@@ -10207,6 +11169,43 @@ export const createAgentExperience = (
     isEventStreamVisible(): boolean {
       return eventStreamVisible;
     },
+    listConversations(opts) {
+      return session.listConversations(opts);
+    },
+    openConversation(conversationId: string): Promise<void> {
+      return openHistoryConversation(conversationId);
+    },
+    startNewConversation(): Promise<void> {
+      return startNewConversation();
+    },
+    deleteConversation(conversationId: string): Promise<void> {
+      return deleteHistoryConversation(conversationId);
+    },
+    clearConversationHistory(opts) {
+      return clearConversationHistory(opts);
+    },
+    resetHistoryIdentity(): Promise<{ remoteRevocationConfirmed: boolean }> {
+      return resetHistoryIdentity();
+    },
+    getHistoryIdentityStatus(): HistoryIdentityStatus {
+      if (!historyProvider) {
+        return historyFeatureEnabled()
+          ? { state: "unavailable", reason: "ineligible_mode" }
+          : { state: "unavailable", reason: "history_disabled" };
+      }
+      return historyProvider.getIdentityStatus();
+    },
+    showHistory(opts): Promise<void> {
+      return openHistory({
+        ...(opts?.returnSurface ? { returnSurface: opts.returnSurface } : {}),
+      });
+    },
+    hideHistory(): void {
+      closeHistory();
+    },
+    isHistoryVisible(): boolean {
+      return historyVisible;
+    },
     showArtifacts(): void {
       if (!artifactsSidebarEnabled(config)) return;
       artifactsPaneUserHidden = false;
@@ -10503,6 +11502,27 @@ export const createAgentExperience = (
         window.removeEventListener("persona:hideEventStream", handleHideEvent);
       });
     }
+
+    // Show/hide only. Identity status stays on the instance-scoped controller
+    // bus so authentication state is never broadcast page-wide.
+    const handleShowHistory = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        void controller.showHistory();
+      }
+    };
+    const handleHideHistory = (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      if (!detail?.instanceId || detail.instanceId === instanceId) {
+        controller.hideHistory();
+      }
+    };
+    window.addEventListener("persona:showHistory", handleShowHistory);
+    window.addEventListener("persona:hideHistory", handleHideHistory);
+    destroyCallbacks.push(() => {
+      window.removeEventListener("persona:showHistory", handleShowHistory);
+      window.removeEventListener("persona:hideHistory", handleHideHistory);
+    });
 
     const handleShowArtifacts = (e: Event) => {
       const detail = (e as CustomEvent).detail;

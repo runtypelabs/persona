@@ -23,7 +23,6 @@ export {
 } from "./components/history-view/copy";
 export type {
   HistoryViewCopyInput,
-  HistoryViewExtraCopy,
   ResolvedHistoryViewCopy,
 } from "./components/history-view/copy";
 export type {

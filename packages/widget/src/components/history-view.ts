@@ -88,6 +88,11 @@ export interface HistoryViewHandle {
   element: HTMLElement;
   /** Re-fetch and re-render the list in place, preserving list/focus state. */
   refresh(): void;
+  /**
+   * Retarget the view when the shell moves it between hosts (rail <-> panel).
+   * The instance and all its state survive the move; only chrome changes.
+   */
+  setPresentation(presentation: HistoryViewPresentation): void;
   /** Keep the active-row indicator in sync when the shell changes conversation. */
   setActiveConversationId(conversationId: string | null): void;
   /** Enter/leave the post-deletion replacement-init recovery state. */
@@ -180,6 +185,7 @@ export function createHistoryView(
   let focusMenuOnRender = false;
   let destroyed = false;
   let listEpoch = 0;
+  let presentation = options.presentation;
   const rowErrors = new Map<string, { message: string; retry: () => void }>();
   let actionError: { message: string; retry: () => void } | null = null;
 
@@ -804,6 +810,19 @@ export function createHistoryView(
     element,
     refresh: () => {
       void loadList("refresh");
+    },
+    setPresentation: (next) => {
+      if (next === presentation) return;
+      presentation = next;
+      const rail = next === "rail";
+      element.classList.toggle("persona-history-view--panel", !rail);
+      element.classList.toggle("persona-history-view--rail", rail);
+      element.setAttribute("data-persona-history-presentation", next);
+      backButton.setAttribute(
+        "aria-label",
+        rail ? copy.closeLabel : copy.backLabel
+      );
+      backButton.replaceChildren(historyIcon(rail ? "x" : "arrow-left"));
     },
     setActiveConversationId: (conversationId) => {
       if (activeConversationId === conversationId) return;

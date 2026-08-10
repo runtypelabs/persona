@@ -22,7 +22,6 @@ export type {
   HistoryViewPresentation,
   HistoryViewPendingAction,
   HistoryViewCopyInput,
-  HistoryViewExtraCopy,
   ResolvedHistoryViewCopy,
   HistoryListState,
   HistoryListErrorReason,

@@ -1225,6 +1225,44 @@ export type AgentWidgetControllerEventMap = {
   "stream:resuming": { executionId: string; after: string; attempt: number };
   /** The durable turn resumed and reached its terminal after a reconnect. */
   "stream:resumed": { executionId: string; after: string };
+  /**
+   * History (Messages) surface events. Payloads are sanitized: never a visitor
+   * token, identity proof, visitor/end-user id, or backend diagnostic string.
+   */
+  "history:opened": {
+    presentation: ResolvedHistoryPresentation;
+    returnSurface: HistoryReturnSurface;
+    timestamp: number;
+  };
+  "history:closed": { returnSurface: HistoryReturnSurface; timestamp: number };
+  "history:conversationOpened": {
+    conversationId: string;
+    scope: HistoryScope;
+    timestamp: number;
+  };
+  "history:conversationDeleted": {
+    conversationId: string;
+    scope: HistoryScope;
+    /** The deleted record was the open one, so the transcript was replaced. */
+    wasActive: boolean;
+    timestamp: number;
+  };
+  "history:cleared": {
+    deleted: number;
+    scope: HistoryScope;
+    /** `null` is a deliberate headless client-token-wide delete. */
+    targetId: string | null;
+    timestamp: number;
+  };
+  "history:identityReset": {
+    remoteRevocationConfirmed: boolean;
+    timestamp: number;
+  };
+  /** Deduped: emitted only when the discriminated state or reason changes. */
+  "history:identityStatusChanged": {
+    status: HistoryIdentityStatus;
+    timestamp: number;
+  };
 };
 
 /**
@@ -2591,6 +2629,84 @@ export interface AgentWidgetHistoryCopy {
   proofNotAdmittedDescription?: string;
   /** Label for the action that retries identity resolution. */
   retryIdentityLabel?: string;
+
+  // --- shell chrome (rendered before/around the lazy Messages chunk) ---------
+
+  /** Accessible name of the header control that opens history. */
+  openHistoryLabel?: string;
+  /** Accessible name of that control while a turn is streaming or resuming. */
+  openHistoryBusyLabel?: string;
+  /** Least-destructive action in every history confirmation dialog. */
+  confirmCancelLabel?: string;
+  /** Heading of the delete-one confirmation. */
+  deleteConversationConfirmTitle?: string;
+  /** Confirming action of the delete-one confirmation. */
+  deleteConversationConfirmLabel?: string;
+  /** Heading of the delete-all confirmation. */
+  clearHistoryConfirmTitle?: string;
+  /** Confirming action of the delete-all confirmation. */
+  clearHistoryConfirmLabel?: string;
+  /** Delete-all body used when the resolved scope is the signed-in user. */
+  clearHistoryVerifiedConfirm?: string;
+  /** Heading of the forget-this-device confirmation. */
+  resetIdentityConfirmTitle?: string;
+  /** Confirming action of the forget-this-device confirmation. */
+  resetIdentityConfirmLabel?: string;
+
+  // --- Messages view (resolved inside the lazy chunk) ------------------------
+
+  /** Panel back control; returns to the surface that opened Messages. */
+  backLabel?: string;
+  /** Rail close control. */
+  closeLabel?: string;
+  /** Accessible status while the first page loads. */
+  loadingLabel?: string;
+  /** Label of the paging action below the last group. */
+  loadMoreLabel?: string;
+  /** Label of that action while its page is in flight. */
+  loadingMoreLabel?: string;
+  /** Accessible name of the per-row overflow trigger and its menu. */
+  rowActionsLabel?: string;
+  /** Delete item inside the per-row overflow menu. */
+  deleteConversationLabel?: string;
+  /** Label of the destructive delete-all action. */
+  clearHistoryLabel?: string;
+  /** Label of the destructive forget-this-device action. */
+  resetIdentityLabel?: string;
+  /** Row message count. `{count}` placeholder. */
+  messageCountLabel?: string;
+  /** Row message count for exactly one message. */
+  messageCountLabelOne?: string;
+  /** Announced after a single conversation was deleted. */
+  conversationRemovedNotice?: string;
+  /** Announced after every conversation in scope was deleted. */
+  historyClearedNotice?: string;
+  /** Heading shown when history is unavailable for this surface. */
+  unavailableTitle?: string;
+  /** Body text shown when history is unavailable for this surface. */
+  unavailableDescription?: string;
+  /** Heading of the post-deletion replacement-init recovery state. */
+  newConversationRequiredTitle?: string;
+  /** Body text of the post-deletion replacement-init recovery state. */
+  newConversationRequiredDescription?: string;
+  /** Rate-limited wait guidance. `{seconds}` placeholder. */
+  rateLimitedWaitDescription?: string;
+  /** Row-adjacent error after a failed open. */
+  openFailedLabel?: string;
+  /** Row-adjacent error after a failed delete. */
+  deleteFailedLabel?: string;
+  /** Relative time for the most recent bucket. */
+  relativeNow?: string;
+  /** Relative time in minutes. `{value}` placeholder. */
+  relativeMinutes?: string;
+  /** Relative time in hours. `{value}` placeholder. */
+  relativeHours?: string;
+  /** Relative time in days. `{value}` placeholder. */
+  relativeDays?: string;
+  /** Relative time in weeks. `{value}` placeholder. */
+  relativeWeeks?: string;
+  /** Relative time in years. `{value}` placeholder. */
+  relativeYears?: string;
 }
 
 /**
@@ -2625,6 +2741,16 @@ export interface AgentWidgetHistoryFeature {
 
 /** Resolved scope for a logical history operation. */
 export type HistoryScope = "browser" | "verified-user";
+
+/** `presentation` after it has been resolved against the host container width. */
+export type ResolvedHistoryPresentation = "panel" | "rail";
+
+/**
+ * The surface Messages returns to on back/Escape. `"home"` only when a Home
+ * Screen composition opened it; the core header button always records
+ * `"conversation"`.
+ */
+export type HistoryReturnSurface = "home" | "conversation";
 
 /**
  * Evidence-based history identity state. Never inferred from the mere presence

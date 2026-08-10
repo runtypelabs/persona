@@ -1,0 +1,564 @@
+// @vitest-environment jsdom
+
+/**
+ * Shell wiring for the visitor conversation history surface
+ * (`docs/visitor-history-implementation-plan.md` D7): header button, panel/rail
+ * hosts, navigation/transition table, open flow, prepend, and confirmations.
+ *
+ * Runs against the in-memory demo provider through the internal registry, so no
+ * transport or credential plumbing is involved.
+ */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { createAgentExperience } from "./ui";
+import { createHistoryView } from "./components/history-view";
+import { setHistoryViewLoader } from "./history-view-loader";
+import { setHistoryProviderFactory } from "./internal/history-provider-registry";
+import {
+  createDemoHistoryProvider,
+  type DemoHistoryConversationSeed,
+  type DemoHistoryProvider,
+  type DemoHistoryProviderOptions,
+} from "./internal/demo-history-provider";
+import type { AgentWidgetPlugin } from "./plugins/types";
+
+const SEEDS: DemoHistoryConversationSeed[] = [
+  {
+    id: "conv-a",
+    title: "Order status",
+    targetId: null,
+    messages: [
+      { id: "a1", role: "user", content: "where is my order" },
+      { id: "a2", role: "assistant", content: "it ships tomorrow" },
+      { id: "a3", role: "user", content: "thanks" },
+    ],
+  },
+  {
+    id: "conv-b",
+    title: "Refund request",
+    targetId: null,
+    messages: [
+      { id: "b1", role: "user", content: "i need a refund" },
+      { id: "b2", role: "assistant", content: "started your refund" },
+    ],
+  },
+];
+
+const mounts: HTMLElement[] = [];
+const controllers: ReturnType<typeof createAgentExperience>[] = [];
+
+const flush = async (times = 12) => {
+  for (let i = 0; i < times; i += 1) {
+    // eslint-disable-next-line no-await-in-loop
+    await Promise.resolve();
+  }
+};
+
+type SetupOptions = {
+  config?: Record<string, unknown>;
+  provider?: DemoHistoryProviderOptions;
+  /** Replaces the demo provider entirely (e.g. to add `resetDevice`). */
+  factory?: () => DemoHistoryProvider;
+  historyFeature?: Record<string, unknown> | null;
+};
+
+const setup = (options: SetupOptions = {}) => {
+  const provider =
+    options.factory?.() ??
+    createDemoHistoryProvider({ conversations: SEEDS, ...options.provider });
+  setHistoryProviderFactory(() => provider);
+  const mount = document.createElement("div");
+  document.body.appendChild(mount);
+  mounts.push(mount);
+  const historyFeature =
+    options.historyFeature === undefined ? { enabled: true } : options.historyFeature;
+  const controller = createAgentExperience(mount, {
+    apiUrl: "https://api.example.com/chat",
+    launcher: { enabled: false },
+    persistState: false,
+    suggestionChips: [],
+    ...(historyFeature ? { features: { history: historyFeature } } : {}),
+    ...options.config,
+  } as unknown as Parameters<typeof createAgentExperience>[1]);
+  controllers.push(controller);
+  return { mount, controller, provider };
+};
+
+const historyButton = (mount: HTMLElement) =>
+  mount.querySelector<HTMLButtonElement>("[data-persona-history-toggle]");
+const historyRoot = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>(".persona-history-view");
+const bodyOf = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+const footerOf = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>(".persona-widget-footer") ??
+  mount.querySelector<HTMLElement>("[data-test-gate]")!;
+const rowOf = (mount: HTMLElement, id: string) =>
+  mount.querySelector<HTMLButtonElement>(`[data-persona-history-conversation="${id}"]`);
+const dialogOf = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
+
+/** Give the container a rail-capable width; jsdom reports 0 for everything. */
+const setContainerWidth = (mount: HTMLElement, width: number) => {
+  const container = mount.querySelector<HTMLElement>(".persona-widget-container")!;
+  Object.defineProperty(container, "clientWidth", {
+    configurable: true,
+    get: () => width,
+  });
+  return container;
+};
+
+const openHistoryUI = async (mount: HTMLElement) => {
+  historyButton(mount)!.click();
+  await flush();
+};
+
+describe("history shell", () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+    // The loader's production path is a sibling-URL / external-subpath import.
+    setHistoryViewLoader(async () => ({ createHistoryView }));
+  });
+
+  afterEach(() => {
+    setHistoryProviderFactory(null);
+    controllers.splice(0).forEach((controller) => {
+      try {
+        controller.destroy();
+      } catch {
+        /* already destroyed */
+      }
+    });
+    mounts.splice(0).forEach((mount) => mount.remove());
+    document.body.innerHTML = "";
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  describe("header button", () => {
+    it("renders a 44x44 Messages control before the close affordance", () => {
+      const { mount } = setup();
+      const button = historyButton(mount);
+      expect(button).not.toBeNull();
+      expect(button!.getAttribute("aria-label")).toBe("Messages");
+      expect(button!.style.minWidth).toBe("44px");
+      expect(button!.style.minHeight).toBe("44px");
+      expect(button!.querySelector("svg")).not.toBeNull();
+    });
+
+    it("does not render when the feature is disabled", () => {
+      const { mount } = setup({ historyFeature: { enabled: false } });
+      expect(historyButton(mount)).toBeNull();
+    });
+
+    it("does not render without a provider", () => {
+      setHistoryProviderFactory(null);
+      const mount = document.createElement("div");
+      document.body.appendChild(mount);
+      mounts.push(mount);
+      const controller = createAgentExperience(mount, {
+        apiUrl: "https://api.example.com/chat",
+        launcher: { enabled: false },
+        persistState: false,
+        features: { history: { enabled: true } },
+      } as unknown as Parameters<typeof createAgentExperience>[1]);
+      controllers.push(controller);
+      expect(historyButton(mount)).toBeNull();
+    });
+
+    it("relabels the visible start-over affordance to New conversation", () => {
+      const { mount } = setup({
+        config: { launcher: { enabled: false, clearChat: { enabled: true } } },
+      });
+      const clear = mount.querySelector<HTMLButtonElement>(
+        'button[aria-label="New conversation"]'
+      );
+      expect(clear).not.toBeNull();
+      expect(clear).not.toBe(historyButton(mount));
+    });
+
+    it("mounts and unmounts through controller.update()", () => {
+      const { mount, controller } = setup({ historyFeature: { enabled: false } });
+      expect(historyButton(mount)).toBeNull();
+      controller.update({ features: { history: { enabled: true } } });
+      expect(historyButton(mount)).not.toBeNull();
+      controller.update({ features: { history: { enabled: false } } });
+      expect(historyButton(mount)).toBeNull();
+    });
+
+    it("removes an already-rendered button when availability degrades", () => {
+      let notify: ((available: boolean) => void) | null = null;
+      const base = createDemoHistoryProvider({ conversations: SEEDS });
+      const { mount } = setup({
+        factory: () =>
+          Object.assign(Object.create(Object.getPrototypeOf(base)), base, {
+            subscribeAvailability: (callback: (available: boolean) => void) => {
+              notify = callback;
+              return () => {
+                notify = null;
+              };
+            },
+          }) as DemoHistoryProvider,
+      });
+      expect(historyButton(mount)).not.toBeNull();
+      notify!(false);
+      expect(historyButton(mount)).toBeNull();
+    });
+  });
+
+  describe("panel host", () => {
+    it("hides and inerts the transcript and composer, then restores them", async () => {
+      const { mount } = setup();
+      const body = bodyOf(mount);
+      const footer = footerOf(mount);
+
+      await openHistoryUI(mount);
+      expect(historyRoot(mount)).not.toBeNull();
+      expect(body.style.display).toBe("none");
+      expect(body.getAttribute("aria-hidden")).toBe("true");
+      expect(body.hasAttribute("inert")).toBe(true);
+      expect(footer.hidden).toBe(true);
+      expect(footer.getAttribute("aria-hidden")).toBe("true");
+      expect(footer.hasAttribute("inert")).toBe(true);
+
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="close"]')!
+        .click();
+      await flush();
+
+      expect(historyRoot(mount)).toBeNull();
+      expect(body.style.display).not.toBe("none");
+      expect(body.hasAttribute("inert")).toBe(false);
+      expect(body.hasAttribute("aria-hidden")).toBe(false);
+      expect(footer.hidden).toBe(false);
+      expect(footer.hasAttribute("inert")).toBe(false);
+    });
+
+    it("re-applies hidden/inert to a replacement composer footer", async () => {
+      let requestRender: (() => void) | null = null;
+      let gated = true;
+      const plugin: AgentWidgetPlugin = {
+        id: "gate",
+        renderComposer: (ctx) => {
+          requestRender = ctx.requestRender;
+          if (!gated) return null;
+          const footer = document.createElement("div");
+          footer.setAttribute("data-test-gate", "");
+          return footer;
+        },
+      };
+      const { mount } = setup({ config: { plugins: [plugin] } });
+      await openHistoryUI(mount);
+      const first = mount.querySelector<HTMLElement>("[data-test-gate]")!;
+      expect(first.hidden).toBe(true);
+
+      gated = false;
+      requestRender!();
+      await flush();
+
+      const replacement = footerOf(mount);
+      expect(replacement).not.toBe(first);
+      expect(replacement.hidden).toBe(true);
+      expect(replacement.getAttribute("aria-hidden")).toBe("true");
+      expect(replacement.hasAttribute("inert")).toBe(true);
+    });
+
+    it("suppresses the scroll-to-bottom affordance while the panel is open", async () => {
+      const { mount } = setup();
+      await openHistoryUI(mount);
+      const jump = mount.querySelector<HTMLElement>("[data-persona-scroll-to-bottom]");
+      expect(jump === null || jump.style.display === "none").toBe(true);
+    });
+  });
+
+  describe("rail host", () => {
+    const railSetup = async () => {
+      const result = setup({ historyFeature: { enabled: true, presentation: "rail" } });
+      setContainerWidth(result.mount, 900);
+      await openHistoryUI(result.mount);
+      return result;
+    };
+
+    it("keeps the transcript and composer operable beside the navigation", async () => {
+      const { mount } = await railSetup();
+      const rail = mount.querySelector<HTMLElement>(".persona-history-rail-host");
+      expect(rail).not.toBeNull();
+      expect(rail!.contains(historyRoot(mount))).toBe(true);
+      const body = bodyOf(mount);
+      expect(body.style.display).not.toBe("none");
+      expect(body.hasAttribute("inert")).toBe(false);
+      expect(footerOf(mount).hidden).toBe(false);
+      expect(historyButton(mount)!.getAttribute("aria-expanded")).toBe("true");
+    });
+
+    it("stays open on selection and marks the active row", async () => {
+      const { mount } = await railSetup();
+      rowOf(mount, "conv-a")!.click();
+      await flush(20);
+      expect(historyRoot(mount)).not.toBeNull();
+      expect(rowOf(mount, "conv-a")!.getAttribute("aria-current")).toBe("page");
+    });
+
+    it("closes on Escape from inside the rail but not from the transcript", async () => {
+      const { mount } = await railSetup();
+      const escape = () =>
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true });
+      bodyOf(mount).dispatchEvent(escape());
+      await flush();
+      expect(historyRoot(mount)).not.toBeNull();
+
+      historyRoot(mount)!.dispatchEvent(escape());
+      await flush();
+      expect(historyRoot(mount)).toBeNull();
+      expect(document.activeElement).toBe(historyButton(mount));
+    });
+
+    it("collapses to panel below 720px while keeping the same view element", async () => {
+      const { mount, controller } = await railSetup();
+      const view = historyRoot(mount)!;
+      setContainerWidth(mount, 500);
+      controller.update({});
+      await flush();
+      expect(historyRoot(mount)).toBe(view);
+      expect(mount.querySelector(".persona-history-rail-host")).toBeNull();
+      expect(view.getAttribute("data-persona-history-presentation")).toBe("panel");
+      expect(bodyOf(mount).style.display).toBe("none");
+    });
+
+    it("auto keeps a floating launcher on panel at any width", async () => {
+      const { mount } = setup({
+        historyFeature: { enabled: true, presentation: "auto" },
+        config: { launcher: { enabled: true, autoExpand: true } },
+      });
+      setContainerWidth(mount, 1200);
+      await openHistoryUI(mount);
+      expect(mount.querySelector(".persona-history-rail-host")).toBeNull();
+      expect(historyRoot(mount)!.getAttribute("data-persona-history-presentation")).toBe(
+        "panel"
+      );
+    });
+  });
+
+  describe("navigation and transitions", () => {
+    it("records the conversation return surface and restores invoker focus", async () => {
+      const { mount, controller } = setup();
+      const closed: unknown[] = [];
+      controller.on("history:closed", (payload) => closed.push(payload));
+      await openHistoryUI(mount);
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="close"]')!
+        .click();
+      await flush();
+      expect(closed).toEqual([
+        expect.objectContaining({ returnSurface: "conversation" }),
+      ]);
+      expect(document.activeElement).toBe(historyButton(mount));
+    });
+
+    it("labels the panel back control for the no-Home fallback", async () => {
+      const { mount } = setup();
+      await openHistoryUI(mount);
+      const back = mount.querySelector<HTMLButtonElement>(
+        '[data-persona-history-focus="close"]'
+      )!;
+      expect(back.getAttribute("aria-label")).toBe("Back to conversation");
+      expect(document.activeElement).toBe(back);
+    });
+
+    it("keeps Messages open and the prior transcript intact when an open fails", async () => {
+      const { mount, provider } = setup();
+      provider.setFailure("getPage", { code: "unavailable" });
+      await openHistoryUI(mount);
+      rowOf(mount, "conv-a")!.click();
+      await flush(20);
+      expect(historyRoot(mount)).not.toBeNull();
+      expect(bodyOf(mount).querySelectorAll("[data-message-id]").length).toBe(0);
+    });
+
+    it("disables the button with an accessible explanation while a turn streams", async () => {
+      const hanging = vi.fn().mockImplementation((_url: string, init: any) => {
+        const signal = init.signal as AbortSignal;
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted")));
+        });
+      });
+      const originalFetch = global.fetch;
+      global.fetch = hanging as unknown as typeof fetch;
+      try {
+        const { mount, controller } = setup();
+        controller.submitMessage("hello");
+        await flush(20);
+        const button = historyButton(mount)!;
+        expect(button.disabled).toBe(true);
+        expect(button.getAttribute("aria-disabled")).toBe("true");
+        expect(button.getAttribute("aria-label")).toBe(
+          "Messages, available once the reply finishes"
+        );
+      } finally {
+        global.fetch = originalFetch;
+      }
+    });
+  });
+
+  describe("open flow", () => {
+    it("hydrates the transcript and closes the panel only after the commit", async () => {
+      const { mount, provider } = setup({ provider: { latencyMs: 5 } });
+      historyButton(mount)!.click();
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      await flush(20);
+      rowOf(mount, "conv-a")!.click();
+      // Still mid-flight: the panel must not close before the activation.
+      expect(historyRoot(mount)).not.toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      await flush(20);
+      expect(historyRoot(mount)).toBeNull();
+      expect(provider.getActiveConversationId()).toBe("conv-a");
+      const ids = Array.from(
+        bodyOf(mount).querySelectorAll("[data-message-id]")
+      ).map((node) => node.getAttribute("data-message-id"));
+      expect(ids).toEqual(["a1", "a2", "a3"]);
+    });
+
+  });
+
+  describe("show earlier messages", () => {
+    it("appears with a cursor and corrects scroll after the prepend", async () => {
+      const long: DemoHistoryConversationSeed = {
+        id: "conv-long",
+        title: "Long thread",
+        targetId: null,
+        messages: Array.from({ length: 8 }, (_value, index) => ({
+          id: `m${index}`,
+          role: index % 2 === 0 ? ("user" as const) : ("assistant" as const),
+          content: `message ${index}`,
+        })),
+      };
+      const { mount, controller } = setup({
+        provider: { conversations: [long], pageSize: 3 },
+      });
+      await controller.openConversation("conv-long");
+      await flush(20);
+
+      const pill = mount.querySelector<HTMLButtonElement>(
+        "[data-persona-history-earlier]"
+      );
+      expect(pill).not.toBeNull();
+      expect(pill!.textContent).toBe("Show earlier messages");
+
+      const body = bodyOf(mount);
+      let height = 300;
+      Object.defineProperty(body, "scrollHeight", {
+        configurable: true,
+        get: () => height,
+      });
+      body.scrollTop = 0;
+      // The prepend grows the transcript above the reader's position, so the
+      // correction must add exactly the height delta back to scrollTop.
+      pill!.click();
+      height = 500;
+      await flush(30);
+
+      expect(body.scrollTop).toBe(200);
+      const ids = Array.from(body.querySelectorAll("[data-message-id]")).map((node) =>
+        node.getAttribute("data-message-id")
+      );
+      expect(ids.slice(0, 3)).toEqual(["m2", "m3", "m4"]);
+    });
+
+    it("disappears once the transcript start is reached", async () => {
+      const { mount, controller } = setup();
+      await controller.openConversation("conv-a");
+      await flush(20);
+      expect(
+        mount.querySelector("[data-persona-history-earlier]")
+      ).toBeNull();
+    });
+  });
+
+  describe("destructive confirmations", () => {
+    const openRowMenu = async (mount: HTMLElement, id: string) => {
+      mount
+        .querySelector<HTMLButtonElement>(
+          `[data-persona-history-focus="menu:${id}"]`
+        )!
+        .click();
+      await flush();
+    };
+
+    it("confirms a delete with a focus-trapped alert dialog", async () => {
+      const { mount, provider } = setup();
+      await openHistoryUI(mount);
+      await openRowMenu(mount, "conv-a");
+      mount
+        .querySelector<HTMLButtonElement>(
+          '[data-persona-history-focus="menu-item:conv-a"]'
+        )!
+        .click();
+      await flush();
+
+      const dialog = dialogOf();
+      expect(dialog).not.toBeNull();
+      expect(dialog!.getAttribute("aria-modal")).toBe("true");
+      expect(dialog!.hasAttribute("aria-labelledby")).toBe(true);
+      expect(dialog!.hasAttribute("aria-describedby")).toBe(true);
+      // Least destructive action holds focus first.
+      expect(document.activeElement).toBe(
+        dialog!.querySelector(".persona-history-confirm__cancel")
+      );
+
+      dialog!
+        .querySelector<HTMLButtonElement>(".persona-history-confirm__confirm")!
+        .click();
+      await flush(20);
+      expect(dialogOf()).toBeNull();
+      expect(provider.getConversationIds()).not.toContain("conv-a");
+      expect(rowOf(mount, "conv-a")).toBeNull();
+    });
+
+    it("cancels on Escape and restores focus without deleting", async () => {
+      const { mount, provider } = setup();
+      await openHistoryUI(mount);
+      await openRowMenu(mount, "conv-b");
+      const trigger = mount.querySelector<HTMLElement>(
+        '[data-persona-history-focus="menu-item:conv-b"]'
+      )!;
+      trigger.focus();
+      trigger.click();
+      await flush();
+
+      const dialog = dialogOf()!;
+      dialog.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      );
+      await flush(20);
+      expect(dialogOf()).toBeNull();
+      expect(provider.getConversationIds()).toContain("conv-b");
+      expect(rowOf(mount, "conv-b")).not.toBeNull();
+    });
+
+    it("uses browser-scope copy for delete all", async () => {
+      const { mount } = setup();
+      await openHistoryUI(mount);
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="clear"]')!
+        .click();
+      await flush();
+      const dialog = dialogOf()!;
+      expect(
+        dialog.querySelector(".persona-history-confirm__description")!.textContent
+      ).toContain("on this browser");
+      dialog
+        .querySelector<HTMLButtonElement>(".persona-history-confirm__cancel")!
+        .click();
+      await flush();
+    });
+
+    it("hides forget-this-device when the provider cannot reset", async () => {
+      const { mount } = setup();
+      await openHistoryUI(mount);
+      expect(
+        mount.querySelector('[data-persona-history-focus="reset"]')
+      ).toBeNull();
+    });
+  });
+});
