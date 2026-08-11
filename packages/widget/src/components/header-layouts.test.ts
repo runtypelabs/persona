@@ -42,6 +42,28 @@ describe("minimal header trailing actions", () => {
     expect(onAction).toHaveBeenCalledWith("home");
   });
 
+  it("keeps the close button transparent so the UA button fill never shows", () => {
+    const elements = build({ layout: "minimal" });
+    expect(elements.closeButton.className).toContain("persona-bg-transparent");
+    expect(elements.closeButton.className).toContain("hover:persona-bg-gray-100");
+    expect(elements.closeButton.style.backgroundColor).toBe("");
+  });
+
+  it("applies closeButtonBackgroundColor instead of the transparent default", () => {
+    const elements = buildMinimalHeader({
+      config: {
+        apiUrl: "https://example.com/api",
+        launcher: { closeButtonBackgroundColor: "red" },
+      },
+      showClose: true,
+      onClose: () => {},
+      layoutHeaderConfig: { layout: "minimal" },
+    });
+    expect(elements.closeButton.style.backgroundColor).toBe("red");
+    expect(elements.closeButton.className).not.toContain("persona-bg-transparent");
+    expect(elements.closeButton.className).not.toContain("hover:persona-bg-gray-100");
+  });
+
   it("still ignores trailingActions when titleMenu is configured", () => {
     const elements = build({
       layout: "minimal",

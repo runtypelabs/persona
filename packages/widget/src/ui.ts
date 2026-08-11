@@ -8230,8 +8230,10 @@ export const createAgentExperience = (
       historyButton = buildHistoryButton();
       const insertBefore =
         panelElements.clearChatButtonWrapper || panelElements.closeButtonWrapper;
-      if (insertBefore && insertBefore.parentNode === header) {
-        header.insertBefore(historyButton, insertBefore);
+      // Layouts may parent these wrappers in a trailing cluster rather than
+      // the header itself; insert wherever they live so close stays outermost.
+      if (insertBefore?.parentNode && header.contains(insertBefore)) {
+        insertBefore.parentNode.insertBefore(historyButton, insertBefore);
       } else {
         header.appendChild(historyButton);
       }

@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, cx } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { createDropdownMenu } from "../utils/dropdown";
 import { createComboButton } from "../utils/buttons";
@@ -207,10 +207,19 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   const closeButtonSize = launcher.closeButtonSize ?? "32px";
   const closeButtonWrapper = createElement("div", "");
 
+  // Same background precedence as createCloseButton: without the transparent
+  // class the UA buttonface fill shows through the rounded mask.
   const closeButton = createElement(
     "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
+    cx(
+      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-cursor-pointer persona-border-none",
+      !launcher.closeButtonBackgroundColor &&
+        "persona-bg-transparent hover:persona-bg-gray-100"
+    )
   ) as HTMLButtonElement;
+  if (launcher.closeButtonBackgroundColor) {
+    closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
+  }
   closeButton.style.height = closeButtonSize;
   closeButton.style.width = closeButtonSize;
   closeButton.type = "button";

@@ -161,6 +161,22 @@ describe("history shell", () => {
       expect(button!.querySelector("svg")).not.toBeNull();
     });
 
+    it("joins the minimal layout's trailing cluster before the close control", () => {
+      const { mount } = setup({
+        config: { layout: { header: { layout: "minimal" } } },
+      });
+      const button = historyButton(mount)!;
+      const closeWrapper = mount.querySelector<HTMLButtonElement>(
+        'button[aria-label="Close chat"]'
+      )!.parentElement!;
+      // Same cluster, close outermost.
+      expect(button.parentElement).toBe(closeWrapper.parentElement);
+      expect(
+        button.compareDocumentPosition(closeWrapper) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    });
+
     it("does not render when the feature is disabled", () => {
       const { mount } = setup({ historyFeature: { enabled: false } });
       expect(historyButton(mount)).toBeNull();
