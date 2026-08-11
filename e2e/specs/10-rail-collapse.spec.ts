@@ -10,7 +10,9 @@ const focusRegion = (page: Page): Promise<string> =>
   page.evaluate(() => {
     const active = document.activeElement as HTMLElement | null;
     if (!active || active === document.body) return "none";
-    if (active.closest(".persona-history-view")) return "view";
+    // Panel hosts the bar's contents in the shell header: still Messages.
+    if (active.closest(".persona-history-view, .persona-history-header-host"))
+      return "view";
     if (active.closest(".persona-widget-footer")) return "footer";
     if (active.closest("#persona-scroll-container")) return "transcript";
     return "outside";
@@ -65,6 +67,11 @@ test("crossing 720px moves the open view without losing state or focus", async (
   // List state, pending state and focus all survived the host move.
   await expect(page.locator(sel.row)).toHaveCount(rowCount);
   await expect(page.locator(sel.rowFor(rowId!))).toHaveAttribute("aria-busy", "true");
+  // Panel owns the bar: its contents move into the shell header, once.
+  await expect(page.locator(`${sel.shellHeader} ${sel.headerHost} ${sel.topbar}`)).toHaveCount(
+    1
+  );
+  await expect(page.locator(`${sel.view} ${sel.topbar}`)).toHaveCount(0);
   // Focus ownership stays inside Messages. Re-parenting a focused node blurs it
   // in every engine, so the shell's contract is that focus lands back on the
   // view's entry control rather than escaping to the body or into the now-inert
@@ -81,4 +88,8 @@ test("crossing 720px moves the open view without losing state or focus", async (
   );
   await expect(page.locator(sel.view)).toHaveAttribute("data-e2e-mark", "original-view");
   await expect(page.locator(sel.row)).toHaveCount(rowCount);
+  // The rail re-adopts its bar and the shell header is handed back intact.
+  await expect(page.locator(`${sel.view} ${sel.topbar}`)).toHaveCount(1);
+  await expect(page.locator(sel.headerHost)).toHaveCount(0);
+  await expect(page.locator(sel.suppressed)).toHaveCount(0);
 });

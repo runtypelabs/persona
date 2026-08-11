@@ -15,6 +15,11 @@ export const sel = {
   state: "[data-persona-history-state]",
   transcript: "#persona-scroll-container",
   footer: ".persona-widget-footer",
+  shellHeader: '[data-persona-theme-zone="header"]',
+  // In panel presentation the bar's contents are hosted in the shell header.
+  headerHost: ".persona-history-header-host",
+  topbar: ".persona-history-topbar",
+  suppressed: "[data-persona-history-suppressed]",
   composerInput: ".persona-widget-footer textarea, .persona-widget-footer input[type='text']",
   bubble: "[data-message-id]",
   earlier: "[data-persona-history-earlier]",

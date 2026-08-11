@@ -6,7 +6,9 @@
  *
  * Every rule is scoped under `.persona-history-view` (and interactive elements
  * additionally by tag), so demo/host resets such as `[data-persona-root] h2`
- * cannot outrank a single-class widget rule.
+ * cannot outrank a single-class widget rule. The one exception is the
+ * "shell-hosted top bar" block at the end: those nodes live in the widget's own
+ * header, outside the view, so their selectors are doubled up instead.
  *
  * History-specific custom properties, all with a themed fallback chain:
  *   --persona-history-surface-bg    list/background surface
@@ -20,9 +22,14 @@
  *   --persona-history-focus-ring    focus-visible outline color
  *   --persona-history-slide         entrance/exit horizontal travel
  *   --persona-history-row-min-height / --persona-history-topbar-min-height
+ *
+ * Section notes are JS comments between concatenated literals, never CSS
+ * comments inside them: the chunk is at its size cap and only JS comments are
+ * minified away. Backticks in a note would terminate the literal.
  */
 
-export const HISTORY_VIEW_CSS = `
+export const HISTORY_VIEW_CSS =
+  `
 .persona-history-view {
   --persona-history-surface-bg: var(--persona-surface, #ffffff);
   --persona-history-topbar-bg: var(--persona-header-bg, var(--persona-surface, #ffffff));
@@ -56,24 +63,21 @@ export const HISTORY_VIEW_CSS = `
 .persona-history-view *::after {
   box-sizing: border-box;
 }
-/* In-panel navigation, not a sheet: only the body slides in from the trailing
-   edge (matching the back arrow), so the top bar arrives in place and reads as
-   persistent chrome. The mirrored exit is playExit() in history-view.ts. */
-.persona-history-view--enter {
-  animation: persona-history-enter 180ms cubic-bezier(0, 0, 0.2, 1) both;
-}
-.persona-history-view--enter .persona-history-body {
+` +
+  /* In-panel navigation, not a sheet: only the body moves, so the bar is never
+     animated or replaced. The mirrored exit is playExit() in history-view.ts. */
+  `.persona-history-view--enter .persona-history-body {
   animation: persona-history-enter-body 180ms cubic-bezier(0, 0, 0.2, 1) both;
 }
-@keyframes persona-history-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
 @keyframes persona-history-enter-body {
-  from { transform: translateX(var(--persona-history-slide)); }
-  to { transform: none; }
+  from { opacity: 0; transform: translateX(var(--persona-history-slide)); }
+  to { opacity: 1; transform: none; }
 }
-.persona-history-view .persona-history-sr-only {
+` +
+  /* Ambient identity states collapse to the caption above the list; the sentence
+     stays in the accessibility tree for its aria-describedby. */
+  `.persona-history-view .persona-history-sr-only,
+.persona-history-view .persona-history-scope-alert[data-persona-history-scope-tone="ambient"] {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -86,62 +90,61 @@ export const HISTORY_VIEW_CSS = `
   border: 0;
 }
 
-/* --- top bar ------------------------------------------------------------ */
-.persona-history-view .persona-history-topbar {
+` +
+  /* --- top bar ------------------------------------------------------------ */
+  /* --shell = the same bar hosted in the widget's own header (block below). */
+  `.persona-history-view .persona-history-topbar,
+.persona-history-topbar.persona-history-topbar--shell {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 4px;
+}
+.persona-history-view .persona-history-topbar {
   min-height: var(--persona-history-topbar-min-height);
   padding: 6px 8px;
   background: var(--persona-history-topbar-bg);
   border-bottom: 1px solid var(--persona-history-border);
 }
-.persona-history-view .persona-history-heading-group {
+.persona-history-view .persona-history-heading-group,
+.persona-history-topbar--shell .persona-history-heading-group {
   min-width: 0;
   text-align: center;
 }
-.persona-history-view .persona-history-title {
+.persona-history-view .persona-history-title,
+.persona-history-topbar--shell .persona-history-title {
   margin: 0;
   padding: 0;
-  font-size: 15px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: var(--persona-header-title-fg, var(--persona-text, #111827));
+  font-size: var(--persona-components-header-title-fontSize, 1rem);
+  font-weight: var(--persona-components-header-title-fontWeight, 600);
+  line-height: var(--persona-components-header-title-lineHeight, 1.5rem);
+  color: var(--persona-header-title-fg, var(--persona-primary, #0f0f0f));
   overflow-wrap: anywhere;
 }
-.persona-history-view .persona-history-scope {
-  margin: 2px 0 0;
-  padding: 0;
+` +
+  /* Ambient privacy caption: a body row above the list, never a second bar line. */
+  `.persona-history-view .persona-history-scope {
+  margin: 0;
+  padding: 0 4px;
   font-size: 12px;
   line-height: 1.35;
-  color: var(--persona-header-subtitle-fg, var(--persona-text-muted, #6b7280));
+  color: var(--persona-text-muted, #6b7280);
   overflow-wrap: anywhere;
 }
 .persona-history-view .persona-history-scope-description {
   display: block;
 }
 .persona-history-view .persona-history-scope-alert {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   margin: 0;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--persona-history-border);
+  padding: 10px 12px;
+  border: 1px solid var(--persona-history-border);
+  border-radius: var(--persona-radius-md, 8px);
   font-size: 12px;
   color: var(--persona-text-muted, #6b7280);
-}
-/* Ambient identity states collapse to the top-bar subtitle; the sentence stays
-   in the accessibility tree for the subtitle's aria-describedby. */
-.persona-history-view
-  .persona-history-scope-alert[data-persona-history-scope-tone="ambient"] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  clip-path: inset(50%);
-  white-space: nowrap;
-  border: 0;
 }
 .persona-history-view .persona-history-scope-alert-title {
   display: block;
@@ -149,8 +152,10 @@ export const HISTORY_VIEW_CSS = `
   color: var(--persona-text, #111827);
 }
 
-/* --- shared controls ---------------------------------------------------- */
-.persona-history-view button.persona-history-icon-button {
+` +
+  /* --- shared controls ---------------------------------------------------- */
+  `.persona-history-view button.persona-history-icon-button,
+.persona-history-topbar--shell button.persona-history-icon-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -166,12 +171,14 @@ export const HISTORY_VIEW_CSS = `
   color: var(--persona-header-action-icon-fg, var(--persona-text-muted, #6b7280));
   cursor: pointer;
 }
-.persona-history-view button.persona-history-icon-button:hover:not(:disabled) {
-  background: var(--persona-history-row-hover-bg);
+.persona-history-view button.persona-history-icon-button:hover:not(:disabled),
+.persona-history-topbar--shell button.persona-history-icon-button:hover:not(:disabled) {
+  background: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.04));
 }
 .persona-history-view button:focus-visible,
-.persona-history-view [role="menuitem"]:focus-visible {
-  outline: 2px solid var(--persona-history-focus-ring);
+.persona-history-view [role="menuitem"]:focus-visible,
+.persona-history-topbar--shell button:focus-visible {
+  outline: 2px solid var(--persona-history-focus-ring, var(--persona-primary, #2563eb));
   outline-offset: 2px;
 }
 .persona-history-view button:disabled {
@@ -179,8 +186,9 @@ export const HISTORY_VIEW_CSS = `
   cursor: default;
 }
 
-/* --- body / regions ----------------------------------------------------- */
-.persona-history-view .persona-history-body {
+` +
+  /* --- body / regions ----------------------------------------------------- */
+  `.persona-history-view .persona-history-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -219,8 +227,9 @@ export const HISTORY_VIEW_CSS = `
   min-width: 0;
 }
 
-/* --- groups and rows ---------------------------------------------------- */
-.persona-history-view .persona-history-group-heading {
+` +
+  /* --- groups and rows ---------------------------------------------------- */
+  `.persona-history-view .persona-history-group-heading {
   margin: 0 0 4px;
   padding: 0 4px;
   font-size: 12px;
@@ -347,8 +356,9 @@ export const HISTORY_VIEW_CSS = `
   color: var(--persona-history-danger-fg);
 }
 
-/* --- pagination, states, footer ----------------------------------------- */
-.persona-history-view button.persona-history-secondary {
+` +
+  /* --- pagination, states, footer ----------------------------------------- */
+  `.persona-history-view button.persona-history-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -442,16 +452,45 @@ export const HISTORY_VIEW_CSS = `
   text-decoration: underline;
 }
 
-/* --- rail presentation --------------------------------------------------- */
-.persona-history-view--rail {
+` +
+  /* --- rail presentation --------------------------------------------------- */
+  `.persona-history-view--rail {
   --persona-history-slide: 12px;
   /* The rail occupies the trailing edge; the divider faces the conversation. */
   border-left: 1px solid var(--persona-history-border);
 }
 
+` +
+  /* --- shell-hosted top bar ------------------------------------------------ */
+  /* Panel keeps ONE bar: the shell header stays, its own children are suppressed,
+     and this bar mounts inside it. Unscoped: these nodes are outside the view. */
+  `[data-persona-history-suppressed] { display: none !important; }
+.persona-history-header-host {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+` +
+  /* The header supplies padding and background; the bar only fills it. */
+  `.persona-history-topbar.persona-history-topbar--shell {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+` +
+  /* The bar never animates; only its arrival in the shell header does. */
+  `.persona-history-topbar--shell.persona-history-topbar--shell-enter {
+  animation: persona-history-header-fade 120ms cubic-bezier(0, 0, 0.2, 1) both;
+}
+@keyframes persona-history-header-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .persona-history-view--enter,
   .persona-history-view--enter .persona-history-body { animation: none; }
+  .persona-history-topbar--shell.persona-history-topbar--shell-enter {
+    animation: none;
+  }
   .persona-history-view .persona-history-skeleton-bar { animation: none; }
 }
 `;

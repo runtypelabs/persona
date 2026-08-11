@@ -681,4 +681,78 @@ describe("history render hooks", () => {
       expect(mount.querySelector("[data-test-more]")).toBeNull();
     });
   });
+  /**
+   * Panel presentation keeps ONE bar: the shell header hosts the default view's
+   * bar. A plugin that owns the whole surface owns the header too, so the shell
+   * falls back to hiding it.
+   */
+  describe("shell header hosting", () => {
+    const headerOf = (mount: HTMLElement) =>
+      mount.querySelector<HTMLElement>('[data-persona-theme-zone="header"]')!;
+    const headerHostOf = (mount: HTMLElement) =>
+      mount.querySelector<HTMLElement>(".persona-history-header-host");
+
+    it("hides the whole header for a custom full view and re-syncs on re-arbitration", async () => {
+      let custom = true;
+      let context: AgentWidgetRenderHistoryViewContext | null = null;
+      const { mount } = setup({
+        plugins: [
+          {
+            id: "toggling",
+            renderHistoryView: (ctx) => {
+              context = ctx;
+              if (!custom) return null;
+              const element = document.createElement("div");
+              element.setAttribute("data-test-view", "custom");
+              return element;
+            },
+          },
+        ],
+      });
+      await openHistoryUI(mount);
+      const header = headerOf(mount);
+      expect(defaultView(mount)).toBeNull();
+      expect(headerHostOf(mount)).toBeNull();
+      expect(header.style.display).toBe("none");
+      expect(header.hasAttribute("inert")).toBe(true);
+      expect(header.querySelector("[data-persona-history-suppressed]")).toBeNull();
+
+      custom = false;
+      context!.requestRender();
+      await flush(20);
+      expect(defaultView(mount)).not.toBeNull();
+      expect(header.style.display).not.toBe("none");
+      expect(header.hasAttribute("inert")).toBe(false);
+      expect(headerHostOf(mount)!.querySelector(".persona-history-topbar")).not.toBeNull();
+      expect(header.querySelector("[data-persona-history-suppressed]")).not.toBeNull();
+
+      custom = true;
+      context!.requestRender();
+      await flush(20);
+      expect(defaultView(mount)).toBeNull();
+      expect(headerHostOf(mount)).toBeNull();
+      expect(header.style.display).toBe("none");
+      expect(header.querySelector("[data-persona-history-suppressed]")).toBeNull();
+    });
+
+    it("hosts a header-slot replacement in the shell header", async () => {
+      const { mount } = setup({
+        plugins: [
+          {
+            id: "header",
+            renderHistoryHeader: (context: AgentWidgetRenderHistoryHeaderContext) => {
+              const element = document.createElement("div");
+              element.setAttribute("data-test-header", context.presentation);
+              return element;
+            },
+          },
+        ],
+      });
+      await openHistoryUI(mount);
+      const slot = mount.querySelector<HTMLElement>("[data-test-header]")!;
+      expect(slot.parentElement).toBe(headerHostOf(mount));
+      expect(mount.querySelector(".persona-history-topbar")).toBeNull();
+      expect(headerOf(mount).hasAttribute("inert")).toBe(false);
+    });
+  });
 });

@@ -97,6 +97,18 @@ const footerOf = (mount: HTMLElement) =>
 /** Every header builder (default, minimal, composer-bar placeholder) marks it. */
 const headerOf = (mount: HTMLElement) =>
   mount.querySelector<HTMLElement>('[data-persona-theme-zone="header"]')!;
+/** Shell-owned wrapper holding the Messages bar inside the widget header. */
+const headerHostOf = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>(".persona-history-header-host");
+const suppressedIn = (header: HTMLElement) =>
+  Array.from(header.querySelectorAll("[data-persona-history-suppressed]"));
+/** Header children the visitor can still see while Messages owns the bar. */
+const visibleHeaderChildren = (header: HTMLElement) =>
+  Array.from(header.children).filter(
+    (child) =>
+      !child.hasAttribute("data-persona-history-suppressed") &&
+      !child.classList.contains("persona-history-header-host")
+  );
 const rowOf = (mount: HTMLElement, id: string) =>
   mount.querySelector<HTMLButtonElement>(`[data-persona-history-conversation="${id}"]`);
 const dialogOf = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
@@ -210,11 +222,12 @@ describe("history shell", () => {
   });
 
   describe("panel host", () => {
-    it("hides and inerts the shell header, transcript and composer, then restores them", async () => {
+    it("swaps the header's contents, hides transcript and composer, then restores them", async () => {
       const { mount } = setup();
       const body = bodyOf(mount);
       const footer = footerOf(mount);
       const header = headerOf(mount);
+      const originals = Array.from(header.children);
 
       await openHistoryUI(mount);
       expect(historyRoot(mount)).not.toBeNull();
@@ -224,10 +237,16 @@ describe("history shell", () => {
       expect(footer.hidden).toBe(true);
       expect(footer.getAttribute("aria-hidden")).toBe("true");
       expect(footer.hasAttribute("inert")).toBe(true);
-      // Single header: the view's top bar replaces the shell's.
-      expect(header.style.display).toBe("none");
-      expect(header.getAttribute("aria-hidden")).toBe("true");
-      expect(header.hasAttribute("inert")).toBe(true);
+      // One persistent bar: the header stays, only its contents change.
+      expect(header.style.display).not.toBe("none");
+      expect(header.hasAttribute("aria-hidden")).toBe(false);
+      expect(header.hasAttribute("inert")).toBe(false);
+      const host = headerHostOf(mount)!;
+      expect(host.parentElement).toBe(header);
+      expect(host.querySelector(".persona-history-topbar")).not.toBeNull();
+      expect(historyRoot(mount)!.querySelector(".persona-history-topbar")).toBeNull();
+      expect(suppressedIn(header)).toEqual(originals);
+      expect(visibleHeaderChildren(header)).toEqual([]);
 
       mount
         .querySelector<HTMLButtonElement>('[data-persona-history-focus="close"]')!
@@ -243,26 +262,58 @@ describe("history shell", () => {
       expect(header.style.display).not.toBe("none");
       expect(header.hasAttribute("inert")).toBe(false);
       expect(header.hasAttribute("aria-hidden")).toBe(false);
-      // The invoker lives in the header, so restoring it must precede focus.
+      expect(headerHostOf(mount)).toBeNull();
+      expect(suppressedIn(header)).toEqual([]);
+      expect(Array.from(header.children)).toEqual(originals);
+      // The invoker is suppressed until this restores it, so chrome comes first.
       expect(document.activeElement).toBe(historyButton(mount));
     });
 
-    it("re-hides a shell header rebuilt by update() while Messages is open", async () => {
+    it("re-homes the bar into a shell header rebuilt by update() while Messages is open", async () => {
       const { mount, controller } = setup({
         config: { layout: { header: { layout: "default" } } },
       });
       await openHistoryUI(mount);
       const first = headerOf(mount);
-      expect(first.style.display).toBe("none");
+      const host = headerHostOf(mount)!;
+      expect(host.parentElement).toBe(first);
 
       controller.update({ layout: { header: { layout: "minimal" } } });
       await flush();
 
       const replacement = headerOf(mount);
       expect(replacement).not.toBe(first);
-      expect(replacement.style.display).toBe("none");
-      expect(replacement.getAttribute("aria-hidden")).toBe("true");
-      expect(replacement.hasAttribute("inert")).toBe(true);
+      expect(replacement.style.display).not.toBe("none");
+      expect(replacement.hasAttribute("inert")).toBe(false);
+      // Same wrapper instance: focus inside the bar survives the rebuild.
+      expect(headerHostOf(mount)).toBe(host);
+      expect(host.parentElement).toBe(replacement);
+      expect(host.querySelector(".persona-history-topbar")).not.toBeNull();
+      expect(visibleHeaderChildren(replacement)).toEqual([]);
+      // Including the Messages button the rebuild re-created.
+      expect(historyButton(mount)!.hasAttribute("data-persona-history-suppressed")).toBe(
+        true
+      );
+
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="close"]')!
+        .click();
+      await flush();
+      expect(headerHostOf(mount)).toBeNull();
+      expect(suppressedIn(replacement)).toEqual([]);
+    });
+
+    it("falls back to hiding the header entirely when there is none to host in", async () => {
+      const { mount } = setup({ config: { layout: { showHeader: false } } });
+      await openHistoryUI(mount);
+      const header = headerOf(mount);
+
+      expect(headerHostOf(mount)).toBeNull();
+      expect(header.style.display).toBe("none");
+      expect(header.getAttribute("aria-hidden")).toBe("true");
+      expect(header.hasAttribute("inert")).toBe(true);
+      // The bar rides inside the view element instead.
+      expect(historyRoot(mount)!.querySelector(".persona-history-topbar")).not.toBeNull();
     });
 
     it("re-applies hidden/inert to a replacement composer footer", async () => {
@@ -319,10 +370,22 @@ describe("history shell", () => {
       expect(body.style.display).not.toBe("none");
       expect(body.hasAttribute("inert")).toBe(false);
       expect(footerOf(mount).hidden).toBe(false);
-      // Rail keeps the shell header: the conversation is still primary.
+      // Rail keeps the shell header untouched: the conversation is still primary.
       const header = headerOf(mount);
       expect(header.style.display).not.toBe("none");
       expect(header.hasAttribute("inert")).toBe(false);
+      expect(headerHostOf(mount)).toBeNull();
+      expect(suppressedIn(header)).toEqual([]);
+      // Its own bar rides inside the rail, with the close (x) affordance.
+      const bar = historyRoot(mount)!.querySelector<HTMLElement>(
+        ".persona-history-topbar"
+      )!;
+      expect(bar.classList.contains("persona-history-topbar--shell")).toBe(false);
+      expect(
+        bar
+          .querySelector('[data-persona-history-focus="close"]')
+          ?.getAttribute("aria-label")
+      ).toBe("Close conversation list");
       expect(historyButton(mount)!.getAttribute("aria-expanded")).toBe("true");
     });
 
@@ -351,6 +414,7 @@ describe("history shell", () => {
     it("collapses to panel below 720px while keeping the same view element", async () => {
       const { mount, controller } = await railSetup();
       const view = historyRoot(mount)!;
+      const bar = view.querySelector<HTMLElement>(".persona-history-topbar")!;
       setContainerWidth(mount, 500);
       controller.update({});
       await flush();
@@ -358,8 +422,15 @@ describe("history shell", () => {
       expect(mount.querySelector(".persona-history-rail-host")).toBeNull();
       expect(view.getAttribute("data-persona-history-presentation")).toBe("panel");
       expect(bodyOf(mount).style.display).toBe("none");
-      expect(headerOf(mount).style.display).toBe("none");
-      expect(headerOf(mount).hasAttribute("inert")).toBe(true);
+      // The bar moves into the shell header, one instance, no entrance replay.
+      expect(headerOf(mount).style.display).not.toBe("none");
+      expect(headerOf(mount).hasAttribute("inert")).toBe(false);
+      expect(headerHostOf(mount)!.contains(bar)).toBe(true);
+      expect(mount.querySelectorAll(".persona-history-topbar")).toHaveLength(1);
+      expect(view.classList.contains("persona-history-view--enter")).toBe(false);
+      expect(document.activeElement).toBe(
+        bar.querySelector('[data-persona-history-focus="close"]')
+      );
 
       // Widening back to rail must hand the header back.
       setContainerWidth(mount, 900);
@@ -368,6 +439,10 @@ describe("history shell", () => {
       expect(mount.querySelector(".persona-history-rail-host")).not.toBeNull();
       expect(headerOf(mount).style.display).not.toBe("none");
       expect(headerOf(mount).hasAttribute("inert")).toBe(false);
+      expect(headerHostOf(mount)).toBeNull();
+      expect(suppressedIn(headerOf(mount))).toEqual([]);
+      expect(view.contains(bar)).toBe(true);
+      expect(mount.querySelectorAll(".persona-history-topbar")).toHaveLength(1);
     });
 
     it("auto keeps a floating launcher on panel at any width", async () => {
@@ -581,7 +656,8 @@ describe("history shell", () => {
         await flush();
         // Still leaving: the surface is mounted and the conversation is hidden.
         expect(historyRoot(mount)).toBe(view);
-        expect(header.style.display).toBe("none");
+        expect(headerHostOf(mount)).not.toBeNull();
+        expect(visibleHeaderChildren(header)).toEqual([]);
         expect(body.style.display).toBe("none");
         expect(view.style.pointerEvents).toBe("none");
         expect(document.activeElement).not.toBe(historyButton(mount));
@@ -589,6 +665,8 @@ describe("history shell", () => {
         waapi.settleAll();
         await flush();
         expect(historyRoot(mount)).toBeNull();
+        expect(headerHostOf(mount)).toBeNull();
+        expect(suppressedIn(header)).toEqual([]);
         expect(header.style.display).not.toBe("none");
         expect(header.hasAttribute("inert")).toBe(false);
         expect(body.style.display).not.toBe("none");
@@ -610,7 +688,7 @@ describe("history shell", () => {
         back(mount).click();
         await flush();
         expect(view.classList.contains("persona-history-view--enter")).toBe(false);
-        expect(waapi.animations).toHaveLength(2);
+        expect(waapi.animations).toHaveLength(1);
 
         waapi.settleAll();
         await flush();

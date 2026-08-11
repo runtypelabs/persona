@@ -826,16 +826,20 @@ The Messages surface (`features.history.enabled`) ships its styles inside the
 lazy `history-view.js` chunk and injects them on mount, so it costs nothing in
 `widget.css`. Every rule is scoped under `.persona-history-view` (interactive
 elements additionally by tag, e.g. `button.persona-history-row`), which keeps a
-host reset such as `[data-persona-root] h2` from outranking it.
+host reset such as `[data-persona-root] h2` from outranking it. The one
+exception is the shell-hosted top bar: in panel presentation the bar's contents
+mount inside the widget's own header (see `.persona-history-topbar--shell`
+below), so those rules use doubled class selectors instead of view scoping,
+which preserves the same specificity guarantee.
 
-Eleven history-specific variables are declared on the view root, each with a
+Twelve history-specific variables are declared on the view root, each with a
 fallback chain into the ordinary theme aliases. Set any of them on the host page
 (or on `[data-persona-root]`) to restyle the surface without touching a class:
 
 | CSS var | Fallback chain | Description |
 |---------|----------------|-------------|
 | `--persona-history-surface-bg` | `--persona-surface` → `#ffffff` | List/background surface and the row overflow menu |
-| `--persona-history-topbar-bg` | `--persona-header-bg` → `--persona-surface` → `#ffffff` | Top bar background |
+| `--persona-history-topbar-bg` | `--persona-header-bg` → `--persona-surface` → `#ffffff` | Top bar background (inline bar only; the shell-hosted bar is transparent, the header theme paints it) |
 | `--persona-history-border` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Hairlines: top bar, row dividers, footer, rail edge |
 | `--persona-history-row-hover-bg` | `--persona-button-ghost-hover-bg` → `rgba(0, 0, 0, 0.04)` | Row hover and active-press wash |
 | `--persona-history-row-active-bg` | `--persona-container` → `#f3f4f6` | Selected conversation wash |
@@ -844,7 +848,8 @@ fallback chain into the ordinary theme aliases. Set any of them on the host page
 | `--persona-history-danger-fg` | `--persona-palette-colors-error-600` → `#b91c1c` | Destructive action text (delete, delete all, forget device) |
 | `--persona-history-focus-ring` | `--persona-primary` → `#2563eb` | `:focus-visible` outline color |
 | `--persona-history-row-min-height` | `72px` | Row and skeleton-row minimum height |
-| `--persona-history-topbar-min-height` | `56px` | Top bar minimum height |
+| `--persona-history-topbar-min-height` | `56px` | Inline top bar minimum height (the shell-hosted bar inherits the header's sizing) |
+| `--persona-history-slide` | `20px` (panel) / `12px` (rail) | Horizontal travel of the body's entrance and exit motion |
 
 Copy is separate from styling: every user-visible string is overridable through
 `features.history.copy` (see `AgentWidgetHistoryCopy`), never through CSS.
@@ -859,14 +864,26 @@ plugins can target them:
 .persona-history-view                 /* view root; carries the variables above */
 .persona-history-view--panel          /* panel presentation */
 .persona-history-view--rail           /* rail presentation (adds the right edge) */
-.persona-history-view--enter          /* one-shot entry animation */
+.persona-history-view--enter          /* one-shot entry animation (body only;
+                                         the bar never animates or moves) */
 
-/* Top bar */
+/* Top bar. In panel presentation the bar's contents are hosted inside the
+   widget's own header: the shell appends .persona-history-header-host to the
+   header and suppresses the header's original children with the
+   data-persona-history-suppressed attribute while Messages is open. Rail (and
+   headerless layouts) keep the bar inline in the view. */
 .persona-history-topbar
+.persona-history-topbar--shell        /* the same bar when shell-hosted:
+                                         transparent, no min-height, the header
+                                         theme paints the chrome */
+.persona-history-topbar--shell-enter  /* one-shot fade as the hosted bar mounts */
+.persona-history-header-host          /* shell-owned wrapper inside the header */
 .persona-history-back                 /* back (panel) / close (rail) control */
 .persona-history-heading-group
 .persona-history-title
-.persona-history-scope                /* evidence-based scope line */
+
+/* Scope and identity (rendered inside the body, never as a second bar line) */
+.persona-history-scope                /* ambient privacy caption above the list */
 .persona-history-scope-title
 .persona-history-scope-description
 .persona-history-scope-alert          /* identity block; sr-only under

@@ -48,6 +48,13 @@ import type {
 
 export type HistoryViewPresentation = "panel" | "rail";
 
+/**
+ * Where the top bar's contents live. `"external"` hands them to the shell,
+ * which mounts them inside its own persistent header; the view element then
+ * starts at the body.
+ */
+export type HistoryHeaderPlacement = "inline" | "external";
+
 export type HistoryViewPendingAction =
   | { kind: "refresh" | "load-more" | "start-new" | "clear" | "reset" }
   | { kind: "open" | "delete"; conversationId: string }
@@ -121,6 +128,8 @@ export interface HistoryViewOptions {
   copy?: HistoryViewCopyInput;
   /** Already resolved against the host container width by the shell, not here. */
   presentation: HistoryViewPresentation;
+  /** Default `"inline"`. Rail is always inline; the shell enforces that. */
+  headerPlacement?: HistoryHeaderPlacement;
   showScopeStatus: boolean;
   activeConversationId: string | null;
   /** List page size. Default 25. */
@@ -173,6 +182,17 @@ export interface HistoryViewHandle {
    * The instance and all its state survive the move; only chrome changes.
    */
   setPresentation(presentation: HistoryViewPresentation): void;
+  /**
+   * The top bar's CURRENT content node (the default bar or a slot replacement).
+   * A slot re-render swaps it in place, so an external host stays its parent.
+   */
+  getHeaderElement(): HTMLElement;
+  /**
+   * Hand the bar's contents to the shell (`"external"`, detached for the shell
+   * to re-home) or take them back (`"inline"`). Idempotent; never replays the
+   * entrance.
+   */
+  setHeaderPlacement(placement: HistoryHeaderPlacement): void;
   /** Keep the active-row indicator in sync when the shell changes conversation. */
   setActiveConversationId(conversationId: string | null): void;
   /** Enter/leave the post-deletion replacement-init recovery state. */
@@ -191,6 +211,8 @@ const DEFAULT_PAGE_SIZE = 25;
 
 /** Motion. The entrance is CSS (`css.ts`); the exit below mirrors it. */
 const ENTRANCE_MS = 180;
+/** Arrival of the shell-hosted bar; the bar chrome around it never moves. */
+const SHELL_FADE_MS = 120;
 const EXIT_MS = 160;
 const EXIT_EASING = "cubic-bezier(0.4, 0, 1, 1)";
 const EXIT_SLIDE_PX: Record<HistoryViewPresentation, number> = {
@@ -353,8 +375,7 @@ export function createHistoryView(
   const headingGroup = createNode(
     "div",
     { className: "persona-history-heading-group" },
-    title,
-    options.showScopeStatus ? scopeLine : null
+    title
   );
 
   const newIconButton = createNode("button", {
@@ -377,8 +398,9 @@ export function createHistoryView(
   );
 
   /**
-   * Explanatory scope text + identity retry. Visible below the bar only for
-   * actionable states; ambient states keep it sr-only (see `scopeAmbient`).
+   * Explanatory scope text + identity retry, at the top of the body. Visible
+   * only for actionable states; ambient states keep it sr-only behind the
+   * caption above the list (see `scopeAmbient`).
    */
   const scopeBlock = createNode("div", {
     className: "persona-history-scope-alert",
@@ -423,13 +445,26 @@ export function createHistoryView(
     resetButton
   );
 
+  // One sliding region below the bar: the scope alert and the ambient caption
+  // are body content, not chrome.
   const body = createNode(
     "div",
     { className: "persona-history-body" },
+    options.showScopeStatus ? scopeBlock : null,
     newConversationButton,
+    options.showScopeStatus ? scopeLine : null,
     listRegion,
     footer
   );
+
+  let headerPlacement: HistoryHeaderPlacement =
+    options.headerPlacement ?? "inline";
+  if (headerPlacement === "external") {
+    topbar.classList.add(
+      "persona-history-topbar--shell",
+      "persona-history-topbar--shell-enter"
+    );
+  }
 
   const element = createNode(
     "div",
@@ -446,8 +481,7 @@ export function createHistoryView(
       },
     },
     announcer.element,
-    topbar,
-    options.showScopeStatus ? scopeBlock : null,
+    headerPlacement === "inline" ? topbar : null,
     body
   );
 
@@ -472,6 +506,27 @@ export function createHistoryView(
   element.addEventListener("animationend", endEntrance);
   entranceTimer = setTimeout(endEntrance, ENTRANCE_MS + 60);
 
+  /**
+   * The shell-hosted bar fades in once. Same one-shot discipline as the
+   * entrance: the class is dropped so a later re-parent cannot replay it.
+   */
+  let shellFadeTimer: ReturnType<typeof setTimeout> | null = null;
+  const endShellFade = (): void => {
+    if (shellFadeTimer !== null) {
+      clearTimeout(shellFadeTimer);
+      shellFadeTimer = null;
+    }
+    topbar.classList.remove("persona-history-topbar--shell-enter");
+  };
+  const startShellFade = (): void => {
+    endShellFade();
+    topbar.classList.add("persona-history-topbar--shell-enter");
+    shellFadeTimer = setTimeout(endShellFade, SHELL_FADE_MS + 60);
+  };
+  if (headerPlacement === "external") {
+    shellFadeTimer = setTimeout(endShellFade, SHELL_FADE_MS + 60);
+  }
+
   let exitAnimations: Animation[] = [];
   let exitPromise: Promise<void> | null = null;
 
@@ -484,21 +539,25 @@ export function createHistoryView(
     // Closing mid-entrance: start from wherever the entrance got to rather than
     // popping back to full opacity first.
     const from =
-      element.ownerDocument.defaultView?.getComputedStyle(element).opacity ?? "1";
+      element.ownerDocument.defaultView?.getComputedStyle(body).opacity || "1";
     endEntrance();
     // A leaving surface is no longer a target, but focus stays put until the
-    // shell restores it.
+    // shell restores it. The bar's contents go with it wherever they are hosted.
     element.style.pointerEvents = "none";
+    headerContent.style.pointerEvents = "none";
     const timing = {
       duration: EXIT_MS,
       easing: EXIT_EASING,
       fill: "forwards",
     } as const;
     const distance = EXIT_SLIDE_PX[presentation];
+    // Only the body leaves: the bar is furniture and switches back instantly.
     exitAnimations = [
-      element.animate([{ opacity: from }, { opacity: 0 }], timing),
       body.animate(
-        [{ transform: "none" }, { transform: `translateX(${distance}px)` }],
+        [
+          { opacity: from, transform: "none" },
+          { opacity: 0, transform: `translateX(${distance}px)` },
+        ],
         timing
       ),
     ];
@@ -540,6 +599,9 @@ export function createHistoryView(
         defaultRenderer: () => topbar,
       }) ?? topbar;
     if (next === headerContent) return;
+    // Swaps in place wherever the content lives, including an external host.
+    // Detached (external, pre-mount) it is bookkeeping only: the shell then
+    // mounts whatever `getHeaderElement()` reports.
     headerContent.replaceWith(next);
     headerContent = next;
   };
@@ -554,16 +616,26 @@ export function createHistoryView(
     if (key === scopeRenderedKey) return;
     scopeRenderedKey = key;
     const resolved = scopeCopy(identityStatus, copy);
-    // Text is patched in place so a stable subtitle never re-announces.
+    // Text is patched in place so a stable caption never re-announces.
     scopeTitle.textContent = resolved.title;
+    const ambient = scopeAmbient(identityStatus);
+    // The visible block carries the whole message; the caption would repeat it.
+    scopeLine.hidden = !ambient;
     scopeBlock.replaceChildren(
+      ...(ambient
+        ? []
+        : [
+            createNode("span", {
+              className: "persona-history-scope-alert-title",
+              text: resolved.title,
+            }),
+          ]),
       createNode("span", {
         className: "persona-history-scope-description",
         text: resolved.description,
         attrs: { id: scopeDescriptionId },
       })
     );
-    const ambient = scopeAmbient(identityStatus);
     scopeBlock.setAttribute(
       "data-persona-history-scope-tone",
       ambient ? "ambient" : "attention"
@@ -1130,6 +1202,21 @@ export function createHistoryView(
       // A header slot is presentation-aware, so it re-arbitrates on the move.
       render();
     },
+    getHeaderElement: () => headerContent,
+    setHeaderPlacement: (next) => {
+      if (next === headerPlacement) return;
+      headerPlacement = next;
+      const external = next === "external";
+      topbar.classList.toggle("persona-history-topbar--shell", external);
+      if (external) {
+        startShellFade();
+        // The shell re-homes it; leaving it here would show it twice.
+        headerContent.remove();
+        return;
+      }
+      endShellFade();
+      element.insertBefore(headerContent, body);
+    },
     setActiveConversationId: (conversationId) => {
       if (activeConversationId === conversationId) return;
       activeConversationId = conversationId;
@@ -1148,6 +1235,9 @@ export function createHistoryView(
       destroyed = true;
       listEpoch += 1;
       endEntrance();
+      endShellFade();
+      // The bar's contents may be hosted outside this element.
+      headerContent.remove();
       exitAnimations.forEach((animation) => animation.cancel());
       exitAnimations = [];
       unsubscribeIdentity();

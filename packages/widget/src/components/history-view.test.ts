@@ -563,7 +563,7 @@ describe("history view list states", () => {
 });
 
 describe("history view scope status", () => {
-  it("collapses the browser-only scope to one subtitle with an sr-only description", async () => {
+  it("collapses the browser-only scope to one body caption with an sr-only description", async () => {
     const { root } = mount();
     await flush();
 
@@ -574,7 +574,7 @@ describe("history view scope status", () => {
     expect(block?.dataset.personaHistoryIdentity).toBe("browser_only");
     expect(block?.textContent).toContain("separate history");
     expect(block?.hasAttribute("role")).toBe(false);
-    // No second visual band: the sentence is reachable only through the subtitle.
+    // No second visual band: the sentence is reachable only through the caption.
     expect(block?.dataset.personaHistoryScopeTone).toBe("ambient");
     const line = root.querySelector<HTMLElement>(".persona-history-scope")!;
     const describedBy = line.getAttribute("aria-describedby");
@@ -584,6 +584,36 @@ describe("history view scope status", () => {
         "persona-history-scope-description"
       )
     ).toBe(true);
+  });
+
+  it("keeps every scope surface below the bar, above the list", async () => {
+    const { root, provider } = mount();
+    await flush();
+    const body = root.querySelector<HTMLElement>(".persona-history-body")!;
+    const bar = root.querySelector<HTMLElement>(".persona-history-topbar")!;
+    const line = root.querySelector<HTMLElement>(".persona-history-scope")!;
+    const block = root.querySelector<HTMLElement>(".persona-history-scope-alert")!;
+
+    expect(bar.contains(line)).toBe(false);
+    expect(body.contains(line)).toBe(true);
+    expect(body.contains(block)).toBe(true);
+    expect(line.hidden).toBe(false);
+    expect(
+      line.compareDocumentPosition(
+        root.querySelector(".persona-history-list-region") as Node
+      )
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    // Actionable states speak through the block; the caption would repeat it.
+    provider.setIdentityStatus({
+      state: "authentication_required",
+      reason: "invalid_identity_proof",
+    });
+    await flush();
+    expect(line.hidden).toBe(true);
+    expect(
+      block.querySelector(".persona-history-scope-alert-title")?.textContent
+    ).toBe("Sign in to see your messages");
   });
 
   it("keeps the verified scope ambient and restores the band for attention states", async () => {
@@ -776,6 +806,103 @@ describe("history view chrome and destructive actions", () => {
   });
 });
 
+describe("history view header placement", () => {
+  const barOf = (root: HTMLElement): HTMLElement | null =>
+    root.querySelector<HTMLElement>(".persona-history-topbar");
+
+  it("carries the bar inline by default and holds nothing but the three controls", async () => {
+    const { root } = mount();
+    await flush();
+    const bar = barOf(root)!;
+    expect(bar.parentElement).toBe(root);
+    expect(bar.querySelector(".persona-history-scope")).toBeNull();
+    expect(bar.querySelector(".persona-history-scope-alert")).toBeNull();
+    expect(bar.querySelectorAll("button")).toHaveLength(2);
+  });
+
+  it("leaves the bar out of the view element when the shell hosts it", async () => {
+    const { root, handle } = mount({ headerPlacement: "external" });
+    await flush();
+    expect(barOf(root)).toBeNull();
+    const bar = handle.getHeaderElement();
+    expect(bar.classList.contains("persona-history-topbar")).toBe(true);
+    expect(bar.isConnected).toBe(false);
+
+    // The shell mounts it wherever it likes; the view never reclaims it.
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    host.appendChild(bar);
+    handle.refresh();
+    await flush();
+    expect(bar.parentElement).toBe(host);
+    host.remove();
+  });
+
+  it("moves the bar between the shell and the view without replaying the entrance", async () => {
+    const { root, handle } = mount();
+    await flush();
+    const bar = handle.getHeaderElement();
+
+    handle.setHeaderPlacement("external");
+    expect(bar.parentElement).toBeNull();
+    expect(bar.classList.contains("persona-history-topbar--shell")).toBe(true);
+    // Idempotent: a repeat call must not disturb the shell's own hosting.
+    const host = document.createElement("div");
+    host.appendChild(bar);
+    handle.setHeaderPlacement("external");
+    expect(bar.parentElement).toBe(host);
+
+    handle.setHeaderPlacement("inline");
+    expect(bar.parentElement).toBe(root);
+    expect(bar.nextElementSibling?.classList.contains("persona-history-body")).toBe(
+      true
+    );
+    expect(bar.classList.contains("persona-history-topbar--shell")).toBe(false);
+    expect(root.classList.contains("persona-history-view--enter")).toBe(true);
+    handle.setHeaderPlacement("inline");
+    expect(root.querySelectorAll(".persona-history-topbar")).toHaveLength(1);
+  });
+
+  it("keeps a header slot replacement in the shell host that already holds it", async () => {
+    let custom: HTMLElement | null = null;
+    const { handle, provider } = mount({
+      headerPlacement: "external",
+      slots: {
+        header: ({ identityStatus, defaultRenderer }) => {
+          if (identityStatus.state !== "verified") return defaultRenderer();
+          custom = document.createElement("div");
+          custom.setAttribute("data-test-header", "");
+          return custom;
+        },
+      },
+    });
+    await flush();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    host.appendChild(handle.getHeaderElement());
+
+    provider.setIdentityStatus({ state: "verified" });
+    await flush();
+    expect(custom).not.toBeNull();
+    expect(handle.getHeaderElement()).toBe(custom);
+    expect(custom!.parentElement).toBe(host);
+    host.remove();
+  });
+
+  it("removes the bar on destroy wherever it is hosted", async () => {
+    const record = mount({ headerPlacement: "external" });
+    await flush();
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    host.appendChild(record.handle.getHeaderElement());
+
+    record.handle.destroy();
+    mounted.splice(mounted.indexOf(record), 1);
+    expect(host.childNodes).toHaveLength(0);
+    host.remove();
+  });
+});
+
 describe("history view unsupported affordances and lifecycle", () => {
   it("renders no search, archive, unread, or delivery affordances", async () => {
     const { root } = mount();
@@ -900,24 +1027,35 @@ describe("history view entrance and exit motion", () => {
     delete (Element.prototype as Partial<Element>).animate;
   });
 
-  it("enters with a class that fades the root and slides only the body", async () => {
+  it("enters by animating the body alone, never the root or the bar", async () => {
     const { root } = mount();
     await flush();
     expect(root.classList.contains("persona-history-view--enter")).toBe(true);
 
     const css = injectedCss();
-    const enterFrames = css.slice(
-      css.indexOf("@keyframes persona-history-enter {"),
-      css.indexOf("@keyframes persona-history-enter-body {")
-    );
-    // The top bar must read as persistent chrome: nothing above the body moves.
-    expect(enterFrames).not.toContain("transform");
+    // The bar is persistent chrome: only the region below it moves.
+    expect(css).not.toContain("@keyframes persona-history-enter {");
+    expect(css).not.toContain(".persona-history-view--enter {");
     expect(css).toContain(".persona-history-view--enter .persona-history-body");
     expect(css).toContain("translateX(var(--persona-history-slide))");
     // Each presentation slides from its own edge; the rail travels less.
     expect(css).toContain("--persona-history-slide: 20px;");
     expect(css).toContain("--persona-history-slide: 12px;");
     expect(css).not.toContain(".persona-history-view--enter .persona-history-topbar");
+  });
+
+  it("fades the shell-hosted bar in once, without animating the bar chrome", async () => {
+    const { handle } = mount({ headerPlacement: "external" });
+    await flush();
+    const bar = handle.getHeaderElement();
+    expect(bar.classList.contains("persona-history-topbar--shell")).toBe(true);
+
+    const css = injectedCss();
+    expect(css).toContain(
+      ".persona-history-topbar--shell.persona-history-topbar--shell-enter"
+    );
+    const fade = css.slice(css.indexOf("@keyframes persona-history-header-fade"));
+    expect(fade.slice(0, fade.indexOf("}"))).not.toContain("transform");
   });
 
   it("drops the entrance before a host move so re-parenting cannot replay it", async () => {
@@ -957,15 +1095,15 @@ describe("history view entrance and exit motion", () => {
       expect(root.classList.contains("persona-history-view--enter")).toBe(false);
       expect(root.style.pointerEvents).toBe("none");
 
-      const rootAnimation = rootOf(waapi.animations);
+      // Body only: the bar is furniture and switches back instantly.
+      expect(rootOf(waapi.animations)).toBeUndefined();
       const bodyAnimation = bodyOf(waapi.animations);
-      expect(rootAnimation.keyframes.map((frame) => frame.opacity)).toEqual(["1", 0]);
-      expect(rootAnimation.keyframes.some((frame) => "transform" in frame)).toBe(false);
+      expect(bodyAnimation.keyframes.map((frame) => frame.opacity)).toEqual(["1", 0]);
       expect(bodyAnimation.keyframes.map((frame) => frame.transform)).toEqual([
         "none",
         "translateX(20px)",
       ]);
-      expect(rootAnimation.options.duration).toBe(160);
+      expect(bodyAnimation.options.duration).toBe(160);
 
       await flush();
       expect(resolved).toBe(false);
@@ -997,7 +1135,7 @@ describe("history view entrance and exit motion", () => {
       const first = handle.playExit();
       const second = handle.playExit();
       expect(second).toBe(first);
-      expect(waapi.animations).toHaveLength(2);
+      expect(waapi.animations).toHaveLength(1);
     } finally {
       waapi.restore();
     }

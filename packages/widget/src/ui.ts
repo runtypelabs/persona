@@ -180,7 +180,11 @@ import {
 import { createLocalStorageAdapter } from "./utils/storage";
 import { createVisitorStore, type VisitorStore } from "./utils/visitor-store";
 import { loadHistoryView } from "./history-view-loader";
-import type { HistoryViewOptions } from "./history-view-entry";
+import type {
+  HistoryHeaderPlacement,
+  HistoryViewHandle,
+  HistoryViewOptions,
+} from "./history-view-entry";
 import {
   createHistoryRenderSurface,
   type HistoryRenderSurface,
@@ -7443,16 +7447,90 @@ export const createAgentExperience = (
     }
   };
 
+  /** Suppression of the shell header's own children while Messages owns the bar. */
+  const HISTORY_SUPPRESSED_ATTR = "data-persona-history-suppressed";
+  /** Shell-owned wrapper for the view's bar contents. Null while not hosting. */
+  let historyHeaderHost: HTMLElement | null = null;
+  /** Handle + arbitrated element, tracked from before `historySurface` is assigned. */
+  let historyViewHandle: HistoryViewHandle | null = null;
+  let historyMountedElement: HTMLElement | null = null;
+  let capturedPanelHeader: HTMLElement | null = null;
+  let capturedPanelHeaderDisplay = "";
+
+  /** The display the shell header returns to; "none" means there is no bar. */
+  const shownHeaderDisplay = (): string =>
+    header === capturedPanelHeader
+      ? capturedPanelHeaderDisplay
+      : config.layout?.showHeader === false
+        ? "none"
+        : "";
+
+  /**
+   * One persistent bar: the shell header hosts the view's bar contents whenever
+   * the default view owns a panel and there is a visible header to host them in.
+   * A plugin's full custom surface owns everything, so it falls back to hiding.
+   */
+  const historyHeaderExternal = (): boolean =>
+    historyPresentation === "panel" &&
+    !!historyViewHandle &&
+    historyMountedElement === historyViewHandle.element &&
+    config.layout?.showHeader !== false &&
+    shownHeaderDisplay() !== "none";
+
+  const suppressHeaderChildren = (): void => {
+    for (const child of Array.from(header.children)) {
+      if (child === historyHeaderHost) continue;
+      child.setAttribute(HISTORY_SUPPRESSED_ATTR, "");
+    }
+  };
+
+  /** By attribute, not by captured list: the header may have been rebuilt. */
+  const unsuppressHeaderChildren = (): void => {
+    for (const node of Array.from(
+      container.querySelectorAll(`[${HISTORY_SUPPRESSED_ATTR}]`)
+    )) {
+      node.removeAttribute(HISTORY_SUPPRESSED_ATTR);
+    }
+  };
+
+  const hostHistoryHeaderContent = (): void => {
+    const view = historyViewHandle;
+    if (!view) return;
+    if (!historyHeaderHost) {
+      historyHeaderHost = createElement("div", "persona-history-header-host");
+    }
+    view.setHeaderPlacement("external");
+    const content = view.getHeaderElement();
+    if (content.parentNode !== historyHeaderHost) {
+      historyHeaderHost.replaceChildren(content);
+    }
+    // The wrapper follows a rebuilt header binding; focus inside it survives.
+    if (historyHeaderHost.parentNode !== header) {
+      header.appendChild(historyHeaderHost);
+    }
+    suppressHeaderChildren();
+  };
+
+  const releaseHistoryHeaderContent = (): void => {
+    if (!historyHeaderHost) return;
+    // The view re-adopts its bar; the wrapper never owns the content's lifetime.
+    historyViewHandle?.setHeaderPlacement("inline");
+    historyHeaderHost.remove();
+    historyHeaderHost = null;
+    unsuppressHeaderChildren();
+  };
+
   /**
    * Panel presentation obscures the conversation, so the transcript AND the
    * composer must be unreachable: a visitor must never send into a conversation
-   * they cannot see. The shell header goes with them so the view's top bar is
-   * the single header (rail keeps it: the conversation stays primary).
+   * they cannot see. The header bar itself stays: only its contents swap, which
+   * is also why it is never inert here (rail changes nothing at all: the
+   * conversation stays primary).
    *
    * The widget's close (×) usually lives inside that header, but no trap
    * results: the view's back control is the initial focus target, Escape exits,
-   * and both restore the header before focus lands. `top-right` close placement
-   * parents the × to the container, so it stays reachable either way.
+   * and both restore the header contents before focus lands. `top-right` close
+   * placement parents the × to the container, so it stays reachable either way.
    *
    * Restores exactly what it captured.
    */
@@ -7465,6 +7543,14 @@ export const createAgentExperience = (
     // header-layout rebuild swaps them and re-enters here for the replacement.
     footer.hidden = true;
     setHistoryHostInert(footer, true);
+    if (historyHeaderExternal()) {
+      hostHistoryHeaderContent();
+      header.style.display = shownHeaderDisplay();
+      setHistoryHostInert(header, false);
+      return;
+    }
+    // No bar to host in: hide the header the way the surface used to.
+    releaseHistoryHeaderContent();
     header.style.display = "none";
     setHistoryHostInert(header, true);
   };
@@ -7476,8 +7562,12 @@ export const createAgentExperience = (
     const capturedFooter = footer;
     const capturedHeader = header;
     const previousHeaderDisplay = header.style.display;
+    capturedPanelHeader = capturedHeader;
+    capturedPanelHeaderDisplay = previousHeaderDisplay;
     restorePanelHost = () => {
       restorePanelHost = null;
+      releaseHistoryHeaderContent();
+      capturedPanelHeader = null;
       body.style.display = previousDisplay;
       setHistoryHostInert(body, false);
       capturedFooter.hidden = previousFooterHidden;
@@ -7553,6 +7643,7 @@ export const createAgentExperience = (
 
   /** Shell-owned chrome applied to whatever element arbitration produced. */
   const prepareHistoryElement = (element: HTMLElement): void => {
+    historyMountedElement = element;
     element.id = historyRegionId;
     // Host-side flex sizing: the chunk sizes itself to 100%, the shell decides
     // how it participates in the column/row it was just dropped into.
@@ -7577,15 +7668,19 @@ export const createAgentExperience = (
     const next = resolveHistoryPresentation();
     if (next === historyPresentation) return;
     const focusKey = document.activeElement;
+    // The bar's contents may be focused inside the shell header, not the view.
     const refocus =
       focusKey instanceof HTMLElement &&
-      historySurface.element.contains(focusKey)
+      (historySurface.element.contains(focusKey) ||
+        historyHeaderHost?.contains(focusKey) === true)
         ? focusKey
         : null;
     unmountHistoryHosts();
     // Detach before re-hosting so a mid-move re-arbitration cannot re-insert
     // the surface into the host it is being moved out of.
     historySurface.element.remove();
+    // Rail is always inline; the panel host re-externalizes on mount.
+    historySurface.view.setHeaderPlacement("inline");
     historyPresentation = next;
     historySurface.view.setPresentation(next);
     historySurface.requestRender();
@@ -7602,10 +7697,19 @@ export const createAgentExperience = (
 
   // --- open / close --------------------------------------------------------
 
+  /** The bar lives in the shell header while it is hosted there. */
+  const queryHistoryOwned = <T extends HTMLElement>(
+    element: HTMLElement,
+    selector: string
+  ): T | null =>
+    historyHeaderHost?.querySelector<T>(selector) ??
+    element.querySelector<T>(selector);
+
   const focusHistoryEntry = (): void => {
-    const element = historySurface?.element;
+    const element = historySurface?.element ?? historyMountedElement;
     if (!element) return;
-    const close = element.querySelector<HTMLElement>(
+    const close = queryHistoryOwned(
+      element,
       '[data-persona-history-focus="close"]'
     );
     if (close) {
@@ -7613,7 +7717,7 @@ export const createAgentExperience = (
       return;
     }
     const heading =
-      element.querySelector<HTMLElement>(".persona-history-title") ??
+      queryHistoryOwned<HTMLElement>(element, ".persona-history-title") ??
       // Custom contents may expose neither: the region itself is the fallback.
       element;
     heading.tabIndex = -1;
@@ -7649,11 +7753,21 @@ export const createAgentExperience = (
     historyPresentation = resolveHistoryPresentation();
     historyVisible = true;
 
+    // Built externally when there is a shell header to host it in; the panel
+    // host re-decides on mount, so this only avoids a needless first insert.
+    const initialHeaderPlacement: HistoryHeaderPlacement =
+      historyPresentation === "panel" &&
+      config.layout?.showHeader !== false &&
+      header.style.display !== "none"
+        ? "external"
+        : "inline";
+
     const baseViewOptions: HistoryViewOptions = {
       provider,
       context: historyOperationContext,
       targetId: activeHistoryTargetId(),
       presentation: historyPresentation,
+      headerPlacement: initialHeaderPlacement,
       showScopeStatus: config.features?.history?.showScopeStatus !== false,
       activeConversationId: session.getActiveConversationId(),
       ...(config.features?.history?.copy
@@ -7681,18 +7795,24 @@ export const createAgentExperience = (
       getPresentation: () => historyPresentation ?? "panel",
       getReturnSurface: () => historyReturnSurface,
       close: () => closeHistory(),
-      createView: ({ slots, renderDom, onModelChange }) =>
-        module.createHistoryView({
+      createView: ({ slots, renderDom, onModelChange }) => {
+        // Tracked before `historySurface` is assigned: the first mount happens
+        // inside this constructor and already needs the handle.
+        historyViewHandle = module.createHistoryView({
           ...baseViewOptions,
           slots,
           renderDom,
           onModelChange,
           onAnnounce: announceHistory,
-        }),
+        });
+        return historyViewHandle;
+      },
       onElementChanged: (next, previous) => {
         if (!previous?.isConnected) return mountHistoryElement(next);
         prepareHistoryElement(next);
         previous.replaceWith(next);
+        // Default <-> custom re-arbitration changes who owns the bar.
+        enforcePanelHost();
       },
     });
     historySurface.view.setNewConversationRequired(
@@ -7745,6 +7865,8 @@ export const createAgentExperience = (
       // A reopen that preempted this exit already owns the shell state.
       if (historySurface === surface) {
         historySurface = null;
+        historyViewHandle = null;
+        historyMountedElement = null;
         historyPresentation = null;
         historyOperationContext = null;
         historyInvoker = null;

@@ -15,6 +15,7 @@ export type {
   HistoryViewOptions,
   HistoryViewHandle,
   HistoryViewPresentation,
+  HistoryHeaderPlacement,
   HistoryViewPendingAction,
   HistoryViewModel,
   HistoryViewOperations,
