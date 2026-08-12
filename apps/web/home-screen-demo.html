@@ -34,6 +34,7 @@
         <div class="info-section">
           <h3>Navigation</h3>
           <p>The house icon in the panel header calls <code>showHome()</code>. These buttons drive the same plugin and the same controller methods from outside the widget.</p>
+          <p>The header intentionally has no new-conversation icon (<code>clearChat: { enabled: false }</code>): in this composition Home's "Start a conversation" card and the Messages surface own conversation creation, matching the Intercom and Zendesk convention that the header only navigates and dismisses. Keep the header affordance when history is enabled without a Home screen.</p>
           <div class="btn-row">
             <button class="btn" type="button" data-home-action="show">Back to home</button>
             <button class="btn" type="button" data-home-action="messages">Open messages</button>

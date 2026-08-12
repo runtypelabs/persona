@@ -225,6 +225,10 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       enabled: mode === "launcher",
       width: mode === "launcher" ? "min(420px, 94vw)" : "100%",
       title: mode === "launcher" ? "Support" : undefined,
+      // Messenger convention (Intercom/Zendesk): the header navigates and
+      // dismisses; conversation creation belongs to Home and Messages. The
+      // header New conversation affordance would be a redundant third entry.
+      clearChat: { enabled: false },
     },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
