@@ -2745,6 +2745,13 @@ export interface AgentWidgetHistoryFeature {
   scope?: HistoryScope;
   /** Copy overrides. Every user-visible history string must be here. */
   copy?: AgentWidgetHistoryCopy;
+  /**
+   * Leading avatar on each conversation row. Default true: the same source the
+   * header icon uses (`launcher.iconUrl`, else `launcher.agentIconText`). Pass
+   * an image URL or a glyph to override it, or false to drop the block and let
+   * the text column run full width.
+   */
+  rowAvatar?: boolean | string;
   /** Show the evidence-based history scope/status beneath the Messages heading. Default true. */
   showScopeStatus?: boolean;
 }

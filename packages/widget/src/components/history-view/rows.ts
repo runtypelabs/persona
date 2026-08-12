@@ -4,10 +4,9 @@
  * The row is a whole-row button; the overflow trigger is a SIBLING absolutely
  * positioned over it, because a button cannot legally nest inside a button.
  *
- * v1 hierarchy (plan D7 "beta hierarchy"): `updatedAt`/preview read as primary
- * and the server title as secondary, unconditionally. Titles are frequently
- * placeholders and nothing may derive a title or preview locally, so the
- * hierarchy is a fixed rendering choice rather than a heuristic on the string.
+ * Hierarchy: avatar, then title over preview with the relative time aligned to
+ * the title. A conversation without a server title promotes its preview to the
+ * title line rather than rendering an empty one; nothing is derived locally.
  */
 
 import { createNode, cx } from "../../utils/dom";
@@ -27,12 +26,33 @@ export interface ConversationRowOptions {
   menuOpen: boolean;
   /** Row-adjacent, retryable failure text. */
   error: { message: string; retry: () => void } | null;
+  /** Image URL or glyph for the leading avatar; `false` omits the block. */
+  avatar: string | false | undefined;
   nowMs: number;
   copy: ResolvedHistoryViewCopy;
   onOpen: () => void;
   onToggleMenu: () => void;
   onCloseMenu: (options?: { restoreFocus?: boolean }) => void;
   onDelete: () => void;
+}
+
+/** Same source shape as the header icon: a URL renders as an image, else a glyph. */
+const AVATAR_URL = /^(https?:|\/|data:)/i;
+const AVATAR_FALLBACK = "\u{1F4AC}";
+
+function buildAvatar(source: string): HTMLElement {
+  const holder = createNode("span", {
+    className: "persona-history-row-avatar",
+    attrs: { "aria-hidden": "true" },
+  });
+  if (AVATAR_URL.test(source)) {
+    holder.appendChild(
+      createNode("img", { attrs: { src: source, alt: "", loading: "lazy" } })
+    );
+  } else {
+    holder.textContent = source;
+  }
+  return holder;
 }
 
 export const rowFocusKey = (id: string): string => `row:${id}`;
@@ -45,12 +65,15 @@ export function buildConversationRow(
   const { conversation, copy, busy, pending } = options;
   const inert = busy || pending !== null;
 
+  // A placeholder-titled conversation promotes its preview instead of showing
+  // an empty title line above it.
+  const titled = conversation.title.trim().length > 0;
   const head = createNode(
     "div",
     { className: "persona-history-row-head" },
     createNode("span", {
       className: "persona-history-row-title persona-history-truncate",
-      text: conversation.title,
+      text: titled ? conversation.title : (conversation.preview ?? ""),
     }),
     createNode("time", {
       className: "persona-history-row-time",
@@ -59,12 +82,13 @@ export function buildConversationRow(
     })
   );
 
-  const preview = conversation.preview
-    ? createNode("span", {
-        className: "persona-history-row-preview persona-history-clamp",
-        text: conversation.preview,
-      })
-    : null;
+  const preview =
+    titled && conversation.preview
+      ? createNode("span", {
+          className: "persona-history-row-preview persona-history-truncate",
+          text: conversation.preview,
+        })
+      : null;
 
   const rowButton = createNode(
     "button",
@@ -83,12 +107,19 @@ export function buildConversationRow(
         ...(pending ? { "aria-busy": "true" } : {}),
       },
     },
-    head,
-    preview,
-    createNode("span", {
-      className: "persona-history-row-count persona-history-sr-only",
-      text: formatMessageCount(conversation.messageCount, copy),
-    })
+    options.avatar === false
+      ? null
+      : buildAvatar(options.avatar || AVATAR_FALLBACK),
+    createNode(
+      "div",
+      { className: "persona-history-row-body" },
+      head,
+      preview,
+      createNode("span", {
+        className: "persona-history-row-count persona-history-sr-only",
+        text: formatMessageCount(conversation.messageCount, copy),
+      })
+    )
   );
   rowButton.addEventListener("click", () => {
     if (inert) return;

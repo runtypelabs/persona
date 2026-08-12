@@ -7774,6 +7774,8 @@ export const createAgentExperience = (
         ? "external"
         : "inline";
 
+    const rowAvatar = config.features?.history?.rowAvatar;
+
     const baseViewOptions: HistoryViewOptions = {
       provider,
       context: historyOperationContext,
@@ -7781,6 +7783,13 @@ export const createAgentExperience = (
       presentation: historyPresentation,
       headerPlacement: initialHeaderPlacement,
       showScopeStatus: config.features?.history?.showScopeStatus !== false,
+      // Rows reuse the header's agent icon unless history overrides or hides it.
+      rowAvatar:
+        rowAvatar === false
+          ? false
+          : typeof rowAvatar === "string"
+            ? rowAvatar
+            : (config.launcher?.iconUrl ?? config.launcher?.agentIconText),
       activeConversationId: session.getActiveConversationId(),
       ...(config.features?.history?.copy
         ? { copy: config.features.history.copy }

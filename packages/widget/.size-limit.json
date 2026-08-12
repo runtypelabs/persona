@@ -44,7 +44,7 @@
   {
     "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "165.5 kB",
+    "limit": "166 kB",
     "gzip": true
   },
   {
@@ -92,7 +92,7 @@
   {
     "name": "Lazy · history (Messages) view chunk (history-view.js)",
     "path": "dist/history-view.js",
-    "limit": "11 kB",
+    "limit": "12 kB",
     "gzip": true
   }
 ]

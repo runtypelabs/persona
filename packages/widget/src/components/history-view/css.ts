@@ -15,6 +15,8 @@
  *   --persona-history-topbar-bg     top bar background
  *   --persona-history-border        hairlines and dividers
  *   --persona-history-row-hover-bg  row hover/active-press wash
+ *   --persona-history-row-divider   inset hairline under each row
+ *   --persona-history-row-avatar-bg leading row avatar plate
  *   --persona-history-row-active-bg selected conversation wash
  *   --persona-history-active-marker selected conversation edge marker
  *   --persona-history-skeleton-bg   loading placeholder blocks
@@ -35,13 +37,15 @@ export const HISTORY_VIEW_CSS =
   --persona-history-topbar-bg: var(--persona-header-bg, var(--persona-surface, #ffffff));
   --persona-history-border: var(--persona-divider, var(--persona-border, #e5e7eb));
   --persona-history-row-hover-bg: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.04));
+  --persona-history-row-divider: var(--persona-history-border);
+  --persona-history-row-avatar-bg: var(--persona-header-icon-bg, var(--persona-primary, #2563eb));
   --persona-history-row-active-bg: var(--persona-container, #f3f4f6);
   --persona-history-active-marker: var(--persona-primary, #2563eb);
   --persona-history-skeleton-bg: var(--persona-container, #eef0f3);
   --persona-history-danger-fg: var(--persona-palette-colors-error-600, #b91c1c);
   --persona-history-focus-ring: var(--persona-primary, #2563eb);
   --persona-history-slide: 20px;
-  --persona-history-row-min-height: 72px;
+  --persona-history-row-min-height: 74px;
   --persona-history-topbar-min-height: 56px;
   box-sizing: border-box;
   display: flex;
@@ -75,8 +79,10 @@ export const HISTORY_VIEW_CSS =
 }
 ` +
   /* Ambient identity states collapse to the caption above the list; the sentence
-     stays in the accessibility tree for its aria-describedby. */
+     stays in the accessibility tree for its aria-describedby. Panel date
+     headings go the same way: one flat list, but the lists stay labelled. */
   `.persona-history-view .persona-history-sr-only,
+.persona-history-view--panel .persona-history-group-heading,
 .persona-history-view .persona-history-scope-alert[data-persona-history-scope-tone="ambient"] {
   position: absolute;
   width: 1px;
@@ -119,7 +125,9 @@ export const HISTORY_VIEW_CSS =
   font-weight: var(--persona-components-header-title-fontWeight, 600);
   line-height: var(--persona-components-header-title-lineHeight, 1.5rem);
   color: var(--persona-header-title-fg, var(--persona-primary, #0f0f0f));
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 ` +
   /* Ambient privacy caption: a body row above the list, never a second bar line. */
@@ -198,22 +206,33 @@ export const HISTORY_VIEW_CSS =
   flex-direction: column;
   gap: 16px;
 }
-.persona-history-view button.persona-history-new {
-  display: flex;
+` +
+  /* Floating pill over the end of the list: last in flex order, pinned to the
+     bottom of the scrolling body, and still in flow so the last row clears it. */
+  `.persona-history-view button.persona-history-new {
+  order: 1;
+  position: sticky;
+  bottom: 12px;
+  z-index: 1;
+  align-self: center;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  width: 100%;
-  min-height: 48px;
-  padding: 12px 16px;
-  margin: 0;
+  width: auto;
+  max-width: 100%;
+  min-height: 40px;
+  padding: 10px 16px;
+  margin: auto 0 0;
   border: 1px solid transparent;
   border-radius: var(--persona-button-radius, var(--persona-radius-lg, 10px));
   background: var(--persona-button-primary-bg, var(--persona-primary, #2563eb));
   color: var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff));
   font: inherit;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 20px;
   text-align: left;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
   cursor: pointer;
 }
 .persona-history-view button.persona-history-new span {
@@ -248,17 +267,28 @@ export const HISTORY_VIEW_CSS =
   padding: 0;
   list-style: none;
 }
-.persona-history-view li.persona-history-item + li.persona-history-item {
-  border-top: 1px solid var(--persona-history-border);
+` +
+  /* Hairline under every row, inset from both edges: a divider that reads as
+     part of the row rather than a border on the list item. */
+  `.persona-history-view li.persona-history-item::after {
+  content: "";
+  position: absolute;
+  right: 20px;
+  bottom: 0;
+  left: 20px;
+  height: 1px;
+  background: var(--persona-history-row-divider);
 }
 .persona-history-view button.persona-history-row {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   min-height: var(--persona-history-row-min-height);
-  padding: 12px 60px 12px 16px;
+  padding: 16px 23px;
   margin: 0;
   border: 0;
-  border-radius: var(--persona-radius-md, 8px);
+  border-radius: 0;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -271,7 +301,30 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view button.persona-history-row[aria-current="page"] {
   background: var(--persona-history-row-active-bg);
   box-shadow: inset 3px 0 0 0 var(--persona-history-active-marker);
-  font-weight: 600;
+}
+.persona-history-view .persona-history-row-avatar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: 16.7%;
+  background: var(--persona-history-row-avatar-bg);
+  color: var(--persona-header-icon-fg, var(--persona-text-inverse, #ffffff));
+  font-size: 20px;
+  line-height: 1;
+}
+.persona-history-view .persona-history-row-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.persona-history-view .persona-history-row-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  line-height: 21px;
 }
 .persona-history-view .persona-history-row-head {
   display: flex;
@@ -282,9 +335,9 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view .persona-history-row-title {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--persona-text-muted, #6b7280);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--persona-text, #111827);
 }
 .persona-history-view .persona-history-truncate {
   display: block;
@@ -295,27 +348,40 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view time.persona-history-row-time {
   flex: 0 0 auto;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 400;
   font-variant-numeric: tabular-nums;
   color: var(--persona-text-muted, #6b7280);
 }
 .persona-history-view .persona-history-row-preview {
-  margin-top: 2px;
   font-size: 14px;
-  color: var(--persona-text, #111827);
+  color: var(--persona-text-muted, #6b7280);
 }
-.persona-history-view .persona-history-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-}
-.persona-history-view button.persona-history-row-menu-button {
+` +
+  /* No per-row menu in the reference design: the trigger takes the time's slot
+     on hover/focus and stays put for coarse pointers and while its menu is open. */
+  `.persona-history-view button.persona-history-row-menu-button {
   position: absolute;
   top: 50%;
   right: 6px;
   transform: translateY(-50%);
+}
+@media (hover: hover) {
+  .persona-history-view button.persona-history-row-menu-button {
+    opacity: 0;
+    transition: opacity 120ms ease;
+  }
+  .persona-history-view li.persona-history-item:hover time.persona-history-row-time,
+  .persona-history-view li.persona-history-item:focus-within time.persona-history-row-time {
+    opacity: 0;
+  }
+  .persona-history-view li.persona-history-item:hover button.persona-history-row-menu-button,
+  .persona-history-view li.persona-history-item:focus-within button.persona-history-row-menu-button {
+    opacity: 1;
+  }
+}
+.persona-history-view button.persona-history-row-menu-button[aria-expanded="true"] {
+  opacity: 1;
 }
 .persona-history-view .persona-history-menu {
   position: absolute;
@@ -408,7 +474,7 @@ export const HISTORY_VIEW_CSS =
 }
 .persona-history-view .persona-history-skeleton-row {
   min-height: var(--persona-history-row-min-height);
-  padding: 12px 16px;
+  padding: 16px 23px;
 }
 .persona-history-view .persona-history-skeleton-bar {
   height: 10px;
@@ -450,6 +516,20 @@ export const HISTORY_VIEW_CSS =
 }
 .persona-history-view button.persona-history-destructive:hover:not(:disabled) {
   text-decoration: underline;
+}
+
+` +
+  /* --- panel presentation -------------------------------------------------- */
+  /* One flat, edge-to-edge list. The date headings stay in the DOM for their
+     list labelling; rows carry a relative time, so nothing is lost. */
+  `.persona-history-view--panel .persona-history-list-region {
+  gap: 0;
+}
+.persona-history-view--panel .persona-history-group {
+  margin: 0 -16px;
+}
+.persona-history-view--panel button.persona-history-load-more {
+  margin-top: 12px;
 }
 
 ` +

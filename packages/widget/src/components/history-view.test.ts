@@ -145,6 +145,11 @@ const menuButtonFor = (root: HTMLElement, id: string): HTMLButtonElement => {
 const stateBlock = (root: HTMLElement): HTMLElement | null =>
   root.querySelector<HTMLElement>("[data-persona-history-state]");
 
+const injectedHistoryCss = (): string =>
+  document.querySelector(
+    'style[data-persona-plugin-style="persona-history-view"]'
+  )?.textContent ?? "";
+
 const liveText = (root: HTMLElement): string =>
   root.querySelector("[data-persona-history-live-region]")?.textContent ?? "";
 
@@ -154,7 +159,7 @@ afterEach(() => {
 });
 
 describe("history view rows", () => {
-  it("renders rows in server order with the beta hierarchy", async () => {
+  it("renders rows in server order with the title over the preview", async () => {
     const { root } = mount();
     await flush();
 
@@ -172,7 +177,8 @@ describe("history view rows", () => {
     expect(title?.textContent).toBe("Session a");
     expect(title?.classList.contains("persona-history-truncate")).toBe(true);
     expect(preview?.textContent).toBe("Preview for a");
-    expect(preview?.classList.contains("persona-history-clamp")).toBe(true);
+    // Both lines are single-line and truncate; nothing wraps to a second line.
+    expect(preview?.classList.contains("persona-history-truncate")).toBe(true);
     // Time is aligned to the title edge (same head row); preview follows below.
     expect(time?.parentElement?.classList.contains("persona-history-row-head")).toBe(
       true
@@ -205,6 +211,69 @@ describe("history view rows", () => {
     ).not.toBeNull();
   });
 
+  it("leads every row with an avatar and falls back to a glyph", async () => {
+    const { root } = mount();
+    await flush();
+    const avatar = rowFor(root, "a").querySelector<HTMLElement>(
+      ".persona-history-row-avatar"
+    );
+    expect(avatar?.getAttribute("aria-hidden")).toBe("true");
+    expect(avatar?.querySelector("img")).toBeNull();
+    expect(avatar?.textContent).toBe("\u{1F4AC}");
+    // The avatar leads the text column.
+    expect(
+      avatar?.compareDocumentPosition(
+        rowFor(root, "a").querySelector(".persona-history-row-body") as Node
+      )
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it("renders a configured avatar URL as an image and a glyph as text", async () => {
+    const { root } = mount({ rowAvatar: "https://example.com/a.png" });
+    await flush();
+    const image = rowFor(root, "a").querySelector<HTMLImageElement>(
+      ".persona-history-row-avatar img"
+    );
+    expect(image?.getAttribute("src")).toBe("https://example.com/a.png");
+    expect(image?.getAttribute("alt")).toBe("");
+
+    const glyph = mount({ rowAvatar: "🥐" });
+    await flush();
+    expect(
+      rowFor(glyph.root, "a").querySelector(".persona-history-row-avatar")
+        ?.textContent
+    ).toBe("🥐");
+  });
+
+  it("drops the avatar block entirely when it is disabled", async () => {
+    const { root } = mount({ rowAvatar: false });
+    await flush();
+    expect(root.querySelector(".persona-history-row-avatar")).toBeNull();
+    expect(
+      rowFor(root, "a").querySelector(".persona-history-row-body")
+    ).not.toBeNull();
+  });
+
+  it("promotes the preview when a conversation has no server title", async () => {
+    const { root } = mount({
+      seeds: [
+        seed("a", 30 * MIN, { title: "  " }),
+        seed("b", 2 * HOUR, { title: "", preview: null }),
+      ],
+    });
+    await flush();
+
+    const first = rowFor(root, "a");
+    expect(first.querySelector(".persona-history-row-title")?.textContent).toBe(
+      "Preview for a"
+    );
+    expect(first.querySelector(".persona-history-row-preview")).toBeNull();
+    // Nothing to promote: the title line stays empty rather than inventing text.
+    expect(rowFor(root, "b").querySelector(".persona-history-row-title")?.textContent).toBe(
+      ""
+    );
+  });
+
   it("marks the active row with aria-current and a class, not color alone", async () => {
     const { root, handle } = mount({ activeConversationId: "b" });
     await flush();
@@ -218,6 +287,58 @@ describe("history view rows", () => {
     handle.setActiveConversationId("a");
     expect(rowFor(root, "a").getAttribute("aria-current")).toBe("page");
     expect(rowFor(root, "b").hasAttribute("aria-current")).toBe(false);
+  });
+});
+
+describe("history view list styling", () => {
+  it("keeps the row menu trigger a hover-revealed sibling of the row button", async () => {
+    const { root } = mount();
+    await flush();
+    const trigger = menuButtonFor(root, "a");
+    expect(trigger.parentElement?.classList.contains("persona-history-item")).toBe(
+      true
+    );
+    expect(trigger.closest(".persona-history-row")).toBeNull();
+
+    const css = injectedHistoryCss();
+    const hover = css.slice(css.indexOf("@media (hover: hover)"));
+    expect(hover).toContain(
+      ".persona-history-view button.persona-history-row-menu-button {\n    opacity: 0;"
+    );
+    expect(hover).toContain(
+      ".persona-history-view li.persona-history-item:hover button.persona-history-row-menu-button"
+    );
+    expect(hover).toContain(
+      ".persona-history-view li.persona-history-item:focus-within button.persona-history-row-menu-button"
+    );
+    // An open menu never fades out from under the pointer.
+    expect(css).toContain(
+      '.persona-history-view button.persona-history-row-menu-button[aria-expanded="true"] {\n  opacity: 1;\n}'
+    );
+  });
+
+  it("draws the row divider as an inset hairline, not a list-item border", async () => {
+    mount();
+    await flush();
+    const css = injectedHistoryCss();
+    expect(css).not.toContain("li.persona-history-item + li.persona-history-item");
+    expect(css).toContain(".persona-history-view li.persona-history-item::after");
+    expect(css).toContain("left: 20px;");
+  });
+
+  it("flattens the panel list and keeps the rail's date headings", async () => {
+    const { root } = mount();
+    await flush();
+    // The headings stay in the DOM: the lists are still labelled by them.
+    expect(root.querySelectorAll(".persona-history-group-heading")).toHaveLength(3);
+    const css = injectedHistoryCss();
+    expect(css).toContain(
+      ".persona-history-view--panel .persona-history-group-heading"
+    );
+    expect(css).not.toContain(
+      ".persona-history-view--rail .persona-history-group-heading"
+    );
+    expect(css).toContain(".persona-history-view--panel .persona-history-group {\n  margin: 0 -16px;\n}");
   });
 });
 
@@ -736,17 +857,24 @@ describe("history view chrome and destructive actions", () => {
     ).toBe("Close conversation list");
   });
 
-  it("runs the primary new-conversation action from the list region", async () => {
+  it("runs the primary new-conversation action from a pill pinned below the list", async () => {
     const { root, onStartNew } = mount();
     await flush();
     const primary = root.querySelector<HTMLButtonElement>(".persona-history-new");
     expect(primary?.textContent).toContain("New conversation");
-    // The primary action sits above the list region.
+    // DOM order is unchanged; flex order and sticky do the placement.
     expect(
       primary?.compareDocumentPosition(
         root.querySelector(".persona-history-list-region") as Node
       )
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const css = injectedHistoryCss();
+    const pill = css.slice(css.indexOf(".persona-history-view button.persona-history-new {"));
+    const block = pill.slice(0, pill.indexOf("}"));
+    expect(block).toContain("order: 1;");
+    expect(block).toContain("position: sticky;");
+    expect(block).toContain("align-self: center;");
+    expect(block).toContain("width: auto;");
 
     primary?.click();
     await flush();

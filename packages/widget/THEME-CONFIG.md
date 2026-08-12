@@ -864,7 +864,7 @@ mount inside the widget's own header (see `.persona-history-topbar--shell`
 below), so those rules use doubled class selectors instead of view scoping,
 which preserves the same specificity guarantee.
 
-Twelve history-specific variables are declared on the view root, each with a
+Fourteen history-specific variables are declared on the view root, each with a
 fallback chain into the ordinary theme aliases. Set any of them on the host page
 (or on `[data-persona-root]`) to restyle the surface without touching a class:
 
@@ -872,14 +872,16 @@ fallback chain into the ordinary theme aliases. Set any of them on the host page
 |---------|----------------|-------------|
 | `--persona-history-surface-bg` | `--persona-surface` → `#ffffff` | List/background surface and the row overflow menu |
 | `--persona-history-topbar-bg` | `--persona-header-bg` → `--persona-surface` → `#ffffff` | Top bar background (inline bar only; the shell-hosted bar is transparent, the header theme paints it) |
-| `--persona-history-border` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Hairlines: top bar, row dividers, footer, rail edge |
+| `--persona-history-border` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Hairlines: top bar, footer, rail edge |
 | `--persona-history-row-hover-bg` | `--persona-button-ghost-hover-bg` → `rgba(0, 0, 0, 0.04)` | Row hover and active-press wash |
+| `--persona-history-row-divider` | `--persona-history-border` | Inset hairline under every row |
+| `--persona-history-row-avatar-bg` | `--persona-header-icon-bg` → `--persona-primary` → `#2563eb` | Leading row avatar plate (behind a glyph; an image covers it) |
 | `--persona-history-row-active-bg` | `--persona-container` → `#f3f4f6` | Selected conversation wash |
 | `--persona-history-active-marker` | `--persona-primary` → `#2563eb` | Selected conversation edge marker |
 | `--persona-history-skeleton-bg` | `--persona-container` → `#eef0f3` | Loading placeholder blocks |
 | `--persona-history-danger-fg` | `--persona-palette-colors-error-600` → `#b91c1c` | Destructive action text (delete, delete all, forget device) |
 | `--persona-history-focus-ring` | `--persona-primary` → `#2563eb` | `:focus-visible` outline color |
-| `--persona-history-row-min-height` | `72px` | Row and skeleton-row minimum height |
+| `--persona-history-row-min-height` | `74px` | Row and skeleton-row minimum height |
 | `--persona-history-topbar-min-height` | `56px` | Inline top bar minimum height (the shell-hosted bar inherits the header's sizing) |
 | `--persona-history-slide` | `20px` (panel) / `12px` (rail) | Horizontal travel of the body's entrance and exit motion |
 
@@ -926,23 +928,29 @@ plugins can target them:
 
 /* Body, groups, rows */
 .persona-history-body
-.persona-history-new                  /* primary "New conversation" action */
+.persona-history-new                  /* primary "New conversation" action: a
+                                         pill pinned to the bottom of the list */
 .persona-history-new-icon             /* its icon-button form in the top bar */
 .persona-history-list-region
 .persona-history-group                /* one time bucket (Today, Yesterday, …) */
-.persona-history-group-heading
+.persona-history-group-heading        /* sr-only in panel, visible in rail */
 .persona-history-list
-.persona-history-item                 /* row wrapper (<li>) */
+.persona-history-item                 /* row wrapper (<li>); its ::after is the
+                                         inset divider under the row */
 .persona-history-row                  /* whole-row button */
 .persona-history-row--active
 .persona-history-row--opening
 .persona-history-row--deleting
+.persona-history-row-avatar           /* leading 40px avatar (features.history.rowAvatar) */
+.persona-history-row-body             /* the two-line text column beside it */
 .persona-history-row-head
 .persona-history-row-title
 .persona-history-row-time
 .persona-history-row-preview
 .persona-history-row-count            /* screen-reader message count */
-.persona-history-row-menu-button      /* overflow trigger; a sibling, not nested */
+.persona-history-row-menu-button      /* overflow trigger; a sibling, not nested.
+                                         Revealed on row hover/focus where the
+                                         pointer can hover */
 .persona-history-menu
 .persona-history-menu-item
 .persona-history-row-error            /* row-adjacent failure with retry */

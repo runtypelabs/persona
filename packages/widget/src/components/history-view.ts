@@ -132,6 +132,11 @@ export interface HistoryViewOptions {
   /** Default `"inline"`. Rail is always inline; the shell enforces that. */
   headerPlacement?: HistoryHeaderPlacement;
   showScopeStatus: boolean;
+  /**
+   * Leading row avatar: an image URL, a glyph, or `false` to omit the block.
+   * Absent falls back to the same glyph the header uses.
+   */
+  rowAvatar?: string | false;
   activeConversationId: string | null;
   /** List page size. Default 25. */
   pageSize?: number;
@@ -742,6 +747,7 @@ export function createHistoryView(
             busy: busy(),
             menuOpen: openMenuId === conversation.id,
             error: rowErrors.get(conversation.id) ?? null,
+            avatar: options.rowAvatar,
             nowMs: now(),
             copy,
             onOpen: () => void openConversation(conversation.id),
