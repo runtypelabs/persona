@@ -939,6 +939,8 @@ export const createAgentExperience = (
   let historyPresentation: ResolvedHistoryPresentation | null = null;
   /** Re-asserts panel-host inert state after a chrome pass. */
   let reapplyHistoryHostChrome: () => void = () => {};
+  /** Re-derives rail geometry from config; no-op unless a rail is mounted. */
+  let applyRailChrome: () => void = () => {};
   let historyStateHandler: (state: SessionHistoryState) => void = () => {};
   let historyNoticeHandler: (notice: SessionHistoryNotice) => void = () => {};
   /** Header button/affordance refresh; a turn's busy state gates the button. */
@@ -1215,8 +1217,9 @@ export const createAgentExperience = (
       onClose: () => setOpenState(false, "user")
     });
     if (customHeader) {
-      // Replace the default header with custom header
-      const existingHeader = container.querySelector('.persona-border-b-persona-divider');
+      // Replace the default header with custom header. By the live binding, not
+      // a container lookup: while a rail is mounted the header sits inside it.
+      const existingHeader = header;
       if (existingHeader) {
         existingHeader.replaceWith(customHeader);
         header = customHeader;
@@ -3577,6 +3580,7 @@ export const createAgentExperience = (
     } else {
       mount.style.removeProperty("--persona-artifact-welded-outer-radius");
     }
+    applyRailChrome();
     // A chrome pass can restyle the panel out from under an open history host.
     reapplyHistoryHostChrome();
   };
@@ -7601,61 +7605,85 @@ export const createAgentExperience = (
   };
 
   let railShell: HTMLElement | null = null;
+  let railHost: HTMLElement | null = null;
+  let railColumn: HTMLElement | null = null;
+  /** Container order the rail borrows from and hands back, header first. */
+  const railBorrowed = (): Array<HTMLElement | null> => [
+    header,
+    panelElements.closeButtonWrapper,
+    panelElements.clearChatButtonWrapper,
+    body,
+    // Composer-bar mode keeps the footer outside the container; the parent
+    // checks below then never adopt it.
+    footer,
+  ];
 
   /**
-   * Rail is a shell-owned navigation column BESIDE a still-operable
-   * conversation: `body` (and the in-container composer) move into a row
-   * wrapper next to the host.
+   * Rail geometry is config-derived, so it must be re-derivable: a live
+   * `update()` of `rail.width` / `rail.side` lands here, not only at mount.
+   */
+  applyRailChrome = (): void => {
+    const host = railHost;
+    const shell = railShell;
+    const column = railColumn;
+    if (!host || !shell || !column) return;
+    const rail = config.features?.history?.rail;
+    const trailing = rail?.side === "right";
+    host.style.flex = `0 0 ${Math.min(400, Math.max(200, rail?.width ?? 260))}px`;
+    // The divider always faces the conversation, whichever edge the rail took.
+    const divider = "1px solid var(--persona-divider,#e5e7eb)";
+    host.style.borderRight = trailing ? "" : divider;
+    host.style.borderLeft = trailing ? divider : "";
+    const leading = trailing ? column : host;
+    // Reorder only on an actual side flip: re-parenting blurs what it moves.
+    if (shell.firstElementChild !== leading) {
+      shell.append(leading, trailing ? host : column);
+    }
+  };
+
+  /**
+   * Rail is a shell-owned navigation column running the FULL widget height
+   * beside a still-operable conversation: the shell header, `body`, the
+   * in-container composer and any top-right action wrappers move into a column
+   * next to the host, and the shell takes the header's old container slot.
    */
   const mountRailHost = (element: HTMLElement): void => {
     const shell = createElement("div", "persona-history-rail-shell");
-    Object.assign(shell.style, {
-      display: "flex",
-      flexDirection: "row",
-      flex: "1 1 auto",
-      minHeight: "0",
-    } satisfies Partial<CSSStyleDeclaration>);
+    shell.style.cssText = "display:flex;flex-direction:row;flex:1 1 auto;min-height:0";
     const column = createElement("div", "persona-history-rail-conversation");
-    Object.assign(column.style, {
-      display: "flex",
-      flexDirection: "column",
-      flex: "1 1 auto",
-      minWidth: "0",
-      minHeight: "0",
-    } satisfies Partial<CSSStyleDeclaration>);
-    const rail = config.features?.history?.rail;
-    const trailing = rail?.side === "right";
+    // position: top-right close/clear wrappers anchor here instead of the
+    // container, or they would float over the rail.
+    column.style.cssText =
+      "display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;position:relative";
     const host = createElement("div", "persona-history-rail-host");
-    Object.assign(host.style, {
-      display: "flex",
-      flex: `0 0 ${Math.min(400, Math.max(200, rail?.width ?? 260))}px`,
-      minHeight: "0",
-      overflow: "hidden",
-      // The divider always faces the conversation, whichever edge the rail took.
-      [trailing ? "borderLeft" : "borderRight"]:
-        "1px solid var(--persona-divider,#e5e7eb)",
-    } as Partial<CSSStyleDeclaration>);
+    host.style.cssText = "display:flex;min-height:0;overflow:hidden";
 
-    container.insertBefore(shell, body);
-    column.appendChild(body);
-    // Composer-bar mode keeps the footer outside the container; leave it alone.
-    if (footer.parentNode === container) column.appendChild(footer);
-    if (trailing) shell.append(column, host);
-    else shell.append(host, column);
+    container.insertBefore(shell, header.parentNode === container ? header : body);
+    for (const node of railBorrowed()) {
+      if (node?.parentNode === container) column.appendChild(node);
+    }
+    shell.append(host, column);
     host.appendChild(element);
     railShell = shell;
+    railHost = host;
+    railColumn = column;
+    applyRailChrome();
   };
 
   const unmountHistoryHosts = (): void => {
     restorePanelHost?.();
-    if (railShell) {
-      container.insertBefore(body, railShell);
-      // Only a footer the rail actually adopted comes back to the container.
-      if (railShell.contains(footer)) {
-        container.insertBefore(footer, railShell);
+    const shell = railShell;
+    if (shell) {
+      // Live bindings, in panel order, before the slot the shell took. A header
+      // restored first also takes its inline action wrappers back with it, so
+      // the `contains` check skips them.
+      for (const node of railBorrowed()) {
+        if (node && shell.contains(node)) container.insertBefore(node, shell);
       }
-      railShell.remove();
+      shell.remove();
       railShell = null;
+      railHost = null;
+      railColumn = null;
     }
   };
 
@@ -10009,6 +10037,8 @@ export const createAgentExperience = (
       applyThemeVariables(mount, config);
       applyArtifactLayoutCssVars(mount, config);
       applyArtifactPaneAppearance(mount, config);
+      // Rail width/side are config-derived, so an open rail re-derives here too.
+      applyRailChrome();
       syncArtifactPane();
 
       // Re-setup theme observer if colorScheme changed
@@ -10289,7 +10319,7 @@ export const createAgentExperience = (
       const headerIconSize = launcher.headerIconSize ?? "48px";
 
       if (iconHolder) {
-        const headerEl = container.querySelector(".persona-border-b-persona-divider");
+        const headerEl = header;
         const headerCopy = headerEl?.querySelector(".persona-flex-col");
 
         // Handle hide/show
@@ -10409,15 +10439,16 @@ export const createAgentExperience = (
           // Update wrapper classes
           if (isTopRight) {
             closeButtonWrapper.className = "persona-absolute persona-top-4 persona-right-4 persona-z-50";
-            container.style.position = "relative";
-            container.appendChild(closeButtonWrapper);
+            // A mounted rail owns the conversation column; anchoring to the
+            // container would float the button over the rail.
+            const anchor = railColumn ?? container;
+            anchor.style.position = "relative";
+            anchor.appendChild(closeButtonWrapper);
           } else {
             // Check if clear chat is inline to determine if we need ml-auto
             const clearChatPlacement = launcher.clearChat?.placement ?? "inline";
             const clearChatEnabled = launcher.clearChat?.enabled ?? true;
             closeButtonWrapper.className = (clearChatEnabled && clearChatPlacement === "inline") ? "" : "persona-ml-auto";
-            // Find header element
-            const header = container.querySelector(".persona-border-b-persona-divider");
             if (header) {
               header.appendChild(closeButtonWrapper);
             }
@@ -10549,14 +10580,14 @@ export const createAgentExperience = (
               // Position to the left of the close button (which is at right: 1rem/16px)
               // Close button is ~32px wide, plus small gap = 48px from right
               clearChatButtonWrapper.style.right = "48px";
-              container.style.position = "relative";
-              container.appendChild(clearChatButtonWrapper);
+              const anchor = railColumn ?? container;
+              anchor.style.position = "relative";
+              anchor.appendChild(clearChatButtonWrapper);
             } else {
               clearChatButtonWrapper.className = "persona-relative persona-ml-auto persona-clear-chat-button-wrapper";
               // Clear the inline right style when switching back to inline mode
               clearChatButtonWrapper.style.right = "";
               // Find header and insert before close button
-              const header = container.querySelector(".persona-border-b-persona-divider");
               const closeButtonWrapperEl = panelElements.closeButtonWrapper;
               if (header && closeButtonWrapperEl && closeButtonWrapperEl.parentElement === header) {
                 header.insertBefore(clearChatButtonWrapper, closeButtonWrapperEl);

@@ -375,6 +375,12 @@ Panel and seamless carry `persona-artifact-welded-split` on the mount root while
 | `border` | `semantic.colors.border` |
 | `borderRadius` | `palette.radius.xl palette.radius.xl 0 0` |
 | `padding` | `semantic.spacing.md` |
+| `minHeight` | unset (`auto`) |
+
+`minHeight` (`--persona-header-min-height`) floors the header strip's height
+for both header layouts. Pin it together with
+`components.history.railHeader.minHeight` so the Messages rail's own top strip
+lines up with the conversation header beside it.
 
 `title` and `subtitle` take the shared `TextStyleTokens` shape
 (`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`,
@@ -427,6 +433,17 @@ Per-control config keys still win: `launcher.closeButtonSize` and
 Leave them unset to follow the token. On coarse pointers the box never
 shrinks below 40px, even with a smaller `controlSize`; an explicit per-control
 size opts out of that floor.
+
+### Messages rail (`components.history.railHeader.*`)
+
+In rail presentation the Messages sidebar runs the full widget height and its
+top strip is the rail's own header, sitting beside the conversation header.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `background` | `--persona-history-rail-header-bg` | the rail surface (`semantic.colors.container`) |
+| `border` | `--persona-history-rail-header-border` | `0` (full border-bottom shorthand) |
+| `minHeight` | `--persona-history-rail-header-min-height` | `components.header.minHeight`, then `56px` |
 
 ### Message (`components.message.*`)
 

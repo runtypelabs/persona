@@ -29,6 +29,19 @@ test("rail Messages keeps the conversation operable and stays open on select", a
   );
   await expect(page.locator(sel.railShell)).toBeVisible();
 
+  // Full-height rail: the shell header sits inside the conversation column and
+  // spans only it, so the rail runs beside the header rather than under it.
+  await expect(
+    page.locator(`${sel.railConversation} > ${sel.shellHeader}`)
+  ).toHaveCount(1);
+  const headerBox = await page.locator(sel.shellHeader).boundingBox();
+  const containerBox = await page
+    .locator(".persona-widget-container")
+    .boundingBox();
+  expect(headerBox!.width).toBeLessThan(containerBox!.width);
+  const railBox = await page.locator(sel.railShell).boundingBox();
+  expect(railBox!.height).toBeGreaterThan(headerBox!.height);
+
   // Conversation surface stays live: visible, not inert, composer focusable.
   const transcript = page.locator(sel.transcript);
   await expect(transcript).toBeVisible();

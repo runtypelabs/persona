@@ -11,6 +11,8 @@ export const HEADER_THEME_CSS = {
     "var(--persona-header-subtitle-fg, var(--persona-text-muted, var(--persona-muted, #9ca3af)))",
   actionIconColor:
     "var(--persona-header-action-icon-fg, var(--persona-muted, #9ca3af))",
+  /** One knob for both header builders; the Messages rail header shares it. */
+  minHeight: "var(--persona-header-min-height, auto)",
 } as const;
 
 /**
@@ -65,6 +67,7 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
       "persona-widget-header persona-flex persona-items-center persona-gap-3 persona-px-6 persona-py-5",
     attrs: { "data-persona-theme-zone": "header" },
     style: {
+      minHeight: HEADER_THEME_CSS.minHeight,
       backgroundColor: "var(--persona-header-bg, var(--persona-surface, #ffffff))",
       borderBottomColor: "var(--persona-header-border, var(--persona-divider, #f1f5f9))",
       boxShadow: "var(--persona-header-shadow, none)",

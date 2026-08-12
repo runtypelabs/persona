@@ -120,9 +120,15 @@ export const THEME_TOKEN_DOCS = {
       header: {
         description: 'Chat panel header.',
         properties:
-          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, controlSize (32px, the box of every header icon button), controlIconSize (20px, the glyph inside it), controlStrokeWidth (1.5, unitless glyph stroke weight; sparse-viewBox glyphs such as the close X scale it by 0.7), shadow, borderBottom, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, controlSize (32px, the box of every header icon button), controlIconSize (20px, the glyph inside it), controlStrokeWidth (1.5, unitless glyph stroke weight; sparse-viewBox glyphs such as the close X scale it by 0.7), shadow, borderBottom, minHeight (height floor for the header strip), title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
         legacy:
           'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set.',
+      },
+      history: {
+        description:
+          'Messages (conversation history) chrome. railHeader styles the rail sidebar top strip, which runs beside the widget header in rail presentation.',
+        properties:
+          'railHeader.background (defaults to the rail surface), railHeader.border (full border-bottom shorthand, default 0), railHeader.minHeight (defaults to components.header.minHeight, then 56px). Pin railHeader.minHeight and header.minHeight to the same value so both top strips read as one band.',
       },
       message: {
         description: 'Chat message bubbles.',

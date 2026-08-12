@@ -419,12 +419,18 @@ describe("history shell", () => {
       expect(body.style.display).not.toBe("none");
       expect(body.hasAttribute("inert")).toBe(false);
       expect(footerOf(mount).hidden).toBe(false);
-      // Rail keeps the shell header untouched: the conversation is still primary.
+      // The rail runs the full widget height, so the shell header rides inside
+      // the conversation column: visible, never inert, never suppressed.
       const header = headerOf(mount);
+      expect(header.closest(".persona-history-rail-conversation")).not.toBeNull();
       expect(header.style.display).not.toBe("none");
       expect(header.hasAttribute("inert")).toBe(false);
       expect(headerHostOf(mount)).toBeNull();
       expect(suppressedIn(header)).toEqual([]);
+      // The rail host is a sibling of the column, not below the header.
+      expect(rail!.parentElement).toBe(
+        header.closest(".persona-history-rail-conversation")!.parentElement
+      );
       // Its own bar rides inside the rail, with the close (x) affordance.
       const bar = historyRoot(mount)!.querySelector<HTMLElement>(
         ".persona-history-topbar"
@@ -471,6 +477,10 @@ describe("history shell", () => {
       expect(mount.querySelector(".persona-history-rail-host")).toBeNull();
       expect(view.getAttribute("data-persona-history-presentation")).toBe("panel");
       expect(bodyOf(mount).style.display).toBe("none");
+      // Panel hosting needs the header back as a direct container child.
+      expect(headerOf(mount).parentElement).toBe(
+        mount.querySelector(".persona-widget-container")
+      );
       // The bar moves into the shell header, one instance, no entrance replay.
       expect(headerOf(mount).style.display).not.toBe("none");
       expect(headerOf(mount).hasAttribute("inert")).toBe(false);
@@ -486,12 +496,103 @@ describe("history shell", () => {
       controller.update({});
       await flush();
       expect(mount.querySelector(".persona-history-rail-host")).not.toBeNull();
+      // And the header travels back into the conversation column.
+      expect(
+        headerOf(mount).closest(".persona-history-rail-conversation")
+      ).not.toBeNull();
       expect(headerOf(mount).style.display).not.toBe("none");
       expect(headerOf(mount).hasAttribute("inert")).toBe(false);
       expect(headerHostOf(mount)).toBeNull();
       expect(suppressedIn(headerOf(mount))).toEqual([]);
       expect(view.contains(bar)).toBe(true);
       expect(mount.querySelectorAll(".persona-history-topbar")).toHaveLength(1);
+    });
+
+    it("keeps a rebuilt header inside the conversation column", async () => {
+      const { mount, controller } = await railSetup();
+      controller.update({ layout: { header: { layout: "minimal" } } });
+      await flush();
+      const header = headerOf(mount);
+      expect(header.closest(".persona-history-rail-conversation")).not.toBeNull();
+      expect(mount.querySelectorAll('[data-persona-theme-zone="header"]')).toHaveLength(1);
+      expect(mount.querySelector(".persona-history-rail-host")).not.toBeNull();
+    });
+
+    it("re-derives the rail width from a live config update", async () => {
+      const { mount, controller } = await railSetup();
+      const host = mount.querySelector<HTMLElement>(".persona-history-rail-host")!;
+      expect(host.style.flex).toBe("0 0 260px");
+      controller.update({
+        features: { history: { rail: { width: 320 } } },
+      } as never);
+      await flush();
+      expect(host.style.flex).toBe("0 0 320px");
+      // A side flip moves the host past the conversation and swaps the divider.
+      controller.update({
+        features: { history: { rail: { side: "right" } } },
+      } as never);
+      await flush();
+      const shell = mount.querySelector<HTMLElement>(".persona-history-rail-shell")!;
+      expect(shell.lastElementChild).toBe(host);
+      expect(host.style.borderLeft).not.toBe("");
+      expect(host.style.borderRight).toBe("");
+    });
+
+    it("ignores Escape raised by the header now that it sits in the column", async () => {
+      const { mount } = await railSetup();
+      headerOf(mount).dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      );
+      await flush();
+      expect(historyRoot(mount)).not.toBeNull();
+    });
+
+    it("anchors a top-right close button to the column, not the container", async () => {
+      const { mount } = setup({
+        historyFeature: { enabled: true, presentation: "rail" },
+        config: {
+          launcher: { enabled: false, closeButtonPlacement: "top-right" },
+        },
+      });
+      const container = setContainerWidth(mount, 900);
+      await openHistoryUI(mount);
+      const column = mount.querySelector<HTMLElement>(
+        ".persona-history-rail-conversation"
+      )!;
+      const wrapper = mount.querySelector<HTMLElement>(
+        'button[aria-label="Close chat"]'
+      )!.parentElement!;
+      // Absolutely positioned: anchored to the container it would float over
+      // the rail instead of over the conversation.
+      expect(wrapper.classList.contains("persona-absolute")).toBe(true);
+      expect(wrapper.parentElement).toBe(column);
+      expect(wrapper.parentElement).not.toBe(container);
+      expect(column.style.position).toBe("relative");
+    });
+
+    it("hands the container back in its original child order", async () => {
+      const { mount } = setup({
+        historyFeature: { enabled: true, presentation: "rail" },
+        config: {
+          launcher: { enabled: false, closeButtonPlacement: "top-right" },
+        },
+      });
+      const container = setContainerWidth(mount, 900);
+      const before = Array.from(container.children);
+      await openHistoryUI(mount);
+      const column = mount.querySelector<HTMLElement>(
+        ".persona-history-rail-conversation"
+      )!;
+      expect(column.contains(headerOf(mount))).toBe(true);
+      expect(column.contains(bodyOf(mount))).toBe(true);
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="close"]')!
+        .click();
+      await flush(20);
+      expect(mount.querySelector(".persona-history-rail-shell")).toBeNull();
+      const after = Array.from(container.children);
+      expect(after).toHaveLength(before.length);
+      after.forEach((node, index) => expect(node).toBe(before[index]));
     });
 
     it("auto keeps a floating launcher on panel at any width", async () => {

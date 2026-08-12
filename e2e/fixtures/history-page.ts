@@ -24,6 +24,8 @@ export const sel = {
   bubble: "[data-message-id]",
   earlier: "[data-persona-history-earlier]",
   railShell: ".persona-history-rail-shell",
+  // Rail runs the full widget height; the shell header rides in this column.
+  railConversation: ".persona-history-rail-conversation",
   newConversation: ".persona-history-new",
 } as const;
 

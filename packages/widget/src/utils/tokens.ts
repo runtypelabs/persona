@@ -883,6 +883,19 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   const headerTokens = theme.components?.header;
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
   if (headerTokens?.borderBottom) cssVars['--persona-header-border-bottom'] = headerTokens.borderBottom;
+  // Conditional: the stylesheet carries `auto` / the rail's own fallback chain,
+  // so an unset token must leave the variable undefined.
+  if (headerTokens?.minHeight) cssVars['--persona-header-min-height'] = headerTokens.minHeight;
+
+  // Messages rail header strip. Same conditional rule: the chunk's CSS carries
+  // the surface/border/height fallback chain when a theme says nothing.
+  const railHeaderBg = cssVars['--persona-components-history-railHeader-background'];
+  if (railHeaderBg) cssVars['--persona-history-rail-header-bg'] = railHeaderBg;
+  const railHeaderBorder = cssVars['--persona-components-history-railHeader-border'];
+  if (railHeaderBorder) cssVars['--persona-history-rail-header-border'] = railHeaderBorder;
+  const railHeaderMinHeight = cssVars['--persona-components-history-railHeader-minHeight'];
+  if (railHeaderMinHeight)
+    cssVars['--persona-history-rail-header-min-height'] = railHeaderMinHeight;
 
   // Intro card aliases: short names the panel inline-styles read directly.
   // The full-path `--persona-components-introCard-*` variables auto-emit above.

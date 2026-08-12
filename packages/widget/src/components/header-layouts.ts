@@ -116,6 +116,7 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     "persona-flex persona-items-center persona-justify-between persona-px-6 persona-py-4"
   );
   header.setAttribute("data-persona-theme-zone", "header");
+  header.style.minHeight = HEADER_THEME_CSS.minHeight;
   header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
   header.style.borderBottomColor = 'var(--persona-header-border, var(--persona-divider, #f1f5f9))';
   header.style.boxShadow = 'var(--persona-header-shadow, none)';

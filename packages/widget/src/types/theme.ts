@@ -250,6 +250,28 @@ export interface HeaderTokens extends ComponentTokenSet {
   shadow?: string;
   /** Override the header bottom border (e.g., `none`). */
   borderBottom?: string;
+  /**
+   * Floor for the header strip's height (e.g. `"56px"`). Pin it together with
+   * `components.history.railHeader.minHeight` so the Messages rail header and
+   * the conversation header read as one continuous band.
+   */
+  minHeight?: string;
+}
+
+/** Messages (conversation history) surfaces. */
+export interface HistoryTokens {
+  /**
+   * The Messages rail's own top strip, which runs beside the widget header
+   * when `features.history.presentation` resolves to `rail`.
+   */
+  railHeader?: {
+    /** Strip background. Defaults to the rail's surface color. */
+    background?: TokenReference<'color'>;
+    /** Full border-bottom shorthand (raw CSS, e.g. `"1px solid #e5e7eb"`). @default "0" */
+    border?: string;
+    /** Strip height floor. Defaults to `components.header.minHeight`, then 56px. */
+    minHeight?: string;
+  };
 }
 
 export interface MessageTokens {
@@ -619,6 +641,8 @@ export interface ComponentTokens {
   launcher: LauncherTokens;
   panel: PanelTokens;
   header: HeaderTokens;
+  /** Messages rail chrome. */
+  history?: HistoryTokens;
   message: MessageTokens;
   /** Welcome / intro card shown above the message list. */
   introCard?: IntroCardTokens;

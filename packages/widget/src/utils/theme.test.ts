@@ -344,6 +344,35 @@ describe('theme utils', () => {
     expect(custom['--persona-components-header-controlStrokeWidth']).toBe('2');
   });
 
+  it('emits the header and rail-header height/surface tokens only when set', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-header-min-height']).toBeUndefined();
+    expect(defaults['--persona-history-rail-header-bg']).toBeUndefined();
+    expect(defaults['--persona-history-rail-header-border']).toBeUndefined();
+    expect(defaults['--persona-history-rail-header-min-height']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          header: { minHeight: '64px' },
+          history: {
+            railHeader: {
+              background: 'palette.colors.gray.100',
+              border: '1px solid #e5e7eb',
+              minHeight: '64px',
+            },
+          },
+        },
+      } as any)
+    );
+
+    expect(custom['--persona-header-min-height']).toBe('64px');
+    // The background goes through token resolution; the rest are raw CSS.
+    expect(custom['--persona-history-rail-header-bg']).toBe('#f3f4f6');
+    expect(custom['--persona-history-rail-header-border']).toBe('1px solid #e5e7eb');
+    expect(custom['--persona-history-rail-header-min-height']).toBe('64px');
+  });
+
   it('emits full-path CSS variables for header and welcome text style tokens', () => {
     const theme = createTheme({
       components: {

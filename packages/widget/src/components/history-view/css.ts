@@ -554,12 +554,22 @@ export const HISTORY_VIEW_CSS =
   --persona-history-row-active-bg: rgba(0, 0, 0, 0.08);
 }
 ` +
-  /* Two tracks: the rail bar has no trailing icon, so a third would push the
-     title off-center. */
+  /* The rail bar IS the sidebar header: a header-height strip that lines up
+     with the conversation column's own header band beside it. Two tracks,
+     because the rail bar has no trailing icon and a third would push the title
+     off-center. */
   `.persona-history-view--rail .persona-history-topbar {
   grid-template-columns: 44px minmax(0, 1fr);
+  min-height: var(
+    --persona-history-rail-header-min-height,
+    var(--persona-header-min-height, 56px)
+  );
   padding: 2px 6px;
-  border-bottom: 0;
+  background: var(
+    --persona-history-rail-header-bg,
+    var(--persona-history-surface-bg)
+  );
+  border-bottom: var(--persona-history-rail-header-border, 0);
 }
 .persona-history-view--rail .persona-history-heading-group {
   text-align: left;

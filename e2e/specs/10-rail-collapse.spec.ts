@@ -36,6 +36,10 @@ test("crossing 720px moves the open view without losing state or focus", async (
   );
   const rowCount = await page.locator(sel.row).count();
   expect(rowCount).toBeGreaterThan(1);
+  // The rail borrows the shell header into its conversation column.
+  await expect(
+    page.locator(`${sel.railConversation} > ${sel.shellHeader}`)
+  ).toHaveCount(1);
 
   // Mark the live element so a remount is detectable.
   await page.locator(sel.view).evaluate((el) => {
@@ -72,6 +76,10 @@ test("crossing 720px moves the open view without losing state or focus", async (
     1
   );
   await expect(page.locator(`${sel.view} ${sel.topbar}`)).toHaveCount(0);
+  // The header is handed back to the container as a direct child.
+  await expect(
+    page.locator(`.persona-widget-container > ${sel.shellHeader}`)
+  ).toHaveCount(1);
   // Focus ownership stays inside Messages. Re-parenting a focused node blurs it
   // in every engine, so the shell's contract is that focus lands back on the
   // view's entry control rather than escaping to the body or into the now-inert
@@ -92,4 +100,8 @@ test("crossing 720px moves the open view without losing state or focus", async (
   await expect(page.locator(`${sel.view} ${sel.topbar}`)).toHaveCount(1);
   await expect(page.locator(sel.headerHost)).toHaveCount(0);
   await expect(page.locator(sel.suppressed)).toHaveCount(0);
+  // And the header travels back into the rail's conversation column.
+  await expect(
+    page.locator(`${sel.railConversation} > ${sel.shellHeader}`)
+  ).toHaveCount(1);
 });
