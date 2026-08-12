@@ -320,8 +320,8 @@ describe('theme utils', () => {
   it('emits the shared header control box, glyph, and stroke tokens', () => {
     const defaults = themeToCssVariables(createTheme());
 
-    expect(defaults['--persona-header-control-size']).toBe('40px');
-    expect(defaults['--persona-header-control-icon-size']).toBe('24px');
+    expect(defaults['--persona-header-control-size']).toBe('32px');
+    expect(defaults['--persona-header-control-icon-size']).toBe('20px');
     // The stroke has no alias: widget.css reads the full-path token and owns
     // the 1.5 default, which keeps the sparse close X on its 1.05.
     expect(defaults['--persona-components-header-controlStrokeWidth']).toBeUndefined();

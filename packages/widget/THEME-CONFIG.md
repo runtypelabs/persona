@@ -404,8 +404,8 @@ drift apart:
 
 | Token | CSS variable | Default |
 |-------|--------------|---------|
-| `controlSize` | `--persona-header-control-size` | `"40px"` |
-| `controlIconSize` | `--persona-header-control-icon-size` | `"24px"` |
+| `controlSize` | `--persona-header-control-size` | `"32px"` |
+| `controlIconSize` | `--persona-header-control-icon-size` | `"20px"` |
 | `controlStrokeWidth` | `--persona-components-header-controlStrokeWidth` | `"1.5"` |
 
 `controlStrokeWidth` is unitless, like the SVG `stroke-width` attribute it

@@ -234,10 +234,10 @@ export interface HeaderTokens extends ComponentTokenSet {
    * Edge of every header icon button: close, clear chat, `trailingActions`, and
    * the Messages toggle. Per-control config keys (`launcher.closeButtonSize`,
    * `launcher.clearChat.size`) still win. Coarse pointers floor the hit area at
-   * 40px regardless. @default "40px"
+   * 40px regardless. @default "32px"
    */
   controlSize?: string;
-  /** Glyph box inside a header control. @default "24px" */
+  /** Glyph box inside a header control. @default "20px" */
   controlIconSize?: string;
   /**
    * Stroke weight of the glyph inside a header control. Unitless, as an SVG

@@ -346,8 +346,8 @@ const headerControlsSectionDef: SectionDef = {
     'One box, glyph, and stroke shared by every header icon button: close, clear chat, trailing actions, and Messages.',
   collapsed: true,
   fields: [
-    { id: 'header-control-size', label: 'Control Size', description: 'The button box. Coarse pointers still floor the hit area at 40px', type: 'slider', path: 'theme.components.header.controlSize', defaultValue: '40px', slider: { min: 24, max: 64, step: 2 }, parseValue: parseSliderPxLength },
-    { id: 'header-control-icon-size', label: 'Icon Size', description: 'The glyph inside the button', type: 'slider', path: 'theme.components.header.controlIconSize', defaultValue: '24px', slider: { min: 12, max: 40, step: 1 }, parseValue: parseSliderPxLength },
+    { id: 'header-control-size', label: 'Control Size', description: 'The button box. Coarse pointers still floor the hit area at 40px', type: 'slider', path: 'theme.components.header.controlSize', defaultValue: '32px', slider: { min: 24, max: 64, step: 2 }, parseValue: parseSliderPxLength },
+    { id: 'header-control-icon-size', label: 'Icon Size', description: 'The glyph inside the button', type: 'slider', path: 'theme.components.header.controlIconSize', defaultValue: '20px', slider: { min: 12, max: 40, step: 1 }, parseValue: parseSliderPxLength },
     { id: 'header-control-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight. The close X renders at 0.7 of it so its sparser glyph matches', type: 'slider', path: 'theme.components.header.controlStrokeWidth', defaultValue: '1.5', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
   ],
 };
@@ -798,7 +798,7 @@ const sendButtonSectionDef: SectionDef = {
 const closeButtonSectionDef: SectionDef = {
   id: 'close-button', title: 'Close Button', collapsed: true,
   fields: [
-    { id: 'close-size', label: 'Size', type: 'slider', path: 'launcher.closeButtonSize', defaultValue: '40px', slider: { min: 16, max: 64, step: 1 } },
+    { id: 'close-size', label: 'Size', type: 'slider', path: 'launcher.closeButtonSize', defaultValue: '32px', slider: { min: 16, max: 64, step: 1 } },
     { id: 'close-placement', label: 'Placement', type: 'select', path: 'launcher.closeButtonPlacement', defaultValue: 'inline', options: [{ value: 'inline', label: 'Inline' }, { value: 'top-right', label: 'Top Right' }] },
     { id: 'close-border-width', label: 'Border Width', type: 'slider', path: 'launcher.closeButtonBorderWidth', defaultValue: '0px', slider: { min: 0, max: 8, step: 1 } },
     { id: 'close-border-radius', label: 'Border Radius', type: 'slider', path: 'launcher.closeButtonBorderRadius', defaultValue: '50%', slider: { min: 0, max: 100, step: 1, isRadiusFull: true } },
@@ -815,7 +815,7 @@ const clearChatSectionDef: SectionDef = {
     { id: 'clear-enabled', label: 'Enabled', type: 'toggle', path: 'launcher.clearChat.enabled', defaultValue: true },
     { id: 'clear-placement', label: 'Placement', type: 'select', path: 'launcher.clearChat.placement', defaultValue: 'inline', options: [{ value: 'inline', label: 'Inline' }, { value: 'top-right', label: 'Top Right' }] },
     { id: 'clear-icon-name', label: 'Icon Name', type: 'text', path: 'launcher.clearChat.iconName', defaultValue: 'refresh-cw' },
-    { id: 'clear-size', label: 'Size', type: 'slider', path: 'launcher.clearChat.size', defaultValue: '40px', slider: { min: 16, max: 64, step: 1 } },
+    { id: 'clear-size', label: 'Size', type: 'slider', path: 'launcher.clearChat.size', defaultValue: '32px', slider: { min: 16, max: 64, step: 1 } },
     { id: 'clear-show-tooltip', label: 'Show Tooltip', type: 'toggle', path: 'launcher.clearChat.showTooltip', defaultValue: true },
     { id: 'clear-tooltip-text', label: 'Tooltip Text', type: 'text', path: 'launcher.clearChat.tooltipText', defaultValue: 'Clear chat' },
   ],

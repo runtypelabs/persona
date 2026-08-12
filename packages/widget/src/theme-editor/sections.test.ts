@@ -112,8 +112,8 @@ describe("theme editor scroll-to-bottom controls", () => {
     const iconSize = fieldsByPath.get("theme.components.header.controlIconSize");
     const stroke = fieldsByPath.get("theme.components.header.controlStrokeWidth");
 
-    expect(size?.defaultValue).toBe("40px");
-    expect(iconSize?.defaultValue).toBe("24px");
+    expect(size?.defaultValue).toBe("32px");
+    expect(iconSize?.defaultValue).toBe("20px");
     expect(stroke?.defaultValue).toBe("1.5");
 
     // Unitless slider: the stroke must never pick up a px suffix.

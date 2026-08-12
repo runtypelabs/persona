@@ -235,7 +235,7 @@ describe("header control styles", () => {
 
     expect(start).toBeGreaterThan(-1);
     expect(rule).toContain(
-      "width: var(--persona-header-control-icon-size, 24px)",
+      "width: var(--persona-header-control-icon-size, 20px)",
     );
     // CSS presentation beats the SVG stroke-width attribute, which stays as
     // the no-CSS fallback.
@@ -250,7 +250,7 @@ describe("header control styles", () => {
 
     expect(start).toBeGreaterThan(-1);
     expect(rule).toContain(
-      "width: calc(var(--persona-header-control-icon-size, 24px) * 1.4)",
+      "width: calc(var(--persona-header-control-icon-size, 20px) * 1.4)",
     );
     // 0.7 x the 1.5 default is 1.05, the stroke the close X has always
     // rendered at; SPARSE_GLYPHS in header-parts.ts carries the same pair.

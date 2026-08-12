@@ -110,11 +110,10 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   const { config, showClose = true, onClose, layoutHeaderConfig, onHeaderAction } = context;
   const launcher = config?.launcher ?? {};
 
-  // py-3, not py-4: the 40px control cluster is 8px taller than the 32px one it
-  // replaced, so the block padding gives that back and the strip keeps its 65px.
+  // max(title 24px, cluster 32px) + py-4 + border = the strip's 65px.
   const header = createElement(
     "div",
-    "persona-flex persona-items-center persona-justify-between persona-px-6 persona-py-3"
+    "persona-flex persona-items-center persona-justify-between persona-px-6 persona-py-4"
   );
   header.setAttribute("data-persona-theme-zone", "header");
   header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';

@@ -876,9 +876,9 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // reads its auto-emitted `--persona-components-header-controlStrokeWidth`
   // directly and carries the 1.5 default in the var() fallback.
   cssVars['--persona-header-control-size'] =
-    cssVars['--persona-components-header-controlSize'] ?? '40px';
+    cssVars['--persona-components-header-controlSize'] ?? '32px';
   cssVars['--persona-header-control-icon-size'] =
-    cssVars['--persona-components-header-controlIconSize'] ?? '24px';
+    cssVars['--persona-components-header-controlIconSize'] ?? '20px';
 
   const headerTokens = theme.components?.header;
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;

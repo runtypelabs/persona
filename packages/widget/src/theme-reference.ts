@@ -120,7 +120,7 @@ export const THEME_TOKEN_DOCS = {
       header: {
         description: 'Chat panel header.',
         properties:
-          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, controlSize (40px, the box of every header icon button), controlIconSize (24px, the glyph inside it), controlStrokeWidth (1.5, unitless glyph stroke weight; sparse-viewBox glyphs such as the close X scale it by 0.7), shadow, borderBottom, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, controlSize (32px, the box of every header icon button), controlIconSize (20px, the glyph inside it), controlStrokeWidth (1.5, unitless glyph stroke weight; sparse-viewBox glyphs such as the close X scale it by 0.7), shadow, borderBottom, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
         legacy:
           'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set.',
       },

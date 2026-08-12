@@ -17,7 +17,7 @@ export const HEADER_CONTROL_SPARSE_CLASS = "persona-header-control--sparse";
  * Icon-size token default in CSS pixels. Only derives the SVG attributes when a
  * per-control size is unset; the box itself is owned by the stylesheet.
  */
-const ICON_FALLBACK_PX = 24;
+const ICON_FALLBACK_PX = 20;
 
 /**
  * Icons whose Lucide paths occupy only the middle of the 24x24 viewBox (X spans
