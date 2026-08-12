@@ -2,8 +2,9 @@
 
 import { describe, expect, it, vi } from "vitest";
 
-import { buildMinimalHeader } from "./header-layouts";
+import { buildHeaderWithLayout, buildMinimalHeader } from "./header-layouts";
 import { HEADER_THEME_CSS } from "./header-builder";
+import type { AgentWidgetConfig } from "../types";
 
 const build = (layoutHeaderConfig: Parameters<typeof buildMinimalHeader>[0]["layoutHeaderConfig"]) =>
   buildMinimalHeader({
@@ -96,5 +97,83 @@ describe("minimal header trailing actions", () => {
     expect(
       elements.header.querySelector('button[aria-label="Back to home"]')
     ).toBeNull();
+  });
+});
+
+describe("minimal header clear chat", () => {
+  it("renders clear chat in the cluster between trailing actions and close", () => {
+    const elements = build({
+      layout: "minimal",
+      trailingActions: [{ id: "home", icon: "house", ariaLabel: "Back to home" }],
+    });
+
+    const clear = elements.clearChatButton;
+    expect(clear).not.toBeNull();
+    expect(clear!.classList.contains("persona-header-control")).toBe(true);
+    expect(elements.clearChatButtonWrapper!.parentElement).toBe(
+      elements.closeButtonWrapper.parentElement
+    );
+    const action = elements.header.querySelector('button[aria-label="Back to home"]')!;
+    expect(
+      action.compareDocumentPosition(clear!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      clear!.compareDocumentPosition(elements.closeButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it("renders nothing when launcher.clearChat.enabled is false", () => {
+    const elements = buildMinimalHeader({
+      config: {
+        apiUrl: "https://example.com/api",
+        launcher: { clearChat: { enabled: false } },
+      },
+      showClose: true,
+      onClose: () => {},
+      layoutHeaderConfig: { layout: "minimal" },
+    });
+    expect(elements.clearChatButton).toBeNull();
+    expect(elements.clearChatButtonWrapper).toBeNull();
+  });
+
+  it("hides the wrapper under layout.header.showClearChat false", () => {
+    const config = {
+      apiUrl: "https://example.com/api",
+      layout: { header: { layout: "minimal", showClearChat: false } },
+    } as unknown as AgentWidgetConfig;
+    const elements = buildHeaderWithLayout(config, config.layout!.header!, {
+      config,
+      showClose: true,
+      onClose: () => {},
+    });
+    expect(elements.clearChatButtonWrapper).not.toBeNull();
+    expect(elements.clearChatButtonWrapper!.style.display).toBe("none");
+  });
+
+  it("keeps a top-right placement out of the header for the container mount", () => {
+    const elements = buildMinimalHeader({
+      config: {
+        apiUrl: "https://example.com/api",
+        launcher: { clearChat: { placement: "top-right" } },
+      },
+      showClose: true,
+      onClose: () => {},
+      layoutHeaderConfig: { layout: "minimal" },
+    });
+    expect(elements.clearChatButtonWrapper).not.toBeNull();
+    expect(elements.header.contains(elements.clearChatButtonWrapper!)).toBe(false);
+    expect(elements.clearChatButtonWrapper!.style.right).toBe("48px");
+  });
+
+  it("still renders clear chat and close when titleMenu is configured", () => {
+    const elements = build({
+      layout: "minimal",
+      titleMenu: { menuItems: [{ id: "a", label: "A" }], onSelect: () => {} },
+    });
+    expect(elements.clearChatButton).not.toBeNull();
+    expect(elements.clearChatButtonWrapper!.parentElement).toBe(
+      elements.closeButtonWrapper.parentElement
+    );
   });
 });

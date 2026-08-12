@@ -13,7 +13,11 @@ import {
   HeaderElements,
   attachHeaderToContainer as _attachHeaderToContainer,
 } from "./header-builder";
-import { createCloseButton, createHeaderIconButton } from "./header-parts";
+import {
+  createClearChatButton,
+  createCloseButton,
+  createHeaderIconButton,
+} from "./header-parts";
 
 export interface HeaderLayoutContext {
   config: AgentWidgetConfig;
@@ -195,13 +199,11 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   // Close button: same shared factory the default layout uses. The wrapper is
   // flex so an inline-flex button can never reserve baseline slack and ride
   // high inside it.
+  const trailingWrapperClass =
+    "persona-relative persona-inline-flex persona-items-center persona-justify-center";
   const { button: closeButton, wrapper: closeButtonWrapper } = createCloseButton(
     config,
-    {
-      showClose,
-      wrapperClassName:
-        "persona-relative persona-inline-flex persona-items-center persona-justify-center",
-    }
+    { showClose, wrapperClassName: trailingWrapperClass }
   );
 
   if (onClose) {
@@ -221,6 +223,31 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
       layoutHeaderConfig?.onAction ?? onHeaderAction
     );
   }
+
+  // Clear chat honors the same config surface as the default layout. Click
+  // wiring is owned by setupClearChatButton() in ui.ts via the returned ref;
+  // top-right placement is mounted by attachHeaderToContainer, also via ref.
+  const clearChatConfig = launcher.clearChat ?? {};
+  let clearChatButton: HTMLButtonElement | null = null;
+  let clearChatButtonWrapper: HTMLElement | null = null;
+  if (clearChatConfig.enabled ?? true) {
+    const clearChatPlacement = clearChatConfig.placement ?? "inline";
+    const parts = createClearChatButton(config, {
+      wrapperClassName:
+        clearChatPlacement === "top-right"
+          ? "persona-absolute persona-top-4 persona-z-50"
+          : trailingWrapperClass,
+    });
+    clearChatButton = parts.button;
+    clearChatButtonWrapper = parts.wrapper;
+    if (clearChatPlacement === "top-right") {
+      clearChatButtonWrapper.style.right = "48px";
+    } else {
+      // Close stays outermost.
+      trailingCluster.appendChild(clearChatButtonWrapper);
+    }
+  }
+
   trailingCluster.appendChild(closeButtonWrapper);
   header.appendChild(trailingCluster);
 
@@ -239,8 +266,8 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     headerSubtitle,
     closeButton,
     closeButtonWrapper,
-    clearChatButton: null,
-    clearChatButtonWrapper: null
+    clearChatButton,
+    clearChatButtonWrapper
   };
 };
 
