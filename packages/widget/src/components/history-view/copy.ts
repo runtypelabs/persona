@@ -50,6 +50,8 @@ export const HISTORY_VIEW_COPY_DEFAULTS: ResolvedHistoryViewCopy = {
   retryIdentityLabel: "Try again",
   backLabel: "Back to conversation",
   closeLabel: "Close conversation list",
+  collapseLabel: "Collapse conversation list",
+  expandLabel: "Expand conversation list",
   loadingLabel: "Loading conversations",
   loadMoreLabel: "Load more",
   loadingMoreLabel: "Loading more conversations",

@@ -10,6 +10,8 @@ export const sel = {
   view: ".persona-history-view",
   viewPresentation: "[data-persona-history-presentation]",
   close: '[data-persona-history-focus="close"]',
+  // Rail only: the leading bar control collapses the rail instead of closing it.
+  collapseToggle: '[data-persona-history-focus="collapse"]',
   row: ".persona-history-row",
   rowFor: (id: string) => `[data-persona-history-conversation="${id}"]`,
   state: "[data-persona-history-state]",
@@ -24,6 +26,7 @@ export const sel = {
   bubble: "[data-message-id]",
   earlier: "[data-persona-history-earlier]",
   railShell: ".persona-history-rail-shell",
+  railHost: ".persona-history-rail-host",
   // Rail runs the full widget height; the shell header rides in this column.
   railConversation: ".persona-history-rail-conversation",
   newConversation: ".persona-history-new",

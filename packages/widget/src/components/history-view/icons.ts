@@ -1,5 +1,5 @@
 /**
- * The four lucide glyphs the Messages view needs, inlined.
+ * The lucide glyphs the Messages view needs, inlined.
  *
  * `utils/icons.ts` would drag the whole ~130-icon registry into this lazy
  * chunk; the chunk exists to stay small. Path data matches lucide 1:1.
@@ -12,6 +12,8 @@ const PATHS = {
   "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
   plus: ["M5 12h14", "M12 5v14"],
   x: ["M18 6 6 18", "m6 6 12 12"],
+  // PanelLeft is a rounded rect plus this divider; the rect is added below.
+  "panel-left": ["M9 3v18"],
   ellipsis: [] as string[],
 } as const;
 
@@ -39,6 +41,16 @@ export function historyIcon(name: HistoryIconName, size = 20): SVGElement {
       svg.appendChild(circle);
     }
     return svg;
+  }
+
+  if (name === "panel-left") {
+    const rect = document.createElementNS(SVG_NS, "rect");
+    rect.setAttribute("width", "18");
+    rect.setAttribute("height", "18");
+    rect.setAttribute("x", "3");
+    rect.setAttribute("y", "3");
+    rect.setAttribute("rx", "2");
+    svg.appendChild(rect);
   }
 
   for (const d of PATHS[name]) {

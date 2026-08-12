@@ -650,6 +650,28 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view--rail .persona-history-skeleton-row {
   padding: 6px 16px;
 }
+` +
+  /* Collapsed rail: an icon column of the expand toggle over an icon-only
+     new-conversation square. Everything else is hidden, so the host can carry
+     the rail down to 52px. */
+  `.persona-history-view--rail-collapsed .persona-history-topbar {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  padding: 2px;
+}
+.persona-history-view--rail-collapsed .persona-history-heading-group,
+.persona-history-view--rail-collapsed .persona-history-body > :not(.persona-history-new) {
+  display: none;
+}
+.persona-history-view--rail-collapsed button.persona-history-new {
+  width: 36px;
+  padding: 0;
+  margin: 0 auto;
+  justify-content: center;
+}
+.persona-history-view--rail-collapsed button.persona-history-new span {
+  display: none;
+}
 
 ` +
   /* --- shell-hosted top bar ------------------------------------------------ */
@@ -660,6 +682,11 @@ export const HISTORY_VIEW_CSS =
   display: flex;
   flex: 1 1 auto;
   min-width: 0;
+}
+` +
+  /* Shell-owned rail host: only its width animates, and only on a collapse. */
+  `.persona-history-rail-host {
+  transition: flex-basis 180ms cubic-bezier(0, 0, 0.2, 1);
 }
 ` +
   /* The header supplies padding and background; the bar only fills it. */
@@ -683,5 +710,6 @@ export const HISTORY_VIEW_CSS =
     animation: none;
   }
   .persona-history-view .persona-history-skeleton-bar { animation: none; }
+  .persona-history-rail-host { transition: none; }
 }
 `;

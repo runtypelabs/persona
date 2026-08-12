@@ -129,6 +129,13 @@ export interface HistoryViewOptions {
   copy?: HistoryViewCopyInput;
   /** Already resolved against the host container width by the shell, not here. */
   presentation: HistoryViewPresentation;
+  /**
+   * Rail only. Default true: the bar's leading control is a collapse toggle
+   * instead of a close (x), and `onToggleCollapse` drives it.
+   */
+  collapsible?: boolean;
+  /** Rail only. Initial collapsed state; the shell owns and persists it. */
+  collapsed?: boolean;
   /** Default `"inline"`. Rail is always inline; the shell enforces that. */
   headerPlacement?: HistoryHeaderPlacement;
   showScopeStatus: boolean;
@@ -146,8 +153,10 @@ export interface HistoryViewOptions {
   /** Row selection. The shell commits the open; the view shows row pending. */
   onSelect: (conversationId: string) => void | Promise<void>;
   onStartNew: () => void | Promise<void>;
-  /** Back (panel) or close (rail). */
+  /** Back (panel) or close (rail without a collapse toggle). */
   onClose: () => void;
+  /** Collapse toggle. The shell decides, then calls `setCollapsed`. */
+  onToggleCollapse?: () => void;
   /** Shell owns the confirmation; resolves with the outcome. */
   onRequestDeleteConversation: (
     conversationId: string
@@ -193,6 +202,11 @@ export interface HistoryViewHandle {
    * The instance and all its state survive the move; only chrome changes.
    */
   setPresentation(presentation: HistoryViewPresentation): void;
+  /**
+   * Collapse the rail to its icon column. The view only styles itself and
+   * relabels the toggle; the shell owns the host width and the persisted state.
+   */
+  setCollapsed(collapsed: boolean): void;
   /**
    * The top bar's CURRENT content node (the default bar or a slot replacement).
    * A slot re-render swaps it in place, so an external host stays its parent.
@@ -338,6 +352,8 @@ export function createHistoryView(
   let destroyed = false;
   let listEpoch = 0;
   let presentation = options.presentation;
+  const collapsible = options.collapsible !== false;
+  let collapsed = options.collapsed === true;
   let domRenderEnabled = options.renderDom !== false;
   const rowErrors = new Map<string, { message: string; retry: () => void }>();
   let actionError: { message: string; retry: () => void } | null = null;
@@ -354,19 +370,49 @@ export function createHistoryView(
 
   // --- static chrome (built once; never moves between list states) ---------
 
+  const bodyId = `${headingId}-body`;
+
   const backButton = createNode("button", {
     className: "persona-history-icon-button persona-history-back",
-    attrs: {
-      type: "button",
-      "data-persona-history-focus": "close",
-      "aria-label":
-        options.presentation === "rail" ? copy.closeLabel : copy.backLabel,
-    },
+    attrs: { type: "button" },
   });
-  backButton.appendChild(
-    historyIcon(options.presentation === "rail" ? "x" : "arrow-left")
-  );
-  backButton.addEventListener("click", () => options.onClose());
+
+  /** Only a collapsible rail turns the leading control into a toggle. */
+  const collapseToggle = (): boolean => presentation === "rail" && collapsible;
+
+  const syncLeadingControl = (): void => {
+    const toggle = collapseToggle();
+    const rail = presentation === "rail";
+    backButton.setAttribute(
+      "data-persona-history-focus",
+      toggle ? "collapse" : "close"
+    );
+    backButton.setAttribute(
+      "aria-label",
+      toggle
+        ? collapsed
+          ? copy.expandLabel
+          : copy.collapseLabel
+        : rail
+          ? copy.closeLabel
+          : copy.backLabel
+    );
+    if (toggle) {
+      backButton.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      backButton.setAttribute("aria-controls", bodyId);
+    } else {
+      backButton.removeAttribute("aria-expanded");
+      backButton.removeAttribute("aria-controls");
+    }
+    backButton.replaceChildren(
+      historyIcon(toggle ? "panel-left" : rail ? "x" : "arrow-left")
+    );
+  };
+  syncLeadingControl();
+  backButton.addEventListener("click", () => {
+    if (collapseToggle()) options.onToggleCollapse?.();
+    else options.onClose();
+  });
 
   const title = createNode("h2", {
     className: "persona-history-title",
@@ -476,7 +522,7 @@ export function createHistoryView(
   // are body content, not chrome.
   const body = createNode(
     "div",
-    { className: "persona-history-body" },
+    { className: "persona-history-body", attrs: { id: bodyId } },
     options.showScopeStatus ? scopeBlock : null,
     newConversationButton,
     options.showScopeStatus ? scopeLine : null,
@@ -511,6 +557,15 @@ export function createHistoryView(
     headerPlacement === "inline" ? topbar : null,
     body
   );
+
+  /** Collapsed is a rail-only treatment: panel always shows the whole list. */
+  const syncCollapsedClass = (): void => {
+    element.classList.toggle(
+      "persona-history-view--rail-collapsed",
+      collapsed && collapseToggle()
+    );
+  };
+  syncCollapsedClass();
 
   injectStyles(element, "persona-history-view", HISTORY_VIEW_CSS);
 
@@ -1222,11 +1277,8 @@ export function createHistoryView(
       element.classList.toggle("persona-history-view--panel", !rail);
       element.classList.toggle("persona-history-view--rail", rail);
       element.setAttribute("data-persona-history-presentation", next);
-      backButton.setAttribute(
-        "aria-label",
-        rail ? copy.closeLabel : copy.backLabel
-      );
-      backButton.replaceChildren(historyIcon(rail ? "x" : "arrow-left"));
+      syncLeadingControl();
+      syncCollapsedClass();
       // The bar icon is the panel's only new-conversation control; the rail
       // has the body row instead.
       if (rail) newIconButton.remove();
@@ -1236,6 +1288,19 @@ export function createHistoryView(
       newIcon = nextIcon;
       // A header slot is presentation-aware, so it re-arbitrates on the move.
       render();
+    },
+    setCollapsed: (next) => {
+      if (next === collapsed) return;
+      collapsed = next;
+      syncCollapsedClass();
+      syncLeadingControl();
+      // The pointer is still on the toggle: re-show so the open tooltip
+      // re-reads the label it was just given.
+      const tip = tooltipHandles[0];
+      if (tip?.isOpen) {
+        tip.hide();
+        tip.show();
+      }
     },
     getHeaderElement: () => headerContent,
     setHeaderPlacement: (next) => {

@@ -431,16 +431,16 @@ describe("history shell", () => {
       expect(rail!.parentElement).toBe(
         header.closest(".persona-history-rail-conversation")!.parentElement
       );
-      // Its own bar rides inside the rail, with the close (x) affordance.
+      // Its own bar rides inside the rail, led by the collapse toggle.
       const bar = historyRoot(mount)!.querySelector<HTMLElement>(
         ".persona-history-topbar"
       )!;
       expect(bar.classList.contains("persona-history-topbar--shell")).toBe(false);
       expect(
         bar
-          .querySelector('[data-persona-history-focus="close"]')
+          .querySelector('[data-persona-history-focus="collapse"]')
           ?.getAttribute("aria-label")
-      ).toBe("Close conversation list");
+      ).toBe("Collapse conversation list");
       expect(historyButton(mount)!.getAttribute("aria-expanded")).toBe("true");
     });
 
@@ -585,14 +585,134 @@ describe("history shell", () => {
       )!;
       expect(column.contains(headerOf(mount))).toBe(true);
       expect(column.contains(bodyOf(mount))).toBe(true);
-      mount
-        .querySelector<HTMLButtonElement>('[data-persona-history-focus="close"]')!
-        .click();
+      // The rail's own full close is the header toggle; its bar collapses.
+      historyButton(mount)!.click();
       await flush(20);
       expect(mount.querySelector(".persona-history-rail-shell")).toBeNull();
       const after = Array.from(container.children);
       expect(after).toHaveLength(before.length);
       after.forEach((node, index) => expect(node).toBe(before[index]));
+    });
+
+    it("shrinks the host to the icon rail and back from the toggle", async () => {
+      const { mount } = await railSetup();
+      const host = mount.querySelector<HTMLElement>(".persona-history-rail-host")!;
+      const toggle = () =>
+        mount.querySelector<HTMLButtonElement>(
+          '[data-persona-history-focus="collapse"]'
+        )!;
+      expect(host.style.flex).toBe("0 0 260px");
+
+      toggle().click();
+      await flush();
+      expect(host.style.flex).toBe("0 0 52px");
+      expect(
+        historyRoot(mount)!.classList.contains("persona-history-view--rail-collapsed")
+      ).toBe(true);
+      // Same button, so focus never leaves the control the visitor pressed.
+      expect(toggle().getAttribute("aria-label")).toBe("Expand conversation list");
+
+      toggle().click();
+      await flush();
+      expect(host.style.flex).toBe("0 0 260px");
+      expect(
+        historyRoot(mount)!.classList.contains("persona-history-view--rail-collapsed")
+      ).toBe(false);
+    });
+
+    it("renders no toggle and stays expanded when collapse is turned off", async () => {
+      const { mount } = await railSetup({ collapsible: false });
+      expect(
+        mount.querySelector('[data-persona-history-focus="collapse"]')
+      ).toBeNull();
+      expect(
+        mount.querySelector<HTMLElement>(".persona-history-rail-host")!.style.flex
+      ).toBe("0 0 260px");
+    });
+
+    it("starts collapsed when the host configures it", async () => {
+      const { mount } = await railSetup({ defaultCollapsed: true });
+      expect(
+        mount.querySelector<HTMLElement>(".persona-history-rail-host")!.style.flex
+      ).toBe("0 0 52px");
+      expect(
+        historyRoot(mount)!.classList.contains("persona-history-view--rail-collapsed")
+      ).toBe(true);
+    });
+
+    it("closes fully on Escape from a collapsed rail", async () => {
+      const { mount } = await railSetup();
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="collapse"]')!
+        .click();
+      await flush();
+      historyRoot(mount)!.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+      );
+      await flush(20);
+      expect(historyRoot(mount)).toBeNull();
+      expect(mount.querySelector(".persona-history-rail-shell")).toBeNull();
+      expect(document.activeElement).toBe(historyButton(mount));
+    });
+
+    it("keeps the collapsed state across a close, a reopen, and a width flip", async () => {
+      const { mount, controller } = setup({
+        historyFeature: { enabled: true, presentation: "rail" },
+        config: { persistState: { keyPrefix: "persona-test-" } },
+      });
+      setContainerWidth(mount, 900);
+      await openHistoryUI(mount);
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="collapse"]')!
+        .click();
+      await flush();
+      expect(window.localStorage.getItem("persona-test-rail-collapsed")).toBe("1");
+
+      historyButton(mount)!.click();
+      await flush(20);
+      await openHistoryUI(mount);
+      expect(
+        mount.querySelector<HTMLElement>(".persona-history-rail-host")!.style.flex
+      ).toBe("0 0 52px");
+
+      // Panel always shows the whole list; the rail restores the state.
+      setContainerWidth(mount, 500);
+      controller.update({});
+      await flush();
+      expect(
+        historyRoot(mount)!.classList.contains("persona-history-view--rail-collapsed")
+      ).toBe(false);
+      setContainerWidth(mount, 900);
+      controller.update({});
+      await flush();
+      expect(
+        historyRoot(mount)!.classList.contains("persona-history-view--rail-collapsed")
+      ).toBe(true);
+      expect(
+        mount.querySelector<HTMLElement>(".persona-history-rail-host")!.style.flex
+      ).toBe("0 0 52px");
+    });
+
+    it("falls back to memory when state persistence is off", async () => {
+      const setItem = vi.spyOn(Storage.prototype, "setItem");
+      const { mount } = await railSetup();
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="collapse"]')!
+        .click();
+      await flush();
+      expect(
+        setItem.mock.calls.filter(([key]) =>
+          String(key).endsWith("rail-collapsed")
+        )
+      ).toEqual([]);
+      expect(window.localStorage.getItem("persona-rail-collapsed")).toBeNull();
+      // The in-memory value still survives a close and reopen.
+      historyButton(mount)!.click();
+      await flush(20);
+      await openHistoryUI(mount);
+      expect(
+        mount.querySelector<HTMLElement>(".persona-history-rail-host")!.style.flex
+      ).toBe("0 0 52px");
     });
 
     it("auto keeps a floating launcher on panel at any width", async () => {

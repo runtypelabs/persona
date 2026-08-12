@@ -916,7 +916,7 @@ describe("history view chrome and destructive actions", () => {
   });
 
   it("labels the rail close control differently from the panel back control", async () => {
-    const { root } = mount({ presentation: "rail" });
+    const { root } = mount({ presentation: "rail", collapsible: false });
     await flush();
     expect(root.classList.contains("persona-history-view--rail")).toBe(true);
     expect(root.dataset.personaHistoryPresentation).toBe("rail");
@@ -925,6 +925,119 @@ describe("history view chrome and destructive actions", () => {
         .querySelector('[data-persona-history-focus="close"]')
         ?.getAttribute("aria-label")
     ).toBe("Close conversation list");
+  });
+
+  it("turns the collapsible rail's leading control into a collapse toggle", async () => {
+    const onToggleCollapse = vi.fn();
+    const { root, handle } = mount({ presentation: "rail", onToggleCollapse });
+    await flush();
+    const toggle = root.querySelector<HTMLButtonElement>(
+      '[data-persona-history-focus="collapse"]'
+    )!;
+    expect(toggle).not.toBeNull();
+    expect(root.querySelector('[data-persona-history-focus="close"]')).toBeNull();
+    expect(toggle.getAttribute("aria-label")).toBe("Collapse conversation list");
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    // Controls the body region it hides, which carries the list.
+    const body = root.querySelector<HTMLElement>(".persona-history-body")!;
+    expect(toggle.getAttribute("aria-controls")).toBe(body.id);
+    expect(body.id).not.toBe("");
+    // Lucide PanelLeft: the rounded plate plus its divider.
+    expect(toggle.querySelector("rect")).not.toBeNull();
+    expect(toggle.querySelector("path")?.getAttribute("d")).toBe("M9 3v18");
+
+    toggle.click();
+    expect(onToggleCollapse).toHaveBeenCalledTimes(1);
+
+    // Panel keeps the back arrow and the close focus key untouched.
+    handle.setPresentation("panel");
+    await flush();
+    const back = root.querySelector<HTMLButtonElement>(
+      '[data-persona-history-focus="close"]'
+    )!;
+    expect(back.getAttribute("aria-label")).toBe("Back to conversation");
+    expect(back.hasAttribute("aria-expanded")).toBe(false);
+    expect(back.querySelector("rect")).toBeNull();
+  });
+
+  it("keeps the rail's close control when collapse is turned off", async () => {
+    const onClose = vi.fn();
+    const { root } = mount({
+      presentation: "rail",
+      collapsible: false,
+      onClose,
+    });
+    await flush();
+    expect(root.querySelector('[data-persona-history-focus="collapse"]')).toBeNull();
+    root
+      .querySelector<HTMLButtonElement>('[data-persona-history-focus="close"]')!
+      .click();
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("stamps the collapsed rail treatment and relabels its toggle", async () => {
+    const { root, handle } = mount({ presentation: "rail", collapsed: true });
+    await flush();
+    const toggle = () =>
+      root.querySelector<HTMLButtonElement>(
+        '[data-persona-history-focus="collapse"]'
+      )!;
+    expect(root.classList.contains("persona-history-view--rail-collapsed")).toBe(
+      true
+    );
+    expect(toggle().getAttribute("aria-label")).toBe("Expand conversation list");
+    expect(toggle().getAttribute("aria-expanded")).toBe("false");
+
+    handle.setCollapsed(false);
+    expect(root.classList.contains("persona-history-view--rail-collapsed")).toBe(
+      false
+    );
+    expect(toggle().getAttribute("aria-label")).toBe("Collapse conversation list");
+    expect(toggle().getAttribute("aria-expanded")).toBe("true");
+
+    // Panel never wears the treatment, whatever the last rail state was.
+    handle.setCollapsed(true);
+    handle.setPresentation("panel");
+    await flush();
+    expect(root.classList.contains("persona-history-view--rail-collapsed")).toBe(
+      false
+    );
+  });
+
+  it("hides everything but the two icons in the collapsed rail", async () => {
+    mount({ presentation: "rail", collapsed: true });
+    await flush();
+    const css = injectedHistoryCss();
+    const hidden = css.slice(
+      css.indexOf(
+        ".persona-history-view--rail-collapsed .persona-history-heading-group"
+      )
+    );
+    const hiddenBlock = hidden.slice(0, hidden.indexOf("}"));
+    // The list, the scope caption and the footer are all body children.
+    expect(hiddenBlock).toContain(
+      ".persona-history-view--rail-collapsed .persona-history-body > :not(.persona-history-new)"
+    );
+    expect(hiddenBlock).toContain("display: none;");
+    // The host's width animation is a rule, so it can honor reduced motion.
+    expect(css).toContain(
+      ".persona-history-rail-host {\n  transition: flex-basis"
+    );
+    expect(css.slice(css.indexOf("@media (prefers-reduced-motion"))).toContain(
+      ".persona-history-rail-host { transition: none; }"
+    );
+    // The new-conversation row squares off into a centered icon button.
+    const row = css.slice(
+      css.indexOf(
+        ".persona-history-view--rail-collapsed button.persona-history-new {"
+      )
+    );
+    const rowBlock = row.slice(0, row.indexOf("}"));
+    expect(rowBlock).toContain("width: 36px;");
+    expect(rowBlock).toContain("margin: 0 auto;");
+    expect(css).toContain(
+      ".persona-history-view--rail-collapsed button.persona-history-new span {\n  display: none;\n}"
+    );
   });
 
   it("carries one new-conversation control per presentation", async () => {
@@ -1171,7 +1284,7 @@ describe("history view unsupported affordances and lifecycle", () => {
     record.handle.setPresentation("rail");
     const text = backCall[0].text;
     expect(typeof text === "function" ? text() : text).toBe(
-      "Close conversation list"
+      "Collapse conversation list"
     );
     record.handle.destroy();
     expect(destroy).toHaveBeenCalledTimes(2);

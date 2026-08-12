@@ -7618,6 +7618,54 @@ export const createAgentExperience = (
     footer,
   ];
 
+  /** Collapsed icon rail, measured from the reference sidebar. */
+  const RAIL_COLLAPSED_WIDTH = 52;
+  const railCollapsible = (): boolean =>
+    config.features?.history?.rail?.collapsible !== false;
+  /** Resolved once per widget: storage, else the configured default. */
+  let railCollapsed: boolean | null = null;
+
+  const railCollapseKey = (): string => `${currentKeyPrefix()}rail-collapsed`;
+
+  // localStorage access throws (not just fails) in Safari private mode and
+  // partitioned iframes, so the resolved value is also the in-memory fallback.
+  const isRailCollapsed = (): boolean => {
+    if (railCollapsed === null) {
+      railCollapsed = config.features?.history?.rail?.defaultCollapsed === true;
+      if (config.persistState !== false) {
+        try {
+          const stored = window.localStorage.getItem(railCollapseKey());
+          if (stored) railCollapsed = stored === "1";
+        } catch {
+          /* blocked storage: the resolved default stands */
+        }
+      }
+    }
+    return railCollapsed;
+  };
+
+  const setRailCollapsed = (next: boolean): void => {
+    railCollapsed = next;
+    if (config.persistState === false) return;
+    try {
+      window.localStorage.setItem(railCollapseKey(), next ? "1" : "0");
+    } catch {
+      /* blocked storage: the in-memory value above is the fallback */
+    }
+  };
+
+  /** Collapsed only ever applies to a collapsible rail presentation. */
+  const railShowsCollapsed = (): boolean =>
+    historyPresentation === "rail" && railCollapsible() && isRailCollapsed();
+
+  const toggleRailCollapsed = (): void => {
+    setRailCollapsed(!isRailCollapsed());
+    historySurface?.view.setCollapsed(railShowsCollapsed());
+    applyRailChrome();
+    // The transcript column resizes beside the anchor; a clamp would bounce it.
+    repinAnchoredMessage();
+  };
+
   /**
    * Rail geometry is config-derived, so it must be re-derivable: a live
    * `update()` of `rail.width` / `rail.side` lands here, not only at mount.
@@ -7629,7 +7677,11 @@ export const createAgentExperience = (
     if (!host || !shell || !column) return;
     const rail = config.features?.history?.rail;
     const trailing = rail?.side === "right";
-    host.style.flex = `0 0 ${Math.min(400, Math.max(200, rail?.width ?? 260))}px`;
+    host.style.flex = `0 0 ${
+      railShowsCollapsed()
+        ? RAIL_COLLAPSED_WIDTH
+        : Math.min(400, Math.max(200, rail?.width ?? 260))
+    }px`;
     // The divider always faces the conversation, whichever edge the rail took.
     const divider = "1px solid var(--persona-divider,#e5e7eb)";
     host.style.borderRight = trailing ? "" : divider;
@@ -7655,6 +7707,8 @@ export const createAgentExperience = (
     // container, or they would float over the rail.
     column.style.cssText =
       "display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;position:relative";
+    // The collapse transition is a rule in the history chunk's stylesheet: an
+    // inline one could not carry the reduced-motion query.
     const host = createElement("div", "persona-history-rail-host");
     host.style.cssText = "display:flex;min-height:0;overflow:hidden";
 
@@ -7729,6 +7783,8 @@ export const createAgentExperience = (
     historySurface.view.setHeaderPlacement("inline");
     historyPresentation = next;
     historySurface.view.setPresentation(next);
+    // Panel always shows the whole list; returning to rail restores the state.
+    historySurface.view.setCollapsed(railShowsCollapsed());
     historySurface.requestRender();
     if (!historySurface.element.isConnected) {
       mountHistoryElement(historySurface.element);
@@ -7756,7 +7812,8 @@ export const createAgentExperience = (
     if (!element) return;
     const close = queryHistoryOwned(
       element,
-      '[data-persona-history-focus="close"]'
+      // The rail's leading control is a collapse toggle, not a close.
+      '[data-persona-history-focus="close"],[data-persona-history-focus="collapse"]'
     );
     if (close) {
       close.focus();
@@ -7815,6 +7872,9 @@ export const createAgentExperience = (
       context: historyOperationContext,
       targetId: activeHistoryTargetId(),
       presentation: historyPresentation,
+      collapsible: railCollapsible(),
+      collapsed: railShowsCollapsed(),
+      onToggleCollapse: toggleRailCollapsed,
       headerPlacement: initialHeaderPlacement,
       showScopeStatus: config.features?.history?.showScopeStatus !== false,
       // Rows reuse the header's agent icon unless history overrides or hides it.

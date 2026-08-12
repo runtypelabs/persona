@@ -2667,8 +2667,12 @@ export interface AgentWidgetHistoryCopy {
 
   /** Panel back control; returns to the surface that opened Messages. */
   backLabel?: string;
-  /** Rail close control. */
+  /** Rail close control, shown only when the rail is not collapsible. */
   closeLabel?: string;
+  /** Rail collapse toggle while the rail is expanded. */
+  collapseLabel?: string;
+  /** Rail collapse toggle while the rail is collapsed to icons. */
+  expandLabel?: string;
   /** Accessible status while the first page loads. */
   loadingLabel?: string;
   /** Label of the paging action below the last group. */
@@ -2739,9 +2743,18 @@ export interface AgentWidgetHistoryFeature {
   /**
    * Geometry of the rail navigation column. `side` picks the edge it docks to
    * (default "left", beside the conversation); `width` is its fixed width in
-   * px, clamped to 200-400 (default 260). Ignored in panel presentation.
+   * px, clamped to 200-400 (default 260). `collapsible` (default true) puts a
+   * collapse toggle in the rail header that shrinks it to a 52px icon rail, and
+   * `defaultCollapsed` (default false) picks the state a visitor who has never
+   * toggled it starts in. The chosen state is remembered per visitor alongside
+   * the other `persistState` keys. Ignored in panel presentation.
    */
-  rail?: { side?: "left" | "right"; width?: number };
+  rail?: {
+    side?: "left" | "right";
+    width?: number;
+    collapsible?: boolean;
+    defaultCollapsed?: boolean;
+  };
   /**
    * History scope. Defaults to "verified-user" when getIdentityProof exists,
    * otherwise "browser". Before this browser has been identity-bound, a null
