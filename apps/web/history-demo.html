@@ -38,12 +38,12 @@
       <aside class="stage-controls">
         <div class="info-section">
           <h3>Presentation</h3>
-          <p>Resolved against the history host container width, never the viewport. Rail needs at least 720px and collapses to panel below it; auto keeps floating launchers panel-based at every width.</p>
+          <p>Panel replaces the conversation. Rail is a navigation column beside it. Auto picks per container.</p>
           <div class="field">
             <label for="history-presentation">features.history.presentation</label>
             <select id="history-presentation" data-history-presentation>
-              <option value="panel">panel (Intercom)</option>
-              <option value="rail">rail (ChatGPT)</option>
+              <option value="panel">panel</option>
+              <option value="rail">rail</option>
               <option value="auto">auto</option>
             </select>
           </div>
@@ -52,20 +52,21 @@
             <button class="btn" type="button" data-history-action="close">Close messages</button>
             <button class="btn" type="button" data-history-action="new">New conversation</button>
           </div>
+          <p class="hint">Width is measured on the widget's container, never the viewport. Rail needs at least 720px and collapses to panel below it; auto keeps floating launchers panel-based at every width.</p>
         </div>
 
         <div class="info-section">
           <h3>Custom rendering</h3>
-          <p>A plugin whose <code>renderHistoryView</code> returns an element wins arbitration outright, so Persona's Messages view never renders. The demo plugin is a ChatGPT-style thread rail built on public hooks only: no provider, no controller, no chunk internals. One renderer covers both placements, reflowing when <code>context.presentation</code> is handed <code>panel</code> instead of <code>rail</code>.</p>
+          <p>The toggle mounts a thread rail plugin built on public hooks only. When its <code>renderHistoryView</code> returns an element, the built-in Messages view never renders.</p>
           <div class="btn-row">
             <button class="btn" type="button" data-history-toggle="custom-view" aria-pressed="false">Custom thread rail</button>
           </div>
-          <p class="hint">Persona still owns orchestration with the plugin mounted: chunk loading, placement, presentation resolution, Escape and focus, the destructive confirmations, and the selection epochs behind <code>context.actions</code>. Switch presentation to <code>rail</code> to see the same renderer beside an operable transcript.</p>
+          <p class="hint">Persona still owns chunk loading, placement, Escape and focus, and the destructive confirmations. One renderer covers both placements; switch presentation to <code>rail</code> to see it beside an operable transcript.</p>
         </div>
 
         <div class="info-section" data-history-demo-only>
           <h3>Identity status</h3>
-          <p>Injected through the demo provider, exactly as the Runtype provider would report it from init and per-response acknowledgement. The scope line under the Messages heading is evidence-based: it never infers verification from a configured callback.</p>
+          <p>Injects the identity state the real provider would report. The scope line in Messages reflects only reported evidence, never a configured callback.</p>
           <div class="btn-row">
             <button class="btn" type="button" data-history-identity="browser_only" data-history-identity-reason="no_identity_provider">Browser only</button>
             <button class="btn" type="button" data-history-identity="verifying">Verifying</button>
@@ -84,7 +85,7 @@
 
         <div class="info-section" data-history-demo-only>
           <h3>Loading and errors</h3>
-          <p>Latency drives the skeleton state; the failure queue is one-shot per operation, so the next call fails and the retry succeeds.</p>
+          <p>Latency drives the skeletons. Failures are one-shot per operation: the next call fails, the retry succeeds.</p>
           <div class="btn-row">
             <button class="btn" type="button" data-history-latency="1200">Slow provider</button>
             <button class="btn" type="button" data-history-latency="0">Instant provider</button>
@@ -110,7 +111,7 @@
 
         <div class="info-section" data-history-demo-only>
           <h3>Delete and empty</h3>
-          <p>Deleting an inactive row is non-disruptive; deleting the open one is irreversible, so the transcript is replaced rather than restored.</p>
+          <p>Deleting an inactive row is non-disruptive. Deleting the open one is irreversible, so the transcript is replaced rather than restored.</p>
           <div class="btn-row">
             <button class="btn" type="button" data-history-action="delete-newest">Delete newest</button>
             <button class="btn btn-danger" type="button" data-history-action="delete-all">Delete all</button>
@@ -124,7 +125,7 @@
 
         <div class="info-section" data-history-demo-only>
           <h3>Forget this device</h3>
-          <p>The in-memory provider has no <code>resetDevice</code>, so the destructive footer never renders that control and the controller method rejects as misuse. Reset is a Runtype visitor-credential operation, not a generic history one.</p>
+          <p>This provider has no <code>resetDevice</code>, so the control never renders and the controller method rejects. Reset is a visitor-credential operation, not a generic history one.</p>
           <div class="btn-row">
             <button class="btn" type="button" data-history-action="reset-identity">Call resetHistoryIdentity()</button>
           </div>
@@ -149,7 +150,12 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Two sources, one surface</h3>
-        <p>The in-memory source mounts a deterministic provider through the source-only internal registry, so every state on this page is reachable without a network. Live staging drops the override and lets the widget build the Runtype provider from a client token, which exercises the same core Messages surface against a real visitor plane. Neither source touches a provider from page code: all actions go through the controller methods and the widget's own view.</p>
+        <p>The same Messages surface runs against two sources.</p>
+        <ul>
+          <li>In-memory: a deterministic demo provider, so every state on this page is reachable without a network.</li>
+          <li>Live staging: the widget builds the real provider from a client token and runs the identical surface against the staging API.</li>
+        </ul>
+        <p>Page code never touches a provider. Every action goes through controller methods and the widget's own view.</p>
         <div class="code-block">
 <span class="function">initAgentWidget</span>({ <span class="prop">config</span>: {
   <span class="prop">clientToken</span>, <span class="prop">apiUrl</span>,
@@ -160,7 +166,13 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Panel, rail, and auto</h3>
-        <p>Panel is the default: Messages replaces the conversation body and composer, both of which become inert, so a visitor browsing history can never send into the conversation hidden underneath. Rail keeps the transcript and composer operable beside a navigation column and stays open when a conversation is selected. Auto resolves to rail only for a wide inline or docked shell. Below 720px of host container width, rail and auto both collapse to panel rather than squeezing either surface.</p>
+        <p>Three placements, resolved against the host container width.</p>
+        <ul>
+          <li>Panel (default): Messages replaces the conversation body and composer, and both become inert, so a visitor can never send into the conversation hidden underneath.</li>
+          <li>Rail: the transcript and composer stay operable beside a navigation column, and selecting a conversation keeps the rail open.</li>
+          <li>Auto: resolves to rail only for a wide inline or docked shell.</li>
+          <li>Below 720px, rail and auto both collapse to panel rather than squeezing either surface.</li>
+        </ul>
       </div>
 
       <div class="notes-section">
@@ -175,14 +187,29 @@
 
       <div class="notes-section">
         <h3 class="notes-section-title">Live staging setup</h3>
-        <p>Live staging reads two variables from <code>apps/web/.env</code>: <code>VITE_HISTORY_API_URL</code> and <code>VITE_CLIENT_TOKEN_HISTORY</code>. With either missing, the page shows setup instructions instead of a broken widget.</p>
-        <p>Phase 0 of the history contract is deployed to the staging API only, not to <code>api.runtype.com</code>, so this demo refuses to run when the URL points at production. The staging token is origin-locked to <code>http://localhost:5173</code> and <code>http://localhost:4173</code>, so it works on the dev server and a local preview build and nowhere else.</p>
+        <p>Live staging reads two variables from <code>apps/web/.env</code>. With either missing, the page shows setup instructions instead of a broken widget.</p>
+        <ul>
+          <li><code>VITE_HISTORY_API_URL</code>: must point at staging. The history contract is not deployed to production yet, so the demo refuses to run against it.</li>
+          <li><code>VITE_CLIENT_TOKEN_HISTORY</code>: origin-locked to <code>http://localhost:5173</code> and <code>http://localhost:4173</code>, so it works on the dev server and a local preview build and nowhere else.</li>
+        </ul>
       </div>
 
       <div class="notes-section">
         <h3 class="notes-section-title">Custom rendering</h3>
-        <p>Four public render hooks arbitrate around the default view: <code>renderHistoryView</code> replaces it entirely, and <code>renderHistoryHeader</code>, <code>renderHistoryConversation</code>, and <code>renderHistoryState</code> replace the top bar, one row, and a non-ready list state. Every hook may return <code>null</code> to fall through to the next plugin and then to Persona, and a hook that throws is reported and falls back rather than losing the surface.</p>
-        <p>The "Custom thread rail" toggle mounts a plugin that returns its own DOM from <code>renderHistoryView</code>. It reads the frozen <code>context</code> snapshot (conversations, active id, list state, pending action, resolved presentation, copy) and calls <code>context.actions</code> for every operation, so busy gating, selection epochs, and the accessible destructive confirmations behave exactly as they do for the built-in view. The snapshot carries no provider, no credential, and no transport detail. A host that wants navigation entirely outside Persona's shell can still build it headlessly with the controller methods and <code>history:*</code> events.</p>
+        <p>Four public render hooks arbitrate around the default view. Every hook may return <code>null</code> to fall through, and a hook that throws is reported and falls back rather than losing the surface.</p>
+        <ul>
+          <li><code>renderHistoryView</code>: replaces the whole view.</li>
+          <li><code>renderHistoryHeader</code>: replaces the top bar.</li>
+          <li><code>renderHistoryConversation</code>: replaces one row.</li>
+          <li><code>renderHistoryState</code>: replaces a non-ready list state.</li>
+        </ul>
+        <p>The "Custom thread rail" toggle mounts a plugin that returns its own DOM from <code>renderHistoryView</code>.</p>
+        <ul>
+          <li>It reads the frozen <code>context</code> snapshot: conversations, active id, list state, pending action, resolved presentation, copy.</li>
+          <li>It calls <code>context.actions</code> for every operation, so busy gating, selection epochs, and the destructive confirmations behave exactly as the built-in view.</li>
+          <li>The snapshot carries no provider, credential, or transport detail.</li>
+        </ul>
+        <p>A host that wants navigation entirely outside the widget shell can build it headlessly with controller methods and <code>history:*</code> events.</p>
       </div>
     </section>
   </main>

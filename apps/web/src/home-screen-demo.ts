@@ -36,7 +36,7 @@ const scaffold = renderDemoScaffold({
   slug: "home-screen-demo",
   title: "Home Screen Plugin",
   blurb:
-    "An Intercom-style home stack built on renderWelcome and renderComposer, wired to the conversation history controller API: Home, Messages, and Conversation are three distinct surfaces.",
+    "A messenger-style home stack built on renderWelcome and renderComposer, wired to the conversation history controller API: Home, Messages, and Conversation are three distinct surfaces.",
 });
 
 const configInspector = createDemoConfigInspector({
@@ -225,9 +225,9 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       enabled: mode === "launcher",
       width: mode === "launcher" ? "min(420px, 94vw)" : "100%",
       title: mode === "launcher" ? "Support" : undefined,
-      // Messenger convention (Intercom/Zendesk): the header navigates and
-      // dismisses; conversation creation belongs to Home and Messages. The
-      // header New conversation affordance would be a redundant third entry.
+      // The header navigates and dismisses; conversation creation belongs to
+      // Home and Messages. A header New conversation icon would be a
+      // redundant third entry point.
       clearChat: { enabled: false },
     },
     copy: {

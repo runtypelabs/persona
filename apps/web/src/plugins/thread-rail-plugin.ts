@@ -5,7 +5,7 @@ import type {
 import { injectStyles } from "@runtypelabs/persona/plugin-kit";
 
 /**
- * Blueprint: a ChatGPT-style thread rail that replaces Persona's Messages view
+ * Blueprint: a sidebar thread rail that replaces Persona's Messages view
  * through `renderHistoryView`, using public hooks only.
  *
  * The plugin owns nothing but DOM. Persona still owns orchestration: it loads
