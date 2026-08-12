@@ -207,32 +207,19 @@ export const HISTORY_VIEW_CSS =
   gap: 16px;
 }
 ` +
-  /* Floating pill over the end of the list: last in flex order, pinned to the
-     bottom of the scrolling body, and still in flow so the last row clears it. */
+  /* Shared skeleton; each presentation styles its own shape below (panel: a
+     floating pill under the list, rail: a row above it). */
   `.persona-history-view button.persona-history-new {
-  order: 1;
-  position: sticky;
-  bottom: 12px;
-  z-index: 1;
-  align-self: center;
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  width: auto;
   max-width: 100%;
-  min-height: 40px;
-  padding: 10px 16px;
-  margin: auto 0 0;
   border: 1px solid transparent;
   border-radius: var(--persona-button-radius, var(--persona-radius-lg, 10px));
-  background: var(--persona-button-primary-bg, var(--persona-primary, #2563eb));
-  color: var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff));
   font: inherit;
   font-size: 14px;
-  font-weight: 600;
   line-height: 20px;
   text-align: left;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
   cursor: pointer;
 }
 .persona-history-view button.persona-history-new span {
@@ -531,13 +518,120 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view--panel button.persona-history-load-more {
   margin-top: 12px;
 }
+` +
+  /* Floating pill over the end of the list: last in flex order, pinned to the
+     bottom of the scrolling body, and still in flow so the last row clears it. */
+  `.persona-history-view--panel button.persona-history-new {
+  order: 1;
+  position: sticky;
+  bottom: 12px;
+  z-index: 1;
+  align-self: center;
+  width: auto;
+  min-height: 40px;
+  padding: 10px 16px;
+  margin: auto 0 0;
+  background: var(--persona-button-primary-bg, var(--persona-primary, #2563eb));
+  color: var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff));
+  font-weight: 600;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
+}
 
 ` +
   /* --- rail presentation --------------------------------------------------- */
+  /* A sidebar of single-line titles on their own surface: no avatar, preview,
+     time, divider or edge marker, and 36px rows inset 6px from both edges so
+     the hover and selection washes read as rounded chips. The host draws the
+     divider, on whichever edge faces the conversation. */
   `.persona-history-view--rail {
   --persona-history-slide: 12px;
-  /* The rail occupies the trailing edge; the divider faces the conversation. */
-  border-left: 1px solid var(--persona-history-border);
+  --persona-history-surface-bg: var(--persona-container, #f7f7f8);
+  --persona-history-topbar-bg: transparent;
+  --persona-history-topbar-min-height: 48px;
+  --persona-history-row-min-height: 36px;
+}
+.persona-history-view--rail .persona-history-topbar {
+  padding: 2px 6px;
+  border-bottom: 0;
+}
+.persona-history-view--rail .persona-history-heading-group {
+  text-align: left;
+}
+.persona-history-view--rail .persona-history-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--persona-text-muted, #6b7280);
+}
+.persona-history-view--rail .persona-history-body {
+  gap: 8px;
+  padding: 4px 0 12px;
+}
+` +
+  /* Rows and headings carry their own 16px text inset, so everything else in
+     the body has to opt into it. */
+  `.persona-history-view--rail .persona-history-scope,
+.persona-history-view--rail .persona-history-scope-alert,
+.persona-history-view--rail .persona-history-state,
+.persona-history-view--rail .persona-history-footer {
+  padding-right: 16px;
+  padding-left: 16px;
+}
+` +
+  /* New-conversation row: the same geometry as a conversation, icon leading. */
+  `.persona-history-view--rail button.persona-history-new {
+  width: calc(100% - 12px);
+  min-height: 36px;
+  padding: 6px 10px;
+  margin: 0 6px;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-weight: 500;
+}
+.persona-history-view--rail button.persona-history-new:hover:not(:disabled) {
+  background: var(--persona-history-row-hover-bg);
+}
+.persona-history-view--rail button.persona-history-new svg {
+  order: -1;
+}
+.persona-history-view--rail .persona-history-list-region {
+  gap: 24px;
+}
+.persona-history-view--rail .persona-history-group-heading {
+  margin: 0 0 6px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.persona-history-view--rail li.persona-history-item::after,
+.persona-history-view--rail .persona-history-row-avatar,
+.persona-history-view--rail .persona-history-row-preview,
+.persona-history-view--rail time.persona-history-row-time {
+  display: none;
+}
+.persona-history-view--rail button.persona-history-row {
+  min-height: 36px;
+  padding: 6px 10px;
+  margin: 0 6px;
+  width: calc(100% - 12px);
+  border-radius: 10px;
+}
+.persona-history-view--rail .persona-history-row-title {
+  font-weight: 400;
+}
+.persona-history-view--rail button.persona-history-row[aria-current="page"] {
+  box-shadow: none;
+}
+.persona-history-view--rail button.persona-history-row-menu-button {
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+}
+.persona-history-view--rail .persona-history-skeleton-row {
+  padding: 6px 16px;
 }
 
 ` +

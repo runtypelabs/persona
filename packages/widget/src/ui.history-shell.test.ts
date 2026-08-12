@@ -378,12 +378,37 @@ describe("history shell", () => {
   });
 
   describe("rail host", () => {
-    const railSetup = async () => {
-      const result = setup({ historyFeature: { enabled: true, presentation: "rail" } });
+    const railSetup = async (rail?: Record<string, unknown>) => {
+      const result = setup({
+        historyFeature: { enabled: true, presentation: "rail", ...(rail ? { rail } : {}) },
+      });
       setContainerWidth(result.mount, 900);
       await openHistoryUI(result.mount);
       return result;
     };
+
+    it("docks the navigation ahead of the conversation at 260px by default", async () => {
+      const { mount } = await railSetup();
+      const shell = mount.querySelector<HTMLElement>(".persona-history-rail-shell")!;
+      const host = shell.querySelector<HTMLElement>(".persona-history-rail-host")!;
+      expect(shell.firstElementChild).toBe(host);
+      expect(host.style.flex).toBe("0 0 260px");
+      // The divider faces the conversation, so a leading rail draws it right.
+      expect(host.style.borderRight).not.toBe("");
+      expect(host.style.borderLeft).toBe("");
+    });
+
+    it("flips to the trailing edge and takes a clamped width from config", async () => {
+      const { mount } = await railSetup({ side: "right", width: 900 });
+      const shell = mount.querySelector<HTMLElement>(".persona-history-rail-shell")!;
+      const host = shell.querySelector<HTMLElement>(".persona-history-rail-host")!;
+      expect(shell.lastElementChild).toBe(host);
+      expect(host.style.flex).toBe("0 0 400px");
+      expect(host.style.borderLeft).not.toBe("");
+      expect(host.style.borderRight).toBe("");
+      // The conversation column still gives the transcript and composer back.
+      expect(bodyOf(mount).closest(".persona-history-rail-conversation")).not.toBeNull();
+    });
 
     it("keeps the transcript and composer operable beside the navigation", async () => {
       const { mount } = await railSetup();

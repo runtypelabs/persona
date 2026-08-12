@@ -7623,20 +7623,25 @@ export const createAgentExperience = (
       minWidth: "0",
       minHeight: "0",
     } satisfies Partial<CSSStyleDeclaration>);
+    const rail = config.features?.history?.rail;
+    const trailing = rail?.side === "right";
     const host = createElement("div", "persona-history-rail-host");
     Object.assign(host.style, {
       display: "flex",
-      flex: "0 0 320px",
-      maxWidth: "360px",
+      flex: `0 0 ${Math.min(400, Math.max(200, rail?.width ?? 260))}px`,
       minHeight: "0",
       overflow: "hidden",
-    } satisfies Partial<CSSStyleDeclaration>);
+      // The divider always faces the conversation, whichever edge the rail took.
+      [trailing ? "borderLeft" : "borderRight"]:
+        "1px solid var(--persona-divider,#e5e7eb)",
+    } as Partial<CSSStyleDeclaration>);
 
     container.insertBefore(shell, body);
     column.appendChild(body);
     // Composer-bar mode keeps the footer outside the container; leave it alone.
     if (footer.parentNode === container) column.appendChild(footer);
-    shell.append(column, host);
+    if (trailing) shell.append(column, host);
+    else shell.append(host, column);
     host.appendChild(element);
     railShell = shell;
   };
@@ -7645,7 +7650,8 @@ export const createAgentExperience = (
     restorePanelHost?.();
     if (railShell) {
       container.insertBefore(body, railShell);
-      if (footer.parentNode === railShell.firstElementChild) {
+      // Only a footer the rail actually adopted comes back to the container.
+      if (railShell.contains(footer)) {
         container.insertBefore(footer, railShell);
       }
       railShell.remove();

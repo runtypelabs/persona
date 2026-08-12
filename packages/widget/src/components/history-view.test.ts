@@ -332,13 +332,79 @@ describe("history view list styling", () => {
     // The headings stay in the DOM: the lists are still labelled by them.
     expect(root.querySelectorAll(".persona-history-group-heading")).toHaveLength(3);
     const css = injectedHistoryCss();
-    expect(css).toContain(
+    const clipped = css.slice(
+      css.indexOf(".persona-history-view .persona-history-sr-only")
+    );
+    // Only the panel's headings join the clipped selector list.
+    expect(clipped.slice(0, clipped.indexOf("{"))).toContain(
       ".persona-history-view--panel .persona-history-group-heading"
     );
-    expect(css).not.toContain(
-      ".persona-history-view--rail .persona-history-group-heading"
-    );
+    expect(clipped.slice(0, clipped.indexOf("{"))).not.toContain("--rail");
     expect(css).toContain(".persona-history-view--panel .persona-history-group {\n  margin: 0 -16px;\n}");
+  });
+
+  it("strips the rail down to single-line titles on their own surface", async () => {
+    mount({ presentation: "rail" });
+    await flush();
+    const css = injectedHistoryCss();
+
+    // Avatar, preview, time and the inset hairline are panel constructs.
+    const hidden = css.slice(
+      css.indexOf(".persona-history-view--rail li.persona-history-item::after")
+    );
+    const hiddenBlock = hidden.slice(0, hidden.indexOf("}"));
+    expect(hiddenBlock).toContain(".persona-history-view--rail .persona-history-row-avatar");
+    expect(hiddenBlock).toContain(".persona-history-view--rail .persona-history-row-preview");
+    expect(hiddenBlock).toContain(
+      ".persona-history-view--rail time.persona-history-row-time"
+    );
+    expect(hiddenBlock).toContain("display: none");
+
+    const row = css.slice(
+      css.indexOf(".persona-history-view--rail button.persona-history-row {")
+    );
+    const rowBlock = row.slice(0, row.indexOf("}"));
+    expect(rowBlock).toContain("min-height: 36px;");
+    expect(rowBlock).toContain("padding: 6px 10px;");
+    expect(rowBlock).toContain("margin: 0 6px;");
+    expect(rowBlock).toContain("border-radius: 10px;");
+
+    // The selection wash carries no edge marker in the rail.
+    expect(css).toContain(
+      '.persona-history-view--rail button.persona-history-row[aria-current="page"] {\n  box-shadow: none;\n}'
+    );
+    // Its own sidebar surface, and no border: the host draws the divider.
+    expect(css).toContain(
+      "--persona-history-surface-bg: var(--persona-container, #f7f7f8);"
+    );
+    expect(css).not.toContain("border-left: 1px solid var(--persona-history-border)");
+  });
+
+  it("styles the rail's new-conversation action as a row above the list", async () => {
+    const { root } = mount({ presentation: "rail" });
+    await flush();
+    // A leading compose glyph, not the panel pill's trailing arrow.
+    const primary = root.querySelector<HTMLButtonElement>(".persona-history-new");
+    expect(
+      Array.from(primary!.querySelectorAll("svg path")).map((path) =>
+        path.getAttribute("d")
+      )
+    ).toEqual(["M5 12h14", "M12 5v14"]);
+
+    const css = injectedHistoryCss();
+    const rail = css.slice(
+      css.indexOf(".persona-history-view--rail button.persona-history-new {")
+    );
+    const block = rail.slice(0, rail.indexOf("}"));
+    expect(block).toContain("min-height: 36px;");
+    expect(block).toContain("padding: 6px 10px;");
+    expect(block).toContain("margin: 0 6px;");
+    expect(block).toContain("background: transparent;");
+    // The pill's sticky placement is panel-only.
+    expect(block).not.toContain("position: sticky;");
+    expect(css).toContain(
+      ".persona-history-view--rail button.persona-history-new svg {\n  order: -1;\n}"
+    );
   });
 });
 
@@ -869,7 +935,9 @@ describe("history view chrome and destructive actions", () => {
       )
     ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     const css = injectedHistoryCss();
-    const pill = css.slice(css.indexOf(".persona-history-view button.persona-history-new {"));
+    const pill = css.slice(
+      css.indexOf(".persona-history-view--panel button.persona-history-new {")
+    );
     const block = pill.slice(0, pill.indexOf("}"));
     expect(block).toContain("order: 1;");
     expect(block).toContain("position: sticky;");

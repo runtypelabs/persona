@@ -870,19 +870,19 @@ fallback chain into the ordinary theme aliases. Set any of them on the host page
 
 | CSS var | Fallback chain | Description |
 |---------|----------------|-------------|
-| `--persona-history-surface-bg` | `--persona-surface` → `#ffffff` | List/background surface and the row overflow menu |
+| `--persona-history-surface-bg` | `--persona-surface` → `#ffffff` | List/background surface and the row overflow menu. Rail re-points it at `--persona-container` → `#f7f7f8` for a distinct sidebar surface |
 | `--persona-history-topbar-bg` | `--persona-header-bg` → `--persona-surface` → `#ffffff` | Top bar background (inline bar only; the shell-hosted bar is transparent, the header theme paints it) |
-| `--persona-history-border` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Hairlines: top bar, footer, rail edge |
+| `--persona-history-border` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Hairlines: top bar and footer. The rail's edge divider is drawn by the shell host from `--persona-divider` |
 | `--persona-history-row-hover-bg` | `--persona-button-ghost-hover-bg` → `rgba(0, 0, 0, 0.04)` | Row hover and active-press wash |
-| `--persona-history-row-divider` | `--persona-history-border` | Inset hairline under every row |
-| `--persona-history-row-avatar-bg` | `--persona-header-icon-bg` → `--persona-primary` → `#2563eb` | Leading row avatar plate (behind a glyph; an image covers it) |
+| `--persona-history-row-divider` | `--persona-history-border` | Inset hairline under every row (panel only; the rail has no row dividers) |
+| `--persona-history-row-avatar-bg` | `--persona-header-icon-bg` → `--persona-primary` → `#2563eb` | Leading row avatar plate (panel only; the rail hides the avatar) |
 | `--persona-history-row-active-bg` | `--persona-container` → `#f3f4f6` | Selected conversation wash |
-| `--persona-history-active-marker` | `--persona-primary` → `#2563eb` | Selected conversation edge marker |
+| `--persona-history-active-marker` | `--persona-primary` → `#2563eb` | Selected conversation edge marker (panel only; the rail marks selection with the wash alone) |
 | `--persona-history-skeleton-bg` | `--persona-container` → `#eef0f3` | Loading placeholder blocks |
 | `--persona-history-danger-fg` | `--persona-palette-colors-error-600` → `#b91c1c` | Destructive action text (delete, delete all, forget device) |
 | `--persona-history-focus-ring` | `--persona-primary` → `#2563eb` | `:focus-visible` outline color |
-| `--persona-history-row-min-height` | `74px` | Row and skeleton-row minimum height |
-| `--persona-history-topbar-min-height` | `56px` | Inline top bar minimum height (the shell-hosted bar inherits the header's sizing) |
+| `--persona-history-row-min-height` | `74px` (panel) / `36px` (rail) | Row and skeleton-row minimum height |
+| `--persona-history-topbar-min-height` | `56px` (panel) / `48px` (rail) | Inline top bar minimum height (the shell-hosted bar inherits the header's sizing) |
 | `--persona-history-slide` | `20px` (panel) / `12px` (rail) | Horizontal travel of the body's entrance and exit motion |
 
 Copy is separate from styling: every user-visible string is overridable through
@@ -897,7 +897,9 @@ plugins can target them:
 /* Root and placement */
 .persona-history-view                 /* view root; carries the variables above */
 .persona-history-view--panel          /* panel presentation */
-.persona-history-view--rail           /* rail presentation (adds the right edge) */
+.persona-history-view--rail           /* rail presentation: 36px title-only rows
+                                         on their own surface. The docked side and
+                                         width come from features.history.rail */
 .persona-history-view--enter          /* one-shot entry animation (body only;
                                          the bar never animates or moves) */
 
@@ -989,7 +991,11 @@ before and around the lazy view:
 .persona-history-toggle               /* header control that opens Messages */
 .persona-history-rail-shell           /* row wrapper created for rail placement */
 .persona-history-rail-conversation    /* the still-operable conversation column */
-.persona-history-rail-host            /* the navigation column the view mounts into */
+.persona-history-rail-host            /* the navigation column the view mounts into;
+                                         260px on the leading edge by default, with
+                                         the divider on the edge facing the
+                                         conversation. features.history.rail sets
+                                         { side: "left" | "right", width: 200-400 } */
 .persona-history-confirm__dialog      /* destructive confirmation (alertdialog) */
 .persona-history-confirm__title
 .persona-history-confirm__description

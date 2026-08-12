@@ -435,7 +435,12 @@ export function createHistoryView(
     },
     createNode("span", { text: copy.newConversationLabel })
   );
-  newConversationButton.appendChild(historyIcon("arrow-right", 18));
+  // Panel trails an arrow on its pill; the rail row leads with a compose plus.
+  let newIcon = historyIcon(
+    options.presentation === "rail" ? "plus" : "arrow-right",
+    18
+  );
+  newConversationButton.appendChild(newIcon);
   newConversationButton.addEventListener("click", () => void startNew());
 
   const listRegion = createNode("div", {
@@ -1220,6 +1225,9 @@ export function createHistoryView(
         rail ? copy.closeLabel : copy.backLabel
       );
       backButton.replaceChildren(historyIcon(rail ? "x" : "arrow-left"));
+      const nextIcon = historyIcon(rail ? "plus" : "arrow-right", 18);
+      newIcon.replaceWith(nextIcon);
+      newIcon = nextIcon;
       // A header slot is presentation-aware, so it re-arbitrates on the move.
       render();
     },

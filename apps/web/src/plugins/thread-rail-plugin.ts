@@ -258,9 +258,8 @@ const THREAD_RAIL_CSS = `
   font-size: 14px;
 }
 .persona-threads * { box-sizing: border-box; }
-.persona-threads--rail {
-  border-right: 1px solid var(--persona-divider, #e5e7eb);
-}
+/* No divider here: Persona's rail host draws one on the edge facing the
+   conversation, whichever side the rail docked to. */
 .persona-threads__header {
   display: flex;
   align-items: center;
@@ -330,7 +329,7 @@ const THREAD_RAIL_CSS = `
   gap: 6px;
   margin: 0;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 10px;
 }
 .persona-threads li.persona-threads__item:hover {
   background: var(--persona-surface, #ffffff);
@@ -340,9 +339,10 @@ const THREAD_RAIL_CSS = `
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding: 8px 4px 8px 10px;
+  min-height: 36px;
+  padding: 6px 4px 6px 10px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -380,6 +380,16 @@ const THREAD_RAIL_CSS = `
 }
 .persona-threads button.persona-threads__row-delete:hover {
   color: var(--persona-palette-colors-error-600, #b91c1c);
+}
+/* Reveal on hover or keyboard focus only; it never leaves the tab order. */
+@media (hover: hover) {
+  .persona-threads button.persona-threads__row-delete {
+    opacity: 0;
+  }
+  .persona-threads li.persona-threads__item:hover button.persona-threads__row-delete,
+  .persona-threads li.persona-threads__item:focus-within button.persona-threads__row-delete {
+    opacity: 1;
+  }
 }
 .persona-threads__state {
   display: flex;

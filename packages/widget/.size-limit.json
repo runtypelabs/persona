@@ -26,7 +26,7 @@
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "188 kB",
+    "limit": "188.5 kB",
     "gzip": true
   },
   {

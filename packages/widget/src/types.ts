@@ -2737,6 +2737,12 @@ export interface AgentWidgetHistoryFeature {
    */
   presentation?: "panel" | "rail" | "auto";
   /**
+   * Geometry of the rail navigation column. `side` picks the edge it docks to
+   * (default "left", beside the conversation); `width` is its fixed width in
+   * px, clamped to 200-400 (default 260). Ignored in panel presentation.
+   */
+  rail?: { side?: "left" | "right"; width?: number };
+  /**
    * History scope. Defaults to "verified-user" when getIdentityProof exists,
    * otherwise "browser". Before this browser has been identity-bound, a null
    * proof falls back to browser scope for that operation. Once visitor.endUserId
