@@ -373,6 +373,10 @@ describe("history view list styling", () => {
     expect(css).toContain(
       '.persona-history-view--rail button.persona-history-row[aria-current="page"] {\n  box-shadow: none;\n}'
     );
+    // The panel wash matches the rail surface, so the rail overrides it darker.
+    expect(css).toContain(
+      "--persona-history-row-active-bg: rgba(0, 0, 0, 0.08);"
+    );
     // Its own sidebar surface, and no border: the host draws the divider.
     expect(css).toContain(
       "--persona-history-surface-bg: var(--persona-container, #f7f7f8);"

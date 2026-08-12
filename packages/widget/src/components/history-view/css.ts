@@ -549,6 +549,9 @@ export const HISTORY_VIEW_CSS =
   --persona-history-topbar-bg: transparent;
   --persona-history-topbar-min-height: 48px;
   --persona-history-row-min-height: 36px;
+  /* The panel active wash resolves to the same container color as the rail
+     surface, so the rail needs a darker step or selection is invisible. */
+  --persona-history-row-active-bg: rgba(0, 0, 0, 0.08);
 }
 .persona-history-view--rail .persona-history-topbar {
   padding: 2px 6px;
