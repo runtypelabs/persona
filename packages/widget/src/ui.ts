@@ -7789,6 +7789,8 @@ export const createAgentExperience = (
         ? { pageSize: config.features.history.pageSize }
         : {}),
       onSelect: (conversationId) => openHistoryConversation(conversationId),
+      // The chunk is size-capped, so it borrows the shell's tooltip module.
+      attachTooltip,
       onStartNew: () => startNewConversation(),
       onClose: () => closeHistory(),
       onRequestDeleteConversation: (conversationId) =>

@@ -16,6 +16,7 @@
 
 import { injectStyles } from "../plugin-kit";
 import { createNode, cx } from "../utils/dom";
+import type { TooltipHandle, TooltipOptions } from "../utils/tooltip";
 import { createHistoryAnnouncer } from "./history-view/announcer";
 import { HISTORY_VIEW_CSS } from "./history-view/css";
 import {
@@ -163,6 +164,11 @@ export interface HistoryViewOptions {
   onModelChange?: () => void;
   /** Shell live region, used while this view's own one is detached. */
   onAnnounce?: (message: string) => void;
+  /**
+   * The shell's tooltip attacher, passed in so the size-capped chunk never
+   * bundles a second copy of the tooltip module. Absent means no tooltips.
+   */
+  attachTooltip?: (options: TooltipOptions) => TooltipHandle;
 }
 
 export interface HistoryViewHandle {
@@ -388,6 +394,15 @@ export function createHistoryView(
   });
   newIconButton.appendChild(historyIcon("plus"));
   newIconButton.addEventListener("click", () => void startNew());
+
+  // Same styled tooltip as the shell header controls beside this bar. Live
+  // aria-label getters keep the rail close relabel accurate.
+  const tooltipHandles = [backButton, newIconButton].map((control) =>
+    options.attachTooltip?.({
+      anchor: control,
+      text: () => control.getAttribute("aria-label") ?? "",
+    })
+  );
 
   const topbar = createNode(
     "div",
@@ -1236,6 +1251,9 @@ export function createHistoryView(
       listEpoch += 1;
       endEntrance();
       endShellFade();
+      // An open tooltip holds document-level listeners; the buttons may also
+      // outlive this element in the shell header.
+      tooltipHandles.forEach((handle) => handle?.destroy());
       // The bar's contents may be hosted outside this element.
       headerContent.remove();
       exitAnimations.forEach((animation) => animation.cancel());

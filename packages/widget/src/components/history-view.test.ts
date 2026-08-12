@@ -904,6 +904,39 @@ describe("history view header placement", () => {
 });
 
 describe("history view unsupported affordances and lifecycle", () => {
+  it("attaches the shell's tooltip to the bar controls and destroys it with the view", async () => {
+    const destroy = vi.fn();
+    const attachTooltip = vi.fn(
+      (opts: { anchor: HTMLElement; text: string | (() => string) }) => {
+        void opts;
+        return {
+          isOpen: false,
+          show: () => {},
+          hide: () => {},
+          reposition: () => {},
+          destroy,
+        };
+      }
+    );
+    const record = mount({ attachTooltip });
+    await flush();
+    expect(attachTooltip).toHaveBeenCalledTimes(2);
+    const anchors = attachTooltip.mock.calls.map(([opts]) => opts.anchor);
+    expect(anchors).toContain(record.root.querySelector(".persona-history-back"));
+    expect(anchors).toContain(record.root.querySelector(".persona-history-new-icon"));
+    // Live getter: a relabel (rail close) changes the tooltip text too.
+    const backCall = attachTooltip.mock.calls.find(
+      ([opts]) => opts.anchor === record.root.querySelector(".persona-history-back")
+    )!;
+    record.handle.setPresentation("rail");
+    const text = backCall[0].text;
+    expect(typeof text === "function" ? text() : text).toBe(
+      "Close conversation list"
+    );
+    record.handle.destroy();
+    expect(destroy).toHaveBeenCalledTimes(2);
+  });
+
   it("renders no search, archive, unread, or delivery affordances", async () => {
     const { root } = mount();
     await flush();
