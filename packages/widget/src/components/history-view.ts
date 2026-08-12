@@ -409,12 +409,14 @@ export function createHistoryView(
     })
   );
 
+  // The rail already carries a new-conversation row in its body, so the bar
+  // icon is panel-only.
   const topbar = createNode(
     "div",
     { className: "persona-history-topbar" },
     backButton,
     headingGroup,
-    newIconButton
+    options.presentation === "rail" ? null : newIconButton
   );
 
   /**
@@ -1225,6 +1227,10 @@ export function createHistoryView(
         rail ? copy.closeLabel : copy.backLabel
       );
       backButton.replaceChildren(historyIcon(rail ? "x" : "arrow-left"));
+      // The bar icon is the panel's only new-conversation control; the rail
+      // has the body row instead.
+      if (rail) newIconButton.remove();
+      else topbar.appendChild(newIconButton);
       const nextIcon = historyIcon(rail ? "plus" : "arrow-right", 18);
       newIcon.replaceWith(nextIcon);
       newIcon = nextIcon;

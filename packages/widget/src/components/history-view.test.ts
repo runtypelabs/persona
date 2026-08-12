@@ -899,7 +899,7 @@ describe("history view chrome and destructive actions", () => {
     back?.click();
     expect(onClose).toHaveBeenCalledTimes(1);
 
-    const newIcon = root.querySelector<HTMLButtonElement>(
+    const newIcon = topbar?.querySelector<HTMLButtonElement>(
       '[data-persona-history-focus="new-icon"]'
     );
     expect(newIcon?.getAttribute("aria-label")).toBe("New conversation");
@@ -925,6 +925,46 @@ describe("history view chrome and destructive actions", () => {
         .querySelector('[data-persona-history-focus="close"]')
         ?.getAttribute("aria-label")
     ).toBe("Close conversation list");
+  });
+
+  it("carries one new-conversation control per presentation", async () => {
+    const { root, handle } = mount({ presentation: "rail" });
+    await flush();
+    const barIcon = () =>
+      root.querySelector<HTMLButtonElement>(
+        '.persona-history-topbar [data-persona-history-focus="new-icon"]'
+      );
+    // The rail's body row is the only one; the panel bar carries the icon.
+    expect(barIcon()).toBeNull();
+    expect(root.querySelector(".persona-history-new")).not.toBeNull();
+
+    handle.setPresentation("panel");
+    await flush();
+    const icon = barIcon();
+    expect(icon).not.toBeNull();
+    // Restored as the trailing child, so the heading stays centered.
+    expect(icon?.previousElementSibling?.className).toBe(
+      "persona-history-heading-group"
+    );
+    expect(icon?.nextElementSibling).toBeNull();
+
+    handle.setPresentation("rail");
+    await flush();
+    expect(barIcon()).toBeNull();
+  });
+
+  it("gives the rail bar only the tracks it fills", async () => {
+    mount({ presentation: "rail" });
+    await flush();
+    const css = injectedHistoryCss();
+    const rail = css.slice(
+      css.indexOf(".persona-history-view--rail .persona-history-topbar {")
+    );
+    expect(rail.slice(0, rail.indexOf("}"))).toContain(
+      "grid-template-columns: 44px minmax(0, 1fr);"
+    );
+    // The panel and shell bars keep the third track for their icon.
+    expect(css).toContain("grid-template-columns: 44px minmax(0, 1fr) 44px;");
   });
 
   it("runs the primary new-conversation action from a pill pinned below the list", async () => {

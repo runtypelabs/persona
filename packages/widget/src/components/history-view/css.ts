@@ -553,7 +553,11 @@ export const HISTORY_VIEW_CSS =
      surface, so the rail needs a darker step or selection is invisible. */
   --persona-history-row-active-bg: rgba(0, 0, 0, 0.08);
 }
-.persona-history-view--rail .persona-history-topbar {
+` +
+  /* Two tracks: the rail bar has no trailing icon, so a third would push the
+     title off-center. */
+  `.persona-history-view--rail .persona-history-topbar {
+  grid-template-columns: 44px minmax(0, 1fr);
   padding: 2px 6px;
   border-bottom: 0;
 }
