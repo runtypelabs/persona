@@ -1842,13 +1842,18 @@
 .persona-header-control--glyph > svg {
   width: var(--persona-header-control-icon-size, 24px);
   height: var(--persona-header-control-icon-size, 24px);
+  /* Presentation wins over the SVG stroke-width attribute, which stays as the
+     no-CSS fallback. Unitless, straight off the theme token. */
+  stroke-width: var(--persona-components-header-controlStrokeWidth, 1.5);
 }
 
 /* Sparse-viewBox glyphs (X) need more box to match the visible extent of their
-   siblings. Multiplier mirrors SPARSE_GLYPHS in header-parts.ts. */
+   siblings, and the same factor thins the stroke so the weight still matches.
+   Multipliers mirror SPARSE_GLYPHS in header-parts.ts. */
 .persona-header-control--sparse > svg {
   width: calc(var(--persona-header-control-icon-size, 24px) * 1.4);
   height: calc(var(--persona-header-control-icon-size, 24px) * 1.4);
+  stroke-width: calc(var(--persona-components-header-controlStrokeWidth, 1.5) * 0.7);
 }
 
 /* A smaller controlSize must never shrink a touch target below 40px. An

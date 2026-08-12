@@ -228,6 +228,44 @@ describe("composer spacing styles", () => {
   });
 });
 
+describe("header control styles", () => {
+  it("sizes and strokes the glyph from the header control tokens", () => {
+    const start = widgetCss.indexOf(".persona-header-control--glyph > svg {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "width: var(--persona-header-control-icon-size, 24px)",
+    );
+    // CSS presentation beats the SVG stroke-width attribute, which stays as
+    // the no-CSS fallback.
+    expect(rule).toContain(
+      "stroke-width: var(--persona-components-header-controlStrokeWidth, 1.5)",
+    );
+  });
+
+  it("thins the sparse glyph stroke by the same 0.7 the JS attributes use", () => {
+    const start = widgetCss.indexOf(".persona-header-control--sparse > svg {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "width: calc(var(--persona-header-control-icon-size, 24px) * 1.4)",
+    );
+    // 0.7 x the 1.5 default is 1.05, the stroke the close X has always
+    // rendered at; SPARSE_GLYPHS in header-parts.ts carries the same pair.
+    expect(rule).toContain(
+      "stroke-width: calc(var(--persona-components-header-controlStrokeWidth, 1.5) * 0.7)",
+    );
+
+    // The sparse rule must stay after the glyph rule: same specificity, so
+    // source order is the only thing that lets it win.
+    expect(start).toBeGreaterThan(
+      widgetCss.indexOf(".persona-header-control--glyph > svg {"),
+    );
+  });
+});
+
 describe("transcript layout styles", () => {
   it("drops the empty messages wrapper from the flex flow", () => {
     // A zero-height flex child still triggers the body's gap, so an empty

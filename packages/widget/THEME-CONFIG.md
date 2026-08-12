@@ -399,19 +399,28 @@ at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
 #### Header controls
 
 Every header icon button (close, clear chat, `layout.header.trailingActions`,
-and the Messages toggle) is sized by one pair of tokens, so they can never
+and the Messages toggle) is sized by one set of tokens, so they can never
 drift apart:
 
 | Token | CSS variable | Default |
 |-------|--------------|---------|
 | `controlSize` | `--persona-header-control-size` | `"40px"` |
 | `controlIconSize` | `--persona-header-control-icon-size` | `"24px"` |
+| `controlStrokeWidth` | `--persona-components-header-controlStrokeWidth` | `"1.5"` |
+
+`controlStrokeWidth` is unitless, like the SVG `stroke-width` attribute it
+overrides. It has no short alias: the stylesheet reads the full-path token
+variable and carries the `1.5` default in its `var()` fallback.
 
 The stylesheet applies them through two class hooks: `.persona-header-control`
 (the box) and `.persona-header-control--glyph` (the SVG inside it). A third
 hook, `.persona-header-control--sparse`, scales up glyphs whose Lucide paths
 under-fill their viewBox (the `x` close icon) so their visible extent matches a
-dense sibling such as `refresh-cw`.
+dense sibling such as `refresh-cw`, and thins their stroke to `0.7` of
+`controlStrokeWidth` so the rendered weight still matches.
+
+All three are live-editable in the theme editor under Components → Header
+Controls.
 
 Per-control config keys still win: `launcher.closeButtonSize` and
 `launcher.clearChat.size` write inline styles that override `controlSize`.

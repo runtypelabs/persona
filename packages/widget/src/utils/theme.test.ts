@@ -317,6 +317,33 @@ describe('theme utils', () => {
     expect(customVars['--persona-header-action-icon-fg']).toBe('#9ca3af');
   });
 
+  it('emits the shared header control box, glyph, and stroke tokens', () => {
+    const defaults = themeToCssVariables(createTheme());
+
+    expect(defaults['--persona-header-control-size']).toBe('40px');
+    expect(defaults['--persona-header-control-icon-size']).toBe('24px');
+    // The stroke has no alias: widget.css reads the full-path token and owns
+    // the 1.5 default, which keeps the sparse close X on its 1.05.
+    expect(defaults['--persona-components-header-controlStrokeWidth']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          header: {
+            controlSize: '32px',
+            controlIconSize: '18px',
+            controlStrokeWidth: '2',
+          },
+        },
+      } as any)
+    );
+
+    expect(custom['--persona-header-control-size']).toBe('32px');
+    expect(custom['--persona-header-control-icon-size']).toBe('18px');
+    // Unitless, straight through: no px suffix, no token resolution.
+    expect(custom['--persona-components-header-controlStrokeWidth']).toBe('2');
+  });
+
   it('emits full-path CSS variables for header and welcome text style tokens', () => {
     const theme = createTheme({
       components: {

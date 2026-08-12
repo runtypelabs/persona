@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { COMPONENTS_SECTIONS, CONFIGURE_SECTIONS, INTERFACE_ROLES_SECTION, STYLE_SECTIONS } from "./sections";
+import {
+  COMPONENT_COLOR_SECTIONS,
+  COMPONENT_SHAPE_SECTIONS,
+  COMPONENTS_SECTIONS,
+  CONFIGURE_SECTIONS,
+  INTERFACE_ROLES_SECTION,
+  STYLE_SECTIONS,
+} from "./sections";
 import { ALL_ROLES } from "./role-mappings";
 
 describe("theme editor scroll-to-bottom controls", () => {
@@ -91,6 +98,39 @@ describe("theme editor scroll-to-bottom controls", () => {
         "theme.components.suggestion.list.background",
       ])
     );
+  });
+
+  it("exposes the three shared header control knobs as live shape fields", () => {
+    const section = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-header-controls"
+    );
+    const fieldsByPath = new Map(
+      section?.fields.map((field) => [field.path, field]) ?? []
+    );
+
+    const size = fieldsByPath.get("theme.components.header.controlSize");
+    const iconSize = fieldsByPath.get("theme.components.header.controlIconSize");
+    const stroke = fieldsByPath.get("theme.components.header.controlStrokeWidth");
+
+    expect(size?.defaultValue).toBe("40px");
+    expect(iconSize?.defaultValue).toBe("24px");
+    expect(stroke?.defaultValue).toBe("1.5");
+
+    // Unitless slider: the stroke must never pick up a px suffix.
+    expect(stroke?.slider?.unit).toBe("none");
+    expect(size?.slider?.unit).toBeUndefined();
+
+    // The WebMCP escape hatch coerces sliders to raw numbers, and token
+    // resolution only walks string values.
+    expect(size?.parseValue?.(44)).toBe("44px");
+    expect(size?.parseValue?.("2.5rem")).toBe("2.5rem");
+    expect(stroke?.parseValue?.(2)).toBe("2");
+    expect(stroke?.parseValue?.("1.75")).toBe("1.75");
+
+    // Sizes are not colors: light/dark scoping must never fork them.
+    expect(
+      COMPONENT_COLOR_SECTIONS.some((entry) => entry.id === "comp-header-controls")
+    ).toBe(false);
   });
 
   it("exposes a shadow control for every themeable component", () => {

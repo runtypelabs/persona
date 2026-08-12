@@ -239,6 +239,13 @@ export interface HeaderTokens extends ComponentTokenSet {
   controlSize?: string;
   /** Glyph box inside a header control. @default "24px" */
   controlIconSize?: string;
+  /**
+   * Stroke weight of the glyph inside a header control. Unitless, as an SVG
+   * stroke-width (e.g. `"1.75"`). Sparse-viewBox glyphs (the close X) render
+   * at 0.7 of it so their heavier visible weight still matches a dense
+   * sibling. @default "1.5"
+   */
+  controlStrokeWidth?: string;
   /** Box-shadow on the header (e.g., a fade shadow to replace the default border). */
   shadow?: string;
   /** Override the header bottom border (e.g., `none`). */

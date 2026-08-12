@@ -871,7 +871,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-header-action-icon-fg'] =
     cssVars['--persona-components-header-actionIconForeground'] ?? cssVars['--persona-muted'];
   // Unified header control box. Every header icon button reads these two from
-  // the stylesheet; per-control config keys stay inline and win.
+  // the stylesheet; per-control config keys stay inline and win. The third
+  // control token, `header.controlStrokeWidth`, needs no alias: widget.css
+  // reads its auto-emitted `--persona-components-header-controlStrokeWidth`
+  // directly and carries the 1.5 default in the var() fallback.
   cssVars['--persona-header-control-size'] =
     cssVars['--persona-components-header-controlSize'] ?? '40px';
   cssVars['--persona-header-control-icon-size'] =

@@ -27,6 +27,13 @@ const parseOptionalCssValue = (value: unknown): string | undefined => {
   return normalized || undefined;
 };
 
+// Slider controls emit CSS strings, but the WebMCP escape hatch coerces a
+// slider to a raw number and token resolution only walks string values.
+const parseSliderPxLength = (value: unknown): string =>
+  typeof value === 'number' ? `${value}px` : String(value ?? '').trim();
+
+const parseSliderUnitless = (value: unknown): string => String(value ?? '').trim();
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // STYLE TAB: brand colors, chat colors, typography, shape, etc.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -332,6 +339,19 @@ const launcherLayoutSectionDef: SectionDef = {
   ],
 };
 
+const headerControlsSectionDef: SectionDef = {
+  id: 'comp-header-controls',
+  title: 'Header Controls',
+  description:
+    'One box, glyph, and stroke shared by every header icon button: close, clear chat, trailing actions, and Messages.',
+  collapsed: true,
+  fields: [
+    { id: 'header-control-size', label: 'Control Size', description: 'The button box. Coarse pointers still floor the hit area at 40px', type: 'slider', path: 'theme.components.header.controlSize', defaultValue: '40px', slider: { min: 24, max: 64, step: 2 }, parseValue: parseSliderPxLength },
+    { id: 'header-control-icon-size', label: 'Icon Size', description: 'The glyph inside the button', type: 'slider', path: 'theme.components.header.controlIconSize', defaultValue: '24px', slider: { min: 12, max: 40, step: 1 }, parseValue: parseSliderPxLength },
+    { id: 'header-control-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight. The close X renders at 0.7 of it so its sparser glyph matches', type: 'slider', path: 'theme.components.header.controlStrokeWidth', defaultValue: '1.5', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
+  ],
+};
+
 const messageShapeSectionDef: SectionDef = {
   id: 'comp-message-shape',
   title: 'Message Shape',
@@ -566,6 +586,9 @@ const textStylesSectionDef: SectionDef = {
 export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   panelLayoutSectionDef,
   launcherLayoutSectionDef,
+  // Sizes, not colors: kept out of COMPONENT_COLOR_SECTIONS so scopeSection
+  // never forks them per light/dark.
+  headerControlsSectionDef,
   messageShapeSectionDef,
   inputShapeSectionDef,
   composerSpacingSectionDef,

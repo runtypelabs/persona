@@ -47,6 +47,20 @@ describe("createHeaderIconButton", () => {
     expect(svg.getAttribute("stroke-width")).toBe("1.5");
   });
 
+  it("keeps an explicitly sized glyph off both token-driven stylesheet rules", () => {
+    const { button } = createHeaderIconButton({
+      ariaLabel: "Close",
+      iconName: "x",
+      iconSize: "12px",
+    });
+    // Neither class hook, so `--persona-header-control-stroke` (and the sparse
+    // 0.7 multiplier) can never reach this control: its JS stroke attribute
+    // stays authoritative.
+    expect(button.classList.contains(HEADER_CONTROL_GLYPH_CLASS)).toBe(false);
+    expect(button.classList.contains(HEADER_CONTROL_SPARSE_CLASS)).toBe(false);
+    expect(button.querySelector("svg")!.getAttribute("stroke-width")).toBe("1.05");
+  });
+
   it("compensates the sparse X glyph in both the class hook and the attributes", () => {
     const token = createHeaderIconButton({ ariaLabel: "Close", iconName: "x" });
     expect(token.button.classList.contains(HEADER_CONTROL_SPARSE_CLASS)).toBe(true);
