@@ -151,13 +151,16 @@ describe("history shell", () => {
   });
 
   describe("header button", () => {
-    it("renders a 44x44 Messages control before the close affordance", () => {
+    it("renders a token-sized Messages control before the close affordance", () => {
       const { mount } = setup();
       const button = historyButton(mount);
       expect(button).not.toBeNull();
       expect(button!.getAttribute("aria-label")).toBe("Messages");
-      expect(button!.style.minWidth).toBe("44px");
-      expect(button!.style.minHeight).toBe("44px");
+      // Box and glyph come from the header control tokens, not an inline size.
+      expect(button!.classList.contains("persona-header-control")).toBe(true);
+      expect(button!.classList.contains("persona-header-control--glyph")).toBe(true);
+      expect(button!.style.width).toBe("");
+      expect(button!.style.minWidth).toBe("");
       expect(button!.querySelector("svg")).not.toBeNull();
     });
 
@@ -170,7 +173,7 @@ describe("history shell", () => {
         'button[aria-label="Close chat"]'
       )!.parentElement!;
       // Same cluster, close outermost.
-      expect(button.parentElement).toBe(closeWrapper.parentElement);
+      expect(button.parentElement!.parentElement).toBe(closeWrapper.parentElement);
       expect(
         button.compareDocumentPosition(closeWrapper) &
           Node.DOCUMENT_POSITION_FOLLOWING
@@ -306,10 +309,13 @@ describe("history shell", () => {
       expect(host.parentElement).toBe(replacement);
       expect(host.querySelector(".persona-history-topbar")).not.toBeNull();
       expect(visibleHeaderChildren(replacement)).toEqual([]);
-      // Including the Messages button the rebuild re-created.
-      expect(historyButton(mount)!.hasAttribute("data-persona-history-suppressed")).toBe(
-        true
-      );
+      // Including the Messages control the rebuild re-created: suppression
+      // lands on its wrapper, which is the header's direct child.
+      expect(
+        historyButton(mount)!.parentElement!.hasAttribute(
+          "data-persona-history-suppressed"
+        )
+      ).toBe(true);
 
       mount
         .querySelector<HTMLButtonElement>('[data-persona-history-focus="close"]')!

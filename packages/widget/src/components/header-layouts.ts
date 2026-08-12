@@ -1,5 +1,4 @@
-import { createElement, cx } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import { createElement } from "../utils/dom";
 import { createDropdownMenu } from "../utils/dropdown";
 import { createComboButton } from "../utils/buttons";
 import {
@@ -14,6 +13,7 @@ import {
   HeaderElements,
   attachHeaderToContainer as _attachHeaderToContainer,
 } from "./header-builder";
+import { createCloseButton, createHeaderIconButton } from "./header-parts";
 
 export interface HeaderLayoutContext {
   config: AgentWidgetConfig;
@@ -71,29 +71,17 @@ function appendTrailingHeaderActions(
 ): void {
   if (!actions?.length) return;
   for (const a of actions) {
-    // Same chrome as the close button beside them: 32px round hit area,
-    // hover fill, and the header zone's action-icon color (the muted body
-    // token disappears on themed headers).
-    const btn = createElement(
-      "button",
-      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-0"
-    ) as HTMLButtonElement;
-    btn.type = "button";
-    btn.style.height = "32px";
-    btn.style.width = "32px";
-    btn.style.color = HEADER_THEME_CSS.actionIconColor;
-    btn.setAttribute("aria-label", a.ariaLabel ?? a.label ?? a.id);
-    if (a.icon) {
-      const ic = renderLucideIcon(a.icon, 16, "currentColor", 2);
-      if (ic) btn.appendChild(ic);
-    } else if (a.label) {
-      btn.textContent = a.label;
-    }
+    // Same shared chrome as the close button beside them. The wrapper stays
+    // relative so a dropdown can anchor to it.
+    const { button: btn, wrapper } = createHeaderIconButton({
+      ariaLabel: a.ariaLabel ?? a.label ?? a.id,
+      iconName: a.icon,
+      iconText: a.icon ? undefined : a.label,
+      wrapperClassName:
+        "persona-relative persona-inline-flex persona-items-center persona-justify-center",
+    });
 
     if (a.menuItems?.length) {
-      // Wrap in a relative container for dropdown positioning
-      const wrapper = createElement("div", "persona-relative");
-      wrapper.appendChild(btn);
       const dropdown = createDropdownMenu({
         items: a.menuItems,
         onSelect: (itemId) => onAction?.(itemId),
@@ -107,11 +95,10 @@ function appendTrailingHeaderActions(
         e.stopPropagation();
         dropdown.toggle();
       });
-      container.appendChild(wrapper);
     } else {
       btn.addEventListener("click", () => onAction?.(a.id));
-      container.appendChild(btn);
     }
+    container.appendChild(wrapper);
   }
 }
 
@@ -119,9 +106,11 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   const { config, showClose = true, onClose, layoutHeaderConfig, onHeaderAction } = context;
   const launcher = config?.launcher ?? {};
 
+  // py-3, not py-4: the 40px control cluster is 8px taller than the 32px one it
+  // replaced, so the block padding gives that back and the strip keeps its 65px.
   const header = createElement(
     "div",
-    "persona-flex persona-items-center persona-justify-between persona-px-6 persona-py-4"
+    "persona-flex persona-items-center persona-justify-between persona-px-6 persona-py-3"
   );
   header.setAttribute("data-persona-theme-zone", "header");
   header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
@@ -203,46 +192,21 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   header.appendChild(titleRow);
 
-  // Close button
-  const closeButtonSize = launcher.closeButtonSize ?? "32px";
-  const closeButtonWrapper = createElement("div", "");
-
-  // Same background precedence as createCloseButton: without the transparent
-  // class the UA buttonface fill shows through the rounded mask.
-  const closeButton = createElement(
-    "button",
-    cx(
-      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-cursor-pointer persona-border-none",
-      !launcher.closeButtonBackgroundColor &&
-        "persona-bg-transparent hover:persona-bg-gray-100"
-    )
-  ) as HTMLButtonElement;
-  if (launcher.closeButtonBackgroundColor) {
-    closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-  }
-  closeButton.style.height = closeButtonSize;
-  closeButton.style.width = closeButtonSize;
-  closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "Close chat");
-  closeButton.style.display = showClose ? "" : "none";
-  closeButton.style.color =
-    launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
-
-  const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  // Larger intrinsic size compensates for the X glyph's sparse viewBox
-  // (paths only occupy the middle 50%). Matches header-builder.ts.
-  const closeIconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
-  if (closeIconSvg) {
-    closeButton.appendChild(closeIconSvg);
-  } else {
-    closeButton.textContent = "×";
-  }
+  // Close button: same shared factory the default layout uses. The wrapper is
+  // flex so an inline-flex button can never reserve baseline slack and ride
+  // high inside it.
+  const { button: closeButton, wrapper: closeButtonWrapper } = createCloseButton(
+    config,
+    {
+      showClose,
+      wrapperClassName:
+        "persona-relative persona-inline-flex persona-items-center persona-justify-center",
+    }
+  );
 
   if (onClose) {
     closeButton.addEventListener("click", onClose);
   }
-
-  closeButtonWrapper.appendChild(closeButton);
 
   // Trailing edge: action buttons cluster with the close button, matching
   // its chrome. `titleMenu` still ignores `trailingActions` (documented).

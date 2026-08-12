@@ -27,16 +27,24 @@ describe("minimal header trailing actions", () => {
     );
     expect(button).not.toBeNull();
 
-    // Trailing cluster, not the title row: the button shares a parent with
-    // the close button wrapper and does not precede the title.
-    expect(button!.parentElement).toBe(elements.closeButtonWrapper.parentElement);
+    // Trailing cluster, not the title row: the action's wrapper shares a
+    // parent with the close button wrapper and does not precede the title.
+    expect(button!.parentElement!.parentElement).toBe(
+      elements.closeButtonWrapper.parentElement
+    );
     expect(elements.headerTitle.parentElement!.contains(button!)).toBe(false);
 
-    // Close-button chrome: 32px round hit area, header action-icon color.
-    expect(button!.style.height).toBe("32px");
-    expect(button!.style.width).toBe("32px");
+    // Shared header control chrome: token-sized box, no inline size, header
+    // action-icon color.
+    expect(button!.classList.contains("persona-header-control")).toBe(true);
+    expect(button!.classList.contains("persona-header-control--glyph")).toBe(true);
+    expect(button!.style.width).toBe("");
+    expect(button!.style.height).toBe("");
     expect(button!.style.color).toBe(HEADER_THEME_CSS.actionIconColor);
     expect(button!.className).toContain("persona-rounded-full");
+    // Flex wrapper: an inline-flex button in a block wrapper reserves baseline
+    // slack and rides high.
+    expect(button!.parentElement!.className).toContain("persona-inline-flex");
 
     button!.click();
     expect(onAction).toHaveBeenCalledWith("home");
@@ -47,6 +55,20 @@ describe("minimal header trailing actions", () => {
     expect(elements.closeButton.className).toContain("persona-bg-transparent");
     expect(elements.closeButton.className).toContain("hover:persona-bg-gray-100");
     expect(elements.closeButton.style.backgroundColor).toBe("");
+  });
+
+  it("shares the header control chrome and a flex wrapper with the default layout", () => {
+    const elements = build({ layout: "minimal" });
+    expect(elements.closeButton.classList.contains("persona-header-control")).toBe(true);
+    // Sparse X glyph: the stylesheet scales it up from the icon-size token.
+    expect(
+      elements.closeButton.classList.contains("persona-header-control--sparse")
+    ).toBe(true);
+    expect(elements.closeButton.style.width).toBe("");
+    // The centering bug: a block wrapper reserves inline baseline slack, so
+    // the button rides high inside it.
+    expect(elements.closeButtonWrapper.className).toContain("persona-inline-flex");
+    expect(elements.closeButtonWrapper.className).toContain("persona-items-center");
   });
 
   it("applies closeButtonBackgroundColor instead of the transparent default", () => {

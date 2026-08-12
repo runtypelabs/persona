@@ -230,6 +230,15 @@ export interface HeaderTokens extends ComponentTokenSet {
   subtitle?: TextStyleTokens;
   /** Default color for clear / close icon buttons when launcher overrides are unset. */
   actionIconForeground: TokenReference<'color'>;
+  /**
+   * Edge of every header icon button: close, clear chat, `trailingActions`, and
+   * the Messages toggle. Per-control config keys (`launcher.closeButtonSize`,
+   * `launcher.clearChat.size`) still win. Coarse pointers floor the hit area at
+   * 40px regardless. @default "40px"
+   */
+  controlSize?: string;
+  /** Glyph box inside a header control. @default "24px" */
+  controlIconSize?: string;
   /** Box-shadow on the header (e.g., a fade shadow to replace the default border). */
   shadow?: string;
   /** Override the header bottom border (e.g., `none`). */

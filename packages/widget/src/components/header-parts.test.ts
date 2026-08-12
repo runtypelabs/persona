@@ -1,10 +1,103 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it } from "vitest";
-import { createCloseButton, createClearChatButton } from "./header-parts";
+import {
+  createCloseButton,
+  createClearChatButton,
+  createHeaderIconButton,
+  HEADER_CONTROL_CLASS,
+  HEADER_CONTROL_GLYPH_CLASS,
+  HEADER_CONTROL_SPARSE_CLASS,
+} from "./header-parts";
+import { HEADER_THEME_CSS } from "./header-builder";
 import type { AgentWidgetConfig } from "../types";
 
 const baseConfig: AgentWidgetConfig = { apiUrl: "/api" };
+
+describe("createHeaderIconButton", () => {
+  it("leaves the box and glyph to the tokens when nothing is configured", () => {
+    const { button } = createHeaderIconButton({
+      ariaLabel: "Do it",
+      iconName: "refresh-cw",
+    });
+    expect(button.classList.contains(HEADER_CONTROL_CLASS)).toBe(true);
+    expect(button.classList.contains(HEADER_CONTROL_GLYPH_CLASS)).toBe(true);
+    expect(button.classList.contains(HEADER_CONTROL_SPARSE_CLASS)).toBe(false);
+    expect(button.style.width).toBe("");
+    expect(button.style.height).toBe("");
+    expect(button.style.minWidth).toBe("");
+    expect(button.type).toBe("button");
+    expect(button.getAttribute("aria-label")).toBe("Do it");
+    expect(button.style.color).toBe(HEADER_THEME_CSS.actionIconColor);
+  });
+
+  it("writes an inline box and drops the glyph class for explicit sizes", () => {
+    const { button } = createHeaderIconButton({
+      ariaLabel: "Do it",
+      iconName: "refresh-cw",
+      size: "16px",
+      iconSize: "14px",
+    });
+    expect(button.classList.contains(HEADER_CONTROL_CLASS)).toBe(true);
+    expect(button.classList.contains(HEADER_CONTROL_GLYPH_CLASS)).toBe(false);
+    expect(button.style.width).toBe("16px");
+    expect(button.style.minHeight).toBe("16px");
+    const svg = button.querySelector("svg")!;
+    expect(svg.getAttribute("width")).toBe("14px");
+    expect(svg.getAttribute("stroke-width")).toBe("1.5");
+  });
+
+  it("compensates the sparse X glyph in both the class hook and the attributes", () => {
+    const token = createHeaderIconButton({ ariaLabel: "Close", iconName: "x" });
+    expect(token.button.classList.contains(HEADER_CONTROL_SPARSE_CLASS)).toBe(true);
+
+    const explicit = createHeaderIconButton({
+      ariaLabel: "Close",
+      iconName: "x",
+      iconSize: "10px",
+    });
+    // Nominal 10px scaled by 1.4, stroke thinned by the same factor so the
+    // rendered weight still matches a dense sibling glyph.
+    const svg = explicit.button.querySelector("svg")!;
+    expect(svg.getAttribute("width")).toBe("14px");
+    expect(svg.getAttribute("stroke-width")).toBe("1.05");
+    expect(explicit.button.classList.contains(HEADER_CONTROL_SPARSE_CLASS)).toBe(false);
+  });
+
+  it("swaps the transparent default classes for an explicit background", () => {
+    const { button } = createHeaderIconButton({
+      ariaLabel: "Do it",
+      iconName: "refresh-cw",
+      backgroundColor: "rgb(1, 2, 3)",
+      color: "rgb(9, 9, 9)",
+    });
+    expect(button.className).not.toContain("persona-bg-transparent");
+    expect(button.className).not.toContain("hover:persona-bg-gray-100");
+    expect(button.style.backgroundColor).toBe("rgb(1, 2, 3)");
+    expect(button.style.color).toBe("rgb(9, 9, 9)");
+  });
+
+  it("falls back to the text glyph when the icon is not in the registry", () => {
+    const { button } = createHeaderIconButton({
+      ariaLabel: "Close",
+      iconName: "not-a-real-icon",
+      iconText: "×",
+    });
+    expect(button.querySelector("svg")).toBeNull();
+    expect(button.textContent).toBe("×");
+  });
+
+  it("wraps the button in a flex box so it can never ride off-center", () => {
+    const { button, wrapper } = createHeaderIconButton({
+      ariaLabel: "Do it",
+      iconName: "refresh-cw",
+    });
+    expect(button.parentElement).toBe(wrapper);
+    expect(wrapper.className).toContain("persona-inline-flex");
+    expect(wrapper.className).toContain("persona-items-center");
+    expect(wrapper.className).toContain("persona-justify-center");
+  });
+});
 
 describe("createCloseButton", () => {
   it("keeps the default utility classes when no style overrides are set", () => {
@@ -15,6 +108,18 @@ describe("createCloseButton", () => {
     expect(button.classList.contains("persona-rounded-full")).toBe(true);
     expect(button.classList.contains("persona-border-none")).toBe(true);
     expect(button.classList.contains("hover:persona-bg-gray-100")).toBe(true);
+    // Unset `launcher.closeButtonSize` leaves the control-size token in charge.
+    expect(button.classList.contains(HEADER_CONTROL_CLASS)).toBe(true);
+    expect(button.style.width).toBe("");
+  });
+
+  it("still lets launcher.closeButtonSize pin the box past the token", () => {
+    const { button } = createCloseButton(
+      { ...baseConfig, launcher: { closeButtonSize: "28px" } },
+      {}
+    );
+    expect(button.style.width).toBe("28px");
+    expect(button.style.minWidth).toBe("28px");
   });
 
   it("hides the button when showClose is false", () => {

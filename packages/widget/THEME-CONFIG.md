@@ -396,6 +396,29 @@ at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
 > `title.color` and `subtitle.color`. Both still work; the `title`/`subtitle`
 > color wins when both are set.
 
+#### Header controls
+
+Every header icon button (close, clear chat, `layout.header.trailingActions`,
+and the Messages toggle) is sized by one pair of tokens, so they can never
+drift apart:
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `controlSize` | `--persona-header-control-size` | `"40px"` |
+| `controlIconSize` | `--persona-header-control-icon-size` | `"24px"` |
+
+The stylesheet applies them through two class hooks: `.persona-header-control`
+(the box) and `.persona-header-control--glyph` (the SVG inside it). A third
+hook, `.persona-header-control--sparse`, scales up glyphs whose Lucide paths
+under-fill their viewBox (the `x` close icon) so their visible extent matches a
+dense sibling such as `refresh-cw`.
+
+Per-control config keys still win: `launcher.closeButtonSize` and
+`launcher.clearChat.size` write inline styles that override `controlSize`.
+Leave them unset to follow the token. On coarse pointers the box never
+shrinks below 40px, even with a smaller `controlSize`; an explicit per-control
+size opts out of that floor.
+
 ### Message (`components.message.*`)
 
 | Token | Default Reference |

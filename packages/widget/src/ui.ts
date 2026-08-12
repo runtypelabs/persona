@@ -100,7 +100,13 @@ import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
 import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./utils/dock";
 import { LauncherSurface } from "./components/launcher";
-import { buildHeader, buildComposer, attachHeaderToContainer } from "./components/panel";
+import {
+  buildHeader,
+  buildComposer,
+  attachHeaderToContainer,
+  COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE,
+  COMPOSER_BAR_CLOSE_ICON_SIZE,
+} from "./components/panel";
 import { buildPillComposer } from "./components/pill-composer-builder";
 import { createWidgetView, resolveLauncher } from "./components/widget-view";
 import {
@@ -114,6 +120,10 @@ import {
 import { createPluginStorageFactory } from "./utils/plugin-storage";
 import { isWelcomeVisible, resolveWelcomeConfig } from "./welcome";
 import { HEADER_THEME_CSS } from "./components/header-builder";
+import {
+  applyHeaderControlGlyph,
+  createHeaderIconButton,
+} from "./components/header-parts";
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
@@ -7330,6 +7340,8 @@ export const createAgentExperience = (
   let historyReturnSurface: HistoryReturnSurface = "conversation";
   let historyInvoker: HTMLElement | null = null;
   let historyButton: HTMLButtonElement | null = null;
+  /** The inserted node: removing the button alone would orphan its wrapper. */
+  let historyButtonWrapper: HTMLElement | null = null;
   let historySessionState: SessionHistoryState = session.getHistoryState();
   let historyIdentityKey: string | null = null;
   let historyOpenToken = 0;
@@ -8190,52 +8202,53 @@ export const createAgentExperience = (
 
   // --- header chrome -------------------------------------------------------
 
-  const buildHistoryButton = (): HTMLButtonElement => {
-    const button = createElement(
-      "button",
-      "persona-history-toggle persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-opacity-80 persona-cursor-pointer persona-border-none persona-bg-transparent"
-    ) as HTMLButtonElement;
-    button.type = "button";
-    // 44x44 pointer target even though the glyph is 20px.
-    Object.assign(button.style, {
-      width: "44px",
-      height: "44px",
-      minWidth: "44px",
-      minHeight: "44px",
-      color: HEADER_THEME_CSS.actionIconColor,
-    } satisfies Partial<CSSStyleDeclaration>);
-    button.setAttribute("data-persona-history-toggle", "");
-    const icon = renderLucideIcon("history", "20px", "currentColor", 1.5);
-    if (icon) button.appendChild(icon);
-    button.addEventListener("click", () => {
+  // Shares the header control chrome (box + glyph from the header tokens) with
+  // the close and clear-chat buttons beside it.
+  const buildHistoryButton = (): {
+    button: HTMLButtonElement;
+    wrapper: HTMLElement;
+  } => {
+    const parts = createHeaderIconButton({
+      ariaLabel: historyShellCopy.openHistoryLabel,
+      iconName: "history",
+      wrapperClassName:
+        "persona-relative persona-inline-flex persona-items-center persona-justify-center",
+      extraClassName: "persona-history-toggle",
+      attrs: { "data-persona-history-toggle": "" },
+    });
+    parts.button.addEventListener("click", () => {
       if (!historyAvailable() || historyTurnBusy()) return;
       if (historyVisible) closeHistory();
-      else void openHistory({ invoker: button });
+      else void openHistory({ invoker: parts.button });
     });
-    return button;
+    return parts;
   };
 
   const syncHistoryButton = (): void => {
     if (!historyAvailable()) {
-      historyButton?.remove();
+      historyButtonWrapper?.remove();
       historyButton = null;
+      historyButtonWrapper = null;
       return;
     }
     // A header rebuild detaches the old button; a stale ref must not block
     // recreation into the replacement header.
-    if (historyButton && !historyButton.isConnected) {
+    if (historyButtonWrapper && !historyButtonWrapper.isConnected) {
       historyButton = null;
+      historyButtonWrapper = null;
     }
     if (!historyButton && header) {
-      historyButton = buildHistoryButton();
+      const parts = buildHistoryButton();
+      historyButton = parts.button;
+      historyButtonWrapper = parts.wrapper;
       const insertBefore =
         panelElements.clearChatButtonWrapper || panelElements.closeButtonWrapper;
       // Layouts may parent these wrappers in a trailing cluster rather than
       // the header itself; insert wherever they live so close stays outermost.
       if (insertBefore?.parentNode && header.contains(insertBefore)) {
-        insertBefore.parentNode.insertBefore(historyButton, insertBefore);
+        insertBefore.parentNode.insertBefore(historyButtonWrapper, insertBefore);
       } else {
-        header.appendChild(historyButton);
+        header.appendChild(historyButtonWrapper);
       }
     }
     if (!historyButton) return;
@@ -8272,8 +8285,8 @@ export const createAgentExperience = (
       }
       button.setAttribute("aria-label", historyShellCopy.newConversationLabel);
       button.title = historyShellCopy.newConversationLabel;
-      button.style.minWidth = "44px";
-      button.style.minHeight = "44px";
+      // No touch-target pin: the shared header control class owns the box, and
+      // a 44px floor here would desync this control from its neighbours.
       return;
     }
     // Only undo a relabel we performed; never clobber host-configured copy.
@@ -10354,10 +10367,17 @@ export const createAgentExperience = (
           isPanelToggleable() && config.layout?.header?.showCloseButton !== false;
         closeButton.style.display = layoutShowCloseButton ? "" : "none";
 
-        const closeButtonSize = launcher.closeButtonSize ?? "32px";
+        // Composer-bar mode owns its close sizing, same as clear chat below.
+        // Elsewhere, unset clears the inline box so the header control-size
+        // token wins; writing a fallback here would pin it past the token.
+        if (!isComposerBar()) {
+          const closeButtonSize = launcher.closeButtonSize ?? "";
+          closeButton.style.height = closeButtonSize;
+          closeButton.style.width = closeButtonSize;
+          closeButton.style.minWidth = closeButtonSize;
+          closeButton.style.minHeight = closeButtonSize;
+        }
         const closeButtonPlacement = launcher.closeButtonPlacement ?? "inline";
-        closeButton.style.height = closeButtonSize;
-        closeButton.style.width = closeButtonSize;
         
         // Update placement if changed - move the wrapper (not just the button) to preserve tooltip
         const { closeButtonWrapper } = panelElements;
@@ -10433,23 +10453,16 @@ export const createAgentExperience = (
           closeButton.style.paddingBottom = "";
         }
 
-        // Update icon
-        const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-        const closeButtonIconText = launcher.closeButtonIconText ?? "×";
-
-        // Clear existing content and render new icon.
-        // Larger intrinsic size compensates for the X glyph's sparse
-        // viewBox so the close button visually matches sibling icons.
-        closeButton.innerHTML = "";
-        const iconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
-        if (iconSvg) {
-          // display:block matches the builder; inline SVG baseline spacing
-          // shifts the icon off-center.
-          iconSvg.style.display = "block";
-          closeButton.appendChild(iconSvg);
-        } else {
-          closeButton.textContent = closeButtonIconText;
-        }
+        // Update icon through the shared renderer so a restyle can never
+        // repaint the glyph at a different size or stroke than the builder.
+        applyHeaderControlGlyph(
+          closeButton,
+          launcher.closeButtonIconName ?? "x",
+          {
+            iconSize: isComposerBar() ? COMPOSER_BAR_CLOSE_ICON_SIZE : undefined,
+            iconText: launcher.closeButtonIconText ?? "×",
+          }
+        );
 
         // Update tooltip
         const closeButtonTooltipText = launcher.closeButtonTooltipText ?? "Close chat";
@@ -10549,35 +10562,32 @@ export const createAgentExperience = (
         }
 
         if (shouldShowClearChat) {
-          // Update size: composer-bar mode owns its sizing (16px to match
-          // the close icon), so leave size alone there. Floating-launcher
-          // and other modes still honor `launcher.clearChat.size`.
+          // Update size: composer-bar mode owns its sizing, so leave size
+          // alone there. Elsewhere, unset clears the inline box so the header
+          // control-size token wins.
           if (!isComposerBar()) {
-            const clearChatSize = clearChatConfig.size ?? "32px";
+            const clearChatSize = clearChatConfig.size ?? "";
             clearChatButton.style.height = clearChatSize;
             clearChatButton.style.width = clearChatSize;
+            clearChatButton.style.minWidth = clearChatSize;
+            clearChatButton.style.minHeight = clearChatSize;
           }
 
-          // Update icon
-          const clearChatIconName = clearChatConfig.iconName ?? "refresh-cw";
           const clearChatIconColor = clearChatConfig.iconColor ?? "";
-
           clearChatButton.style.color =
             clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
 
-          // Clear existing icon and render new one. Composer-bar shrinks
-          // the icon to match its 16px button.
-          clearChatButton.innerHTML = "";
-          const clearChatIconSize = isComposerBar() ? "14px" : "20px";
-          // Stroke 1 matches the mount-time builder (header-parts.ts); a
-          // different weight here makes the icon visibly bolden on update.
-          const iconSvg = renderLucideIcon(clearChatIconName, clearChatIconSize, "currentColor", 1);
-          if (iconSvg) {
-            // display:block matches the builder; inline SVG baseline spacing
-            // shifts the icon off-center.
-            iconSvg.style.display = "block";
-            clearChatButton.appendChild(iconSvg);
-          }
+          // Same shared renderer as the builder, so a restyle can never
+          // repaint the glyph at a different size or stroke.
+          applyHeaderControlGlyph(
+            clearChatButton,
+            clearChatConfig.iconName ?? "refresh-cw",
+            {
+              iconSize: isComposerBar()
+                ? COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE
+                : undefined,
+            }
+          );
 
           // Update background color
           if (clearChatConfig.backgroundColor) {

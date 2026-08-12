@@ -1827,6 +1827,39 @@
   justify-content: center;
 }
 
+/* Shared header control box: close, clear chat, trailing actions, and the
+   Messages toggle. A per-control config key (`launcher.closeButtonSize`,
+   `launcher.clearChat.size`) writes inline styles, which win. */
+.persona-header-control {
+  width: var(--persona-header-control-size, 40px);
+  height: var(--persona-header-control-size, 40px);
+  flex-shrink: 0;
+  /* UA button padding would eat into the box and crush the glyph; a configured
+     paddingX/Y is inline and still wins. */
+  padding: 0;
+}
+
+.persona-header-control--glyph > svg {
+  width: var(--persona-header-control-icon-size, 24px);
+  height: var(--persona-header-control-icon-size, 24px);
+}
+
+/* Sparse-viewBox glyphs (X) need more box to match the visible extent of their
+   siblings. Multiplier mirrors SPARSE_GLYPHS in header-parts.ts. */
+.persona-header-control--sparse > svg {
+  width: calc(var(--persona-header-control-icon-size, 24px) * 1.4);
+  height: calc(var(--persona-header-control-icon-size, 24px) * 1.4);
+}
+
+/* A smaller controlSize must never shrink a touch target below 40px. An
+   explicit per-control size is inline, so it opts out of this floor. */
+@media (pointer: coarse) {
+  .persona-header-control {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .persona-control-tooltip {
     transition: none;

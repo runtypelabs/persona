@@ -31,9 +31,10 @@ export const DEFAULT_LAUNCHER_CONFIG: AgentWidgetLauncherConfig = {
   callToActionIconHidden: false,
   agentIconSize: "40px",
   headerIconSize: "40px",
-  closeButtonSize: "32px",
+  // closeButtonSize / clearChat.size omitted so theme.components.header.controlSize
+  // sizes the header controls; setting either here would pin them past the token.
   // Zero out browser-default <button> padding so the icon gets the full
-  // 32x32 content box, matching clearChat.paddingX/Y below. Without this,
+  // content box, matching clearChat.paddingX/Y below. Without this,
   // UA stylesheets add ~1-2px vertical and ~6px horizontal padding that
   // eats into the border-box width and shrinks the rendered icon.
   closeButtonPaddingX: "0px",
@@ -52,7 +53,6 @@ export const DEFAULT_LAUNCHER_CONFIG: AgentWidgetLauncherConfig = {
     enabled: true,
     placement: "inline",
     iconName: "refresh-cw",
-    size: "32px",
     showTooltip: true,
     tooltipText: "Clear chat",
     paddingX: "0px",

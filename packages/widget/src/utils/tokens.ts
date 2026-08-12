@@ -870,6 +870,12 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-text-muted'];
   cssVars['--persona-header-action-icon-fg'] =
     cssVars['--persona-components-header-actionIconForeground'] ?? cssVars['--persona-muted'];
+  // Unified header control box. Every header icon button reads these two from
+  // the stylesheet; per-control config keys stay inline and win.
+  cssVars['--persona-header-control-size'] =
+    cssVars['--persona-components-header-controlSize'] ?? '40px';
+  cssVars['--persona-header-control-icon-size'] =
+    cssVars['--persona-components-header-controlIconSize'] ?? '24px';
 
   const headerTokens = theme.components?.header;
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;

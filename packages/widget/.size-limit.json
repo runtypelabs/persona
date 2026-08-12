@@ -14,7 +14,7 @@
   {
     "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
-    "limit": "17.5 kB",
+    "limit": "17.6 kB",
     "gzip": true
   },
   {

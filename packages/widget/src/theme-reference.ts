@@ -120,7 +120,7 @@ export const THEME_TOKEN_DOCS = {
       header: {
         description: 'Chat panel header.',
         properties:
-          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, shadow, borderBottom, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, controlSize (40px, the box of every header icon button), controlIconSize (24px, the glyph inside it), shadow, borderBottom, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
         legacy:
           'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set.',
       },
@@ -211,12 +211,12 @@ export const THEME_TOKEN_DOCS = {
         'backgroundColor, textColor, borderWidth, borderColor, paddingX, paddingY, iconText, iconName, size.',
     },
     closeButton: {
-      description: 'Close button (on launcher config).',
+      description: 'Close button (on launcher config). Unset closeButtonSize means theme.components.header.controlSize owns the box.',
       properties:
         'closeButtonSize, closeButtonColor, closeButtonBackgroundColor, closeButtonBorderWidth, closeButtonBorderColor, closeButtonBorderRadius.',
     },
     clearChat: {
-      description: 'Clear chat button (on launcher.clearChat config).',
+      description: 'Clear chat button (on launcher.clearChat config). Unset size means theme.components.header.controlSize owns the box.',
       properties:
         'enabled, iconColor, backgroundColor, borderWidth, borderColor, borderRadius, size.',
     },
