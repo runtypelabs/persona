@@ -343,12 +343,36 @@ const headerControlsSectionDef: SectionDef = {
   id: 'comp-header-controls',
   title: 'Header Controls',
   description:
-    'One box, glyph, and stroke shared by every header icon button: close, clear chat, trailing actions, and Messages.',
+    'One box, glyph, and stroke shared by every header icon button: close, clear chat, trailing actions, and Messages, plus the strip height.',
   collapsed: true,
   fields: [
+    { id: 'header-min-height', label: 'Header Min Height', description: 'CSS length, e.g. 65px. Blank stays at the natural height', type: 'text', path: 'theme.components.header.minHeight', defaultValue: '', parseValue: parseOptionalCssValue },
     { id: 'header-control-size', label: 'Control Size', description: 'The button box. Coarse pointers still floor the hit area at 40px', type: 'slider', path: 'theme.components.header.controlSize', defaultValue: '32px', slider: { min: 24, max: 64, step: 2 }, parseValue: parseSliderPxLength },
     { id: 'header-control-icon-size', label: 'Icon Size', description: 'The glyph inside the button', type: 'slider', path: 'theme.components.header.controlIconSize', defaultValue: '20px', slider: { min: 12, max: 40, step: 1 }, parseValue: parseSliderPxLength },
     { id: 'header-control-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight. The close X renders at 0.7 of it so its sparser glyph matches', type: 'slider', path: 'theme.components.header.controlStrokeWidth', defaultValue: '1.5', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
+  ],
+};
+
+// The Messages rail's own top strip, beside the widget header in rail
+// presentation. Its color lives in COMPONENT_COLOR_SECTIONS.
+const historyRailHeaderShapeSectionDef: SectionDef = {
+  id: 'comp-history-rail-header',
+  title: 'Messages Rail Header',
+  description:
+    'The Messages rail top strip. Match its height to the header so both read as one band.',
+  collapsed: true,
+  fields: [
+    { id: 'rail-header-min-height', label: 'Min Height', description: 'CSS length. Blank follows the header min height', type: 'text', path: 'theme.components.history.railHeader.minHeight', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'rail-header-border', label: 'Bottom Border', description: 'Full border-bottom shorthand, e.g. 1px solid #333', type: 'text', path: 'theme.components.history.railHeader.border', defaultValue: '', parseValue: parseOptionalCssValue },
+  ],
+};
+
+const historyRailHeaderColorsSectionDef: SectionDef = {
+  id: 'comp-history-rail-header-colors',
+  title: 'Messages Rail Header Colors',
+  collapsed: true,
+  fields: [
+    { id: 'rail-header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.history.railHeader.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
   ],
 };
 
@@ -589,6 +613,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   // Sizes, not colors: kept out of COMPONENT_COLOR_SECTIONS so scopeSection
   // never forks them per light/dark.
   headerControlsSectionDef,
+  historyRailHeaderShapeSectionDef,
   messageShapeSectionDef,
   inputShapeSectionDef,
   composerSpacingSectionDef,
@@ -600,6 +625,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
 /** Component color sections (can be scoped for light/dark) */
 export const COMPONENT_COLOR_SECTIONS: SectionDef[] = [
   headerColorsSectionDef,
+  historyRailHeaderColorsSectionDef,
   messageColorsSectionDef,
   inputColorsSectionDef,
   buttonColorsSectionDef,

@@ -445,6 +445,27 @@ top strip is the rail's own header, sitting beside the conversation header.
 | `border` | `--persona-history-rail-header-border` | `0` (full border-bottom shorthand) |
 | `minHeight` | `--persona-history-rail-header-min-height` | `components.header.minHeight`, then `56px` |
 
+Set `components.header.minHeight` and `railHeader.minHeight` to the same value
+to weld the two strips into one band. The built-in minimal header measures
+65px, so a themed app frame on that layout pins both to `65px`.
+
+The rest of the sidebar is styled by the `--persona-history-*` variables listed
+under [Conversation History (Messages) Variables](#conversation-history-messages-variables):
+in rail presentation the surface re-points to `--persona-container` for its own
+sidebar color, row dividers, avatars, and the selection marker drop out, and
+selection becomes a `rgba(0, 0, 0, 0.08)` wash. Both the hover and selection
+washes darken, so on a dark theme re-declare
+`--persona-history-row-hover-bg` and `--persona-history-row-active-bg` as light
+washes on `.persona-history-view--rail`.
+
+Geometry and behavior are config, not tokens: `features.history.rail` takes
+`side` (`"left"` default, or `"right"`), `width` (px, clamped 200 to 400,
+default 260), `collapsible` (default true: a toggle in the rail header shrinks
+the sidebar to a 52px icon rail carrying expand and new-conversation), and
+`defaultCollapsed` (default false) for visitors who have never toggled it. The
+chosen state is remembered alongside the other `persistState` keys, and
+`persistState: false` keeps it in memory for the page load only.
+
 ### Message (`components.message.*`)
 
 | Token | Default Reference |
@@ -917,6 +938,8 @@ plugins can target them:
 .persona-history-view--rail           /* rail presentation: 36px title-only rows
                                          on their own surface. The docked side and
                                          width come from features.history.rail */
+.persona-history-view--rail-collapsed  /* the 52px icon rail: list hidden, the
+                                         new-conversation row icon-only */
 .persona-history-view--enter          /* one-shot entry animation (body only;
                                          the bar never animates or moves) */
 

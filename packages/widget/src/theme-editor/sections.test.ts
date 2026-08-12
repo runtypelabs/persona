@@ -133,6 +133,44 @@ describe("theme editor scroll-to-bottom controls", () => {
     ).toBe(false);
   });
 
+  it("exposes the header and rail header band controls", () => {
+    const headerControls = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-header-controls"
+    );
+    const minHeight = headerControls?.fields.find(
+      (field) => field.path === "theme.components.header.minHeight"
+    );
+    expect(minHeight?.type).toBe("text");
+    // Blank keeps the built-in auto height instead of writing an empty token.
+    expect(minHeight?.parseValue?.(" 65px ")).toBe("65px");
+    expect(minHeight?.parseValue?.("")).toBeUndefined();
+
+    const railShape = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-history-rail-header"
+    );
+    const railPaths = railShape?.fields.map((field) => field.path) ?? [];
+    expect(railPaths).toEqual([
+      "theme.components.history.railHeader.minHeight",
+      "theme.components.history.railHeader.border",
+    ]);
+
+    const railColors = COMPONENT_COLOR_SECTIONS.find(
+      (entry) => entry.id === "comp-history-rail-header-colors"
+    );
+    const background = railColors?.fields.find(
+      (field) => field.path === "theme.components.history.railHeader.background"
+    );
+    expect(background?.type).toBe("token-ref");
+    expect(background?.tokenRef?.tokenType).toBe("color");
+
+    // Sizes are not colors: light/dark scoping must never fork them.
+    expect(
+      COMPONENT_COLOR_SECTIONS.some(
+        (entry) => entry.id === "comp-history-rail-header"
+      )
+    ).toBe(false);
+  });
+
   it("exposes a shadow control for every themeable component", () => {
     const fieldPaths = COMPONENTS_SECTIONS.flatMap((section) => section.fields.map((field) => field.path));
 

@@ -16,6 +16,11 @@ import {
   type AgentWidgetInitHandle,
   type AgentWidgetPlugin
 } from "@runtypelabs/persona";
+// Source-only demo seam: the in-memory history provider is not part of the
+// published package. Production builds the Runtype provider from client-token
+// config instead.
+import { setHistoryProviderFactory } from "@runtypelabs/persona/internal/history-provider-registry";
+import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-history-provider";
 import {
   createFullscreenAssistantScriptedStream,
   FULLSCREEN_ASSISTANT_DEMO_ARTIFACT_ID,
@@ -49,6 +54,107 @@ const COLORS = {
   inlineCodeFg: "#D19A9A",
   link: "#60a5fa"
 } as const;
+
+/** The minimal header's natural strip height; the rail header pins to it. */
+const HEADER_MIN_HEIGHT = "65px";
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const iso = (ms: number): string => new Date(ms).toISOString();
+
+/** Seeded rail conversations in this assistant's voice, newest first. */
+function buildAssistantConversations(nowMs: number) {
+  const spotlight = nowMs - 25 * MINUTE;
+  const changelog = nowMs - 5 * HOUR;
+  const onboarding = nowMs - 28 * HOUR;
+  const research = nowMs - 6 * DAY;
+  return [
+    {
+      id: "assistant-conv-spotlight",
+      title: "Runtype assistant spotlight",
+      createdAt: iso(spotlight),
+      updatedAt: iso(spotlight + 6 * MINUTE),
+      messages: [
+        {
+          role: "user" as const,
+          content: "Draft a spotlight page for the assistant launch.",
+          createdAt: iso(spotlight)
+        },
+        {
+          role: "assistant" as const,
+          content:
+            "Here is a first pass. The document is open on the right, so you can read the full draft while we keep talking.",
+          createdAt: iso(spotlight + 3 * MINUTE)
+        }
+      ]
+    },
+    {
+      id: "assistant-conv-changelog",
+      title: "Q3 changelog copy",
+      createdAt: iso(changelog),
+      updatedAt: iso(changelog + 12 * MINUTE),
+      messages: [
+        {
+          role: "user" as const,
+          content: "Turn these merged pull requests into changelog entries.",
+          createdAt: iso(changelog)
+        },
+        {
+          role: "assistant" as const,
+          content:
+            "Grouped into shipped, improved, and fixed, one sentence each, with the breaking change called out first.",
+          createdAt: iso(changelog + 12 * MINUTE)
+        }
+      ]
+    },
+    {
+      id: "assistant-conv-onboarding",
+      title: "Onboarding email rewrite",
+      createdAt: iso(onboarding),
+      updatedAt: iso(onboarding + 9 * MINUTE),
+      messages: [
+        {
+          role: "user" as const,
+          content: "The welcome email reads like a manual. Make it warmer.",
+          createdAt: iso(onboarding)
+        },
+        {
+          role: "assistant" as const,
+          content:
+            "Cut it to three short paragraphs, moved the setup steps behind one link, and kept a single call to action.",
+          createdAt: iso(onboarding + 9 * MINUTE)
+        }
+      ]
+    },
+    {
+      id: "assistant-conv-research",
+      title: "Competitive research notes",
+      createdAt: iso(research),
+      updatedAt: iso(research + 21 * MINUTE),
+      messages: [
+        {
+          role: "user" as const,
+          content: "Summarize what the four closest products charge for.",
+          createdAt: iso(research)
+        },
+        {
+          role: "assistant" as const,
+          content:
+            "Two price per seat, one per conversation, one bundles it into a platform fee. Notes are in the table below.",
+          createdAt: iso(research + 21 * MINUTE)
+        }
+      ]
+    }
+  ];
+}
+
+// One store for the page, so the rail keeps whatever the visitor opened,
+// started, or deleted. Production builds the Runtype provider instead.
+const historyProvider = createDemoHistoryProvider({
+  conversations: buildAssistantConversations(Date.now())
+});
+setHistoryProviderFactory(() => historyProvider);
 
 // Inject hover styles that can't be expressed via inline styles or SDK tokens.
 // After SDK token additions, only file card hover, attachment preview, and audio bars remain.
@@ -95,6 +201,12 @@ if (!document.getElementById(fileCardStyleId)) {
     }
     [data-persona-audio-bars-btn] svg line {
       transform-origin: center;
+    }
+    /* The rail's row washes darken, which is invisible on a dark surface.
+       Two classes so the lazily injected chunk rule cannot win on order. */
+    .persona-history-view.persona-history-view--rail {
+      --persona-history-row-hover-bg: rgba(255, 255, 255, 0.06);
+      --persona-history-row-active-bg: rgba(255, 255, 255, 0.1);
     }
   `;
   document.head.appendChild(style);
@@ -357,6 +469,15 @@ const fullscreenAssistantDarkTokens = {
       foreground: COLORS.text,
       shadow: `0 8px 16px 4px ${COLORS.chat}`,
       borderBottom: "none",
+      // Pinned with railHeader.minHeight so both top strips read as one band.
+      minHeight: HEADER_MIN_HEIGHT,
+    },
+    history: {
+      railHeader: {
+        background: COLORS.chat,
+        border: "none",
+        minHeight: HEADER_MIN_HEIGHT,
+      },
     },
     input: {
       background: COLORS.chat,
@@ -552,6 +673,11 @@ const config = mergeWithDefaults({
   features: {
     showReasoning: false,
     showToolCalls: false,
+    history: {
+      enabled: true,
+      presentation: "rail",
+      rail: { collapsible: true },
+    },
     scrollToBottom: {
       enabled: true,
       iconName: "arrow-down",
@@ -659,3 +785,5 @@ const handle = initAgentWidget({
 
 demoCtl.handle = handle;
 void handle.connectStream(newFullscreenAssistantScriptStream());
+// The rail is the frame of this layout, so it opens with the page.
+void handle.showHistory();
