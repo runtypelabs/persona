@@ -200,7 +200,13 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     syncVisibility();
   };
   const onFocus = (): void => {
-    focused = true;
+    // Only keyboard-visible focus opens the tooltip: a shell moving focus
+    // programmatically after a mouse interaction must not pop one.
+    try {
+      focused = anchor.matches(":focus-visible");
+    } catch {
+      focused = true;
+    }
     syncVisibility();
   };
   const onBlur = (): void => {

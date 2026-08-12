@@ -3,6 +3,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { attachTooltip } from "./tooltip";
 
+/**
+ * Focus with a pinned keyboard-visible verdict. jsdom implements the spec's
+ * focus-visible propagation, so a bare focus() verdict depends on what ran
+ * before it; tests that open via focus must not be order-dependent.
+ */
+const focusVisible = (button: HTMLElement): void => {
+  vi.spyOn(button, "matches").mockImplementation(
+    (selector: string) => selector === ":focus-visible"
+  );
+  button.focus();
+};
+
 const rect = (
   left: number,
   top: number,
@@ -98,7 +110,7 @@ describe("attachTooltip", () => {
     );
 
     attachTooltip({ anchor: button, text: "Close chat" });
-    button.focus();
+    focusVisible(button);
 
     const tooltip = document.body.querySelector<HTMLElement>(
       ".persona-control-tooltip"
@@ -110,12 +122,26 @@ describe("attachTooltip", () => {
     expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
   });
 
+  it("stays closed on focus that is not focus-visible", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    // jsdom reports every focus as :focus-visible; model a browser's
+    // programmatic-focus-after-mouse verdict instead.
+    vi.spyOn(button, "matches").mockImplementation(
+      (selector: string) => selector !== ":focus-visible"
+    );
+
+    attachTooltip({ anchor: button, text: "Close chat" });
+    button.focus();
+    expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+  });
+
   it("dismisses an open tooltip with Escape", () => {
     const button = document.createElement("button");
     document.body.appendChild(button);
 
     attachTooltip({ anchor: button, text: "Close chat" });
-    button.focus();
+    focusVisible(button);
     expect(document.body.querySelector(".persona-control-tooltip")).not.toBeNull();
 
     button.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
@@ -166,7 +192,7 @@ describe("attachTooltip", () => {
     );
 
     attachTooltip({ anchor: button, text: "Add context" });
-    button.focus();
+    focusVisible(button);
     const tooltip = document.body.querySelector<HTMLElement>(
       ".persona-control-tooltip"
     );
@@ -186,7 +212,7 @@ describe("attachTooltip", () => {
     document.body.appendChild(button);
 
     attachTooltip({ anchor: button, text: "Add context" });
-    button.focus();
+    focusVisible(button);
     expect(document.body.querySelector(".persona-control-tooltip")).not.toBeNull();
 
     button.remove();
@@ -203,7 +229,7 @@ describe("attachTooltip", () => {
     const next = attachTooltip({ anchor: button, text: "New", enabled: false });
 
     expect(old.isOpen).toBe(false);
-    button.focus();
+    focusVisible(button);
     expect(next.isOpen).toBe(false);
     expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
   });
@@ -216,7 +242,7 @@ describe("attachTooltip", () => {
     document.body.appendChild(host);
 
     attachTooltip({ anchor: button, text: "Shadow tooltip" });
-    button.focus();
+    focusVisible(button);
 
     expect(shadow.querySelector(".persona-control-tooltip")?.textContent).toContain(
       "Shadow tooltip"
