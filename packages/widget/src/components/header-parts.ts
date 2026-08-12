@@ -93,8 +93,14 @@ export interface HeaderIconButtonParts {
 }
 
 export interface CreateHeaderIconButtonOptions {
-  /** Required: also the tooltip text when the caller attaches one. */
+  /** Required: also the default tooltip text. */
   ariaLabel: string;
+  /**
+   * Attach the shared styled tooltip, reading the button's live `aria-label`
+   * so a relabel (e.g. Messages while busy) stays accurate. `false` opts out;
+   * default true.
+   */
+  tooltip?: boolean;
   /** Lucide icon name; falls back to `iconText` when it is not in the registry. */
   iconName?: string;
   /** Text glyph rendered when no icon resolves. */
@@ -139,6 +145,7 @@ export const createHeaderIconButton = (
 ): HeaderIconButtonParts => {
   const {
     ariaLabel,
+    tooltip = true,
     iconName,
     iconText,
     wrapperClassName = DEFAULT_WRAPPER_CLASS,
@@ -200,6 +207,14 @@ export const createHeaderIconButton = (
   }
 
   wrapper.appendChild(button);
+  // attachTooltip is per-anchor idempotent, and a disabled attach replaces any
+  // previous enabled one, so update() rebuilds stay safe.
+  attachTooltip({
+    anchor: button,
+    trigger: wrapper,
+    text: () => button.getAttribute("aria-label") ?? ariaLabel,
+    enabled: tooltip,
+  });
   return { button, wrapper };
 };
 
@@ -274,6 +289,7 @@ export const createCloseButton = (
 
   const { button, wrapper } = createHeaderIconButton({
     ariaLabel: closeButtonTooltipText,
+    tooltip: closeButtonShowTooltip,
     iconName: launcher.closeButtonIconName ?? "x",
     iconText: launcher.closeButtonIconText ?? "×",
     wrapperClassName,
@@ -289,13 +305,6 @@ export const createCloseButton = (
     paddingX: launcher.closeButtonPaddingX,
     paddingY: launcher.closeButtonPaddingY,
     hidden: !showClose,
-  });
-
-  attachTooltip({
-    anchor: button,
-    trigger: wrapper,
-    text: () => button.getAttribute("aria-label") ?? closeButtonTooltipText,
-    enabled: closeButtonShowTooltip,
   });
 
   return { button, wrapper };
@@ -325,6 +334,7 @@ export const createClearChatButton = (
 
   const { button, wrapper } = createHeaderIconButton({
     ariaLabel: clearChatTooltipText,
+    tooltip: clearChatShowTooltip,
     iconName: clearChatConfig.iconName ?? "refresh-cw",
     wrapperClassName,
     // Call-site `buttonSize` wins over `launcher.clearChat.size`; both unset
@@ -338,13 +348,6 @@ export const createClearChatButton = (
     borderRadius: clearChatConfig.borderRadius,
     paddingX: clearChatConfig.paddingX,
     paddingY: clearChatConfig.paddingY,
-  });
-
-  attachTooltip({
-    anchor: button,
-    trigger: wrapper,
-    text: () => button.getAttribute("aria-label") ?? clearChatTooltipText,
-    enabled: clearChatShowTooltip,
   });
 
   return { button, wrapper };

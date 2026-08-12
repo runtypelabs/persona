@@ -162,6 +162,8 @@ describe("history shell", () => {
       expect(button!.style.width).toBe("");
       expect(button!.style.minWidth).toBe("");
       expect(button!.querySelector("svg")).not.toBeNull();
+      // The styled tooltip reads the live aria-label; a title would double it.
+      expect(button!.hasAttribute("title")).toBe(false);
     });
 
     it("joins the minimal layout's trailing cluster before the close control", () => {

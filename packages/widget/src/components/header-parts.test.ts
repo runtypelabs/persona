@@ -111,6 +111,33 @@ describe("createHeaderIconButton", () => {
     expect(wrapper.className).toContain("persona-items-center");
     expect(wrapper.className).toContain("persona-justify-center");
   });
+
+  it("attaches the styled tooltip by default, reading the live aria-label", () => {
+    const { button, wrapper } = createHeaderIconButton({
+      ariaLabel: "Messages",
+      iconName: "history",
+    });
+    document.body.appendChild(wrapper);
+    button.setAttribute("aria-label", "Opening conversation");
+    wrapper.dispatchEvent(new MouseEvent("mouseenter"));
+    const tooltip = document.body.querySelector(".persona-control-tooltip");
+    expect(tooltip).not.toBeNull();
+    expect(tooltip!.textContent).toContain("Opening conversation");
+    wrapper.remove();
+    tooltip!.remove();
+  });
+
+  it("attaches no tooltip when tooltip is false", () => {
+    const { wrapper } = createHeaderIconButton({
+      ariaLabel: "Silent",
+      iconName: "x",
+      tooltip: false,
+    });
+    document.body.appendChild(wrapper);
+    wrapper.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+    wrapper.remove();
+  });
 });
 
 describe("createCloseButton", () => {

@@ -8258,8 +8258,8 @@ export const createAgentExperience = (
     const label = busy
       ? historyShellCopy.openHistoryBusyLabel
       : historyShellCopy.openHistoryLabel;
+    // The factory tooltip reads the live aria-label; a title would double it.
     historyButton.setAttribute("aria-label", label);
-    historyButton.title = label;
     // Rail/auto toggles a navigation region; panel navigates to a surface.
     if ((config.features?.history?.presentation ?? "panel") === "panel") {
       historyButton.removeAttribute("aria-expanded");
@@ -8283,8 +8283,10 @@ export const createAgentExperience = (
         clearChatDefaultLabel = button.getAttribute("aria-label") ?? "";
         clearChatRelabelled = true;
       }
+      // aria-label only: the styled tooltip reads it live, and a title would
+      // render a second native tooltip on top.
       button.setAttribute("aria-label", historyShellCopy.newConversationLabel);
-      button.title = historyShellCopy.newConversationLabel;
+      button.removeAttribute("title");
       // No touch-target pin: the shared header control class owns the box, and
       // a 44px floor here would desync this control from its neighbours.
       return;
@@ -8294,7 +8296,6 @@ export const createAgentExperience = (
     clearChatRelabelled = false;
     if (clearChatDefaultLabel) {
       button.setAttribute("aria-label", clearChatDefaultLabel);
-      button.title = clearChatDefaultLabel;
     }
   };
 
