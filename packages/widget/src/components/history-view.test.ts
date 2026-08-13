@@ -1229,6 +1229,133 @@ describe("history view chrome and destructive actions", () => {
     warn.mockRestore();
   });
 
+  it("composes a brand declaration into the heading and the collapsed toggle", async () => {
+    const railBrand = vi.fn((collapsed: boolean) => {
+      const mark = document.createElement("i");
+      mark.dataset.face = collapsed ? "collapsed" : "expanded";
+      return mark;
+    });
+    const { root, handle } = mount({ presentation: "rail", railBrand });
+    await flush();
+
+    // Expanded heading: the mark leads, the view title follows as wordmark.
+    const brand = root.querySelector<HTMLElement>(
+      ".persona-history-heading-brand"
+    )!;
+    expect(brand.getAttribute("aria-hidden")).toBe("true");
+    expect(
+      brand.querySelector<HTMLElement>(".persona-history-brand-mark i")?.dataset
+        .face
+    ).toBe("expanded");
+    expect(brand.querySelector(".persona-history-wordmark")?.textContent).toBe(
+      "Messages"
+    );
+    // The heading stays for the region's accessible name.
+    const title = root.querySelector<HTMLElement>(".persona-history-title")!;
+    expect(title.classList.contains("persona-history-sr-only")).toBe(true);
+    expect(
+      document.getElementById(root.getAttribute("aria-labelledby")!)?.textContent
+    ).toBe("Messages");
+
+    // Collapsed rest face: the mark sits in the toggle beside its glyph.
+    const toggle = root.querySelector<HTMLElement>(
+      '[data-persona-history-focus="collapse"]'
+    )!;
+    expect(toggle.classList.contains("persona-history-back--branded")).toBe(true);
+    const face = () =>
+      toggle.querySelector<HTMLElement>(".persona-history-toggle-brand i")
+        ?.dataset.face;
+    expect(face()).toBe("collapsed");
+    expect(toggle.querySelector("svg")).not.toBeNull();
+
+    // One call per face: neither ctx changes with the collapsed state.
+    handle.setCollapsed(true);
+    handle.setCollapsed(false);
+    expect(face()).toBe("collapsed");
+    expect(toggle.querySelector("svg")).not.toBeNull();
+    expect(root.querySelector(".persona-history-heading-brand")).not.toBeNull();
+    expect(railBrand).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the rail brand out of the panel and lets renderHeader outrank it", async () => {
+    const railBrand = vi.fn(() => document.createElement("i"));
+    const renderRailHeader = vi.fn(() => {
+      const slot = document.createElement("b");
+      slot.dataset.slot = "";
+      return slot;
+    });
+    const { root, handle } = mount({
+      presentation: "rail",
+      railBrand,
+      renderRailHeader,
+    });
+    await flush();
+    const group = root.querySelector<HTMLElement>(
+      ".persona-history-heading-group"
+    )!;
+    // Full override: the heading area is the slot's, not the brand default.
+    expect(group.querySelector("[data-slot]")).not.toBeNull();
+    expect(group.querySelector(".persona-history-heading-brand")).toBeNull();
+    // The collapsed face is the brand's alone, so it is still there.
+    const toggle = root.querySelector<HTMLElement>(
+      '[data-persona-history-focus="collapse"]'
+    )!;
+    expect(toggle.querySelector(".persona-history-toggle-brand")).not.toBeNull();
+
+    handle.setPresentation("panel");
+    await flush();
+    expect(root.querySelector(".persona-history-toggle-brand")).toBeNull();
+    expect(root.querySelector(".persona-history-heading-brand")).toBeNull();
+    expect(
+      root
+        .querySelector(".persona-history-back")
+        ?.classList.contains("persona-history-back--branded")
+    ).toBe(false);
+
+    // Back in the rail the same face returns without a second brand call.
+    handle.setPresentation("rail");
+    await flush();
+    expect(root.querySelector(".persona-history-toggle-brand")).not.toBeNull();
+    expect(railBrand).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the toggle glyph alone when no brand is configured", async () => {
+    const { root } = mount({ presentation: "rail" });
+    await flush();
+    const toggle = root.querySelector<HTMLElement>(
+      '[data-persona-history-focus="collapse"]'
+    )!;
+    expect(toggle.querySelector(".persona-history-toggle-brand")).toBeNull();
+    expect(toggle.classList.contains("persona-history-back--branded")).toBe(
+      false
+    );
+  });
+
+  it("swaps the collapsed toggle's brand face for the glyph on hover and focus", async () => {
+    mount({ presentation: "rail", railBrand: () => document.createElement("i") });
+    await flush();
+    const css = injectedHistoryCss();
+    const branded =
+      ".persona-history-view--rail-collapsed .persona-history-back--branded";
+    // At rest the mark shows and the glyph waits under it.
+    expect(css).toContain(
+      `${branded} .persona-history-toggle-brand {\n  display: flex;\n}`
+    );
+    expect(css).toContain(`${branded} > svg {\n  display: none;\n}`);
+    expect(css).toContain(
+      `${branded}:hover .persona-history-toggle-brand,\n${branded}:focus-visible .persona-history-toggle-brand {\n  display: none;\n}`
+    );
+    expect(css).toContain(
+      `${branded}:hover > svg,\n${branded}:focus-visible > svg {\n  display: block;\n}`
+    );
+    // Touch has no hover, so the glyph is the only face there.
+    const coarse = css.slice(css.lastIndexOf("@media (pointer: coarse)"));
+    expect(coarse).toContain(
+      `  ${branded} .persona-history-toggle-brand {\n    display: none;\n  }`
+    );
+    expect(coarse).toContain(`  ${branded} > svg {\n    display: block;\n  }`);
+  });
+
   it("runs the primary new-conversation action from a pill pinned below the list", async () => {
     const { root, onStartNew } = mount();
     await flush();

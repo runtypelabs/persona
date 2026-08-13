@@ -7642,6 +7642,49 @@ export const createAgentExperience = (
   const railSide = (): "left" | "right" =>
     config.features?.history?.rail?.side === "right" ? "right" : "left";
 
+  /** Decorative image for a config-supplied rail icon or brand URL. */
+  const railIconImage = (src: string): HTMLImageElement => {
+    const image = createElement("img");
+    image.src = src;
+    image.alt = "";
+    image.setAttribute("aria-hidden", "true");
+    return image;
+  };
+
+  /**
+   * One brand declaration, resolved here where the lucide registry lives, into
+   * the callback both rail placements call: the expanded heading and the
+   * collapsed toggle's rest face. Precedence render > iconUrl > icon; the
+   * icon cases resolve once (so an unknown name warns once) and each caller
+   * gets its own copy, since both faces can be in the DOM at once.
+   */
+  const railBrandNode = ():
+    | ((collapsed: boolean) => Element | null)
+    | undefined => {
+    const brand = config.features?.history?.rail?.brand;
+    if (!brand) return undefined;
+    let warned = false;
+    let mark: Element | null | undefined;
+    return (collapsed) => {
+      if (brand.render) {
+        try {
+          return brand.render({ collapsed }) ?? null;
+        } catch (error) {
+          if (!warned) {
+            warned = true;
+            console.warn("[persona] history rail brand threw", error);
+          }
+          return null;
+        }
+      }
+      if (mark === undefined) {
+        if (brand.iconUrl) mark = railIconImage(brand.iconUrl);
+        else mark = brand.icon ? renderLucideIcon(brand.icon, 20) : null;
+      }
+      return mark ? (mark.cloneNode(true) as Element) : null;
+    };
+  };
+
   /**
    * Config nav sections, normalized for the size-capped chunk: icon precedence
    * (renderIcon > iconUrl > icon) collapses to one memoized thunk resolved
@@ -7672,13 +7715,8 @@ export const createAgentExperience = (
               if (node !== undefined) return node;
               try {
                 if (item.renderIcon) node = item.renderIcon() ?? null;
-                else if (item.iconUrl) {
-                  const image = createElement("img");
-                  image.src = item.iconUrl;
-                  image.alt = "";
-                  image.setAttribute("aria-hidden", "true");
-                  node = image;
-                } else node = item.icon ? renderLucideIcon(item.icon, 20) : null;
+                else if (item.iconUrl) node = railIconImage(item.iconUrl);
+                else node = item.icon ? renderLucideIcon(item.icon, 20) : null;
               } catch (error) {
                 warn(error);
                 node = null;
@@ -8042,6 +8080,7 @@ export const createAgentExperience = (
       collapsed: railShowsCollapsed(),
       railSide: railSide(),
       renderRailHeader: config.features?.history?.rail?.renderHeader,
+      railBrand: railBrandNode(),
       onToggleCollapse: toggleRailCollapsed,
       // Formatted strings only: the size-capped chunk never imports shortcuts.
       ...(collapseShortcutStrings

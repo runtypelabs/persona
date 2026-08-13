@@ -466,6 +466,19 @@ the sidebar to a 52px icon rail carrying expand and new-conversation), and
 chosen state is remembered alongside the other `persistState` keys, and
 `persistState: false` keeps it in memory for the page load only.
 
+Rail identity is a ladder, cheapest first. `features.history.rail.brand` is one
+declaration (`icon`, `iconUrl`, or `render({ collapsed })`, in that precedence,
+highest last) that the widget places twice: beside the view title in the
+expanded header (`.persona-history-heading-brand` around
+`.persona-history-brand-mark` and `.persona-history-wordmark`) and as the
+collapsed toggle's rest face (`.persona-history-toggle-brand`, revealing the
+panel glyph on hover and keyboard focus, and staying out of the way of a coarse
+pointer that has no hover). `features.history.rail.renderHeader` outranks it for
+the header area only, taking the whole identity slot; the collapsed face stays
+the brand's. The `renderHistoryHeader` plugin hook outranks both by replacing
+the top bar itself. Every rung is decorative: the `h2` stays in the DOM as
+`.persona-history-sr-only`, so `copy.viewTitle` still names the region.
+
 `features.history.rail.sections` adds host navigation sections around the
 conversation list, each stamped `data-persona-rail-section="<id>"` with rows
 stamped `data-persona-rail-item="<id>"`. They are styled by
@@ -992,9 +1005,15 @@ plugins can target them:
                                          theme paints the chrome */
 .persona-history-topbar--shell-enter  /* one-shot fade as the hosted bar mounts */
 .persona-history-header-host          /* shell-owned wrapper inside the header */
-.persona-history-back                 /* back (panel) / close (rail) control */
+.persona-history-back                 /* back (panel) / close (rail) control;
+                                         --branded when features.history.rail.brand
+                                         gives the collapsed toggle a rest face */
 .persona-history-heading-group
 .persona-history-title
+.persona-history-heading-brand        /* rail.brand in the expanded header */
+.persona-history-brand-mark           /* the mark itself, in either placement */
+.persona-history-wordmark             /* copy.viewTitle beside the mark */
+.persona-history-toggle-brand         /* the mark as the collapsed toggle's face */
 
 /* Scope and identity (rendered inside the body, never as a second bar line) */
 .persona-history-scope                /* ambient privacy caption above the list */

@@ -213,24 +213,14 @@ if (!document.getElementById(fileCardStyleId)) {
 }
 
 /**
- * Rail header identity: the same name the conversation header carries. The
- * widget keeps the heading for the accessible name, so this is decorative.
+ * Rail identity mark: the widget pairs it with the view title in the expanded
+ * header and uses it as the collapsed toggle's rest face.
  */
-function renderRailBrand(collapsed: boolean): HTMLElement | null {
-  // Collapsed the rail is a 52px icon column, so the toggle stands alone.
-  if (collapsed) return null;
-  const brand = document.createElement("span");
-  brand.setAttribute("aria-hidden", "true");
-  brand.style.cssText =
-    "display:flex;align-items:center;gap:8px;min-width:0;";
+function renderRailMark(): HTMLElement {
   const mark = document.createElement("span");
   mark.style.cssText = `display:flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;border-radius:7px;background:${COLORS.userBubble};color:${COLORS.text};font-size:12px;font-weight:600;`;
   mark.textContent = "C";
-  const name = document.createElement("span");
-  name.style.cssText = `min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600;color:${COLORS.text};`;
-  name.textContent = "Chat Assistant";
-  brand.append(mark, name);
-  return brand;
+  return mark;
 }
 
 function renderCustomFileCard(artifactId: string, title: string, subtitle: string): HTMLElement {
@@ -723,9 +713,11 @@ const config = mergeWithDefaults({
     history: {
       enabled: true,
       presentation: "rail",
+      // The wordmark beside the rail's mark is this title.
+      copy: { viewTitle: "Chat Assistant" },
       rail: {
         collapsible: true,
-        renderHeader: ({ collapsed }) => renderRailBrand(collapsed),
+        brand: { render: () => renderRailMark() },
         sections: railNavSections,
         // The widget IS this page, so the combo is claimed document-wide. An
         // embedded widget would leave the scope at its "widget" default.

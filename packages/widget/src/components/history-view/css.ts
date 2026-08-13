@@ -611,6 +611,66 @@ export const HISTORY_VIEW_CSS =
   font-weight: 600;
   color: var(--persona-text-muted, #6b7280);
 }
+` +
+  /* features.history.rail.brand, expanded: the mark leads on the same 16px
+     text inset as the rows, the view title follows as the wordmark. */
+  `.persona-history-view .persona-history-heading-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.persona-history-view .persona-history-brand-mark {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+.persona-history-view .persona-history-brand-mark > img,
+.persona-history-view .persona-history-brand-mark > svg {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+.persona-history-view .persona-history-wordmark {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--persona-text, #111827);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+` +
+  /* The same brand is the collapsed toggle's rest face; the glyph under it
+     takes over on hover and keyboard focus, so the control still reads as one. */
+  `.persona-history-view .persona-history-toggle-brand {
+  display: none;
+}
+.persona-history-view--rail-collapsed .persona-history-back--branded .persona-history-toggle-brand {
+  display: flex;
+}
+.persona-history-view--rail-collapsed .persona-history-back--branded > svg {
+  display: none;
+}
+.persona-history-view--rail-collapsed .persona-history-back--branded:hover .persona-history-toggle-brand,
+.persona-history-view--rail-collapsed .persona-history-back--branded:focus-visible .persona-history-toggle-brand {
+  display: none;
+}
+.persona-history-view--rail-collapsed .persona-history-back--branded:hover > svg,
+.persona-history-view--rail-collapsed .persona-history-back--branded:focus-visible > svg {
+  display: block;
+}
+` +
+  /* Touch has no hover to bring the glyph up with, so it stays the only face. */
+  `@media (pointer: coarse) {
+  .persona-history-view--rail-collapsed .persona-history-back--branded .persona-history-toggle-brand {
+    display: none;
+  }
+  .persona-history-view--rail-collapsed .persona-history-back--branded > svg {
+    display: block;
+  }
+}
 .persona-history-view--rail .persona-history-body {
   gap: 8px;
   padding: 4px 0 12px;

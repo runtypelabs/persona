@@ -473,6 +473,44 @@ describe("history shell", () => {
       expect(group().querySelector("[data-brand]")).toBeNull();
     });
 
+    it("resolves one brand declaration into both rail faces", async () => {
+      const { mount } = await railSetup({
+        brand: { iconUrl: "https://cdn.example/mark.png" },
+      });
+      const marks = Array.from(
+        mount.querySelectorAll<HTMLImageElement>(".persona-history-brand-mark > img")
+      );
+      // The heading mark and the collapsed toggle face are separate copies.
+      expect(marks).toHaveLength(2);
+      for (const mark of marks) {
+        expect(mark.src).toBe("https://cdn.example/mark.png");
+        expect(mark.alt).toBe("");
+        expect(mark.getAttribute("aria-hidden")).toBe("true");
+      }
+      // The wordmark beside the heading mark is the view title.
+      expect(
+        mount.querySelector<HTMLElement>(".persona-history-wordmark")?.textContent
+      ).toBe("Messages");
+      expect(
+        mount
+          .querySelector<HTMLElement>('[data-persona-history-focus="collapse"]')
+          ?.querySelector(".persona-history-toggle-brand > img")
+      ).not.toBeNull();
+    });
+
+    it("drops the brand and warns once for an unknown lucide name", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { mount } = await railSetup({ brand: { icon: "not-a-real-icon" } });
+      expect(mount.querySelector(".persona-history-brand-mark")).toBeNull();
+      expect(mount.querySelector(".persona-history-toggle-brand")).toBeNull();
+      // The plain title comes back, visible, as if no brand were declared.
+      const title = mount.querySelector<HTMLElement>(".persona-history-title")!;
+      expect(title.classList.contains("persona-history-sr-only")).toBe(false);
+      // Resolved once for both faces, so the registry warns once.
+      expect(warn).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+    });
+
     describe("collapse shortcut", () => {
       beforeEach(() => setMacPlatformOverride(false));
       afterEach(() => setMacPlatformOverride(null));

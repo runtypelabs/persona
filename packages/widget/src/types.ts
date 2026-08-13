@@ -2791,9 +2791,32 @@ export interface AgentWidgetHistoryFeature {
     collapsible?: boolean;
     defaultCollapsed?: boolean;
     /**
-     * Brand slot for the rail header's identity area, re-invoked whenever the
-     * collapsed state changes. Return null to leave the area empty, which
-     * leaves the collapse toggle standing alone. The accessible name of the
+     * One brand declaration, placed in both of the rail's identity spots: the
+     * header's heading area when expanded (the mark leading, `copy.viewTitle`
+     * beside it as the wordmark), and the collapse toggle's rest face when the
+     * rail is collapsed, where hover and keyboard focus reveal the panel glyph
+     * under it. A coarse pointer keeps the glyph, having no hover to reveal it
+     * with. Icon precedence, highest first: `render`, then `iconUrl`, then
+     * `icon`. `render` receives the placement through `ctx.collapsed` (`true`
+     * is the collapsed toggle face) and may return null to skip that spot.
+     * `renderHeader` outranks this for the heading area; the collapsed face is
+     * this slot's alone. Decorative either way: the view's accessible name
+     * still comes from `copy.viewTitle`, and the toggle keeps its own label.
+     * Ignored in panel presentation.
+     */
+    brand?: {
+      /** Lucide name from the built-in registry; an unknown one warns once. */
+      icon?: IconName | (string & {});
+      /** Image URL or data URI, rendered as a decorative `img`. */
+      iconUrl?: string;
+      /** Full custom node. A throw warns once and drops the brand. */
+      render?: (context: { collapsed: boolean }) => Element | null;
+    };
+    /**
+     * Full override of the rail header's identity area, outranking `brand`
+     * there, re-invoked whenever the collapsed state changes. Return null to
+     * leave the area empty, which leaves the collapse toggle standing alone.
+     * The accessible name of the
      * view comes from `copy.viewTitle` either way: the heading stays in the
      * DOM, visually hidden, whenever this renders. Ignored in panel
      * presentation.

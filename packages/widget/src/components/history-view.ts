@@ -179,6 +179,13 @@ export interface HistoryViewOptions {
     defaultTitle: string;
   }) => Element | null;
   /**
+   * Rail only. Core-resolved brand mark for both identity spots: the heading
+   * default composition (`false`) and the collapsed toggle's rest face
+   * (`true`). Null means no brand for that spot. Outranked by
+   * `renderRailHeader` in the heading.
+   */
+  railBrand?: (collapsed: boolean) => Element | null;
+  /**
    * Rail only. Host navigation sections stacked around the conversation list.
    * Normalized by the core, which also resolves each item's icon precedence
    * into `iconNode` so this chunk never imports the lucide registry.
@@ -437,6 +444,38 @@ export function createHistoryView(
   /** Only a collapsible rail turns the leading control into a toggle. */
   const collapseToggle = (): boolean => presentation === "rail" && collapsible;
 
+  /** Built once: the ctx of this face is always the collapsed rail. */
+  let toggleFace: Element | null | undefined;
+
+  /**
+   * Collapsed rest face for the toggle, stacked with the glyph the CSS reveals
+   * on hover and keyboard focus. Panel drops it; a move back re-appends it.
+   */
+  const syncToggleBrand = (): void => {
+    if (!options.railBrand) return;
+    if (!collapseToggle()) {
+      backButton.classList.remove("persona-history-back--branded");
+      return;
+    }
+    if (toggleFace === undefined) {
+      const mark = options.railBrand(true);
+      toggleFace = mark
+        ? createNode(
+            "span",
+            {
+              className:
+                "persona-history-brand-mark persona-history-toggle-brand",
+              attrs: { "aria-hidden": "true" },
+            },
+            mark
+          )
+        : null;
+    }
+    if (!toggleFace) return;
+    backButton.classList.add("persona-history-back--branded");
+    backButton.appendChild(toggleFace);
+  };
+
   const syncLeadingControl = (): void => {
     const toggle = collapseToggle();
     const rail = presentation === "rail";
@@ -472,6 +511,7 @@ export function createHistoryView(
     backButton.replaceChildren(
       historyIcon(toggle ? "panel-left" : rail ? "x" : "arrow-left")
     );
+    syncToggleBrand();
   };
   syncLeadingControl();
   backButton.addEventListener("click", () => {
@@ -501,13 +541,16 @@ export function createHistoryView(
   );
 
   let brandWarned = false;
+  /** Built once: the ctx of this face is always the expanded rail. */
+  let headingBrand: Element | null | undefined;
 
   /**
    * Rail-only identity slot. A host mark replaces the visible title; the `h2`
    * stays sr-only so `aria-labelledby` still resolves to a name.
    */
   const syncRailBrand = (): void => {
-    const slot = presentation === "rail" ? options.renderRailHeader : undefined;
+    const rail = presentation === "rail";
+    const slot = rail ? options.renderRailHeader : undefined;
     let mark: Element | null = null;
     let slotted = slot !== undefined;
     if (slot) {
@@ -519,6 +562,36 @@ export function createHistoryView(
           brandWarned = true;
           console.warn("[persona] history rail renderHeader threw", error);
         }
+      }
+    }
+    // Default composition for a brand declaration: mark leading, the view
+    // title beside it as the wordmark. Built once, since this face is only
+    // ever the expanded one.
+    if (!slotted && rail && options.railBrand) {
+      if (headingBrand === undefined) {
+        const brand = options.railBrand(false);
+        headingBrand = brand
+          ? createNode(
+              "span",
+              {
+                className: "persona-history-heading-brand",
+                attrs: { "aria-hidden": "true" },
+              },
+              createNode(
+                "span",
+                { className: "persona-history-brand-mark" },
+                brand
+              ),
+              createNode("span", {
+                className: "persona-history-wordmark",
+                text: copy.viewTitle,
+              })
+            )
+          : null;
+      }
+      if (headingBrand) {
+        slotted = true;
+        mark = headingBrand;
       }
     }
     title.classList.toggle("persona-history-sr-only", slotted);
