@@ -727,6 +727,10 @@ const config = mergeWithDefaults({
         collapsible: true,
         renderHeader: ({ collapsed }) => renderRailBrand(collapsed),
         sections: railNavSections,
+        // The widget IS this page, so the combo is claimed document-wide. An
+        // embedded widget would leave the scope at its "widget" default.
+        collapseShortcut: "mod+b",
+        collapseShortcutScope: "page",
       },
     },
     scrollToBottom: {

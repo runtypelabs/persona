@@ -64,6 +64,12 @@ import { renderLucideIcon } from "./utils/icons";
 import { createElement } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
 import { attachTooltip } from "./utils/tooltip";
+import {
+  ariaCombo,
+  createShortcutRegistry,
+  formatCombo,
+  parseCombo,
+} from "./utils/shortcuts";
 import { downloadInfoFor } from "./utils/artifact-file";
 import { artifactCopyText } from "./components/artifact-preview";
 import { morphMessages } from "./utils/morph";
@@ -724,6 +730,11 @@ export const createAgentExperience = (
 
   // Get plugins for this instance
   const plugins = pluginRegistry.getForInstance(config.plugins);
+
+  // One keydown listener per instance. Widget-scoped bindings resolve against
+  // the mount; Escape is reserved and never routed through here.
+  const shortcuts = createShortcutRegistry(mount);
+  let releaseShortcuts: Array<() => void> = [];
 
   // Guards the composer/welcome hooks, which can run before `session` exists
   // (its `let` is declared far below and is in the temporal dead zone here).
@@ -3587,6 +3598,11 @@ export const createAgentExperience = (
   };
 
   const destroyCallbacks: Array<() => void> = [];
+  // Drops every binding (config and plugin) with the document listener.
+  destroyCallbacks.push(() => {
+    releaseShortcuts.forEach((release) => release());
+    shortcuts.destroy();
+  });
   // Clean up the document-level digit-key shortcut listener registered earlier.
   destroyCallbacks.push(() => {
     document.removeEventListener("keydown", handleAskUserDigitKey);
@@ -7740,6 +7756,74 @@ export const createAgentExperience = (
   };
 
   /**
+   * One declaration, three artifacts: the binding below, the toggle's tooltip
+   * hint chip, and its `aria-keyshortcuts`. Null when unset or unparseable.
+   */
+  const railCollapseShortcut = (): {
+    combo: string;
+    hint: string;
+    aria: string;
+  } | null => {
+    const combo = config.features?.history?.rail?.collapseShortcut;
+    if (!combo || !parseCombo(combo)) return null;
+    return { combo, hint: formatCombo(combo), aria: ariaCombo(combo) };
+  };
+
+  /**
+   * Every binding this instance owns, re-derived so a live `update()` of the
+   * config or the plugin list lands. Config registers before plugins, so a
+   * collision leaves the config combo standing.
+   */
+  const syncShortcuts = (): void => {
+    releaseShortcuts.forEach((release) => release());
+    releaseShortcuts = [];
+    const shortcut = railCollapseShortcut();
+    if (shortcut) {
+      releaseShortcuts.push(
+        shortcuts.register({
+          id: "history-rail-collapse",
+          combo: shortcut.combo,
+          scope:
+            config.features?.history?.rail?.collapseShortcutScope === "page"
+              ? "page"
+              : "widget",
+          when: () =>
+            historyVisible &&
+            historyPresentation === "rail" &&
+            railCollapsible(),
+          run: () => toggleRailCollapsed(),
+        })
+      );
+    }
+    for (const action of config.layout?.header?.trailingActions ?? []) {
+      if (!action.shortcut) continue;
+      releaseShortcuts.push(
+        shortcuts.register({
+          id: `header-action-${action.id}`,
+          combo: action.shortcut,
+          // The click path, so a menu action still opens its dropdown; a
+          // header rebuild swaps the button, so it is found per keypress.
+          run: () => {
+            const button = mount.querySelector<HTMLButtonElement>(
+              `[data-persona-header-action="${action.id}"]`
+            );
+            if (button) button.click();
+            else config.layout?.header?.onAction?.(action.id);
+          },
+        })
+      );
+    }
+    for (const plugin of plugins) {
+      for (const shortcut of plugin.shortcuts ?? []) {
+        releaseShortcuts.push(
+          shortcuts.register({ ...shortcut, id: `${plugin.id}:${shortcut.id}` })
+        );
+      }
+    }
+  };
+  syncShortcuts();
+
+  /**
    * Rail geometry is config-derived, so it must be re-derivable: a live
    * `update()` of `rail.width` / `rail.side` lands here, not only at mount.
    */
@@ -7944,6 +8028,10 @@ export const createAgentExperience = (
         : "inline";
 
     const rowAvatar = config.features?.history?.rowAvatar;
+    const shortcut = railCollapseShortcut();
+    const collapseShortcutStrings = shortcut
+      ? { hint: shortcut.hint, aria: shortcut.aria }
+      : null;
 
     const baseViewOptions: HistoryViewOptions = {
       provider,
@@ -7955,6 +8043,10 @@ export const createAgentExperience = (
       railSide: railSide(),
       renderRailHeader: config.features?.history?.rail?.renderHeader,
       onToggleCollapse: toggleRailCollapsed,
+      // Formatted strings only: the size-capped chunk never imports shortcuts.
+      ...(collapseShortcutStrings
+        ? { collapseShortcut: collapseShortcutStrings }
+        : {}),
       headerPlacement: initialHeaderPlacement,
       showScopeStatus: config.features?.history?.showScopeStatus !== false,
       // Rows reuse the header's agent icon unless history overrides or hides it.
@@ -10200,6 +10292,8 @@ export const createAgentExperience = (
       const newPlugins = pluginRegistry.getForInstance(config.plugins);
       plugins.length = 0;
       plugins.push(...newPlugins);
+      // Bindings are config- and plugin-derived, so they re-derive after both.
+      syncShortcuts();
 
       launcherEnabled = config.launcher?.enabled ?? true;
       autoExpand = config.launcher?.autoExpand ?? false;

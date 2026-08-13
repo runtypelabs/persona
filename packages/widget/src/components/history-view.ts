@@ -184,6 +184,12 @@ export interface HistoryViewOptions {
    * into `iconNode` so this chunk never imports the lucide registry.
    */
   railSections?: HistoryRailSection[];
+  /**
+   * Rail only. Pre-formatted collapse shortcut: `hint` is the tooltip chip,
+   * `aria` the `aria-keyshortcuts` value. The shell owns the binding and both
+   * strings, so this chunk never bundles the shortcut module.
+   */
+  collapseShortcut?: { hint: string; aria: string };
   /** Default `"inline"`. Rail is always inline; the shell enforces that. */
   headerPlacement?: HistoryHeaderPlacement;
   showScopeStatus: boolean;
@@ -451,9 +457,17 @@ export function createHistoryView(
     if (toggle) {
       backButton.setAttribute("aria-expanded", collapsed ? "false" : "true");
       backButton.setAttribute("aria-controls", bodyId);
+      // Only the collapse toggle answers to the shortcut; a back/close does not.
+      if (options.collapseShortcut?.aria) {
+        backButton.setAttribute(
+          "aria-keyshortcuts",
+          options.collapseShortcut.aria
+        );
+      }
     } else {
       backButton.removeAttribute("aria-expanded");
       backButton.removeAttribute("aria-controls");
+      backButton.removeAttribute("aria-keyshortcuts");
     }
     backButton.replaceChildren(
       historyIcon(toggle ? "panel-left" : rail ? "x" : "arrow-left")
@@ -530,6 +544,10 @@ export function createHistoryView(
     options.attachTooltip?.({
       anchor: control,
       text: () => control.getAttribute("aria-label") ?? "",
+      // Hint chip only while this control is the collapse toggle.
+      ...(control === backButton && options.collapseShortcut
+        ? { hint: () => (collapseToggle() ? options.collapseShortcut!.hint : "") }
+        : {}),
     })
   );
 

@@ -1,6 +1,7 @@
 import { createElement } from "../utils/dom";
 import { createDropdownMenu } from "../utils/dropdown";
 import { createComboButton } from "../utils/buttons";
+import { ariaCombo, formatCombo } from "../utils/shortcuts";
 import {
   AgentWidgetConfig,
   AgentWidgetHeaderLayoutConfig,
@@ -81,9 +82,17 @@ function appendTrailingHeaderActions(
       ariaLabel: a.ariaLabel ?? a.label ?? a.id,
       iconName: a.icon,
       iconText: a.icon ? undefined : a.label,
+      tooltipHint: a.shortcut ? formatCombo(a.shortcut) : undefined,
       wrapperClassName:
         "persona-relative persona-inline-flex persona-items-center persona-justify-center",
     });
+    // The keydown binding is registered by the shell, which finds the button
+    // by this id; the shortcut's other two artifacts are stamped here.
+    btn.setAttribute("data-persona-header-action", a.id);
+    if (a.shortcut) {
+      const aria = ariaCombo(a.shortcut);
+      if (aria) btn.setAttribute("aria-keyshortcuts", aria);
+    }
 
     if (a.menuItems?.length) {
       const dropdown = createDropdownMenu({

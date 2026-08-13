@@ -1,5 +1,6 @@
 import type { ResolvedWelcomeConfig } from "../welcome";
 import type { AgentWidgetPluginStorage } from "../utils/plugin-storage";
+import type { ShortcutScope } from "../utils/shortcuts";
 import {
   AgentWidgetMessage,
   AgentWidgetConfig,
@@ -96,6 +97,19 @@ export type AgentWidgetRailSection = {
   title?: string;
   /** Section body. Null renders nothing for the current state. */
   render: (context: AgentWidgetRailSectionContext) => Element | null;
+};
+
+/** A plugin-contributed keyboard shortcut, bound per widget instance. */
+export type AgentWidgetPluginShortcut = {
+  /** Stable identity, used in duplicate/throw warnings. */
+  id: string;
+  /** e.g. `"mod+b"`. "mod" is Command on Apple platforms, Control elsewhere. */
+  combo: string;
+  /** Default `"widget"`: fires only from inside the widget mount. */
+  scope?: ShortcutScope;
+  /** Returning false skips the binding for this keypress. */
+  when?: () => boolean;
+  run: () => void;
 };
 
 export type AgentWidgetSuggestionSelectContext = {
@@ -541,6 +555,23 @@ export interface AgentWidgetPlugin {
    * ```
    */
   railSections?: AgentWidgetRailSection[];
+
+  /**
+   * Keyboard shortcuts registered for the lifetime of each widget instance the
+   * plugin is active in, and unregistered on its teardown. `combo` is written
+   * as `"mod+b"` / `"mod+shift+k"`, where "mod" is Command on Apple platforms
+   * and Control elsewhere. `scope` defaults to `"widget"` (only while focus is
+   * inside the mount); `when` returning false skips the keypress. A combo
+   * another binding already owns warns and is ignored, first registration wins.
+   *
+   * @example
+   * ```typescript
+   * shortcuts: [
+   *   { id: "open-inbox", combo: "mod+shift+i", run: () => openInbox() }
+   * ]
+   * ```
+   */
+  shortcuts?: AgentWidgetPluginShortcut[];
 
   /**
    * Called when plugin is registered

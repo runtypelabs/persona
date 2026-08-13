@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { buildHeaderWithLayout, buildMinimalHeader } from "./header-layouts";
 import { HEADER_THEME_CSS } from "./header-builder";
 import type { AgentWidgetConfig } from "../types";
+import { setMacPlatformOverride } from "../utils/shortcuts";
 
 const build = (layoutHeaderConfig: Parameters<typeof buildMinimalHeader>[0]["layoutHeaderConfig"]) =>
   buildMinimalHeader({
@@ -49,6 +50,46 @@ describe("minimal header trailing actions", () => {
 
     button!.click();
     expect(onAction).toHaveBeenCalledWith("home");
+  });
+
+  it("stamps a declared shortcut on the button and hints it in the tooltip", () => {
+    setMacPlatformOverride(false);
+    const elements = build({
+      layout: "minimal",
+      trailingActions: [
+        {
+          id: "home",
+          icon: "house",
+          ariaLabel: "Back to home",
+          shortcut: "mod+shift+h",
+        },
+      ],
+    });
+    const button = elements.header.querySelector<HTMLButtonElement>(
+      'button[aria-label="Back to home"]'
+    )!;
+    // The shell finds the button by this id to run the binding.
+    expect(button.getAttribute("data-persona-header-action")).toBe("home");
+    expect(button.getAttribute("aria-keyshortcuts")).toBe("Control+Shift+H");
+
+    document.body.appendChild(elements.header);
+    button.parentElement!.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(
+      document.querySelector(".persona-control-tooltip__hint")!.textContent
+    ).toBe("Ctrl+Shift+H");
+    document.body.innerHTML = "";
+    setMacPlatformOverride(null);
+  });
+
+  it("leaves aria-keyshortcuts off an action with no shortcut", () => {
+    const elements = build({
+      layout: "minimal",
+      trailingActions: [{ id: "home", icon: "house", ariaLabel: "Back to home" }],
+    });
+    const button = elements.header.querySelector<HTMLButtonElement>(
+      'button[aria-label="Back to home"]'
+    )!;
+    expect(button.hasAttribute("aria-keyshortcuts")).toBe(false);
   });
 
   it("keeps the close button transparent so the UA button fill never shows", () => {

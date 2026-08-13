@@ -22,6 +22,7 @@ import {
   type DemoHistoryProviderOptions,
 } from "./internal/demo-history-provider";
 import type { AgentWidgetPlugin } from "./plugins/types";
+import { setMacPlatformOverride } from "./utils/shortcuts";
 
 const SEEDS: DemoHistoryConversationSeed[] = [
   {
@@ -470,6 +471,83 @@ describe("history shell", () => {
       await flush();
       expect(calls).toEqual([false, true]);
       expect(group().querySelector("[data-brand]")).toBeNull();
+    });
+
+    describe("collapse shortcut", () => {
+      beforeEach(() => setMacPlatformOverride(false));
+      afterEach(() => setMacPlatformOverride(null));
+
+      const collapseToggle = (mount: HTMLElement) =>
+        mount.querySelector<HTMLButtonElement>(
+          '[data-persona-history-focus="collapse"]'
+        )!;
+      const railWidth = (mount: HTMLElement) =>
+        mount.querySelector<HTMLElement>(".persona-history-rail-host")!.style.flex;
+      const pressModB = (target: EventTarget) =>
+        target.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            key: "b",
+            ctrlKey: true,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+          })
+        );
+
+      it("binds nothing by default, so an embed never claims the host's keys", async () => {
+        const { mount } = await railSetup();
+        expect(railWidth(mount)).toBe("0 0 260px");
+        pressModB(collapseToggle(mount));
+        await flush();
+        expect(railWidth(mount)).toBe("0 0 260px");
+        expect(collapseToggle(mount).hasAttribute("aria-keyshortcuts")).toBe(false);
+      });
+
+      it("collapses and expands from the configured combo", async () => {
+        const { mount } = await railSetup({ collapseShortcut: "mod+b" });
+        pressModB(collapseToggle(mount));
+        await flush();
+        expect(railWidth(mount)).toBe("0 0 52px");
+        pressModB(collapseToggle(mount));
+        await flush();
+        expect(railWidth(mount)).toBe("0 0 260px");
+      });
+
+      it("keeps a widget-scoped binding out of the rest of the page", async () => {
+        const { mount } = await railSetup({ collapseShortcut: "mod+b" });
+        const outside = document.createElement("button");
+        document.body.appendChild(outside);
+        pressModB(outside);
+        await flush();
+        expect(railWidth(mount)).toBe("0 0 260px");
+      });
+
+      it("answers a page-scoped binding from outside the widget", async () => {
+        const { mount } = await railSetup({
+          collapseShortcut: "mod+b",
+          collapseShortcutScope: "page",
+        });
+        const outside = document.createElement("button");
+        document.body.appendChild(outside);
+        pressModB(outside);
+        await flush();
+        expect(railWidth(mount)).toBe("0 0 52px");
+      });
+
+      it("stamps the toggle with aria-keyshortcuts and hints it in the tooltip", async () => {
+        const { mount } = await railSetup({ collapseShortcut: "mod+b" });
+        const toggle = collapseToggle(mount);
+        expect(toggle.getAttribute("aria-keyshortcuts")).toBe("Control+B");
+
+        toggle.dispatchEvent(new MouseEvent("mouseenter"));
+        const tooltip = document.querySelector(".persona-control-tooltip")!;
+        expect(
+          tooltip.querySelector(".persona-control-tooltip__label")!.textContent
+        ).toBe("Collapse conversation list");
+        expect(
+          tooltip.querySelector(".persona-control-tooltip__hint")!.textContent
+        ).toBe("Ctrl+B");
+      });
     });
 
     it("resolves declarative section icons and runs their callbacks", async () => {

@@ -2808,6 +2808,20 @@ export interface AgentWidgetHistoryFeature {
      * into panel presentation removes them and a move back re-renders them.
      */
     sections?: AgentWidgetHistoryRailSection[];
+    /**
+     * Keyboard shortcut for the collapse toggle, e.g. `"mod+b"` ("mod" is
+     * Command on Apple platforms, Control elsewhere). Undefined by default, so
+     * an embedded widget never claims a host page's keys. The same declaration
+     * drives the binding, the toggle's tooltip hint chip, and its
+     * `aria-keyshortcuts`.
+     */
+    collapseShortcut?: string | false;
+    /**
+     * Where `collapseShortcut` listens. Default `"widget"`: only while focus is
+     * inside the widget. `"page"` claims the combo document-wide, which suits a
+     * fullscreen widget that IS the app.
+     */
+    collapseShortcutScope?: "widget" | "page";
   };
   /**
    * History scope. Defaults to "verified-user" when getIdentityProof exists,
@@ -4852,6 +4866,13 @@ export type AgentWidgetHeaderTrailingAction = {
     destructive?: boolean;
     dividerBefore?: boolean;
   }>;
+  /**
+   * Keyboard shortcut that activates this action, e.g. `"mod+shift+h"` ("mod"
+   * is Command on Apple platforms, Control elsewhere). Fires only while focus
+   * is inside the widget, and also drives the button's tooltip hint chip and
+   * its `aria-keyshortcuts`.
+   */
+  shortcut?: string;
 };
 
 /**
