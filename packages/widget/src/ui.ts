@@ -7901,11 +7901,10 @@ export const createAgentExperience = (
   //
   // Rest state is a trigger at the leading edge of the conversation header and
   // nothing else: no column, no mounted view, and the history chunk unloaded
-  // until a hover warms it. Dwelling floats the expanded rail over the
-  // conversation; clicking pins it back into the full-height column.
+  // until a hover warms it. The pointer entering floats the expanded rail over
+  // the conversation; clicking pins it back into the full-height column.
 
-  /** Hover dwell before the overlay opens, and the pointer-out grace. */
-  const RAIL_OVERLAY_INTENT_MS = 200;
+  /** Grace before a pointer that left both surfaces dismisses the rail. */
   const RAIL_OVERLAY_GRACE_MS = 300;
   /** Inset of the floating rail from the widget's top and bottom edges. */
   const RAIL_OVERLAY_INSET = 8;
@@ -7913,12 +7912,17 @@ export const createAgentExperience = (
   let railTriggerButton: HTMLButtonElement | null = null;
   let railTriggerWrapper: HTMLElement | null = null;
   let railOverlayHost: HTMLElement | null = null;
-  let railIntentTimer: ReturnType<typeof setTimeout> | null = null;
   let railGraceTimer: ReturnType<typeof setTimeout> | null = null;
   /** Pointer is over the trigger or over the floating rail. */
   let railPointerInside = false;
+  /**
+   * Uncovering the trigger re-enters it with no pointer movement at all, which
+   * would undo the dismissal that just uncovered it. That synthetic enter
+   * arrives within a frame or two of the unmount.
+   */
+  let railUncoveredUntil = 0;
 
-  /** Touch has no hover to dwell on, so it taps the overlay open instead. */
+  /** Touch has no hover to open with, so it taps the overlay open instead. */
   const coarsePointer = (): boolean =>
     window.matchMedia?.("(pointer: coarse)").matches === true;
 
@@ -7931,17 +7935,12 @@ export const createAgentExperience = (
   /** Docked in its own column rather than floating over the conversation. */
   const railPinned = (): boolean => historyVisible && !railOverlayOpen;
 
-  const cancelRailIntent = (): void => {
-    if (railIntentTimer !== null) clearTimeout(railIntentTimer);
-    railIntentTimer = null;
-  };
-
   const cancelRailGrace = (): void => {
     if (railGraceTimer !== null) clearTimeout(railGraceTimer);
     railGraceTimer = null;
   };
 
-  /** Hover AND focus warm it, so neither pointer nor keyboard waits on open. */
+  /** Keyboard focus warms without opening; Enter and Space commit. */
   const warmHistoryChunk = (): void => {
     // A failed load just leaves the overlay closed; the loader retries later.
     void loadHistoryView().catch(() => {});
@@ -7957,12 +7956,17 @@ export const createAgentExperience = (
       // A keyboard visitor inside the floating rail never loses it to a stray
       // pointer leaving the widget.
       if (railOverlayHost?.contains(document.activeElement)) return;
-      closeHistory();
+      // A pointer dismissal moves focus no more than a pointer open does.
+      closeHistory({ restoreFocus: false });
     }, RAIL_OVERLAY_GRACE_MS);
   };
 
+  /**
+   * No dwell: the rail answers the pointer the moment it arrives, as fast as
+   * the chunk allows (already loaded, that is the same frame). The 300ms leave
+   * grace is what an accidental pass over the trigger costs.
+   */
   const openRailOverlay = (opts?: { keyboard?: boolean }): void => {
-    cancelRailIntent();
     if (historyVisible || !railTriggerApplies()) return;
     railOverlayOpen = true;
     void openHistory({
@@ -8045,7 +8049,9 @@ export const createAgentExperience = (
       extraClassName: brand
         ? "persona-rail-trigger persona-rail-trigger--branded"
         : "persona-rail-trigger",
-      ...(shortcut ? { tooltipHint: shortcut.hint } : {}),
+      // Hovering answers with the rail itself; a bubble would race the flyover.
+      // The combo stays discoverable on the floating rail's own toggle.
+      tooltip: false,
       attrs: {
         "data-persona-rail-trigger": "",
         "aria-controls": historyRegionId,
@@ -8067,14 +8073,13 @@ export const createAgentExperience = (
     button.addEventListener("mouseenter", () => {
       railPointerInside = true;
       cancelRailGrace();
-      if (coarsePointer() || historyVisible) return;
-      warmHistoryChunk();
-      cancelRailIntent();
-      railIntentTimer = setTimeout(openRailOverlay, RAIL_OVERLAY_INTENT_MS);
+      if (coarsePointer() || Date.now() < railUncoveredUntil) return;
+      openRailOverlay();
     });
     button.addEventListener("mouseleave", () => {
       railPointerInside = false;
-      cancelRailIntent();
+      // A real departure ends the hold-off: the next enter is intent.
+      railUncoveredUntil = 0;
       scheduleRailOverlayClose();
     });
     // Focus only warms: Enter and Space are how a keyboard visitor commits.
@@ -8083,7 +8088,6 @@ export const createAgentExperience = (
     });
     button.addEventListener("click", () => {
       if (!historyAvailable()) return;
-      cancelRailIntent();
       // Touch taps the overlay open first and pins on a second tap; a pointer
       // that can hover is already looking at the overlay, so it pins outright.
       if (coarsePointer() && !historyVisible) openRailOverlay();
@@ -8144,7 +8148,6 @@ export const createAgentExperience = (
   document.addEventListener("pointerdown", handleRailOverlayPointerDown, true);
   destroyCallbacks.push(() => {
     document.removeEventListener("pointerdown", handleRailOverlayPointerDown, true);
-    cancelRailIntent();
     cancelRailGrace();
   });
 
@@ -8247,6 +8250,9 @@ export const createAgentExperience = (
   const unmountHistoryHosts = (): void => {
     restorePanelHost?.();
     if (railOverlayHost) {
+      // Dismissed under the pointer: hold the hover off until the synthetic
+      // enter from uncovering the trigger has passed.
+      if (railPointerInside) railUncoveredUntil = Date.now() + 150;
       railOverlayHost.remove();
       railOverlayHost = null;
     }
@@ -8526,7 +8532,6 @@ export const createAgentExperience = (
       if (timer !== null) clearTimeout(timer);
       // The floating rail is torn down with the surface it hosted.
       railOverlayOpen = false;
-      cancelRailIntent();
       cancelRailGrace();
       // Before focus restoration below: the invoker lives in the shell header,
       // which is inert until this restores it.
@@ -9014,6 +9019,8 @@ export const createAgentExperience = (
   destroyCallbacks.push(() => {
     unsubscribeHistoryAvailability?.();
     unsubscribeHistoryIdentity?.();
+    // An open in flight (a hover this teardown raced) must not mount after it.
+    historyOpenToken += 1;
     // A pending exit still owns a mounted surface and a live timer.
     settleHistoryExit();
     historySurface?.dispose();

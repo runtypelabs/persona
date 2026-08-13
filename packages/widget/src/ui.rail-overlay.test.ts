@@ -50,8 +50,6 @@ const wait = (ms: number) =>
     setTimeout(resolve, ms);
   });
 
-/** Past the 200ms intent dwell, plus room for the chunk promise. */
-const INTENT = 260;
 /** Past the 300ms pointer-out grace. */
 const GRACE = 380;
 
@@ -115,7 +113,6 @@ const unhover = (element: HTMLElement) =>
 /** Opens the overlay the way a pointer does, and settles the chunk load. */
 const hoverOpen = async (mount: HTMLElement) => {
   hover(trigger(mount)!);
-  await wait(INTENT);
   await flush();
 };
 
@@ -188,15 +185,10 @@ describe("collapsed rail overlay", () => {
     expect(header.lastElementChild!.contains(trigger(mount))).toBe(true);
   });
 
-  it("floats the expanded rail after the hover dwell", async () => {
+  it("floats the expanded rail as soon as the pointer arrives", async () => {
     const { mount } = setup();
-    hover(trigger(mount)!);
-    await flush();
-    // Dwell not elapsed: still nothing but the trigger.
-    expect(overlayHost(mount)).toBeNull();
-
-    await wait(INTENT);
-    await flush();
+    // No dwell: the loaded chunk opens it on the enter itself.
+    await hoverOpen(mount);
     const host = overlayHost(mount)!;
     expect(host).not.toBeNull();
     expect(host.contains(view(mount))).toBe(true);
@@ -209,15 +201,23 @@ describe("collapsed rail overlay", () => {
     expect(railShell(mount)).toBeNull();
     expect(trigger(mount)!.getAttribute("aria-expanded")).toBe("true");
     expect(mount.querySelectorAll(".persona-history-row").length).toBeGreaterThan(0);
+    // The rail is the answer to the hover; a tooltip would race it.
+    expect(document.querySelector(".persona-control-tooltip")).toBeNull();
+    // The control still carries its name and its combo for assistive tech.
+    expect(trigger(mount)!.getAttribute("aria-label")).toBe(
+      "Expand conversation list"
+    );
   });
 
-  it("cancels the dwell when the pointer leaves first", async () => {
+  it("takes a pass of the pointer back off after the grace", async () => {
     const { mount } = setup();
     hover(trigger(mount)!);
     unhover(trigger(mount)!);
-    await wait(INTENT);
     await flush();
+    await wait(GRACE);
+    await flush(20);
     expect(overlayHost(mount)).toBeNull();
+    expect(view(mount)).toBeNull();
   });
 
   it("dismisses after the grace once the pointer leaves both surfaces", async () => {
@@ -336,6 +336,29 @@ describe("collapsed rail overlay", () => {
     expect(overlayHost(mount)).toBeNull();
   });
 
+  it("does not let the uncovered trigger undo the dismissal", async () => {
+    const { mount } = setup();
+    await hoverOpen(mount);
+    // The rail covers the trigger, so the pointer is over the floating host.
+    unhover(trigger(mount)!);
+    hover(overlayHost(mount)!);
+    view(mount)!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    );
+    await flush(20);
+    expect(overlayHost(mount)).toBeNull();
+
+    // Uncovering the trigger re-enters it with no pointer movement at all.
+    hover(trigger(mount)!);
+    await flush();
+    expect(overlayHost(mount)).toBeNull();
+
+    // A real departure ends the hold-off.
+    unhover(trigger(mount)!);
+    await hoverOpen(mount);
+    expect(overlayHost(mount)).not.toBeNull();
+  });
+
   it("closes on a click outside, but not on one inside", async () => {
     const { mount } = setup();
     await hoverOpen(mount);
@@ -369,9 +392,8 @@ describe("collapsed rail overlay", () => {
     window.matchMedia = ((query: string) =>
       ({ matches: query.includes("coarse") }) as MediaQueryList) as typeof window.matchMedia;
     const { mount } = setup();
-    // No hover to dwell on: the dwell never arms.
+    // No hover to open with, so the enter is ignored.
     hover(trigger(mount)!);
-    await wait(INTENT);
     await flush();
     expect(overlayHost(mount)).toBeNull();
 
@@ -413,9 +435,12 @@ describe("collapsed rail overlay", () => {
 
   it("takes its listeners and timers down with the widget", async () => {
     const { mount, controller } = setup();
+    // An open raced by the teardown must not mount behind it.
     hover(trigger(mount)!);
     controller.destroy();
-    await wait(INTENT);
+    await flush(20);
+    expect(overlayHost(mount)).toBeNull();
+    await wait(GRACE);
     await flush();
     expect(overlayHost(mount)).toBeNull();
     // A pointerdown after teardown must not reach a detached handler.
