@@ -559,7 +559,7 @@ export const HISTORY_VIEW_CSS =
      the collapse toggle takes the inner edge facing the conversation, and there
      is no third track to push the title off the leading edge. */
   `.persona-history-view--rail .persona-history-topbar {
-  grid-template-columns: minmax(0, 1fr) 44px;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: var(
     --persona-history-rail-header-min-height,
     var(--persona-header-min-height, 56px)
@@ -582,10 +582,29 @@ export const HISTORY_VIEW_CSS =
   /* A right-docked rail faces the conversation with its LEFT edge, so the
      toggle leads there and the identity trails it, inset from the outer edge. */
   `.persona-history-view--rail-right .persona-history-topbar {
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
 }
 .persona-history-view--rail-right .persona-history-heading-group {
   padding: 0 10px 0 0;
+}
+` +
+  /* The sidebar toggle answers to the 36px rows beside it, not to the 44px
+     header controls; the auto tracks above take their width from it. */
+  `.persona-history-view--rail .persona-history-topbar button.persona-history-icon-button {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+}
+` +
+  /* Touch has no hover to aim with, so the target goes back to 44px. */
+  `@media (pointer: coarse) {
+  .persona-history-view--rail .persona-history-topbar button.persona-history-icon-button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
 }
 .persona-history-view--rail .persona-history-title {
   font-size: 14px;

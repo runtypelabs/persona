@@ -149,6 +149,47 @@ describe("attachTooltip", () => {
     expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
   });
 
+  it("dismisses on activation and reopens with the label the control now has", () => {
+    const button = document.createElement("button");
+    button.setAttribute("aria-label", "Collapse conversation list");
+    document.body.appendChild(button);
+    const tip = () =>
+      document.body.querySelector<HTMLElement>(".persona-control-tooltip");
+
+    attachTooltip({
+      anchor: button,
+      text: () => button.getAttribute("aria-label") ?? "",
+    });
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(tip()?.textContent).toContain("Collapse conversation list");
+
+    // The pointer never left, so nothing but the activation closes it.
+    button.click();
+    expect(tip()).toBeNull();
+
+    button.setAttribute("aria-label", "Expand conversation list");
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(tip()?.textContent).toContain("Expand conversation list");
+  });
+
+  it("dismisses a keyboard-opened tooltip on activation until focus returns", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    const tip = () => document.body.querySelector(".persona-control-tooltip");
+
+    attachTooltip({ anchor: button, text: "Close chat" });
+    focusVisible(button);
+    expect(tip()).not.toBeNull();
+
+    // Space/Enter activates without moving focus off the control.
+    button.click();
+    expect(tip()).toBeNull();
+
+    button.blur();
+    focusVisible(button);
+    expect(tip()).not.toBeNull();
+  });
+
   it("suppresses hover tooltips when the device has no hover capability", () => {
     vi.stubGlobal(
       "matchMedia",

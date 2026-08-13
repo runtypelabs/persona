@@ -213,11 +213,15 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     focused = false;
     syncVisibility();
   };
-  const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key !== "Escape") return;
+  // Activation dismisses the tooltip. The flags re-arm on the next mouseenter
+  // or keyboard-visible focus, which re-reads whatever label the control now has.
+  const dismiss = (): void => {
     hovered = false;
     focused = false;
     hide();
+  };
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === "Escape") dismiss();
   };
 
   trigger.addEventListener("mouseenter", onMouseEnter);
@@ -225,6 +229,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
   anchor.addEventListener("focus", onFocus);
   anchor.addEventListener("blur", onBlur);
   anchor.addEventListener("keydown", onKeyDown);
+  anchor.addEventListener("click", dismiss);
 
   const handle: TooltipHandle = {
     get isOpen() {
@@ -242,6 +247,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
       anchor.removeEventListener("focus", onFocus);
       anchor.removeEventListener("blur", onBlur);
       anchor.removeEventListener("keydown", onKeyDown);
+      anchor.removeEventListener("click", dismiss);
       handles.delete(anchor);
     },
   };

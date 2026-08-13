@@ -1354,13 +1354,6 @@ export function createHistoryView(
       syncCollapsedClass();
       syncLeadingControl();
       syncRailBrand();
-      // The pointer is still on the toggle: re-show so the open tooltip
-      // re-reads the label it was just given.
-      const tip = tooltipHandles[0];
-      if (tip?.isOpen) {
-        tip.hide();
-        tip.show();
-      }
     },
     setRailSide: (side) => {
       railRight = side === "right";

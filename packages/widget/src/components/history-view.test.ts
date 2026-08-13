@@ -1073,15 +1073,15 @@ describe("history view chrome and destructive actions", () => {
     const rail = css.slice(
       css.indexOf(".persona-history-view--rail .persona-history-topbar {")
     );
-    // Identity leads, the toggle takes the trailing (inner) track.
+    // Identity leads, the toggle takes the trailing (inner) track, sized to it.
     expect(rail.slice(0, rail.indexOf("}"))).toContain(
-      "grid-template-columns: minmax(0, 1fr) 44px;"
+      "grid-template-columns: minmax(0, 1fr) auto;"
     );
     const mirrored = css.slice(
       css.indexOf(".persona-history-view--rail-right .persona-history-topbar {")
     );
     expect(mirrored.slice(0, mirrored.indexOf("}"))).toContain(
-      "grid-template-columns: 44px minmax(0, 1fr);"
+      "grid-template-columns: auto minmax(0, 1fr);"
     );
     // The heading takes the rows' 16px text inset on whichever edge it leads.
     expect(css).toContain(
@@ -1089,6 +1089,28 @@ describe("history view chrome and destructive actions", () => {
     );
     // The panel and shell bars keep the third track for their icon.
     expect(css).toContain("grid-template-columns: 44px minmax(0, 1fr) 44px;");
+  });
+
+  it("sizes the rail toggle to 36px with a coarse-pointer 44px floor", async () => {
+    mount({ presentation: "rail" });
+    await flush();
+    const css = injectedHistoryCss();
+    const selector =
+      ".persona-history-view--rail .persona-history-topbar button.persona-history-icon-button {";
+    const box = css.slice(css.indexOf(selector));
+    const boxBlock = box.slice(0, box.indexOf("}"));
+    for (const property of ["width", "height", "min-width", "min-height"]) {
+      expect(boxBlock).toContain(`${property}: 36px;`);
+    }
+    // The panel and shell bars keep the 44px header control box.
+    const shared = css.slice(
+      css.indexOf(".persona-history-view button.persona-history-icon-button,")
+    );
+    expect(shared.slice(0, shared.indexOf("}"))).toContain("width: 44px;");
+    // Touch has no hover to aim with, so the target goes back to 44px.
+    const coarse = css.slice(css.indexOf("@media (pointer: coarse)"));
+    expect(coarse).toContain(`  ${selector}`);
+    expect(coarse.slice(0, coarse.indexOf("\n}"))).toContain("width: 44px;");
   });
 
   it("puts the rail's collapse toggle on the edge facing the conversation", async () => {

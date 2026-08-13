@@ -123,8 +123,18 @@ const setContainerWidth = (mount: HTMLElement, width: number) => {
   return container;
 };
 
-const openHistoryUI = async (mount: HTMLElement) => {
-  historyButton(mount)!.click();
+/** Enter/Space synthesize a click with detail 0; a pointer press reports 1. */
+const openHistoryUI = async (
+  mount: HTMLElement,
+  opts?: { keyboard?: boolean }
+) => {
+  historyButton(mount)!.dispatchEvent(
+    new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      detail: opts?.keyboard === true ? 0 : 1,
+    })
+  );
   await flush();
 };
 
@@ -670,6 +680,38 @@ describe("history shell", () => {
       expect(
         historyRoot(mount)!.classList.contains("persona-history-view--rail-collapsed")
       ).toBe(false);
+    });
+
+    it("moves focus into the rail only for a keyboard-initiated open", async () => {
+      const { mount, controller } = setup({
+        historyFeature: { enabled: true, presentation: "rail" },
+      });
+      setContainerWidth(mount, 900);
+      const host = () =>
+        mount.querySelector<HTMLElement>(".persona-history-rail-host")!;
+      const toggle = () =>
+        mount.querySelector<HTMLButtonElement>(
+          '[data-persona-history-focus="collapse"]'
+        )!;
+      const close = async () => {
+        historyButton(mount)!.click();
+        await flush(20);
+      };
+
+      // Pointer: the conversation stays operable beside the rail, so a focus
+      // move would only leave a keyboard ring on the toggle.
+      await openHistoryUI(mount);
+      expect(host().contains(document.activeElement)).toBe(false);
+      await close();
+
+      // Programmatic: no user event behind it at all.
+      await controller.showHistory();
+      await flush();
+      expect(host().contains(document.activeElement)).toBe(false);
+      await close();
+
+      await openHistoryUI(mount, { keyboard: true });
+      expect(document.activeElement).toBe(toggle());
     });
 
     it("renders no toggle and stays expanded when collapse is turned off", async () => {

@@ -7835,6 +7835,8 @@ export const createAgentExperience = (
   const openHistory = async (opts?: {
     returnSurface?: HistoryReturnSurface;
     invoker?: HTMLElement | null;
+    /** Rail only: an open with no keyboard behind it must not move focus. */
+    keyboard?: boolean;
   }): Promise<void> => {
     if (!historyAvailable() || historyVisible) return;
     const provider = historyProvider;
@@ -7942,7 +7944,12 @@ export const createAgentExperience = (
     historySurface.view.setNewConversationRequired(
       historySessionState.recovery === "new_conversation_required"
     );
-    focusHistoryEntry();
+    // The panel makes the conversation inert behind it, so it always takes
+    // focus. The rail leaves it operable: a pointer or programmatic open would
+    // only leave a keyboard ring on the toggle, so it keeps focus where it is.
+    if (historyPresentation !== "rail" || opts?.keyboard === true) {
+      focusHistoryEntry();
+    }
     syncScrollToBottomButton();
     repinAnchoredMessage();
     syncHistoryChromeImpl();
@@ -8328,10 +8335,14 @@ export const createAgentExperience = (
       extraClassName: "persona-history-toggle",
       attrs: { "data-persona-history-toggle": "" },
     });
-    parts.button.addEventListener("click", () => {
+    parts.button.addEventListener("click", (event) => {
       if (!historyAvailable() || historyTurnBusy()) return;
-      if (historyVisible) closeHistory();
-      else void openHistory({ invoker: parts.button });
+      if (historyVisible) {
+        closeHistory();
+        return;
+      }
+      // Enter/Space synthesize a click with detail 0; a pointer press reports > 0.
+      void openHistory({ invoker: parts.button, keyboard: event.detail === 0 });
     });
     return parts;
   };
