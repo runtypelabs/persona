@@ -373,6 +373,49 @@ describe('theme utils', () => {
     expect(custom['--persona-history-rail-header-min-height']).toBe('64px');
   });
 
+  it('emits the tooltip aliases only when set, including the arrow opt-out', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-tooltip-background']).toBeUndefined();
+    expect(defaults['--persona-tooltip-hint-fg']).toBeUndefined();
+    expect(defaults['--persona-tooltip-radius']).toBeUndefined();
+    expect(defaults['--persona-tooltip-arrow-display']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          tooltip: {
+            background: 'palette.colors.gray.800',
+            foreground: 'palette.colors.gray.50',
+            hintForeground: 'palette.colors.gray.400',
+            borderRadius: 'palette.radius.md',
+            fontSize: '13px',
+            padding: '8px 14px',
+            maxWidth: '240px',
+            shadow: 'none',
+            arrow: false,
+          },
+        },
+      } as any)
+    );
+
+    // Colors and the radius resolve through the palette; the rest are raw CSS.
+    expect(custom['--persona-tooltip-background']).toBe('#1f2937');
+    expect(custom['--persona-tooltip-foreground']).toBe('#f9fafb');
+    expect(custom['--persona-tooltip-hint-fg']).toBe('#9ca3af');
+    expect(custom['--persona-tooltip-radius']).toBe('0.375rem');
+    expect(custom['--persona-tooltip-font-size']).toBe('13px');
+    expect(custom['--persona-tooltip-padding']).toBe('8px 14px');
+    expect(custom['--persona-tooltip-max-width']).toBe('240px');
+    expect(custom['--persona-tooltip-shadow']).toBe('none');
+    expect(custom['--persona-tooltip-arrow-display']).toBe('none');
+
+    // arrow: true is the built-in look, so it emits nothing.
+    const withArrow = themeToCssVariables(
+      createTheme({ components: { tooltip: { arrow: true } } } as any)
+    );
+    expect(withArrow['--persona-tooltip-arrow-display']).toBeUndefined();
+  });
+
   it('emits full-path CSS variables for header and welcome text style tokens', () => {
     const theme = createTheme({
       components: {

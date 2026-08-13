@@ -275,6 +275,93 @@ describe("attachTooltip", () => {
     expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
   });
 
+  it("renders a shortcut hint chip and refreshes it alongside the label", () => {
+    const button = document.createElement("button");
+    button.setAttribute("aria-label", "New conversation");
+    document.body.appendChild(button);
+    let hint = "⌘K";
+
+    attachTooltip({
+      anchor: button,
+      text: () => button.getAttribute("aria-label") ?? "",
+      hint: () => hint,
+    });
+    focusVisible(button);
+
+    const chip = () =>
+      document.body.querySelector<HTMLElement>(
+        ".persona-control-tooltip__hint"
+      );
+    expect(chip()?.textContent).toBe("⌘K");
+
+    hint = "⌘⇧K";
+    window.dispatchEvent(new Event("resize"));
+    expect(chip()?.textContent).toBe("⌘⇧K");
+  });
+
+  it("renders no hint chip when the hint is absent or empty", () => {
+    const bare = document.createElement("button");
+    const blank = document.createElement("button");
+    document.body.append(bare, blank);
+
+    attachTooltip({ anchor: bare, text: "Close chat" });
+    focusVisible(bare);
+    expect(
+      document.body.querySelector(".persona-control-tooltip__hint")
+    ).toBeNull();
+    bare.blur();
+
+    attachTooltip({ anchor: blank, text: "Close chat", hint: () => "  " });
+    focusVisible(blank);
+    expect(
+      document.body.querySelector(".persona-control-tooltip__hint")
+    ).toBeNull();
+  });
+
+  it("copies the anchor's resolved theme variables onto a body-portaled tooltip", () => {
+    const mount = document.createElement("div");
+    const button = document.createElement("button");
+    mount.appendChild(button);
+    document.body.appendChild(mount);
+
+    // The mount carries the theme; jsdom does not inherit custom properties,
+    // so the anchor's computed style is stubbed the way a browser resolves it.
+    vi.spyOn(window, "getComputedStyle").mockImplementation(
+      (element: Element) =>
+        ({
+          getPropertyValue: (name: string) =>
+            element === button
+              ? ({
+                  "--persona-tooltip-background": "#1d4ed8",
+                  "--persona-tooltip-hint-fg": "rgba(255,255,255,0.6)",
+                  "--persona-tooltip-arrow-display": "none",
+                  "--persona-radius-sm": "0.5rem",
+                })[name] ?? ""
+              : "",
+        }) as CSSStyleDeclaration
+    );
+
+    attachTooltip({ anchor: button, text: "Close chat", hint: "Esc" });
+    focusVisible(button);
+
+    const tooltip = document.body.querySelector<HTMLElement>(
+      ".persona-control-tooltip"
+    );
+    expect(tooltip!.style.getPropertyValue("--persona-tooltip-background")).toBe(
+      "#1d4ed8"
+    );
+    expect(tooltip!.style.getPropertyValue("--persona-tooltip-hint-fg")).toBe(
+      "rgba(255,255,255,0.6)"
+    );
+    // arrow: false rides along, so a themed tooltip hides the caret off-mount.
+    expect(
+      tooltip!.style.getPropertyValue("--persona-tooltip-arrow-display")
+    ).toBe("none");
+    expect(tooltip!.style.getPropertyValue("--persona-radius-sm")).toBe("0.5rem");
+    // Unresolved variables are never written as empty declarations.
+    expect(tooltip!.style.getPropertyValue("--persona-tooltip-padding")).toBe("");
+  });
+
   it("portals into the anchor's shadow root so widget styles still apply", () => {
     const host = document.createElement("div");
     const shadow = host.attachShadow({ mode: "open" });

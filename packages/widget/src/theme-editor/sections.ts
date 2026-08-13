@@ -376,6 +376,38 @@ const historyRailHeaderColorsSectionDef: SectionDef = {
   ],
 };
 
+// The portaled tooltip on icon controls. Its colors live in
+// COMPONENT_COLOR_SECTIONS.
+const tooltipShapeSectionDef: SectionDef = {
+  id: 'comp-tooltip',
+  title: 'Tooltip',
+  description:
+    'The hover and focus tooltip on icon controls, including its shortcut hint chip.',
+  collapsed: true,
+  fields: [
+    { id: 'tooltip-radius', label: 'Corner Radius', type: 'select', path: 'theme.components.tooltip.borderRadius', defaultValue: 'palette.radius.sm', options: [
+      { value: 'palette.radius.none', label: 'None' },
+      { value: 'palette.radius.sm', label: 'Small' },
+      { value: 'palette.radius.md', label: 'Medium' },
+      { value: 'palette.radius.lg', label: 'Large' },
+      { value: 'palette.radius.xl', label: 'Extra Large' },
+    ] },
+    { id: 'tooltip-font-size', label: 'Font Size', description: 'CSS length. Blank stays at 12px', type: 'text', path: 'theme.components.tooltip.fontSize', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'tooltip-arrow', label: 'Show Arrow', description: 'The caret pointing at the control', type: 'toggle', path: 'theme.components.tooltip.arrow', defaultValue: true },
+  ],
+};
+
+const tooltipColorsSectionDef: SectionDef = {
+  id: 'comp-tooltip-colors',
+  title: 'Tooltip Colors',
+  collapsed: true,
+  fields: [
+    { id: 'tooltip-bg', label: 'Background', type: 'token-ref', path: 'theme.components.tooltip.background', defaultValue: 'palette.colors.gray.900', tokenRef: { tokenType: 'color' } },
+    { id: 'tooltip-fg', label: 'Label', type: 'token-ref', path: 'theme.components.tooltip.foreground', defaultValue: 'palette.colors.primary.50', tokenRef: { tokenType: 'color' } },
+    { id: 'tooltip-hint-fg', label: 'Shortcut Hint', type: 'token-ref', path: 'theme.components.tooltip.hintForeground', defaultValue: 'palette.colors.gray.400', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
 const messageShapeSectionDef: SectionDef = {
   id: 'comp-message-shape',
   title: 'Message Shape',
@@ -614,6 +646,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   // never forks them per light/dark.
   headerControlsSectionDef,
   historyRailHeaderShapeSectionDef,
+  tooltipShapeSectionDef,
   messageShapeSectionDef,
   inputShapeSectionDef,
   composerSpacingSectionDef,
@@ -626,6 +659,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
 export const COMPONENT_COLOR_SECTIONS: SectionDef[] = [
   headerColorsSectionDef,
   historyRailHeaderColorsSectionDef,
+  tooltipColorsSectionDef,
   messageColorsSectionDef,
   inputColorsSectionDef,
   buttonColorsSectionDef,

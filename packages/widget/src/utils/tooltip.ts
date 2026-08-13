@@ -11,6 +11,11 @@ export interface TooltipOptions {
   trigger?: HTMLElement;
   /** Tooltip copy. A callback keeps live aria-label updates in sync. */
   text: string | (() => string);
+  /**
+   * Muted chip after the label, e.g. a keyboard shortcut. Empty renders
+   * nothing. A callback is re-read on every reposition, like `text`.
+   */
+  hint?: string | (() => string);
   /** Whether the visual tooltip may open. The anchor's accessible name is unaffected. */
   enabled?: boolean;
   /** Gap between the control and tooltip, in pixels. */
@@ -41,6 +46,26 @@ const tooltipContainer = (anchor: HTMLElement): HTMLElement | ShadowRoot | null 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), Math.max(min, max));
 
+// Theme variables live on the widget mount, which a body-portaled tooltip is
+// not inside, so the anchor's resolved values are copied onto it at show time.
+// A theme change lands on the next open.
+const INHERITED_VARS = [
+  ...[
+    "background",
+    "foreground",
+    "hint-fg",
+    "radius",
+    "font-size",
+    "padding",
+    "max-width",
+    "shadow",
+    "arrow-display",
+  ].map((name) => `--persona-tooltip-${name}`),
+  // Inputs to the stylesheet's own var() fallback chains.
+  "--persona-font-family",
+  "--persona-radius-sm",
+];
+
 /**
  * Attach a portaled, viewport-aware tooltip to an icon control.
  *
@@ -55,6 +80,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     anchor,
     trigger = anchor,
     text,
+    hint,
     enabled = true,
     gap = DEFAULT_GAP,
     viewportPadding = DEFAULT_VIEWPORT_PADDING,
@@ -65,6 +91,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
 
   let tooltip: HTMLElement | null = null;
   let label: HTMLElement | null = null;
+  let hintChip: HTMLElement | null = null;
   let detachOpenListeners: (() => void) | null = null;
   let hovered = false;
   let focused = false;
@@ -72,6 +99,8 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
 
   const resolvedText = (): string =>
     (typeof text === "function" ? text() : text).trim();
+  const resolvedHint = (): string =>
+    (typeof hint === "function" ? hint() : (hint ?? "")).trim();
 
   const hide = (): void => {
     detachOpenListeners?.();
@@ -79,6 +108,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     tooltip?.remove();
     tooltip = null;
     label = null;
+    hintChip = null;
   };
 
   const reposition = (): void => {
@@ -138,10 +168,26 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     tooltip.dataset.state = "measuring";
     tooltip.style.zIndex = String(PORTALED_OVERLAY_Z_INDEX);
 
+    const computed = ownerWindow.getComputedStyle?.(anchor);
+    if (computed) {
+      for (const name of INHERITED_VARS) {
+        const value = computed.getPropertyValue(name).trim();
+        if (value) tooltip.style.setProperty(name, value);
+      }
+    }
+
     label = ownerDocument.createElement("span");
     label.className = "persona-control-tooltip__label";
     label.textContent = copy;
     tooltip.appendChild(label);
+
+    const hintCopy = resolvedHint();
+    if (hintCopy) {
+      hintChip = ownerDocument.createElement("span");
+      hintChip.className = "persona-control-tooltip__hint";
+      hintChip.textContent = hintCopy;
+      tooltip.appendChild(hintChip);
+    }
 
     const arrow = ownerDocument.createElement("span");
     arrow.className = "persona-control-tooltip__arrow";
@@ -157,6 +203,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
         return;
       }
       if (label) label.textContent = resolvedText();
+      if (hintChip) hintChip.textContent = resolvedHint();
       reposition();
     };
     ownerWindow.addEventListener("scroll", onReposition, true);

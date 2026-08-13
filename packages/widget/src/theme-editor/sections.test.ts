@@ -171,6 +171,48 @@ describe("theme editor scroll-to-bottom controls", () => {
     ).toBe(false);
   });
 
+  it("exposes the tooltip shape and color controls", () => {
+    const shape = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-tooltip"
+    );
+    const shapePaths = shape?.fields.map((field) => field.path) ?? [];
+    expect(shapePaths).toEqual([
+      "theme.components.tooltip.borderRadius",
+      "theme.components.tooltip.fontSize",
+      "theme.components.tooltip.arrow",
+    ]);
+
+    const fontSize = shape?.fields.find(
+      (field) => field.path === "theme.components.tooltip.fontSize"
+    );
+    // Blank keeps the built-in 12px instead of writing an empty token.
+    expect(fontSize?.parseValue?.(" 13px ")).toBe("13px");
+    expect(fontSize?.parseValue?.("")).toBeUndefined();
+
+    const arrow = shape?.fields.find(
+      (field) => field.path === "theme.components.tooltip.arrow"
+    );
+    expect(arrow?.type).toBe("toggle");
+    expect(arrow?.defaultValue).toBe(true);
+
+    const colors = COMPONENT_COLOR_SECTIONS.find(
+      (entry) => entry.id === "comp-tooltip-colors"
+    );
+    expect(colors?.fields.map((field) => field.path)).toEqual([
+      "theme.components.tooltip.background",
+      "theme.components.tooltip.foreground",
+      "theme.components.tooltip.hintForeground",
+    ]);
+    expect(
+      colors?.fields.every((field) => field.tokenRef?.tokenType === "color")
+    ).toBe(true);
+
+    // Sizes are not colors: light/dark scoping must never fork them.
+    expect(
+      COMPONENT_COLOR_SECTIONS.some((entry) => entry.id === "comp-tooltip")
+    ).toBe(false);
+  });
+
   it("exposes a shadow control for every themeable component", () => {
     const fieldPaths = COMPONENTS_SECTIONS.flatMap((section) => section.fields.map((field) => field.path));
 

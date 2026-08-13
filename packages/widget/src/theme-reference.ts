@@ -130,6 +130,12 @@ export const THEME_TOKEN_DOCS = {
         properties:
           'railHeader.background (defaults to the rail surface), railHeader.border (full border-bottom shorthand, default 0), railHeader.minHeight (defaults to components.header.minHeight, then 56px). Pin railHeader.minHeight and header.minHeight to the same value so both top strips read as one band.',
       },
+      tooltip: {
+        description:
+          'The portaled tooltip on icon controls, plus the muted shortcut hint chip after its label.',
+        properties:
+          'background (#111827), foreground (#ffffff), hintForeground (rgba(255, 255, 255, 0.55)), borderRadius (palette.radius.sm), fontSize (12px), padding (6px 12px), shadow, maxWidth (min(320px, calc(100vw - 16px))), arrow (boolean, default true; false drops the caret). Unset keys keep the built-in dark look.',
+      },
       message: {
         description: 'Chat message bubbles.',
         user: 'background, text, borderRadius, shadow.',

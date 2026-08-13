@@ -897,6 +897,25 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   if (railHeaderMinHeight)
     cssVars['--persona-history-rail-header-min-height'] = railHeaderMinHeight;
 
+  // Portaled control tooltip. Same conditional rule: widget.css carries the
+  // built-in look in every var() fallback, so an unset token stays undefined.
+  for (const [token, alias] of [
+    ['background', 'background'],
+    ['foreground', 'foreground'],
+    ['hintForeground', 'hint-fg'],
+    ['borderRadius', 'radius'],
+    ['fontSize', 'font-size'],
+    ['padding', 'padding'],
+    ['maxWidth', 'max-width'],
+    ['shadow', 'shadow'],
+  ]) {
+    const value = cssVars[`--persona-components-tooltip-${token}`];
+    if (value) cssVars[`--persona-tooltip-${alias}`] = value;
+  }
+  // Booleans never resolve into a token, so the arrow reads off the theme.
+  if (theme.components?.tooltip?.arrow === false)
+    cssVars['--persona-tooltip-arrow-display'] = 'none';
+
   // Intro card aliases: short names the panel inline-styles read directly.
   // The full-path `--persona-components-introCard-*` variables auto-emit above.
   // Default is flat (transparent, no shadow): the greeting renders as plain

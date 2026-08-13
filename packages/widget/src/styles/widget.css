@@ -1783,12 +1783,12 @@
 .persona-control-tooltip {
   position: fixed;
   box-sizing: border-box;
-  max-width: min(320px, calc(100vw - 16px));
+  max-width: var(--persona-tooltip-max-width, min(320px, calc(100vw - 16px)));
   background-color: var(--persona-tooltip-background, #111827);
   color: var(--persona-tooltip-foreground, #ffffff);
-  padding: 6px 12px;
-  border-radius: var(--persona-radius-sm, 0.125rem);
-  font-size: 12px;
+  padding: var(--persona-tooltip-padding, 6px 12px);
+  border-radius: var(--persona-tooltip-radius, var(--persona-radius-sm, 0.125rem));
+  font-size: var(--persona-tooltip-font-size, 12px);
   line-height: 1.35;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1803,8 +1803,16 @@
   opacity: 0;
 }
 
+/* Trailing shortcut hint, e.g. a key combo after the label. */
+.persona-control-tooltip__hint {
+  margin-left: 6px;
+  color: var(--persona-tooltip-hint-fg, rgba(255, 255, 255, 0.55));
+  white-space: nowrap;
+}
+
 .persona-control-tooltip__arrow {
   position: absolute;
+  display: var(--persona-tooltip-arrow-display, block);
   left: var(--persona-tooltip-arrow-x, 50%);
   width: 8px;
   height: 8px;

@@ -101,6 +101,8 @@ export interface CreateHeaderIconButtonOptions {
    * default true.
    */
   tooltip?: boolean;
+  /** Muted chip after the tooltip label, e.g. a keyboard shortcut. */
+  tooltipHint?: string | (() => string);
   /** Lucide icon name; falls back to `iconText` when it is not in the registry. */
   iconName?: string;
   /** Text glyph rendered when no icon resolves. */
@@ -146,6 +148,7 @@ export const createHeaderIconButton = (
   const {
     ariaLabel,
     tooltip = true,
+    tooltipHint,
     iconName,
     iconText,
     wrapperClassName = DEFAULT_WRAPPER_CLASS,
@@ -213,6 +216,7 @@ export const createHeaderIconButton = (
     anchor: button,
     trigger: wrapper,
     text: () => button.getAttribute("aria-label") ?? ariaLabel,
+    hint: tooltipHint,
     enabled: tooltip,
   });
   return { button, wrapper };

@@ -477,6 +477,33 @@ an icon), and `.persona-history-nav-icon` / `.persona-history-nav-label` /
 `.persona-history-group-heading`. Collapsed, the icon rows square off like the
 new-conversation row and everything else in the section hides.
 
+### Tooltip (`components.tooltip.*`)
+
+Icon controls (header buttons, composer buttons) open a shared tooltip that is
+portaled out of the panel so nothing clips it. Unset tokens keep the built-in
+dark bubble, so a widget with no tooltip tokens is pixel-identical.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `background` | `--persona-tooltip-background` | `#111827` |
+| `foreground` | `--persona-tooltip-foreground` | `#ffffff` |
+| `hintForeground` | `--persona-tooltip-hint-fg` | `rgba(255, 255, 255, 0.55)` |
+| `borderRadius` | `--persona-tooltip-radius` | `palette.radius.sm` |
+| `fontSize` | `--persona-tooltip-font-size` | `12px` |
+| `padding` | `--persona-tooltip-padding` | `6px 12px` |
+| `shadow` | `--persona-tooltip-shadow` | `0 4px 12px rgba(15, 23, 42, 0.18)` |
+| `maxWidth` | `--persona-tooltip-max-width` | `min(320px, calc(100vw - 16px))` |
+| `arrow` | `--persona-tooltip-arrow-display` | `true` (`false` emits `none` and drops the caret) |
+
+`hintForeground` colors the muted chip a tooltip can carry after its label, for
+a keyboard shortcut. Because the tooltip is portaled to the document body, out
+of the mount that carries the theme variables, the resolved values are copied
+onto the bubble each time it opens: a theme swap lands on the next open.
+
+Background, foreground, and hint color are live-editable in the theme editor
+under Components → Tooltip Colors; radius, font size, and the arrow live under
+Components → Tooltip.
+
 ### Message (`components.message.*`)
 
 | Token | Default Reference |

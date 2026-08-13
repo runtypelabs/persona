@@ -274,6 +274,31 @@ export interface HistoryTokens {
   };
 }
 
+/**
+ * The portaled icon-control tooltip (header controls, composer buttons) and
+ * its trailing shortcut hint chip. Unset keys keep the built-in dark look.
+ */
+export interface TooltipTokens {
+  /** Bubble and arrow fill. @default "#111827" */
+  background?: TokenReference<'color'>;
+  /** Label color. @default "#ffffff" */
+  foreground?: TokenReference<'color'>;
+  /** Trailing shortcut hint color. @default "rgba(255, 255, 255, 0.55)" */
+  hintForeground?: TokenReference<'color'>;
+  /** Bubble corner radius. Defaults to `palette.radius.sm`. */
+  borderRadius?: TokenReference<'radius'>;
+  /** Label type size. @default "12px" */
+  fontSize?: string;
+  /** Bubble inset, full CSS shorthand. @default "6px 12px" */
+  padding?: TokenReference<'spacing'>;
+  /** Bubble box-shadow (token ref or raw CSS, e.g. `none`). */
+  shadow?: string;
+  /** Render the caret pointing at the control. @default true */
+  arrow?: boolean;
+  /** Wrap width. @default "min(320px, calc(100vw - 16px))" */
+  maxWidth?: string;
+}
+
 export interface MessageTokens {
   user: {
     background: TokenReference<'color'>;
@@ -643,6 +668,8 @@ export interface ComponentTokens {
   header: HeaderTokens;
   /** Messages rail chrome. */
   history?: HistoryTokens;
+  /** Portaled icon-control tooltip and its shortcut hint chip. */
+  tooltip?: TooltipTokens;
   message: MessageTokens;
   /** Welcome / intro card shown above the message list. */
   introCard?: IntroCardTokens;
