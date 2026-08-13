@@ -7622,6 +7622,8 @@ export const createAgentExperience = (
   const RAIL_COLLAPSED_WIDTH = 52;
   const railCollapsible = (): boolean =>
     config.features?.history?.rail?.collapsible !== false;
+  const railSide = (): "left" | "right" =>
+    config.features?.history?.rail?.side === "right" ? "right" : "left";
   /** Resolved once per widget: storage, else the configured default. */
   let railCollapsed: boolean | null = null;
 
@@ -7671,6 +7673,9 @@ export const createAgentExperience = (
    * `update()` of `rail.width` / `rail.side` lands here, not only at mount.
    */
   applyRailChrome = (): void => {
+    // The bar mirrors the docked edge, so the view hears about a side flip even
+    // while it is presenting as a panel.
+    historySurface?.view.setRailSide(railSide());
     const host = railHost;
     const shell = railShell;
     const column = railColumn;
@@ -7874,6 +7879,8 @@ export const createAgentExperience = (
       presentation: historyPresentation,
       collapsible: railCollapsible(),
       collapsed: railShowsCollapsed(),
+      railSide: railSide(),
+      renderRailHeader: config.features?.history?.rail?.renderHeader,
       onToggleCollapse: toggleRailCollapsed,
       headerPlacement: initialHeaderPlacement,
       showScopeStatus: config.features?.history?.showScopeStatus !== false,

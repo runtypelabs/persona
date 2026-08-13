@@ -555,11 +555,11 @@ export const HISTORY_VIEW_CSS =
 }
 ` +
   /* The rail bar IS the sidebar header: a header-height strip that lines up
-     with the conversation column's own header band beside it. Two tracks,
-     because the rail bar has no trailing icon and a third would push the title
-     off-center. */
+     with the conversation column's own header band beside it. Identity leads,
+     the collapse toggle takes the inner edge facing the conversation, and there
+     is no third track to push the title off the leading edge. */
   `.persona-history-view--rail .persona-history-topbar {
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 44px;
   min-height: var(
     --persona-history-rail-header-min-height,
     var(--persona-header-min-height, 56px)
@@ -571,8 +571,21 @@ export const HISTORY_VIEW_CSS =
   );
   border-bottom: var(--persona-history-rail-header-border, 0);
 }
-.persona-history-view--rail .persona-history-heading-group {
+` +
+  /* Identity sits at the leading edge on the rows' 16px text inset, which the
+     bar's own 6px padding already covers 6 of. */
+  `.persona-history-view--rail .persona-history-heading-group {
   text-align: left;
+  padding-left: 10px;
+}
+` +
+  /* A right-docked rail faces the conversation with its LEFT edge, so the
+     toggle leads there and the identity trails it, inset from the outer edge. */
+  `.persona-history-view--rail-right .persona-history-topbar {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+.persona-history-view--rail-right .persona-history-heading-group {
+  padding: 0 10px 0 0;
 }
 .persona-history-view--rail .persona-history-title {
   font-size: 14px;

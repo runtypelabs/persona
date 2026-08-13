@@ -410,6 +410,58 @@ describe("history shell", () => {
       expect(bodyOf(mount).closest(".persona-history-rail-conversation")).not.toBeNull();
     });
 
+    it("mirrors the bar order for a rail docked on the right", async () => {
+      const { mount, controller } = await railSetup();
+      const bar = () =>
+        mount.querySelector<HTMLElement>(".persona-history-topbar")!;
+      const focusKeys = () =>
+        Array.from(bar().children).map((child) =>
+          child.getAttribute("data-persona-history-focus")
+        );
+      // Left rail: identity leads, the toggle takes the inner edge.
+      expect(focusKeys()).toEqual([null, "collapse"]);
+
+      controller.update({
+        features: { history: { rail: { side: "right" } } },
+      } as never);
+      await flush();
+      expect(focusKeys()).toEqual(["collapse", null]);
+      expect(
+        historyRoot(mount)!.classList.contains("persona-history-view--rail-right")
+      ).toBe(true);
+    });
+
+    it("renders the configured rail header brand and re-renders it on collapse", async () => {
+      const calls: boolean[] = [];
+      const { mount } = await railSetup({
+        renderHeader: ({ collapsed }: { collapsed: boolean }) => {
+          calls.push(collapsed);
+          if (collapsed) return null;
+          const brand = document.createElement("span");
+          brand.dataset.brand = "";
+          brand.textContent = "Acme";
+          return brand;
+        },
+      });
+      const group = () =>
+        mount.querySelector<HTMLElement>(".persona-history-heading-group")!;
+      expect(calls).toEqual([false]);
+      expect(group().querySelector("[data-brand]")?.textContent).toBe("Acme");
+      // The heading stays for the region's accessible name.
+      const title = mount.querySelector<HTMLElement>(".persona-history-title")!;
+      expect(title.classList.contains("persona-history-sr-only")).toBe(true);
+      expect(title.textContent).toBe("Messages");
+
+      mount
+        .querySelector<HTMLButtonElement>(
+          '[data-persona-history-focus="collapse"]'
+        )!
+        .click();
+      await flush();
+      expect(calls).toEqual([false, true]);
+      expect(group().querySelector("[data-brand]")).toBeNull();
+    });
+
     it("keeps the transcript and composer operable beside the navigation", async () => {
       const { mount } = await railSetup();
       const rail = mount.querySelector<HTMLElement>(".persona-history-rail-host");

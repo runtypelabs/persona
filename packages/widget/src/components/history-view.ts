@@ -136,6 +136,19 @@ export interface HistoryViewOptions {
   collapsible?: boolean;
   /** Rail only. Initial collapsed state; the shell owns and persists it. */
   collapsed?: boolean;
+  /**
+   * Rail only. The edge the rail docks to, so the bar can put its collapse
+   * toggle on the inner edge facing the conversation. Default `"left"`.
+   */
+  railSide?: "left" | "right";
+  /**
+   * Rail only. Host-rendered identity for the bar's heading area. The `h2`
+   * stays in the DOM as sr-only, so the region keeps its accessible name.
+   */
+  renderRailHeader?: (context: {
+    collapsed: boolean;
+    defaultTitle: string;
+  }) => Element | null;
   /** Default `"inline"`. Rail is always inline; the shell enforces that. */
   headerPlacement?: HistoryHeaderPlacement;
   showScopeStatus: boolean;
@@ -207,6 +220,8 @@ export interface HistoryViewHandle {
    * relabels the toggle; the shell owns the host width and the persisted state.
    */
   setCollapsed(collapsed: boolean): void;
+  /** Re-mirror the bar for a live `rail.side` change. */
+  setRailSide(side: "left" | "right"): void;
   /**
    * The top bar's CURRENT content node (the default bar or a slot replacement).
    * A slot re-render swaps it in place, so an external host stays its parent.
@@ -354,6 +369,7 @@ export function createHistoryView(
   let presentation = options.presentation;
   const collapsible = options.collapsible !== false;
   let collapsed = options.collapsed === true;
+  let railRight = options.railSide === "right";
   let domRenderEnabled = options.renderDom !== false;
   const rowErrors = new Map<string, { message: string; retry: () => void }>();
   let actionError: { message: string; retry: () => void } | null = null;
@@ -435,6 +451,33 @@ export function createHistoryView(
     title
   );
 
+  let brandWarned = false;
+
+  /**
+   * Rail-only identity slot. A host mark replaces the visible title; the `h2`
+   * stays sr-only so `aria-labelledby` still resolves to a name.
+   */
+  const syncRailBrand = (): void => {
+    const slot = presentation === "rail" ? options.renderRailHeader : undefined;
+    let mark: Element | null = null;
+    let slotted = slot !== undefined;
+    if (slot) {
+      try {
+        mark = slot({ collapsed, defaultTitle: copy.viewTitle });
+      } catch (error) {
+        slotted = false;
+        if (!brandWarned) {
+          brandWarned = true;
+          console.warn("[persona] history rail renderHeader threw", error);
+        }
+      }
+    }
+    title.classList.toggle("persona-history-sr-only", slotted);
+    headingGroup.replaceChildren(title);
+    if (mark) headingGroup.appendChild(mark);
+  };
+  syncRailBrand();
+
   const newIconButton = createNode("button", {
     className: "persona-history-icon-button persona-history-new-icon",
     attrs: {
@@ -455,15 +498,32 @@ export function createHistoryView(
     })
   );
 
-  // The rail already carries a new-conversation row in its body, so the bar
-  // icon is panel-only.
-  const topbar = createNode(
-    "div",
-    { className: "persona-history-topbar" },
-    backButton,
-    headingGroup,
-    options.presentation === "rail" ? null : newIconButton
-  );
+  const topbar = createNode("div", { className: "persona-history-topbar" });
+
+  let barOrderKey: string | null = null;
+
+  /**
+   * The rail puts its collapse toggle on the inner edge facing the conversation
+   * (trailing on the left, leading on the right); the panel keeps the back
+   * arrow leading. DOM order, so tab order follows the visual one.
+   */
+  const syncBarOrder = (): void => {
+    const rail = presentation === "rail";
+    const key = rail ? (railRight ? "rail-right" : "rail") : "panel";
+    if (key === barOrderKey) return;
+    barOrderKey = key;
+    // Re-parenting blurs what it moves, so only a real order change re-appends.
+    if (key === "rail") topbar.append(headingGroup, backButton);
+    else topbar.append(backButton, headingGroup);
+    // The rail already carries a new-conversation row in its body.
+    if (rail) newIconButton.remove();
+    else topbar.appendChild(newIconButton);
+    // Only reachable after `element` exists: the first call is below it.
+    element.classList.toggle(
+      "persona-history-view--rail-right",
+      key === "rail-right"
+    );
+  };
 
   /**
    * Explanatory scope text + identity retry, at the top of the body. Visible
@@ -566,6 +626,7 @@ export function createHistoryView(
     );
   };
   syncCollapsedClass();
+  syncBarOrder();
 
   injectStyles(element, "persona-history-view", HISTORY_VIEW_CSS);
 
@@ -1279,10 +1340,8 @@ export function createHistoryView(
       element.setAttribute("data-persona-history-presentation", next);
       syncLeadingControl();
       syncCollapsedClass();
-      // The bar icon is the panel's only new-conversation control; the rail
-      // has the body row instead.
-      if (rail) newIconButton.remove();
-      else topbar.appendChild(newIconButton);
+      syncBarOrder();
+      syncRailBrand();
       const nextIcon = historyIcon(rail ? "plus" : "arrow-right", 18);
       newIcon.replaceWith(nextIcon);
       newIcon = nextIcon;
@@ -1294,6 +1353,7 @@ export function createHistoryView(
       collapsed = next;
       syncCollapsedClass();
       syncLeadingControl();
+      syncRailBrand();
       // The pointer is still on the toggle: re-show so the open tooltip
       // re-reads the label it was just given.
       const tip = tooltipHandles[0];
@@ -1301,6 +1361,10 @@ export function createHistoryView(
         tip.hide();
         tip.show();
       }
+    },
+    setRailSide: (side) => {
+      railRight = side === "right";
+      syncBarOrder();
     },
     getHeaderElement: () => headerContent,
     setHeaderPlacement: (next) => {

@@ -1073,11 +1073,138 @@ describe("history view chrome and destructive actions", () => {
     const rail = css.slice(
       css.indexOf(".persona-history-view--rail .persona-history-topbar {")
     );
+    // Identity leads, the toggle takes the trailing (inner) track.
     expect(rail.slice(0, rail.indexOf("}"))).toContain(
+      "grid-template-columns: minmax(0, 1fr) 44px;"
+    );
+    const mirrored = css.slice(
+      css.indexOf(".persona-history-view--rail-right .persona-history-topbar {")
+    );
+    expect(mirrored.slice(0, mirrored.indexOf("}"))).toContain(
       "grid-template-columns: 44px minmax(0, 1fr);"
+    );
+    // The heading takes the rows' 16px text inset on whichever edge it leads.
+    expect(css).toContain(
+      ".persona-history-view--rail .persona-history-heading-group {\n  text-align: left;"
     );
     // The panel and shell bars keep the third track for their icon.
     expect(css).toContain("grid-template-columns: 44px minmax(0, 1fr) 44px;");
+  });
+
+  it("puts the rail's collapse toggle on the edge facing the conversation", async () => {
+    const { root, handle } = mount({ presentation: "rail" });
+    await flush();
+    const bar = root.querySelector<HTMLElement>(".persona-history-topbar")!;
+    const order = () =>
+      Array.from(bar.children).map((child) => child.className.split(" ")[0]);
+    // Rail on the left: heading first, toggle on the trailing inner edge.
+    expect(order()).toEqual([
+      "persona-history-heading-group",
+      "persona-history-icon-button",
+    ]);
+    expect(bar.lastElementChild?.getAttribute("data-persona-history-focus")).toBe(
+      "collapse"
+    );
+    expect(root.classList.contains("persona-history-view--rail-right")).toBe(
+      false
+    );
+
+    // Panel keeps the back arrow leading and the icon trailing.
+    handle.setPresentation("panel");
+    await flush();
+    expect(order()).toEqual([
+      "persona-history-icon-button",
+      "persona-history-heading-group",
+      "persona-history-icon-button",
+    ]);
+    expect(bar.firstElementChild?.getAttribute("data-persona-history-focus")).toBe(
+      "close"
+    );
+  });
+
+  it("mirrors the rail bar when the rail docks on the right", async () => {
+    const { root, handle } = mount({ presentation: "rail", railSide: "right" });
+    await flush();
+    const bar = root.querySelector<HTMLElement>(".persona-history-topbar")!;
+    // Inner edge faces left, so the toggle leads and the heading trails.
+    expect(bar.firstElementChild?.getAttribute("data-persona-history-focus")).toBe(
+      "collapse"
+    );
+    expect(bar.lastElementChild?.className).toBe("persona-history-heading-group");
+    expect(root.classList.contains("persona-history-view--rail-right")).toBe(true);
+
+    handle.setRailSide("left");
+    expect(bar.lastElementChild?.getAttribute("data-persona-history-focus")).toBe(
+      "collapse"
+    );
+    expect(root.classList.contains("persona-history-view--rail-right")).toBe(
+      false
+    );
+
+    // Panel never wears the mirrored treatment.
+    handle.setRailSide("right");
+    handle.setPresentation("panel");
+    await flush();
+    expect(root.classList.contains("persona-history-view--rail-right")).toBe(
+      false
+    );
+    expect(bar.firstElementChild?.getAttribute("data-persona-history-focus")).toBe(
+      "close"
+    );
+  });
+
+  it("renders a host brand in the rail header and keeps the title for the name", async () => {
+    const seen: Array<{ collapsed: boolean; defaultTitle: string }> = [];
+    const renderRailHeader = vi.fn((context: { collapsed: boolean; defaultTitle: string }) => {
+      seen.push(context);
+      // Unlabelled content: the region's name must still come from the h2.
+      return context.collapsed ? null : document.createElement("img");
+    });
+    const { root, handle } = mount({ presentation: "rail", renderRailHeader });
+    await flush();
+
+    const group = root.querySelector<HTMLElement>(
+      ".persona-history-heading-group"
+    )!;
+    const title = root.querySelector<HTMLElement>(".persona-history-title")!;
+    expect(seen).toEqual([{ collapsed: false, defaultTitle: "Messages" }]);
+    expect(group.querySelector("img")).not.toBeNull();
+    expect(title.classList.contains("persona-history-sr-only")).toBe(true);
+    // aria-labelledby still resolves to a non-empty accessible name.
+    const labelledBy = root.getAttribute("aria-labelledby")!;
+    expect(document.getElementById(labelledBy)?.textContent).toBe("Messages");
+
+    // Collapsed re-invokes the slot; null empties the identity area.
+    handle.setCollapsed(true);
+    expect(seen[1]).toEqual({ collapsed: true, defaultTitle: "Messages" });
+    expect(group.querySelector("img")).toBeNull();
+    expect(title.classList.contains("persona-history-sr-only")).toBe(true);
+
+    // Panel ignores the slot: the plain title comes back, visible.
+    handle.setPresentation("panel");
+    await flush();
+    expect(renderRailHeader).toHaveBeenCalledTimes(2);
+    expect(title.classList.contains("persona-history-sr-only")).toBe(false);
+    expect(group.querySelector("img")).toBeNull();
+  });
+
+  it("falls back to the plain title when the rail brand renderer throws", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderRailHeader = vi.fn(() => {
+      throw new Error("brand blew up");
+    });
+    const { root, handle } = mount({ presentation: "rail", renderRailHeader });
+    await flush();
+    const title = root.querySelector<HTMLElement>(".persona-history-title")!;
+    expect(title.textContent).toBe("Messages");
+    expect(title.classList.contains("persona-history-sr-only")).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
+
+    // Warned once, not on every collapse.
+    handle.setCollapsed(true);
+    expect(renderRailHeader).toHaveBeenCalledTimes(2);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   it("runs the primary new-conversation action from a pill pinned below the list", async () => {

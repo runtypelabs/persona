@@ -2754,6 +2754,18 @@ export interface AgentWidgetHistoryFeature {
     width?: number;
     collapsible?: boolean;
     defaultCollapsed?: boolean;
+    /**
+     * Brand slot for the rail header's identity area, re-invoked whenever the
+     * collapsed state changes. Return null to leave the area empty, which
+     * leaves the collapse toggle standing alone. The accessible name of the
+     * view comes from `copy.viewTitle` either way: the heading stays in the
+     * DOM, visually hidden, whenever this renders. Ignored in panel
+     * presentation.
+     */
+    renderHeader?: (context: {
+      collapsed: boolean;
+      defaultTitle: string;
+    }) => Element | null;
   };
   /**
    * History scope. Defaults to "verified-user" when getIdentityProof exists,

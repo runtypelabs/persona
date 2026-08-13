@@ -212,6 +212,27 @@ if (!document.getElementById(fileCardStyleId)) {
   document.head.appendChild(style);
 }
 
+/**
+ * Rail header identity: the same name the conversation header carries. The
+ * widget keeps the heading for the accessible name, so this is decorative.
+ */
+function renderRailBrand(collapsed: boolean): HTMLElement | null {
+  // Collapsed the rail is a 52px icon column, so the toggle stands alone.
+  if (collapsed) return null;
+  const brand = document.createElement("span");
+  brand.setAttribute("aria-hidden", "true");
+  brand.style.cssText =
+    "display:flex;align-items:center;gap:8px;min-width:0;";
+  const mark = document.createElement("span");
+  mark.style.cssText = `display:flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;border-radius:7px;background:${COLORS.userBubble};color:${COLORS.text};font-size:12px;font-weight:600;`;
+  mark.textContent = "C";
+  const name = document.createElement("span");
+  name.style.cssText = `min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;font-weight:600;color:${COLORS.text};`;
+  name.textContent = "Chat Assistant";
+  brand.append(mark, name);
+  return brand;
+}
+
 function renderCustomFileCard(artifactId: string, title: string, subtitle: string): HTMLElement {
   const root = document.createElement("div");
   root.className =
@@ -676,7 +697,10 @@ const config = mergeWithDefaults({
     history: {
       enabled: true,
       presentation: "rail",
-      rail: { collapsible: true },
+      rail: {
+        collapsible: true,
+        renderHeader: ({ collapsed }) => renderRailBrand(collapsed),
+      },
     },
     scrollToBottom: {
       enabled: true,
