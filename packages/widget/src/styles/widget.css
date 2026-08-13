@@ -1873,6 +1873,36 @@
   }
 }
 
+/* Overlay rail trigger: the brand mark rests on the control and the sidebar
+   glyph waits under it, so the control still reads as a control the moment it
+   is aimed at. Mirrors the collapsed rail toggle's faces in the chunk. */
+.persona-rail-trigger-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.persona-rail-trigger--branded > svg {
+  display: none;
+}
+.persona-rail-trigger--branded:hover > svg,
+.persona-rail-trigger--branded:focus-visible > svg {
+  display: block;
+}
+.persona-rail-trigger--branded:hover .persona-rail-trigger-brand,
+.persona-rail-trigger--branded:focus-visible .persona-rail-trigger-brand {
+  display: none;
+}
+
+/* Touch has no hover to reveal the glyph with, so it keeps the glyph. */
+@media (pointer: coarse) {
+  .persona-rail-trigger--branded > svg {
+    display: block;
+  }
+  .persona-rail-trigger--branded .persona-rail-trigger-brand {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .persona-control-tooltip {
     transition: none;

@@ -18,6 +18,10 @@ const SHELL_COPY_KEYS = [
   "openHistoryLabel",
   "openHistoryBusyLabel",
   "newConversationLabel",
+  // The rail toggle's pair: the shell renders the overlay trigger before the
+  // chunk loads, and relabels the view's toggle while the rail floats.
+  "expandLabel",
+  "collapseLabel",
   "showEarlierMessagesLabel",
   "confirmCancelLabel",
   "deleteConversationConfirmTitle",
@@ -46,6 +50,8 @@ export const HISTORY_SHELL_COPY_DEFAULTS: ResolvedHistoryShellCopy = {
   openHistoryLabel: "Messages",
   openHistoryBusyLabel: "Messages, available once the reply finishes",
   newConversationLabel: "New conversation",
+  expandLabel: "Expand conversation list",
+  collapseLabel: "Collapse conversation list",
   showEarlierMessagesLabel: "Show earlier messages",
   confirmCancelLabel: "Cancel",
   deleteConversationConfirmTitle: "Delete conversation",

@@ -717,6 +717,10 @@ const config = mergeWithDefaults({
       copy: { viewTitle: "Chat Assistant" },
       rail: {
         collapsible: true,
+        // Collapsed, the sidebar leaves a trigger in the conversation header
+        // and floats back on hover instead of holding an icon column.
+        collapsedBehavior: "overlay",
+        defaultCollapsed: true,
         brand: { render: () => renderRailMark() },
         sections: railNavSections,
         // The widget IS this page, so the combo is claimed document-wide. An

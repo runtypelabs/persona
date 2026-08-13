@@ -466,6 +466,14 @@ the sidebar to a 52px icon rail carrying expand and new-conversation), and
 chosen state is remembered alongside the other `persistState` keys, and
 `persistState: false` keeps it in memory for the page load only.
 
+`collapsedBehavior` picks what "collapsed" looks like: `"icon-rail"` (default)
+is that 52px column, `"overlay"` replaces it with a trigger in the conversation
+header (`.persona-rail-trigger`, wearing `rail.brand` through
+`.persona-rail-trigger-brand`) that floats the expanded rail over the
+conversation in `.persona-history-rail-overlay` and pins it back on click. The
+floating host is geometry, not tokens: it takes `width` and `side` and paints
+the rail surface, so a rail themed for the column is themed for it too.
+
 Rail identity is a ladder, cheapest first. `features.history.rail.brand` is one
 declaration (`icon`, `iconUrl`, or `render({ collapsed })`, in that precedence,
 highest last) that the widget places twice: beside the view title in the

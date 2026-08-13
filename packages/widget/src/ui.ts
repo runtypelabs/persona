@@ -91,7 +91,11 @@ import {
   resolveFollowStateFromScroll,
   resolveFollowStateFromWheel
 } from "./utils/auto-follow";
-import { statusCopy, DEFAULT_OVERLAY_Z_INDEX } from "./utils/constants";
+import {
+  statusCopy,
+  DEFAULT_OVERLAY_Z_INDEX,
+  PORTALED_OVERLAY_Z_INDEX,
+} from "./utils/constants";
 import {
   applyStreamBuffer,
   createSkeletonPlaceholder,
@@ -7641,6 +7645,19 @@ export const createAgentExperience = (
     config.features?.history?.rail?.collapsible !== false;
   const railSide = (): "left" | "right" =>
     config.features?.history?.rail?.side === "right" ? "right" : "left";
+  /** Expanded rail width, shared by the column and the floating overlay. */
+  const railWidth = (): number =>
+    Math.min(400, Math.max(200, config.features?.history?.rail?.width ?? 260));
+  /**
+   * Overlay mode: the collapsed rail is a trigger in the conversation header
+   * plus a floating host, so there is no icon column and no mounted view at
+   * rest. `collapsed` then means "not pinned".
+   */
+  const railOverlayMode = (): boolean =>
+    railCollapsible() &&
+    config.features?.history?.rail?.collapsedBehavior === "overlay";
+  /** True while the view is mounted in the floating host, not a rail column. */
+  let railOverlayOpen = false;
 
   /** Decorative image for a config-supplied rail icon or brand URL. */
   const railIconImage = (src: string): HTMLImageElement => {
@@ -7781,11 +7798,26 @@ export const createAgentExperience = (
     }
   };
 
-  /** Collapsed only ever applies to a collapsible rail presentation. */
+  /**
+   * Collapsed only ever applies to a collapsible rail presentation, and never
+   * in overlay mode, where a mounted rail is always the expanded one.
+   */
   const railShowsCollapsed = (): boolean =>
-    historyPresentation === "rail" && railCollapsible() && isRailCollapsed();
+    historyPresentation === "rail" &&
+    railCollapsible() &&
+    !railOverlayMode() &&
+    isRailCollapsed();
+
+  /** Overlay-mode counterpart, assigned with the overlay controller below. */
+  let toggleRailPinned: () => void = () => {};
 
   const toggleRailCollapsed = (): void => {
+    // The rail's own toggle sits where the trigger does, so in overlay mode it
+    // is that control: it pins a floating rail and unpins a docked one.
+    if (railOverlayMode()) {
+      toggleRailPinned();
+      return;
+    }
     setRailCollapsed(!isRailCollapsed());
     historySurface?.view.setCollapsed(railShowsCollapsed());
     applyRailChrome();
@@ -7825,11 +7857,15 @@ export const createAgentExperience = (
             config.features?.history?.rail?.collapseShortcutScope === "page"
               ? "page"
               : "widget",
+          // Overlay mode answers at rest too: the combo is how a keyboard
+          // visitor pins a rail that is currently only a trigger.
           when: () =>
-            historyVisible &&
-            historyPresentation === "rail" &&
-            railCollapsible(),
-          run: () => toggleRailCollapsed(),
+            (historyVisible &&
+              historyPresentation === "rail" &&
+              railCollapsible()) ||
+            railTriggerApplies(),
+          run: () =>
+            railOverlayMode() ? toggleRailPinned() : toggleRailCollapsed(),
         })
       );
     }
@@ -7861,6 +7897,257 @@ export const createAgentExperience = (
   };
   syncShortcuts();
 
+  // --- collapsed rail as a floating overlay --------------------------------
+  //
+  // Rest state is a trigger at the leading edge of the conversation header and
+  // nothing else: no column, no mounted view, and the history chunk unloaded
+  // until a hover warms it. Dwelling floats the expanded rail over the
+  // conversation; clicking pins it back into the full-height column.
+
+  /** Hover dwell before the overlay opens, and the pointer-out grace. */
+  const RAIL_OVERLAY_INTENT_MS = 200;
+  const RAIL_OVERLAY_GRACE_MS = 300;
+  /** Inset of the floating rail from the widget's top and bottom edges. */
+  const RAIL_OVERLAY_INSET = 8;
+
+  let railTriggerButton: HTMLButtonElement | null = null;
+  let railTriggerWrapper: HTMLElement | null = null;
+  let railOverlayHost: HTMLElement | null = null;
+  let railIntentTimer: ReturnType<typeof setTimeout> | null = null;
+  let railGraceTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Pointer is over the trigger or over the floating rail. */
+  let railPointerInside = false;
+
+  /** Touch has no hover to dwell on, so it taps the overlay open instead. */
+  const coarsePointer = (): boolean =>
+    window.matchMedia?.("(pointer: coarse)").matches === true;
+
+  /** The trigger stands in for the collapsed rail, so it needs a rail width. */
+  const railTriggerApplies = (): boolean =>
+    historyAvailable() &&
+    railOverlayMode() &&
+    (historyPresentation ?? resolveHistoryPresentation()) === "rail";
+
+  /** Docked in its own column rather than floating over the conversation. */
+  const railPinned = (): boolean => historyVisible && !railOverlayOpen;
+
+  const cancelRailIntent = (): void => {
+    if (railIntentTimer !== null) clearTimeout(railIntentTimer);
+    railIntentTimer = null;
+  };
+
+  const cancelRailGrace = (): void => {
+    if (railGraceTimer !== null) clearTimeout(railGraceTimer);
+    railGraceTimer = null;
+  };
+
+  /** Hover AND focus warm it, so neither pointer nor keyboard waits on open. */
+  const warmHistoryChunk = (): void => {
+    // A failed load just leaves the overlay closed; the loader retries later.
+    void loadHistoryView().catch(() => {});
+  };
+
+  /** Leaving both surfaces dismisses, but only after a grace to come back in. */
+  const scheduleRailOverlayClose = (): void => {
+    cancelRailGrace();
+    if (!railOverlayOpen) return;
+    railGraceTimer = setTimeout(() => {
+      railGraceTimer = null;
+      if (railPointerInside || !railOverlayOpen) return;
+      // A keyboard visitor inside the floating rail never loses it to a stray
+      // pointer leaving the widget.
+      if (railOverlayHost?.contains(document.activeElement)) return;
+      closeHistory();
+    }, RAIL_OVERLAY_GRACE_MS);
+  };
+
+  const openRailOverlay = (opts?: { keyboard?: boolean }): void => {
+    cancelRailIntent();
+    if (historyVisible || !railTriggerApplies()) return;
+    railOverlayOpen = true;
+    void openHistory({
+      invoker: railTriggerButton,
+      keyboard: opts?.keyboard === true,
+    }).then(() => {
+      // The chunk can resolve after the pointer left, or not resolve at all.
+      if (!historyVisible) railOverlayOpen = false;
+      else if (!railPointerInside && document.activeElement !== railTriggerButton) {
+        closeHistory();
+      }
+    });
+  };
+
+  /**
+   * Floating, the rail's own toggle pins instead of collapsing, so it wears
+   * the expand label; docked, it says collapse again.
+   */
+  const syncRailToggleLabel = (): void => {
+    // The mounted element, not the surface: the first mount happens inside the
+    // surface constructor, before `historySurface` is assigned.
+    const toggle = historyMountedElement?.querySelector(
+      '[data-persona-history-focus="collapse"]'
+    );
+    if (!toggle) return;
+    toggle.setAttribute(
+      "aria-label",
+      railOverlayOpen
+        ? historyShellCopy.expandLabel
+        : historyShellCopy.collapseLabel
+    );
+    toggle.setAttribute("aria-expanded", railOverlayOpen ? "false" : "true");
+  };
+
+  /**
+   * Pin: the floating rail gives way to the full-height column, moving the
+   * SAME view element when one is already open.
+   */
+  const pinRail = (): void => {
+    setRailCollapsed(false);
+    const surface = historySurface;
+    if (!railOverlayOpen || !surface) {
+      void openHistory({ invoker: railTriggerButton });
+      return;
+    }
+    const refocus = document.activeElement === railTriggerButton;
+    railOverlayOpen = false;
+    unmountHistoryHosts();
+    // Detach before re-hosting, exactly as the panel/rail move does.
+    surface.element.remove();
+    mountHistoryElement(surface.element);
+    syncRailToggleLabel();
+    // The trigger stands down beside the rail's own toggle, so keyboard focus
+    // has to follow the control there.
+    if (refocus) focusHistoryEntry();
+    repinAnchoredMessage();
+    syncHistoryChromeImpl();
+  };
+
+  /** Unpin: the column closes and the trigger takes the control back. */
+  const unpinRail = (): void => {
+    setRailCollapsed(true);
+    closeHistory();
+  };
+
+  toggleRailPinned = (): void => {
+    if (!historyVisible || railOverlayOpen) pinRail();
+    else unpinRail();
+  };
+
+  const buildRailTrigger = (): void => {
+    // The rail brand's collapsed face, the same one the icon column wears.
+    const brand = railBrandNode()?.(true) ?? null;
+    const shortcut = railCollapseShortcut();
+    const parts = createHeaderIconButton({
+      ariaLabel: historyShellCopy.expandLabel,
+      iconName: "panel-left",
+      wrapperClassName:
+        "persona-relative persona-inline-flex persona-items-center persona-justify-center",
+      extraClassName: brand
+        ? "persona-rail-trigger persona-rail-trigger--branded"
+        : "persona-rail-trigger",
+      ...(shortcut ? { tooltipHint: shortcut.hint } : {}),
+      attrs: {
+        "data-persona-rail-trigger": "",
+        "aria-controls": historyRegionId,
+        ...(shortcut ? { "aria-keyshortcuts": shortcut.aria } : {}),
+      },
+    });
+    const button = parts.button;
+    if (brand) {
+      // The factory pins the glyph to `display:block` inline, which no rule can
+      // beat: the stylesheet can only swap the two faces once that is gone.
+      button.querySelector("svg")?.style.removeProperty("display");
+      // Stacked under the glyph; the stylesheet swaps the faces on hover and
+      // keyboard focus, and keeps the glyph alone on a coarse pointer.
+      const face = createElement("span", "persona-rail-trigger-brand");
+      face.setAttribute("aria-hidden", "true");
+      face.appendChild(brand);
+      button.appendChild(face);
+    }
+    button.addEventListener("mouseenter", () => {
+      railPointerInside = true;
+      cancelRailGrace();
+      if (coarsePointer() || historyVisible) return;
+      warmHistoryChunk();
+      cancelRailIntent();
+      railIntentTimer = setTimeout(openRailOverlay, RAIL_OVERLAY_INTENT_MS);
+    });
+    button.addEventListener("mouseleave", () => {
+      railPointerInside = false;
+      cancelRailIntent();
+      scheduleRailOverlayClose();
+    });
+    // Focus only warms: Enter and Space are how a keyboard visitor commits.
+    button.addEventListener("focus", () => {
+      if (!historyVisible) warmHistoryChunk();
+    });
+    button.addEventListener("click", () => {
+      if (!historyAvailable()) return;
+      cancelRailIntent();
+      // Touch taps the overlay open first and pins on a second tap; a pointer
+      // that can hover is already looking at the overlay, so it pins outright.
+      if (coarsePointer() && !historyVisible) openRailOverlay();
+      else pinRail();
+    });
+    railTriggerButton = button;
+    railTriggerWrapper = parts.wrapper;
+  };
+
+  /**
+   * The trigger is chrome, not surface state: it exists whenever a collapsed
+   * overlay rail could be opened, and stands down only while the rail is
+   * docked, where the rail's own header toggle is the same control.
+   */
+  const syncRailOverlayTrigger = (): void => {
+    // A header rebuild detaches it; a stale ref must not block recreation.
+    if (railTriggerWrapper && !railTriggerWrapper.isConnected) {
+      railTriggerWrapper = null;
+      railTriggerButton = null;
+    }
+    if (!railTriggerApplies()) {
+      railTriggerWrapper?.remove();
+      railTriggerWrapper = null;
+      railTriggerButton = null;
+      return;
+    }
+    if (!railTriggerButton) buildRailTrigger();
+    const wrapper = railTriggerWrapper;
+    const button = railTriggerButton;
+    if (!wrapper || !button) return;
+    // Leading edge of the conversation header, mirrored for a right rail.
+    const lead = railSide() !== "right" ? header.firstChild : null;
+    if ((lead ?? header.lastChild) !== wrapper) header.insertBefore(wrapper, lead);
+    wrapper.style.display = railPinned() ? "none" : "";
+    button.setAttribute("aria-label", historyShellCopy.expandLabel);
+    button.setAttribute("aria-expanded", historyVisible ? "true" : "false");
+  };
+
+  /**
+   * Click outside dismisses the floating rail. Portaled surfaces it opened
+   * itself (row menus, confirmations) are not "outside" it.
+   */
+  const handleRailOverlayPointerDown = (event: Event): void => {
+    if (!railOverlayOpen) return;
+    const target = event.target;
+    if (!(target instanceof Node)) return;
+    if (railOverlayHost?.contains(target) || railTriggerWrapper?.contains(target)) {
+      return;
+    }
+    if (
+      target instanceof Element &&
+      target.closest('.persona-dropdown-menu,[role="alertdialog"]')
+    ) {
+      return;
+    }
+    closeHistory({ restoreFocus: false });
+  };
+  document.addEventListener("pointerdown", handleRailOverlayPointerDown, true);
+  destroyCallbacks.push(() => {
+    document.removeEventListener("pointerdown", handleRailOverlayPointerDown, true);
+    cancelRailIntent();
+    cancelRailGrace();
+  });
+
   /**
    * Rail geometry is config-derived, so it must be re-derivable: a live
    * `update()` of `rail.width` / `rail.side` lands here, not only at mount.
@@ -7869,16 +8156,22 @@ export const createAgentExperience = (
     // The bar mirrors the docked edge, so the view hears about a side flip even
     // while it is presenting as a panel.
     historySurface?.view.setRailSide(railSide());
+    const trailing = railSide() === "right";
+    const overlay = railOverlayHost;
+    if (overlay) {
+      // Flush to the docked edge, inset from the widget's top and bottom, with
+      // the radius on the corners that face the conversation.
+      overlay.style.width = `${railWidth()}px`;
+      overlay.style.left = trailing ? "" : "0";
+      overlay.style.right = trailing ? "0" : "";
+      overlay.style.borderRadius = trailing ? "12px 0 0 12px" : "0 12px 12px 0";
+    }
     const host = railHost;
     const shell = railShell;
     const column = railColumn;
     if (!host || !shell || !column) return;
-    const rail = config.features?.history?.rail;
-    const trailing = rail?.side === "right";
     host.style.flex = `0 0 ${
-      railShowsCollapsed()
-        ? RAIL_COLLAPSED_WIDTH
-        : Math.min(400, Math.max(200, rail?.width ?? 260))
+      railShowsCollapsed() ? RAIL_COLLAPSED_WIDTH : railWidth()
     }px`;
     // The divider always faces the conversation, whichever edge the rail took.
     const divider = "1px solid var(--persona-divider,#e5e7eb)";
@@ -7922,8 +8215,41 @@ export const createAgentExperience = (
     applyRailChrome();
   };
 
+  /**
+   * Floating host for the collapsed overlay rail: the expanded view elevated
+   * over a conversation that keeps its own layout, so nothing is borrowed and
+   * nothing reflows around it.
+   */
+  const mountRailOverlayHost = (element: HTMLElement): void => {
+    const host = createElement("div", "persona-history-rail-overlay");
+    host.style.cssText =
+      `position:absolute;top:${RAIL_OVERLAY_INSET}px;bottom:${RAIL_OVERLAY_INSET}px;` +
+      `display:flex;overflow:hidden;z-index:${PORTALED_OVERLAY_Z_INDEX - 1};` +
+      "background:var(--persona-container,#f7f7f8);" +
+      "box-shadow:0 16px 40px rgba(0,0,0,0.18)";
+    // The conversation column already relies on a positioned container.
+    container.style.position = "relative";
+    container.appendChild(host);
+    host.appendChild(element);
+    host.addEventListener("mouseenter", () => {
+      railPointerInside = true;
+      cancelRailGrace();
+    });
+    host.addEventListener("mouseleave", () => {
+      railPointerInside = false;
+      scheduleRailOverlayClose();
+    });
+    railOverlayHost = host;
+    applyRailChrome();
+    syncRailToggleLabel();
+  };
+
   const unmountHistoryHosts = (): void => {
     restorePanelHost?.();
+    if (railOverlayHost) {
+      railOverlayHost.remove();
+      railOverlayHost = null;
+    }
     const shell = railShell;
     if (shell) {
       // Live bindings, in panel order, before the slot the shell took. A header
@@ -7952,8 +8278,9 @@ export const createAgentExperience = (
   /** The chunk owns its own classes/labels; the shell only picks the host. */
   const mountHistoryElement = (element: HTMLElement): void => {
     prepareHistoryElement(element);
-    if (historyPresentation === "rail") mountRailHost(element);
-    else mountPanelHost(element);
+    if (historyPresentation !== "rail") mountPanelHost(element);
+    else if (railOverlayOpen) mountRailOverlayHost(element);
+    else mountRailHost(element);
   };
 
   /**
@@ -7962,6 +8289,8 @@ export const createAgentExperience = (
    * custom full view is re-invoked with the new presentation value.
    */
   const syncHistoryPresentation = (): void => {
+    // The trigger belongs to a rail-capable width, so it resolves here too.
+    syncRailOverlayTrigger();
     if (!historyVisible || !historySurface) return;
     const next = resolveHistoryPresentation();
     if (next === historyPresentation) return;
@@ -8034,6 +8363,12 @@ export const createAgentExperience = (
     if (!historyAvailable() || historyVisible) return;
     const provider = historyProvider;
     if (!provider) return;
+    // An unpinned overlay rail IS its trigger, so restoring that state must
+    // render chrome only: no surface, and no chunk fetched for it.
+    if (!railOverlayOpen && railTriggerApplies() && isRailCollapsed()) {
+      syncRailOverlayTrigger();
+      return;
+    }
     // A reopen mid-exit finishes the outgoing teardown first: never two
     // surfaces, never a restore that lands after this one mounts.
     settleHistoryExit();
@@ -8189,6 +8524,10 @@ export const createAgentExperience = (
       done = true;
       settleHistoryExit = () => {};
       if (timer !== null) clearTimeout(timer);
+      // The floating rail is torn down with the surface it hosted.
+      railOverlayOpen = false;
+      cancelRailIntent();
+      cancelRailGrace();
       // Before focus restoration below: the invoker lives in the shell header,
       // which is inert until this restores it.
       unmountHistoryHosts();
@@ -8236,12 +8575,16 @@ export const createAgentExperience = (
   /** Escape returns to the recorded invoking surface, like the back control. */
   const handleHistoryKeydown = (event: KeyboardEvent): void => {
     if (event.key !== "Escape" || !historyVisible || !historySurface) return;
-    // Rail leaves the conversation operable: only its own focus closes it.
+    // Rail leaves the conversation operable: only its own focus closes it, and
+    // the floating rail's scope includes the trigger it hangs from.
     if (historyPresentation === "rail") {
       const target = event.target;
       if (
         !(target instanceof Node) ||
-        !historySurface.element.contains(target)
+        !(
+          historySurface.element.contains(target) ||
+          (railOverlayOpen && railTriggerWrapper?.contains(target) === true)
+        )
       ) {
         return;
       }
@@ -8282,8 +8625,9 @@ export const createAgentExperience = (
       scope,
       timestamp: Date.now(),
     });
-    // Only a committed activation closes the panel; the rail stays open.
-    if (historyVisible && historyPresentation === "panel") {
+    // Only a committed activation closes the panel; a docked rail stays open,
+    // and the floating one is transient, so a selection dismisses it.
+    if (historyVisible && (historyPresentation === "panel" || railOverlayOpen)) {
       closeHistory({ restoreFocus: false });
       maybeFocusInput();
     }
@@ -8307,7 +8651,7 @@ export const createAgentExperience = (
       conversationId,
       timestamp: Date.now(),
     });
-    if (historyVisible && historyPresentation === "panel") {
+    if (historyVisible && (historyPresentation === "panel" || railOverlayOpen)) {
       closeHistory({ restoreFocus: false });
     }
     maybeFocusInput();
@@ -8540,6 +8884,12 @@ export const createAgentExperience = (
     });
     parts.button.addEventListener("click", (event) => {
       if (!historyAvailable() || historyTurnBusy()) return;
+      // Overlay mode has no closed state to open into: this pins and unpins
+      // the rail, like the trigger beside the conversation.
+      if (railTriggerApplies()) {
+        toggleRailPinned();
+        return;
+      }
       if (historyVisible) {
         closeHistory();
         return;
@@ -8628,6 +8978,7 @@ export const createAgentExperience = (
   const syncHistoryChromeImpl = (): void => {
     historyShellCopy = resolveHistoryShellCopy(config.features?.history?.copy);
     syncHistoryButton();
+    syncRailOverlayTrigger();
     syncClearChatAffordance();
     syncEarlierMessagesPill();
   };

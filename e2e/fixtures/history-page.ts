@@ -27,6 +27,10 @@ export const sel = {
   earlier: "[data-persona-history-earlier]",
   railShell: ".persona-history-rail-shell",
   railHost: ".persona-history-rail-host",
+  // Overlay collapse: the header trigger that stands in for the icon column,
+  // and the floating host its rail mounts in.
+  railTrigger: "[data-persona-rail-trigger]",
+  railOverlay: ".persona-history-rail-overlay",
   // Rail runs the full widget height; the shell header rides in this column.
   railConversation: ".persona-history-rail-conversation",
   newConversation: ".persona-history-new",
@@ -37,6 +41,7 @@ export type FixtureMode = "demo" | "intercepted";
 export interface FixtureOptions {
   mode?: FixtureMode;
   presentation?: "panel" | "rail" | "auto";
+  collapsedBehavior?: "overlay";
   width?: number;
   throwRenderView?: boolean;
   persist?: boolean;
@@ -48,6 +53,9 @@ export function fixtureUrl(options: FixtureOptions = {}): string {
   const params = new URLSearchParams();
   params.set("mode", options.mode ?? "demo");
   if (options.presentation) params.set("presentation", options.presentation);
+  if (options.collapsedBehavior) {
+    params.set("collapsedBehavior", options.collapsedBehavior);
+  }
   if (options.width) params.set("width", String(options.width));
   if (options.throwRenderView) params.set("throwRenderView", "1");
   if (options.persist === false) params.set("persist", "0");

@@ -2791,6 +2791,19 @@ export interface AgentWidgetHistoryFeature {
     collapsible?: boolean;
     defaultCollapsed?: boolean;
     /**
+     * Shape of the COLLAPSED rail. `"icon-rail"` (default) keeps the 52px icon
+     * column beside the conversation. `"overlay"` removes the column entirely:
+     * a trigger takes the leading edge of the conversation header, hovering or
+     * tapping it floats the expanded rail over the conversation, and clicking
+     * it pins the rail back open. The floating rail is transient, so leaving
+     * it, Escape, a click outside, or selecting a conversation all dismiss it;
+     * its own header toggle docks it instead, being the control the pointer
+     * finds there. Geometry follows `width` and `side`; the collapsed rail's
+     * chunk is not loaded until the first hover. Ignored when `collapsible` is
+     * false or in panel presentation.
+     */
+    collapsedBehavior?: "icon-rail" | "overlay";
+    /**
      * One brand declaration, placed in both of the rail's identity spots: the
      * header's heading area when expanded (the mark leading, `copy.viewTitle`
      * beside it as the wordmark), and the collapse toggle's rest face when the

@@ -26,6 +26,9 @@ const params = new URLSearchParams(window.location.search);
 const mode = params.get("mode") === "intercepted" ? "intercepted" : "demo";
 const presentation = (params.get("presentation") ?? "panel") as
   "panel" | "rail" | "auto";
+/** Rail-only: "overlay" swaps the collapsed icon column for a header trigger. */
+const collapsedBehavior =
+  params.get("collapsedBehavior") === "overlay" ? "overlay" : undefined;
 const apiUrl = params.get("apiUrl") ?? "/e2e-api";
 const clientToken = params.get("clientToken") ?? "ct_e2e_history";
 const keyPrefix = params.get("keyPrefix") ?? "persona-e2e-";
@@ -52,7 +55,13 @@ if (params.get("throwRenderView") === "1") plugins.push(throwingViewPlugin);
 
 const base: AgentWidgetConfig = {
   ...DEFAULT_WIDGET_CONFIG,
-  features: { history: { enabled: true, presentation } },
+  features: {
+    history: {
+      enabled: true,
+      presentation,
+      ...(collapsedBehavior ? { rail: { collapsedBehavior } } : {}),
+    },
+  },
   suggestionChips: [],
   plugins,
   launcher: { ...DEFAULT_WIDGET_CONFIG.launcher, enabled: false, width: "100%" },
