@@ -18,7 +18,10 @@ import {
   type DemoHistoryConversationSeed,
   type DemoHistoryProviderOptions,
 } from "./internal/demo-history-provider";
-import type { AgentWidgetPlugin } from "./plugins/types";
+import type {
+  AgentWidgetPlugin,
+  AgentWidgetRailSectionContext,
+} from "./plugins/types";
 import type {
   AgentWidgetRenderHistoryViewContext,
   AgentWidgetRenderHistoryConversationContext,
@@ -681,6 +684,149 @@ describe("history render hooks", () => {
       expect(mount.querySelector("[data-test-more]")).toBeNull();
     });
   });
+  describe("plugin rail sections", () => {
+    /** Section body tagged with the collapsed state it was rendered for. */
+    const pinnedBody = (context: AgentWidgetRailSectionContext): HTMLElement => {
+      const node = document.createElement("div");
+      node.setAttribute("data-test-pinned", String(context.collapsed));
+      const open = document.createElement("button");
+      open.setAttribute("data-test-pinned-open", "");
+      open.addEventListener("click", () => {
+        void context.actions.openConversation("conv-b");
+      });
+      node.appendChild(open);
+      return node;
+    };
+
+    const pinsPlugin = (
+      render: (context: AgentWidgetRailSectionContext) => Element | null
+    ): AgentWidgetPlugin => ({
+      id: "pins",
+      railSections: [{ id: "pinned", title: "Pinned", render }],
+    });
+
+    /** One config section, so bucket ordering is observable. */
+    const configSection = {
+      id: "workspace",
+      title: "Workspace",
+      items: [{ id: "projects", label: "Projects", onSelect: () => {} }],
+    };
+
+    const railSetup = async (options: SetupOptions) => {
+      const result = setup(options);
+      setContainerWidth(result.mount, 900);
+      await openHistoryUI(result.mount);
+      return result;
+    };
+
+    const sectionAt = (mount: HTMLElement, id: string) =>
+      mount.querySelector<HTMLElement>(`[data-persona-rail-section="${id}"]`);
+
+    it("stacks plugin sections behind the config ones and shares the action path", async () => {
+      const { mount, provider } = await railSetup({
+        historyFeature: {
+          presentation: "rail",
+          rail: { sections: [configSection] },
+        },
+        plugins: [pinsPlugin(pinnedBody)],
+      });
+
+      const ids = Array.from(
+        mount.querySelectorAll<HTMLElement>("[data-persona-rail-section]")
+      ).map((node) => node.getAttribute("data-persona-rail-section"));
+      expect(ids).toEqual(["workspace", "pinned"]);
+      const pinned = sectionAt(mount, "pinned")!;
+      expect(
+        pinned.querySelector(".persona-history-group-heading")?.textContent
+      ).toBe("Pinned");
+      expect(
+        pinned.querySelector("[data-test-pinned]")?.getAttribute("data-test-pinned")
+      ).toBe("false");
+
+      pinned.querySelector<HTMLButtonElement>("[data-test-pinned-open]")!.click();
+      await flush(30);
+      expect(provider.getActiveConversationId()).toBe("conv-b");
+    });
+
+    it("re-invokes the section with the new collapsed value", async () => {
+      const seen: Array<{ collapsed: boolean; presentation: string }> = [];
+      const { mount } = await railSetup({
+        historyFeature: { presentation: "rail", rail: { collapsible: true } },
+        plugins: [
+          pinsPlugin((context) => {
+            seen.push({
+              collapsed: context.collapsed,
+              presentation: context.presentation,
+            });
+            return context.collapsed ? null : pinnedBody(context);
+          }),
+        ],
+      });
+      expect(seen).toEqual([{ collapsed: false, presentation: "rail" }]);
+
+      mount
+        .querySelector<HTMLButtonElement>('[data-persona-history-focus="collapse"]')!
+        .click();
+      await flush(20);
+      expect(seen).toEqual([
+        { collapsed: false, presentation: "rail" },
+        { collapsed: true, presentation: "rail" },
+      ]);
+      // Null empties the section and takes its heading with it.
+      const pinned = sectionAt(mount, "pinned")!;
+      expect(pinned.hidden).toBe(true);
+      expect(pinned.querySelector("[data-test-pinned]")).toBeNull();
+    });
+
+    it("drops a plugin section whose id a config section already owns", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const render = vi.fn(pinnedBody);
+      const { mount } = await railSetup({
+        historyFeature: {
+          presentation: "rail",
+          rail: { sections: [{ ...configSection, id: "pinned" }] },
+        },
+        plugins: [pinsPlugin(render)],
+      });
+      expect(render).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        "[persona] duplicate history rail section id",
+        "pinned"
+      );
+      expect(warn).toHaveBeenCalledTimes(1);
+      // The config section kept the id and its rows.
+      expect(
+        sectionAt(mount, "pinned")!.querySelector('[data-persona-rail-item="projects"]')
+      ).not.toBeNull();
+      warn.mockRestore();
+    });
+
+    it("renders no sections in the panel presentation", async () => {
+      const render = vi.fn(pinnedBody);
+      const { mount } = setup({
+        historyFeature: { presentation: "panel" },
+        plugins: [pinsPlugin(render)],
+      });
+      await openHistoryUI(mount);
+      expect(mount.querySelector("[data-persona-rail-section]")).toBeNull();
+      expect(render).not.toHaveBeenCalled();
+    });
+
+    it("never invokes a section under a full view replacement", async () => {
+      const render = vi.fn(pinnedBody);
+      const { mount } = await railSetup({
+        historyFeature: { presentation: "rail" },
+        plugins: [
+          { ...pinsPlugin(render), ...fullViewPlugin("pins", "custom") },
+        ],
+      });
+      expect(mount.querySelector("[data-test-view]")).not.toBeNull();
+      expect(defaultView(mount)).toBeNull();
+      expect(mount.querySelector("[data-persona-rail-section]")).toBeNull();
+      expect(render).not.toHaveBeenCalled();
+    });
+  });
+
   /**
    * Panel presentation keeps ONE bar: the shell header hosts the default view's
    * bar. A plugin that owns the whole surface owns the header too, so the shell

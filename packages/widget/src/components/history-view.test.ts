@@ -1471,6 +1471,123 @@ describe("history view rail sections", () => {
     expect(squareBlock).toContain("width: 36px;");
     expect(squareBlock).toContain("margin: 0 auto;");
   });
+
+  // Render-backed sections: the plugin seam the core normalizes into the same
+  // array, carrying a `render` in place of items.
+  it("mounts render-backed content under its heading and re-renders on collapse", async () => {
+    const render = vi.fn((collapsed: boolean) => {
+      const node = document.createElement("p");
+      node.setAttribute("data-plugin", collapsed ? "collapsed" : "expanded");
+      return node;
+    });
+    const { root, handle } = mount({
+      presentation: "rail",
+      railSections: [
+        ...sections()!,
+        {
+          id: "pinned",
+          title: "Pinned",
+          placement: "above-conversations",
+          items: [],
+          render,
+        },
+      ],
+    });
+    await flush();
+
+    const pinned = sectionAt(root, "pinned")!;
+    // Config sections keep their array order ahead of it inside the bucket.
+    expect(pinned.previousElementSibling).toBe(sectionAt(root, "workspace"));
+    expect(pinned.querySelector(".persona-history-group-heading")?.textContent).toBe(
+      "Pinned"
+    );
+    expect(pinned.querySelector("[data-plugin]")?.getAttribute("data-plugin")).toBe(
+      "expanded"
+    );
+    expect(render).toHaveBeenCalledTimes(1);
+
+    handle.setCollapsed(true);
+    await flush();
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(render).toHaveBeenLastCalledWith(true);
+    // The previous content is replaced, not appended beside.
+    expect(pinned.querySelectorAll("[data-plugin]")).toHaveLength(1);
+    expect(pinned.querySelector("[data-plugin]")?.getAttribute("data-plugin")).toBe(
+      "collapsed"
+    );
+    expect(pinned.querySelector(".persona-history-group-heading")).not.toBeNull();
+  });
+
+  it("hides the section when render yields null", async () => {
+    const { root, handle } = mount({
+      presentation: "rail",
+      railSections: [
+        {
+          id: "pinned",
+          title: "Pinned",
+          placement: "above-conversations",
+          items: [],
+          render: (collapsed) => {
+            if (collapsed) return null;
+            return document.createElement("p");
+          },
+        },
+      ],
+    });
+    await flush();
+    const pinned = sectionAt(root, "pinned")!;
+    expect(pinned.hidden).toBe(false);
+
+    handle.setCollapsed(true);
+    await flush();
+    expect(pinned.hidden).toBe(true);
+    expect(pinned.querySelector("p")).toBeNull();
+    // Hiding beats the section's own display rule.
+    expect(injectedHistoryCss()).toContain(
+      ".persona-history-view .persona-history-nav[hidden]"
+    );
+  });
+
+  it("warns once for a throwing render and empties only that section", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { root, handle } = mount({
+      presentation: "rail",
+      railSections: [
+        {
+          id: "pinned",
+          placement: "above-conversations",
+          items: [],
+          render: () => {
+            throw new Error("section exploded");
+          },
+        },
+        {
+          id: "tools",
+          placement: "below-conversations",
+          items: [],
+          render: () => document.createElement("p"),
+        },
+      ],
+    });
+    await flush();
+    const pinned = sectionAt(root, "pinned")!;
+    expect(pinned.hidden).toBe(true);
+    expect(pinned.childElementCount).toBe(0);
+    expect(sectionAt(root, "tools")!.hidden).toBe(false);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      "[persona] history rail section threw",
+      "pinned",
+      expect.any(Error)
+    );
+
+    // A collapse re-renders the survivor and never re-enters the dropped one.
+    handle.setCollapsed(true);
+    await flush();
+    expect(pinned.hidden).toBe(true);
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
 });
 
 describe("history view header placement", () => {

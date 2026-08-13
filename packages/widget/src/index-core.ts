@@ -369,7 +369,9 @@ export type {
   AgentWidgetTransformSuggestionsContext,
   AgentWidgetRenderSuggestionContext,
   AgentWidgetRenderWelcomeContext,
-  AgentWidgetSuggestionSelectContext
+  AgentWidgetSuggestionSelectContext,
+  AgentWidgetRailSection,
+  AgentWidgetRailSectionContext
 } from "./plugins/types";
 // Welcome resolver: `renderWelcome` receives the resolved shape.
 export { resolveWelcomeConfig, isWelcomeVisible } from "./welcome";

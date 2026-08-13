@@ -7632,7 +7632,7 @@ export const createAgentExperience = (
    * here, where the lucide registry already lives, and every host callback gets
    * a warn-once-per-section guard.
    */
-  const railNavSections = (): HistoryRailSection[] | undefined =>
+  const configNavSections = (): HistoryRailSection[] =>
     config.features?.history?.rail?.sections?.map((section) => {
       let warned = false;
       const warn = (error: unknown): void => {
@@ -7679,7 +7679,22 @@ export const createAgentExperience = (
           };
         }),
       };
-    });
+    }) ?? [];
+
+  /** One array for the chunk: config sections first in each placement bucket. */
+  const railNavSections = (
+    pluginSections: HistoryRailSection[]
+  ): HistoryRailSection[] | undefined => {
+    const sections = configNavSections();
+    for (const section of pluginSections) {
+      // Config owns the id space; a colliding plugin section is dropped.
+      if (sections.some((existing) => existing.id === section.id)) {
+        console.warn("[persona] duplicate history rail section id", section.id);
+      } else sections.push(section);
+    }
+    return sections.length ? sections : undefined;
+  };
+
   /** Resolved once per widget: storage, else the configured default. */
   let railCollapsed: boolean | null = null;
 
@@ -7939,7 +7954,6 @@ export const createAgentExperience = (
       collapsed: railShowsCollapsed(),
       railSide: railSide(),
       renderRailHeader: config.features?.history?.rail?.renderHeader,
-      railSections: railNavSections(),
       onToggleCollapse: toggleRailCollapsed,
       headerPlacement: initialHeaderPlacement,
       showScopeStatus: config.features?.history?.showScopeStatus !== false,
@@ -7978,11 +7992,12 @@ export const createAgentExperience = (
       getPresentation: () => historyPresentation ?? "panel",
       getReturnSurface: () => historyReturnSurface,
       close: () => closeHistory(),
-      createView: ({ slots, renderDom, onModelChange }) => {
+      createView: ({ slots, renderDom, onModelChange, railSections }) => {
         // Tracked before `historySurface` is assigned: the first mount happens
         // inside this constructor and already needs the handle.
         historyViewHandle = module.createHistoryView({
           ...baseViewOptions,
+          railSections: railNavSections(railSections),
           slots,
           renderDom,
           onModelChange,

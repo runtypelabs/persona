@@ -37,6 +37,7 @@ import type {
   ResolvedHistoryPresentation,
 } from "./types";
 import type {
+  HistoryRailSection,
   HistoryViewHandle,
   HistoryViewModel,
   HistoryViewSlotRenderers,
@@ -57,6 +58,8 @@ export interface HistoryRenderSurfaceOptions {
     slots: HistoryViewSlotRenderers;
     renderDom: boolean;
     onModelChange: () => void;
+    /** Plugin rail sections, for the core to merge behind the config ones. */
+    railSections: HistoryRailSection[];
   }) => HistoryViewHandle;
   /** Mount (previous === null) or swap the arbitrated element. */
   onElementChanged: (next: HTMLElement, previous: HTMLElement | null) => void;
@@ -201,10 +204,32 @@ export function createHistoryRenderSurface(
         : null,
   };
 
+  /**
+   * Plugin rail sections, in plugin order. Only the context is assembled here;
+   * a throwing `render` is the view's to warn about once and drop. `actions`
+   * resolves at invocation, which never happens before the view owns the DOM.
+   */
+  const railSections: HistoryRailSection[] = plugins.flatMap((plugin) =>
+    (plugin.railSections ?? []).map((section) => ({
+      ...section,
+      placement: section.placement ?? "above-conversations",
+      items: [],
+      render: (collapsed: boolean) =>
+        section.render(
+          Object.freeze({
+            collapsed,
+            presentation: options.getPresentation(),
+            actions,
+          })
+        ),
+    }))
+  );
+
   const view = options.createView({
     slots,
     renderDom: false,
     onModelChange: () => requestRender(),
+    railSections,
   });
 
   /** Every action IS the operation the default DOM invokes; close is the shell's. */

@@ -20,7 +20,10 @@ import {
   AgentWidgetRenderHistoryViewContext,
   AgentWidgetRenderHistoryHeaderContext,
   AgentWidgetRenderHistoryConversationContext,
-  AgentWidgetRenderHistoryStateContext
+  AgentWidgetRenderHistoryStateContext,
+  AgentWidgetHistoryRailSection,
+  AgentWidgetHistoryRenderActions,
+  ResolvedHistoryPresentation
 } from "../types";
 
 export type AgentWidgetTransformSuggestionsContext = {
@@ -72,6 +75,27 @@ export type AgentWidgetRenderWelcomeContext = {
   storage: AgentWidgetPluginStorage;
   /** Teardown for this render; runs before the next one and on destroy. */
   onCleanup: (fn: () => void) => void;
+};
+
+/** Context for one `railSections` entry. Frozen per invocation. */
+export type AgentWidgetRailSectionContext = {
+  /** Current rail width state. The section re-renders whenever this flips. */
+  collapsed: boolean;
+  presentation: ResolvedHistoryPresentation;
+  /** The same frozen action path the default rows and `renderHistoryView` use. */
+  actions: AgentWidgetHistoryRenderActions;
+};
+
+/** A plugin-contributed navigation section in the history rail. */
+export type AgentWidgetRailSection = {
+  /** Stable identity, stamped as `data-persona-rail-section`. */
+  id: string;
+  /** Default `"above-conversations"`. */
+  placement?: AgentWidgetHistoryRailSection["placement"];
+  /** Optional heading, styled like a conversation date-group heading. */
+  title?: string;
+  /** Section body. Null renders nothing for the current state. */
+  render: (context: AgentWidgetRailSectionContext) => Element | null;
 };
 
 export type AgentWidgetSuggestionSelectContext = {
@@ -481,6 +505,42 @@ export interface AgentWidgetPlugin {
   renderHistoryState?: (
     context: AgentWidgetRenderHistoryStateContext
   ) => HTMLElement | null;
+
+  /**
+   * Contribute navigation sections to the history rail, stacked around the
+   * conversation list in `placement` order. Rail only: the panel presentation
+   * renders none of them, and `features.history.rail.sections` (config) comes
+   * first inside each bucket, then plugins in plugin order.
+   *
+   * `render` is re-invoked with the new `collapsed` value whenever the rail
+   * collapses or expands, and its return replaces the previous content;
+   * returning null renders nothing for that state. A throwing `render` warns
+   * once and drops that section only, leaving the rest of the rail alone. An id
+   * a config section already owns is dropped with a warning.
+   *
+   * Keep heavy UI in the host bundle: `render` may return a skeleton and
+   * hydrate it after the host's own dynamic import resolves.
+   *
+   * @example
+   * ```typescript
+   * railSections: [
+   *   {
+   *     id: "pinned",
+   *     title: "Pinned",
+   *     render: ({ collapsed, actions }) => {
+   *       if (collapsed) return null;
+   *       const list = document.createElement("div");
+   *       const row = document.createElement("button");
+   *       row.textContent = "Weekly report";
+   *       row.addEventListener("click", () => void actions.openConversation("c1"));
+   *       list.appendChild(row);
+   *       return list;
+   *     }
+   *   }
+   * ]
+   * ```
+   */
+  railSections?: AgentWidgetRailSection[];
 
   /**
    * Called when plugin is registered

@@ -658,6 +658,10 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view .persona-history-nav--footer {
   margin-top: auto;
 }
+/* A render-backed section that yielded nothing keeps its heading out too. */
+.persona-history-view .persona-history-nav[hidden] {
+  display: none;
+}
 .persona-history-view button.persona-history-nav-item {
   display: flex;
   align-items: center;

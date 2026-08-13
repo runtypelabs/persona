@@ -21,6 +21,7 @@ import { createDemoConfigInspector } from "./demo-config-inspector";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { renderDemoScaffold } from "./demo-scaffold";
 import { runWidgetMountWithInspector, setupMountMode } from "./mount-mode";
+import { createPinnedSectionPlugin } from "./plugins/pinned-section-plugin";
 import { createThreadRailPlugin } from "./plugins/thread-rail-plugin";
 import type { Mode } from "./examples-nav";
 
@@ -121,12 +122,22 @@ const stagingUsable = stagingConfigured && !stagingPointsAtProduction;
 
 const threadRailPlugin = createThreadRailPlugin();
 
+/**
+ * Contributes one rail section through the plugin hook. A full
+ * renderHistoryView replacement supersedes sections, so the two demo plugins
+ * are mutually exclusive: this one runs while the custom view is off.
+ */
+const pinnedSectionPlugin = createPinnedSectionPlugin((label) =>
+  log("info", `picked the pinned item ${label}`),
+);
+
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const base: AgentWidgetConfig = {
     ...DEFAULT_WIDGET_CONFIG,
     features: { history: { enabled: true, presentation } },
     // Public hooks only: the plugin returns DOM, Persona keeps orchestration.
-    ...(customView ? { plugins: [threadRailPlugin] } : {}),
+    // The rail section only shows in the rail presentation.
+    plugins: [customView ? threadRailPlugin : pinnedSectionPlugin],
     // The page is about the Messages surface, so the transcript stays quiet.
     suggestionChips: [],
     launcher: {
@@ -301,7 +312,9 @@ function remount(): void {
   log(
     "session",
     `mounted ${stagingSelected ? "live staging" : "in-memory"} source, presentation ${presentation}, ${
-      customView ? "custom renderHistoryView plugin" : "built-in Messages view"
+      customView
+        ? "custom renderHistoryView plugin"
+        : "built-in Messages view with the pinned rail section plugin"
     }`,
   );
 }

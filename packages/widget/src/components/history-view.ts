@@ -140,6 +140,11 @@ export interface HistoryRailSection {
   title?: string;
   placement: HistoryRailSectionPlacement;
   items: HistoryRailSectionItem[];
+  /**
+   * Plugin-backed body, in place of `items`. Re-invoked with each new collapsed
+   * value; null empties and hides the section, as does a throw after one warn.
+   */
+  render?: (collapsed: boolean) => Element | null;
 }
 
 export interface HistoryViewOptions {
@@ -723,6 +728,39 @@ export function createHistoryView(
 
   /** Built once; a presentation flip only detaches and re-attaches them. */
   let navNodes: HTMLElement[] | null = null;
+  /** Collapsed value the render-backed sections were last built for. */
+  let navCollapsed: boolean | null = null;
+
+  /**
+   * Render-backed sections only, and only while this view owns the DOM: a
+   * plugin holding the whole surface never invokes them.
+   */
+  const syncNavContent = (): void => {
+    if (
+      !navNodes ||
+      !domRenderEnabled ||
+      presentation !== "rail" ||
+      collapsed === navCollapsed
+    )
+      return;
+    navCollapsed = collapsed;
+    options.railSections!.forEach((section, index) => {
+      if (!section.render) return;
+      const node = navNodes![index];
+      // The heading outlives a content swap; it is always the first child.
+      const heading = section.title ? node.firstElementChild : null;
+      let content: Element | null = null;
+      try {
+        content = section.render(collapsed);
+      } catch (error) {
+        // Warn once, then drop the section: this array is the view's own copy.
+        section.render = undefined;
+        console.warn("[persona] history rail section threw", section.id, error);
+      }
+      node.replaceChildren(...(heading ? [heading] : []), ...(content ? [content] : []));
+      node.hidden = !content;
+    });
+  };
 
   const syncNavSections = (): void => {
     const sections = options.railSections;
@@ -751,6 +789,7 @@ export function createHistoryView(
         }
       });
     }
+    syncNavContent();
   };
   syncNavSections();
 
@@ -1126,6 +1165,8 @@ export function createHistoryView(
     renderScope();
     renderChrome();
     renderList();
+    // First paint for render-backed sections: nothing runs while suspended.
+    syncNavContent();
   };
 
   // --- menu ---------------------------------------------------------------
@@ -1481,6 +1522,7 @@ export function createHistoryView(
       syncCollapsedClass();
       syncLeadingControl();
       syncRailBrand();
+      syncNavContent();
     },
     setRailSide: (side) => {
       railRight = side === "right";
