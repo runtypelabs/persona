@@ -20,7 +20,7 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "188.5 kB",
+    "limit": "189 kB",
     "gzip": true
   },
   {
@@ -92,7 +92,7 @@
   {
     "name": "Lazy · history (Messages) view chunk (history-view.js)",
     "path": "dist/history-view.js",
-    "limit": "12.5 kB",
+    "limit": "13 kB",
     "gzip": true
   }
 ]

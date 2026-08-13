@@ -472,6 +472,90 @@ describe("history shell", () => {
       expect(group().querySelector("[data-brand]")).toBeNull();
     });
 
+    it("resolves declarative section icons and runs their callbacks", async () => {
+      const onSelect = vi.fn();
+      const { mount } = await railSetup({
+        sections: [
+          {
+            id: "workspace",
+            title: "Workspace",
+            items: [
+              { id: "projects", label: "Projects", icon: "folder", onSelect },
+              {
+                id: "library",
+                label: "Library",
+                iconUrl: "https://cdn.example.com/library.png",
+                badge: "12",
+                onSelect: () => {},
+              },
+            ],
+          },
+        ],
+      });
+
+      const section = mount.querySelector<HTMLElement>(
+        '[data-persona-rail-section="workspace"]'
+      )!;
+      // Default placement is above the list, after the new-conversation row.
+      expect(section.previousElementSibling?.className).toContain(
+        "persona-history-new"
+      );
+      const projects = section.querySelector<HTMLButtonElement>(
+        '[data-persona-rail-item="projects"]'
+      )!;
+      expect(projects.querySelector("svg")).not.toBeNull();
+
+      const image = section.querySelector<HTMLImageElement>(
+        '[data-persona-rail-item="library"] img'
+      )!;
+      expect(image.getAttribute("src")).toBe(
+        "https://cdn.example.com/library.png"
+      );
+      expect(image.getAttribute("alt")).toBe("");
+      expect(image.getAttribute("aria-hidden")).toBe("true");
+      expect(
+        section.querySelector('[data-persona-rail-item="library"] .persona-history-nav-badge')
+          ?.textContent
+      ).toBe("12");
+
+      projects.click();
+      expect(onSelect).toHaveBeenCalledTimes(1);
+    });
+
+    it("warns once for an unknown lucide name and renders the row label-only", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const { mount, controller } = await railSetup({
+        sections: [
+          {
+            id: "workspace",
+            items: [
+              { id: "projects", label: "Projects", icon: "not-an-icon", onSelect: () => {} },
+            ],
+          },
+        ],
+      });
+      const projects = () =>
+        mount.querySelector<HTMLButtonElement>(
+          '[data-persona-rail-item="projects"]'
+        )!;
+      expect(projects().querySelector("svg")).toBeNull();
+      expect(projects().textContent).toBe("Projects");
+      expect(warn).toHaveBeenCalledTimes(1);
+
+      // A presentation flip re-attaches the rows it already built: no re-warn.
+      controller.update({
+        features: { history: { presentation: "panel" } },
+      } as never);
+      await flush();
+      controller.update({
+        features: { history: { presentation: "rail" } },
+      } as never);
+      await flush();
+      expect(projects().textContent).toBe("Projects");
+      expect(warn).toHaveBeenCalledTimes(1);
+      warn.mockRestore();
+    });
+
     it("keeps the transcript and composer operable beside the navigation", async () => {
       const { mount } = await railSetup();
       const rail = mount.querySelector<HTMLElement>(".persona-history-rail-host");

@@ -592,6 +592,32 @@ const fullscreenAssistantDarkTokens = {
 const demoCtl: { handle: AgentWidgetInitHandle | null } = { handle: null };
 let isStarred = false;
 
+/** The demo has nowhere to navigate to, so a nav pick answers in the transcript. */
+const noteRailNav = (label: string): void => {
+  demoCtl.handle?.injectAssistantMessage({
+    content: `You picked ${label}. This row is declarative config: the widget builds it from features.history.rail.sections.`
+  });
+};
+
+/** Nav section above the conversation list. Icons are built-in lucide names. */
+const railNavSections = [
+  {
+    id: "workspace",
+    title: "Workspace",
+    items: [
+      { id: "projects", label: "Projects", icon: "folder", onSelect: () => noteRailNav("Projects") },
+      { id: "library", label: "Library", icon: "bookmark", onSelect: () => noteRailNav("Library") },
+      {
+        id: "drafts",
+        label: "Drafts",
+        icon: "files",
+        badge: "3",
+        onSelect: () => noteRailNav("Drafts")
+      }
+    ]
+  }
+];
+
 const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScriptedStream();
 
 const config = mergeWithDefaults({
@@ -700,6 +726,7 @@ const config = mergeWithDefaults({
       rail: {
         collapsible: true,
         renderHeader: ({ collapsed }) => renderRailBrand(collapsed),
+        sections: railNavSections,
       },
     },
     scrollToBottom: {

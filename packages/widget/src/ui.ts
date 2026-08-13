@@ -192,6 +192,7 @@ import { createVisitorStore, type VisitorStore } from "./utils/visitor-store";
 import { loadHistoryView } from "./history-view-loader";
 import type {
   HistoryHeaderPlacement,
+  HistoryRailSection,
   HistoryViewHandle,
   HistoryViewOptions,
 } from "./history-view-entry";
@@ -7624,6 +7625,61 @@ export const createAgentExperience = (
     config.features?.history?.rail?.collapsible !== false;
   const railSide = (): "left" | "right" =>
     config.features?.history?.rail?.side === "right" ? "right" : "left";
+
+  /**
+   * Config nav sections, normalized for the size-capped chunk: icon precedence
+   * (renderIcon > iconUrl > icon) collapses to one memoized thunk resolved
+   * here, where the lucide registry already lives, and every host callback gets
+   * a warn-once-per-section guard.
+   */
+  const railNavSections = (): HistoryRailSection[] | undefined =>
+    config.features?.history?.rail?.sections?.map((section) => {
+      let warned = false;
+      const warn = (error: unknown): void => {
+        if (warned) return;
+        warned = true;
+        console.warn("[persona] history rail section threw", section.id, error);
+      };
+      return {
+        id: section.id,
+        title: section.title,
+        placement: section.placement ?? "above-conversations",
+        items: section.items.map((item) => {
+          // Built on first paint and cached: an unknown lucide name warns once,
+          // and a presentation flip reuses the node it made.
+          let node: Element | null | undefined;
+          return {
+            id: item.id,
+            label: item.label,
+            badge: item.badge,
+            iconNode: (): Element | null => {
+              if (node !== undefined) return node;
+              try {
+                if (item.renderIcon) node = item.renderIcon() ?? null;
+                else if (item.iconUrl) {
+                  const image = createElement("img");
+                  image.src = item.iconUrl;
+                  image.alt = "";
+                  image.setAttribute("aria-hidden", "true");
+                  node = image;
+                } else node = item.icon ? renderLucideIcon(item.icon, 20) : null;
+              } catch (error) {
+                warn(error);
+                node = null;
+              }
+              return node;
+            },
+            onSelect: () => {
+              try {
+                item.onSelect();
+              } catch (error) {
+                warn(error);
+              }
+            },
+          };
+        }),
+      };
+    });
   /** Resolved once per widget: storage, else the configured default. */
   let railCollapsed: boolean | null = null;
 
@@ -7883,6 +7939,7 @@ export const createAgentExperience = (
       collapsed: railShowsCollapsed(),
       railSide: railSide(),
       renderRailHeader: config.features?.history?.rail?.renderHeader,
+      railSections: railNavSections(),
       onToggleCollapse: toggleRailCollapsed,
       headerPlacement: initialHeaderPlacement,
       showScopeStatus: config.features?.history?.showScopeStatus !== false,

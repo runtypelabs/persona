@@ -1308,6 +1308,171 @@ describe("history view chrome and destructive actions", () => {
   });
 });
 
+describe("history view rail sections", () => {
+  const svgIcon = (): SVGElement =>
+    document.createElementNS("http://www.w3.org/2000/svg", "svg");
+
+  const sections = (): HistoryViewOptions["railSections"] => [
+    {
+      id: "workspace",
+      title: "Workspace",
+      placement: "above-conversations",
+      items: [
+        { id: "projects", label: "Projects", iconNode: () => svgIcon(), onSelect: vi.fn() },
+        { id: "drafts", label: "Drafts", badge: "3", onSelect: vi.fn() },
+      ],
+    },
+    {
+      id: "tools",
+      placement: "below-conversations",
+      items: [{ id: "export", label: "Export", onSelect: vi.fn() }],
+    },
+    {
+      id: "account",
+      placement: "footer",
+      items: [{ id: "settings", label: "Settings", onSelect: vi.fn() }],
+    },
+  ];
+
+  const sectionAt = (root: HTMLElement, id: string): HTMLElement | null =>
+    root.querySelector<HTMLElement>(`[data-persona-rail-section="${id}"]`);
+
+  it("stacks the sections around the conversation list in placement order", async () => {
+    const railSections = sections();
+    const { root } = mount({ presentation: "rail", railSections });
+    await flush();
+
+    const body = root.querySelector<HTMLElement>(".persona-history-body")!;
+    const order = Array.from(body.children).map(
+      (child) =>
+        child.getAttribute("data-persona-rail-section") ?? child.className
+    );
+    expect(order).toEqual([
+      "persona-history-scope-alert",
+      "persona-history-new",
+      "workspace",
+      "persona-history-scope",
+      "persona-history-list-region",
+      "tools",
+      "account",
+      "persona-history-footer",
+    ]);
+    // The footer bucket sinks to the bottom of the body above the destructive row.
+    expect(sectionAt(root, "account")!.className).toContain(
+      "persona-history-nav--footer"
+    );
+    // A titled section is a labelled group; the heading reuses the group treatment.
+    const workspace = sectionAt(root, "workspace")!;
+    const heading = workspace.querySelector(".persona-history-group-heading")!;
+    expect(heading.textContent).toBe("Workspace");
+    expect(workspace.getAttribute("aria-labelledby")).toBe(heading.id);
+    expect(sectionAt(root, "tools")!.getAttribute("aria-label")).toBe("tools");
+  });
+
+  it("builds each item from its icon thunk, label and badge", async () => {
+    const railSections = sections();
+    const { root } = mount({ presentation: "rail", railSections });
+    await flush();
+
+    const projects = root.querySelector<HTMLButtonElement>(
+      '[data-persona-rail-item="projects"]'
+    )!;
+    expect(projects.type).toBe("button");
+    expect(projects.getAttribute("aria-label")).toBe("Projects");
+    expect(projects.querySelector(".persona-history-nav-icon svg")).not.toBeNull();
+    expect(
+      projects.querySelector(".persona-history-nav-label")?.textContent
+    ).toBe("Projects");
+    expect(projects.querySelector(".persona-history-nav-badge")).toBeNull();
+
+    // No icon thunk: label only, and no collapsed-square opt-in.
+    const drafts = root.querySelector<HTMLButtonElement>(
+      '[data-persona-rail-item="drafts"]'
+    )!;
+    expect(drafts.querySelector(".persona-history-nav-icon")).toBeNull();
+    expect(drafts.classList.contains("persona-history-nav-item--icon")).toBe(
+      false
+    );
+    expect(drafts.querySelector(".persona-history-nav-badge")?.textContent).toBe(
+      "3"
+    );
+
+    drafts.click();
+    expect(railSections![0].items[1].onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders label-only when the icon thunk yields null", async () => {
+    const { root } = mount({
+      presentation: "rail",
+      railSections: [
+        {
+          id: "workspace",
+          placement: "above-conversations",
+          items: [{ id: "projects", label: "Projects", iconNode: () => null, onSelect: vi.fn() }],
+        },
+      ],
+    });
+    await flush();
+    const projects = root.querySelector<HTMLButtonElement>(
+      '[data-persona-rail-item="projects"]'
+    )!;
+    expect(projects.querySelector(".persona-history-nav-icon")).toBeNull();
+    expect(projects.textContent).toBe("Projects");
+  });
+
+  it("keeps the sections rail-only across a presentation flip", async () => {
+    const railSections = sections();
+    const { root, handle } = mount({ presentation: "panel", railSections });
+    await flush();
+    expect(root.querySelector("[data-persona-rail-section]")).toBeNull();
+
+    handle.setPresentation("rail");
+    await flush();
+    expect(root.querySelectorAll("[data-persona-rail-section]")).toHaveLength(3);
+
+    handle.setPresentation("panel");
+    await flush();
+    expect(root.querySelector("[data-persona-rail-section]")).toBeNull();
+
+    // Back into rail re-attaches the same nodes rather than rebuilding them.
+    handle.setPresentation("rail");
+    await flush();
+    expect(root.querySelectorAll("[data-persona-rail-section]")).toHaveLength(3);
+  });
+
+  it("keeps only the icon rows as squares in the collapsed rail", async () => {
+    mount({ presentation: "rail", collapsed: true, railSections: sections() });
+    await flush();
+    const css = injectedHistoryCss();
+    // Sections survive the body-child sweep that hides everything else.
+    expect(css).toContain(
+      ".persona-history-body > :not(.persona-history-new):not(.persona-history-nav)"
+    );
+    const hidden = css.slice(
+      css.indexOf(
+        ".persona-history-view--rail-collapsed .persona-history-nav .persona-history-group-heading"
+      )
+    );
+    const hiddenBlock = hidden.slice(0, hidden.indexOf("}"));
+    // Headings, labels, badges and every row without an icon go.
+    expect(hiddenBlock).toContain(
+      "button.persona-history-nav-item:not(.persona-history-nav-item--icon)"
+    );
+    expect(hiddenBlock).toContain(".persona-history-nav-label");
+    expect(hiddenBlock).toContain(".persona-history-nav-badge");
+    expect(hiddenBlock).toContain("display: none;");
+
+    const square = css.slice(
+      css.indexOf(
+        ".persona-history-view--rail-collapsed button.persona-history-nav-item {"
+      )
+    );
+    const squareBlock = square.slice(0, square.indexOf("}"));
+    expect(squareBlock).toContain("width: 36px;");
+    expect(squareBlock).toContain("margin: 0 auto;");
+  });
+});
+
 describe("history view header placement", () => {
   const barOf = (root: HTMLElement): HTMLElement | null =>
     root.querySelector<HTMLElement>(".persona-history-topbar");

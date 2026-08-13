@@ -2724,6 +2724,42 @@ export interface AgentWidgetHistoryCopy {
 }
 
 /**
+ * One row in a `features.history.rail.sections` navigation section. Icon
+ * precedence, highest first: `renderIcon`, then `iconUrl`, then `icon`.
+ * Whichever resolves first is built once and reused for the item's lifetime.
+ */
+export interface AgentWidgetHistoryRailSectionItem {
+  /** Stable identity, stamped as `data-persona-rail-item`. */
+  id: string;
+  /** Visible text, and the default `aria-label` of the button. */
+  label: string;
+  /**
+   * Lucide name from the widget's built-in icon registry (see `IconName`). A
+   * name outside the registry warns once and the row renders label-only.
+   */
+  icon?: IconName | (string & {});
+  /** Image URL or data URI, rendered as a decorative `img` in the icon slot. */
+  iconUrl?: string;
+  /** Full custom icon node. Returning null renders the row label-only. */
+  renderIcon?: () => Element | null;
+  /** Small trailing text chip, for a count or a short status word. */
+  badge?: string;
+  /** Invoked on click. A throw is caught and warned once per section. */
+  onSelect: () => void;
+}
+
+/** One navigation section in the history rail, above or below the list. */
+export interface AgentWidgetHistoryRailSection {
+  /** Stable identity, stamped as `data-persona-rail-section`. */
+  id: string;
+  /** Optional heading, styled like a conversation date-group heading. */
+  title?: string;
+  /** Default `"above-conversations"`. */
+  placement?: "above-conversations" | "below-conversations" | "footer";
+  items: AgentWidgetHistoryRailSectionItem[];
+}
+
+/**
  * Feature config for per-visitor conversation history. Client token mode only:
  * the UI never renders for proxy/agent sessions.
  */
@@ -2766,6 +2802,12 @@ export interface AgentWidgetHistoryFeature {
       collapsed: boolean;
       defaultTitle: string;
     }) => Element | null;
+    /**
+     * Extra navigation sections stacked around the conversation list, in array
+     * order within each `placement` bucket. Rail-only in this release: a move
+     * into panel presentation removes them and a move back re-renders them.
+     */
+    sections?: AgentWidgetHistoryRailSection[];
   };
   /**
    * History scope. Defaults to "verified-user" when getIdentityProof exists,

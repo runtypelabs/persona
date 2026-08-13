@@ -646,6 +646,64 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view--rail .persona-history-list-region {
   gap: 24px;
 }
+` +
+  /* Host nav sections. Rail-only, so they take the row geometry unconditionally;
+     the footer bucket sinks to the bottom of the body above the destructive
+     actions. */
+  `.persona-history-view .persona-history-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.persona-history-view .persona-history-nav--footer {
+  margin-top: auto;
+}
+.persona-history-view button.persona-history-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% - 12px);
+  min-height: 36px;
+  padding: 6px 10px;
+  margin: 0 6px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.persona-history-view button.persona-history-nav-item:hover:not(:disabled) {
+  background: var(--persona-history-row-hover-bg);
+}
+.persona-history-view .persona-history-nav-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--persona-text-muted, #6b7280);
+}
+.persona-history-view .persona-history-nav-icon > * {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+}
+.persona-history-view .persona-history-nav-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.persona-history-view .persona-history-nav-badge {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--persona-history-row-hover-bg);
+  color: var(--persona-text-muted, #6b7280);
+  font-size: 11px;
+  line-height: 18px;
+}
 .persona-history-view--rail .persona-history-group-heading {
   margin: 0 0 6px;
   padding: 0 16px;
@@ -692,7 +750,7 @@ export const HISTORY_VIEW_CSS =
   padding: 2px;
 }
 .persona-history-view--rail-collapsed .persona-history-heading-group,
-.persona-history-view--rail-collapsed .persona-history-body > :not(.persona-history-new) {
+.persona-history-view--rail-collapsed .persona-history-body > :not(.persona-history-new):not(.persona-history-nav) {
   display: none;
 }
 .persona-history-view--rail-collapsed button.persona-history-new {
@@ -703,6 +761,21 @@ export const HISTORY_VIEW_CSS =
 }
 .persona-history-view--rail-collapsed button.persona-history-new span {
   display: none;
+}
+` +
+  /* Nav sections keep only their icon rows, squared off like the one above. A
+     labelled row with no icon has nothing to show in a 52px column. */
+  `.persona-history-view--rail-collapsed .persona-history-nav .persona-history-group-heading,
+.persona-history-view--rail-collapsed button.persona-history-nav-item:not(.persona-history-nav-item--icon),
+.persona-history-view--rail-collapsed .persona-history-nav-label,
+.persona-history-view--rail-collapsed .persona-history-nav-badge {
+  display: none;
+}
+.persona-history-view--rail-collapsed button.persona-history-nav-item {
+  width: 36px;
+  padding: 0;
+  margin: 0 auto;
+  justify-content: center;
 }
 
 ` +

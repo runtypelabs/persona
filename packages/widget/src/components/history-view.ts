@@ -118,6 +118,30 @@ export type HistoryViewOperations = Omit<
   "close"
 >;
 
+/** Where a rail section sits relative to the built-in conversation list. */
+export type HistoryRailSectionPlacement =
+  | "above-conversations"
+  | "below-conversations"
+  | "footer";
+
+/** Core-normalized rail nav item: one label, one pre-resolved icon, one action. */
+export interface HistoryRailSectionItem {
+  id: string;
+  label: string;
+  badge?: string;
+  /** Memoized by the core, so a presentation flip reuses the same node. */
+  iconNode?: () => Element | null;
+  /** Already guarded by the core; this chunk calls it bare. */
+  onSelect: () => void;
+}
+
+export interface HistoryRailSection {
+  id: string;
+  title?: string;
+  placement: HistoryRailSectionPlacement;
+  items: HistoryRailSectionItem[];
+}
+
 export interface HistoryViewOptions {
   /** Internal seam (D9). The view never touches `AgentWidgetClient`. */
   provider: HistoryProvider;
@@ -149,6 +173,12 @@ export interface HistoryViewOptions {
     collapsed: boolean;
     defaultTitle: string;
   }) => Element | null;
+  /**
+   * Rail only. Host navigation sections stacked around the conversation list.
+   * Normalized by the core, which also resolves each item's icon precedence
+   * into `iconNode` so this chunk never imports the lucide registry.
+   */
+  railSections?: HistoryRailSection[];
   /** Default `"inline"`. Rail is always inline; the shell enforces that. */
   headerPlacement?: HistoryHeaderPlacement;
   showScopeStatus: boolean;
@@ -627,6 +657,102 @@ export function createHistoryView(
   };
   syncCollapsedClass();
   syncBarOrder();
+
+  // --- rail nav sections --------------------------------------------------
+
+  const buildNavSection = (
+    section: HistoryRailSection,
+    index: number
+  ): HTMLElement => {
+    const navHeadingId = `${headingId}-s${index}`;
+    const node = createNode("div", {
+      className: cx(
+        "persona-history-nav",
+        section.placement === "footer" && "persona-history-nav--footer"
+      ),
+      attrs: {
+        role: "group",
+        "data-persona-rail-section": section.id,
+        ...(section.title
+          ? { "aria-labelledby": navHeadingId }
+          : { "aria-label": section.id }),
+      },
+    });
+    if (section.title) {
+      node.appendChild(
+        createNode("h3", {
+          className: "persona-history-group-heading",
+          text: section.title,
+          attrs: { id: navHeadingId },
+        })
+      );
+    }
+    for (const item of section.items) {
+      const icon = item.iconNode?.() ?? null;
+      const button = createNode(
+        "button",
+        {
+          // Collapsed keeps only the rows that have something to show as a square.
+          className: cx(
+            "persona-history-nav-item",
+            icon && "persona-history-nav-item--icon"
+          ),
+          attrs: {
+            type: "button",
+            "aria-label": item.label,
+            "data-persona-rail-item": item.id,
+          },
+        },
+        icon ? createNode("span", { className: "persona-history-nav-icon" }, icon) : null,
+        createNode("span", {
+          className: "persona-history-nav-label persona-history-truncate",
+          text: item.label,
+        }),
+        item.badge
+          ? createNode("span", {
+              className: "persona-history-nav-badge",
+              text: item.badge,
+            })
+          : null
+      );
+      button.addEventListener("click", () => item.onSelect());
+      node.appendChild(button);
+    }
+    return node;
+  };
+
+  /** Built once; a presentation flip only detaches and re-attaches them. */
+  let navNodes: HTMLElement[] | null = null;
+
+  const syncNavSections = (): void => {
+    const sections = options.railSections;
+    if (!sections?.length) return;
+    if (presentation !== "rail") {
+      navNodes?.forEach((node) => node.remove());
+      return;
+    }
+    navNodes ??= sections.map(buildNavSection);
+    // Bucket order, then array order within a bucket: re-parenting an already
+    // placed node is a no-op only because nothing inside it holds focus.
+    for (const placement of [
+      "above-conversations",
+      "below-conversations",
+      "footer",
+    ] as HistoryRailSectionPlacement[]) {
+      const anchor =
+        placement === "above-conversations"
+          ? options.showScopeStatus
+            ? scopeLine
+            : listRegion
+          : footer;
+      sections.forEach((section, index) => {
+        if (section.placement === placement) {
+          body.insertBefore(navNodes![index], anchor);
+        }
+      });
+    }
+  };
+  syncNavSections();
 
   injectStyles(element, "persona-history-view", HISTORY_VIEW_CSS);
 
@@ -1342,6 +1468,7 @@ export function createHistoryView(
       syncCollapsedClass();
       syncBarOrder();
       syncRailBrand();
+      syncNavSections();
       const nextIcon = historyIcon(rail ? "plus" : "arrow-right", 18);
       newIcon.replaceWith(nextIcon);
       newIcon = nextIcon;

@@ -466,6 +466,17 @@ the sidebar to a 52px icon rail carrying expand and new-conversation), and
 chosen state is remembered alongside the other `persistState` keys, and
 `persistState: false` keeps it in memory for the page load only.
 
+`features.history.rail.sections` adds host navigation sections around the
+conversation list, each stamped `data-persona-rail-section="<id>"` with rows
+stamped `data-persona-rail-item="<id>"`. They are styled by
+`.persona-history-nav` (the section, plus `.persona-history-nav--footer` for the
+`"footer"` placement), `.persona-history-nav-item` (a row on the same 36px
+geometry as a conversation, `.persona-history-nav-item--icon` when it resolved
+an icon), and `.persona-history-nav-icon` / `.persona-history-nav-label` /
+`.persona-history-nav-badge` inside it. Section titles reuse
+`.persona-history-group-heading`. Collapsed, the icon rows square off like the
+new-conversation row and everything else in the section hides.
+
 ### Message (`components.message.*`)
 
 | Token | Default Reference |
@@ -974,6 +985,13 @@ plugins can target them:
                                          pill pinned to the bottom of the list */
 .persona-history-new-icon             /* its icon-button form in the top bar */
 .persona-history-list-region
+.persona-history-nav                  /* a features.history.rail.sections group;
+                                         --footer sinks to the bottom of the body */
+.persona-history-nav-item             /* one nav row; --icon marks the rows that
+                                         survive as squares in the collapsed rail */
+.persona-history-nav-icon
+.persona-history-nav-label
+.persona-history-nav-badge            /* small trailing text chip */
 .persona-history-group                /* one time bucket (Today, Yesterday, …) */
 .persona-history-group-heading        /* sr-only in panel, visible in rail */
 .persona-history-list
