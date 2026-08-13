@@ -171,6 +171,36 @@ describe("theme editor scroll-to-bottom controls", () => {
     ).toBe(false);
   });
 
+  it("exposes the floating rail surface controls", () => {
+    const shape = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-history-overlay"
+    );
+    expect(shape?.fields.map((field) => field.path)).toEqual([
+      "theme.components.history.overlay.margin",
+      "theme.components.history.overlay.borderRadius",
+      "theme.components.history.overlay.shadow",
+    ]);
+    // Blank keeps the built-in default instead of writing an empty token.
+    const margin = shape?.fields[0];
+    expect(margin?.type).toBe("text");
+    expect(margin?.parseValue?.(" 12px ")).toBe("12px");
+    expect(margin?.parseValue?.("")).toBeUndefined();
+
+    const colors = COMPONENT_COLOR_SECTIONS.find(
+      (entry) => entry.id === "comp-history-overlay-colors"
+    );
+    const background = colors?.fields.find(
+      (field) => field.path === "theme.components.history.overlay.background"
+    );
+    expect(background?.type).toBe("token-ref");
+    expect(background?.tokenRef?.tokenType).toBe("color");
+
+    // Geometry is not color: the shape section never forks per light/dark.
+    expect(
+      COMPONENT_COLOR_SECTIONS.some((entry) => entry.id === "comp-history-overlay")
+    ).toBe(false);
+  });
+
   it("exposes the tooltip shape and color controls", () => {
     const shape = COMPONENT_SHAPE_SECTIONS.find(
       (entry) => entry.id === "comp-tooltip"

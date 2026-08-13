@@ -373,6 +373,37 @@ describe('theme utils', () => {
     expect(custom['--persona-history-rail-header-min-height']).toBe('64px');
   });
 
+  it('emits the floating rail aliases only when set', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-history-overlay-margin']).toBeUndefined();
+    expect(defaults['--persona-history-overlay-radius']).toBeUndefined();
+    expect(defaults['--persona-history-overlay-shadow']).toBeUndefined();
+    expect(defaults['--persona-history-overlay-bg']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          history: {
+            overlay: {
+              margin: '12px',
+              borderRadius: '20px',
+              shadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+              background: 'palette.colors.gray.100',
+            },
+          },
+        },
+      } as any)
+    );
+
+    expect(custom['--persona-history-overlay-margin']).toBe('12px');
+    expect(custom['--persona-history-overlay-radius']).toBe('20px');
+    expect(custom['--persona-history-overlay-shadow']).toBe(
+      '0 8px 24px rgba(0, 0, 0, 0.4)'
+    );
+    // The background goes through token resolution; the rest are raw CSS.
+    expect(custom['--persona-history-overlay-bg']).toBe('#f3f4f6');
+  });
+
   it('emits the tooltip aliases only when set, including the arrow opt-out', () => {
     const defaults = themeToCssVariables(createTheme());
     expect(defaults['--persona-tooltip-background']).toBeUndefined();

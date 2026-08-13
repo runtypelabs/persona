@@ -53,8 +53,38 @@ test("the collapsed rail floats on hover and pins from its toggle", async ({
   await expect(overlay).toHaveCount(0);
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
 
-  // Floating, the rail's own toggle is the control the pointer finds where the
-  // trigger was, so it docks the rail instead of collapsing it.
+  // The rail hangs below the trigger's row, which stays visible and clickable
+  // above it, one margin off the docked edge.
+  await enter();
+  await expect(overlay).toBeVisible();
+  await expect(trigger).toBeVisible();
+  const triggerBox = (await trigger.boundingBox())!;
+  const overlayBox = (await overlay.boundingBox())!;
+  // The measured trigger row is rounded to whole pixels, so the gap is the 8px
+  // margin plus at most that rounding.
+  const gap = overlayBox.y - (triggerBox.y + triggerBox.height);
+  expect(gap).toBeGreaterThanOrEqual(8);
+  expect(gap).toBeLessThanOrEqual(9);
+  const containerBox = (await page
+    .locator(".persona-widget-container")
+    .boundingBox())!;
+  // Measured from the container's border box, so its own 1px border rides on
+  // top of the margin.
+  const inset = overlayBox.x - containerBox.x;
+  expect(inset).toBeGreaterThanOrEqual(8);
+  expect(inset).toBeLessThanOrEqual(9);
+
+  // Clicking the trigger pins, now that the rail never covers it.
+  await trigger.click();
+  await expect(page.locator(sel.railShell)).toBeVisible();
+  await expect(overlay).toHaveCount(0);
+  await expect(trigger).toBeHidden();
+  await page.locator(sel.collapseToggle).click();
+  await expect(page.locator(sel.railShell)).toHaveCount(0);
+  await expect(trigger).toBeVisible();
+
+  // Floating, the rail's own toggle docks it too.
+  await leave();
   await enter();
   await expect(overlay).toBeVisible();
   await expect(page.locator(sel.collapseToggle)).toHaveAttribute(

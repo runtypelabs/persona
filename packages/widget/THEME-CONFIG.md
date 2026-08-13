@@ -471,8 +471,12 @@ is that 52px column, `"overlay"` replaces it with a trigger in the conversation
 header (`.persona-rail-trigger`, wearing `rail.brand` through
 `.persona-rail-trigger-brand`) that floats the expanded rail over the
 conversation in `.persona-history-rail-overlay` and pins it back on click. The
-floating host is geometry, not tokens: it takes `width` and `side` and paints
-the rail surface, so a rail themed for the column is themed for it too.
+floating rail hangs from the trigger's row and keeps `width` and `side`, which
+stay config. Its surface is `components.history.overlay`: `margin` (`8px`, the
+gap from the trigger, the docked edge and the bottom), `borderRadius` (`16px`),
+`shadow` (`0 12px 40px rgba(0, 0, 0, 0.25)`) and `background` (the rail
+surface). Unset keys keep those defaults, and a live `update()` of any of them
+reaches an open rail.
 
 Rail identity is a ladder, cheapest first. `features.history.rail.brand` is one
 declaration (`icon`, `iconUrl`, or `render({ collapsed })`, in that precedence,

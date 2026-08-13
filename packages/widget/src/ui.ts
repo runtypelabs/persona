@@ -7906,8 +7906,11 @@ export const createAgentExperience = (
 
   /** Grace before a pointer that left both surfaces dismisses the rail. */
   const RAIL_OVERLAY_GRACE_MS = 300;
-  /** Inset of the floating rail from the widget's top and bottom edges. */
-  const RAIL_OVERLAY_INSET = 8;
+  /**
+   * Gap from the trigger, the docked edge and the bottom. A var reference, not
+   * a number, so a live theme update reaches an open overlay unaided.
+   */
+  const RAIL_OVERLAY_MARGIN = "var(--persona-history-overlay-margin,8px)";
 
   let railTriggerButton: HTMLButtonElement | null = null;
   let railTriggerWrapper: HTMLElement | null = null;
@@ -8086,12 +8089,14 @@ export const createAgentExperience = (
     button.addEventListener("focus", () => {
       if (!historyVisible) warmHistoryChunk();
     });
-    button.addEventListener("click", () => {
+    button.addEventListener("click", (event) => {
       if (!historyAvailable()) return;
-      // Touch taps the overlay open first and pins on a second tap; a pointer
-      // that can hover is already looking at the overlay, so it pins outright.
-      if (coarsePointer() && !historyVisible) openRailOverlay();
-      else pinRail();
+      // Touch taps the overlay open first and pins on a second tap. A pointer
+      // that can hover is already looking at the rail, and Enter/Space (a click
+      // with detail 0) is a commitment either way, so both pin outright.
+      if (event.detail !== 0 && coarsePointer() && !historyVisible) {
+        openRailOverlay();
+      } else pinRail();
     });
     railTriggerButton = button;
     railTriggerWrapper = parts.wrapper;
@@ -8124,6 +8129,9 @@ export const createAgentExperience = (
     wrapper.style.display = railPinned() ? "none" : "";
     button.setAttribute("aria-label", historyShellCopy.expandLabel);
     button.setAttribute("aria-expanded", historyVisible ? "true" : "false");
+    // The floating rail hangs from this control, so a rebuild or a resize that
+    // moved it re-anchors what is already open.
+    if (railOverlayHost) applyRailChrome();
   };
 
   /**
@@ -8162,12 +8170,17 @@ export const createAgentExperience = (
     const trailing = railSide() === "right";
     const overlay = railOverlayHost;
     if (overlay) {
-      // Flush to the docked edge, inset from the widget's top and bottom, with
-      // the radius on the corners that face the conversation.
+      // Hangs from the trigger's row rather than the widget's top edge, so the
+      // trigger stays visible and clickable above it. Measured, since a header
+      // rebuild or a resize can move the trigger.
+      const below = railTriggerButton
+        ? railTriggerButton.getBoundingClientRect().bottom -
+          container.getBoundingClientRect().top
+        : 0;
+      overlay.style.top = `calc(${Math.max(0, Math.round(below))}px + ${RAIL_OVERLAY_MARGIN})`;
       overlay.style.width = `${railWidth()}px`;
-      overlay.style.left = trailing ? "" : "0";
-      overlay.style.right = trailing ? "0" : "";
-      overlay.style.borderRadius = trailing ? "12px 0 0 12px" : "0 12px 12px 0";
+      overlay.style.left = trailing ? "" : RAIL_OVERLAY_MARGIN;
+      overlay.style.right = trailing ? RAIL_OVERLAY_MARGIN : "";
     }
     const host = railHost;
     const shell = railShell;
@@ -8225,11 +8238,14 @@ export const createAgentExperience = (
    */
   const mountRailOverlayHost = (element: HTMLElement): void => {
     const host = createElement("div", "persona-history-rail-overlay");
+    // Every themeable value is a var() reference with its default in the
+    // fallback, so an unset token costs nothing and a live one lands at once.
     host.style.cssText =
-      `position:absolute;top:${RAIL_OVERLAY_INSET}px;bottom:${RAIL_OVERLAY_INSET}px;` +
+      `position:absolute;bottom:${RAIL_OVERLAY_MARGIN};` +
       `display:flex;overflow:hidden;z-index:${PORTALED_OVERLAY_Z_INDEX - 1};` +
-      "background:var(--persona-container,#f7f7f8);" +
-      "box-shadow:0 16px 40px rgba(0,0,0,0.18)";
+      "border-radius:var(--persona-history-overlay-radius,16px);" +
+      "background:var(--persona-history-overlay-bg,var(--persona-container,#f7f7f8));" +
+      "box-shadow:var(--persona-history-overlay-shadow,0 12px 40px rgba(0,0,0,0.25))";
     // The conversation column already relies on a positioned container.
     container.style.position = "relative";
     container.appendChild(host);

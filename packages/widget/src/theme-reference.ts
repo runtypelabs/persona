@@ -126,9 +126,9 @@ export const THEME_TOKEN_DOCS = {
       },
       history: {
         description:
-          'Messages (conversation history) chrome. railHeader styles the rail sidebar top strip, which runs beside the widget header in rail presentation.',
+          'Messages (conversation history) chrome. railHeader styles the rail sidebar top strip, which runs beside the widget header in rail presentation; overlay styles the floating rail a collapsed overlay rail opens on hover.',
         properties:
-          'railHeader.background (defaults to the rail surface), railHeader.border (full border-bottom shorthand, default 0), railHeader.minHeight (defaults to components.header.minHeight, then 56px). Pin railHeader.minHeight and header.minHeight to the same value so both top strips read as one band.',
+          'railHeader.background (defaults to the rail surface), railHeader.border (full border-bottom shorthand, default 0), railHeader.minHeight (defaults to components.header.minHeight, then 56px). Pin railHeader.minHeight and header.minHeight to the same value so both top strips read as one band. overlay.margin (8px, the gap from the trigger, the docked edge and the bottom), overlay.borderRadius (16px), overlay.shadow (0 12px 40px rgba(0, 0, 0, 0.25)), overlay.background (defaults to the rail surface). The floating rail keeps features.history.rail width and side, which are config, not tokens.',
       },
       tooltip: {
         description:

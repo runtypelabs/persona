@@ -105,6 +105,23 @@ const railToggle = (mount: HTMLElement) =>
 const historyButton = (mount: HTMLElement) =>
   mount.querySelector<HTMLButtonElement>("[data-persona-history-toggle]")!;
 
+/** The themed margin, as the host carries it: a var with its default inline. */
+const MARGIN = "var(--persona-history-overlay-margin,8px)";
+
+/** jsdom measures nothing, so the trigger's row is stubbed for the anchor math. */
+const stubTriggerRow = (mount: HTMLElement, bottom: number) => {
+  const rect = (box: Partial<DOMRect>) => () => ({ ...box }) as DOMRect;
+  mount.querySelector<HTMLElement>(".persona-widget-container")!.getBoundingClientRect =
+    rect({ top: 0, left: 0, width: 900 });
+  trigger(mount)!.getBoundingClientRect = rect({ top: 12, bottom, left: 8 });
+};
+
+/** Enter and Space synthesize a click with detail 0; a pointer reports 1. */
+const click = (element: HTMLElement, detail: number) =>
+  element.dispatchEvent(
+    new MouseEvent("click", { bubbles: true, cancelable: true, detail })
+  );
+
 const hover = (element: HTMLElement) =>
   element.dispatchEvent(new MouseEvent("mouseenter"));
 const unhover = (element: HTMLElement) =>
@@ -187,13 +204,28 @@ describe("collapsed rail overlay", () => {
 
   it("floats the expanded rail as soon as the pointer arrives", async () => {
     const { mount } = setup();
+    stubTriggerRow(mount, 44);
     // No dwell: the loaded chunk opens it on the enter itself.
     await hoverOpen(mount);
     const host = overlayHost(mount)!;
     expect(host).not.toBeNull();
     expect(host.contains(view(mount))).toBe(true);
     expect(host.style.width).toBe("260px");
-    expect(host.style.left).toBe("0px");
+    // Hangs from the trigger's row, one margin off every other edge, and
+    // rounded on all four corners.
+    expect(host.style.top).toBe(`calc(44px + ${MARGIN})`);
+    expect(host.style.bottom).toBe(MARGIN);
+    expect(host.style.left).toBe(MARGIN);
+    expect(host.style.right).toBe("");
+    expect(host.style.borderRadius).toBe("var(--persona-history-overlay-radius,16px)");
+    expect(host.style.background).toBe(
+      "var(--persona-history-overlay-bg,var(--persona-container,#f7f7f8))"
+    );
+    expect(host.style.boxShadow).toBe(
+      "var(--persona-history-overlay-shadow,0 12px 40px rgba(0,0,0,0.25))"
+    );
+    // The trigger stays above it, visible and clickable.
+    expect(trigger(mount)!.parentElement!.style.display).toBe("");
     // Expanded, not the icon column, and floating rather than docked.
     expect(
       view(mount)!.classList.contains("persona-history-view--rail-collapsed")
@@ -244,7 +276,8 @@ describe("collapsed rail overlay", () => {
     const element = view(mount)!;
     element.dataset.mark = "same-view";
 
-    trigger(mount)!.click();
+    // A real pointer click, on the trigger the floating rail no longer covers.
+    click(trigger(mount)!, 1);
     await flush();
     expect(overlayHost(mount)).toBeNull();
     const shell = railShell(mount)!;
@@ -257,6 +290,23 @@ describe("collapsed rail overlay", () => {
     expect(window.localStorage.getItem("persona-test-rail-collapsed")).toBe("0");
     // The rail's own toggle owns the control now, so the trigger stands down.
     expect(trigger(mount)!.parentElement!.style.display).toBe("none");
+  });
+
+  it("pins from the keyboard, even right after a dismissal under the pointer", async () => {
+    const { mount } = setup();
+    await hoverOpen(mount);
+    // Dismiss with the pointer still inside: that arms the hover hold-off.
+    view(mount)!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    );
+    await flush(20);
+    expect(overlayHost(mount)).toBeNull();
+
+    // The hold-off gates hover, never a commitment.
+    click(trigger(mount)!, 0);
+    await flush();
+    expect(railShell(mount)).not.toBeNull();
+    expect(overlayHost(mount)).toBeNull();
   });
 
   it("returns to the trigger when the pinned rail collapses", async () => {
@@ -397,11 +447,11 @@ describe("collapsed rail overlay", () => {
     await flush();
     expect(overlayHost(mount)).toBeNull();
 
-    trigger(mount)!.click();
+    click(trigger(mount)!, 1);
     await flush();
     expect(overlayHost(mount)).not.toBeNull();
 
-    trigger(mount)!.click();
+    click(trigger(mount)!, 1);
     await flush();
     expect(overlayHost(mount)).toBeNull();
     expect(railShell(mount)).not.toBeNull();

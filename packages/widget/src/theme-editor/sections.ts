@@ -376,6 +376,30 @@ const historyRailHeaderColorsSectionDef: SectionDef = {
   ],
 };
 
+// The floating rail a collapsed overlay rail opens on hover. Its width and
+// edge stay features.history.rail config; only the surface is themeable.
+const historyOverlayShapeSectionDef: SectionDef = {
+  id: 'comp-history-overlay',
+  title: 'Messages Floating Rail',
+  description:
+    'The Messages rail floating over the conversation, when a collapsed rail opens on hover.',
+  collapsed: true,
+  fields: [
+    { id: 'history-overlay-margin', label: 'Margin', description: 'Gap from the trigger, the docked edge and the bottom', type: 'text', path: 'theme.components.history.overlay.margin', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-overlay-radius', label: 'Corner Radius', description: 'CSS length on all four corners. Blank keeps 16px', type: 'text', path: 'theme.components.history.overlay.borderRadius', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-overlay-shadow', label: 'Shadow', description: 'Full box-shadow shorthand. Blank keeps the built-in elevation', type: 'text', path: 'theme.components.history.overlay.shadow', defaultValue: '', parseValue: parseOptionalCssValue },
+  ],
+};
+
+const historyOverlayColorsSectionDef: SectionDef = {
+  id: 'comp-history-overlay-colors',
+  title: 'Messages Floating Rail Colors',
+  collapsed: true,
+  fields: [
+    { id: 'history-overlay-bg', label: 'Background', type: 'token-ref', path: 'theme.components.history.overlay.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
 // The portaled tooltip on icon controls. Its colors live in
 // COMPONENT_COLOR_SECTIONS.
 const tooltipShapeSectionDef: SectionDef = {
@@ -646,6 +670,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   // never forks them per light/dark.
   headerControlsSectionDef,
   historyRailHeaderShapeSectionDef,
+  historyOverlayShapeSectionDef,
   tooltipShapeSectionDef,
   messageShapeSectionDef,
   inputShapeSectionDef,
@@ -659,6 +684,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
 export const COMPONENT_COLOR_SECTIONS: SectionDef[] = [
   headerColorsSectionDef,
   historyRailHeaderColorsSectionDef,
+  historyOverlayColorsSectionDef,
   tooltipColorsSectionDef,
   messageColorsSectionDef,
   inputColorsSectionDef,

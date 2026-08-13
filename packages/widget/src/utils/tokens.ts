@@ -897,6 +897,18 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   if (railHeaderMinHeight)
     cssVars['--persona-history-rail-header-min-height'] = railHeaderMinHeight;
 
+  // Floating (overlay-collapsed) rail. Same conditional rule: the host's
+  // inline styles carry every default in their var() fallback.
+  for (const [token, alias] of [
+    ['margin', 'margin'],
+    ['borderRadius', 'radius'],
+    ['shadow', 'shadow'],
+    ['background', 'bg'],
+  ] as const) {
+    const value = cssVars[`--persona-components-history-overlay-${token}`];
+    if (value) cssVars[`--persona-history-overlay-${alias}`] = value;
+  }
+
   // Portaled control tooltip. Same conditional rule: widget.css carries the
   // built-in look in every var() fallback, so an unset token stays undefined.
   for (const [token, alias] of [

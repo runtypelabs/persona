@@ -272,6 +272,22 @@ export interface HistoryTokens {
     /** Strip height floor. Defaults to `components.header.minHeight`, then 56px. */
     minHeight?: string;
   };
+  /**
+   * The floating rail that a collapsed
+   * `features.history.rail.collapsedBehavior: "overlay"` opens on hover. It
+   * hangs below the trigger in the conversation header; its width and edge
+   * stay `features.history.rail` geometry, not tokens.
+   */
+  overlay?: {
+    /** Gap from the trigger, the docked edge, and the bottom. @default "8px" */
+    margin?: string;
+    /** Corner radius, on all four corners. @default "16px" */
+    borderRadius?: string;
+    /** Elevation over the conversation. @default "0 12px 40px rgba(0, 0, 0, 0.25)" */
+    shadow?: string;
+    /** Surface behind the rail. Defaults to the rail's own surface color. */
+    background?: TokenReference<'color'>;
+  };
 }
 
 /**
