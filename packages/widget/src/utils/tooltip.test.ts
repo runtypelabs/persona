@@ -329,6 +329,7 @@ describe("attachTooltip", () => {
     vi.spyOn(window, "getComputedStyle").mockImplementation(
       (element: Element) =>
         ({
+          fontFamily: element === button ? "Geist, sans-serif" : "serif",
           getPropertyValue: (name: string) =>
             element === button
               ? ({
@@ -358,6 +359,8 @@ describe("attachTooltip", () => {
       tooltip!.style.getPropertyValue("--persona-tooltip-arrow-display")
     ).toBe("none");
     expect(tooltip!.style.getPropertyValue("--persona-radius-sm")).toBe("0.5rem");
+    // The body portal inherits the page font; the anchor's family wins instead.
+    expect(tooltip!.style.fontFamily).toBe("Geist, sans-serif");
     // Unresolved variables are never written as empty declarations.
     expect(tooltip!.style.getPropertyValue("--persona-tooltip-padding")).toBe("");
   });

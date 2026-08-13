@@ -174,6 +174,9 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
         const value = computed.getPropertyValue(name).trim();
         if (value) tooltip.style.setProperty(name, value);
       }
+      // Body portal inherits the host page font, not the widget's; the anchor's
+      // resolved family is the font the control actually renders in.
+      if (computed.fontFamily) tooltip.style.fontFamily = computed.fontFamily;
     }
 
     label = ownerDocument.createElement("span");
