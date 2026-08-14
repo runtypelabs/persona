@@ -2721,16 +2721,18 @@
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: var(--persona-radius-sm, 0.125rem);
+  border-radius: var(--persona-message-action-radius, var(--persona-radius-md, 0.375rem));
   background-color: transparent;
   color: var(--persona-muted, #6b7280);
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
+/* Hover reads the shared ghost wash (scheme-aware) and moves the icon toward
+   text, never a surface fill or the brand color. */
 .persona-message-action-btn:hover {
-  background-color: var(--persona-container, #f8fafc);
-  color: var(--persona-primary, #111827);
+  background-color: var(--persona-message-action-hover-bg, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+  color: var(--persona-message-action-hover-fg, var(--persona-text, #111827));
 }
 
 .persona-message-action-btn:active {

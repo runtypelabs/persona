@@ -928,6 +928,18 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   if (theme.components?.tooltip?.arrow === false)
     cssVars['--persona-tooltip-arrow-display'] = 'none';
 
+  // Per-message action row (copy, vote, read aloud). Same conditional rule:
+  // widget.css falls back to the scheme-aware ghost wash and semantic text, so
+  // an unset token must leave the variable undefined.
+  for (const [token, alias] of [
+    ['hoverBackground', 'hover-bg'],
+    ['hoverForeground', 'hover-fg'],
+    ['borderRadius', 'radius'],
+  ] as const) {
+    const value = cssVars[`--persona-components-messageActions-${token}`];
+    if (value) cssVars[`--persona-message-action-${alias}`] = value;
+  }
+
   // Intro card aliases: short names the panel inline-styles read directly.
   // The full-path `--persona-components-introCard-*` variables auto-emit above.
   // Default is flat (transparent, no shadow): the greeting renders as plain

@@ -527,6 +527,80 @@ describe('theme utils', () => {
     expect(customVars['--persona-button-ghost-hover-bg']).toBe('#f3f4f6'); // gray.100
   });
 
+  it('inverts the ghost hover wash for dark color schemes', () => {
+    // 5% black is invisible on a near-black surface, so every dark scheme —
+    // including a host theme that never mentions button.ghost — gets a light
+    // alpha wash instead. This drives the history rail's collapse toggle, its
+    // un-themed rows, and the per-message action buttons.
+    const light = themeToCssVariables(getActiveTheme({ colorScheme: 'light' }));
+    expect(light['--persona-button-ghost-hover-bg']).toBe('rgba(0, 0, 0, 0.05)');
+
+    const dark = themeToCssVariables(getActiveTheme({ colorScheme: 'dark' }));
+    expect(dark['--persona-button-ghost-hover-bg']).toBe('rgba(255, 255, 255, 0.08)');
+
+    // A host dark theme that overrides unrelated component tokens keeps it:
+    // the dark default is deep-merged underneath, not spread over.
+    const hostDark = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: { components: { button: { primary: { background: '#22c55e' } } } },
+      } as any)
+    );
+    expect(hostDark['--persona-button-ghost-hover-bg']).toBe('rgba(255, 255, 255, 0.08)');
+
+    // An explicit hoverBackground always wins, in either scheme.
+    const explicitDark = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: {
+          components: { button: { ghost: { hoverBackground: 'palette.colors.gray.800' } } },
+        },
+      } as any)
+    );
+    expect(explicitDark['--persona-button-ghost-hover-bg']).toBe('#1f2937'); // gray.800
+
+    // Set on `theme` alone it still reaches dark mode, which merges theme
+    // under darkTheme before the dark rebuild.
+    const explicitViaLight = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        theme: { components: { button: { ghost: { hoverBackground: '#123456' } } } },
+      } as any)
+    );
+    expect(explicitViaLight['--persona-button-ghost-hover-bg']).toBe('#123456');
+  });
+
+  it('emits messageActions aliases only when the group is configured', () => {
+    // widget.css chains to the ghost wash and semantic text on its own, so an
+    // unset group must leave every alias undefined.
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-message-action-hover-bg']).toBeUndefined();
+    expect(defaults['--persona-message-action-hover-fg']).toBeUndefined();
+    expect(defaults['--persona-message-action-radius']).toBeUndefined();
+
+    const themed = themeToCssVariables(
+      createTheme({
+        components: {
+          messageActions: {
+            hoverBackground: 'palette.colors.gray.100',
+            hoverForeground: 'semantic.colors.text',
+            borderRadius: 'palette.radius.full',
+          },
+        },
+      } as any)
+    );
+    expect(themed['--persona-message-action-hover-bg']).toBe('#f3f4f6'); // gray.100
+    expect(themed['--persona-message-action-hover-fg']).toBe('#111827'); // semantic text
+    expect(themed['--persona-message-action-radius']).toBe('9999px');
+
+    // Partial groups emit only what they set.
+    const partial = themeToCssVariables(
+      createTheme({ components: { messageActions: { borderRadius: '2px' } } } as any)
+    );
+    expect(partial['--persona-message-action-radius']).toBe('2px');
+    expect(partial['--persona-message-action-hover-bg']).toBeUndefined();
+  });
+
   it('defaults artifact pane fill from semantic container and resolves toolbar background token refs', () => {
     const theme = createTheme();
     const cssVars = themeToCssVariables(theme);

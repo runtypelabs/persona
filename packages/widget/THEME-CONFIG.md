@@ -549,6 +549,23 @@ Components → Tooltip.
 | `assistant.text` | `semantic.colors.text` |
 | `assistant.borderRadius` | `palette.radius.lg` |
 
+### Message actions (`components.messageActions.*`)
+
+The hover-revealed action row under a message (copy, vote, read aloud). Every
+token is optional: unset, the buttons inherit the shared ghost icon-button wash,
+which already inverts with the color scheme, and darken toward
+`semantic.colors.text` on hover. Set these only to break a message action away
+from the rest of the widget's icon buttons.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `hoverBackground` | `--persona-message-action-hover-bg` | `components.button.ghost.hoverBackground` |
+| `hoverForeground` | `--persona-message-action-hover-fg` | `semantic.colors.text` |
+| `borderRadius` | `--persona-message-action-radius` | `palette.radius.md` |
+
+The voted (active) state stays on `semantic.colors.accent` and is not themable
+through this group.
+
 ### Voice (`components.voice.*`)
 
 | Token | Default Reference |

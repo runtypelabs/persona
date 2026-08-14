@@ -315,6 +315,20 @@ export interface TooltipTokens {
   maxWidth?: string;
 }
 
+/**
+ * The hover-revealed action row under a message (copy, vote, read aloud).
+ * Unset keys inherit the shared ghost icon-button wash, which is already
+ * scheme-aware, so most themes never need this group.
+ */
+export interface MessageActionsTokens {
+  /** Hover fill. Defaults to `components.button.ghost.hoverBackground`. */
+  hoverBackground?: TokenReference<'color'>;
+  /** Hover icon color. Defaults to `semantic.colors.text`. */
+  hoverForeground?: TokenReference<'color'>;
+  /** Button corner radius. Defaults to `palette.radius.md`. */
+  borderRadius?: TokenReference<'radius'>;
+}
+
 export interface MessageTokens {
   user: {
     background: TokenReference<'color'>;
@@ -687,6 +701,8 @@ export interface ComponentTokens {
   /** Portaled icon-control tooltip and its shortcut hint chip. */
   tooltip?: TooltipTokens;
   message: MessageTokens;
+  /** Hover-revealed per-message action row (copy, vote, read aloud). */
+  messageActions?: MessageActionsTokens;
   /** Welcome / intro card shown above the message list. */
   introCard?: IntroCardTokens;
   /** Markdown surfaces (chat + artifact pane). */

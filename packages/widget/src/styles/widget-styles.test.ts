@@ -418,3 +418,33 @@ describe("scrollbar policy styles", () => {
     );
   });
 });
+
+describe("message action button styles", () => {
+  it("rounds the hit target on the medium radius, not the near-square small one", () => {
+    const start = widgetCss.indexOf(".persona-message-action-btn {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "border-radius: var(--persona-message-action-radius, var(--persona-radius-md, 0.375rem))",
+    );
+    expect(rule).not.toContain("--persona-radius-sm");
+  });
+
+  it("hovers with the scheme-aware ghost wash and text color, not surface or brand", () => {
+    const start = widgetCss.indexOf(".persona-message-action-btn:hover {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "background-color: var(--persona-message-action-hover-bg, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)))",
+    );
+    expect(rule).toContain(
+      "color: var(--persona-message-action-hover-fg, var(--persona-text, #111827))",
+    );
+    // A surface token is nearly invisible on light and paints a darker box on
+    // dark; the brand color is never an icon-hover color.
+    expect(rule).not.toContain("--persona-container");
+    expect(rule).not.toContain("--persona-primary");
+  });
+});
