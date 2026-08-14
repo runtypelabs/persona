@@ -341,6 +341,7 @@ export const HISTORY_VIEW_CSS =
   top: 50%;
   right: 6px;
   transform: translateY(-50%);
+  color: var(--persona-text-muted, #6b7280);
 }
 @media (hover: hover) {
   .persona-history-view button.persona-history-row-menu-button {
@@ -367,6 +368,7 @@ export const HISTORY_VIEW_CSS =
   background: linear-gradient(var(--persona-history-row-hover-bg), var(--persona-history-row-hover-bg)),
     linear-gradient(var(--persona-history-row-hover-bg), var(--persona-history-row-hover-bg)),
     var(--persona-history-surface-bg);
+  color: var(--persona-text, #111827);
 }
 ` +
   /* Long previews taper out before the trigger zone instead of running under

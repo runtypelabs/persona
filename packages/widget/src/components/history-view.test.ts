@@ -332,6 +332,15 @@ describe("history view list styling", () => {
     expect(chipBlock).toContain('button.persona-history-row-menu-button[aria-expanded="true"]');
     expect(chipBlock.match(/var\(--persona-history-row-hover-bg\)/g)).toHaveLength(4);
     expect(chipBlock).toContain("var(--persona-history-surface-bg);");
+    // The glyph keys to LIST text tokens, never the header icon token: it
+    // rests muted on the surface and darkens to text on the chip.
+    expect(chipBlock).toContain("color: var(--persona-text, #111827);");
+    const rest = css.slice(
+      css.indexOf(".persona-history-view button.persona-history-row-menu-button {")
+    );
+    expect(rest.slice(0, rest.indexOf("}"))).toContain(
+      "color: var(--persona-text-muted, #6b7280);"
+    );
     // The preview fades before the trigger zone in every state that shows the
     // trigger: hover reveal, focus, an open menu, and always on coarse pointers.
     expect(css).toContain(
