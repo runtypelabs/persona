@@ -282,6 +282,9 @@ export const HISTORY_VIEW_CSS =
   text-align: left;
   cursor: pointer;
 }
+` +
+  /* Hover keyed to the li so the wash holds over the sibling menu trigger. */
+  `.persona-history-view li.persona-history-item:hover button.persona-history-row:not(:disabled),
 .persona-history-view button.persona-history-row:hover:not(:disabled) {
   background: var(--persona-history-row-hover-bg);
 }
