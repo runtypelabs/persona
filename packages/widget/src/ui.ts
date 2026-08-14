@@ -3203,7 +3203,9 @@ export const createAgentExperience = (
     panel.style.cssText = '';
     container.style.cssText = '';
     body.style.cssText = '';
-    footer.style.cssText = '';
+    // A plugin-owned footer is the plugin's DOM: its inline state (the home
+    // screen's `display: none` placeholder) is not ours to reset.
+    if (!composerIsPluginOwned) footer.style.cssText = '';
 
     // Preserve the event-stream takeover across a layout-mode change. The
     // cssText reset above wiped the `display: none` that toggleEventStreamOn
@@ -3540,8 +3542,9 @@ export const createAgentExperience = (
         ${chatFlush ? 'background: transparent !important;' : ''}
       `;
       
-      // Remove footer border in sidebar mode
-      footer.style.cssText = `
+      // Remove footer border in sidebar mode (never on a plugin footer: see
+      // the cssText reset above)
+      if (!composerIsPluginOwned) footer.style.cssText = `
         flex-shrink: 0 !important;
         border-top: none !important;
         padding: 8px 16px 12px 16px !important;

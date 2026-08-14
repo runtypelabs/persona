@@ -957,6 +957,16 @@
   overflow: hidden;
 }
 
+/* The overlay is absolute inside the scroll body, so anything left scrollable
+   underneath strands it at the content origin instead of the viewport (the
+   body carries an inline `overflow-y: auto` in fill/fullscreen layouts, which
+   outranks the rule above). Hiding the transcript siblings leaves the body
+   with nothing to scroll, so the overlay stays over the visible area. */
+.persona-widget-body.persona-welcome-overlay-active
+  > :not([data-persona-welcome-overlay]) {
+  display: none !important;
+}
+
 /* Hero: auto block margins center the surface in the empty conversation
    without `justify-content`, which would make overflowing content
    unreachable in the scroll body. */

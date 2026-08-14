@@ -370,6 +370,21 @@ describe("plugin welcome styles", () => {
       ".persona-widget-body.persona-welcome-overlay-active {\n  overflow: hidden;\n}",
     );
   });
+
+  it("takes the transcript out of layout so nothing scrolls under the overlay", () => {
+    // The rule above cannot win against the inline `overflow-y: auto` that
+    // fill/fullscreen layouts stamp on the body, so the transcript stayed
+    // scrollable underneath an `inset: 0` box whose containing block scrolls
+    // with it: home and the transcript then read as one column, with no
+    // composer, and scrolling past the overlay left the transcript bare.
+    const selector =
+      ".persona-widget-body.persona-welcome-overlay-active\n  > :not([data-persona-welcome-overlay]) {";
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("display: none !important");
+  });
 });
 
 describe("scrollbar policy styles", () => {
