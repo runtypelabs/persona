@@ -536,26 +536,23 @@ const buildRecentRow = (
   return row;
 };
 
-const RELATIVE_UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
-  ["year", 365 * 24 * 60 * 60 * 1000],
-  ["month", 30 * 24 * 60 * 60 * 1000],
-  ["week", 7 * 24 * 60 * 60 * 1000],
-  ["day", 24 * 60 * 60 * 1000],
-  ["hour", 60 * 60 * 1000],
-  ["minute", 60 * 1000],
+const RELATIVE_UNITS: ReadonlyArray<readonly [string, number]> = [
+  ["y", 365 * 24 * 60 * 60 * 1000],
+  ["w", 7 * 24 * 60 * 60 * 1000],
+  ["d", 24 * 60 * 60 * 1000],
+  ["h", 60 * 60 * 1000],
+  ["m", 60 * 1000],
 ];
 
-/** Localized relative time. Empty string for a value that will not parse. */
+/** Compact relative time ("3h", "2d"), matching the widget's Messages list. */
 const relativeTime = (iso: string): string => {
   const then = Date.parse(iso);
   if (Number.isNaN(then)) return "";
-  const diff = then - Date.now();
-  const absolute = Math.abs(diff);
-  const format = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  const absolute = Math.abs(Date.now() - then);
   for (const [unit, ms] of RELATIVE_UNITS) {
-    if (absolute >= ms) return format.format(Math.round(diff / ms), unit);
+    if (absolute >= ms) return `${Math.floor(absolute / ms)}${unit}`;
   }
-  return format.format(0, "second");
+  return "now";
 };
 
 /**
