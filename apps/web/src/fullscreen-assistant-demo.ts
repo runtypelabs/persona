@@ -654,6 +654,9 @@ const config = mergeWithDefaults({
     header: {
       layout: "minimal",
       showCloseButton: false,
+      // The rail's new-conversation row and delete-all cover these jobs, and the
+      // clear-chat glyph reads as a duplicate of the artifact toolbar's refresh.
+      showClearChat: false,
       titleMenu: {
         menuItems: [
           { id: "star", label: "Star", icon: "star" },
