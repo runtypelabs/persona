@@ -3896,7 +3896,9 @@
   margin: 0.25rem 0;
 }
 
-/* Draggable split handle (desktop split only; hidden in drawer / narrow host / small viewport) */
+/* Draggable split handles: the artifact seam (desktop split only; hidden in
+   drawer / narrow host / small viewport) and the docked Messages rail's edge. */
+[data-persona-root] .persona-rail-resizer,
 [data-persona-root] .persona-artifact-split-handle {
   width: 6px;
   flex-shrink: 0;
@@ -3910,6 +3912,8 @@
   box-sizing: border-box;
 }
 
+[data-persona-root] .persona-rail-resizer:hover,
+[data-persona-root] .persona-rail-resizer:focus-visible,
 [data-persona-root] .persona-artifact-split-handle:hover,
 [data-persona-root] .persona-artifact-split-handle:focus-visible {
   background: color-mix(in srgb, var(--persona-border, #e5e7eb) 55%, transparent);

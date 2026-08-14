@@ -2673,6 +2673,8 @@ export interface AgentWidgetHistoryCopy {
   collapseLabel?: string;
   /** Rail collapse toggle while the rail is collapsed to icons. */
   expandLabel?: string;
+  /** Accessible name of the docked rail's drag-resize handle. */
+  resizeLabel?: string;
   /** Accessible status while the first page loads. */
   loadingLabel?: string;
   /** Label of the paging action below the last group. */
@@ -2790,6 +2792,15 @@ export interface AgentWidgetHistoryFeature {
     width?: number;
     collapsible?: boolean;
     defaultCollapsed?: boolean;
+    /**
+     * Drag handle on the docked rail's divider edge, resizing it live within
+     * the same 200 to 400 clamp `width` takes. Default false. The chosen width
+     * is remembered per visitor alongside the other `persistState` keys and
+     * outranks a later `width` update, the way the collapsed state does; the
+     * floating overlay rail inherits it but is never itself resizable, and a
+     * collapsed icon column ignores it until it expands again.
+     */
+    resizable?: boolean;
     /**
      * Shape of the COLLAPSED rail. `"icon-rail"` (default) keeps the 52px icon
      * column beside the conversation. `"overlay"` removes the column entirely:

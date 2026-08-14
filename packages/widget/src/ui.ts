@@ -7645,9 +7645,55 @@ export const createAgentExperience = (
     config.features?.history?.rail?.collapsible !== false;
   const railSide = (): "left" | "right" =>
     config.features?.history?.rail?.side === "right" ? "right" : "left";
-  /** Expanded rail width, shared by the column and the floating overlay. */
+  /** The band a rail width may take, by config or by drag. */
+  const RAIL_MIN_WIDTH = 200;
+  const RAIL_MAX_WIDTH = 400;
+  const clampRailWidth = (value: number): number =>
+    Math.min(RAIL_MAX_WIDTH, Math.max(RAIL_MIN_WIDTH, Math.round(value)));
+
+  const railResizable = (): boolean =>
+    config.features?.history?.rail?.resizable === true;
+  /** Resolved once per widget: storage, else nothing. */
+  let railWidthChoice: number | null | undefined;
+
+  // Same teaser pattern as the collapsed state: blocked storage throws rather
+  // than fails, so the resolved value is also the in-memory fallback.
+  const storedRailWidth = (): number | null => {
+    if (railWidthChoice === undefined) {
+      railWidthChoice = null;
+      if (config.persistState !== false) {
+        try {
+          const stored = Number(
+            window.localStorage.getItem(`${currentKeyPrefix()}rail-width`)
+          );
+          if (stored) railWidthChoice = stored;
+        } catch {
+          /* blocked storage: the config width stands */
+        }
+      }
+    }
+    return railWidthChoice;
+  };
+
+  /**
+   * Expanded rail width, shared by the column and the floating overlay. A
+   * dragged width outranks config, the way the collapsed state does: a live
+   * `update()` must not undo what the visitor chose.
+   */
   const railWidth = (): number =>
-    Math.min(400, Math.max(200, config.features?.history?.rail?.width ?? 260));
+    clampRailWidth(
+      storedRailWidth() ?? config.features?.history?.rail?.width ?? 260
+    );
+
+  const setStoredRailWidth = (next: number): void => {
+    railWidthChoice = next;
+    if (config.persistState === false) return;
+    try {
+      window.localStorage.setItem(`${currentKeyPrefix()}rail-width`, String(next));
+    } catch {
+      /* blocked storage: the in-memory value above is the fallback */
+    }
+  };
   /**
    * Overlay mode: the collapsed rail is a trigger in the conversation header
    * plus a floating host, so there is no icon column and no mounted view at
@@ -8177,8 +8223,117 @@ export const createAgentExperience = (
     document.removeEventListener("pointerdown", handleRailOverlayPointerDown, true);
     // Attached only while the rail floats; removing an unattached one is free.
     document.removeEventListener("pointermove", handleRailPointerMove);
+    railResizeRelease?.();
     cancelRailGrace();
   });
+
+  // --- drag-resize of the docked rail --------------------------------------
+
+  let railResizeHandle: HTMLElement | null = null;
+  /** Ends an in-flight drag: its listeners are on the document, not the handle. */
+  let railResizeRelease: (() => void) | null = null;
+  /** Arrow-key step, matching the reference sidebar's coarse nudge. */
+  const RAIL_RESIZE_STEP = 16;
+
+  const commitRailWidth = (next: number): void => {
+    setStoredRailWidth(clampRailWidth(next));
+    applyRailChrome();
+    // The transcript resized beside the anchor; a clamp would bounce it.
+    repinAnchoredMessage();
+  };
+
+  /** Mirrors the artifact split handle: pointer capture, document-level drag. */
+  const buildRailResizeHandle = (): HTMLElement => {
+    const handle = createElement("div", "persona-rail-resizer");
+    handle.tabIndex = 0;
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", "vertical");
+    handle.setAttribute("aria-valuemin", String(RAIL_MIN_WIDTH));
+    handle.setAttribute("aria-valuemax", String(RAIL_MAX_WIDTH));
+
+    handle.addEventListener("pointerdown", (event) => {
+      const host = railHost;
+      if (!host || event.button !== 0) return;
+      event.preventDefault();
+      railResizeRelease?.();
+      const startX = event.clientX;
+      const startWidth = host.getBoundingClientRect().width || railWidth();
+      // A leading rail widens as the pointer travels right; a trailing one
+      // mirrors that.
+      const direction = railSide() === "right" ? -1 : 1;
+      let width = startWidth;
+      const doc = mount.ownerDocument;
+      // The collapse animation is a transition on this very basis; left on, it
+      // would trail the pointer for the whole drag.
+      host.style.transition = "none";
+      const onMove = (move: PointerEvent): void => {
+        width = clampRailWidth(startWidth + direction * (move.clientX - startX));
+        // Straight onto the basis: a chrome pass per pointer move is waste.
+        host.style.flex = `0 0 ${width}px`;
+        handle.setAttribute("aria-valuenow", String(width));
+      };
+      const onUp = (): void => {
+        railResizeRelease = null;
+        doc.removeEventListener("pointermove", onMove);
+        doc.removeEventListener("pointerup", onUp);
+        doc.removeEventListener("pointercancel", onUp);
+        host.style.removeProperty("transition");
+        try {
+          handle.releasePointerCapture(event.pointerId);
+        } catch {
+          /* the capture may already be gone */
+        }
+        commitRailWidth(width);
+      };
+      railResizeRelease = onUp;
+      doc.addEventListener("pointermove", onMove);
+      doc.addEventListener("pointerup", onUp);
+      doc.addEventListener("pointercancel", onUp);
+      try {
+        handle.setPointerCapture(event.pointerId);
+      } catch {
+        /* pointer capture is an enhancement, not the mechanism */
+      }
+    });
+
+    handle.addEventListener("keydown", (event) => {
+      // Arrows track the visual direction, so a trailing rail inverts them.
+      const step = railSide() === "right" ? -RAIL_RESIZE_STEP : RAIL_RESIZE_STEP;
+      const width = railWidth();
+      const next =
+        event.key === "ArrowRight"
+          ? width + step
+          : event.key === "ArrowLeft"
+            ? width - step
+            : event.key === "Home"
+              ? RAIL_MIN_WIDTH
+              : event.key === "End"
+                ? RAIL_MAX_WIDTH
+                : null;
+      if (next === null) return;
+      event.preventDefault();
+      commitRailWidth(next);
+    });
+    return handle;
+  };
+
+  /** Docked and expanded only: the floating rail and the icon column never resize. */
+  const syncRailResizeHandle = (
+    shell: HTMLElement,
+    before: HTMLElement
+  ): void => {
+    if (!railResizable() || railShowsCollapsed()) {
+      railResizeRelease?.();
+      railResizeHandle?.remove();
+      return;
+    }
+    const handle = railResizeHandle ?? buildRailResizeHandle();
+    railResizeHandle = handle;
+    handle.setAttribute("aria-label", historyShellCopy.resizeLabel);
+    handle.setAttribute("aria-valuenow", String(railWidth()));
+    // Between the two, on the edge the divider already faces.
+    if (handle.nextElementSibling !== before) shell.insertBefore(handle, before);
+  };
 
   /**
    * Rail geometry is config-derived, so it must be re-derivable: a live
@@ -8219,6 +8374,7 @@ export const createAgentExperience = (
     if (shell.firstElementChild !== leading) {
       shell.append(leading, trailing ? host : column);
     }
+    syncRailResizeHandle(shell, trailing ? host : column);
   };
 
   /**
@@ -8291,6 +8447,8 @@ export const createAgentExperience = (
     }
     const shell = railShell;
     if (shell) {
+      // A drag in flight owns document listeners the host is about to lose.
+      railResizeRelease?.();
       // Live bindings, in panel order, before the slot the shell took. A header
       // restored first also takes its inline action wrappers back with it, so
       // the `contains` check skips them.

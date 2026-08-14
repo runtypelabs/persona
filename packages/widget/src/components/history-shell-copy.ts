@@ -22,6 +22,8 @@ const SHELL_COPY_KEYS = [
   // chunk loads, and relabels the view's toggle while the rail floats.
   "expandLabel",
   "collapseLabel",
+  // The rail's resize handle is shell chrome, not part of the view.
+  "resizeLabel",
   "showEarlierMessagesLabel",
   "confirmCancelLabel",
   "deleteConversationConfirmTitle",
@@ -52,6 +54,7 @@ export const HISTORY_SHELL_COPY_DEFAULTS: ResolvedHistoryShellCopy = {
   newConversationLabel: "New conversation",
   expandLabel: "Expand conversation list",
   collapseLabel: "Collapse conversation list",
+  resizeLabel: "Resize conversation list",
   showEarlierMessagesLabel: "Show earlier messages",
   confirmCancelLabel: "Cancel",
   deleteConversationConfirmTitle: "Delete conversation",

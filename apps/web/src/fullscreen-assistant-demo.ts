@@ -721,6 +721,8 @@ const config = mergeWithDefaults({
         // and floats back on hover instead of holding an icon column.
         collapsedBehavior: "overlay",
         defaultCollapsed: true,
+        // Docked, its divider edge is a drag handle.
+        resizable: true,
         brand: { render: () => renderRailMark() },
         sections: railNavSections,
         // The widget IS this page, so the combo is claimed document-wide. An

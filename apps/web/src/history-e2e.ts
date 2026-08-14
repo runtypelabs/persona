@@ -29,6 +29,8 @@ const presentation = (params.get("presentation") ?? "panel") as
 /** Rail-only: "overlay" swaps the collapsed icon column for a header trigger. */
 const collapsedBehavior =
   params.get("collapsedBehavior") === "overlay" ? "overlay" : undefined;
+/** Rail-only: a drag handle on the docked rail's divider edge. */
+const resizable = params.get("resizable") === "1";
 const apiUrl = params.get("apiUrl") ?? "/e2e-api";
 const clientToken = params.get("clientToken") ?? "ct_e2e_history";
 const keyPrefix = params.get("keyPrefix") ?? "persona-e2e-";
@@ -59,7 +61,14 @@ const base: AgentWidgetConfig = {
     history: {
       enabled: true,
       presentation,
-      ...(collapsedBehavior ? { rail: { collapsedBehavior } } : {}),
+      ...(collapsedBehavior || resizable
+        ? {
+            rail: {
+              ...(collapsedBehavior ? { collapsedBehavior } : {}),
+              ...(resizable ? { resizable } : {}),
+            },
+          }
+        : {}),
     },
   },
   suggestionChips: [],

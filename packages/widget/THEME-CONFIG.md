@@ -465,6 +465,11 @@ the sidebar to a 52px icon rail carrying expand and new-conversation), and
 `defaultCollapsed` (default false) for visitors who have never toggled it. The
 chosen state is remembered alongside the other `persistState` keys, and
 `persistState: false` keeps it in memory for the page load only.
+`resizable` (default false) puts a drag handle (`.persona-rail-resizer`, the
+artifact seam's box and cursor) on the docked rail's divider edge; it is a
+`separator` with arrow, Home and End keys, resizes within the same 200 to 400
+clamp, and the width it commits is remembered the same way and outranks a later
+`width` update. The floating rail inherits that width without a handle.
 
 `collapsedBehavior` picks what "collapsed" looks like: `"icon-rail"` (default)
 is that 52px column, `"overlay"` replaces it with a trigger in the conversation
