@@ -740,6 +740,7 @@ const config = mergeWithDefaults({
       enabled: true,
       layout: {
         splitGap: "0",
+        resizable: true,
         paneWidth: "50%",
         paneMaxWidth: "min(50%, 100%)",
         paneMinWidth: "0",
