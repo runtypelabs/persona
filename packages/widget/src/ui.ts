@@ -8654,13 +8654,15 @@ export const createAgentExperience = (
         : {}),
       headerPlacement: initialHeaderPlacement,
       showScopeStatus: config.features?.history?.showScopeStatus !== false,
-      // Rows reuse the header's agent icon unless history overrides or hides it.
+      // Rows borrow the launcher's IMAGE mark only: agentIconText carries the
+      // merged 💬 default, which would put a placeholder glyph on every row.
+      // No mark at all means text-only rows, the assistant-list default.
       rowAvatar:
         rowAvatar === false
           ? false
           : typeof rowAvatar === "string"
             ? rowAvatar
-            : (config.launcher?.iconUrl ?? config.launcher?.agentIconText),
+            : config.launcher?.iconUrl,
       activeConversationId: session.getActiveConversationId(),
       ...(config.features?.history?.copy
         ? { copy: config.features.history.copy }

@@ -2880,10 +2880,10 @@ export interface AgentWidgetHistoryFeature {
   /** Copy overrides. Every user-visible history string must be here. */
   copy?: AgentWidgetHistoryCopy;
   /**
-   * Leading avatar on each conversation row. Default true: the same source the
-   * header icon uses (`launcher.iconUrl`, else `launcher.agentIconText`). Pass
-   * an image URL or a glyph to override it, or false to drop the block and let
-   * the text column run full width.
+   * Leading avatar on each conversation row. Unset, rows show the launcher's
+   * image mark (`launcher.iconUrl`) when one exists and are text-only
+   * otherwise, the assistant-list default. Pass an image URL or a glyph to
+   * always show a mark, or false to force text-only rows.
    */
   rowAvatar?: boolean | string;
   /** Show the evidence-based history scope/status beneath the Messages heading. Default true. */

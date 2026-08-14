@@ -26,7 +26,7 @@ export interface ConversationRowOptions {
   menuOpen: boolean;
   /** Row-adjacent, retryable failure text. */
   error: { message: string; retry: () => void } | null;
-  /** Image URL or glyph for the leading avatar; `false` omits the block. */
+  /** Image URL or glyph for the leading avatar; empty/false omits the block. */
   avatar: string | false | undefined;
   nowMs: number;
   copy: ResolvedHistoryViewCopy;
@@ -38,7 +38,6 @@ export interface ConversationRowOptions {
 
 /** Same source shape as the header icon: a URL renders as an image, else a glyph. */
 const AVATAR_URL = /^(https?:|\/|data:)/i;
-const AVATAR_FALLBACK = "\u{1F4AC}";
 
 function buildAvatar(source: string): HTMLElement {
   const holder = createNode("span", {
@@ -107,9 +106,7 @@ export function buildConversationRow(
         ...(pending ? { "aria-busy": "true" } : {}),
       },
     },
-    options.avatar === false
-      ? null
-      : buildAvatar(options.avatar || AVATAR_FALLBACK),
+    options.avatar ? buildAvatar(options.avatar) : null,
     createNode(
       "div",
       { className: "persona-history-row-body" },

@@ -211,15 +211,24 @@ describe("history view rows", () => {
     ).not.toBeNull();
   });
 
-  it("leads every row with an avatar and falls back to a glyph", async () => {
+  it("renders text-only rows when no avatar source is provided", async () => {
     const { root } = mount();
+    await flush();
+    // No placeholder glyph: rows without a real mark drop the block entirely.
+    expect(
+      rowFor(root, "a").querySelector(".persona-history-row-avatar")
+    ).toBeNull();
+  });
+
+  it("leads the row with the configured glyph avatar", async () => {
+    const { root } = mount({ rowAvatar: "🛍️" });
     await flush();
     const avatar = rowFor(root, "a").querySelector<HTMLElement>(
       ".persona-history-row-avatar"
     );
     expect(avatar?.getAttribute("aria-hidden")).toBe("true");
     expect(avatar?.querySelector("img")).toBeNull();
-    expect(avatar?.textContent).toBe("\u{1F4AC}");
+    expect(avatar?.textContent).toBe("🛍️");
     // The avatar leads the text column.
     expect(
       avatar?.compareDocumentPosition(
