@@ -186,7 +186,12 @@ import {
 } from "./utils/artifact-gate";
 import { resolveArtifactDisplayMode } from "./utils/artifact-display";
 import { resolveConfigPreferences } from "./utils/feature-preferences";
-import { readFlexGapPx, resolveArtifactPaneWidthPx } from "./utils/artifact-resize";
+import {
+  ARTIFACT_RESIZE_CHAT_MIN_PX,
+  ARTIFACT_RESIZE_RAILED_TRANSCRIPT_MIN_PX,
+  readFlexGapPx,
+  resolveArtifactPaneWidthPx,
+} from "./utils/artifact-resize";
 import { enhanceWithForms } from "./components/forms";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults, DEFAULT_FLOATING_LAUNCHER_WIDTH } from "./defaults";
@@ -2653,6 +2658,21 @@ export const createAgentExperience = (
     artifactResizeDocEnd = null;
   }
 
+  /**
+   * Chat-column minimum for an artifact drag. A docked in-flow rail lives
+   * inside the chat column, so the flat chat minimum would let a wide drag
+   * squeeze the column under the rail's own responsive floor and re-mode the
+   * rail into the panel mid-drag. The floating overlay rail (`railOverlayHost`)
+   * takes no flex width, so only the in-flow `railHost` counts, measured live
+   * to cover expanded, collapsed, and dragged widths alike.
+   */
+  const railedChatMinPx = (): number => {
+    const host = railShell && railHost?.isConnected ? railHost : null;
+    const railPx = host ? host.getBoundingClientRect().width : 0;
+    if (railPx <= 0) return ARTIFACT_RESIZE_CHAT_MIN_PX;
+    return railPx + ARTIFACT_RESIZE_RAILED_TRANSCRIPT_MIN_PX;
+  };
+
   /** Flush split: overlay handle on the seam so it does not consume flex gap (extension + resizable). */
   const positionExtensionArtifactResizeHandle = () => {
     if (!artifactSplitRoot || !artifactResizeHandle) return;
@@ -2900,7 +2920,8 @@ export const createAgentExperience = (
               gapPx,
               handleW,
               layout?.resizableMinWidth,
-              layout?.resizableMaxWidth
+              layout?.resizableMaxWidth,
+              railedChatMinPx()
             );
             artifactPaneApi!.element.style.width = `${clamped}px`;
             artifactPaneApi!.element.style.maxWidth = "none";
@@ -7349,7 +7370,7 @@ export const createAgentExperience = (
   // mutation. The lazily loaded Messages view owns the list itself.
   // ==========================================================================
 
-  /** Rail needs this much HOST CONTAINER width; below it, rail collapses to panel. */
+  /** Rail needs this much HOST width; below it, rail collapses to panel. */
   const RAIL_MIN_CONTAINER_WIDTH = 720;
   /** Ceiling on the view's ~160ms exit before the close proceeds regardless. */
   const HISTORY_EXIT_TIMEOUT_MS = 250;
@@ -7461,7 +7482,14 @@ export const createAgentExperience = (
 
   // --- presentation hosts --------------------------------------------------
 
-  /** Resolved against the history host CONTAINER width, never the viewport. */
+  /**
+   * Resolved against the history HOST width, never the viewport. With the
+   * artifact split mounted the split root is that host, not the container:
+   * width the artifact pane borrows from the chat column is still the widget's,
+   * so a drag on the split must never read as a narrow host and re-mode the
+   * rail. A real window/host narrowing shrinks the split root too, and still
+   * flips.
+   */
   const resolveHistoryPresentation = (): ResolvedHistoryPresentation => {
     const configured = config.features?.history?.presentation ?? "panel";
     if (configured === "panel") return "panel";
@@ -7470,7 +7498,8 @@ export const createAgentExperience = (
       const inlineOrDocked = !launcherEnabled || isDockedMountMode(config);
       if (!inlineOrDocked) return "panel";
     }
-    const width = container.getBoundingClientRect().width || container.clientWidth;
+    const host = artifactSplitRoot ?? container;
+    const width = host.getBoundingClientRect().width || host.clientWidth;
     return width >= RAIL_MIN_CONTAINER_WIDTH ? "rail" : "panel";
   };
 
