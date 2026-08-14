@@ -183,17 +183,21 @@ describe("collapsed rail overlay", () => {
     expect(header.firstElementChild!.contains(trigger(mount))).toBe(true);
   });
 
-  it("stacks the brand mark over the glyph for the stylesheet to swap", () => {
+  it("stays the plain sidebar glyph even under a rail brand", async () => {
     const { mount } = setup({
       rail: { brand: { iconUrl: "https://cdn.example/mark.png" } },
     });
     const button = trigger(mount)!;
-    expect(button.classList.contains("persona-rail-trigger--branded")).toBe(true);
+    // The conversation header beside it already carries the agent's identity.
+    expect(button.querySelector("img")).toBeNull();
+    expect(button.querySelector("svg")).not.toBeNull();
+    expect(button.getAttribute("aria-label")).toBe("Expand conversation list");
+
+    // The brand still dresses the floating rail's own header.
+    await hoverOpen(mount);
     expect(
-      button.querySelector(".persona-rail-trigger-brand > img")
+      overlayHost(mount)!.querySelector(".persona-history-brand-mark > img")
     ).not.toBeNull();
-    // An inline display on the glyph would outrank the swap rules.
-    expect(button.querySelector("svg")!.style.display).toBe("");
   });
 
   it("mirrors to the trailing edge for a right-docked rail", () => {

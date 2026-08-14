@@ -468,9 +468,10 @@ chosen state is remembered alongside the other `persistState` keys, and
 
 `collapsedBehavior` picks what "collapsed" looks like: `"icon-rail"` (default)
 is that 52px column, `"overlay"` replaces it with a trigger in the conversation
-header (`.persona-rail-trigger`, wearing `rail.brand` through
-`.persona-rail-trigger-brand`) that floats the expanded rail over the
-conversation in `.persona-history-rail-overlay` and pins it back on click. The
+header (`.persona-rail-trigger`, the plain sidebar glyph: `rail.brand` dresses
+the icon column and the rail's own header, not a control sitting beside the
+agent's identity) that floats the expanded rail over the conversation in
+`.persona-history-rail-overlay` and pins it back on click. The
 floating rail hangs from the trigger's row and keeps `width` and `side`, which
 stay config. Its surface is `components.history.overlay`: `margin` (`8px`, the
 gap from the trigger, the docked edge and the bottom), `borderRadius` (`16px`),

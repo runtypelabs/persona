@@ -8040,18 +8040,19 @@ export const createAgentExperience = (
     else unpinRail();
   };
 
+  /**
+   * The sidebar glyph, plainly. `rail.brand` belongs to the icon column, which
+   * has no other identity, and to the rail's own header; this control sits in
+   * a conversation header that already carries the agent's.
+   */
   const buildRailTrigger = (): void => {
-    // The rail brand's collapsed face, the same one the icon column wears.
-    const brand = railBrandNode()?.(true) ?? null;
     const shortcut = railCollapseShortcut();
     const parts = createHeaderIconButton({
       ariaLabel: historyShellCopy.expandLabel,
       iconName: "panel-left",
       wrapperClassName:
         "persona-relative persona-inline-flex persona-items-center persona-justify-center",
-      extraClassName: brand
-        ? "persona-rail-trigger persona-rail-trigger--branded"
-        : "persona-rail-trigger",
+      extraClassName: "persona-rail-trigger",
       // Hovering answers with the rail itself; a bubble would race the flyover.
       // The combo stays discoverable on the floating rail's own toggle.
       tooltip: false,
@@ -8062,17 +8063,6 @@ export const createAgentExperience = (
       },
     });
     const button = parts.button;
-    if (brand) {
-      // The factory pins the glyph to `display:block` inline, which no rule can
-      // beat: the stylesheet can only swap the two faces once that is gone.
-      button.querySelector("svg")?.style.removeProperty("display");
-      // Stacked under the glyph; the stylesheet swaps the faces on hover and
-      // keyboard focus, and keeps the glyph alone on a coarse pointer.
-      const face = createElement("span", "persona-rail-trigger-brand");
-      face.setAttribute("aria-hidden", "true");
-      face.appendChild(brand);
-      button.appendChild(face);
-    }
     button.addEventListener("mouseenter", () => {
       railPointerInside = true;
       cancelRailGrace();
