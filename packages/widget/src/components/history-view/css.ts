@@ -359,6 +359,27 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view button.persona-history-row-menu-button[aria-expanded="true"] {
   opacity: 1;
 }
+` +
+  /* The chip composites the wash twice over the opaque surface: one step to
+     match the hovered row, one to stand off it, so text never shows through. */
+  `.persona-history-view button.persona-history-row-menu-button:hover:not(:disabled),
+.persona-history-view button.persona-history-row-menu-button[aria-expanded="true"] {
+  background: linear-gradient(var(--persona-history-row-hover-bg), var(--persona-history-row-hover-bg)),
+    linear-gradient(var(--persona-history-row-hover-bg), var(--persona-history-row-hover-bg)),
+    var(--persona-history-surface-bg);
+}
+` +
+  /* Long previews taper out before the trigger zone instead of running under
+     the glyph: whenever the trigger is present (revealed on hover/focus, held
+     by an open menu, or always for coarse pointers). */
+  `@media (hover: hover) {
+  .persona-history-view li.persona-history-item:hover .persona-history-row-preview,
+  .persona-history-view li.persona-history-item:focus-within .persona-history-row-preview,
+  .persona-history-view li.persona-history-item:has(button[aria-expanded="true"]) .persona-history-row-preview {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 84px), transparent calc(100% - 36px));
+    mask-image: linear-gradient(to right, #000 calc(100% - 84px), transparent calc(100% - 36px));
+  }
+}
 .persona-history-view .persona-history-menu {
   position: absolute;
   top: calc(50% + 20px);
@@ -598,6 +619,10 @@ export const HISTORY_VIEW_CSS =
   .persona-history-view button.persona-history-menu-item {
     min-height: 44px;
     padding: 10px 12px;
+  }
+  .persona-history-view .persona-history-row-preview {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 84px), transparent calc(100% - 36px));
+    mask-image: linear-gradient(to right, #000 calc(100% - 84px), transparent calc(100% - 36px));
   }
 }
 .persona-history-view--rail .persona-history-title {

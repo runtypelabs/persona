@@ -317,6 +317,41 @@ describe("history view list styling", () => {
     );
   });
 
+  it("keeps the trigger chip opaque and tapers the preview under it", async () => {
+    mount();
+    await flush();
+    const css = injectedHistoryCss();
+    // Wash composited twice over the opaque surface: row text never shows
+    // through the hovered or menu-open chip.
+    const chip = css.slice(
+      css.indexOf(
+        ".persona-history-view button.persona-history-row-menu-button:hover:not(:disabled)"
+      )
+    );
+    const chipBlock = chip.slice(0, chip.indexOf("}"));
+    expect(chipBlock).toContain('button.persona-history-row-menu-button[aria-expanded="true"]');
+    expect(chipBlock.match(/var\(--persona-history-row-hover-bg\)/g)).toHaveLength(4);
+    expect(chipBlock).toContain("var(--persona-history-surface-bg);");
+    // The preview fades before the trigger zone in every state that shows the
+    // trigger: hover reveal, focus, an open menu, and always on coarse pointers.
+    expect(css).toContain(
+      ".persona-history-view li.persona-history-item:hover .persona-history-row-preview"
+    );
+    expect(css).toContain(
+      '.persona-history-view li.persona-history-item:has(button[aria-expanded="true"]) .persona-history-row-preview'
+    );
+    // Standard + -webkit- pairs in both the hover-state rule and the coarse
+    // always-on rule: 4 mask-image declarations total.
+    expect(
+      css.match(/mask-image: linear-gradient\(to right, #000 calc\(100% - 84px\), transparent calc\(100% - 36px\)\)/g)
+    ).toHaveLength(4);
+    // The always-on pair lives in the shared coarse-pointer block.
+    const coarse = css.slice(css.indexOf("@media (pointer: coarse)"));
+    expect(coarse.slice(0, coarse.indexOf("\n}") + 2)).toContain(
+      ".persona-history-view .persona-history-row-preview"
+    );
+  });
+
   it("separates rows with spacing, never dividers or borders", async () => {
     mount();
     await flush();
