@@ -487,6 +487,11 @@ gap from the trigger, the docked edge and the bottom), `borderRadius` (`16px`),
 surface). Unset keys keep those defaults, and a live `update()` of any of them
 reaches an open rail.
 
+Each row's overflow menu is `components.history.menu`: `background` (defaults
+to the list surface lifted 8% toward white, so it reads as elevated in dark
+schemes) and `borderRadius` (`12px`). Item metrics are fixed to the reference
+density (32px rows, 44px under a coarse pointer) and are not tokens.
+
 Rail identity is a ladder, cheapest first. `features.history.rail.brand` is one
 declaration (`icon`, `iconUrl`, or `render({ collapsed })`, in that precedence,
 highest last) that the widget places twice: beside the view title in the

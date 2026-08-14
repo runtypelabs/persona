@@ -404,6 +404,28 @@ describe('theme utils', () => {
     expect(custom['--persona-history-overlay-bg']).toBe('#f3f4f6');
   });
 
+  it('emits the history menu aliases only when set', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-history-menu-bg']).toBeUndefined();
+    expect(defaults['--persona-history-menu-radius']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          history: {
+            menu: {
+              background: 'palette.colors.gray.100',
+              borderRadius: '16px',
+            },
+          },
+        },
+      } as any)
+    );
+
+    expect(custom['--persona-history-menu-bg']).toBe('#f3f4f6');
+    expect(custom['--persona-history-menu-radius']).toBe('16px');
+  });
+
   it('emits the tooltip aliases only when set, including the arrow opt-out', () => {
     const defaults = themeToCssVariables(createTheme());
     expect(defaults['--persona-tooltip-background']).toBeUndefined();

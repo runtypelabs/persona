@@ -909,6 +909,16 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (value) cssVars[`--persona-history-overlay-${alias}`] = value;
   }
 
+  // Row overflow menu. Same conditional rule: the chunk's CSS carries the
+  // elevated color-mix default in its var() fallback.
+  for (const [token, alias] of [
+    ['background', 'bg'],
+    ['borderRadius', 'radius'],
+  ] as const) {
+    const value = cssVars[`--persona-components-history-menu-${token}`];
+    if (value) cssVars[`--persona-history-menu-${alias}`] = value;
+  }
+
   // Portaled control tooltip. Same conditional rule: widget.css carries the
   // built-in look in every var() fallback, so an unset token stays undefined.
   for (const [token, alias] of [

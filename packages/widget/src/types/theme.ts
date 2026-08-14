@@ -288,6 +288,16 @@ export interface HistoryTokens {
     /** Surface behind the rail. Defaults to the rail's own surface color. */
     background?: TokenReference<'color'>;
   };
+  /** The per-row overflow menu in the Messages list (rail and panel). */
+  menu?: {
+    /**
+     * Menu surface. Defaults to the list surface lifted 8% toward white so
+     * the menu reads as elevated in dark schemes.
+     */
+    background?: TokenReference<'color'>;
+    /** Corner radius. @default "12px" */
+    borderRadius?: string;
+  };
 }
 
 /**

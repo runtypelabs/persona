@@ -382,17 +382,18 @@ export const HISTORY_VIEW_CSS =
   max-width: calc(100% - 16px);
   padding: 4px;
   border: 1px solid var(--persona-history-border);
-  border-radius: var(--persona-radius-md, 8px);
+  border-radius: var(--persona-history-menu-radius, 12px);
   background: var(--persona-history-surface-bg);
+  background: var(--persona-history-menu-bg, color-mix(in srgb, var(--persona-history-surface-bg) 92%, #fff));
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
 }
 .persona-history-view button.persona-history-menu-item {
   display: block;
   width: 100%;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: 32px;
+  padding: 6px 10px;
   border: 0;
-  border-radius: var(--persona-radius-sm, 6px);
+  border-radius: 8px;
   background: transparent;
   color: var(--persona-history-danger-fg);
   font: inherit;
@@ -607,6 +608,10 @@ export const HISTORY_VIEW_CSS =
     height: 44px;
     min-width: 44px;
     min-height: 44px;
+  }
+  .persona-history-view button.persona-history-menu-item {
+    min-height: 44px;
+    padding: 10px 12px;
   }
 }
 .persona-history-view--rail .persona-history-title {
