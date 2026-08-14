@@ -433,6 +433,7 @@ describe("collapsed rail overlay", () => {
     await flush(20);
     expect(railShell(mount)).toBeNull();
     expect(trigger(mount)).not.toBeNull();
+    setMacPlatformOverride(null);
   });
 
   it("closes on Escape and hands focus back to the trigger", async () => {
@@ -528,16 +529,17 @@ describe("collapsed rail overlay", () => {
     delete (window as { matchMedia?: unknown }).matchMedia;
   });
 
-  it("pins and unpins from the header Messages button", async () => {
+  it("keeps the header Messages button hidden behind the trigger", async () => {
     const { mount } = setup();
-    historyButton(mount).click();
+    const hidden = () => historyButton(mount).parentElement!.style.display;
+    // Rest, floating and pinned: the trigger and the rail own every entry.
+    expect(hidden()).toBe("none");
+    await hoverOpen(mount);
+    expect(hidden()).toBe("none");
+    railToggle(mount).click();
     await flush();
     expect(railShell(mount)).not.toBeNull();
-    historyButton(mount).click();
-    await flush(20);
-    expect(railShell(mount)).toBeNull();
-    expect(trigger(mount)).not.toBeNull();
-    setMacPlatformOverride(null);
+    expect(hidden()).toBe("none");
   });
 
   it("leaves the panel fallback below 720px untouched", async () => {

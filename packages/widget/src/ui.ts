@@ -8486,8 +8486,10 @@ export const createAgentExperience = (
    * custom full view is re-invoked with the new presentation value.
    */
   const syncHistoryPresentation = (): void => {
-    // The trigger belongs to a rail-capable width, so it resolves here too.
+    // The trigger belongs to a rail-capable width, so it resolves here too, and
+    // the header toggle stands down beside whatever it resolved to.
     syncRailOverlayTrigger();
+    syncHistoryButton();
     if (!historyVisible || !historySurface) return;
     const next = resolveHistoryPresentation();
     if (next === historyPresentation) return;
@@ -9080,12 +9082,6 @@ export const createAgentExperience = (
     });
     parts.button.addEventListener("click", (event) => {
       if (!historyAvailable() || historyTurnBusy()) return;
-      // Overlay mode has no closed state to open into: this pins and unpins
-      // the rail, like the trigger beside the conversation.
-      if (railTriggerApplies()) {
-        toggleRailPinned();
-        return;
-      }
       if (historyVisible) {
         closeHistory();
         return;
@@ -9123,7 +9119,18 @@ export const createAgentExperience = (
         header.appendChild(historyButtonWrapper);
       }
     }
-    if (!historyButton) return;
+    if (!historyButton || !historyButtonWrapper) return;
+    // Every rail surface carries its own toggle, and so does the trigger that
+    // summons one: the header keeps a control only when neither is on screen.
+    const railed =
+      railTriggerApplies() || (historyVisible && historyPresentation === "rail");
+    historyButtonWrapper.style.display = railed ? "none" : "";
+    if (railed) {
+      // Hiding the control under focus would drop it to the body; the rail's
+      // own toggle is the same control, so focus follows it there.
+      if (document.activeElement === historyButton) focusHistoryEntry();
+      return;
+    }
     const busy = historyTurnBusy();
     historyButton.disabled = busy;
     historyButton.setAttribute("aria-disabled", busy ? "true" : "false");

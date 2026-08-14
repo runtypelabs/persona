@@ -29,11 +29,14 @@ test("crossing 720px moves the open view without losing state or focus", async (
   await page.goto(fixtureUrl({ mode: "demo", presentation: "rail", width: 960 }));
   await waitForWidget(page);
 
+  // Closed, the header toggle is the way in; railed, the rail owns that.
+  await expect(page.locator(sel.historyToggle)).toBeVisible();
   await openMessages(page);
   await expect(page.locator(sel.viewPresentation)).toHaveAttribute(
     "data-persona-history-presentation",
     "rail"
   );
+  await expect(page.locator(sel.historyToggle)).toBeHidden();
   const rowCount = await page.locator(sel.row).count();
   expect(rowCount).toBeGreaterThan(1);
   // The rail borrows the shell header into its conversation column.
@@ -96,6 +99,8 @@ test("crossing 720px moves the open view without losing state or focus", async (
   );
   await expect(page.locator(sel.view)).toHaveAttribute("data-e2e-mark", "original-view");
   await expect(page.locator(sel.row)).toHaveCount(rowCount);
+  // Back beside a rail, the header toggle stands down again.
+  await expect(page.locator(sel.historyToggle)).toBeHidden();
   // The rail re-adopts its bar and the shell header is handed back intact.
   await expect(page.locator(`${sel.view} ${sel.topbar}`)).toHaveCount(1);
   await expect(page.locator(sel.headerHost)).toHaveCount(0);

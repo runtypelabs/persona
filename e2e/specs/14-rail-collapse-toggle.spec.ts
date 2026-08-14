@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { sel } from "../fixtures/history-page";
+import { closeRail, sel } from "../fixtures/history-page";
 
 /**
  * Gate 12: the rail collapses to an icon column and back from its own header
@@ -17,6 +17,8 @@ test("the rail collapses to an icon column and remembers the choice", async ({
 
   await page.locator(sel.historyToggle).click();
   await expect(page.locator(sel.railShell)).toBeVisible();
+  // The rail's own toggle takes over; the header keeps no second control.
+  await expect(page.locator(sel.historyToggle)).toBeHidden();
   const host = page.locator(sel.railHost);
   expect((await host.boundingBox())!.width).toBeGreaterThan(200);
 
@@ -63,9 +65,11 @@ test("the rail collapses to an icon column and remembers the choice", async ({
   await expect
     .poll(async () => Math.round((await host.boundingBox())!.width))
     .toBe(52);
-  await page.locator(sel.historyToggle).click();
+  await closeRail(page);
   await expect(page.locator(sel.railShell)).toHaveCount(0);
 
+  // Fully closed, the header hands the toggle back as the only way in.
+  await expect(page.locator(sel.historyToggle)).toBeVisible();
   await page.locator(sel.historyToggle).click();
   await expect(page.locator(sel.railShell)).toBeVisible();
   await expect

@@ -28,6 +28,8 @@ test("rail Messages keeps the conversation operable and stays open on select", a
     "rail"
   );
   await expect(page.locator(sel.railShell)).toBeVisible();
+  // The rail carries its own toggle, so the header keeps none beside it.
+  await expect(page.locator(sel.historyToggle)).toBeHidden();
 
   // Full-height rail: the shell header sits inside the conversation column and
   // spans only it, so the rail runs beside the header rather than under it.

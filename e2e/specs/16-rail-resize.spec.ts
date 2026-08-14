@@ -1,5 +1,11 @@
 import { expect, test } from "@playwright/test";
-import { fixtureUrl, openMessages, sel, waitForWidget } from "../fixtures/history-page";
+import {
+  closeRail,
+  fixtureUrl,
+  openMessages,
+  sel,
+  waitForWidget,
+} from "../fixtures/history-page";
 
 /**
  * Gate 12: `features.history.rail.resizable` puts a real drag handle on the
@@ -49,7 +55,7 @@ test("the docked rail resizes by drag and remembers the width", async ({ page })
     .toBe(336);
 
   // Close Messages entirely and reopen: the chosen width comes back.
-  await page.locator(sel.historyToggle).click();
+  await closeRail(page);
   await expect(page.locator(sel.railShell)).toHaveCount(0);
   await openMessages(page);
   await expect

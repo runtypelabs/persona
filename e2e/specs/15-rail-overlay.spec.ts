@@ -32,8 +32,10 @@ test("the collapsed rail floats on hover and pins from its toggle", async ({
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   };
 
-  // Rest: the trigger stands alone, and the lazy view was never fetched.
+  // Rest: the trigger stands alone, and the lazy view was never fetched. The
+  // header keeps no history toggle of its own beside it.
   await expect(trigger).toBeVisible();
+  await expect(page.locator(sel.historyToggle)).toBeHidden();
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
   await expect(page.locator(sel.view)).toHaveCount(0);
   await expect(page.locator(sel.railShell)).toHaveCount(0);

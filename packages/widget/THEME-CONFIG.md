@@ -437,7 +437,10 @@ size opts out of that floor.
 ### Messages rail (`components.history.railHeader.*`)
 
 In rail presentation the Messages sidebar runs the full widget height and its
-top strip is the rail's own header, sitting beside the conversation header.
+top strip is the rail's own header, sitting beside the conversation header. That
+strip carries the rail's own toggle, so the header's Messages control hides
+while a rail or its overlay trigger is on screen and comes back once Messages is
+fully closed.
 
 | Token | CSS variable | Default |
 |-------|--------------|---------|
@@ -1110,7 +1113,8 @@ A further set is owned by the shell rather than the chunk, because it exists
 before and around the lazy view:
 
 ```css
-.persona-history-toggle               /* header control that opens Messages */
+.persona-history-toggle               /* header control that opens Messages;
+                                         hidden while a rail surface is up */
 .persona-history-rail-shell           /* row wrapper created for rail placement */
 .persona-history-rail-conversation    /* the still-operable conversation column */
 .persona-history-rail-host            /* the navigation column the view mounts into;

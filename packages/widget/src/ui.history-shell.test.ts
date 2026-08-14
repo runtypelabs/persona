@@ -139,6 +139,12 @@ const openHistoryUI = async (
   await flush();
 };
 
+/** Railed, the header toggle is gone, so the close comes from the controller. */
+const closeHistoryUI = async (controller: { hideHistory: () => void }) => {
+  controller.hideHistory();
+  await flush(20);
+};
+
 describe("history shell", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
@@ -703,7 +709,33 @@ describe("history shell", () => {
           .querySelector('[data-persona-history-focus="collapse"]')
           ?.getAttribute("aria-label")
       ).toBe("Collapse conversation list");
-      expect(historyButton(mount)!.getAttribute("aria-expanded")).toBe("true");
+      // The rail owns the toggle, so the header keeps none beside it.
+      expect(historyButton(mount)!.parentElement!.style.display).toBe("none");
+    });
+
+    it("hands the header toggle back once the rail is fully closed", async () => {
+      const { mount, controller } = await railSetup();
+      expect(historyButton(mount)!.parentElement!.style.display).toBe("none");
+      await closeHistoryUI(controller);
+      // With no rail on screen it is the only way back in.
+      expect(historyButton(mount)!.parentElement!.style.display).toBe("");
+      await openHistoryUI(mount);
+      expect(mount.querySelector(".persona-history-rail-shell")).not.toBeNull();
+    });
+
+    it("keeps the header toggle hidden while an overlay trigger stands in", async () => {
+      const { mount, controller } = setup({
+        historyFeature: {
+          enabled: true,
+          presentation: "rail",
+          rail: { collapsedBehavior: "overlay" },
+        },
+      });
+      setContainerWidth(mount, 900);
+      controller.update({});
+      // Rest state: no rail, but the trigger owns opening and pinning.
+      expect(mount.querySelector("[data-persona-rail-trigger]")).not.toBeNull();
+      expect(historyButton(mount)!.parentElement!.style.display).toBe("none");
     });
 
     it("stays open on selection and marks the active row", async () => {
@@ -833,7 +865,7 @@ describe("history shell", () => {
     });
 
     it("hands the container back in its original child order", async () => {
-      const { mount } = setup({
+      const { mount, controller } = setup({
         historyFeature: { enabled: true, presentation: "rail" },
         config: {
           launcher: { enabled: false, closeButtonPlacement: "top-right" },
@@ -847,9 +879,7 @@ describe("history shell", () => {
       )!;
       expect(column.contains(headerOf(mount))).toBe(true);
       expect(column.contains(bodyOf(mount))).toBe(true);
-      // The rail's own full close is the header toggle; its bar collapses.
-      historyButton(mount)!.click();
-      await flush(20);
+      await closeHistoryUI(controller);
       expect(mount.querySelector(".persona-history-rail-shell")).toBeNull();
       const after = Array.from(container.children);
       expect(after).toHaveLength(before.length);
@@ -893,10 +923,7 @@ describe("history shell", () => {
         mount.querySelector<HTMLButtonElement>(
           '[data-persona-history-focus="collapse"]'
         )!;
-      const close = async () => {
-        historyButton(mount)!.click();
-        await flush(20);
-      };
+      const close = () => closeHistoryUI(controller);
 
       // Pointer: the conversation stays operable beside the rail, so a focus
       // move would only leave a keyboard ring on the toggle.
@@ -962,8 +989,7 @@ describe("history shell", () => {
       await flush();
       expect(window.localStorage.getItem("persona-test-rail-collapsed")).toBe("1");
 
-      historyButton(mount)!.click();
-      await flush(20);
+      await closeHistoryUI(controller);
       await openHistoryUI(mount);
       expect(
         mount.querySelector<HTMLElement>(".persona-history-rail-host")!.style.flex
@@ -989,7 +1015,7 @@ describe("history shell", () => {
 
     it("falls back to memory when state persistence is off", async () => {
       const setItem = vi.spyOn(Storage.prototype, "setItem");
-      const { mount } = await railSetup();
+      const { mount, controller } = await railSetup();
       mount
         .querySelector<HTMLButtonElement>('[data-persona-history-focus="collapse"]')!
         .click();
@@ -1001,8 +1027,7 @@ describe("history shell", () => {
       ).toEqual([]);
       expect(window.localStorage.getItem("persona-rail-collapsed")).toBeNull();
       // The in-memory value still survives a close and reopen.
-      historyButton(mount)!.click();
-      await flush(20);
+      await closeHistoryUI(controller);
       await openHistoryUI(mount);
       expect(
         mount.querySelector<HTMLElement>(".persona-history-rail-host")!.style.flex

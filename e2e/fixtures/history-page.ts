@@ -79,6 +79,15 @@ export async function openMessages(page: Page): Promise<void> {
   await page.locator(sel.historyToggle).click();
 }
 
+/**
+ * Closes a docked rail. The header carries no toggle beside one, so the way
+ * out is Escape from a control inside the rail.
+ */
+export async function closeRail(page: Page): Promise<void> {
+  await page.locator(sel.collapseToggle).focus();
+  await page.keyboard.press("Escape");
+}
+
 /** Every localStorage entry whose key looks like the visitor credential. */
 export async function visitorEntries(
   page: Page
