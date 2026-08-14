@@ -108,13 +108,24 @@ const historyButton = (mount: HTMLElement) =>
 /** The themed margin, as the host carries it: a var with its default inline. */
 const MARGIN = "var(--persona-history-overlay-margin,8px)";
 
-/** jsdom measures nothing, so the trigger's row is stubbed for the anchor math. */
-const stubTriggerRow = (mount: HTMLElement, bottom: number) => {
+/** A laid-out rail: the trigger's row, and the rail hanging below it. */
+const ROW = { top: 12, bottom: 44, left: 8, right: 40 };
+const RAIL = { top: 52, bottom: 500, left: 8, right: 268 };
+
+/** jsdom measures nothing, so both rects are stubbed. Safe to re-run at open. */
+const stubRailGeometry = (mount: HTMLElement) => {
   const rect = (box: Partial<DOMRect>) => () => ({ ...box }) as DOMRect;
   mount.querySelector<HTMLElement>(".persona-widget-container")!.getBoundingClientRect =
     rect({ top: 0, left: 0, width: 900 });
-  trigger(mount)!.getBoundingClientRect = rect({ top: 12, bottom, left: 8 });
+  trigger(mount)!.getBoundingClientRect = rect(ROW);
+  const host = overlayHost(mount);
+  if (host) host.getBoundingClientRect = rect(RAIL);
 };
+
+const movePointer = (x: number, y: number) =>
+  document.dispatchEvent(
+    new MouseEvent("pointermove", { clientX: x, clientY: y })
+  );
 
 /** Enter and Space synthesize a click with detail 0; a pointer reports 1. */
 const click = (element: HTMLElement, detail: number) =>
@@ -208,7 +219,7 @@ describe("collapsed rail overlay", () => {
 
   it("floats the expanded rail as soon as the pointer arrives", async () => {
     const { mount } = setup();
-    stubTriggerRow(mount, 44);
+    stubRailGeometry(mount);
     // No dwell: the loaded chunk opens it on the enter itself.
     await hoverOpen(mount);
     const host = overlayHost(mount)!;
@@ -256,22 +267,75 @@ describe("collapsed rail overlay", () => {
     expect(view(mount)).toBeNull();
   });
 
-  it("dismisses after the grace once the pointer leaves both surfaces", async () => {
+  it("holds the rail while the pointer crosses the header above it", async () => {
     const { mount } = setup();
+    stubRailGeometry(mount);
     await hoverOpen(mount);
+    stubRailGeometry(mount);
+
+    // Leaving the trigger arms the grace; the bridge above the rail, which
+    // belongs to neither element, takes it back off.
     unhover(trigger(mount)!);
-    hover(overlayHost(mount)!);
+    movePointer(150, 28);
     await wait(GRACE);
     await flush();
-    // Still inside the floating rail: the grace never fired.
     expect(overlayHost(mount)).not.toBeNull();
 
-    unhover(overlayHost(mount)!);
+    // And inside the rail itself.
+    movePointer(150, 200);
+    await wait(GRACE);
+    await flush();
+    expect(overlayHost(mount)).not.toBeNull();
+  });
+
+  it("dismisses once the pointer passes the rail's edges", async () => {
+    const { mount } = setup();
+    stubRailGeometry(mount);
+    await hoverOpen(mount);
+    stubRailGeometry(mount);
+
+    // Same header row, past the rail's right edge.
+    movePointer(RAIL.right + 40, 28);
     await wait(GRACE);
     await flush(20);
     expect(overlayHost(mount)).toBeNull();
     expect(view(mount)).toBeNull();
     expect(trigger(mount)!.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("dismisses below the rail as well", async () => {
+    const { mount } = setup();
+    stubRailGeometry(mount);
+    await hoverOpen(mount);
+    stubRailGeometry(mount);
+
+    movePointer(150, RAIL.bottom + 40);
+    await wait(GRACE);
+    await flush(20);
+    expect(overlayHost(mount)).toBeNull();
+  });
+
+  it("tracks the pointer only while the rail floats", async () => {
+    const added = vi.spyOn(document, "addEventListener");
+    const removed = vi.spyOn(document, "removeEventListener");
+    const { mount, controller } = setup();
+    stubRailGeometry(mount);
+    await hoverOpen(mount);
+    const listener = added.mock.calls.find(([type]) => type === "pointermove");
+    expect(listener).toBeDefined();
+
+    stubRailGeometry(mount);
+    movePointer(RAIL.right + 40, RAIL.bottom + 40);
+    await wait(GRACE);
+    await flush(20);
+    expect(overlayHost(mount)).toBeNull();
+    const wasRemoved = ([type, fn]: unknown[]) =>
+      type === "pointermove" && fn === listener![1];
+    expect(removed.mock.calls.some(wasRemoved)).toBe(true);
+
+    removed.mockClear();
+    controller.destroy();
+    expect(removed.mock.calls.some(wasRemoved)).toBe(true);
   });
 
   it("pins the same view element into the full-height rail on click", async () => {
@@ -390,19 +454,21 @@ describe("collapsed rail overlay", () => {
     expect(overlayHost(mount)).toBeNull();
   });
 
-  it("does not let the uncovered trigger undo the dismissal", async () => {
+  it("does not let a re-enter undo a dismissal made under the pointer", async () => {
     const { mount } = setup();
+    stubRailGeometry(mount);
     await hoverOpen(mount);
-    // The rail covers the trigger, so the pointer is over the floating host.
+    stubRailGeometry(mount);
+    // The pointer is resting inside the rail as it is dismissed.
     unhover(trigger(mount)!);
-    hover(overlayHost(mount)!);
+    movePointer(150, 200);
     view(mount)!.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
     );
     await flush(20);
     expect(overlayHost(mount)).toBeNull();
 
-    // Uncovering the trigger re-enters it with no pointer movement at all.
+    // The removal re-enters whatever is under the pointer, unmoved.
     hover(trigger(mount)!);
     await flush();
     expect(overlayHost(mount)).toBeNull();

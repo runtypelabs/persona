@@ -7965,6 +7965,35 @@ export const createAgentExperience = (
   };
 
   /**
+   * Hover keep-alive is geometric, not element-based: a pointer travelling
+   * from the trigger to the rail crosses the conversation header, which is
+   * neither. The safe zone is the trigger, the rail, and the bridge between
+   * them: the rail's own horizontal extent, from the trigger's row down to the
+   * rail's top edge. Derived from the live rects, so a right-docked rail needs
+   * no separate case.
+   */
+  const inRailSafeZone = (x: number, y: number): boolean => {
+    const rail = railOverlayHost?.getBoundingClientRect();
+    if (!rail) return false;
+    const row = railTriggerButton?.getBoundingClientRect();
+    // The rail and the bridge are one band: the rail's own width, from the
+    // trigger's row down to the rail's bottom. The trigger is its own rect.
+    const top = row ? Math.min(row.top, rail.top) : rail.top;
+    return (
+      (x >= rail.left && x <= rail.right && y >= top && y <= rail.bottom) ||
+      (!!row && x >= row.left && x <= row.right && y >= row.top && y <= row.bottom)
+    );
+  };
+
+  const handleRailPointerMove = (event: PointerEvent): void => {
+    if (!railOverlayOpen) return;
+    railPointerInside = inRailSafeZone(event.clientX, event.clientY);
+    if (railPointerInside) cancelRailGrace();
+    // Re-arming on every outside move would restart the countdown forever.
+    else if (railGraceTimer === null) scheduleRailOverlayClose();
+  };
+
+  /**
    * No dwell: the rail answers the pointer the moment it arrives, as fast as
    * the chunk allows (already loaded, that is the same frame). The 300ms leave
    * grace is what an accidental pass over the trigger costs.
@@ -8146,6 +8175,8 @@ export const createAgentExperience = (
   document.addEventListener("pointerdown", handleRailOverlayPointerDown, true);
   destroyCallbacks.push(() => {
     document.removeEventListener("pointerdown", handleRailOverlayPointerDown, true);
+    // Attached only while the rail floats; removing an unattached one is free.
+    document.removeEventListener("pointermove", handleRailPointerMove);
     cancelRailGrace();
   });
 
@@ -8240,14 +8271,9 @@ export const createAgentExperience = (
     container.style.position = "relative";
     container.appendChild(host);
     host.appendChild(element);
-    host.addEventListener("mouseenter", () => {
-      railPointerInside = true;
-      cancelRailGrace();
-    });
-    host.addEventListener("mouseleave", () => {
-      railPointerInside = false;
-      scheduleRailOverlayClose();
-    });
+    // The safe zone spans nodes the rail does not own, so hover is tracked by
+    // position for as long as it is open.
+    document.addEventListener("pointermove", handleRailPointerMove);
     railOverlayHost = host;
     applyRailChrome();
     syncRailToggleLabel();
@@ -8259,6 +8285,7 @@ export const createAgentExperience = (
       // Dismissed under the pointer: hold the hover off until the synthetic
       // enter from uncovering the trigger has passed.
       if (railPointerInside) railUncoveredUntil = Date.now() + 150;
+      document.removeEventListener("pointermove", handleRailPointerMove);
       railOverlayHost.remove();
       railOverlayHost = null;
     }

@@ -48,7 +48,19 @@ test("the collapsed rail floats on hover and pins from its toggle", async ({
   await expect(page.locator(sel.railShell)).toHaveCount(0);
   expect(Math.round((await overlay.boundingBox())!.width)).toBe(260);
 
+  // The header above the rail is the bridge between the two: crossing it keeps
+  // the rail, and passing the rail's right edge in that same row drops it.
+  const railBox = (await overlay.boundingBox())!;
+  const rowY = (await trigger.boundingBox())!.y + 4;
+  await page.mouse.move(railBox.x + railBox.width / 2, rowY);
+  await page.waitForTimeout(450);
+  await expect(overlay).toBeVisible();
+  await page.mouse.move(railBox.x + railBox.width + 60, rowY);
+  await expect(overlay).toHaveCount(0);
+
   // Pointer out of both surfaces: dismissed after the grace.
+  await enter();
+  await expect(overlay).toBeVisible();
   await leave();
   await expect(overlay).toHaveCount(0);
   await expect(trigger).toHaveAttribute("aria-expanded", "false");
