@@ -9,7 +9,6 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 
 const PATHS = {
   "arrow-left": ["m12 19-7-7 7-7", "M19 12H5"],
-  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
   plus: ["M5 12h14", "M12 5v14"],
   x: ["M18 6 6 18", "m6 6 12 12"],
   // PanelLeft is a rounded rect plus this divider; the rect is added below.

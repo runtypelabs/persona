@@ -317,13 +317,13 @@ describe("history view list styling", () => {
     );
   });
 
-  it("draws the row divider as an inset hairline, not a list-item border", async () => {
+  it("separates rows with spacing, never dividers or borders", async () => {
     mount();
     await flush();
     const css = injectedHistoryCss();
     expect(css).not.toContain("li.persona-history-item + li.persona-history-item");
-    expect(css).toContain(".persona-history-view li.persona-history-item::after");
-    expect(css).toContain("left: 20px;");
+    expect(css).not.toContain("li.persona-history-item::after");
+    expect(css).not.toContain("--persona-history-row-divider");
   });
 
   it("flattens the panel list and keeps the rail's date headings", async () => {
@@ -348,9 +348,9 @@ describe("history view list styling", () => {
     await flush();
     const css = injectedHistoryCss();
 
-    // Avatar, preview, time and the inset hairline are panel constructs.
+    // Avatar, preview and time are panel constructs.
     const hidden = css.slice(
-      css.indexOf(".persona-history-view--rail li.persona-history-item::after")
+      css.indexOf(".persona-history-view--rail .persona-history-row-avatar")
     );
     const hiddenBlock = hidden.slice(0, hidden.indexOf("}"));
     expect(hiddenBlock).toContain(".persona-history-view--rail .persona-history-row-avatar");
@@ -406,9 +406,8 @@ describe("history view list styling", () => {
     expect(block).toContain("background: transparent;");
     // The pill's sticky placement is panel-only.
     expect(block).not.toContain("position: sticky;");
-    expect(css).toContain(
-      ".persona-history-view--rail button.persona-history-new svg {\n  order: -1;\n}"
-    );
+    // The compose glyph leads in the DOM; no CSS reorder is needed.
+    expect(primary!.firstElementChild?.tagName.toLowerCase()).toBe("svg");
   });
 });
 

@@ -661,20 +661,17 @@ export function createHistoryView(
   });
   const scopeDescriptionId = `${headingId}-scope`;
 
+  // Both presentations lead with the compose plus, Intercom-style.
+  const newIcon = historyIcon("plus", 18);
   const newConversationButton = createNode(
     "button",
     {
       className: "persona-history-new",
       attrs: { type: "button", "data-persona-history-focus": "new" },
     },
+    newIcon,
     createNode("span", { text: copy.newConversationLabel })
   );
-  // Panel trails an arrow on its pill; the rail row leads with a compose plus.
-  let newIcon = historyIcon(
-    options.presentation === "rail" ? "plus" : "arrow-right",
-    18
-  );
-  newConversationButton.appendChild(newIcon);
   newConversationButton.addEventListener("click", () => void startNew());
 
   const listRegion = createNode("div", {
@@ -1601,9 +1598,6 @@ export function createHistoryView(
       syncBarOrder();
       syncRailBrand();
       syncNavSections();
-      const nextIcon = historyIcon(rail ? "plus" : "arrow-right", 18);
-      newIcon.replaceWith(nextIcon);
-      newIcon = nextIcon;
       // A header slot is presentation-aware, so it re-arbitrates on the move.
       render();
     },

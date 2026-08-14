@@ -15,7 +15,6 @@
  *   --persona-history-topbar-bg     top bar background
  *   --persona-history-border        hairlines and dividers
  *   --persona-history-row-hover-bg  row hover/active-press wash
- *   --persona-history-row-divider   inset hairline under each row
  *   --persona-history-row-avatar-bg leading row avatar plate
  *   --persona-history-row-active-bg selected conversation wash
  *   --persona-history-active-marker selected conversation edge marker
@@ -37,7 +36,6 @@ export const HISTORY_VIEW_CSS =
   --persona-history-topbar-bg: var(--persona-header-bg, var(--persona-surface, #ffffff));
   --persona-history-border: var(--persona-divider, var(--persona-border, #e5e7eb));
   --persona-history-row-hover-bg: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.04));
-  --persona-history-row-divider: var(--persona-history-border);
   --persona-history-row-avatar-bg: var(--persona-header-icon-bg, var(--persona-primary, #2563eb));
   --persona-history-row-active-bg: var(--persona-container, #f3f4f6);
   --persona-history-active-marker: var(--persona-primary, #2563eb);
@@ -45,7 +43,7 @@ export const HISTORY_VIEW_CSS =
   --persona-history-danger-fg: var(--persona-palette-colors-error-600, #b91c1c);
   --persona-history-focus-ring: var(--persona-primary, #2563eb);
   --persona-history-slide: 20px;
-  --persona-history-row-min-height: 74px;
+  --persona-history-row-min-height: 60px;
   --persona-history-topbar-min-height: 56px;
   box-sizing: border-box;
   display: flex;
@@ -254,25 +252,13 @@ export const HISTORY_VIEW_CSS =
   padding: 0;
   list-style: none;
 }
-` +
-  /* Hairline under every row, inset from both edges: a divider that reads as
-     part of the row rather than a border on the list item. */
-  `.persona-history-view li.persona-history-item::after {
-  content: "";
-  position: absolute;
-  right: 20px;
-  bottom: 0;
-  left: 20px;
-  height: 1px;
-  background: var(--persona-history-row-divider);
-}
 .persona-history-view button.persona-history-row {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
   min-height: var(--persona-history-row-min-height);
-  padding: 16px 23px;
+  padding: 10px 16px;
   margin: 0;
   border: 0;
   border-radius: 0;
@@ -465,7 +451,7 @@ export const HISTORY_VIEW_CSS =
 }
 .persona-history-view .persona-history-skeleton-row {
   min-height: var(--persona-history-row-min-height);
-  padding: 16px 23px;
+  padding: 10px 16px;
 }
 .persona-history-view .persona-history-skeleton-bar {
   height: 10px;
@@ -708,9 +694,6 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view--rail button.persona-history-new:hover:not(:disabled) {
   background: var(--persona-history-row-hover-bg);
 }
-.persona-history-view--rail button.persona-history-new svg {
-  order: -1;
-}
 .persona-history-view--rail .persona-history-list-region {
   gap: 24px;
 }
@@ -783,7 +766,6 @@ export const HISTORY_VIEW_CSS =
   font-weight: 500;
   line-height: 20px;
 }
-.persona-history-view--rail li.persona-history-item::after,
 .persona-history-view--rail .persona-history-row-avatar,
 .persona-history-view--rail .persona-history-row-preview,
 .persona-history-view--rail time.persona-history-row-time {
