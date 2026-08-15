@@ -128,6 +128,9 @@ const DARK_COMPONENTS: DeepPartial<PersonaTheme> = {
         // error-600: bright enough to read as a control against a dark
         // surface (3:1 non-text) while the white label keeps 4.8:1.
         dangerBackground: 'palette.colors.error.600',
+        // 45% slate darkens near-black surfaces by almost nothing; dark
+        // schemes need a heavier dimmer for the modal to read as modal.
+        scrim: 'rgba(0, 0, 0, 0.6)',
       },
     },
   },

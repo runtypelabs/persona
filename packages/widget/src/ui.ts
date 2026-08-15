@@ -8990,11 +8990,19 @@ export const createAgentExperience = (
 
   // --- confirmations (shell-owned alert dialogs) ---------------------------
 
+  // With the artifact split, `container` is only the chat column, so an
+  // inset:0 overlay there would leave the artifact pane undimmed. The panel
+  // wraps the whole split and is already position:relative on that path;
+  // forcing `relative` onto it elsewhere would not survive the chrome
+  // passes' cssText resets, so plain layouts keep the container host.
+  const historyConfirmHost = (): HTMLElement =>
+    artifactSplitRoot ? panel : container;
+
   const requestDeleteConversation = async (
     conversationId: string
   ): Promise<"deleted" | "cancelled"> => {
     const confirmed = await showHistoryConfirm({
-      host: container,
+      host: historyConfirmHost(),
       title: historyShellCopy.deleteConversationConfirmTitle,
       description: historyShellCopy.deleteConversationConfirm,
       confirmLabel: historyShellCopy.deleteConversationConfirmLabel,
@@ -9011,7 +9019,7 @@ export const createAgentExperience = (
     // Scope-aware copy: never imply the delete is limited to the rendered page.
     const verified = historyOperationScope() === "verified-user";
     const confirmed = await showHistoryConfirm({
-      host: container,
+      host: historyConfirmHost(),
       title: historyShellCopy.clearHistoryConfirmTitle,
       description: verified
         ? historyShellCopy.clearHistoryVerifiedConfirm
@@ -9028,7 +9036,7 @@ export const createAgentExperience = (
     { outcome: "cancelled" } | { outcome: "reset"; remoteRevocationConfirmed: boolean }
   > => {
     const confirmed = await showHistoryConfirm({
-      host: container,
+      host: historyConfirmHost(),
       title: historyShellCopy.resetIdentityConfirmTitle,
       description: historyShellCopy.resetIdentityConfirm,
       confirmLabel: historyShellCopy.resetIdentityConfirmLabel,

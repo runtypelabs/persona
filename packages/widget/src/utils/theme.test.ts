@@ -623,6 +623,8 @@ describe('theme utils', () => {
 
     const dark = themeToCssVariables(getActiveTheme({ colorScheme: 'dark' }));
     expect(dark['--persona-danger']).toBe('#dc2626'); // error.600
+    // The light scrim default barely dims near-black surfaces.
+    expect(dark['--persona-history-confirm-scrim']).toBe('rgba(0, 0, 0, 0.6)');
 
     const explicit = themeToCssVariables(
       getActiveTheme({
