@@ -490,6 +490,15 @@ const fullscreenAssistantDarkTokens = {
         minHeight: HEADER_MIN_HEIGHT,
       },
     },
+    // The built-in tooltip default (#111827) is blue-tinted; this palette is
+    // strictly neutral, so the bubble needs its own grays. Shadow swapped off
+    // the slate default for the same reason.
+    tooltip: {
+      background: COLORS.userBubble,
+      foreground: COLORS.text,
+      borderRadius: "6px",
+      shadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
+    },
     input: {
       background: COLORS.chat,
       placeholder: COLORS.muted,
