@@ -327,6 +327,12 @@ export const HISTORY_VIEW_CSS =
   font-variant-numeric: tabular-nums;
   color: var(--persona-text-muted, #6b7280);
 }
+.persona-history-view .persona-history-row-star {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-self: center;
+  color: var(--persona-text-muted, #6b7280);
+}
 .persona-history-view .persona-history-row-preview {
   font-size: 14px;
   color: var(--persona-text-muted, #6b7280);

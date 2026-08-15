@@ -42,7 +42,8 @@ export type DemoHistoryOperation =
   | "prepareOpen"
   | "prepareStartNew"
   | "delete"
-  | "deleteAll";
+  | "deleteAll"
+  | "update";
 
 export interface DemoHistoryErrorInit {
   code: HistoryProviderErrorCode;
@@ -70,6 +71,7 @@ export interface DemoHistoryConversationSeed {
   preview?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  starred?: boolean;
   /** Oldest first, the order the transcript reads in. */
   messages: DemoHistoryMessageSeed[];
 }
@@ -116,6 +118,7 @@ type DemoConversation = {
   preview: string | null;
   createdAt: string;
   updatedAt: string;
+  starred: boolean;
   revision: string;
   /** Oldest first. */
   messages: AgentWidgetMessage[];
@@ -232,6 +235,7 @@ function summarize(conversation: DemoConversation): HistoryConversationSummary {
     messageCount: conversation.messages.length,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
+    starred: conversation.starred,
   };
 }
 
@@ -430,6 +434,7 @@ export function createDemoHistoryProvider(
       createdAt: seed.createdAt ?? messages[0]?.createdAt ?? iso(baseMs),
       updatedAt:
         seed.updatedAt ?? messages[messages.length - 1]?.createdAt ?? iso(baseMs),
+      starred: seed.starred ?? false,
       revision: nextRevision(),
       messages,
     });
@@ -594,6 +599,7 @@ export function createDemoHistoryProvider(
           preview: null,
           createdAt,
           updatedAt: createdAt,
+          starred: false,
           revision,
           messages: [],
         });
@@ -606,6 +612,17 @@ export function createDemoHistoryProvider(
       mustGet(id);
       conversations.delete(id);
       if (activeConversationId === id) activeConversationId = null;
+    },
+
+    async update(id, patch, opts) {
+      await begin("update", opts.context);
+      const conversation = mustGet(id);
+      const title = patch.title?.trim();
+      // Rename never reorders the list: only the revision moves, not updatedAt.
+      if (title) conversation.title = title;
+      if (patch.starred !== undefined) conversation.starred = patch.starred;
+      conversation.revision = nextRevision();
+      return summarize(conversation);
     },
 
     async deleteAll(opts: HistoryDeleteAllOptions) {

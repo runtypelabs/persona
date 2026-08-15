@@ -10,6 +10,9 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const PATHS = {
   "arrow-left": ["m12 19-7-7 7-7", "M19 12H5"],
   plus: ["M5 12h14", "M12 5v14"],
+  // Rendered filled at ~11px, so a plain 5-point polygon beats lucide's long
+  // rounded path byte-for-byte with no visible difference.
+  star: ["m12 2 2.9 6.2 6.8.7-5.1 4.5 1.4 6.6-6-3.4-6 3.4 1.4-6.6-5.1-4.5 6.8-.7z"],
   x: ["M18 6 6 18", "m6 6 12 12"],
   // PanelLeft is a rounded rect plus this divider; the rect is added below.
   "panel-left": ["M9 3v18"],

@@ -44,6 +44,7 @@ import {
   AgentWidgetSuggestion,
   AgentWidgetSuggestionSource,
   AgentWidgetWelcomeIcon,
+  HistoryConversationPatch,
   HistoryConversationSummary,
   HistoryIdentityStatus,
   HistoryReturnSurface,
@@ -545,12 +546,27 @@ type Controller = {
     items: HistoryConversationSummary[];
     nextCursor: string | null;
   }>;
+  /** The open conversation's record id; null for a fresh unsaved chat. */
+  getActiveConversationId: () => string | null;
   /** Full open flow: transactional resume, hydration, and scroll restore. */
   openConversation: (conversationId: string) => Promise<void>;
   /** Clean local state plus a new owned server conversation. */
   startNewConversation: () => Promise<void>;
   /** Permanently delete one server record; the active one is replaced. */
   deleteConversation: (conversationId: string) => Promise<void>;
+  /**
+   * Visitor-scoped rename. Requires a provider with the update capability;
+   * a user-set title pins, so a later auto-generated title never overwrites it.
+   */
+  renameConversation: (
+    conversationId: string,
+    title: string
+  ) => Promise<HistoryConversationSummary>;
+  /** Visitor-scoped star/unstar. Requires a provider with the update capability. */
+  setConversationStarred: (
+    conversationId: string,
+    starred: boolean
+  ) => Promise<HistoryConversationSummary>;
   /**
    * Permanently delete every record in the resolved scope. Defaults to the
    * active target filter; `allTargets` is a deliberate client-token-wide delete.
@@ -8696,7 +8712,8 @@ export const createAgentExperience = (
         ? { pageSize: config.features.history.pageSize }
         : {}),
       onSelect: (conversationId) => openHistoryConversation(conversationId),
-      onActiveConversationTitle: (title) => setActiveConversationTitle(title),
+      onActiveConversationChange: (summary) =>
+        setActiveConversationSummary(summary),
       // The chunk is size-capped, so it borrows the shell's tooltip module.
       attachTooltip,
       onStartNew: () => startNewConversation(),
@@ -8859,10 +8876,13 @@ export const createAgentExperience = (
   // --- session operations --------------------------------------------------
 
   // ---- header title binding (layout.header.titleSource: "conversation") ----
-  // The history view reports the active conversation's list title through
-  // onActiveConversationTitle; the shell owns the fallback and the write, so
+  // The history view reports the active conversation's list summary through
+  // onActiveConversationChange; the shell owns the fallback and the write, so
   // the binding works for both the plain title span and the titleMenu label.
+  // `activeConversationStarred` additionally feeds the built-in title-menu
+  // star toggle.
   let activeConversationTitle: string | null = null;
+  let activeConversationStarred = false;
   const applyHeaderTitle = (): void => {
     if (!headerTitle) return;
     const bound =
@@ -8876,6 +8896,30 @@ export const createAgentExperience = (
     activeConversationTitle = title;
     applyHeaderTitle();
   };
+  const setActiveConversationSummary = (
+    summary: HistoryConversationSummary | null
+  ): void => {
+    activeConversationStarred = summary?.starred === true;
+    setActiveConversationTitle(summary ? summary.title.trim() || null : null);
+  };
+
+  // Built-in title-menu actions, raised as a bubbling DOM event by the header
+  // combo (the initial header is built by the pure panel builder, out of the
+  // shell's reach). One listener on the stable container survives header
+  // rebuilds and rail re-homing.
+  container.addEventListener("persona:title-menu-builtin", (event) => {
+    const actionId = (event as CustomEvent<{ actionId?: string }>).detail
+      ?.actionId;
+    const activeId = session.getActiveConversationId();
+    if (!activeId) return;
+    if (actionId === "delete") {
+      void requestDeleteConversation(activeId);
+    } else if (actionId === "star" && session.canUpdateConversations()) {
+      void updateHistoryConversation(activeId, {
+        starred: !activeConversationStarred,
+      }).catch(() => {});
+    }
+  });
 
   /**
    * Transactional reopen. `suppressScrollSend` covers the hydration: otherwise
@@ -8897,7 +8941,7 @@ export const createAgentExperience = (
     if (!restoreScrollPosition()) jumpToBottomInstant();
     syncEarlierMessagesPill();
     // Without a mounted view there is no list to look the title up in.
-    if (!historySurface) setActiveConversationTitle(null);
+    if (!historySurface) setActiveConversationSummary(null);
     // Synchronously reports the title through onActiveConversationTitle.
     historySurface?.view.setActiveConversationId(conversationId);
     eventBus.emit("history:conversationOpened", {
@@ -8920,7 +8964,7 @@ export const createAgentExperience = (
    */
   const startNewConversation = async (): Promise<void> => {
     await session.startNewConversation({ scope: historyOperationScope() });
-    setActiveConversationTitle(null);
+    setActiveConversationSummary(null);
     messageCache.clear();
     resetAnchorState();
     resumeAutoScroll();
@@ -8939,14 +8983,35 @@ export const createAgentExperience = (
     maybeFocusInput();
   };
 
+  /** Shared rename/star path: provider update, then view + header binding. */
+  const updateHistoryConversation = async (
+    conversationId: string,
+    patch: HistoryConversationPatch
+  ): Promise<HistoryConversationSummary> => {
+    const summary = await session.updateConversation(conversationId, {
+      ...patch,
+      ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
+    });
+    // The view re-renders and reports the active title through the reporter;
+    // without a mounted view, keep the header binding fresh directly.
+    historySurface?.view.applyConversationSummary(summary);
+    if (!historySurface && conversationId === session.getActiveConversationId()) {
+      setActiveConversationSummary(summary);
+    }
+    return summary;
+  };
+
   const deleteHistoryConversation = async (
     conversationId: string
   ): Promise<void> => {
     const scope = historyOperationScope();
     const wasActive = session.getActiveConversationId() === conversationId;
     await session.deleteConversation(conversationId, { scope });
+    // Prune the open list too: the view's own delete flow removes its row
+    // after this resolves, but built-in/headless deletes have no view caller.
+    historySurface?.view.removeConversationSummary(conversationId);
     if (wasActive) {
-      setActiveConversationTitle(null);
+      setActiveConversationSummary(null);
       messageCache.clear();
       resetAnchorState();
       resumeAutoScroll();
@@ -8976,7 +9041,7 @@ export const createAgentExperience = (
       ...(targetId ? { targetId } : {}),
       scope,
     });
-    setActiveConversationTitle(null);
+    setActiveConversationSummary(null);
     messageCache.clear();
     resetAnchorState();
     resumeAutoScroll();
@@ -9008,7 +9073,7 @@ export const createAgentExperience = (
       const result = await session.resetHistoryDevice();
       remoteRevocationConfirmed = result.remoteRevocationConfirmed;
     } finally {
-      setActiveConversationTitle(null);
+      setActiveConversationSummary(null);
       session.clearArtifacts();
       messageCache.clear();
       lastAppliedMessages = null;
@@ -12425,6 +12490,9 @@ export const createAgentExperience = (
     listConversations(opts) {
       return session.listConversations(opts);
     },
+    getActiveConversationId(): string | null {
+      return session.getActiveConversationId();
+    },
     openConversation(conversationId: string): Promise<void> {
       return openHistoryConversation(conversationId);
     },
@@ -12433,6 +12501,12 @@ export const createAgentExperience = (
     },
     deleteConversation(conversationId: string): Promise<void> {
       return deleteHistoryConversation(conversationId);
+    },
+    renameConversation(conversationId, title) {
+      return updateHistoryConversation(conversationId, { title });
+    },
+    setConversationStarred(conversationId, starred) {
+      return updateHistoryConversation(conversationId, { starred });
     },
     clearConversationHistory(opts) {
       return clearConversationHistory(opts);

@@ -25,6 +25,7 @@ export const HISTORY_VIEW_COPY_DEFAULTS: ResolvedHistoryViewCopy = {
   retryLabel: "Retry",
   rateLimitedTitle: "Too many requests",
   rateLimitedDescription: "Please wait a moment before trying again.",
+  groupStarred: "Starred",
   groupToday: "Today",
   groupYesterday: "Yesterday",
   groupPrevious7Days: "Previous 7 days",

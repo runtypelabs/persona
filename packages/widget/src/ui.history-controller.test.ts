@@ -314,6 +314,83 @@ describe("history controller API", () => {
       expect(titleShown("Acme Assistant")).toBe(true);
     });
 
+    it("renames and stars conversations through the controller", async () => {
+      const { controller, mount } = setup({
+        config: {
+          launcher: { enabled: false, title: "Acme Assistant" },
+          layout: { header: { layout: "minimal", titleSource: "conversation" } },
+        },
+      });
+      await controller.showHistory();
+      await flush();
+
+      const renamed = await controller.renameConversation(
+        "conv-a",
+        "Renamed thread"
+      );
+      expect(renamed.title).toBe("Renamed thread");
+      await flush();
+      // The open list restamps in place.
+      expect(
+        mount.querySelector('[data-persona-history-conversation="conv-a"]')
+          ?.textContent
+      ).toContain("Renamed thread");
+
+      const starred = await controller.setConversationStarred("conv-a", true);
+      expect(starred.starred).toBe(true);
+      await flush();
+      // Starred rows pin into the leading group.
+      expect(
+        mount.querySelector('[data-persona-history-group="starred"]')
+      ).not.toBeNull();
+
+      await controller.openConversation("conv-a");
+      await flush();
+      // The titleSource binding shows the renamed title in the header.
+      const headerSpans = Array.from(
+        mount
+          .querySelector('[data-persona-theme-zone="header"]')
+          ?.querySelectorAll("span") ?? []
+      );
+      expect(headerSpans.some((el) => el.textContent === "Renamed thread")).toBe(
+        true
+      );
+    });
+
+    it("prunes the open list when a delete comes from the controller", async () => {
+      const { controller, mount } = setup();
+      await controller.showHistory();
+      await flush();
+      expect(
+        mount.querySelector('[data-persona-history-conversation="conv-b"]')
+      ).not.toBeNull();
+
+      await controller.deleteConversation("conv-b");
+      await flush();
+      expect(
+        mount.querySelector('[data-persona-history-conversation="conv-b"]')
+      ).toBeNull();
+    });
+
+    it("runs the built-in star toggle from the title-menu event", async () => {
+      const { controller, mount } = setup();
+      await controller.openConversation("conv-a");
+      await flush();
+
+      mount
+        .querySelector('[data-persona-theme-zone="header"]')!
+        .dispatchEvent(
+          new CustomEvent("persona:title-menu-builtin", {
+            bubbles: true,
+            detail: { actionId: "star" },
+          })
+        );
+      await flush();
+
+      const page = await controller.listConversations({ limit: 10 });
+      expect(page.items.find((item) => item.id === "conv-a")?.starred).toBe(true);
+    });
+
     it("emits a sanitized conversationStarted from the controller method", async () => {
       const { controller, provider } = setup();
       const started: Array<Record<string, unknown>> = [];

@@ -688,26 +688,72 @@ describe("history view row actions", () => {
     expect(onSelect).toHaveBeenCalledWith("a");
   });
 
-  it("reports the active conversation's title through onActiveConversationTitle", async () => {
-    const onActiveConversationTitle = vi.fn();
-    const { root, handle } = (() => {
-      const m = mount({ activeConversationId: "a", onActiveConversationTitle });
-      return { root: m.root, handle: m.handle };
-    })();
-    void root;
+  it("reports the active conversation's summary through onActiveConversationChange", async () => {
+    const onActiveConversationChange = vi.fn();
+    const { handle } = mount({
+      activeConversationId: "a",
+      onActiveConversationChange,
+    });
     await flush();
-    expect(onActiveConversationTitle).toHaveBeenLastCalledWith("Session a");
+    expect(onActiveConversationChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: "a", title: "Session a" })
+    );
 
     handle.setActiveConversationId("b");
-    expect(onActiveConversationTitle).toHaveBeenLastCalledWith("Session b");
+    expect(onActiveConversationChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ id: "b", title: "Session b" })
+    );
 
     // Only changes are reported: re-rendering with the same active id is silent.
-    const calls = onActiveConversationTitle.mock.calls.length;
+    const calls = onActiveConversationChange.mock.calls.length;
     handle.setActiveConversationId("b");
-    expect(onActiveConversationTitle.mock.calls.length).toBe(calls);
+    expect(onActiveConversationChange.mock.calls.length).toBe(calls);
 
     handle.setActiveConversationId(null);
-    expect(onActiveConversationTitle).toHaveBeenLastCalledWith(null);
+    expect(onActiveConversationChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it("patches one summary in place and re-reports through applyConversationSummary", async () => {
+    const onActiveConversationChange = vi.fn();
+    const { root, handle } = mount({
+      activeConversationId: "a",
+      onActiveConversationChange,
+    });
+    await flush();
+
+    const base = {
+      targetId: "t1",
+      preview: "Preview for a",
+      messageCount: 2,
+      createdAt: at(31 * MIN),
+      updatedAt: at(30 * MIN),
+    };
+    handle.applyConversationSummary({
+      id: "a",
+      title: "Renamed session",
+      starred: true,
+      ...base,
+    });
+
+    // The row restamps, the starred group pins first, and the reporter fires.
+    expect(rowFor(root, "a").textContent).toContain("Renamed session");
+    expect(
+      root.querySelector(".persona-history-group")?.getAttribute(
+        "data-persona-history-group"
+      )
+    ).toBe("starred");
+    expect(root.querySelector(".persona-history-row-star")).not.toBeNull();
+    expect(onActiveConversationChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: "Renamed session", starred: true })
+    );
+
+    // Unknown ids are ignored.
+    handle.applyConversationSummary({
+      id: "ghost",
+      title: "Ghost",
+      ...base,
+    });
+    expect(rowFor(root, "a").textContent).toContain("Renamed session");
   });
 
   it("hides the delete-all control when showDeleteAll is false", async () => {

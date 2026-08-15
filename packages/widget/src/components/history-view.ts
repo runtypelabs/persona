@@ -246,12 +246,15 @@ export interface HistoryViewOptions {
   /** Model-change signal, emitted only while DOM rendering is suspended. */
   onModelChange?: () => void;
   /**
-   * Fired whenever the ACTIVE conversation's list title changes: on selection,
-   * on a list refresh that delivers a server-generated title, and with `null`
-   * when no titled active conversation exists. Feeds the shell's
-   * `layout.header.titleSource: "conversation"` binding.
+   * Fired whenever the ACTIVE conversation's list summary changes: on
+   * selection, on a list refresh that delivers a server-generated title, on a
+   * rename/star patch, and with `null` when no active conversation is listed.
+   * Feeds the shell's `layout.header.titleSource: "conversation"` binding and
+   * its built-in title-menu star toggle.
    */
-  onActiveConversationTitle?: (title: string | null) => void;
+  onActiveConversationChange?: (
+    summary: HistoryConversationSummary | null
+  ) => void;
   /** Shell live region, used while this view's own one is detached. */
   onAnnounce?: (message: string) => void;
   /**
@@ -298,6 +301,10 @@ export interface HistoryViewHandle {
   setHeaderPlacement(placement: HistoryHeaderPlacement): void;
   /** Keep the active-row indicator in sync when the shell changes conversation. */
   setActiveConversationId(conversationId: string | null): void;
+  /** Patch one listed summary in place after a shell-side rename/star. */
+  applyConversationSummary(summary: HistoryConversationSummary): void;
+  /** Drop one listed row after a shell-side delete (headless or built-in). */
+  removeConversationSummary(conversationId: string): void;
   /** Enter/leave the post-deletion replacement-init recovery state. */
   setNewConversationRequired(required: boolean): void;
   /**
@@ -1262,24 +1269,27 @@ export function createHistoryView(
     footer.hidden = (!clearButton || clearButton.hidden) && !resetButton;
   };
 
-  // The shell's header-title binding. Reported from render() so every path
-  // that can change the answer (selection, list refresh delivering a server
-  // title, deletion, clear) funnels through one change-detecting emit; runs
-  // even while DOM rendering is suspended, since the data still moved.
-  let reportedActiveTitle: string | null | undefined;
-  const reportActiveTitle = (): void => {
-    const callback = options.onActiveConversationTitle;
+  // The shell's active-conversation binding. Reported from render() so every
+  // path that can change the answer (selection, list refresh delivering a
+  // server title, rename/star, deletion, clear) funnels through one
+  // change-detecting emit; runs even while DOM rendering is suspended, since
+  // the data still moved.
+  let reportedActiveKey: string | undefined;
+  const reportActiveConversation = (): void => {
+    const callback = options.onActiveConversationChange;
     if (!callback) return;
-    const active = items.find((c) => c.id === activeConversationId);
-    const title = active ? active.title.trim() || null : null;
-    if (title === reportedActiveTitle) return;
-    reportedActiveTitle = title;
-    callback(title);
+    const active = items.find((c) => c.id === activeConversationId) ?? null;
+    const key = active
+      ? `${active.id} ${active.title} ${active.starred ? 1 : 0}`
+      : "";
+    if (key === reportedActiveKey) return;
+    reportedActiveKey = key;
+    callback(active);
   };
 
   const render = (): void => {
     if (destroyed) return;
-    reportActiveTitle();
+    reportActiveConversation();
     // Suspended means a plugin owns the whole surface: build nothing, just tell
     // the arbitration layer the model moved.
     if (!domRenderEnabled) {
@@ -1668,6 +1678,17 @@ export function createHistoryView(
     setActiveConversationId: (conversationId) => {
       if (activeConversationId === conversationId) return;
       activeConversationId = conversationId;
+      render();
+    },
+    applyConversationSummary: (summary) => {
+      const index = items.findIndex((item) => item.id === summary.id);
+      if (index === -1) return;
+      items[index] = summary;
+      render();
+    },
+    removeConversationSummary: (conversationId) => {
+      if (!items.some((item) => item.id === conversationId)) return;
+      removeConversation(conversationId);
       render();
     },
     setNewConversationRequired: (required) => {

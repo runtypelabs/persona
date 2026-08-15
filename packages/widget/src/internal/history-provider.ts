@@ -31,6 +31,14 @@ export interface HistoryConversationSummary {
   messageCount: number;
   createdAt: string;
   updatedAt: string;
+  /** Visitor-pinned flag. Absent when the provider has no update capability. */
+  starred?: boolean;
+}
+
+/** Visitor-editable conversation metadata. Absent fields are left unchanged. */
+export interface HistoryConversationPatch {
+  title?: string;
+  starred?: boolean;
 }
 
 /**
@@ -100,6 +108,17 @@ export interface HistoryProvider {
   }): Promise<PreparedHistoryActivation>;
   delete(id: string, opts: { context: HistoryOperationContext }): Promise<void>;
   deleteAll(opts: HistoryDeleteAllOptions): Promise<{ deleted: number }>;
+  /**
+   * Optional capability: visitor-scoped rename/star. Absence hides every
+   * update affordance (star glyphs, built-in title-menu actions). A user-set
+   * title pins: the provider must never let a later auto-generated title
+   * overwrite one set through this call.
+   */
+  update?(
+    id: string,
+    patch: HistoryConversationPatch,
+    opts: { context: HistoryOperationContext }
+  ): Promise<HistoryConversationSummary>;
   /**
    * Optional capability. Absence hides "forget this device". Resolves (never
    * rejects) on remote failure; credentials are cleared in `finally` either way.

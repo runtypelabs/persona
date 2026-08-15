@@ -54,6 +54,7 @@ import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import type { VisitorStore, VisitorStoreChange } from "./utils/visitor-store";
 import { HistoryProviderError } from "./internal/history-provider";
 import type {
+  HistoryConversationPatch,
   HistoryConversationSummary,
   HistoryOperationContext,
   HistoryProvider,
@@ -1285,6 +1286,29 @@ export class AgentWidgetSession {
     await provider.delete(id, { context });
     if (id !== this.activeConversationId) return;
     await this.recoverFromDestroyedConversation(context);
+  }
+
+  /** Visitor-scoped rename/star. Requires a provider with the update capability. */
+  public async updateConversation(
+    id: string,
+    patch: HistoryConversationPatch,
+    opts?: { scope?: HistoryScope }
+  ): Promise<HistoryConversationSummary> {
+    const provider = this.requireHistoryProvider();
+    if (!provider.update) {
+      throw new SessionHistoryError(
+        "history_unavailable",
+        "This history provider cannot update conversations"
+      );
+    }
+    const context = this.historyContext(opts?.scope);
+    await this.awaitHistorySettled();
+    return provider.update(id, patch, { context });
+  }
+
+  /** True when the provider supports visitor-scoped rename/star. */
+  public canUpdateConversations(): boolean {
+    return typeof this.historyProvider?.update === "function";
   }
 
   public async clearConversationHistory(opts?: {

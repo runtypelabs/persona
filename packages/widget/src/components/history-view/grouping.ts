@@ -10,6 +10,7 @@ import { fillTemplate, type ResolvedHistoryViewCopy } from "./copy";
 import type { HistoryConversationSummary } from "../../internal/history-provider";
 
 export type HistoryGroupKey =
+  | "starred"
   | "today"
   | "yesterday"
   | "previous-7-days"
@@ -73,8 +74,15 @@ export function groupConversations(
   nowMs: number,
   copy: ResolvedHistoryViewCopy
 ): HistoryGroup[] {
-  const groups: HistoryGroup[] = [];
+  // Starred rows pin into one leading group (server order preserved within
+  // it); everything else keeps the time grouping.
+  const starred = items.filter((item) => item.starred);
+  const groups: HistoryGroup[] =
+    starred.length > 0
+      ? [{ key: "starred", label: copy.groupStarred, items: starred }]
+      : [];
   for (const item of items) {
+    if (item.starred) continue;
     const key = resolveGroupKey(item.updatedAt, nowMs);
     const current = groups[groups.length - 1];
     if (current && current.key === key) {

@@ -69,6 +69,24 @@ export function buildConversationRow(
   // A placeholder-titled conversation promotes its preview instead of showing
   // an empty title line above it.
   const titled = conversation.title.trim().length > 0;
+  // Filled miniature of the chunk's stroke star; sr text reuses the group label.
+  const starMark = conversation.starred
+    ? (() => {
+        const glyph = historyIcon("star", 11);
+        glyph.setAttribute("fill", "currentColor");
+        glyph.setAttribute("stroke-width", "1");
+        return createNode(
+          "span",
+          { className: "persona-history-row-star" },
+          glyph,
+          createNode("span", {
+            className: "persona-history-sr-only",
+            text: copy.groupStarred,
+          })
+        );
+      })()
+    : null;
+
   const head = createNode(
     "div",
     { className: "persona-history-row-head" },
@@ -76,6 +94,7 @@ export function buildConversationRow(
       className: "persona-history-row-title persona-history-truncate",
       text: titled ? conversation.title : (conversation.preview ?? ""),
     }),
+    starMark,
     createNode("time", {
       className: "persona-history-row-time",
       attrs: { datetime: conversation.updatedAt },

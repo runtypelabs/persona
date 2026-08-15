@@ -142,7 +142,28 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     const combo = createComboButton({
       label: launcher.title ?? "Chat Assistant",
       menuItems: titleMenuConfig.menuItems,
-      onSelect: titleMenuConfig.onSelect,
+      // `false` = not handled: bubble the id to the shell's built-ins (star,
+      // delete on the active conversation). A DOM event, not a context
+      // callback, because the initial header is built by the pure panel
+      // builder with no shell in reach.
+      onSelect: (itemId) => {
+        const finish = (handled: unknown): void => {
+          if (handled !== false) return;
+          combo.element.dispatchEvent(
+            new CustomEvent("persona:title-menu-builtin", {
+              bubbles: true,
+              composed: true,
+              detail: { actionId: itemId },
+            })
+          );
+        };
+        const result = titleMenuConfig.onSelect(itemId);
+        if (result instanceof Promise) {
+          void result.then(finish, () => {});
+        } else {
+          finish(result);
+        }
+      },
       hover: titleMenuConfig.hover,
       className: "",
     });

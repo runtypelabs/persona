@@ -591,7 +591,6 @@ const fullscreenAssistantDarkTokens = {
 } as unknown as NonNullable<AgentWidgetConfig["darkTheme"]>;
 
 const demoCtl: { handle: AgentWidgetInitHandle | null } = { handle: null };
-let isStarred = false;
 
 /** The demo has nowhere to navigate to, so a nav pick answers in the transcript. */
 const noteRailNav = (label: string): void => {
@@ -715,47 +714,33 @@ const config = mergeWithDefaults({
       // conversation actions. Falls back to launcher.title on a fresh chat.
       titleSource: "conversation",
       titleMenu: {
+        // No "Add to project": nothing backs projects yet, and an honest menu
+        // beats an aspirational one.
         menuItems: [
           { id: "star", label: "Star", icon: "star" },
           { id: "rename", label: "Rename", icon: "pencil" },
-          { id: "add-to-project", label: "Add to project", icon: "folder" },
           { id: "delete", label: "Delete", icon: "trash-2", destructive: true, dividerBefore: true },
         ],
         onSelect: (id) => {
           const h = demoCtl.handle;
           if (!h) return;
-          switch (id) {
-            case "star": {
-              isStarred = !isStarred;
-              // Demo stub: mutates the label directly, so the titleSource
-              // binding restamps it on the next conversation switch. A real
-              // host would persist and let the bound title carry it.
-              const label = document.querySelector(".persona-combo-btn-label");
-              if (label) {
-                const current = label.textContent?.replace(/^\u2605\s*/, "") ?? "";
-                label.textContent = isStarred ? `\u2605 ${current}` : current;
-              }
-              break;
+          if (id === "rename") {
+            const activeId = h.getActiveConversationId();
+            if (!activeId) return;
+            const current = document
+              .querySelector(".persona-combo-btn-label")
+              ?.textContent ?? "";
+            const next = window.prompt("Rename chat:", current);
+            if (next?.trim()) {
+              // Persists through the provider; the titleSource binding and the
+              // rail row both restamp from the returned summary.
+              void h.renameConversation(activeId, next.trim()).catch(() => {});
             }
-            case "rename": {
-              const label = document.querySelector(".persona-combo-btn-label");
-              const current = label?.textContent?.replace(/^\u2605\s*/, "") ?? "Chat Assistant";
-              const newName = window.prompt("Rename chat:", current);
-              if (newName?.trim() && label) {
-                const prefix = isStarred ? "\u2605 " : "";
-                label.textContent = prefix + newName.trim();
-              }
-              break;
-            }
-            case "add-to-project":
-              console.log("[titleMenu] Add to project");
-              break;
-            case "delete":
-              if (window.confirm("Delete this chat? This cannot be undone.")) {
-                h.clearChat();
-              }
-              break;
+            return;
           }
+          // Star and Delete fall through to the widget built-ins: star
+          // toggles via the provider, delete runs the shell's confirm flow.
+          return false;
         },
         hover: {
           background: COLORS.userBubble,

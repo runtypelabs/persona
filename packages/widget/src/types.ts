@@ -2625,6 +2625,8 @@ export interface AgentWidgetHistoryCopy {
   identityResetNotice?: string;
   /** Status notice when a local reset succeeded but server revocation was unconfirmed. */
   identityResetUnconfirmedNotice?: string;
+  /** Pinned group heading for starred conversations. */
+  groupStarred?: string;
   /** Time-group heading for conversations updated today. */
   groupToday?: string;
   /** Time-group heading for conversations updated yesterday. */
@@ -4811,6 +4813,14 @@ export type HistoryConversationSummary = {
   messageCount: number;
   createdAt: string;
   updatedAt: string;
+  /** Visitor-pinned flag. Absent when the provider has no update capability. */
+  starred?: boolean;
+};
+
+/** Visitor-editable conversation metadata. Absent fields are left unchanged. */
+export type HistoryConversationPatch = {
+  title?: string;
+  starred?: boolean;
 };
 
 export type HistoryConversationPage = {
@@ -5081,8 +5091,16 @@ export type AgentWidgetHeaderLayoutConfig = {
       destructive?: boolean;
       dividerBefore?: boolean;
     }>;
-    /** Called when a menu item is selected. */
-    onSelect: (id: string) => void;
+    /**
+     * Called when a menu item is selected. Returning `false` (sync or via
+     * promise) falls through to the widget built-ins, mirroring the artifact
+     * copy-menu contract: id `star` toggles the active conversation's star and
+     * id `delete` runs the shell's confirm-then-delete on it (both require
+     * `features.history` and, for star, a provider with the update
+     * capability). `rename` has no built-in: hosts own the rename UI and call
+     * `renameConversation()`.
+     */
+    onSelect: (id: string) => void | boolean | Promise<void | boolean>;
     /** Hover pill style. */
     hover?: {
       background?: string;
