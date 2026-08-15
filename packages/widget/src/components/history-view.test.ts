@@ -669,6 +669,39 @@ describe("history view row actions", () => {
     );
   });
 
+  it("drops the row overflow trigger entirely when showDelete is false", async () => {
+    const { root, onSelect } = mount({ showDelete: false });
+    await flush();
+
+    expect(root.querySelectorAll(".persona-history-row-menu-button")).toHaveLength(
+      0
+    );
+    expect(root.querySelector('[role="menu"]')).toBeNull();
+    // The modifier keeps the hover time-swap and preview taper from firing
+    // with no trigger to swap in.
+    expect(root.querySelectorAll("li.persona-history-item--no-menu")).toHaveLength(
+      4
+    );
+    // Rows still open normally.
+    rowFor(root, "a").click();
+    await flush();
+    expect(onSelect).toHaveBeenCalledWith("a");
+  });
+
+  it("hides the delete-all control when showDeleteAll is false", async () => {
+    const { root } = mount({ showDeleteAll: false });
+    await flush();
+
+    expect(root.querySelector(".persona-history-clear")).toBeNull();
+    // No reset control on this provider either, so the footer collapses.
+    expect(root.querySelector<HTMLElement>(".persona-history-footer")?.hidden).toBe(
+      true
+    );
+    // Per-row delete stays independent of the delete-all switch.
+    menuButtonFor(root, "a").click();
+    expect(root.querySelector('[role="menuitem"]')).not.toBeNull();
+  });
+
   it("removes the row when the shell reports a delete", async () => {
     const { root, onRequestDeleteConversation } = mount();
     await flush();

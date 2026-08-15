@@ -380,6 +380,20 @@ export const HISTORY_VIEW_CSS =
     mask-image: linear-gradient(to right, #000 calc(100% - 84px), transparent calc(100% - 36px));
   }
 }
+` +
+  /* showDelete:false rows render no trigger, so the time keeps its slot on
+     hover and the preview never tapers. Must stay after the rules above (the
+     hover pairs tie on specificity) but outranks the coarse mask below. */
+  `.persona-history-view li.persona-history-item--no-menu:hover time.persona-history-row-time,
+.persona-history-view li.persona-history-item--no-menu:focus-within time.persona-history-row-time {
+  opacity: 1;
+}
+.persona-history-view li.persona-history-item--no-menu:hover .persona-history-row-preview,
+.persona-history-view li.persona-history-item--no-menu:focus-within .persona-history-row-preview,
+.persona-history-view li.persona-history-item--no-menu .persona-history-row-preview {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
 .persona-history-view .persona-history-menu {
   position: absolute;
   top: calc(50% + 20px);

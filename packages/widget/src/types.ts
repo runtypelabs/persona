@@ -2904,6 +2904,20 @@ export interface AgentWidgetHistoryFeature {
   rowAvatar?: boolean | string;
   /** Show the evidence-based history scope/status beneath the Messages heading. Default true. */
   showScopeStatus?: boolean;
+  /**
+   * Visitor-facing delete of a single conversation via each row's overflow
+   * menu. Default true. False hides the control only: it changes nothing about
+   * what is stored or for how long, and custom row slots still receive
+   * `requestDelete`. Turn off for deployments that treat conversations as
+   * business records.
+   */
+  showDelete?: boolean;
+  /**
+   * The "Delete all conversations" control in the history footer. Default
+   * true. False hides the control only; storage and retention are unchanged.
+   * The identity reset control is separate and unaffected.
+   */
+  showDeleteAll?: boolean;
 }
 
 /** Resolved scope for a logical history operation. */

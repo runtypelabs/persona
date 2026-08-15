@@ -172,6 +172,8 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       enabled: false,
       presentation: "panel",
       showScopeStatus: true,
+      showDelete: true,
+      showDeleteAll: true,
     },
   },
   // Placeholder copy that models the right shape: verb-first, user-voice,

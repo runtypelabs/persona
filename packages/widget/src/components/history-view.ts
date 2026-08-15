@@ -201,6 +201,14 @@ export interface HistoryViewOptions {
   headerPlacement?: HistoryHeaderPlacement;
   showScopeStatus: boolean;
   /**
+   * Per-row delete via the row overflow menu. Default true; false drops the
+   * trigger (delete is its only item). Hides the control only — custom row
+   * slots still receive `requestDelete`.
+   */
+  showDelete?: boolean;
+  /** The footer's clear-history control. Default true. */
+  showDeleteAll?: boolean;
+  /**
    * Leading row avatar: an image URL, a glyph, or `false` to omit the block.
    * Absent falls back to the same glyph the header uses.
    */
@@ -678,12 +686,15 @@ export function createHistoryView(
     className: "persona-history-list-region",
   });
 
-  const clearButton = createNode("button", {
-    className: "persona-history-destructive persona-history-clear",
-    text: copy.clearHistoryLabel,
-    attrs: { type: "button", "data-persona-history-focus": "clear" },
-  });
-  clearButton.addEventListener("click", () => void clearHistory());
+  const clearButton =
+    options.showDeleteAll !== false
+      ? createNode("button", {
+          className: "persona-history-destructive persona-history-clear",
+          text: copy.clearHistoryLabel,
+          attrs: { type: "button", "data-persona-history-focus": "clear" },
+        })
+      : null;
+  clearButton?.addEventListener("click", () => void clearHistory());
 
   const resetButton = options.provider.resetDevice
     ? createNode("button", {
@@ -1124,6 +1135,7 @@ export function createHistoryView(
             menuOpen: openMenuId === conversation.id,
             error: rowErrors.get(conversation.id) ?? null,
             avatar: options.rowAvatar,
+            showDelete: options.showDelete !== false,
             nowMs: now(),
             copy,
             onOpen: () => void openConversation(conversation.id),
@@ -1237,8 +1249,10 @@ export function createHistoryView(
     setInert(clearButton, busy());
     setInert(resetButton, busy());
     // Nothing to delete: keep the destructive control out of the empty state.
-    clearButton.hidden = items.length === 0 && listState.kind === "empty";
-    footer.hidden = clearButton.hidden && !resetButton;
+    if (clearButton) {
+      clearButton.hidden = items.length === 0 && listState.kind === "empty";
+    }
+    footer.hidden = (!clearButton || clearButton.hidden) && !resetButton;
   };
 
   const render = (): void => {

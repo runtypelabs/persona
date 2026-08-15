@@ -28,6 +28,8 @@ export interface ConversationRowOptions {
   error: { message: string; retry: () => void } | null;
   /** Image URL or glyph for the leading avatar; empty/false omits the block. */
   avatar: string | false | undefined;
+  /** Row overflow menu (delete). False drops the trigger entirely. */
+  showDelete: boolean;
   nowMs: number;
   copy: ResolvedHistoryViewCopy;
   onOpen: () => void;
@@ -123,39 +125,45 @@ export function buildConversationRow(
     options.onOpen();
   });
 
-  const menuButton = createNode("button", {
-    className: "persona-history-icon-button persona-history-row-menu-button",
-    attrs: {
-      type: "button",
-      "aria-label": `${copy.rowActionsLabel}: ${conversation.title}`,
-      "aria-haspopup": "menu",
-      "aria-expanded": options.menuOpen ? "true" : "false",
-      "data-persona-history-focus": menuFocusKey(conversation.id),
-      ...(inert ? { "aria-disabled": "true" } : {}),
-    },
-  });
-  menuButton.appendChild(historyIcon("ellipsis"));
-  menuButton.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (inert) return;
-    options.onToggleMenu();
-  });
-  menuButton.addEventListener("keydown", (event) => {
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    event.preventDefault();
-    if (inert || options.menuOpen) return;
-    options.onToggleMenu();
-  });
+  let menuButton: HTMLElement | null = null;
+  if (options.showDelete) {
+    menuButton = createNode("button", {
+      className: "persona-history-icon-button persona-history-row-menu-button",
+      attrs: {
+        type: "button",
+        "aria-label": `${copy.rowActionsLabel}: ${conversation.title}`,
+        "aria-haspopup": "menu",
+        "aria-expanded": options.menuOpen ? "true" : "false",
+        "data-persona-history-focus": menuFocusKey(conversation.id),
+        ...(inert ? { "aria-disabled": "true" } : {}),
+      },
+    });
+    menuButton.appendChild(historyIcon("ellipsis"));
+    menuButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (inert) return;
+      options.onToggleMenu();
+    });
+    menuButton.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      if (inert || options.menuOpen) return;
+      options.onToggleMenu();
+    });
+  }
 
   const item = createNode(
     "li",
     {
-      className: "persona-history-item",
+      className: cx(
+        "persona-history-item",
+        !options.showDelete && "persona-history-item--no-menu"
+      ),
       attrs: { "data-persona-history-item": conversation.id },
     },
     rowButton,
     menuButton,
-    options.menuOpen ? buildRowMenu(options) : null,
+    options.menuOpen && options.showDelete ? buildRowMenu(options) : null,
     options.error ? buildRowError(options.error, copy, conversation.id) : null
   );
   return item;
