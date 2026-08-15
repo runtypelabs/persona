@@ -63,7 +63,11 @@ import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
 import { createElement } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
-import { attachTooltip } from "./utils/tooltip";
+import { attachTooltip, configureTooltipTiming } from "./utils/tooltip";
+import {
+  DEFAULT_TOOLTIP_DELAY_MS,
+  DEFAULT_TOOLTIP_SKIP_DELAY_MS,
+} from "./utils/tooltip-timing";
 import {
   ariaCombo,
   createShortcutRegistry,
@@ -730,6 +734,13 @@ export const createAgentExperience = (
   }
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
+  const applyTooltipTiming = (): void => {
+    configureTooltipTiming({
+      delayMs: config.tooltip?.delayMs ?? DEFAULT_TOOLTIP_DELAY_MS,
+      skipDelayMs: config.tooltip?.skipDelayMs ?? DEFAULT_TOOLTIP_SKIP_DELAY_MS,
+    });
+  };
+  applyTooltipTiming();
   // `config.features` holds the preference-resolved view every read site uses;
   // `baseFeatures` keeps the pre-preference base so update() re-resolves from
   // it instead of stacking new preferences onto already-overlaid values.
@@ -10922,6 +10933,7 @@ export const createAgentExperience = (
       config = mergeConfigUpdate({ ...config, features: baseFeatures }, nextConfig);
       baseFeatures = config.features;
       config = resolveConfigPreferences(config);
+      applyTooltipTiming();
       // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
       applyFullHeightStyles();
       applyThemeVariables(mount, config);

@@ -1,6 +1,10 @@
 import type { AgentWidgetConfig, AgentWidgetLauncherConfig } from "./types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
 import { deepMerge } from "./utils/deep-merge";
+import {
+  DEFAULT_TOOLTIP_DELAY_MS,
+  DEFAULT_TOOLTIP_SKIP_DELAY_MS,
+} from "./utils/tooltip-timing";
 
 /**
  * Default width for the floating launcher panel (when not overridden).
@@ -77,6 +81,10 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   theme: undefined,
   darkTheme: undefined,
   colorScheme: "light",
+  tooltip: {
+    delayMs: DEFAULT_TOOLTIP_DELAY_MS,
+    skipDelayMs: DEFAULT_TOOLTIP_SKIP_DELAY_MS,
+  },
   launcher: DEFAULT_LAUNCHER_CONFIG,
   copy: {
     // No welcomeTitle / welcomeSubtitle here on purpose: `resolveWelcomeConfig`
@@ -269,6 +277,10 @@ export function mergeWithDefaults(
         ...DEFAULT_WIDGET_CONFIG.launcher?.clearChat,
         ...config.launcher?.clearChat,
       },
+    },
+    tooltip: {
+      ...DEFAULT_WIDGET_CONFIG.tooltip,
+      ...config.tooltip,
     },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,

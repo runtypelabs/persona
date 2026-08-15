@@ -23,6 +23,7 @@ import {
 } from "./internal/demo-history-provider";
 import type { AgentWidgetPlugin } from "./plugins/types";
 import { setMacPlatformOverride } from "./utils/shortcuts";
+import { resetTooltipTiming } from "./utils/tooltip";
 
 const SEEDS: DemoHistoryConversationSeed[] = [
   {
@@ -583,6 +584,7 @@ describe("history shell", () => {
         const toggle = collapseToggle(mount);
         expect(toggle.getAttribute("aria-keyshortcuts")).toBe("Control+B");
 
+        resetTooltipTiming({ delayMs: 0, skipDelayMs: 0 });
         toggle.dispatchEvent(new MouseEvent("mouseenter"));
         const tooltip = document.querySelector(".persona-control-tooltip")!;
         expect(

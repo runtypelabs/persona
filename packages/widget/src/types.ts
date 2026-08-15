@@ -3568,6 +3568,25 @@ export type AgentWidgetLauncherTeaserConfig = {
   dismissLabel?: string;
 };
 
+/**
+ * Timing for the portaled icon-control tooltip (header, composer, rail).
+ * Keyboard focus always opens immediately. Hover waits `delayMs` unless
+ * another tooltip closed within `skipDelayMs` (toolbar scan).
+ */
+export type AgentWidgetTooltipConfig = {
+  /**
+   * Milliseconds to wait on hover before the first tooltip appears.
+   * `0` restores the previous instant-open behavior.
+   * @default 200
+   */
+  delayMs?: number;
+  /**
+   * After a tooltip closes, later hovers in this window skip `delayMs`.
+   * @default 300
+   */
+  skipDelayMs?: number;
+};
+
 export type AgentWidgetSendButtonConfig = {
   borderWidth?: string;
   borderColor?: string;
@@ -6055,6 +6074,12 @@ export type AgentWidgetConfig = {
    * @default false
    */
   autoFocusInput?: boolean;
+  /**
+   * Hover timing for the portaled control tooltip. Keyboard focus is
+   * always immediate. Unset keys keep the ChatGPT/Claude defaults
+   * (`delayMs: 200`, `skipDelayMs: 300`).
+   */
+  tooltip?: AgentWidgetTooltipConfig;
   launcher?: AgentWidgetLauncherConfig;
   initialMessages?: AgentWidgetMessage[];
   /**

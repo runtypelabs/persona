@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { attachTooltip } from "./tooltip";
+import {
+  attachTooltip,
+  DEFAULT_TOOLTIP_DELAY_MS,
+  resetTooltipTiming,
+} from "./tooltip";
 
 /**
  * Focus with a pinned keyboard-visible verdict. jsdom implements the spec's
@@ -379,5 +383,86 @@ describe("attachTooltip", () => {
       "Shadow tooltip"
     );
     expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+  });
+});
+
+describe("attachTooltip hover delay", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    resetTooltipTiming({ delayMs: 0, skipDelayMs: 0 });
+  });
+
+  const tip = () => document.body.querySelector(".persona-control-tooltip");
+
+  const hoverButton = (label: string): HTMLButtonElement => {
+    const button = document.createElement("button");
+    button.setAttribute("aria-label", label);
+    document.body.appendChild(button);
+    attachTooltip({
+      anchor: button,
+      text: () => button.getAttribute("aria-label") ?? "",
+    });
+    return button;
+  };
+
+  it("waits the product default before showing on hover", () => {
+    resetTooltipTiming();
+    vi.useFakeTimers();
+    const button = hoverButton("Close chat");
+
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(tip()).toBeNull();
+
+    vi.advanceTimersByTime(DEFAULT_TOOLTIP_DELAY_MS - 1);
+    expect(tip()).toBeNull();
+
+    vi.advanceTimersByTime(1);
+    expect(tip()?.textContent).toContain("Close chat");
+  });
+
+  it("cancels a pending hover if the pointer leaves before the delay", () => {
+    resetTooltipTiming();
+    vi.useFakeTimers();
+    const button = hoverButton("Close chat");
+
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+    vi.advanceTimersByTime(100);
+    button.dispatchEvent(new MouseEvent("mouseleave"));
+    vi.advanceTimersByTime(DEFAULT_TOOLTIP_DELAY_MS);
+    expect(tip()).toBeNull();
+  });
+
+  it("opens the next tooltip immediately inside the skip-delay window", () => {
+    resetTooltipTiming();
+    vi.useFakeTimers();
+    const first = hoverButton("New conversation");
+    const second = hoverButton("Close chat");
+
+    first.dispatchEvent(new MouseEvent("mouseenter"));
+    vi.advanceTimersByTime(DEFAULT_TOOLTIP_DELAY_MS);
+    expect(tip()?.textContent).toContain("New conversation");
+
+    first.dispatchEvent(new MouseEvent("mouseleave"));
+    expect(tip()).toBeNull();
+
+    second.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(tip()?.textContent).toContain("Close chat");
+  });
+
+  it("opens immediately on keyboard-visible focus even when hover is delayed", () => {
+    resetTooltipTiming();
+    const button = hoverButton("Close chat");
+    focusVisible(button);
+    expect(tip()?.textContent).toContain("Close chat");
+  });
+
+  it("honors delayMs: 0 for instant hover", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    attachTooltip({ anchor: button, text: "Close chat", delayMs: 0 });
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(tip()?.textContent).toContain("Close chat");
   });
 });

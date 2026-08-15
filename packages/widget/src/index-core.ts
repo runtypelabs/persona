@@ -32,6 +32,7 @@ export type {
   AgentWidgetMessage,
   AgentWidgetLauncherConfig,
   AgentWidgetLauncherTeaserConfig,
+  AgentWidgetTooltipConfig,
   AgentWidgetDockConfig,
   AgentWidgetEvent,
   AgentWidgetStreamParser,

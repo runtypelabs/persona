@@ -1,8 +1,51 @@
 import { PORTALED_OVERLAY_Z_INDEX } from "./constants";
+import {
+  DEFAULT_TOOLTIP_DELAY_MS,
+  DEFAULT_TOOLTIP_SKIP_DELAY_MS,
+} from "./tooltip-timing";
+
+export { DEFAULT_TOOLTIP_DELAY_MS, DEFAULT_TOOLTIP_SKIP_DELAY_MS };
 
 const DEFAULT_GAP = 8;
 const DEFAULT_VIEWPORT_PADDING = 8;
 const MIN_ARROW_INSET = 10;
+
+let configuredDelayMs = DEFAULT_TOOLTIP_DELAY_MS;
+let configuredSkipDelayMs = DEFAULT_TOOLTIP_SKIP_DELAY_MS;
+let skipDelayUntil = 0;
+
+const clampMs = (value: number): number => Math.max(0, value);
+
+/**
+ * Set the widget-wide hover timing. Per-attach `delayMs` / `skipDelayMs`
+ * still win. Keyboard focus is always immediate.
+ */
+export function configureTooltipTiming(timing: {
+  delayMs?: number;
+  skipDelayMs?: number;
+}): void {
+  if (timing.delayMs !== undefined) configuredDelayMs = clampMs(timing.delayMs);
+  if (timing.skipDelayMs !== undefined)
+    configuredSkipDelayMs = clampMs(timing.skipDelayMs);
+}
+
+/** Restore product defaults and clear the skip-delay window. */
+export function resetTooltipTiming(timing?: {
+  delayMs?: number;
+  skipDelayMs?: number;
+}): void {
+  configuredDelayMs = clampMs(timing?.delayMs ?? DEFAULT_TOOLTIP_DELAY_MS);
+  configuredSkipDelayMs = clampMs(
+    timing?.skipDelayMs ?? DEFAULT_TOOLTIP_SKIP_DELAY_MS
+  );
+  skipDelayUntil = 0;
+}
+
+const isSkipDelayWarm = (): boolean => Date.now() < skipDelayUntil;
+
+const markSkipDelay = (skipMs: number): void => {
+  skipDelayUntil = skipMs > 0 ? Date.now() + skipMs : 0;
+};
 
 export interface TooltipOptions {
   /** The control the tooltip describes and positions against. */
@@ -22,6 +65,16 @@ export interface TooltipOptions {
   gap?: number;
   /** Minimum distance from viewport edges, in pixels. */
   viewportPadding?: number;
+  /**
+   * Hover wait before the first tooltip. Falls back to the widget
+   * `tooltip.delayMs` (default 200). Keyboard focus ignores this.
+   */
+  delayMs?: number;
+  /**
+   * After a tooltip closes, later hovers in this window skip `delayMs`.
+   * Falls back to the widget `tooltip.skipDelayMs` (default 300).
+   */
+  skipDelayMs?: number;
 }
 
 export interface TooltipHandle {
@@ -93,6 +146,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
   let label: HTMLElement | null = null;
   let hintChip: HTMLElement | null = null;
   let detachOpenListeners: (() => void) | null = null;
+  let openTimer: ReturnType<Window["setTimeout"]> | undefined;
   let hovered = false;
   let focused = false;
   let destroyed = false;
@@ -101,14 +155,27 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     (typeof text === "function" ? text() : text).trim();
   const resolvedHint = (): string =>
     (typeof hint === "function" ? hint() : (hint ?? "")).trim();
+  const resolvedDelayMs = (): number =>
+    clampMs(options.delayMs ?? configuredDelayMs);
+  const resolvedSkipDelayMs = (): number =>
+    clampMs(options.skipDelayMs ?? configuredSkipDelayMs);
+
+  const clearOpenTimer = (): void => {
+    if (openTimer === undefined) return;
+    currentWindow().clearTimeout(openTimer);
+    openTimer = undefined;
+  };
 
   const hide = (): void => {
+    clearOpenTimer();
+    const wasOpen = tooltip !== null;
     detachOpenListeners?.();
     detachOpenListeners = null;
     tooltip?.remove();
     tooltip = null;
     label = null;
     hintChip = null;
+    if (wasOpen) markSkipDelay(resolvedSkipDelayMs());
   };
 
   const reposition = (): void => {
@@ -232,8 +299,21 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     };
   };
 
+  const scheduleShow = (immediate: boolean): void => {
+    if (destroyed || tooltip) return;
+    clearOpenTimer();
+    if (immediate || resolvedDelayMs() <= 0 || isSkipDelayWarm()) {
+      show();
+      return;
+    }
+    openTimer = currentWindow().setTimeout(() => {
+      openTimer = undefined;
+      show();
+    }, resolvedDelayMs());
+  };
+
   const syncVisibility = (): void => {
-    if (hovered || focused) show();
+    if (hovered || focused) scheduleShow(focused);
     else hide();
   };
   const onMouseEnter = (): void => {

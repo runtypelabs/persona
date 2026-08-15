@@ -256,6 +256,7 @@ describe("attachment button live config updates", () => {
     const controller = createAgentExperience(mount, {
       apiUrl: "https://api.example.com/chat",
       launcher: { enabled: false },
+      tooltip: { delayMs: 0 },
       attachments: { enabled: true, buttonIconName: "paperclip", buttonTooltipText: "Attach file" },
     });
 
