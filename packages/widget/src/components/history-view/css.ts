@@ -875,10 +875,30 @@ export const HISTORY_VIEW_CSS =
   transition: flex-basis 180ms cubic-bezier(0, 0, 0.2, 1);
 }
 ` +
-  /* The header supplies padding and background; the bar only fills it. */
+  /* The header supplies padding and background; the bar only fills it. Its
+     controls follow the header's sizing tokens so the band height never
+     changes between surfaces; the 40px coarse floor matches
+     .persona-header-control. */
   `.persona-history-topbar.persona-history-topbar--shell {
   flex: 1 1 auto;
   min-width: 0;
+  grid-template-columns: var(--persona-header-control-size, 44px) minmax(0, 1fr) var(--persona-header-control-size, 44px);
+}
+.persona-history-topbar--shell button.persona-history-icon-button {
+  width: var(--persona-header-control-size, 44px);
+  height: var(--persona-header-control-size, 44px);
+  min-width: var(--persona-header-control-size, 44px);
+  min-height: var(--persona-header-control-size, 44px);
+}
+.persona-history-topbar--shell button.persona-history-icon-button svg {
+  width: var(--persona-header-control-icon-size, 20px);
+  height: var(--persona-header-control-icon-size, 20px);
+}
+@media (pointer: coarse) {
+  .persona-history-topbar--shell button.persona-history-icon-button {
+    min-width: 40px;
+    min-height: 40px;
+  }
 }
 ` +
   /* The bar never animates; only its arrival in the shell header does. */

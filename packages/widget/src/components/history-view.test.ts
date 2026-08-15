@@ -370,6 +370,32 @@ describe("history view list styling", () => {
     );
   });
 
+  it("sizes shell-hosted bar controls from the header tokens", async () => {
+    mount();
+    await flush();
+    const css = injectedHistoryCss();
+    expect(css).toContain(
+      ".persona-history-topbar--shell button.persona-history-icon-button {\n" +
+        "  width: var(--persona-header-control-size, 44px);\n" +
+        "  height: var(--persona-header-control-size, 44px);\n" +
+        "  min-width: var(--persona-header-control-size, 44px);\n" +
+        "  min-height: var(--persona-header-control-size, 44px);\n}"
+    );
+    // The glyph follows the header icon size, and touch keeps the header's
+    // own 40px floor rather than a taller bar-only one.
+    expect(css).toContain(
+      ".persona-history-topbar--shell button.persona-history-icon-button svg {\n  width: var(--persona-header-control-icon-size, 20px);"
+    );
+    const shellCoarse = css.slice(
+      css.indexOf("@media (pointer: coarse) {\n  .persona-history-topbar--shell")
+    );
+    expect(shellCoarse.slice(0, shellCoarse.indexOf("}"))).toContain("min-width: 40px;");
+    // The grid tracks mirror the control size so the centered title holds.
+    expect(css).toContain(
+      "grid-template-columns: var(--persona-header-control-size, 44px) minmax(0, 1fr) var(--persona-header-control-size, 44px);"
+    );
+  });
+
   it("separates rows with spacing, never dividers or borders", async () => {
     mount();
     await flush();
@@ -1401,7 +1427,9 @@ describe("history view chrome and destructive actions", () => {
       `${branded}:hover > svg,\n${branded}:focus-visible > svg {\n  display: block;\n}`
     );
     // Touch has no hover, so the glyph is the only face there.
-    const coarse = css.slice(css.lastIndexOf("@media (pointer: coarse)"));
+    const coarse = css.slice(
+      css.indexOf("@media (pointer: coarse) {\n  .persona-history-view--rail-collapsed")
+    );
     expect(coarse).toContain(
       `  ${branded} .persona-history-toggle-brand {\n    display: none;\n  }`
     );
