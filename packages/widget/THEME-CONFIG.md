@@ -491,6 +491,10 @@ Each row's overflow menu is `components.history.menu`: `background` (defaults
 to the list surface lifted 8% toward white, so it reads as elevated in dark
 schemes) and `borderRadius` (`12px`). Item metrics are fixed to the reference
 density (32px rows, 44px under a coarse pointer) and are not tokens.
+Destructive labels (Delete, delete all) take
+`components.history.dangerForeground`, defaulting to the palette's error-600
+in light schemes and a lighter red in the built-in dark theme so the 14px
+text keeps AA contrast on dark surfaces.
 
 Rail identity is a ladder, cheapest first. `features.history.rail.brand` is one
 declaration (`icon`, `iconUrl`, or `render({ collapsed })`, in that precedence,

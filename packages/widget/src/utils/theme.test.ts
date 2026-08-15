@@ -592,6 +592,27 @@ describe('theme utils', () => {
     expect(explicitViaLight['--persona-button-ghost-hover-bg']).toBe('#123456');
   });
 
+  it('lightens the history danger red for dark color schemes', () => {
+    // error-600 lands ~3:1 on dark surfaces, under the AA floor for the 14px
+    // destructive labels; the built-in dark defaults swap in error-400.
+    const light = themeToCssVariables(getActiveTheme({ colorScheme: 'light' }));
+    expect(light['--persona-history-danger-fg']).toBeUndefined();
+
+    const dark = themeToCssVariables(getActiveTheme({ colorScheme: 'dark' }));
+    expect(dark['--persona-history-danger-fg']).toBe('#f87171');
+
+    // An explicit dangerForeground wins in either scheme.
+    const explicit = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: {
+          components: { history: { dangerForeground: '#fecaca' } },
+        },
+      } as any)
+    );
+    expect(explicit['--persona-history-danger-fg']).toBe('#fecaca');
+  });
+
   it('emits messageActions aliases only when the group is configured', () => {
     // widget.css chains to the ghost wash and semantic text on its own, so an
     // unset group must leave every alias undefined.

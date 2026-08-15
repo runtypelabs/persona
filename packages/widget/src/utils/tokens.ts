@@ -918,6 +918,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     const value = cssVars[`--persona-components-history-menu-${token}`];
     if (value) cssVars[`--persona-history-menu-${alias}`] = value;
   }
+  // Destructive action text. The chunk falls back to the light-surface
+  // error-600; the built-in dark theme sets this to a passing lighter red.
+  const historyDangerFg = cssVars['--persona-components-history-dangerForeground'];
+  if (historyDangerFg) cssVars['--persona-history-danger-fg'] = historyDangerFg;
 
   // Portaled control tooltip. Same conditional rule: widget.css carries the
   // built-in look in every var() fallback, so an unset token stays undefined.

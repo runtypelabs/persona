@@ -288,6 +288,12 @@ export interface HistoryTokens {
     /** Surface behind the rail. Defaults to the rail's own surface color. */
     background?: TokenReference<'color'>;
   };
+  /**
+   * Destructive action text (row Delete, "Delete all conversations").
+   * Defaults to `palette.colors.error.600` in light schemes and a lighter
+   * red in the built-in dark theme so the 14px labels keep AA contrast.
+   */
+  dangerForeground?: TokenReference<'color'>;
   /** The per-row overflow menu in the Messages list (rail and panel). */
   menu?: {
     /**

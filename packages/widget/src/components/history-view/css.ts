@@ -19,7 +19,6 @@
  *   --persona-history-row-active-bg selected conversation wash
  *   --persona-history-active-marker selected conversation edge marker
  *   --persona-history-skeleton-bg   loading placeholder blocks
- *   --persona-history-danger-fg     destructive action text
  *   --persona-history-focus-ring    focus-visible outline color
  *   --persona-history-slide         entrance/exit horizontal travel
  *   --persona-history-row-min-height / --persona-history-topbar-min-height
@@ -40,7 +39,6 @@ export const HISTORY_VIEW_CSS =
   --persona-history-row-active-bg: var(--persona-container, #f3f4f6);
   --persona-history-active-marker: var(--persona-primary, #2563eb);
   --persona-history-skeleton-bg: var(--persona-container, #eef0f3);
-  --persona-history-danger-fg: var(--persona-palette-colors-error-600, #b91c1c);
   --persona-history-focus-ring: var(--persona-primary, #2563eb);
   --persona-history-slide: 20px;
   --persona-history-row-min-height: 60px;
@@ -404,7 +402,7 @@ export const HISTORY_VIEW_CSS =
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--persona-history-danger-fg);
+  color: var(--persona-history-danger-fg, var(--persona-palette-colors-error-600, #b91c1c));
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -419,7 +417,7 @@ export const HISTORY_VIEW_CSS =
   gap: 8px;
   padding: 8px 16px 12px;
   font-size: 13px;
-  color: var(--persona-history-danger-fg);
+  color: var(--persona-history-danger-fg, var(--persona-palette-colors-error-600, #b91c1c));
 }
 
 ` +
@@ -508,7 +506,7 @@ export const HISTORY_VIEW_CSS =
   margin: 0;
   border: 0;
   background: transparent;
-  color: var(--persona-history-danger-fg);
+  color: var(--persona-history-danger-fg, var(--persona-palette-colors-error-600, #b91c1c));
   font: inherit;
   font-size: 13px;
   text-align: left;

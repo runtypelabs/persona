@@ -120,6 +120,11 @@ const DARK_COMPONENTS: DeepPartial<PersonaTheme> = {
         hoverBackground: 'rgba(255, 255, 255, 0.08)',
       },
     },
+    history: {
+      // error-400: the light-surface error-600 red lands ~3:1 on dark
+      // surfaces, under the 4.5:1 AA floor for the 14px destructive labels.
+      dangerForeground: '#f87171',
+    },
   },
 };
 
