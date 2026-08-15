@@ -1,5 +1,0 @@
----
-"@runtypelabs/persona": patch
----
-
-Add `features.history.rail.collapsedBehavior: "overlay"`, a second shape for the collapsed Messages rail. Instead of the 52px icon column, the rail leaves a trigger at the leading edge of the conversation header (wearing `rail.brand` at rest and the sidebar glyph on hover or keyboard focus), and the pointer arriving on it floats the expanded rail below that row, one margin off the docked edge. Clicking the trigger, or the floating rail's own toggle, pins it into the full-height column; the docked rail's toggle collapses it back. The floating rail is transient: leaving it, Escape, a click outside, or selecting a conversation all dismiss it. A collapsed rail restored this way renders the trigger alone, so the lazy history chunk is not fetched until the first hover or focus warms it. Its surface is themeable through the new `components.history.overlay` tokens (`margin`, `borderRadius`, `shadow`, `background`), and the default stays `"icon-rail"`, so existing rails are unchanged.
