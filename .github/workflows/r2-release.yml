@@ -16,7 +16,7 @@ jobs:
   publish-to-r2:
     name: Publish to R2 CDN
     if: startsWith(inputs.tag, '@runtypelabs/persona@')
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     env:
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
