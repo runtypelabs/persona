@@ -294,6 +294,25 @@ export interface HistoryTokens {
    * red in the built-in dark theme so the 14px labels keep AA contrast.
    */
   dangerForeground?: TokenReference<'color'>;
+  /**
+   * The delete/forget confirmation dialog the shell shows for destructive
+   * history actions. The danger pair is always emitted (`--persona-danger`
+   * / `--persona-danger-fg`); scrim and shadow keep the built-in look when
+   * unset.
+   */
+  confirm?: {
+    /**
+     * Destructive button fill. Defaults to `palette.colors.error.700` in
+     * light schemes and `error.600` in the built-in dark theme.
+     */
+    dangerBackground?: TokenReference<'color'>;
+    /** Destructive button label. @default "#ffffff" */
+    dangerForeground?: TokenReference<'color'>;
+    /** Overlay behind the dialog. @default "rgba(15, 23, 42, 0.45)" */
+    scrim?: TokenReference<'color'>;
+    /** Card elevation (raw CSS shadow). */
+    shadow?: string;
+  };
   /** The per-row overflow menu in the Messages list (rail and panel). */
   menu?: {
     /**

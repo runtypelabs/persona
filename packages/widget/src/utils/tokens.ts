@@ -922,6 +922,19 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // error-600; the built-in dark theme sets this to a passing lighter red.
   const historyDangerFg = cssVars['--persona-components-history-dangerForeground'];
   if (historyDangerFg) cssVars['--persona-history-danger-fg'] = historyDangerFg;
+  // Confirmation dialog. The danger fill/label pair is always emitted so the
+  // dialog follows the error palette; scrim and shadow stay conditional with
+  // the dialog's inline fallbacks as the defaults.
+  cssVars['--persona-danger'] =
+    cssVars['--persona-components-history-confirm-dangerBackground'] ??
+    cssVars['--persona-palette-colors-error-700'] ??
+    '#b42318';
+  cssVars['--persona-danger-fg'] =
+    cssVars['--persona-components-history-confirm-dangerForeground'] ?? '#ffffff';
+  for (const token of ['scrim', 'shadow'] as const) {
+    const value = cssVars[`--persona-components-history-confirm-${token}`];
+    if (value) cssVars[`--persona-history-confirm-${token}`] = value;
+  }
 
   // Portaled control tooltip. Same conditional rule: widget.css carries the
   // built-in look in every var() fallback, so an unset token stays undefined.

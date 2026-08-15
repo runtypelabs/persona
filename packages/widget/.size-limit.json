@@ -8,7 +8,7 @@
   {
     "name": "⛔ CRITICAL · launcher critical bundle (launcher.global.js)",
     "path": "dist/launcher.global.js",
-    "limit": "18.5 kB",
+    "limit": "18.75 kB",
     "gzip": true
   },
   {
@@ -20,7 +20,7 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "192.75 kB",
+    "limit": "193 kB",
     "gzip": true
   },
   {

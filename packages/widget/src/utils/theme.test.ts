@@ -613,6 +613,38 @@ describe('theme utils', () => {
     expect(explicit['--persona-history-danger-fg']).toBe('#fecaca');
   });
 
+  it('emits the confirm dialog danger pair and forks the fill for dark', () => {
+    // Always emitted: the dialog's inline var() must resolve so the fill
+    // follows a customized error palette instead of its legacy fallback.
+    const light = themeToCssVariables(getActiveTheme({ colorScheme: 'light' }));
+    expect(light['--persona-danger']).toBe('#b91c1c'); // error.700
+    expect(light['--persona-danger-fg']).toBe('#ffffff');
+    expect(light['--persona-history-confirm-scrim']).toBeUndefined();
+
+    const dark = themeToCssVariables(getActiveTheme({ colorScheme: 'dark' }));
+    expect(dark['--persona-danger']).toBe('#dc2626'); // error.600
+
+    const explicit = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: {
+          components: {
+            history: {
+              confirm: {
+                dangerBackground: '#7f1d1d',
+                dangerForeground: '#fee2e2',
+                scrim: 'rgba(0, 0, 0, 0.6)',
+              },
+            },
+          },
+        },
+      } as any)
+    );
+    expect(explicit['--persona-danger']).toBe('#7f1d1d');
+    expect(explicit['--persona-danger-fg']).toBe('#fee2e2');
+    expect(explicit['--persona-history-confirm-scrim']).toBe('rgba(0, 0, 0, 0.6)');
+  });
+
   it('emits messageActions aliases only when the group is configured', () => {
     // widget.css chains to the ghost wash and semantic text on its own, so an
     // unset group must leave every alias undefined.

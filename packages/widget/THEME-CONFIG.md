@@ -496,6 +496,13 @@ Destructive labels (Delete, delete all) take
 in light schemes and a lighter red in the built-in dark theme so the 14px
 text keeps AA contrast on dark surfaces.
 
+The delete confirmation dialog is `components.history.confirm`:
+`dangerBackground` (the filled button, palette error-700 in light and
+error-600 in the built-in dark theme) with its paired `dangerForeground`
+(white), plus `scrim` and `shadow` for the overlay and card. The danger pair
+always emits as `--persona-danger` / `--persona-danger-fg`, so it follows a
+customized error palette; a live theme update reaches an open dialog.
+
 Rail identity is a ladder, cheapest first. `features.history.rail.brand` is one
 declaration (`icon`, `iconUrl`, or `render({ collapsed })`, in that precedence,
 highest last) that the widget places twice: beside the view title in the

@@ -124,6 +124,11 @@ const DARK_COMPONENTS: DeepPartial<PersonaTheme> = {
       // error-400: the light-surface error-600 red lands ~3:1 on dark
       // surfaces, under the 4.5:1 AA floor for the 14px destructive labels.
       dangerForeground: '#f87171',
+      confirm: {
+        // error-600: bright enough to read as a control against a dark
+        // surface (3:1 non-text) while the white label keeps 4.8:1.
+        dangerBackground: 'palette.colors.error.600',
+      },
     },
   },
 };

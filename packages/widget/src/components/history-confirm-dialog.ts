@@ -58,7 +58,8 @@ export function showHistoryConfirm(
         borderRadius: "var(--persona-radius-lg, 0.75rem)",
         background: "var(--persona-surface, #ffffff)",
         color: "var(--persona-text-primary, inherit)",
-        boxShadow: "0 20px 40px -12px rgba(0, 0, 0, 0.35)",
+        boxShadow:
+          "var(--persona-history-confirm-shadow, 0 20px 40px -12px rgba(0, 0, 0, 0.35))",
         padding: "20px",
         display: "flex",
         flexDirection: "column",
@@ -106,7 +107,7 @@ export function showHistoryConfirm(
   cancel.style.color = "inherit";
   confirm.style.border = "none";
   confirm.style.background = "var(--persona-danger, #b42318)";
-  confirm.style.color = "#ffffff";
+  confirm.style.color = "var(--persona-danger-fg, #ffffff)";
 
   const overlay = createNode(
     "div",
@@ -120,7 +121,7 @@ export function showHistoryConfirm(
         alignItems: "center",
         justifyContent: "center",
         padding: "16px",
-        background: "rgba(15, 23, 42, 0.45)",
+        background: "var(--persona-history-confirm-scrim, rgba(15, 23, 42, 0.45))",
       },
     },
     dialog
