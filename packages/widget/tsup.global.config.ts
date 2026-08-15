@@ -67,5 +67,10 @@ export default defineConfig({
     // loader for the standalone `history-view.js` chunk, fetched only when the
     // visitor first opens history.
     options.external.push("@runtypelabs/persona/history-view");
+
+    // Keep the event-stream observability panel out of the CDN payload. Same
+    // scheme: sibling-URL chunk `event-stream-view.js`, fetched only when the
+    // visitor first opens the panel via the header toggle.
+    options.external.push("@runtypelabs/persona/event-stream-view");
   },
 });

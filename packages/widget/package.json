@@ -77,6 +77,11 @@
       "import": "./dist/history-view.js",
       "require": "./dist/history-view.cjs"
     },
+    "./event-stream-view": {
+      "types": "./dist/event-stream-view.d.ts",
+      "import": "./dist/event-stream-view.js",
+      "require": "./dist/event-stream-view.cjs"
+    },
     "./widget.css": "./dist/widget.css"
   },
   "files": [
@@ -84,7 +89,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:context-mentions && pnpm run build:context-mentions-inline && pnpm run build:history-view && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run check:dist-vite8",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:context-mentions && pnpm run build:context-mentions-inline && pnpm run build:history-view && pnpm run build:event-stream-view && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run check:dist-vite8",
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:markdown-parsers": "tsup --config tsup.markdown-parsers.config.ts",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
@@ -97,7 +102,7 @@
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:codegen": "tsup src/codegen.ts --format esm,cjs --minify --dts",
     "build:styles": "node scripts/build-styles.mjs",
-    "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" --external @runtypelabs/persona/context-mentions --external @runtypelabs/persona/context-mentions-inline --external @runtypelabs/persona/history-view && tsup --config tsup.global.config.ts && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
+    "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" --external @runtypelabs/persona/context-mentions --external @runtypelabs/persona/context-mentions-inline --external @runtypelabs/persona/history-view --external @runtypelabs/persona/event-stream-view && tsup --config tsup.global.config.ts && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
     "build:webmcp-polyfill": "tsup --config tsup.webmcp-polyfill.config.ts",
     "build:context-mentions": "tsup --config tsup.context-mentions.config.ts",
     "build:context-mentions-inline": "tsup --config tsup.context-mentions-inline.config.ts",
@@ -113,7 +118,8 @@
     "size": "size-limit",
     "fetch:runtype-openapi": "node scripts/fetch-runtype-openapi.mjs",
     "generate:runtype-types": "pnpm run fetch:runtype-openapi && node scripts/generate-runtype-openapi-types.mjs",
-    "check:runtype-types": "pnpm run fetch:runtype-openapi && node scripts/generate-runtype-openapi-types.mjs --check"
+    "check:runtype-types": "pnpm run fetch:runtype-openapi && node scripts/generate-runtype-openapi-types.mjs --check",
+    "build:event-stream-view": "tsup --config tsup.event-stream-view.config.ts"
   },
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^3.0.0",

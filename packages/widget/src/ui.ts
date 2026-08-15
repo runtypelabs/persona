@@ -171,7 +171,8 @@ import {
 import { EventStreamBuffer } from "./utils/event-stream-buffer";
 import { EventStreamStore } from "./utils/event-stream-store";
 import { ThroughputTracker } from "./utils/throughput-tracker";
-import { createEventStreamView } from "./components/event-stream-view";
+import { loadEventStreamView } from "./event-stream-view-loader";
+import type { EventStreamViewHandle } from "./event-stream-view-entry";
 import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
 import {
   hasLiveInlineArtifactBlock,
@@ -948,7 +949,7 @@ export const createAgentExperience = (
   let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore) : null;
   // Passive output-throughput tracker, fed from the same SSE tap as the buffer.
   let throughputTracker = showEventStreamToggle ? new ThroughputTracker() : null;
-  let eventStreamView: ReturnType<typeof createEventStreamView> | null = null;
+  let eventStreamView: EventStreamViewHandle | null = null;
   let eventStreamVisible = false;
   let eventStreamRAF: number | null = null;
   let eventStreamLastUpdate = 0;
@@ -1252,24 +1253,39 @@ export const createAgentExperience = (
   }
 
   // Event stream toggle functions (lifted to outer scope for controller access)
+  const mountEventStreamView = () => {
+    if (!eventStreamView) return;
+    body.style.display = "none";
+    footer.parentNode?.insertBefore(eventStreamView.element, footer);
+    eventStreamView.update();
+  };
+
   const toggleEventStreamOn = () => {
     if (!eventStreamBuffer) return;
     eventStreamVisible = true;
-    if (!eventStreamView && eventStreamBuffer) {
-      eventStreamView = createEventStreamView({
-        buffer: eventStreamBuffer,
-        getFullHistory: () => eventStreamBuffer!.getAllFromStore(),
-        onClose: () => toggleEventStreamOff(),
-        config,
-        plugins,
-        getThroughput: () =>
-          throughputTracker?.getMetric() ?? { status: "idle" },
-      });
-    }
-    if (eventStreamView) {
-      body.style.display = "none";
-      footer.parentNode?.insertBefore(eventStreamView.element, footer);
-      eventStreamView.update();
+    if (!eventStreamView) {
+      // The panel lives in a lazy chunk; mount when it resolves, unless the
+      // toggle was flipped back off (or the widget destroyed) meanwhile.
+      void loadEventStreamView()
+        .then((mod) => {
+          if (eventStreamView || !eventStreamVisible || !eventStreamBuffer) return;
+          eventStreamView = mod.createEventStreamView({
+            buffer: eventStreamBuffer,
+            getFullHistory: () => eventStreamBuffer!.getAllFromStore(),
+            onClose: () => toggleEventStreamOff(),
+            config,
+            plugins,
+            getThroughput: () =>
+              throughputTracker?.getMetric() ?? { status: "idle" },
+          });
+          mountEventStreamView();
+        })
+        .catch(() => {
+          // Chunk failure resets the toggle; the next click retries the load.
+          toggleEventStreamOff();
+        });
+    } else {
+      mountEventStreamView();
     }
     if (eventStreamToggleBtn) {
       eventStreamToggleBtn.style.boxShadow = `inset 0 0 0 1.5px ${HEADER_THEME_CSS.actionIconColor}`;
