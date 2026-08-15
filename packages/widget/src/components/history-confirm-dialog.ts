@@ -57,7 +57,9 @@ export function showHistoryConfirm(
         width: "100%",
         borderRadius: "var(--persona-radius-lg, 0.75rem)",
         background: "var(--persona-surface, #ffffff)",
-        color: "var(--persona-text-primary, inherit)",
+        // The real text token, never `inherit`: the host is the panel in
+        // split layouts, whose cascaded color is the page's, not the theme's.
+        color: "var(--persona-text, #111827)",
         boxShadow:
           "var(--persona-history-confirm-shadow, 0 20px 40px -12px rgba(0, 0, 0, 0.35))",
         padding: "20px",

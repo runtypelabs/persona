@@ -1422,6 +1422,9 @@ describe("history shell", () => {
       expect(dialog!.getAttribute("aria-modal")).toBe("true");
       expect(dialog!.hasAttribute("aria-labelledby")).toBe(true);
       expect(dialog!.hasAttribute("aria-describedby")).toBe(true);
+      // The theme token, never `inherit`: the split-layout host (the panel)
+      // cascades the page's color, not the widget's.
+      expect(dialog!.style.color).toBe("var(--persona-text, #111827)");
       // Least destructive action holds focus first.
       expect(document.activeElement).toBe(
         dialog!.querySelector(".persona-history-confirm__cancel")
