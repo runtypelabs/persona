@@ -244,13 +244,36 @@ export function createArtifactPane(
     return { markdown, jsonPayload, id };
   };
 
-  const defaultCopy = async () => {
+  const defaultCopy = async (): Promise<boolean> => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
     try {
       await navigator.clipboard.writeText(artifactCopyText(sel));
+      return true;
     } catch {
-      /* ignore */
+      return false;
     }
+  };
+
+  // Success affordance matching the message-copy action: swap the copy glyph
+  // (and "Copy" label when present) to a check for 2s, then restore. Only
+  // called after the copy path resolved, so failures stay unconfirmed.
+  let copyRestore: (() => void) | null = null;
+  const flashCopied = () => {
+    copyRestore?.();
+    const glyph = copyBtn.querySelector("svg");
+    const size = Number(glyph?.getAttribute("width")) || 16;
+    const check = renderLucideIcon("check", size, "currentColor", 2);
+    if (!glyph || !check) return;
+    glyph.replaceWith(check);
+    const labelSpan = copyBtn.querySelector("span");
+    if (labelSpan) labelSpan.textContent = "Copied";
+    const timer = setTimeout(() => copyRestore?.(), 2000);
+    copyRestore = () => {
+      clearTimeout(timer);
+      check.replaceWith(glyph);
+      if (labelSpan) labelSpan.textContent = "Copy";
+      copyRestore = null;
+    };
   };
 
   copyBtn.addEventListener("click", async () => {
@@ -259,12 +282,13 @@ export function createArtifactPane(
       const { markdown, jsonPayload, id } = getSelectedArtifactText();
       try {
         await handler({ actionId: "primary", artifactId: id, markdown, jsonPayload });
+        flashCopied();
       } catch {
         /* ignore */
       }
       return;
     }
-    await defaultCopy();
+    if (await defaultCopy()) flashCopied();
   });
 
   if (copyMenuChevronBtn && copyMenuItems?.length) {
@@ -279,14 +303,19 @@ export function createArtifactPane(
           const handler = layout?.onDocumentToolbarCopyMenuSelect;
           try {
             if (handler) {
+              // Custom menus can hold non-copy actions (download, publish),
+              // so the integrator's handler owns any feedback there.
               await handler({ actionId, artifactId: id, markdown, jsonPayload });
-            } else if (actionId === "markdown" || actionId === "md") {
+              return;
+            }
+            if (actionId === "markdown" || actionId === "md") {
               await navigator.clipboard.writeText(markdown);
             } else if (actionId === "json" || actionId === "source") {
               await navigator.clipboard.writeText(jsonPayload);
             } else {
               await navigator.clipboard.writeText(markdown || jsonPayload);
             }
+            flashCopied();
           } catch {
             /* ignore */
           }

@@ -536,6 +536,104 @@ describe("artifact-pane default-toolbar copy button", () => {
   });
 });
 
+describe("artifact-pane copy success feedback", () => {
+  const docCopyConfig = (
+    layoutOver: Record<string, unknown> = {}
+  ): AgentWidgetConfig =>
+    ({
+      sanitize: false,
+      features: {
+        artifacts: {
+          enabled: true,
+          layout: {
+            toolbarPreset: "document",
+            documentToolbarShowCopyLabel: true,
+            ...layoutOver,
+          },
+        },
+      },
+    }) as AgentWidgetConfig;
+
+  const setClipboard = (writeText: ReturnType<typeof vi.fn>): void => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("flashes check + Copied for 2s after a successful default copy", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    setClipboard(writeText);
+    const pane = createArtifactPane(docCopyConfig(), { onSelect: () => {} });
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const btn = pane.element.querySelector(
+      ".persona-artifact-doc-copy-btn"
+    ) as HTMLButtonElement;
+    const originalGlyph = btn.querySelector("svg");
+    expect(btn.querySelector("span")?.textContent).toBe("Copy");
+
+    btn.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(btn.querySelector("span")?.textContent).toBe("Copied");
+    expect(btn.querySelector("svg")).not.toBe(originalGlyph);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(btn.querySelector("span")?.textContent).toBe("Copy");
+    expect(btn.querySelector("svg")).toBe(originalGlyph);
+  });
+
+  it("flashes after the primary click resolves through the copy-menu handler", async () => {
+    const handler = vi.fn().mockResolvedValue(undefined);
+    const pane = createArtifactPane(
+      docCopyConfig({
+        documentToolbarShowCopyChevron: true,
+        documentToolbarCopyMenuItems: [{ id: "download", label: "Download" }],
+        onDocumentToolbarCopyMenuSelect: handler,
+      }),
+      { onSelect: () => {} }
+    );
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const btn = pane.element.querySelector(
+      ".persona-artifact-doc-copy-btn"
+    ) as HTMLButtonElement;
+    btn.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ actionId: "primary", artifactId: "a1" })
+    );
+    expect(btn.querySelector("span")?.textContent).toBe("Copied");
+  });
+
+  it("stays unconfirmed when the clipboard write fails", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    setClipboard(writeText);
+    const pane = createArtifactPane(docCopyConfig(), { onSelect: () => {} });
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const btn = pane.element.querySelector(
+      ".persona-artifact-doc-copy-btn"
+    ) as HTMLButtonElement;
+    btn.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(btn.querySelector("span")?.textContent).toBe("Copy");
+  });
+});
+
 const makeToolbarActionsConfig = (
   actions: PersonaArtifactCustomAction[]
 ): AgentWidgetConfig =>
