@@ -2808,6 +2808,9 @@ export const createAgentExperience = (
     artifactPaneApi.setCopyButtonVisible(
       config.features?.artifacts?.layout?.showCopyButton === true
     );
+    artifactPaneApi.setRefreshButtonVisible(
+      typeof config.features?.artifacts?.layout?.onDocumentToolbarRefresh === "function"
+    );
     artifactPaneApi.setCustomActions(config.features?.artifacts?.toolbarActions ?? []);
     artifactPaneApi.setTabFade(config.features?.artifacts?.layout?.tabFade);
     artifactPaneApi.setRenderTabBar(config.features?.artifacts?.renderTabBar);

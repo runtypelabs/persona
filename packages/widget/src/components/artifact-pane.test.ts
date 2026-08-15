@@ -726,6 +726,63 @@ describe("artifact-pane copy success feedback", () => {
     }
   });
 
+  it("renders the copy menu as a split button with an accurate chevron state", async () => {
+    const pane = createArtifactPane(
+      docCopyConfig({
+        documentToolbarShowCopyChevron: true,
+        documentToolbarCopyMenuItems: [{ id: "download", label: "Download" }],
+      }),
+      { onSelect: () => {} }
+    );
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    await vi.advanceTimersByTimeAsync(20);
+
+    const wrap = pane.element.querySelector(".persona-split-btn") as HTMLElement;
+    expect(wrap).toBeTruthy();
+    const primary = wrap.querySelector(
+      "button.persona-split-btn-primary.persona-artifact-doc-copy-btn"
+    );
+    expect(primary).toBeTruthy();
+    const chevron = wrap.querySelector(
+      "button.persona-split-btn-chevron"
+    ) as HTMLButtonElement;
+    expect(chevron.getAttribute("aria-haspopup")).toBe("true");
+    expect(chevron.getAttribute("aria-expanded")).toBe("false");
+
+    chevron.click();
+    expect(chevron.getAttribute("aria-expanded")).toBe("true");
+    chevron.click();
+    expect(chevron.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("shows the refresh button only while a handler is configured", async () => {
+    const withoutHandler = createArtifactPane(docCopyConfig(), { onSelect: () => {} });
+    withoutHandler.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const hiddenRefresh = withoutHandler.element.querySelector(
+      '[aria-label="Refresh"]'
+    ) as HTMLButtonElement;
+    expect(hiddenRefresh.classList.contains("persona-hidden")).toBe(true);
+
+    const onRefresh = vi.fn();
+    const pane = createArtifactPane(
+      docCopyConfig({ onDocumentToolbarRefresh: onRefresh }),
+      { onSelect: () => {} }
+    );
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const refresh = pane.element.querySelector(
+      '[aria-label="Refresh"]'
+    ) as HTMLButtonElement;
+    expect(refresh.classList.contains("persona-hidden")).toBe(false);
+    refresh.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    // Live config sync drives the same visibility.
+    pane.setRefreshButtonVisible(false);
+    expect(refresh.classList.contains("persona-hidden")).toBe(true);
+  });
+
   it("stays unconfirmed when the clipboard write fails", async () => {
     const writeText = vi.fn().mockRejectedValue(new Error("denied"));
     setClipboard(writeText);

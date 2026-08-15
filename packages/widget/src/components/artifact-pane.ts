@@ -21,8 +21,13 @@ import {
   type ArtifactPreviewBodyHandle,
 } from "./artifact-preview";
 import { renderLucideIcon } from "../utils/icons";
-import { createDropdownMenu, type DropdownMenuHandle } from "../utils/dropdown";
-import { createIconButton, createLabelButton, createToggleGroup } from "../utils/buttons";
+import {
+  createIconButton,
+  createLabelButton,
+  createSplitButton,
+  createToggleGroup,
+  type SplitButtonHandle,
+} from "../utils/buttons";
 import { createRovingTablist } from "../utils/roving-tablist";
 
 export type ArtifactPaneApi = {
@@ -37,6 +42,8 @@ export type ArtifactPaneApi = {
   setExpandToggleVisible: (visible: boolean) => void;
   /** Show/hide the default-preset copy button; no-op in the document preset (copy is always shown there). */
   setCopyButtonVisible: (visible: boolean) => void;
+  /** Show/hide the document-preset refresh button; driven from the parent's config on every sync (visible only with an onDocumentToolbarRefresh handler). */
+  setRefreshButtonVisible: (visible: boolean) => void;
   /** Replace the toolbar custom-action list and re-render it; driven from the parent's config on every sync so live config updates apply. */
   setCustomActions: (actions: PersonaArtifactCustomAction[]) => void;
   /** Update the tab-strip edge fade live; driven from the parent's config on every sync. */
@@ -105,7 +112,7 @@ export function createArtifactPane(
     backdrop?.classList.add("persona-hidden");
     shell.classList.remove("persona-artifact-drawer-open");
     // Hide portaled copy menu
-    copyMenuDropdown?.hide();
+    copySplit?.closeMenu();
   };
 
   if (backdrop) {
@@ -173,8 +180,7 @@ export function createArtifactPane(
 
   let copyWrap: HTMLElement | null = null;
   let copyBtn: HTMLButtonElement;
-  let copyMenuChevronBtn: HTMLButtonElement | null = null;
-  let copyMenuDropdown: DropdownMenuHandle | null = null;
+  let copySplit: SplitButtonHandle | null = null;
 
   if (documentChrome && (showCopyLabel || showCopyChevron) && !showCopyMenu) {
     copyBtn = showCopyLabel
@@ -185,21 +191,22 @@ export function createArtifactPane(
       if (chev) copyBtn.appendChild(chev);
     }
   } else if (documentChrome && showCopyMenu) {
-    copyWrap = createElement(
-      "div",
-      "persona-relative persona-inline-flex persona-items-center persona-gap-0 persona-rounded-md"
-    );
-    copyBtn = showCopyLabel
-      ? createLabelButton({ icon: "copy", label: "Copy", iconSize: 14, className: "persona-artifact-doc-copy-btn" })
-      : createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-copy-btn" });
-    copyMenuChevronBtn = createIconButton({
-      icon: "chevron-down",
-      label: "More copy options",
-      size: 14,
-      className: "persona-artifact-doc-copy-menu-chevron persona-artifact-doc-icon-btn",
-      aria: { "aria-haspopup": "true", "aria-expanded": "false" }
+    copySplit = createSplitButton({
+      label: "Copy",
+      icon: "copy",
+      iconSize: 14,
+      iconOnly: !showCopyLabel,
+      primaryClassName: "persona-artifact-doc-copy-btn",
+      chevronLabel: "More copy options",
+      chevronClassName: "persona-artifact-doc-copy-menu-chevron persona-artifact-doc-icon-btn",
+      menuItems: (copyMenuItems ?? []).map((item) => ({ id: item.id, label: item.label })),
+      position: "bottom-right",
+      // Widget root for CSS var inheritance, escaping overflow: hidden.
+      portal: () => (shell.closest("[data-persona-root]") as HTMLElement | null) ?? document.body,
+      onSelect: (actionId) => void handleCopyMenuSelect(actionId),
     });
-    copyWrap.append(copyBtn, copyMenuChevronBtn);
+    copyWrap = copySplit.element;
+    copyBtn = copySplit.primaryButton;
   } else if (documentChrome) {
     copyBtn = createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-icon-btn" });
   } else {
@@ -214,6 +221,12 @@ export function createArtifactPane(
   const refreshBtn = documentChrome
     ? createIconButton({ icon: "refresh-cw", label: "Refresh", className: "persona-artifact-doc-icon-btn" })
     : createIconButton({ icon: "refresh-cw", label: "Refresh" });
+  // The refresh glyph universally reads "reload this preview", so the button
+  // only shows when a handler gives it that meaning; revealed live via
+  // setRefreshButtonVisible when a config update supplies one.
+  if (!layout?.onDocumentToolbarRefresh) {
+    refreshBtn.classList.add("persona-hidden");
+  }
   const closeIconBtn = documentChrome
     ? createIconButton({ icon: "x", label: closeButtonLabel, className: "persona-artifact-doc-icon-btn" })
     : createIconButton({ icon: "x", label: closeButtonLabel });
@@ -326,57 +339,33 @@ export function createArtifactPane(
     if (await defaultCopy()) flashCopied();
   });
 
-  if (copyMenuChevronBtn && copyMenuItems?.length) {
-    // Resolve the portal target: widget root for CSS var inheritance, escaping overflow: hidden
-    const resolvePortal = (): HTMLElement => shell.closest("[data-persona-root]") as HTMLElement ?? document.body;
-
-    const initDropdown = () => {
-      copyMenuDropdown = createDropdownMenu({
-        items: copyMenuItems.map((item) => ({ id: item.id, label: item.label })),
-        onSelect: async (actionId) => {
-          const handler = layout?.onDocumentToolbarCopyMenuSelect;
-          try {
-            if (handler) {
-              // Custom menus can hold non-copy actions (download, publish),
-              // so the integrator's handler owns the outcome and feedback;
-              // returning `false` falls through to the built-ins below.
-              const result = await handler(menuPayload(actionId));
-              if (result !== false) return;
-            }
-            if (actionId === "download") {
-              performDownload();
-              return;
-            }
-            const { markdown, jsonPayload } = getSelectedArtifactText();
-            if (actionId === "markdown" || actionId === "md") {
-              await navigator.clipboard.writeText(markdown);
-            } else if (actionId === "json" || actionId === "source") {
-              await navigator.clipboard.writeText(jsonPayload);
-            } else {
-              await navigator.clipboard.writeText(markdown || jsonPayload);
-            }
-            flashCopied();
-          } catch {
-            /* ignore */
-          }
-        },
-        anchor: copyWrap ?? copyMenuChevronBtn!,
-        position: 'bottom-right',
-        portal: resolvePortal(),
-      });
-    };
-
-    // Defer init until shell is in the DOM (may not be attached yet)
-    if (shell.isConnected) {
-      initDropdown();
-    } else {
-      requestAnimationFrame(initDropdown);
+  // Hoisted: referenced by the split button built above.
+  async function handleCopyMenuSelect(actionId: string): Promise<void> {
+    const handler = layout?.onDocumentToolbarCopyMenuSelect;
+    try {
+      if (handler) {
+        // Custom menus can hold non-copy actions (download, publish),
+        // so the integrator's handler owns the outcome and feedback;
+        // returning `false` falls through to the built-ins below.
+        const result = await handler(menuPayload(actionId));
+        if (result !== false) return;
+      }
+      if (actionId === "download") {
+        performDownload();
+        return;
+      }
+      const { markdown, jsonPayload } = getSelectedArtifactText();
+      if (actionId === "markdown" || actionId === "md") {
+        await navigator.clipboard.writeText(markdown);
+      } else if (actionId === "json" || actionId === "source") {
+        await navigator.clipboard.writeText(jsonPayload);
+      } else {
+        await navigator.clipboard.writeText(markdown || jsonPayload);
+      }
+      flashCopied();
+    } catch {
+      /* ignore */
     }
-
-    copyMenuChevronBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      copyMenuDropdown?.toggle();
-    });
   }
 
   refreshBtn.addEventListener("click", async () => {
@@ -818,6 +807,9 @@ export function createArtifactPane(
     setCopyButtonVisible(visible: boolean) {
       if (documentChrome) return;
       copyBtn.classList.toggle("persona-hidden", !visible);
+    },
+    setRefreshButtonVisible(visible: boolean) {
+      refreshBtn.classList.toggle("persona-hidden", !visible);
     },
     setCustomActions(actions: PersonaArtifactCustomAction[]) {
       customActionList = actions;

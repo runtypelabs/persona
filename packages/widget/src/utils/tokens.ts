@@ -1208,7 +1208,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.copyBackground) cssVars['--persona-artifact-toolbar-copy-bg'] = t.copyBackground;
     if (t.copyBorder) cssVars['--persona-artifact-toolbar-copy-border'] = t.copyBorder;
     if (t.copyColor) cssVars['--persona-artifact-toolbar-copy-color'] = t.copyColor;
-    if (t.copyBorderRadius) cssVars['--persona-artifact-toolbar-copy-radius'] = t.copyBorderRadius;
+    // Feeds the split-button halves' inner-radius calc; must stay a <length>.
+    if (t.copyBorderRadius) cssVars['--persona-artifact-toolbar-copy-radius'] = zeroLength(t.copyBorderRadius);
     if (t.copyPadding) cssVars['--persona-artifact-toolbar-copy-padding'] = t.copyPadding;
     if (t.copyMenuBackground) {
       cssVars['--persona-artifact-toolbar-copy-menu-bg'] = t.copyMenuBackground;

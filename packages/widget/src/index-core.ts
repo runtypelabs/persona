@@ -423,7 +423,7 @@ export { renderLucideIcon } from "./utils/icons";
 export type { IconName } from "./utils/icons";
 
 // Button utility exports
-export { createIconButton, createLabelButton, createToggleGroup, createComboButton } from "./utils/buttons";
+export { createIconButton, createLabelButton, createToggleGroup, createComboButton, createSplitButton } from "./utils/buttons";
 export type {
   CreateIconButtonOptions,
   CreateLabelButtonOptions,

@@ -835,13 +835,10 @@ const config = mergeWithDefaults({
           } else if (p.actionId === "json") {
             await navigator.clipboard.writeText(p.jsonPayload);
           }
-        },
-        onDocumentToolbarRefresh: async () => {
-          const h = demoCtl.handle;
-          if (!h) return;
-          h.clearChat();
-          await h.connectStream(newFullscreenAssistantScriptStream());
         }
+        // No onDocumentToolbarRefresh: the refresh glyph means "reload this
+        // preview", and conversation lifecycle belongs to the rail. Without a
+        // handler the widget hides the button.
       },
       renderCard: ({ artifact }) => {
         return renderCustomFileCard(

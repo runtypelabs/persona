@@ -1,6 +1,10 @@
 import { createElement } from "./dom";
 import { renderLucideIcon } from "./icons";
-import { createDropdownMenu, type DropdownMenuItem } from "./dropdown";
+import {
+  createDropdownMenu,
+  type DropdownMenuHandle,
+  type DropdownMenuItem,
+} from "./dropdown";
 
 // ---------------------------------------------------------------------------
 // createIconButton
@@ -238,6 +242,182 @@ export function createToggleGroup(options: CreateToggleGroupOptions): ToggleGrou
   }
 
   return { element: wrapper, setSelected };
+}
+
+// ---------------------------------------------------------------------------
+// createSplitButton
+// ---------------------------------------------------------------------------
+
+/** Options for {@link createSplitButton}. */
+export interface CreateSplitButtonOptions {
+  /** Primary action text (always the accessible name; hidden visually with `iconOnly`). */
+  label: string;
+  /** Lucide icon for the primary half. */
+  icon?: string;
+  /** Primary icon size in pixels. Default: 14. */
+  iconSize?: number;
+  /** Render the primary half icon-only. */
+  iconOnly?: boolean;
+  /** Menu items behind the chevron half. */
+  menuItems: DropdownMenuItem[];
+  /** Called when a menu item is selected. */
+  onSelect: (id: string) => void;
+  /** Click handler for the primary half. */
+  onPrimary?: (e: MouseEvent) => void;
+  /** Menu alignment relative to the whole control. Default: "bottom-left". */
+  position?: "bottom-left" | "bottom-right";
+  /**
+   * Portal target for the menu (escapes `overflow: hidden` containers). A
+   * thunk is resolved when the menu is first built, so it may depend on the
+   * control being in the DOM.
+   */
+  portal?: HTMLElement | (() => HTMLElement | null | undefined);
+  /** Accessible label of the chevron half. Default: "More options". */
+  chevronLabel?: string;
+  /** Chevron icon size in pixels. Default: 14. */
+  chevronIconSize?: number;
+  /** Extra CSS class(es) on the wrapper. */
+  className?: string;
+  /** Extra CSS class(es) on the primary button. */
+  primaryClassName?: string;
+  /** Extra CSS class(es) on the chevron button. */
+  chevronClassName?: string;
+}
+
+/** Handle returned by {@link createSplitButton}. */
+export interface SplitButtonHandle {
+  /** The bordered wrapper holding both halves. */
+  element: HTMLElement;
+  /** The primary-action half. */
+  primaryButton: HTMLButtonElement;
+  /** The menu-trigger half. */
+  chevronButton: HTMLButtonElement;
+  /** Open the menu. */
+  openMenu: () => void;
+  /** Close the menu. */
+  closeMenu: () => void;
+  /** Toggle the menu. */
+  toggleMenu: () => void;
+  /** Remove from DOM and clean up. */
+  destroy: () => void;
+}
+
+/**
+ * Creates a split button: one bordered control holding two separately
+ * invocable halves — a primary action button and an icon-only chevron that
+ * opens a dropdown menu — divided by an internal hairline. This is the
+ * Primer/Fluent/Material split-button anatomy; for a single button whose whole
+ * surface opens the menu, use {@link createComboButton} instead.
+ *
+ * Both halves are real `button`s (two tab stops). The chevron carries its own
+ * accessible label plus `aria-haspopup`/`aria-expanded`, kept accurate across
+ * outside-click dismissal.
+ *
+ * ```ts
+ * import { createSplitButton } from "@runtypelabs/persona";
+ *
+ * const split = createSplitButton({
+ *   label: "Copy",
+ *   icon: "copy",
+ *   menuItems: [{ id: "download", label: "Download" }],
+ *   onPrimary: () => copyToClipboard(),
+ *   onSelect: (id) => handleMenuAction(id),
+ * });
+ * toolbar.appendChild(split.element);
+ * ```
+ */
+export function createSplitButton(options: CreateSplitButtonOptions): SplitButtonHandle {
+  const {
+    label,
+    icon,
+    iconSize,
+    iconOnly,
+    menuItems,
+    onSelect,
+    onPrimary,
+    position = "bottom-left",
+    portal,
+    chevronLabel = "More options",
+    chevronIconSize,
+    className,
+    primaryClassName,
+    chevronClassName,
+  } = options;
+
+  const wrapper = createElement(
+    "div",
+    "persona-split-btn" + (className ? " " + className : ""),
+  );
+
+  const primaryBase = {
+    label,
+    className:
+      "persona-split-btn-primary" + (primaryClassName ? " " + primaryClassName : ""),
+    onClick: onPrimary,
+  };
+  const primaryButton =
+    iconOnly && icon
+      ? createIconButton({ ...primaryBase, icon, size: iconSize ?? 14 })
+      : createLabelButton({ ...primaryBase, icon, iconSize: iconSize ?? 14 });
+
+  const chevronButton = createIconButton({
+    icon: "chevron-down",
+    label: chevronLabel,
+    size: chevronIconSize ?? 14,
+    className:
+      "persona-split-btn-chevron" + (chevronClassName ? " " + chevronClassName : ""),
+    aria: { "aria-haspopup": "true", "aria-expanded": "false" },
+  });
+
+  wrapper.append(primaryButton, chevronButton);
+
+  let dropdown: DropdownMenuHandle | null = null;
+  const ensureMenu = (): DropdownMenuHandle => {
+    if (dropdown) return dropdown;
+    const target = (typeof portal === "function" ? portal() : portal) ?? undefined;
+    dropdown = createDropdownMenu({
+      items: menuItems,
+      onSelect,
+      anchor: wrapper,
+      position,
+      portal: target,
+      onOpenChange: (open) => {
+        chevronButton.setAttribute("aria-expanded", open ? "true" : "false");
+      },
+    });
+    // Non-portaled menus position absolutely inside the anchor.
+    if (!target) wrapper.appendChild(dropdown.element);
+    return dropdown;
+  };
+
+  // Build the (hidden) menu eagerly so it is queryable before first open, but
+  // wait a frame when the control is still detached: a portal thunk may need
+  // the mounted DOM to resolve its target.
+  if (wrapper.isConnected) {
+    ensureMenu();
+  } else {
+    requestAnimationFrame(() => {
+      if (!dropdown) ensureMenu();
+    });
+  }
+
+  chevronButton.addEventListener("click", (e) => {
+    e.stopPropagation();
+    ensureMenu().toggle();
+  });
+
+  return {
+    element: wrapper,
+    primaryButton,
+    chevronButton,
+    openMenu: () => ensureMenu().show(),
+    closeMenu: () => dropdown?.hide(),
+    toggleMenu: () => ensureMenu().toggle(),
+    destroy: () => {
+      dropdown?.destroy();
+      wrapper.remove();
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

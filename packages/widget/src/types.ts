@@ -1425,8 +1425,12 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /** Tab fade width (CSS length). @default 24px */
   tabFadeSize?: string;
   /**
-   * Invoked when the document toolbar Refresh control is used (before the pane re-renders).
-   * Use to replay `connectStream`, refetch, etc.
+   * Invoked when the document toolbar Refresh control is used (before the pane
+   * re-renders). The button renders only while this handler is set: the refresh
+   * glyph universally reads "reload this preview" (Claude artifacts, v0), so
+   * keep the handler scoped to refreshing the rendered artifact — regenerating
+   * content or resetting the conversation belongs to message-level or
+   * conversation-level controls, not artifact chrome.
    */
   onDocumentToolbarRefresh?: () => void | Promise<void>;
   /**

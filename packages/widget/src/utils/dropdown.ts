@@ -28,6 +28,11 @@ export interface CreateDropdownOptions {
    * Use this to escape `overflow: hidden` containers.
    */
   portal?: HTMLElement;
+  /**
+   * Fired on every open/close transition, including outside-click dismissal.
+   * Use to keep a trigger's `aria-expanded` accurate.
+   */
+  onOpenChange?: (open: boolean) => void;
 }
 
 export interface DropdownMenuHandle {
@@ -65,7 +70,7 @@ export interface DropdownMenuHandle {
  * ```
  */
 export function createDropdownMenu(options: CreateDropdownOptions): DropdownMenuHandle {
-  const { items, onSelect, anchor, position = 'bottom-left', portal } = options;
+  const { items, onSelect, anchor, position = 'bottom-left', portal, onOpenChange } = options;
 
   const menu = createElement("div", "persona-dropdown-menu persona-hidden");
   menu.setAttribute("role", "menu");
@@ -137,8 +142,10 @@ export function createDropdownMenu(options: CreateDropdownOptions): DropdownMenu
   }
 
   function show() {
+    const wasHidden = menu.classList.contains("persona-hidden");
     reposition();
     menu.classList.remove("persona-hidden");
+    if (wasHidden) onOpenChange?.(true);
     // Defer click-outside listener to avoid catching the triggering click
     requestAnimationFrame(() => {
       const handler = (e: MouseEvent) => {
@@ -152,9 +159,11 @@ export function createDropdownMenu(options: CreateDropdownOptions): DropdownMenu
   }
 
   function hide() {
+    const wasOpen = !menu.classList.contains("persona-hidden");
     menu.classList.add("persona-hidden");
     cleanupClickOutside?.();
     cleanupClickOutside = null;
+    if (wasOpen) onOpenChange?.(false);
   }
 
   function toggle() {
