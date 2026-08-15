@@ -1432,17 +1432,31 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /**
    * Optional copy dropdown entries (shown when `documentToolbarShowCopyChevron` is true and this array is non-empty).
    * The main Copy control still performs default copy unless `onDocumentToolbarCopyMenuSelect` handles everything.
+   * Without a handler, built-in ids work out of the box: `download` saves the
+   * artifact (real filename/MIME for file artifacts, `<title>.md` otherwise);
+   * `markdown`/`md` and `json`/`source` copy that form to the clipboard.
    */
   documentToolbarCopyMenuItems?: Array<{ id: string; label: string }>;
   /**
    * When set, invoked for the chevron menu (and can override default copy per `actionId`).
+   * Return `false` to fall through to the widget's built-in behavior for that
+   * action id (`download` saves the artifact; copy ids copy); any other return
+   * value keeps the handler's outcome as final.
    */
   onDocumentToolbarCopyMenuSelect?: (payload: {
     actionId: string;
     artifactId: string | null;
     markdown: string;
     jsonPayload: string;
-  }) => void | Promise<void>;
+    /** File metadata when the selected artifact is a previewable file. */
+    file?: PersonaArtifactFileMeta;
+    /** Filename the built-in download would use (file basename, or `<title>.md`). */
+    suggestedFilename: string;
+    /** MIME type paired with `suggestedFilename`. */
+    mime: string;
+    /** Raw content the built-in download would write (unfenced source for file artifacts). */
+    content: string;
+  }) => void | boolean | Promise<void | boolean>;
 };
 
 /**

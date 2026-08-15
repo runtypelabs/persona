@@ -4,7 +4,13 @@ import type {
   PersonaArtifactRecord,
   PersonaArtifactCustomAction,
 } from "../types";
-import { fileKindOf, fileTypeLabel, basenameOf } from "../utils/artifact-file";
+import {
+  fileKindOf,
+  fileTypeLabel,
+  basenameOf,
+  downloadInfoFor,
+  triggerArtifactDownload,
+} from "../utils/artifact-file";
 import {
   buildArtifactActionButton,
   artifactRecordActionContext,
@@ -234,14 +240,39 @@ export function createArtifactPane(
   let customActionList: PersonaArtifactCustomAction[] =
     config.features?.artifacts?.toolbarActions ?? [];
 
-  const getSelectedArtifactText = (): { markdown: string; jsonPayload: string; id: string | null } => {
+  const getSelectedArtifactText = () => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
     const id = sel?.id ?? null;
     const markdown = sel?.artifactType === "markdown" ? sel.markdown ?? "" : "";
     const jsonPayload = sel
       ? JSON.stringify({ component: sel.component, props: sel.props }, null, 2)
       : "";
-    return { markdown, jsonPayload, id };
+    const { filename, mime, content } = downloadInfoFor({
+      title: sel?.title,
+      markdown: sel?.markdown ?? "",
+      file: sel?.file,
+    });
+    return {
+      markdown,
+      jsonPayload,
+      id,
+      file: sel?.file,
+      suggestedFilename: filename,
+      mime,
+      content,
+    };
+  };
+
+  /** Built-in `download` menu action: same blob-anchor path as the card button. */
+  const performDownload = () => {
+    const { suggestedFilename, mime, content } = getSelectedArtifactText();
+    if (!content) return;
+    triggerArtifactDownload({ filename: suggestedFilename, mime, content });
+  };
+
+  const menuPayload = (actionId: string) => {
+    const { id, ...rest } = getSelectedArtifactText();
+    return { actionId, artifactId: id, ...rest };
   };
 
   const defaultCopy = async (): Promise<boolean> => {
@@ -279,9 +310,13 @@ export function createArtifactPane(
   copyBtn.addEventListener("click", async () => {
     const handler = layout?.onDocumentToolbarCopyMenuSelect;
     if (handler && showCopyMenu) {
-      const { markdown, jsonPayload, id } = getSelectedArtifactText();
       try {
-        await handler({ actionId: "primary", artifactId: id, markdown, jsonPayload });
+        // `false` = not handled: fall through to the built-in copy.
+        const result = await handler(menuPayload("primary"));
+        if (result === false) {
+          if (await defaultCopy()) flashCopied();
+          return;
+        }
         flashCopied();
       } catch {
         /* ignore */
@@ -299,15 +334,20 @@ export function createArtifactPane(
       copyMenuDropdown = createDropdownMenu({
         items: copyMenuItems.map((item) => ({ id: item.id, label: item.label })),
         onSelect: async (actionId) => {
-          const { markdown, jsonPayload, id } = getSelectedArtifactText();
           const handler = layout?.onDocumentToolbarCopyMenuSelect;
           try {
             if (handler) {
               // Custom menus can hold non-copy actions (download, publish),
-              // so the integrator's handler owns any feedback there.
-              await handler({ actionId, artifactId: id, markdown, jsonPayload });
+              // so the integrator's handler owns the outcome and feedback;
+              // returning `false` falls through to the built-ins below.
+              const result = await handler(menuPayload(actionId));
+              if (result !== false) return;
+            }
+            if (actionId === "download") {
+              performDownload();
               return;
             }
+            const { markdown, jsonPayload } = getSelectedArtifactText();
             if (actionId === "markdown" || actionId === "md") {
               await navigator.clipboard.writeText(markdown);
             } else if (actionId === "json" || actionId === "source") {

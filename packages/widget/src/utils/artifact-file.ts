@@ -115,3 +115,18 @@ export function downloadInfoFor(record: ArtifactDownloadSource): {
   const title = record.title || "artifact";
   return { filename: `${title}.md`, mime: "text/markdown", content: raw };
 }
+
+/** Save `content` as a browser download via a transient blob anchor. */
+export function triggerArtifactDownload(info: {
+  filename: string;
+  mime: string;
+  content: string;
+}): void {
+  const blob = new Blob([info.content], { type: info.mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = info.filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}

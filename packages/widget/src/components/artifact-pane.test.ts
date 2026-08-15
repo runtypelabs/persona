@@ -562,6 +562,7 @@ describe("artifact-pane copy success feedback", () => {
   };
 
   beforeEach(() => {
+    document.body.innerHTML = "";
     vi.useFakeTimers();
   });
 
@@ -615,6 +616,114 @@ describe("artifact-pane copy success feedback", () => {
       expect.objectContaining({ actionId: "primary", artifactId: "a1" })
     );
     expect(btn.querySelector("span")?.textContent).toBe("Copied");
+  });
+
+  it("built-in download menu id saves the artifact when there is no handler", async () => {
+    const urlApi = URL as unknown as {
+      createObjectURL?: (b: Blob) => string;
+      revokeObjectURL?: (u: string) => void;
+    };
+    const origCreate = urlApi.createObjectURL;
+    const origRevoke = urlApi.revokeObjectURL;
+    const created = vi.fn(() => "blob:persona-test");
+    urlApi.createObjectURL = created;
+    urlApi.revokeObjectURL = vi.fn();
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    try {
+      const pane = createArtifactPane(
+        docCopyConfig({
+          documentToolbarShowCopyChevron: true,
+          documentToolbarCopyMenuItems: [{ id: "download", label: "Download" }],
+        }),
+        { onSelect: () => {} }
+      );
+      document.body.appendChild(pane.element);
+      pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+      // Dropdown init is deferred to rAF when the shell mounts after creation.
+      await vi.advanceTimersByTimeAsync(20);
+
+      const item = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".persona-dropdown-menu button")
+      ).find((b) => b.textContent?.includes("Download"));
+      expect(item).toBeTruthy();
+      item!.click();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(created).toHaveBeenCalledTimes(1);
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+    } finally {
+      anchorClick.mockRestore();
+      urlApi.createObjectURL = origCreate;
+      urlApi.revokeObjectURL = origRevoke;
+    }
+  });
+
+  it("handler returning false falls through to the built-in download", async () => {
+    const urlApi = URL as unknown as {
+      createObjectURL?: (b: Blob) => string;
+      revokeObjectURL?: (u: string) => void;
+    };
+    const origCreate = urlApi.createObjectURL;
+    const origRevoke = urlApi.revokeObjectURL;
+    const created = vi.fn(() => "blob:persona-test");
+    urlApi.createObjectURL = created;
+    urlApi.revokeObjectURL = vi.fn();
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    const handler = vi.fn().mockResolvedValue(false);
+    const consumingHandler = vi.fn().mockResolvedValue(undefined);
+    try {
+      const paneFor = (h: typeof handler) =>
+        createArtifactPane(
+          docCopyConfig({
+            documentToolbarShowCopyChevron: true,
+            documentToolbarCopyMenuItems: [{ id: "download", label: "Download" }],
+            onDocumentToolbarCopyMenuSelect: h,
+          }),
+          { onSelect: () => {} }
+        );
+      const pane = paneFor(handler);
+      document.body.appendChild(pane.element);
+      pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+      await vi.advanceTimersByTimeAsync(20);
+      const item = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".persona-dropdown-menu button")
+      ).find((b) => b.textContent?.includes("Download"));
+      item!.click();
+      await vi.advanceTimersByTimeAsync(0);
+      // Handler saw the enriched payload, declined, and the widget downloaded.
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionId: "download",
+          artifactId: "a1",
+          suggestedFilename: "cat.html",
+          mime: "text/html",
+          content: HTML_RAW,
+        })
+      );
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+
+      // A handler that consumes the action (returns undefined) suppresses it.
+      document.body.innerHTML = "";
+      const pane2 = paneFor(consumingHandler);
+      document.body.appendChild(pane2.element);
+      pane2.update({ artifacts: [fileRecord()], selectedId: "a1" });
+      await vi.advanceTimersByTimeAsync(20);
+      const item2 = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".persona-dropdown-menu button")
+      ).find((b) => b.textContent?.includes("Download"));
+      item2!.click();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(consumingHandler).toHaveBeenCalledTimes(1);
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+    } finally {
+      anchorClick.mockRestore();
+      urlApi.createObjectURL = origCreate;
+      urlApi.revokeObjectURL = origRevoke;
+    }
   });
 
   it("stays unconfirmed when the clipboard write fails", async () => {

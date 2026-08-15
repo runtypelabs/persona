@@ -70,7 +70,7 @@ import {
   formatCombo,
   parseCombo,
 } from "./utils/shortcuts";
-import { downloadInfoFor } from "./utils/artifact-file";
+import { downloadInfoFor, triggerArtifactDownload } from "./utils/artifact-file";
 import { artifactCopyText } from "./components/artifact-preview";
 import { morphMessages } from "./utils/morph";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
@@ -2106,14 +2106,7 @@ export const createAgentExperience = (
     if (!markdown) return;
     // File artifacts download the raw unfenced source under their real name/MIME;
     // non-file markdown artifacts keep the legacy `<title>.md` / text/markdown path.
-    const { filename, mime, content } = downloadInfoFor({ title, markdown, file });
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
+    triggerArtifactDownload(downloadInfoFor({ title, markdown, file }));
   });
 
   // Click delegation for integrator-supplied card action buttons. Actions are

@@ -612,6 +612,48 @@ const railNavSections = [
 
 const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScriptedStream();
 
+const artifactDocumentTitle = (suggestedFilename: string): string =>
+  suggestedFilename.replace(/\.(md|html?)$/i, "") || "Artifact";
+
+/** The pane's rendered artifact body wrapped as a standalone light-mode page. */
+const renderedArtifactDocument = (title: string): string => {
+  const body =
+    document.querySelector(".persona-artifact-pane .persona-artifact-content")
+      ?.innerHTML ?? "";
+  const safeTitle = title
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title><style>
+    body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #171717; max-width: 720px; margin: 40px auto; padding: 0 24px; }
+    pre { white-space: pre-wrap; }
+    img, svg { max-width: 100%; }
+    a { color: #1d4ed8; }
+  </style></head><body>${body}</body></html>`;
+};
+
+/** PDF without a backend: open the rendered page and hand off to the native
+    print dialog, where "Save as PDF" produces the file. */
+const printRenderedArtifact = (title: string): void => {
+  const w = window.open("", "_blank", "width=820,height=1000");
+  if (!w) return;
+  w.document.write(renderedArtifactDocument(title));
+  w.document.close();
+  w.focus();
+  w.print();
+};
+
+/** Publish without a backend: the rendered page served from a local blob URL,
+    demonstrating the flow honestly instead of faking a hosted link. */
+const openPublishedPreview = (title: string): void => {
+  const url = URL.createObjectURL(
+    new Blob([renderedArtifactDocument(title)], { type: "text/html" })
+  );
+  window.open(url, "_blank");
+  // Keep the URL alive long enough for the tab to load before revoking.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
+
 const config = mergeWithDefaults({
   apiUrl,
   storageAdapter: fullscreenAssistantWidgetStorage,
@@ -775,6 +817,17 @@ const config = mergeWithDefaults({
           if (p.actionId === "primary") {
             const text = p.markdown || p.jsonPayload || "";
             await navigator.clipboard.writeText(text);
+            return;
+          }
+          // Widget's built-in download (real filename/MIME via the same path
+          // as the card download button).
+          if (p.actionId === "download") return false;
+          if (p.actionId === "download-pdf") {
+            printRenderedArtifact(artifactDocumentTitle(p.suggestedFilename));
+            return;
+          }
+          if (p.actionId === "publish") {
+            openPublishedPreview(artifactDocumentTitle(p.suggestedFilename));
             return;
           }
           if (p.actionId === "markdown" || p.actionId === "md") {
