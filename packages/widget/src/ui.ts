@@ -8696,6 +8696,7 @@ export const createAgentExperience = (
         ? { pageSize: config.features.history.pageSize }
         : {}),
       onSelect: (conversationId) => openHistoryConversation(conversationId),
+      onActiveConversationTitle: (title) => setActiveConversationTitle(title),
       // The chunk is size-capped, so it borrows the shell's tooltip module.
       attachTooltip,
       onStartNew: () => startNewConversation(),
@@ -8857,6 +8858,25 @@ export const createAgentExperience = (
 
   // --- session operations --------------------------------------------------
 
+  // ---- header title binding (layout.header.titleSource: "conversation") ----
+  // The history view reports the active conversation's list title through
+  // onActiveConversationTitle; the shell owns the fallback and the write, so
+  // the binding works for both the plain title span and the titleMenu label.
+  let activeConversationTitle: string | null = null;
+  const applyHeaderTitle = (): void => {
+    if (!headerTitle) return;
+    const bound =
+      config.layout?.header?.titleSource === "conversation"
+        ? activeConversationTitle?.trim() || null
+        : null;
+    headerTitle.textContent = bound ?? config.launcher?.title ?? "Chat Assistant";
+  };
+  const setActiveConversationTitle = (title: string | null): void => {
+    if (title === activeConversationTitle) return;
+    activeConversationTitle = title;
+    applyHeaderTitle();
+  };
+
   /**
    * Transactional reopen. `suppressScrollSend` covers the hydration: otherwise
    * the last restored user message triggers the anchor-top send scroll.
@@ -8876,9 +8896,13 @@ export const createAgentExperience = (
     resumeAutoScroll();
     if (!restoreScrollPosition()) jumpToBottomInstant();
     syncEarlierMessagesPill();
+    // Without a mounted view there is no list to look the title up in.
+    if (!historySurface) setActiveConversationTitle(null);
+    // Synchronously reports the title through onActiveConversationTitle.
     historySurface?.view.setActiveConversationId(conversationId);
     eventBus.emit("history:conversationOpened", {
       conversationId,
+      title: activeConversationTitle,
       scope,
       timestamp: Date.now(),
     });
@@ -8896,6 +8920,7 @@ export const createAgentExperience = (
    */
   const startNewConversation = async (): Promise<void> => {
     await session.startNewConversation({ scope: historyOperationScope() });
+    setActiveConversationTitle(null);
     messageCache.clear();
     resetAnchorState();
     resumeAutoScroll();
@@ -8921,6 +8946,7 @@ export const createAgentExperience = (
     const wasActive = session.getActiveConversationId() === conversationId;
     await session.deleteConversation(conversationId, { scope });
     if (wasActive) {
+      setActiveConversationTitle(null);
       messageCache.clear();
       resetAnchorState();
       resumeAutoScroll();
@@ -8950,6 +8976,7 @@ export const createAgentExperience = (
       ...(targetId ? { targetId } : {}),
       scope,
     });
+    setActiveConversationTitle(null);
     messageCache.clear();
     resetAnchorState();
     resumeAutoScroll();
@@ -8981,6 +9008,7 @@ export const createAgentExperience = (
       const result = await session.resetHistoryDevice();
       remoteRevocationConfirmed = result.remoteRevocationConfirmed;
     } finally {
+      setActiveConversationTitle(null);
       session.clearArtifacts();
       messageCache.clear();
       lastAppliedMessages = null;
@@ -11063,10 +11091,10 @@ export const createAgentExperience = (
       }
       // Note: Custom launcher updates are handled by the plugin's own logic
 
-      // Update panel header title and subtitle
-      if (headerTitle && config.launcher?.title !== undefined) {
-        headerTitle.textContent = config.launcher.title;
-      }
+      // Update panel header title and subtitle. applyHeaderTitle respects the
+      // titleSource binding, so a static launcher.title update never clobbers
+      // a bound conversation title (and a titleSource flip applies live).
+      applyHeaderTitle();
       if (headerSubtitle && config.launcher?.subtitle !== undefined) {
         headerSubtitle.textContent = config.launcher.subtitle;
       }
@@ -11099,6 +11127,8 @@ export const createAgentExperience = (
         closeButton = view.header.closeButton;
 
         prevHeaderLayout = headerLayoutConfig?.layout;
+        // The rebuilt title span starts static; restamp the bound title.
+        applyHeaderTitle();
       } else if (headerLayoutConfig) {
         // Apply visibility settings without rebuilding
         if (iconHolder) {

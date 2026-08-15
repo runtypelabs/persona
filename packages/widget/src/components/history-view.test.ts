@@ -688,6 +688,28 @@ describe("history view row actions", () => {
     expect(onSelect).toHaveBeenCalledWith("a");
   });
 
+  it("reports the active conversation's title through onActiveConversationTitle", async () => {
+    const onActiveConversationTitle = vi.fn();
+    const { root, handle } = (() => {
+      const m = mount({ activeConversationId: "a", onActiveConversationTitle });
+      return { root: m.root, handle: m.handle };
+    })();
+    void root;
+    await flush();
+    expect(onActiveConversationTitle).toHaveBeenLastCalledWith("Session a");
+
+    handle.setActiveConversationId("b");
+    expect(onActiveConversationTitle).toHaveBeenLastCalledWith("Session b");
+
+    // Only changes are reported: re-rendering with the same active id is silent.
+    const calls = onActiveConversationTitle.mock.calls.length;
+    handle.setActiveConversationId("b");
+    expect(onActiveConversationTitle.mock.calls.length).toBe(calls);
+
+    handle.setActiveConversationId(null);
+    expect(onActiveConversationTitle).toHaveBeenLastCalledWith(null);
+  });
+
   it("hides the delete-all control when showDeleteAll is false", async () => {
     const { root } = mount({ showDeleteAll: false });
     await flush();

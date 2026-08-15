@@ -1237,6 +1237,8 @@ export type AgentWidgetControllerEventMap = {
   "history:closed": { returnSurface: HistoryReturnSurface; timestamp: number };
   "history:conversationOpened": {
     conversationId: string;
+    /** List title of the opened conversation; null when not yet known. */
+    title: string | null;
     scope: HistoryScope;
     timestamp: number;
   };
@@ -5020,6 +5022,15 @@ export type AgentWidgetHeaderLayoutConfig = {
   showIcon?: boolean;
   /** Show/hide the title */
   showTitle?: boolean;
+  /**
+   * What the header title (or `titleMenu` label) displays. `"static"`
+   * (default) always shows `launcher.title`. `"conversation"` shows the active
+   * conversation's title — the Claude-style pairing for a `titleMenu` holding
+   * conversation actions — falling back to `launcher.title` while no titled
+   * conversation is open (fresh chat, cleared history, or before the history
+   * view has loaded titles). Requires `features.history` for titles to exist.
+   */
+  titleSource?: "static" | "conversation";
   /** Show/hide the subtitle */
   showSubtitle?: boolean;
   /** Show/hide the close button */

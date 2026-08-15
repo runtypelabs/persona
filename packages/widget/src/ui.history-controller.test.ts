@@ -263,6 +263,7 @@ describe("history controller API", () => {
       });
       expect(events[1]![1]).toEqual({
         conversationId: "conv-a",
+        title: "Order status",
         scope: "browser",
         timestamp: expect.any(Number),
       });
@@ -281,6 +282,36 @@ describe("history controller API", () => {
       // No credential, proof, visitor, or backend text anywhere.
       const serialized = JSON.stringify(events);
       expect(serialized).not.toMatch(/token|proof|visitor|endUser/i);
+    });
+
+    it("binds the header title to the active conversation with titleSource", async () => {
+      const { controller, mount } = setup({
+        config: {
+          launcher: { enabled: false, title: "Acme Assistant" },
+          layout: { header: { layout: "minimal", titleSource: "conversation" } },
+        },
+      });
+      // Scoped to the header zone: the history list rows also render titles.
+      const titleShown = (text: string): boolean =>
+        Array.from(
+          mount
+            .querySelector('[data-persona-theme-zone="header"]')
+            ?.querySelectorAll("span") ?? []
+        ).some((el) => el.textContent === text);
+
+      await controller.showHistory();
+      await flush();
+      expect(titleShown("Order status")).toBe(false);
+
+      await controller.openConversation("conv-a");
+      await flush();
+      expect(titleShown("Order status")).toBe(true);
+
+      // A fresh conversation reverts to the static fallback.
+      await controller.startNewConversation();
+      await flush();
+      expect(titleShown("Order status")).toBe(false);
+      expect(titleShown("Acme Assistant")).toBe(true);
     });
 
     it("emits a sanitized conversationStarted from the controller method", async () => {

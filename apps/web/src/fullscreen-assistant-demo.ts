@@ -710,6 +710,10 @@ const config = mergeWithDefaults({
       // The rail's new-conversation row and delete-all cover these jobs, and the
       // clear-chat glyph reads as a duplicate of the artifact toolbar's refresh.
       showClearChat: false,
+      // Claude pairing: the rail owns the brand wordmark, so the header combo
+      // shows the ACTIVE conversation's title, matching its menu of
+      // conversation actions. Falls back to launcher.title on a fresh chat.
+      titleSource: "conversation",
       titleMenu: {
         menuItems: [
           { id: "star", label: "Star", icon: "star" },
@@ -723,10 +727,13 @@ const config = mergeWithDefaults({
           switch (id) {
             case "star": {
               isStarred = !isStarred;
-              // Update the combo button label directly (no config side effects)
+              // Demo stub: mutates the label directly, so the titleSource
+              // binding restamps it on the next conversation switch. A real
+              // host would persist and let the bound title carry it.
               const label = document.querySelector(".persona-combo-btn-label");
               if (label) {
-                label.textContent = isStarred ? "\u2605 Chat Assistant" : "Chat Assistant";
+                const current = label.textContent?.replace(/^\u2605\s*/, "") ?? "";
+                label.textContent = isStarred ? `\u2605 ${current}` : current;
               }
               break;
             }

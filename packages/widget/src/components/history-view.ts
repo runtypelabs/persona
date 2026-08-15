@@ -245,6 +245,13 @@ export interface HistoryViewOptions {
   renderDom?: boolean;
   /** Model-change signal, emitted only while DOM rendering is suspended. */
   onModelChange?: () => void;
+  /**
+   * Fired whenever the ACTIVE conversation's list title changes: on selection,
+   * on a list refresh that delivers a server-generated title, and with `null`
+   * when no titled active conversation exists. Feeds the shell's
+   * `layout.header.titleSource: "conversation"` binding.
+   */
+  onActiveConversationTitle?: (title: string | null) => void;
   /** Shell live region, used while this view's own one is detached. */
   onAnnounce?: (message: string) => void;
   /**
@@ -1255,8 +1262,24 @@ export function createHistoryView(
     footer.hidden = (!clearButton || clearButton.hidden) && !resetButton;
   };
 
+  // The shell's header-title binding. Reported from render() so every path
+  // that can change the answer (selection, list refresh delivering a server
+  // title, deletion, clear) funnels through one change-detecting emit; runs
+  // even while DOM rendering is suspended, since the data still moved.
+  let reportedActiveTitle: string | null | undefined;
+  const reportActiveTitle = (): void => {
+    const callback = options.onActiveConversationTitle;
+    if (!callback) return;
+    const active = items.find((c) => c.id === activeConversationId);
+    const title = active ? active.title.trim() || null : null;
+    if (title === reportedActiveTitle) return;
+    reportedActiveTitle = title;
+    callback(title);
+  };
+
   const render = (): void => {
     if (destroyed) return;
+    reportActiveTitle();
     // Suspended means a plugin owns the whole surface: build nothing, just tell
     // the arbitration layer the model moved.
     if (!domRenderEnabled) {
