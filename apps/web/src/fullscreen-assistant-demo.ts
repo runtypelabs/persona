@@ -83,8 +83,11 @@ function buildAssistantConversations(nowMs: number) {
         },
         {
           role: "assistant" as const,
+          // Chains into the scripted stream's "Here is a concise readout"
+          // intro instead of repeating it: this record IS the landing
+          // conversation, and the stream continues it.
           content:
-            "Here is a first pass. The document is open on the right, so you can read the full draft while we keep talking.",
+            "Happy to. I will pull the launch story together and open the full draft beside this thread.",
           createdAt: iso(spotlight + 3 * MINUTE)
         }
       ]
@@ -897,6 +900,27 @@ const handle = initAgentWidget({
 });
 
 demoCtl.handle = handle;
-void handle.connectStream(newFullscreenAssistantScriptStream());
 // The rail is the frame of this layout, so it opens with the page.
 void handle.showHistory();
+// Land IN the seeded spotlight conversation, then stream the readout and
+// artifact into it: the seed hydrates as prior context, the header binds the
+// conversation title, and the title-menu actions apply from the first frame.
+void (async () => {
+  try {
+    await handle.openConversation("assistant-conv-spotlight");
+  } catch {
+    /* seed missing: the scripted stream still tells the story in a fresh chat */
+  }
+  await handle.connectStream(newFullscreenAssistantScriptStream());
+  // Persist the streamed turns so reopening the conversation matches what was
+  // on screen (the record is in-memory and rebuilt per page load).
+  historyProvider.appendMessage("assistant-conv-spotlight", {
+    role: "assistant",
+    content:
+      "Here is a concise readout. Open the document on the right for the full spotlight draft."
+  });
+  historyProvider.appendMessage("assistant-conv-spotlight", {
+    role: "user",
+    content: "Tighten the checklist section and add one competitor callout."
+  });
+})();
