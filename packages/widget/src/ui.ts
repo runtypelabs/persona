@@ -8885,11 +8885,24 @@ export const createAgentExperience = (
   let activeConversationStarred = false;
   const applyHeaderTitle = (): void => {
     if (!headerTitle) return;
-    const bound =
-      config.layout?.header?.titleSource === "conversation"
-        ? activeConversationTitle?.trim() || null
-        : null;
+    const conversationMode = config.layout?.header?.titleSource === "conversation";
+    const bound = conversationMode
+      ? activeConversationTitle?.trim() || null
+      : null;
     headerTitle.textContent = bound ?? config.launcher?.title ?? "Chat Assistant";
+    // A conversation-bound titleMenu acts on the ACTIVE conversation, so with
+    // none open the combo locks into a plain title (no chevron, no menu)
+    // instead of a menu of no-ops. Static titles keep their menu untouched.
+    const combo = headerTitle.closest<HTMLElement>(".persona-combo-btn");
+    if (!combo) return;
+    const menuAvailable =
+      !conversationMode || session.getActiveConversationId() !== null;
+    combo.setAttribute("data-persona-menu-locked", menuAvailable ? "false" : "true");
+    combo.setAttribute("aria-haspopup", menuAvailable ? "true" : "false");
+    if (!menuAvailable) combo.setAttribute("aria-expanded", "false");
+    combo.style.cursor = menuAvailable ? "pointer" : "default";
+    const chevron = combo.querySelector("svg");
+    if (chevron) chevron.style.display = menuAvailable ? "" : "none";
   };
   const setActiveConversationTitle = (title: string | null): void => {
     if (title === activeConversationTitle) return;
@@ -8901,12 +8914,19 @@ export const createAgentExperience = (
   ): void => {
     activeConversationStarred = summary?.starred === true;
     setActiveConversationTitle(summary ? summary.title.trim() || null : null);
+    // The title can be unchanged (null to null) while the ACTIVE id flipped,
+    // e.g. start-new; the menu lock keys on the id, so always resync.
+    applyHeaderTitle();
   };
 
   // Built-in title-menu actions, raised as a bubbling DOM event by the header
   // combo (the initial header is built by the pure panel builder, out of the
   // shell's reach). One listener on the stable container survives header
   // rebuilds and rail re-homing.
+  // Initial stamp: with no active conversation the conversation-bound menu
+  // starts locked (and a restored session starts unlocked).
+  applyHeaderTitle();
+
   container.addEventListener("persona:title-menu-builtin", (event) => {
     const actionId = (event as CustomEvent<{ actionId?: string }>).detail
       ?.actionId;

@@ -372,6 +372,44 @@ describe("history controller API", () => {
       ).toBeNull();
     });
 
+    it("locks the conversation-bound title menu until a conversation is open", async () => {
+      const { controller, mount } = setup({
+        config: {
+          launcher: { enabled: false, title: "Acme Assistant" },
+          layout: {
+            header: {
+              layout: "minimal",
+              titleSource: "conversation",
+              titleMenu: {
+                menuItems: [{ id: "star", label: "Star" }],
+                onSelect: () => false,
+              },
+            },
+          },
+        },
+      });
+      await flush();
+
+      const combo = () =>
+        mount.querySelector<HTMLElement>(".persona-combo-btn");
+      expect(combo()?.getAttribute("data-persona-menu-locked")).toBe("true");
+      // Locked, a click opens nothing: the combo reads as a plain title.
+      combo()!.click();
+      expect(
+        mount.querySelector(".persona-dropdown-menu:not(.persona-hidden)")
+      ).toBeNull();
+
+      await controller.openConversation("conv-a");
+      await flush();
+      expect(combo()?.getAttribute("data-persona-menu-locked")).toBe("false");
+
+      // Deleting the active conversation installs a replacement record, so
+      // the menu stays available: its actions target the fresh conversation.
+      await controller.deleteConversation("conv-a");
+      await flush();
+      expect(combo()?.getAttribute("data-persona-menu-locked")).toBe("false");
+    });
+
     it("runs the built-in star toggle from the title-menu event", async () => {
       const { controller, mount } = setup();
       await controller.openConversation("conv-a");

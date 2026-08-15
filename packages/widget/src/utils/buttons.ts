@@ -560,9 +560,16 @@ export function createComboButton(options: CreateComboButtonOptions): ComboButto
     wrapper.appendChild(dropdown.element);
   }
 
+  // A shell may lock the menu while it has nothing to act on (e.g. no active
+  // conversation behind a conversation-title menu); locked, the combo reads
+  // as a plain title.
+  const locked = (): boolean =>
+    wrapper.getAttribute("data-persona-menu-locked") === "true";
+
   // Click toggles dropdown
   wrapper.addEventListener("click", (e) => {
     e.stopPropagation();
+    if (locked()) return;
     const isOpen = !dropdown.element.classList.contains("persona-hidden");
     wrapper.setAttribute("aria-expanded", isOpen ? "false" : "true");
     dropdown.toggle();
