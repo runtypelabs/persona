@@ -1414,6 +1414,8 @@ export type AgentWidgetArtifactsLayoutConfig = {
   documentToolbarToggleActiveBackground?: string;
   /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`. */
   documentToolbarToggleActiveBorderColor?: string;
+  /** Active view/source toggle icon color (defaults to `documentToolbarIconColor`). Sets `--persona-artifact-doc-toggle-active-color`. */
+  documentToolbarToggleActiveColor?: string;
   /** Show an expand/collapse toggle in the artifact toolbar (both presets). Expanded fills the widget with the pane and hides the chat column. Default: false. */
   showExpandToggle?: boolean;
   /** Show the copy control in the `default` toolbar preset (the `document` preset always shows it). Default: false. */

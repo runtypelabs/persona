@@ -1936,7 +1936,7 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
 | `showReasoning` | Show AI reasoning/thinking steps |
 | `showToolCalls` | Show tool call invocations |
 | `scrollToBottom` | Shared transcript + event-stream affordance config: `enabled`, `iconName`, `label` (empty string renders icon-only). Defaults: `enabled: true`, `iconName: "arrow-down"`, `label: ""`. |
-| `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
+| `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, `documentToolbarToggleActiveColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
 
 ---
 

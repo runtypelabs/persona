@@ -107,23 +107,19 @@ export function applyArtifactLayoutCssVars(mount: HTMLElement, config: AgentWidg
     mount.style.removeProperty("--persona-artifact-pane-padding");
   }
 
-  const iconColor = l?.documentToolbarIconColor?.trim();
-  if (iconColor) {
-    mount.style.setProperty("--persona-artifact-doc-toolbar-icon-color", iconColor);
-  } else {
-    mount.style.removeProperty("--persona-artifact-doc-toolbar-icon-color");
-  }
-  const toggleBg = l?.documentToolbarToggleActiveBackground?.trim();
-  if (toggleBg) {
-    mount.style.setProperty("--persona-artifact-doc-toggle-active-bg", toggleBg);
-  } else {
-    mount.style.removeProperty("--persona-artifact-doc-toggle-active-bg");
-  }
-  const toggleBorder = l?.documentToolbarToggleActiveBorderColor?.trim();
-  if (toggleBorder) {
-    mount.style.setProperty("--persona-artifact-doc-toggle-active-border", toggleBorder);
-  } else {
-    mount.style.removeProperty("--persona-artifact-doc-toggle-active-border");
+  const docToolbarVars: Array<[string | undefined, string]> = [
+    [l?.documentToolbarIconColor, "--persona-artifact-doc-toolbar-icon-color"],
+    [l?.documentToolbarToggleActiveBackground, "--persona-artifact-doc-toggle-active-bg"],
+    [l?.documentToolbarToggleActiveBorderColor, "--persona-artifact-doc-toggle-active-border"],
+    [l?.documentToolbarToggleActiveColor, "--persona-artifact-doc-toggle-active-color"],
+  ];
+  for (const [raw, name] of docToolbarVars) {
+    const value = raw?.trim();
+    if (value) {
+      mount.style.setProperty(name, value);
+    } else {
+      mount.style.removeProperty(name);
+    }
   }
 
   applyArtifactPaneBorderTheme(mount, config);

@@ -3493,6 +3493,7 @@
 [data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn[aria-pressed="true"] {
   background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
   border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb)));
+  color: var(--persona-artifact-doc-toggle-active-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
 }
 
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn,
@@ -3803,6 +3804,9 @@
   /* Inset ring instead of a border so documentToolbarToggleActiveBorderColor
      still applies inside the borderless segment (transparent by default). */
   box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
+  /* Survives the @supports thumb override below, which resets only the
+     background and ring; the active glyph keeps this color either way. */
+  color: var(--persona-artifact-doc-toggle-active-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
 }
 
 /* Sliding selection thumb: a container ::before that translates between the

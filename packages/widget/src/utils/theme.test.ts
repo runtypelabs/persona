@@ -701,6 +701,34 @@ describe('theme utils', () => {
     expect(surfaceVars['--persona-artifact-toolbar-bg']).toBe('#f9fafb');
   });
 
+  it('coerces unitless zero toggle-group gap/padding to px (calc-safe)', () => {
+    const theme = createTheme({
+      components: {
+        artifact: {
+          toolbar: {
+            toggleGroupGap: '0',
+            toggleGroupPadding: '0',
+          },
+        },
+      },
+    } as any);
+    const cssVars = themeToCssVariables(theme);
+    // The selection thumb's width calc() mixes these with lengths; a bare
+    // "0" is a <number> there and would invalidate the whole expression.
+    expect(cssVars['--persona-artifact-toolbar-toggle-group-gap']).toBe('0px');
+    expect(cssVars['--persona-artifact-toolbar-toggle-group-padding']).toBe('0px');
+
+    const unitful = themeToCssVariables(
+      createTheme({
+        components: {
+          artifact: { toolbar: { toggleGroupGap: '4px', toggleGroupPadding: '0.25rem' } },
+        },
+      } as any)
+    );
+    expect(unitful['--persona-artifact-toolbar-toggle-group-gap']).toBe('4px');
+    expect(unitful['--persona-artifact-toolbar-toggle-group-padding']).toBe('0.25rem');
+  });
+
   it('maps artifact inline chrome tokens to dedicated CSS variables (with semantic refs)', () => {
     const theme = createTheme({
       components: {

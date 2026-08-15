@@ -549,7 +549,9 @@ const fullscreenAssistantDarkTokens = {
         iconHoverBackground: COLORS.userBubble,
         iconHoverColor: COLORS.text,
         toggleGroupGap: "0",
-        toggleBorderRadius: "0",
+        // Concentric with the 8px pill radius minus its 2px padding; the "0"
+        // set here previously predates the selection chip being visible.
+        toggleBorderRadius: "6px",
         copyBackground: "transparent",
         copyBorder: `1px solid ${COLORS.border}`,
         copyColor: COLORS.text,
@@ -759,8 +761,11 @@ const config = mergeWithDefaults({
         documentToolbarShowCopyLabel: true,
         documentToolbarShowCopyChevron: true,
         documentToolbarIconColor: COLORS.muted,
-        documentToolbarToggleActiveBackground: `${COLORS.chat}`,
+        // Contrasts with the pill background (surface, #171717); the chat
+        // color used previously matched it exactly and hid the selection.
+        documentToolbarToggleActiveBackground: COLORS.userBubble,
         documentToolbarToggleActiveBorderColor: COLORS.border,
+        documentToolbarToggleActiveColor: COLORS.text,
         documentToolbarCopyMenuItems: [
           { id: "download", label: "Download" },
           { id: "download-pdf", label: "Download as PDF" },

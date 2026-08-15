@@ -729,6 +729,9 @@ export function createTheme(
   return theme;
 }
 
+/** Coerce a unitless "0" to "0px" for vars consumed inside length calc()s. */
+const zeroLength = (value: string): string => (value.trim() === '0' ? '0px' : value);
+
 export function themeToCssVariables(theme: PersonaTheme): Record<string, string> {
   const resolved = resolveTokens(theme);
   const cssVars: Record<string, string> = {};
@@ -1194,9 +1197,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.iconPadding) cssVars['--persona-artifact-toolbar-icon-padding'] = t.iconPadding;
     if (t.iconBorderRadius) cssVars['--persona-artifact-toolbar-icon-radius'] = t.iconBorderRadius;
     if (t.iconBorder) cssVars['--persona-artifact-toolbar-icon-border'] = t.iconBorder;
-    if (t.toggleGroupGap) cssVars['--persona-artifact-toolbar-toggle-group-gap'] = t.toggleGroupGap;
+    // A bare "0" is a <number> in calc(), not a <length>; gap/padding feed the
+    // toggle thumb's width calc, so a unitless zero would zero out the thumb.
+    if (t.toggleGroupGap) cssVars['--persona-artifact-toolbar-toggle-group-gap'] = zeroLength(t.toggleGroupGap);
     if (t.toggleBorderRadius) cssVars['--persona-artifact-toolbar-toggle-radius'] = t.toggleBorderRadius;
-    if (t.toggleGroupPadding) cssVars['--persona-artifact-toolbar-toggle-group-padding'] = t.toggleGroupPadding;
+    if (t.toggleGroupPadding) cssVars['--persona-artifact-toolbar-toggle-group-padding'] = zeroLength(t.toggleGroupPadding);
     if (t.toggleGroupBorder) cssVars['--persona-artifact-toolbar-toggle-group-border'] = t.toggleGroupBorder;
     if (t.toggleGroupBorderRadius) cssVars['--persona-artifact-toolbar-toggle-group-radius'] = t.toggleGroupBorderRadius;
     if (t.toggleGroupBackground) cssVars['--persona-artifact-toolbar-toggle-group-bg'] = resolveTokenValue(theme, t.toggleGroupBackground) ?? t.toggleGroupBackground;
