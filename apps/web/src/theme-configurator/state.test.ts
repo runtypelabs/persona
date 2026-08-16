@@ -314,6 +314,26 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
     expect(state.getPreviewBackgroundUrl()).toBe('https://restored.com');
   });
 
+  test('the messages preview scene survives a persisted-ui round trip', () => {
+    localStorage.setItem(
+      'persona-theme-editor-ui',
+      JSON.stringify({
+        editingTheme: 'light',
+        previewMode: 'system',
+        previewDevice: 'desktop',
+        previewScene: 'messages',
+        editorMode: 'basic',
+      })
+    );
+
+    const mount = document.createElement('div');
+    mount.id = 'widget-preview-3';
+    document.body.appendChild(mount);
+    state.initStore(mount);
+
+    expect(state.getPreviewScene()).toBe('messages');
+  });
+
   test('saved snapshot can be updated and later retrieved for compare mode', () => {
     const initialSaved = state.getSavedSnapshot();
     expect(initialSaved).not.toBeNull();

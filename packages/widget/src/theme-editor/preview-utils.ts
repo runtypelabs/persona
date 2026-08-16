@@ -200,7 +200,8 @@ export type PreviewScene =
   | 'conversation'
   | 'follow-ups'
   | 'minimized'
-  | 'artifact';
+  | 'artifact'
+  | 'messages';
 
 export type PreviewTranscriptEntryPreset =
   | 'user-message'
@@ -659,6 +660,19 @@ export function applySceneConfig(
 
   if (scene === 'artifact') {
     config.features = { ...config.features, artifacts: { ...config.features?.artifacts, enabled: true } };
+  }
+  if (scene === 'messages') {
+    // The host wires a provider (setHistoryProviderFactory) and opens the view
+    // after mount; without one the widget hides its history chrome and the
+    // scene degrades to a plain conversation.
+    config.features = {
+      ...config.features,
+      history: {
+        presentation: 'panel',
+        ...config.features?.history,
+        enabled: true,
+      },
+    };
   }
   return config;
 }

@@ -308,8 +308,14 @@ export function createThemePreview(
         if (isMinimized) controller.close();
       }
 
-      // Inject artifacts if needed
       const scene = options.scene ?? 'conversation';
+      // No-op without a history provider (see applySceneConfig): the host
+      // registers one via setHistoryProviderFactory before mounting.
+      if (scene === 'messages') {
+        for (const c of controllers) void c.showHistory();
+      }
+
+      // Inject artifacts if needed
       if (scene === 'artifact' || options.config?.features?.artifacts?.enabled) {
         for (const c of controllers) {
           c.upsertArtifact({

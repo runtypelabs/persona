@@ -1037,6 +1037,9 @@ millisecond numbers and `0` disables that leg; only the body moves (the bar is
 persistent chrome), and `prefers-reduced-motion` always wins. The slide variable
 above is chunk-scoped (declared on `.persona-history-view`), so unlike the
 motion vars it is overridden with CSS on that selector, not by a theme emission.
+The theme editor's Messages preview scene shows these live: it opens the
+Messages view against a demo provider and replays the enter/exit pair after a
+motion token edit.
 
 Copy is separate from styling: every user-visible string is overridable through
 `features.history.copy` (see `AgentWidgetHistoryCopy`), never through CSS.

@@ -942,6 +942,7 @@ const SCENE_LABELS: Record<string, string> = {
   'follow-ups': 'Follow-ups',
   minimized: 'Minimized',
   artifact: 'Artifact',
+  messages: 'Messages',
 };
 
 const THEME_ICONS: Record<string, string> = {
