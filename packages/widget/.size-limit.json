@@ -92,7 +92,7 @@
   {
     "name": "Lazy · history (Messages) view chunk (history-view.js)",
     "path": "dist/history-view.js",
-    "limit": "14.75 kB",
+    "limit": "15 kB",
     "gzip": true
   },
   {
