@@ -335,6 +335,14 @@ export interface PreviewManager {
   clearHighlight(): void;
   /** Capture each visible preview frame as a downscaled JPEG data URL. */
   capturePreview(): Promise<PreviewCaptureFrame[]>;
+  /**
+   * Messages scene: while held (a motion field has focus), motion-token
+   * commits mark a replay pending instead of scheduling it; releasing the
+   * hold schedules any pending replay.
+   */
+  setHistoryMotionEditHold(held: boolean): void;
+  /** Messages scene: run a pending or debounced motion replay now (Enter). */
+  flushHistoryMotionReplay(): void;
   /** Clean up all resources. */
   destroy(): void;
 }
@@ -364,6 +372,8 @@ export function createPreviewManager(
   let lastStreamAnimationSignature: string | null = null;
   let lastHistoryMotionSignature: string | null = null;
   let historyMotionReplayTimer: ReturnType<typeof setTimeout> | null = null;
+  let historyMotionEditHold = false;
+  let historyMotionReplayPending = false;
   /** Messages scene: which previews currently show the history view. */
   const historyOpenControllers = new WeakSet<AgentWidgetController>();
   let pendingStreamTimers: Array<ReturnType<typeof setTimeout>> = [];
@@ -1392,6 +1402,7 @@ export function createPreviewManager(
       clearTimeout(historyMotionReplayTimer);
       historyMotionReplayTimer = null;
     }
+    historyMotionReplayPending = false;
     lastHistoryMotionSignature = getHistoryMotionSignature();
 
     const specs = getPreviewSpecs(preserveBackgroundStates);
@@ -1657,7 +1668,18 @@ export function createPreviewManager(
     }
   }
 
+  /**
+   * Editor text fields commit on every keystroke, so a replay per commit would
+   * churn the view mid-edit. While a motion field holds focus (the edit hold),
+   * commits only mark a replay pending; blur releases it and Enter flushes it.
+   * The debounce below covers edit paths with no field focus at all: the theme
+   * copilot, WebMCP tools, undo/redo, presets.
+   */
   function scheduleHistoryMotionReplay(): void {
+    if (historyMotionEditHold) {
+      historyMotionReplayPending = true;
+      return;
+    }
     if (historyMotionReplayTimer !== null) clearTimeout(historyMotionReplayTimer);
     historyMotionReplayTimer = setTimeout(() => {
       historyMotionReplayTimer = null;
@@ -1963,6 +1985,26 @@ export function createPreviewManager(
 
     capturePreview(): Promise<PreviewCaptureFrame[]> {
       return capturePreviewFrames();
+    },
+
+    setHistoryMotionEditHold(held: boolean): void {
+      if (historyMotionEditHold === held) return;
+      historyMotionEditHold = held;
+      if (!held && historyMotionReplayPending) {
+        historyMotionReplayPending = false;
+        scheduleHistoryMotionReplay();
+      }
+    },
+
+    flushHistoryMotionReplay(): void {
+      const timerArmed = historyMotionReplayTimer !== null;
+      if (!historyMotionReplayPending && !timerArmed) return;
+      historyMotionReplayPending = false;
+      if (historyMotionReplayTimer !== null) {
+        clearTimeout(historyMotionReplayTimer);
+        historyMotionReplayTimer = null;
+      }
+      replayHistoryMotion();
     },
 
     destroy(): void {
