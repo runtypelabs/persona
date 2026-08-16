@@ -365,35 +365,6 @@ export const HISTORY_VIEW_CSS =
   color: var(--persona-text-muted, #6b7280);
 }
 ` +
-  /* Pending acknowledgment: the shell blocks navigation on the transcript
-     fetch, so the awaiting row must visibly say so. The spinner takes the
-     time's slot; reduced motion keeps the static ring and the dim. */
-  `.persona-history-view .persona-history-row[aria-busy="true"] {
-  cursor: progress;
-  opacity: 0.55;
-}
-.persona-history-view .persona-history-row--opening time.persona-history-row-time {
-  visibility: hidden;
-}
-.persona-history-view .persona-history-row--opening .persona-history-row-head {
-  position: relative;
-}
-.persona-history-view .persona-history-row--opening .persona-history-row-head::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  right: 0;
-  width: 13px;
-  height: 13px;
-  border: 2px solid var(--persona-history-border);
-  border-top-color: var(--persona-text-muted, #6b7280);
-  border-radius: 999px;
-  animation: persona-history-row-spin 700ms linear infinite;
-}
-@keyframes persona-history-row-spin {
-  to { transform: rotate(360deg); }
-}
-` +
   /* No per-row menu in the reference design: the trigger takes the time's slot
      on hover/focus and stays put for coarse pointers and while its menu is open. */
   `.persona-history-view button.persona-history-row-menu-button {
@@ -983,9 +954,6 @@ export const HISTORY_VIEW_CSS =
     animation: none;
   }
   .persona-history-view .persona-history-skeleton-bar { animation: none; }
-  .persona-history-view .persona-history-row--opening .persona-history-row-head::after {
-    animation: none;
-  }
   .persona-history-rail-host { transition: none; }
 }
 `;
