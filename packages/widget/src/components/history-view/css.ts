@@ -117,6 +117,10 @@ export const HISTORY_VIEW_CSS =
 .persona-history-topbar--shell .persona-history-title {
   margin: 0;
   padding: 0;
+  /* Pinned like the main header stamps it inline: without a declaration here,
+     a non-shadow host's own h2 font rule fills the gap and the two titles
+     drift apart. The inherit fallback resolves to the widget's font. */
+  font-family: var(--persona-components-header-title-fontFamily, inherit);
   font-size: var(--persona-components-header-title-fontSize, 1rem);
   font-weight: var(--persona-components-header-title-fontWeight, 600);
   line-height: var(--persona-components-header-title-lineHeight, 1.5rem);
