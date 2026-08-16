@@ -35,6 +35,7 @@ export type RuntypeExecutionStreamEvent = ({
   iterations?: number;
   kind: "agent" | "flow";
   seq: number;
+  stepErrorCount?: number;
   stopReason?: string;
   success: boolean;
   successfulSteps?: number;
@@ -364,10 +365,21 @@ export type RuntypeExecutionStreamEvent = ({
   mode: "form" | "url";
   pauseCount?: number;
   requestedSchema?: Record<string, unknown>;
+  requests?: Array<{
+  message: string;
+  mode: "form" | "url";
+  name: string;
+  requestedSchema?: Record<string, unknown>;
+  url?: string;
+}>;
   serverName?: string;
   url?: string;
 };
   executionId: string;
+  externalAgent?: {
+  contextId?: string;
+  taskId?: string;
+};
   origin?: "webmcp" | "sdk";
   pageOrigin?: string;
   parameters?: Record<string, unknown>;
@@ -418,23 +430,59 @@ export type RuntypeStopReasonKind = NonNullable<
 
 export type RuntypeClientInitRequest = {
   flowId?: string;
-  sessionId?: string;
+  identityProof?: string;
   token: string;
+  visitorHistory?: boolean;
+  visitorToken?: string;
+} | {
+  flowId?: string;
+  identityProof?: string;
+  sessionId: string;
+  token: string;
+  visitorHistory?: boolean;
+  visitorToken?: string;
+} | {
+  conversationId: string;
+  flowId?: string;
+  identityProof?: string;
+  token: string;
+  visitorHistory?: boolean;
+  visitorToken: string;
+} | {
+  conversationId: string;
+  flowId?: string;
+  identityProof: string;
+  token: string;
+  visitorHistory?: boolean;
+  visitorToken?: string;
 };
 
 export type RuntypeClientInitResponse = {
-  config: {
-  placeholder?: string;
-  theme?: unknown;
-  welcomeMessage?: string | null;
+  app?: {
+  id: string;
 };
+  config: {
+  placeholder: string;
+  theme?: unknown;
+  welcomeMessage: string | null;
+};
+  conversationId: string;
+  conversationRevision: string;
   expiresAt: string;
   flow?: {
   description?: string | null;
   id: string;
-  name?: string | null;
+  name?: string;
 };
   sessionId: string;
+  targetId?: string;
+  visitor?: {
+  endUserId: string | null;
+  expiresAt: string;
+  id: string;
+  identityStatus: "not_provided" | "admitted" | "ignored";
+  token?: string;
+};
 };
 
 export type RuntypeClientChatRequest = {
@@ -474,6 +522,7 @@ export type RuntypeClientChatRequest = {
   text: string;
   type: "reasoning";
 }>);
+  displayContent?: string;
   id?: string;
   role: "user" | "assistant" | "system";
 }>;
