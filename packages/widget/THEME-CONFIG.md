@@ -1028,6 +1028,16 @@ fallback chain into the ordinary theme aliases. Set any of them on the host page
 | `--persona-history-topbar-min-height` | `56px` (panel) / `48px` (rail) | Inline top bar minimum height (the shell-hosted bar inherits the header's sizing) |
 | `--persona-history-slide` | `20px` (panel) / `12px` (rail) | Horizontal travel of the body's entrance and exit motion |
 
+Enter/exit timing is a token group, `components.history.motion`: `enterDurationMs`
+(default `180`), `enterEasing` (`cubic-bezier(0, 0, 0.2, 1)`), `exitDurationMs`
+(`160`), and `exitEasing` (`cubic-bezier(0.4, 0, 1, 1)`), emitted as
+`--persona-history-enter-ms` / `--persona-history-enter-easing` /
+`--persona-history-exit-ms` / `--persona-history-exit-easing`. Durations are bare
+millisecond numbers and `0` disables that leg; only the body moves (the bar is
+persistent chrome), and `prefers-reduced-motion` always wins. The slide variable
+above is chunk-scoped (declared on `.persona-history-view`), so unlike the
+motion vars it is overridden with CSS on that selector, not by a theme emission.
+
 Copy is separate from styling: every user-visible string is overridable through
 `features.history.copy` (see `AgentWidgetHistoryCopy`), never through CSS.
 

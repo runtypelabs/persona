@@ -137,6 +137,32 @@ describe('theme utils', () => {
     expect(cssVars['--persona-button-radius']).toBe('6px');
   });
 
+  it('emits history motion vars with ms appended to bare durations', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: {
+          history: {
+            motion: {
+              enterDurationMs: 320,
+              enterEasing: 'ease-out',
+              exitDurationMs: 0,
+              exitEasing: 'linear',
+            },
+          },
+        },
+      } as any)
+    );
+    expect(cssVars['--persona-history-enter-ms']).toBe('320ms');
+    expect(cssVars['--persona-history-enter-easing']).toBe('ease-out');
+    expect(cssVars['--persona-history-exit-ms']).toBe('0ms');
+    expect(cssVars['--persona-history-exit-easing']).toBe('linear');
+
+    // Unset motion emits nothing: the chunk's fallbacks stay in charge.
+    const bare = themeToCssVariables(createTheme({} as any));
+    expect(bare['--persona-history-enter-ms']).toBeUndefined();
+    expect(bare['--persona-history-exit-easing']).toBeUndefined();
+  });
+
   it('zeroes horizontal intro-card padding when the card resolves flat', () => {
     const cssVars = themeToCssVariables(createTheme({} as any));
     expect(cssVars['--persona-intro-card-padding']).toBe('1.5rem 0');

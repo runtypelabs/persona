@@ -67,7 +67,8 @@ export const HISTORY_VIEW_CSS =
   /* In-panel navigation, not a sheet: only the body moves, so the bar is never
      animated or replaced. The mirrored exit is playExit() in history-view.ts. */
   `.persona-history-view--enter .persona-history-body {
-  animation: persona-history-enter-body 180ms cubic-bezier(0, 0, 0.2, 1) both;
+  animation: persona-history-enter-body var(--persona-history-enter-ms, 180ms)
+    var(--persona-history-enter-easing, cubic-bezier(0, 0, 0.2, 1)) both;
 }
 @keyframes persona-history-enter-body {
   from { opacity: 0; transform: translateX(var(--persona-history-slide)); }

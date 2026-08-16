@@ -921,6 +921,26 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     const value = cssVars[`--persona-components-history-menu-${token}`];
     if (value) cssVars[`--persona-history-menu-${alias}`] = value;
   }
+  // Messages enter/exit motion. Read straight off the theme: durations are
+  // authored as bare millisecond NUMBERS, and resolveTokens collects only
+  // string leaves, so these never reach the flattened vars. A unitless value
+  // gains "ms" for the CSS animation shorthand; 0 emits "0ms" (leg disabled).
+  const historyMotion = theme.components?.history?.motion;
+  if (historyMotion) {
+    const asTime = (value: number | string | undefined): string | undefined => {
+      if (value === undefined) return undefined;
+      const s = String(value).trim();
+      return /^\d+(\.\d+)?$/.test(s) ? `${s}ms` : s;
+    };
+    const enterMs = asTime(historyMotion.enterDurationMs);
+    if (enterMs !== undefined) cssVars['--persona-history-enter-ms'] = enterMs;
+    const exitMs = asTime(historyMotion.exitDurationMs);
+    if (exitMs !== undefined) cssVars['--persona-history-exit-ms'] = exitMs;
+    if (historyMotion.enterEasing)
+      cssVars['--persona-history-enter-easing'] = historyMotion.enterEasing;
+    if (historyMotion.exitEasing)
+      cssVars['--persona-history-exit-easing'] = historyMotion.exitEasing;
+  }
   // Destructive action text. The chunk falls back to the light-surface
   // error-600; the built-in dark theme sets this to a passing lighter red.
   const historyDangerFg = cssVars['--persona-components-history-dangerForeground'];

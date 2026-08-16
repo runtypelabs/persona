@@ -323,6 +323,21 @@ export interface HistoryTokens {
     /** Corner radius. @default "12px" */
     borderRadius?: string;
   };
+  /**
+   * Enter/exit motion of the Messages surface. Only the body slides; the bar
+   * is persistent chrome and never animates. Durations are milliseconds and 0
+   * disables that leg; `prefers-reduced-motion` always wins over these.
+   */
+  motion?: {
+    /** Entrance slide-and-fade duration. @default 180 */
+    enterDurationMs?: number;
+    /** Entrance easing. @default "cubic-bezier(0, 0, 0.2, 1)" */
+    enterEasing?: string;
+    /** Exit slide-and-fade duration. @default 160 */
+    exitDurationMs?: number;
+    /** Exit easing. @default "cubic-bezier(0.4, 0, 1, 1)" */
+    exitEasing?: string;
+  };
 }
 
 /**

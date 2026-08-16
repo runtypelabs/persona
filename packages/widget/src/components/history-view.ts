@@ -910,10 +910,29 @@ export function createHistoryView(
 
   // --- entrance / exit ----------------------------------------------------
 
+  // components.history.motion overrides ride in as inherited CSS vars; the
+  // chunk never defines them on its own elements, so a theme emission at the
+  // widget root is never shadowed. Read lazily: the values must match what
+  // the CSS animation actually uses at that moment.
+  const motionMs = (name: string, fallback: number): number => {
+    const raw = element.ownerDocument.defaultView
+      ?.getComputedStyle(element)
+      .getPropertyValue(name);
+    const parsed = Number.parseFloat(raw ?? "");
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+  };
+  const motionEasing = (name: string, fallback: string): string =>
+    element.ownerDocument.defaultView
+      ?.getComputedStyle(element)
+      .getPropertyValue(name)
+      .trim() || fallback;
+
   /**
    * The entrance is a one-shot mount animation. Re-parenting a node restarts a
    * CSS animation, so the class is dropped the moment it can no longer be
-   * needed: the shell's live rail <-> panel move must not replay it.
+   * needed: the shell's live rail <-> panel move must not replay it. The timer
+   * is only the fallback for a missing animationend, so it follows the themed
+   * duration rather than cutting a longer one short.
    */
   let entranceTimer: ReturnType<typeof setTimeout> | null = null;
   const endEntrance = (): void => {
@@ -925,7 +944,15 @@ export function createHistoryView(
     element.classList.remove("persona-history-view--enter");
   };
   element.addEventListener("animationend", endEntrance);
-  entranceTimer = setTimeout(endEntrance, ENTRANCE_MS + 60);
+  // Two-step arm: at creation the element is detached and inherited vars read
+  // empty, so the themed duration resolves one macrotask later, after the
+  // shell has mounted the view.
+  entranceTimer = setTimeout(() => {
+    entranceTimer = setTimeout(
+      endEntrance,
+      motionMs("--persona-history-enter-ms", ENTRANCE_MS) + 60
+    );
+  }, 0);
 
   /**
    * The shell-hosted bar fades in once. Same one-shot discipline as the
@@ -967,8 +994,8 @@ export function createHistoryView(
     element.style.pointerEvents = "none";
     headerContent.style.pointerEvents = "none";
     const timing = {
-      duration: EXIT_MS,
-      easing: EXIT_EASING,
+      duration: motionMs("--persona-history-exit-ms", EXIT_MS),
+      easing: motionEasing("--persona-history-exit-easing", EXIT_EASING),
       fill: "forwards",
     } as const;
     const distance = EXIT_SLIDE_PX[presentation];
