@@ -29,13 +29,14 @@ type Source = "demo" | "staging";
 type Presentation = "panel" | "rail" | "auto";
 
 /**
- * Staging only. Phase 0 of the history contract is deployed to the staging API,
- * not to api.runtype.com, and the staging token is origin-locked to
- * http://localhost:5173 and http://localhost:4173.
+ * Live source. Defaults to the production API, which serves the history
+ * contract; override VITE_HISTORY_API_URL to test a staging host. The client
+ * token must allow this page's origin (origin-locking is configured per token
+ * in the Runtype dashboard).
  */
-const STAGING_API_URL = import.meta.env.VITE_HISTORY_API_URL ?? "";
-const STAGING_CLIENT_TOKEN = import.meta.env.VITE_CLIENT_TOKEN_HISTORY ?? "";
-const PRODUCTION_API_HOST = "api.runtype.com";
+const LIVE_API_URL =
+  import.meta.env.VITE_HISTORY_API_URL || "https://api.runtype.com";
+const LIVE_CLIENT_TOKEN = import.meta.env.VITE_CLIENT_TOKEN_HISTORY ?? "";
 
 let source: Source = "demo";
 let presentation: Presentation = "panel";
@@ -50,7 +51,7 @@ const scaffold = renderDemoScaffold({
   slug: "history-demo",
   title: "Conversation History",
   blurb:
-    "The Messages surface end to end: panel and rail presentations, every identity and list state, and the same core surface against live staging.",
+    "The Messages surface end to end: panel and rail presentations, every identity and list state, and the same core surface against the live Runtype API.",
   variants: {
     label: "Source",
     options: [
@@ -60,9 +61,10 @@ const scaffold = renderDemoScaffold({
         description: "Deterministic provider, no API",
       },
       {
+        // Historic id, kept so remembered variant selections stay valid.
         id: "staging",
-        label: "Live staging",
-        description: "Client token against the staging API",
+        label: "Live API",
+        description: "Client token against the Runtype API",
       },
     ],
     onSelect: (id) => {
@@ -116,9 +118,7 @@ const describeIdentity = (status: HistoryIdentityStatus): string =>
 
 // --- config ----------------------------------------------------------------
 
-const stagingConfigured = Boolean(STAGING_API_URL && STAGING_CLIENT_TOKEN);
-const stagingPointsAtProduction = STAGING_API_URL.includes(PRODUCTION_API_HOST);
-const stagingUsable = stagingConfigured && !stagingPointsAtProduction;
+const liveUsable = Boolean(LIVE_CLIENT_TOKEN);
 
 const threadRailPlugin = createThreadRailPlugin();
 
@@ -159,8 +159,8 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
   if (source === "staging") {
     return {
       ...base,
-      clientToken: STAGING_CLIENT_TOKEN,
-      apiUrl: STAGING_API_URL,
+      clientToken: LIVE_CLIENT_TOKEN,
+      apiUrl: LIVE_API_URL,
       // The visitor credential is durable by design: with persistence off the
       // widget keeps history for this page load only.
       persistState: { keyPrefix: "persona-history-staging-" },
@@ -169,7 +169,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
   return { ...base, persistState: false, customFetch: echoFetch };
 };
 
-// --- staging guard ---------------------------------------------------------
+// --- live-source guard ------------------------------------------------------
 
 const addLine = (parent: HTMLElement, text: string, className?: string): void => {
   const node = document.createElement("p");
@@ -178,37 +178,28 @@ const addLine = (parent: HTMLElement, text: string, className?: string): void =>
   parent.appendChild(node);
 };
 
-/** No env vars, or a production URL, renders instructions instead of a widget. */
-function renderStagingSetup(stage: HTMLElement): () => void {
+/** A missing client token renders instructions instead of a broken widget. */
+function renderLiveSetup(stage: HTMLElement): () => void {
   stage.innerHTML = "";
   const panel = document.createElement("div");
   panel.className = "history-setup";
   const heading = document.createElement("h3");
-  heading.textContent = stagingPointsAtProduction
-    ? "Point this demo at staging"
-    : "Set up live staging";
+  heading.textContent = "Set up the live API";
   panel.appendChild(heading);
-
-  if (stagingPointsAtProduction) {
-    addLine(
-      panel,
-      `VITE_HISTORY_API_URL points at ${PRODUCTION_API_HOST}. Phase 0 of the history contract is not deployed to production, so this demo refuses to run against it.`,
-    );
-  } else {
-    addLine(
-      panel,
-      "Add both variables to apps/web/.env and restart the dev server:",
-    );
-    const code = document.createElement("pre");
-    code.className = "code-block";
-    code.textContent =
-      "VITE_HISTORY_API_URL=https://api.runtype-staging.com\nVITE_CLIENT_TOKEN_HISTORY=ct_live_…";
-    panel.appendChild(code);
-  }
 
   addLine(
     panel,
-    "The staging token is origin-locked to http://localhost:5173 and http://localhost:4173, so it only works on the dev server or a local preview build.",
+    "Add a client token with visitor history enabled to apps/web/.env and restart the dev server:",
+  );
+  const code = document.createElement("pre");
+  code.className = "code-block";
+  code.textContent =
+    "VITE_CLIENT_TOKEN_HISTORY=ct_live_…\n# Optional, defaults to https://api.runtype.com:\n# VITE_HISTORY_API_URL=https://api.runtype-staging.com";
+  panel.appendChild(code);
+
+  addLine(
+    panel,
+    "Client tokens are origin-locked in the Runtype dashboard; allow http://localhost:5173 and http://localhost:4173 for local work.",
     "hint",
   );
   addLine(
@@ -280,22 +271,22 @@ function remount(): void {
   teardownActive = null;
   activeController = null;
 
-  const stagingSelected = source === "staging";
+  const liveSelected = source === "staging";
   document
     .querySelectorAll<HTMLElement>("[data-history-demo-only]")
     .forEach((group) => {
-      group.hidden = stagingSelected;
+      group.hidden = liveSelected;
     });
 
-  if (stagingSelected && !stagingUsable) {
+  if (liveSelected && !liveUsable) {
     setHistoryProviderFactory(null);
-    teardownActive = renderStagingSetup(activeStage);
-    log("error", "Live staging is not configured; showing setup instructions.");
+    teardownActive = renderLiveSetup(activeStage);
+    log("error", "The live API is not configured; showing setup instructions.");
     return;
   }
 
-  // Staging builds the real Runtype provider: clear the demo override first.
-  setHistoryProviderFactory(stagingSelected ? null : () => provider);
+  // The live source builds the real Runtype provider: clear the demo override.
+  setHistoryProviderFactory(liveSelected ? null : () => provider);
 
   const mounted = runWidgetMountWithInspector(
     configInspector,
@@ -311,7 +302,7 @@ function remount(): void {
   };
   log(
     "session",
-    `mounted ${stagingSelected ? "live staging" : "in-memory"} source, presentation ${presentation}, ${
+    `mounted ${liveSelected ? "live API" : "in-memory"} source, presentation ${presentation}, ${
       customView
         ? "custom renderHistoryView plugin"
         : "built-in Messages view with the pinned rail section plugin"

@@ -155,7 +155,7 @@
         <p>The same Messages surface runs against two sources.</p>
         <ul>
           <li>In-memory: a deterministic demo provider, so every state on this page is reachable without a network.</li>
-          <li>Live staging: the widget builds the real provider from a client token and runs the identical surface against the staging API.</li>
+          <li>Live API: the widget builds the real provider from a client token and runs the identical surface against the Runtype API.</li>
         </ul>
         <p>Page code never touches a provider. Every action goes through controller methods and the widget's own view.</p>
         <div class="code-block">
@@ -188,11 +188,11 @@
       </div>
 
       <div class="notes-section">
-        <h3 class="notes-section-title">Live staging setup</h3>
-        <p>Live staging reads two variables from <code>apps/web/.env</code>. With either missing, the page shows setup instructions instead of a broken widget.</p>
+        <h3 class="notes-section-title">Live API setup</h3>
+        <p>The live source reads <code>apps/web/.env</code>. With the token missing, the page shows setup instructions instead of a broken widget.</p>
         <ul>
-          <li><code>VITE_HISTORY_API_URL</code>: must point at staging. The history contract is not deployed to production yet, so the demo refuses to run against it.</li>
-          <li><code>VITE_CLIENT_TOKEN_HISTORY</code>: origin-locked to <code>http://localhost:5173</code> and <code>http://localhost:4173</code>, so it works on the dev server and a local preview build and nowhere else.</li>
+          <li><code>VITE_CLIENT_TOKEN_HISTORY</code>: a client token with visitor history enabled. Tokens are origin-locked in the Runtype dashboard; allow <code>http://localhost:5173</code> and <code>http://localhost:4173</code> for local work.</li>
+          <li><code>VITE_HISTORY_API_URL</code> (optional): defaults to <code>https://api.runtype.com</code>. Point it at a staging host to test unreleased contract changes.</li>
         </ul>
       </div>
 
