@@ -55,6 +55,7 @@ export const HISTORY_VIEW_COPY_DEFAULTS: ResolvedHistoryViewCopy = {
   loadMoreLabel: "Load more",
   loadingMoreLabel: "Loading more conversations",
   rowActionsLabel: "Conversation options",
+  listOptionsLabel: "Conversation options",
   deleteConversationLabel: "Delete",
   clearHistoryLabel: "Delete all conversations",
   resetIdentityLabel: "Forget this device",

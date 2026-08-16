@@ -145,6 +145,21 @@ const menuButtonFor = (root: HTMLElement, id: string): HTMLButtonElement => {
 const stateBlock = (root: HTMLElement): HTMLElement | null =>
   root.querySelector<HTMLElement>("[data-persona-history-state]");
 
+const listOptions = (root: HTMLElement): HTMLButtonElement | null =>
+  root.querySelector<HTMLButtonElement>(".persona-history-list-options");
+
+/** Opens the list overflow menu and returns its items in DOM order. */
+const openListMenu = (root: HTMLElement): HTMLButtonElement[] => {
+  const trigger = listOptions(root);
+  if (!trigger) throw new Error("list options trigger not rendered");
+  trigger.click();
+  return Array.from(
+    root.querySelectorAll<HTMLButtonElement>(
+      '.persona-history-caption [role="menuitem"]'
+    )
+  );
+};
+
 const injectedHistoryCss = (): string =>
   document.querySelector(
     'style[data-persona-plugin-style="persona-history-view"]'
@@ -756,15 +771,12 @@ describe("history view row actions", () => {
     expect(rowFor(root, "a").textContent).toContain("Renamed session");
   });
 
-  it("hides the delete-all control when showDeleteAll is false", async () => {
+  it("drops the list overflow trigger when showDeleteAll is false", async () => {
     const { root } = mount({ showDeleteAll: false });
     await flush();
 
-    expect(root.querySelector(".persona-history-clear")).toBeNull();
-    // No reset control on this provider either, so the footer collapses.
-    expect(root.querySelector<HTMLElement>(".persona-history-footer")?.hidden).toBe(
-      true
-    );
+    // No reset control on this provider either, so the menu has nothing to hold.
+    expect(listOptions(root)).toBeNull();
     // Per-row delete stays independent of the delete-all switch.
     menuButtonFor(root, "a").click();
     expect(root.querySelector('[role="menuitem"]')).not.toBeNull();
@@ -835,22 +847,25 @@ describe("history view list states", () => {
     expect(block?.textContent).toBe("");
   });
 
-  it("keeps the destructive footer hidden until the first load resolves", async () => {
+  it("keeps the overflow trigger in place but inert until the first load resolves", async () => {
     const { root } = mount();
-    // Unresolved initial load: nothing to act on yet.
-    expect(
-      root.querySelector<HTMLElement>(".persona-history-footer")?.hidden
-    ).toBe(true);
+    // Chrome, so the trigger holds its slot rather than popping in behind the
+    // rows; there is just nothing to offer yet.
+    const trigger = listOptions(root)!;
+    expect(trigger.hidden).toBe(false);
+    expect(trigger.getAttribute("aria-disabled")).toBe("true");
+    trigger.click();
+    expect(root.querySelector(".persona-history-caption .persona-history-menu")).toBeNull();
+
     await flush();
-    expect(
-      root.querySelector<HTMLElement>(".persona-history-footer")?.hidden
-    ).toBe(false);
-    expect(
-      root.querySelector<HTMLElement>(".persona-history-clear")?.hidden
-    ).toBe(false);
+    expect(trigger.hidden).toBe(false);
+    expect(trigger.hasAttribute("aria-disabled")).toBe(false);
+    expect(openListMenu(root).map((item) => item.textContent)).toEqual([
+      "Delete all conversations",
+    ]);
   });
 
-  it("renders the empty state and hides delete-all when there is nothing to delete", async () => {
+  it("renders the empty state and drops the trigger when there is nothing to act on", async () => {
     const { root } = mount({ seeds: [] });
     await flush();
 
@@ -860,9 +875,9 @@ describe("history view list states", () => {
     expect(rows(root)).toHaveLength(0);
     // The primary action stays prominent.
     expect(root.querySelector(".persona-history-new")).not.toBeNull();
-    expect(
-      root.querySelector<HTMLElement>(".persona-history-clear")?.hidden
-    ).toBe(true);
+    // Delete-all is the only item this provider can offer, and there is
+    // nothing to delete.
+    expect(listOptions(root)?.hidden).toBe(true);
   });
 
   it("renders a retryable error with an adjacent retry", async () => {
@@ -1578,28 +1593,88 @@ describe("history view chrome and destructive actions", () => {
     expect(onStartNew).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps the destructive actions behind the caption row overflow trigger", async () => {
+    const { root } = mount();
+    await flush();
+
+    // Nothing destructive stands in the resting surface.
+    expect(root.querySelector(".persona-history-destructive")).toBeNull();
+
+    const caption = root.querySelector<HTMLElement>(".persona-history-caption")!;
+    const trigger = listOptions(root)!;
+    // Caption text leads, the trigger trails it, and the row sits above the list.
+    expect(trigger.parentElement).toBe(caption);
+    expect(
+      caption
+        .querySelector(".persona-history-scope")
+        ?.compareDocumentPosition(trigger)
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(
+      caption.compareDocumentPosition(
+        root.querySelector(".persona-history-list-region") as Node
+      )
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
+    expect(trigger.getAttribute("aria-label")).toBe("Conversation options");
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    const [first] = openListMenu(root);
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      root
+        .querySelector(".persona-history-caption .persona-history-menu")
+        ?.getAttribute("aria-label")
+    ).toBe("Conversation options");
+    // Opening lands on the first item; Escape closes and hands focus back.
+    expect(document.activeElement).toBe(first);
+    first.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true })
+    );
+    expect(root.querySelector(".persona-history-caption .persona-history-menu")).toBeNull();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("takes the overflow trigger label from copy", async () => {
+    const { root } = mount({ copy: { listOptionsLabel: "More options" } });
+    await flush();
+    expect(listOptions(root)?.getAttribute("aria-label")).toBe("More options");
+    openListMenu(root);
+    expect(
+      root
+        .querySelector(".persona-history-caption .persona-history-menu")
+        ?.getAttribute("aria-label")
+    ).toBe("More options");
+  });
+
   it("clears the list after the shell confirms delete-all", async () => {
     const { root, onRequestClearHistory } = mount();
     await flush();
 
-    const clear = root.querySelector<HTMLButtonElement>(".persona-history-clear");
-    expect(clear?.textContent).toBe("Delete all conversations");
-    clear?.click();
+    const [clear] = openListMenu(root);
+    expect(clear.textContent).toBe("Delete all conversations");
+    clear.click();
     await flush();
 
     expect(onRequestClearHistory).toHaveBeenCalledTimes(1);
     expect(rows(root)).toHaveLength(0);
     expect(stateBlock(root)?.dataset.personaHistoryState).toBe("empty");
     expect(liveText(root)).toBe("All conversations were deleted.");
+    // The menu closed with the action, and now has nothing left to offer.
+    expect(root.querySelector(".persona-history-caption .persona-history-menu")).toBeNull();
+    expect(listOptions(root)?.hidden).toBe(true);
   });
 
-  it("hides forget-this-device when the provider cannot reset", async () => {
+  it("omits forget-this-device when the provider cannot reset", async () => {
     const { root } = mount();
     await flush();
-    expect(root.querySelector(".persona-history-reset")).toBeNull();
+    expect(openListMenu(root).map((item) => item.textContent)).toEqual([
+      "Delete all conversations",
+    ]);
   });
 
-  it("shows forget-this-device when the provider can reset", async () => {
+  it("offers forget-this-device when the provider can reset", async () => {
     const base = createDemoHistoryProvider({
       conversations: DEFAULT_SEEDS,
       now: () => NOW,
@@ -1611,23 +1686,35 @@ describe("history view chrome and destructive actions", () => {
     const { root, onRequestResetIdentity } = mount({ provider });
     await flush();
 
-    const reset = root.querySelector<HTMLButtonElement>(".persona-history-reset");
-    expect(reset?.textContent).toBe("Forget this device");
-    reset?.click();
+    const items = openListMenu(root);
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Delete all conversations",
+      "Forget this device",
+    ]);
+    items[1].click();
     await flush();
     expect(onRequestResetIdentity).toHaveBeenCalledTimes(1);
     expect(liveText(root)).toBe("This device was forgotten.");
   });
 
-  it("separates destructive actions below the pagination region", async () => {
-    const { root } = mount({ pageSize: 2 });
+  it("keeps forget-this-device reachable on an empty list", async () => {
+    const base = createDemoHistoryProvider({
+      conversations: [],
+      now: () => NOW,
+    });
+    const provider: HistoryProvider = {
+      ...base,
+      resetDevice: async () => ({ remoteRevocationConfirmed: false }),
+    };
+    const { root } = mount({ provider });
     await flush();
-    const footer = root.querySelector(".persona-history-footer");
-    const listRegion = root.querySelector(".persona-history-list-region");
-    expect(
-      listRegion?.compareDocumentPosition(footer as Node)
-    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(footer?.querySelector(".persona-history-row")).toBeNull();
+
+    expect(stateBlock(root)?.dataset.personaHistoryState).toBe("empty");
+    expect(listOptions(root)?.hidden).toBe(false);
+    // Delete-all drops out with the rows it acted on; the reset stays.
+    expect(openListMenu(root).map((item) => item.textContent)).toEqual([
+      "Forget this device",
+    ]);
   });
 });
 
@@ -1674,13 +1761,12 @@ describe("history view rail sections", () => {
       "persona-history-scope-alert",
       "persona-history-new",
       "workspace",
-      "persona-history-scope",
+      "persona-history-caption",
       "persona-history-list-region",
       "tools",
       "account",
-      "persona-history-footer",
     ]);
-    // The footer bucket sinks to the bottom of the body above the destructive row.
+    // The footer bucket sinks to the bottom of the body.
     expect(sectionAt(root, "account")!.className).toContain(
       "persona-history-nav--footer"
     );

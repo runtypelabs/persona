@@ -1485,8 +1485,13 @@ describe("history shell", () => {
     it("uses browser-scope copy for delete all", async () => {
       const { mount } = setup();
       await openHistoryUI(mount);
+      // Delete-all lives in the list overflow menu, not in standing chrome.
+      mount.querySelector<HTMLButtonElement>(".persona-history-list-options")!.click();
+      await flush();
       mount
-        .querySelector<HTMLButtonElement>('[data-persona-history-focus="clear"]')!
+        .querySelector<HTMLButtonElement>(
+          '.persona-history-caption [role="menuitem"]'
+        )!
         .click();
       await flush();
       const dialog = dialogOf()!;
@@ -1499,12 +1504,16 @@ describe("history shell", () => {
       await flush();
     });
 
-    it("hides forget-this-device when the provider cannot reset", async () => {
+    it("omits forget-this-device when the provider cannot reset", async () => {
       const { mount } = setup();
       await openHistoryUI(mount);
+      mount.querySelector<HTMLButtonElement>(".persona-history-list-options")!.click();
+      await flush();
       expect(
-        mount.querySelector('[data-persona-history-focus="reset"]')
-      ).toBeNull();
+        Array.from(
+          mount.querySelectorAll('.persona-history-caption [role="menuitem"]')
+        ).map((item) => item.textContent)
+      ).toEqual(["Delete all conversations"]);
     });
   });
 });

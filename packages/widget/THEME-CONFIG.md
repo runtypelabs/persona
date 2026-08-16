@@ -1083,6 +1083,10 @@ plugins can target them:
 .persona-history-toggle-brand         /* the mark as the collapsed toggle's face */
 
 /* Scope and identity (rendered inside the body, never as a second bar line) */
+.persona-history-caption              /* the caption row: scope text left, the
+                                         list overflow trigger right */
+.persona-history-list-options         /* that trigger; opens the list overflow
+                                         menu holding delete-all and reset */
 .persona-history-scope                /* ambient privacy caption above the list */
 .persona-history-scope-title
 .persona-history-scope-description
@@ -1125,6 +1129,7 @@ plugins can target them:
                                          Revealed on row hover/focus where the
                                          pointer can hover */
 .persona-history-menu
+.persona-history-menu--list           /* the same menu anchored to the caption row */
 .persona-history-menu-item
 .persona-history-row-error            /* row-adjacent failure with retry */
 
@@ -1140,13 +1145,9 @@ plugins can target them:
 .persona-history-skeleton-bar--medium
 .persona-history-skeleton-bar--wide
 
-/* Pagination and footer */
+/* Pagination */
 .persona-history-secondary            /* shared outline button */
 .persona-history-load-more
-.persona-history-footer
-.persona-history-destructive
-.persona-history-clear                /* delete all in the active scope */
-.persona-history-reset                /* forget this device (provider-gated) */
 
 /* Shared controls and utilities */
 .persona-history-icon-button

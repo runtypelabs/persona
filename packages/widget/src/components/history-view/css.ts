@@ -131,10 +131,18 @@ export const HISTORY_VIEW_CSS =
   white-space: nowrap;
 }
 ` +
-  /* Ambient privacy caption: a body row above the list, never a second bar line. */
-  `.persona-history-view .persona-history-scope {
-  margin: 0;
+  /* Ambient privacy caption: a body row above the list, never a second bar line.
+     The row also carries the list overflow trigger at its trailing end. */
+  `.persona-history-view .persona-history-caption {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 0 4px;
+}
+.persona-history-view .persona-history-scope {
+  flex: 1 1 auto;
+  margin: 0;
   font-size: 12px;
   line-height: 1.35;
   color: var(--persona-text-muted, #6b7280);
@@ -193,6 +201,20 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view button:disabled {
   opacity: 0.55;
   cursor: default;
+}
+` +
+  /* List overflow trigger: answers to the caption beside it, not to the 44px
+     header controls, and goes back to a real target for coarse pointers. */
+  `.persona-history-view button.persona-history-list-options {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  margin-left: auto;
+}
+.persona-history-view button.persona-history-list-options[aria-expanded="true"] {
+  background: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.04));
+  color: var(--persona-text, #111827);
 }
 
 ` +
@@ -419,6 +441,12 @@ export const HISTORY_VIEW_CSS =
   background: var(--persona-history-menu-bg, color-mix(in srgb, var(--persona-history-surface-bg) 92%, #fff));
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
 }
+` +
+  /* The list menu hangs off the caption row's trailing end instead of a row. */
+  `.persona-history-view .persona-history-caption .persona-history-menu {
+  top: calc(100% - 2px);
+  right: 4px;
+}
 .persona-history-view button.persona-history-menu-item {
   display: block;
   width: 100%;
@@ -446,7 +474,7 @@ export const HISTORY_VIEW_CSS =
 }
 
 ` +
-  /* --- pagination, states, footer ----------------------------------------- */
+  /* --- pagination and states ----------------------------------------------- */
   `.persona-history-view button.persona-history-secondary {
   display: inline-flex;
   align-items: center;
@@ -520,31 +548,6 @@ export const HISTORY_VIEW_CSS =
 @keyframes persona-history-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
-}
-.persona-history-view .persona-history-footer {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-  padding-top: 12px;
-  border-top: 1px solid var(--persona-history-border);
-}
-.persona-history-view button.persona-history-destructive {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 4px;
-  margin: 0;
-  border: 0;
-  background: transparent;
-  color: var(--persona-history-danger-fg, var(--persona-palette-colors-error-600, #b91c1c));
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
-}
-.persona-history-view button.persona-history-destructive:hover:not(:disabled) {
-  text-decoration: underline;
 }
 
 ` +
@@ -655,6 +658,12 @@ export const HISTORY_VIEW_CSS =
     -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 84px), transparent calc(100% - 36px));
     mask-image: linear-gradient(to right, #000 calc(100% - 84px), transparent calc(100% - 36px));
   }
+  .persona-history-view button.persona-history-list-options {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
 }
 .persona-history-view--rail .persona-history-title {
   font-size: 14px;
@@ -728,10 +737,9 @@ export const HISTORY_VIEW_CSS =
 ` +
   /* Rows and headings carry their own 16px text inset, so everything else in
      the body has to opt into it. */
-  `.persona-history-view--rail .persona-history-scope,
+  `.persona-history-view--rail .persona-history-caption,
 .persona-history-view--rail .persona-history-scope-alert,
-.persona-history-view--rail .persona-history-state,
-.persona-history-view--rail .persona-history-footer {
+.persona-history-view--rail .persona-history-state {
   padding-right: 16px;
   padding-left: 16px;
 }
@@ -755,8 +763,7 @@ export const HISTORY_VIEW_CSS =
 }
 ` +
   /* Host nav sections. Rail-only, so they take the row geometry unconditionally;
-     the footer bucket sinks to the bottom of the body above the destructive
-     actions. */
+     the footer bucket sinks to the bottom of the body. */
   `.persona-history-view .persona-history-nav {
   display: flex;
   flex-direction: column;

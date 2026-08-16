@@ -144,32 +144,16 @@ export function buildConversationRow(
     options.onOpen();
   });
 
-  let menuButton: HTMLElement | null = null;
-  if (options.showDelete) {
-    menuButton = createNode("button", {
-      className: "persona-history-icon-button persona-history-row-menu-button",
-      attrs: {
-        type: "button",
-        "aria-label": `${copy.rowActionsLabel}: ${conversation.title}`,
-        "aria-haspopup": "menu",
-        "aria-expanded": options.menuOpen ? "true" : "false",
-        "data-persona-history-focus": menuFocusKey(conversation.id),
-        ...(inert ? { "aria-disabled": "true" } : {}),
-      },
-    });
-    menuButton.appendChild(historyIcon("ellipsis"));
-    menuButton.addEventListener("click", (event) => {
-      event.stopPropagation();
-      if (inert) return;
-      options.onToggleMenu();
-    });
-    menuButton.addEventListener("keydown", (event) => {
-      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-      event.preventDefault();
-      if (inert || options.menuOpen) return;
-      options.onToggleMenu();
-    });
-  }
+  const menuButton = options.showDelete
+    ? buildMenuTrigger({
+        className: "persona-history-row-menu-button",
+        label: `${copy.rowActionsLabel}: ${conversation.title}`,
+        focusKey: menuFocusKey(conversation.id),
+        open: options.menuOpen,
+        inert,
+        onToggle: options.onToggleMenu,
+      })
+    : null;
 
   const item = createNode(
     "li",
@@ -190,32 +174,105 @@ export function buildConversationRow(
 
 function buildRowMenu(options: ConversationRowOptions): HTMLElement {
   const { conversation, copy } = options;
-  const deleteItem = createNode("button", {
-    className: "persona-history-menu-item",
-    text: copy.deleteConversationLabel,
+  return buildOverflowMenu({
+    label: `${copy.rowActionsLabel}: ${conversation.title}`,
+    items: [
+      {
+        label: copy.deleteConversationLabel,
+        focusKey: menuItemFocusKey(conversation.id),
+        onSelect: options.onDelete,
+      },
+    ],
+    onCloseMenu: options.onCloseMenu,
+  });
+}
+
+export interface MenuTriggerOptions {
+  /** Added to the shared icon-button class. */
+  className: string;
+  label: string;
+  focusKey: string;
+  open: boolean;
+  /** Keeps focus but does not open. Read live, so an owner may re-set it. */
+  inert: boolean;
+  iconSize?: number;
+  onToggle: () => void;
+}
+
+/**
+ * The ellipsis trigger both menus hang off. State is read back from the
+ * element, so an owner that mutates the attributes in place stays consistent.
+ */
+export function buildMenuTrigger(options: MenuTriggerOptions): HTMLElement {
+  const button = createNode("button", {
+    className: cx("persona-history-icon-button", options.className),
     attrs: {
       type: "button",
-      role: "menuitem",
-      tabindex: "0",
-      "data-persona-history-focus": menuItemFocusKey(conversation.id),
+      "aria-label": options.label,
+      "aria-haspopup": "menu",
+      "aria-expanded": options.open ? "true" : "false",
+      "data-persona-history-focus": options.focusKey,
+      ...(options.inert ? { "aria-disabled": "true" } : {}),
     },
   });
-  deleteItem.addEventListener("click", () => {
-    options.onCloseMenu();
-    options.onDelete();
+  button.appendChild(historyIcon("ellipsis", options.iconSize));
+  const blocked = (): boolean =>
+    button.getAttribute("aria-disabled") === "true";
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (blocked()) return;
+    options.onToggle();
+  });
+  button.addEventListener("keydown", (event) => {
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (blocked() || button.getAttribute("aria-expanded") === "true") return;
+    options.onToggle();
+  });
+  return button;
+}
+
+export interface HistoryMenuItemSpec {
+  label: string;
+  /** `data-persona-history-focus` value, so a re-render can land focus back. */
+  focusKey: string;
+  onSelect: () => void;
+}
+
+export interface OverflowMenuOptions {
+  /** Accessible name of the menu itself. */
+  label: string;
+  items: HistoryMenuItemSpec[];
+  onCloseMenu: (options?: { restoreFocus?: boolean }) => void;
+}
+
+/**
+ * The one popover shape this view uses: rows and the list-level trigger share
+ * it, so keyboard behaviour is defined once.
+ */
+export function buildOverflowMenu(options: OverflowMenuOptions): HTMLElement {
+  const menu = createNode("div", {
+    className: "persona-history-menu",
+    attrs: { role: "menu", "aria-label": options.label },
   });
 
-  const menu = createNode(
-    "div",
-    {
-      className: "persona-history-menu",
+  for (const spec of options.items) {
+    const item = createNode("button", {
+      className: "persona-history-menu-item",
+      text: spec.label,
       attrs: {
-        role: "menu",
-        "aria-label": `${copy.rowActionsLabel}: ${conversation.title}`,
+        type: "button",
+        role: "menuitem",
+        tabindex: "0",
+        "data-persona-history-focus": spec.focusKey,
       },
-    },
-    deleteItem
-  );
+    });
+    item.addEventListener("click", () => {
+      options.onCloseMenu();
+      spec.onSelect();
+    });
+    menu.appendChild(item);
+  }
 
   menu.addEventListener("keydown", (event) => {
     const items = Array.from(

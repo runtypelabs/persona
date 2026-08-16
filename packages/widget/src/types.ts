@@ -2707,11 +2707,13 @@ export interface AgentWidgetHistoryCopy {
   loadingMoreLabel?: string;
   /** Accessible name of the per-row overflow trigger and its menu. */
   rowActionsLabel?: string;
+  /** Accessible name of the list-level overflow trigger and its menu. */
+  listOptionsLabel?: string;
   /** Delete item inside the per-row overflow menu. */
   deleteConversationLabel?: string;
-  /** Label of the destructive delete-all action. */
+  /** Delete-all item inside the list overflow menu. */
   clearHistoryLabel?: string;
-  /** Label of the destructive forget-this-device action. */
+  /** Forget-this-device item inside the list overflow menu. */
   resetIdentityLabel?: string;
   /** Row message count. `{count}` placeholder. */
   messageCountLabel?: string;
@@ -2921,9 +2923,9 @@ export interface AgentWidgetHistoryFeature {
    */
   showDelete?: boolean;
   /**
-   * The "Delete all conversations" control in the history footer. Default
+   * The "Delete all conversations" item in the Messages overflow menu. Default
    * true. False hides the control only; storage and retention are unchanged.
-   * The identity reset control is separate and unaffected.
+   * The identity reset item is separate and unaffected.
    */
   showDeleteAll?: boolean;
 }

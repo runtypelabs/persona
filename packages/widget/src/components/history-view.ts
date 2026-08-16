@@ -28,7 +28,10 @@ import { groupConversations } from "./history-view/grouping";
 import { historyIcon } from "./history-view/icons";
 import {
   buildConversationRow,
+  buildMenuTrigger,
+  buildOverflowMenu,
   menuItemFocusKey,
+  type HistoryMenuItemSpec,
   type RowPending,
 } from "./history-view/rows";
 import {
@@ -206,7 +209,7 @@ export interface HistoryViewOptions {
    * slots still receive `requestDelete`.
    */
   showDelete?: boolean;
-  /** The footer's clear-history control. Default true. */
+  /** The list overflow menu's clear-history item. Default true. */
   showDeleteAll?: boolean;
   /**
    * Leading row avatar: an image URL, a glyph, or `false` to omit the block.
@@ -318,6 +321,12 @@ export interface HistoryViewHandle {
 }
 
 const DEFAULT_PAGE_SIZE = 25;
+
+/**
+ * Open-menu id for the list-level overflow, so it shares the row menu's
+ * open/close, outside-click and Escape machinery. Never a conversation id.
+ */
+const LIST_MENU_ID = "persona:list-options";
 
 /** Motion. The entrance is CSS (`css.ts`); the exit below mirrors it. */
 const ENTRANCE_MS = 180;
@@ -700,30 +709,38 @@ export function createHistoryView(
     className: "persona-history-list-region",
   });
 
-  const clearButton =
-    options.showDeleteAll !== false
-      ? createNode("button", {
-          className: "persona-history-destructive persona-history-clear",
-          text: copy.clearHistoryLabel,
-          attrs: { type: "button", "data-persona-history-focus": "clear" },
+  // Destructive actions are never ambient furniture: both live behind this one
+  // quiet trigger, which is chrome and therefore renders through the load.
+  const clearAllowed = options.showDeleteAll !== false;
+  const resetAllowed = !!options.provider.resetDevice;
+
+  const optionsButton =
+    clearAllowed || resetAllowed
+      ? buildMenuTrigger({
+          className: "persona-history-list-options",
+          label: copy.listOptionsLabel,
+          focusKey: `menu:${LIST_MENU_ID}`,
+          open: false,
+          inert: true,
+          iconSize: 16,
+          onToggle: () => toggleMenu(LIST_MENU_ID),
         })
       : null;
-  clearButton?.addEventListener("click", () => void clearHistory());
 
-  const resetButton = options.provider.resetDevice
-    ? createNode("button", {
-        className: "persona-history-destructive persona-history-reset",
-        text: copy.resetIdentityLabel,
-        attrs: { type: "button", "data-persona-history-focus": "reset" },
-      })
-    : null;
-  resetButton?.addEventListener("click", () => void resetIdentity());
-
-  const footer = createNode(
+  /**
+   * Caption text left, overflow trigger right. Present even when the scope
+   * caption is off or hidden, so the trigger never depends on identity state.
+   * The item attribute is what the row menus use, so the outside-click guard
+   * covers this menu too.
+   */
+  const captionRow = createNode(
     "div",
-    { className: "persona-history-footer" },
-    clearButton,
-    resetButton
+    {
+      className: "persona-history-caption",
+      attrs: { "data-persona-history-item": LIST_MENU_ID },
+    },
+    options.showScopeStatus ? scopeLine : null,
+    optionsButton
   );
 
   // One sliding region below the bar: the scope alert and the ambient caption
@@ -733,9 +750,8 @@ export function createHistoryView(
     { className: "persona-history-body", attrs: { id: bodyId } },
     options.showScopeStatus ? scopeBlock : null,
     newConversationButton,
-    options.showScopeStatus ? scopeLine : null,
-    listRegion,
-    footer
+    options.showScopeStatus || optionsButton ? captionRow : null,
+    listRegion
   );
 
   let headerPlacement: HistoryHeaderPlacement =
@@ -890,12 +906,14 @@ export function createHistoryView(
       "below-conversations",
       "footer",
     ] as HistoryRailSectionPlacement[]) {
+      // Nothing follows the list any more, so the trailing buckets append in
+      // placement order; `insertBefore(node, null)` is that append.
       const anchor =
         placement === "above-conversations"
-          ? options.showScopeStatus
-            ? scopeLine
+          ? captionRow.parentNode === body
+            ? captionRow
             : listRegion
-          : footer;
+          : null;
       sections.forEach((section, index) => {
         if (section.placement === placement) {
           body.insertBefore(navNodes![index], anchor);
@@ -1122,10 +1140,12 @@ export function createHistoryView(
     return active.getAttribute("data-persona-history-focus");
   };
 
+  // Menu keys are looked up on the whole view: the list menu lives in the
+  // caption row, outside the list region.
   const restoreFocus = (key: string | null): void => {
     if (focusMenuOnRender && openMenuId) {
       focusMenuOnRender = false;
-      const item = listRegion.querySelector<HTMLElement>(
+      const item = element.querySelector<HTMLElement>(
         `[data-persona-history-focus="${menuItemFocusKey(openMenuId)}"]`
       );
       if (item) {
@@ -1134,7 +1154,7 @@ export function createHistoryView(
       }
     }
     if (!key) return;
-    listRegion
+    element
       .querySelector<HTMLElement>(`[data-persona-history-focus="${key}"]`)
       ?.focus();
   };
@@ -1284,22 +1304,71 @@ export function createHistoryView(
     restoreFocus(focusKey);
   };
 
+  /**
+   * Menu items, computed fresh at open time. Destructive actions reveal with
+   * the data they act on: neither the empty state nor an unresolved first load
+   * has anything to delete yet.
+   */
+  const listMenuItems = (): HistoryMenuItemSpec[] => {
+    const listUnresolved = listState.kind === "loading" && items.length === 0;
+    const specs: HistoryMenuItemSpec[] = [];
+    // Opening lands on the first item, whichever action that turns out to be.
+    const nextKey = (): string =>
+      specs.length === 0
+        ? menuItemFocusKey(LIST_MENU_ID)
+        : `${menuItemFocusKey(LIST_MENU_ID)}-${specs.length}`;
+    if (
+      clearAllowed &&
+      !(items.length === 0 && (listState.kind === "empty" || listUnresolved))
+    ) {
+      specs.push({
+        label: copy.clearHistoryLabel,
+        focusKey: nextKey(),
+        onSelect: () => void clearHistory(),
+      });
+    }
+    if (resetAllowed && !listUnresolved) {
+      specs.push({
+        label: copy.resetIdentityLabel,
+        focusKey: nextKey(),
+        onSelect: () => void resetIdentity(),
+      });
+    }
+    return specs;
+  };
+
   const renderChrome = (): void => {
     setInert(newConversationButton, busy());
     setInert(newIconButton, busy());
-    setInert(clearButton, busy());
-    setInert(resetButton, busy());
-    // Destructive actions reveal with the data they act on: neither the empty
-    // state nor an unresolved first load has anything to delete yet.
-    const listUnresolved = listState.kind === "loading" && items.length === 0;
-    if (clearButton) {
-      clearButton.hidden =
-        items.length === 0 && (listState.kind === "empty" || listUnresolved);
+    if (optionsButton) {
+      const specs = listMenuItems();
+      // The trigger is chrome: it holds its slot through the first load rather
+      // than popping in behind the rows, and only drops out once the resolved
+      // state has nothing to offer.
+      const listUnresolved = listState.kind === "loading" && items.length === 0;
+      optionsButton.hidden = specs.length === 0 && !listUnresolved;
+      setInert(optionsButton, busy() || specs.length === 0);
+      optionsButton.setAttribute(
+        "aria-expanded",
+        openMenuId === LIST_MENU_ID ? "true" : "false"
+      );
+      const menu = captionRow.querySelector(".persona-history-menu");
+      if (openMenuId !== LIST_MENU_ID || specs.length === 0) {
+        menu?.remove();
+      } else {
+        const next = buildOverflowMenu({
+          label: copy.listOptionsLabel,
+          items: specs,
+          onCloseMenu: (opts) => closeMenu(opts),
+        });
+        if (menu) menu.replaceWith(next);
+        else captionRow.appendChild(next);
+      }
     }
-    if (resetButton) resetButton.hidden = listUnresolved;
-    footer.hidden =
-      (!clearButton || clearButton.hidden) &&
-      (!resetButton || resetButton.hidden);
+    // An empty caption row would still take a body gap.
+    captionRow.hidden =
+      (!optionsButton || optionsButton.hidden) &&
+      (!options.showScopeStatus || scopeLine.hidden);
   };
 
   // The shell's active-conversation binding. Reported from render() so every
@@ -1346,7 +1415,7 @@ export function createHistoryView(
     focusMenuOnRender = false;
     render();
     if (opts?.restoreFocus) {
-      listRegion
+      element
         .querySelector<HTMLElement>(
           `[data-persona-history-focus="menu:${previous}"]`
         )
