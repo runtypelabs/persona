@@ -38,7 +38,7 @@ export const HISTORY_VIEW_CSS =
   --persona-history-row-avatar-bg: var(--persona-header-icon-bg, var(--persona-primary, #2563eb));
   --persona-history-row-active-bg: var(--persona-container, #f3f4f6);
   --persona-history-active-marker: var(--persona-primary, #2563eb);
-  --persona-history-skeleton-bg: var(--persona-container, #eef0f3);
+  --persona-history-skeleton-bg: var(--persona-divider, var(--persona-border, #e5e7eb));
   --persona-history-focus-ring: var(--persona-primary, #2563eb);
   --persona-history-slide: 20px;
   --persona-history-row-min-height: 60px;
@@ -494,6 +494,12 @@ export const HISTORY_VIEW_CSS =
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* Show-delay: loads that resolve inside 250ms never flash the skeleton. */
+  animation: persona-history-skeleton-in 120ms ease-out 250ms both;
+}
+@keyframes persona-history-skeleton-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .persona-history-view .persona-history-skeleton-row {
   min-height: var(--persona-history-row-min-height);
