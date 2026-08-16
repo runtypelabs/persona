@@ -329,12 +329,12 @@ export interface HistoryTokens {
    * disables that leg; `prefers-reduced-motion` always wins over these.
    */
   motion?: {
-    /** Entrance slide-and-fade duration. @default 180 */
-    enterDurationMs?: number;
+    /** Entrance slide-and-fade duration: bare ms number, or a CSS time string. @default 180 */
+    enterDurationMs?: number | string;
     /** Entrance easing. @default "cubic-bezier(0, 0, 0.2, 1)" */
     enterEasing?: string;
-    /** Exit slide-and-fade duration. @default 160 */
-    exitDurationMs?: number;
+    /** Exit slide-and-fade duration: bare ms number, or a CSS time string. @default 160 */
+    exitDurationMs?: number | string;
     /** Exit easing. @default "cubic-bezier(0.4, 0, 1, 1)" */
     exitEasing?: string;
   };

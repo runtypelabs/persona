@@ -400,6 +400,22 @@ const historyOverlayColorsSectionDef: SectionDef = {
   ],
 };
 
+// Enter/exit motion of the Messages surface. Durations, not colors, so it
+// stays a shape section and never forks per scheme.
+const historyMotionSectionDef: SectionDef = {
+  id: 'comp-history-motion',
+  title: 'Messages Motion',
+  description:
+    'Enter and exit animation of the Messages body. The bar is persistent chrome and never animates; reduced-motion preferences always win.',
+  collapsed: true,
+  fields: [
+    { id: 'history-motion-enter-ms', label: 'Enter Duration', description: 'Milliseconds, e.g. 180. 0 disables the entrance. Blank keeps 180', type: 'text', path: 'theme.components.history.motion.enterDurationMs', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-motion-enter-easing', label: 'Enter Easing', description: 'CSS easing, e.g. ease-out or cubic-bezier(0, 0, 0.2, 1)', type: 'text', path: 'theme.components.history.motion.enterEasing', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-motion-exit-ms', label: 'Exit Duration', description: 'Milliseconds, e.g. 160. 0 disables the exit. Blank keeps 160', type: 'text', path: 'theme.components.history.motion.exitDurationMs', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-motion-exit-easing', label: 'Exit Easing', description: 'CSS easing, e.g. ease-in or cubic-bezier(0.4, 0, 1, 1)', type: 'text', path: 'theme.components.history.motion.exitEasing', defaultValue: '', parseValue: parseOptionalCssValue },
+  ],
+};
+
 // The portaled tooltip on icon controls. Its colors live in
 // COMPONENT_COLOR_SECTIONS.
 const tooltipShapeSectionDef: SectionDef = {
@@ -671,6 +687,7 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   headerControlsSectionDef,
   historyRailHeaderShapeSectionDef,
   historyOverlayShapeSectionDef,
+  historyMotionSectionDef,
   tooltipShapeSectionDef,
   messageShapeSectionDef,
   inputShapeSectionDef,
