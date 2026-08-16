@@ -1519,7 +1519,7 @@ export function createPreviewManager(
           controller.close();
         }
         if (stateModule.getPreviewScene() === 'messages') {
-          void controller.showHistory();
+          void controller.showHistory({ focus: false });
         }
       }
 
@@ -1650,7 +1650,7 @@ export function createPreviewManager(
   function replayHistoryMotion(): void {
     for (const controller of previewControllers) {
       if (!historyOpenControllers.has(controller)) {
-        void controller.showHistory();
+        void controller.showHistory({ focus: false });
         continue;
       }
       let done = false;
@@ -1660,11 +1660,11 @@ export function createPreviewManager(
         done = true;
         if (timer !== null) clearTimeout(timer);
         unsubscribe();
-        void controller.showHistory();
+        void controller.showHistory({ focus: false });
       };
       const unsubscribe = controller.on('history:closed', reopen);
       timer = setTimeout(reopen, HISTORY_MOTION_REPLAY_FALLBACK_MS);
-      controller.hideHistory();
+      controller.hideHistory({ restoreFocus: false });
     }
   }
 

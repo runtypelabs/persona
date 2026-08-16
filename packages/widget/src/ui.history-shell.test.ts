@@ -393,6 +393,26 @@ describe("history shell", () => {
       const jump = mount.querySelector<HTMLElement>("[data-persona-scroll-to-bottom]");
       expect(jump === null || jump.style.display === "none").toBe(true);
     });
+
+    it("leaves focus untouched for focus: false opens and restoreFocus: false closes", async () => {
+      const { mount, controller } = setup();
+      // A focus owner outside the widget (the theme editor's input in the
+      // preview-replay case): neither half may move it.
+      const outside = document.createElement("input");
+      document.body.appendChild(outside);
+      outside.focus();
+
+      await controller.showHistory({ focus: false });
+      await flush();
+      expect(historyRoot(mount)).not.toBeNull();
+      expect(document.activeElement).toBe(outside);
+
+      controller.hideHistory({ restoreFocus: false });
+      await flush(20);
+      expect(historyRoot(mount)).toBeNull();
+      expect(document.activeElement).toBe(outside);
+      outside.remove();
+    });
   });
 
   describe("rail host", () => {

@@ -312,7 +312,7 @@ export function createThemePreview(
       // No-op without a history provider (see applySceneConfig): the host
       // registers one via setHistoryProviderFactory before mounting.
       if (scene === 'messages') {
-        for (const c of controllers) void c.showHistory();
+        for (const c of controllers) void c.showHistory({ focus: false });
       }
 
       // Inject artifacts if needed

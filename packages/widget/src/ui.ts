@@ -584,8 +584,13 @@ type Controller = {
   resetHistoryIdentity: () => Promise<{ remoteRevocationConfirmed: boolean }>;
   /** Latest sanitized identity state; carries no token, proof, or identity id. */
   getHistoryIdentityStatus: () => HistoryIdentityStatus;
-  showHistory: (opts?: { returnSurface?: HistoryReturnSurface }) => Promise<void>;
-  hideHistory: () => void;
+  /** `focus: false` keeps focus where it is (programmatic/preview opens). */
+  showHistory: (opts?: {
+    returnSurface?: HistoryReturnSurface;
+    focus?: boolean;
+  }) => Promise<void>;
+  /** `restoreFocus: false` leaves focus untouched on close. */
+  hideHistory: (opts?: { restoreFocus?: boolean }) => void;
   isHistoryVisible: () => boolean;
 };
 
@@ -8629,6 +8634,8 @@ export const createAgentExperience = (
     invoker?: HTMLElement | null;
     /** Rail only: an open with no keyboard behind it must not move focus. */
     keyboard?: boolean;
+    /** `false` skips the entry focus entirely (programmatic/preview opens). */
+    focus?: boolean;
   }): Promise<void> => {
     if (!historyAvailable() || historyVisible) return;
     const provider = historyProvider;
@@ -8761,7 +8768,11 @@ export const createAgentExperience = (
     // The panel makes the conversation inert behind it, so it always takes
     // focus. The rail leaves it operable: a pointer or programmatic open would
     // only leave a keyboard ring on the toggle, so it keeps focus where it is.
-    if (historyPresentation !== "rail" || opts?.keyboard === true) {
+    // `focus: false` opts out entirely: the caller owns focus (preview replay).
+    if (
+      opts?.focus !== false &&
+      (historyPresentation !== "rail" || opts?.keyboard === true)
+    ) {
       focusHistoryEntry();
     }
     syncScrollToBottomButton();
@@ -12545,10 +12556,15 @@ export const createAgentExperience = (
     showHistory(opts): Promise<void> {
       return openHistory({
         ...(opts?.returnSurface ? { returnSurface: opts.returnSurface } : {}),
+        ...(opts?.focus !== undefined ? { focus: opts.focus } : {}),
       });
     },
-    hideHistory(): void {
-      closeHistory();
+    hideHistory(opts): void {
+      closeHistory(
+        opts?.restoreFocus !== undefined
+          ? { restoreFocus: opts.restoreFocus }
+          : undefined
+      );
     },
     isHistoryVisible(): boolean {
       return historyVisible;
