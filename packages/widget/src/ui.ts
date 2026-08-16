@@ -7564,6 +7564,8 @@ export const createAgentExperience = (
   const HISTORY_SUPPRESSED_ATTR = "data-persona-history-suppressed";
   /** Shell-owned wrapper for the view's bar contents. Null while not hosting. */
   let historyHeaderHost: HTMLElement | null = null;
+  /** Header carrying the swap-time min-height pin. Null while not hosting. */
+  let historyPinnedHeader: HTMLElement | null = null;
   /** Handle + arbitrated element, tracked from before `historySurface` is assigned. */
   let historyViewHandle: HistoryViewHandle | null = null;
   let historyMountedElement: HTMLElement | null = null;
@@ -7609,6 +7611,28 @@ export const createAgentExperience = (
   const hostHistoryHeaderContent = (): void => {
     const view = historyViewHandle;
     if (!view) return;
+    // Pin the pre-swap height so the contents swap never moves the chrome: the
+    // hosted bar is usually shorter than the title cluster it replaces, and
+    // constant-height chrome is what keeps the switch from reading as layout
+    // shift. Measurable only while the original contents are still visible; a
+    // re-entry on an already-hosted header keeps the standing pin, and a
+    // rebuilt header re-measures before its own suppression below.
+    const originalsVisible = Array.from(header.children).some(
+      (child) =>
+        child !== historyHeaderHost &&
+        !child.hasAttribute(HISTORY_SUPPRESSED_ATTR)
+    );
+    if (originalsVisible) {
+      if (historyPinnedHeader && historyPinnedHeader !== header) {
+        historyPinnedHeader.style.removeProperty("min-height");
+        historyPinnedHeader = null;
+      }
+      const measured = header.offsetHeight;
+      if (measured > 0) {
+        header.style.minHeight = `${measured}px`;
+        historyPinnedHeader = header;
+      }
+    }
     if (!historyHeaderHost) {
       historyHeaderHost = createElement("div", "persona-history-header-host");
     }
@@ -7625,6 +7649,10 @@ export const createAgentExperience = (
   };
 
   const releaseHistoryHeaderContent = (): void => {
+    if (historyPinnedHeader) {
+      historyPinnedHeader.style.removeProperty("min-height");
+      historyPinnedHeader = null;
+    }
     if (!historyHeaderHost) return;
     // The view re-adopts its bar; the wrapper never owns the content's lifetime.
     historyViewHandle?.setHeaderPlacement("inline");

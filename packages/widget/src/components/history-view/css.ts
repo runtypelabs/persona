@@ -903,6 +903,8 @@ export const HISTORY_VIEW_CSS =
 .persona-history-header-host {
   display: flex;
   flex: 1 1 auto;
+  align-self: stretch;
+  align-items: center;
   min-width: 0;
 }
 ` +

@@ -308,6 +308,29 @@ describe("history shell", () => {
       expect(document.activeElement).toBe(historyButton(mount));
     });
 
+    it("pins the header's pre-swap height while Messages owns the bar", async () => {
+      const { mount, controller } = setup();
+      const header = headerOf(mount);
+      // jsdom reports 0 for layout; stand in for a real header measurement.
+      Object.defineProperty(header, "offsetHeight", {
+        configurable: true,
+        get: () => 81,
+      });
+
+      await openHistoryUI(mount);
+      // Constant-height chrome: the hosted bar swap must not move the header.
+      expect(header.style.minHeight).toBe("81px");
+
+      // A re-entry on the already-hosted header keeps the standing pin rather
+      // than re-measuring the (now shorter) hosted contents.
+      controller.update({});
+      await flush();
+      expect(headerOf(mount).style.minHeight).toBe("81px");
+
+      await closeHistoryUI(controller);
+      expect(header.style.minHeight).toBe("");
+    });
+
     it("re-homes the bar into a shell header rebuilt by update() while Messages is open", async () => {
       const { mount, controller } = setup({
         config: { layout: { header: { layout: "default" } } },
