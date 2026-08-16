@@ -1289,11 +1289,17 @@ export function createHistoryView(
     setInert(newIconButton, busy());
     setInert(clearButton, busy());
     setInert(resetButton, busy());
-    // Nothing to delete: keep the destructive control out of the empty state.
+    // Destructive actions reveal with the data they act on: neither the empty
+    // state nor an unresolved first load has anything to delete yet.
+    const listUnresolved = listState.kind === "loading" && items.length === 0;
     if (clearButton) {
-      clearButton.hidden = items.length === 0 && listState.kind === "empty";
+      clearButton.hidden =
+        items.length === 0 && (listState.kind === "empty" || listUnresolved);
     }
-    footer.hidden = (!clearButton || clearButton.hidden) && !resetButton;
+    if (resetButton) resetButton.hidden = listUnresolved;
+    footer.hidden =
+      (!clearButton || clearButton.hidden) &&
+      (!resetButton || resetButton.hidden);
   };
 
   // The shell's active-conversation binding. Reported from render() so every

@@ -835,6 +835,21 @@ describe("history view list states", () => {
     expect(block?.textContent).toBe("");
   });
 
+  it("keeps the destructive footer hidden until the first load resolves", async () => {
+    const { root } = mount();
+    // Unresolved initial load: nothing to act on yet.
+    expect(
+      root.querySelector<HTMLElement>(".persona-history-footer")?.hidden
+    ).toBe(true);
+    await flush();
+    expect(
+      root.querySelector<HTMLElement>(".persona-history-footer")?.hidden
+    ).toBe(false);
+    expect(
+      root.querySelector<HTMLElement>(".persona-history-clear")?.hidden
+    ).toBe(false);
+  });
+
   it("renders the empty state and hides delete-all when there is nothing to delete", async () => {
     const { root } = mount({ seeds: [] });
     await flush();
