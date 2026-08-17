@@ -10,8 +10,8 @@
     "test:run": "vitest run src"
   },
   "dependencies": {
-    "@mcp-b/global": "^3.0.0",
-    "@mcp-b/webmcp-polyfill": "^3.0.0",
+    "@mcp-b/global": "^4.0.0",
+    "@mcp-b/webmcp-polyfill": "^4.0.0",
     "@runtypelabs/persona": "workspace:^",
     "alasql": "^4.17.3",
     "echarts": "^6.1.0",

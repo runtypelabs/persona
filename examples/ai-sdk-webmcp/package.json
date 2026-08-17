@@ -10,7 +10,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@mcp-b/webmcp-polyfill": "^3.0.0",
+    "@mcp-b/webmcp-polyfill": "^4.0.0",
     "@runtypelabs/persona": "workspace:^",
     "@vercel/functions": "^3.7.1",
     "ai": "^6.0.203",
