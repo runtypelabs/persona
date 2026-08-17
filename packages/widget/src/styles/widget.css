@@ -1905,6 +1905,50 @@
   animation: persona-typing 1s infinite;
 }
 
+/* Conversation-open stand-in: transcript skeleton shown while a conversation
+   selected from the Messages list is fetched. The container carries the
+   transcript's centered column so custom renderers land where messages will. */
+.persona-conversation-loading {
+  width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
+  margin: 0 auto;
+}
+
+.persona-conversation-loading-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+
+.persona-conversation-loading-bubble {
+  height: 44px;
+  border-radius: 16px;
+  background: var(--persona-divider, var(--persona-border, #e5e7eb));
+  align-self: flex-start;
+  animation: persona-conversation-loading-pulse 1400ms ease-in-out infinite;
+}
+
+.persona-conversation-loading-bubble--trailing {
+  align-self: flex-end;
+}
+
+@keyframes persona-conversation-loading-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-conversation-loading-bubble {
+    animation: none;
+  }
+}
+
 .persona-space-x-1 > * + * {
   margin-left: 0.25rem;
 }

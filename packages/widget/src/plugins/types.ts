@@ -402,6 +402,10 @@ export interface AgentWidgetPlugin {
    * Custom renderer for loading indicator
    * Return null to use default renderer (or config-based renderer)
    *
+   * Covers the streaming indicator ('inline', 'standalone') and the transcript
+   * skeleton shown while a conversation opened from the Messages list loads
+   * ('conversation-open').
+   *
    * @example
    * ```typescript
    * renderLoadingIndicator: ({ location, defaultRenderer }) => {

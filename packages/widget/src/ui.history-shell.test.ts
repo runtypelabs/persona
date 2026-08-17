@@ -22,6 +22,7 @@ import {
   type DemoHistoryProviderOptions,
 } from "./internal/demo-history-provider";
 import type { AgentWidgetPlugin } from "./plugins/types";
+import type { LoadingIndicatorRenderContext } from "./types";
 import { setMacPlatformOverride } from "./utils/shortcuts";
 import { resetTooltipTiming } from "./utils/tooltip";
 
@@ -1211,10 +1212,14 @@ describe("history shell", () => {
       )!;
       expect(skeleton.getAttribute("role")).toBe("status");
       expect(skeleton.getAttribute("aria-label")).toBe("Loading conversation");
-      // Shares the transcript column, so hydration causes no width reflow.
-      expect(skeleton.getAttribute("style")).toContain(
-        "max-width:var(--persona-content-max-width, 768px)"
+      // The container class carries the transcript column (stylesheet, not
+      // inline styles) so host CSS can retarget the stand-in.
+      expect(skeleton.classList.contains("persona-conversation-loading")).toBe(
+        true
       );
+      expect(
+        skeleton.querySelectorAll(".persona-conversation-loading-bubble").length
+      ).toBe(3);
       expect(footerOf(mount).hasAttribute("inert")).toBe(true);
       expect(bodyOf(mount).querySelectorAll("[data-message-id]").length).toBe(0);
 
@@ -1232,6 +1237,98 @@ describe("history shell", () => {
       expect(ids).toEqual(["a1", "a2", "a3"]);
     });
 
+    it("routes the transcript stand-in through loadingIndicator.render", async () => {
+      const seen: Array<{ location: string; streaming: boolean }> = [];
+      const { mount } = setup({
+        provider: { latencyMs: 30 },
+        config: {
+          loadingIndicator: {
+            render: (context: LoadingIndicatorRenderContext) => {
+              seen.push({
+                location: context.location,
+                streaming: context.streaming,
+              });
+              const el = document.createElement("div");
+              el.className = "custom-open-loading";
+              el.textContent = "Fetching that conversation";
+              return el;
+            },
+          },
+        },
+      });
+      historyButton(mount)!.click();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await flush(20);
+      rowOf(mount, "conv-a")!.click();
+      await flush();
+      const standIn = mount.querySelector<HTMLElement>(
+        ".persona-conversation-loading"
+      )!;
+      expect(standIn.querySelector(".custom-open-loading")).not.toBeNull();
+      expect(
+        standIn.querySelector(".persona-conversation-loading-bubble")
+      ).toBeNull();
+      expect(seen).toEqual([
+        { location: "conversation-open", streaming: false },
+      ]);
+      // Persona keeps the orchestration around the custom node.
+      expect(standIn.getAttribute("role")).toBe("status");
+      expect(footerOf(mount).hasAttribute("inert")).toBe(true);
+    });
+
+    it("lets a plugin own the stand-in ahead of the config renderer", async () => {
+      const plugin: AgentWidgetPlugin = {
+        id: "test-open-loading",
+        renderLoadingIndicator: ({ location, defaultRenderer }) => {
+          if (location !== "conversation-open") return defaultRenderer();
+          const el = document.createElement("div");
+          el.className = "plugin-open-loading";
+          return el;
+        },
+      };
+      const { mount } = setup({
+        provider: { latencyMs: 30 },
+        config: {
+          plugins: [plugin],
+          loadingIndicator: {
+            render: () => {
+              const el = document.createElement("div");
+              el.className = "config-open-loading";
+              return el;
+            },
+          },
+        },
+      });
+      historyButton(mount)!.click();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await flush(20);
+      rowOf(mount, "conv-a")!.click();
+      await flush();
+      const standIn = mount.querySelector<HTMLElement>(
+        ".persona-conversation-loading"
+      )!;
+      expect(standIn.querySelector(".plugin-open-loading")).not.toBeNull();
+      expect(standIn.querySelector(".config-open-loading")).toBeNull();
+    });
+
+    it("falls back to the default skeleton when hooks return null", async () => {
+      const plugin: AgentWidgetPlugin = {
+        id: "test-open-loading-null",
+        renderLoadingIndicator: () => null,
+      };
+      const { mount } = setup({
+        provider: { latencyMs: 30 },
+        config: { plugins: [plugin] },
+      });
+      historyButton(mount)!.click();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await flush(20);
+      rowOf(mount, "conv-a")!.click();
+      await flush();
+      expect(
+        mount.querySelectorAll(".persona-conversation-loading-bubble").length
+      ).toBe(3);
+    });
   });
 
   describe("show earlier messages", () => {

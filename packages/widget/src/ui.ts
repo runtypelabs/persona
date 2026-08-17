@@ -62,7 +62,7 @@ import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
-import { createElement, createNode } from "./utils/dom";
+import { createElement, createNode, cx } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
 import { attachTooltip, configureTooltipTiming } from "./utils/tooltip";
 import {
@@ -9001,20 +9001,29 @@ export const createAgentExperience = (
   };
 
   // The stand-in surfaces share the transcript's centered column, so the
-  // hydrated messages land exactly where the skeleton was.
+  // hydrated messages land exactly where the skeleton was. The loading
+  // container gets the same column from `.persona-conversation-loading`.
   const COLUMN_STYLE =
     "width:100%;max-width:var(--persona-content-max-width, 768px);margin:0 auto";
 
   const skeletonBubble = (width: string, trailing: boolean): HTMLElement =>
     createNode("div", {
-      attrs: {
-        "aria-hidden": "true",
-        style:
-          `width:${width};height:44px;border-radius:16px;` +
-          "background:var(--persona-divider, var(--persona-border, #e5e7eb));" +
-          `align-self:${trailing ? "flex-end" : "flex-start"}`,
-      },
+      className: cx(
+        "persona-conversation-loading-bubble",
+        trailing && "persona-conversation-loading-bubble--trailing"
+      ),
+      attrs: { "aria-hidden": "true" },
+      style: { width },
     });
+
+  const buildConversationOpenSkeleton = (): HTMLElement =>
+    createNode(
+      "div",
+      { className: "persona-conversation-loading-body" },
+      skeletonBubble("58%", false),
+      skeletonBubble("72%", true),
+      skeletonBubble("44%", false)
+    );
 
   const mountConversationOpenState = (element: HTMLElement): void => {
     conversationOpenPendingEl?.remove();
@@ -9028,33 +9037,36 @@ export const createAgentExperience = (
   };
 
   const showConversationOpenPending = (): void => {
-    const skeleton = createNode(
-      "div",
-      {
-        className: "persona-conversation-loading",
-        attrs: {
-          role: "status",
-          "aria-label": historyShellCopy.openConversationLoadingLabel,
-          style:
-            "display:flex;flex-direction:column;gap:12px;padding:20px;" +
-            COLUMN_STYLE,
-        },
-      },
-      skeletonBubble("58%", false),
-      skeletonBubble("72%", true),
-      skeletonBubble("44%", false)
-    );
-    try {
-      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
-        skeleton.animate(
-          [{ opacity: 1 }, { opacity: 0.55 }, { opacity: 1 }],
-          { duration: 1400, iterations: Infinity, easing: "ease-in-out" }
-        );
-      }
-    } catch {
-      /* environments without WAAPI keep the static skeleton */
+    // Same plugin -> config -> default chain as the streaming indicator. The
+    // hook replaces the skeleton only; the container keeps the centered
+    // column, the status role, and the composer gate.
+    const context: LoadingIndicatorRenderContext = {
+      config,
+      streaming: false,
+      location: "conversation-open",
+      defaultRenderer: buildConversationOpenSkeleton,
+    };
+    let content: HTMLElement | null = null;
+    const loadingPlugin = plugins.find((p) => p.renderLoadingIndicator);
+    if (loadingPlugin?.renderLoadingIndicator) {
+      content = loadingPlugin.renderLoadingIndicator(context);
     }
-    mountConversationOpenState(skeleton);
+    if (content === null && config.loadingIndicator?.render) {
+      content = config.loadingIndicator.render(context);
+    }
+    mountConversationOpenState(
+      createNode(
+        "div",
+        {
+          className: "persona-conversation-loading",
+          attrs: {
+            role: "status",
+            "aria-label": historyShellCopy.openConversationLoadingLabel,
+          },
+        },
+        content ?? buildConversationOpenSkeleton()
+      )
+    );
   };
 
   const showConversationOpenError = (conversationId: string): void => {

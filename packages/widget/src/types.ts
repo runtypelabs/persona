@@ -5704,15 +5704,20 @@ export type LoadingIndicatorRenderContext = {
    */
   config: AgentWidgetConfig;
   /**
-   * Current streaming state (always true when indicator is shown)
+   * Current streaming state. Always true for 'inline' and 'standalone';
+   * false for 'conversation-open' (a history fetch, not a stream).
    */
   streaming: boolean;
   /**
    * Location where the indicator is rendered:
    * - 'inline': Inside a streaming assistant message bubble (when content is empty)
    * - 'standalone': Separate bubble while waiting for stream to start
+   * - 'conversation-open': Transcript stand-in while a conversation opened
+   *   from the Messages list is being fetched. The returned element is mounted
+   *   inside Persona's centered transcript column, which keeps the status
+   *   role, announcement label, and composer gating.
    */
-  location: 'inline' | 'standalone';
+  location: 'inline' | 'standalone' | 'conversation-open';
   /**
    * Function to render the default 3-dot bouncing indicator.
    * Call this if you want to use the default for certain cases.
