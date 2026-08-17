@@ -463,13 +463,10 @@ describe("history view list styling", () => {
     expect(rowBlock).toContain("margin: 0 6px;");
     expect(rowBlock).toContain("border-radius: 10px;");
 
-    // The selection wash carries no edge marker in the rail.
+    // The selection wash's divider-chain default cannot collapse into the
+    // surface color.
     expect(css).toContain(
-      '.persona-history-view--rail button.persona-history-row[aria-current="page"] {\n  box-shadow: none;\n}'
-    );
-    // The panel wash matches the rail surface, so the rail overrides it darker.
-    expect(css).toContain(
-      "--persona-history-row-active-bg: rgba(0, 0, 0, 0.08);"
+      "--persona-history-row-active-bg: var(--persona-divider, var(--persona-border, #e5e7eb));"
     );
     // Its own sidebar surface, and no border: the host draws the divider.
     expect(css).toContain(

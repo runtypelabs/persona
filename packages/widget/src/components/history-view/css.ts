@@ -16,8 +16,8 @@
  *   --persona-history-border        hairlines and dividers
  *   --persona-history-row-hover-bg  row hover/active-press wash
  *   --persona-history-row-avatar-bg leading row avatar plate
- *   --persona-history-row-active-bg selected conversation wash
- *   --persona-history-active-marker selected conversation edge marker
+ *   --persona-history-row-active-bg selected conversation wash (wash-only, no
+ *     edge marker; the divider-chain default cannot collapse into the surface)
  *   --persona-history-skeleton-bg   loading placeholder blocks
  *   --persona-history-focus-ring    focus-visible outline color
  *   --persona-history-slide         entrance/exit horizontal travel
@@ -36,8 +36,7 @@ export const HISTORY_VIEW_CSS =
   --persona-history-border: var(--persona-divider, var(--persona-border, #e5e7eb));
   --persona-history-row-hover-bg: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.04));
   --persona-history-row-avatar-bg: var(--persona-header-icon-bg, var(--persona-primary, #2563eb));
-  --persona-history-row-active-bg: var(--persona-container, #f3f4f6);
-  --persona-history-active-marker: var(--persona-primary, #2563eb);
+  --persona-history-row-active-bg: var(--persona-divider, var(--persona-border, #e5e7eb));
   --persona-history-skeleton-bg: var(--persona-divider, var(--persona-border, #e5e7eb));
   --persona-history-focus-ring: var(--persona-primary, #2563eb);
   --persona-history-slide: 20px;
@@ -301,7 +300,6 @@ export const HISTORY_VIEW_CSS =
 }
 .persona-history-view button.persona-history-row[aria-current="page"] {
   background: var(--persona-history-row-active-bg);
-  box-shadow: inset 3px 0 0 0 var(--persona-history-active-marker);
 }
 .persona-history-view .persona-history-row-avatar {
   display: flex;
@@ -608,9 +606,6 @@ export const HISTORY_VIEW_CSS =
   --persona-history-topbar-bg: transparent;
   --persona-history-topbar-min-height: 48px;
   --persona-history-row-min-height: 36px;
-  /* The panel active wash resolves to the same container color as the rail
-     surface, so the rail needs a darker step or selection is invisible. */
-  --persona-history-row-active-bg: rgba(0, 0, 0, 0.08);
 }
 ` +
   /* The rail bar IS the sidebar header: a header-height strip that lines up
@@ -857,9 +852,6 @@ export const HISTORY_VIEW_CSS =
 }
 .persona-history-view--rail .persona-history-row-title {
   font-weight: 400;
-}
-.persona-history-view--rail button.persona-history-row[aria-current="page"] {
-  box-shadow: none;
 }
 .persona-history-view--rail button.persona-history-row-menu-button {
   right: 10px;

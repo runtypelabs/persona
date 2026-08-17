@@ -455,11 +455,10 @@ to weld the two strips into one band. The built-in minimal header measures
 The rest of the sidebar is styled by the `--persona-history-*` variables listed
 under [Conversation History (Messages) Variables](#conversation-history-messages-variables):
 in rail presentation the surface re-points to `--persona-container` for its own
-sidebar color, row dividers, avatars, and the selection marker drop out, and
-selection becomes a `rgba(0, 0, 0, 0.08)` wash. Both the hover and selection
-washes darken, so on a dark theme re-declare
-`--persona-history-row-hover-bg` and `--persona-history-row-active-bg` as light
-washes on `.persona-history-view--rail`.
+sidebar color, and row dividers and avatars drop out. The hover wash darkens,
+so on a dark theme re-declare `--persona-history-row-hover-bg` as a light wash
+on `.persona-history-view--rail`; the selection wash follows `--persona-divider`
+and adapts with the theme.
 
 Geometry and behavior are config, not tokens: `features.history.rail` takes
 `side` (`"left"` default, or `"right"`), `width` (px, clamped 200 to 400,
@@ -1019,9 +1018,8 @@ fallback chain into the ordinary theme aliases. Set any of them on the host page
 | `--persona-history-row-hover-bg` | `--persona-button-ghost-hover-bg` → `rgba(0, 0, 0, 0.04)` | Row hover and active-press wash |
 | `--persona-history-row-divider` | `--persona-history-border` | Inset hairline under every row (panel only; the rail has no row dividers) |
 | `--persona-history-row-avatar-bg` | `--persona-header-icon-bg` → `--persona-primary` → `#2563eb` | Leading row avatar plate (panel only; the rail hides the avatar) |
-| `--persona-history-row-active-bg` | `--persona-container` → `#f3f4f6` | Selected conversation wash |
-| `--persona-history-active-marker` | `--persona-primary` → `#2563eb` | Selected conversation edge marker (panel only; the rail marks selection with the wash alone) |
-| `--persona-history-skeleton-bg` | `--persona-container` → `#eef0f3` | Loading placeholder blocks |
+| `--persona-history-row-active-bg` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Selected conversation wash (wash-only selection, no edge marker) |
+| `--persona-history-skeleton-bg` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Loading placeholder blocks |
 | `--persona-history-danger-fg` | `--persona-palette-colors-error-600` → `#b91c1c` | Destructive action text (delete, delete all, forget device) |
 | `--persona-history-focus-ring` | `--persona-primary` → `#2563eb` | `:focus-visible` outline color |
 | `--persona-history-row-min-height` | `74px` (panel) / `36px` (rail) | Row and skeleton-row minimum height |
