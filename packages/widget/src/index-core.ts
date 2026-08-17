@@ -164,6 +164,7 @@ export type {
   AgentWidgetRenderHistoryHeaderContext,
   AgentWidgetRenderHistoryConversationContext,
   AgentWidgetRenderHistoryStateContext,
+  AgentWidgetRenderHistoryOpenErrorContext,
   ClientVisitorGrant,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionChipsConfig,

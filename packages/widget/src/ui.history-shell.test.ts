@@ -1311,6 +1311,83 @@ describe("history shell", () => {
       expect(standIn.querySelector(".config-open-loading")).toBeNull();
     });
 
+    it("routes the failed-open surface through renderHistoryOpenError", async () => {
+      const seen: Array<{ conversationId: string; hasBack: boolean; title: string }> =
+        [];
+      const plugin: AgentWidgetPlugin = {
+        id: "test-open-error",
+        renderHistoryOpenError: (context) => {
+          seen.push({
+            conversationId: context.conversationId,
+            hasBack: typeof context.back === "function",
+            title: context.copy.title,
+          });
+          const el = document.createElement("div");
+          el.className = "custom-open-error";
+          const retryButton = document.createElement("button");
+          retryButton.textContent = "custom retry";
+          retryButton.addEventListener("click", context.retry);
+          el.append(retryButton);
+          return el;
+        },
+      };
+      const { mount, provider } = setup({ config: { plugins: [plugin] } });
+      provider.setFailure("getPage", { code: "unavailable" });
+      await openHistoryUI(mount);
+      rowOf(mount, "conv-a")!.click();
+      await flush(20);
+      const container = mount.querySelector<HTMLElement>(
+        ".persona-conversation-loading-error"
+      )!;
+      // Persona keeps the orchestration around the custom node.
+      expect(container.getAttribute("role")).toBe("alert");
+      expect(container.querySelector(".custom-open-error")).not.toBeNull();
+      expect(
+        container.querySelector(".persona-conversation-loading-error-body")
+      ).toBeNull();
+      expect(seen).toEqual([
+        {
+          conversationId: "conv-a",
+          hasBack: true,
+          title: "Could not open the conversation.",
+        },
+      ]);
+      expect(footerOf(mount).hasAttribute("inert")).toBe(true);
+
+      // The provided retry routes through the token-guarded open flow.
+      provider.setFailure("getPage", null);
+      container.querySelector("button")!.click();
+      await flush(20);
+      expect(
+        mount.querySelector(".persona-conversation-loading-error")
+      ).toBeNull();
+      expect(
+        bodyOf(mount).querySelectorAll("[data-message-id]").length
+      ).toBeGreaterThan(0);
+      expect(footerOf(mount).hasAttribute("inert")).toBe(false);
+    });
+
+    it("falls back to the default error block when the hook returns null", async () => {
+      const plugin: AgentWidgetPlugin = {
+        id: "test-open-error-null",
+        renderHistoryOpenError: () => null,
+      };
+      const { mount, provider } = setup({ config: { plugins: [plugin] } });
+      provider.setFailure("getPage", { code: "unavailable" });
+      await openHistoryUI(mount);
+      rowOf(mount, "conv-a")!.click();
+      await flush(20);
+      const body = mount.querySelector<HTMLElement>(
+        ".persona-conversation-loading-error-body"
+      )!;
+      expect(body.textContent).toContain("Could not open the conversation.");
+      expect(
+        Array.from(body.querySelectorAll("button")).map(
+          (button) => button.textContent
+        )
+      ).toEqual(["Try again", "Back to messages"]);
+    });
+
     it("falls back to the default skeleton when hooks return null", async () => {
       const plugin: AgentWidgetPlugin = {
         id: "test-open-loading-null",

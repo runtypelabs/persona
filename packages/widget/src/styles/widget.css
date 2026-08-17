@@ -1949,6 +1949,44 @@
   }
 }
 
+/* Failed conversation-open surface. The container carries the transcript
+   column; the body classes style the default block only, so a plugin's
+   renderHistoryOpenError content starts from a clean slate. */
+.persona-conversation-loading-error {
+  width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
+  margin: 0 auto;
+}
+
+.persona-conversation-loading-error-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  color: var(--persona-text-muted, #6b7280);
+}
+
+.persona-conversation-loading-error-title {
+  margin: 0;
+}
+
+.persona-conversation-loading-error-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.persona-conversation-loading-error-action {
+  padding: 8px 14px;
+  border: 1px solid var(--persona-divider, var(--persona-border, #e5e7eb));
+  border-radius: var(--persona-radius-md, 8px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
 .persona-space-x-1 > * + * {
   margin-left: 0.25rem;
 }

@@ -32,6 +32,7 @@ import {
   InjectSystemMessageOptions,
   InjectComponentDirectiveOptions,
   LoadingIndicatorRenderContext,
+  AgentWidgetRenderHistoryOpenErrorContext,
   IdleIndicatorRenderContext,
   VoiceStatus,
   ReadAloudState,
@@ -9000,12 +9001,8 @@ export const createAgentExperience = (
     setHistoryHostInert(footer, false);
   };
 
-  // The stand-in surfaces share the transcript's centered column, so the
-  // hydrated messages land exactly where the skeleton was. The loading
-  // container gets the same column from `.persona-conversation-loading`.
-  const COLUMN_STYLE =
-    "width:100%;max-width:var(--persona-content-max-width, 768px);margin:0 auto";
-
+  // The stand-in surfaces get the transcript's centered column from their
+  // container classes, so the hydrated messages land exactly where they stood.
   const skeletonBubble = (width: string, trailing: boolean): HTMLElement =>
     createNode("div", {
       className: cx(
@@ -9070,52 +9067,77 @@ export const createAgentExperience = (
   };
 
   const showConversationOpenError = (conversationId: string): void => {
+    const retry = (): void => {
+      void openHistoryConversation(conversationId).catch(() => {});
+    };
+    const back = historyAvailable()
+      ? (): void => {
+          clearConversationOpenPending();
+          void openHistory();
+        }
+      : undefined;
     const actionButton = (label: string, onClick: () => void): HTMLElement => {
       const button = createNode("button", {
-        attrs: {
-          type: "button",
-          style:
-            "padding:8px 14px;" +
-            "border:1px solid var(--persona-divider, var(--persona-border, #e5e7eb));" +
-            "border-radius:var(--persona-radius-md, 8px);" +
-            "background:transparent;color:inherit;font:inherit;cursor:pointer",
-        },
+        className: "persona-conversation-loading-error-action",
+        attrs: { type: "button" },
         text: label,
       });
       button.addEventListener("click", onClick);
       return button;
     };
-    const block = createNode(
-      "div",
-      {
-        className: "persona-conversation-loading-error",
-        attrs: {
-          role: "alert",
-          style:
-            "display:flex;flex-direction:column;align-items:flex-start;" +
-            "gap:12px;padding:20px;color:var(--persona-text-muted, #6b7280);" +
-            COLUMN_STYLE,
-        },
-      },
-      createNode("p", {
-        attrs: { style: "margin:0" },
-        text: historyShellCopy.openConversationErrorTitle,
-      }),
+    const buildDefaultBlock = (): HTMLElement =>
       createNode(
         "div",
-        { attrs: { style: "display:flex;gap:8px;flex-wrap:wrap" } },
-        actionButton(historyShellCopy.openConversationRetryLabel, () => {
-          void openHistoryConversation(conversationId).catch(() => {});
+        { className: "persona-conversation-loading-error-body" },
+        createNode("p", {
+          className: "persona-conversation-loading-error-title",
+          text: historyShellCopy.openConversationErrorTitle,
         }),
-        historyAvailable()
-          ? actionButton(historyShellCopy.openConversationBackLabel, () => {
-              clearConversationOpenPending();
-              void openHistory();
-            })
-          : null
+        createNode(
+          "div",
+          { className: "persona-conversation-loading-error-actions" },
+          actionButton(historyShellCopy.openConversationRetryLabel, retry),
+          back
+            ? actionButton(historyShellCopy.openConversationBackLabel, back)
+            : null
+        )
+      );
+    // First non-null plugin hook wins (plugins are priority-sorted); a throw
+    // is reported and skipped. The container keeps the centered column, the
+    // alert role, and the composer gate around whatever the hook returns.
+    const context: AgentWidgetRenderHistoryOpenErrorContext = Object.freeze({
+      conversationId,
+      config,
+      copy: Object.freeze({
+        title: historyShellCopy.openConversationErrorTitle,
+        retryLabel: historyShellCopy.openConversationRetryLabel,
+        backLabel: historyShellCopy.openConversationBackLabel,
+      }),
+      retry,
+      ...(back ? { back } : {}),
+      defaultRenderer: buildDefaultBlock,
+    });
+    let content: HTMLElement | null = null;
+    for (const plugin of plugins) {
+      if (!plugin.renderHistoryOpenError) continue;
+      try {
+        content = plugin.renderHistoryOpenError(context);
+      } catch (error) {
+        console.warn("[persona] renderHistoryOpenError threw", error);
+        content = null;
+      }
+      if (content) break;
+    }
+    mountConversationOpenState(
+      createNode(
+        "div",
+        {
+          className: "persona-conversation-loading-error",
+          attrs: { role: "alert" },
+        },
+        content ?? buildDefaultBlock()
       )
     );
-    mountConversationOpenState(block);
   };
 
   // The panel exit's deferred teardown restores the footer it captured, which

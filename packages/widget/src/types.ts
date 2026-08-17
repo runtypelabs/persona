@@ -3098,6 +3098,25 @@ export type AgentWidgetRenderHistoryStateContext = {
   defaultRenderer(): HTMLElement;
 };
 
+/**
+ * Context for `renderHistoryOpenError` (the transcript-level surface shown
+ * when opening a conversation from the Messages list fails). `retry` and
+ * `back` are the only exits: both route through the token-guarded open flow,
+ * so custom DOM must not fetch on its own. `back` is present only when the
+ * Messages surface is available to return to.
+ */
+export type AgentWidgetRenderHistoryOpenErrorContext = {
+  conversationId: string;
+  config: AgentWidgetConfig;
+  /** Resolved shell copy the default surface renders. */
+  copy: { title: string; retryLabel: string; backLabel: string };
+  /** Re-runs the open through Persona's token-guarded flow. */
+  retry: () => void;
+  /** Returns to the Messages list. Absent when history is unavailable. */
+  back?: () => void;
+  defaultRenderer(): HTMLElement;
+};
+
 export type SSEEventRecord = {
   id: string;
   type: string;

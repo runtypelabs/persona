@@ -21,6 +21,7 @@ import {
   AgentWidgetRenderHistoryViewContext,
   AgentWidgetRenderHistoryHeaderContext,
   AgentWidgetRenderHistoryConversationContext,
+  AgentWidgetRenderHistoryOpenErrorContext,
   AgentWidgetRenderHistoryStateContext,
   AgentWidgetHistoryRailSection,
   AgentWidgetHistoryRenderActions,
@@ -522,6 +523,21 @@ export interface AgentWidgetPlugin {
    */
   renderHistoryState?: (
     context: AgentWidgetRenderHistoryStateContext
+  ) => HTMLElement | null;
+
+  /**
+   * Replace the transcript-level error surface shown when opening a
+   * conversation from the Messages list fails. Plugins run by priority and
+   * the first non-null element wins; null falls through to the default block.
+   *
+   * Persona keeps the centered transcript column, the alert role, and the
+   * composer gate around the returned element. `retry`/`back` are the only
+   * exits: both route through the token-guarded open flow, so do not fetch
+   * directly. `back` is absent when there is no Messages surface to return
+   * to; do not render a back affordance without it.
+   */
+  renderHistoryOpenError?: (
+    context: AgentWidgetRenderHistoryOpenErrorContext
   ) => HTMLElement | null;
 
   /**
