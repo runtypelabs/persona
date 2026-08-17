@@ -1119,14 +1119,54 @@ describe("history shell", () => {
       expect(document.activeElement).toBe(back);
     });
 
-    it("keeps Messages open and the prior transcript intact when an open fails", async () => {
+    it("shows a retryable error surface when an open fails, with a way back", async () => {
       const { mount, provider } = setup();
       provider.setFailure("getPage", { code: "unavailable" });
       await openHistoryUI(mount);
       rowOf(mount, "conv-a")!.click();
       await flush(20);
+      // Optimistic navigation: the list is gone, the error surface owns it.
+      expect(historyRoot(mount)).toBeNull();
+      const error = mount.querySelector<HTMLElement>(
+        ".persona-conversation-loading-error"
+      )!;
+      expect(error.textContent).toContain("Could not open the conversation.");
+      // The composer must not send into the conversation that failed to open.
+      expect(footerOf(mount).hasAttribute("inert")).toBe(true);
+
+      // Retry succeeds once the provider recovers and hydrates the transcript.
+      provider.setFailure("getPage", null);
+      const retry = Array.from(error.querySelectorAll("button")).find(
+        (button) => button.textContent === "Try again"
+      )!;
+      retry.click();
+      await flush(20);
+      expect(
+        mount.querySelector(".persona-conversation-loading-error")
+      ).toBeNull();
+      expect(
+        bodyOf(mount).querySelectorAll("[data-message-id]").length
+      ).toBeGreaterThan(0);
+      expect(footerOf(mount).hasAttribute("inert")).toBe(false);
+    });
+
+    it("returns to Messages from the failed-open surface", async () => {
+      const { mount, provider } = setup();
+      provider.setFailure("getPage", { code: "unavailable" });
+      await openHistoryUI(mount);
+      rowOf(mount, "conv-a")!.click();
+      await flush(20);
+      const back = Array.from(
+        mount.querySelectorAll<HTMLButtonElement>(
+          ".persona-conversation-loading-error button"
+        )
+      ).find((button) => button.textContent === "Back to messages")!;
+      back.click();
+      await flush(20);
       expect(historyRoot(mount)).not.toBeNull();
-      expect(bodyOf(mount).querySelectorAll("[data-message-id]").length).toBe(0);
+      expect(
+        mount.querySelector(".persona-conversation-loading-error")
+      ).toBeNull();
     });
 
     it("disables the button with an accessible explanation while a turn streams", async () => {
@@ -1155,17 +1195,36 @@ describe("history shell", () => {
   });
 
   describe("open flow", () => {
-    it("hydrates the transcript and closes the panel only after the commit", async () => {
-      const { mount, provider } = setup({ provider: { latencyMs: 5 } });
+    it("navigates on the click, shows a skeleton, and hydrates on the commit", async () => {
+      const { mount, provider } = setup({ provider: { latencyMs: 30 } });
       historyButton(mount)!.click();
-      await new Promise((resolve) => setTimeout(resolve, 30));
+      await new Promise((resolve) => setTimeout(resolve, 60));
       await flush(20);
       rowOf(mount, "conv-a")!.click();
-      // Still mid-flight: the panel must not close before the activation.
-      expect(historyRoot(mount)).not.toBeNull();
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      await flush();
+      // Optimistic navigation: the panel leaves immediately (jsdom has no
+      // WAAPI, so the exit settles synchronously), the transcript skeleton
+      // stands in, and the composer is gated until hydration.
+      expect(historyRoot(mount)).toBeNull();
+      const skeleton = mount.querySelector<HTMLElement>(
+        ".persona-conversation-loading"
+      )!;
+      expect(skeleton.getAttribute("role")).toBe("status");
+      expect(skeleton.getAttribute("aria-label")).toBe("Loading conversation");
+      // Shares the transcript column, so hydration causes no width reflow.
+      expect(skeleton.getAttribute("style")).toContain(
+        "max-width:var(--persona-content-max-width, 768px)"
+      );
+      expect(footerOf(mount).hasAttribute("inert")).toBe(true);
+      expect(bodyOf(mount).querySelectorAll("[data-message-id]").length).toBe(0);
+
+      // The provider applies latency per internal operation, so the settle
+      // window is a multiple of it.
+      await new Promise((resolve) => setTimeout(resolve, 200));
       await flush(20);
       expect(historyRoot(mount)).toBeNull();
+      expect(mount.querySelector(".persona-conversation-loading")).toBeNull();
+      expect(footerOf(mount).hasAttribute("inert")).toBe(false);
       expect(provider.getActiveConversationId()).toBe("conv-a");
       const ids = Array.from(
         bodyOf(mount).querySelectorAll("[data-message-id]")

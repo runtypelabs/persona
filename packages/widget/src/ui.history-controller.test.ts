@@ -249,10 +249,12 @@ describe("history controller API", () => {
       await flush();
 
       const names = events.map(([name]) => name);
+      // Optimistic open: the panel closes on the selection and the
+      // conversationOpened commit follows once the transcript hydrates.
       expect(names).toEqual([
         "opened",
-        "conversationOpened",
         "closed",
+        "conversationOpened",
         "conversationDeleted",
         "cleared",
       ]);
@@ -261,7 +263,7 @@ describe("history controller API", () => {
         returnSurface: "conversation",
         timestamp: expect.any(Number),
       });
-      expect(events[1]![1]).toEqual({
+      expect(events[2]![1]).toEqual({
         conversationId: "conv-a",
         title: "Order status",
         scope: "browser",

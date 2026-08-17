@@ -2619,6 +2619,14 @@ export interface AgentWidgetHistoryCopy {
   newConversationLabel?: string;
   /** Label for the action that prepends the previous transcript page. */
   showEarlierMessagesLabel?: string;
+  /** Accessible label for the transcript skeleton while a conversation loads. */
+  openConversationLoadingLabel?: string;
+  /** Body text when a selected conversation failed to load. */
+  openConversationErrorTitle?: string;
+  /** Label for the retry action after a conversation failed to load. */
+  openConversationRetryLabel?: string;
+  /** Label for the return-to-messages action after a conversation failed to load. */
+  openConversationBackLabel?: string;
   /** Status notice after a deleted conversation was recovered into a fresh one. */
   conversationDeletedNotice?: string;
   /** Status notice after this browser was detached from its history identity. */

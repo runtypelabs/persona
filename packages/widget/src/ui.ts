@@ -62,7 +62,7 @@ import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
 import { renderLucideIcon } from "./utils/icons";
-import { createElement } from "./utils/dom";
+import { createElement, createNode } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
 import { attachTooltip, configureTooltipTiming } from "./utils/tooltip";
 import {
@@ -8746,7 +8746,10 @@ export const createAgentExperience = (
       ...(config.features?.history?.pageSize !== undefined
         ? { pageSize: config.features.history.pageSize }
         : {}),
-      onSelect: (conversationId) => openHistoryConversation(conversationId),
+      // The pending/error surface owns failures (optimistic open), so the
+      // row must not double-report them.
+      onSelect: (conversationId) =>
+        openHistoryConversation(conversationId).catch(() => {}),
       onActiveConversationChange: (summary) =>
         setActiveConversationSummary(summary),
       // The chunk is size-capped, so it borrows the shell's tooltip module.
@@ -8980,41 +8983,185 @@ export const createAgentExperience = (
     }
   });
 
+  // --- optimistic conversation open ---------------------------------------
+  // Selection acknowledges within a frame: the surface switches immediately
+  // (seeded title, transcript skeleton, gated composer) and hydrates when the
+  // fetch lands. The token invalidates a stale resolution after a newer open,
+  // a new conversation, or a failure the visitor navigated away from.
+  let conversationOpenToken = 0;
+  let conversationOpenPendingEl: HTMLElement | null = null;
+
+  const clearConversationOpenPending = (): void => {
+    conversationOpenToken += 1;
+    if (!conversationOpenPendingEl) return;
+    conversationOpenPendingEl.remove();
+    conversationOpenPendingEl = null;
+    messagesWrapper.style.removeProperty("display");
+    setHistoryHostInert(footer, false);
+  };
+
+  // The stand-in surfaces share the transcript's centered column, so the
+  // hydrated messages land exactly where the skeleton was.
+  const COLUMN_STYLE =
+    "width:100%;max-width:var(--persona-content-max-width, 768px);margin:0 auto";
+
+  const skeletonBubble = (width: string, trailing: boolean): HTMLElement =>
+    createNode("div", {
+      attrs: {
+        "aria-hidden": "true",
+        style:
+          `width:${width};height:44px;border-radius:16px;` +
+          "background:var(--persona-divider, var(--persona-border, #e5e7eb));" +
+          `align-self:${trailing ? "flex-end" : "flex-start"}`,
+      },
+    });
+
+  const mountConversationOpenState = (element: HTMLElement): void => {
+    conversationOpenPendingEl?.remove();
+    conversationOpenPendingEl = element;
+    body.insertBefore(element, messagesWrapper);
+    messagesWrapper.style.display = "none";
+    // The composer must not send into the conversation being replaced. The
+    // panel exit restores the footer after its animation, so the close path
+    // re-asserts this gate (see the history:closed re-assert below).
+    setHistoryHostInert(footer, true);
+  };
+
+  const showConversationOpenPending = (): void => {
+    const skeleton = createNode(
+      "div",
+      {
+        className: "persona-conversation-loading",
+        attrs: {
+          role: "status",
+          "aria-label": historyShellCopy.openConversationLoadingLabel,
+          style:
+            "display:flex;flex-direction:column;gap:12px;padding:20px;" +
+            COLUMN_STYLE,
+        },
+      },
+      skeletonBubble("58%", false),
+      skeletonBubble("72%", true),
+      skeletonBubble("44%", false)
+    );
+    try {
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+        skeleton.animate(
+          [{ opacity: 1 }, { opacity: 0.55 }, { opacity: 1 }],
+          { duration: 1400, iterations: Infinity, easing: "ease-in-out" }
+        );
+      }
+    } catch {
+      /* environments without WAAPI keep the static skeleton */
+    }
+    mountConversationOpenState(skeleton);
+  };
+
+  const showConversationOpenError = (conversationId: string): void => {
+    const actionButton = (label: string, onClick: () => void): HTMLElement => {
+      const button = createNode("button", {
+        attrs: {
+          type: "button",
+          style:
+            "padding:8px 14px;" +
+            "border:1px solid var(--persona-divider, var(--persona-border, #e5e7eb));" +
+            "border-radius:var(--persona-radius-md, 8px);" +
+            "background:transparent;color:inherit;font:inherit;cursor:pointer",
+        },
+        text: label,
+      });
+      button.addEventListener("click", onClick);
+      return button;
+    };
+    const block = createNode(
+      "div",
+      {
+        className: "persona-conversation-loading-error",
+        attrs: {
+          role: "alert",
+          style:
+            "display:flex;flex-direction:column;align-items:flex-start;" +
+            "gap:12px;padding:20px;color:var(--persona-text-muted, #6b7280);" +
+            COLUMN_STYLE,
+        },
+      },
+      createNode("p", {
+        attrs: { style: "margin:0" },
+        text: historyShellCopy.openConversationErrorTitle,
+      }),
+      createNode(
+        "div",
+        { attrs: { style: "display:flex;gap:8px;flex-wrap:wrap" } },
+        actionButton(historyShellCopy.openConversationRetryLabel, () => {
+          void openHistoryConversation(conversationId).catch(() => {});
+        }),
+        historyAvailable()
+          ? actionButton(historyShellCopy.openConversationBackLabel, () => {
+              clearConversationOpenPending();
+              void openHistory();
+            })
+          : null
+      )
+    );
+    mountConversationOpenState(block);
+  };
+
+  // The panel exit's deferred teardown restores the footer it captured, which
+  // would lift the composer gate mid-fetch; re-assert it while an open is
+  // still pending.
+  eventBus.on("history:closed", () => {
+    if (conversationOpenPendingEl) setHistoryHostInert(footer, true);
+  });
+
   /**
-   * Transactional reopen. `suppressScrollSend` covers the hydration: otherwise
-   * the last restored user message triggers the anchor-top send scroll.
+   * Optimistic reopen: navigate on the click, hydrate on the fetch. The
+   * returned promise keeps the transactional contract (resolves once the
+   * transcript is live, rejects on failure) for `controller.openConversation`.
+   * `suppressScrollSend` covers the hydration: otherwise the last restored
+   * user message triggers the anchor-top send scroll.
    */
   const openHistoryConversation = async (
     conversationId: string
   ): Promise<void> => {
     const scope = historyOperationScope();
+    // Seeds the header title binding from the list row before the list leaves.
+    // The surface is usually gone by hydration time (the exit outruns the
+    // fetch), so this is the only moment the title can be read from the list.
+    const seededFromList = !!historySurface;
+    historySurface?.view.setActiveConversationId(conversationId);
+    clearConversationOpenPending();
+    const token = conversationOpenToken;
+    showConversationOpenPending();
+    if (historyVisible && (historyPresentation === "panel" || railOverlayOpen)) {
+      closeHistory({ restoreFocus: false });
+    }
     suppressScrollSend = true;
     try {
       await session.openConversation(conversationId, { scope });
+    } catch (error) {
+      if (token === conversationOpenToken) {
+        showConversationOpenError(conversationId);
+      }
+      throw error;
     } finally {
       suppressScrollSend = false;
     }
+    if (token !== conversationOpenToken) return;
+    clearConversationOpenPending();
     messageCache.clear();
     resetAnchorState();
     resumeAutoScroll();
     if (!restoreScrollPosition()) jumpToBottomInstant();
     syncEarlierMessagesPill();
-    // Without a mounted view there is no list to look the title up in.
-    if (!historySurface) setActiveConversationSummary(null);
-    // Synchronously reports the title through onActiveConversationTitle.
-    historySurface?.view.setActiveConversationId(conversationId);
+    // Without a list at selection time there was no title to seed.
+    if (!seededFromList) setActiveConversationSummary(null);
     eventBus.emit("history:conversationOpened", {
       conversationId,
       title: activeConversationTitle,
       scope,
       timestamp: Date.now(),
     });
-    // Only a committed activation closes the panel; a docked rail stays open,
-    // and the floating one is transient, so a selection dismisses it.
-    if (historyVisible && (historyPresentation === "panel" || railOverlayOpen)) {
-      closeHistory({ restoreFocus: false });
-      maybeFocusInput();
-    }
+    maybeFocusInput();
   };
 
   /**
@@ -9022,6 +9169,8 @@ export const createAgentExperience = (
    * and `controller.startNewConversation()`, so one emit covers all three.
    */
   const startNewConversation = async (): Promise<void> => {
+    // A new conversation supersedes any transcript fetch still in flight.
+    clearConversationOpenPending();
     await session.startNewConversation({ scope: historyOperationScope() });
     setActiveConversationSummary(null);
     messageCache.clear();

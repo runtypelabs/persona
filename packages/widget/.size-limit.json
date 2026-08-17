@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "190 kB",
+    "limit": "190.75 kB",
     "gzip": true
   },
   {
@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "190 kB",
+    "limit": "190.75 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "191 kB",
+    "limit": "191.75 kB",
     "gzip": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "167.75 kB",
+    "limit": "168.5 kB",
     "gzip": true
   },
   {
@@ -92,7 +92,7 @@
   {
     "name": "Lazy · history (Messages) view chunk (history-view.js)",
     "path": "dist/history-view.js",
-    "limit": "14.75 kB",
+    "limit": "15 kB",
     "gzip": true
   },
   {
