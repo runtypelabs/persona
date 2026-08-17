@@ -285,12 +285,79 @@ export const animateWelcomeOut = (
     onFinished(null);
     return null;
   }
+  // Collapse layout in the SAME motion as the fade. The default welcome is
+  // in-flow above the transcript (unlike plugin welcomes, which overlay it),
+  // so an opacity-only exit would hold the hero's height for the whole fade
+  // and then release it in one frame at the hidden flip — the first message
+  // renders below the hero, then teleports to the top when the repin lands.
+  //
+  // Height alone is not enough: the hero centers itself with auto margins,
+  // and auto margins absorb whatever the height collapse frees, so the
+  // transcript below would still not move until the flip. The margins'
+  // USED values are measured from geometry (computed style reports the
+  // keyword, not pixels, for flex auto margins) and animated to zero in the
+  // same keyframes, with a negative end margin canceling the host's flex gap
+  // slot — the transcript slides up continuously and the hidden flip at the
+  // end changes nothing the eye can see.
+  const rect = host.getBoundingClientRect();
+  const parent = host.parentElement;
+  let gap = 0;
+  let usedMarginTop = 0;
+  let usedMarginBottom = 0;
+  if (parent) {
+    const parentStyle = getComputedStyle(parent);
+    gap = parseFloat(parentStyle.rowGap) || 0;
+    const prev = host.previousElementSibling;
+    const next = host.nextElementSibling;
+    const parentRect = parent.getBoundingClientRect();
+    const contentTop =
+      parentRect.top +
+      (parseFloat(parentStyle.borderTopWidth) || 0) +
+      (parseFloat(parentStyle.paddingTop) || 0) -
+      parent.scrollTop;
+    usedMarginTop = Math.max(
+      0,
+      prev
+        ? rect.top - prev.getBoundingClientRect().bottom - gap
+        : rect.top - contentTop
+    );
+    usedMarginBottom = Math.max(
+      0,
+      next ? next.getBoundingClientRect().top - rect.bottom - gap : 0
+    );
+  }
+  const previousOverflow = host.style.overflow;
+  host.style.overflow = "hidden";
+  // Padding collapses with the height: under border-box sizing a height of
+  // zero clamps at the vertical padding, which would leave a padding-tall
+  // remnant releasing in one frame at the flip.
+  const hostStyle = getComputedStyle(host);
+  const paddingTop = parseFloat(hostStyle.paddingTop) || 0;
+  const paddingBottom = parseFloat(hostStyle.paddingBottom) || 0;
   // `forwards`, not `backwards`: backwards only fills the delay phase, so the
   // element snaps back to opacity 1 for a frame after the keyframes end.
   const animation = host.animate(
     [
-      { opacity: "1", transform: "none" },
-      { opacity: "0", transform: "translateY(-4px)" },
+      {
+        opacity: "1",
+        transform: "none",
+        height: `${rect.height}px`,
+        minHeight: "0px",
+        paddingTop: `${paddingTop}px`,
+        paddingBottom: `${paddingBottom}px`,
+        marginTop: `${usedMarginTop}px`,
+        marginBottom: `${usedMarginBottom}px`,
+      },
+      {
+        opacity: "0",
+        transform: "translateY(-4px)",
+        height: "0px",
+        minHeight: "0px",
+        paddingTop: "0px",
+        paddingBottom: "0px",
+        marginTop: "0px",
+        marginBottom: `${-gap}px`,
+      },
     ],
     { duration: 180, easing: "ease-out", fill: "forwards" }
   );
@@ -298,6 +365,9 @@ export const animateWelcomeOut = (
   const settle = () => {
     if (settled) return;
     settled = true;
+    // Restored on BOTH settle paths (finish and a re-show's cancel), so a
+    // welcome brought back by clearChat keeps its natural overflow.
+    host.style.overflow = previousOverflow;
     onFinished(animation);
   };
   animation.finished.then(settle).catch(settle);
