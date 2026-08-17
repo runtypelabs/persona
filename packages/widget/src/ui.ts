@@ -6655,8 +6655,11 @@ export const createAgentExperience = (
   });
 
   // Declared here, not beside the rest of the conversation-open state below:
-  // `updateWelcome` reads it during the session's first render.
+  // `updateWelcome` reads them during the session's first render.
   let conversationOpenPendingEl: HTMLElement | null = null;
+  // False during the stand-in's show delay, when the surface it replaces
+  // (welcome or previous transcript) is still the one on screen.
+  let conversationOpenTakeover = false;
 
   // Welcome visibility is derived, never stored: `resolveWelcomeConfig` owns
   // the config and the session's user messages own the dismissal.
@@ -6705,11 +6708,11 @@ export const createAgentExperience = (
 
     const current =
       messages ?? (session ? session.getMessages() : config.initialMessages);
-    // A pending conversation open owns the surface: the transcript is replaced
-    // only at commit, so derived visibility would hold the welcome above the
-    // stand-in for the whole fetch.
-    const openPending = conversationOpenPendingEl !== null;
-    const visible = !openPending && isWelcomeVisible(resolved, current);
+    // An engaged conversation-open stand-in owns the surface: the transcript is
+    // replaced only at commit, so derived visibility would hold the welcome
+    // above the stand-in for the rest of the fetch.
+    const openTakeover = conversationOpenTakeover;
+    const visible = !openTakeover && isWelcomeVisible(resolved, current);
     const flipped = visible !== welcomeShown;
     welcomeShown = visible;
     // Plugin content renders regardless of derived visibility and owns the
@@ -6717,22 +6720,22 @@ export const createAgentExperience = (
     if (welcomePluginContent) {
       welcomeDismissAnimation?.cancel();
       welcomeDismissAnimation = null;
-      if (openPending !== welcomePluginSuppressed) {
-        welcomePluginSuppressed = openPending;
-        // The overlay body class hides every transcript sibling, the pending
+      if (openTakeover !== welcomePluginSuppressed) {
+        welcomePluginSuppressed = openTakeover;
+        // The overlay body class hides every transcript sibling, the engaged
         // stand-in included, so navigation drops it and the return restores it.
-        if (openPending) clearWelcomePluginContent(body, welcomeHost, null);
+        if (openTakeover) clearWelcomePluginContent(body, welcomeHost, null);
         else mountWelcomePluginContent(body, welcomeHost, welcomePluginContent);
       }
       // Plugin content is an absolute overlay, so hiding it collapses no layout.
-      applyWelcomeVisibility(body, welcomeHost, !openPending);
+      applyWelcomeVisibility(body, welcomeHost, !openTakeover);
       return;
     }
     if (
       flipped &&
       !visible &&
       // Navigation is not a first message: that hide is instant.
-      !openPending &&
+      !openTakeover &&
       resolved.dismiss === "on-first-message" &&
       welcomeHydrated
     ) {
@@ -6752,9 +6755,9 @@ export const createAgentExperience = (
       return;
     }
     if (welcomeDismissAnimation) {
-      // A pending open takes the host instantly; every other render must not
+      // An engaged open takes the host instantly; every other render must not
       // hide it out from under the animation.
-      if (!visible && !openPending) return;
+      if (!visible && !openTakeover) return;
       welcomeDismissAnimation.cancel();
       welcomeDismissAnimation = null;
     }
@@ -9033,21 +9036,66 @@ export const createAgentExperience = (
   });
 
   // --- optimistic conversation open ---------------------------------------
-  // Selection acknowledges within a frame: the surface switches immediately
-  // (seeded title, transcript skeleton, gated composer) and hydrates when the
-  // fetch lands. The token invalidates a stale resolution after a newer open,
-  // a new conversation, or a failure the visitor navigated away from.
+  // Selection acknowledges within a frame: the composer gates immediately, the
+  // stand-in takes the surface only if the fetch outlasts the show delay, and
+  // the transcript hydrates when the fetch lands. The token invalidates a stale
+  // resolution after a newer open, a new conversation, or a failure the visitor
+  // navigated away from.
   let conversationOpenToken = 0;
+  // Show delay: opens that land inside it swap straight from the welcome or the
+  // previous conversation to the loaded transcript, so no skeleton ever flashes.
+  const CONVERSATION_OPEN_TAKEOVER_DELAY_MS = 250;
+  let conversationOpenTakeoverTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const cancelConversationOpenTakeover = (): void => {
+    if (conversationOpenTakeoverTimer) clearTimeout(conversationOpenTakeoverTimer);
+    conversationOpenTakeoverTimer = null;
+  };
+  destroyCallbacks.push(cancelConversationOpenTakeover);
+
+  /** Hands the surface to the mounted stand-in. Idempotent by re-application. */
+  const engageConversationOpenTakeover = (): void => {
+    cancelConversationOpenTakeover();
+    const element = conversationOpenPendingEl;
+    if (!element) return;
+    conversationOpenTakeover = true;
+    element.hidden = false;
+    messagesWrapper.style.display = "none";
+    // The welcome is a sibling of the transcript, so hiding the wrapper alone
+    // would leave it painted above the stand-in.
+    updateWelcome();
+  };
 
   const clearConversationOpenPending = (): void => {
     conversationOpenToken += 1;
+    cancelConversationOpenTakeover();
     if (!conversationOpenPendingEl) return;
     conversationOpenPendingEl.remove();
     conversationOpenPendingEl = null;
+    conversationOpenTakeover = false;
     messagesWrapper.style.removeProperty("display");
     setHistoryHostInert(footer, false);
     // Restores the welcome when navigation lands back on an empty transcript.
     updateWelcome();
+  };
+
+  /**
+   * Commit fade for the reopened transcript. WAAPI, not a CSS transition: the
+   * wrapper is the morph target, and post-render inline state is stripped by
+   * every render inside the completion window.
+   */
+  const fadeInTranscript = (): void => {
+    try {
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
+        return;
+      }
+      messagesWrapper.animate([{ opacity: 0 }, { opacity: 1 }], {
+        duration: 150,
+        easing: "ease-out",
+      });
+    } catch {
+      /* environments without WAAPI land the transcript without motion */
+    }
   };
 
   // The stand-in surfaces get the transcript's centered column from their
@@ -9074,11 +9122,17 @@ export const createAgentExperience = (
   const mountConversationOpenState = (element: HTMLElement): void => {
     conversationOpenPendingEl?.remove();
     conversationOpenPendingEl = element;
+    // The takeover is deferred, so the stand-in mounts hidden; one that replaces
+    // an already-engaged stand-in keeps the surface instead of blanking it.
+    element.hidden = !conversationOpenTakeover;
     body.insertBefore(element, messagesWrapper);
-    messagesWrapper.style.display = "none";
-    // The welcome is a sibling of the transcript, so hiding the wrapper alone
-    // would leave it painted above the stand-in.
-    updateWelcome();
+    cancelConversationOpenTakeover();
+    if (!conversationOpenTakeover) {
+      conversationOpenTakeoverTimer = setTimeout(
+        engageConversationOpenTakeover,
+        CONVERSATION_OPEN_TAKEOVER_DELAY_MS
+      );
+    }
     // The composer must not send into the conversation being replaced. The
     // panel exit restores the footer after its animation, so the close path
     // re-asserts this gate (see the history:closed re-assert below).
@@ -9190,6 +9244,9 @@ export const createAgentExperience = (
         content ?? buildDefaultBlock()
       )
     );
+    // A failure must never sit hidden behind the surface it replaces, so the
+    // error skips the stand-in's show delay.
+    engageConversationOpenTakeover();
   };
 
   // The panel exit's deferred teardown restores the footer it captured, which
@@ -9238,6 +9295,8 @@ export const createAgentExperience = (
     resetAnchorState();
     resumeAutoScroll();
     if (!restoreScrollPosition()) jumpToBottomInstant();
+    // Fades only after the scroll settles, so the motion covers the final frame.
+    fadeInTranscript();
     syncEarlierMessagesPill();
     // Without a list at selection time there was no title to seed.
     if (!seededFromList) setActiveConversationSummary(null);

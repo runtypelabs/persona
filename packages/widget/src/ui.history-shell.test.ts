@@ -58,6 +58,18 @@ const flush = async (times = 12) => {
   }
 };
 
+/** Real timers, so a slow open is polled rather than timed to the millisecond. */
+const waitUntil = async (predicate: () => boolean, timeoutMs = 3000) => {
+  const started = Date.now();
+  while (!predicate()) {
+    if (Date.now() - started > timeoutMs) throw new Error("waitUntil timed out");
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    // eslint-disable-next-line no-await-in-loop
+    await flush(8);
+  }
+};
+
 type SetupOptions = {
   config?: Record<string, unknown>;
   provider?: DemoHistoryProviderOptions;
@@ -94,6 +106,9 @@ const historyRoot = (mount: HTMLElement) =>
   mount.querySelector<HTMLElement>(".persona-history-view");
 const bodyOf = (mount: HTMLElement) =>
   mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+/** Transcript wrapper the conversation-open stand-in hides once it takes over. */
+const messagesOf = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>(".persona-widget-messages")!;
 const footerOf = (mount: HTMLElement) =>
   mount.querySelector<HTMLElement>(".persona-widget-footer") ??
   mount.querySelector<HTMLElement>("[data-test-gate]")!;
@@ -1199,50 +1214,56 @@ describe("history shell", () => {
   });
 
   describe("open flow", () => {
-    it("navigates on the click, shows a skeleton, and hydrates on the commit", async () => {
-      const { mount, provider } = setup({ provider: { latencyMs: 30 } });
+    it("navigates on the click, gates the composer, and hydrates without flashing a skeleton", async () => {
+      const { mount, provider } = setup({ provider: { latencyMs: 20 } });
       historyButton(mount)!.click();
       await new Promise((resolve) => setTimeout(resolve, 60));
       await flush(20);
       rowOf(mount, "conv-a")!.click();
       await flush();
-      // Optimistic navigation: the panel leaves immediately (jsdom has no
-      // WAAPI, so the exit settles synchronously), the transcript skeleton
-      // stands in, and the composer is gated until hydration.
+      // Optimistic navigation: the panel leaves immediately (jsdom has no WAAPI,
+      // so the exit settles synchronously) and the composer is gated, but the
+      // stand-in waits out its show delay before it takes the surface.
       expect(historyRoot(mount)).toBeNull();
-      const skeleton = mount.querySelector<HTMLElement>(
+      const standIn = mount.querySelector<HTMLElement>(
         ".persona-conversation-loading"
       )!;
-      expect(skeleton.getAttribute("role")).toBe("status");
-      expect(skeleton.getAttribute("aria-label")).toBe("Loading conversation");
-      // The container class carries the transcript column (stylesheet, not
-      // inline styles) so host CSS can retarget the stand-in.
-      expect(skeleton.classList.contains("persona-conversation-loading")).toBe(
-        true
-      );
+      expect(standIn.getAttribute("role")).toBe("status");
+      expect(standIn.getAttribute("aria-label")).toBe("Loading conversation");
       expect(
-        skeleton.querySelectorAll(".persona-conversation-loading-bubble").length
+        standIn.querySelectorAll(".persona-conversation-loading-bubble").length
       ).toBe(3);
+      expect(standIn.hidden).toBe(true);
+      expect(messagesOf(mount).style.display).toBe("");
       expect(footerOf(mount).hasAttribute("inert")).toBe(true);
       expect(bodyOf(mount).querySelectorAll("[data-message-id]").length).toBe(0);
 
-      // The provider applies latency per internal operation, so the settle
-      // window is a multiple of it.
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      await flush(20);
+      // The provider applies latency per internal operation, so the whole open
+      // is a multiple of it and still lands inside the delay: one swap, and the
+      // skeleton the visitor never saw is simply removed.
+      await waitUntil(
+        () => mount.querySelector(".persona-conversation-loading") === null
+      );
       expect(historyRoot(mount)).toBeNull();
-      expect(mount.querySelector(".persona-conversation-loading")).toBeNull();
       expect(footerOf(mount).hasAttribute("inert")).toBe(false);
       expect(provider.getActiveConversationId()).toBe("conv-a");
       const ids = Array.from(
         bodyOf(mount).querySelectorAll("[data-message-id]")
       ).map((node) => node.getAttribute("data-message-id"));
       expect(ids).toEqual(["a1", "a2", "a3"]);
+      expect(messagesOf(mount).style.display).toBe("");
+
+      // The commit cancelled the takeover, so nothing regresses once the delay
+      // it was scheduled for has passed.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await flush(20);
+      expect(mount.querySelector(".persona-conversation-loading")).toBeNull();
+      expect(messagesOf(mount).style.display).toBe("");
     });
 
-    it("hides the welcome surface for the whole open, not just at hydration", async () => {
+    it("holds the welcome surface through a fast open and hides it at hydration", async () => {
       const { mount } = setup({
-        provider: { latencyMs: 30 },
+        provider: { latencyMs: 20 },
         config: { welcome: { variant: "hero", title: "Welcome home" } },
       });
       // Empty transcript: the hero owns the conversation surface.
@@ -1252,19 +1273,57 @@ describe("history shell", () => {
       await flush(20);
       rowOf(mount, "conv-a")!.click();
       await flush();
-      // Mid-flight the messages have not changed yet, so only the pending open
-      // can suppress the welcome above the stand-in.
-      expect(mount.querySelector(".persona-conversation-loading")).not.toBeNull();
-      expect(welcomeOf(mount).hidden).toBe(true);
+      // Mid-flight the stand-in is still waiting, so the hero holds: a fast open
+      // must not parade welcome, skeleton, transcript.
+      expect(mount.querySelector<HTMLElement>(".persona-conversation-loading")!.hidden).toBe(
+        true
+      );
+      expect(welcomeOf(mount).hidden).toBe(false);
 
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      await flush(20);
-      expect(mount.querySelector(".persona-conversation-loading")).toBeNull();
-      // Derived visibility agrees once the restored user messages land.
+      await waitUntil(
+        () => mount.querySelector(".persona-conversation-loading") === null
+      );
+      // Derived visibility hides the hero once the restored user messages land.
       expect(welcomeOf(mount).hidden).toBe(true);
       expect(
         bodyOf(mount).querySelectorAll("[data-message-id]").length
       ).toBeGreaterThan(0);
+      // The cancelled takeover cannot hide the hero again after the fact.
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await flush(20);
+      expect(messagesOf(mount).style.display).toBe("");
+    });
+
+    it("takes the surface with a skeleton once an open outlasts the show delay", async () => {
+      const { mount, provider } = setup({
+        config: { welcome: { variant: "hero", title: "Welcome home" } },
+      });
+      await openHistoryUI(mount);
+      // Far past the 250ms delay, so the takeover is observable mid-flight.
+      provider.setLatency(600);
+      rowOf(mount, "conv-a")!.click();
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      await flush(20);
+      const skeleton = mount.querySelector<HTMLElement>(
+        ".persona-conversation-loading"
+      )!;
+      expect(skeleton.hidden).toBe(false);
+      expect(messagesOf(mount).style.display).toBe("none");
+      expect(welcomeOf(mount).hidden).toBe(true);
+      expect(footerOf(mount).hasAttribute("inert")).toBe(true);
+
+      // Let the rest of the open run at speed; the transcript replaces the
+      // skeleton and restores the wrapper.
+      provider.setLatency(0);
+      await waitUntil(
+        () => mount.querySelector(".persona-conversation-loading") === null
+      );
+      expect(messagesOf(mount).style.display).toBe("");
+      expect(footerOf(mount).hasAttribute("inert")).toBe(false);
+      const ids = Array.from(
+        bodyOf(mount).querySelectorAll("[data-message-id]")
+      ).map((node) => node.getAttribute("data-message-id"));
+      expect(ids).toEqual(["a1", "a2", "a3"]);
     });
 
     it("keeps the welcome hidden behind the failed-open surface and restores it on the way back", async () => {
