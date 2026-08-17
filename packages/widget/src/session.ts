@@ -1053,10 +1053,17 @@ export class AgentWidgetSession {
    */
   private historyContext(scope?: HistoryScope): HistoryOperationContext {
     const provider = this.requireHistoryProvider();
+    const requested = scope ?? this.config.features?.history?.scope;
+    const derived: HistoryScope = this.config.getIdentityProof
+      ? "verified-user"
+      : "browser";
+    // Only a requested scope fails closed; the derived default narrows to what
+    // the provider advertises.
     const resolved =
-      scope ??
-      this.config.features?.history?.scope ??
-      (this.config.getIdentityProof ? "verified-user" : "browser");
+      requested ??
+      (provider.capabilities.scopes.includes(derived)
+        ? derived
+        : (provider.capabilities.scopes[0] ?? derived));
     if (!provider.capabilities.scopes.includes(resolved)) {
       throw new HistoryProviderError(
         "unsupported_scope",

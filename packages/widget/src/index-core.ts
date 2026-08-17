@@ -152,6 +152,7 @@ export type {
   ResolvedHistoryPresentation,
   HistoryReturnSurface,
   HistoryConversationSummary,
+  HistoryConversationPatch,
   HistoryConversationPage,
   HistoryConversationDetail,
   HistoryDisplayProjection,
@@ -182,6 +183,26 @@ export type {
   AgentWidgetWelcomeVariant,
   AgentWidgetWelcomeDismiss
 } from "./types";
+
+// Custom conversation-history backends (`features.history.provider`). The
+// provider registry beside this module stays private.
+export type {
+  HistoryProvider,
+  HistoryOperationContext,
+  PreparedHistoryActivation,
+  HistoryListOptions,
+  HistoryListResult,
+  HistoryPageOptions,
+  HistoryPageResult,
+  HistoryDeleteAllOptions,
+  HistoryProviderErrorCode,
+} from "./internal/history-provider";
+
+// Value export: custom providers construct and `instanceof` this.
+export {
+  HistoryProviderError,
+  isHistoryProviderError,
+} from "./internal/history-provider";
 
 export {
   applyFeaturePreferences,

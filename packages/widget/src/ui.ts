@@ -7453,9 +7453,18 @@ export const createAgentExperience = (
     const status = session.getStatus();
     return isStreaming || status === "paused" || status === "resuming";
   };
-  const historyScope = (): HistoryScope =>
-    config.features?.history?.scope ??
-    (config.getIdentityProof ? "verified-user" : "browser");
+  const historyScope = (): HistoryScope => {
+    const configured = config.features?.history?.scope;
+    if (configured) return configured;
+    // Derived, not requested: narrow to what the provider advertises rather
+    // than asking it for a scope it will reject.
+    const derived: HistoryScope = config.getIdentityProof
+      ? "verified-user"
+      : "browser";
+    const scopes = historyProvider?.capabilities.scopes;
+    if (!scopes || scopes.includes(derived)) return derived;
+    return scopes[0] ?? derived;
+  };
   const historyOperationScope = (): HistoryScope =>
     historyOperationContext?.scope ?? historyScope();
   const activeHistoryTargetId = (): string | null =>
@@ -7484,12 +7493,25 @@ export const createAgentExperience = (
 
   // --- provider ------------------------------------------------------------
 
+  /** One provider build per widget instance; a new factory identity rebuilds. */
+  let configuredProviderFactory: (() => HistoryProvider) | null = null;
+  let configuredProviderInstance: HistoryProvider | null = null;
+
   const buildHistoryProvider = (): HistoryProvider | null => {
     if (!historyFeatureEnabled()) return null;
-    // Demo override first; production builds the Runtype provider from
-    // client-token config.
+    // Demo/test override first, then the host's own provider; production
+    // without one builds the Runtype provider from client-token config.
     const override = getHistoryProviderFactory();
     if (override) return override();
+    const configured = config.features?.history?.provider;
+    if (configured) {
+      if (typeof configured !== "function") return configured;
+      if (configuredProviderFactory !== configured) {
+        configuredProviderFactory = configured;
+        configuredProviderInstance = configured();
+      }
+      return configuredProviderInstance;
+    }
     if (!session.isClientTokenMode()) return null;
     return createRuntypeHistoryProvider({
       client: session.getClient(),
@@ -11262,6 +11284,7 @@ export const createAgentExperience = (
       // History provider identity: enablement, eligibility, and advertised
       // scopes are all resolved at construction, so a change rebuilds it.
       const previousHistoryEnabled = config.features?.history?.enabled === true;
+      const previousHistoryProvider = config.features?.history?.provider;
       const previousIdentityProof = config.getIdentityProof;
       const previousClientToken = config.clientToken;
       // One consistent recursive patch policy across the live controller and the
@@ -11969,6 +11992,7 @@ export const createAgentExperience = (
       session.updateConfig(config);
       if (
         (config.features?.history?.enabled === true) !== previousHistoryEnabled ||
+        config.features?.history?.provider !== previousHistoryProvider ||
         config.getIdentityProof !== previousIdentityProof ||
         config.clientToken !== previousClientToken
       ) {

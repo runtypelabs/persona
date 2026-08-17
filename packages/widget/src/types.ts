@@ -2796,12 +2796,64 @@ export interface AgentWidgetHistoryRailSection {
 }
 
 /**
- * Feature config for per-visitor conversation history. Client token mode only:
- * the UI never renders for proxy/agent sessions.
+ * Feature config for per-visitor conversation history. Without a `provider`,
+ * client token mode only: the built-in Runtype backend needs one, so the UI
+ * never renders for proxy/agent sessions. A `provider` lifts that restriction.
  */
 export interface AgentWidgetHistoryFeature {
   /** Master switch. Default false: no capability flag on init, no UI. */
   enabled?: boolean;
+  /**
+   * Custom conversation-history backend. Supply one to run the history UX
+   * (list, open, delete, delete-all, header title binding) against your own
+   * storage in ANY session mode, including a custom `apiUrl` backend with no
+   * client token. Omitted, history falls back to the built-in Runtype backend,
+   * which requires client token mode.
+   *
+   * Pass either an instance or a factory. The factory form is called once per
+   * widget instance, so a single script-tag config object (assembled before
+   * install) can back several widgets without sharing provider state. Passing a
+   * new factory identity through `update()` rebuilds the provider.
+   *
+   * Failures are signalled by throwing `HistoryProviderError` with a `code` from
+   * `HistoryProviderErrorCode`. The view branches on that code alone: it never
+   * reads message text, and an untyped throw degrades to a generic error state.
+   *
+   * `prepareOpen`/`prepareStartNew` resolve BEFORE anything visible changes:
+   * they return a `PreparedHistoryActivation` whose `commit()` applies the
+   * already-authorized binding and whose `discard()` idempotently abandons a
+   * superseded activation, leaving the active chat untouched. The widget calls
+   * exactly one of the two per prepared activation.
+   *
+   * Optional capabilities hide their affordances when absent: no `update`
+   * removes the rename/star actions (including the built-in title-menu `star`),
+   * and no `resetDevice` removes "forget this device".
+   *
+   * The provider's `capabilities.scopes` is authoritative: the widget derives a
+   * default scope (`"verified-user"` when `getIdentityProof` is configured,
+   * otherwise `"browser"`) and narrows it to what the provider advertises, so a
+   * browser-only provider is never asked for a scope it cannot serve. An
+   * explicit `features.history.scope` is a hard request and still fails closed
+   * with `unsupported_scope`. `getIdentityProof` is never called for a supplied
+   * provider, and `HistoryOperationContext` carries only the resolved scope;
+   * report your own identity through `getIdentityStatus()` /
+   * `subscribeIdentityStatus()`, which is what the scope banner and its retry
+   * affordance read.
+   *
+   * Reopening the last conversation after a page reload is the host's job: the
+   * widget's boot resume runs only on the built-in Runtype path, so with a
+   * supplied provider the transcript is restored by the storage adapter while
+   * `getActiveConversationId()` starts null (no active row, no
+   * conversation-bound header title) until something opens a conversation.
+   * Persist the id yourself and call `controller.openConversation(id)` on ready
+   * if you want the last conversation to come back automatically.
+   *
+   * @example
+   * ```js
+   * features: { history: { enabled: true, provider: () => myProvider } }
+   * ```
+   */
+  provider?: HistoryProvider | (() => HistoryProvider);
   /** Page size for the conversation list (default 25, server max 100). */
   pageSize?: number;
   /**
@@ -2909,6 +2961,11 @@ export interface AgentWidgetHistoryFeature {
    * otherwise "browser". Before this browser has been identity-bound, a null
    * proof falls back to browser scope for that operation. Once visitor.endUserId
    * is non-null, a null proof fails closed until the host resets history identity.
+   *
+   * With a `provider`, this is a hard request: the provider must advertise it
+   * in `capabilities.scopes` or every history operation fails with
+   * `unsupported_scope`. Leave it unset to let the provider's advertised scope
+   * win.
    */
   scope?: HistoryScope;
   /** Copy overrides. Every user-visible history string must be here. */

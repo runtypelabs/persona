@@ -1,44 +1,27 @@
 /**
- * Internal history provider seam (`docs/visitor-history-implementation-plan.md`
- * D9). Session/UI history code depends on this interface, never on
+ * History provider seam (`docs/visitor-history-implementation-plan.md` D9).
+ * Session/UI history code depends on this interface, never on
  * `AgentWidgetClient`.
  *
- * Not public in v1: nothing here is re-exported from `index.ts` or any tsup
- * entry, so the published package can neither ship nor expose it. The shape a
- * future `features.history.provider` would take.
+ * The module stays under `internal/` but its contract is public: `index-core.ts`
+ * re-exports these declarations so integrators can implement
+ * `features.history.provider`. The provider REGISTRY beside it stays private.
  */
 
 import type {
   AgentWidgetMessage,
+  HistoryConversationPatch,
+  HistoryConversationSummary,
   HistoryIdentityStatus,
   HistoryScope,
 } from "../types";
 
+// Row/patch shapes are declared in `types.ts` (one declaration, two importers).
+export type { HistoryConversationPatch, HistoryConversationSummary };
+
 /** Fixed for the lifetime of one opened history view/action chain. */
 export interface HistoryOperationContext {
   scope: HistoryScope;
-}
-
-/**
- * Provider-neutral conversation row. Deliberately excludes the deprecated
- * Runtype `flowId` alias: only the Runtype boundary understands it.
- */
-export interface HistoryConversationSummary {
-  id: string;
-  title: string;
-  targetId: string | null;
-  preview: string | null;
-  messageCount: number;
-  createdAt: string;
-  updatedAt: string;
-  /** Visitor-pinned flag. Absent when the provider has no update capability. */
-  starred?: boolean;
-}
-
-/** Visitor-editable conversation metadata. Absent fields are left unchanged. */
-export interface HistoryConversationPatch {
-  title?: string;
-  starred?: boolean;
 }
 
 /**
@@ -88,7 +71,7 @@ export interface HistoryDeleteAllOptions {
   context: HistoryOperationContext;
 }
 
-/** Internal in v1; the shape a future public `features.history.provider` would take. */
+/** The contract a `features.history.provider` implementation satisfies. */
 export interface HistoryProvider {
   readonly capabilities: {
     scopes: readonly HistoryScope[];
