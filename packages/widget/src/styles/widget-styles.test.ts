@@ -463,3 +463,26 @@ describe("message action button styles", () => {
     expect(rule).not.toContain("--persona-primary");
   });
 });
+
+describe("conversation-open skeleton styles", () => {
+  it("follows each role's real bubble radius chain", () => {
+    const leading = ".persona-conversation-loading-bubble {";
+    const start = widgetCss.indexOf(leading);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))",
+    );
+
+    const trailing = ".persona-conversation-loading-bubble--trailing {";
+    const trailingStart = widgetCss.indexOf(trailing);
+    const trailingRule = widgetCss.slice(
+      trailingStart,
+      widgetCss.indexOf("\n}", trailingStart),
+    );
+    expect(trailingStart).toBeGreaterThan(-1);
+    expect(trailingRule).toContain(
+      "border-radius: var(--persona-message-user-radius, var(--persona-radius-lg, 0.5rem))",
+    );
+  });
+});

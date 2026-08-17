@@ -1921,9 +1921,11 @@
   padding: 20px;
 }
 
+/* Leading bubbles stand in for assistant messages, trailing for user ones,
+   so each follows its role's real radius chain. */
 .persona-conversation-loading-bubble {
   height: 44px;
-  border-radius: 16px;
+  border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem));
   background: var(--persona-divider, var(--persona-border, #e5e7eb));
   align-self: flex-start;
   animation: persona-conversation-loading-pulse 1400ms ease-in-out infinite;
@@ -1931,6 +1933,7 @@
 
 .persona-conversation-loading-bubble--trailing {
   align-self: flex-end;
+  border-radius: var(--persona-message-user-radius, var(--persona-radius-lg, 0.5rem));
 }
 
 @keyframes persona-conversation-loading-pulse {
