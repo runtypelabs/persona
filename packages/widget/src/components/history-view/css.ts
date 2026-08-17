@@ -643,12 +643,16 @@ export const HISTORY_VIEW_CSS =
 }
 ` +
   /* The sidebar toggle answers to the 36px rows beside it, not to the 44px
-     header controls; the auto tracks above take their width from it. */
+     header controls; the auto tracks above take their width from it. Its color
+     answers to the rail surface, not the conversation header: the shared
+     icon-button rule reads the header action token, which brand themes tint
+     for a colored header band, and that tint has no contrast on the rail. */
   `.persona-history-view--rail .persona-history-topbar button.persona-history-icon-button {
   width: 36px;
   height: 36px;
   min-width: 36px;
   min-height: 36px;
+  color: var(--persona-text-muted, #6b7280);
 }
 ` +
   /* Touch has no hover to aim with, so the target goes back to 44px. */
@@ -675,9 +679,15 @@ export const HISTORY_VIEW_CSS =
   }
 }
 .persona-history-view--rail .persona-history-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--persona-text-muted, #6b7280);
+  font-family: var(--persona-components-history-railHeader-title-fontFamily, inherit);
+  font-size: var(--persona-components-history-railHeader-title-fontSize, 14px);
+  font-weight: var(--persona-components-history-railHeader-title-fontWeight, 600);
+  line-height: var(--persona-components-history-railHeader-title-lineHeight, inherit);
+  letter-spacing: var(--persona-components-history-railHeader-title-letterSpacing, normal);
+  color: var(
+    --persona-components-history-railHeader-title-color,
+    var(--persona-text-muted, #6b7280)
+  );
 }
 ` +
   /* features.history.rail.brand, expanded: the mark leads on the same 16px

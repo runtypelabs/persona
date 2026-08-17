@@ -386,6 +386,11 @@ describe('theme utils', () => {
               background: 'palette.colors.gray.100',
               border: '1px solid #e5e7eb',
               minHeight: '64px',
+              title: {
+                color: 'palette.colors.gray.900',
+                fontSize: '15px',
+                fontWeight: '700',
+              },
             },
           },
         },
@@ -397,6 +402,10 @@ describe('theme utils', () => {
     expect(custom['--persona-history-rail-header-bg']).toBe('#f3f4f6');
     expect(custom['--persona-history-rail-header-border']).toBe('1px solid #e5e7eb');
     expect(custom['--persona-history-rail-header-min-height']).toBe('64px');
+    // The rail title is styled straight off the auto-emitted component vars.
+    expect(custom['--persona-components-history-railHeader-title-color']).toBe('#111827');
+    expect(custom['--persona-components-history-railHeader-title-fontSize']).toBe('15px');
+    expect(custom['--persona-components-history-railHeader-title-fontWeight']).toBe('700');
   });
 
   it('emits the floating rail aliases only when set', () => {

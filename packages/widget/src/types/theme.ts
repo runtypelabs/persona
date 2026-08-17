@@ -271,6 +271,12 @@ export interface HistoryTokens {
     border?: string;
     /** Strip height floor. Defaults to `components.header.minHeight`, then 56px. */
     minHeight?: string;
+    /**
+     * The strip's view title ("Messages"). Muted 14px/600 by default so the
+     * label defers to the conversation header band beside it; set `color`
+     * (and the type keys) to promote it.
+     */
+    title?: TextStyleTokens;
   };
   /**
    * The floating rail that a collapsed
