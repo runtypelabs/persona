@@ -521,7 +521,6 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view .persona-history-view-loading {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   /* Show-delay: loads that resolve inside 250ms never flash the skeleton. */
   animation: persona-history-skeleton-in 120ms ease-out 250ms both;
 }
@@ -529,22 +528,37 @@ export const HISTORY_VIEW_CSS =
   from { opacity: 0; }
   to { opacity: 1; }
 }
-.persona-history-view .persona-history-skeleton-row {
+` +
+  /* Mirrors the row anatomy exactly (same box, head line with the time slot,
+     preview under), so the loaded rows land where the skeleton stood. Bar
+     height splits the 21px line: text-sized pill, line-spaced rhythm. */
+  `.persona-history-view .persona-history-skeleton-row {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 9px;
   min-height: var(--persona-history-row-min-height);
   padding: 10px 16px;
 }
+.persona-history-view .persona-history-skeleton-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .persona-history-view .persona-history-skeleton-bar {
-  height: 10px;
+  height: 12px;
   border-radius: 999px;
   background: var(--persona-history-skeleton-bg);
   animation: persona-history-pulse 1400ms ease-in-out infinite;
 }
-.persona-history-view .persona-history-skeleton-bar + .persona-history-skeleton-bar {
-  margin-top: 10px;
+.persona-history-view .persona-history-skeleton-bar--time {
+  flex: 0 0 auto;
+  width: 22px;
 }
-.persona-history-view .persona-history-skeleton-bar--short { width: 40%; }
-.persona-history-view .persona-history-skeleton-bar--wide { width: 88%; }
-.persona-history-view .persona-history-skeleton-bar--medium { width: 64%; }
+.persona-history-view .persona-history-skeleton-bar--preview {
+  width: 88%;
+}
 @keyframes persona-history-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }
@@ -856,6 +870,10 @@ export const HISTORY_VIEW_CSS =
 }
 .persona-history-view--rail .persona-history-skeleton-row {
   padding: 6px 16px;
+}
+.persona-history-view--rail .persona-history-skeleton-bar--preview,
+.persona-history-view--rail .persona-history-skeleton-bar--time {
+  display: none;
 }
 ` +
   /* Collapsed rail: an icon column of the expand toggle over an icon-only

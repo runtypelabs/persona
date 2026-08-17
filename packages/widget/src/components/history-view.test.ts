@@ -844,6 +844,21 @@ describe("history view list states", () => {
     expect(block?.getAttribute("role")).toBe("status");
     expect(block?.getAttribute("aria-label")).toBe("Loading conversations");
     expect(block?.querySelectorAll(".persona-history-skeleton-row")).toHaveLength(3);
+    // Mirrors the row anatomy: head line with title and time bars, preview under.
+    const first = block?.querySelector(".persona-history-skeleton-row");
+    expect(
+      first?.querySelector(
+        ".persona-history-skeleton-head .persona-history-skeleton-bar--title"
+      )
+    ).not.toBeNull();
+    expect(
+      first?.querySelector(
+        ".persona-history-skeleton-head .persona-history-skeleton-bar--time"
+      )
+    ).not.toBeNull();
+    expect(
+      first?.querySelector(".persona-history-skeleton-bar--preview")
+    ).not.toBeNull();
     expect(block?.textContent).toBe("");
   });
 

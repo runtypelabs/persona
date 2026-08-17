@@ -181,8 +181,13 @@ function buildBlock(
   );
 }
 
-/** Three row-shaped skeletons, no fake readable text. Motion is CSS-gated. */
+/**
+ * Three skeletons mirroring the row anatomy (title left, time right, preview
+ * under), no fake readable text. Motion is CSS-gated.
+ */
 function buildLoadingBlock(copy: ResolvedHistoryViewCopy): HTMLElement {
+  const titleWidths = ["42%", "58%", "34%"];
+  const previewWidths = ["94%", "78%", "88%"];
   const rows = [0, 1, 2].map((index) =>
     createNode(
       "div",
@@ -190,13 +195,23 @@ function buildLoadingBlock(copy: ResolvedHistoryViewCopy): HTMLElement {
         className: "persona-history-skeleton-row",
         attrs: { "aria-hidden": "true" },
       },
+      createNode(
+        "div",
+        { className: "persona-history-skeleton-head" },
+        createNode("div", {
+          className:
+            "persona-history-skeleton-bar persona-history-skeleton-bar--title",
+          style: { width: titleWidths[index] },
+        }),
+        createNode("div", {
+          className:
+            "persona-history-skeleton-bar persona-history-skeleton-bar--time",
+        })
+      ),
       createNode("div", {
-        className: "persona-history-skeleton-bar persona-history-skeleton-bar--short",
-      }),
-      createNode("div", {
-        className: `persona-history-skeleton-bar persona-history-skeleton-bar--${
-          index === 1 ? "medium" : "wide"
-        }`,
+        className:
+          "persona-history-skeleton-bar persona-history-skeleton-bar--preview",
+        style: { width: previewWidths[index] },
       })
     )
   );
