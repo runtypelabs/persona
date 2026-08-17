@@ -1,5 +1,12 @@
 # @runtypelabs/persona
 
+## 4.17.1
+
+### Patch Changes
+
+- 66e9360: Regenerate the Runtype OpenAPI contract types to match the current public API spec. Adds visitor/identity fields to client init (`identityProof`, `visitorToken`, `visitorHistory`, `conversationId`), `conversationId`/`conversationRevision`/`visitor`/`app`/`targetId` on the init response, a `requests[]` array and `externalAgent` on await events, `stepErrorCount` on execution completion, and `displayContent` on chat request messages.
+- 510d4ae: Bump `@mcp-b/webmcp-polyfill` to 4.0.0.
+
 ## 4.17.0
 
 ### Minor Changes
