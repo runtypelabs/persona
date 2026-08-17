@@ -69,7 +69,6 @@ const PINNED_CSS = `
   margin: 0 6px;
   padding: 6px 10px;
   border: 0;
-  border-left: 2px solid var(--persona-primary, #2563eb);
   border-radius: 8px;
   background: transparent;
   color: inherit;
