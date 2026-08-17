@@ -112,6 +112,9 @@ const visibleHeaderChildren = (header: HTMLElement) =>
       !child.hasAttribute("data-persona-history-suppressed") &&
       !child.classList.contains("persona-history-header-host")
   );
+/** Permanent welcome host; `applyWelcomeVisibility` toggles its hidden state. */
+const welcomeOf = (mount: HTMLElement) =>
+  mount.querySelector<HTMLElement>("[data-persona-welcome]")!;
 const rowOf = (mount: HTMLElement, id: string) =>
   mount.querySelector<HTMLButtonElement>(`[data-persona-history-conversation="${id}"]`);
 const dialogOf = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
@@ -1235,6 +1238,56 @@ describe("history shell", () => {
         bodyOf(mount).querySelectorAll("[data-message-id]")
       ).map((node) => node.getAttribute("data-message-id"));
       expect(ids).toEqual(["a1", "a2", "a3"]);
+    });
+
+    it("hides the welcome surface for the whole open, not just at hydration", async () => {
+      const { mount } = setup({
+        provider: { latencyMs: 30 },
+        config: { welcome: { variant: "hero", title: "Welcome home" } },
+      });
+      // Empty transcript: the hero owns the conversation surface.
+      expect(welcomeOf(mount).hidden).toBe(false);
+      historyButton(mount)!.click();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await flush(20);
+      rowOf(mount, "conv-a")!.click();
+      await flush();
+      // Mid-flight the messages have not changed yet, so only the pending open
+      // can suppress the welcome above the stand-in.
+      expect(mount.querySelector(".persona-conversation-loading")).not.toBeNull();
+      expect(welcomeOf(mount).hidden).toBe(true);
+
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await flush(20);
+      expect(mount.querySelector(".persona-conversation-loading")).toBeNull();
+      // Derived visibility agrees once the restored user messages land.
+      expect(welcomeOf(mount).hidden).toBe(true);
+      expect(
+        bodyOf(mount).querySelectorAll("[data-message-id]").length
+      ).toBeGreaterThan(0);
+    });
+
+    it("keeps the welcome hidden behind the failed-open surface and restores it on the way back", async () => {
+      const { mount, provider } = setup({
+        config: { welcome: { variant: "hero", title: "Welcome home" } },
+      });
+      provider.setFailure("getPage", { code: "unavailable" });
+      await openHistoryUI(mount);
+      rowOf(mount, "conv-a")!.click();
+      await flush(20);
+      const error = mount.querySelector<HTMLElement>(
+        ".persona-conversation-loading-error"
+      )!;
+      expect(welcomeOf(mount).hidden).toBe(true);
+
+      const back = Array.from(error.querySelectorAll("button")).find(
+        (button) => button.textContent === "Back to messages"
+      )!;
+      back.click();
+      await flush(20);
+      // The transcript never changed, so the welcome comes back with it.
+      expect(bodyOf(mount).querySelectorAll("[data-message-id]").length).toBe(0);
+      expect(welcomeOf(mount).hidden).toBe(false);
     });
 
     it("routes the transcript stand-in through loadingIndicator.render", async () => {

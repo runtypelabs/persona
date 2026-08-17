@@ -44,7 +44,7 @@
   {
     "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "168.5 kB",
+    "limit": "168.75 kB",
     "gzip": true
   },
   {

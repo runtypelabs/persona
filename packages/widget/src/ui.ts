@@ -6654,6 +6654,10 @@ export const createAgentExperience = (
     if (config.autoFocusInput) setTimeout(() => maybeFocusInput(), 200);
   });
 
+  // Declared here, not beside the rest of the conversation-open state below:
+  // `updateWelcome` reads it during the session's first render.
+  let conversationOpenPendingEl: HTMLElement | null = null;
+
   // Welcome visibility is derived, never stored: `resolveWelcomeConfig` owns
   // the config and the session's user messages own the dismissal.
   let welcomeShown = !welcomeHost.hidden;
@@ -6670,6 +6674,9 @@ export const createAgentExperience = (
   // Element returned by a `renderWelcome` plugin, or null when the default
   // renderer owns the host. A plugin element ignores derived visibility.
   let welcomePluginContent: HTMLElement | null = null;
+  // True while plugin content stays mounted but unmounted from the overlay,
+  // so the pending stand-in the overlay body class would hide stays visible.
+  let welcomePluginSuppressed = false;
   const updateWelcome = (messages?: AgentWidgetMessage[]) => {
     const resolved = resolveWelcomeConfig(config);
     const welcomeKey = `${resolved.variant}|${resolved.dismiss}|${resolved.title}|${resolved.subtitle}`;
@@ -6698,7 +6705,11 @@ export const createAgentExperience = (
 
     const current =
       messages ?? (session ? session.getMessages() : config.initialMessages);
-    const visible = isWelcomeVisible(resolved, current);
+    // A pending conversation open owns the surface: the transcript is replaced
+    // only at commit, so derived visibility would hold the welcome above the
+    // stand-in for the whole fetch.
+    const openPending = conversationOpenPendingEl !== null;
+    const visible = !openPending && isWelcomeVisible(resolved, current);
     const flipped = visible !== welcomeShown;
     welcomeShown = visible;
     // Plugin content renders regardless of derived visibility and owns the
@@ -6706,12 +6717,22 @@ export const createAgentExperience = (
     if (welcomePluginContent) {
       welcomeDismissAnimation?.cancel();
       welcomeDismissAnimation = null;
-      applyWelcomeVisibility(body, welcomeHost, true);
+      if (openPending !== welcomePluginSuppressed) {
+        welcomePluginSuppressed = openPending;
+        // The overlay body class hides every transcript sibling, the pending
+        // stand-in included, so navigation drops it and the return restores it.
+        if (openPending) clearWelcomePluginContent(body, welcomeHost, null);
+        else mountWelcomePluginContent(body, welcomeHost, welcomePluginContent);
+      }
+      // Plugin content is an absolute overlay, so hiding it collapses no layout.
+      applyWelcomeVisibility(body, welcomeHost, !openPending);
       return;
     }
     if (
       flipped &&
       !visible &&
+      // Navigation is not a first message: that hide is instant.
+      !openPending &&
       resolved.dismiss === "on-first-message" &&
       welcomeHydrated
     ) {
@@ -6731,13 +6752,17 @@ export const createAgentExperience = (
       return;
     }
     if (welcomeDismissAnimation) {
-      // Later renders must not hide the host out from under the animation.
-      if (!visible) return;
+      // A pending open takes the host instantly; every other render must not
+      // hide it out from under the animation.
+      if (!visible && !openPending) return;
       welcomeDismissAnimation.cancel();
       welcomeDismissAnimation = null;
     }
+    // The host still holds layout while a cancelled dismiss was running, so the
+    // repin keys off the applied state rather than the derived flip.
+    const wasLaidOut = !welcomeHost.hidden;
     applyWelcomeVisibility(body, welcomeHost, visible);
-    if (flipped && !visible) repinAnchoredMessage();
+    if (!visible && wasLaidOut) repinAnchoredMessage();
   };
 
   // `renderWelcome` arbitration. The core owns the host; a re-render runs the
@@ -6810,6 +6835,7 @@ export const createAgentExperience = (
       runWelcomeCleanups();
       clearWelcomePluginContent(body, welcomeHost, welcomePluginContent);
       welcomePluginContent = null;
+      welcomePluginSuppressed = false;
 
       const current = session ? session.getMessages() : config.initialMessages;
       const visible = isWelcomeVisible(resolved, current);
@@ -9012,7 +9038,6 @@ export const createAgentExperience = (
   // fetch lands. The token invalidates a stale resolution after a newer open,
   // a new conversation, or a failure the visitor navigated away from.
   let conversationOpenToken = 0;
-  let conversationOpenPendingEl: HTMLElement | null = null;
 
   const clearConversationOpenPending = (): void => {
     conversationOpenToken += 1;
@@ -9021,6 +9046,8 @@ export const createAgentExperience = (
     conversationOpenPendingEl = null;
     messagesWrapper.style.removeProperty("display");
     setHistoryHostInert(footer, false);
+    // Restores the welcome when navigation lands back on an empty transcript.
+    updateWelcome();
   };
 
   // The stand-in surfaces get the transcript's centered column from their
@@ -9049,6 +9076,9 @@ export const createAgentExperience = (
     conversationOpenPendingEl = element;
     body.insertBefore(element, messagesWrapper);
     messagesWrapper.style.display = "none";
+    // The welcome is a sibling of the transcript, so hiding the wrapper alone
+    // would leave it painted above the stand-in.
+    updateWelcome();
     // The composer must not send into the conversation being replaced. The
     // panel exit restores the footer after its animation, so the close path
     // re-asserts this gate (see the history:closed re-assert below).
