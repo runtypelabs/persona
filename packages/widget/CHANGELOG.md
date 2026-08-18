@@ -1709,25 +1709,20 @@
   - Sensitive data redaction (show PII to user, hide from LLM)
   - Context injection (rich LLM context with minimal UI footprint)
 
-- 28132f6: Rename travrse to runtype and update API URLs
+- 28132f6: Rebrand to Runtype and update API URLs
 
-  - Update all references from "travrse" to "runtype" throughout codebase
-  - Change API endpoint from api.travrse.ai to api.runtype.com
-  - Update environment variable names (TRAVRSE_API_KEY -> RUNTYPE_API_KEY)
-  - Update data attribute from data-travrse-token to data-runtype-token
-  - Update CSS variable names from --travrse-_ to --runtype-_
-  - Rename types TravrseFlowConfig -> RuntypeFlowConfig (with deprecated aliases)
+  - Update naming throughout the codebase
+  - API endpoint is `api.runtype.com`
+  - Environment variable is `RUNTYPE_API_KEY`
+  - Data attribute is `data-runtype-token`
+  - CSS variables are `--runtype-*`
+  - Flow config types are `RuntypeFlowConfig` and `RuntypeFlowStep`
 
   **Breaking Changes:**
 
   - Default API endpoint changed to `api.runtype.com`
-  - Data attribute changed from `data-travrse-token` to `data-runtype-token`
-  - CSS variables renamed from `--travrse-*` to `--runtype-*`
-
-  **Backwards Compatibility:**
-
-  - `TRAVRSE_API_KEY` environment variable is still supported as a fallback
-  - `TravrseFlowStep` and `TravrseFlowConfig` types are exported as deprecated aliases
+  - Data attribute is now `data-runtype-token`
+  - CSS variables are now `--runtype-*`
 
 ## 1.36.1
 
