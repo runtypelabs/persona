@@ -7,6 +7,11 @@
  * widget package takes on no polyfill dependency. These mirror the WebMCP draft
  * (`registerTool(tool, { signal })`) and the MCP tool-result envelope that
  * `@mcp-b/webmcp-polyfill` expects `execute` to return.
+ *
+ * Note that `registerTool` is async in both the spec (`Promise<undefined>`) and
+ * the polyfill, and rejects on an already-aborted `signal`. A synchronous
+ * `try`/`catch` around a call will NOT catch that: await it, or attach a
+ * `.catch()`.
  */
 
 import type { AgentWidgetConfig } from '../../types';
@@ -43,7 +48,34 @@ export interface ToolAnnotations {
   untrustedContentHint?: boolean;
 }
 
-export type ToolExecute = (input: unknown) => Promise<ToolResult> | ToolResult;
+/**
+ * Second argument handed to `execute`. Its shape is NOT stable across runtimes,
+ * so both members are optional and a tool MUST feature-detect before using
+ * either:
+ *
+ *   - Native Chrome (≥ 153.0.8009.0) passes `{ signal }`: an `AbortSignal` that
+ *     fires when the user or agent cancels the call. Per webmachinelearning/
+ *     webmcp#247, which is still an OPEN spec PR: the published IDL declares
+ *     `execute` single-argument, so Chrome is ahead of the spec text here.
+ *   - `@mcp-b/webmcp-polyfill` instead passes `{ requestUserInteraction }`, a
+ *     polyfill-only extension present in neither the spec nor Chrome. It races
+ *     `execute()` against its own abort signal but never hands that signal to
+ *     the tool, so a polyfill-driven tool cannot observe cancellation at all.
+ *
+ * Verified against polyfill 4.0.0 and 4.1.0-beta.20260702224704 (the beta ships
+ * a byte-identical bundle: no in-flight alignment with #247).
+ */
+export interface ToolExecuteContext {
+  /** Present on native Chrome ≥ 153. Absent under `@mcp-b/webmcp-polyfill`. */
+  signal?: AbortSignal;
+  /** Polyfill-only extension. Absent on native Chrome and not in the spec. */
+  requestUserInteraction?: (callback: () => unknown) => Promise<unknown>;
+}
+
+export type ToolExecute = (
+  input: unknown,
+  context?: ToolExecuteContext,
+) => Promise<ToolResult> | ToolResult;
 
 export interface WebMcpTool {
   name: string;

@@ -25,7 +25,7 @@ export type PaintBridge = {
   setColors(foreground?: string, background?: string): PaintState;
   drawStroke(
     points: Array<{ x: number; y: number }>,
-    options?: { durationMs?: number },
+    options?: { durationMs?: number; signal?: AbortSignal },
   ): Promise<PaintState>;
   undo(): PaintState;
   redo(): PaintState;

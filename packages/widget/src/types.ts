@@ -815,8 +815,10 @@ export type WebMcpConfirmInfo = {
   /**
    * Why the confirm was requested. Currently always `'gate'`: the default
    * confirm-by-default gate that fires before every `webmcp:*` call. (The
-   * `@mcp-b/webmcp-polyfill` owns the spec's `requestUserInteraction` callback
-   * internally, so Persona no longer surfaces a nested in-tool confirm.)
+   * `@mcp-b/webmcp-polyfill` owns its `requestUserInteraction` callback
+   * internally, so Persona no longer surfaces a nested in-tool confirm. That
+   * callback is a polyfill-only extension — it is in neither the WebMCP spec
+   * nor native Chrome — so on native there is no nested confirm to surface.)
    */
   reason: 'gate';
 };

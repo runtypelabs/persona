@@ -8,6 +8,13 @@
 // contextProvider (shop_context), never via a read call.
 
 import {
+  getModelContext,
+  registerWebMcpTools,
+  type WebMcpToolContext,
+  type WebMcpToolDescriptor,
+} from "@runtypelabs/persona/webmcp-tool";
+
+import {
   BRANDS,
   CATEGORIES,
   COLORS,
@@ -25,22 +32,7 @@ declare global {
   }
 }
 
-type ToolDescriptor = {
-  name: string;
-  title?: string;
-  description: string;
-  inputSchema: object;
-  annotations?: Record<string, unknown>;
-  execute: (args: Record<string, unknown>) => unknown | Promise<unknown>;
-};
-
-type RegisterableModelContext = {
-  registerTool: (tool: ToolDescriptor, options?: { signal?: AbortSignal }) => void;
-};
-
-const getModelContext = (): RegisterableModelContext | undefined =>
-  (document as unknown as { modelContext?: RegisterableModelContext }).modelContext ??
-  (navigator as unknown as { modelContext?: RegisterableModelContext }).modelContext;
+type ToolDescriptor = WebMcpToolDescriptor<WebMcpToolContext>;
 
 const toolResult = (data: unknown, summary?: string): unknown => ({
   content: [
@@ -95,8 +87,7 @@ function toUpdate(args: Record<string, unknown>): FilterUpdate {
 }
 
 export function setupShopTools(store: ShopStore): void {
-  const modelContext = getModelContext();
-  if (!modelContext) {
+  if (!getModelContext()) {
     console.warn("[Shop] document.modelContext unavailable; tools not registered");
     return;
   }
@@ -176,14 +167,14 @@ export function setupShopTools(store: ShopStore): void {
     },
   ];
 
-  for (const tool of tools) {
-    try {
-      const descriptor = tool.title
-        ? { ...tool, annotations: { title: tool.title, ...tool.annotations } }
-        : tool;
-      modelContext.registerTool(descriptor, { signal });
-    } catch (error) {
-      console.warn(`[Shop] Failed to register ${tool.name}`, error);
-    }
-  }
+  // `registerWebMcpTools` normalizes each execute() context, forwards `signal`
+  // as the batch's unregister lifetime, and catches BOTH synchronous throws and
+  // promise rejections (registerTool is async and rejects on an already-aborted
+  // signal, which a plain try/catch would miss).
+  void registerWebMcpTools(tools, {
+    signal,
+    onError: (toolName, error) => {
+      console.warn(`[Shop] Failed to register ${toolName}`, error);
+    },
+  });
 }

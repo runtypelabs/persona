@@ -9,6 +9,7 @@ import {
   type AgentWidgetInitHandle,
   type WebMcpConfirmInfo,
 } from "@runtypelabs/persona";
+import type { WebMcpToolDescriptor } from "@runtypelabs/persona/webmcp-tool";
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 import { registerOttoCharts } from "./docked-panel-charts";
 
@@ -28,20 +29,17 @@ const apiUrl =
     ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-docked`
     : `http://localhost:${proxyPort}/api/chat/dispatch-docked`;
 
-/** Minimal structural view of the WebMCP producer surface (see webmcp-demo.ts). */
-interface RegisterableModelContext {
+/**
+ * The WebMCP producer surface, from `@runtypelabs/persona/webmcp-tool`. These
+ * tools register one at a time rather than through `registerWebMcpTools`, and
+ * none of them needs `execute`'s second argument.
+ */
+type RegisterableModelContext = {
   registerTool(
-    tool: {
-      name: string;
-      title?: string;
-      description: string;
-      inputSchema?: object;
-      annotations?: Record<string, unknown>;
-      execute: (args: Record<string, unknown>) => unknown;
-    },
+    tool: WebMcpToolDescriptor,
     options?: { signal?: AbortSignal },
-  ): void;
-}
+  ): void | Promise<void>;
+};
 
 /** Read-only tools run without confirmation; mutations get Otto's approval bubble. */
 const READ_ONLY_TOOLS = new Set([

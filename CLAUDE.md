@@ -124,6 +124,7 @@ The widget uses a layered architecture:
    - `postprocessors.ts` - Markdown and directive postprocessors
    - `defaults.ts` - Default configuration with light/dark theme presets
    - `smart-dom-reader.ts` - Optional entry (`@runtypelabs/persona/smart-dom-reader`) exposing a `contextProviders` provider backed by a vendored `@mcp-b/smart-dom-reader` (`src/vendor/`, see its README) for Shadow-DOM-piercing page context; kept out of the main bundle. The pure mapper is `utils/smart-dom-adapter.ts`.
+   - `webmcp-tool.ts` - Optional entry (`@runtypelabs/persona/webmcp-tool`) with the only *producer*-side helpers Persona ships: `defineWebMcpTool` / `registerWebMcpTools` normalize `execute()`'s non-portable second argument (native Chrome passes `{ signal }`, `@mcp-b/webmcp-polyfill` passes `{ requestUserInteraction }`, Chrome < 153 passes nothing) so tool bodies are runtime-agnostic. `capabilities.cancellation` reports whether the signal can actually fire. Imports nothing; usable from a page that never loads the widget. See the header comment for the compatibility table.
 
 ### Key Patterns
 
@@ -200,6 +201,7 @@ The widget builds to multiple formats via tsup:
 - `dist/launcher.global.js` - IIFE critical launcher bundle (deferred-loading fast path; see "Deferred Launcher Loading")
 - `dist/webmcp-polyfill.js` - Self-contained ESM chunk with `@mcp-b/webmcp-polyfill`; lazy-imported by the IIFE bundle (which marks the polyfill external) only when `config.webmcp.enabled` is true and the page has no `document.modelContext`. URL is derived from the widget script's `src` by the loader registered in `index-global.ts`.
 - `dist/index.d.ts` - TypeScript declarations
+- `dist/webmcp-tool.js` / `.cjs` - Producer-side WebMCP tool helpers (`@runtypelabs/persona/webmcp-tool`); dependency-free, ~1 KB
 - `dist/widget.css` - Prefixed, hand-authored utility CSS (for consumers who import styles separately)
 
 ## CI

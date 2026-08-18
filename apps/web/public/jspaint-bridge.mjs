@@ -138,7 +138,11 @@ window.__paintBridge = {
 	 * point, paced pointermoves along the (densified) path, pointerup at the
 	 * last. Pacing makes the drawing visibly animate: that IS the demo.
 	 */
-	async drawStroke(rawPoints, { durationMs = 800 } = {}) {
+	// `signal` (when the caller has one: native Chrome >= 153 hands WebMCP tools
+	// an AbortSignal) cuts the animation short. We always finish with a
+	// `pointerup` even when aborted: bailing with the pointer still down leaves
+	// jspaint mid-drag, and the next stroke would smear from the abandoned point.
+	async drawStroke(rawPoints, { durationMs = 800, signal } = {}) {
 		if (!Array.isArray(rawPoints) || rawPoints.length === 0) {
 			throw new Error("drawStroke needs at least one point");
 		}
@@ -159,15 +163,18 @@ window.__paintBridge = {
 		// the remaining events synchronously once it's spent. Focused pages get
 		// the smooth animation; throttled ones still complete promptly.
 		const budgetEndsAt = performance.now() + durationMs * 2;
+		let lastPoint = sampled[0];
 		for (const point of sampled) {
+			if (signal?.aborted) break;
+			lastPoint = point;
 			const { clientX, clientY } = toClient(point.x, point.y);
 			triggerPointerEvent("pointermove", clientX, clientY);
 			if (performance.now() < budgetEndsAt) await sleep(delay);
 		}
-		const last = toClient(
-			sampled[sampled.length - 1].x,
-			sampled[sampled.length - 1].y,
-		);
+		// Lift at wherever we actually stopped, not the intended endpoint: on an
+		// abort those differ, and releasing at the endpoint would draw the very
+		// segment the cancel was meant to prevent.
+		const last = toClient(lastPoint.x, lastPoint.y);
 		triggerPointerEvent("pointerup", last.clientX, last.clientY);
 		return this.getState();
 	},

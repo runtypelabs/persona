@@ -31,9 +31,13 @@
  * including those that never opted into WebMCP.
  *
  * Confirm model: every `webmcp:*` call goes through one confirm gate before
- * `execute()` runs, regardless of `annotations.readOnlyHint`. (The polyfill owns
- * the spec's `client.requestUserInteraction` callback internally; Persona cannot
- * inject a nested confirm there, so the single outer gate is the whole story.)
+ * `execute()` runs, regardless of `annotations.readOnlyHint`. (When the polyfill
+ * is driving, it owns its `client.requestUserInteraction` callback internally;
+ * Persona cannot inject a nested confirm there, so the single outer gate is the
+ * whole story. `requestUserInteraction` is a POLYFILL-ONLY extension: it is in
+ * neither the WebMCP spec nor native Chrome, which passes `{ signal }` as
+ * `execute`'s second argument instead. Either way the outer gate is unaffected,
+ * since it fires before we call `executeTool` at all.)
  */
 
 import type {
@@ -64,8 +68,12 @@ export const WEBMCP_TOOL_PREFIX = "webmcp:";
 interface ModelContextToolInfo {
   name: string;
   description: string;
-  /** JSON-encoded JSON Schema for the tool's input. */
-  inputSchema?: string;
+  /**
+   * JSON Schema for the tool's input. `@mcp-b/webmcp-polyfill` returns this
+   * JSON-*encoded*; the spec IDL types it as an `object`. `parseSchema` accepts
+   * either, so both runtimes yield a usable `parametersSchema`.
+   */
+  inputSchema?: string | object;
   /**
    * Display title declared on the tool (`ToolDescriptor.title` in the WebMCP
    * spec). The polyfill returns `""` when the tool didn't declare one. Note:
@@ -584,12 +592,20 @@ const matchesGlob = (name: string, pattern: string): boolean => {
 };
 
 /**
- * Parse the JSON-string `inputSchema` from `getTools()` back into an object for
+ * Parse the `inputSchema` from `getTools()` into an object for
  * `parametersSchema`. Returns `undefined` for a missing or unparseable schema
  * (the server can still accept a tool with no declared parameters).
+ *
+ * Accepts BOTH a JSON string and an already-parsed object. `@mcp-b/webmcp-
+ * polyfill` returns a string (`JSON.stringify(tool.inputSchema)`), which is
+ * what we see today, but the spec IDL types `RegisteredTool.inputSchema` as an
+ * `object`. Handling both means a runtime that follows the IDL literally
+ * degrades to "no declared parameters" instead of silently shipping every
+ * WebMCP tool to the model with its schema dropped.
  */
-const parseSchema = (raw: string | undefined): object | undefined => {
+const parseSchema = (raw: string | object | undefined): object | undefined => {
   if (raw === undefined || raw === "") return undefined;
+  if (typeof raw === "object") return raw === null ? undefined : raw;
   try {
     const parsed = JSON.parse(raw);
     return parsed !== null && typeof parsed === "object"

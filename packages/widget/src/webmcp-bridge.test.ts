@@ -14,6 +14,16 @@ import type {
 //   - getTools(): async; inputSchema is a JSON string; NO annotations
 //   - executeTool(info, argsJson, { signal }): async; validates+runs execute(),
 //     returns JSON.stringify(rawResult) or null; honors the abort signal.
+//
+// `execute`'s SECOND argument differs by runtime, so the fake models both via
+// `registry.executeContext`:
+//   - "polyfill" (default): `{ requestUserInteraction }`, a polyfill-only
+//     extension in neither the spec nor Chrome. The polyfill races execute()
+//     against its signal but never hands the signal to the tool.
+//   - "native": `{ signal }`, per Chrome ≥ 153.0.8009.0 and the (still OPEN)
+//     spec PR webmachinelearning/webmcp#247.
+// The bridge itself is indifferent — it only ever calls `executeTool` — but the
+// fake carries both so provider-side expectations stay honest.
 // ---------------------------------------------------------------------------
 
 const polyfillMock = { initThrows: false };
@@ -35,29 +45,46 @@ import {
 } from "./webmcp-bridge";
 import type { ClientToolDefinition } from "./types";
 
-type MockClient = { requestUserInteraction: (cb: () => unknown) => Promise<unknown> };
+type MockExecuteContext = {
+  /** Native Chrome ≥ 153 only. */
+  signal?: AbortSignal;
+  /** `@mcp-b/webmcp-polyfill` only. */
+  requestUserInteraction?: (cb: () => unknown) => Promise<unknown>;
+};
 
 type MockTool = {
   name: string;
   description?: string;
   inputSchema?: object;
+  /**
+   * Return `inputSchema` from `getTools()` verbatim instead of JSON-encoding
+   * it, modeling a runtime that follows the spec IDL (`object inputSchema`)
+   * rather than the polyfill's JSON-string convention.
+   */
+  rawInputSchema?: boolean;
   title?: string;
-  execute: (args: Record<string, unknown>, client: MockClient) => unknown;
+  execute: (args: Record<string, unknown>, context: MockExecuteContext) => unknown;
 };
 
-const registry: { tools: MockTool[] } = { tools: [] };
+const registry: {
+  tools: MockTool[];
+  executeContext: "polyfill" | "native";
+} = { tools: [], executeContext: "polyfill" };
 
 /** A fake `document.modelContext` exposing the strict consumer surface. */
 const makeModelContext = () => ({
   async getTools() {
     // Mirrors the real polyfill's getRegisteredToolInfos(): `title` is always
     // present, "" when the tool didn't declare one; annotations are absent.
-    return registry.tools.map((t) => ({
-      name: t.name,
-      description: t.description ?? `mock ${t.name}`,
-      inputSchema: JSON.stringify(t.inputSchema ?? { type: "object" }),
-      title: t.title ?? "",
-    }));
+    return registry.tools.map((t) => {
+      const schema = t.inputSchema ?? { type: "object" };
+      return {
+        name: t.name,
+        description: t.description ?? `mock ${t.name}`,
+        inputSchema: t.rawInputSchema ? schema : JSON.stringify(schema),
+        title: t.title ?? "",
+      };
+    });
   },
   async executeTool(
     info: { name: string },
@@ -68,11 +95,13 @@ const makeModelContext = () => ({
     const tool = registry.tools.find((t) => t.name === info.name);
     if (!tool) throw new Error(`Tool not found: ${info.name}`);
     const args = inputArgsJson ? JSON.parse(inputArgsJson) : {};
-    // The polyfill owns this client; `requestUserInteraction` is a pass-through.
-    const client: MockClient = {
-      requestUserInteraction: async (cb) => cb(),
-    };
-    const execPromise = Promise.resolve(tool.execute(args, client));
+    // Second-arg shape is runtime-dependent: the polyfill passes a client with
+    // a pass-through `requestUserInteraction`, native Chrome passes `{ signal }`.
+    const context: MockExecuteContext =
+      registry.executeContext === "native"
+        ? { signal: options?.signal }
+        : { requestUserInteraction: async (cb) => cb() };
+    const execPromise = Promise.resolve(tool.execute(args, context));
     const raced = options?.signal
       ? Promise.race<unknown>([
           execPromise,
@@ -107,6 +136,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   polyfillMock.initThrows = false;
   registry.tools = [];
+  registry.executeContext = "polyfill";
   // location is read by snapshotForDispatch; document.modelContext is the
   // consumer surface. Both are absent in the Node test environment.
   vi.stubGlobal("location", { origin: "https://example.test" });
@@ -186,6 +216,25 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
     expect((tool as unknown as { execute?: unknown }).execute).toBeUndefined();
     // Now that the registry was read, the bridge reports operational.
     expect(bridge.isOperational()).toBe(true);
+  });
+
+  it("accepts an object-shaped inputSchema as well as the polyfill's JSON string", async () => {
+    // The polyfill JSON-encodes inputSchema, but the spec IDL types
+    // `RegisteredTool.inputSchema` as an `object`. A runtime following the IDL
+    // literally must not silently ship every tool with its schema dropped.
+    registry.tools = [
+      fakeTool({
+        name: "search",
+        rawInputSchema: true,
+        inputSchema: { type: "object", properties: { q: { type: "string" } } },
+      }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true });
+    const snap = await bridge.snapshotForDispatch();
+    expect(snap[0]!.parametersSchema).toEqual({
+      type: "object",
+      properties: { q: { type: "string" } },
+    });
   });
 
   it("applies client-side allowlist glob (`search_*`)", async () => {
@@ -426,13 +475,14 @@ describe("WebMcpBridge.executeToolCall", () => {
     expect(r).toEqual({ content: [{ type: "text", text: "" }] });
   });
 
-  it("runs a tool's client.requestUserInteraction callback without a second confirm", async () => {
+  it("runs a polyfill client.requestUserInteraction callback without a second confirm", async () => {
     const confirmSpy = vi.fn(async () => true);
     registry.tools = [
       fakeTool({
         name: "sensitive",
-        execute: async (_args, client) => {
-          const ack = await client.requestUserInteraction(async () => "ok!");
+        execute: async (_args, context) => {
+          // Polyfill-only extension: absent on native Chrome, hence the guard.
+          const ack = await context.requestUserInteraction?.(async () => "ok!");
           return { ack };
         },
       }),
@@ -446,6 +496,67 @@ describe("WebMcpBridge.executeToolCall", () => {
       type: "text",
       text: JSON.stringify({ ack: "ok!" }),
     });
+  });
+
+  it("hands a native runtime's execute() the bridge's combined abort signal", async () => {
+    // Chrome >= 153 passes `{ signal }` as execute()'s second argument. The
+    // bridge doesn't pass it directly (the runtime does), but it MUST be the
+    // bridge's combined controller signal, or a cancel() mid-flight would abort
+    // the /resume path while the page kept working.
+    registry.executeContext = "native";
+    const caller = new AbortController();
+    let observed: AbortSignal | undefined;
+    let abortedDuringExecute = false;
+
+    registry.tools = [
+      fakeTool({
+        name: "slow",
+        execute: async (_args, context) => {
+          observed = context.signal;
+          caller.abort();
+          abortedDuringExecute = context.signal?.aborted === true;
+          // A signal-honoring tool rejects rather than returning a value. That
+          // rejection is what the bridge maps to an "Aborted by cancel()"
+          // result; a tool that ignores the signal and resolves anyway has its
+          // result passed through as a success (the work did happen).
+          throw new DOMException("Aborted", "AbortError");
+        },
+      }),
+    ];
+
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:slow", {}, caller.signal);
+
+    expect(observed).toBeInstanceOf(AbortSignal);
+    // Not the caller's own signal: the bridge wraps it alongside the timeout.
+    expect(observed).not.toBe(caller.signal);
+    // ...but aborting the caller propagates through to the tool synchronously.
+    expect(abortedDuringExecute).toBe(true);
+    expect(r.isError).toBe(true);
+    expect((r.content[0] as { text: string }).text).toMatch(/Aborted by cancel/);
+  });
+
+  it("passes through the result of a tool that ignores its abort signal", async () => {
+    // Cancellation is cooperative: nothing can stop a tool that already did the
+    // work, so the bridge returns what it got rather than discarding it.
+    registry.executeContext = "native";
+    const caller = new AbortController();
+    registry.tools = [
+      fakeTool({
+        name: "stubborn",
+        execute: (_args, context) => {
+          caller.abort();
+          void context.signal;
+          return "done anyway";
+        },
+      }),
+    ];
+
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const r = await bridge.executeToolCall("webmcp:stubborn", {}, caller.signal);
+
+    expect(r.isError).toBeUndefined();
+    expect(r.content[0]).toEqual({ type: "text", text: "done anyway" });
   });
 
   it("returns isError when the user declines the confirm gate", async () => {

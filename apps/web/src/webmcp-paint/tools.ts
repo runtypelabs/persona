@@ -1,3 +1,10 @@
+import {
+  getModelContext,
+  registerWebMcpTools,
+  type WebMcpToolContext,
+  type WebMcpToolDescriptor,
+} from "@runtypelabs/persona/webmcp-tool";
+
 import type { PaintBridge } from "./jspaint-host";
 
 // WebMCP tool surface for the jspaint demo: spike scope. Operator-level
@@ -19,27 +26,14 @@ declare global {
 // (and everything lands on jspaint's undo stack anyway).
 export const APPROVAL_REQUIRED_TOOL_NAMES = new Set(["clear_canvas"]);
 
-type ToolDescriptor = {
-  name: string;
-  title?: string;
-  description: string;
-  inputSchema: object;
-  annotations?: Record<string, unknown>;
-  execute: (args: Record<string, unknown>) => unknown | Promise<unknown>;
-};
-
-type RegisterableModelContext = {
-  registerTool: (
-    tool: ToolDescriptor,
-    options?: { signal?: AbortSignal },
-  ) => void;
-};
-
-const getModelContext = (): RegisterableModelContext | undefined =>
-  (document as unknown as { modelContext?: RegisterableModelContext })
-    .modelContext ??
-  (navigator as unknown as { modelContext?: RegisterableModelContext })
-    .modelContext;
+/**
+ * `execute` receives a normalized context (always a `signal`, always a
+ * `requestUserInteraction`) courtesy of `registerWebMcpTools`. Only
+ * `draw_stroke`/`flood_fill` have work long enough to cancel; the rest ignore
+ * it. Note that real cancellation requires native Chrome >= 153 — under
+ * `@mcp-b/webmcp-polyfill` the signal is inert (`capabilities.cancellation`).
+ */
+type ToolDescriptor = WebMcpToolDescriptor<WebMcpToolContext>;
 
 const toolResult = (data: unknown, summary?: string): unknown => ({
   content: [
@@ -64,8 +58,7 @@ const POINT = {
 };
 
 export function setupPaintTools(bridge: PaintBridge): void {
-  const modelContext = getModelContext();
-  if (!modelContext) {
+  if (!getModelContext()) {
     console.warn("[Paint] document.modelContext unavailable; tools not registered");
     return;
   }
@@ -147,11 +140,16 @@ export function setupPaintTools(bridge: PaintBridge): void {
         required: ["points"],
         additionalProperties: false,
       },
-      execute: async (args) => {
+      execute: async (args, { signal }) => {
         applyRiders(args);
         const points = args.points as Array<{ x: number; y: number }>;
-        const state = await bridge.drawStroke(points);
-        return toolResult(state, `Stroke drawn through ${points.length} points.`);
+        const state = await bridge.drawStroke(points, { signal });
+        return toolResult(
+          state,
+          signal.aborted
+            ? "Stroke cancelled partway through."
+            : `Stroke drawn through ${points.length} points.`,
+        );
       },
     },
     {
@@ -169,11 +167,11 @@ export function setupPaintTools(bridge: PaintBridge): void {
         required: ["x", "y"],
         additionalProperties: false,
       },
-      execute: async (args) => {
+      execute: async (args, { signal }) => {
         if (typeof args.color === "string") bridge.setColors(args.color);
         bridge.selectTool("fill");
         const point = { x: Number(args.x), y: Number(args.y) };
-        const state = await bridge.drawStroke([point]);
+        const state = await bridge.drawStroke([point], { signal });
         return toolResult(state, `Filled at (${point.x}, ${point.y}).`);
       },
     },
@@ -246,14 +244,12 @@ export function setupPaintTools(bridge: PaintBridge): void {
     },
   ];
 
-  for (const tool of tools) {
-    try {
-      const descriptor = tool.title
-        ? { ...tool, annotations: { title: tool.title, ...tool.annotations } }
-        : tool;
-      modelContext.registerTool(descriptor, { signal });
-    } catch (error) {
-      console.warn(`[Paint] Failed to register ${tool.name}`, error);
-    }
-  }
+  // Normalizes each execute() context, forwards `signal` as the batch's
+  // unregister lifetime, and catches registration rejections as well as throws.
+  void registerWebMcpTools(tools, {
+    signal,
+    onError: (toolName, error) => {
+      console.warn(`[Paint] Failed to register ${toolName}`, error);
+    },
+  });
 }

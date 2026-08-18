@@ -42,6 +42,11 @@
       "import": "./dist/smart-dom-reader.js",
       "require": "./dist/smart-dom-reader.cjs"
     },
+    "./webmcp-tool": {
+      "types": "./dist/webmcp-tool.d.ts",
+      "import": "./dist/webmcp-tool.js",
+      "require": "./dist/webmcp-tool.cjs"
+    },
     "./voice-worklet-player": {
       "types": "./dist/voice-worklet-player.d.ts",
       "import": "./dist/voice-worklet-player.js",
@@ -79,7 +84,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:context-mentions && pnpm run build:context-mentions-inline && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run check:dist-vite8",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:context-mentions && pnpm run build:context-mentions-inline && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:webmcp-tool && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run check:dist-vite8",
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:markdown-parsers": "tsup --config tsup.markdown-parsers.config.ts",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
@@ -87,6 +92,7 @@
     "build:theme-editor-preview": "tsup src/theme-editor-preview.ts --format esm,cjs --minify --dts --out-dir dist",
     "build:testing": "tsup src/testing.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:smart-dom-reader": "tsup src/smart-dom-reader.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
+    "build:webmcp-tool": "tsup src/webmcp-tool.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:voice-worklet-player": "tsup src/voice-worklet-player.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
     "build:animations": "tsup src/animations/glyph-cycle.ts src/animations/wipe.ts --format esm,cjs --minify --dts --out-dir dist/animations --no-splitting",
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",

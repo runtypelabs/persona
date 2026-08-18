@@ -8,6 +8,7 @@ import {
   type AgentWidgetConfig,
   type WebMcpConfirmInfo,
 } from "@runtypelabs/persona";
+import type { WebMcpToolDescriptor } from "@runtypelabs/persona/webmcp-tool";
 import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
 import { setupMountMode, renderInlineMount } from "./mount-mode";
 import type { Mode } from "./examples-nav";
@@ -29,27 +30,19 @@ import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp
 // ===========================================================================
 
 /**
- * Minimal structural view of the producer surface we use here. The full type
- * lives in `@mcp-b/webmcp-types`; declaring just `registerTool` keeps this demo
- * self-contained.
+ * The producer surface comes from `@runtypelabs/persona/webmcp-tool`, which
+ * also carries the portability notes for `execute`'s second argument (native
+ * Chrome passes `{ signal }`, the polyfill passes `{ requestUserInteraction }`).
+ * This demo registers tools one at a time rather than through
+ * `registerWebMcpTools`, so its `execute` receives the RAW context: check
+ * before using either member.
  */
-interface RegisterableModelContext {
+type RegisterableModelContext = {
   registerTool(
-    tool: {
-      name: string;
-      /** User-facing label (WebMCP `ToolDescriptor.title`): shown in Persona's approval bubble. */
-      title?: string;
-      description: string;
-      inputSchema?: object;
-      annotations?: Record<string, unknown>;
-      execute: (
-        args: Record<string, unknown>,
-        client: { requestUserInteraction: (cb: () => unknown) => Promise<unknown> },
-      ) => unknown;
-    },
+    tool: WebMcpToolDescriptor,
     options?: { signal?: AbortSignal },
-  ): void;
-}
+  ): void | Promise<void>;
+};
 
 // ---------------------------------------------------------------------------
 // Tiny escaping helper: everything we render with innerHTML below mixes static
