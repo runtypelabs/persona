@@ -79,6 +79,11 @@ export const applyHeaderControlGlyph = (
     // Inline SVG baseline spacing pushes the glyph a fractional pixel
     // off-center inside the button.
     icon.style.display = "block";
+    if (!tokenGlyph) {
+      // Explicit sizing detaches the glyph classes, so the stroke token has to
+      // ride inline; the attribute stroke stays as the no-token fallback.
+      icon.style.strokeWidth = `calc(var(--persona-components-header-controlStrokeWidth, 1.5) * ${Number((stroke / 1.5).toFixed(4))})`;
+    }
     button.replaceChildren(icon);
   } else if (iconText) {
     button.textContent = iconText;
