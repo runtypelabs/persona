@@ -318,7 +318,7 @@ touch `--persona-primary`). Icon and tooltip text remain per-feature config
 | `border` | `semantic.colors.border` |
 | `size` | `60px` |
 | `iconSize` | `28px` |
-| `iconStrokeWidth` | `2` |
+| `iconStrokeWidth` | `1.5` |
 | `borderRadius` | `palette.radius.full` |
 | `shadow` | `palette.shadows.lg` |
 
@@ -331,7 +331,8 @@ affects registry-icon launchers (`launcher.agentIconName`,
 `launcher.callToActionIconName`); an emoji or image launcher has no svg to
 weight. The same rule ships in the critical launcher bundle and the full
 widget, so a deferred install renders the stroke identically before and after
-the handoff.
+the handoff. The default matches the header's `controlStrokeWidth` (1.5), so
+launcher and header glyphs share one line weight out of the box.
 
 `background` and `foreground` recolor the launcher pill without touching the
 shared `surface`/`primary` tokens the panel reads. The pill title renders in

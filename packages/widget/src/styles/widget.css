@@ -332,7 +332,7 @@
    surfaces identical. */
 [data-persona-root] [data-role="launcher-icon"] > svg,
 [data-persona-root] [data-role="launcher-call-to-action-icon"] > svg {
-  stroke-width: var(--persona-components-launcher-iconStrokeWidth, 2);
+  stroke-width: var(--persona-components-launcher-iconStrokeWidth, 1.5);
 }
 
 /* An empty transcript still counts as a flex child, so the body's gap

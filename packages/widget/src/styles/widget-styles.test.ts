@@ -271,7 +271,7 @@ describe("launcher icon styles", () => {
     // Locate the rule by its declaration and read the SHIPPED selector back
     // out of the file, so a rescope cannot slip past a hardcoded expectation.
     const declaration =
-      "stroke-width: var(--persona-components-launcher-iconStrokeWidth, 2)";
+      "stroke-width: var(--persona-components-launcher-iconStrokeWidth, 1.5)";
     const declarationAt = widgetCss.indexOf(declaration);
     expect(declarationAt).toBeGreaterThan(-1);
     const selectorStart = widgetCss.lastIndexOf("}", declarationAt) + 1;

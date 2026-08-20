@@ -108,7 +108,7 @@ describe("theme editor scroll-to-bottom controls", () => {
       (field) => field.path === "theme.components.launcher.iconStrokeWidth"
     );
 
-    expect(stroke?.defaultValue).toBe("2");
+    expect(stroke?.defaultValue).toBe("1.5");
     // Unitless slider: the stroke must never pick up a px suffix, and the
     // WebMCP escape hatch coerces sliders to raw numbers while token
     // resolution only walks string values.

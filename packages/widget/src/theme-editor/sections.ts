@@ -323,7 +323,7 @@ const launcherLayoutSectionDef: SectionDef = {
   fields: [
     { id: 'launcher-size', label: 'Size', type: 'slider', path: 'theme.components.launcher.size', defaultValue: '60px', slider: { min: 32, max: 80, step: 2 } },
     { id: 'launcher-icon-size', label: 'Icon Size', type: 'slider', path: 'theme.components.launcher.iconSize', defaultValue: '28px', slider: { min: 16, max: 48, step: 2 } },
-    { id: 'launcher-icon-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight for the agent glyph and the call-to-action arrow', type: 'slider', path: 'theme.components.launcher.iconStrokeWidth', defaultValue: '2', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
+    { id: 'launcher-icon-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight for the agent glyph and the call-to-action arrow', type: 'slider', path: 'theme.components.launcher.iconStrokeWidth', defaultValue: '1.5', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
     { id: 'launcher-border-radius', label: 'Border Radius', type: 'select', path: 'theme.components.launcher.borderRadius', defaultValue: 'palette.radius.full', options: [
       { value: 'palette.radius.md', label: 'Medium' },
       { value: 'palette.radius.lg', label: 'Large' },

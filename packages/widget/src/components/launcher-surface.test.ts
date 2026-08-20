@@ -422,7 +422,7 @@ describe("launcher icon stroke parity", () => {
   // a rescope of the real rule fails here instead of slipping past a
   // hardcoded copy of the selector.
   const strokeDeclarationAt = widgetCss.indexOf(
-    "stroke-width: var(--persona-components-launcher-iconStrokeWidth, 2)"
+    "stroke-width: var(--persona-components-launcher-iconStrokeWidth, 1.5)"
   );
   const strokeSelectorStart = widgetCss.lastIndexOf("}", strokeDeclarationAt) + 1;
   const STROKE_RULE = widgetCss

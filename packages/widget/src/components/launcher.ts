@@ -82,7 +82,7 @@ export const createLauncherButton = (
         if (launcher.agentIconName) {
           // Use Lucide icon
           const iconSizeNum = parseFloat(iconSize) || 24;
-          const iconSvg = renderLucideIcon(launcher.agentIconName, iconSizeNum * 0.6, "var(--persona-text-inverse, #ffffff)", 2);
+          const iconSvg = renderLucideIcon(launcher.agentIconName, iconSizeNum * 0.6, "var(--persona-text-inverse, #ffffff)", 1.5);
           if (iconSvg) {
             icon.appendChild(iconSvg);
             icon.style.display = "";
@@ -166,7 +166,7 @@ export const createLauncherButton = (
           // Calculate actual icon size by subtracting padding
           const containerSize = parseFloat(callToActionIconSize) || 24;
           const iconSize = Math.max(containerSize - paddingTotal, 8); // Ensure minimum size of 8px
-          const iconSvg = renderLucideIcon(launcher.callToActionIconName, iconSize, "currentColor", 2);
+          const iconSvg = renderLucideIcon(launcher.callToActionIconName, iconSize, "currentColor", 1.5);
           if (iconSvg) {
             callToActionIconEl.appendChild(iconSvg);
           } else {

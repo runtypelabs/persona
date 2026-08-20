@@ -195,7 +195,7 @@ export interface LauncherTokens extends ComponentTokenSet {
    * never `1.75`: the token resolver silently skips numbers). Applied as CSS,
    * so it beats the attribute the icons render with. Inert for emoji / image
    * launchers, which have no svg.
-   * @default "2"
+   * @default "1.5", matching the header's controlStrokeWidth
    */
   iconStrokeWidth?: string;
 }
