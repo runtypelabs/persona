@@ -313,10 +313,20 @@ touch `--persona-primary`). Icon and tooltip text remain per-feature config
 
 | Token | Default |
 |-------|---------|
+| `background` | `semantic.colors.surface` |
+| `foreground` | `semantic.colors.primary` |
+| `border` | `semantic.colors.border` |
 | `size` | `60px` |
 | `iconSize` | `28px` |
 | `borderRadius` | `palette.radius.full` |
 | `shadow` | `palette.shadows.lg` |
+
+`background` and `foreground` recolor the launcher pill without touching the
+shared `surface`/`primary` tokens the panel reads. The pill title renders in
+`foreground`; the subtitle keeps the shared muted tone until `foreground` is
+customized, then follows it at 70% strength so both lines recolor together.
+`border` is a color; the `launcher.border` config string (a full CSS border
+shorthand) still wins when set.
 
 ### Panel (`components.panel.*`)
 

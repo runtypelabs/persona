@@ -16,6 +16,24 @@ describe("createLauncherButton", () => {
     element.remove();
   });
 
+  it("renders the pill from launcher-specific theme vars", () => {
+    const { element, update } = createLauncherButton(undefined, () => {});
+    update({});
+    expect(element.classList.contains("persona-bg-persona-launcher")).toBe(true);
+    expect(
+      element
+        .querySelector("[data-role='launcher-title']")
+        ?.classList.contains("persona-text-persona-launcher")
+    ).toBe(true);
+    expect(
+      element
+        .querySelector("[data-role='launcher-subtitle']")
+        ?.classList.contains("persona-text-persona-launcher-muted")
+    ).toBe(true);
+    expect(element.style.border).toContain("--persona-launcher-border");
+    element.remove();
+  });
+
   it("applies collapsedMaxWidth when set", () => {
     const { element, update } = createLauncherButton(undefined, () => {});
     update({

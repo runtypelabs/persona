@@ -280,9 +280,10 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     },
   },
   launcher: {
-    background: 'palette.colors.primary.500',
-    foreground: 'palette.colors.primary.50',
-    border: 'palette.colors.gray.200',
+    // Launcher pill role: shared surface/primary tones until a host overrides.
+    background: 'semantic.colors.surface',
+    foreground: 'semantic.colors.primary',
+    border: 'semantic.colors.border',
     size: '60px',
     iconSize: '28px',
     borderRadius: 'palette.radius.full',
@@ -790,10 +791,20 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     '9999px';
   cssVars['--persona-launcher-bg'] =
     cssVars['--persona-components-launcher-background'] ??
-    cssVars['--persona-primary'];
+    cssVars['--persona-surface'];
   cssVars['--persona-launcher-fg'] =
     cssVars['--persona-components-launcher-foreground'] ??
-    cssVars['--persona-text-inverse'];
+    cssVars['--persona-primary'];
+  // Subtitle keeps the shared muted tone while the foreground is stock (it
+  // resolves to primary); a custom foreground washes to 70% so both pill
+  // text lines recolor together. Compared by resolved value, not key
+  // presence: DEFAULT_COMPONENTS materializes launcher.foreground into
+  // every theme.
+  const launcherFg = cssVars['--persona-components-launcher-foreground'];
+  cssVars['--persona-launcher-fg-muted'] =
+    launcherFg && launcherFg !== cssVars['--persona-primary']
+      ? `color-mix(in srgb, ${launcherFg} 70%, transparent)`
+      : cssVars['--persona-muted'];
   cssVars['--persona-launcher-border'] =
     cssVars['--persona-components-launcher-border'] ??
     cssVars['--persona-border'];

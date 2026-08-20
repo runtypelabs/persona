@@ -1026,6 +1026,10 @@
   background-color: var(--persona-surface, #ffffff);
 }
 
+.persona-bg-persona-launcher {
+  background-color: var(--persona-launcher-bg, var(--persona-surface, #ffffff));
+}
+
 .persona-bg-persona-container {
   background-color: var(--persona-container, #f8fafc);
 }
@@ -1060,6 +1064,14 @@
 
 .persona-text-persona-muted {
   color: var(--persona-muted, #6b7280);
+}
+
+.persona-text-persona-launcher {
+  color: var(--persona-launcher-fg, var(--persona-primary, #171717));
+}
+
+.persona-text-persona-launcher-muted {
+  color: var(--persona-launcher-fg-muted, var(--persona-muted, #6b7280));
 }
 
 .persona-text-white {

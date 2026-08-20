@@ -163,6 +163,35 @@ describe('theme utils', () => {
     expect(bare['--persona-history-exit-easing']).toBeUndefined();
   });
 
+  it('keys launcher pill vars to shared tokens by default and launcher tokens when customized', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-launcher-bg']).toBe(defaults['--persona-surface']);
+    expect(defaults['--persona-launcher-fg']).toBe(defaults['--persona-primary']);
+    expect(defaults['--persona-launcher-fg-muted']).toBe(defaults['--persona-muted']);
+    expect(defaults['--persona-launcher-border']).toBe(defaults['--persona-border']);
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          launcher: {
+            background: '#1e293b',
+            foreground: '#f8fafc',
+            border: '#334155',
+          },
+        },
+      } as any)
+    );
+    expect(custom['--persona-launcher-bg']).toBe('#1e293b');
+    expect(custom['--persona-launcher-fg']).toBe('#f8fafc');
+    expect(custom['--persona-launcher-fg-muted']).toBe(
+      'color-mix(in srgb, #f8fafc 70%, transparent)'
+    );
+    expect(custom['--persona-launcher-border']).toBe('#334155');
+    // Launcher tokens must not leak into the shared tokens the panel reads.
+    expect(custom['--persona-surface']).toBe(defaults['--persona-surface']);
+    expect(custom['--persona-primary']).toBe(defaults['--persona-primary']);
+  });
+
   it('zeroes horizontal intro-card padding when the card resolves flat', () => {
     const cssVars = themeToCssVariables(createTheme({} as any));
     expect(cssVars['--persona-intro-card-padding']).toBe('1.5rem 0');
