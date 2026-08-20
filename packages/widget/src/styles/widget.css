@@ -325,6 +325,16 @@
   display: none;
 }
 
+/* Launcher glyph weight, agent icon and call-to-action arrow alike: one pill
+   must never carry two line weights. CSS wins over the SVG stroke-width
+   attribute, which stays the no-CSS fallback. Both the critical launcher
+   bundle and the full widget render this markup, so one rule keeps the two
+   surfaces identical. */
+[data-persona-root] [data-role="launcher-icon"] > svg,
+[data-persona-root] [data-role="launcher-call-to-action-icon"] > svg {
+  stroke-width: var(--persona-components-launcher-iconStrokeWidth, 2);
+}
+
 /* An empty transcript still counts as a flex child, so the body's gap
    inserts phantom space below the welcome and fakes scrollable height. */
 .persona-widget-messages:empty {

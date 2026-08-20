@@ -189,6 +189,15 @@ export interface LauncherTokens extends ComponentTokenSet {
   size: string;
   iconSize: string;
   shadow: TokenReference<'shadow'>;
+  /**
+   * Stroke weight of the launcher glyphs, the agent icon and the
+   * call-to-action arrow alike. Unitless, and must be a STRING (`"1.75"`,
+   * never `1.75`: the token resolver silently skips numbers). Applied as CSS,
+   * so it beats the attribute the icons render with. Inert for emoji / image
+   * launchers, which have no svg.
+   * @default "2"
+   */
+  iconStrokeWidth?: string;
 }
 
 export interface PanelTokens extends ComponentTokenSet {

@@ -110,7 +110,8 @@ export const THEME_TOKEN_DOCS = {
       },
       launcher: {
         description: 'Floating launcher button.',
-        properties: 'size (60px), iconSize (28px), borderRadius, shadow.',
+        properties:
+          'size (60px), iconSize (28px), iconStrokeWidth (2, unitless glyph stroke weight; applies to registry-icon launchers, inert for emoji and image icons), borderRadius, shadow.',
       },
       panel: {
         description: 'Chat panel container.',

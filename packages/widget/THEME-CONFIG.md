@@ -318,8 +318,20 @@ touch `--persona-primary`). Icon and tooltip text remain per-feature config
 | `border` | `semantic.colors.border` |
 | `size` | `60px` |
 | `iconSize` | `28px` |
+| `iconStrokeWidth` | `2` |
 | `borderRadius` | `palette.radius.full` |
 | `shadow` | `palette.shadows.lg` |
+
+`iconStrokeWidth` is a unitless SVG stroke-width applied as CSS to both
+launcher glyphs, the agent icon and the call-to-action arrow, so one pill never
+carries two line weights and the value wins over the attribute the icons render
+with. It must be a string (`"1.75"`, never the number `1.75`: the token
+resolver silently skips numeric values, and no warning is emitted). It only
+affects registry-icon launchers (`launcher.agentIconName`,
+`launcher.callToActionIconName`); an emoji or image launcher has no svg to
+weight. The same rule ships in the critical launcher bundle and the full
+widget, so a deferred install renders the stroke identically before and after
+the handoff.
 
 `background` and `foreground` recolor the launcher pill without touching the
 shared `surface`/`primary` tokens the panel reads. The pill title renders in

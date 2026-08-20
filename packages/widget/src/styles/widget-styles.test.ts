@@ -266,6 +266,33 @@ describe("header control styles", () => {
   });
 });
 
+describe("launcher icon styles", () => {
+  it("strokes every launcher glyph from the stroke token, surface-neutrally", () => {
+    // Locate the rule by its declaration and read the SHIPPED selector back
+    // out of the file, so a rescope cannot slip past a hardcoded expectation.
+    const declaration =
+      "stroke-width: var(--persona-components-launcher-iconStrokeWidth, 2)";
+    const declarationAt = widgetCss.indexOf(declaration);
+    expect(declarationAt).toBeGreaterThan(-1);
+    const selectorStart = widgetCss.lastIndexOf("}", declarationAt) + 1;
+    const selector = widgetCss
+      .slice(selectorStart, widgetCss.indexOf("{", selectorStart))
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .trim();
+
+    // One pill, one line weight: the agent icon and the call-to-action arrow
+    // both follow the token.
+    expect(selector).toContain('[data-role="launcher-icon"] > svg');
+    expect(selector).toContain(
+      '[data-role="launcher-call-to-action-icon"] > svg',
+    );
+    // Both launcher surfaces render under [data-persona-root]; naming either
+    // surface here would change stroke weight between the two bundles.
+    expect(selector).not.toContain("data-persona-launcher-critical");
+    expect(selector).not.toContain("persona-widget-container");
+  });
+});
+
 describe("transcript layout styles", () => {
   it("drops the empty messages wrapper from the flex flow", () => {
     // A zero-height flex child still triggers the body's gap, so an empty

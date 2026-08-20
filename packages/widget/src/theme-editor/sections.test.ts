@@ -100,6 +100,23 @@ describe("theme editor scroll-to-bottom controls", () => {
     );
   });
 
+  it("exposes the launcher icon stroke as a unitless slider", () => {
+    const section = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-launcher"
+    );
+    const stroke = section?.fields.find(
+      (field) => field.path === "theme.components.launcher.iconStrokeWidth"
+    );
+
+    expect(stroke?.defaultValue).toBe("2");
+    // Unitless slider: the stroke must never pick up a px suffix, and the
+    // WebMCP escape hatch coerces sliders to raw numbers while token
+    // resolution only walks string values.
+    expect(stroke?.slider?.unit).toBe("none");
+    expect(stroke?.parseValue?.(1.5)).toBe("1.5");
+    expect(stroke?.parseValue?.("1.75")).toBe("1.75");
+  });
+
   it("exposes the three shared header control knobs as live shape fields", () => {
     const section = COMPONENT_SHAPE_SECTIONS.find(
       (entry) => entry.id === "comp-header-controls"

@@ -399,6 +399,27 @@ describe('theme utils', () => {
     expect(custom['--persona-components-header-controlStrokeWidth']).toBe('2');
   });
 
+  it('emits the launcher icon stroke token only when set', () => {
+    const defaults = themeToCssVariables(createTheme());
+
+    // No alias and no default: widget.css owns the shipped 2 in its var()
+    // fallback, so an unset token must leave the variable undefined.
+    expect(defaults['--persona-components-launcher-iconStrokeWidth']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          launcher: {
+            iconStrokeWidth: '1.5',
+          },
+        },
+      } as any)
+    );
+
+    // Unitless, straight through: no px suffix, no token resolution.
+    expect(custom['--persona-components-launcher-iconStrokeWidth']).toBe('1.5');
+  });
+
   it('emits the header and rail-header height/surface tokens only when set', () => {
     const defaults = themeToCssVariables(createTheme());
     expect(defaults['--persona-header-min-height']).toBeUndefined();
