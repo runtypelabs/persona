@@ -549,10 +549,18 @@ type Controller = {
   }>;
   /** The open conversation's record id; null for a fresh unsaved chat. */
   getActiveConversationId: () => string | null;
-  /** Full open flow: transactional resume, hydration, and scroll restore. */
-  openConversation: (conversationId: string) => Promise<void>;
-  /** Clean local state plus a new owned server conversation. */
-  startNewConversation: () => Promise<void>;
+  /**
+   * Full open flow: transactional resume, hydration, and scroll restore.
+   * `focus: true` moves focus to the composer; the programmatic default
+   * leaves focus alone (an embedded widget must not scroll the host page
+   * on a boot-time reopen).
+   */
+  openConversation: (
+    conversationId: string,
+    opts?: { focus?: boolean }
+  ) => Promise<void>;
+  /** Clean local state plus a new owned server conversation. `focus` as on `openConversation`. */
+  startNewConversation: (opts?: { focus?: boolean }) => Promise<void>;
   /** Permanently delete one server record; the active one is replaced. */
   deleteConversation: (conversationId: string) => Promise<void>;
   /**
@@ -8801,12 +8809,14 @@ export const createAgentExperience = (
       // The pending/error surface owns failures (optimistic open), so the
       // row must not double-report them.
       onSelect: (conversationId) =>
-        openHistoryConversation(conversationId).catch(() => {}),
+        openHistoryConversation(conversationId, { focusComposer: true }).catch(
+          () => {}
+        ),
       onActiveConversationChange: (summary) =>
         setActiveConversationSummary(summary),
       // The chunk is size-capped, so it borrows the shell's tooltip module.
       attachTooltip,
-      onStartNew: () => startNewConversation(),
+      onStartNew: () => startNewConversation({ focusComposer: true }),
       onClose: () => closeHistory(),
       onRequestDeleteConversation: (conversationId) =>
         requestDeleteConversation(conversationId),
@@ -9174,7 +9184,9 @@ export const createAgentExperience = (
 
   const showConversationOpenError = (conversationId: string): void => {
     const retry = (): void => {
-      void openHistoryConversation(conversationId).catch(() => {});
+      void openHistoryConversation(conversationId, {
+        focusComposer: true,
+      }).catch(() => {});
     };
     const back = historyAvailable()
       ? (): void => {
@@ -9264,7 +9276,8 @@ export const createAgentExperience = (
    * user message triggers the anchor-top send scroll.
    */
   const openHistoryConversation = async (
-    conversationId: string
+    conversationId: string,
+    { focusComposer = false }: { focusComposer?: boolean } = {}
   ): Promise<void> => {
     const scope = historyOperationScope();
     // Seeds the header title binding from the list row before the list leaves.
@@ -9306,14 +9319,18 @@ export const createAgentExperience = (
       scope,
       timestamp: Date.now(),
     });
-    maybeFocusInput();
+    // Only interaction paths focus: focusing a programmatic open scrolls the
+    // host page to the widget (same-origin iframes included).
+    if (focusComposer) maybeFocusInput();
   };
 
   /**
    * The single commit path behind the header action, the view's `onStartNew`,
    * and `controller.startNewConversation()`, so one emit covers all three.
    */
-  const startNewConversation = async (): Promise<void> => {
+  const startNewConversation = async ({
+    focusComposer = false,
+  }: { focusComposer?: boolean } = {}): Promise<void> => {
     // A new conversation supersedes any transcript fetch still in flight.
     clearConversationOpenPending();
     await session.startNewConversation({ scope: historyOperationScope() });
@@ -9333,7 +9350,7 @@ export const createAgentExperience = (
     if (historyVisible && (historyPresentation === "panel" || railOverlayOpen)) {
       closeHistory({ restoreFocus: false });
     }
-    maybeFocusInput();
+    if (focusComposer) maybeFocusInput();
   };
 
   /** Shared rename/star path: provider update, then view + header binding. */
@@ -11066,7 +11083,7 @@ export const createAgentExperience = (
       // With history available this affordance is "New conversation": a local
       // view clear would leave the server record open and unreachable.
       if (historyAvailable()) {
-        void startNewConversation().catch((error) => {
+        void startNewConversation({ focusComposer: true }).catch((error) => {
           if (config.debug) {
             // eslint-disable-next-line no-console
             console.warn("[AgentWidget] New conversation failed:", error);
@@ -12848,11 +12865,16 @@ export const createAgentExperience = (
     getActiveConversationId(): string | null {
       return session.getActiveConversationId();
     },
-    openConversation(conversationId: string): Promise<void> {
-      return openHistoryConversation(conversationId);
+    openConversation(
+      conversationId: string,
+      opts?: { focus?: boolean }
+    ): Promise<void> {
+      return openHistoryConversation(conversationId, {
+        focusComposer: opts?.focus === true,
+      });
     },
-    startNewConversation(): Promise<void> {
-      return startNewConversation();
+    startNewConversation(opts?: { focus?: boolean }): Promise<void> {
+      return startNewConversation({ focusComposer: opts?.focus === true });
     },
     deleteConversation(conversationId: string): Promise<void> {
       return deleteHistoryConversation(conversationId);

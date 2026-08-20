@@ -126,6 +126,32 @@ describe("history controller API", () => {
       ).toBe(2);
     });
 
+    it("keeps focus off the composer for programmatic opens, and moves it with focus: true", async () => {
+      const { mount, controller } = setup();
+      const outside = document.createElement("button");
+      document.body.appendChild(outside);
+      outside.focus();
+
+      // A boot-time reopen must not steal focus: in a same-origin iframe the
+      // browser would scroll the host page to the widget.
+      await controller.openConversation("conv-a");
+      await flush();
+      expect(document.activeElement).toBe(outside);
+
+      await controller.startNewConversation();
+      await flush();
+      expect(document.activeElement).toBe(outside);
+
+      await controller.openConversation("conv-a", { focus: true });
+      await flush();
+      expect(document.activeElement).toBe(mount.querySelector("textarea"));
+
+      outside.focus();
+      await controller.startNewConversation({ focus: true });
+      await flush();
+      expect(document.activeElement).toBe(mount.querySelector("textarea"));
+    });
+
     it("starts a new server conversation and clears the transcript", async () => {
       const { controller, provider } = setup();
       await controller.openConversation("conv-a");
