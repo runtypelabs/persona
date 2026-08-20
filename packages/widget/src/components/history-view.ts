@@ -1382,7 +1382,7 @@ export function createHistoryView(
     if (!callback) return;
     const active = items.find((c) => c.id === activeConversationId) ?? null;
     const key = active
-      ? `${active.id} ${active.title} ${active.starred ? 1 : 0}`
+      ? `${active.id}\0${active.title}\0${active.starred ? 1 : 0}`
       : "";
     if (key === reportedActiveKey) return;
     reportedActiveKey = key;
