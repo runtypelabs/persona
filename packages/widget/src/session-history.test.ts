@@ -803,9 +803,12 @@ describe('session history (Runtype transport specifics)', () => {
       expect(first.messages.length).toBeGreaterThan(1);
       expect(replacement.messages).toHaveLength(1);
       expect(replacement.messages[0].content).toBe('please try again');
-      // No prior message id or content is re-sent into the fresh record.
+      // No prior message id or content is re-sent into the fresh record. Ids
+      // compare as whole values: a fresh random id can contain "a1"/"a2" as a
+      // substring (usr_..._iva26z7k), which made a serialized check flaky.
+      const sentIds = replacement.messages.map((message) => message.id);
+      for (const id of ['a1', 'a2']) expect(sentIds).not.toContain(id);
       const serialized = JSON.stringify(replacement);
-      for (const id of ['a1', 'a2']) expect(serialized).not.toContain(id);
       expect(serialized).not.toContain('Where is my order?');
       expect(serialized).not.toContain('It ships Thursday.');
       expect(replacement.sessionId).not.toBe(first.sessionId);
