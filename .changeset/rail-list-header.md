@@ -1,7 +1,0 @@
----
-"@runtypelabs/persona": minor
----
-
-The Messages rail gets a list header by default: a "Conversations" heading (new copy key `features.history.copy.conversationsTitle`) now sits above the conversation groups and carries the list overflow trigger, with the scope caption beneath it as a compact "On this device" line (leading device icon; `browserOnlyTitle` default shortened from "Messages on this device"). When `features.history.rail.sections` place a nav block above the conversations, a hairline divider separates the two. The rail header title now defaults to the full text color instead of muted; themes setting `components.history.railHeader.title.color` are unaffected. Panel presentation is unchanged (the heading is sr-only there).
-
-The list heading and the muted sub-headers (date groups and rail nav section titles) are themable through the new `components.history.listHeading` and `components.history.groupHeading` text-style tokens, and both now pin every text property (fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color) in the widget CSS, so bare host-page h2/h3 rules no longer restyle them. For a custom scope indicator (a status dot or similar), decorate the stable `.persona-history-scope` / `.persona-history-scope-title` classes from host CSS keyed off the stamped `data-persona-history-identity` attribute, or take over the surface with a `renderHistoryView` plugin.
