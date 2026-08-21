@@ -41,6 +41,8 @@ const LIVE_CLIENT_TOKEN = import.meta.env.VITE_CLIENT_TOKEN_HISTORY ?? "";
 let source: Source = "demo";
 let presentation: Presentation = "panel";
 let grouping: "time" | "none" = "time";
+/** The minimal header strip pairs naturally with the rail presentation. */
+let headerLayout: "default" | "minimal" = "default";
 /** Swaps Persona's Messages view for the demo `renderHistoryView` plugin. */
 let customView = false;
 let activeStage: HTMLElement | null = null;
@@ -136,6 +138,13 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const base: AgentWidgetConfig = {
     ...DEFAULT_WIDGET_CONFIG,
     features: { history: { enabled: true, presentation, grouping } },
+    layout: {
+      ...DEFAULT_WIDGET_CONFIG.layout,
+      header: {
+        ...DEFAULT_WIDGET_CONFIG.layout?.header,
+        layout: headerLayout,
+      },
+    },
     // Public hooks only: the plugin returns DOM, Persona keeps orchestration.
     // The rail section only shows in the rail presentation.
     plugins: [customView ? threadRailPlugin : pinnedSectionPlugin],
@@ -345,6 +354,14 @@ const groupingSelect =
   document.querySelector<HTMLSelectElement>("[data-history-grouping]");
 groupingSelect?.addEventListener("change", () => {
   grouping = groupingSelect.value === "none" ? "none" : "time";
+  remount();
+});
+
+const headerLayoutSelect = document.querySelector<HTMLSelectElement>(
+  "[data-history-header-layout]",
+);
+headerLayoutSelect?.addEventListener("change", () => {
+  headerLayout = headerLayoutSelect.value === "minimal" ? "minimal" : "default";
   remount();
 });
 
