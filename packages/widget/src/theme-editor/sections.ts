@@ -79,11 +79,12 @@ const chatColorsSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'chat-header-bg', label: 'Header Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-fg', label: 'Header Foreground', description: 'Anchors the header text. The title takes it, the subtitle and button icons take a 72% mix of it over the background', type: 'token-ref', path: 'theme.components.header.foreground', defaultValue: '', tokenRef: { tokenType: 'color' } },
     { id: 'chat-header-icon-bg', label: 'Header Icon Background', type: 'token-ref', path: 'theme.components.header.iconBackground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
     { id: 'chat-header-icon-fg', label: 'Header Icon Color', type: 'token-ref', path: 'theme.components.header.iconForeground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-title-fg', label: 'Header Title Color', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-subtitle-fg', label: 'Header Subtitle Color', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-action-icons-fg', label: 'Header Button Icons', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-title-fg', label: 'Header Title Color', description: 'Blank follows the header foreground', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-subtitle-fg', label: 'Header Subtitle Color', description: 'Blank follows the 72% foreground mix', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-action-icons-fg', label: 'Header Button Icons', description: 'Blank follows the 72% foreground mix', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-user-bg', label: 'User Message Background', type: 'token-ref', path: 'theme.components.message.user.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-user-text', label: 'User Message Text', type: 'token-ref', path: 'theme.components.message.user.text', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-assistant-bg', label: 'Assistant Message Background', type: 'token-ref', path: 'theme.components.message.assistant.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
@@ -518,12 +519,13 @@ const headerColorsSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'header-fg', label: 'Foreground', description: 'Anchors the header text. Background and foreground together derive every color left blank below', type: 'token-ref', path: 'theme.components.header.foreground', defaultValue: '', tokenRef: { tokenType: 'color' } },
     { id: 'header-icon-bg', label: 'Icon background', type: 'token-ref', path: 'theme.components.header.iconBackground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
     { id: 'header-icon-fg', label: 'Icon color', type: 'token-ref', path: 'theme.components.header.iconForeground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'header-title-fg', label: 'Title color', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'header-subtitle-fg', label: 'Subtitle color', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
-    { id: 'header-action-icons-fg', label: 'Clear / close icons', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
-    { id: 'header-border', label: 'Border', type: 'token-ref', path: 'theme.components.header.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
+    { id: 'header-title-fg', label: 'Title color', description: 'Blank follows the header foreground', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'header-subtitle-fg', label: 'Subtitle color', description: 'Blank follows a 72% mix of the foreground over the background', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'header-action-icons-fg', label: 'Clear / close icons', description: 'Blank follows the same 72% foreground mix as the subtitle', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'header-border', label: 'Border', description: 'Blank follows a 14% mix of the foreground over the background', type: 'token-ref', path: 'theme.components.header.border', defaultValue: '', tokenRef: { tokenType: 'color' } },
   ],
 };
 

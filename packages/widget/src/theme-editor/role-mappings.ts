@@ -52,6 +52,9 @@ export const ROLE_HEADER: RoleAssignmentOptions = {
   intensities: ROLE_INTENSITIES,
   targets: [
     { path: 'components.header.background', kind: 'background' },
+    // Anchor of the widget's derivation; the explicit keys below still win,
+    // so role themes keep their exact per-key shades.
+    { path: 'components.header.foreground', kind: 'foreground' },
     { path: 'components.header.border', kind: 'border' },
     { path: 'components.header.iconBackground', kind: 'accent' },
     { path: 'components.header.iconForeground', kind: 'foreground' },
@@ -250,7 +253,7 @@ function resolveHeaderTarget(family: string, solid: boolean, target: RoleTarget)
       ? `palette.colors.${family}.50`
       : `palette.colors.${family}.50`;
   }
-  if (path.endsWith('.titleForeground')) {
+  if (path.endsWith('.foreground') || path.endsWith('.titleForeground')) {
     return solid
       ? `palette.colors.${family}.50`
       : `palette.colors.${family}.${family === 'gray' ? '900' : '700'}`;

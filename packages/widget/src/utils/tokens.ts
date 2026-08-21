@@ -300,16 +300,14 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     canvasBackground: DEFAULT_PANEL_CANVAS_BACKGROUND,
   },
   header: {
-    // Header role: solid primary
+    // Header role: solid primary. Border, subtitle, and action icons stay
+    // unset so they derive from this background/foreground pair.
     background: 'palette.colors.primary.500',
-    border: 'palette.colors.primary.600',
+    foreground: 'palette.colors.primary.50',
     borderRadius: 'palette.radius.xl palette.radius.xl 0 0',
     padding: 'semantic.spacing.md',
     iconBackground: 'palette.colors.primary.600',
     iconForeground: 'palette.colors.primary.50',
-    titleForeground: 'palette.colors.primary.50',
-    subtitleForeground: 'palette.colors.primary.200',
-    actionIconForeground: 'palette.colors.primary.200',
   },
   message: {
     user: {
@@ -867,8 +865,15 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // dedicated CSS variables that the widget CSS reads for individual elements.
   cssVars['--persona-header-bg'] =
     cssVars['--persona-components-header-background'] ?? cssVars['--persona-surface'];
+  // The background/foreground pair anchors every other header color: unset
+  // text and border keys mix the two rather than falling back to page chrome.
+  const headerBg = cssVars['--persona-header-bg'];
+  const headerFg = cssVars['--persona-components-header-foreground'];
+  const headerMutedFg = headerFg ? `color-mix(in srgb, ${headerFg} 72%, ${headerBg})` : undefined;
   cssVars['--persona-header-border'] =
-    cssVars['--persona-components-header-border'] ?? cssVars['--persona-divider'];
+    cssVars['--persona-components-header-border'] ??
+    (headerFg ? `color-mix(in srgb, ${headerFg} 14%, ${headerBg})` : undefined) ??
+    cssVars['--persona-divider'];
   cssVars['--persona-header-icon-bg'] =
     cssVars['--persona-components-header-iconBackground'] ?? cssVars['--persona-primary'];
   cssVars['--persona-header-icon-fg'] =
@@ -877,13 +882,17 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-header-title-fg'] =
     cssVars['--persona-components-header-title-color'] ??
     cssVars['--persona-components-header-titleForeground'] ??
+    headerFg ??
     cssVars['--persona-primary'];
   cssVars['--persona-header-subtitle-fg'] =
     cssVars['--persona-components-header-subtitle-color'] ??
     cssVars['--persona-components-header-subtitleForeground'] ??
+    headerMutedFg ??
     cssVars['--persona-text-muted'];
   cssVars['--persona-header-action-icon-fg'] =
-    cssVars['--persona-components-header-actionIconForeground'] ?? cssVars['--persona-muted'];
+    cssVars['--persona-components-header-actionIconForeground'] ??
+    headerMutedFg ??
+    cssVars['--persona-muted'];
   // Unified header control box. Every header icon button reads these two from
   // the stylesheet; per-control config keys stay inline and win. The third
   // control token, `header.controlStrokeWidth`, needs no alias: widget.css

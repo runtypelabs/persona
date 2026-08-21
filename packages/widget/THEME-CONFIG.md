@@ -392,10 +392,46 @@ Panel and seamless carry `persona-artifact-welded-split` on the mount root while
 
 ### Header (`components.header.*`)
 
+`background` and `foreground` are the pair that colors the band. Set those two
+and the rest of the header follows: the title takes `foreground`, the subtitle
+and the clear / close icons take a 72% mix of `foreground` over `background`,
+and the hairline border takes a 14% mix.
+
+```typescript
+theme: {
+  components: {
+    header: {
+      background: '#0f172a',
+      foreground: '#e2e8f0',
+    },
+  },
+}
+```
+
+Derivation only fills the keys a theme leaves unset, so an explicit value always
+wins:
+
+| Resolved color | Resolution order |
+|----------------|------------------|
+| title | `title.color`, then `titleForeground`, then `foreground`, then `semantic.colors.primary` |
+| subtitle | `subtitle.color`, then `subtitleForeground`, then `color-mix(in srgb, foreground 72%, background)`, then `semantic.colors.textMuted` |
+| clear / close icons | `actionIconForeground`, then that same 72% mix, then `semantic.colors.textMuted` |
+| border | `border`, then `color-mix(in srgb, foreground 14%, background)`, then `semantic.colors.divider` |
+
+`iconBackground` and `iconForeground` (the avatar tile beside the title) are not
+derived and keep their own defaults, and `minHeight` stays a separate knob.
+
+The shipped defaults set `background` to `palette.colors.primary.500` and
+`foreground` to `palette.colors.primary.50`, and leave `border`,
+`titleForeground`, `subtitleForeground`, and `actionIconForeground` unset so
+they derive from that pair. The solid primary band therefore looks the same out
+of the box, with its hairline mixed from the pair rather than pinned to a shade.
+
 | Token | Default Reference |
 |-------|-------------------|
-| `background` | `semantic.colors.surface` |
-| `border` | `semantic.colors.border` |
+| `background` | `palette.colors.primary.500` (`semantic.colors.surface` when a theme unsets it) |
+| `foreground` | `palette.colors.primary.50` |
+| `border` | derived from the `foreground` / `background` pair, then `semantic.colors.divider` |
 | `borderRadius` | `palette.radius.xl palette.radius.xl 0 0` |
 | `padding` | `semantic.spacing.md` |
 | `minHeight` | unset (`auto`) |
@@ -416,14 +452,15 @@ at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
 | `title.fontSize` | `"1rem"` |
 | `title.fontWeight` | `"600"` |
 | `title.lineHeight` | `"1.5rem"` |
-| `title.color` | `semantic.colors.primary` |
+| `title.color` | `foreground`, then `semantic.colors.primary` |
 | `subtitle.fontSize` | `"0.75rem"` |
 | `subtitle.lineHeight` | `"1rem"` |
-| `subtitle.color` | `semantic.colors.textMuted` |
+| `subtitle.color` | the 72% `foreground` mix, then `semantic.colors.textMuted` |
 
 > `titleForeground` and `subtitleForeground` are legacy aliases of
 > `title.color` and `subtitle.color`. Both still work; the `title`/`subtitle`
-> color wins when both are set.
+> color wins when both are set, and either alias still outranks the `foreground`
+> derivation.
 
 #### Header controls
 

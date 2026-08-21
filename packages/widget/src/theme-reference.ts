@@ -119,11 +119,12 @@ export const THEME_TOKEN_DOCS = {
           'width, maxWidth (440px), height (600px), maxHeight, borderRadius, shadow, inset (16px, gap around a detached panel), canvasBackground (transparent, fills the region behind a detached panel in docked and inline embed modes; a no-op in sidebar mode, where the gap stays click-through and the host page shows through like floating). inset and canvasBackground apply only when launcher.detachedPanel is true or artifacts.layout.paneAppearance is "detached".',
       },
       header: {
-        description: 'Chat panel header.',
+        description:
+          'Chat panel header. background and foreground are the pair that colors the band: set those two and the rest of the header text follows.',
         properties:
-          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, controlSize (32px, the box of every header icon button), controlIconSize (20px, the glyph inside it), controlStrokeWidth (1.5, unitless glyph stroke weight; sparse-viewBox glyphs such as the close X scale it by 0.7), shadow, borderBottom, minHeight (height floor for the header strip), title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+          'background, foreground (anchors the header text; the title takes it directly, the subtitle and action icons take color-mix(in srgb, foreground 72%, background), and the border takes color-mix(in srgb, foreground 14%, background)), border, borderRadius, padding, iconBackground, iconForeground (the avatar tile, which keeps its own defaults and never derives), actionIconForeground, controlSize (32px, the box of every header icon button), controlIconSize (20px, the glyph inside it), controlStrokeWidth (1.5, unitless glyph stroke weight; sparse-viewBox glyphs such as the close X scale it by 0.7), shadow, borderBottom, minHeight (height floor for the header strip), title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color). Derivation only fills keys the theme leaves unset, so any explicit border, titleForeground, subtitleForeground, actionIconForeground, title.color, or subtitle.color wins. With no foreground either, each key falls back as before: the primary color for the title, the muted text color for the subtitle and action icons, the divider color for the border.',
         legacy:
-          'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set.',
+          'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set, and either alias still outranks the foreground derivation.',
       },
       history: {
         description:

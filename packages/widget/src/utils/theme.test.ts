@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyThemeVariables, createTheme, getActiveTheme, themeToCssVariables } from './theme';
+import {
+  applyThemeVariables,
+  createDarkTheme,
+  createLightTheme,
+  createTheme,
+  getActiveTheme,
+  themeToCssVariables,
+} from './theme';
 
 describe('theme utils', () => {
   afterEach(() => {
@@ -349,9 +356,15 @@ describe('theme utils', () => {
     // Default header uses solid primary role: icon-bg=primary.600, icon-fg=primary.50, etc.
     expect(cssVars['--persona-header-icon-bg']).toBe('#0f0f0f'); // primary.600
     expect(cssVars['--persona-header-icon-fg']).toBe('#ffffff'); // primary.50
-    expect(cssVars['--persona-header-title-fg']).toBe('#ffffff'); // primary.50
-    expect(cssVars['--persona-header-subtitle-fg']).toBe('#d4d4d4'); // primary.200
-    expect(cssVars['--persona-header-action-icon-fg']).toBe('#d4d4d4'); // primary.200
+    expect(cssVars['--persona-header-title-fg']).toBe('#ffffff'); // primary.50, via header.foreground
+    // Subtitle and action icons now derive from the background/foreground
+    // pair; the mix replaces the primary.200 they used to name directly.
+    expect(cssVars['--persona-header-subtitle-fg']).toBe(
+      'color-mix(in srgb, #ffffff 72%, #171717)'
+    );
+    expect(cssVars['--persona-header-action-icon-fg']).toBe(
+      'color-mix(in srgb, #ffffff 72%, #171717)'
+    );
 
     const custom = createTheme({
       components: {
@@ -370,6 +383,96 @@ describe('theme utils', () => {
     expect(customVars['--persona-header-title-fg']).toBe('#8b5cf6');
     expect(customVars['--persona-header-subtitle-fg']).toBe('#6b7280');
     expect(customVars['--persona-header-action-icon-fg']).toBe('#9ca3af');
+  });
+
+  it('renders the same default header chrome in light and dark schemes', () => {
+    // Golden values for the shipped header band. The dark preset overrides no
+    // header token, so both schemes must resolve identically.
+    const expected = {
+      '--persona-header-bg': '#171717', // primary.500
+      '--persona-header-border': 'color-mix(in srgb, #ffffff 14%, #171717)',
+      '--persona-header-title-fg': '#ffffff', // primary.50
+      '--persona-header-subtitle-fg': 'color-mix(in srgb, #ffffff 72%, #171717)',
+      '--persona-header-action-icon-fg': 'color-mix(in srgb, #ffffff 72%, #171717)',
+      '--persona-header-icon-bg': '#0f0f0f', // primary.600
+      '--persona-header-icon-fg': '#ffffff', // primary.50
+    };
+
+    const light = themeToCssVariables(createLightTheme());
+    const dark = themeToCssVariables(createDarkTheme());
+
+    for (const [key, value] of Object.entries(expected)) {
+      expect(light[key]).toBe(value);
+      expect(dark[key]).toBe(value);
+    }
+  });
+
+  it('derives header text and border from the background/foreground pair', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: {
+          header: { background: '#0b3d2e', foreground: '#f4f3ee' },
+        },
+      } as any)
+    );
+
+    expect(cssVars['--persona-header-bg']).toBe('#0b3d2e');
+    expect(cssVars['--persona-header-title-fg']).toBe('#f4f3ee');
+    expect(cssVars['--persona-header-subtitle-fg']).toBe(
+      'color-mix(in srgb, #f4f3ee 72%, #0b3d2e)'
+    );
+    expect(cssVars['--persona-header-action-icon-fg']).toBe(
+      'color-mix(in srgb, #f4f3ee 72%, #0b3d2e)'
+    );
+    expect(cssVars['--persona-header-border']).toBe(
+      'color-mix(in srgb, #f4f3ee 14%, #0b3d2e)'
+    );
+  });
+
+  it('lets explicit header keys win over the foreground derivation', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: {
+          header: {
+            background: '#0b3d2e',
+            foreground: '#f4f3ee',
+            border: '#1f5c48',
+            titleForeground: '#ffe066',
+            actionIconForeground: '#cfd8cc',
+            subtitle: { color: '#b9c8bc' },
+          },
+        },
+      } as any)
+    );
+
+    expect(cssVars['--persona-header-border']).toBe('#1f5c48');
+    expect(cssVars['--persona-header-title-fg']).toBe('#ffe066');
+    expect(cssVars['--persona-header-action-icon-fg']).toBe('#cfd8cc');
+    expect(cssVars['--persona-header-subtitle-fg']).toBe('#b9c8bc');
+  });
+
+  it('ranks header title color as title.color, then titleForeground, then foreground', () => {
+    const base = { background: '#0b3d2e', foreground: '#f4f3ee' };
+
+    const fromForeground = themeToCssVariables(
+      createTheme({ components: { header: base } } as any)
+    );
+    const fromAlias = themeToCssVariables(
+      createTheme({
+        components: { header: { ...base, titleForeground: '#ffe066' } },
+      } as any)
+    );
+    const fromTitleColor = themeToCssVariables(
+      createTheme({
+        components: {
+          header: { ...base, titleForeground: '#ffe066', title: { color: '#8b5cf6' } },
+        },
+      } as any)
+    );
+
+    expect(fromForeground['--persona-header-title-fg']).toBe('#f4f3ee');
+    expect(fromAlias['--persona-header-title-fg']).toBe('#ffe066');
+    expect(fromTitleColor['--persona-header-title-fg']).toBe('#8b5cf6');
   });
 
   it('emits the shared header control box, glyph, and stroke tokens', () => {

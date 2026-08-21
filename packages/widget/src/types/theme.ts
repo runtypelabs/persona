@@ -159,6 +159,10 @@ export interface SemanticTokens {
 
 export interface ComponentTokenSet {
   background?: TokenReference<'color'>;
+  /**
+   * Text and glyph color on `background`. `HeaderTokens` also derives its
+   * unset text, icon, and border colors from this pair.
+   */
   foreground?: TokenReference<'color'>;
   border?: TokenReference<'color'>;
   borderRadius?: TokenReference<'radius'>;
@@ -221,24 +225,48 @@ export interface TextStyleTokens {
   color?: TokenReference<'color'>;
 }
 
+/**
+ * Header band tokens. `background` plus `foreground` (inherited from
+ * `ComponentTokenSet`) is the pair that colors the band: `foreground` anchors
+ * the header text, and every text, action-icon, and border color the theme
+ * leaves unset derives from the pair. Derivation only fills unset keys, so an
+ * explicit key always wins, and `iconBackground` / `iconForeground` (the avatar
+ * tile) keep their own defaults rather than deriving.
+ */
 export interface HeaderTokens extends ComponentTokenSet {
   background: TokenReference<'color'>;
-  border: TokenReference<'color'>;
+  /**
+   * Hairline under the header. Unset, it derives as
+   * `color-mix(in srgb, foreground 14%, background)`, then the divider color.
+   */
+  border?: TokenReference<'color'>;
   borderRadius: TokenReference<'radius'>;
   /** Background of the rounded avatar tile next to the title (Lucide / emoji / image). */
   iconBackground: TokenReference<'color'>;
   /** Foreground (glyph stroke or emoji text) on the header avatar tile. */
   iconForeground: TokenReference<'color'>;
-  /** Legacy alias of `title.color`; `title.color` wins when both are set. */
-  titleForeground: TokenReference<'color'>;
-  /** Legacy alias of `subtitle.color`; `subtitle.color` wins when both are set. */
-  subtitleForeground: TokenReference<'color'>;
+  /**
+   * Legacy alias of `title.color`; `title.color` wins when both are set.
+   * Unset, the title takes `foreground`, then the primary color.
+   */
+  titleForeground?: TokenReference<'color'>;
+  /**
+   * Legacy alias of `subtitle.color`; `subtitle.color` wins when both are set.
+   * Unset, the subtitle takes `color-mix(in srgb, foreground 72%, background)`,
+   * then the muted text color.
+   */
+  subtitleForeground?: TokenReference<'color'>;
   /** Header title typography (next to the icon, or minimal layout title). */
   title?: TextStyleTokens;
   /** Header subtitle typography, for the line under the title. */
   subtitle?: TextStyleTokens;
-  /** Default color for clear / close icon buttons when launcher overrides are unset. */
-  actionIconForeground: TokenReference<'color'>;
+  /**
+   * Default color for clear / close icon buttons when launcher overrides are
+   * unset. Itself unset, it takes the same
+   * `color-mix(in srgb, foreground 72%, background)` as the subtitle, then the
+   * muted text color.
+   */
+  actionIconForeground?: TokenReference<'color'>;
   /**
    * Edge of every header icon button: close, clear chat, `trailingActions`, and
    * the Messages toggle. Per-control config keys (`launcher.closeButtonSize`,

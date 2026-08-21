@@ -145,10 +145,10 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
         layout: headerLayout,
       },
     },
-    // The minimal strip pairs with the rail: drop the dark header band for the
-    // surface color and pin both top strips to one height
-    // (components.header.minHeight = components.history.railHeader.minHeight),
-    // the same recipe as the fullscreen assistant demo.
+    // The minimal strip pairs with the rail: the background/foreground pair
+    // recolors the whole band (title, icons, and border derive from it), and
+    // both top strips pin to one height
+    // (components.header.minHeight = components.history.railHeader.minHeight).
     ...(headerLayout === "minimal"
       ? {
           theme: {
@@ -156,12 +156,6 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
               header: {
                 background: "semantic.colors.surface",
                 foreground: "semantic.colors.text",
-                titleForeground: "semantic.colors.text",
-                actionIconForeground: "semantic.colors.text",
-                // The base theme's border is primary.600, tuned to hide under
-                // the solid-primary band; on a surface header it reads as a
-                // hard bar, so it goes back to the divider hairline.
-                border: "semantic.colors.divider",
                 minHeight: "65px",
               },
               history: { railHeader: { minHeight: "65px" } },
