@@ -31,6 +31,9 @@ const collapsedBehavior =
   params.get("collapsedBehavior") === "overlay" ? "overlay" : undefined;
 /** Rail-only: a drag handle on the docked rail's divider edge. */
 const resizable = params.get("resizable") === "1";
+/** "none" flattens the date groups into one recents-style list. */
+const grouping =
+  params.get("grouping") === "none" ? ("none" as const) : undefined;
 const apiUrl = params.get("apiUrl") ?? "/e2e-api";
 const clientToken = params.get("clientToken") ?? "ct_e2e_history";
 const keyPrefix = params.get("keyPrefix") ?? "persona-e2e-";
@@ -61,6 +64,7 @@ const base: AgentWidgetConfig = {
     history: {
       enabled: true,
       presentation,
+      ...(grouping ? { grouping } : {}),
       ...(collapsedBehavior || resizable
         ? {
             rail: {

@@ -503,6 +503,41 @@ describe("history view list styling", () => {
 });
 
 describe("history view grouping and pagination", () => {
+  it("renders one flat list under grouping none, starred still pinned", async () => {
+    const { root } = mount({
+      grouping: "none",
+      seeds: [
+        seed("a", 30 * MIN),
+        seed("s", 26 * HOUR, { starred: true }),
+        seed("c", 4 * DAY),
+      ],
+    });
+    await flush();
+
+    const groups = Array.from(
+      root.querySelectorAll<HTMLElement>("[data-persona-history-group]")
+    );
+    expect(groups.map((g) => g.dataset.personaHistoryGroup)).toEqual([
+      "starred",
+      "recent",
+    ]);
+    expect(rows(root)).toHaveLength(3);
+
+    // The pinned heading stays visible; the flat group's heading would repeat
+    // the list heading above it, so it labels the list sr-only instead.
+    const headings = groups.map(
+      (g) => g.querySelector<HTMLElement>(".persona-history-group-heading")!
+    );
+    expect(headings.map((h) => h.textContent)).toEqual([
+      "Starred",
+      "Conversations",
+    ]);
+    expect(headings[0].classList.contains("persona-history-sr-only")).toBe(false);
+    expect(headings[1].classList.contains("persona-history-sr-only")).toBe(true);
+    const list = groups[1].querySelector("ul.persona-history-list")!;
+    expect(list.getAttribute("aria-labelledby")).toBe(headings[1].id);
+  });
+
   it("groups rows client-side without reordering them", async () => {
     const { root } = mount();
     await flush();

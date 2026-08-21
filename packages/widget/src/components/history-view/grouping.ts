@@ -16,7 +16,12 @@ export type HistoryGroupKey =
   | "previous-7-days"
   | "previous-30-days"
   /** `month:<year>-<zero-based month>` */
-  | `month:${string}`;
+  | `month:${string}`
+  /** The single flat group `grouping: "none"` folds the time buckets into. */
+  | "recent";
+
+/** `features.history.grouping`. Starred rows keep their pinned group in both. */
+export type HistoryGroupingMode = "time" | "none";
 
 export interface HistoryGroup {
   key: HistoryGroupKey;
@@ -72,7 +77,8 @@ export function formatGroupLabel(
 export function groupConversations(
   items: readonly HistoryConversationSummary[],
   nowMs: number,
-  copy: ResolvedHistoryViewCopy
+  copy: ResolvedHistoryViewCopy,
+  grouping: HistoryGroupingMode = "time"
 ): HistoryGroup[] {
   // Starred rows pin into one leading group (server order preserved within
   // it); everything else keeps the time grouping.
@@ -81,6 +87,16 @@ export function groupConversations(
     starred.length > 0
       ? [{ key: "starred", label: copy.groupStarred, items: starred }]
       : [];
+  if (grouping === "none") {
+    // One flat group. Its label exists for the list's accessible name only:
+    // the view renders it sr-only, since the list heading directly above
+    // already says the same thing.
+    const rest = items.filter((item) => !item.starred);
+    if (rest.length > 0) {
+      groups.push({ key: "recent", label: copy.conversationsTitle, items: rest });
+    }
+    return groups;
+  }
   for (const item of items) {
     if (item.starred) continue;
     const key = resolveGroupKey(item.updatedAt, nowMs);

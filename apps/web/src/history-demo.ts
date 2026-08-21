@@ -40,6 +40,7 @@ const LIVE_CLIENT_TOKEN = import.meta.env.VITE_CLIENT_TOKEN_HISTORY ?? "";
 
 let source: Source = "demo";
 let presentation: Presentation = "panel";
+let grouping: "time" | "none" = "time";
 /** Swaps Persona's Messages view for the demo `renderHistoryView` plugin. */
 let customView = false;
 let activeStage: HTMLElement | null = null;
@@ -134,7 +135,7 @@ const pinnedSectionPlugin = createPinnedSectionPlugin((label) =>
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const base: AgentWidgetConfig = {
     ...DEFAULT_WIDGET_CONFIG,
-    features: { history: { enabled: true, presentation } },
+    features: { history: { enabled: true, presentation, grouping } },
     // Public hooks only: the plugin returns DOM, Persona keeps orchestration.
     // The rail section only shows in the rail presentation.
     plugins: [customView ? threadRailPlugin : pinnedSectionPlugin],
@@ -337,6 +338,13 @@ const presentationSelect =
   document.querySelector<HTMLSelectElement>("[data-history-presentation]");
 presentationSelect?.addEventListener("change", () => {
   presentation = presentationSelect.value as Presentation;
+  remount();
+});
+
+const groupingSelect =
+  document.querySelector<HTMLSelectElement>("[data-history-grouping]");
+groupingSelect?.addEventListener("change", () => {
+  grouping = groupingSelect.value === "none" ? "none" : "time";
   remount();
 });
 

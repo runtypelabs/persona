@@ -8800,6 +8800,9 @@ export const createAgentExperience = (
             ? rowAvatar
             : config.launcher?.iconUrl,
       activeConversationId: session.getActiveConversationId(),
+      ...(config.features?.history?.grouping
+        ? { grouping: config.features.history.grouping }
+        : {}),
       ...(config.features?.history?.copy
         ? { copy: config.features.history.copy }
         : {}),

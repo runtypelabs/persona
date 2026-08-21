@@ -64,6 +64,50 @@ describe("history grouping", () => {
     expect(groups[0].label).toBe("Today");
   });
 
+  it("folds the time buckets into one flat group with grouping none", () => {
+    const groups = groupConversations(
+      [
+        summary("a", 10 * MIN),
+        summary("b", 26 * HOUR),
+        summary("c", 100 * DAY),
+      ],
+      NOW,
+      COPY,
+      "none"
+    );
+    expect(groups.map((group) => group.key)).toEqual(["recent"]);
+    expect(groups[0].items.map((item) => item.id)).toEqual(["a", "b", "c"]);
+    // The label exists for the list's accessible name; the view renders it
+    // sr-only under the identical list heading.
+    expect(groups[0].label).toBe("Conversations");
+  });
+
+  it("keeps the pinned starred group with grouping none", () => {
+    const groups = groupConversations(
+      [
+        summary("a", 10 * MIN),
+        { ...summary("pinned", 26 * HOUR), starred: true },
+        summary("b", 4 * DAY),
+      ],
+      NOW,
+      COPY,
+      "none"
+    );
+    expect(groups.map((group) => group.key)).toEqual(["starred", "recent"]);
+    expect(groups[0].items.map((item) => item.id)).toEqual(["pinned"]);
+    expect(groups[1].items.map((item) => item.id)).toEqual(["a", "b"]);
+  });
+
+  it("returns only the starred group when every row is pinned under grouping none", () => {
+    const groups = groupConversations(
+      [{ ...summary("pinned", 26 * HOUR), starred: true }],
+      NOW,
+      COPY,
+      "none"
+    );
+    expect(groups.map((group) => group.key)).toEqual(["starred"]);
+  });
+
   it("does not reorder rows that arrive out of recency order", () => {
     const groups = groupConversations(
       [summary("old", 4 * DAY), summary("new", 10 * MIN)],

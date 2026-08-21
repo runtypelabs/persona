@@ -24,7 +24,10 @@ import {
   type HistoryViewCopyInput,
   type ResolvedHistoryViewCopy,
 } from "./history-view/copy";
-import { groupConversations } from "./history-view/grouping";
+import {
+  groupConversations,
+  type HistoryGroupingMode,
+} from "./history-view/grouping";
 import { historyIcon } from "./history-view/icons";
 import {
   buildConversationRow,
@@ -217,6 +220,12 @@ export interface HistoryViewOptions {
    */
   rowAvatar?: string | false;
   activeConversationId: string | null;
+  /**
+   * Date bucketing of the list. Default `"time"`; `"none"` folds the time
+   * buckets into one flat group. Starred rows keep their pinned group either
+   * way.
+   */
+  grouping?: HistoryGroupingMode;
   /** List page size. Default 25. */
   pageSize?: number;
   /** Clock seam for grouping and relative time. */
@@ -1211,7 +1220,7 @@ export function createHistoryView(
   };
 
   const buildGroups = (): HTMLElement[] =>
-    groupConversations(items, now(), copy).map((group, index) => {
+    groupConversations(items, now(), copy, options.grouping).map((group, index) => {
       const groupHeadingId = `${headingId}-g${index}`;
       const list = createNode("ul", {
         className: "persona-history-list",
@@ -1258,7 +1267,12 @@ export function createHistoryView(
           attrs: { "data-persona-history-group": group.key },
         },
         createNode("h3", {
-          className: "persona-history-group-heading",
+          // The flat group's heading would repeat the list heading above it,
+          // so it labels the list from the accessibility tree only.
+          className: cx(
+            "persona-history-group-heading",
+            group.key === "recent" && "persona-history-sr-only"
+          ),
           text: group.label,
           attrs: { id: groupHeadingId },
         }),

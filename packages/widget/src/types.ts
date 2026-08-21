@@ -2976,6 +2976,14 @@ export interface AgentWidgetHistoryFeature {
   /** Copy overrides. Every user-visible history string must be here. */
   copy?: AgentWidgetHistoryCopy;
   /**
+   * Date bucketing of the conversation list. `"time"` (default) groups rows
+   * under Today, Yesterday, Previous 7 days, Previous 30 days, and month
+   * headings. `"none"` renders one flat list in server order instead, the
+   * recents-style sidebar. Starred conversations keep their pinned group
+   * either way.
+   */
+  grouping?: "time" | "none";
+  /**
    * Leading avatar on each conversation row. Unset, rows show the launcher's
    * image mark (`launcher.iconUrl`) when one exists and are text-only
    * otherwise, the assistant-list default. Pass an image URL or a glyph to
