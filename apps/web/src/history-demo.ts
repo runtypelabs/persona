@@ -145,6 +145,30 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
         layout: headerLayout,
       },
     },
+    // The minimal strip pairs with the rail: drop the dark header band for the
+    // surface color and pin both top strips to one height
+    // (components.header.minHeight = components.history.railHeader.minHeight),
+    // the same recipe as the fullscreen assistant demo.
+    ...(headerLayout === "minimal"
+      ? {
+          theme: {
+            components: {
+              header: {
+                background: "semantic.colors.surface",
+                foreground: "semantic.colors.text",
+                titleForeground: "semantic.colors.text",
+                actionIconForeground: "semantic.colors.text",
+                // The base theme's border is primary.600, tuned to hide under
+                // the solid-primary band; on a surface header it reads as a
+                // hard bar, so it goes back to the divider hairline.
+                border: "semantic.colors.divider",
+                minHeight: "65px",
+              },
+              history: { railHeader: { minHeight: "65px" } },
+            },
+          },
+        }
+      : {}),
     // Public hooks only: the plugin returns DOM, Persona keeps orchestration.
     // The rail section only shows in the rail presentation.
     plugins: [customView ? threadRailPlugin : pinnedSectionPlugin],
