@@ -281,12 +281,26 @@ export interface HistoryTokens {
     /** Strip height floor. Defaults to `components.header.minHeight`, then 56px. */
     minHeight?: string;
     /**
-     * The strip's view title ("Messages"). Muted 14px/600 by default so the
-     * label defers to the conversation header band beside it; set `color`
-     * (and the type keys) to promote it.
+     * The strip's view title ("Messages"). 14px/600 in the text color by
+     * default; set the type keys to restyle it.
      */
     title?: TextStyleTokens;
   };
+  /**
+   * The "Conversations" heading over the list block. Visible in rail
+   * presentation only (the panel keeps it screen-reader-only). 14px/600 in
+   * the text color by default. Every key is pinned in the widget CSS, so
+   * host-page heading rules never restyle it.
+   */
+  listHeading?: TextStyleTokens;
+  /**
+   * The muted sub-headers inside the Messages surface: date groups ("Today",
+   * "Yesterday") and rail nav section titles (`features.history.rail.sections`
+   * `title`, e.g. "Workspace"). 13px/500 in the muted text color in the rail
+   * (the panel keeps date groups screen-reader-only). Every key is pinned in
+   * the widget CSS, so host-page heading rules never restyle them.
+   */
+  groupHeading?: TextStyleTokens;
   /**
    * The floating rail that a collapsed
    * `features.history.rail.collapsedBehavior: "overlay"` opens on hover. It

@@ -16,8 +16,16 @@ const PATHS = {
   x: ["M18 6 6 18", "m6 6 12 12"],
   // PanelLeft is a rounded rect plus this divider; the rect is added below.
   "panel-left": ["M9 3v18"],
+  // Monitor is a rounded rect (added below) plus the stand.
+  monitor: ["M8 21h8", "M12 17v4"],
   ellipsis: [] as string[],
 } as const;
+
+/** The rounded-rect halves of the two-part glyphs above. */
+const RECTS: Partial<Record<keyof typeof PATHS, [number, number, number, number]>> = {
+  "panel-left": [3, 3, 18, 18],
+  monitor: [2, 3, 20, 14],
+};
 
 export type HistoryIconName = keyof typeof PATHS;
 
@@ -45,12 +53,13 @@ export function historyIcon(name: HistoryIconName, size = 20): SVGElement {
     return svg;
   }
 
-  if (name === "panel-left") {
+  const box = RECTS[name];
+  if (box) {
     const rect = document.createElementNS(SVG_NS, "rect");
-    rect.setAttribute("width", "18");
-    rect.setAttribute("height", "18");
-    rect.setAttribute("x", "3");
-    rect.setAttribute("y", "3");
+    rect.setAttribute("x", String(box[0]));
+    rect.setAttribute("y", String(box[1]));
+    rect.setAttribute("width", String(box[2]));
+    rect.setAttribute("height", String(box[3]));
     rect.setAttribute("rx", "2");
     svg.appendChild(rect);
   }

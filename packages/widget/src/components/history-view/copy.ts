@@ -31,7 +31,7 @@ export const HISTORY_VIEW_COPY_DEFAULTS: ResolvedHistoryViewCopy = {
   groupPrevious7Days: "Previous 7 days",
   groupPrevious30Days: "Previous 30 days",
   groupMonthYear: "{month} {year}",
-  browserOnlyTitle: "Messages on this device",
+  browserOnlyTitle: "On this device",
   browserOnlyDescription:
     "Another browser or device keeps its own separate history.",
   verifyingTitle: "Checking your account",
@@ -54,6 +54,7 @@ export const HISTORY_VIEW_COPY_DEFAULTS: ResolvedHistoryViewCopy = {
   loadingLabel: "Loading conversations",
   loadMoreLabel: "Load more",
   loadingMoreLabel: "Loading more conversations",
+  conversationsTitle: "Conversations",
   rowActionsLabel: "Conversation options",
   listOptionsLabel: "Conversation options",
   deleteConversationLabel: "Delete",

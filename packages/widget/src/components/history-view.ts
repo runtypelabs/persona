@@ -559,9 +559,19 @@ export function createHistoryView(
   const scopeTitle = createNode("span", {
     className: "persona-history-scope-title",
   });
+  // The icon is rail-only chrome, revealed by CSS; panel keeps the plain
+  // sentence. Decorative: the title text carries the meaning.
   const scopeLine = createNode(
     "p",
     { className: "persona-history-scope" },
+    createNode(
+      "span",
+      {
+        className: "persona-history-scope-icon",
+        attrs: { "aria-hidden": "true" },
+      },
+      historyIcon("monitor", 14)
+    ),
     scopeTitle
   );
 
@@ -728,10 +738,20 @@ export function createHistoryView(
       : null;
 
   /**
-   * Caption text left, overflow trigger right. Present even when the scope
-   * caption is off or hidden, so the trigger never depends on identity state.
-   * The item attribute is what the row menus use, so the outside-click guard
-   * covers this menu too.
+   * Heading over the conversation list. Visible in the rail, where it anchors
+   * the block the way the nav section titles do; sr-only in the panel, which
+   * already carries the view title directly above.
+   */
+  const conversationsHeading = createNode("h3", {
+    className: "persona-history-conversations-title",
+    text: copy.conversationsTitle,
+  });
+
+  /**
+   * List header block: heading and overflow trigger on the first line, the
+   * scope caption under them. Present even when the scope caption is off or
+   * hidden, so the trigger never depends on identity state. The item attribute
+   * is what the row menus use, so the outside-click guard covers this menu too.
    */
   const captionRow = createNode(
     "div",
@@ -739,6 +759,7 @@ export function createHistoryView(
       className: "persona-history-caption",
       attrs: { "data-persona-history-item": LIST_MENU_ID },
     },
+    conversationsHeading,
     options.showScopeStatus ? scopeLine : null,
     optionsButton
   );
@@ -750,7 +771,9 @@ export function createHistoryView(
     { className: "persona-history-body", attrs: { id: bodyId } },
     options.showScopeStatus ? scopeBlock : null,
     newConversationButton,
-    options.showScopeStatus || optionsButton ? captionRow : null,
+    // Always present: the rail shows its heading even with the scope caption
+    // off and no overflow trigger; the panel hides the empty row (renderChrome).
+    captionRow,
     listRegion
   );
 
@@ -893,6 +916,12 @@ export function createHistoryView(
 
   const syncNavSections = (): void => {
     const sections = options.railSections;
+    // The list header draws its divider only with a nav block above to close off.
+    element.classList.toggle(
+      "persona-history-view--has-nav",
+      presentation === "rail" &&
+        !!sections?.some((section) => section.placement === "above-conversations")
+    );
     if (!sections?.length) return;
     if (presentation !== "rail") {
       navNodes?.forEach((node) => node.remove());
@@ -1112,6 +1141,8 @@ export function createHistoryView(
     if (resolved.pending) scopeBlock.setAttribute("role", "status");
     else scopeBlock.removeAttribute("role");
     scopeBlock.setAttribute("data-persona-history-identity", identityStatus.state);
+    // Mirrored on the caption so the rail's icon and dot can key off it.
+    scopeLine.setAttribute("data-persona-history-identity", identityStatus.state);
     if (identityRetryable(identityStatus)) {
       const retry = createNode("button", {
         className: "persona-history-secondary persona-history-state-action",
@@ -1365,10 +1396,12 @@ export function createHistoryView(
         else captionRow.appendChild(next);
       }
     }
-    // An empty caption row would still take a body gap.
+    // The rail always shows the block for its heading; in the panel the
+    // heading is sr-only, so an otherwise empty row would still take a body gap.
     captionRow.hidden =
-      (!optionsButton || optionsButton.hidden) &&
-      (!options.showScopeStatus || scopeLine.hidden);
+      presentation !== "rail" &&
+      ((!optionsButton || optionsButton.hidden) &&
+        (!options.showScopeStatus || scopeLine.hidden));
   };
 
   // The shell's active-conversation binding. Reported from render() so every

@@ -79,6 +79,7 @@ export const HISTORY_VIEW_CSS =
      headings go the same way: one flat list, but the lists stay labelled. */
   `.persona-history-view .persona-history-sr-only,
 .persona-history-view--panel .persona-history-group-heading,
+.persona-history-view--panel .persona-history-conversations-title,
 .persona-history-view .persona-history-scope-alert[data-persona-history-scope-tone="ambient"] {
   position: absolute;
   width: 1px;
@@ -146,6 +147,28 @@ export const HISTORY_VIEW_CSS =
   line-height: 1.35;
   color: var(--persona-text-muted, #6b7280);
   overflow-wrap: anywhere;
+}
+` +
+  /* Heading over the list block. Visible only in the rail (the panel sr-onlys
+     it above); rail-specific placement is in the rail section below. Every
+     text property is pinned: a bare host h3 rule beats inheritance for
+     whatever this rule leaves undeclared. */
+  `.persona-history-view .persona-history-conversations-title {
+  margin: 0;
+  font-family: var(--persona-components-history-listHeading-fontFamily, inherit);
+  font-size: var(--persona-components-history-listHeading-fontSize, 14px);
+  font-weight: var(--persona-components-history-listHeading-fontWeight, 600);
+  line-height: var(--persona-components-history-listHeading-lineHeight, 20px);
+  letter-spacing: var(--persona-components-history-listHeading-letterSpacing, normal);
+  color: var(--persona-components-history-listHeading-color, var(--persona-text, #111827));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+` +
+  /* Rail-only caption chrome: hidden until the rail block below reveals it. */
+  `.persona-history-view .persona-history-scope-icon {
+  display: none;
 }
 .persona-history-view .persona-history-scope-description {
   display: block;
@@ -260,10 +283,12 @@ export const HISTORY_VIEW_CSS =
   `.persona-history-view .persona-history-group-heading {
   margin: 0 0 4px;
   padding: 0 4px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.35;
-  color: var(--persona-text-muted, #6b7280);
+  font-family: var(--persona-components-history-groupHeading-fontFamily, inherit);
+  font-size: var(--persona-components-history-groupHeading-fontSize, 12px);
+  font-weight: var(--persona-components-history-groupHeading-fontWeight, 600);
+  line-height: var(--persona-components-history-groupHeading-lineHeight, 1.35);
+  letter-spacing: var(--persona-components-history-groupHeading-letterSpacing, normal);
+  color: var(--persona-components-history-groupHeading-color, var(--persona-text-muted, #6b7280));
 }
 .persona-history-view ul.persona-history-list {
   list-style: none;
@@ -686,7 +711,7 @@ export const HISTORY_VIEW_CSS =
   letter-spacing: var(--persona-components-history-railHeader-title-letterSpacing, normal);
   color: var(
     --persona-components-history-railHeader-title-color,
-    var(--persona-text-muted, #6b7280)
+    var(--persona-text, #111827)
   );
 }
 ` +
@@ -761,6 +786,59 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view--rail .persona-history-state {
   padding-right: 16px;
   padding-left: 16px;
+}
+` +
+  /* Rail list header: heading and overflow trigger on the first line, the
+     scope caption spanning under them. DOM order is heading, scope, trigger,
+     so each cell is placed explicitly. */
+  `.persona-history-view--rail .persona-history-caption {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  row-gap: 2px;
+}
+.persona-history-view--rail .persona-history-conversations-title {
+  grid-row: 1;
+  grid-column: 1;
+}
+.persona-history-view--rail .persona-history-caption button.persona-history-list-options {
+  grid-row: 1;
+  grid-column: 2;
+  margin-left: 0;
+}
+.persona-history-view--rail .persona-history-scope {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+` +
+  /* The explicit display beats the UA hidden rule, so restate it: attention
+     states hide the caption and speak through the alert block instead. */
+  `.persona-history-view--rail .persona-history-scope[hidden] {
+  display: none;
+}
+.persona-history-view--rail .persona-history-scope-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+` +
+  /* Device icon only for the browser-only scope; the line is hidden for
+     everything but the ambient states. */
+  `.persona-history-view--rail .persona-history-scope[data-persona-history-identity="browser_only"] .persona-history-scope-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+` +
+  /* A nav block above the list closes off with a hairline over the header. */
+  `.persona-history-view--rail.persona-history-view--has-nav .persona-history-caption {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--persona-history-border);
 }
 ` +
   /* New-conversation row: the same geometry as a conversation, icon leading. */
@@ -844,9 +922,9 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view--rail .persona-history-group-heading {
   margin: 0 0 6px;
   padding: 0 16px;
-  font-size: 13px;
-  font-weight: 500;
-  line-height: 20px;
+  font-size: var(--persona-components-history-groupHeading-fontSize, 13px);
+  font-weight: var(--persona-components-history-groupHeading-fontWeight, 500);
+  line-height: var(--persona-components-history-groupHeading-lineHeight, 20px);
 }
 .persona-history-view--rail .persona-history-row-avatar,
 .persona-history-view--rail .persona-history-row-preview,

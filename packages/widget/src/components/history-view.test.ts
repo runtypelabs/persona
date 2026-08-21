@@ -980,7 +980,7 @@ describe("history view scope status", () => {
     await flush();
 
     expect(root.querySelector(".persona-history-scope-title")?.textContent).toBe(
-      "Messages on this device"
+      "On this device"
     );
     const block = root.querySelector<HTMLElement>(".persona-history-scope-alert");
     expect(block?.dataset.personaHistoryIdentity).toBe("browser_only");
@@ -2008,6 +2008,141 @@ describe("history view rail sections", () => {
     expect(pinned.hidden).toBe(true);
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+});
+
+describe("history view rail list header", () => {
+  const heading = (root: HTMLElement): HTMLElement | null =>
+    root.querySelector<HTMLElement>(".persona-history-conversations-title");
+
+  it("heads the rail list with the overflow trigger and the scope caption", async () => {
+    const { root } = mount({ presentation: "rail" });
+    await flush();
+
+    const caption = root.querySelector<HTMLElement>(".persona-history-caption")!;
+    expect(caption.hidden).toBe(false);
+    const title = heading(root)!;
+    expect(title.tagName).toBe("H3");
+    expect(title.textContent).toBe("Conversations");
+    expect(title.parentElement).toBe(caption);
+    expect(listOptions(root)?.parentElement).toBe(caption);
+
+    // Compact device caption: the icon leads the title, identity stamped so
+    // the CSS can key the icon to the browser-only state.
+    const scope = caption.querySelector<HTMLElement>(".persona-history-scope")!;
+    expect(scope.dataset.personaHistoryIdentity).toBe("browser_only");
+    expect(scope.querySelector(".persona-history-scope-icon svg")).toBeTruthy();
+    expect(scope.querySelector(".persona-history-scope-title")?.textContent).toBe(
+      "On this device"
+    );
+  });
+
+  it("keeps a hidden caption hidden despite the rail's flex display", async () => {
+    const { root, provider } = mount({ presentation: "rail" });
+    await flush();
+    provider.setIdentityStatus({
+      state: "authentication_required",
+      reason: "invalid_identity_proof",
+    });
+    await flush();
+    const scope = root.querySelector<HTMLElement>(".persona-history-scope")!;
+    expect(scope.hidden).toBe(true);
+    // The rail's display:flex outranks the UA hidden rule; the sheet restates it.
+    expect(injectedHistoryCss()).toContain(
+      ".persona-history-view--rail .persona-history-scope[hidden]"
+    );
+  });
+
+  it("pins themable typography on the list heading and the sub-headers", async () => {
+    mount({ presentation: "rail" });
+    await flush();
+    const css = injectedHistoryCss();
+    // Host pages style bare h2/h3, which beats inheritance for any property
+    // these rules leave undeclared; each must pin its full text style behind
+    // its component token.
+    const blockOf = (selector: string): string => {
+      const start = css.indexOf(`${selector} {`);
+      expect(start).toBeGreaterThan(-1);
+      return css.slice(start, css.indexOf("}", start));
+    };
+    const heading = blockOf(
+      ".persona-history-view .persona-history-conversations-title"
+    );
+    for (const key of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "color"]) {
+      expect(heading).toContain(`--persona-components-history-listHeading-${key}`);
+    }
+    const group = blockOf(".persona-history-view .persona-history-group-heading");
+    for (const key of ["fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "color"]) {
+      expect(group).toContain(`--persona-components-history-groupHeading-${key}`);
+    }
+  });
+
+  it("takes the heading text from copy", async () => {
+    const { root } = mount({
+      presentation: "rail",
+      copy: { conversationsTitle: "Chats" },
+    });
+    await flush();
+    expect(heading(root)?.textContent).toBe("Chats");
+  });
+
+  it("keeps the rail heading with the scope caption and overflow trigger off", async () => {
+    const { root } = mount({
+      presentation: "rail",
+      showScopeStatus: false,
+      showDeleteAll: false,
+    });
+    await flush();
+
+    const caption = root.querySelector<HTMLElement>(".persona-history-caption")!;
+    expect(caption.hidden).toBe(false);
+    expect(heading(root)?.textContent).toBe("Conversations");
+    expect(listOptions(root)).toBeNull();
+    expect(caption.querySelector(".persona-history-scope")).toBeNull();
+  });
+
+  it("hides the panel heading visually while keeping it in the tree", async () => {
+    const { root } = mount();
+    await flush();
+    expect(heading(root)?.textContent).toBe("Conversations");
+    expect(injectedHistoryCss()).toContain(
+      ".persona-history-view--panel .persona-history-conversations-title"
+    );
+  });
+
+  it("draws the divider only with a nav block above the conversations", async () => {
+    const railSections: HistoryViewOptions["railSections"] = [
+      {
+        id: "workspace",
+        title: "Workspace",
+        placement: "above-conversations",
+        items: [{ id: "projects", label: "Projects", onSelect: vi.fn() }],
+      },
+    ];
+    const withNav = mount({ presentation: "rail", railSections });
+    const withoutNav = mount({ presentation: "rail" });
+    const footerOnly = mount({
+      presentation: "rail",
+      railSections: [
+        {
+          id: "account",
+          placement: "footer",
+          items: [{ id: "settings", label: "Settings", onSelect: vi.fn() }],
+        },
+      ],
+    });
+    await flush();
+
+    expect(withNav.root.classList.contains("persona-history-view--has-nav")).toBe(true);
+    expect(withoutNav.root.classList.contains("persona-history-view--has-nav")).toBe(false);
+    expect(footerOnly.root.classList.contains("persona-history-view--has-nav")).toBe(false);
+
+    // The divider is rail chrome; a move into panel takes it away and a move
+    // back restores it.
+    withNav.handle.setPresentation("panel");
+    expect(withNav.root.classList.contains("persona-history-view--has-nav")).toBe(false);
+    withNav.handle.setPresentation("rail");
+    expect(withNav.root.classList.contains("persona-history-view--has-nav")).toBe(true);
   });
 });
 

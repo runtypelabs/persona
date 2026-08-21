@@ -475,6 +475,16 @@ Set `components.header.minHeight` and `railHeader.minHeight` to the same value
 to weld the two strips into one band. The built-in minimal header measures
 65px, so a themed app frame on that layout pins both to `65px`.
 
+Three text-style token groups cover the sidebar's typography, each taking
+`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, and
+`color`: `railHeader.title` for the strip's view title ("Messages", 14px/600,
+text color), `components.history.listHeading` for the "Conversations" heading
+over the list block (14px/600, text color; rail only), and
+`components.history.groupHeading` for the muted sub-headers, covering both the
+date groups ("Today", "Yesterday") and rail nav section titles (rail 13px/500,
+muted text color). Every key is pinned in the widget CSS, so bare host-page
+`h2`/`h3` rules never restyle these headings.
+
 The rest of the sidebar is styled by the `--persona-history-*` variables listed
 under [Conversation History (Messages) Variables](#conversation-history-messages-variables):
 in rail presentation the surface re-points to `--persona-container` for its own

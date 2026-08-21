@@ -2713,6 +2713,11 @@ export interface AgentWidgetHistoryCopy {
   loadMoreLabel?: string;
   /** Label of that action while its page is in flight. */
   loadingMoreLabel?: string;
+  /**
+   * Heading over the conversation list. Visible in rail presentation, where it
+   * carries the list overflow trigger; sr-only in panel presentation.
+   */
+  conversationsTitle?: string;
   /** Accessible name of the per-row overflow trigger and its menu. */
   rowActionsLabel?: string;
   /** Accessible name of the list-level overflow trigger and its menu. */
