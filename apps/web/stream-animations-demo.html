@@ -98,11 +98,6 @@
             </div>
 
             <div data-config-inspector></div>
-
-            <div class="info-section">
-              <h3>Log</h3>
-              <div id="log" class="event-log"></div>
-            </div>
           </div>
         </aside>
 
@@ -176,14 +171,6 @@
         cancelToken.cancelled = true;
         cancelToken = { cancelled: false };
         return cancelToken;
-      };
-
-      const logEl = document.getElementById("log");
-      const log = (msg) => {
-        const line = document.createElement("div");
-        line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-        logEl.appendChild(line);
-        logEl.scrollTop = logEl.scrollHeight;
       };
 
       let currentType = "none";
@@ -303,7 +290,6 @@ Both were captured at *golden hour*.`,
         // reset.
         refreshConfigPreview();
         await sleep(100);
-        log(`Playing stream: type=${currentType}, placeholder=${currentPlaceholder}`);
 
         controller.injectUserMessage({
           id: nextId("user"),
@@ -330,7 +316,6 @@ Both were captured at *golden hour*.`,
         if (!token.cancelled) {
           controller.injectAssistantMessage({ id: msgId, content: acc, streaming: false });
         }
-        log("Stream complete");
         playBtn.disabled = false;
       };
 
@@ -410,7 +395,6 @@ Both were captured at *golden hour*.`,
           };
         },
       });
-      log("Ready: pick a type and click Stream reply.");
     </script>
     <script type="module">
       import { renderExamplesShell } from "/src/examples-nav.ts";

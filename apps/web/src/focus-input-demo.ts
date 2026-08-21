@@ -22,15 +22,7 @@ const proxyUrl =
     ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch`
     : `http://localhost:${proxyPort}/api/chat/dispatch`;
 
-const logEl = document.getElementById("log");
-const log = (msg: string) => {
-  if (logEl) {
-    const time = new Date().toLocaleTimeString();
-    logEl.textContent += `[${time}] ${msg}\n`;
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-  console.log(`[FocusDemo] ${msg}`);
-};
+const log = (msg: string) => console.log(`[FocusDemo] ${msg}`);
 
 const STORAGE_KEY = "focus-demo-autoFocusInput";
 let autoFocus = localStorage.getItem(STORAGE_KEY) === "true";
