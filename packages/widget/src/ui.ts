@@ -1604,6 +1604,9 @@ export const createAgentExperience = (
       element.style.maxWidth = max;
       element.style.marginLeft = "auto";
       element.style.marginRight = "auto";
+      // Auto cross-axis margins defeat flex stretch: the previews container
+      // sits inside the flex-column form and would shrink-center without this.
+      element.style.width = "100%";
     }
   };
   applyComposerContentMaxWidth();
