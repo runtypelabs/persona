@@ -8795,6 +8795,9 @@ export const createAgentExperience = (
       showScopeStatus: config.features?.history?.showScopeStatus !== false,
       showDelete: config.features?.history?.showDelete !== false,
       showDeleteAll: config.features?.history?.showDeleteAll !== false,
+      ...(config.features?.history?.listActions?.length
+        ? { listActions: config.features.history.listActions }
+        : {}),
       // Rows borrow the launcher's IMAGE mark only: agentIconText carries the
       // merged 💬 default, which would put a placeholder glyph on every row.
       // No mark at all means text-only rows, the assistant-list default.

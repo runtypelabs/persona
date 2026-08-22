@@ -2801,6 +2801,22 @@ export interface AgentWidgetHistoryRailSection {
 }
 
 /**
+ * Host-defined item in the list overflow menu (the `…` beside the
+ * conversation-list heading). Rendered above the built-in destructive items.
+ */
+export interface AgentWidgetHistoryListAction {
+  /** Stable identity; keeps menu focus keys stable across re-renders. */
+  id: string;
+  label: string;
+  /** Destructive (red) styling like the built-in delete-all. Default false. */
+  danger?: boolean;
+  /** Receives the conversation summaries loaded at selection time. */
+  onSelect: (context: {
+    conversations: HistoryConversationSummary[];
+  }) => void | Promise<void>;
+}
+
+/**
  * Feature config for per-visitor conversation history. Without a `provider`,
  * client token mode only: the built-in Runtype backend needs one, so the UI
  * never renders for proxy/agent sessions. A `provider` lifts that restriction.
@@ -3006,6 +3022,12 @@ export interface AgentWidgetHistoryFeature {
    * The identity reset item is separate and unaffected.
    */
   showDeleteAll?: boolean;
+  /**
+   * Host items appended to the list overflow menu, above the built-in
+   * destructive actions. The trigger renders whenever any item exists, so
+   * these keep the menu alive even with `showDeleteAll: false`.
+   */
+  listActions?: AgentWidgetHistoryListAction[];
 }
 
 /** Resolved scope for a logical history operation. */

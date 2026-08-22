@@ -471,6 +471,17 @@ export const HISTORY_VIEW_CSS =
   top: calc(100% - 2px);
   right: 4px;
 }
+` +
+  /* Rail caption is a two-row grid (heading + scope line); grid-placing the
+     abspos menu makes row 1 its containing block, so 100% means "below the
+     trigger row", not "below the whole caption". Spanning both columns keeps
+     the base rule's max-width resolving against the full caption width. */
+  `.persona-history-view--rail .persona-history-caption .persona-history-menu {
+  grid-row: 1 / 2;
+  grid-column: 1 / -1;
+  top: calc(100% + 2px);
+  right: 0;
+}
 .persona-history-view button.persona-history-menu-item {
   display: block;
   width: 100%;
@@ -479,10 +490,13 @@ export const HISTORY_VIEW_CSS =
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: var(--persona-history-danger-fg, var(--persona-palette-colors-error-600, #b91c1c));
+  color: var(--persona-text, #111827);
   font: inherit;
   text-align: left;
   cursor: pointer;
+}
+.persona-history-view button.persona-history-menu-item--danger {
+  color: var(--persona-history-danger-fg, var(--persona-palette-colors-error-600, #b91c1c));
 }
 .persona-history-view button.persona-history-menu-item:hover:not(:disabled) {
   background: var(--persona-history-row-hover-bg);
@@ -796,6 +810,10 @@ export const HISTORY_VIEW_CSS =
   `.persona-history-view--rail .persona-history-caption {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
+  /* Explicit rows: the abspos menu is grid-placed into row 1, and abspos
+     grid placement only resolves against explicit lines (implicit/auto ends
+     fall back to the padding-box edge, i.e. below the scope line). */
+  grid-template-rows: auto auto;
   align-items: center;
   row-gap: 2px;
 }

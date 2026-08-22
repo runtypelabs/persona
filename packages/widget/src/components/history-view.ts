@@ -49,6 +49,7 @@ import {
   type HistoryProvider,
 } from "../internal/history-provider";
 import type {
+  AgentWidgetHistoryListAction,
   AgentWidgetHistoryRenderActions,
   HistoryIdentityStatus,
 } from "../types";
@@ -214,6 +215,8 @@ export interface HistoryViewOptions {
   showDelete?: boolean;
   /** The list overflow menu's clear-history item. Default true. */
   showDeleteAll?: boolean;
+  /** Host items in the list overflow menu, above the built-in destructive ones. */
+  listActions?: AgentWidgetHistoryListAction[];
   /**
    * Leading row avatar: an image URL, a glyph, or `false` to omit the block.
    * Absent falls back to the same glyph the header uses.
@@ -732,9 +735,10 @@ export function createHistoryView(
   // quiet trigger, which is chrome and therefore renders through the load.
   const clearAllowed = options.showDeleteAll !== false;
   const resetAllowed = !!options.provider.resetDevice;
+  const listActions = options.listActions ?? [];
 
   const optionsButton =
-    clearAllowed || resetAllowed
+    clearAllowed || resetAllowed || listActions.length > 0
       ? buildMenuTrigger({
           className: "persona-history-list-options",
           label: copy.listOptionsLabel,
@@ -1362,6 +1366,18 @@ export function createHistoryView(
       specs.length === 0
         ? menuItemFocusKey(LIST_MENU_ID)
         : `${menuItemFocusKey(LIST_MENU_ID)}-${specs.length}`;
+    // Host actions lead so the menu never opens straight onto a destructive
+    // built-in when neutral options exist.
+    if (!listUnresolved) {
+      for (const action of listActions) {
+        specs.push({
+          label: action.label,
+          focusKey: nextKey(),
+          danger: action.danger === true,
+          onSelect: () => void action.onSelect({ conversations: [...items] }),
+        });
+      }
+    }
     if (
       clearAllowed &&
       !(items.length === 0 && (listState.kind === "empty" || listUnresolved))
@@ -1369,6 +1385,7 @@ export function createHistoryView(
       specs.push({
         label: copy.clearHistoryLabel,
         focusKey: nextKey(),
+        danger: true,
         onSelect: () => void clearHistory(),
       });
     }
@@ -1376,6 +1393,7 @@ export function createHistoryView(
       specs.push({
         label: copy.resetIdentityLabel,
         focusKey: nextKey(),
+        danger: true,
         onSelect: () => void resetIdentity(),
       });
     }

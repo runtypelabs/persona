@@ -180,6 +180,7 @@ function buildRowMenu(options: ConversationRowOptions): HTMLElement {
       {
         label: copy.deleteConversationLabel,
         focusKey: menuItemFocusKey(conversation.id),
+        danger: true,
         onSelect: options.onDelete,
       },
     ],
@@ -236,6 +237,8 @@ export interface HistoryMenuItemSpec {
   label: string;
   /** `data-persona-history-focus` value, so a re-render can land focus back. */
   focusKey: string;
+  /** Destructive (red) styling. Host list actions default to neutral text. */
+  danger?: boolean;
   onSelect: () => void;
 }
 
@@ -258,7 +261,10 @@ export function buildOverflowMenu(options: OverflowMenuOptions): HTMLElement {
 
   for (const spec of options.items) {
     const item = createNode("button", {
-      className: "persona-history-menu-item",
+      className: cx(
+        "persona-history-menu-item",
+        spec.danger && "persona-history-menu-item--danger"
+      ),
       text: spec.label,
       attrs: {
         type: "button",

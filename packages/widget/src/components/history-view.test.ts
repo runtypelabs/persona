@@ -1744,6 +1744,62 @@ describe("history view chrome and destructive actions", () => {
     expect(liveText(root)).toBe("This device was forgotten.");
   });
 
+  it("renders host list actions above the built-ins, neutral unless danger", async () => {
+    const onExport = vi.fn();
+    const { root } = mount({
+      listActions: [
+        { id: "export", label: "Export conversations", onSelect: onExport },
+      ],
+    });
+    await flush();
+
+    const items = openListMenu(root);
+    expect(items.map((item) => item.textContent)).toEqual([
+      "Export conversations",
+      "Delete all conversations",
+    ]);
+    expect(items[0].classList.contains("persona-history-menu-item--danger")).toBe(false);
+    expect(items[1].classList.contains("persona-history-menu-item--danger")).toBe(true);
+
+    items[0].click();
+    await flush();
+    expect(onExport).toHaveBeenCalledTimes(1);
+    const context = onExport.mock.calls[0][0] as {
+      conversations: { id: string }[];
+    };
+    expect(context.conversations.map((c) => c.id)).toEqual(
+      DEFAULT_SEEDS.map((seed) => seed.id)
+    );
+    // The action closed the menu like the built-ins do.
+    expect(root.querySelector(".persona-history-caption .persona-history-menu")).toBeNull();
+  });
+
+  it("keeps the overflow trigger for host actions when delete-all is hidden", async () => {
+    const onExport = vi.fn();
+    const { root } = mount({
+      showDeleteAll: false,
+      listActions: [
+        { id: "export", label: "Export conversations", onSelect: onExport },
+      ],
+    });
+    await flush();
+
+    expect(openListMenu(root).map((item) => item.textContent)).toEqual([
+      "Export conversations",
+    ]);
+  });
+
+  it("styles a danger host action like the built-in destructive items", async () => {
+    const { root } = mount({
+      listActions: [
+        { id: "purge", label: "Purge cache", danger: true, onSelect: vi.fn() },
+      ],
+    });
+    await flush();
+    const [purge] = openListMenu(root);
+    expect(purge.classList.contains("persona-history-menu-item--danger")).toBe(true);
+  });
+
   it("keeps forget-this-device reachable on an empty list", async () => {
     const base = createDemoHistoryProvider({
       conversations: [],

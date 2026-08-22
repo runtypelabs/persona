@@ -146,6 +146,7 @@ export type {
   AgentWidgetAskUserQuestionStyles,
   // Visitor conversation history (client-token mode) types
   AgentWidgetHistoryFeature,
+  AgentWidgetHistoryListAction,
   AgentWidgetHistoryCopy,
   HistoryScope,
   HistoryIdentityStatus,

@@ -137,7 +137,32 @@ const pinnedSectionPlugin = createPinnedSectionPlugin((label) =>
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const base: AgentWidgetConfig = {
     ...DEFAULT_WIDGET_CONFIG,
-    features: { history: { enabled: true, presentation, grouping } },
+    features: {
+      history: {
+        enabled: true,
+        presentation,
+        grouping,
+        // Host item in the list overflow menu, above the built-in delete-all.
+        listActions: [
+          {
+            id: "export",
+            label: "Export conversations",
+            onSelect: ({ conversations }) => {
+              const blob = new Blob([JSON.stringify(conversations, null, 2)], {
+                type: "application/json",
+              });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = "conversations.json";
+              link.click();
+              URL.revokeObjectURL(url);
+              log("info", `exported ${conversations.length} conversation summaries`);
+            },
+          },
+        ],
+      },
+    },
     layout: {
       ...DEFAULT_WIDGET_CONFIG.layout,
       header: {
