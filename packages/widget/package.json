@@ -107,6 +107,11 @@
       "import": "./dist/icons-extra.js",
       "require": "./dist/icons-extra.cjs"
     },
+    "./artifacts-ui": {
+      "types": "./dist/artifacts-ui.d.ts",
+      "import": "./dist/artifacts-ui.js",
+      "require": "./dist/artifacts-ui.cjs"
+    },
     "./widget.css": "./dist/widget.css"
   },
   "files": [
@@ -114,7 +119,7 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:context-mentions && pnpm run build:context-mentions-inline && pnpm run build:history-view && pnpm run build:event-stream-view && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run build:animations-extra && pnpm run build:approval-ui && pnpm run build:session-reconnect && pnpm run build:webmcp-runtime && pnpm run build:icons-extra && pnpm run check:dist-vite8",
+    "build": "rimraf dist && pnpm run build:styles && pnpm run build:markdown-parsers && pnpm run build:client && pnpm run build:installer && pnpm run build:launcher && pnpm run build:webmcp-polyfill && pnpm run build:context-mentions && pnpm run build:context-mentions-inline && pnpm run build:history-view && pnpm run build:event-stream-view && pnpm run build:runtype-tts && pnpm run build:theme-ref && pnpm run build:codegen && pnpm run build:theme-editor && pnpm run build:theme-editor-preview && pnpm run build:testing && pnpm run build:smart-dom-reader && pnpm run build:voice-worklet-player && pnpm run build:plugin-kit && pnpm run build:animations && pnpm run build:animations-extra && pnpm run build:approval-ui && pnpm run build:session-reconnect && pnpm run build:webmcp-runtime && pnpm run build:icons-extra && pnpm run build:artifacts-ui && pnpm run check:dist-vite8",
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:markdown-parsers": "tsup --config tsup.markdown-parsers.config.ts",
     "build:plugin-kit": "tsup src/plugin-kit.ts --format esm,cjs --minify --dts --out-dir dist --no-splitting",
@@ -129,10 +134,11 @@
     "build:session-reconnect": "tsup --config tsup.session-reconnect.config.ts",
     "build:webmcp-runtime": "tsup --config tsup.webmcp-runtime.config.ts",
     "build:icons-extra": "tsup --config tsup.icons-extra.config.ts",
+    "build:artifacts-ui": "tsup --config tsup.artifacts-ui.config.ts",
     "build:theme-ref": "tsup src/theme-reference.ts --format esm,cjs --minify --dts",
     "build:codegen": "tsup src/codegen.ts --format esm,cjs --minify --dts",
     "build:styles": "node scripts/build-styles.mjs",
-    "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" --external @runtypelabs/persona/context-mentions --external @runtypelabs/persona/context-mentions-inline --external @runtypelabs/persona/history-view --external @runtypelabs/persona/event-stream-view --external @runtypelabs/persona/animations-extra --external @runtypelabs/persona/approval-ui --external @runtypelabs/persona/session-reconnect --external @runtypelabs/persona/webmcp-runtime --external @runtypelabs/persona/icons-extra && tsup --config tsup.global.config.ts && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
+    "build:client": "tsup src/index.ts --format esm,cjs --minify --sourcemap --splitting false --dts --loader \".css=text\" --external @runtypelabs/persona/context-mentions --external @runtypelabs/persona/context-mentions-inline --external @runtypelabs/persona/history-view --external @runtypelabs/persona/event-stream-view --external @runtypelabs/persona/animations-extra --external @runtypelabs/persona/approval-ui --external @runtypelabs/persona/session-reconnect --external @runtypelabs/persona/webmcp-runtime --external @runtypelabs/persona/icons-extra --external @runtypelabs/persona/artifacts-ui && tsup --config tsup.global.config.ts && node -e \"const fs=require('fs');for(const ext of ['.global.js','.global.js.map']){const from='dist/index-global'+ext;if(fs.existsSync(from))fs.renameSync(from,'dist/index'+ext);}\"",
     "build:webmcp-polyfill": "tsup --config tsup.webmcp-polyfill.config.ts",
     "build:context-mentions": "tsup --config tsup.context-mentions.config.ts",
     "build:context-mentions-inline": "tsup --config tsup.context-mentions-inline.config.ts",

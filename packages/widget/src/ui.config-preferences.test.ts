@@ -9,6 +9,15 @@ import type {
   WidgetPreferenceSlice,
 } from "./types";
 
+// The artifacts UI ships in a lazy chunk; provide + adopt it eagerly so this
+// file's synchronous pane/card assertions hold (adoption also registers the
+// built-in artifact components, which import-time code no longer does).
+import { provideArtifactsUi } from "./artifacts-ui-loader";
+import * as artifactsUiEntry from "./artifacts-ui-entry";
+
+provideArtifactsUi(artifactsUiEntry);
+
+
 beforeAll(() => {
   // jsdom does not implement matchMedia; the pane's layout code touches it.
   if (!window.matchMedia) {

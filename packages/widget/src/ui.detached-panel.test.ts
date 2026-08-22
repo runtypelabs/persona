@@ -5,6 +5,15 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAgentExperience } from "./ui";
 import type { AgentWidgetConfig } from "./types";
 
+// The artifacts UI ships in a lazy chunk; provide + adopt it eagerly so this
+// file's synchronous pane/card assertions hold (adoption also registers the
+// built-in artifact components, which import-time code no longer does).
+import { provideArtifactsUi } from "./artifacts-ui-loader";
+import * as artifactsUiEntry from "./artifacts-ui-entry";
+
+provideArtifactsUi(artifactsUiEntry);
+
+
 const originalInnerWidth = window.innerWidth;
 
 beforeAll(() => {

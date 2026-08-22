@@ -265,6 +265,35 @@ setApprovalUiLoader(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Deferred artifacts-ui loading.
+//
+// This bundle is built with `@runtypelabs/persona/artifacts-ui` external (see
+// `tsup.global.config.ts`): the artifact pane, inline/card components, and
+// preview renderer are kept out of the CDN payload and fetched when the
+// artifacts sidebar is enabled or the first artifact directive arrives. Same
+// sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setArtifactsUiLoader } from "./artifacts-ui-loader";
+
+setArtifactsUiLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "artifacts-ui.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the artifacts-ui.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host artifacts-ui.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
 // Deferred extra-icons loading.
 //
 // This bundle is built with `@runtypelabs/persona/icons-extra` external (see

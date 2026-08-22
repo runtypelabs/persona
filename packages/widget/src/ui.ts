@@ -78,8 +78,9 @@ import {
   formatCombo,
   parseCombo,
 } from "./utils/shortcuts";
-import { downloadInfoFor, triggerArtifactDownload } from "./utils/artifact-file";
-import { artifactCopyText } from "./components/artifact-preview";
+// The artifact download/copy helpers live in the lazy artifacts-ui chunk;
+// reached via getArtifactsUiSync() in the delegated click handlers (which can
+// only fire on DOM the adopted chunk rendered).
 import { morphMessages } from "./utils/morph";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
@@ -187,11 +188,13 @@ import type { EventStreamStore } from "./utils/event-stream-store";
 import type { ThroughputTracker } from "./utils/throughput-tracker";
 import { loadEventStreamView } from "./event-stream-view-loader";
 import type { EventStreamViewHandle } from "./event-stream-view-entry";
-import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
+import type { ArtifactPaneApi } from "./components/artifact-pane";
 import {
-  hasLiveInlineArtifactBlock,
-  updateInlineArtifactBlocks
-} from "./components/artifact-inline";
+  loadArtifactsUi,
+  getArtifactsUiSync,
+  onArtifactsUiReady,
+  type ArtifactsUiModule,
+} from "./artifacts-ui-loader";
 import {
   artifactsSidebarEnabled,
   applyArtifactLayoutCssVars,
@@ -2182,6 +2185,8 @@ export const createAgentExperience = (
   });
 
   let artifactPaneApi: ArtifactPaneApi | null = null;
+  // Guards the deferred pane graft against post-destroy chunk adoption.
+  let artifactsUiDisposed = false;
   let artifactPanelResizeObs: ResizeObserver | null = null;
   // Re-runs panel chrome when the split-chrome mode flips (pane
   // open/close/appearance change). Assigned once applyFullHeightStyles exists.
@@ -2280,9 +2285,12 @@ export const createAgentExperience = (
     if (dlPrevented === true) return;
     const { markdown, title, file } = resolveCardArtifactContent(dlBtn, artifactId);
     if (!markdown) return;
+    // The button only exists on chunk-rendered DOM, so the module is adopted.
+    const artifactsUi = getArtifactsUiSync();
+    if (!artifactsUi) return;
     // File artifacts download the raw unfenced source under their real name/MIME;
     // non-file markdown artifacts keep the legacy `<title>.md` / text/markdown path.
-    triggerArtifactDownload(downloadInfoFor({ title, markdown, file }));
+    artifactsUi.triggerArtifactDownload(artifactsUi.downloadInfoFor({ title, markdown, file }));
   });
 
   // Click delegation for integrator-supplied card action buttons. Actions are
@@ -2335,13 +2343,16 @@ export const createAgentExperience = (
     // Prefer the live record (covers component JSON); fall back to the persisted
     // markdown / file source parsed from the inline block's message rawContent.
     const artifact = session.getArtifactById(artifactId);
+    // The button only exists on chunk-rendered DOM, so the module is adopted.
+    const artifactsUi = getArtifactsUiSync();
+    if (!artifactsUi) return;
     let text = '';
     if (artifact) {
-      text = artifactCopyText(artifact);
+      text = artifactsUi.artifactCopyText(artifact);
     } else {
       const { markdown, file, artifactType } = resolveCardArtifactContent(copyBtn, artifactId);
       if (artifactType === 'markdown') {
-        text = artifactCopyText({
+        text = artifactsUi.artifactCopyText({
           id: artifactId,
           artifactType: 'markdown',
           status: 'complete',
@@ -2995,6 +3006,13 @@ export const createAgentExperience = (
   };
 
   if (artifactsSidebarEnabled(config)) {
+    // The split-root SKELETON is built synchronously so panel layout is
+    // byte-identical from first paint; the pane itself lives in the lazy
+    // artifacts-ui chunk and is grafted in at adoption. The pane element
+    // starts `persona-hidden` and only becomes visible once artifacts exist
+    // (`syncArtifactPane`), so deferred attachment is invisible; an artifact
+    // arriving while the chunk is in flight is adopted by the
+    // `syncArtifactPane()` call below.
     panel.style.position = "relative";
     const chatColumn = createElement(
       "div",
@@ -3005,37 +3023,59 @@ export const createAgentExperience = (
       "persona-flex persona-h-full persona-w-full persona-min-h-0 persona-artifact-split-root"
     );
     chatColumn.appendChild(container);
-    artifactPaneApi = createArtifactPane(config, {
-      onSelect: (id) => sessionRef.current?.selectArtifact(id),
-      onDismiss: () => {
-        artifactsPaneUserHidden = true;
-        syncArtifactPane();
-      },
-      onToggleExpand: () => {
-        const next = !artifactPaneExpanded;
-        const artifactId =
-          lastArtifactsState.selectedId ??
-          lastArtifactsState.artifacts[lastArtifactsState.artifacts.length - 1]?.id ??
-          null;
-        const prevented = config.features?.artifacts?.onArtifactAction?.({
-          type: "expand",
-          artifactId,
-          expanded: next,
-        });
-        if (prevented === true) return;
-        artifactPaneExpanded = next;
-        if (!next) artifactPaneExpandedPinned = false;
-        syncArtifactPane();
-      }
-    });
-    artifactPaneApi.element.classList.add("persona-hidden");
     artifactSplitRoot = splitRoot;
     splitRoot.appendChild(chatColumn);
-    splitRoot.appendChild(artifactPaneApi.element);
-    if (artifactPaneApi.backdrop) {
-      panel.appendChild(artifactPaneApi.backdrop);
-    }
     panel.appendChild(splitRoot);
+
+    const graftArtifactPane = (mod: ArtifactsUiModule): void => {
+        if (artifactsUiDisposed || artifactPaneApi) return;
+        artifactPaneApi = mod.createArtifactPane(config, {
+          onSelect: (id) => sessionRef.current?.selectArtifact(id),
+          onDismiss: () => {
+            artifactsPaneUserHidden = true;
+            syncArtifactPane();
+          },
+          onToggleExpand: () => {
+            const next = !artifactPaneExpanded;
+            const artifactId =
+              lastArtifactsState.selectedId ??
+              lastArtifactsState.artifacts[lastArtifactsState.artifacts.length - 1]?.id ??
+              null;
+            const prevented = config.features?.artifacts?.onArtifactAction?.({
+              type: "expand",
+              artifactId,
+              expanded: next,
+            });
+            if (prevented === true) return;
+            artifactPaneExpanded = next;
+            if (!next) artifactPaneExpandedPinned = false;
+            syncArtifactPane();
+          }
+        });
+        artifactPaneApi.element.classList.add("persona-hidden");
+        splitRoot.appendChild(artifactPaneApi.element);
+        if (artifactPaneApi.backdrop) {
+          panel.appendChild(artifactPaneApi.backdrop);
+        }
+        // Adopt anything that streamed in while the chunk was in flight.
+        reconcileArtifactResize();
+        syncArtifactPane();
+    };
+    // Graft on ADOPTION (not this load promise): if this initial fetch fails,
+    // a later artifact render's kick (component-middleware) can still resolve
+    // the chunk, and the ready subscriber grafts the pane then.
+    const syncMod = getArtifactsUiSync();
+    if (syncMod) {
+      graftArtifactPane(syncMod);
+    } else {
+      onArtifactsUiReady(() => {
+        const mod = getArtifactsUiSync();
+        if (mod) graftArtifactPane(mod);
+      });
+      void loadArtifactsUi().catch(() => {
+        // Failed fetch: the sidebar stays absent until a retry succeeds.
+      });
+    }
 
     reconcileArtifactResize = () => {
       if (!artifactSplitRoot || !artifactPaneApi) return;
@@ -3798,6 +3838,9 @@ export const createAgentExperience = (
   };
 
   const destroyCallbacks: Array<() => void> = [];
+  destroyCallbacks.push(() => {
+    artifactsUiDisposed = true;
+  });
   // Drops every binding (config and plugin) with the document listener.
   destroyCallbacks.push(() => {
     releaseShortcuts.forEach((release) => release());
@@ -5647,7 +5690,7 @@ export const createAgentExperience = (
                 fresh &&
                 live &&
                 live !== fresh &&
-                hasLiveInlineArtifactBlock(live)
+                getArtifactsUiSync()?.hasLiveInlineArtifactBlock(live)
               ) {
                 if (fresh === componentBubble) componentBubble = live;
                 else fresh.replaceWith(live);
@@ -7346,7 +7389,7 @@ export const createAgentExperience = (
     // Freshly (re)built inline artifact blocks render from their persisted
     // props; sync them with the live registry so a block created after the
     // last onArtifactsState emission still shows current content.
-    updateInlineArtifactBlocks(messagesWrapper, lastArtifactsState.artifacts, {
+    getArtifactsUiSync()?.updateInlineArtifactBlocks(messagesWrapper, lastArtifactsState.artifacts, {
       suppressTransition: isStreaming,
     });
     ensureToolElapsedTimer();
@@ -7548,7 +7591,7 @@ export const createAgentExperience = (
       // streaming: it captures the whole document, and cross-fading a stale
       // snapshot over still-moving message text reads as ghosting/motion blur
       // on the transcript.
-      updateInlineArtifactBlocks(messagesWrapper, state.artifacts, {
+      getArtifactsUiSync()?.updateInlineArtifactBlocks(messagesWrapper, state.artifacts, {
         suppressTransition: isStreaming,
       });
       syncArtifactPane();
@@ -13598,6 +13641,23 @@ export const createAgentExperience = (
     renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
   });
   destroyCallbacks.push(unsubscribeExtraIcons);
+
+  // Artifact directives rendered while the artifacts-ui chunk was in flight
+  // are empty placeholders; once it's adopted, rebuild them into real
+  // cards/inline blocks and sync the pane. Same heal shape as above.
+  const unsubscribeArtifactsUi = onArtifactsUiReady(() => {
+    if (!session) return;
+    configVersion++;
+    messageCache.clear();
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+    getArtifactsUiSync()?.updateInlineArtifactBlocks(
+      messagesWrapper,
+      lastArtifactsState.artifacts,
+      { suppressTransition: true }
+    );
+    syncArtifactPane();
+  });
+  destroyCallbacks.push(unsubscribeArtifactsUi);
 
   return controller;
 };

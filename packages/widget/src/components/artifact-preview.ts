@@ -20,6 +20,7 @@ import {
   type ComponentContext,
   type ComponentRenderer,
 } from "./registry";
+import { getInjectedComponentRegistry } from "./artifacts-deps";
 
 /**
  * Shared artifact preview body renderer.
@@ -562,7 +563,11 @@ export function renderArtifactPreviewBody(
   ctx: ArtifactPreviewContext
 ): ArtifactPreviewBodyHandle {
   const { config } = ctx;
-  const registry = ctx.registry ?? componentRegistry;
+  // Injected-first: in the lazy artifacts-ui chunk the imported
+  // `componentRegistry` is the chunk's own empty copy; the adoption step
+  // injects core's (see artifacts-deps.ts). Same instance in ESM/tests.
+  const registry =
+    ctx.registry ?? getInjectedComponentRegistry() ?? componentRegistry;
   const layout = ctx.bodyLayout;
 
   const md = config.markdown ? createMarkdownProcessorFromConfig(config.markdown) : null;

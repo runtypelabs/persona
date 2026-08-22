@@ -1,6 +1,4 @@
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
-import { PersonaArtifactCard } from "./artifact-card";
-import { PersonaArtifactInline } from "./artifact-inline";
 
 /**
  * Context provided to component renderers
@@ -115,12 +113,14 @@ class ComponentRegistry {
 }
 
 /**
- * Global component registry instance
+ * Global component registry instance.
+ *
+ * The built-in artifact components (`PersonaArtifactCard` /
+ * `PersonaArtifactInline`) are NOT registered at import time anymore: their
+ * renderers live in the lazy artifacts-ui chunk and are registered by its
+ * adoption step (`artifacts-ui-loader.ts`), with host registrations under the
+ * same names still winning. `component-middleware` suppresses the
+ * missing-component warning for those two names and kicks the chunk load
+ * instead.
  */
 export const componentRegistry = new ComponentRegistry();
-
-// Register built-in components. The artifact card and inline block carry
-// their own border and surface, so they render bare in the thread to avoid
-// double-boxing.
-componentRegistry.register("PersonaArtifactCard", PersonaArtifactCard, { bubbleChrome: false });
-componentRegistry.register("PersonaArtifactInline", PersonaArtifactInline, { bubbleChrome: false });

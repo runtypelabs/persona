@@ -97,5 +97,11 @@ export default defineConfig({
     // Same scheme: sibling-URL chunk `icons-extra.js`, fetched the first time
     // `renderLucideIcon` is asked for one of its names.
     options.external.push("@runtypelabs/persona/icons-extra");
+
+    // Keep the artifacts UI (pane + inline/card components + preview) out of
+    // the CDN payload. Same scheme: sibling-URL chunk `artifacts-ui.js`,
+    // fetched when the sidebar is enabled or the first artifact directive
+    // arrives.
+    options.external.push("@runtypelabs/persona/artifacts-ui");
   },
 });

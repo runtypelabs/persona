@@ -19,6 +19,15 @@ import {
 } from "./internal/demo-history-provider";
 import { ARTIFACT_RESIZE_RAILED_TRANSCRIPT_MIN_PX } from "./utils/artifact-resize";
 
+// The artifacts UI ships in a lazy chunk; provide + adopt it eagerly so this
+// file's synchronous pane/card assertions hold (adoption also registers the
+// built-in artifact components, which import-time code no longer does).
+import { provideArtifactsUi } from "./artifacts-ui-loader";
+import * as artifactsUiEntry from "./artifacts-ui-entry";
+
+provideArtifactsUi(artifactsUiEntry);
+
+
 const SEEDS: DemoHistoryConversationSeed[] = [
   {
     id: "conv-a",

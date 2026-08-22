@@ -2,6 +2,8 @@ import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { componentRegistry, ComponentContext } from "../components/registry";
 import { ComponentDirective, createComponentStreamParser } from "./component-parser";
 import { createStandardBubble as _createStandardBubble, MessageTransform } from "../components/message-bubble";
+import { loadArtifactsUi, LAZY_ARTIFACT_COMPONENTS } from "../artifacts-ui-loader";
+import { createElement } from "./dom";
 
 /**
  * Options for component middleware
@@ -25,6 +27,21 @@ export function renderComponentDirective(
   // Get component renderer from registry
   const renderer = componentRegistry.get(directive.component);
   if (!renderer) {
+    if (
+      (LAZY_ARTIFACT_COMPONENTS as readonly string[]).includes(
+        directive.component
+      )
+    ) {
+      // Built-in artifact component: its renderer lives in the lazy
+      // artifacts-ui chunk. Kick the load and hold the slot with an empty
+      // placeholder (returning null would flash the raw directive JSON);
+      // the adoption step registers the renderer and ui.ts's
+      // onArtifactsUiReady heal re-renders the transcript.
+      void loadArtifactsUi().catch(() => {});
+      const placeholder = createElement("div", "persona-w-full");
+      placeholder.setAttribute("data-persona-artifact-pending", "true");
+      return placeholder;
+    }
     // Component not found, fall back to default rendering
     console.warn(
       `[ComponentMiddleware] Component "${directive.component}" not found in registry. Falling back to default rendering.`

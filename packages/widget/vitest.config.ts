@@ -44,6 +44,10 @@ export default defineConfig({
       '@runtypelabs/persona/icons-extra': fileURLToPath(
         new URL('./src/icons-extra.ts', import.meta.url)
       ),
+      // Same for the lazy artifacts-ui chunk subpath.
+      '@runtypelabs/persona/artifacts-ui': fileURLToPath(
+        new URL('./src/artifacts-ui.ts', import.meta.url)
+      ),
     },
   },
   test: {
