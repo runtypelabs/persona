@@ -13,4 +13,4 @@ export {
 } from "./components/approval-bubble";
 export { createBuiltInApprovalPlugin } from "./components/approval-actions";
 export { initApprovalUi } from "./components/approval-deps";
-export type { ApprovalUiDeps, ApprovalIconRenderer } from "./components/approval-deps";
+export type { ApprovalUiDeps } from "./components/approval-deps";

@@ -2,13 +2,13 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "182.5 kB",
+    "limit": "179.25 kB",
     "gzip": true
   },
   {
     "name": "⛔ CRITICAL · launcher critical bundle (launcher.global.js)",
     "path": "dist/launcher.global.js",
-    "limit": "19 kB",
+    "limit": "16.5 kB",
     "gzip": true
   },
   {
@@ -123,6 +123,12 @@
     "name": "Lazy · WebMCP bridge runtime chunk (webmcp-runtime.js)",
     "path": "dist/webmcp-runtime.js",
     "limit": "3 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · config-only icon data chunk (icons-extra.js)",
+    "path": "dist/icons-extra.js",
+    "limit": "4.75 kB",
     "gzip": true
   }
 ]

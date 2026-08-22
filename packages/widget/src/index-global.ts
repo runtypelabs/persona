@@ -265,6 +265,35 @@ setApprovalUiLoader(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Deferred extra-icons loading.
+//
+// This bundle is built with `@runtypelabs/persona/icons-extra` external (see
+// `tsup.global.config.ts`): the config-only tail of the icon registry is kept
+// out of the CDN payload and fetched the first time `renderLucideIcon` is
+// asked for one of its names. Same sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setIconsExtraLoader } from "./icons-extra-loader";
+
+setIconsExtraLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "icons-extra.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the icons-extra.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host icons-extra.js alongside it, or " +
+          "register the icons they use via registerIcons().",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
 // Deferred WebMCP bridge runtime loading.
 //
 // This bundle is built with `@runtypelabs/persona/webmcp-runtime` external

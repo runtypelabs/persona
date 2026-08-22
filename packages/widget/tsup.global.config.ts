@@ -92,5 +92,10 @@ export default defineConfig({
     // payload. Same scheme: sibling-URL chunk `webmcp-runtime.js`, fetched by
     // client.ts only when `config.webmcp.enabled === true`.
     options.external.push("@runtypelabs/persona/webmcp-runtime");
+
+    // Keep the config-only tail of the icon registry out of the CDN payload.
+    // Same scheme: sibling-URL chunk `icons-extra.js`, fetched the first time
+    // `renderLucideIcon` is asked for one of its names.
+    options.external.push("@runtypelabs/persona/icons-extra");
   },
 });

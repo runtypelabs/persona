@@ -19,12 +19,12 @@
  * trace.
  */
 import { createElement } from "../utils/dom";
-// Icon + webmcp-title lookups are injected by ui.ts at chunk adoption (see
-// approval-deps): this module ships in the lazy approval-ui chunk.
-import {
-  renderApprovalIcon as renderLucideIcon,
-  getWebMcpToolDisplayTitle,
-} from "./approval-deps";
+// The webmcp-title lookup is injected by ui.ts at chunk adoption (see
+// approval-deps): this module ships in the lazy approval-ui chunk. Icons are
+// direct lucide data imports.
+import { getWebMcpToolDisplayTitle } from "./approval-deps";
+import { Ban, ChevronDown, ShieldCheck } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
 import { formatUnknownValue } from "../utils/formatting";
 import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
 import { createPopover, isEditableEventTarget, type PopoverHandle } from "../plugin-kit";
@@ -163,7 +163,7 @@ const buildTitle = (
 
 const buildResolvedTrace = (approval: Approval): HTMLElement => {
   const row = createElement("div", "persona-approval-resolved");
-  const icon = renderLucideIcon("ban", 15, "currentColor", 2);
+  const icon = renderIconNode(Ban, 15, "currentColor", 2);
   if (icon) row.appendChild(icon);
   const name = createElement("span", "persona-approval-resolved-name");
   name.textContent = approval.toolName ? humanizeToolName(approval.toolName) : "Tool";
@@ -220,7 +220,7 @@ const buildPending = (
   }
 
   const logo = createElement("span", "persona-approval-logo");
-  const glyph = renderLucideIcon("shield-check", 16, "currentColor", 2);
+  const glyph = renderIconNode(ShieldCheck, 16, "currentColor", 2);
   if (glyph) logo.appendChild(glyph);
   head.appendChild(logo);
 
@@ -228,7 +228,7 @@ const buildPending = (
   if (hasDetails) {
     const toggle = createElement("span", "persona-approval-toggle");
     toggle.setAttribute("aria-hidden", "true");
-    const chevron = renderLucideIcon("chevron-down", 14, "currentColor", 2);
+    const chevron = renderIconNode(ChevronDown, 14, "currentColor", 2);
     if (chevron) toggle.appendChild(chevron);
     title.append(" ");
     title.appendChild(toggle);
@@ -299,7 +299,7 @@ const buildPending = (
     caret.setAttribute("data-action", "toggle-menu");
     caret.setAttribute("aria-label", "More options");
     applyPrimaryColors(caret);
-    const caretIcon = renderLucideIcon("chevron-down", 15, "currentColor", 2);
+    const caretIcon = renderIconNode(ChevronDown, 15, "currentColor", 2);
     if (caretIcon) caret.appendChild(caretIcon);
 
     split.append(primary, caret);

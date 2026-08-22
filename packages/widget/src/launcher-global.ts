@@ -7,10 +7,13 @@
  * widget from a tiny bundle. The heavy conversation panel is deferred until
  * first open by the installer (Phase 2).
  *
- * The full Lucide icon registry is kept on purpose: any *supported* icon a site
- * configures (`launcher.agentIconName` / `callToActionIconName`) must render at
- * first paint with no flash, and the only synchronously-available source is this
- * bundle. See the "Deferred Launcher Loading" pattern in CLAUDE.md.
+ * Icons: the CORE tier of the registry ships in this bundle, which covers the
+ * launcher defaults (`bot`, `arrow-up-right`) and every widget-emitted name,
+ * so default-config launchers paint with no flash. A site that configures an
+ * EXTRA-tier icon (`launcher.agentIconName: "shopping-cart"`) paints a
+ * correctly-sized empty placeholder and fills within one round-trip of the
+ * `icons-extra.js` sibling chunk (loader registered below). See the
+ * "Deferred Launcher Loading" pattern in CLAUDE.md.
  *
  * Public global (via tsup `--global-name AgentWidgetLauncher`):
  *
@@ -20,7 +23,35 @@
 import { createLauncherSurface } from "./components/launcher";
 import { applyThemeVariables } from "./utils/theme";
 import { DEFAULT_LAUNCHER_CONFIG } from "./defaults";
+import { setIconsExtraLoader } from "./icons-extra-loader";
 import type { AgentWidgetConfig } from "./types";
+
+// ---------------------------------------------------------------------------
+// Deferred extra-icons loading (same sibling-URL scheme as index-global.ts,
+// derived from THIS script's src). Registered at module evaluation:
+// `document.currentScript` is null once execution leaves the initial run.
+// ---------------------------------------------------------------------------
+const launcherScriptSrc: string | null =
+  typeof document !== "undefined"
+    ? ((document.currentScript as HTMLScriptElement | null)?.src ?? null)
+    : null;
+
+setIconsExtraLoader(() => {
+  const chunkUrl = launcherScriptSrc?.replace(
+    /launcher\.global\.js($|\?)/,
+    "icons-extra.js$1",
+  );
+  if (!chunkUrl || chunkUrl === launcherScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the icons-extra.js URL from the launcher script URL " +
+          `(${launcherScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename launcher.global.js should host icons-extra.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
 
 export interface AgentWidgetLauncherMountOptions {
   /** Where to mount. Defaults to `document.body` (the floating launcher is `position: fixed`). */

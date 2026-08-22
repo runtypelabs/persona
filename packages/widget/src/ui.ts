@@ -63,7 +63,7 @@ import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
 import { Activity, Check, Copy } from "lucide";
-import { renderLucideIcon } from "./utils/icons";
+import { renderLucideIcon, onExtraIconsReady } from "./utils/icons";
 import { renderIconNode } from "./utils/icon-node";
 import { createElement, createNode, cx } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
@@ -820,10 +820,9 @@ export const createAgentExperience = (
   let onApprovalUiReady: (() => void) | null = null;
   const adoptApprovalUi = (mod: ApprovalUiModule): void => {
     approvalUi = mod;
-    // Inject the core icon registry + the core bridge's webmcp title map: the
-    // chunk is bundled noExternal and must not carry its own copies.
+    // Inject the core bridge's webmcp title map: the chunk is bundled
+    // noExternal and must not read its own (empty) copy.
     mod.initApprovalUi({
-      renderIcon: renderLucideIcon,
       webMcpToolTitle: getWebMcpToolDisplayTitle,
     });
     const built = mod.createBuiltInApprovalPlugin();
@@ -13585,6 +13584,20 @@ export const createAgentExperience = (
     messageCache.clear();
     renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
   };
+
+  // Extra-tier icons rendered into the transcript fill their placeholders in
+  // place, but the fingerprint cache + idiomorph CLONE nodes — a cloned
+  // pending placeholder never self-fills. Re-render once the icons-extra
+  // chunk lands so cloned copies rebuild with real data. Chrome surfaces
+  // (header, composer, launcher) keep their original elements and fill in
+  // place without this.
+  const unsubscribeExtraIcons = onExtraIconsReady(() => {
+    if (!session) return;
+    configVersion++;
+    messageCache.clear();
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+  });
+  destroyCallbacks.push(unsubscribeExtraIcons);
 
   return controller;
 };

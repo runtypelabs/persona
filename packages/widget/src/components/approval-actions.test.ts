@@ -10,14 +10,13 @@ import type {
 } from "../types";
 import type { AgentWidgetPlugin } from "../plugins/types";
 
-// The chunked approval components read icons and webmcp titles through
-// injected deps (see approval-deps.ts); wire the real core functions here the
-// way ui.ts does at chunk adoption.
+// The chunked approval components read webmcp titles through an injected dep
+// (see approval-deps.ts); wire the real core function here the way ui.ts does
+// at chunk adoption.
 import { initApprovalUi } from "./approval-deps";
-import { renderLucideIcon } from "../utils/icons";
 import { getWebMcpToolDisplayTitle } from "../webmcp-bridge";
 
-initApprovalUi({ renderIcon: renderLucideIcon, webMcpToolTitle: getWebMcpToolDisplayTitle });
+initApprovalUi({ webMcpToolTitle: getWebMcpToolDisplayTitle });
 
 
 const makeMessage = (

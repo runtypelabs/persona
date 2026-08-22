@@ -40,6 +40,10 @@ export default defineConfig({
       '@runtypelabs/persona/webmcp-runtime': fileURLToPath(
         new URL('./src/webmcp-runtime.ts', import.meta.url)
       ),
+      // Same for the lazy icons-extra chunk subpath.
+      '@runtypelabs/persona/icons-extra': fileURLToPath(
+        new URL('./src/icons-extra.ts', import.meta.url)
+      ),
     },
   },
   test: {

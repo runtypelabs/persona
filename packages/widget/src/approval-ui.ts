@@ -15,4 +15,4 @@ export {
   initApprovalUi,
   updateApprovalDetailsUI,
 } from "./approval-ui-entry";
-export type { ApprovalUiDeps, ApprovalIconRenderer } from "./approval-ui-entry";
+export type { ApprovalUiDeps } from "./approval-ui-entry";
