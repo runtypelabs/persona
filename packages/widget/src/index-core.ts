@@ -348,12 +348,10 @@ export {
   fileToImagePart,
   validateImageFile
 } from "./utils/content";
-// Context mention helpers (for building config.contextMentions.sources)
-export {
-  defaultMentionFilter,
-  createStaticMentionSource,
-  createSlashCommandsSource,
-} from "./utils/mention-matcher";
+// Context mention helper TYPES only. The value helpers (defaultMentionFilter,
+// createStaticMentionSource, createSlashCommandsSource) ship from `index.ts`
+// (npm) so the CDN global doesn't carry mention-matcher: script-tag hosts pass
+// plain source objects in config; no shipped demo reaches these via the global.
 export type { SlashCommandDefinition } from "./utils/mention-matcher";
 export {
   collectEnrichedPageContext,

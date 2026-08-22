@@ -38,6 +38,15 @@ export type {
   DemoCarouselHandle
 } from "./components/demo-carousel";
 
+// Context mention helpers (for building config.contextMentions.sources).
+// npm-only values: kept off `index-core.ts` so the CDN global doesn't carry
+// mention-matcher (script-tag hosts pass plain source objects in config).
+export {
+  defaultMentionFilter,
+  createStaticMentionSource,
+  createSlashCommandsSource,
+} from "./utils/mention-matcher";
+
 // Accessible roving-tabindex tablist helper for custom artifact tab bars
 // (features.artifacts.renderTabBar).
 export { createRovingTablist } from "./utils/roving-tablist";
