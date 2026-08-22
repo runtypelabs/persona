@@ -36,16 +36,25 @@ describe("onMarkdownParsersReady", () => {
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
-  it("kicks the load itself so a lone surface still heals", async () => {
+  it("does NOT kick the load on subscribe (visibility owns the fetch)", async () => {
     const loader = await freshLoader();
     const load = vi.fn(() => Promise.resolve(FAKE_PARSERS));
     loader.setMarkdownParsersLoader(load);
 
     const cb = vi.fn();
-    // No explicit loadMarkdownParsers() call — subscribing must trigger it.
+    // Subscribing is passive: the chunk is fetched by ui.ts's first-panel-
+    // visibility warm, never as a side effect of registering a heal callback
+    // (ui.ts subscribes at init — a kick here re-eagers the chunk on every page).
     loader.onMarkdownParsersReady(cb);
-    await vi.waitFor(() => expect(cb).toHaveBeenCalledTimes(1));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(load).not.toHaveBeenCalled();
+    expect(cb).not.toHaveBeenCalled();
+
+    // The warm (an explicit load) heals the waiting subscriber.
+    await loader.loadMarkdownParsers();
     expect(load).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenCalledTimes(1);
   });
 
   it("does not fire (and returns a no-op) when parsers are already loaded", async () => {
@@ -110,12 +119,13 @@ describe("onMarkdownParsersReady", () => {
     // Failed attempt: not fired, but still registered.
     expect(cb).not.toHaveBeenCalled();
 
-    // A later subscribe re-triggers the load (rejected promise was not cached)
-    // and the retry heals BOTH the new subscriber and the one that rendered
-    // escaped during the failed attempt.
+    // A later explicit load (e.g. the panel-visibility warm retrying) succeeds
+    // — the rejected promise was not cached — and heals BOTH the new
+    // subscriber and the one that rendered escaped during the failed attempt.
     const cb2 = vi.fn();
     loader.onMarkdownParsersReady(cb2);
-    await vi.waitFor(() => expect(cb2).toHaveBeenCalledTimes(1));
+    await loader.loadMarkdownParsers();
+    expect(cb2).toHaveBeenCalledTimes(1);
     expect(cb).toHaveBeenCalledTimes(1);
     expect(attempt).toBe(2);
   });

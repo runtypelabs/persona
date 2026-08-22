@@ -111,6 +111,7 @@ import {
   detachAllPlugins,
   ensurePluginActive,
   LAZY_BUILTIN_STREAM_ANIMATIONS,
+  registerStreamAnimationPlugin,
   resolveStreamAnimation,
   resolveStreamAnimationPlugin,
   wrapStreamAnimation,
@@ -3908,8 +3909,14 @@ export const createAgentExperience = (
     const plugin = resolveStreamAnimationPlugin(type, overrides);
     if (plugin || !LAZY_BUILTIN_STREAM_ANIMATIONS.includes(type)) return plugin;
     void loadAnimationsExtra()
-      .then(() => {
+      .then((mod) => {
         if (streamAnimationLoadDisposed) return;
+        // Register the chunk's plugin objects into CORE's registry explicitly.
+        // The chunk is bundled noExternal, so its import-time self-registration
+        // lands in the chunk's own copy of the registry Map — invisible to
+        // core's resolver. Idempotent when both copies are one module (ESM/tests).
+        registerStreamAnimationPlugin(mod.wipe);
+        registerStreamAnimationPlugin(mod.glyphCycle);
         const loaded = resolveStreamAnimationPlugin(type, overrides);
         if (loaded) ensurePluginActive(loaded, mount);
       })
