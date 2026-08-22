@@ -103,5 +103,11 @@ export default defineConfig({
     // fetched when the sidebar is enabled or the first artifact directive
     // arrives.
     options.external.push("@runtypelabs/persona/artifacts-ui");
+
+    // Keep the voice provider runtime (factory + Runtype/browser providers +
+    // audio playback) out of the CDN payload. Same scheme: sibling-URL chunk
+    // `voice-runtime.js`, prefetched by the session when a voice provider is
+    // configured.
+    options.external.push("@runtypelabs/persona/voice-runtime");
   },
 });

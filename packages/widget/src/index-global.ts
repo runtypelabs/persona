@@ -265,6 +265,35 @@ setApprovalUiLoader(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Deferred voice-runtime loading.
+//
+// This bundle is built with `@runtypelabs/persona/voice-runtime` external (see
+// `tsup.global.config.ts`): the voice provider factory + providers + audio
+// playback manager are kept out of the CDN payload, prefetched by the session
+// when a voice provider is configured. Same sibling-URL scheme as the chunks
+// above.
+// ---------------------------------------------------------------------------
+
+import { setVoiceRuntimeLoader } from "./voice-runtime-loader";
+
+setVoiceRuntimeLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "voice-runtime.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the voice-runtime.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host voice-runtime.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
 // Deferred artifacts-ui loading.
 //
 // This bundle is built with `@runtypelabs/persona/artifacts-ui` external (see

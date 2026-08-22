@@ -23,7 +23,8 @@
       "@runtypelabs/persona/session-reconnect": ["src/session-reconnect.ts"],
       "@runtypelabs/persona/webmcp-runtime": ["src/webmcp-runtime.ts"],
       "@runtypelabs/persona/icons-extra": ["src/icons-extra.ts"],
-      "@runtypelabs/persona/artifacts-ui": ["src/artifacts-ui.ts"]
+      "@runtypelabs/persona/artifacts-ui": ["src/artifacts-ui.ts"],
+      "@runtypelabs/persona/voice-runtime": ["src/voice-runtime.ts"]
     },
     "declaration": true,
     "outDir": "dist"

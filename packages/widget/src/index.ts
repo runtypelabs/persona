@@ -42,6 +42,14 @@ export type {
   DemoCarouselHandle
 } from "./components/demo-carousel";
 
+// Voice provider factory (npm-only values). The CDN path reaches the provider
+// runtime lazily via the voice-runtime chunk inside session.setupVoice.
+export {
+  createVoiceProvider,
+  createBestAvailableVoiceProvider,
+  isVoiceSupported,
+} from "./voice";
+
 // WebMCP bridge class (npm-only value; historical one-argument constructor).
 // The CDN path reaches the runtime lazily via the webmcp-runtime chunk.
 export { WebMcpBridge } from "./webmcp-bridge-public";

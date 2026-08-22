@@ -48,6 +48,10 @@ export default defineConfig({
       '@runtypelabs/persona/artifacts-ui': fileURLToPath(
         new URL('./src/artifacts-ui.ts', import.meta.url)
       ),
+      // Same for the lazy voice-runtime chunk subpath.
+      '@runtypelabs/persona/voice-runtime': fileURLToPath(
+        new URL('./src/voice-runtime.ts', import.meta.url)
+      ),
     },
   },
   test: {

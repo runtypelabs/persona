@@ -594,12 +594,10 @@ export {
 } from "./components/feedback";
 export type { CSATFeedbackOptions, NPSFeedbackOptions } from "./components/feedback";
 
-// Voice module exports
-export {
-  createVoiceProvider,
-  createBestAvailableVoiceProvider,
-  isVoiceSupported
-} from "./voice";
+// Voice module TYPE exports. The factory VALUES (createVoiceProvider,
+// createBestAvailableVoiceProvider, isVoiceSupported) ship from `index.ts`
+// (npm) so the CDN global doesn't carry the provider runtime — the CDN path
+// reaches it lazily via the voice-runtime chunk inside session.setupVoice.
 export type {
   VoiceProvider,
   VoiceResult,
@@ -615,11 +613,14 @@ export type {
   SpeechCallbacks
 } from "./types";
 
+// Direct-file imports (NOT the ./voice barrel): the barrel re-exports the
+// provider factory + providers, which live in the lazy voice-runtime chunk
+// and must not be dragged back into the core bundles.
 export {
   BrowserSpeechEngine,
-  pickBestVoice,
-  ReadAloudController
-} from "./voice";
+  pickBestVoice
+} from "./voice/browser-speech-engine";
+export { ReadAloudController } from "./voice/read-aloud-controller";
 export type {
   BrowserSpeechEngineOptions,
   ReadAloudListener,
