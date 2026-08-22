@@ -177,9 +177,11 @@ import {
   createSuggestions,
   normalizeSuggestion,
 } from "./components/suggestions";
-import { EventStreamBuffer } from "./utils/event-stream-buffer";
-import { EventStreamStore } from "./utils/event-stream-store";
-import { ThroughputTracker } from "./utils/throughput-tracker";
+// Type-only: the capture/persistence classes ship in the lazy
+// event-stream-view chunk and are constructed at chunk adoption.
+import type { EventStreamBuffer } from "./utils/event-stream-buffer";
+import type { EventStreamStore } from "./utils/event-stream-store";
+import type { ThroughputTracker } from "./utils/throughput-tracker";
 import { loadEventStreamView } from "./event-stream-view-loader";
 import type { EventStreamViewHandle } from "./event-stream-view-entry";
 import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
@@ -1033,15 +1035,76 @@ export const createAgentExperience = (
     (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
   const persistKeyPrefix = currentKeyPrefix();
   const eventStreamDbName = `${persistKeyPrefix}event-stream`;
-  let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
+  // The capture runtime (store + buffer + throughput tracker) lives in the
+  // lazy event-stream-view chunk; when the toggle is on, the chunk is fetched
+  // at init and the instances are constructed at adoption. Events tapped while
+  // the chunk is in flight are staged in `pendingEventStreamEvents` and
+  // replayed in order.
+  let eventStreamStore: EventStreamStore | null = null;
   const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 2000;
-  let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore) : null;
+  let eventStreamBuffer: EventStreamBuffer | null = null;
   // Passive output-throughput tracker, fed from the same SSE tap as the buffer.
-  let throughputTracker = showEventStreamToggle ? new ThroughputTracker() : null;
+  let throughputTracker: ThroughputTracker | null = null;
+  let pendingEventStreamEvents: Array<{ type: string; payload: unknown }> | null = null;
+  let eventStreamRuntimeDisposed = false;
   let eventStreamView: EventStreamViewHandle | null = null;
   let eventStreamVisible = false;
   let eventStreamRAF: number | null = null;
   let eventStreamLastUpdate = 0;
+
+  const pushToEventStreamBuffer = (type: string, payload: unknown): void => {
+    eventStreamBuffer?.push({
+      id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      timestamp: Date.now(),
+      payload: JSON.stringify(payload),
+    });
+  };
+
+  /** SSE tap target: buffers live events, stages them while the chunk loads. */
+  const feedEventStream = (type: string, payload: unknown): void => {
+    throughputTracker?.processEvent(type, payload);
+    if (eventStreamBuffer) {
+      pushToEventStreamBuffer(type, payload);
+    } else if (pendingEventStreamEvents) {
+      // Stage bounded to the buffer's own cap: keep the newest, like the ring.
+      if (pendingEventStreamEvents.length >= eventStreamMaxEvents) {
+        pendingEventStreamEvents.shift();
+      }
+      pendingEventStreamEvents.push({ type, payload });
+    }
+  };
+
+  const ensureEventStreamRuntime = (): void => {
+    if (eventStreamBuffer || !showEventStreamToggle) return;
+    pendingEventStreamEvents ??= [];
+    // The chunk loader dedupes concurrent loads and clears a rejection so a
+    // later call retries.
+    void loadEventStreamView()
+      .then((mod) => {
+        if (eventStreamRuntimeDisposed || eventStreamBuffer || !showEventStreamToggle) return;
+        eventStreamStore = new mod.EventStreamStore(eventStreamDbName);
+        eventStreamBuffer = new mod.EventStreamBuffer(eventStreamMaxEvents, eventStreamStore);
+        throughputTracker = throughputTracker ?? new mod.ThroughputTracker();
+        // Open IndexedDB and restore persisted events into the buffer.
+        eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(err => {
+          if (config.debug) console.warn('[AgentWidget] IndexedDB not available for event stream:', err);
+        });
+        // Replay events tapped while the chunk was in flight, in order. (Live
+        // pushes race the async restore the same way they always have.)
+        const staged = pendingEventStreamEvents ?? [];
+        pendingEventStreamEvents = null;
+        for (const evt of staged) {
+          throughputTracker?.processEvent(evt.type, evt.payload);
+          pushToEventStreamBuffer(evt.type, evt.payload);
+        }
+      })
+      .catch(() => {
+        // Failed fetch: staged events keep accumulating (bounded below) and
+        // the next ensure call retries.
+      });
+  };
+  if (showEventStreamToggle) ensureEventStreamRuntime();
 
   // --- history (Messages) shell state ---------------------------------------
   // Declared here because the scroll-affordance gate, `syncPanelChrome`, and the
@@ -1060,12 +1123,6 @@ export const createAgentExperience = (
   const fullPanelOverlayVisible = (): boolean =>
     eventStreamVisible || (historyVisible && historyPresentation === "panel");
 
-  // Open IndexedDB store and restore persisted events into the buffer
-  eventStreamStore?.open().then(() => {
-    return eventStreamBuffer?.restore();
-  }).catch(err => {
-    if (config.debug) console.warn('[AgentWidget] IndexedDB not available for event stream:', err);
-  });
 
   // Create message action callbacks that emit events and optionally send to API
   const messageActionCallbacks: MessageActionCallbacks = {
@@ -1350,7 +1407,12 @@ export const createAgentExperience = (
   };
 
   const toggleEventStreamOn = () => {
-    if (!eventStreamBuffer) return;
+    if (!eventStreamBuffer) {
+      // Runtime chunk not adopted yet (or a failed fetch): retry the load; the
+      // user can click again once it lands.
+      ensureEventStreamRuntime();
+      return;
+    }
     eventStreamVisible = true;
     if (!eventStreamView) {
       // The panel lives in a lazy chunk; mount when it resolves, unless the
@@ -3780,6 +3842,8 @@ export const createAgentExperience = (
   // Event stream cleanup
   if (showEventStreamToggle) {
     destroyCallbacks.push(() => {
+      eventStreamRuntimeDisposed = true;
+      pendingEventStreamEvents = null;
       if (eventStreamRAF !== null) {
         cancelAnimationFrame(eventStreamRAF);
         eventStreamRAF = null;
@@ -9897,17 +9961,12 @@ export const createAgentExperience = (
       });
   }
 
-  // Wire up optional SSE tap (host) + event stream buffer to capture SSE events
-  if (eventStreamBuffer || config.onSSEEvent) {
+  // Wire up optional SSE tap (host) + event stream buffer to capture SSE
+  // events. `feedEventStream` stages events while the lazy chunk is in flight.
+  if (showEventStreamToggle || config.onSSEEvent) {
     session.setSSEEventCallback((type: string, payload: unknown) => {
       config.onSSEEvent?.(type, payload);
-      throughputTracker?.processEvent(type, payload);
-      eventStreamBuffer?.push({
-        id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        type,
-        timestamp: Date.now(),
-        payload: JSON.stringify(payload)
-      });
+      feedEventStream(type, payload);
     });
   }
 
@@ -11562,22 +11621,14 @@ export const createAgentExperience = (
 
       // Handle dynamic event stream feature flag toggling
       if (showEventStreamToggle && !prevShowEventStreamToggle) {
-        // Flag changed from false to true - create buffer/store if needed
+        // Flag changed from false to true - fetch the chunk and construct the
+        // runtime at adoption; stage events tapped meanwhile.
         if (!eventStreamBuffer) {
-          eventStreamStore = new EventStreamStore(eventStreamDbName);
-          eventStreamBuffer = new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore);
-          throughputTracker = throughputTracker ?? new ThroughputTracker();
-          eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(() => {});
+          ensureEventStreamRuntime();
           // Register the SSE event callback (host tap + buffer + throughput)
           session.setSSEEventCallback((type: string, payload: unknown) => {
             config.onSSEEvent?.(type, payload);
-            throughputTracker?.processEvent(type, payload);
-            eventStreamBuffer!.push({
-              id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              type,
-              timestamp: Date.now(),
-              payload: JSON.stringify(payload)
-            });
+            feedEventStream(type, payload);
           });
         }
         // Add header toggle button if not present
@@ -11622,6 +11673,7 @@ export const createAgentExperience = (
         eventStreamStore = null;
         throughputTracker?.reset();
         throughputTracker = null;
+        pendingEventStreamEvents = null;
       }
 
       if (config.launcher?.enabled === false && launcherSurfaceInstance) {
@@ -12957,18 +13009,12 @@ export const createAgentExperience = (
     },
     /** Push a raw event into the event stream buffer (for testing/debugging) */
     __pushEventStreamEvent(event: { type: string; payload: unknown }): void {
-      if (eventStreamBuffer) {
-        throughputTracker?.processEvent(event.type, event.payload);
-        eventStreamBuffer.push({
-          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          type: event.type,
-          timestamp: Date.now(),
-          payload: JSON.stringify(event.payload)
-        });
-      }
+      if (!showEventStreamToggle) return;
+      ensureEventStreamRuntime();
+      feedEventStream(event.type, event.payload);
     },
     showEventStream(): void {
-      if (!showEventStreamToggle || !eventStreamBuffer) return;
+      if (!showEventStreamToggle) return;
       toggleEventStreamOn();
     },
     hideEventStream(): void {

@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "187 kB",
+    "limit": "185.25 kB",
     "gzip": true
   },
   {
@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "188.5 kB",
+    "limit": "186.5 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "189.5 kB",
+    "limit": "187.5 kB",
     "gzip": true
   },
   {
@@ -98,7 +98,7 @@
   {
     "name": "Lazy · event-stream observability panel chunk (event-stream-view.js)",
     "path": "dist/event-stream-view.js",
-    "limit": "13.25 kB",
+    "limit": "15.5 kB",
     "gzip": true
   },
   {

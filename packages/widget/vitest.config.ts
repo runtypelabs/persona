@@ -28,6 +28,10 @@ export default defineConfig({
       '@runtypelabs/persona/approval-ui': fileURLToPath(
         new URL('./src/approval-ui.ts', import.meta.url)
       ),
+      // Same for the lazy event-stream-view chunk subpath.
+      '@runtypelabs/persona/event-stream-view': fileURLToPath(
+        new URL('./src/event-stream-view.ts', import.meta.url)
+      ),
     },
   },
   test: {

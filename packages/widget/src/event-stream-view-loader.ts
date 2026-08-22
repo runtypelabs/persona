@@ -14,9 +14,19 @@ import type {
   EventStreamViewOptions,
   EventStreamViewHandle,
 } from "./event-stream-view-entry";
+import type { EventStreamBuffer } from "./utils/event-stream-buffer";
+import type { EventStreamStore } from "./utils/event-stream-store";
+import type { ThroughputTracker } from "./utils/throughput-tracker";
 
 export type EventStreamViewModule = {
   createEventStreamView: (options: EventStreamViewOptions) => EventStreamViewHandle;
+  // Capture/persistence runtime, constructed by ui.ts at chunk adoption.
+  EventStreamBuffer: new (
+    maxSize?: number,
+    store?: EventStreamStore | null
+  ) => EventStreamBuffer;
+  EventStreamStore: new (dbName?: string, storeName?: string) => EventStreamStore;
+  ThroughputTracker: new (now?: () => number) => ThroughputTracker;
 };
 
 // IIFE/CDN: sibling-URL chunk via the registered loader.

@@ -19,7 +19,14 @@ const dist = (f: string) => resolve(__dirname, "..", "dist", f);
 // Chunk-only literals: the view's root and list class names are never emitted
 // by core code; the sibling-URL stub in the core bundles is the bare filename
 // `event-stream-view.js`, which does not contain these.
-const RUNTIME_MARKERS = ["persona-event-stream-view", "persona-event-stream-list"];
+const RUNTIME_MARKERS = [
+  "persona-event-stream-view",
+  "persona-event-stream-list",
+  // Capture/persistence runtime, moved into this chunk alongside the view:
+  // IndexedDB store (createObjectStore) and throughput tracker (flow_run_start).
+  "createObjectStore",
+  "flow_run_start",
+];
 
 const SUBPATH = "@runtypelabs/persona/event-stream-view";
 
