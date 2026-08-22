@@ -8,7 +8,7 @@
  * the entry directly. See `docs/context-mentions-plan.md`.
  */
 
-export { mountContextMentions } from "./context-mentions-entry";
+export { mountContextMentions, setMentionIconRenderer } from "./context-mentions-entry";
 export type {
   ContextMentionMountContext,
   ContextMentionEngine,

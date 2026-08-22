@@ -1,7 +1,8 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue, describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/formatting";
-import { renderLucideIcon } from "../utils/icons";
+import { ChevronDown, ChevronUp } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
 import { appendCharSpans } from "../utils/tool-loading-animation";
 
 // Expansion state per widget instance
@@ -120,7 +121,7 @@ export const updateToolBubbleUI = (messageId: string, bubble: HTMLElement, confi
       toolCallConfig.toggleTextColor ||
       toolCallConfig.headerTextColor ||
       "var(--persona-primary, #171717)";
-    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+    const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
     if (chevronIcon) {
       toggleIcon.appendChild(chevronIcon);
     } else {
@@ -346,7 +347,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
       toolCallConfig.toggleTextColor ||
       toolCallConfig.headerTextColor ||
       "var(--persona-primary, #171717)";
-    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+    const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
     if (chevronIcon) {
       toggleIcon.appendChild(chevronIcon);
     } else {
@@ -523,7 +524,7 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
         toolCallConfig.toggleTextColor ||
         toolCallConfig.headerTextColor ||
         "var(--persona-primary, #171717)";
-      const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+      const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
       if (chevronIcon) {
         toggleIcon.appendChild(chevronIcon);
       } else {

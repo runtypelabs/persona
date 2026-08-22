@@ -68,6 +68,11 @@ describe("event-stream-view bundle split", () => {
     for (const marker of RUNTIME_MARKERS) {
       expect(chunk.includes(marker), `chunk is missing "${marker}"`).toBe(true);
     }
+    // The chunk must NOT carry its own copy of the icon registry: its static
+    // icons are direct lucide data imports, and the one config-driven name
+    // (scrollToBottom.iconName) resolves through the injected renderIconByName.
+    // Registry map keys like "shopping-cart" only exist where it was bundled.
+    expect(chunk.includes("shopping-cart")).toBe(false);
     // A CJS twin exists for require()-based consumers.
     expect(existsSync(dist("event-stream-view.cjs"))).toBe(true);
     // Declarations ship with the chunk so the subpath is typed.

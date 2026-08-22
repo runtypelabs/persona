@@ -1,5 +1,9 @@
 import { createElement, createNode } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import { X } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
+// Provider-supplied chip icon names resolve through the injected renderer;
+// this chunk carries no string registry (see mention-icon-renderer.ts).
+import { renderMentionIcon } from "../utils/mention-icon-renderer";
 import type {
   AgentWidgetContextMentionConfig,
   AgentWidgetContextMentionPayload,
@@ -76,7 +80,7 @@ export function createMentionChip(opts: {
   const iconHost = createElement("span", "persona-mention-chip-icon");
   const setIcon = (name: string) => {
     iconHost.replaceChildren();
-    const svg = renderLucideIcon(name, 13, "currentColor", 2);
+    const svg = renderMentionIcon(name, 13, "currentColor", 2);
     if (svg) iconHost.appendChild(svg);
   };
   setIcon(iconName);
@@ -96,7 +100,7 @@ export function createMentionChip(opts: {
       "aria-label": `Remove ${ref.label} context`,
     },
   }) as HTMLButtonElement;
-  const x = renderLucideIcon("x", 11, "currentColor", 2.5);
+  const x = renderIconNode(X, 11, "currentColor", 2.5);
   if (x) removeBtn.appendChild(x);
   else removeBtn.textContent = "×";
   removeBtn.addEventListener("click", (e) => {

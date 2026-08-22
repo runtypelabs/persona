@@ -17,6 +17,7 @@ import { parseAnyTrigger, isMenuOpeningInput } from "./mention-trigger";
 import { normalizeMentionChannels, type NormalizedMentionChannel } from "./mention-channels";
 import { createMentionButton } from "../components/context-mention-button";
 import { loadContextMentions } from "../context-mentions-loader";
+import { renderLucideIcon } from "./icons";
 import { loadContextMentionsInline } from "../context-mentions-inline-loader";
 import { createMentionTokenElement } from "./mention-token";
 import type { ComposerInputCapability } from "./composer-input";
@@ -159,6 +160,9 @@ export function createContextMentionOrchestrator(opts: {
     if (mountPromise) return mountPromise;
     const attempt = loadContextMentions()
       .then((mod) => {
+        // Inject core's registry resolver before the first chip can render:
+        // the chunk carries no icon registry of its own.
+        mod.setMentionIconRenderer(renderLucideIcon);
         engine = mod.mountContextMentions({
           mentionConfig,
           textarea: opts.textarea,

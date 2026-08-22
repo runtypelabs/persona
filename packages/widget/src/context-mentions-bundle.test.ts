@@ -72,6 +72,10 @@ describe("context-mentions bundle split", () => {
     expect(chunk).toContain("context-mention prompt resolve failed");
     // The menu CSS rides with the chunk (injected on open), not eager widget.css.
     expect(chunk).toContain(".persona-mention-option[data-active");
+    // The chunk must NOT carry its own copy of the icon registry: chip icons
+    // resolve through the injected setMentionIconRenderer (core's registry).
+    // Registry map keys like "shopping-cart" only exist where it was bundled.
+    expect(chunk.includes("shopping-cart")).toBe(false);
     // A CJS twin exists for require()-based consumers.
     expect(existsSync(dist("context-mentions.cjs"))).toBe(true);
   });

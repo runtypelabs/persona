@@ -6,7 +6,8 @@
  */
 
 import { createElement } from "./dom";
-import { renderLucideIcon } from "./icons";
+import { File as FileIcon, FileCode, FileSpreadsheet, FileText, X, type IconNode } from "lucide";
+import { renderIconNode } from "./icon-node";
 import type {
   AgentWidgetAttachmentsConfig,
   ContentPart,
@@ -59,15 +60,16 @@ function generateAttachmentId(): string {
 }
 
 /**
- * Get the appropriate Lucide icon name for a file type
+ * Get the appropriate Lucide icon data for a file type. Closed internal set:
+ * direct icon-data imports keep this module off the string registry.
  */
-function getFileIconName(mimeType: string): string {
-  if (mimeType === 'application/pdf') return 'file-text';
-  if (mimeType.startsWith('text/')) return 'file-text';
-  if (mimeType.includes('word')) return 'file-text';
-  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return 'file-spreadsheet';
-  if (mimeType === 'application/json') return 'file-code';
-  return 'file';
+function getFileIconData(mimeType: string): IconNode {
+  if (mimeType === 'application/pdf') return FileText;
+  if (mimeType.startsWith('text/')) return FileText;
+  if (mimeType.includes('word')) return FileText;
+  if (mimeType.includes('excel') || mimeType.includes('spreadsheet')) return FileSpreadsheet;
+  if (mimeType === 'application/json') return FileCode;
+  return FileIcon;
 }
 
 /**
@@ -316,8 +318,8 @@ export class AttachmentManager {
       filePreview.style.overflow = "hidden";
 
       // File icon
-      const iconName = getFileIconName(attachment.file.type);
-      const fileIcon = renderLucideIcon(iconName, 20, "var(--persona-muted, #6b7280)", 1.5);
+      const iconData = getFileIconData(attachment.file.type);
+      const fileIcon = renderIconNode(iconData, 20, "var(--persona-muted, #6b7280)", 1.5);
       if (fileIcon) {
         filePreview.appendChild(fileIcon);
       }
@@ -357,7 +359,7 @@ export class AttachmentManager {
     removeBtn.style.padding = "0";
 
     // Add X icon
-    const xIcon = renderLucideIcon("x", 10, "var(--persona-text-inverse, #ffffff)", 2);
+    const xIcon = renderIconNode(X, 10, "var(--persona-text-inverse, #ffffff)", 2);
     if (xIcon) {
       removeBtn.appendChild(xIcon);
     } else {

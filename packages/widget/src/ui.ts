@@ -62,7 +62,9 @@ import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
+import { Activity, Check, Copy } from "lucide";
 import { renderLucideIcon } from "./utils/icons";
+import { renderIconNode } from "./utils/icon-node";
 import { createElement, createNode, cx } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
 import { attachTooltip, configureTooltipTiming } from "./utils/tooltip";
@@ -1428,6 +1430,8 @@ export const createAgentExperience = (
             plugins,
             getThroughput: () =>
               throughputTracker?.getMetric() ?? { status: "idle" },
+            // Inject the string-name resolver: the chunk carries no registry.
+            renderIconByName: renderLucideIcon,
           });
           mountEventStreamView();
         })
@@ -1492,7 +1496,7 @@ export const createAgentExperience = (
     eventStreamToggleBtn.type = "button";
     eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
     eventStreamToggleBtn.title = "Event Stream";
-    const activityIcon = renderLucideIcon("activity", "18px", "currentColor", 1.5);
+    const activityIcon = renderIconNode(Activity, "18px", "currentColor", 1.5);
     if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
 
     // Insert before clear chat button wrapper or close button wrapper
@@ -2048,14 +2052,14 @@ export const createAgentExperience = (
         navigator.clipboard.writeText(textToCopy).then(() => {
           // Show success feedback - swap icon temporarily
           actionBtn.classList.add("persona-message-action-success");
-          const checkIcon = renderLucideIcon("check", 14, "currentColor", 2);
+          const checkIcon = renderIconNode(Check, 14, "currentColor", 2);
           if (checkIcon) {
             actionBtn.innerHTML = "";
             actionBtn.appendChild(checkIcon);
           }
           setTimeout(() => {
             actionBtn.classList.remove("persona-message-action-success");
-            const originalIcon = renderLucideIcon("copy", 14, "currentColor", 2);
+            const originalIcon = renderIconNode(Copy, 14, "currentColor", 2);
             if (originalIcon) {
               actionBtn.innerHTML = "";
               actionBtn.appendChild(originalIcon);
@@ -2349,11 +2353,11 @@ export const createAgentExperience = (
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
       // Lightweight feedback: swap the copy glyph for a check briefly.
-      const checkIcon = renderLucideIcon('check', 16, 'currentColor', 2);
+      const checkIcon = renderIconNode(Check, 16, 'currentColor', 2);
       if (checkIcon) {
         copyBtn.replaceChildren(checkIcon);
         setTimeout(() => {
-          const copyIcon = renderLucideIcon('copy', 16, 'currentColor', 2);
+          const copyIcon = renderIconNode(Copy, 16, 'currentColor', 2);
           if (copyIcon) copyBtn.replaceChildren(copyIcon);
         }, 1500);
       }
@@ -11642,7 +11646,7 @@ export const createAgentExperience = (
           eventStreamToggleBtn.type = "button";
           eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
           eventStreamToggleBtn.title = "Event Stream";
-          const activityIcon = renderLucideIcon("activity", "18px", "currentColor", 1.5);
+          const activityIcon = renderIconNode(Activity, "18px", "currentColor", 1.5);
           if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
           const clearChatWrapper = panelElements.clearChatButtonWrapper;
           const closeWrapper = panelElements.closeButtonWrapper;

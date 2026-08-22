@@ -80,7 +80,7 @@
   {
     "name": "Lazy · context-mentions + slash-commands chunk (context-mentions.js)",
     "path": "dist/context-mentions.js",
-    "limit": "19 kB",
+    "limit": "12.25 kB",
     "gzip": true
   },
   {
@@ -98,7 +98,7 @@
   {
     "name": "Lazy · event-stream observability panel chunk (event-stream-view.js)",
     "path": "dist/event-stream-view.js",
-    "limit": "15.5 kB",
+    "limit": "9 kB",
     "gzip": true
   },
   {

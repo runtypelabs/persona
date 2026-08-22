@@ -1,4 +1,5 @@
 import type { IconNode } from "lucide";
+import { renderIconNode } from "./icon-node";
 import {
   // ---------- Mandatory (referenced as string literals in widget source) ----------
   Activity,
@@ -321,41 +322,5 @@ export const renderLucideIcon = (
     );
     return null;
   }
-  return createSvgFromIconData(iconData, size, color, strokeWidth);
+  return renderIconNode(iconData, size, color, strokeWidth);
 };
-
-function createSvgFromIconData(
-  iconData: IconNode,
-  size: number | string,
-  color: string,
-  strokeWidth: number
-): SVGElement | null {
-  if (!Array.isArray(iconData)) return null;
-
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", String(size));
-  svg.setAttribute("height", String(size));
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", color);
-  svg.setAttribute("stroke-width", String(strokeWidth));
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
-
-  // IconNode shape: [["path", {"d": "..."}], ["circle", {"cx": "..."}], ...]
-  iconData.forEach((elementData) => {
-    if (!Array.isArray(elementData) || elementData.length < 2) return;
-    const tagName = elementData[0] as string;
-    const attrs = elementData[1] as Record<string, string> | undefined;
-    if (!attrs) return;
-    const element = document.createElementNS("http://www.w3.org/2000/svg", tagName);
-    Object.entries(attrs).forEach(([key, value]) => {
-      // Skip 'stroke' so the parent SVG's stroke attribute drives color uniformly
-      if (key !== "stroke") element.setAttribute(key, String(value));
-    });
-    svg.appendChild(element);
-  });
-
-  return svg;
-}

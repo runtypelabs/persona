@@ -20,7 +20,8 @@ import {
   artifactCopyText,
   type ArtifactPreviewBodyHandle,
 } from "./artifact-preview";
-import { renderLucideIcon } from "../utils/icons";
+import { Check, ChevronDown, Maximize, Minimize } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
 import {
   createIconButton,
   createLabelButton,
@@ -189,7 +190,7 @@ export function createArtifactPane(
       ? createLabelButton({ icon: "copy", label: "Copy", iconSize: 14, className: "persona-artifact-doc-copy-btn" })
       : createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-copy-btn" });
     if (showCopyChevron) {
-      const chev = renderLucideIcon("chevron-down", 14, "currentColor", 2);
+      const chev = renderIconNode(ChevronDown, 14, "currentColor", 2);
       if (chev) copyBtn.appendChild(chev);
     }
   } else if (documentChrome && showCopyMenu) {
@@ -308,7 +309,7 @@ export function createArtifactPane(
     copyRestore?.();
     const glyph = copyBtn.querySelector("svg");
     const size = Number(glyph?.getAttribute("width")) || 16;
-    const check = renderLucideIcon("check", size, "currentColor", 2);
+    const check = renderIconNode(Check, size, "currentColor", 2);
     if (!glyph || !check) return;
     glyph.replaceWith(check);
     const labelSpan = copyBtn.querySelector("span");
@@ -798,7 +799,7 @@ export function createArtifactPane(
       // Swap the icon (the state signal) and update the accessible label. We
       // deliberately avoid aria-pressed here: the icon-btn [aria-pressed] CSS
       // would add unwanted active styling.
-      const svg = renderLucideIcon(expanded ? "minimize" : "maximize", 16, "currentColor", 2);
+      const svg = renderIconNode(expanded ? Minimize : Maximize, 16, "currentColor", 2);
       if (svg) expandBtn.replaceChildren(svg);
       const label = expanded ? "Collapse artifacts panel" : "Expand artifacts panel";
       expandBtn.setAttribute("aria-label", label);

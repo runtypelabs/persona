@@ -1,5 +1,6 @@
 import { createElement, createNode } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import { ChevronUp, MessageSquare } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
 import { ComposerBuildContext, ComposerElements } from "./composer-builder";
 import {
   createAttachmentControls,
@@ -44,7 +45,7 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
   });
 
   const iconHolder = createElement("span", "persona-pill-peek__icon");
-  const messageIcon = renderLucideIcon("message-square", 16, "currentColor", 1.5);
+  const messageIcon = renderIconNode(MessageSquare, 16, "currentColor", 1.5);
   if (messageIcon) {
     iconHolder.appendChild(messageIcon);
   }
@@ -52,7 +53,7 @@ export const buildPillPeekBanner = (): PillPeekBanner => {
   const textNode = createElement("span", "persona-pill-peek__text");
 
   const caret = createElement("span", "persona-pill-peek__caret");
-  const caretIcon = renderLucideIcon("chevron-up", 16, "currentColor", 1.5);
+  const caretIcon = renderIconNode(ChevronUp, 16, "currentColor", 1.5);
   if (caretIcon) {
     caret.appendChild(caretIcon);
   }
