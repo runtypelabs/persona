@@ -1,7 +1,0 @@
----
-"@runtypelabs/persona": minor
----
-
-Make the artifact toolbar copy menu actionable without integrator code, and show the same success feedback the message-level copy action uses. The copy control is now a `createSplitButton` (exported alongside the other button builders): one bordered control holding the primary action and an icon-only chevron that opens the menu. A `download` menu item id now triggers the widget's built-in artifact download (real filename/MIME for file artifacts, `<title>.md` otherwise) when no handler is set, and `onDocumentToolbarCopyMenuSelect` can return `false` to fall through to the built-in behavior for any action id. The handler payload now also carries `file` metadata, `suggestedFilename`, `mime`, and the raw download `content`. After a copy resolves, the copy glyph swaps to a check and the label reads "Copied" for 2 seconds; failed copies stay unconfirmed. Copy-menu selections routed to a custom handler are left to the integrator. The refresh button now renders only while `onDocumentToolbarRefresh` is set.
-
-Also fixes the view/source toggle losing its selected-state highlight when a theme sets `toggleGroupGap` or `toggleGroupPadding` to a unitless `0` (coerced to `0px` before the selection thumb `calc()`), adds `documentToolbarToggleActiveColor` so themes can brighten the active segment's icon, and keeps the history rail stable while resizing the artifact pane (the width fallback now measures the full widget including the artifact split, and the drag reserves room for a docked rail plus a readable transcript).
