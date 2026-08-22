@@ -2,12 +2,25 @@
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createArtifactPane } from "./artifact-pane";
+import { createArtifactPane as createArtifactPaneImpl } from "./artifact-pane";
 import type {
   AgentWidgetConfig,
   PersonaArtifactCustomAction,
   PersonaArtifactRecord,
 } from "../types";
+
+// Track every pane and destroy it after each test: a dropped pane's file
+// preview holds pending overlay timers that would otherwise fire after the
+// test environment is torn down ("document is not defined" uncaught errors).
+const livePanes: ReturnType<typeof createArtifactPaneImpl>[] = [];
+const createArtifactPane: typeof createArtifactPaneImpl = (...args) => {
+  const pane = createArtifactPaneImpl(...args);
+  livePanes.push(pane);
+  return pane;
+};
+afterEach(() => {
+  for (const pane of livePanes.splice(0)) pane.destroy();
+});
 
 beforeAll(() => {
   // jsdom does not implement matchMedia; the pane's layout code touches it.

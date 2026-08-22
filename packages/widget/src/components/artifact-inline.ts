@@ -18,7 +18,8 @@ import { renderLucideIcon } from "../utils/icons";
 import {
   renderArtifactPreviewBody,
   runArtifactBodyTransition,
-  type ArtifactBodyLayout
+  type ArtifactBodyLayout,
+  type ArtifactPreviewBodyHandle
 } from "./artifact-preview";
 import { PersonaArtifactCard } from "./artifact-card";
 
@@ -510,7 +511,12 @@ function renderDefaultArtifactInline(
   // card-sync updater so later records (title/status changes) re-render the card.
   const renderCardChild = (rec: PersonaArtifactRecord): HTMLElement =>
     PersonaArtifactCard(cardPropsFromRecord(rec), context);
+  // The live preview body, once built, so mountCard can release its
+  // file-preview timers/listeners when the collapse discards it.
+  let liveBody: ArtifactPreviewBodyHandle | null = null;
   const mountCard = (rec: PersonaArtifactRecord): void => {
+    liveBody?.destroy();
+    liveBody = null;
     root.classList.add("persona-artifact-inline--card");
     root.style.removeProperty(BODY_HEIGHT_VAR);
     root.replaceChildren(renderCardChild(rec));
@@ -534,6 +540,7 @@ function renderDefaultArtifactInline(
     // is behavior-identical to passing no `resolveViewMode` at all.
     resolveViewMode: () => userViewMode ?? bodyLayout.viewMode
   });
+  liveBody = handle;
 
   // Body wrapper is always present so the frame's padding lives here (chrome
   // sits flush to the frame edge); required even when chrome is disabled.

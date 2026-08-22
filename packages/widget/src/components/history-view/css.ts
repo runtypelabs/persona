@@ -118,10 +118,11 @@ export const HISTORY_VIEW_CSS =
 .persona-history-topbar--shell .persona-history-title {
   margin: 0;
   padding: 0;
+` +
   /* Pinned like the main header stamps it inline: without a declaration here,
      a non-shadow host's own h2 font rule fills the gap and the two titles
      drift apart. The inherit fallback resolves to the widget's font. */
-  font-family: var(--persona-components-header-title-fontFamily, inherit);
+  `  font-family: var(--persona-components-header-title-fontFamily, inherit);
   font-size: var(--persona-components-header-title-fontSize, 1rem);
   font-weight: var(--persona-components-header-title-fontWeight, 600);
   line-height: var(--persona-components-header-title-lineHeight, 1.5rem);
@@ -544,8 +545,9 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view .persona-history-view-loading {
   display: flex;
   flex-direction: column;
+` +
   /* Show-delay: loads that resolve inside 250ms never flash the skeleton. */
-  animation: persona-history-skeleton-in 120ms ease-out 250ms both;
+  `  animation: persona-history-skeleton-in 120ms ease-out 250ms both;
 }
 @keyframes persona-history-skeleton-in {
   from { opacity: 0; }
@@ -869,8 +871,9 @@ export const HISTORY_VIEW_CSS =
 .persona-history-view .persona-history-nav--footer {
   margin-top: auto;
 }
-/* A render-backed section that yielded nothing keeps its heading out too. */
-.persona-history-view .persona-history-nav[hidden] {
+` +
+  /* A render-backed section that yielded nothing keeps its heading out too. */
+  `.persona-history-view .persona-history-nav[hidden] {
   display: none;
 }
 .persona-history-view button.persona-history-nav-item {

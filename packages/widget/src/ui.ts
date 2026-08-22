@@ -3723,6 +3723,8 @@ export const createAgentExperience = (
     }
     artifactPaneApi?.element.style.removeProperty("width");
     artifactPaneApi?.element.style.removeProperty("maxWidth");
+    // Release the pane preview's pending file-preview timers/listeners.
+    artifactPaneApi?.destroy();
   });
 
   // Event stream cleanup

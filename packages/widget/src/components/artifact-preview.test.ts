@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  renderArtifactPreviewBody,
+  renderArtifactPreviewBody as renderArtifactPreviewBodyImpl,
   runArtifactBodyTransition,
   type ArtifactBodyLayout,
 } from "./artifact-preview";
@@ -13,6 +13,19 @@ import type {
   PersonaArtifactStatusLabelContext,
 } from "../types";
 import type { ComponentRenderer } from "./registry";
+
+// Track every handle and destroy it after each test: a dropped file preview
+// holds pending overlay timers that would otherwise fire after the test
+// environment is torn down ("document is not defined" uncaught errors).
+const liveHandles: ReturnType<typeof renderArtifactPreviewBodyImpl>[] = [];
+const renderArtifactPreviewBody: typeof renderArtifactPreviewBodyImpl = (...args) => {
+  const handle = renderArtifactPreviewBodyImpl(...args);
+  liveHandles.push(handle);
+  return handle;
+};
+afterEach(() => {
+  for (const handle of liveHandles.splice(0)) handle.destroy();
+});
 
 const layout = (o: Partial<ArtifactBodyLayout> = {}): ArtifactBodyLayout => ({
   streamingView: "source",

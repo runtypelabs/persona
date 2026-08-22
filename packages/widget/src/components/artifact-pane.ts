@@ -67,6 +67,8 @@ export type ArtifactPaneApi = {
    * reveal the pane renders the current recorded state.
    */
   setVisible: (visible: boolean) => void;
+  /** Release the current preview's timers/listeners. Call when the pane is discarded. */
+  destroy: () => void;
 };
 
 /**
@@ -671,6 +673,7 @@ export function createArtifactPane(
       records[records.length - 1];
     if (!sel) {
       content.replaceChildren();
+      preview?.destroy();
       preview = null;
       updateFileToggleVisibility(false);
       return;
@@ -841,6 +844,10 @@ export function createArtifactPane(
       // comments in artifact-preview.ts). Laziness only blocks building NEW
       // previews while hidden; an already-mounted one stays put.
       if (next && dirty) flush();
+    },
+    destroy() {
+      preview?.destroy();
+      preview = null;
     }
   };
 }
