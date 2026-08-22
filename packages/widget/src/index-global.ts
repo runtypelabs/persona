@@ -265,6 +265,35 @@ setApprovalUiLoader(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Deferred WebMCP bridge runtime loading.
+//
+// This bundle is built with `@runtypelabs/persona/webmcp-runtime` external
+// (see `tsup.global.config.ts`): the WebMcpBridge class is kept out of the
+// CDN payload and fetched by client.ts only when `config.webmcp.enabled` is
+// true. Same sibling-URL scheme as the chunks above. (The polyfill itself is
+// a separate, older chunk: `webmcp-polyfill.js`, registered further up.)
+// ---------------------------------------------------------------------------
+
+import { setWebMcpRuntimeLoader } from "./webmcp-runtime-loader";
+
+setWebMcpRuntimeLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "webmcp-runtime.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the webmcp-runtime.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host webmcp-runtime.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
 // Deferred session-reconnect loading.
 //
 // This bundle is built with `@runtypelabs/persona/session-reconnect` external

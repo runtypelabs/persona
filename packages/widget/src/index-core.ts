@@ -293,8 +293,10 @@ export {
 } from "./session";
 export { AgentWidgetClient } from "./client";
 export type { SSEEventCallback } from "./client";
+// `WebMcpBridge` (the class VALUE) ships from `index.ts` (npm only): the CDN
+// global constructs the runtime lazily inside client.ts from the
+// webmcp-runtime chunk, so the class stays out of the IIFE payload.
 export {
-  WebMcpBridge,
   WEBMCP_TOOL_PREFIX,
   isWebMcpToolName,
   stripWebMcpPrefix

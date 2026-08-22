@@ -38,6 +38,10 @@ export type {
   DemoCarouselHandle
 } from "./components/demo-carousel";
 
+// WebMCP bridge class (npm-only value; historical one-argument constructor).
+// The CDN path reaches the runtime lazily via the webmcp-runtime chunk.
+export { WebMcpBridge } from "./webmcp-bridge-public";
+
 // Context mention helpers (for building config.contextMentions.sources).
 // npm-only values: kept off `index-core.ts` so the CDN global doesn't carry
 // mention-matcher (script-tag hosts pass plain source objects in config).

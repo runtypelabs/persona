@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "184.5 kB",
+    "limit": "182.5 kB",
     "gzip": true
   },
   {
@@ -117,6 +117,12 @@
     "name": "Lazy · durable-session reconnect chunk (session-reconnect.js)",
     "path": "dist/session-reconnect.js",
     "limit": "1.25 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · WebMCP bridge runtime chunk (webmcp-runtime.js)",
+    "path": "dist/webmcp-runtime.js",
+    "limit": "3 kB",
     "gzip": true
   }
 ]

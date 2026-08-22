@@ -36,6 +36,10 @@ export default defineConfig({
       '@runtypelabs/persona/session-reconnect': fileURLToPath(
         new URL('./src/session-reconnect.ts', import.meta.url)
       ),
+      // Same for the lazy webmcp-runtime chunk subpath.
+      '@runtypelabs/persona/webmcp-runtime': fileURLToPath(
+        new URL('./src/webmcp-runtime.ts', import.meta.url)
+      ),
     },
   },
   test: {

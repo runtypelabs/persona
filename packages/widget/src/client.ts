@@ -33,7 +33,15 @@ import {
   HistoryDisplayProjection,
   WebMcpConfirmHandler
 } from "./types";
-import { WebMcpBridge, computeClientToolsFingerprint, isWebMcpToolName } from "./webmcp-bridge";
+import {
+  computeClientToolsFingerprint,
+  getWebMcpToolDisplayTitle,
+  isWebMcpToolName,
+  loadWebMcpPolyfillModule,
+  recordWebMcpToolDisplayTitles,
+} from "./webmcp-bridge";
+import { loadWebMcpRuntime } from "./webmcp-runtime-loader";
+import type { WebMcpBridge } from "./webmcp-runtime-entry";
 import {
   buildArtifactRefRawContent,
   resolveArtifactDisplayMode
@@ -306,9 +314,14 @@ export class AgentWidgetClient {
   >();
   private historyAvailabilitySubscribers = new Set<(available: boolean) => void>();
 
-  // WebMCP: page-discovered tool consumption (see ./webmcp-bridge).
-  // Constructed lazily: null when `config.webmcp?.enabled !== true`.
-  private readonly webMcpBridge: WebMcpBridge | null;
+  // WebMCP: page-discovered tool consumption. The bridge runtime ships in the
+  // lazy webmcp-runtime chunk; `webMcpBridge` stays null until the chunk is
+  // adopted (and forever when `config.webmcp?.enabled !== true`). Dispatch
+  // paths await `getWebMcpBridge()`; sync callers read the cached instance.
+  private webMcpBridge: WebMcpBridge | null = null;
+  private webMcpBridgePromise: Promise<WebMcpBridge | null> | null = null;
+  /** undefined = never set; null = explicitly cleared. Applied at adoption. */
+  private pendingWebMcpConfirmHandler: WebMcpConfirmHandler | null | undefined;
 
   constructor(
     private config: AgentWidgetConfig = {},
@@ -333,8 +346,49 @@ export class AgentWidgetClient {
     this.customFetch = config.customFetch;
     this.parseSSEEvent = config.parseSSEEvent;
     this.getHeaders = config.getHeaders;
-    this.webMcpBridge =
-      config.webmcp?.enabled === true ? new WebMcpBridge(config.webmcp) : null;
+    if (config.webmcp?.enabled === true) {
+      // Kick the runtime chunk fetch now so the bridge is warm before the
+      // first dispatch snapshot (which awaits it either way).
+      this.webMcpBridgePromise = this.createWebMcpBridge(config.webmcp);
+    }
+  }
+
+  /** Load the lazy runtime chunk and construct the bridge with core-owned deps. */
+  private createWebMcpBridge(
+    webmcpConfig: NonNullable<AgentWidgetConfig["webmcp"]>
+  ): Promise<WebMcpBridge | null> {
+    return loadWebMcpRuntime()
+      .then((mod) => {
+        const bridge = new mod.WebMcpBridge(webmcpConfig, {
+          recordToolDisplayTitles: recordWebMcpToolDisplayTitles,
+          getToolDisplayTitle: getWebMcpToolDisplayTitle,
+          loadPolyfill: loadWebMcpPolyfillModule,
+        });
+        if (this.pendingWebMcpConfirmHandler !== undefined) {
+          bridge.setConfirmHandler(this.pendingWebMcpConfirmHandler);
+        }
+        this.webMcpBridge = bridge;
+        return bridge;
+      })
+      .catch((err) => {
+        // Failed chunk fetch: clear the memoized promise so the next dispatch
+        // retries (the chunk loader clears its own rejection too).
+        this.webMcpBridgePromise = null;
+        if (this.debug) {
+          console.warn("[Persona] Failed to load the WebMCP runtime chunk", err);
+        }
+        return null;
+      });
+  }
+
+  /** Resolve the bridge, loading the runtime chunk on first use. */
+  private getWebMcpBridge(): Promise<WebMcpBridge | null> {
+    if (this.webMcpBridge) return Promise.resolve(this.webMcpBridge);
+    if (this.config.webmcp?.enabled !== true) return Promise.resolve(null);
+    if (!this.webMcpBridgePromise) {
+      this.webMcpBridgePromise = this.createWebMcpBridge(this.config.webmcp);
+    }
+    return this.webMcpBridgePromise;
   }
 
   /**
@@ -377,6 +431,8 @@ export class AgentWidgetClient {
    * chrome is ready to render.
    */
   public setWebMcpConfirmHandler(handler: WebMcpConfirmHandler | null): void {
+    // Queue for a bridge still in flight; apply immediately once adopted.
+    this.pendingWebMcpConfirmHandler = handler;
     this.webMcpBridge?.setConfirmHandler(handler);
   }
 
@@ -405,8 +461,20 @@ export class AgentWidgetClient {
     args: unknown,
     signal?: AbortSignal,
   ): Promise<import("./types").WebMcpToolResult> | null {
-    if (!this.webMcpBridge) return null;
-    return this.webMcpBridge.executeToolCall(wireToolName, args, signal);
+    // Route on CONFIG, not bridge presence: the lazily-loaded bridge may not
+    // have adopted yet, and returning null would misroute the call to the
+    // legacy local-tool resume path.
+    if (this.config.webmcp?.enabled !== true) return null;
+    return this.getWebMcpBridge().then((bridge) =>
+      bridge
+        ? bridge.executeToolCall(wireToolName, args, signal)
+        : {
+            isError: true,
+            content: [
+              { type: "text", text: "WebMCP runtime failed to load." },
+            ],
+          }
+    );
   }
 
   /**
@@ -2160,7 +2228,7 @@ export class AgentWidgetClient {
       // so the server replaces the persisted set instead of keeping it frozen.
       const fullClientTools = [
         ...builtInClientToolsForDispatch(this.config),
-        ...((await this.webMcpBridge?.snapshotForDispatch()) ?? []),
+        ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
       ];
       const { response, commit } = await this.sendWithClientToolsDiff(
         resumeSessionId,
@@ -2301,7 +2369,7 @@ export class AgentWidgetClient {
     // so dispatch microtask timing is unchanged.
     const clientTools = [
       ...builtInClientToolsForDispatch(this.config),
-      ...((await this.webMcpBridge?.snapshotForDispatch()) ?? []),
+      ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
     ];
     if (clientTools.length > 0) {
       payload.clientTools = clientTools;
@@ -2358,7 +2426,7 @@ export class AgentWidgetClient {
     // (flow-dispatch path).
     const clientTools = [
       ...builtInClientToolsForDispatch(this.config),
-      ...((await this.webMcpBridge?.snapshotForDispatch()) ?? []),
+      ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
     ];
     if (clientTools.length > 0) {
       payload.clientTools = clientTools;
