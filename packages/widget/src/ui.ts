@@ -2,7 +2,7 @@ import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors"
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
-import { onMarkdownParsersReady, getMarkdownParsersSync } from "./markdown-parsers-loader";
+import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
 import {
   AgentWidgetSession,
   AgentWidgetSessionStatus,
@@ -6414,7 +6414,26 @@ export const createAgentExperience = (
     s.maxWidth = viewportClamp;
   };
 
+  // Markdown parsers (marked + DOMPurify) live in a lazy sibling chunk. Warm
+  // them the first time the panel is actually visible instead of at page load:
+  // visitors who never open the launcher never fetch the ~21 kB chunk. Renders
+  // that beat the chunk show escaped text and self-heal via
+  // onMarkdownParsersReady (subscriber below).
+  let markdownParsersWarmed = false;
+  const warmMarkdownParsers = () => {
+    if (markdownParsersWarmed) return;
+    markdownParsersWarmed = true;
+    loadMarkdownParsers().catch(() => {
+      // Failed fetch (ad blocker, offline): allow the next visibility change
+      // to retry; the chunk loader resets its cached promise on rejection.
+      markdownParsersWarmed = false;
+    });
+  };
+
   const updateOpenState = () => {
+    // Before the toggleable check: docked/fullscreen panels are visible from
+    // init but never toggle, and must still warm the markdown chunk.
+    if (open) warmMarkdownParsers();
     if (!isPanelToggleable()) return;
 
     // Composer-bar mode morphs the wrapper between collapsed pill and
