@@ -159,6 +159,10 @@ export interface SemanticTokens {
 
 export interface ComponentTokenSet {
   background?: TokenReference<'color'>;
+  /**
+   * Text and glyph color on `background`. `HeaderTokens` also derives its
+   * unset text, icon, and border colors from this pair.
+   */
   foreground?: TokenReference<'color'>;
   border?: TokenReference<'color'>;
   borderRadius?: TokenReference<'radius'>;
@@ -189,6 +193,15 @@ export interface LauncherTokens extends ComponentTokenSet {
   size: string;
   iconSize: string;
   shadow: TokenReference<'shadow'>;
+  /**
+   * Stroke weight of the launcher glyphs, the agent icon and the
+   * call-to-action arrow alike. Unitless, and must be a STRING (`"1.75"`,
+   * never `1.75`: the token resolver silently skips numbers). Applied as CSS,
+   * so it beats the attribute the icons render with. Inert for emoji / image
+   * launchers, which have no svg.
+   * @default "1.5", matching the header's controlStrokeWidth
+   */
+  iconStrokeWidth?: string;
 }
 
 export interface PanelTokens extends ComponentTokenSet {
@@ -212,28 +225,215 @@ export interface TextStyleTokens {
   color?: TokenReference<'color'>;
 }
 
+/**
+ * Header band tokens. `background` plus `foreground` (inherited from
+ * `ComponentTokenSet`) is the pair that colors the band: `foreground` anchors
+ * the header text, and every text, action-icon, and border color the theme
+ * leaves unset derives from the pair. Derivation only fills unset keys, so an
+ * explicit key always wins, and `iconBackground` / `iconForeground` (the avatar
+ * tile) keep their own defaults rather than deriving.
+ */
 export interface HeaderTokens extends ComponentTokenSet {
   background: TokenReference<'color'>;
-  border: TokenReference<'color'>;
+  /**
+   * Hairline under the header. Unset, it derives as
+   * `color-mix(in srgb, foreground 14%, background)`, then the divider color.
+   */
+  border?: TokenReference<'color'>;
   borderRadius: TokenReference<'radius'>;
   /** Background of the rounded avatar tile next to the title (Lucide / emoji / image). */
   iconBackground: TokenReference<'color'>;
   /** Foreground (glyph stroke or emoji text) on the header avatar tile. */
   iconForeground: TokenReference<'color'>;
-  /** Legacy alias of `title.color`; `title.color` wins when both are set. */
-  titleForeground: TokenReference<'color'>;
-  /** Legacy alias of `subtitle.color`; `subtitle.color` wins when both are set. */
-  subtitleForeground: TokenReference<'color'>;
+  /**
+   * Legacy alias of `title.color`; `title.color` wins when both are set.
+   * Unset, the title takes `foreground`, then the primary color.
+   */
+  titleForeground?: TokenReference<'color'>;
+  /**
+   * Legacy alias of `subtitle.color`; `subtitle.color` wins when both are set.
+   * Unset, the subtitle takes `color-mix(in srgb, foreground 72%, background)`,
+   * then the muted text color.
+   */
+  subtitleForeground?: TokenReference<'color'>;
   /** Header title typography (next to the icon, or minimal layout title). */
   title?: TextStyleTokens;
   /** Header subtitle typography, for the line under the title. */
   subtitle?: TextStyleTokens;
-  /** Default color for clear / close icon buttons when launcher overrides are unset. */
-  actionIconForeground: TokenReference<'color'>;
+  /**
+   * Default color for clear / close icon buttons when launcher overrides are
+   * unset. Itself unset, it takes the same
+   * `color-mix(in srgb, foreground 72%, background)` as the subtitle, then the
+   * muted text color.
+   */
+  actionIconForeground?: TokenReference<'color'>;
+  /**
+   * Edge of every header icon button: close, clear chat, `trailingActions`, and
+   * the Messages toggle. Per-control config keys (`launcher.closeButtonSize`,
+   * `launcher.clearChat.size`) still win. Coarse pointers floor the hit area at
+   * 40px regardless. @default "32px"
+   */
+  controlSize?: string;
+  /** Glyph box inside a header control. @default "20px" */
+  controlIconSize?: string;
+  /**
+   * Stroke weight of the glyph inside a header control. Unitless, as an SVG
+   * stroke-width (e.g. `"1.75"`). Sparse-viewBox glyphs (the close X) render
+   * at 0.7 of it so their heavier visible weight still matches a dense
+   * sibling. @default "1.5"
+   */
+  controlStrokeWidth?: string;
   /** Box-shadow on the header (e.g., a fade shadow to replace the default border). */
   shadow?: string;
   /** Override the header bottom border (e.g., `none`). */
   borderBottom?: string;
+  /**
+   * Floor for the header strip's height (e.g. `"56px"`). Pin it together with
+   * `components.history.railHeader.minHeight` so the Messages rail header and
+   * the conversation header read as one continuous band.
+   */
+  minHeight?: string;
+}
+
+/** Messages (conversation history) surfaces. */
+export interface HistoryTokens {
+  /**
+   * The Messages rail's own top strip, which runs beside the widget header
+   * when `features.history.presentation` resolves to `rail`.
+   */
+  railHeader?: {
+    /** Strip background. Defaults to the rail's surface color. */
+    background?: TokenReference<'color'>;
+    /** Full border-bottom shorthand (raw CSS, e.g. `"1px solid #e5e7eb"`). @default "0" */
+    border?: string;
+    /** Strip height floor. Defaults to `components.header.minHeight`, then 56px. */
+    minHeight?: string;
+    /**
+     * The strip's view title ("Messages"). 14px/600 in the text color by
+     * default; set the type keys to restyle it.
+     */
+    title?: TextStyleTokens;
+  };
+  /**
+   * The "Conversations" heading over the list block. Visible in rail
+   * presentation only (the panel keeps it screen-reader-only). 14px/600 in
+   * the text color by default. Every key is pinned in the widget CSS, so
+   * host-page heading rules never restyle it.
+   */
+  listHeading?: TextStyleTokens;
+  /**
+   * The muted sub-headers inside the Messages surface: date groups ("Today",
+   * "Yesterday") and rail nav section titles (`features.history.rail.sections`
+   * `title`, e.g. "Workspace"). 13px/500 in the muted text color in the rail
+   * (the panel keeps date groups screen-reader-only). Every key is pinned in
+   * the widget CSS, so host-page heading rules never restyle them.
+   */
+  groupHeading?: TextStyleTokens;
+  /**
+   * The floating rail that a collapsed
+   * `features.history.rail.collapsedBehavior: "overlay"` opens on hover. It
+   * hangs below the trigger in the conversation header; its width and edge
+   * stay `features.history.rail` geometry, not tokens.
+   */
+  overlay?: {
+    /** Gap from the trigger, the docked edge, and the bottom. @default "8px" */
+    margin?: string;
+    /** Corner radius, on all four corners. @default "16px" */
+    borderRadius?: string;
+    /** Elevation over the conversation. @default "0 12px 40px rgba(0, 0, 0, 0.25)" */
+    shadow?: string;
+    /** Surface behind the rail. Defaults to the rail's own surface color. */
+    background?: TokenReference<'color'>;
+  };
+  /**
+   * Destructive action text (row Delete, "Delete all conversations").
+   * Defaults to `palette.colors.error.600` in light schemes and a lighter
+   * red in the built-in dark theme so the 14px labels keep AA contrast.
+   */
+  dangerForeground?: TokenReference<'color'>;
+  /**
+   * The delete/forget confirmation dialog the shell shows for destructive
+   * history actions. The danger pair is always emitted (`--persona-danger`
+   * / `--persona-danger-fg`); scrim and shadow keep the built-in look when
+   * unset.
+   */
+  confirm?: {
+    /**
+     * Destructive button fill. Defaults to `palette.colors.error.700` in
+     * light schemes and `error.600` in the built-in dark theme.
+     */
+    dangerBackground?: TokenReference<'color'>;
+    /** Destructive button label. @default "#ffffff" */
+    dangerForeground?: TokenReference<'color'>;
+    /** Overlay behind the dialog. @default "rgba(15, 23, 42, 0.45)" */
+    scrim?: TokenReference<'color'>;
+    /** Card elevation (raw CSS shadow). */
+    shadow?: string;
+  };
+  /** The per-row overflow menu in the Messages list (rail and panel). */
+  menu?: {
+    /**
+     * Menu surface. Defaults to the list surface lifted 8% toward white so
+     * the menu reads as elevated in dark schemes.
+     */
+    background?: TokenReference<'color'>;
+    /** Corner radius. @default "12px" */
+    borderRadius?: string;
+  };
+  /**
+   * Enter/exit motion of the Messages surface. Only the body slides; the bar
+   * is persistent chrome and never animates. Durations are milliseconds and 0
+   * disables that leg; `prefers-reduced-motion` always wins over these.
+   */
+  motion?: {
+    /** Entrance slide-and-fade duration: bare ms number, or a CSS time string. @default 180 */
+    enterDurationMs?: number | string;
+    /** Entrance easing. @default "cubic-bezier(0, 0, 0.2, 1)" */
+    enterEasing?: string;
+    /** Exit slide-and-fade duration: bare ms number, or a CSS time string. @default 160 */
+    exitDurationMs?: number | string;
+    /** Exit easing. @default "cubic-bezier(0.4, 0, 1, 1)" */
+    exitEasing?: string;
+  };
+}
+
+/**
+ * The portaled icon-control tooltip (header controls, composer buttons) and
+ * its trailing shortcut hint chip. Unset keys keep the built-in dark look.
+ */
+export interface TooltipTokens {
+  /** Bubble and arrow fill. @default "#111827" */
+  background?: TokenReference<'color'>;
+  /** Label color. @default "#ffffff" */
+  foreground?: TokenReference<'color'>;
+  /** Trailing shortcut hint color. @default "rgba(255, 255, 255, 0.55)" */
+  hintForeground?: TokenReference<'color'>;
+  /** Bubble corner radius. Defaults to `palette.radius.sm`. */
+  borderRadius?: TokenReference<'radius'>;
+  /** Label type size. @default "12px" */
+  fontSize?: string;
+  /** Bubble inset, full CSS shorthand. @default "6px 12px" */
+  padding?: TokenReference<'spacing'>;
+  /** Bubble box-shadow (token ref or raw CSS, e.g. `none`). */
+  shadow?: string;
+  /** Render the caret pointing at the control. @default true */
+  arrow?: boolean;
+  /** Wrap width. @default "min(320px, calc(100vw - 16px))" */
+  maxWidth?: string;
+}
+
+/**
+ * The hover-revealed action row under a message (copy, vote, read aloud).
+ * Unset keys inherit the shared ghost icon-button wash, which is already
+ * scheme-aware, so most themes never need this group.
+ */
+export interface MessageActionsTokens {
+  /** Hover fill. Defaults to `components.button.ghost.hoverBackground`. */
+  hoverBackground?: TokenReference<'color'>;
+  /** Hover icon color. Defaults to `semantic.colors.text`. */
+  hoverForeground?: TokenReference<'color'>;
+  /** Button corner radius. Defaults to `palette.radius.md`. */
+  borderRadius?: TokenReference<'radius'>;
 }
 
 export interface MessageTokens {
@@ -603,7 +803,13 @@ export interface ComponentTokens {
   launcher: LauncherTokens;
   panel: PanelTokens;
   header: HeaderTokens;
+  /** Messages rail chrome. */
+  history?: HistoryTokens;
+  /** Portaled icon-control tooltip and its shortcut hint chip. */
+  tooltip?: TooltipTokens;
   message: MessageTokens;
+  /** Hover-revealed per-message action row (copy, vote, read aloud). */
+  messageActions?: MessageActionsTokens;
   /** Welcome / intro card shown above the message list. */
   introCard?: IntroCardTokens;
   /** Markdown surfaces (chat + artifact pane). */

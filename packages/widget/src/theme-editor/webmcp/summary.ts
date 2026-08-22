@@ -163,13 +163,15 @@ export interface ContrastPair {
   key: string;
   label: string;
   fg: string;
+  /** Tried in order when `fg` is unset; suggestions still write to `fg`. */
+  fgFallbacks?: string[];
   bg: string;
 }
 
 export const CONTRAST_PAIRS: ContrastPair[] = [
   { key: 'user-message', label: 'User message text', fg: 'components.message.user.text', bg: 'components.message.user.background' },
   { key: 'assistant-message', label: 'Assistant message text', fg: 'components.message.assistant.text', bg: 'components.message.assistant.background' },
-  { key: 'header', label: 'Header title', fg: 'components.header.titleForeground', bg: 'components.header.background' },
+  { key: 'header', label: 'Header title', fg: 'components.header.titleForeground', fgFallbacks: ['components.header.foreground'], bg: 'components.header.background' },
   { key: 'primary-button', label: 'Primary button label', fg: 'components.button.primary.foreground', bg: 'components.button.primary.background' },
   { key: 'input', label: 'Input placeholder', fg: 'components.input.placeholder', bg: 'components.input.background' },
   { key: 'link', label: 'Link text', fg: 'components.markdown.link.foreground', bg: 'semantic.colors.background' },
@@ -177,6 +179,18 @@ export const CONTRAST_PAIRS: ContrastPair[] = [
   { key: 'body', label: 'Body text on background', fg: 'semantic.colors.text', bg: 'semantic.colors.background' },
   { key: 'surface', label: 'Body text on surface', fg: 'semantic.colors.text', bg: 'semantic.colors.surface' },
 ];
+
+function resolveContrastForeground(
+  state: ThemeEditorLike,
+  pair: ContrastPair,
+  prefix: 'theme' | 'darkTheme'
+): string | null {
+  for (const path of [pair.fg, ...(pair.fgFallbacks ?? [])]) {
+    const color = resolveColor(state, path, prefix);
+    if (color) return color;
+  }
+  return null;
+}
 
 /**
  * The contrast-pair keys relevant to a role, derived by intersecting the role's
@@ -275,7 +289,7 @@ export function runContrastChecks(
   for (const v of variants) {
     const prefix = v === 'light' ? 'theme' : 'darkTheme';
     for (const pair of pairs) {
-      const fg = resolveColor(state, pair.fg, prefix);
+      const fg = resolveContrastForeground(state, pair, prefix);
       const bg = resolveColor(state, pair.bg, prefix);
       if (!fg || !bg) continue;
       const ratio = round2(wcagContrastRatio(fg, bg));

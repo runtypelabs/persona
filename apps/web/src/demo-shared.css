@@ -905,6 +905,11 @@ body.demo-code-active [data-persona-root] { display: none; }
   flex-direction: column;
   gap: 0.3rem;
 }
+/* Direct children only: fields inside .field-grid space with the grid gap. */
+.info-section > .field:not(:last-child),
+.info-section > .config-field:not(:last-child) {
+  margin-bottom: 0.6rem;
+}
 .field > label,
 .config-field > label {
   font-family: var(--font-label);

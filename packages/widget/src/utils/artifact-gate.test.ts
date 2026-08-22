@@ -371,6 +371,7 @@ describe("applyArtifactLayoutCssVars", () => {
               documentToolbarIconColor: "#60a5fa",
               documentToolbarToggleActiveBackground: "#262626",
               documentToolbarToggleActiveBorderColor: "#444444",
+              documentToolbarToggleActiveColor: "#e5e5e5",
             },
           },
         },
@@ -384,6 +385,9 @@ describe("applyArtifactLayoutCssVars", () => {
     );
     expect(mount.style.getPropertyValue("--persona-artifact-doc-toggle-active-border").trim()).toBe(
       "#444444"
+    );
+    expect(mount.style.getPropertyValue("--persona-artifact-doc-toggle-active-color").trim()).toBe(
+      "#e5e5e5"
     );
   });
 });

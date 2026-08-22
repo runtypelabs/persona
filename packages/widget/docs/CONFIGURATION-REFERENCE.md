@@ -55,6 +55,21 @@ For detailed theme styling properties, see [THEME-CONFIG.md](../THEME-CONFIG.md)
 | `parseSSEEvent` | `(eventData) => { text?, done?, error? } \| null` | Transform non-standard SSE events into the expected format. Return `null` to ignore an event. |
 | `onSSEEvent` | `(eventType, payload) => void` | Observe every parsed SSE frame before Persona handles it. Useful for lightweight telemetry; does not replace native streaming. |
 | `errorMessage` | `string \| (error: Error) => string` | Override the fallback assistant bubble shown when a dispatch fails before streaming. Return an empty string to suppress the bubble while still firing `onError`. |
+| `tooltip` | `AgentWidgetTooltipConfig?` | Hover timing for the portaled control tooltip (header, composer, rail). Keyboard focus is always immediate. See below. |
+
+**`AgentWidgetTooltipConfig`**
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `delayMs` | `number?` | Hover wait before the first tooltip. Default: `200` (ChatGPT / Claude). `0` opens instantly. |
+| `skipDelayMs` | `number?` | After a tooltip closes, later hovers in this window skip `delayMs` so toolbar scanning stays fast. Default: `300`. |
+
+```typescript
+config: {
+  tooltip: { delayMs: 200, skipDelayMs: 300 }  // default
+  // tooltip: { delayMs: 0 }                   // previous instant-open
+}
+```
 
 #### Routing targets
 

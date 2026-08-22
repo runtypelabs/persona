@@ -78,6 +78,22 @@ describe("injectStyles / getStyleRoot", () => {
     expect(shadow.querySelector('style[data-persona-plugin-style="kit-deferred"]')).not.toBeNull();
   });
 
+  it("re-injects into a foreign document's head for a node adopted after the call", async () => {
+    // Mirrors the theme-editor preview: nodes built against the outer document
+    // and mounted into an iframe's. The branch must resolve by nodeType, since
+    // a real iframe document fails cross-realm instanceof checks.
+    const foreignDoc = document.implementation.createHTMLDocument("frame");
+    const el = document.createElement("div");
+    injectStyles(el, "kit-foreign", ".f {}");
+    foreignDoc.body.appendChild(el);
+
+    await flushMicrotasks();
+
+    expect(
+      foreignDoc.head.querySelector('style[data-persona-plugin-style="kit-foreign"]')
+    ).not.toBeNull();
+  });
+
   it("accepts an explicit Document or ShadowRoot target", () => {
     const host = document.createElement("div");
     document.body.appendChild(host);

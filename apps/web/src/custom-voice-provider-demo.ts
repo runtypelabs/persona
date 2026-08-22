@@ -6,6 +6,7 @@ import {
   markdownPostprocessor,
   DEFAULT_WIDGET_CONFIG,
   type AgentWidgetConfig,
+  type VoiceProvider,
 } from "@runtypelabs/persona";
 import { setupMountMode, runWidgetMountWithInspector } from "./mount-mode";
 import { createDemoConfigInspector } from "./demo-config-inspector";
@@ -45,6 +46,42 @@ if (supportEl) {
   supportEl.style.color = supported ? "var(--ok, #10b981)" : "var(--warn, #f59e0b)";
 }
 
+// Log both sides of the VoiceProvider contract: the widget's lifecycle calls
+// in, and the provider's result/status/error callbacks out.
+const instrumentProvider = (provider: VoiceProvider): VoiceProvider => {
+  provider.onStatusChange((status) => log(`provider → onStatusChange: ${status}`));
+  provider.onResult((result) => {
+    const confidence =
+      result.confidence !== undefined
+        ? ` (confidence ${result.confidence.toFixed(2)})`
+        : "";
+    log(`provider → onResult: "${result.text}"${confidence}`);
+  });
+  provider.onError((error) => log(`provider → onError: ${error.message}`));
+  return {
+    type: provider.type,
+    connect: () => {
+      log("widget → connect()");
+      return provider.connect();
+    },
+    disconnect: () => {
+      log("widget → disconnect()");
+      return provider.disconnect();
+    },
+    startListening: () => {
+      log("widget → startListening()");
+      return provider.startListening();
+    },
+    stopListening: () => {
+      log("widget → stopListening()");
+      return provider.stopListening();
+    },
+    onResult: (cb) => provider.onResult(cb),
+    onError: (cb) => provider.onError(cb),
+    onStatusChange: (cb) => provider.onStatusChange(cb),
+  };
+};
+
 const buildConfig = (mode: Mode): AgentWidgetConfig => {
   const isLauncher = mode === "launcher";
   return {
@@ -62,7 +99,8 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       processingText: "🎤 Transcribing…",
       provider: {
         type: "custom",
-        custom: () => createWebSpeechVoiceProvider({ language: "en-US" }),
+        custom: () =>
+          instrumentProvider(createWebSpeechVoiceProvider({ language: "en-US" })),
       },
     },
     // Speech back: textToSpeech is a separate subsystem from voice input, so it
@@ -96,18 +134,25 @@ setupMountMode({
   slug: "custom-voice-provider-demo",
   modes: ["inline", "launcher"],
   mount: (mode, { stage }) => {
-    const { teardown } = runWidgetMountWithInspector(
+    const { controller, teardown } = runWidgetMountWithInspector(
       configInspector,
       mode,
       stage,
       buildConfig,
     );
-    return () => teardown();
+    // The speech-out half of the loop: browser TTS reading the reply back.
+    const unsubscribe = controller.on("message:read-aloud", (event) => {
+      log(`tts → read-aloud: ${event.state}`);
+    });
+    return () => {
+      unsubscribe();
+      teardown();
+    };
   },
 });
 
 log(
   supported
-    ? "BYO voice demo ready. Click the mic in the composer to dictate a message."
+    ? "BYO voice demo ready. Click the mic and the log traces each VoiceProvider contract call."
     : "BYO voice demo ready. Web Speech isn't supported here, but the wiring is identical for any custom provider.",
 );

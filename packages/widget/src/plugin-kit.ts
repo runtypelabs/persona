@@ -30,21 +30,29 @@
  * regardless of whether the widget runs in light or shadow DOM. For a detached
  * node (one not yet mounted) this falls back to the owning document.
  */
+// nodeType checks, not instanceof: an iframe's Document/ShadowRoot fail
+// cross-realm instanceof against this realm's constructors.
+const isDocumentNode = (node: Node): node is Document =>
+  node.nodeType === Node.DOCUMENT_NODE;
+const isShadowRootNode = (node: Node): node is ShadowRoot =>
+  node.nodeType === Node.DOCUMENT_FRAGMENT_NODE &&
+  (node as ShadowRoot).host !== undefined;
+
 export function getStyleRoot(node: Node): Document | ShadowRoot {
   const root = node.getRootNode?.();
-  if (root instanceof ShadowRoot) return root;
-  if (root instanceof Document) return root;
+  if (root && isShadowRootNode(root)) return root;
+  if (root && isDocumentNode(root)) return root;
   return node.ownerDocument ?? document;
 }
 
 function injectInto(root: Document | ShadowRoot, id: string, css: string): void {
   const container: Document | ShadowRoot | HTMLHeadElement =
-    root instanceof Document ? root.head : root;
+    isDocumentNode(root) ? root.head : root;
   const escaped = id.replace(/["\\]/g, "\\$&");
   if (container.querySelector(`style[data-persona-plugin-style="${escaped}"]`)) {
     return; // Already present in this root: idempotent.
   }
-  const doc = root instanceof Document ? root : root.ownerDocument ?? document;
+  const doc = isDocumentNode(root) ? root : root.ownerDocument ?? document;
   const style = doc.createElement("style");
   style.setAttribute("data-persona-plugin-style", id);
   style.textContent = css;
@@ -77,7 +85,7 @@ export function injectStyles(
   id: string,
   css: string
 ): void {
-  if (target instanceof Document || target instanceof ShadowRoot) {
+  if (isDocumentNode(target) || isShadowRootNode(target)) {
     injectInto(target, id, css);
     return;
   }

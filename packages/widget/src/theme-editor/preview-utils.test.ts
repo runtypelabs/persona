@@ -43,6 +43,25 @@ describe("theme editor preview demo data", () => {
     );
   });
 
+  it("enables the history feature for the messages scene", () => {
+    const config = buildPreviewConfig({ scene: "messages" });
+
+    expect(config.features?.history?.enabled).toBe(true);
+    expect(config.features?.history?.presentation).toBe("panel");
+    // A transcript still sits behind the Messages surface.
+    expect(config.initialMessages?.length).toBeGreaterThan(0);
+  });
+
+  it("keeps an explicit history presentation in the messages scene", () => {
+    const config = buildPreviewConfig({
+      scene: "messages",
+      config: { features: { history: { enabled: false, presentation: "rail" } } },
+    });
+
+    expect(config.features?.history?.enabled).toBe(true);
+    expect(config.features?.history?.presentation).toBe("rail");
+  });
+
   it("seeds tool call preview messages when advanced tool display modes are enabled", () => {
     const config = buildPreviewConfig({
       scene: "conversation",

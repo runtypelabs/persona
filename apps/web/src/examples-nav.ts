@@ -128,6 +128,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "history-demo",
+    href: "/history-demo.html",
+    title: "Conversation History",
+    blurb: "The Messages surface end to end: panel and rail presentations, every identity and list state, and a live staging mode.",
+    tier: "patterns",
+    tags: ["history", "navigation", "states"],
+    modes: ["inline"],
+  },
+  {
     slug: "approval-demo",
     href: "/approval-demo.html",
     title: "Tool Approval",

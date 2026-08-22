@@ -37,6 +37,8 @@ import {
   createWidgetHostLayout,
   isDockedMountMode,
 } from '@runtypelabs/persona';
+import { setHistoryProviderFactory } from '@runtypelabs/persona/internal/history-provider-registry';
+import { createDemoHistoryProvider } from '@runtypelabs/persona/internal/demo-history-provider';
 import type {
   AgentWidgetConfig,
   AgentWidgetController,
@@ -112,6 +114,11 @@ const PREVIEW_IFRAME_SHELL_STYLE_ID = SHELL_STYLE_ID;
 const STREAM_CHUNK_SIZE = 6;
 const STREAM_CHUNK_DELAY_MS = 80;
 const STREAM_INITIAL_DELAY_MS = 600;
+
+// Messages-scene motion replay: debounce collects a burst of edits into one
+// replay; the fallback must outlast any plausible themed exit duration.
+const HISTORY_MOTION_REPLAY_DEBOUNCE_MS = 300;
+const HISTORY_MOTION_REPLAY_FALLBACK_MS = 5000;
 
 // Screenshot capture (screenshot_preview WebMCP tool). Downscaled JPEG keeps a
 // two-frame capture comfortably inside the tool-result payload budget the
@@ -328,6 +335,14 @@ export interface PreviewManager {
   clearHighlight(): void;
   /** Capture each visible preview frame as a downscaled JPEG data URL. */
   capturePreview(): Promise<PreviewCaptureFrame[]>;
+  /**
+   * Messages scene: while held (a motion field has focus), motion-token
+   * commits mark a replay pending instead of scheduling it; releasing the
+   * hold schedules any pending replay.
+   */
+  setHistoryMotionEditHold(held: boolean): void;
+  /** Messages scene: run a pending or debounced motion replay now (Enter). */
+  flushHistoryMotionReplay(): void;
   /** Clean up all resources. */
   destroy(): void;
 }
@@ -355,7 +370,18 @@ export function createPreviewManager(
   let activeHighlightZone: string | null = null;
   let lastInjectedTranscriptCount = 0;
   let lastStreamAnimationSignature: string | null = null;
+  let lastHistoryMotionSignature: string | null = null;
+  let historyMotionReplayTimer: ReturnType<typeof setTimeout> | null = null;
+  let historyMotionEditHold = false;
+  let historyMotionReplayPending = false;
+  /** Messages scene: which previews currently show the history view. */
+  const historyOpenControllers = new WeakSet<AgentWidgetController>();
   let pendingStreamTimers: Array<ReturnType<typeof setTimeout>> = [];
+
+  // Messages scene: preview widgets resolve history against the in-memory demo
+  // provider (per widget, so compare frames stay isolated). Page-scoped, but
+  // only widgets with features.history enabled ever consult it.
+  setHistoryProviderFactory(() => createDemoHistoryProvider());
 
   const previewEmbedCheckInFlight = new Map<string, number>();
   const previewBackgroundOverlayTimers = new Map<string, { timeoutId: number; dismissKey: string }>();
@@ -1372,6 +1398,12 @@ export function createPreviewManager(
     lastInjectedTranscriptCount = 0;
     cancelPendingStreamTimers();
     lastStreamAnimationSignature = getStreamAnimationSignature();
+    if (historyMotionReplayTimer !== null) {
+      clearTimeout(historyMotionReplayTimer);
+      historyMotionReplayTimer = null;
+    }
+    historyMotionReplayPending = false;
+    lastHistoryMotionSignature = getHistoryMotionSignature();
 
     const specs = getPreviewSpecs(preserveBackgroundStates);
     const renderToken = ++previewRenderToken;
@@ -1466,10 +1498,28 @@ export function createPreviewManager(
           };
         }
 
+        if (stateModule.getPreviewScene() === 'messages') {
+          const openUnsub = controller.on('history:opened', () =>
+            historyOpenControllers.add(controller)
+          );
+          const closeUnsub = controller.on('history:closed', () =>
+            historyOpenControllers.delete(controller)
+          );
+          const previousCleanup = layoutCleanup;
+          layoutCleanup = () => {
+            openUnsub();
+            closeUnsub();
+            previousCleanup();
+          };
+        }
+
         previewLayoutCleanups.push(layoutCleanup);
 
         if (stateModule.getPreviewScene() === 'minimized') {
           controller.close();
+        }
+        if (stateModule.getPreviewScene() === 'messages') {
+          void controller.showHistory({ focus: false });
         }
       }
 
@@ -1581,6 +1631,60 @@ export function createPreviewManager(
         scrollBody.scrollTop = scrollBody.scrollHeight;
       }
     }
+  }
+
+  function getHistoryMotionSignature(): string {
+    return JSON.stringify({
+      light: stateModule.get('theme.components.history.motion') ?? null,
+      dark: stateModule.get('darkTheme.components.history.motion') ?? null,
+    });
+  }
+
+  /**
+   * Replay the Messages entrance so a motion-token edit is visible without
+   * leaving the editor: close (playing the themed exit), then reopen on
+   * `history:closed`. A view the user closed inside the preview reopens
+   * directly. The timeout fallback covers a missed close event; a reopen
+   * mid-exit is safe (the widget settles the outgoing surface first).
+   */
+  function replayHistoryMotion(): void {
+    for (const controller of previewControllers) {
+      if (!historyOpenControllers.has(controller)) {
+        void controller.showHistory({ focus: false });
+        continue;
+      }
+      let done = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      const reopen = (): void => {
+        if (done) return;
+        done = true;
+        if (timer !== null) clearTimeout(timer);
+        unsubscribe();
+        void controller.showHistory({ focus: false });
+      };
+      const unsubscribe = controller.on('history:closed', reopen);
+      timer = setTimeout(reopen, HISTORY_MOTION_REPLAY_FALLBACK_MS);
+      controller.hideHistory({ restoreFocus: false });
+    }
+  }
+
+  /**
+   * Editor text fields commit on every keystroke, so a replay per commit would
+   * churn the view mid-edit. While a motion field holds focus (the edit hold),
+   * commits only mark a replay pending; blur releases it and Enter flushes it.
+   * The debounce below covers edit paths with no field focus at all: the theme
+   * copilot, WebMCP tools, undo/redo, presets.
+   */
+  function scheduleHistoryMotionReplay(): void {
+    if (historyMotionEditHold) {
+      historyMotionReplayPending = true;
+      return;
+    }
+    if (historyMotionReplayTimer !== null) clearTimeout(historyMotionReplayTimer);
+    historyMotionReplayTimer = setTimeout(() => {
+      historyMotionReplayTimer = null;
+      replayHistoryMotion();
+    }, HISTORY_MOTION_REPLAY_DEBOUNCE_MS);
   }
 
   function getStreamAnimationSignature(): string {
@@ -1704,6 +1808,12 @@ export function createPreviewManager(
       nextStreamAnimationSignature !== lastStreamAnimationSignature;
     lastStreamAnimationSignature = nextStreamAnimationSignature;
 
+    const nextHistoryMotionSignature = getHistoryMotionSignature();
+    const historyMotionChanged =
+      lastHistoryMotionSignature !== null &&
+      nextHistoryMotionSignature !== lastHistoryMotionSignature;
+    lastHistoryMotionSignature = nextHistoryMotionSignature;
+
     previewControllers.forEach((controller, index) => {
       controller.update(specs[index].previewConfig);
       applyPreviewBackgroundStateToWrapper(specs[index].mountId, specs[index].backgroundState);
@@ -1729,6 +1839,10 @@ export function createPreviewManager(
 
     if (streamAnimationChanged) {
       replayLastStreamableTranscriptEntry();
+    }
+
+    if (historyMotionChanged && stateModule.getPreviewScene() === 'messages') {
+      scheduleHistoryMotionReplay();
     }
   }
 
@@ -1873,6 +1987,26 @@ export function createPreviewManager(
       return capturePreviewFrames();
     },
 
+    setHistoryMotionEditHold(held: boolean): void {
+      if (historyMotionEditHold === held) return;
+      historyMotionEditHold = held;
+      if (!held && historyMotionReplayPending) {
+        historyMotionReplayPending = false;
+        scheduleHistoryMotionReplay();
+      }
+    },
+
+    flushHistoryMotionReplay(): void {
+      const timerArmed = historyMotionReplayTimer !== null;
+      if (!historyMotionReplayPending && !timerArmed) return;
+      historyMotionReplayPending = false;
+      if (historyMotionReplayTimer !== null) {
+        clearTimeout(historyMotionReplayTimer);
+        historyMotionReplayTimer = null;
+      }
+      replayHistoryMotion();
+    },
+
     destroy(): void {
       unbindPreviewBackgroundMessageListener();
 
@@ -1881,6 +2015,11 @@ export function createPreviewManager(
       }
 
       destroyPreviewControllers();
+
+      if (historyMotionReplayTimer !== null) {
+        clearTimeout(historyMotionReplayTimer);
+        historyMotionReplayTimer = null;
+      }
 
       if (previewResizeObserver) {
         previewResizeObserver.disconnect();

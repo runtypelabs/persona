@@ -15,7 +15,7 @@
       <aside class="stage-controls">
         <div class="info-section">
           <h3>Home stack</h3>
-          <p>Plugin options are read on every render, so toggling a section updates the stack in place without remounting the widget.</p>
+          <p>Each toggle updates the stack in place. Options are read on every render, so nothing remounts.</p>
           <div class="btn-row">
             <button class="btn" type="button" data-home-toggle="cards" aria-pressed="true">What is new cards</button>
             <button class="btn" type="button" data-home-toggle="links" aria-pressed="true">Link list</button>
@@ -23,13 +23,25 @@
         </div>
 
         <div class="info-section">
+          <h3>Conversation history</h3>
+          <p>History adds recent conversations to the stack and a Messages action to the header. Turning it off remounts the original blueprint.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-home-toggle="history" aria-pressed="true">Recent conversations</button>
+          </div>
+          <p class="hint">The demo mounts an in-memory history provider, so every state is deterministic and no API is involved.</p>
+        </div>
+
+        <div class="info-section">
           <h3>Navigation</h3>
-          <p>The house icon in the panel header calls <code>showHome()</code>. These buttons drive the same plugin from outside the widget.</p>
+          <p>The house icon in the panel header calls <code>showHome()</code>. These buttons drive the same controller methods from outside the widget.</p>
           <div class="btn-row">
             <button class="btn" type="button" data-home-action="show">Back to home</button>
+            <button class="btn" type="button" data-home-action="messages">Open messages</button>
+            <button class="btn" type="button" data-home-action="new">New conversation</button>
             <button class="btn" type="button" data-home-action="rename">Rename the greeting</button>
           </div>
-          <p class="hint">Renaming calls <code>controller.update({ welcome: { title } })</code>, which re-runs welcome arbitration so the plugin's own header picks up the new title.</p>
+          <p class="hint">Renaming calls <code>controller.update({ welcome: { title } })</code>; the greeting picks it up on the next render.</p>
+          <p class="hint">The header has no new-conversation icon (<code>clearChat: { enabled: false }</code>): Home and Messages own conversation creation, so the header only navigates and dismisses. Keep it when history runs without a Home screen.</p>
         </div>
 
         <div data-config-inspector></div>
@@ -39,16 +51,27 @@
     </div>
 
     <section class="notes">
-      <h2 class="notes-heading">Home screen, built on public surface</h2>
+      <h2 class="notes-heading">How it works</h2>
 
       <div class="notes-section">
-        <h3 class="notes-section-title">The stack owns the welcome host</h3>
-        <p><code>renderWelcome</code> returns a card stack instead of the intro card: a greeting header with an avatar, a "start a conversation" card, starter cards, static content cards, and a link list. The first plugin returning an element wins, so <code>defaultRenderer()</code> is simply never called here. Config is <code>welcome: { variant: "hero", dismiss: "on-first-message" }</code>: that hero is what the panel falls back to once the user leaves home without sending anything.</p>
+        <h3 class="notes-section-title">Home replaces the welcome card</h3>
+        <p>Everything on this page uses the public API: render hooks, the plugin contract, and controller methods. <code>renderWelcome</code> returns a card stack instead of the intro card. The first plugin returning an element wins, so <code>defaultRenderer()</code> never runs here. The stack is:</p>
+        <ul>
+          <li>a greeting header with an avatar</li>
+          <li>a "start a conversation" card</li>
+          <li>starter cards</li>
+          <li>static content cards and a link list</li>
+        </ul>
+        <p>Config keeps a fallback: <code>welcome: { variant: "hero", dismiss: "on-first-message" }</code> is what the panel shows if the user leaves home without sending anything.</p>
       </div>
 
       <div class="notes-section">
         <h3 class="notes-section-title">Leaving and returning</h3>
-        <p>"Start a conversation" writes the view flag and calls <code>requestRender()</code>; the plugin then returns null, the overlay clears, and the transcript is visible underneath. The header action calls <code>showHome()</code>, which flips the flag back and re-renders. A plugin element renders regardless of derived <code>visible</code> and the host overlays the transcript while it is mounted, so home comes back over an existing conversation.</p>
+        <p>"Start a conversation" flips a view flag and re-renders. The plugin returns null, the overlay clears, and the transcript underneath becomes visible.</p>
+        <ul>
+          <li>The header's house action calls <code>showHome()</code>, which flips the flag back.</li>
+          <li>A mounted plugin element overlays the transcript, so home returns on top of an existing conversation.</li>
+        </ul>
         <div class="code-block">
 <span class="prop">layout</span>: {
   <span class="prop">header</span>: {
@@ -60,13 +83,69 @@
       </div>
 
       <div class="notes-section">
-        <h3 class="notes-section-title">Starters keep the pipeline</h3>
-        <p>Each starter is rendered with <code>ctx.renderStarter(suggestion)</code>, so <code>onSuggestionSelect</code>, the cancelable <code>persona:suggestion:*</code> events, and send/fill semantics all still apply. The plugin leaves home from its own <code>onSuggestionSelect</code> hook at a low priority, so a hook that cancels the selection keeps the user on home.</p>
+        <h3 class="notes-section-title">Three surfaces: home, messages, conversation</h3>
+        <p>Home is this plugin. Messages and Conversation are core.</p>
+        <ul>
+          <li>The plugin never sees a history provider: it takes async callbacks, and the host wires them to public controller methods.</li>
+          <li>"See all" opens Messages with <code>returnSurface: "home"</code>, so back and Escape land on the stack instead of the transcript.</li>
+        </ul>
+        <div class="code-block">
+<span class="function">createHomeScreenPlugin</span>({
+  <span class="function">onStartConversation</span>: () =&gt; controller.<span class="function">startNewConversation</span>(),
+  <span class="function">onOpenConversation</span>: (id) =&gt; controller.<span class="function">openConversation</span>(id),
+  <span class="function">onShowConversations</span>: () =&gt; controller.<span class="function">showHistory</span>({ <span class="prop">returnSurface</span>: <span class="string">"home"</span> }),
+  <span class="function">onRetryRecent</span>: refreshRecent,
+});
+        </div>
       </div>
 
       <div class="notes-section">
-        <h3 class="notes-section-title">View state</h3>
-        <p>Whether the user has left home lives in <code>ctx.storage</code>, the synchronous per-plugin store namespaced by <code>persistState.keyPrefix</code> plus the plugin id. Under <code>persistState: false</code> (this demo) it degrades to memory, so every reload starts on home. With storage on, a returning visitor lands where they left off, and a restored transcript never gets covered: an unset flag plus derived <code>visible: false</code> means the conversation wins.</p>
+        <h3 class="notes-section-title">Navigation waits for success</h3>
+        <p>Every network-backed action is awaited before the surface changes.</p>
+        <ul>
+          <li>Success: show Conversation, focus the composer.</li>
+          <li>Failure: stay on Home, keep the transcript, restore focus, show an inline status line.</li>
+          <li>The re-enabled control is the retry, so there are never two competing retries.</li>
+        </ul>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Recent rows are a teaser, not the list</h3>
+        <p>Home shows at most three rows: title, preview, and relative time in a <code>&lt;time datetime&gt;</code>. Anything heavier belongs to Messages: message counts, active markers, overflow menus, delete.</p>
+        <ul>
+          <li>Loading: two skeleton rows, shape-matched to real rows.</li>
+          <li>Failure: a compact error with Retry; "Start a conversation" stays enabled.</li>
+          <li>Empty (confirmed): the section and its heading disappear entirely.</li>
+        </ul>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Refreshing the teaser</h3>
+        <p>The host calls <code>controller.listConversations({ limit: 3 })</code> and pushes the result through <code>homePlugin.update()</code>. It refreshes when Home opens and on:</p>
+        <ul>
+          <li><code>history:conversationOpened</code></li>
+          <li><code>history:conversationDeleted</code></li>
+          <li><code>history:cleared</code></li>
+          <li><code>history:identityReset</code></li>
+          <li><code>history:identityStatusChanged</code></li>
+        </ul>
+        <p>Ordinary refreshes leave stale rows visible. A deletion, clear, or identity reset invalidates them immediately.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Starters behave like normal suggestions</h3>
+        <p>Each starter renders through <code>ctx.renderStarter(suggestion)</code>, so everything that applies to a suggestion chip still applies here: <code>onSuggestionSelect</code>, the cancelable <code>persona:suggestion:*</code> events, and send/fill semantics.</p>
+        <p>The plugin leaves home from its own low-priority <code>onSuggestionSelect</code> hook. A hook that cancels the selection keeps the user on home.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Remembering where the user left off</h3>
+        <p>Whether the user has left home lives in <code>ctx.storage</code>, the per-plugin store namespaced by <code>persistState.keyPrefix</code> plus the plugin id.</p>
+        <ul>
+          <li><code>persistState: false</code> (this demo): memory only, so every reload starts on home.</li>
+          <li>With storage on: a returning visitor lands where they left off.</li>
+          <li>A restored transcript is never covered: an unset flag plus derived <code>visible: false</code> means the conversation wins.</li>
+        </ul>
       </div>
 
       <div class="notes-section">

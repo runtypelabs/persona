@@ -21,6 +21,16 @@ import {
 import { isWelcomeVisible, resolveWelcomeConfig } from "../welcome";
 import { resolveContentMaxWidth } from "../utils/content-width";
 
+/**
+ * Composer-bar chrome sizes. Not header controls: these float over the
+ * composer, so they opt out of the header control-size token with explicit
+ * per-control overrides. `CLOSE_ICON_SIZE` is the X's nominal size before the
+ * factory's sparse-viewBox compensation (10 x 1.4 = the rendered 14px).
+ */
+export const COMPOSER_BAR_CONTROL_SIZE = "16px";
+export const COMPOSER_BAR_CLOSE_ICON_SIZE = "10px";
+export const COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE = "14px";
+
 export interface PanelWrapper {
   wrapper: HTMLElement;
   panel: HTMLElement;
@@ -257,16 +267,16 @@ const buildComposerBarPanel = (
   // Minimal header: just an absolutely-positioned close button.
   // The wrapper uses inline styles (top/right/z-index values) because the
   // widget's hand-authored CSS doesn't ship every Tailwind utility.
-  // Composer-bar's defaults are roughly half the floating-launcher's
-  // (button 16px, icon 14px) to match the minimal aesthetic; the user can
-  // still override via `launcher.closeButtonSize`.
+  // Composer-bar's close is a 16px box, far below the header control token,
+  // to match the minimal aesthetic; the user can still override via
+  // `launcher.closeButtonSize`.
   const { button: closeButton, wrapper: closeButtonWrapper } = createCloseButton(
     config,
     {
       showClose,
       wrapperClassName: "persona-composer-bar-close",
-      buttonSize: "16px",
-      iconSize: "14px",
+      buttonSize: COMPOSER_BAR_CONTROL_SIZE,
+      iconSize: COMPOSER_BAR_CLOSE_ICON_SIZE,
     }
   );
   closeButtonWrapper.style.position = "absolute";
@@ -288,8 +298,8 @@ const buildComposerBarPanel = (
   if (clearChatEnabled) {
     const parts = createClearChatButton(config, {
       wrapperClassName: "persona-composer-bar-clear-chat",
-      buttonSize: "16px",
-      iconSize: "14px",
+      buttonSize: COMPOSER_BAR_CONTROL_SIZE,
+      iconSize: COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE,
     });
     clearChatButton = parts.button;
     clearChatButtonWrapper = parts.wrapper;

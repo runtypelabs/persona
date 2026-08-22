@@ -107,6 +107,36 @@ const DARK_PALETTE = {
 };
 
 /**
+ * Component defaults that only hold in a dark color scheme. Layered UNDER the
+ * host's theme, so any explicit value still wins.
+ *
+ * The ghost hover wash must invert with the scheme: 5% black is invisible on a
+ * near-black surface, so every dark scheme gets a light alpha instead.
+ */
+const DARK_COMPONENTS: DeepPartial<PersonaTheme> = {
+  components: {
+    button: {
+      ghost: {
+        hoverBackground: 'rgba(255, 255, 255, 0.08)',
+      },
+    },
+    history: {
+      // error-400: the light-surface error-600 red lands ~3:1 on dark
+      // surfaces, under the 4.5:1 AA floor for the 14px destructive labels.
+      dangerForeground: '#f87171',
+      confirm: {
+        // error-600: bright enough to read as a control against a dark
+        // surface (3:1 non-text) while the white label keeps 4.8:1.
+        dangerBackground: 'palette.colors.error.600',
+        // 45% slate darkens near-black surfaces by almost nothing; dark
+        // schemes need a heavier dimmer for the modal to read as modal.
+        scrim: 'rgba(0, 0, 0, 0.6)',
+      },
+    },
+  },
+};
+
+/**
  * Normalize theme config for merging; rejects non-objects.
  */
 const normalizeThemeConfig = (
@@ -151,14 +181,23 @@ export const createDarkTheme = (userConfig?: DeepPartial<PersonaTheme>): Persona
   // layered UNDER the user's colors here. Spreading a pre-built default
   // palette instead would clobber the user's non-color palette overrides
   // (radius/typography) in dark mode while light mode honored them.
+  //
+  // DARK_COMPONENTS goes underneath by deep merge, not spread: a shallow
+  // spread of `components` would drop the dark ghost hover the moment a host
+  // set any unrelated component token.
+  const config = (deepMerge(
+    DARK_COMPONENTS as Record<string, unknown>,
+    (userConfig ?? {}) as Record<string, unknown>
+  ) ?? {}) as DeepPartial<PersonaTheme>;
+
   return createTheme(
     {
-      ...userConfig,
+      ...config,
       palette: {
-        ...userConfig?.palette,
+        ...config.palette,
         colors: {
           ...DARK_PALETTE.colors,
-          ...userConfig?.palette?.colors,
+          ...config.palette?.colors,
         },
       },
     },

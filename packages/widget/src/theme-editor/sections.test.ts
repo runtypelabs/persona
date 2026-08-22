@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { COMPONENTS_SECTIONS, CONFIGURE_SECTIONS, INTERFACE_ROLES_SECTION, STYLE_SECTIONS } from "./sections";
+import {
+  COMPONENT_COLOR_SECTIONS,
+  COMPONENT_SHAPE_SECTIONS,
+  COMPONENTS_SECTIONS,
+  CONFIGURE_SECTIONS,
+  INTERFACE_ROLES_SECTION,
+  STYLE_SECTIONS,
+} from "./sections";
 import { ALL_ROLES } from "./role-mappings";
 
 describe("theme editor scroll-to-bottom controls", () => {
@@ -91,6 +98,166 @@ describe("theme editor scroll-to-bottom controls", () => {
         "theme.components.suggestion.list.background",
       ])
     );
+  });
+
+  it("exposes the launcher icon stroke as a unitless slider", () => {
+    const section = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-launcher"
+    );
+    const stroke = section?.fields.find(
+      (field) => field.path === "theme.components.launcher.iconStrokeWidth"
+    );
+
+    expect(stroke?.defaultValue).toBe("1.5");
+    // Unitless slider: the stroke must never pick up a px suffix, and the
+    // WebMCP escape hatch coerces sliders to raw numbers while token
+    // resolution only walks string values.
+    expect(stroke?.slider?.unit).toBe("none");
+    expect(stroke?.parseValue?.(1.5)).toBe("1.5");
+    expect(stroke?.parseValue?.("1.75")).toBe("1.75");
+  });
+
+  it("exposes the three shared header control knobs as live shape fields", () => {
+    const section = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-header-controls"
+    );
+    const fieldsByPath = new Map(
+      section?.fields.map((field) => [field.path, field]) ?? []
+    );
+
+    const size = fieldsByPath.get("theme.components.header.controlSize");
+    const iconSize = fieldsByPath.get("theme.components.header.controlIconSize");
+    const stroke = fieldsByPath.get("theme.components.header.controlStrokeWidth");
+
+    expect(size?.defaultValue).toBe("32px");
+    expect(iconSize?.defaultValue).toBe("20px");
+    expect(stroke?.defaultValue).toBe("1.5");
+
+    // Unitless slider: the stroke must never pick up a px suffix.
+    expect(stroke?.slider?.unit).toBe("none");
+    expect(size?.slider?.unit).toBeUndefined();
+
+    // The WebMCP escape hatch coerces sliders to raw numbers, and token
+    // resolution only walks string values.
+    expect(size?.parseValue?.(44)).toBe("44px");
+    expect(size?.parseValue?.("2.5rem")).toBe("2.5rem");
+    expect(stroke?.parseValue?.(2)).toBe("2");
+    expect(stroke?.parseValue?.("1.75")).toBe("1.75");
+
+    // Sizes are not colors: light/dark scoping must never fork them.
+    expect(
+      COMPONENT_COLOR_SECTIONS.some((entry) => entry.id === "comp-header-controls")
+    ).toBe(false);
+  });
+
+  it("exposes the header and rail header band controls", () => {
+    const headerControls = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-header-controls"
+    );
+    const minHeight = headerControls?.fields.find(
+      (field) => field.path === "theme.components.header.minHeight"
+    );
+    expect(minHeight?.type).toBe("text");
+    // Blank keeps the built-in auto height instead of writing an empty token.
+    expect(minHeight?.parseValue?.(" 65px ")).toBe("65px");
+    expect(minHeight?.parseValue?.("")).toBeUndefined();
+
+    const railShape = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-history-rail-header"
+    );
+    const railPaths = railShape?.fields.map((field) => field.path) ?? [];
+    expect(railPaths).toEqual([
+      "theme.components.history.railHeader.minHeight",
+      "theme.components.history.railHeader.border",
+    ]);
+
+    const railColors = COMPONENT_COLOR_SECTIONS.find(
+      (entry) => entry.id === "comp-history-rail-header-colors"
+    );
+    const background = railColors?.fields.find(
+      (field) => field.path === "theme.components.history.railHeader.background"
+    );
+    expect(background?.type).toBe("token-ref");
+    expect(background?.tokenRef?.tokenType).toBe("color");
+
+    // Sizes are not colors: light/dark scoping must never fork them.
+    expect(
+      COMPONENT_COLOR_SECTIONS.some(
+        (entry) => entry.id === "comp-history-rail-header"
+      )
+    ).toBe(false);
+  });
+
+  it("exposes the floating rail surface controls", () => {
+    const shape = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-history-overlay"
+    );
+    expect(shape?.fields.map((field) => field.path)).toEqual([
+      "theme.components.history.overlay.margin",
+      "theme.components.history.overlay.borderRadius",
+      "theme.components.history.overlay.shadow",
+    ]);
+    // Blank keeps the built-in default instead of writing an empty token.
+    const margin = shape?.fields[0];
+    expect(margin?.type).toBe("text");
+    expect(margin?.parseValue?.(" 12px ")).toBe("12px");
+    expect(margin?.parseValue?.("")).toBeUndefined();
+
+    const colors = COMPONENT_COLOR_SECTIONS.find(
+      (entry) => entry.id === "comp-history-overlay-colors"
+    );
+    const background = colors?.fields.find(
+      (field) => field.path === "theme.components.history.overlay.background"
+    );
+    expect(background?.type).toBe("token-ref");
+    expect(background?.tokenRef?.tokenType).toBe("color");
+
+    // Geometry is not color: the shape section never forks per light/dark.
+    expect(
+      COMPONENT_COLOR_SECTIONS.some((entry) => entry.id === "comp-history-overlay")
+    ).toBe(false);
+  });
+
+  it("exposes the tooltip shape and color controls", () => {
+    const shape = COMPONENT_SHAPE_SECTIONS.find(
+      (entry) => entry.id === "comp-tooltip"
+    );
+    const shapePaths = shape?.fields.map((field) => field.path) ?? [];
+    expect(shapePaths).toEqual([
+      "theme.components.tooltip.borderRadius",
+      "theme.components.tooltip.fontSize",
+      "theme.components.tooltip.arrow",
+    ]);
+
+    const fontSize = shape?.fields.find(
+      (field) => field.path === "theme.components.tooltip.fontSize"
+    );
+    // Blank keeps the built-in 12px instead of writing an empty token.
+    expect(fontSize?.parseValue?.(" 13px ")).toBe("13px");
+    expect(fontSize?.parseValue?.("")).toBeUndefined();
+
+    const arrow = shape?.fields.find(
+      (field) => field.path === "theme.components.tooltip.arrow"
+    );
+    expect(arrow?.type).toBe("toggle");
+    expect(arrow?.defaultValue).toBe(true);
+
+    const colors = COMPONENT_COLOR_SECTIONS.find(
+      (entry) => entry.id === "comp-tooltip-colors"
+    );
+    expect(colors?.fields.map((field) => field.path)).toEqual([
+      "theme.components.tooltip.background",
+      "theme.components.tooltip.foreground",
+      "theme.components.tooltip.hintForeground",
+    ]);
+    expect(
+      colors?.fields.every((field) => field.tokenRef?.tokenType === "color")
+    ).toBe(true);
+
+    // Sizes are not colors: light/dark scoping must never fork them.
+    expect(
+      COMPONENT_COLOR_SECTIONS.some((entry) => entry.id === "comp-tooltip")
+    ).toBe(false);
   });
 
   it("exposes a shadow control for every themeable component", () => {

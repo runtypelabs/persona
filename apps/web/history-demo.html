@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Conversation History Demo</title>
+  <style>
+    /* Page-level only: nothing here targets widget internals. */
+    .history-setup {
+      max-width: 40rem;
+      margin: 2rem auto;
+      padding: 1.5rem;
+    }
+
+    .history-setup h3 {
+      margin: 0 0 0.75rem;
+      font-size: 1rem;
+    }
+
+    .history-setup p {
+      margin: 0 0 0.75rem;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+
+    .history-setup .code-block {
+      white-space: pre;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <div class="info-section">
+          <h3>Presentation</h3>
+          <p>Panel replaces the conversation. Rail is a navigation column beside it. Auto picks per container.</p>
+          <div class="field">
+            <label for="history-presentation">features.history.presentation</label>
+            <select id="history-presentation" data-history-presentation>
+              <option value="panel">panel</option>
+              <option value="rail">rail</option>
+              <option value="auto">auto</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="history-grouping">features.history.grouping</label>
+            <select id="history-grouping" data-history-grouping>
+              <option value="time">time (Today, Yesterday, …)</option>
+              <option value="none">none (flat recents list)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="history-header-layout">layout.header.layout</label>
+            <select id="history-header-layout" data-history-header-layout>
+              <option value="default">default (icon, title, subtitle)</option>
+              <option value="minimal">minimal (pairs with the rail)</option>
+            </select>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-action="open">Open messages</button>
+            <button class="btn" type="button" data-history-action="close">Close messages</button>
+            <button class="btn" type="button" data-history-action="new">New conversation</button>
+          </div>
+          <p class="hint">Width is measured on the widget's container, never the viewport. Rail needs at least 720px and collapses to panel below it; auto keeps floating launchers panel-based at every width.</p>
+          <p class="hint">The rail header carries a toggle that shrinks the sidebar to an icon rail, and the choice is remembered for the next visit.</p>
+        </div>
+
+        <div class="info-section">
+          <h3>Custom rendering</h3>
+          <p>The toggle mounts a thread rail plugin built on public hooks only. When its <code>renderHistoryView</code> returns an element, the built-in Messages view never renders.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-toggle="custom-view" aria-pressed="false">Custom thread rail</button>
+          </div>
+          <p class="hint">Persona still owns chunk loading, placement, Escape and focus, and the destructive confirmations. One renderer covers both placements; switch presentation to <code>rail</code> to see it beside an operable transcript.</p>
+          <p class="hint">With the toggle off, a second plugin contributes a pinned section through <code>railSections</code> instead of replacing the view. Its markup and styles are host-side, and it renders nothing while the rail is collapsed. Switch presentation to <code>rail</code> to see it above the conversation list.</p>
+        </div>
+
+        <div class="info-section" data-history-demo-only>
+          <h3>Identity status</h3>
+          <p>Injects the identity state the real provider would report. The scope line in Messages reflects only reported evidence, never a configured callback.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-identity="browser_only" data-history-identity-reason="no_identity_provider">Browser only</button>
+            <button class="btn" type="button" data-history-identity="verifying">Verifying</button>
+            <button class="btn" type="button" data-history-identity="verified">Verified</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-identity="authentication_required" data-history-identity-reason="proof_unavailable_after_binding">Authentication required</button>
+            <button class="btn" type="button" data-history-identity="identity_provider_failed">Provider failed</button>
+            <button class="btn" type="button" data-history-identity="configuration_error" data-history-identity-reason="proof_not_admitted">Proof not admitted</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-action="status">Log current status</button>
+          </div>
+          <p class="hint">Open Messages after injecting a failing state: an unavailable account scope explains itself instead of rendering an apparently empty browser list.</p>
+        </div>
+
+        <div class="info-section" data-history-demo-only>
+          <h3>Loading and errors</h3>
+          <p>Latency drives the skeletons. Failures are one-shot per operation: the next call fails, the retry succeeds.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-latency="1200">Slow provider</button>
+            <button class="btn" type="button" data-history-latency="0">Instant provider</button>
+            <button class="btn" type="button" data-history-action="clear-failures">Clear injections</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-fail="list" data-history-code="unavailable">Fail list</button>
+            <button class="btn" type="button" data-history-fail="list" data-history-code="rate_limited" data-history-retry-after="10">Rate limit list</button>
+            <button class="btn" type="button" data-history-fail="list" data-history-code="authentication_required">Auth error on list</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-fail="list" data-history-code="identity_provider_failed">Provider error on list</button>
+            <button class="btn" type="button" data-history-fail="list" data-history-code="proof_not_admitted">Proof not admitted on list</button>
+            <button class="btn" type="button" data-history-fail="list" data-history-code="unsupported_scope">Unsupported scope</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-fail="getPage" data-history-code="not_found">Fail next open (404)</button>
+            <button class="btn" type="button" data-history-fail="prepareOpen" data-history-code="unavailable">Fail next resume</button>
+            <button class="btn" type="button" data-history-fail="prepareStartNew" data-history-code="unavailable">Fail next new conversation</button>
+          </div>
+          <p class="hint">Failing the replacement init after an irreversible delete is what produces the <code>new_conversation_required</code> recovery state: queue "Fail next new conversation", then delete the open conversation.</p>
+        </div>
+
+        <div class="info-section" data-history-demo-only>
+          <h3>Delete and empty</h3>
+          <p>Deleting an inactive row is non-disruptive. Deleting the open one is irreversible, so the transcript is replaced rather than restored.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-action="delete-newest">Delete newest</button>
+            <button class="btn btn-danger" type="button" data-history-action="delete-all">Delete all</button>
+            <button class="btn" type="button" data-history-action="reseed">Reseed</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-fail="delete" data-history-code="unavailable">Fail next delete</button>
+            <button class="btn" type="button" data-history-fail="deleteAll" data-history-code="rate_limited" data-history-retry-after="10">Rate limit delete all</button>
+          </div>
+        </div>
+
+        <div class="info-section" data-history-demo-only>
+          <h3>Forget this device</h3>
+          <p>This provider has no <code>resetDevice</code>, so the control never renders and the controller method rejects. Reset is a visitor-credential operation, not a generic history one.</p>
+          <div class="btn-row">
+            <button class="btn" type="button" data-history-action="reset-identity">Call resetHistoryIdentity()</button>
+          </div>
+        </div>
+
+        <div class="info-section">
+          <h3>Event log</h3>
+          <p>Every payload is sanitized: no visitor token, identity proof, visitor or end-user id, or backend text.</p>
+          <div class="log-panel" id="history-log">
+            <div class="empty-state">No history events yet.</div>
+          </div>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Messages, end to end</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Two sources, one surface</h3>
+        <p>The same Messages surface runs against two sources.</p>
+        <ul>
+          <li>In-memory: a deterministic demo provider, so every state on this page is reachable without a network.</li>
+          <li>Live API: the widget builds the real provider from a client token and runs the identical surface against the Runtype API.</li>
+        </ul>
+        <p>Page code never touches a provider. Every action goes through controller methods and the widget's own view.</p>
+        <div class="code-block">
+<span class="function">initAgentWidget</span>({ <span class="prop">config</span>: {
+  <span class="prop">clientToken</span>, <span class="prop">apiUrl</span>,
+  <span class="prop">features</span>: { <span class="prop">history</span>: { <span class="prop">enabled</span>: <span class="keyword">true</span>, <span class="prop">presentation</span>: <span class="string">"panel"</span> } },
+} });
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Panel, rail, and auto</h3>
+        <p>Three placements, resolved against the host container width.</p>
+        <ul>
+          <li>Panel (default): Messages replaces the conversation body and composer, and both become inert, so a visitor can never send into the conversation hidden underneath.</li>
+          <li>Rail: the transcript and composer stay operable beside a navigation column, and selecting a conversation keeps the rail open.</li>
+          <li>Auto: resolves to rail only for a wide inline or docked shell.</li>
+          <li>Below 720px, rail and auto both collapse to panel rather than squeezing either surface.</li>
+        </ul>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">States covered here</h3>
+        <ul>
+          <li>Identity: browser only, verifying, verified, authentication required, identity provider failed, and proof not admitted.</li>
+          <li>List: loading skeletons, ready, confirmed empty, error with retry, and the 429 soft state with its retry-after wait.</li>
+          <li>Recovery: <code>new_conversation_required</code>, after an irreversible delete whose replacement init failed.</li>
+          <li>Destructive: delete one, delete all for the active target, and the hidden forget-this-device control.</li>
+        </ul>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Live API setup</h3>
+        <p>The live source reads <code>apps/web/.env</code>. With the token missing, the page shows setup instructions instead of a broken widget.</p>
+        <ul>
+          <li><code>VITE_CLIENT_TOKEN_HISTORY</code>: a client token with visitor history enabled. Tokens are origin-locked in the Runtype dashboard; allow <code>http://localhost:5173</code> and <code>http://localhost:4173</code> for local work.</li>
+          <li><code>VITE_HISTORY_API_URL</code> (optional): defaults to <code>https://api.runtype.com</code>. Point it at a staging host to test unreleased contract changes.</li>
+        </ul>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Custom rendering</h3>
+        <p>Four public render hooks arbitrate around the default view. Every hook may return <code>null</code> to fall through, and a hook that throws is reported and falls back rather than losing the surface.</p>
+        <ul>
+          <li><code>renderHistoryView</code>: replaces the whole view.</li>
+          <li><code>renderHistoryHeader</code>: replaces the top bar.</li>
+          <li><code>renderHistoryConversation</code>: replaces one row.</li>
+          <li><code>renderHistoryState</code>: replaces a non-ready list state.</li>
+        </ul>
+        <p>The "Custom thread rail" toggle mounts a plugin that returns its own DOM from <code>renderHistoryView</code>.</p>
+        <ul>
+          <li>It reads the frozen <code>context</code> snapshot: conversations, active id, list state, pending action, resolved presentation, copy.</li>
+          <li>It calls <code>context.actions</code> for every operation, so busy gating, selection epochs, and the destructive confirmations behave exactly as the built-in view.</li>
+          <li>The snapshot carries no provider, credential, or transport detail.</li>
+        </ul>
+        <p>A host that wants navigation entirely outside the widget shell can build it headlessly with controller methods and <code>history:*</code> events.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/history-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("history-demo");
+  </script>
+</body>
+</html>

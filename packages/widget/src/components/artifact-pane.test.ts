@@ -2,12 +2,25 @@
 
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createArtifactPane } from "./artifact-pane";
+import { createArtifactPane as createArtifactPaneImpl } from "./artifact-pane";
 import type {
   AgentWidgetConfig,
   PersonaArtifactCustomAction,
   PersonaArtifactRecord,
 } from "../types";
+
+// Track every pane and destroy it after each test: a dropped pane's file
+// preview holds pending overlay timers that would otherwise fire after the
+// test environment is torn down ("document is not defined" uncaught errors).
+const livePanes: ReturnType<typeof createArtifactPaneImpl>[] = [];
+const createArtifactPane: typeof createArtifactPaneImpl = (...args) => {
+  const pane = createArtifactPaneImpl(...args);
+  livePanes.push(pane);
+  return pane;
+};
+afterEach(() => {
+  for (const pane of livePanes.splice(0)) pane.destroy();
+});
 
 beforeAll(() => {
   // jsdom does not implement matchMedia; the pane's layout code touches it.
@@ -533,6 +546,270 @@ describe("artifact-pane default-toolbar copy button", () => {
     expect(copyBtnOf(pane)!.classList.contains("persona-hidden")).toBe(false);
     pane.setCopyButtonVisible(false);
     expect(copyBtnOf(pane)!.classList.contains("persona-hidden")).toBe(true);
+  });
+});
+
+describe("artifact-pane copy success feedback", () => {
+  const docCopyConfig = (
+    layoutOver: Record<string, unknown> = {}
+  ): AgentWidgetConfig =>
+    ({
+      sanitize: false,
+      features: {
+        artifacts: {
+          enabled: true,
+          layout: {
+            toolbarPreset: "document",
+            documentToolbarShowCopyLabel: true,
+            ...layoutOver,
+          },
+        },
+      },
+    }) as AgentWidgetConfig;
+
+  const setClipboard = (writeText: ReturnType<typeof vi.fn>): void => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("flashes check + Copied for 2s after a successful default copy", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    setClipboard(writeText);
+    const pane = createArtifactPane(docCopyConfig(), { onSelect: () => {} });
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const btn = pane.element.querySelector(
+      ".persona-artifact-doc-copy-btn"
+    ) as HTMLButtonElement;
+    const originalGlyph = btn.querySelector("svg");
+    expect(btn.querySelector("span")?.textContent).toBe("Copy");
+
+    btn.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(btn.querySelector("span")?.textContent).toBe("Copied");
+    expect(btn.querySelector("svg")).not.toBe(originalGlyph);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(btn.querySelector("span")?.textContent).toBe("Copy");
+    expect(btn.querySelector("svg")).toBe(originalGlyph);
+  });
+
+  it("flashes after the primary click resolves through the copy-menu handler", async () => {
+    const handler = vi.fn().mockResolvedValue(undefined);
+    const pane = createArtifactPane(
+      docCopyConfig({
+        documentToolbarShowCopyChevron: true,
+        documentToolbarCopyMenuItems: [{ id: "download", label: "Download" }],
+        onDocumentToolbarCopyMenuSelect: handler,
+      }),
+      { onSelect: () => {} }
+    );
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const btn = pane.element.querySelector(
+      ".persona-artifact-doc-copy-btn"
+    ) as HTMLButtonElement;
+    btn.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({ actionId: "primary", artifactId: "a1" })
+    );
+    expect(btn.querySelector("span")?.textContent).toBe("Copied");
+  });
+
+  it("built-in download menu id saves the artifact when there is no handler", async () => {
+    const urlApi = URL as unknown as {
+      createObjectURL?: (b: Blob) => string;
+      revokeObjectURL?: (u: string) => void;
+    };
+    const origCreate = urlApi.createObjectURL;
+    const origRevoke = urlApi.revokeObjectURL;
+    const created = vi.fn(() => "blob:persona-test");
+    urlApi.createObjectURL = created;
+    urlApi.revokeObjectURL = vi.fn();
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    try {
+      const pane = createArtifactPane(
+        docCopyConfig({
+          documentToolbarShowCopyChevron: true,
+          documentToolbarCopyMenuItems: [{ id: "download", label: "Download" }],
+        }),
+        { onSelect: () => {} }
+      );
+      document.body.appendChild(pane.element);
+      pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+      // Dropdown init is deferred to rAF when the shell mounts after creation.
+      await vi.advanceTimersByTimeAsync(20);
+
+      const item = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".persona-dropdown-menu button")
+      ).find((b) => b.textContent?.includes("Download"));
+      expect(item).toBeTruthy();
+      item!.click();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(created).toHaveBeenCalledTimes(1);
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+    } finally {
+      anchorClick.mockRestore();
+      urlApi.createObjectURL = origCreate;
+      urlApi.revokeObjectURL = origRevoke;
+    }
+  });
+
+  it("handler returning false falls through to the built-in download", async () => {
+    const urlApi = URL as unknown as {
+      createObjectURL?: (b: Blob) => string;
+      revokeObjectURL?: (u: string) => void;
+    };
+    const origCreate = urlApi.createObjectURL;
+    const origRevoke = urlApi.revokeObjectURL;
+    const created = vi.fn(() => "blob:persona-test");
+    urlApi.createObjectURL = created;
+    urlApi.revokeObjectURL = vi.fn();
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+    const handler = vi.fn().mockResolvedValue(false);
+    const consumingHandler = vi.fn().mockResolvedValue(undefined);
+    try {
+      const paneFor = (h: typeof handler) =>
+        createArtifactPane(
+          docCopyConfig({
+            documentToolbarShowCopyChevron: true,
+            documentToolbarCopyMenuItems: [{ id: "download", label: "Download" }],
+            onDocumentToolbarCopyMenuSelect: h,
+          }),
+          { onSelect: () => {} }
+        );
+      const pane = paneFor(handler);
+      document.body.appendChild(pane.element);
+      pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+      await vi.advanceTimersByTimeAsync(20);
+      const item = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".persona-dropdown-menu button")
+      ).find((b) => b.textContent?.includes("Download"));
+      item!.click();
+      await vi.advanceTimersByTimeAsync(0);
+      // Handler saw the enriched payload, declined, and the widget downloaded.
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionId: "download",
+          artifactId: "a1",
+          suggestedFilename: "cat.html",
+          mime: "text/html",
+          content: HTML_RAW,
+        })
+      );
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+
+      // A handler that consumes the action (returns undefined) suppresses it.
+      document.body.innerHTML = "";
+      const pane2 = paneFor(consumingHandler);
+      document.body.appendChild(pane2.element);
+      pane2.update({ artifacts: [fileRecord()], selectedId: "a1" });
+      await vi.advanceTimersByTimeAsync(20);
+      const item2 = Array.from(
+        document.querySelectorAll<HTMLButtonElement>(".persona-dropdown-menu button")
+      ).find((b) => b.textContent?.includes("Download"));
+      item2!.click();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(consumingHandler).toHaveBeenCalledTimes(1);
+      expect(anchorClick).toHaveBeenCalledTimes(1);
+    } finally {
+      anchorClick.mockRestore();
+      urlApi.createObjectURL = origCreate;
+      urlApi.revokeObjectURL = origRevoke;
+    }
+  });
+
+  it("renders the copy menu as a split button with an accurate chevron state", async () => {
+    const pane = createArtifactPane(
+      docCopyConfig({
+        documentToolbarShowCopyChevron: true,
+        documentToolbarCopyMenuItems: [{ id: "download", label: "Download" }],
+      }),
+      { onSelect: () => {} }
+    );
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    await vi.advanceTimersByTimeAsync(20);
+
+    const wrap = pane.element.querySelector(".persona-split-btn") as HTMLElement;
+    expect(wrap).toBeTruthy();
+    const primary = wrap.querySelector(
+      "button.persona-split-btn-primary.persona-artifact-doc-copy-btn"
+    );
+    expect(primary).toBeTruthy();
+    const chevron = wrap.querySelector(
+      "button.persona-split-btn-chevron"
+    ) as HTMLButtonElement;
+    expect(chevron.getAttribute("aria-haspopup")).toBe("true");
+    expect(chevron.getAttribute("aria-expanded")).toBe("false");
+
+    chevron.click();
+    expect(chevron.getAttribute("aria-expanded")).toBe("true");
+    chevron.click();
+    expect(chevron.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("shows the refresh button only while a handler is configured", async () => {
+    const withoutHandler = createArtifactPane(docCopyConfig(), { onSelect: () => {} });
+    withoutHandler.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const hiddenRefresh = withoutHandler.element.querySelector(
+      '[aria-label="Refresh"]'
+    ) as HTMLButtonElement;
+    expect(hiddenRefresh.classList.contains("persona-hidden")).toBe(true);
+
+    const onRefresh = vi.fn();
+    const pane = createArtifactPane(
+      docCopyConfig({ onDocumentToolbarRefresh: onRefresh }),
+      { onSelect: () => {} }
+    );
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+    const refresh = pane.element.querySelector(
+      '[aria-label="Refresh"]'
+    ) as HTMLButtonElement;
+    expect(refresh.classList.contains("persona-hidden")).toBe(false);
+    refresh.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    // Live config sync drives the same visibility.
+    pane.setRefreshButtonVisible(false);
+    expect(refresh.classList.contains("persona-hidden")).toBe(true);
+  });
+
+  it("stays unconfirmed when the clipboard write fails", async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    setClipboard(writeText);
+    const pane = createArtifactPane(docCopyConfig(), { onSelect: () => {} });
+    document.body.appendChild(pane.element);
+    pane.update({ artifacts: [fileRecord()], selectedId: "a1" });
+
+    const btn = pane.element.querySelector(
+      ".persona-artifact-doc-copy-btn"
+    ) as HTMLButtonElement;
+    btn.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(writeText).toHaveBeenCalledTimes(1);
+    expect(btn.querySelector("span")?.textContent).toBe("Copy");
   });
 });
 

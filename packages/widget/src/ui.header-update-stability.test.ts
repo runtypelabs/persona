@@ -87,10 +87,10 @@ describe("header stability across unrelated updates", () => {
       mount
         .querySelector('button[aria-label="Clear chat"] svg')!
         .getAttribute("stroke-width");
-    expect(stroke()).toBe("1");
+    expect(stroke()).toBe("1.5");
 
     controller.update({ attachments: { enabled: true, maxFiles: 2 } });
-    expect(stroke()).toBe("1");
+    expect(stroke()).toBe("1.5");
 
     controller.destroy();
   });

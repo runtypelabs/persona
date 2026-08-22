@@ -80,6 +80,16 @@ function readAttachmentsConfig(): AgentWidgetAttachmentsConfig {
     allowedTypes,
     buttonIconName,
     dropOverlay,
+    onFileRejected: (file, reason) => {
+      const size = `${(file.size / MB).toFixed(2)}MB`;
+      const why =
+        reason === "type"
+          ? `type "${file.type || "unknown"}" not in allowedTypes`
+          : reason === "size"
+            ? `${size} exceeds the ${maxFileSize / MB}MB maxFileSize`
+            : `already at the maxFiles limit of ${maxFiles}`;
+      log(`Rejected "${file.name}" (${size}): ${why}`);
+    },
   };
 }
 

@@ -6,6 +6,10 @@ import type {
   RuntypeStopReasonKind,
 } from "./generated/runtype-openapi-contract";
 import type { TargetResolver } from "./utils/target";
+import type { VisitorStore } from "./utils/visitor-store";
+import type { HistoryWireMessage } from "./utils/history-messages";
+// Internal seam (not exported from any entry); type-only, so the cycle is erased.
+import type { HistoryProvider } from "./internal/history-provider";
 import type { IconName } from "./utils/icons";
 
 export type { TargetResolver, ResolvedTarget } from "./utils/target";
@@ -1221,6 +1225,56 @@ export type AgentWidgetControllerEventMap = {
   "stream:resuming": { executionId: string; after: string; attempt: number };
   /** The durable turn resumed and reached its terminal after a reconnect. */
   "stream:resumed": { executionId: string; after: string };
+  /**
+   * History (Messages) surface events. Payloads are sanitized: never a visitor
+   * token, identity proof, visitor/end-user id, or backend diagnostic string.
+   */
+  "history:opened": {
+    presentation: ResolvedHistoryPresentation;
+    returnSurface: HistoryReturnSurface;
+    timestamp: number;
+  };
+  "history:closed": { returnSurface: HistoryReturnSurface; timestamp: number };
+  "history:conversationOpened": {
+    conversationId: string;
+    /** List title of the opened conversation; null when not yet known. */
+    title: string | null;
+    scope: HistoryScope;
+    timestamp: number;
+  };
+  /**
+   * A replacement conversation was committed (header action, in-panel "New
+   * conversation", or `startNewConversation()`). `history:closed` alone cannot
+   * distinguish this commit from a plain close.
+   */
+  "history:conversationStarted": {
+    /** `null` when the provider committed without returning a record id. */
+    conversationId: string | null;
+    timestamp: number;
+  };
+  "history:conversationDeleted": {
+    conversationId: string;
+    scope: HistoryScope;
+    /** The deleted record was the open one, so the transcript was replaced. */
+    wasActive: boolean;
+    timestamp: number;
+  };
+  "history:cleared": {
+    deleted: number;
+    scope: HistoryScope;
+    /** `null` is a deliberate headless client-token-wide delete. */
+    targetId: string | null;
+    timestamp: number;
+  };
+  "history:identityReset": {
+    remoteRevocationConfirmed: boolean;
+    timestamp: number;
+  };
+  /** Deduped: emitted only when the discriminated state or reason changes. */
+  "history:identityStatusChanged": {
+    status: HistoryIdentityStatus;
+    timestamp: number;
+  };
 };
 
 /**
@@ -1362,6 +1416,8 @@ export type AgentWidgetArtifactsLayoutConfig = {
   documentToolbarToggleActiveBackground?: string;
   /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`. */
   documentToolbarToggleActiveBorderColor?: string;
+  /** Active view/source toggle icon color (defaults to `documentToolbarIconColor`). Sets `--persona-artifact-doc-toggle-active-color`. */
+  documentToolbarToggleActiveColor?: string;
   /** Show an expand/collapse toggle in the artifact toolbar (both presets). Expanded fills the widget with the pane and hides the chat column. Default: false. */
   showExpandToggle?: boolean;
   /** Show the copy control in the `default` toolbar preset (the `document` preset always shows it). Default: false. */
@@ -1371,24 +1427,42 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /** Tab fade width (CSS length). @default 24px */
   tabFadeSize?: string;
   /**
-   * Invoked when the document toolbar Refresh control is used (before the pane re-renders).
-   * Use to replay `connectStream`, refetch, etc.
+   * Invoked when the document toolbar Refresh control is used (before the pane
+   * re-renders). The button renders only while this handler is set: the refresh
+   * glyph universally reads "reload this preview" (Claude artifacts, v0), so
+   * keep the handler scoped to refreshing the rendered artifact — regenerating
+   * content or resetting the conversation belongs to message-level or
+   * conversation-level controls, not artifact chrome.
    */
   onDocumentToolbarRefresh?: () => void | Promise<void>;
   /**
    * Optional copy dropdown entries (shown when `documentToolbarShowCopyChevron` is true and this array is non-empty).
    * The main Copy control still performs default copy unless `onDocumentToolbarCopyMenuSelect` handles everything.
+   * Without a handler, built-in ids work out of the box: `download` saves the
+   * artifact (real filename/MIME for file artifacts, `<title>.md` otherwise);
+   * `markdown`/`md` and `json`/`source` copy that form to the clipboard.
    */
   documentToolbarCopyMenuItems?: Array<{ id: string; label: string }>;
   /**
    * When set, invoked for the chevron menu (and can override default copy per `actionId`).
+   * Return `false` to fall through to the widget's built-in behavior for that
+   * action id (`download` saves the artifact; copy ids copy); any other return
+   * value keeps the handler's outcome as final.
    */
   onDocumentToolbarCopyMenuSelect?: (payload: {
     actionId: string;
     artifactId: string | null;
     markdown: string;
     jsonPayload: string;
-  }) => void | Promise<void>;
+    /** File metadata when the selected artifact is a previewable file. */
+    file?: PersonaArtifactFileMeta;
+    /** Filename the built-in download would use (file basename, or `<title>.md`). */
+    suggestedFilename: string;
+    /** MIME type paired with `suggestedFilename`. */
+    mime: string;
+    /** Raw content the built-in download would write (unfenced source for file artifacts). */
+    content: string;
+  }) => void | boolean | Promise<void | boolean>;
 };
 
 /**
@@ -2284,6 +2358,11 @@ export type AgentWidgetFeatureFlags = {
    */
   askUserQuestion?: AgentWidgetAskUserQuestionFeature;
   /**
+   * Per-visitor conversation history. Client token mode only; disabled by
+   * default so no capability flag is sent on init and no UI mounts.
+   */
+  history?: AgentWidgetHistoryFeature;
+  /**
    * Built-in `suggest_replies` follow-ups. When the assistant invokes the
    * tool, the widget shows the suggestions using `suggestions.followUps` and
    * immediately resumes the execution: fire-and-forget, no user input awaited.
@@ -2506,6 +2585,628 @@ export type AgentWidgetAskUserQuestionFeature = {
   skipLabel?: string;
   /** Style overrides for the sheet and pills. */
   styles?: AgentWidgetAskUserQuestionStyles;
+};
+
+/**
+ * Copy overrides for the visitor-facing conversation history surface. These are
+ * the widget's only localization mechanism for history, so every user-visible
+ * history string is listed here.
+ */
+export interface AgentWidgetHistoryCopy {
+  /** Title of the history view. Defaults to "Messages". */
+  viewTitle?: string;
+  /** Heading shown when the visitor has no stored conversations. */
+  emptyTitle?: string;
+  /** Body text shown when the visitor has no stored conversations. */
+  emptyDescription?: string;
+  /** Heading shown when a history request fails. */
+  errorTitle?: string;
+  /** Body text shown when a history request fails. */
+  errorDescription?: string;
+  /** Label for the retry action on the error state. */
+  retryLabel?: string;
+  /** Heading shown after a 429 rate-limited history response. */
+  rateLimitedTitle?: string;
+  /** Body text shown after a 429 rate-limited history response. */
+  rateLimitedDescription?: string;
+  /** Confirmation prompt before deleting a single conversation. */
+  deleteConversationConfirm?: string;
+  /** Confirmation prompt before deleting every conversation in the active scope. */
+  clearHistoryConfirm?: string;
+  /** Confirmation prompt before detaching this browser from its history identity. */
+  resetIdentityConfirm?: string;
+  /** Label for the action that starts a new server conversation. */
+  newConversationLabel?: string;
+  /** Label for the action that prepends the previous transcript page. */
+  showEarlierMessagesLabel?: string;
+  /** Accessible label for the transcript skeleton while a conversation loads. */
+  openConversationLoadingLabel?: string;
+  /** Body text when a selected conversation failed to load. */
+  openConversationErrorTitle?: string;
+  /** Label for the retry action after a conversation failed to load. */
+  openConversationRetryLabel?: string;
+  /** Label for the return-to-messages action after a conversation failed to load. */
+  openConversationBackLabel?: string;
+  /** Status notice after a deleted conversation was recovered into a fresh one. */
+  conversationDeletedNotice?: string;
+  /** Status notice after this browser was detached from its history identity. */
+  identityResetNotice?: string;
+  /** Status notice when a local reset succeeded but server revocation was unconfirmed. */
+  identityResetUnconfirmedNotice?: string;
+  /** Pinned group heading for starred conversations. */
+  groupStarred?: string;
+  /** Time-group heading for conversations updated today. */
+  groupToday?: string;
+  /** Time-group heading for conversations updated yesterday. */
+  groupYesterday?: string;
+  /** Time-group heading for the trailing 7-day window. */
+  groupPrevious7Days?: string;
+  /** Time-group heading for the trailing 30-day window. */
+  groupPrevious30Days?: string;
+  /** Time-group heading for older conversations, grouped by month and year. */
+  groupMonthYear?: string;
+  /** Scope title when history is limited to this browser. */
+  browserOnlyTitle?: string;
+  /** Scope description when history is limited to this browser. */
+  browserOnlyDescription?: string;
+  /** Scope title while an identity proof is being resolved. */
+  verifyingTitle?: string;
+  /** Scope description while an identity proof is being resolved. */
+  verifyingDescription?: string;
+  /** Scope title when history is available across signed-in devices. */
+  verifiedTitle?: string;
+  /** Scope description when history is available across signed-in devices. */
+  verifiedDescription?: string;
+  /** Scope title when the visitor must sign in again to view account history. */
+  authenticationRequiredTitle?: string;
+  /** Scope description when the visitor must sign in again to view account history. */
+  authenticationRequiredDescription?: string;
+  /** Scope title when the host identity provider threw or rejected. */
+  identityProviderFailedTitle?: string;
+  /** Scope description when the host identity provider threw or rejected. */
+  identityProviderFailedDescription?: string;
+  /** Scope title when the server did not admit a supplied identity proof. */
+  proofNotAdmittedTitle?: string;
+  /** Scope description when the server did not admit a supplied identity proof. */
+  proofNotAdmittedDescription?: string;
+  /** Label for the action that retries identity resolution. */
+  retryIdentityLabel?: string;
+
+  // --- shell chrome (rendered before/around the lazy Messages chunk) ---------
+
+  /** Accessible name of the header control that opens history. */
+  openHistoryLabel?: string;
+  /** Accessible name of that control while a turn is streaming or resuming. */
+  openHistoryBusyLabel?: string;
+  /** Least-destructive action in every history confirmation dialog. */
+  confirmCancelLabel?: string;
+  /** Heading of the delete-one confirmation. */
+  deleteConversationConfirmTitle?: string;
+  /** Confirming action of the delete-one confirmation. */
+  deleteConversationConfirmLabel?: string;
+  /** Heading of the delete-all confirmation. */
+  clearHistoryConfirmTitle?: string;
+  /** Confirming action of the delete-all confirmation. */
+  clearHistoryConfirmLabel?: string;
+  /** Delete-all body used when the resolved scope is the signed-in user. */
+  clearHistoryVerifiedConfirm?: string;
+  /** Heading of the forget-this-device confirmation. */
+  resetIdentityConfirmTitle?: string;
+  /** Confirming action of the forget-this-device confirmation. */
+  resetIdentityConfirmLabel?: string;
+
+  // --- Messages view (resolved inside the lazy chunk) ------------------------
+
+  /** Panel back control; returns to the surface that opened Messages. */
+  backLabel?: string;
+  /** Rail close control, shown only when the rail is not collapsible. */
+  closeLabel?: string;
+  /** Rail collapse toggle while the rail is expanded. */
+  collapseLabel?: string;
+  /** Rail collapse toggle while the rail is collapsed to icons. */
+  expandLabel?: string;
+  /** Accessible name of the docked rail's drag-resize handle. */
+  resizeLabel?: string;
+  /** Accessible status while the first page loads. */
+  loadingLabel?: string;
+  /** Label of the paging action below the last group. */
+  loadMoreLabel?: string;
+  /** Label of that action while its page is in flight. */
+  loadingMoreLabel?: string;
+  /**
+   * Heading over the conversation list. Visible in rail presentation, where it
+   * carries the list overflow trigger; sr-only in panel presentation.
+   */
+  conversationsTitle?: string;
+  /** Accessible name of the per-row overflow trigger and its menu. */
+  rowActionsLabel?: string;
+  /** Accessible name of the list-level overflow trigger and its menu. */
+  listOptionsLabel?: string;
+  /** Delete item inside the per-row overflow menu. */
+  deleteConversationLabel?: string;
+  /** Delete-all item inside the list overflow menu. */
+  clearHistoryLabel?: string;
+  /** Forget-this-device item inside the list overflow menu. */
+  resetIdentityLabel?: string;
+  /** Row message count. `{count}` placeholder. */
+  messageCountLabel?: string;
+  /** Row message count for exactly one message. */
+  messageCountLabelOne?: string;
+  /** Announced after a single conversation was deleted. */
+  conversationRemovedNotice?: string;
+  /** Announced after every conversation in scope was deleted. */
+  historyClearedNotice?: string;
+  /** Heading shown when history is unavailable for this surface. */
+  unavailableTitle?: string;
+  /** Body text shown when history is unavailable for this surface. */
+  unavailableDescription?: string;
+  /** Heading of the post-deletion replacement-init recovery state. */
+  newConversationRequiredTitle?: string;
+  /** Body text of the post-deletion replacement-init recovery state. */
+  newConversationRequiredDescription?: string;
+  /** Rate-limited wait guidance. `{seconds}` placeholder. */
+  rateLimitedWaitDescription?: string;
+  /** Row-adjacent error after a failed open. */
+  openFailedLabel?: string;
+  /** Row-adjacent error after a failed delete. */
+  deleteFailedLabel?: string;
+  /** Relative time for the most recent bucket. */
+  relativeNow?: string;
+  /** Relative time in minutes. `{value}` placeholder. */
+  relativeMinutes?: string;
+  /** Relative time in hours. `{value}` placeholder. */
+  relativeHours?: string;
+  /** Relative time in days. `{value}` placeholder. */
+  relativeDays?: string;
+  /** Relative time in weeks. `{value}` placeholder. */
+  relativeWeeks?: string;
+  /** Relative time in years. `{value}` placeholder. */
+  relativeYears?: string;
+}
+
+/**
+ * One row in a `features.history.rail.sections` navigation section. Icon
+ * precedence, highest first: `renderIcon`, then `iconUrl`, then `icon`.
+ * Whichever resolves first is built once and reused for the item's lifetime.
+ */
+export interface AgentWidgetHistoryRailSectionItem {
+  /** Stable identity, stamped as `data-persona-rail-item`. */
+  id: string;
+  /** Visible text, and the default `aria-label` of the button. */
+  label: string;
+  /**
+   * Lucide name from the widget's built-in icon registry (see `IconName`). A
+   * name outside the registry warns once and the row renders label-only.
+   */
+  icon?: IconName | (string & {});
+  /** Image URL or data URI, rendered as a decorative `img` in the icon slot. */
+  iconUrl?: string;
+  /** Full custom icon node. Returning null renders the row label-only. */
+  renderIcon?: () => Element | null;
+  /** Small trailing text chip, for a count or a short status word. */
+  badge?: string;
+  /** Invoked on click. A throw is caught and warned once per section. */
+  onSelect: () => void;
+}
+
+/** One navigation section in the history rail, above or below the list. */
+export interface AgentWidgetHistoryRailSection {
+  /** Stable identity, stamped as `data-persona-rail-section`. */
+  id: string;
+  /** Optional heading, styled like a conversation date-group heading. */
+  title?: string;
+  /** Default `"above-conversations"`. */
+  placement?: "above-conversations" | "below-conversations" | "footer";
+  items: AgentWidgetHistoryRailSectionItem[];
+}
+
+/**
+ * Host-defined item in the list overflow menu (the `…` beside the
+ * conversation-list heading). Rendered above the built-in destructive items.
+ */
+export interface AgentWidgetHistoryListAction {
+  /** Stable identity; keeps menu focus keys stable across re-renders. */
+  id: string;
+  label: string;
+  /** Destructive (red) styling like the built-in delete-all. Default false. */
+  danger?: boolean;
+  /** Receives the conversation summaries loaded at selection time. */
+  onSelect: (context: {
+    conversations: HistoryConversationSummary[];
+  }) => void | Promise<void>;
+}
+
+/**
+ * Feature config for per-visitor conversation history. Without a `provider`,
+ * client token mode only: the built-in Runtype backend needs one, so the UI
+ * never renders for proxy/agent sessions. A `provider` lifts that restriction.
+ */
+export interface AgentWidgetHistoryFeature {
+  /** Master switch. Default false: no capability flag on init, no UI. */
+  enabled?: boolean;
+  /**
+   * Custom conversation-history backend. Supply one to run the history UX
+   * (list, open, delete, delete-all, header title binding) against your own
+   * storage in ANY session mode, including a custom `apiUrl` backend with no
+   * client token. Omitted, history falls back to the built-in Runtype backend,
+   * which requires client token mode.
+   *
+   * Pass either an instance or a factory. The factory form is called once per
+   * widget instance, so a single script-tag config object (assembled before
+   * install) can back several widgets without sharing provider state. Passing a
+   * new factory identity through `update()` rebuilds the provider.
+   *
+   * Failures are signalled by throwing `HistoryProviderError` with a `code` from
+   * `HistoryProviderErrorCode`. The view branches on that code alone: it never
+   * reads message text, and an untyped throw degrades to a generic error state.
+   *
+   * `prepareOpen`/`prepareStartNew` resolve BEFORE anything visible changes:
+   * they return a `PreparedHistoryActivation` whose `commit()` applies the
+   * already-authorized binding and whose `discard()` idempotently abandons a
+   * superseded activation, leaving the active chat untouched. The widget calls
+   * exactly one of the two per prepared activation.
+   *
+   * Optional capabilities hide their affordances when absent: no `update`
+   * removes the rename/star actions (including the built-in title-menu `star`),
+   * and no `resetDevice` removes "forget this device".
+   *
+   * The provider's `capabilities.scopes` is authoritative: the widget derives a
+   * default scope (`"verified-user"` when `getIdentityProof` is configured,
+   * otherwise `"browser"`) and narrows it to what the provider advertises, so a
+   * browser-only provider is never asked for a scope it cannot serve. An
+   * explicit `features.history.scope` is a hard request and still fails closed
+   * with `unsupported_scope`. `getIdentityProof` is never called for a supplied
+   * provider, and `HistoryOperationContext` carries only the resolved scope;
+   * report your own identity through `getIdentityStatus()` /
+   * `subscribeIdentityStatus()`, which is what the scope banner and its retry
+   * affordance read.
+   *
+   * Reopening the last conversation after a page reload is the host's job: the
+   * widget's boot resume runs only on the built-in Runtype path, so with a
+   * supplied provider the transcript is restored by the storage adapter while
+   * `getActiveConversationId()` starts null (no active row, no
+   * conversation-bound header title) until something opens a conversation.
+   * Persist the id yourself and call `controller.openConversation(id)` on ready
+   * if you want the last conversation to come back automatically.
+   *
+   * @example
+   * ```js
+   * features: { history: { enabled: true, provider: () => myProvider } }
+   * ```
+   */
+  provider?: HistoryProvider | (() => HistoryProvider);
+  /** Page size for the conversation list (default 25, server max 100). */
+  pageSize?: number;
+  /**
+   * Default history placement. "panel" replaces the conversation surface;
+   * "rail" requests a side navigation host whenever it is at least 720px wide
+   * and collapses to panel below that; "auto" uses rail only for a wide inline
+   * or docked shell and keeps floating launchers panel-based at every width.
+   * Default "panel".
+   */
+  presentation?: "panel" | "rail" | "auto";
+  /**
+   * Geometry of the rail navigation column. `side` picks the edge it docks to
+   * (default "left", beside the conversation); `width` is its fixed width in
+   * px, clamped to 200-400 (default 260). `collapsible` (default true) puts a
+   * collapse toggle in the rail header that shrinks it to a 52px icon rail, and
+   * `defaultCollapsed` (default false) picks the state a visitor who has never
+   * toggled it starts in. The chosen state is remembered per visitor alongside
+   * the other `persistState` keys. Ignored in panel presentation.
+   */
+  rail?: {
+    side?: "left" | "right";
+    width?: number;
+    collapsible?: boolean;
+    defaultCollapsed?: boolean;
+    /**
+     * Drag handle on the docked rail's divider edge, resizing it live within
+     * the same 200 to 400 clamp `width` takes. Default false. The chosen width
+     * is remembered per visitor alongside the other `persistState` keys and
+     * outranks a later `width` update, the way the collapsed state does; the
+     * floating overlay rail inherits it but is never itself resizable, and a
+     * collapsed icon column ignores it until it expands again.
+     */
+    resizable?: boolean;
+    /**
+     * Shape of the COLLAPSED rail. `"icon-rail"` (default) keeps the 52px icon
+     * column beside the conversation. `"overlay"` removes the column entirely:
+     * a trigger takes the leading edge of the conversation header, hovering or
+     * tapping it floats the expanded rail over the conversation, and clicking
+     * it pins the rail back open. The floating rail is transient, so leaving
+     * it, Escape, a click outside, or selecting a conversation all dismiss it;
+     * its own header toggle docks it instead, being the control the pointer
+     * finds there. Geometry follows `width` and `side`; the collapsed rail's
+     * chunk is not loaded until the first hover. Ignored when `collapsible` is
+     * false or in panel presentation.
+     */
+    collapsedBehavior?: "icon-rail" | "overlay";
+    /**
+     * One brand declaration, placed in both of the rail's identity spots: the
+     * header's heading area when expanded (the mark leading, `copy.viewTitle`
+     * beside it as the wordmark), and the collapse toggle's rest face when the
+     * rail is collapsed, where hover and keyboard focus reveal the panel glyph
+     * under it. A coarse pointer keeps the glyph, having no hover to reveal it
+     * with. Icon precedence, highest first: `render`, then `iconUrl`, then
+     * `icon`. `render` receives the placement through `ctx.collapsed` (`true`
+     * is the collapsed toggle face) and may return null to skip that spot.
+     * `renderHeader` outranks this for the heading area; the collapsed face is
+     * this slot's alone. Decorative either way: the view's accessible name
+     * still comes from `copy.viewTitle`, and the toggle keeps its own label.
+     * Ignored in panel presentation.
+     */
+    brand?: {
+      /** Lucide name from the built-in registry; an unknown one warns once. */
+      icon?: IconName | (string & {});
+      /** Image URL or data URI, rendered as a decorative `img`. */
+      iconUrl?: string;
+      /** Full custom node. A throw warns once and drops the brand. */
+      render?: (context: { collapsed: boolean }) => Element | null;
+    };
+    /**
+     * Full override of the rail header's identity area, outranking `brand`
+     * there, re-invoked whenever the collapsed state changes. Return null to
+     * leave the area empty, which leaves the collapse toggle standing alone.
+     * The accessible name of the
+     * view comes from `copy.viewTitle` either way: the heading stays in the
+     * DOM, visually hidden, whenever this renders. Ignored in panel
+     * presentation.
+     */
+    renderHeader?: (context: {
+      collapsed: boolean;
+      defaultTitle: string;
+    }) => Element | null;
+    /**
+     * Extra navigation sections stacked around the conversation list, in array
+     * order within each `placement` bucket. Rail-only in this release: a move
+     * into panel presentation removes them and a move back re-renders them.
+     */
+    sections?: AgentWidgetHistoryRailSection[];
+    /**
+     * Keyboard shortcut for the collapse toggle, e.g. `"mod+b"` ("mod" is
+     * Command on Apple platforms, Control elsewhere). Undefined by default, so
+     * an embedded widget never claims a host page's keys. The same declaration
+     * drives the binding, the toggle's tooltip hint chip, and its
+     * `aria-keyshortcuts`.
+     */
+    collapseShortcut?: string | false;
+    /**
+     * Where `collapseShortcut` listens. Default `"widget"`: only while focus is
+     * inside the widget. `"page"` claims the combo document-wide, which suits a
+     * fullscreen widget that IS the app.
+     */
+    collapseShortcutScope?: "widget" | "page";
+  };
+  /**
+   * History scope. Defaults to "verified-user" when getIdentityProof exists,
+   * otherwise "browser". Before this browser has been identity-bound, a null
+   * proof falls back to browser scope for that operation. Once visitor.endUserId
+   * is non-null, a null proof fails closed until the host resets history identity.
+   *
+   * With a `provider`, this is a hard request: the provider must advertise it
+   * in `capabilities.scopes` or every history operation fails with
+   * `unsupported_scope`. Leave it unset to let the provider's advertised scope
+   * win.
+   */
+  scope?: HistoryScope;
+  /** Copy overrides. Every user-visible history string must be here. */
+  copy?: AgentWidgetHistoryCopy;
+  /**
+   * Date bucketing of the conversation list. `"time"` (default) groups rows
+   * under Today, Yesterday, Previous 7 days, Previous 30 days, and month
+   * headings. `"none"` renders one flat list in server order instead, the
+   * recents-style sidebar. Starred conversations keep their pinned group
+   * either way.
+   */
+  grouping?: "time" | "none";
+  /**
+   * Leading avatar on each conversation row. Unset, rows show the launcher's
+   * image mark (`launcher.iconUrl`) when one exists and are text-only
+   * otherwise, the assistant-list default. Pass an image URL or a glyph to
+   * always show a mark, or false to force text-only rows.
+   */
+  rowAvatar?: boolean | string;
+  /** Show the evidence-based history scope/status beneath the Messages heading. Default true. */
+  showScopeStatus?: boolean;
+  /**
+   * Visitor-facing delete of a single conversation via each row's overflow
+   * menu. Default true. False hides the control only: it changes nothing about
+   * what is stored or for how long, and custom row slots still receive
+   * `requestDelete`. Turn off for deployments that treat conversations as
+   * business records.
+   */
+  showDelete?: boolean;
+  /**
+   * The "Delete all conversations" item in the Messages overflow menu. Default
+   * true. False hides the control only; storage and retention are unchanged.
+   * The identity reset item is separate and unaffected.
+   */
+  showDeleteAll?: boolean;
+  /**
+   * Host items appended to the list overflow menu, above the built-in
+   * destructive actions. The trigger renders whenever any item exists, so
+   * these keep the menu alive even with `showDeleteAll: false`.
+   */
+  listActions?: AgentWidgetHistoryListAction[];
+}
+
+/** Resolved scope for a logical history operation. */
+export type HistoryScope = "browser" | "verified-user";
+
+/** `presentation` after it has been resolved against the host container width. */
+export type ResolvedHistoryPresentation = "panel" | "rail";
+
+/**
+ * The surface Messages returns to on back/Escape. `"home"` only when a Home
+ * Screen composition opened it; the core header button always records
+ * `"conversation"`.
+ */
+export type HistoryReturnSurface = "home" | "conversation";
+
+/**
+ * Evidence-based history identity state. Never inferred from the mere presence
+ * of `getIdentityProof`, and never carries token, visitor, or end-user values.
+ */
+export type HistoryIdentityStatus =
+  | {
+      state: "browser_only";
+      reason:
+        | "configured_browser_scope"
+        | "no_identity_provider"
+        | "proof_unavailable_before_binding";
+    }
+  | { state: "verifying" }
+  | { state: "verified" }
+  | {
+      state: "authentication_required";
+      reason: "proof_unavailable_after_binding" | "invalid_identity_proof";
+    }
+  | { state: "identity_provider_failed" }
+  | { state: "configuration_error"; reason: "proof_not_admitted" }
+  | { state: "resetting" }
+  | {
+      state: "unavailable";
+      reason: "history_disabled" | "ineligible_mode";
+    };
+
+// ----------------------------------------------------------------------------
+// History rendering customization (plan D7, "Public rendering customization
+// contract"). Types only: the implementation stays in the lazy view chunk and
+// the core arbitration layer.
+// ----------------------------------------------------------------------------
+
+/** Fully defaulted history copy. Every user-visible history string. */
+export type ResolvedHistoryCopy = Required<AgentWidgetHistoryCopy>;
+
+/** List-region state handed to render hooks. */
+export type HistoryViewState =
+  | { kind: "loading"; phase: "initial" | "refresh" | "load-more" }
+  | { kind: "ready" }
+  | { kind: "empty" }
+  | {
+      kind: "error";
+      reason:
+        | "unavailable"
+        | "authentication_failed"
+        | "authentication_required"
+        | "identity_provider_failed"
+        | "proof_not_admitted"
+        | "unsupported_scope"
+        | "unknown";
+      retryable: boolean;
+    }
+  | { kind: "rate_limited"; retryAfterSeconds: number }
+  | { kind: "new_conversation_required" };
+
+/** The single in-flight history operation, or `null` when idle. */
+export type HistoryPendingAction =
+  | { kind: "refresh" | "load-more" | "start-new" | "clear" | "reset" }
+  | { kind: "open" | "delete"; conversationId: string }
+  | null;
+
+/**
+ * Every history operation a render hook may invoke. Each routes through the
+ * same controller/session path as the default renderer, so busy gating,
+ * selection epochs, and confirmations behave identically.
+ */
+export type AgentWidgetHistoryRenderActions = {
+  refresh(): Promise<void>;
+  loadMore(): Promise<void>;
+  openConversation(conversationId: string): Promise<void>;
+  startNewConversation(): Promise<void>;
+  /** Each request method opens Persona's accessible confirmation first. */
+  requestDeleteConversation(
+    conversationId: string
+  ): Promise<"deleted" | "cancelled">;
+  requestClearConversationHistory(): Promise<"cleared" | "cancelled">;
+  requestResetHistoryIdentity(): Promise<
+    | { outcome: "cancelled" }
+    | { outcome: "reset"; remoteRevocationConfirmed: boolean }
+  >;
+  close(): void;
+};
+
+/** Context for `renderHistoryView`. Frozen snapshot; no provider or credentials. */
+export type AgentWidgetRenderHistoryViewContext = {
+  conversations: readonly HistoryConversationSummary[];
+  activeConversationId: string | null;
+  state: HistoryViewState;
+  pendingAction: HistoryPendingAction;
+  identityStatus: HistoryIdentityStatus;
+  nextCursor: string | null;
+  presentation: ResolvedHistoryPresentation;
+  returnSurface: HistoryReturnSurface;
+  config: AgentWidgetConfig;
+  copy: ResolvedHistoryCopy;
+  actions: AgentWidgetHistoryRenderActions;
+  /** The default full view. Bypasses this hook only; lower slots still apply. */
+  defaultRenderer(): HTMLElement;
+  /** Re-run arbitration with the current snapshot. Inert after close/destroy. */
+  requestRender(): void;
+  /** Teardown for this render; runs before the next one and on close. */
+  onCleanup(callback: () => void): void;
+};
+
+/** Context for `renderHistoryConversation` (one list row). */
+export type AgentWidgetRenderHistoryConversationContext = {
+  conversation: HistoryConversationSummary;
+  active: boolean;
+  pending: "opening" | "deleting" | null;
+  presentation: ResolvedHistoryPresentation;
+  config: AgentWidgetConfig;
+  open(): Promise<void>;
+  requestDelete(): Promise<"deleted" | "cancelled">;
+  defaultRenderer(): HTMLElement;
+};
+
+/** Context for `renderHistoryHeader` (the Messages top bar). */
+export type AgentWidgetRenderHistoryHeaderContext = {
+  presentation: ResolvedHistoryPresentation;
+  returnSurface: HistoryReturnSurface;
+  identityStatus: HistoryIdentityStatus;
+  pendingAction: HistoryPendingAction;
+  config: AgentWidgetConfig;
+  copy: ResolvedHistoryCopy;
+  actions: Pick<
+    AgentWidgetHistoryRenderActions,
+    "close" | "startNewConversation"
+  >;
+  defaultRenderer(): HTMLElement;
+};
+
+/**
+ * Context for `renderHistoryState`. Invoked only for non-ready list states;
+ * `retry`/`startNewConversation` are present only where they are safe, so
+ * custom DOM never infers recovery behavior.
+ */
+export type AgentWidgetRenderHistoryStateContext = {
+  state: Exclude<HistoryViewState, { kind: "ready" }>;
+  identityStatus: HistoryIdentityStatus;
+  presentation: ResolvedHistoryPresentation;
+  config: AgentWidgetConfig;
+  copy: ResolvedHistoryCopy;
+  retry?: () => Promise<void>;
+  startNewConversation?: () => Promise<void>;
+  defaultRenderer(): HTMLElement;
+};
+
+/**
+ * Context for `renderHistoryOpenError` (the transcript-level surface shown
+ * when opening a conversation from the Messages list fails). `retry` and
+ * `back` are the only exits: both route through the token-guarded open flow,
+ * so custom DOM must not fetch on its own. `back` is present only when the
+ * Messages surface is available to return to.
+ */
+export type AgentWidgetRenderHistoryOpenErrorContext = {
+  conversationId: string;
+  config: AgentWidgetConfig;
+  /** Resolved shell copy the default surface renders. */
+  copy: { title: string; retryLabel: string; backLabel: string };
+  /** Re-runs the open through Persona's token-guarded flow. */
+  retry: () => void;
+  /** Returns to the Messages list. Absent when history is unavailable. */
+  back?: () => void;
+  defaultRenderer(): HTMLElement;
 };
 
 export type SSEEventRecord = {
@@ -2994,6 +3695,25 @@ export type AgentWidgetLauncherTeaserConfig = {
    * @default "Dismiss message"
    */
   dismissLabel?: string;
+};
+
+/**
+ * Timing for the portaled icon-control tooltip (header, composer, rail).
+ * Keyboard focus always opens immediately. Hover waits `delayMs` unless
+ * another tooltip closed within `skipDelayMs` (toolbar scan).
+ */
+export type AgentWidgetTooltipConfig = {
+  /**
+   * Milliseconds to wait on hover before the first tooltip appears.
+   * `0` restores the previous instant-open behavior.
+   * @default 200
+   */
+  delayMs?: number;
+  /**
+   * After a tooltip closes, later hovers in this window skip `delayMs`.
+   * @default 300
+   */
+  skipDelayMs?: number;
 };
 
 export type AgentWidgetSendButtonConfig = {
@@ -4128,12 +4848,42 @@ export type ClientSession = {
     name: string;
     description: string | null;
   };
+  /**
+   * Active conversation record for this session. Optional only for rolling-deploy
+   * compatibility with servers that predate the visitor history contract.
+   */
+  conversationId?: string;
+  /**
+   * Canonical resolved chat target (flow or agent). Normalized from the response
+   * `targetId`, falling back to `flow.id` during rolling deployment. History code
+   * reads this, never widget config.
+   */
+  targetId?: string;
+  /** Opaque change token; differs whenever the conversation transcript mutated. */
+  conversationRevision?: string;
+  /** Visitor grant backing history. `token` appears only at mint. */
+  visitor?: ClientVisitorGrant;
   /** Configuration from the server */
   config: {
     welcomeMessage: string | null;
     placeholder: string;
     theme: Record<string, unknown> | null;
   };
+};
+
+/**
+ * Visitor credential and identity acknowledgement returned by /v1/client/init.
+ * `expiresAt` stays the wire string: it is a server-slid idle window the widget
+ * never evaluates locally.
+ */
+export type ClientVisitorGrant = {
+  id: string;
+  /** Replacement secret. Present only at mint; persist it before anything else. */
+  token?: string;
+  expiresAt: string;
+  endUserId: string | null;
+  /** Server acknowledgement of the supplied identity proof. Status metadata only. */
+  identityStatus?: "not_provided" | "admitted" | "ignored";
 };
 
 /**
@@ -4147,12 +4897,120 @@ export type ClientInitResponse = {
     name: string;
     description: string | null;
   };
+  /** Additive visitor history fields; optional for rolling-deploy compatibility. */
+  conversationId?: string;
+  targetId?: string;
+  conversationRevision?: string;
+  visitor?: ClientVisitorGrant;
   config: {
     welcomeMessage: string | null;
     placeholder: string;
     theme: Record<string, unknown> | null;
   };
 };
+
+/**
+ * Transactional init handle. `commit()` installs only the client's session
+ * cache; `discard()` is an idempotent no-op. Neither writes persisted ids.
+ */
+export type PreparedClientSession = {
+  session: ClientSession;
+  commit(): void;
+  discard(): void;
+};
+
+/**
+ * One conversation row, normalized at the Runtype boundary. The deprecated wire
+ * `flowId` alias never escapes that boundary: history code reads `targetId`.
+ */
+export type HistoryConversationSummary = {
+  id: string;
+  /** Server-generated; rendered verbatim, never derived locally. */
+  title: string;
+  /** Resolved chat target (flow or agent); `null` when the server omits it. */
+  targetId: string | null;
+  /** Server-produced plain-text preview; `null` when unavailable. */
+  preview: string | null;
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+  /** Visitor-pinned flag. Absent when the provider has no update capability. */
+  starred?: boolean;
+};
+
+/** Visitor-editable conversation metadata. Absent fields are left unchanged. */
+export type HistoryConversationPatch = {
+  title?: string;
+  starred?: boolean;
+};
+
+export type HistoryConversationPage = {
+  data: HistoryConversationSummary[];
+  nextCursor: string | null;
+};
+
+/**
+ * Conversation detail. Messages stay on the wire shape: mapping to widget
+ * messages belongs to `utils/history-messages.ts`.
+ */
+export type HistoryConversationDetail = {
+  summary: HistoryConversationSummary;
+  messages: HistoryWireMessage[];
+  nextMessageCursor: string | null;
+  conversationRevision: string | null;
+};
+
+/** One finalized visitor-visible projection for an already-stored message. */
+export type HistoryDisplayProjection = {
+  id: string;
+  displayContent: string;
+};
+
+/**
+ * Pending projection marker. Only ids are stored: the display strings already
+ * live in the persisted messages and are never duplicated.
+ */
+export type PendingDisplayProjections = {
+  conversationId: string;
+  messageIds: string[];
+};
+
+/**
+ * Internal history dependencies the controller injects into the session and
+ * every client it builds. Not part of the public config surface.
+ */
+export interface WidgetHistoryInternals {
+  visitorStore?: VisitorStore;
+  /** Resolves once stored state has been applied; gates history-capable init. */
+  historyBootstrapReady?: Promise<void>;
+  /**
+   * The one production provider is built by the shell from client-token config
+   * (or taken from the internal demo registry). Session/UI history code depends
+   * on this seam, never on `AgentWidgetClient`.
+   */
+  historyProvider?: HistoryProvider;
+  /** Persist the revision beside the active conversation id (internal only). */
+  setStoredConversationRevision?: (revision: string | null) => void;
+  getStoredConversationRevision?: () => string | null;
+  /** "Show earlier messages" cursor for the persisted transcript. */
+  setStoredMessageCursor?: (cursor: string | null) => void;
+  getStoredMessageCursor?: () => string | null;
+  /**
+   * Display projections finalized in the browser but not yet acknowledged by
+   * the server. Absent callbacks mean memory-only (persistence disabled).
+   */
+  setPendingDisplayProjections?: (
+    pending: PendingDisplayProjections | null
+  ) => void;
+  getPendingDisplayProjections?: () => PendingDisplayProjections | null;
+  onHistoryAvailabilityChanged?: (available: boolean) => void;
+  /** Deduped status changes; carries no token, proof, or identity value. */
+  onHistoryIdentityStatusChanged?: (status: HistoryIdentityStatus) => void;
+  onHistoryContinuityChanged?: (info: {
+    previousConversationId: string | null;
+    conversationId: string;
+  }) => void;
+}
 
 /**
  * Request payload for /v1/client/chat endpoint
@@ -4163,6 +5021,11 @@ export type ClientChatRequest = {
     id?: string;
     role: 'user' | 'assistant' | 'system';
     content: MessageContent;
+    /**
+     * Visitor-visible projection, sent only where it diverges from the model
+     * channel above (contract fact #15). Never model input or merge authority.
+     */
+    displayContent?: string;
   }>;
   /** ID for the expected assistant response message */
   assistantMessageId?: string;
@@ -4236,6 +5099,13 @@ export type AgentWidgetHeaderTrailingAction = {
     destructive?: boolean;
     dividerBefore?: boolean;
   }>;
+  /**
+   * Keyboard shortcut that activates this action, e.g. `"mod+shift+h"` ("mod"
+   * is Command on Apple platforms, Control elsewhere). Fires only while focus
+   * is inside the widget, and also drives the button's tooltip hint chip and
+   * its `aria-keyshortcuts`.
+   */
+  shortcut?: string;
 };
 
 /**
@@ -4283,6 +5153,15 @@ export type AgentWidgetHeaderLayoutConfig = {
   showIcon?: boolean;
   /** Show/hide the title */
   showTitle?: boolean;
+  /**
+   * What the header title (or `titleMenu` label) displays. `"static"`
+   * (default) always shows `launcher.title`. `"conversation"` shows the active
+   * conversation's title — the Claude-style pairing for a `titleMenu` holding
+   * conversation actions — falling back to `launcher.title` while no titled
+   * conversation is open (fresh chat, cleared history, or before the history
+   * view has loaded titles). Requires `features.history` for titles to exist.
+   */
+  titleSource?: "static" | "conversation";
   /** Show/hide the subtitle */
   showSubtitle?: boolean;
   /** Show/hide the close button */
@@ -4333,8 +5212,16 @@ export type AgentWidgetHeaderLayoutConfig = {
       destructive?: boolean;
       dividerBefore?: boolean;
     }>;
-    /** Called when a menu item is selected. */
-    onSelect: (id: string) => void;
+    /**
+     * Called when a menu item is selected. Returning `false` (sync or via
+     * promise) falls through to the widget built-ins, mirroring the artifact
+     * copy-menu contract: id `star` toggles the active conversation's star and
+     * id `delete` runs the shell's confirm-then-delete on it (both require
+     * `features.history` and, for star, a provider with the update
+     * capability). `rename` has no built-in: hosts own the rename UI and call
+     * `renameConversation()`.
+     */
+    onSelect: (id: string) => void | boolean | Promise<void | boolean>;
     /** Hover pill style. */
     hover?: {
       background?: string;
@@ -4928,15 +5815,20 @@ export type LoadingIndicatorRenderContext = {
    */
   config: AgentWidgetConfig;
   /**
-   * Current streaming state (always true when indicator is shown)
+   * Current streaming state. Always true for 'inline' and 'standalone';
+   * false for 'conversation-open' (a history fetch, not a stream).
    */
   streaming: boolean;
   /**
    * Location where the indicator is rendered:
    * - 'inline': Inside a streaming assistant message bubble (when content is empty)
    * - 'standalone': Separate bubble while waiting for stream to start
+   * - 'conversation-open': Transcript stand-in while a conversation opened
+   *   from the Messages list is being fetched. The returned element is mounted
+   *   inside Persona's centered transcript column, which keeps the status
+   *   role, announcement label, and composer gating.
    */
-  location: 'inline' | 'standalone';
+  location: 'inline' | 'standalone' | 'conversation-open';
   /**
    * Function to render the default 3-dot bouncing indicator.
    * Call this if you want to use the default for certain cases.
@@ -5241,6 +6133,28 @@ export type AgentWidgetConfig = {
    */
   setStoredSessionId?: (sessionId: string) => void;
   /**
+   * Called immediately before any cross-device history request and before a
+   * conversationId resume of a conversation discovered on another device.
+   * Return a fresh end-user access token (rt_eu_… / JWT). Null uses exact-browser
+   * scope only for a never-bound visitor; a previously bound visitor fails closed
+   * until resetHistoryIdentity() runs. Never cached by the widget.
+   */
+  getIdentityProof?: () => string | null | Promise<string | null>;
+  /**
+   * Read the persisted active conversation id (client token mode only).
+   * Called only after the internal stored-state bootstrap gate resolves.
+   */
+  getStoredConversationId?: () => string | null;
+  /** Persist the active conversation id so a later boot reopens the same record. */
+  setStoredConversationId?: (conversationId: string) => void;
+  /** Drop the persisted active conversation id (new conversation, deletion, reset). */
+  clearStoredConversationId?: () => void;
+  /**
+   * Drop the persisted session id. Dedicated clear seam: it avoids widening
+   * `setStoredSessionId` and its existing host call sites.
+   */
+  clearStoredSessionId?: () => void;
+  /**
    * Static headers to include with each request.
    * For dynamic headers (e.g., auth tokens), use `getHeaders` instead.
    */
@@ -5319,6 +6233,12 @@ export type AgentWidgetConfig = {
    * @default false
    */
   autoFocusInput?: boolean;
+  /**
+   * Hover timing for the portaled control tooltip. Keyboard focus is
+   * always immediate. Unset keys keep the ChatGPT/Claude defaults
+   * (`delayMs: 200`, `skipDelayMs: 300`).
+   */
+  tooltip?: AgentWidgetTooltipConfig;
   launcher?: AgentWidgetLauncherConfig;
   initialMessages?: AgentWidgetMessage[];
   /**

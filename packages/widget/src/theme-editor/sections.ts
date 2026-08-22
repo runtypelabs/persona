@@ -27,6 +27,13 @@ const parseOptionalCssValue = (value: unknown): string | undefined => {
   return normalized || undefined;
 };
 
+// Slider controls emit CSS strings, but the WebMCP escape hatch coerces a
+// slider to a raw number and token resolution only walks string values.
+const parseSliderPxLength = (value: unknown): string =>
+  typeof value === 'number' ? `${value}px` : String(value ?? '').trim();
+
+const parseSliderUnitless = (value: unknown): string => String(value ?? '').trim();
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // STYLE TAB: brand colors, chat colors, typography, shape, etc.
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -72,11 +79,12 @@ const chatColorsSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'chat-header-bg', label: 'Header Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-fg', label: 'Header Foreground', description: 'Anchors the header text. The title takes it, the subtitle and button icons take a 72% mix of it over the background', type: 'token-ref', path: 'theme.components.header.foreground', defaultValue: '', tokenRef: { tokenType: 'color' } },
     { id: 'chat-header-icon-bg', label: 'Header Icon Background', type: 'token-ref', path: 'theme.components.header.iconBackground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
     { id: 'chat-header-icon-fg', label: 'Header Icon Color', type: 'token-ref', path: 'theme.components.header.iconForeground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-title-fg', label: 'Header Title Color', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-subtitle-fg', label: 'Header Subtitle Color', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-action-icons-fg', label: 'Header Button Icons', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-title-fg', label: 'Header Title Color', description: 'Blank follows the header foreground', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-subtitle-fg', label: 'Header Subtitle Color', description: 'Blank follows the 72% foreground mix', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'chat-header-action-icons-fg', label: 'Header Button Icons', description: 'Blank follows the 72% foreground mix', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-user-bg', label: 'User Message Background', type: 'token-ref', path: 'theme.components.message.user.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-user-text', label: 'User Message Text', type: 'token-ref', path: 'theme.components.message.user.text', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
     { id: 'chat-msg-assistant-bg', label: 'Assistant Message Background', type: 'token-ref', path: 'theme.components.message.assistant.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
@@ -316,6 +324,7 @@ const launcherLayoutSectionDef: SectionDef = {
   fields: [
     { id: 'launcher-size', label: 'Size', type: 'slider', path: 'theme.components.launcher.size', defaultValue: '60px', slider: { min: 32, max: 80, step: 2 } },
     { id: 'launcher-icon-size', label: 'Icon Size', type: 'slider', path: 'theme.components.launcher.iconSize', defaultValue: '28px', slider: { min: 16, max: 48, step: 2 } },
+    { id: 'launcher-icon-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight for the agent glyph and the call-to-action arrow', type: 'slider', path: 'theme.components.launcher.iconStrokeWidth', defaultValue: '1.5', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
     { id: 'launcher-border-radius', label: 'Border Radius', type: 'select', path: 'theme.components.launcher.borderRadius', defaultValue: 'palette.radius.full', options: [
       { value: 'palette.radius.md', label: 'Medium' },
       { value: 'palette.radius.lg', label: 'Large' },
@@ -329,6 +338,115 @@ const launcherLayoutSectionDef: SectionDef = {
       { value: 'palette.shadows.lg', label: 'Large' },
       { value: 'palette.shadows.xl', label: 'Extra Large' },
     ] },
+  ],
+};
+
+const headerControlsSectionDef: SectionDef = {
+  id: 'comp-header-controls',
+  title: 'Header Controls',
+  description:
+    'One box, glyph, and stroke shared by every header icon button: close, clear chat, trailing actions, and Messages, plus the strip height.',
+  collapsed: true,
+  fields: [
+    { id: 'header-min-height', label: 'Header Min Height', description: 'CSS length, e.g. 65px. Blank stays at the natural height', type: 'text', path: 'theme.components.header.minHeight', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'header-control-size', label: 'Control Size', description: 'The button box. Coarse pointers still floor the hit area at 40px', type: 'slider', path: 'theme.components.header.controlSize', defaultValue: '32px', slider: { min: 24, max: 64, step: 2 }, parseValue: parseSliderPxLength },
+    { id: 'header-control-icon-size', label: 'Icon Size', description: 'The glyph inside the button', type: 'slider', path: 'theme.components.header.controlIconSize', defaultValue: '20px', slider: { min: 12, max: 40, step: 1 }, parseValue: parseSliderPxLength },
+    { id: 'header-control-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight. The close X renders at 0.7 of it so its sparser glyph matches', type: 'slider', path: 'theme.components.header.controlStrokeWidth', defaultValue: '1.5', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
+  ],
+};
+
+// The Messages rail's own top strip, beside the widget header in rail
+// presentation. Its color lives in COMPONENT_COLOR_SECTIONS.
+const historyRailHeaderShapeSectionDef: SectionDef = {
+  id: 'comp-history-rail-header',
+  title: 'Messages Rail Header',
+  description:
+    'The Messages rail top strip. Match its height to the header so both read as one band.',
+  collapsed: true,
+  fields: [
+    { id: 'rail-header-min-height', label: 'Min Height', description: 'CSS length. Blank follows the header min height', type: 'text', path: 'theme.components.history.railHeader.minHeight', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'rail-header-border', label: 'Bottom Border', description: 'Full border-bottom shorthand, e.g. 1px solid #333', type: 'text', path: 'theme.components.history.railHeader.border', defaultValue: '', parseValue: parseOptionalCssValue },
+  ],
+};
+
+const historyRailHeaderColorsSectionDef: SectionDef = {
+  id: 'comp-history-rail-header-colors',
+  title: 'Messages Rail Header Colors',
+  collapsed: true,
+  fields: [
+    { id: 'rail-header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.history.railHeader.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
+// The floating rail a collapsed overlay rail opens on hover. Its width and
+// edge stay features.history.rail config; only the surface is themeable.
+const historyOverlayShapeSectionDef: SectionDef = {
+  id: 'comp-history-overlay',
+  title: 'Messages Floating Rail',
+  description:
+    'The Messages rail floating over the conversation, when a collapsed rail opens on hover.',
+  collapsed: true,
+  fields: [
+    { id: 'history-overlay-margin', label: 'Margin', description: 'Gap from the trigger, the docked edge and the bottom', type: 'text', path: 'theme.components.history.overlay.margin', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-overlay-radius', label: 'Corner Radius', description: 'CSS length on all four corners. Blank keeps 16px', type: 'text', path: 'theme.components.history.overlay.borderRadius', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-overlay-shadow', label: 'Shadow', description: 'Full box-shadow shorthand. Blank keeps the built-in elevation', type: 'text', path: 'theme.components.history.overlay.shadow', defaultValue: '', parseValue: parseOptionalCssValue },
+  ],
+};
+
+const historyOverlayColorsSectionDef: SectionDef = {
+  id: 'comp-history-overlay-colors',
+  title: 'Messages Floating Rail Colors',
+  collapsed: true,
+  fields: [
+    { id: 'history-overlay-bg', label: 'Background', type: 'token-ref', path: 'theme.components.history.overlay.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
+  ],
+};
+
+// Enter/exit motion of the Messages surface. Durations, not colors, so it
+// stays a shape section and never forks per scheme.
+const historyMotionSectionDef: SectionDef = {
+  id: 'comp-history-motion',
+  title: 'Messages Motion',
+  description:
+    'Enter and exit animation of the Messages body. The bar is persistent chrome and never animates; reduced-motion preferences always win.',
+  collapsed: true,
+  fields: [
+    { id: 'history-motion-enter-ms', label: 'Enter Duration', description: 'Milliseconds, e.g. 180. 0 disables the entrance. Blank keeps 180', type: 'text', path: 'theme.components.history.motion.enterDurationMs', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-motion-enter-easing', label: 'Enter Easing', description: 'CSS easing, e.g. ease-out or cubic-bezier(0, 0, 0.2, 1)', type: 'text', path: 'theme.components.history.motion.enterEasing', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-motion-exit-ms', label: 'Exit Duration', description: 'Milliseconds, e.g. 160. 0 disables the exit. Blank keeps 160', type: 'text', path: 'theme.components.history.motion.exitDurationMs', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'history-motion-exit-easing', label: 'Exit Easing', description: 'CSS easing, e.g. ease-in or cubic-bezier(0.4, 0, 1, 1)', type: 'text', path: 'theme.components.history.motion.exitEasing', defaultValue: '', parseValue: parseOptionalCssValue },
+  ],
+};
+
+// The portaled tooltip on icon controls. Its colors live in
+// COMPONENT_COLOR_SECTIONS.
+const tooltipShapeSectionDef: SectionDef = {
+  id: 'comp-tooltip',
+  title: 'Tooltip',
+  description:
+    'The hover and focus tooltip on icon controls, including its shortcut hint chip.',
+  collapsed: true,
+  fields: [
+    { id: 'tooltip-radius', label: 'Corner Radius', type: 'select', path: 'theme.components.tooltip.borderRadius', defaultValue: 'palette.radius.sm', options: [
+      { value: 'palette.radius.none', label: 'None' },
+      { value: 'palette.radius.sm', label: 'Small' },
+      { value: 'palette.radius.md', label: 'Medium' },
+      { value: 'palette.radius.lg', label: 'Large' },
+      { value: 'palette.radius.xl', label: 'Extra Large' },
+    ] },
+    { id: 'tooltip-font-size', label: 'Font Size', description: 'CSS length. Blank stays at 12px', type: 'text', path: 'theme.components.tooltip.fontSize', defaultValue: '', parseValue: parseOptionalCssValue },
+    { id: 'tooltip-arrow', label: 'Show Arrow', description: 'The caret pointing at the control', type: 'toggle', path: 'theme.components.tooltip.arrow', defaultValue: true },
+  ],
+};
+
+const tooltipColorsSectionDef: SectionDef = {
+  id: 'comp-tooltip-colors',
+  title: 'Tooltip Colors',
+  collapsed: true,
+  fields: [
+    { id: 'tooltip-bg', label: 'Background', type: 'token-ref', path: 'theme.components.tooltip.background', defaultValue: 'palette.colors.gray.900', tokenRef: { tokenType: 'color' } },
+    { id: 'tooltip-fg', label: 'Label', type: 'token-ref', path: 'theme.components.tooltip.foreground', defaultValue: 'palette.colors.primary.50', tokenRef: { tokenType: 'color' } },
+    { id: 'tooltip-hint-fg', label: 'Shortcut Hint', type: 'token-ref', path: 'theme.components.tooltip.hintForeground', defaultValue: 'palette.colors.gray.400', tokenRef: { tokenType: 'color' } },
   ],
 };
 
@@ -401,12 +519,13 @@ const headerColorsSectionDef: SectionDef = {
   collapsed: true,
   fields: [
     { id: 'header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
+    { id: 'header-fg', label: 'Foreground', description: 'Anchors the header text. Background and foreground together derive every color left blank below', type: 'token-ref', path: 'theme.components.header.foreground', defaultValue: '', tokenRef: { tokenType: 'color' } },
     { id: 'header-icon-bg', label: 'Icon background', type: 'token-ref', path: 'theme.components.header.iconBackground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
     { id: 'header-icon-fg', label: 'Icon color', type: 'token-ref', path: 'theme.components.header.iconForeground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'header-title-fg', label: 'Title color', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'header-subtitle-fg', label: 'Subtitle color', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
-    { id: 'header-action-icons-fg', label: 'Clear / close icons', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
-    { id: 'header-border', label: 'Border', type: 'token-ref', path: 'theme.components.header.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
+    { id: 'header-title-fg', label: 'Title color', description: 'Blank follows the header foreground', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'header-subtitle-fg', label: 'Subtitle color', description: 'Blank follows a 72% mix of the foreground over the background', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'header-action-icons-fg', label: 'Clear / close icons', description: 'Blank follows the same 72% foreground mix as the subtitle', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'header-border', label: 'Border', description: 'Blank follows a 14% mix of the foreground over the background', type: 'token-ref', path: 'theme.components.header.border', defaultValue: '', tokenRef: { tokenType: 'color' } },
   ],
 };
 
@@ -566,6 +685,13 @@ const textStylesSectionDef: SectionDef = {
 export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
   panelLayoutSectionDef,
   launcherLayoutSectionDef,
+  // Sizes, not colors: kept out of COMPONENT_COLOR_SECTIONS so scopeSection
+  // never forks them per light/dark.
+  headerControlsSectionDef,
+  historyRailHeaderShapeSectionDef,
+  historyOverlayShapeSectionDef,
+  historyMotionSectionDef,
+  tooltipShapeSectionDef,
   messageShapeSectionDef,
   inputShapeSectionDef,
   composerSpacingSectionDef,
@@ -577,6 +703,9 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
 /** Component color sections (can be scoped for light/dark) */
 export const COMPONENT_COLOR_SECTIONS: SectionDef[] = [
   headerColorsSectionDef,
+  historyRailHeaderColorsSectionDef,
+  historyOverlayColorsSectionDef,
+  tooltipColorsSectionDef,
   messageColorsSectionDef,
   inputColorsSectionDef,
   buttonColorsSectionDef,

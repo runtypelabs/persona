@@ -1,6 +1,12 @@
 /** Minimum width (px) reserved for the chat column while resizing the artifact pane. */
 export const ARTIFACT_RESIZE_CHAT_MIN_PX = 200;
 
+/**
+ * Minimum transcript width (px) preserved beside a docked history rail while
+ * resizing the artifact pane. Added to the rail's own rendered width.
+ */
+export const ARTIFACT_RESIZE_RAILED_TRANSCRIPT_MIN_PX = 360;
+
 /** Default minimum width (px) for the artifact column when `resizableMinWidth` is unset. */
 export const ARTIFACT_RESIZE_PANE_MIN_DEFAULT_PX = 200;
 
@@ -54,10 +60,11 @@ export function resolveArtifactPaneWidthPx(
   gapPx: number,
   handleWidthPx: number,
   resizableMinWidth?: string,
-  resizableMaxWidth?: string
+  resizableMaxWidth?: string,
+  chatMinPx: number = ARTIFACT_RESIZE_CHAT_MIN_PX
 ): number {
   const minPx = parseArtifactResizePx(resizableMinWidth, ARTIFACT_RESIZE_PANE_MIN_DEFAULT_PX);
-  let maxPx = maxArtifactWidthFromSplit(splitWidthPx, gapPx, handleWidthPx, ARTIFACT_RESIZE_CHAT_MIN_PX);
+  let maxPx = maxArtifactWidthFromSplit(splitWidthPx, gapPx, handleWidthPx, chatMinPx);
   maxPx = Math.max(minPx, maxPx);
   const cap = parseArtifactResizeMaxPxOptional(resizableMaxWidth);
   if (cap !== null) {

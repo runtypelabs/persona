@@ -110,7 +110,8 @@ export const THEME_TOKEN_DOCS = {
       },
       launcher: {
         description: 'Floating launcher button.',
-        properties: 'size (60px), iconSize (28px), borderRadius, shadow.',
+        properties:
+          'size (60px), iconSize (28px), iconStrokeWidth (2, unitless glyph stroke weight; applies to registry-icon launchers, inert for emoji and image icons), borderRadius, shadow.',
       },
       panel: {
         description: 'Chat panel container.',
@@ -118,11 +119,24 @@ export const THEME_TOKEN_DOCS = {
           'width, maxWidth (440px), height (600px), maxHeight, borderRadius, shadow, inset (16px, gap around a detached panel), canvasBackground (transparent, fills the region behind a detached panel in docked and inline embed modes; a no-op in sidebar mode, where the gap stays click-through and the host page shows through like floating). inset and canvasBackground apply only when launcher.detachedPanel is true or artifacts.layout.paneAppearance is "detached".',
       },
       header: {
-        description: 'Chat panel header.',
+        description:
+          'Chat panel header. background and foreground are the pair that colors the band: set those two and the rest of the header text follows.',
         properties:
-          'background, border, borderRadius, padding, iconBackground, iconForeground, actionIconForeground, shadow, borderBottom, title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color).',
+          'background, foreground (anchors the header text; the title takes it directly, the subtitle and action icons take color-mix(in srgb, foreground 72%, background), and the border takes color-mix(in srgb, foreground 14%, background)), border, borderRadius, padding, iconBackground, iconForeground (the avatar tile, which keeps its own defaults and never derives), actionIconForeground, controlSize (32px, the box of every header icon button), controlIconSize (20px, the glyph inside it), controlStrokeWidth (1.5, unitless glyph stroke weight; sparse-viewBox glyphs such as the close X scale it by 0.7), shadow, borderBottom, minHeight (height floor for the header strip), title and subtitle (each fontFamily, fontSize, fontWeight, lineHeight, letterSpacing, color). Derivation only fills keys the theme leaves unset, so any explicit border, titleForeground, subtitleForeground, actionIconForeground, title.color, or subtitle.color wins. With no foreground either, each key falls back as before: the primary color for the title, the muted text color for the subtitle and action icons, the divider color for the border.',
         legacy:
-          'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set.',
+          'titleForeground and subtitleForeground are legacy aliases of header.title.color and header.subtitle.color. Both still work; the title/subtitle color wins when both are set, and either alias still outranks the foreground derivation.',
+      },
+      history: {
+        description:
+          'Messages (conversation history) chrome and motion. railHeader styles the rail sidebar top strip, which runs beside the widget header in rail presentation; overlay styles the floating rail a collapsed overlay rail opens on hover; motion times the surface entering and leaving.',
+        properties:
+          'railHeader.background (defaults to the rail surface), railHeader.border (full border-bottom shorthand, default 0), railHeader.minHeight (defaults to components.header.minHeight, then 56px). Pin railHeader.minHeight and header.minHeight to the same value so both top strips read as one band. railHeader.title takes TextStyleTokens for the strip view title ("Messages"): color (defaults to the text color; the sidebar identity reads at full strength), fontFamily, fontSize (14px), fontWeight (600), lineHeight, letterSpacing. listHeading takes the same TextStyleTokens for the rail-only "Conversations" heading over the list block (14px/600 in the text color); groupHeading styles the muted sub-headers, both the date groups ("Today", "Yesterday") and rail nav section titles (rail 13px/500, muted text color). Every key of all three is pinned in the widget CSS, so host-page h2/h3 rules cannot restyle them. overlay.margin (8px, the gap from the trigger, the docked edge and the bottom), overlay.borderRadius (16px), overlay.shadow (0 12px 40px rgba(0, 0, 0, 0.25)), overlay.background (defaults to the rail surface). The floating rail keeps features.history.rail width and side, which are config, not tokens. motion.enterDurationMs (180) and motion.exitDurationMs (160) are bare millisecond numbers, 0 disables that leg; motion.enterEasing (cubic-bezier(0, 0, 0.2, 1)) and motion.exitEasing (cubic-bezier(0.4, 0, 1, 1)) take any CSS easing. Only the body animates, and prefers-reduced-motion always wins.',
+      },
+      tooltip: {
+        description:
+          'The portaled tooltip on icon controls, plus the muted shortcut hint chip after its label.',
+        properties:
+          'background (#111827), foreground (#ffffff), hintForeground (rgba(255, 255, 255, 0.55)), borderRadius (palette.radius.sm), fontSize (12px), padding (6px 12px), shadow, maxWidth (min(320px, calc(100vw - 16px))), arrow (boolean, default true; false drops the caret). Unset keys keep the built-in dark look.',
       },
       message: {
         description: 'Chat message bubbles.',
@@ -211,12 +225,12 @@ export const THEME_TOKEN_DOCS = {
         'backgroundColor, textColor, borderWidth, borderColor, paddingX, paddingY, iconText, iconName, size.',
     },
     closeButton: {
-      description: 'Close button (on launcher config).',
+      description: 'Close button (on launcher config). Unset closeButtonSize means theme.components.header.controlSize owns the box.',
       properties:
         'closeButtonSize, closeButtonColor, closeButtonBackgroundColor, closeButtonBorderWidth, closeButtonBorderColor, closeButtonBorderRadius.',
     },
     clearChat: {
-      description: 'Clear chat button (on launcher.clearChat config).',
+      description: 'Clear chat button (on launcher.clearChat config). Unset size means theme.components.header.controlSize owns the box.',
       properties:
         'enabled, iconColor, backgroundColor, borderWidth, borderColor, borderRadius, size.',
     },

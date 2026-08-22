@@ -1,7 +1,7 @@
 import { createElement } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
 import { createDropdownMenu } from "../utils/dropdown";
 import { createComboButton } from "../utils/buttons";
+import { ariaCombo, formatCombo } from "../utils/shortcuts";
 import {
   AgentWidgetConfig,
   AgentWidgetHeaderLayoutConfig,
@@ -14,6 +14,11 @@ import {
   HeaderElements,
   attachHeaderToContainer as _attachHeaderToContainer,
 } from "./header-builder";
+import {
+  createClearChatButton,
+  createCloseButton,
+  createHeaderIconButton,
+} from "./header-parts";
 
 export interface HeaderLayoutContext {
   config: AgentWidgetConfig;
@@ -71,29 +76,25 @@ function appendTrailingHeaderActions(
 ): void {
   if (!actions?.length) return;
   for (const a of actions) {
-    // Same chrome as the close button beside them: 32px round hit area,
-    // hover fill, and the header zone's action-icon color (the muted body
-    // token disappears on themed headers).
-    const btn = createElement(
-      "button",
-      "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none persona-bg-transparent persona-p-0"
-    ) as HTMLButtonElement;
-    btn.type = "button";
-    btn.style.height = "32px";
-    btn.style.width = "32px";
-    btn.style.color = HEADER_THEME_CSS.actionIconColor;
-    btn.setAttribute("aria-label", a.ariaLabel ?? a.label ?? a.id);
-    if (a.icon) {
-      const ic = renderLucideIcon(a.icon, 16, "currentColor", 2);
-      if (ic) btn.appendChild(ic);
-    } else if (a.label) {
-      btn.textContent = a.label;
+    // Same shared chrome as the close button beside them. The wrapper stays
+    // relative so a dropdown can anchor to it.
+    const { button: btn, wrapper } = createHeaderIconButton({
+      ariaLabel: a.ariaLabel ?? a.label ?? a.id,
+      iconName: a.icon,
+      iconText: a.icon ? undefined : a.label,
+      tooltipHint: a.shortcut ? formatCombo(a.shortcut) : undefined,
+      wrapperClassName:
+        "persona-relative persona-inline-flex persona-items-center persona-justify-center",
+    });
+    // The keydown binding is registered by the shell, which finds the button
+    // by this id; the shortcut's other two artifacts are stamped here.
+    btn.setAttribute("data-persona-header-action", a.id);
+    if (a.shortcut) {
+      const aria = ariaCombo(a.shortcut);
+      if (aria) btn.setAttribute("aria-keyshortcuts", aria);
     }
 
     if (a.menuItems?.length) {
-      // Wrap in a relative container for dropdown positioning
-      const wrapper = createElement("div", "persona-relative");
-      wrapper.appendChild(btn);
       const dropdown = createDropdownMenu({
         items: a.menuItems,
         onSelect: (itemId) => onAction?.(itemId),
@@ -107,11 +108,10 @@ function appendTrailingHeaderActions(
         e.stopPropagation();
         dropdown.toggle();
       });
-      container.appendChild(wrapper);
     } else {
       btn.addEventListener("click", () => onAction?.(a.id));
-      container.appendChild(btn);
     }
+    container.appendChild(wrapper);
   }
 }
 
@@ -119,11 +119,13 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
   const { config, showClose = true, onClose, layoutHeaderConfig, onHeaderAction } = context;
   const launcher = config?.launcher ?? {};
 
+  // max(title 24px, cluster 32px) + py-4 + border = the strip's 65px.
   const header = createElement(
     "div",
     "persona-flex persona-items-center persona-justify-between persona-px-6 persona-py-4"
   );
   header.setAttribute("data-persona-theme-zone", "header");
+  header.style.minHeight = HEADER_THEME_CSS.minHeight;
   header.style.backgroundColor = 'var(--persona-header-bg, var(--persona-surface, #ffffff))';
   header.style.borderBottomColor = 'var(--persona-header-border, var(--persona-divider, #f1f5f9))';
   header.style.boxShadow = 'var(--persona-header-shadow, none)';
@@ -140,7 +142,28 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     const combo = createComboButton({
       label: launcher.title ?? "Chat Assistant",
       menuItems: titleMenuConfig.menuItems,
-      onSelect: titleMenuConfig.onSelect,
+      // `false` = not handled: bubble the id to the shell's built-ins (star,
+      // delete on the active conversation). A DOM event, not a context
+      // callback, because the initial header is built by the pure panel
+      // builder with no shell in reach.
+      onSelect: (itemId) => {
+        const finish = (handled: unknown): void => {
+          if (handled !== false) return;
+          combo.element.dispatchEvent(
+            new CustomEvent("persona:title-menu-builtin", {
+              bubbles: true,
+              composed: true,
+              detail: { actionId: itemId },
+            })
+          );
+        };
+        const result = titleMenuConfig.onSelect(itemId);
+        if (result instanceof Promise) {
+          void result.then(finish, () => {});
+        } else {
+          finish(result);
+        }
+      },
       hover: titleMenuConfig.hover,
       className: "",
     });
@@ -203,37 +226,19 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
 
   header.appendChild(titleRow);
 
-  // Close button
-  const closeButtonSize = launcher.closeButtonSize ?? "32px";
-  const closeButtonWrapper = createElement("div", "");
-
-  const closeButton = createElement(
-    "button",
-    "persona-inline-flex persona-items-center persona-justify-center persona-rounded-full hover:persona-bg-gray-100 persona-cursor-pointer persona-border-none"
-  ) as HTMLButtonElement;
-  closeButton.style.height = closeButtonSize;
-  closeButton.style.width = closeButtonSize;
-  closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "Close chat");
-  closeButton.style.display = showClose ? "" : "none";
-  closeButton.style.color =
-    launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
-
-  const closeButtonIconName = launcher.closeButtonIconName ?? "x";
-  // Larger intrinsic size compensates for the X glyph's sparse viewBox
-  // (paths only occupy the middle 50%). Matches header-builder.ts.
-  const closeIconSvg = renderLucideIcon(closeButtonIconName, "28px", "currentColor", 1);
-  if (closeIconSvg) {
-    closeButton.appendChild(closeIconSvg);
-  } else {
-    closeButton.textContent = "×";
-  }
+  // Close button: same shared factory the default layout uses. The wrapper is
+  // flex so an inline-flex button can never reserve baseline slack and ride
+  // high inside it.
+  const trailingWrapperClass =
+    "persona-relative persona-inline-flex persona-items-center persona-justify-center";
+  const { button: closeButton, wrapper: closeButtonWrapper } = createCloseButton(
+    config,
+    { showClose, wrapperClassName: trailingWrapperClass }
+  );
 
   if (onClose) {
     closeButton.addEventListener("click", onClose);
   }
-
-  closeButtonWrapper.appendChild(closeButton);
 
   // Trailing edge: action buttons cluster with the close button, matching
   // its chrome. `titleMenu` still ignores `trailingActions` (documented).
@@ -248,6 +253,31 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
       layoutHeaderConfig?.onAction ?? onHeaderAction
     );
   }
+
+  // Clear chat honors the same config surface as the default layout. Click
+  // wiring is owned by setupClearChatButton() in ui.ts via the returned ref;
+  // top-right placement is mounted by attachHeaderToContainer, also via ref.
+  const clearChatConfig = launcher.clearChat ?? {};
+  let clearChatButton: HTMLButtonElement | null = null;
+  let clearChatButtonWrapper: HTMLElement | null = null;
+  if (clearChatConfig.enabled ?? true) {
+    const clearChatPlacement = clearChatConfig.placement ?? "inline";
+    const parts = createClearChatButton(config, {
+      wrapperClassName:
+        clearChatPlacement === "top-right"
+          ? "persona-absolute persona-top-4 persona-z-50"
+          : trailingWrapperClass,
+    });
+    clearChatButton = parts.button;
+    clearChatButtonWrapper = parts.wrapper;
+    if (clearChatPlacement === "top-right") {
+      clearChatButtonWrapper.style.right = "48px";
+    } else {
+      // Close stays outermost.
+      trailingCluster.appendChild(clearChatButtonWrapper);
+    }
+  }
+
   trailingCluster.appendChild(closeButtonWrapper);
   header.appendChild(trailingCluster);
 
@@ -266,8 +296,8 @@ export const buildMinimalHeader: HeaderLayoutRenderer = (context) => {
     headerSubtitle,
     closeButton,
     closeButtonWrapper,
-    clearChatButton: null,
-    clearChatButtonWrapper: null
+    clearChatButton,
+    clearChatButtonWrapper
   };
 };
 

@@ -313,9 +313,10 @@ componentRegistry.register("ProductGrid", ProductGrid);
 
 // ============================================================================
 // Storefront chat header: custom body-top slot that replaces the default
-// "Hi 👋" welcome card with an ecommerce-style header (brand wordmark,
-// concierge badge, welcome hero, category chips). The chips submit real
-// queries through the widget handle below.
+// "Hi 👋" welcome card with an ecommerce-style hero (welcome copy + category
+// chips); the chips submit real queries through the widget handle below. The
+// EVERSPUN wordmark is mounted separately into the panel chrome so it stays
+// pinned while the hero scrolls away with the transcript.
 // ============================================================================
 
 // Filled in after `initAgentWidget(...)` returns. The slot renderer is
@@ -347,25 +348,34 @@ const ensureStorefrontHeaderStyles = () => {
       border: none;
       border-bottom: 1px solid #e5e3dd;
       border-radius: 0;
-      padding: 18px 24px 14px;
+      /* Top padding clears the floating wordmark band so the hero lands where
+         the old in-flow brand row put it. */
+      padding: 46px 24px 14px;
       color: #1a1a1a;
       box-shadow: none;
     }
-    .persona-storefront-header__top {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 8px;
-      /* Reserve clearance on the right so the brand wordmark doesn't sit
-         underneath the absolute clear (⟲) and close (×) buttons at top: 8px /
-         right: 8px / right: 32px in panel chrome. */
-      padding-right: 56px;
-    }
-    .persona-storefront-header__brand {
+    /* The wordmark lives in the panel chrome (same layer as the absolute
+       clear/close buttons), not the scrolling body, so the send-anchor scroll
+       cannot carry it away. The gradient starts at the hero's top color for a
+       seamless first paint, then masks bubbles that scroll under it. */
+    .persona-storefront-brand {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 9; /* below the clear/close wrappers at 10 */
+      padding: 18px 24px 12px;
+      pointer-events: none;
       font-size: 13px;
       font-weight: 600;
       letter-spacing: 0.16em;
       color: #1a1a1a;
+      background: linear-gradient(
+        180deg,
+        #fafaf7 0%,
+        rgba(250, 250, 247, 0.92) 70%,
+        rgba(250, 250, 247, 0) 100%
+      );
     }
     .persona-storefront-header__hero {
       margin-bottom: 10px;
@@ -429,7 +439,8 @@ const ensureStorefrontHeaderStyles = () => {
       cursor: not-allowed;
     }
     @media (max-width: 540px) {
-      .persona-storefront-header { padding: 22px 18px 16px; }
+      .persona-storefront-header { padding: 46px 18px 16px; }
+      .persona-storefront-brand { padding: 18px 18px 12px; }
       .persona-storefront-header__title { font-size: 20px; }
       .persona-storefront-header__shopby { gap: 8px; }
     }
@@ -450,9 +461,6 @@ const renderStorefrontHeader: SlotRenderer = () => {
   // carry that marker or it will be hidden along with the original card.
 
   header.innerHTML = `
-    <div class="persona-storefront-header__top">
-      <span class="persona-storefront-header__brand">EVERSPUN.</span>
-    </div>
     <div class="persona-storefront-header__hero">
       <h2 class="persona-storefront-header__title">Welcome.</h2>
       <p class="persona-storefront-header__lede">
@@ -486,6 +494,20 @@ const renderStorefrontHeader: SlotRenderer = () => {
       chipsContainer.appendChild(chip);
     });
   }
+
+  // The wordmark mounts into the panel container (the clear/close buttons'
+  // layer) so the send-anchor scroll can't carry it off with the body. The
+  // slot renderer reruns on every panel rebuild, which re-adds it; the
+  // microtask waits for this element to be inserted so `closest()` resolves.
+  queueMicrotask(() => {
+    const container = header.closest(".persona-widget-container");
+    if (!(container instanceof HTMLElement)) return;
+    if (container.querySelector(".persona-storefront-brand")) return;
+    const brand = document.createElement("div");
+    brand.className = "persona-storefront-brand";
+    brand.textContent = "EVERSPUN.";
+    container.appendChild(brand);
+  });
 
   return header;
 };
@@ -868,6 +890,9 @@ const config: AgentWidgetConfig = {
   },
   features: {
     ...DEFAULT_WIDGET_CONFIG.features,
+    // The pinned send bubble rests below the floating EVERSPUN wordmark band
+    // (~43px tall) instead of sliding under its gradient.
+    scrollBehavior: { anchorTopOffset: 48 },
     // word-fade on the main bubble, and, by inheritance, on the peek
     // ticker above the collapsed pill. Devs configure animations in one
     // place and both surfaces render with matching cadence. `buffer: "line"`
@@ -906,7 +931,6 @@ const config: AgentWidgetConfig = {
     "Show me cashmere essentials",
     "What pants would go with this?",
     "Show me everything under $200",
-    "I need a gift under $300",
   ],
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
 };

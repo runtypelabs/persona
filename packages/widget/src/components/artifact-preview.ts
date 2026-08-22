@@ -206,6 +206,12 @@ export type ArtifactPreviewBodyHandle = {
   el: HTMLElement;
   /** Apply streaming deltas / status changes (may be a different record). */
   update(record: PersonaArtifactRecord): void;
+  /**
+   * Release the file-preview loading state machine: pending overlay/settle
+   * timers and the window `message` listener, which otherwise outlive a
+   * discarded preview. Idempotent; call whenever the handle is dropped.
+   */
+  destroy(): void;
 };
 
 const PRE_CLASS =
@@ -989,6 +995,9 @@ export function renderArtifactPreviewBody(
     el,
     update(rec: PersonaArtifactRecord) {
       render(rec);
+    },
+    destroy() {
+      resetFilePreview();
     },
   };
 }

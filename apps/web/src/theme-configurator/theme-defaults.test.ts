@@ -7,16 +7,24 @@ import {
 
 describe('theme-defaults', () => {
   test('getPackageDefaultForComponentsPath resolves header tokens for theme and darkTheme paths', () => {
-    // Defaults now use direct palette refs (solid primary role)
-    expect(getPackageDefaultForComponentsPath('theme.components.header.actionIconForeground')).toBe(
-      'palette.colors.primary.200'
+    // The header hangs off the background/foreground pair; title, subtitle,
+    // action icons, and border derive from it at render, so the base theme
+    // leaves those keys unset.
+    expect(getPackageDefaultForComponentsPath('theme.components.header.background')).toBe(
+      'palette.colors.primary.500'
     );
-    expect(getPackageDefaultForComponentsPath('darkTheme.components.header.actionIconForeground')).toBe(
-      'palette.colors.primary.200'
-    );
-    expect(getPackageDefaultForComponentsPath('theme.components.header.titleForeground')).toBe(
+    expect(getPackageDefaultForComponentsPath('theme.components.header.foreground')).toBe(
       'palette.colors.primary.50'
     );
+    expect(getPackageDefaultForComponentsPath('darkTheme.components.header.foreground')).toBe(
+      'palette.colors.primary.50'
+    );
+    expect(
+      getPackageDefaultForComponentsPath('theme.components.header.actionIconForeground')
+    ).toBeUndefined();
+    expect(
+      getPackageDefaultForComponentsPath('theme.components.header.titleForeground')
+    ).toBeUndefined();
   });
 
   test('pairedThemeColorPaths maps theme prefix to darkTheme', () => {

@@ -228,6 +228,71 @@ describe("composer spacing styles", () => {
   });
 });
 
+describe("header control styles", () => {
+  it("sizes and strokes the glyph from the header control tokens", () => {
+    const start = widgetCss.indexOf(".persona-header-control--glyph > svg {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "width: var(--persona-header-control-icon-size, 20px)",
+    );
+    // CSS presentation beats the SVG stroke-width attribute, which stays as
+    // the no-CSS fallback.
+    expect(rule).toContain(
+      "stroke-width: var(--persona-components-header-controlStrokeWidth, 1.5)",
+    );
+  });
+
+  it("thins the sparse glyph stroke by the same 0.7 the JS attributes use", () => {
+    const start = widgetCss.indexOf(".persona-header-control--sparse > svg {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "width: calc(var(--persona-header-control-icon-size, 20px) * 1.4)",
+    );
+    // 0.7 x the 1.5 default is 1.05, the stroke the close X has always
+    // rendered at; SPARSE_GLYPHS in header-parts.ts carries the same pair.
+    expect(rule).toContain(
+      "stroke-width: calc(var(--persona-components-header-controlStrokeWidth, 1.5) * 0.7)",
+    );
+
+    // The sparse rule must stay after the glyph rule: same specificity, so
+    // source order is the only thing that lets it win.
+    expect(start).toBeGreaterThan(
+      widgetCss.indexOf(".persona-header-control--glyph > svg {"),
+    );
+  });
+});
+
+describe("launcher icon styles", () => {
+  it("strokes every launcher glyph from the stroke token, surface-neutrally", () => {
+    // Locate the rule by its declaration and read the SHIPPED selector back
+    // out of the file, so a rescope cannot slip past a hardcoded expectation.
+    const declaration =
+      "stroke-width: var(--persona-components-launcher-iconStrokeWidth, 1.5)";
+    const declarationAt = widgetCss.indexOf(declaration);
+    expect(declarationAt).toBeGreaterThan(-1);
+    const selectorStart = widgetCss.lastIndexOf("}", declarationAt) + 1;
+    const selector = widgetCss
+      .slice(selectorStart, widgetCss.indexOf("{", selectorStart))
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .trim();
+
+    // One pill, one line weight: the agent icon and the call-to-action arrow
+    // both follow the token.
+    expect(selector).toContain('[data-role="launcher-icon"] > svg');
+    expect(selector).toContain(
+      '[data-role="launcher-call-to-action-icon"] > svg',
+    );
+    // Both launcher surfaces render under [data-persona-root]; naming either
+    // surface here would change stroke weight between the two bundles.
+    expect(selector).not.toContain("data-persona-launcher-critical");
+    expect(selector).not.toContain("persona-widget-container");
+  });
+});
+
 describe("transcript layout styles", () => {
   it("drops the empty messages wrapper from the flex flow", () => {
     // A zero-height flex child still triggers the body's gap, so an empty
@@ -332,6 +397,21 @@ describe("plugin welcome styles", () => {
       ".persona-widget-body.persona-welcome-overlay-active {\n  overflow: hidden;\n}",
     );
   });
+
+  it("takes the transcript out of layout so nothing scrolls under the overlay", () => {
+    // The rule above cannot win against the inline `overflow-y: auto` that
+    // fill/fullscreen layouts stamp on the body, so the transcript stayed
+    // scrollable underneath an `inset: 0` box whose containing block scrolls
+    // with it: home and the transcript then read as one column, with no
+    // composer, and scrolling past the overlay left the transcript bare.
+    const selector =
+      ".persona-widget-body.persona-welcome-overlay-active\n  > :not([data-persona-welcome-overlay]) {";
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("display: none !important");
+  });
 });
 
 describe("scrollbar policy styles", () => {
@@ -377,6 +457,59 @@ describe("scrollbar policy styles", () => {
     );
     expect(widgetCss).toContain(
       '[data-persona-scrollbar="hidden"] .persona-artifact-list,',
+    );
+  });
+});
+
+describe("message action button styles", () => {
+  it("rounds the hit target on the medium radius, not the near-square small one", () => {
+    const start = widgetCss.indexOf(".persona-message-action-btn {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "border-radius: var(--persona-message-action-radius, var(--persona-radius-md, 0.375rem))",
+    );
+    expect(rule).not.toContain("--persona-radius-sm");
+  });
+
+  it("hovers with the scheme-aware ghost wash and text color, not surface or brand", () => {
+    const start = widgetCss.indexOf(".persona-message-action-btn:hover {");
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "background-color: var(--persona-message-action-hover-bg, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)))",
+    );
+    expect(rule).toContain(
+      "color: var(--persona-message-action-hover-fg, var(--persona-text, #111827))",
+    );
+    // A surface token is nearly invisible on light and paints a darker box on
+    // dark; the brand color is never an icon-hover color.
+    expect(rule).not.toContain("--persona-container");
+    expect(rule).not.toContain("--persona-primary");
+  });
+});
+
+describe("conversation-open skeleton styles", () => {
+  it("follows each role's real bubble radius chain", () => {
+    const leading = ".persona-conversation-loading-bubble {";
+    const start = widgetCss.indexOf(leading);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain(
+      "border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))",
+    );
+
+    const trailing = ".persona-conversation-loading-bubble--trailing {";
+    const trailingStart = widgetCss.indexOf(trailing);
+    const trailingRule = widgetCss.slice(
+      trailingStart,
+      widgetCss.indexOf("\n}", trailingStart),
+    );
+    expect(trailingStart).toBeGreaterThan(-1);
+    expect(trailingRule).toContain(
+      "border-radius: var(--persona-message-user-radius, var(--persona-radius-lg, 0.5rem))",
     );
   });
 });

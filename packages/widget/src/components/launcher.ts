@@ -21,8 +21,8 @@ export const createLauncherButton = (
     <span class="persona-inline-flex persona-items-center persona-justify-center persona-rounded-full persona-bg-persona-primary persona-text-white" data-role="launcher-icon">💬</span>
     <img data-role="launcher-image" class="persona-rounded-full persona-object-cover" alt="" style="display:none" />
     <span class="persona-flex persona-min-w-0 persona-flex-1 persona-flex-col persona-items-start persona-text-left">
-      <span class="persona-block persona-w-full persona-truncate persona-text-sm persona-font-semibold persona-text-persona-primary" data-role="launcher-title"></span>
-      <span class="persona-block persona-w-full persona-truncate persona-text-xs persona-text-persona-muted" data-role="launcher-subtitle"></span>
+      <span class="persona-block persona-w-full persona-truncate persona-text-sm persona-font-semibold persona-text-persona-launcher" data-role="launcher-title"></span>
+      <span class="persona-block persona-w-full persona-truncate persona-text-xs persona-text-persona-launcher-muted" data-role="launcher-subtitle"></span>
     </span>
     <span class="persona-ml-2 persona-grid persona-place-items-center persona-rounded-full persona-bg-persona-primary persona-text-persona-call-to-action" data-role="launcher-call-to-action-icon">↗</span>
   `;
@@ -82,7 +82,7 @@ export const createLauncherButton = (
         if (launcher.agentIconName) {
           // Use Lucide icon
           const iconSizeNum = parseFloat(iconSize) || 24;
-          const iconSvg = renderLucideIcon(launcher.agentIconName, iconSizeNum * 0.6, "var(--persona-text-inverse, #ffffff)", 2);
+          const iconSvg = renderLucideIcon(launcher.agentIconName, iconSizeNum * 0.6, "var(--persona-text-inverse, #ffffff)", 1.5);
           if (iconSvg) {
             icon.appendChild(iconSvg);
             icon.style.display = "";
@@ -166,7 +166,7 @@ export const createLauncherButton = (
           // Calculate actual icon size by subtracting padding
           const containerSize = parseFloat(callToActionIconSize) || 24;
           const iconSize = Math.max(containerSize - paddingTotal, 8); // Ensure minimum size of 8px
-          const iconSvg = renderLucideIcon(launcher.callToActionIconName, iconSize, "currentColor", 2);
+          const iconSvg = renderLucideIcon(launcher.callToActionIconName, iconSize, "currentColor", 1.5);
           if (iconSvg) {
             callToActionIconEl.appendChild(iconSvg);
           } else {
@@ -185,9 +185,9 @@ export const createLauncherButton = (
         : positionMap["bottom-right"];
 
     const floatingBase =
-      "persona-fixed persona-flex persona-items-center persona-gap-3 persona-rounded-launcher persona-bg-persona-surface persona-py-2.5 persona-pl-3 persona-pr-3 persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer";
+      "persona-fixed persona-flex persona-items-center persona-gap-3 persona-rounded-launcher persona-bg-persona-launcher persona-py-2.5 persona-pl-3 persona-pr-3 persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer";
     const dockedBase =
-      "persona-relative persona-mt-4 persona-mb-4 persona-mx-auto persona-flex persona-items-center persona-justify-center persona-rounded-launcher persona-bg-persona-surface persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer";
+      "persona-relative persona-mt-4 persona-mb-4 persona-mx-auto persona-flex persona-items-center persona-justify-center persona-rounded-launcher persona-bg-persona-launcher persona-transition hover:persona-translate-y-[-2px] persona-cursor-pointer";
 
     button.className = dockedMode ? dockedBase : `${floatingBase} ${positionClass}`;
 
@@ -196,7 +196,7 @@ export const createLauncherButton = (
     }
 
     // Apply launcher border and shadow from config (with defaults matching previous Tailwind classes)
-    const defaultBorder = "1px solid var(--persona-border, #e5e7eb)";
+    const defaultBorder = "1px solid var(--persona-launcher-border, var(--persona-border, #e5e7eb))";
     const defaultShadow = "var(--persona-launcher-shadow, 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1))";
 
     button.style.border = launcher.border ?? defaultBorder;

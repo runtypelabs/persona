@@ -280,9 +280,10 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     },
   },
   launcher: {
-    background: 'palette.colors.primary.500',
-    foreground: 'palette.colors.primary.50',
-    border: 'palette.colors.gray.200',
+    // Launcher pill role: shared surface/primary tones until a host overrides.
+    background: 'semantic.colors.surface',
+    foreground: 'semantic.colors.primary',
+    border: 'semantic.colors.border',
     size: '60px',
     iconSize: '28px',
     borderRadius: 'palette.radius.full',
@@ -299,16 +300,14 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     canvasBackground: DEFAULT_PANEL_CANVAS_BACKGROUND,
   },
   header: {
-    // Header role: solid primary
+    // Header role: solid primary. Border, subtitle, and action icons stay
+    // unset so they derive from this background/foreground pair.
     background: 'palette.colors.primary.500',
-    border: 'palette.colors.primary.600',
+    foreground: 'palette.colors.primary.50',
     borderRadius: 'palette.radius.xl palette.radius.xl 0 0',
     padding: 'semantic.spacing.md',
     iconBackground: 'palette.colors.primary.600',
     iconForeground: 'palette.colors.primary.50',
-    titleForeground: 'palette.colors.primary.50',
-    subtitleForeground: 'palette.colors.primary.200',
-    actionIconForeground: 'palette.colors.primary.200',
   },
   message: {
     user: {
@@ -729,6 +728,9 @@ export function createTheme(
   return theme;
 }
 
+/** Coerce a unitless "0" to "0px" for vars consumed inside length calc()s. */
+const zeroLength = (value: string): string => (value.trim() === '0' ? '0px' : value);
+
 export function themeToCssVariables(theme: PersonaTheme): Record<string, string> {
   const resolved = resolveTokens(theme);
   const cssVars: Record<string, string> = {};
@@ -787,10 +789,20 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     '9999px';
   cssVars['--persona-launcher-bg'] =
     cssVars['--persona-components-launcher-background'] ??
-    cssVars['--persona-primary'];
+    cssVars['--persona-surface'];
   cssVars['--persona-launcher-fg'] =
     cssVars['--persona-components-launcher-foreground'] ??
-    cssVars['--persona-text-inverse'];
+    cssVars['--persona-primary'];
+  // Subtitle keeps the shared muted tone while the foreground is stock (it
+  // resolves to primary); a custom foreground washes to 70% so both pill
+  // text lines recolor together. Compared by resolved value, not key
+  // presence: DEFAULT_COMPONENTS materializes launcher.foreground into
+  // every theme.
+  const launcherFg = cssVars['--persona-components-launcher-foreground'];
+  cssVars['--persona-launcher-fg-muted'] =
+    launcherFg && launcherFg !== cssVars['--persona-primary']
+      ? `color-mix(in srgb, ${launcherFg} 70%, transparent)`
+      : cssVars['--persona-muted'];
   cssVars['--persona-launcher-border'] =
     cssVars['--persona-components-launcher-border'] ??
     cssVars['--persona-border'];
@@ -853,8 +865,15 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // dedicated CSS variables that the widget CSS reads for individual elements.
   cssVars['--persona-header-bg'] =
     cssVars['--persona-components-header-background'] ?? cssVars['--persona-surface'];
+  // The background/foreground pair anchors every other header color: unset
+  // text and border keys mix the two rather than falling back to page chrome.
+  const headerBg = cssVars['--persona-header-bg'];
+  const headerFg = cssVars['--persona-components-header-foreground'];
+  const headerMutedFg = headerFg ? `color-mix(in srgb, ${headerFg} 72%, ${headerBg})` : undefined;
   cssVars['--persona-header-border'] =
-    cssVars['--persona-components-header-border'] ?? cssVars['--persona-divider'];
+    cssVars['--persona-components-header-border'] ??
+    (headerFg ? `color-mix(in srgb, ${headerFg} 14%, ${headerBg})` : undefined) ??
+    cssVars['--persona-divider'];
   cssVars['--persona-header-icon-bg'] =
     cssVars['--persona-components-header-iconBackground'] ?? cssVars['--persona-primary'];
   cssVars['--persona-header-icon-fg'] =
@@ -863,17 +882,133 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--persona-header-title-fg'] =
     cssVars['--persona-components-header-title-color'] ??
     cssVars['--persona-components-header-titleForeground'] ??
+    headerFg ??
     cssVars['--persona-primary'];
   cssVars['--persona-header-subtitle-fg'] =
     cssVars['--persona-components-header-subtitle-color'] ??
     cssVars['--persona-components-header-subtitleForeground'] ??
+    headerMutedFg ??
     cssVars['--persona-text-muted'];
   cssVars['--persona-header-action-icon-fg'] =
-    cssVars['--persona-components-header-actionIconForeground'] ?? cssVars['--persona-muted'];
+    cssVars['--persona-components-header-actionIconForeground'] ??
+    headerMutedFg ??
+    cssVars['--persona-muted'];
+  // Unified header control box. Every header icon button reads these two from
+  // the stylesheet; per-control config keys stay inline and win. The third
+  // control token, `header.controlStrokeWidth`, needs no alias: widget.css
+  // reads its auto-emitted `--persona-components-header-controlStrokeWidth`
+  // directly and carries the 1.5 default in the var() fallback.
+  cssVars['--persona-header-control-size'] =
+    cssVars['--persona-components-header-controlSize'] ?? '32px';
+  cssVars['--persona-header-control-icon-size'] =
+    cssVars['--persona-components-header-controlIconSize'] ?? '20px';
 
   const headerTokens = theme.components?.header;
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
   if (headerTokens?.borderBottom) cssVars['--persona-header-border-bottom'] = headerTokens.borderBottom;
+  // Conditional: the stylesheet carries `auto` / the rail's own fallback chain,
+  // so an unset token must leave the variable undefined.
+  if (headerTokens?.minHeight) cssVars['--persona-header-min-height'] = headerTokens.minHeight;
+
+  // Messages rail header strip. Same conditional rule: the chunk's CSS carries
+  // the surface/border/height fallback chain when a theme says nothing.
+  const railHeaderBg = cssVars['--persona-components-history-railHeader-background'];
+  if (railHeaderBg) cssVars['--persona-history-rail-header-bg'] = railHeaderBg;
+  const railHeaderBorder = cssVars['--persona-components-history-railHeader-border'];
+  if (railHeaderBorder) cssVars['--persona-history-rail-header-border'] = railHeaderBorder;
+  const railHeaderMinHeight = cssVars['--persona-components-history-railHeader-minHeight'];
+  if (railHeaderMinHeight)
+    cssVars['--persona-history-rail-header-min-height'] = railHeaderMinHeight;
+
+  // Floating (overlay-collapsed) rail. Same conditional rule: the host's
+  // inline styles carry every default in their var() fallback.
+  for (const [token, alias] of [
+    ['margin', 'margin'],
+    ['borderRadius', 'radius'],
+    ['shadow', 'shadow'],
+    ['background', 'bg'],
+  ] as const) {
+    const value = cssVars[`--persona-components-history-overlay-${token}`];
+    if (value) cssVars[`--persona-history-overlay-${alias}`] = value;
+  }
+
+  // Row overflow menu. Same conditional rule: the chunk's CSS carries the
+  // elevated color-mix default in its var() fallback.
+  for (const [token, alias] of [
+    ['background', 'bg'],
+    ['borderRadius', 'radius'],
+  ] as const) {
+    const value = cssVars[`--persona-components-history-menu-${token}`];
+    if (value) cssVars[`--persona-history-menu-${alias}`] = value;
+  }
+  // Messages enter/exit motion. Read straight off the theme: durations are
+  // authored as bare millisecond NUMBERS, and resolveTokens collects only
+  // string leaves, so these never reach the flattened vars. A unitless value
+  // gains "ms" for the CSS animation shorthand; 0 emits "0ms" (leg disabled).
+  const historyMotion = theme.components?.history?.motion;
+  if (historyMotion) {
+    const asTime = (value: number | string | undefined): string | undefined => {
+      if (value === undefined) return undefined;
+      const s = String(value).trim();
+      return /^\d+(\.\d+)?$/.test(s) ? `${s}ms` : s;
+    };
+    const enterMs = asTime(historyMotion.enterDurationMs);
+    if (enterMs !== undefined) cssVars['--persona-history-enter-ms'] = enterMs;
+    const exitMs = asTime(historyMotion.exitDurationMs);
+    if (exitMs !== undefined) cssVars['--persona-history-exit-ms'] = exitMs;
+    if (historyMotion.enterEasing)
+      cssVars['--persona-history-enter-easing'] = historyMotion.enterEasing;
+    if (historyMotion.exitEasing)
+      cssVars['--persona-history-exit-easing'] = historyMotion.exitEasing;
+  }
+  // Destructive action text. The chunk falls back to the light-surface
+  // error-600; the built-in dark theme sets this to a passing lighter red.
+  const historyDangerFg = cssVars['--persona-components-history-dangerForeground'];
+  if (historyDangerFg) cssVars['--persona-history-danger-fg'] = historyDangerFg;
+  // Confirmation dialog. The danger fill/label pair is always emitted so the
+  // dialog follows the error palette; scrim and shadow stay conditional with
+  // the dialog's inline fallbacks as the defaults.
+  cssVars['--persona-danger'] =
+    cssVars['--persona-components-history-confirm-dangerBackground'] ??
+    cssVars['--persona-palette-colors-error-700'] ??
+    '#b42318';
+  cssVars['--persona-danger-fg'] =
+    cssVars['--persona-components-history-confirm-dangerForeground'] ?? '#ffffff';
+  for (const token of ['scrim', 'shadow'] as const) {
+    const value = cssVars[`--persona-components-history-confirm-${token}`];
+    if (value) cssVars[`--persona-history-confirm-${token}`] = value;
+  }
+
+  // Portaled control tooltip. Same conditional rule: widget.css carries the
+  // built-in look in every var() fallback, so an unset token stays undefined.
+  for (const [token, alias] of [
+    ['background', 'background'],
+    ['foreground', 'foreground'],
+    ['hintForeground', 'hint-fg'],
+    ['borderRadius', 'radius'],
+    ['fontSize', 'font-size'],
+    ['padding', 'padding'],
+    ['maxWidth', 'max-width'],
+    ['shadow', 'shadow'],
+  ]) {
+    const value = cssVars[`--persona-components-tooltip-${token}`];
+    if (value) cssVars[`--persona-tooltip-${alias}`] = value;
+  }
+  // Booleans never resolve into a token, so the arrow reads off the theme.
+  if (theme.components?.tooltip?.arrow === false)
+    cssVars['--persona-tooltip-arrow-display'] = 'none';
+
+  // Per-message action row (copy, vote, read aloud). Same conditional rule:
+  // widget.css falls back to the scheme-aware ghost wash and semantic text, so
+  // an unset token must leave the variable undefined.
+  for (const [token, alias] of [
+    ['hoverBackground', 'hover-bg'],
+    ['hoverForeground', 'hover-fg'],
+    ['borderRadius', 'radius'],
+  ] as const) {
+    const value = cssVars[`--persona-components-messageActions-${token}`];
+    if (value) cssVars[`--persona-message-action-${alias}`] = value;
+  }
 
   // Intro card aliases: short names the panel inline-styles read directly.
   // The full-path `--persona-components-introCard-*` variables auto-emit above.
@@ -1102,16 +1237,19 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (t.iconPadding) cssVars['--persona-artifact-toolbar-icon-padding'] = t.iconPadding;
     if (t.iconBorderRadius) cssVars['--persona-artifact-toolbar-icon-radius'] = t.iconBorderRadius;
     if (t.iconBorder) cssVars['--persona-artifact-toolbar-icon-border'] = t.iconBorder;
-    if (t.toggleGroupGap) cssVars['--persona-artifact-toolbar-toggle-group-gap'] = t.toggleGroupGap;
+    // A bare "0" is a <number> in calc(), not a <length>; gap/padding feed the
+    // toggle thumb's width calc, so a unitless zero would zero out the thumb.
+    if (t.toggleGroupGap) cssVars['--persona-artifact-toolbar-toggle-group-gap'] = zeroLength(t.toggleGroupGap);
     if (t.toggleBorderRadius) cssVars['--persona-artifact-toolbar-toggle-radius'] = t.toggleBorderRadius;
-    if (t.toggleGroupPadding) cssVars['--persona-artifact-toolbar-toggle-group-padding'] = t.toggleGroupPadding;
+    if (t.toggleGroupPadding) cssVars['--persona-artifact-toolbar-toggle-group-padding'] = zeroLength(t.toggleGroupPadding);
     if (t.toggleGroupBorder) cssVars['--persona-artifact-toolbar-toggle-group-border'] = t.toggleGroupBorder;
     if (t.toggleGroupBorderRadius) cssVars['--persona-artifact-toolbar-toggle-group-radius'] = t.toggleGroupBorderRadius;
     if (t.toggleGroupBackground) cssVars['--persona-artifact-toolbar-toggle-group-bg'] = resolveTokenValue(theme, t.toggleGroupBackground) ?? t.toggleGroupBackground;
     if (t.copyBackground) cssVars['--persona-artifact-toolbar-copy-bg'] = t.copyBackground;
     if (t.copyBorder) cssVars['--persona-artifact-toolbar-copy-border'] = t.copyBorder;
     if (t.copyColor) cssVars['--persona-artifact-toolbar-copy-color'] = t.copyColor;
-    if (t.copyBorderRadius) cssVars['--persona-artifact-toolbar-copy-radius'] = t.copyBorderRadius;
+    // Feeds the split-button halves' inner-radius calc; must stay a <length>.
+    if (t.copyBorderRadius) cssVars['--persona-artifact-toolbar-copy-radius'] = zeroLength(t.copyBorderRadius);
     if (t.copyPadding) cssVars['--persona-artifact-toolbar-copy-padding'] = t.copyPadding;
     if (t.copyMenuBackground) {
       cssVars['--persona-artifact-toolbar-copy-menu-bg'] = t.copyMenuBackground;

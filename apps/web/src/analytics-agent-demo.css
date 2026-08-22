@@ -720,3 +720,21 @@ body.analytics-artifact-open::after {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* Match the clear glyph to the close X: same optical weight (the scoped token
+   only reaches the refresh; the X keeps its sparse 1.05) and equal visible
+   extent (the refresh fills its viewBox, the X does not, so its box shrinks). */
+#analytics-agent-root .persona-composer-bar-clear-chat {
+  --persona-components-header-controlStrokeWidth: 1.05;
+}
+#analytics-agent-root .persona-composer-bar-clear-chat svg {
+  width: 10px;
+  height: 10px;
+}
+/* Block wrappers align the inline-flex buttons by SVG baseline (bottom edge),
+   so unequal glyph boxes misalign vertically; flex-centering both wrappers
+   aligns the button centers instead. */
+#analytics-agent-root :is(.persona-composer-bar-close, .persona-composer-bar-clear-chat) {
+  display: flex;
+  align-items: center;
+}

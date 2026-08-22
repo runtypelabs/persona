@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { applyThemeVariables, createTheme, getActiveTheme, themeToCssVariables } from './theme';
+import {
+  applyThemeVariables,
+  createDarkTheme,
+  createLightTheme,
+  createTheme,
+  getActiveTheme,
+  themeToCssVariables,
+} from './theme';
 
 describe('theme utils', () => {
   afterEach(() => {
@@ -135,6 +142,61 @@ describe('theme utils', () => {
     expect(cssVars['--persona-message-assistant-radius']).toBe('10px');
     expect(cssVars['--persona-launcher-radius']).toBe('9999px');
     expect(cssVars['--persona-button-radius']).toBe('6px');
+  });
+
+  it('emits history motion vars with ms appended to bare durations', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: {
+          history: {
+            motion: {
+              enterDurationMs: 320,
+              enterEasing: 'ease-out',
+              exitDurationMs: 0,
+              exitEasing: 'linear',
+            },
+          },
+        },
+      } as any)
+    );
+    expect(cssVars['--persona-history-enter-ms']).toBe('320ms');
+    expect(cssVars['--persona-history-enter-easing']).toBe('ease-out');
+    expect(cssVars['--persona-history-exit-ms']).toBe('0ms');
+    expect(cssVars['--persona-history-exit-easing']).toBe('linear');
+
+    // Unset motion emits nothing: the chunk's fallbacks stay in charge.
+    const bare = themeToCssVariables(createTheme({} as any));
+    expect(bare['--persona-history-enter-ms']).toBeUndefined();
+    expect(bare['--persona-history-exit-easing']).toBeUndefined();
+  });
+
+  it('keys launcher pill vars to shared tokens by default and launcher tokens when customized', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-launcher-bg']).toBe(defaults['--persona-surface']);
+    expect(defaults['--persona-launcher-fg']).toBe(defaults['--persona-primary']);
+    expect(defaults['--persona-launcher-fg-muted']).toBe(defaults['--persona-muted']);
+    expect(defaults['--persona-launcher-border']).toBe(defaults['--persona-border']);
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          launcher: {
+            background: '#1e293b',
+            foreground: '#f8fafc',
+            border: '#334155',
+          },
+        },
+      } as any)
+    );
+    expect(custom['--persona-launcher-bg']).toBe('#1e293b');
+    expect(custom['--persona-launcher-fg']).toBe('#f8fafc');
+    expect(custom['--persona-launcher-fg-muted']).toBe(
+      'color-mix(in srgb, #f8fafc 70%, transparent)'
+    );
+    expect(custom['--persona-launcher-border']).toBe('#334155');
+    // Launcher tokens must not leak into the shared tokens the panel reads.
+    expect(custom['--persona-surface']).toBe(defaults['--persona-surface']);
+    expect(custom['--persona-primary']).toBe(defaults['--persona-primary']);
   });
 
   it('zeroes horizontal intro-card padding when the card resolves flat', () => {
@@ -294,9 +356,15 @@ describe('theme utils', () => {
     // Default header uses solid primary role: icon-bg=primary.600, icon-fg=primary.50, etc.
     expect(cssVars['--persona-header-icon-bg']).toBe('#0f0f0f'); // primary.600
     expect(cssVars['--persona-header-icon-fg']).toBe('#ffffff'); // primary.50
-    expect(cssVars['--persona-header-title-fg']).toBe('#ffffff'); // primary.50
-    expect(cssVars['--persona-header-subtitle-fg']).toBe('#d4d4d4'); // primary.200
-    expect(cssVars['--persona-header-action-icon-fg']).toBe('#d4d4d4'); // primary.200
+    expect(cssVars['--persona-header-title-fg']).toBe('#ffffff'); // primary.50, via header.foreground
+    // Subtitle and action icons now derive from the background/foreground
+    // pair; the mix replaces the primary.200 they used to name directly.
+    expect(cssVars['--persona-header-subtitle-fg']).toBe(
+      'color-mix(in srgb, #ffffff 72%, #171717)'
+    );
+    expect(cssVars['--persona-header-action-icon-fg']).toBe(
+      'color-mix(in srgb, #ffffff 72%, #171717)'
+    );
 
     const custom = createTheme({
       components: {
@@ -315,6 +383,278 @@ describe('theme utils', () => {
     expect(customVars['--persona-header-title-fg']).toBe('#8b5cf6');
     expect(customVars['--persona-header-subtitle-fg']).toBe('#6b7280');
     expect(customVars['--persona-header-action-icon-fg']).toBe('#9ca3af');
+  });
+
+  it('renders the same default header chrome in light and dark schemes', () => {
+    // Golden values for the shipped header band. The dark preset overrides no
+    // header token, so both schemes must resolve identically.
+    const expected = {
+      '--persona-header-bg': '#171717', // primary.500
+      '--persona-header-border': 'color-mix(in srgb, #ffffff 14%, #171717)',
+      '--persona-header-title-fg': '#ffffff', // primary.50
+      '--persona-header-subtitle-fg': 'color-mix(in srgb, #ffffff 72%, #171717)',
+      '--persona-header-action-icon-fg': 'color-mix(in srgb, #ffffff 72%, #171717)',
+      '--persona-header-icon-bg': '#0f0f0f', // primary.600
+      '--persona-header-icon-fg': '#ffffff', // primary.50
+    };
+
+    const light = themeToCssVariables(createLightTheme());
+    const dark = themeToCssVariables(createDarkTheme());
+
+    for (const [key, value] of Object.entries(expected)) {
+      expect(light[key]).toBe(value);
+      expect(dark[key]).toBe(value);
+    }
+  });
+
+  it('derives header text and border from the background/foreground pair', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: {
+          header: { background: '#0b3d2e', foreground: '#f4f3ee' },
+        },
+      } as any)
+    );
+
+    expect(cssVars['--persona-header-bg']).toBe('#0b3d2e');
+    expect(cssVars['--persona-header-title-fg']).toBe('#f4f3ee');
+    expect(cssVars['--persona-header-subtitle-fg']).toBe(
+      'color-mix(in srgb, #f4f3ee 72%, #0b3d2e)'
+    );
+    expect(cssVars['--persona-header-action-icon-fg']).toBe(
+      'color-mix(in srgb, #f4f3ee 72%, #0b3d2e)'
+    );
+    expect(cssVars['--persona-header-border']).toBe(
+      'color-mix(in srgb, #f4f3ee 14%, #0b3d2e)'
+    );
+  });
+
+  it('lets explicit header keys win over the foreground derivation', () => {
+    const cssVars = themeToCssVariables(
+      createTheme({
+        components: {
+          header: {
+            background: '#0b3d2e',
+            foreground: '#f4f3ee',
+            border: '#1f5c48',
+            titleForeground: '#ffe066',
+            actionIconForeground: '#cfd8cc',
+            subtitle: { color: '#b9c8bc' },
+          },
+        },
+      } as any)
+    );
+
+    expect(cssVars['--persona-header-border']).toBe('#1f5c48');
+    expect(cssVars['--persona-header-title-fg']).toBe('#ffe066');
+    expect(cssVars['--persona-header-action-icon-fg']).toBe('#cfd8cc');
+    expect(cssVars['--persona-header-subtitle-fg']).toBe('#b9c8bc');
+  });
+
+  it('ranks header title color as title.color, then titleForeground, then foreground', () => {
+    const base = { background: '#0b3d2e', foreground: '#f4f3ee' };
+
+    const fromForeground = themeToCssVariables(
+      createTheme({ components: { header: base } } as any)
+    );
+    const fromAlias = themeToCssVariables(
+      createTheme({
+        components: { header: { ...base, titleForeground: '#ffe066' } },
+      } as any)
+    );
+    const fromTitleColor = themeToCssVariables(
+      createTheme({
+        components: {
+          header: { ...base, titleForeground: '#ffe066', title: { color: '#8b5cf6' } },
+        },
+      } as any)
+    );
+
+    expect(fromForeground['--persona-header-title-fg']).toBe('#f4f3ee');
+    expect(fromAlias['--persona-header-title-fg']).toBe('#ffe066');
+    expect(fromTitleColor['--persona-header-title-fg']).toBe('#8b5cf6');
+  });
+
+  it('emits the shared header control box, glyph, and stroke tokens', () => {
+    const defaults = themeToCssVariables(createTheme());
+
+    expect(defaults['--persona-header-control-size']).toBe('32px');
+    expect(defaults['--persona-header-control-icon-size']).toBe('20px');
+    // The stroke has no alias: widget.css reads the full-path token and owns
+    // the 1.5 default, which keeps the sparse close X on its 1.05.
+    expect(defaults['--persona-components-header-controlStrokeWidth']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          header: {
+            controlSize: '32px',
+            controlIconSize: '18px',
+            controlStrokeWidth: '2',
+          },
+        },
+      } as any)
+    );
+
+    expect(custom['--persona-header-control-size']).toBe('32px');
+    expect(custom['--persona-header-control-icon-size']).toBe('18px');
+    // Unitless, straight through: no px suffix, no token resolution.
+    expect(custom['--persona-components-header-controlStrokeWidth']).toBe('2');
+  });
+
+  it('emits the launcher icon stroke token only when set', () => {
+    const defaults = themeToCssVariables(createTheme());
+
+    // No alias and no default: widget.css owns the shipped 2 in its var()
+    // fallback, so an unset token must leave the variable undefined.
+    expect(defaults['--persona-components-launcher-iconStrokeWidth']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          launcher: {
+            iconStrokeWidth: '1.5',
+          },
+        },
+      } as any)
+    );
+
+    // Unitless, straight through: no px suffix, no token resolution.
+    expect(custom['--persona-components-launcher-iconStrokeWidth']).toBe('1.5');
+  });
+
+  it('emits the header and rail-header height/surface tokens only when set', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-header-min-height']).toBeUndefined();
+    expect(defaults['--persona-history-rail-header-bg']).toBeUndefined();
+    expect(defaults['--persona-history-rail-header-border']).toBeUndefined();
+    expect(defaults['--persona-history-rail-header-min-height']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          header: { minHeight: '64px' },
+          history: {
+            railHeader: {
+              background: 'palette.colors.gray.100',
+              border: '1px solid #e5e7eb',
+              minHeight: '64px',
+              title: {
+                color: 'palette.colors.gray.900',
+                fontSize: '15px',
+                fontWeight: '700',
+              },
+            },
+          },
+        },
+      } as any)
+    );
+
+    expect(custom['--persona-header-min-height']).toBe('64px');
+    // The background goes through token resolution; the rest are raw CSS.
+    expect(custom['--persona-history-rail-header-bg']).toBe('#f3f4f6');
+    expect(custom['--persona-history-rail-header-border']).toBe('1px solid #e5e7eb');
+    expect(custom['--persona-history-rail-header-min-height']).toBe('64px');
+    // The rail title is styled straight off the auto-emitted component vars.
+    expect(custom['--persona-components-history-railHeader-title-color']).toBe('#111827');
+    expect(custom['--persona-components-history-railHeader-title-fontSize']).toBe('15px');
+    expect(custom['--persona-components-history-railHeader-title-fontWeight']).toBe('700');
+  });
+
+  it('emits the floating rail aliases only when set', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-history-overlay-margin']).toBeUndefined();
+    expect(defaults['--persona-history-overlay-radius']).toBeUndefined();
+    expect(defaults['--persona-history-overlay-shadow']).toBeUndefined();
+    expect(defaults['--persona-history-overlay-bg']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          history: {
+            overlay: {
+              margin: '12px',
+              borderRadius: '20px',
+              shadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
+              background: 'palette.colors.gray.100',
+            },
+          },
+        },
+      } as any)
+    );
+
+    expect(custom['--persona-history-overlay-margin']).toBe('12px');
+    expect(custom['--persona-history-overlay-radius']).toBe('20px');
+    expect(custom['--persona-history-overlay-shadow']).toBe(
+      '0 8px 24px rgba(0, 0, 0, 0.4)'
+    );
+    // The background goes through token resolution; the rest are raw CSS.
+    expect(custom['--persona-history-overlay-bg']).toBe('#f3f4f6');
+  });
+
+  it('emits the history menu aliases only when set', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-history-menu-bg']).toBeUndefined();
+    expect(defaults['--persona-history-menu-radius']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          history: {
+            menu: {
+              background: 'palette.colors.gray.100',
+              borderRadius: '16px',
+            },
+          },
+        },
+      } as any)
+    );
+
+    expect(custom['--persona-history-menu-bg']).toBe('#f3f4f6');
+    expect(custom['--persona-history-menu-radius']).toBe('16px');
+  });
+
+  it('emits the tooltip aliases only when set, including the arrow opt-out', () => {
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-tooltip-background']).toBeUndefined();
+    expect(defaults['--persona-tooltip-hint-fg']).toBeUndefined();
+    expect(defaults['--persona-tooltip-radius']).toBeUndefined();
+    expect(defaults['--persona-tooltip-arrow-display']).toBeUndefined();
+
+    const custom = themeToCssVariables(
+      createTheme({
+        components: {
+          tooltip: {
+            background: 'palette.colors.gray.800',
+            foreground: 'palette.colors.gray.50',
+            hintForeground: 'palette.colors.gray.400',
+            borderRadius: 'palette.radius.md',
+            fontSize: '13px',
+            padding: '8px 14px',
+            maxWidth: '240px',
+            shadow: 'none',
+            arrow: false,
+          },
+        },
+      } as any)
+    );
+
+    // Colors and the radius resolve through the palette; the rest are raw CSS.
+    expect(custom['--persona-tooltip-background']).toBe('#1f2937');
+    expect(custom['--persona-tooltip-foreground']).toBe('#f9fafb');
+    expect(custom['--persona-tooltip-hint-fg']).toBe('#9ca3af');
+    expect(custom['--persona-tooltip-radius']).toBe('0.375rem');
+    expect(custom['--persona-tooltip-font-size']).toBe('13px');
+    expect(custom['--persona-tooltip-padding']).toBe('8px 14px');
+    expect(custom['--persona-tooltip-max-width']).toBe('240px');
+    expect(custom['--persona-tooltip-shadow']).toBe('none');
+    expect(custom['--persona-tooltip-arrow-display']).toBe('none');
+
+    // arrow: true is the built-in look, so it emits nothing.
+    const withArrow = themeToCssVariables(
+      createTheme({ components: { tooltip: { arrow: true } } } as any)
+    );
+    expect(withArrow['--persona-tooltip-arrow-display']).toBeUndefined();
   });
 
   it('emits full-path CSS variables for header and welcome text style tokens', () => {
@@ -397,6 +737,135 @@ describe('theme utils', () => {
     expect(customVars['--persona-button-ghost-hover-bg']).toBe('#f3f4f6'); // gray.100
   });
 
+  it('inverts the ghost hover wash for dark color schemes', () => {
+    // 5% black is invisible on a near-black surface, so every dark scheme —
+    // including a host theme that never mentions button.ghost — gets a light
+    // alpha wash instead. This drives the history rail's collapse toggle, its
+    // un-themed rows, and the per-message action buttons.
+    const light = themeToCssVariables(getActiveTheme({ colorScheme: 'light' }));
+    expect(light['--persona-button-ghost-hover-bg']).toBe('rgba(0, 0, 0, 0.05)');
+
+    const dark = themeToCssVariables(getActiveTheme({ colorScheme: 'dark' }));
+    expect(dark['--persona-button-ghost-hover-bg']).toBe('rgba(255, 255, 255, 0.08)');
+
+    // A host dark theme that overrides unrelated component tokens keeps it:
+    // the dark default is deep-merged underneath, not spread over.
+    const hostDark = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: { components: { button: { primary: { background: '#22c55e' } } } },
+      } as any)
+    );
+    expect(hostDark['--persona-button-ghost-hover-bg']).toBe('rgba(255, 255, 255, 0.08)');
+
+    // An explicit hoverBackground always wins, in either scheme.
+    const explicitDark = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: {
+          components: { button: { ghost: { hoverBackground: 'palette.colors.gray.800' } } },
+        },
+      } as any)
+    );
+    expect(explicitDark['--persona-button-ghost-hover-bg']).toBe('#1f2937'); // gray.800
+
+    // Set on `theme` alone it still reaches dark mode, which merges theme
+    // under darkTheme before the dark rebuild.
+    const explicitViaLight = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        theme: { components: { button: { ghost: { hoverBackground: '#123456' } } } },
+      } as any)
+    );
+    expect(explicitViaLight['--persona-button-ghost-hover-bg']).toBe('#123456');
+  });
+
+  it('lightens the history danger red for dark color schemes', () => {
+    // error-600 lands ~3:1 on dark surfaces, under the AA floor for the 14px
+    // destructive labels; the built-in dark defaults swap in error-400.
+    const light = themeToCssVariables(getActiveTheme({ colorScheme: 'light' }));
+    expect(light['--persona-history-danger-fg']).toBeUndefined();
+
+    const dark = themeToCssVariables(getActiveTheme({ colorScheme: 'dark' }));
+    expect(dark['--persona-history-danger-fg']).toBe('#f87171');
+
+    // An explicit dangerForeground wins in either scheme.
+    const explicit = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: {
+          components: { history: { dangerForeground: '#fecaca' } },
+        },
+      } as any)
+    );
+    expect(explicit['--persona-history-danger-fg']).toBe('#fecaca');
+  });
+
+  it('emits the confirm dialog danger pair and forks the fill for dark', () => {
+    // Always emitted: the dialog's inline var() must resolve so the fill
+    // follows a customized error palette instead of its legacy fallback.
+    const light = themeToCssVariables(getActiveTheme({ colorScheme: 'light' }));
+    expect(light['--persona-danger']).toBe('#b91c1c'); // error.700
+    expect(light['--persona-danger-fg']).toBe('#ffffff');
+    expect(light['--persona-history-confirm-scrim']).toBeUndefined();
+
+    const dark = themeToCssVariables(getActiveTheme({ colorScheme: 'dark' }));
+    expect(dark['--persona-danger']).toBe('#dc2626'); // error.600
+    // The light scrim default barely dims near-black surfaces.
+    expect(dark['--persona-history-confirm-scrim']).toBe('rgba(0, 0, 0, 0.6)');
+
+    const explicit = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: {
+          components: {
+            history: {
+              confirm: {
+                dangerBackground: '#7f1d1d',
+                dangerForeground: '#fee2e2',
+                scrim: 'rgba(0, 0, 0, 0.6)',
+              },
+            },
+          },
+        },
+      } as any)
+    );
+    expect(explicit['--persona-danger']).toBe('#7f1d1d');
+    expect(explicit['--persona-danger-fg']).toBe('#fee2e2');
+    expect(explicit['--persona-history-confirm-scrim']).toBe('rgba(0, 0, 0, 0.6)');
+  });
+
+  it('emits messageActions aliases only when the group is configured', () => {
+    // widget.css chains to the ghost wash and semantic text on its own, so an
+    // unset group must leave every alias undefined.
+    const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-message-action-hover-bg']).toBeUndefined();
+    expect(defaults['--persona-message-action-hover-fg']).toBeUndefined();
+    expect(defaults['--persona-message-action-radius']).toBeUndefined();
+
+    const themed = themeToCssVariables(
+      createTheme({
+        components: {
+          messageActions: {
+            hoverBackground: 'palette.colors.gray.100',
+            hoverForeground: 'semantic.colors.text',
+            borderRadius: 'palette.radius.full',
+          },
+        },
+      } as any)
+    );
+    expect(themed['--persona-message-action-hover-bg']).toBe('#f3f4f6'); // gray.100
+    expect(themed['--persona-message-action-hover-fg']).toBe('#111827'); // semantic text
+    expect(themed['--persona-message-action-radius']).toBe('9999px');
+
+    // Partial groups emit only what they set.
+    const partial = themeToCssVariables(
+      createTheme({ components: { messageActions: { borderRadius: '2px' } } } as any)
+    );
+    expect(partial['--persona-message-action-radius']).toBe('2px');
+    expect(partial['--persona-message-action-hover-bg']).toBeUndefined();
+  });
+
   it('defaults artifact pane fill from semantic container and resolves toolbar background token refs', () => {
     const theme = createTheme();
     const cssVars = themeToCssVariables(theme);
@@ -418,6 +887,34 @@ describe('theme utils', () => {
     const surfaceVars = themeToCssVariables(surfacePane);
     expect(surfaceVars['--persona-components-artifact-pane-background']).toBe('#f9fafb');
     expect(surfaceVars['--persona-artifact-toolbar-bg']).toBe('#f9fafb');
+  });
+
+  it('coerces unitless zero toggle-group gap/padding to px (calc-safe)', () => {
+    const theme = createTheme({
+      components: {
+        artifact: {
+          toolbar: {
+            toggleGroupGap: '0',
+            toggleGroupPadding: '0',
+          },
+        },
+      },
+    } as any);
+    const cssVars = themeToCssVariables(theme);
+    // The selection thumb's width calc() mixes these with lengths; a bare
+    // "0" is a <number> there and would invalidate the whole expression.
+    expect(cssVars['--persona-artifact-toolbar-toggle-group-gap']).toBe('0px');
+    expect(cssVars['--persona-artifact-toolbar-toggle-group-padding']).toBe('0px');
+
+    const unitful = themeToCssVariables(
+      createTheme({
+        components: {
+          artifact: { toolbar: { toggleGroupGap: '4px', toggleGroupPadding: '0.25rem' } },
+        },
+      } as any)
+    );
+    expect(unitful['--persona-artifact-toolbar-toggle-group-gap']).toBe('4px');
+    expect(unitful['--persona-artifact-toolbar-toggle-group-padding']).toBe('0.25rem');
   });
 
   it('maps artifact inline chrome tokens to dedicated CSS variables (with semantic refs)', () => {

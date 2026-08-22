@@ -66,6 +66,7 @@ import {
   EllipsisVertical,
   Menu,
   House,
+  PanelLeft,
   // ---------- Actions ----------
   Plus,
   Minus,
@@ -220,6 +221,8 @@ const LUCIDE_ICONS = {
   "ellipsis-vertical": EllipsisVertical,
   "menu": Menu,
   "house": House,
+  // Sidebar glyph shared with the history rail's collapse controls.
+  "panel-left": PanelLeft,
   // Actions
   "plus": Plus,
   "minus": Minus,

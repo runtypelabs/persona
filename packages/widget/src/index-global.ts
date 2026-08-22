@@ -188,3 +188,58 @@ setContextMentionsInlineLoader(() => {
   }
   return import(/* @vite-ignore */ chunkUrl);
 });
+
+// ---------------------------------------------------------------------------
+// Deferred history-view loading.
+//
+// This bundle is built with `@runtypelabs/persona/history-view` external (see
+// `tsup.global.config.ts`): the Messages navigation surface is kept out of the
+// CDN payload and fetched only when the visitor first opens history. Same
+// sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setHistoryViewLoader } from "./history-view-loader";
+
+setHistoryViewLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "history-view.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the history-view.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host history-view.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred event-stream-view loading.
+//
+// Same scheme as history-view: `@runtypelabs/persona/event-stream-view` is
+// external here (see `tsup.global.config.ts`), and the observability panel is
+// fetched from a sibling URL only when the visitor first opens it.
+// ---------------------------------------------------------------------------
+
+import { setEventStreamViewLoader } from "./event-stream-view-loader";
+
+setEventStreamViewLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "event-stream-view.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the event-stream-view.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host event-stream-view.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});

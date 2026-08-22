@@ -4,7 +4,13 @@ import type {
   PersonaArtifactRecord,
   PersonaArtifactCustomAction,
 } from "../types";
-import { fileKindOf, fileTypeLabel, basenameOf } from "../utils/artifact-file";
+import {
+  fileKindOf,
+  fileTypeLabel,
+  basenameOf,
+  downloadInfoFor,
+  triggerArtifactDownload,
+} from "../utils/artifact-file";
 import {
   buildArtifactActionButton,
   artifactRecordActionContext,
@@ -15,8 +21,13 @@ import {
   type ArtifactPreviewBodyHandle,
 } from "./artifact-preview";
 import { renderLucideIcon } from "../utils/icons";
-import { createDropdownMenu, type DropdownMenuHandle } from "../utils/dropdown";
-import { createIconButton, createLabelButton, createToggleGroup } from "../utils/buttons";
+import {
+  createIconButton,
+  createLabelButton,
+  createSplitButton,
+  createToggleGroup,
+  type SplitButtonHandle,
+} from "../utils/buttons";
 import { createRovingTablist } from "../utils/roving-tablist";
 
 export type ArtifactPaneApi = {
@@ -31,6 +42,8 @@ export type ArtifactPaneApi = {
   setExpandToggleVisible: (visible: boolean) => void;
   /** Show/hide the default-preset copy button; no-op in the document preset (copy is always shown there). */
   setCopyButtonVisible: (visible: boolean) => void;
+  /** Show/hide the document-preset refresh button; driven from the parent's config on every sync (visible only with an onDocumentToolbarRefresh handler). */
+  setRefreshButtonVisible: (visible: boolean) => void;
   /** Replace the toolbar custom-action list and re-render it; driven from the parent's config on every sync so live config updates apply. */
   setCustomActions: (actions: PersonaArtifactCustomAction[]) => void;
   /** Update the tab-strip edge fade live; driven from the parent's config on every sync. */
@@ -54,6 +67,8 @@ export type ArtifactPaneApi = {
    * reveal the pane renders the current recorded state.
    */
   setVisible: (visible: boolean) => void;
+  /** Release the current preview's timers/listeners. Call when the pane is discarded. */
+  destroy: () => void;
 };
 
 /**
@@ -99,7 +114,7 @@ export function createArtifactPane(
     backdrop?.classList.add("persona-hidden");
     shell.classList.remove("persona-artifact-drawer-open");
     // Hide portaled copy menu
-    copyMenuDropdown?.hide();
+    copySplit?.closeMenu();
   };
 
   if (backdrop) {
@@ -167,8 +182,7 @@ export function createArtifactPane(
 
   let copyWrap: HTMLElement | null = null;
   let copyBtn: HTMLButtonElement;
-  let copyMenuChevronBtn: HTMLButtonElement | null = null;
-  let copyMenuDropdown: DropdownMenuHandle | null = null;
+  let copySplit: SplitButtonHandle | null = null;
 
   if (documentChrome && (showCopyLabel || showCopyChevron) && !showCopyMenu) {
     copyBtn = showCopyLabel
@@ -179,21 +193,22 @@ export function createArtifactPane(
       if (chev) copyBtn.appendChild(chev);
     }
   } else if (documentChrome && showCopyMenu) {
-    copyWrap = createElement(
-      "div",
-      "persona-relative persona-inline-flex persona-items-center persona-gap-0 persona-rounded-md"
-    );
-    copyBtn = showCopyLabel
-      ? createLabelButton({ icon: "copy", label: "Copy", iconSize: 14, className: "persona-artifact-doc-copy-btn" })
-      : createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-copy-btn" });
-    copyMenuChevronBtn = createIconButton({
-      icon: "chevron-down",
-      label: "More copy options",
-      size: 14,
-      className: "persona-artifact-doc-copy-menu-chevron persona-artifact-doc-icon-btn",
-      aria: { "aria-haspopup": "true", "aria-expanded": "false" }
+    copySplit = createSplitButton({
+      label: "Copy",
+      icon: "copy",
+      iconSize: 14,
+      iconOnly: !showCopyLabel,
+      primaryClassName: "persona-artifact-doc-copy-btn",
+      chevronLabel: "More copy options",
+      chevronClassName: "persona-artifact-doc-copy-menu-chevron persona-artifact-doc-icon-btn",
+      menuItems: (copyMenuItems ?? []).map((item) => ({ id: item.id, label: item.label })),
+      position: "bottom-right",
+      // Widget root for CSS var inheritance, escaping overflow: hidden.
+      portal: () => (shell.closest("[data-persona-root]") as HTMLElement | null) ?? document.body,
+      onSelect: (actionId) => void handleCopyMenuSelect(actionId),
     });
-    copyWrap.append(copyBtn, copyMenuChevronBtn);
+    copyWrap = copySplit.element;
+    copyBtn = copySplit.primaryButton;
   } else if (documentChrome) {
     copyBtn = createIconButton({ icon: "copy", label: "Copy", className: "persona-artifact-doc-icon-btn" });
   } else {
@@ -208,6 +223,12 @@ export function createArtifactPane(
   const refreshBtn = documentChrome
     ? createIconButton({ icon: "refresh-cw", label: "Refresh", className: "persona-artifact-doc-icon-btn" })
     : createIconButton({ icon: "refresh-cw", label: "Refresh" });
+  // The refresh glyph universally reads "reload this preview", so the button
+  // only shows when a handler gives it that meaning; revealed live via
+  // setRefreshButtonVisible when a config update supplies one.
+  if (!layout?.onDocumentToolbarRefresh) {
+    refreshBtn.classList.add("persona-hidden");
+  }
   const closeIconBtn = documentChrome
     ? createIconButton({ icon: "x", label: closeButtonLabel, className: "persona-artifact-doc-icon-btn" })
     : createIconButton({ icon: "x", label: closeButtonLabel });
@@ -234,80 +255,119 @@ export function createArtifactPane(
   let customActionList: PersonaArtifactCustomAction[] =
     config.features?.artifacts?.toolbarActions ?? [];
 
-  const getSelectedArtifactText = (): { markdown: string; jsonPayload: string; id: string | null } => {
+  const getSelectedArtifactText = () => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
     const id = sel?.id ?? null;
     const markdown = sel?.artifactType === "markdown" ? sel.markdown ?? "" : "";
     const jsonPayload = sel
       ? JSON.stringify({ component: sel.component, props: sel.props }, null, 2)
       : "";
-    return { markdown, jsonPayload, id };
+    const { filename, mime, content } = downloadInfoFor({
+      title: sel?.title,
+      markdown: sel?.markdown ?? "",
+      file: sel?.file,
+    });
+    return {
+      markdown,
+      jsonPayload,
+      id,
+      file: sel?.file,
+      suggestedFilename: filename,
+      mime,
+      content,
+    };
   };
 
-  const defaultCopy = async () => {
+  /** Built-in `download` menu action: same blob-anchor path as the card button. */
+  const performDownload = () => {
+    const { suggestedFilename, mime, content } = getSelectedArtifactText();
+    if (!content) return;
+    triggerArtifactDownload({ filename: suggestedFilename, mime, content });
+  };
+
+  const menuPayload = (actionId: string) => {
+    const { id, ...rest } = getSelectedArtifactText();
+    return { actionId, artifactId: id, ...rest };
+  };
+
+  const defaultCopy = async (): Promise<boolean> => {
     const sel = records.find((r) => r.id === selectedId) ?? records[records.length - 1];
     try {
       await navigator.clipboard.writeText(artifactCopyText(sel));
+      return true;
     } catch {
-      /* ignore */
+      return false;
     }
+  };
+
+  // Success affordance matching the message-copy action: swap the copy glyph
+  // (and "Copy" label when present) to a check for 2s, then restore. Only
+  // called after the copy path resolved, so failures stay unconfirmed.
+  let copyRestore: (() => void) | null = null;
+  const flashCopied = () => {
+    copyRestore?.();
+    const glyph = copyBtn.querySelector("svg");
+    const size = Number(glyph?.getAttribute("width")) || 16;
+    const check = renderLucideIcon("check", size, "currentColor", 2);
+    if (!glyph || !check) return;
+    glyph.replaceWith(check);
+    const labelSpan = copyBtn.querySelector("span");
+    if (labelSpan) labelSpan.textContent = "Copied";
+    const timer = setTimeout(() => copyRestore?.(), 2000);
+    copyRestore = () => {
+      clearTimeout(timer);
+      check.replaceWith(glyph);
+      if (labelSpan) labelSpan.textContent = "Copy";
+      copyRestore = null;
+    };
   };
 
   copyBtn.addEventListener("click", async () => {
     const handler = layout?.onDocumentToolbarCopyMenuSelect;
     if (handler && showCopyMenu) {
-      const { markdown, jsonPayload, id } = getSelectedArtifactText();
       try {
-        await handler({ actionId: "primary", artifactId: id, markdown, jsonPayload });
+        // `false` = not handled: fall through to the built-in copy.
+        const result = await handler(menuPayload("primary"));
+        if (result === false) {
+          if (await defaultCopy()) flashCopied();
+          return;
+        }
+        flashCopied();
       } catch {
         /* ignore */
       }
       return;
     }
-    await defaultCopy();
+    if (await defaultCopy()) flashCopied();
   });
 
-  if (copyMenuChevronBtn && copyMenuItems?.length) {
-    // Resolve the portal target: widget root for CSS var inheritance, escaping overflow: hidden
-    const resolvePortal = (): HTMLElement => shell.closest("[data-persona-root]") as HTMLElement ?? document.body;
-
-    const initDropdown = () => {
-      copyMenuDropdown = createDropdownMenu({
-        items: copyMenuItems.map((item) => ({ id: item.id, label: item.label })),
-        onSelect: async (actionId) => {
-          const { markdown, jsonPayload, id } = getSelectedArtifactText();
-          const handler = layout?.onDocumentToolbarCopyMenuSelect;
-          try {
-            if (handler) {
-              await handler({ actionId, artifactId: id, markdown, jsonPayload });
-            } else if (actionId === "markdown" || actionId === "md") {
-              await navigator.clipboard.writeText(markdown);
-            } else if (actionId === "json" || actionId === "source") {
-              await navigator.clipboard.writeText(jsonPayload);
-            } else {
-              await navigator.clipboard.writeText(markdown || jsonPayload);
-            }
-          } catch {
-            /* ignore */
-          }
-        },
-        anchor: copyWrap ?? copyMenuChevronBtn!,
-        position: 'bottom-right',
-        portal: resolvePortal(),
-      });
-    };
-
-    // Defer init until shell is in the DOM (may not be attached yet)
-    if (shell.isConnected) {
-      initDropdown();
-    } else {
-      requestAnimationFrame(initDropdown);
+  // Hoisted: referenced by the split button built above.
+  async function handleCopyMenuSelect(actionId: string): Promise<void> {
+    const handler = layout?.onDocumentToolbarCopyMenuSelect;
+    try {
+      if (handler) {
+        // Custom menus can hold non-copy actions (download, publish),
+        // so the integrator's handler owns the outcome and feedback;
+        // returning `false` falls through to the built-ins below.
+        const result = await handler(menuPayload(actionId));
+        if (result !== false) return;
+      }
+      if (actionId === "download") {
+        performDownload();
+        return;
+      }
+      const { markdown, jsonPayload } = getSelectedArtifactText();
+      if (actionId === "markdown" || actionId === "md") {
+        await navigator.clipboard.writeText(markdown);
+      } else if (actionId === "json" || actionId === "source") {
+        await navigator.clipboard.writeText(jsonPayload);
+      } else {
+        await navigator.clipboard.writeText(markdown || jsonPayload);
+      }
+      flashCopied();
+    } catch {
+      /* ignore */
     }
-
-    copyMenuChevronBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      copyMenuDropdown?.toggle();
-    });
   }
 
   refreshBtn.addEventListener("click", async () => {
@@ -613,6 +673,7 @@ export function createArtifactPane(
       records[records.length - 1];
     if (!sel) {
       content.replaceChildren();
+      preview?.destroy();
       preview = null;
       updateFileToggleVisibility(false);
       return;
@@ -750,6 +811,9 @@ export function createArtifactPane(
       if (documentChrome) return;
       copyBtn.classList.toggle("persona-hidden", !visible);
     },
+    setRefreshButtonVisible(visible: boolean) {
+      refreshBtn.classList.toggle("persona-hidden", !visible);
+    },
     setCustomActions(actions: PersonaArtifactCustomAction[]) {
       customActionList = actions;
       renderCustomActions();
@@ -780,6 +844,10 @@ export function createArtifactPane(
       // comments in artifact-preview.ts). Laziness only blocks building NEW
       // previews while hidden; an already-mounted one stays put.
       if (next && dirty) flush();
+    },
+    destroy() {
+      preview?.destroy();
+      preview = null;
     }
   };
 }

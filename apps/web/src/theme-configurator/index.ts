@@ -101,6 +101,28 @@ function listConfigDrawerFocusables(panel: Element): HTMLElement[] {
   });
 }
 
+/**
+ * Motion fields commit per keystroke like every editor text input, which keeps
+ * the CSS vars live but would replay the Messages view mid-edit. Delegated
+ * focus tracking (the inputs are rebuilt with the drill-down) holds the replay
+ * while one has focus; blur releases it, Enter flushes it immediately.
+ */
+function initHistoryMotionFieldHold(): void {
+  const isMotionField = (target: EventTarget | null): boolean =>
+    target instanceof HTMLInputElement && target.id.startsWith('history-motion-');
+  document.addEventListener('focusin', (e) => {
+    if (isMotionField(e.target)) previewManager?.setHistoryMotionEditHold(true);
+  });
+  document.addEventListener('focusout', (e) => {
+    if (isMotionField(e.target)) previewManager?.setHistoryMotionEditHold(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && isMotionField(e.target)) {
+      previewManager?.flushHistoryMotionReplay();
+    }
+  });
+}
+
 function initMobileConfigDrawer(): void {
   const backdrop = document.getElementById('config-drawer-backdrop');
   const openBtn = document.getElementById('mobile-form-open-btn') as HTMLButtonElement | null;
@@ -195,6 +217,7 @@ function init(): void {
     }
   });
   previewManager.mount();
+  initHistoryMotionFieldHold();
 
   window.addEventListener('persona-configurator:inject-artifact', () => {
     if (!state.get('features.artifacts.enabled')) {
@@ -775,9 +798,16 @@ const SECTION_TO_DRILLDOWN: Record<string, DrilldownView> = {
   'dark-comp-button-colors': 'component-colors',
   'comp-panel': 'component-shapes',
   'comp-launcher': 'component-shapes',
+  'comp-header-controls': 'component-shapes',
+  'comp-history-rail-header': 'component-shapes',
+  'comp-history-overlay': 'component-shapes',
+  'comp-history-motion': 'component-shapes',
+  'comp-tooltip': 'component-shapes',
   'comp-message-shape': 'component-shapes',
   'comp-input-shape': 'component-shapes',
+  'comp-composer-spacing': 'component-shapes',
   'comp-button-shape': 'component-shapes',
+  'comp-text-styles': 'component-shapes',
   // V1 sections now in Advanced Tokens drilldown
   'chat-colors': 'advanced-tokens',
   'typography': 'advanced-tokens',
@@ -935,6 +965,7 @@ const SCENE_LABELS: Record<string, string> = {
   'follow-ups': 'Follow-ups',
   minimized: 'Minimized',
   artifact: 'Artifact',
+  messages: 'Messages',
 };
 
 const THEME_ICONS: Record<string, string> = {

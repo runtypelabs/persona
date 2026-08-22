@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLauncherSurface } from "./launcher";
+import { mount as mountCriticalLauncher } from "../launcher-global";
+import { createAgentExperience } from "../ui";
 import type {
   AgentWidgetConfig,
   AgentWidgetLauncherTeaserConfig,
@@ -399,5 +404,133 @@ describe("createLauncherSurface", () => {
     expect(teaserElement?.hidden).toBe(true);
     expect(surface.element.parentElement).toBeNull();
     expect(document.body.children.length).toBe(0);
+  });
+});
+
+/**
+ * The deferred install paints the launcher from the critical bundle and swaps
+ * to the full widget on first click, so any glyph styling must reach both
+ * surfaces from the one stylesheet or the swap flickers.
+ */
+describe("launcher icon stroke parity", () => {
+  // jsdom leaves `import.meta.url` an http URL, so resolve from the package root.
+  const widgetCss = readFileSync(
+    resolve(process.cwd(), "src/styles/widget.css"),
+    "utf8"
+  );
+  // The SHIPPED selector, read back out of widget.css by its declaration, so
+  // a rescope of the real rule fails here instead of slipping past a
+  // hardcoded copy of the selector.
+  const strokeDeclarationAt = widgetCss.indexOf(
+    "stroke-width: var(--persona-components-launcher-iconStrokeWidth, 1.5)"
+  );
+  const strokeSelectorStart = widgetCss.lastIndexOf("}", strokeDeclarationAt) + 1;
+  const STROKE_RULE = widgetCss
+    .slice(strokeSelectorStart, widgetCss.indexOf("{", strokeSelectorStart))
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim();
+
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+
+  it("renders one glyph the shared stroke rule reaches from both surfaces", () => {
+    const config = {
+      apiUrl: "https://api.example.com/chat",
+      persistState: { keyPrefix: nextPrefix() },
+      launcher: {
+        agentIconName: "message-circle",
+        callToActionIconName: "arrow-up-right",
+      },
+    };
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const controller = createAgentExperience(host, config);
+
+    const criticalTarget = document.createElement("div");
+    document.body.appendChild(criticalTarget);
+    const critical = mountCriticalLauncher({
+      target: criticalTarget,
+      config,
+      onOpen: () => {},
+    });
+
+    const iconSvg = "[data-role='launcher-icon'] > svg";
+    const eager = host.querySelector<SVGElement>(iconSvg);
+    const deferred = criticalTarget.querySelector<SVGElement>(iconSvg);
+
+    expect(eager).not.toBeNull();
+    expect(deferred).not.toBeNull();
+    expect(deferred!.outerHTML).toBe(eager!.outerHTML);
+    // matches() resolves the descendant combinator against each surface's own
+    // ancestors, and STROKE_RULE is the selector parsed from widget.css, so
+    // this proves the shipped rule selects the glyph in both surfaces.
+    expect(eager!.matches(STROKE_RULE)).toBe(true);
+    expect(deferred!.matches(STROKE_RULE)).toBe(true);
+
+    // One pill, one line weight: the call-to-action arrow follows the same
+    // rule as the agent glyph on both surfaces.
+    const ctaSvg = "[data-role='launcher-call-to-action-icon'] > svg";
+    const eagerCta = host.querySelector<SVGElement>(ctaSvg);
+    const deferredCta = criticalTarget.querySelector<SVGElement>(ctaSvg);
+    expect(eagerCta).not.toBeNull();
+    expect(deferredCta).not.toBeNull();
+    expect(eagerCta!.matches(STROKE_RULE)).toBe(true);
+    expect(deferredCta!.matches(STROKE_RULE)).toBe(true);
+
+    critical.destroy();
+    controller.destroy();
+  });
+
+  it("emits the stroke token onto both surfaces' roots", () => {
+    const config = {
+      apiUrl: "https://api.example.com/chat",
+      persistState: { keyPrefix: nextPrefix() },
+      launcher: { agentIconName: "message-circle" },
+      theme: { components: { launcher: { iconStrokeWidth: "1.25" } } },
+    };
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const controller = createAgentExperience(host, config);
+
+    const criticalTarget = document.createElement("div");
+    document.body.appendChild(criticalTarget);
+    const critical = mountCriticalLauncher({
+      target: criticalTarget,
+      config,
+      onOpen: () => {},
+    });
+
+    // The theme plumbing is duplicated across the two bundles; this is the
+    // claim that breaks if they diverge.
+    const fullRoot = host.hasAttribute("data-persona-root")
+      ? host
+      : host.querySelector<HTMLElement>("[data-persona-root]");
+    const criticalRoot = criticalTarget.querySelector<HTMLElement>(
+      "[data-persona-root]"
+    );
+    expect(fullRoot).not.toBeNull();
+    expect(criticalRoot).not.toBeNull();
+    expect(
+      fullRoot!.style.getPropertyValue(
+        "--persona-components-launcher-iconStrokeWidth"
+      )
+    ).toBe("1.25");
+    expect(
+      criticalRoot!.style.getPropertyValue(
+        "--persona-components-launcher-iconStrokeWidth"
+      )
+    ).toBe("1.25");
+
+    critical.destroy();
+    controller.destroy();
   });
 });

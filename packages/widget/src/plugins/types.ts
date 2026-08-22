@@ -1,5 +1,6 @@
 import type { ResolvedWelcomeConfig } from "../welcome";
 import type { AgentWidgetPluginStorage } from "../utils/plugin-storage";
+import type { ShortcutScope } from "../utils/shortcuts";
 import {
   AgentWidgetMessage,
   AgentWidgetConfig,
@@ -16,7 +17,15 @@ import {
   AgentWidgetSuggestionSource,
   AgentWidgetSuggestionSurface,
   AgentWidgetSuggestionVariant,
-  AgentWidgetWelcomeVariant
+  AgentWidgetWelcomeVariant,
+  AgentWidgetRenderHistoryViewContext,
+  AgentWidgetRenderHistoryHeaderContext,
+  AgentWidgetRenderHistoryConversationContext,
+  AgentWidgetRenderHistoryOpenErrorContext,
+  AgentWidgetRenderHistoryStateContext,
+  AgentWidgetHistoryRailSection,
+  AgentWidgetHistoryRenderActions,
+  ResolvedHistoryPresentation
 } from "../types";
 
 export type AgentWidgetTransformSuggestionsContext = {
@@ -68,6 +77,40 @@ export type AgentWidgetRenderWelcomeContext = {
   storage: AgentWidgetPluginStorage;
   /** Teardown for this render; runs before the next one and on destroy. */
   onCleanup: (fn: () => void) => void;
+};
+
+/** Context for one `railSections` entry. Frozen per invocation. */
+export type AgentWidgetRailSectionContext = {
+  /** Current rail width state. The section re-renders whenever this flips. */
+  collapsed: boolean;
+  presentation: ResolvedHistoryPresentation;
+  /** The same frozen action path the default rows and `renderHistoryView` use. */
+  actions: AgentWidgetHistoryRenderActions;
+};
+
+/** A plugin-contributed navigation section in the history rail. */
+export type AgentWidgetRailSection = {
+  /** Stable identity, stamped as `data-persona-rail-section`. */
+  id: string;
+  /** Default `"above-conversations"`. */
+  placement?: AgentWidgetHistoryRailSection["placement"];
+  /** Optional heading, styled like a conversation date-group heading. */
+  title?: string;
+  /** Section body. Null renders nothing for the current state. */
+  render: (context: AgentWidgetRailSectionContext) => Element | null;
+};
+
+/** A plugin-contributed keyboard shortcut, bound per widget instance. */
+export type AgentWidgetPluginShortcut = {
+  /** Stable identity, used in duplicate/throw warnings. */
+  id: string;
+  /** e.g. `"mod+b"`. "mod" is Command on Apple platforms, Control elsewhere. */
+  combo: string;
+  /** Default `"widget"`: fires only from inside the widget mount. */
+  scope?: ShortcutScope;
+  /** Returning false skips the binding for this keypress. */
+  when?: () => boolean;
+  run: () => void;
 };
 
 export type AgentWidgetSuggestionSelectContext = {
@@ -360,6 +403,10 @@ export interface AgentWidgetPlugin {
    * Custom renderer for loading indicator
    * Return null to use default renderer (or config-based renderer)
    *
+   * Covers the streaming indicator ('inline', 'standalone') and the transcript
+   * skeleton shown while a conversation opened from the Messages list loads
+   * ('conversation-open').
+   *
    * @example
    * ```typescript
    * renderLoadingIndicator: ({ location, defaultRenderer }) => {
@@ -416,6 +463,135 @@ export interface AgentWidgetPlugin {
    * Return null to use default renderer.
    */
   renderEventStreamPayload?: (context: EventStreamPayloadRenderContext) => HTMLElement | null;
+
+  /**
+   * Replace the complete history ("Messages") navigation contents in either
+   * host. Plugins run by priority and the first non-null element wins; null
+   * falls through to the default full view, which then applies the first
+   * non-null header/row/state hook at each slot.
+   *
+   * Calling `defaultRenderer()` bypasses this hook only: the default view is
+   * built and its lower-level slots still arbitrate, including this plugin's.
+   * Return it (or an element containing it) to compose rather than replace.
+   *
+   * The hook replaces contents, not orchestration. Persona keeps placement,
+   * open/close, responsive rail <-> panel movement, inertness, Escape, the
+   * confirmation dialogs, live announcements, and focus fallback. Fetch nothing
+   * directly: `actions.refresh()` is the only way to reload the list.
+   *
+   * @example
+   * ```typescript
+   * renderHistoryView: ({ conversations, actions, presentation, onCleanup }) => {
+   *   const rail = document.createElement("nav");
+   *   rail.dataset.presentation = presentation;
+   *   for (const conversation of conversations) {
+   *     const row = document.createElement("button");
+   *     row.textContent = conversation.title;
+   *     row.addEventListener("click", () => void actions.openConversation(conversation.id));
+   *     rail.appendChild(row);
+   *   }
+   *   const timer = setInterval(() => void actions.refresh(), 60_000);
+   *   onCleanup(() => clearInterval(timer));
+   *   return rail;
+   * }
+   * ```
+   */
+  renderHistoryView?: (
+    context: AgentWidgetRenderHistoryViewContext
+  ) => HTMLElement | null;
+
+  /**
+   * Replace the standard Messages header while retaining its list/state UI.
+   * Return null to use the default top bar. A custom header may not remove the
+   * keyboard close path or falsify the resolved open state.
+   */
+  renderHistoryHeader?: (
+    context: AgentWidgetRenderHistoryHeaderContext
+  ) => HTMLElement | null;
+
+  /**
+   * Replace one conversation row while retaining standard paging/grouping.
+   * Return null to use the default row.
+   */
+  renderHistoryConversation?: (
+    context: AgentWidgetRenderHistoryConversationContext
+  ) => HTMLElement | null;
+
+  /**
+   * Replace loading, empty, error, authentication, rate-limit, or recovery
+   * content in the list region. Return null to use the default block.
+   */
+  renderHistoryState?: (
+    context: AgentWidgetRenderHistoryStateContext
+  ) => HTMLElement | null;
+
+  /**
+   * Replace the transcript-level error surface shown when opening a
+   * conversation from the Messages list fails. Plugins run by priority and
+   * the first non-null element wins; null falls through to the default block.
+   *
+   * Persona keeps the centered transcript column, the alert role, and the
+   * composer gate around the returned element. `retry`/`back` are the only
+   * exits: both route through the token-guarded open flow, so do not fetch
+   * directly. `back` is absent when there is no Messages surface to return
+   * to; do not render a back affordance without it.
+   */
+  renderHistoryOpenError?: (
+    context: AgentWidgetRenderHistoryOpenErrorContext
+  ) => HTMLElement | null;
+
+  /**
+   * Contribute navigation sections to the history rail, stacked around the
+   * conversation list in `placement` order. Rail only: the panel presentation
+   * renders none of them, and `features.history.rail.sections` (config) comes
+   * first inside each bucket, then plugins in plugin order.
+   *
+   * `render` is re-invoked with the new `collapsed` value whenever the rail
+   * collapses or expands, and its return replaces the previous content;
+   * returning null renders nothing for that state. A throwing `render` warns
+   * once and drops that section only, leaving the rest of the rail alone. An id
+   * a config section already owns is dropped with a warning.
+   *
+   * Keep heavy UI in the host bundle: `render` may return a skeleton and
+   * hydrate it after the host's own dynamic import resolves.
+   *
+   * @example
+   * ```typescript
+   * railSections: [
+   *   {
+   *     id: "pinned",
+   *     title: "Pinned",
+   *     render: ({ collapsed, actions }) => {
+   *       if (collapsed) return null;
+   *       const list = document.createElement("div");
+   *       const row = document.createElement("button");
+   *       row.textContent = "Weekly report";
+   *       row.addEventListener("click", () => void actions.openConversation("c1"));
+   *       list.appendChild(row);
+   *       return list;
+   *     }
+   *   }
+   * ]
+   * ```
+   */
+  railSections?: AgentWidgetRailSection[];
+
+  /**
+   * Keyboard shortcuts registered for the lifetime of each widget instance the
+   * plugin is active in, and unregistered on its teardown. `combo` is written
+   * as `"mod+b"` / `"mod+shift+k"`, where "mod" is Command on Apple platforms
+   * and Control elsewhere. `scope` defaults to `"widget"` (only while focus is
+   * inside the mount); `when` returning false skips the keypress. A combo
+   * another binding already owns warns and is ignored, first registration wins.
+   *
+   * @example
+   * ```typescript
+   * shortcuts: [
+   *   { id: "open-inbox", combo: "mod+shift+i", run: () => openInbox() }
+   * ]
+   * ```
+   */
+  shortcuts?: AgentWidgetPluginShortcut[];
 
   /**
    * Called when plugin is registered

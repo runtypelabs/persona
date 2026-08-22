@@ -64,6 +64,97 @@ describe("mergeConfigUpdate", () => {
     expect(next.onSessionInit).toBe(second);
   });
 
+  it("replaces history identity/persistence callbacks wholesale", () => {
+    const firstProof = vi.fn();
+    const secondProof = vi.fn();
+    const firstGet = vi.fn();
+    const secondGet = vi.fn();
+    const firstSet = vi.fn();
+    const secondSet = vi.fn();
+    const firstClear = vi.fn();
+    const secondClear = vi.fn();
+    const firstClearSession = vi.fn();
+    const secondClearSession = vi.fn();
+
+    const prev = base({
+      getIdentityProof: firstProof,
+      getStoredConversationId: firstGet,
+      setStoredConversationId: firstSet,
+      clearStoredConversationId: firstClear,
+      clearStoredSessionId: firstClearSession,
+    });
+    const next = mergeConfigUpdate(prev, {
+      getIdentityProof: secondProof,
+      getStoredConversationId: secondGet,
+      setStoredConversationId: secondSet,
+      clearStoredConversationId: secondClear,
+      clearStoredSessionId: secondClearSession,
+    });
+
+    expect(next.getIdentityProof).toBe(secondProof);
+    expect(next.getStoredConversationId).toBe(secondGet);
+    expect(next.setStoredConversationId).toBe(secondSet);
+    expect(next.clearStoredConversationId).toBe(secondClear);
+    expect(next.clearStoredSessionId).toBe(secondClearSession);
+  });
+
+  it("preserves history identity/persistence callbacks absent from the patch", () => {
+    const getProof = vi.fn();
+    const getId = vi.fn();
+    const setId = vi.fn();
+    const clearId = vi.fn();
+    const clearSession = vi.fn();
+
+    const prev = base({
+      getIdentityProof: getProof,
+      getStoredConversationId: getId,
+      setStoredConversationId: setId,
+      clearStoredConversationId: clearId,
+      clearStoredSessionId: clearSession,
+    });
+    const next = mergeConfigUpdate(prev, { launcher: { title: "New" } });
+
+    expect(next.getIdentityProof).toBe(getProof);
+    expect(next.getStoredConversationId).toBe(getId);
+    expect(next.setStoredConversationId).toBe(setId);
+    expect(next.clearStoredConversationId).toBe(clearId);
+    expect(next.clearStoredSessionId).toBe(clearSession);
+  });
+
+  it("keeps features.history defaults when the host sets only enabled", () => {
+    const prev = base();
+    expect(prev.features?.history).toMatchObject({
+      enabled: false,
+      presentation: "panel",
+      showScopeStatus: true,
+    });
+
+    // Same guarantee through the defaults merge itself.
+    const withDefaults = mergeWithDefaults({ features: { history: { enabled: true } } });
+    expect(withDefaults.features?.history).toMatchObject({
+      enabled: true,
+      presentation: "panel",
+      showScopeStatus: true,
+    });
+
+    const next = mergeConfigUpdate(prev, { features: { history: { enabled: true } } });
+    expect(next.features?.history?.enabled).toBe(true);
+    expect(next.features?.history?.presentation).toBe("panel");
+    expect(next.features?.history?.showScopeStatus).toBe(true);
+    // Sibling feature blocks survive the history patch.
+    expect(next.features?.askUserQuestion?.enabled).toBe(true);
+  });
+
+  it("merges features.history.copy without dropping sibling copy overrides", () => {
+    const prev = base({ features: { history: { copy: { viewTitle: "Threads" } } } });
+    const next = mergeConfigUpdate(prev, {
+      features: { history: { copy: { emptyTitle: "Nothing yet" } } },
+    });
+    expect(next.features?.history?.copy?.viewTitle).toBe("Threads");
+    expect(next.features?.history?.copy?.emptyTitle).toBe("Nothing yet");
+    expect(next.features?.history?.presentation).toBe("panel");
+  });
+
   it("guards boolean|object unions in both directions", () => {
     const objFirst = base({ approval: { backgroundColor: "#ffffff" } });
     const toScalar = mergeConfigUpdate(objFirst, { approval: false });

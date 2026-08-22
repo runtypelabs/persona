@@ -16,6 +16,11 @@ import {
   type AgentWidgetInitHandle,
   type AgentWidgetPlugin
 } from "@runtypelabs/persona";
+// Source-only demo seam: the in-memory history provider is not part of the
+// published package. Production builds the Runtype provider from client-token
+// config instead.
+import { setHistoryProviderFactory } from "@runtypelabs/persona/internal/history-provider-registry";
+import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-history-provider";
 import {
   createFullscreenAssistantScriptedStream,
   FULLSCREEN_ASSISTANT_DEMO_ARTIFACT_ID,
@@ -49,6 +54,110 @@ const COLORS = {
   inlineCodeFg: "#D19A9A",
   link: "#60a5fa"
 } as const;
+
+/** The minimal header's natural strip height; the rail header pins to it. */
+const HEADER_MIN_HEIGHT = "65px";
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+const iso = (ms: number): string => new Date(ms).toISOString();
+
+/** Seeded rail conversations in this assistant's voice, newest first. */
+function buildAssistantConversations(nowMs: number) {
+  const spotlight = nowMs - 25 * MINUTE;
+  const changelog = nowMs - 5 * HOUR;
+  const onboarding = nowMs - 28 * HOUR;
+  const research = nowMs - 6 * DAY;
+  return [
+    {
+      id: "assistant-conv-spotlight",
+      title: "Runtype assistant spotlight",
+      createdAt: iso(spotlight),
+      updatedAt: iso(spotlight + 6 * MINUTE),
+      messages: [
+        {
+          role: "user" as const,
+          content: "Draft a spotlight page for the assistant launch.",
+          createdAt: iso(spotlight)
+        },
+        {
+          role: "assistant" as const,
+          // Chains into the scripted stream's "Here is a concise readout"
+          // intro instead of repeating it: this record IS the landing
+          // conversation, and the stream continues it.
+          content:
+            "Happy to. I will pull the launch story together and open the full draft beside this thread.",
+          createdAt: iso(spotlight + 3 * MINUTE)
+        }
+      ]
+    },
+    {
+      id: "assistant-conv-changelog",
+      title: "Q3 changelog copy",
+      createdAt: iso(changelog),
+      updatedAt: iso(changelog + 12 * MINUTE),
+      messages: [
+        {
+          role: "user" as const,
+          content: "Turn these merged pull requests into changelog entries.",
+          createdAt: iso(changelog)
+        },
+        {
+          role: "assistant" as const,
+          content:
+            "Grouped into shipped, improved, and fixed, one sentence each, with the breaking change called out first.",
+          createdAt: iso(changelog + 12 * MINUTE)
+        }
+      ]
+    },
+    {
+      id: "assistant-conv-onboarding",
+      title: "Onboarding email rewrite",
+      createdAt: iso(onboarding),
+      updatedAt: iso(onboarding + 9 * MINUTE),
+      messages: [
+        {
+          role: "user" as const,
+          content: "The welcome email reads like a manual. Make it warmer.",
+          createdAt: iso(onboarding)
+        },
+        {
+          role: "assistant" as const,
+          content:
+            "Cut it to three short paragraphs, moved the setup steps behind one link, and kept a single call to action.",
+          createdAt: iso(onboarding + 9 * MINUTE)
+        }
+      ]
+    },
+    {
+      id: "assistant-conv-research",
+      title: "Competitive research notes",
+      createdAt: iso(research),
+      updatedAt: iso(research + 21 * MINUTE),
+      messages: [
+        {
+          role: "user" as const,
+          content: "Summarize what the four closest products charge for.",
+          createdAt: iso(research)
+        },
+        {
+          role: "assistant" as const,
+          content:
+            "Two price per seat, one per conversation, one bundles it into a platform fee. Notes are in the table below.",
+          createdAt: iso(research + 21 * MINUTE)
+        }
+      ]
+    }
+  ];
+}
+
+// One store for the page, so the rail keeps whatever the visitor opened,
+// started, or deleted. Production builds the Runtype provider instead.
+const historyProvider = createDemoHistoryProvider({
+  conversations: buildAssistantConversations(Date.now())
+});
+setHistoryProviderFactory(() => historyProvider);
 
 // Inject hover styles that can't be expressed via inline styles or SDK tokens.
 // After SDK token additions, only file card hover, attachment preview, and audio bars remain.
@@ -96,8 +205,25 @@ if (!document.getElementById(fileCardStyleId)) {
     [data-persona-audio-bars-btn] svg line {
       transform-origin: center;
     }
+    /* The rail's row washes darken, which is invisible on a dark surface.
+       Two classes so the lazily injected chunk rule cannot win on order. */
+    .persona-history-view.persona-history-view--rail {
+      --persona-history-row-hover-bg: rgba(255, 255, 255, 0.06);
+      --persona-history-row-active-bg: rgba(255, 255, 255, 0.1);
+    }
   `;
   document.head.appendChild(style);
+}
+
+/**
+ * Rail identity mark: the widget pairs it with the view title in the expanded
+ * header and uses it as the collapsed toggle's rest face.
+ */
+function renderRailMark(): HTMLElement {
+  const mark = document.createElement("span");
+  mark.style.cssText = `display:flex;align-items:center;justify-content:center;flex:none;width:22px;height:22px;border-radius:7px;background:${COLORS.userBubble};color:${COLORS.text};font-size:12px;font-weight:600;`;
+  mark.textContent = "C";
+  return mark;
 }
 
 function renderCustomFileCard(artifactId: string, title: string, subtitle: string): HTMLElement {
@@ -357,6 +483,24 @@ const fullscreenAssistantDarkTokens = {
       foreground: COLORS.text,
       shadow: `0 8px 16px 4px ${COLORS.chat}`,
       borderBottom: "none",
+      // Pinned with railHeader.minHeight so both top strips read as one band.
+      minHeight: HEADER_MIN_HEIGHT,
+    },
+    history: {
+      railHeader: {
+        background: COLORS.chat,
+        border: "none",
+        minHeight: HEADER_MIN_HEIGHT,
+      },
+    },
+    // The built-in tooltip default (#111827) is blue-tinted; this palette is
+    // strictly neutral, so the bubble needs its own grays. Shadow swapped off
+    // the slate default for the same reason.
+    tooltip: {
+      background: COLORS.userBubble,
+      foreground: COLORS.text,
+      borderRadius: "6px",
+      shadow: "0 4px 12px rgba(0, 0, 0, 0.4)",
     },
     input: {
       background: COLORS.chat,
@@ -417,7 +561,9 @@ const fullscreenAssistantDarkTokens = {
         iconHoverBackground: COLORS.userBubble,
         iconHoverColor: COLORS.text,
         toggleGroupGap: "0",
-        toggleBorderRadius: "0",
+        // Concentric with the 8px pill radius minus its 2px padding; the "0"
+        // set here previously predates the selection chip being visible.
+        toggleBorderRadius: "6px",
         copyBackground: "transparent",
         copyBorder: `1px solid ${COLORS.border}`,
         copyColor: COLORS.text,
@@ -448,9 +594,76 @@ const fullscreenAssistantDarkTokens = {
 } as unknown as NonNullable<AgentWidgetConfig["darkTheme"]>;
 
 const demoCtl: { handle: AgentWidgetInitHandle | null } = { handle: null };
-let isStarred = false;
+
+/** The demo has nowhere to navigate to, so a nav pick answers in the transcript. */
+const noteRailNav = (label: string): void => {
+  demoCtl.handle?.injectAssistantMessage({
+    content: `You picked ${label}. This row is declarative config: the widget builds it from features.history.rail.sections.`
+  });
+};
+
+/** Nav section above the conversation list. Icons are built-in lucide names. */
+const railNavSections = [
+  {
+    id: "workspace",
+    title: "Workspace",
+    items: [
+      { id: "projects", label: "Projects", icon: "folder", onSelect: () => noteRailNav("Projects") },
+      { id: "library", label: "Library", icon: "bookmark", onSelect: () => noteRailNav("Library") },
+      {
+        id: "drafts",
+        label: "Drafts",
+        icon: "files",
+        badge: "3",
+        onSelect: () => noteRailNav("Drafts")
+      }
+    ]
+  }
+];
 
 const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScriptedStream();
+
+const artifactDocumentTitle = (suggestedFilename: string): string =>
+  suggestedFilename.replace(/\.(md|html?)$/i, "") || "Artifact";
+
+/** The pane's rendered artifact body wrapped as a standalone light-mode page. */
+const renderedArtifactDocument = (title: string): string => {
+  const body =
+    document.querySelector(".persona-artifact-pane .persona-artifact-content")
+      ?.innerHTML ?? "";
+  const safeTitle = title
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${safeTitle}</title><style>
+    body { font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #171717; max-width: 720px; margin: 40px auto; padding: 0 24px; }
+    pre { white-space: pre-wrap; }
+    img, svg { max-width: 100%; }
+    a { color: #1d4ed8; }
+  </style></head><body>${body}</body></html>`;
+};
+
+/** PDF without a backend: open the rendered page and hand off to the native
+    print dialog, where "Save as PDF" produces the file. */
+const printRenderedArtifact = (title: string): void => {
+  const w = window.open("", "_blank", "width=820,height=1000");
+  if (!w) return;
+  w.document.write(renderedArtifactDocument(title));
+  w.document.close();
+  w.focus();
+  w.print();
+};
+
+/** Publish without a backend: the rendered page served from a local blob URL,
+    demonstrating the flow honestly instead of faking a hosted link. */
+const openPublishedPreview = (title: string): void => {
+  const url = URL.createObjectURL(
+    new Blob([renderedArtifactDocument(title)], { type: "text/html" })
+  );
+  window.open(url, "_blank");
+  // Keep the URL alive long enough for the tab to load before revoking.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+};
 
 const config = mergeWithDefaults({
   apiUrl,
@@ -496,45 +709,41 @@ const config = mergeWithDefaults({
     header: {
       layout: "minimal",
       showCloseButton: false,
+      // The rail's new-conversation row and delete-all cover these jobs, and the
+      // clear-chat glyph reads as a duplicate of the artifact toolbar's refresh.
+      showClearChat: false,
+      // Claude pairing: the rail owns the brand wordmark, so the header combo
+      // shows the ACTIVE conversation's title, matching its menu of
+      // conversation actions. Falls back to launcher.title on a fresh chat.
+      titleSource: "conversation",
       titleMenu: {
+        // No "Add to project": nothing backs projects yet, and an honest menu
+        // beats an aspirational one.
         menuItems: [
           { id: "star", label: "Star", icon: "star" },
           { id: "rename", label: "Rename", icon: "pencil" },
-          { id: "add-to-project", label: "Add to project", icon: "folder" },
           { id: "delete", label: "Delete", icon: "trash-2", destructive: true, dividerBefore: true },
         ],
         onSelect: (id) => {
           const h = demoCtl.handle;
           if (!h) return;
-          switch (id) {
-            case "star": {
-              isStarred = !isStarred;
-              // Update the combo button label directly (no config side effects)
-              const label = document.querySelector(".persona-combo-btn-label");
-              if (label) {
-                label.textContent = isStarred ? "\u2605 Chat Assistant" : "Chat Assistant";
-              }
-              break;
+          if (id === "rename") {
+            const activeId = h.getActiveConversationId();
+            if (!activeId) return;
+            const current = document
+              .querySelector(".persona-combo-btn-label")
+              ?.textContent ?? "";
+            const next = window.prompt("Rename chat:", current);
+            if (next?.trim()) {
+              // Persists through the provider; the titleSource binding and the
+              // rail row both restamp from the returned summary.
+              void h.renameConversation(activeId, next.trim()).catch(() => {});
             }
-            case "rename": {
-              const label = document.querySelector(".persona-combo-btn-label");
-              const current = label?.textContent?.replace(/^\u2605\s*/, "") ?? "Chat Assistant";
-              const newName = window.prompt("Rename chat:", current);
-              if (newName?.trim() && label) {
-                const prefix = isStarred ? "\u2605 " : "";
-                label.textContent = prefix + newName.trim();
-              }
-              break;
-            }
-            case "add-to-project":
-              console.log("[titleMenu] Add to project");
-              break;
-            case "delete":
-              if (window.confirm("Delete this chat? This cannot be undone.")) {
-                h.clearChat();
-              }
-              break;
+            return;
           }
+          // Star and Delete fall through to the widget built-ins: star
+          // toggles via the provider, delete runs the shell's confirm flow.
+          return false;
         },
         hover: {
           background: COLORS.userBubble,
@@ -552,6 +761,27 @@ const config = mergeWithDefaults({
   features: {
     showReasoning: false,
     showToolCalls: false,
+    history: {
+      enabled: true,
+      presentation: "rail",
+      // The wordmark beside the rail's mark is this title.
+      copy: { viewTitle: "Chat Assistant" },
+      rail: {
+        collapsible: true,
+        // Collapsed, the sidebar leaves a trigger in the conversation header
+        // and floats back on hover instead of holding an icon column.
+        collapsedBehavior: "overlay",
+        defaultCollapsed: true,
+        // Docked, its divider edge is a drag handle.
+        resizable: true,
+        brand: { render: () => renderRailMark() },
+        sections: railNavSections,
+        // The widget IS this page, so the combo is claimed document-wide. An
+        // embedded widget would leave the scope at its "widget" default.
+        collapseShortcut: "mod+b",
+        collapseShortcutScope: "page",
+      },
+    },
     scrollToBottom: {
       enabled: true,
       iconName: "arrow-down",
@@ -561,6 +791,7 @@ const config = mergeWithDefaults({
       enabled: true,
       layout: {
         splitGap: "0",
+        resizable: true,
         paneWidth: "50%",
         paneMaxWidth: "min(50%, 100%)",
         paneMinWidth: "0",
@@ -576,8 +807,11 @@ const config = mergeWithDefaults({
         documentToolbarShowCopyLabel: true,
         documentToolbarShowCopyChevron: true,
         documentToolbarIconColor: COLORS.muted,
-        documentToolbarToggleActiveBackground: `${COLORS.chat}`,
+        // Contrasts with the pill background (surface, #171717); the chat
+        // color used previously matched it exactly and hid the selection.
+        documentToolbarToggleActiveBackground: COLORS.userBubble,
         documentToolbarToggleActiveBorderColor: COLORS.border,
+        documentToolbarToggleActiveColor: COLORS.text,
         documentToolbarCopyMenuItems: [
           { id: "download", label: "Download" },
           { id: "download-pdf", label: "Download as PDF" },
@@ -589,18 +823,26 @@ const config = mergeWithDefaults({
             await navigator.clipboard.writeText(text);
             return;
           }
+          // Widget's built-in download (real filename/MIME via the same path
+          // as the card download button).
+          if (p.actionId === "download") return false;
+          if (p.actionId === "download-pdf") {
+            printRenderedArtifact(artifactDocumentTitle(p.suggestedFilename));
+            return;
+          }
+          if (p.actionId === "publish") {
+            openPublishedPreview(artifactDocumentTitle(p.suggestedFilename));
+            return;
+          }
           if (p.actionId === "markdown" || p.actionId === "md") {
             await navigator.clipboard.writeText(p.markdown);
           } else if (p.actionId === "json") {
             await navigator.clipboard.writeText(p.jsonPayload);
           }
-        },
-        onDocumentToolbarRefresh: async () => {
-          const h = demoCtl.handle;
-          if (!h) return;
-          h.clearChat();
-          await h.connectStream(newFullscreenAssistantScriptStream());
         }
+        // No onDocumentToolbarRefresh: the refresh glyph means "reload this
+        // preview", and conversation lifecycle belongs to the rail. Without a
+        // handler the widget hides the button.
       },
       renderCard: ({ artifact }) => {
         return renderCustomFileCard(
@@ -658,4 +900,27 @@ const handle = initAgentWidget({
 });
 
 demoCtl.handle = handle;
-void handle.connectStream(newFullscreenAssistantScriptStream());
+// The rail is the frame of this layout, so it opens with the page.
+void handle.showHistory();
+// Land IN the seeded spotlight conversation, then stream the readout and
+// artifact into it: the seed hydrates as prior context, the header binds the
+// conversation title, and the title-menu actions apply from the first frame.
+void (async () => {
+  try {
+    await handle.openConversation("assistant-conv-spotlight");
+  } catch {
+    /* seed missing: the scripted stream still tells the story in a fresh chat */
+  }
+  await handle.connectStream(newFullscreenAssistantScriptStream());
+  // Persist the streamed turns so reopening the conversation matches what was
+  // on screen (the record is in-memory and rebuilt per page load).
+  historyProvider.appendMessage("assistant-conv-spotlight", {
+    role: "assistant",
+    content:
+      "Here is a concise readout. Open the document on the right for the full spotlight draft."
+  });
+  historyProvider.appendMessage("assistant-conv-spotlight", {
+    role: "user",
+    content: "Tighten the checklist section and add one competitor callout."
+  });
+})();

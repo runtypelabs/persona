@@ -1,6 +1,10 @@
 import type { AgentWidgetConfig, AgentWidgetLauncherConfig } from "./types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
 import { deepMerge } from "./utils/deep-merge";
+import {
+  DEFAULT_TOOLTIP_DELAY_MS,
+  DEFAULT_TOOLTIP_SKIP_DELAY_MS,
+} from "./utils/tooltip-timing";
 
 /**
  * Default width for the floating launcher panel (when not overridden).
@@ -31,9 +35,10 @@ export const DEFAULT_LAUNCHER_CONFIG: AgentWidgetLauncherConfig = {
   callToActionIconHidden: false,
   agentIconSize: "40px",
   headerIconSize: "40px",
-  closeButtonSize: "32px",
+  // closeButtonSize / clearChat.size omitted so theme.components.header.controlSize
+  // sizes the header controls; setting either here would pin them past the token.
   // Zero out browser-default <button> padding so the icon gets the full
-  // 32x32 content box, matching clearChat.paddingX/Y below. Without this,
+  // content box, matching clearChat.paddingX/Y below. Without this,
   // UA stylesheets add ~1-2px vertical and ~6px horizontal padding that
   // eats into the border-box width and shrinks the rendered icon.
   closeButtonPaddingX: "0px",
@@ -52,7 +57,6 @@ export const DEFAULT_LAUNCHER_CONFIG: AgentWidgetLauncherConfig = {
     enabled: true,
     placement: "inline",
     iconName: "refresh-cw",
-    size: "32px",
     showTooltip: true,
     tooltipText: "Clear chat",
     paddingX: "0px",
@@ -77,6 +81,10 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
   theme: undefined,
   darkTheme: undefined,
   colorScheme: "light",
+  tooltip: {
+    delayMs: DEFAULT_TOOLTIP_DELAY_MS,
+    skipDelayMs: DEFAULT_TOOLTIP_SKIP_DELAY_MS,
+  },
   launcher: DEFAULT_LAUNCHER_CONFIG,
   copy: {
     // No welcomeTitle / welcomeSubtitle here on purpose: `resolveWelcomeConfig`
@@ -167,6 +175,13 @@ export const DEFAULT_WIDGET_CONFIG: Partial<AgentWidgetConfig> = {
       freeTextLabel: "Other…",
       freeTextPlaceholder: "Type your answer…",
       submitLabel: "Send",
+    },
+    history: {
+      enabled: false,
+      presentation: "panel",
+      showScopeStatus: true,
+      showDelete: true,
+      showDeleteAll: true,
     },
   },
   // Placeholder copy that models the right shape: verb-first, user-voice,
@@ -263,6 +278,10 @@ export function mergeWithDefaults(
         ...config.launcher?.clearChat,
       },
     },
+    tooltip: {
+      ...DEFAULT_WIDGET_CONFIG.tooltip,
+      ...config.tooltip,
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
       ...config.copy,
@@ -290,6 +309,8 @@ export function mergeWithDefaults(
       const csa = config.features?.streamAnimation;
       const dau = DEFAULT_WIDGET_CONFIG.features?.askUserQuestion;
       const cau = config.features?.askUserQuestion;
+      const dh = DEFAULT_WIDGET_CONFIG.features?.history;
+      const ch = config.features?.history;
       const mergedArtifacts =
         da === undefined && ca === undefined
           ? undefined
@@ -333,6 +354,17 @@ export function mergeWithDefaults(
                 ...cau?.styles,
               },
             };
+      const mergedHistory =
+        dh === undefined && ch === undefined
+          ? undefined
+          : {
+              ...dh,
+              ...ch,
+              copy: {
+                ...dh?.copy,
+                ...ch?.copy,
+              },
+            };
       return {
         ...DEFAULT_WIDGET_CONFIG.features,
         ...config.features,
@@ -341,6 +373,7 @@ export function mergeWithDefaults(
         ...(mergedArtifacts !== undefined ? { artifacts: mergedArtifacts } : {}),
         ...(mergedStreamAnimation !== undefined ? { streamAnimation: mergedStreamAnimation } : {}),
         ...(mergedAskUserQuestion !== undefined ? { askUserQuestion: mergedAskUserQuestion } : {}),
+        ...(mergedHistory !== undefined ? { history: mergedHistory } : {}),
       };
     })(),
     suggestionChips: config.suggestionChips ?? DEFAULT_WIDGET_CONFIG.suggestionChips,

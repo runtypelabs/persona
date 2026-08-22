@@ -313,10 +313,33 @@ touch `--persona-primary`). Icon and tooltip text remain per-feature config
 
 | Token | Default |
 |-------|---------|
+| `background` | `semantic.colors.surface` |
+| `foreground` | `semantic.colors.primary` |
+| `border` | `semantic.colors.border` |
 | `size` | `60px` |
 | `iconSize` | `28px` |
+| `iconStrokeWidth` | `1.5` |
 | `borderRadius` | `palette.radius.full` |
 | `shadow` | `palette.shadows.lg` |
+
+`iconStrokeWidth` is a unitless SVG stroke-width applied as CSS to both
+launcher glyphs, the agent icon and the call-to-action arrow, so one pill never
+carries two line weights and the value wins over the attribute the icons render
+with. It must be a string (`"1.75"`, never the number `1.75`: the token
+resolver silently skips numeric values, and no warning is emitted). It only
+affects registry-icon launchers (`launcher.agentIconName`,
+`launcher.callToActionIconName`); an emoji or image launcher has no svg to
+weight. The same rule ships in the critical launcher bundle and the full
+widget, so a deferred install renders the stroke identically before and after
+the handoff. The default matches the header's `controlStrokeWidth` (1.5), so
+launcher and header glyphs share one line weight out of the box.
+
+`background` and `foreground` recolor the launcher pill without touching the
+shared `surface`/`primary` tokens the panel reads. The pill title renders in
+`foreground`; the subtitle keeps the shared muted tone until `foreground` is
+customized, then follows it at 70% strength so both lines recolor together.
+`border` is a color; the `launcher.border` config string (a full CSS border
+shorthand) still wins when set.
 
 ### Panel (`components.panel.*`)
 
@@ -369,12 +392,54 @@ Panel and seamless carry `persona-artifact-welded-split` on the mount root while
 
 ### Header (`components.header.*`)
 
+`background` and `foreground` are the pair that colors the band. Set those two
+and the rest of the header follows: the title takes `foreground`, the subtitle
+and the clear / close icons take a 72% mix of `foreground` over `background`,
+and the hairline border takes a 14% mix.
+
+```typescript
+theme: {
+  components: {
+    header: {
+      background: '#0f172a',
+      foreground: '#e2e8f0',
+    },
+  },
+}
+```
+
+Derivation only fills the keys a theme leaves unset, so an explicit value always
+wins:
+
+| Resolved color | Resolution order |
+|----------------|------------------|
+| title | `title.color`, then `titleForeground`, then `foreground`, then `semantic.colors.primary` |
+| subtitle | `subtitle.color`, then `subtitleForeground`, then `color-mix(in srgb, foreground 72%, background)`, then `semantic.colors.textMuted` |
+| clear / close icons | `actionIconForeground`, then that same 72% mix, then `semantic.colors.textMuted` |
+| border | `border`, then `color-mix(in srgb, foreground 14%, background)`, then `semantic.colors.divider` |
+
+`iconBackground` and `iconForeground` (the avatar tile beside the title) are not
+derived and keep their own defaults, and `minHeight` stays a separate knob.
+
+The shipped defaults set `background` to `palette.colors.primary.500` and
+`foreground` to `palette.colors.primary.50`, and leave `border`,
+`titleForeground`, `subtitleForeground`, and `actionIconForeground` unset so
+they derive from that pair. The solid primary band therefore looks the same out
+of the box, with its hairline mixed from the pair rather than pinned to a shade.
+
 | Token | Default Reference |
 |-------|-------------------|
-| `background` | `semantic.colors.surface` |
-| `border` | `semantic.colors.border` |
+| `background` | `palette.colors.primary.500` (`semantic.colors.surface` when a theme unsets it) |
+| `foreground` | `palette.colors.primary.50` |
+| `border` | derived from the `foreground` / `background` pair, then `semantic.colors.divider` |
 | `borderRadius` | `palette.radius.xl palette.radius.xl 0 0` |
 | `padding` | `semantic.spacing.md` |
+| `minHeight` | unset (`auto`) |
+
+`minHeight` (`--persona-header-min-height`) floors the header strip's height
+for both header layouts. Pin it together with
+`components.history.railHeader.minHeight` so the Messages rail's own top strip
+lines up with the conversation header beside it.
 
 `title` and `subtitle` take the shared `TextStyleTokens` shape
 (`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`,
@@ -387,14 +452,176 @@ at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
 | `title.fontSize` | `"1rem"` |
 | `title.fontWeight` | `"600"` |
 | `title.lineHeight` | `"1.5rem"` |
-| `title.color` | `semantic.colors.primary` |
+| `title.color` | `foreground`, then `semantic.colors.primary` |
 | `subtitle.fontSize` | `"0.75rem"` |
 | `subtitle.lineHeight` | `"1rem"` |
-| `subtitle.color` | `semantic.colors.textMuted` |
+| `subtitle.color` | the 72% `foreground` mix, then `semantic.colors.textMuted` |
 
 > `titleForeground` and `subtitleForeground` are legacy aliases of
 > `title.color` and `subtitle.color`. Both still work; the `title`/`subtitle`
-> color wins when both are set.
+> color wins when both are set, and either alias still outranks the `foreground`
+> derivation.
+
+#### Header controls
+
+Every header icon button (close, clear chat, `layout.header.trailingActions`,
+and the Messages toggle) is sized by one set of tokens, so they can never
+drift apart:
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `controlSize` | `--persona-header-control-size` | `"32px"` |
+| `controlIconSize` | `--persona-header-control-icon-size` | `"20px"` |
+| `controlStrokeWidth` | `--persona-components-header-controlStrokeWidth` | `"1.5"` |
+
+`controlStrokeWidth` is unitless, like the SVG `stroke-width` attribute it
+overrides. It has no short alias: the stylesheet reads the full-path token
+variable and carries the `1.5` default in its `var()` fallback.
+
+The stylesheet applies them through two class hooks: `.persona-header-control`
+(the box) and `.persona-header-control--glyph` (the SVG inside it). A third
+hook, `.persona-header-control--sparse`, scales up glyphs whose Lucide paths
+under-fill their viewBox (the `x` close icon) so their visible extent matches a
+dense sibling such as `refresh-cw`, and thins their stroke to `0.7` of
+`controlStrokeWidth` so the rendered weight still matches.
+
+All three are live-editable in the theme editor under Components → Header
+Controls.
+
+Per-control config keys still win: `launcher.closeButtonSize` and
+`launcher.clearChat.size` write inline styles that override `controlSize`.
+Leave them unset to follow the token. On coarse pointers the box never
+shrinks below 40px, even with a smaller `controlSize`; an explicit per-control
+size opts out of that floor.
+
+### Messages rail (`components.history.railHeader.*`)
+
+In rail presentation the Messages sidebar runs the full widget height and its
+top strip is the rail's own header, sitting beside the conversation header. That
+strip carries the rail's own toggle, so the header's Messages control hides
+while a rail or its overlay trigger is on screen and comes back once Messages is
+fully closed.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `background` | `--persona-history-rail-header-bg` | the rail surface (`semantic.colors.container`) |
+| `border` | `--persona-history-rail-header-border` | `0` (full border-bottom shorthand) |
+| `minHeight` | `--persona-history-rail-header-min-height` | `components.header.minHeight`, then `56px` |
+
+Set `components.header.minHeight` and `railHeader.minHeight` to the same value
+to weld the two strips into one band. The built-in minimal header measures
+65px, so a themed app frame on that layout pins both to `65px`.
+
+Three text-style token groups cover the sidebar's typography, each taking
+`fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing`, and
+`color`: `railHeader.title` for the strip's view title ("Messages", 14px/600,
+text color), `components.history.listHeading` for the "Conversations" heading
+over the list block (14px/600, text color; rail only), and
+`components.history.groupHeading` for the muted sub-headers, covering both the
+date groups ("Today", "Yesterday") and rail nav section titles (rail 13px/500,
+muted text color). Every key is pinned in the widget CSS, so bare host-page
+`h2`/`h3` rules never restyle these headings.
+
+The rest of the sidebar is styled by the `--persona-history-*` variables listed
+under [Conversation History (Messages) Variables](#conversation-history-messages-variables):
+in rail presentation the surface re-points to `--persona-container` for its own
+sidebar color, and row dividers and avatars drop out. The hover wash darkens,
+so on a dark theme re-declare `--persona-history-row-hover-bg` as a light wash
+on `.persona-history-view--rail`; the selection wash follows `--persona-divider`
+and adapts with the theme.
+
+Geometry and behavior are config, not tokens: `features.history.rail` takes
+`side` (`"left"` default, or `"right"`), `width` (px, clamped 200 to 400,
+default 260), `collapsible` (default true: a toggle in the rail header shrinks
+the sidebar to a 52px icon rail carrying expand and new-conversation), and
+`defaultCollapsed` (default false) for visitors who have never toggled it. The
+chosen state is remembered alongside the other `persistState` keys, and
+`persistState: false` keeps it in memory for the page load only.
+`resizable` (default false) puts a drag handle (`.persona-rail-resizer`, the
+artifact seam's box and cursor) on the docked rail's divider edge; it is a
+`separator` with arrow, Home and End keys, resizes within the same 200 to 400
+clamp, and the width it commits is remembered the same way and outranks a later
+`width` update. The floating rail inherits that width without a handle.
+
+`collapsedBehavior` picks what "collapsed" looks like: `"icon-rail"` (default)
+is that 52px column, `"overlay"` replaces it with a trigger in the conversation
+header (`.persona-rail-trigger`, the plain sidebar glyph: `rail.brand` dresses
+the icon column and the rail's own header, not a control sitting beside the
+agent's identity) that floats the expanded rail over the conversation in
+`.persona-history-rail-overlay` and pins it back on click. The
+floating rail hangs from the trigger's row and keeps `width` and `side`, which
+stay config. Its surface is `components.history.overlay`: `margin` (`8px`, the
+gap from the trigger, the docked edge and the bottom), `borderRadius` (`16px`),
+`shadow` (`0 12px 40px rgba(0, 0, 0, 0.25)`) and `background` (the rail
+surface). Unset keys keep those defaults, and a live `update()` of any of them
+reaches an open rail.
+
+Each row's overflow menu is `components.history.menu`: `background` (defaults
+to the list surface lifted 8% toward white, so it reads as elevated in dark
+schemes) and `borderRadius` (`12px`). Item metrics are fixed to the reference
+density (32px rows, 44px under a coarse pointer) and are not tokens.
+Destructive labels (Delete, delete all) take
+`components.history.dangerForeground`, defaulting to the palette's error-600
+in light schemes and a lighter red in the built-in dark theme so the 14px
+text keeps AA contrast on dark surfaces.
+
+The delete confirmation dialog is `components.history.confirm`:
+`dangerBackground` (the filled button, palette error-700 in light and
+error-600 in the built-in dark theme) with its paired `dangerForeground`
+(white), plus `scrim` and `shadow` for the overlay and card. The danger pair
+always emits as `--persona-danger` / `--persona-danger-fg`, so it follows a
+customized error palette; a live theme update reaches an open dialog.
+
+Rail identity is a ladder, cheapest first. `features.history.rail.brand` is one
+declaration (`icon`, `iconUrl`, or `render({ collapsed })`, in that precedence,
+highest last) that the widget places twice: beside the view title in the
+expanded header (`.persona-history-heading-brand` around
+`.persona-history-brand-mark` and `.persona-history-wordmark`) and as the
+collapsed toggle's rest face (`.persona-history-toggle-brand`, revealing the
+panel glyph on hover and keyboard focus, and staying out of the way of a coarse
+pointer that has no hover). `features.history.rail.renderHeader` outranks it for
+the header area only, taking the whole identity slot; the collapsed face stays
+the brand's. The `renderHistoryHeader` plugin hook outranks both by replacing
+the top bar itself. Every rung is decorative: the `h2` stays in the DOM as
+`.persona-history-sr-only`, so `copy.viewTitle` still names the region.
+
+`features.history.rail.sections` adds host navigation sections around the
+conversation list, each stamped `data-persona-rail-section="<id>"` with rows
+stamped `data-persona-rail-item="<id>"`. They are styled by
+`.persona-history-nav` (the section, plus `.persona-history-nav--footer` for the
+`"footer"` placement), `.persona-history-nav-item` (a row on the same 36px
+geometry as a conversation, `.persona-history-nav-item--icon` when it resolved
+an icon), and `.persona-history-nav-icon` / `.persona-history-nav-label` /
+`.persona-history-nav-badge` inside it. Section titles reuse
+`.persona-history-group-heading`. Collapsed, the icon rows square off like the
+new-conversation row and everything else in the section hides.
+
+### Tooltip (`components.tooltip.*`)
+
+Icon controls (header buttons, composer buttons) open a shared tooltip that is
+portaled out of the panel so nothing clips it. Unset tokens keep the built-in
+dark bubble, so a widget with no tooltip tokens is pixel-identical.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `background` | `--persona-tooltip-background` | `#111827` |
+| `foreground` | `--persona-tooltip-foreground` | `#ffffff` |
+| `hintForeground` | `--persona-tooltip-hint-fg` | `rgba(255, 255, 255, 0.55)` |
+| `borderRadius` | `--persona-tooltip-radius` | `palette.radius.sm` |
+| `fontSize` | `--persona-tooltip-font-size` | `12px` |
+| `padding` | `--persona-tooltip-padding` | `6px 12px` |
+| `shadow` | `--persona-tooltip-shadow` | `0 4px 12px rgba(15, 23, 42, 0.18)` |
+| `maxWidth` | `--persona-tooltip-max-width` | `min(320px, calc(100vw - 16px))` |
+| `arrow` | `--persona-tooltip-arrow-display` | `true` (`false` emits `none` and drops the caret) |
+
+`hintForeground` colors the muted chip a tooltip can carry after its label, for
+a keyboard shortcut. Because the tooltip is portaled to the document body, out
+of the mount that carries the theme variables, the resolved values are copied
+onto the bubble each time it opens: a theme swap lands on the next open.
+
+Background, foreground, and hint color are live-editable in the theme editor
+under Components → Tooltip Colors; radius, font size, and the arrow live under
+Components → Tooltip.
 
 ### Message (`components.message.*`)
 
@@ -406,6 +633,23 @@ at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
 | `assistant.background` | `semantic.colors.container` |
 | `assistant.text` | `semantic.colors.text` |
 | `assistant.borderRadius` | `palette.radius.lg` |
+
+### Message actions (`components.messageActions.*`)
+
+The hover-revealed action row under a message (copy, vote, read aloud). Every
+token is optional: unset, the buttons inherit the shared ghost icon-button wash,
+which already inverts with the color scheme, and darken toward
+`semantic.colors.text` on hover. Set these only to break a message action away
+from the rest of the widget's icon buttons.
+
+| Token | CSS variable | Default |
+|-------|--------------|---------|
+| `hoverBackground` | `--persona-message-action-hover-bg` | `components.button.ghost.hoverBackground` |
+| `hoverForeground` | `--persona-message-action-hover-fg` | `semantic.colors.text` |
+| `borderRadius` | `--persona-message-action-radius` | `palette.radius.md` |
+
+The voted (active) state stays on `semantic.colors.accent` and is not themable
+through this group.
 
 ### Voice (`components.voice.*`)
 
@@ -819,6 +1063,236 @@ Returning `null` (or throwing) falls back to the default spinner, mirroring the
 `renderInline` / `renderCard` null-falls-back contract. When a custom indicator
 is used, the escalation-label logic is skipped (the host owns the content); the
 overlay backdrop, timing, and dismissal stay widget-owned either way.
+
+### Conversation History (Messages) Variables
+
+The Messages surface (`features.history.enabled`) ships its styles inside the
+lazy `history-view.js` chunk and injects them on mount, so it costs nothing in
+`widget.css`. Every rule is scoped under `.persona-history-view` (interactive
+elements additionally by tag, e.g. `button.persona-history-row`), which keeps a
+host reset such as `[data-persona-root] h2` from outranking it. The one
+exception is the shell-hosted top bar: in panel presentation the bar's contents
+mount inside the widget's own header (see `.persona-history-topbar--shell`
+below), so those rules use doubled class selectors instead of view scoping,
+which preserves the same specificity guarantee.
+
+Fourteen history-specific variables are declared on the view root, each with a
+fallback chain into the ordinary theme aliases. Set any of them on the host page
+(or on `[data-persona-root]`) to restyle the surface without touching a class:
+
+| CSS var | Fallback chain | Description |
+|---------|----------------|-------------|
+| `--persona-history-surface-bg` | `--persona-surface` → `#ffffff` | List/background surface and the row overflow menu. Rail re-points it at `--persona-container` → `#f7f7f8` for a distinct sidebar surface |
+| `--persona-history-topbar-bg` | `--persona-header-bg` → `--persona-surface` → `#ffffff` | Top bar background (inline bar only; the shell-hosted bar is transparent, the header theme paints it) |
+| `--persona-history-border` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Hairlines: top bar and footer. The rail's edge divider is drawn by the shell host from `--persona-divider` |
+| `--persona-history-row-hover-bg` | `--persona-button-ghost-hover-bg` → `rgba(0, 0, 0, 0.04)` | Row hover and active-press wash |
+| `--persona-history-row-divider` | `--persona-history-border` | Inset hairline under every row (panel only; the rail has no row dividers) |
+| `--persona-history-row-avatar-bg` | `--persona-header-icon-bg` → `--persona-primary` → `#2563eb` | Leading row avatar plate (panel only; the rail hides the avatar) |
+| `--persona-history-row-active-bg` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Selected conversation wash (wash-only selection, no edge marker) |
+| `--persona-history-skeleton-bg` | `--persona-divider` → `--persona-border` → `#e5e7eb` | Loading placeholder blocks |
+| `--persona-history-danger-fg` | `--persona-palette-colors-error-600` → `#b91c1c` | Destructive action text (delete, delete all, forget device) |
+| `--persona-history-focus-ring` | `--persona-primary` → `#2563eb` | `:focus-visible` outline color |
+| `--persona-history-row-min-height` | `74px` (panel) / `36px` (rail) | Row and skeleton-row minimum height |
+| `--persona-history-topbar-min-height` | `56px` (panel) / `48px` (rail) | Inline top bar minimum height (the shell-hosted bar inherits the header's sizing) |
+| `--persona-history-slide` | `20px` (panel) / `12px` (rail) | Horizontal travel of the body's entrance and exit motion |
+
+Enter/exit timing is a token group, `components.history.motion`: `enterDurationMs`
+(default `180`), `enterEasing` (`cubic-bezier(0, 0, 0.2, 1)`), `exitDurationMs`
+(`160`), and `exitEasing` (`cubic-bezier(0.4, 0, 1, 1)`), emitted as
+`--persona-history-enter-ms` / `--persona-history-enter-easing` /
+`--persona-history-exit-ms` / `--persona-history-exit-easing`. Durations are bare
+millisecond numbers and `0` disables that leg; only the body moves (the bar is
+persistent chrome), and `prefers-reduced-motion` always wins. The slide variable
+above is chunk-scoped (declared on `.persona-history-view`), so unlike the
+motion vars it is overridden with CSS on that selector, not by a theme emission.
+The theme editor's Messages preview scene shows these live: it opens the
+Messages view against a demo provider and replays the enter/exit pair after a
+motion token edit.
+
+Copy is separate from styling: every user-visible string is overridable through
+`features.history.copy` (see `AgentWidgetHistoryCopy`), never through CSS.
+
+#### Stable classes
+
+These class names are part of the public surface, so custom CSS and render-hook
+plugins can target them:
+
+```css
+/* Root and placement */
+.persona-history-view                 /* view root; carries the variables above */
+.persona-history-view--panel          /* panel presentation */
+.persona-history-view--rail           /* rail presentation: 36px title-only rows
+                                         on their own surface. The docked side and
+                                         width come from features.history.rail */
+.persona-history-view--rail-collapsed  /* the 52px icon rail: list hidden, the
+                                         new-conversation row icon-only */
+.persona-history-view--enter          /* one-shot entry animation (body only;
+                                         the bar never animates or moves) */
+
+/* Top bar. In panel presentation the bar's contents are hosted inside the
+   widget's own header: the shell appends .persona-history-header-host to the
+   header and suppresses the header's original children with the
+   data-persona-history-suppressed attribute while Messages is open. Rail (and
+   headerless layouts) keep the bar inline in the view. */
+.persona-history-topbar
+.persona-history-topbar--shell        /* the same bar when shell-hosted:
+                                         transparent, no min-height, the header
+                                         theme paints the chrome */
+.persona-history-topbar--shell-enter  /* one-shot fade as the hosted bar mounts */
+.persona-history-header-host          /* shell-owned wrapper inside the header */
+.persona-history-back                 /* back (panel) / close (rail) control;
+                                         --branded when features.history.rail.brand
+                                         gives the collapsed toggle a rest face */
+.persona-history-heading-group
+.persona-history-title
+.persona-history-heading-brand        /* rail.brand in the expanded header */
+.persona-history-brand-mark           /* the mark itself, in either placement */
+.persona-history-wordmark             /* copy.viewTitle beside the mark */
+.persona-history-toggle-brand         /* the mark as the collapsed toggle's face */
+
+/* Scope and identity (rendered inside the body, never as a second bar line) */
+.persona-history-caption              /* the caption row: scope text left, the
+                                         list overflow trigger right */
+.persona-history-list-options         /* that trigger; opens the list overflow
+                                         menu holding delete-all and reset */
+.persona-history-scope                /* ambient privacy caption above the list */
+.persona-history-scope-title
+.persona-history-scope-description
+.persona-history-scope-alert          /* identity block; sr-only under
+                                         [data-persona-history-scope-tone="ambient"]
+                                         (verified / browser-only), visible for
+                                         actionable identity states */
+.persona-history-scope-alert-title
+
+/* Body, groups, rows */
+.persona-history-body
+.persona-history-new                  /* primary "New conversation" action: a
+                                         pill pinned to the bottom of the list */
+.persona-history-new-icon             /* its icon-button form in the top bar */
+.persona-history-list-region
+.persona-history-nav                  /* a features.history.rail.sections group;
+                                         --footer sinks to the bottom of the body */
+.persona-history-nav-item             /* one nav row; --icon marks the rows that
+                                         survive as squares in the collapsed rail */
+.persona-history-nav-icon
+.persona-history-nav-label
+.persona-history-nav-badge            /* small trailing text chip */
+.persona-history-group                /* one time bucket (Today, Yesterday, …) */
+.persona-history-group-heading        /* sr-only in panel, visible in rail */
+.persona-history-list
+.persona-history-item                 /* row wrapper (<li>); its ::after is the
+                                         inset divider under the row */
+.persona-history-row                  /* whole-row button */
+.persona-history-row--active
+.persona-history-row--opening
+.persona-history-row--deleting
+.persona-history-row-avatar           /* leading 40px avatar (features.history.rowAvatar) */
+.persona-history-row-body             /* the two-line text column beside it */
+.persona-history-row-head
+.persona-history-row-title
+.persona-history-row-time
+.persona-history-row-preview
+.persona-history-row-count            /* screen-reader message count */
+.persona-history-row-menu-button      /* overflow trigger; a sibling, not nested.
+                                         Revealed on row hover/focus where the
+                                         pointer can hover */
+.persona-history-menu
+.persona-history-menu--list           /* the same menu anchored to the caption row */
+.persona-history-menu-item
+.persona-history-row-error            /* row-adjacent failure with retry */
+
+/* States and skeletons */
+.persona-history-state
+.persona-history-state-title
+.persona-history-state-description
+.persona-history-state-action
+.persona-history-view-loading
+.persona-history-skeleton-row
+.persona-history-skeleton-bar
+.persona-history-skeleton-bar--short
+.persona-history-skeleton-bar--medium
+.persona-history-skeleton-bar--wide
+
+/* Pagination */
+.persona-history-secondary            /* shared outline button */
+.persona-history-load-more
+
+/* Shared controls and utilities */
+.persona-history-icon-button
+.persona-history-truncate
+.persona-history-clamp
+.persona-history-sr-only
+```
+
+A further set is owned by the shell rather than the chunk, because it exists
+before and around the lazy view:
+
+```css
+.persona-history-toggle               /* header control that opens Messages;
+                                         hidden while a rail surface is up */
+.persona-history-rail-shell           /* row wrapper created for rail placement */
+.persona-history-rail-conversation    /* the still-operable conversation column */
+.persona-history-rail-host            /* the navigation column the view mounts into;
+                                         260px on the leading edge by default, with
+                                         the divider on the edge facing the
+                                         conversation. features.history.rail sets
+                                         { side: "left" | "right", width: 200-400 } */
+.persona-history-confirm__dialog      /* destructive confirmation (alertdialog) */
+.persona-history-confirm__title
+.persona-history-confirm__description
+.persona-history-confirm__actions
+.persona-history-confirm__cancel
+.persona-history-confirm__confirm
+```
+
+The rail hosts and the confirmation dialog are styled inline from theme
+variables so they cost no bytes in `widget.css`; the class names are still
+stable selectors for host overrides.
+
+#### Stable data attributes
+
+Useful when styling by state rather than by class, and the selectors the widget's
+own tests use:
+
+| Attribute | Values | On |
+|-----------|--------|----|
+| `data-persona-history-toggle` | (present) | The header control that opens Messages |
+| `data-persona-history-presentation` | `panel` \| `rail` | View root; updated live on a rail/panel flip |
+| `data-persona-history-identity` | `HistoryIdentityStatus["state"]` | The scope alert block |
+| `data-persona-history-state` | `loading` \| `empty` \| `identity` \| `error` \| `rate_limited` \| `new_conversation_required` | The list state block |
+| `data-persona-history-group` | group key | One time bucket |
+| `data-persona-history-item` | conversation id | Row wrapper |
+| `data-persona-history-conversation` | conversation id | Row button |
+| `data-persona-history-focus` | focus key | Any element the view can restore focus to |
+| `data-persona-history-live-region` | (present) | The shell's polite announcer |
+
+#### Home Screen recent-conversation classes (showcase)
+
+The Home Screen composition in the showcase (`apps/web/src/plugins/home-screen-plugin.ts`)
+renders an optional "Recent conversations" teaser above the starters. It is a
+demo plugin, not part of the published package, so these classes live with the
+plugin and are documented here only because the blueprint is meant to be copied:
+
+```css
+.persona-home__recent-header
+.persona-home__recent-all              /* "See all" → controller.showHistory() */
+.persona-home__recent                  /* one teaser row (whole-row button) */
+.persona-home__recent-copy
+.persona-home__recent-title
+.persona-home__recent-preview
+.persona-home__recent-time
+.persona-home__recent-skeleton
+.persona-home__recent-skeleton-bar
+.persona-home__recent-skeleton-bar--title
+.persona-home__recent-skeleton-bar--preview
+.persona-home__recent-error
+.persona-home__recent-retry
+```
+
+A teaser row deliberately renders less than a full Messages row: title, preview,
+and relative time only, with no message count, active marker, overflow menu, or
+delete. The plugin never touches a history provider; the host wires its
+callbacks to the public controller methods.
 
 ---
 
@@ -1544,7 +2018,7 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
 | `showReasoning` | Show AI reasoning/thinking steps |
 | `showToolCalls` | Show tool call invocations |
 | `scrollToBottom` | Shared transcript + event-stream affordance config: `enabled`, `iconName`, `label` (empty string renders icon-only). Defaults: `enabled: true`, `iconName: "arrow-down"`, `label: ""`. |
-| `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
+| `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, `documentToolbarToggleActiveColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
 
 ---
 

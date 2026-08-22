@@ -535,6 +535,7 @@ export type RuntypeClientChatRequest = {
 export type RuntypeClientChatStreamEvent = RuntypeExecutionStreamEvent;
 
 export type RuntypeClientResumeRequest = {
+  assistantMessageId?: string;
   clientTools?: Array<{
   description: string;
   name: string;

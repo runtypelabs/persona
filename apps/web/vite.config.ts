@@ -673,6 +673,10 @@ export default defineConfig({
         'help-search-demo': path.resolve(__dirname, 'help-search-demo.html'),
         'pre-chat-demo': path.resolve(__dirname, 'pre-chat-demo.html'),
         'home-screen-demo': path.resolve(__dirname, 'home-screen-demo.html'),
+        // Conversation history: Messages states + live staging mode
+        'history-demo': path.resolve(__dirname, 'history-demo.html'),
+        // Internal fixture for the Playwright history suite (e2e/); not in examples-nav.
+        'history-e2e': path.resolve(__dirname, 'history-e2e.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
         'stream-animations-demo': path.resolve(__dirname, 'stream-animations-demo.html'),
         'streaming-table-demo': path.resolve(__dirname, 'streaming-table-demo.html'),

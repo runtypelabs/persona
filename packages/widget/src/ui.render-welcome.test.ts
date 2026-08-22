@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
@@ -254,6 +258,44 @@ describe("renderWelcome plugin hook", () => {
     showHome = false;
     request();
     expect(body.scrollTop).toBe(240);
+  });
+
+  it("takes the transcript out of layout while the overlay is mounted", () => {
+    // Zeroing the scroll once at mount does not hold the overlay in place: the
+    // body keeps its own `overflow-y: auto` (inline in fill/fullscreen
+    // layouts, where the overlay state class cannot outrank it), and every
+    // later transcript scroll - autoscroll, a repin, a wheel - drags the
+    // containing block of an `inset: 0` box out from under the viewport. The
+    // plugin stack and the transcript then render as one scrolling column,
+    // with the composer still hidden. Out of layout, nothing scrolls under it.
+    const style = document.createElement("style");
+    style.textContent = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), "styles/widget.css"),
+      "utf8"
+    );
+    document.head.appendChild(style);
+    let showHome = true;
+    let request: () => void = () => {};
+    const plugin: AgentWidgetPlugin = {
+      id: "home",
+      renderWelcome: (ctx) => {
+        request = ctx.requestRender;
+        if (!showHome) return null;
+        const root = document.createElement("div");
+        root.setAttribute("data-test-home", "");
+        return root;
+      },
+    };
+    const { mount, controller } = makeController({ plugins: [plugin] });
+    controller.injectUserMessage({ content: "hello" });
+
+    const messages = mount.querySelector<HTMLElement>(".persona-widget-messages")!;
+    expect(getComputedStyle(messages).display).toBe("none");
+
+    showHome = false;
+    request();
+    expect(getComputedStyle(messages).display).not.toBe("none");
+    style.remove();
   });
 
   it("re-enables renderStarter output when a stream ends", async () => {

@@ -345,6 +345,27 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
     expect(mount.style.getPropertyValue("--persona-border")).not.toBe("");
   });
 
+  it("keeps a plugin footer's own inline styles across a rebuild", () => {
+    // applyFullHeightStyles resets footer.style.cssText for the built-in
+    // composer's per-mode geometry. A plugin footer is the plugin's DOM: the
+    // home screen's hidden placeholder relies on inline `display: none`, and
+    // the reset turned it into an empty visible composer band.
+    const plugin: AgentWidgetPlugin = {
+      id: "gate",
+      renderComposer: () => {
+        const footer = document.createElement("div");
+        footer.className = "persona-widget-footer";
+        footer.style.display = "none";
+        footer.setAttribute("data-test-gate", "");
+        return footer;
+      },
+    };
+    const { mount } = makeController({ plugins: [plugin] });
+
+    const footer = mount.querySelector<HTMLElement>("[data-test-gate]")!;
+    expect(footer.style.display).toBe("none");
+  });
+
   it("keeps the floating panel's fixed height across a rebuild", () => {
     // applyFullHeightStyles wipes panel.style.cssText and only restores width;
     // the fixed height belongs to recalcPanelHeight. Without a re-stamp in

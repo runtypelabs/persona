@@ -325,6 +325,16 @@
   display: none;
 }
 
+/* Launcher glyph weight, agent icon and call-to-action arrow alike: one pill
+   must never carry two line weights. CSS wins over the SVG stroke-width
+   attribute, which stays the no-CSS fallback. Both the critical launcher
+   bundle and the full widget render this markup, so one rule keeps the two
+   surfaces identical. */
+[data-persona-root] [data-role="launcher-icon"] > svg,
+[data-persona-root] [data-role="launcher-call-to-action-icon"] > svg {
+  stroke-width: var(--persona-components-launcher-iconStrokeWidth, 1.5);
+}
+
 /* An empty transcript still counts as a flex child, so the body's gap
    inserts phantom space below the welcome and fakes scrollable height. */
 .persona-widget-messages:empty {
@@ -957,6 +967,16 @@
   overflow: hidden;
 }
 
+/* The overlay is absolute inside the scroll body, so anything left scrollable
+   underneath strands it at the content origin instead of the viewport (the
+   body carries an inline `overflow-y: auto` in fill/fullscreen layouts, which
+   outranks the rule above). Hiding the transcript siblings leaves the body
+   with nothing to scroll, so the overlay stays over the visible area. */
+.persona-widget-body.persona-welcome-overlay-active
+  > :not([data-persona-welcome-overlay]) {
+  display: none !important;
+}
+
 /* Hero: auto block margins center the surface in the empty conversation
    without `justify-content`, which would make overflowing content
    unreachable in the scroll body. */
@@ -1016,6 +1036,10 @@
   background-color: var(--persona-surface, #ffffff);
 }
 
+.persona-bg-persona-launcher {
+  background-color: var(--persona-launcher-bg, var(--persona-surface, #ffffff));
+}
+
 .persona-bg-persona-container {
   background-color: var(--persona-container, #f8fafc);
 }
@@ -1050,6 +1074,14 @@
 
 .persona-text-persona-muted {
   color: var(--persona-muted, #6b7280);
+}
+
+.persona-text-persona-launcher {
+  color: var(--persona-launcher-fg, var(--persona-primary, #171717));
+}
+
+.persona-text-persona-launcher-muted {
+  color: var(--persona-launcher-fg-muted, var(--persona-muted, #6b7280));
 }
 
 .persona-text-white {
@@ -1783,12 +1815,12 @@
 .persona-control-tooltip {
   position: fixed;
   box-sizing: border-box;
-  max-width: min(320px, calc(100vw - 16px));
+  max-width: var(--persona-tooltip-max-width, min(320px, calc(100vw - 16px)));
   background-color: var(--persona-tooltip-background, #111827);
   color: var(--persona-tooltip-foreground, #ffffff);
-  padding: 6px 12px;
-  border-radius: var(--persona-radius-sm, 0.125rem);
-  font-size: 12px;
+  padding: var(--persona-tooltip-padding, 6px 12px);
+  border-radius: var(--persona-tooltip-radius, var(--persona-radius-sm, 0.125rem));
+  font-size: var(--persona-tooltip-font-size, 12px);
   line-height: 1.35;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -1803,8 +1835,16 @@
   opacity: 0;
 }
 
+/* Trailing shortcut hint, e.g. a key combo after the label. */
+.persona-control-tooltip__hint {
+  margin-left: 6px;
+  color: var(--persona-tooltip-hint-fg, rgba(255, 255, 255, 0.55));
+  white-space: nowrap;
+}
+
 .persona-control-tooltip__arrow {
   position: absolute;
+  display: var(--persona-tooltip-arrow-display, block);
   left: var(--persona-tooltip-arrow-x, 50%);
   width: 8px;
   height: 8px;
@@ -1827,6 +1867,44 @@
   justify-content: center;
 }
 
+/* Shared header control box: close, clear chat, trailing actions, and the
+   Messages toggle. A per-control config key (`launcher.closeButtonSize`,
+   `launcher.clearChat.size`) writes inline styles, which win. */
+.persona-header-control {
+  width: var(--persona-header-control-size, 32px);
+  height: var(--persona-header-control-size, 32px);
+  flex-shrink: 0;
+  /* UA button padding would eat into the box and crush the glyph; a configured
+     paddingX/Y is inline and still wins. */
+  padding: 0;
+}
+
+.persona-header-control--glyph > svg {
+  width: var(--persona-header-control-icon-size, 20px);
+  height: var(--persona-header-control-icon-size, 20px);
+  /* Presentation wins over the SVG stroke-width attribute, which stays as the
+     no-CSS fallback. Unitless, straight off the theme token. */
+  stroke-width: var(--persona-components-header-controlStrokeWidth, 1.5);
+}
+
+/* Sparse-viewBox glyphs (X) need more box to match the visible extent of their
+   siblings, and the same factor thins the stroke so the weight still matches.
+   Multipliers mirror SPARSE_GLYPHS in header-parts.ts. */
+.persona-header-control--sparse > svg {
+  width: calc(var(--persona-header-control-icon-size, 20px) * 1.4);
+  height: calc(var(--persona-header-control-icon-size, 20px) * 1.4);
+  stroke-width: calc(var(--persona-components-header-controlStrokeWidth, 1.5) * 0.7);
+}
+
+/* A smaller controlSize must never shrink a touch target below 40px. An
+   explicit per-control size is inline, so it opts out of this floor. */
+@media (pointer: coarse) {
+  .persona-header-control {
+    min-width: 40px;
+    min-height: 40px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .persona-control-tooltip {
     transition: none;
@@ -1847,6 +1925,91 @@
 
 .persona-animate-typing {
   animation: persona-typing 1s infinite;
+}
+
+/* Conversation-open stand-in: transcript skeleton shown while a conversation
+   selected from the Messages list is fetched. The container carries the
+   transcript's centered column so custom renderers land where messages will. */
+.persona-conversation-loading {
+  width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
+  margin: 0 auto;
+}
+
+.persona-conversation-loading-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+}
+
+/* Leading bubbles stand in for assistant messages, trailing for user ones,
+   so each follows its role's real radius chain. */
+.persona-conversation-loading-bubble {
+  height: 44px;
+  border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem));
+  background: var(--persona-divider, var(--persona-border, #e5e7eb));
+  align-self: flex-start;
+  animation: persona-conversation-loading-pulse 1400ms ease-in-out infinite;
+}
+
+.persona-conversation-loading-bubble--trailing {
+  align-self: flex-end;
+  border-radius: var(--persona-message-user-radius, var(--persona-radius-lg, 0.5rem));
+}
+
+@keyframes persona-conversation-loading-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-conversation-loading-bubble {
+    animation: none;
+  }
+}
+
+/* Failed conversation-open surface. The container carries the transcript
+   column; the body classes style the default block only, so a plugin's
+   renderHistoryOpenError content starts from a clean slate. */
+.persona-conversation-loading-error {
+  width: 100%;
+  max-width: var(--persona-content-max-width, 768px);
+  margin: 0 auto;
+}
+
+.persona-conversation-loading-error-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px;
+  color: var(--persona-text-muted, #6b7280);
+}
+
+.persona-conversation-loading-error-title {
+  margin: 0;
+}
+
+.persona-conversation-loading-error-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.persona-conversation-loading-error-action {
+  padding: 8px 14px;
+  border: 1px solid var(--persona-divider, var(--persona-border, #e5e7eb));
+  border-radius: var(--persona-radius-md, 8px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
 }
 
 .persona-space-x-1 > * + * {
@@ -2675,16 +2838,18 @@
   height: 28px;
   padding: 0;
   border: none;
-  border-radius: var(--persona-radius-sm, 0.125rem);
+  border-radius: var(--persona-message-action-radius, var(--persona-radius-md, 0.375rem));
   background-color: transparent;
   color: var(--persona-muted, #6b7280);
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
+/* Hover reads the shared ghost wash (scheme-aware) and moves the icon toward
+   text, never a surface fill or the brand color. */
 .persona-message-action-btn:hover {
-  background-color: var(--persona-container, #f8fafc);
-  color: var(--persona-primary, #111827);
+  background-color: var(--persona-message-action-hover-bg, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+  color: var(--persona-message-action-hover-fg, var(--persona-text, #111827));
 }
 
 .persona-message-action-btn:active {
@@ -3406,6 +3571,42 @@
   gap: var(--persona-artifact-split-gap, 0.5rem);
 }
 
+/* Split button: one bordered control, two invocable halves, internal hairline
+   divider (Primer/Fluent anatomy). The wrap paints border, surface, and radius
+   once; the halves stay borderless and transparent, with inner radii carved
+   1px inside the wrap so hover fills never poke past the rounded corners. The
+   half selectors carry a `button.` tag so they outrank context skins' rest
+   rules (0,3,1 vs 0,3,0) while context hover rules (0,4,0) still win. */
+[data-persona-root] .persona-split-btn {
+  --persona-split-radius: var(--persona-radius-md, 0.375rem);
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--persona-border, #e5e7eb);
+  border-radius: var(--persona-split-radius);
+  background: var(--persona-surface, #ffffff);
+}
+
+[data-persona-root] .persona-split-btn > button.persona-split-btn-primary,
+[data-persona-root] .persona-split-btn > button.persona-split-btn-chevron {
+  border: 0;
+  background: transparent;
+}
+
+[data-persona-root] .persona-split-btn > button.persona-split-btn-primary {
+  border-radius: calc(var(--persona-split-radius) - 1px) 0 0 calc(var(--persona-split-radius) - 1px);
+}
+
+[data-persona-root] .persona-split-btn > button.persona-split-btn-chevron {
+  border-left: 1px solid var(--persona-split-divider, var(--persona-border, #e5e7eb));
+  border-radius: 0 calc(var(--persona-split-radius) - 1px) calc(var(--persona-split-radius) - 1px) 0;
+}
+
+[data-persona-root] .persona-split-btn > button.persona-split-btn-primary:where(:hover),
+[data-persona-root] .persona-split-btn > button.persona-split-btn-chevron:where(:hover) {
+  background: var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6));
+}
+
 /* Document toolbar preset: optional layout vars: --persona-artifact-doc-toolbar-icon-color, etc. */
 /* Document-toolbar icon/copy button styling is shared by the artifact pane's
    document preset and the inline chrome actions cluster, so both surfaces read
@@ -3435,6 +3636,7 @@
 [data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn[aria-pressed="true"] {
   background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
   border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb)));
+  color: var(--persona-artifact-doc-toggle-active-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
 }
 
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn,
@@ -3455,6 +3657,16 @@
 [data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover,
 [data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn:hover {
   background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
+}
+
+/* Copy split button inside the document toolbar: the wrap takes over the copy
+   pill's themed border/background/radius; the halves fall through to the base
+   split-btn rules above, which outrank these context rest rules by tag. */
+[data-persona-root] .persona-artifact-toolbar-document .persona-split-btn,
+[data-persona-root] .persona-artifact-inline-chrome-actions .persona-split-btn {
+  --persona-split-radius: var(--persona-artifact-toolbar-copy-radius, var(--persona-radius-md, 0.375rem));
+  border: var(--persona-artifact-toolbar-copy-border, 1px solid var(--persona-border, #e5e7eb));
+  background: var(--persona-artifact-toolbar-copy-bg, var(--persona-surface, #ffffff));
 }
 
 
@@ -3745,6 +3957,9 @@
   /* Inset ring instead of a border so documentToolbarToggleActiveBorderColor
      still applies inside the borderless segment (transparent by default). */
   box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
+  /* Survives the @supports thumb override below, which resets only the
+     background and ring; the active glyph keeps this color either way. */
+  color: var(--persona-artifact-doc-toggle-active-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
 }
 
 /* Sliding selection thumb: a container ::before that translates between the
@@ -3850,7 +4065,9 @@
   margin: 0.25rem 0;
 }
 
-/* Draggable split handle (desktop split only; hidden in drawer / narrow host / small viewport) */
+/* Draggable split handles: the artifact seam (desktop split only; hidden in
+   drawer / narrow host / small viewport) and the docked Messages rail's edge. */
+[data-persona-root] .persona-rail-resizer,
 [data-persona-root] .persona-artifact-split-handle {
   width: 6px;
   flex-shrink: 0;
@@ -3864,6 +4081,8 @@
   box-sizing: border-box;
 }
 
+[data-persona-root] .persona-rail-resizer:hover,
+[data-persona-root] .persona-rail-resizer:focus-visible,
 [data-persona-root] .persona-artifact-split-handle:hover,
 [data-persona-root] .persona-artifact-split-handle:focus-visible {
   background: color-mix(in srgb, var(--persona-border, #e5e7eb) 55%, transparent);

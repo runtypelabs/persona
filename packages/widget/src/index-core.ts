@@ -32,6 +32,7 @@ export type {
   AgentWidgetMessage,
   AgentWidgetLauncherConfig,
   AgentWidgetLauncherTeaserConfig,
+  AgentWidgetTooltipConfig,
   AgentWidgetDockConfig,
   AgentWidgetEvent,
   AgentWidgetStreamParser,
@@ -93,6 +94,7 @@ export type {
   // Client token types
   ClientSession,
   ClientInitResponse,
+  PreparedClientSession,
   ClientChatRequest,
   ClientFeedbackRequest,
   ClientFeedbackType,
@@ -142,6 +144,30 @@ export type {
   AskUserQuestionOption,
   AgentWidgetAskUserQuestionFeature,
   AgentWidgetAskUserQuestionStyles,
+  // Visitor conversation history (client-token mode) types
+  AgentWidgetHistoryFeature,
+  AgentWidgetHistoryListAction,
+  AgentWidgetHistoryCopy,
+  HistoryScope,
+  HistoryIdentityStatus,
+  ResolvedHistoryPresentation,
+  HistoryReturnSurface,
+  HistoryConversationSummary,
+  HistoryConversationPatch,
+  HistoryConversationPage,
+  HistoryConversationDetail,
+  HistoryDisplayProjection,
+  // History rendering customization (plugin render hooks; types only)
+  ResolvedHistoryCopy,
+  HistoryViewState,
+  HistoryPendingAction,
+  AgentWidgetHistoryRenderActions,
+  AgentWidgetRenderHistoryViewContext,
+  AgentWidgetRenderHistoryHeaderContext,
+  AgentWidgetRenderHistoryConversationContext,
+  AgentWidgetRenderHistoryStateContext,
+  AgentWidgetRenderHistoryOpenErrorContext,
+  ClientVisitorGrant,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionChipsConfig,
   AgentWidgetResolvedSuggestion,
@@ -158,6 +184,26 @@ export type {
   AgentWidgetWelcomeVariant,
   AgentWidgetWelcomeDismiss
 } from "./types";
+
+// Custom conversation-history backends (`features.history.provider`). The
+// provider registry beside this module stays private.
+export type {
+  HistoryProvider,
+  HistoryOperationContext,
+  PreparedHistoryActivation,
+  HistoryListOptions,
+  HistoryListResult,
+  HistoryPageOptions,
+  HistoryPageResult,
+  HistoryDeleteAllOptions,
+  HistoryProviderErrorCode,
+} from "./internal/history-provider";
+
+// Value export: custom providers construct and `instanceof` this.
+export {
+  HistoryProviderError,
+  isHistoryProviderError,
+} from "./internal/history-provider";
 
 export {
   applyFeaturePreferences,
@@ -347,7 +393,9 @@ export type {
   AgentWidgetTransformSuggestionsContext,
   AgentWidgetRenderSuggestionContext,
   AgentWidgetRenderWelcomeContext,
-  AgentWidgetSuggestionSelectContext
+  AgentWidgetSuggestionSelectContext,
+  AgentWidgetRailSection,
+  AgentWidgetRailSectionContext
 } from "./plugins/types";
 // Welcome resolver: `renderWelcome` receives the resolved shape.
 export { resolveWelcomeConfig, isWelcomeVisible } from "./welcome";
@@ -398,7 +446,7 @@ export { renderLucideIcon } from "./utils/icons";
 export type { IconName } from "./utils/icons";
 
 // Button utility exports
-export { createIconButton, createLabelButton, createToggleGroup, createComboButton } from "./utils/buttons";
+export { createIconButton, createLabelButton, createToggleGroup, createComboButton, createSplitButton } from "./utils/buttons";
 export type {
   CreateIconButtonOptions,
   CreateLabelButtonOptions,
