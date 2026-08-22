@@ -108,10 +108,12 @@ import {
   createStreamCaret,
   detachAllPlugins,
   ensurePluginActive,
+  LAZY_BUILTIN_STREAM_ANIMATIONS,
   resolveStreamAnimation,
   resolveStreamAnimationPlugin,
   wrapStreamAnimation,
 } from "./utils/stream-animation";
+import { loadAnimationsExtra } from "./animations-extra-loader";
 import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
 import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./utils/dock";
@@ -3771,6 +3773,34 @@ export const createAgentExperience = (
   // instance's state, so other widgets on the page are unaffected.
   destroyCallbacks.push(teardownBuiltInApprovals);
 
+  // `wipe` / `glyph-cycle` live in the lazy animations-extra chunk (CDN) or
+  // the animations/* subpaths (npm). When config selects one that isn't
+  // registered yet, kick the chunk load and activate on arrival: text streams
+  // unanimated until the chunk lands, then subsequent renders animate.
+  // Unregistered custom names never trigger a fetch.
+  let streamAnimationLoadDisposed = false;
+  destroyCallbacks.push(() => {
+    streamAnimationLoadDisposed = true;
+  });
+  const resolveStreamAnimationPluginLazy: typeof resolveStreamAnimationPlugin = (
+    type,
+    overrides
+  ) => {
+    const plugin = resolveStreamAnimationPlugin(type, overrides);
+    if (plugin || !LAZY_BUILTIN_STREAM_ANIMATIONS.includes(type)) return plugin;
+    void loadAnimationsExtra()
+      .then(() => {
+        if (streamAnimationLoadDisposed) return;
+        const loaded = resolveStreamAnimationPlugin(type, overrides);
+        if (loaded) ensurePluginActive(loaded, mount);
+      })
+      .catch(() => {
+        // Failed fetch: renders fall back to unanimated text; the next
+        // resolve retries via the chunk loader's rejection-retry semantics.
+      });
+    return null;
+  };
+
   // Activate the stream-animation plugin for this widget instance. Plugins
   // with `styles` inject their CSS into the widget root once; plugins with
   // `onAttach` (e.g., glyph-cycle's MutationObserver for real glyph tick
@@ -3778,14 +3808,13 @@ export const createAgentExperience = (
   // deferred to widget destroy.
   const streamAnimationConfig = config.features?.streamAnimation;
   if (streamAnimationConfig?.type && streamAnimationConfig.type !== "none") {
-    const plugin = resolveStreamAnimationPlugin(
+    const plugin = resolveStreamAnimationPluginLazy(
       streamAnimationConfig.type,
       streamAnimationConfig.plugins
     );
-    if (plugin) {
-      ensurePluginActive(plugin, mount);
-      destroyCallbacks.push(() => detachAllPlugins(mount));
-    }
+    if (plugin) ensurePluginActive(plugin, mount);
+    // Push unconditionally: a lazily-loaded plugin can activate after init.
+    destroyCallbacks.push(() => detachAllPlugins(mount));
   }
 
   // Reassignable: a composer rebuild swaps the row this manager renders into.
@@ -6135,7 +6164,7 @@ export const createAgentExperience = (
     const streamAnimation = resolveStreamAnimation(feature);
     const plugin =
       streamAnimation.type !== "none"
-        ? resolveStreamAnimationPlugin(streamAnimation.type, feature?.plugins)
+        ? resolveStreamAnimationPluginLazy(streamAnimation.type, feature?.plugins)
         : null;
     const pluginStillAnimating =
       plugin?.isAnimating?.(lastAssistant) === true;
@@ -11705,7 +11734,7 @@ export const createAgentExperience = (
         nextStreamAnimationType &&
         nextStreamAnimationType !== "none"
       ) {
-        const streamAnimationPlugin = resolveStreamAnimationPlugin(
+        const streamAnimationPlugin = resolveStreamAnimationPluginLazy(
           nextStreamAnimationType,
           config.features?.streamAnimation?.plugins
         );

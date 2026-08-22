@@ -20,6 +20,10 @@ export default defineConfig({
       '@runtypelabs/persona/history-view': fileURLToPath(
         new URL('./src/history-view.ts', import.meta.url)
       ),
+      // Same for the lazy stream-animations chunk subpath.
+      '@runtypelabs/persona/animations-extra': fileURLToPath(
+        new URL('./src/animations-extra.ts', import.meta.url)
+      ),
     },
   },
   test: {

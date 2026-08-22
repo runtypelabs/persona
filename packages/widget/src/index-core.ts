@@ -404,8 +404,8 @@ export type { AgentWidgetPluginStorage } from "./utils/plugin-storage";
 export { pluginRegistry } from "./plugins/registry";
 
 // Stream animation plugin API: lets consumers register custom animations
-// that match the built-in surface (typewriter, pop-bubble) and subpath
-// modules (letter-rise, word-fade, wipe, glyph-cycle).
+// that match the core built-ins (typewriter, pop-bubble, letter-rise,
+// word-fade) and the subpath modules (wipe, glyph-cycle).
 export {
   registerStreamAnimationPlugin,
   unregisterStreamAnimationPlugin,

@@ -1,26 +1,26 @@
 [
   {
-    "name": "\u26d4 CRITICAL \u00b7 CDN browser payload (index.global.js)",
+    "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "191.5 kB",
+    "limit": "190.5 kB",
     "gzip": true
   },
   {
-    "name": "\u26d4 CRITICAL \u00b7 launcher critical bundle (launcher.global.js)",
+    "name": "⛔ CRITICAL · launcher critical bundle (launcher.global.js)",
     "path": "dist/launcher.global.js",
     "limit": "19 kB",
     "gzip": true
   },
   {
-    "name": "\u26d4 CRITICAL \u00b7 browser stylesheet (widget.css)",
+    "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
     "limit": "18.25 kB",
     "gzip": true
   },
   {
-    "name": "\u26d4 CRITICAL \u00b7 ESM bundle shipped by consumers (index.js)",
+    "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "191.5 kB",
+    "limit": "192 kB",
     "gzip": true
   },
   {
@@ -36,69 +36,75 @@
     "gzip": true
   },
   {
-    "name": "Opt-in \u00b7 theme-editor headless subpath (theme-editor.js)",
+    "name": "Opt-in · theme-editor headless subpath (theme-editor.js)",
     "path": "dist/theme-editor.js",
     "limit": "36.75 kB",
     "gzip": true
   },
   {
-    "name": "Opt-in \u00b7 theme-editor preview subpath (theme-editor-preview.js)",
+    "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
     "limit": "169.5 kB",
     "gzip": true
   },
   {
-    "name": "Opt-in \u00b7 smart-dom-reader subpath (smart-dom-reader.js)",
+    "name": "Opt-in · smart-dom-reader subpath (smart-dom-reader.js)",
     "path": "dist/smart-dom-reader.js",
     "limit": "13 kB",
     "gzip": true
   },
   {
-    "name": "Server-safe \u00b7 codegen subpath (codegen.js)",
+    "name": "Server-safe · codegen subpath (codegen.js)",
     "path": "dist/codegen.js",
     "limit": "12 kB",
     "gzip": true
   },
   {
-    "name": "Opt-in \u00b7 plugin-kit subpath (plugin-kit.js)",
+    "name": "Opt-in · plugin-kit subpath (plugin-kit.js)",
     "path": "dist/plugin-kit.js",
     "limit": "2 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 WebMCP polyfill chunk (webmcp-polyfill.js)",
+    "name": "Lazy · WebMCP polyfill chunk (webmcp-polyfill.js)",
     "path": "dist/webmcp-polyfill.js",
     "limit": "11 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 Runtype TTS engine chunk (runtype-tts.js)",
+    "name": "Lazy · Runtype TTS engine chunk (runtype-tts.js)",
     "path": "dist/runtype-tts.js",
     "limit": "4 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 context-mentions + slash-commands chunk (context-mentions.js)",
+    "name": "Lazy · context-mentions + slash-commands chunk (context-mentions.js)",
     "path": "dist/context-mentions.js",
     "limit": "19 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 inline-mention contenteditable chunk (context-mentions-inline.js)",
+    "name": "Lazy · inline-mention contenteditable chunk (context-mentions-inline.js)",
     "path": "dist/context-mentions-inline.js",
     "limit": "6 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 history (Messages) view chunk (history-view.js)",
+    "name": "Lazy · history (Messages) view chunk (history-view.js)",
     "path": "dist/history-view.js",
     "limit": "15.5 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 event-stream observability panel chunk (event-stream-view.js)",
+    "name": "Lazy · event-stream observability panel chunk (event-stream-view.js)",
     "path": "dist/event-stream-view.js",
     "limit": "13.25 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · wipe + glyph-cycle stream animations chunk (animations-extra.js)",
+    "path": "dist/animations-extra.js",
+    "limit": "2.25 kB",
     "gzip": true
   }
 ]

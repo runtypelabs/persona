@@ -17,7 +17,8 @@
         "src/context-mentions-inline.ts"
       ],
       "@runtypelabs/persona/history-view": ["src/history-view.ts"],
-      "@runtypelabs/persona/event-stream-view": ["src/event-stream-view.ts"]
+      "@runtypelabs/persona/event-stream-view": ["src/event-stream-view.ts"],
+      "@runtypelabs/persona/animations-extra": ["src/animations-extra.ts"]
     },
     "declaration": true,
     "outDir": "dist"

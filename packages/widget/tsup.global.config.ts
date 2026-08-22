@@ -72,5 +72,10 @@ export default defineConfig({
     // scheme: sibling-URL chunk `event-stream-view.js`, fetched only when the
     // visitor first opens the panel via the header toggle.
     options.external.push("@runtypelabs/persona/event-stream-view");
+
+    // Keep the wipe + glyph-cycle stream animations out of the CDN payload.
+    // Same scheme: sibling-URL chunk `animations-extra.js`, fetched only when
+    // `features.streamAnimation.type` selects one of them.
+    options.external.push("@runtypelabs/persona/animations-extra");
   },
 });

@@ -45,9 +45,11 @@ export const resolveStreamAnimation = (
  * Built-in animations ship with the core widget: CSS lives in widget.css
  * and no subpath import is required. They register automatically.
  *
- * Other animations (`letter-rise`, `word-fade`, `wipe`, `glyph-cycle`) are
- * tree-shakeable subpath plugins: consumers import them from
- * `@runtypelabs/persona/animations/<name>` and they auto-register on load.
+ * `wipe` and `glyph-cycle` are tree-shakeable subpath plugins: consumers
+ * import them from `@runtypelabs/persona/animations/<name>` and they
+ * auto-register on load. The IIFE/CDN build instead lazy-loads them from the
+ * `animations-extra.js` sibling chunk when config selects one (see
+ * LAZY_BUILTIN_STREAM_ANIMATIONS below and the resolver in ui.ts).
  */
 const BUILTIN_PLUGINS: StreamAnimationPlugin[] = [
   {
@@ -83,6 +85,17 @@ const BUILTIN_PLUGINS: StreamAnimationPlugin[] = [
  */
 const globalRegistry = new Map<string, StreamAnimationPlugin>();
 for (const plugin of BUILTIN_PLUGINS) globalRegistry.set(plugin.name, plugin);
+
+/**
+ * Built-in names whose plugins live OUTSIDE the core bundle: the
+ * `animations/*` subpaths (npm) and the `animations-extra` lazy chunk (CDN).
+ * The UI uses this to decide whether an unresolved type is worth a chunk
+ * fetch (vs. an unregistered custom name, which never is).
+ */
+export const LAZY_BUILTIN_STREAM_ANIMATIONS: readonly string[] = [
+  "wipe",
+  "glyph-cycle",
+];
 
 /**
  * Register a custom stream animation plugin globally. Subsequent widget
