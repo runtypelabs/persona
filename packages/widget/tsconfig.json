@@ -19,7 +19,8 @@
       "@runtypelabs/persona/history-view": ["src/history-view.ts"],
       "@runtypelabs/persona/event-stream-view": ["src/event-stream-view.ts"],
       "@runtypelabs/persona/animations-extra": ["src/animations-extra.ts"],
-      "@runtypelabs/persona/approval-ui": ["src/approval-ui.ts"]
+      "@runtypelabs/persona/approval-ui": ["src/approval-ui.ts"],
+      "@runtypelabs/persona/session-reconnect": ["src/session-reconnect.ts"]
     },
     "declaration": true,
     "outDir": "dist"

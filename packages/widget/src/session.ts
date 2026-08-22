@@ -74,13 +74,15 @@ import {
 } from "./voice";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
-// Type-only (erased at build): the runtime reconnect machinery is reached via a
-// dynamic import in `beginReconnect`, so it never lands in bundles that don't
-// opt into durable reconnect (see ./session-reconnect.ts).
+// Type-only (erased at build): the runtime reconnect machinery ships in the
+// lazy session-reconnect chunk, reached via `session-reconnect-loader.ts` in
+// `beginReconnect`, so it never lands in bundles that don't opt into durable
+// reconnect.
 import type {
   ReconnectController,
   ReconnectHost,
 } from "./session-reconnect";
+import { loadSessionReconnect } from "./session-reconnect-loader";
 
 export type AgentWidgetSessionStatus =
   | "idle"
@@ -4373,7 +4375,7 @@ export class AgentWidgetSession {
       return Promise.resolve(this.reconnectController);
     }
     if (!this.reconnectControllerPromise) {
-      this.reconnectControllerPromise = import("./session-reconnect").then(
+      this.reconnectControllerPromise = loadSessionReconnect().then(
         ({ createReconnectController }) => {
           const controller = createReconnectController(
             this.buildReconnectHost()
@@ -4382,6 +4384,11 @@ export class AgentWidgetSession {
           return controller;
         }
       );
+      // A failed chunk fetch must not poison the memoized promise: clear it so
+      // the next reconnect trigger retries the load.
+      this.reconnectControllerPromise.catch(() => {
+        this.reconnectControllerPromise = null;
+      });
     }
     return this.reconnectControllerPromise;
   }

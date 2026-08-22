@@ -265,6 +265,35 @@ setApprovalUiLoader(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Deferred session-reconnect loading.
+//
+// This bundle is built with `@runtypelabs/persona/session-reconnect` external
+// (see `tsup.global.config.ts`): the durable-session reconnect loop is kept
+// out of the CDN payload and fetched only when a session with a
+// `reconnectStream` transport first needs to resume. Same sibling-URL scheme
+// as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setSessionReconnectLoader } from "./session-reconnect-loader";
+
+setSessionReconnectLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "session-reconnect.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the session-reconnect.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host session-reconnect.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
 // Deferred event-stream-view loading.
 //
 // Same scheme as history-view: `@runtypelabs/persona/event-stream-view` is

@@ -82,5 +82,10 @@ export default defineConfig({
     // CDN payload. Same scheme: sibling-URL chunk `approval-ui.js`, fetched
     // when the first approval message arrives.
     options.external.push("@runtypelabs/persona/approval-ui");
+
+    // Keep the durable-session reconnect loop out of the CDN payload. Same
+    // scheme: sibling-URL chunk `session-reconnect.js`, fetched only when a
+    // session with a `reconnectStream` transport first needs to resume.
+    options.external.push("@runtypelabs/persona/session-reconnect");
   },
 });
