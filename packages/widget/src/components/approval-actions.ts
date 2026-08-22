@@ -19,9 +19,14 @@
  * trace.
  */
 import { createElement } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+// Icon + webmcp-title lookups are injected by ui.ts at chunk adoption (see
+// approval-deps): this module ships in the lazy approval-ui chunk.
+import {
+  renderApprovalIcon as renderLucideIcon,
+  getWebMcpToolDisplayTitle,
+} from "./approval-deps";
 import { formatUnknownValue } from "../utils/formatting";
-import { WEBMCP_TOOL_PREFIX, getWebMcpToolDisplayTitle } from "../webmcp-bridge";
+import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
 import { createPopover, isEditableEventTarget, type PopoverHandle } from "../plugin-kit";
 import type {
   AgentWidgetMessage,

@@ -169,8 +169,9 @@ import {
   resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
 import { formatElapsedMs } from "./utils/formatting";
-import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
-import { createBuiltInApprovalPlugin } from "./components/approval-actions";
+import { loadApprovalUi, getApprovalUiSync, type ApprovalUiModule } from "./approval-ui-loader";
+import { getWebMcpToolDisplayTitle } from "./webmcp-bridge";
+import type { AgentWidgetPlugin } from "./plugins/types";
 import {
   createSuggestionElement,
   createSuggestions,
@@ -800,8 +801,53 @@ export const createAgentExperience = (
   // The built-in approval renderer, shaped as a plugin. Resolved as a FALLBACK
   // (not pushed into `plugins`) so a user `renderApproval` plugin always wins
   // and a later config-update plugin push can't reorder ahead of it.
-  const { plugin: builtInApprovalPlugin, teardown: teardownBuiltInApprovals } =
-    createBuiltInApprovalPlugin();
+  //
+  // The whole approval UI (bubble + built-in plugin) lives in the lazy
+  // approval-ui chunk: nothing loads until the first approval message arrives.
+  // While the chunk is in flight that message renders as an empty preserved
+  // row; `onApprovalUiReady` (assigned at the end of the factory) clears the
+  // cache and re-renders so the real card appears. The approval is parked on
+  // the user's decision anyway, so the delay costs nothing semantically.
+  let approvalUi: ApprovalUiModule | null = null;
+  let builtInApprovalPlugin: AgentWidgetPlugin | null = null;
+  let teardownBuiltInApprovals: (() => void) | null = null;
+  let approvalUiDisposed = false;
+  let onApprovalUiReady: (() => void) | null = null;
+  const adoptApprovalUi = (mod: ApprovalUiModule): void => {
+    approvalUi = mod;
+    // Inject the core icon registry + the core bridge's webmcp title map: the
+    // chunk is bundled noExternal and must not carry its own copies.
+    mod.initApprovalUi({
+      renderIcon: renderLucideIcon,
+      webMcpToolTitle: getWebMcpToolDisplayTitle,
+    });
+    const built = mod.createBuiltInApprovalPlugin();
+    builtInApprovalPlugin = built.plugin;
+    teardownBuiltInApprovals = built.teardown;
+  };
+  const ensureApprovalUi = (): ApprovalUiModule | null => {
+    if (approvalUi) return approvalUi;
+    // Synchronous when the module was provided eagerly (tests) or already
+    // loaded by another widget instance on the page.
+    const sync = getApprovalUiSync();
+    if (sync) {
+      adoptApprovalUi(sync);
+      return sync;
+    }
+    // No local in-flight flag: the chunk loader dedupes concurrent loads,
+    // caches success, and clears a rejection so the next render retries.
+    void loadApprovalUi()
+      .then((mod) => {
+        if (approvalUiDisposed || approvalUi) return;
+        adoptApprovalUi(mod);
+        onApprovalUiReady?.();
+      })
+      .catch(() => {
+        // Failed fetch: renders keep holding empty rows; a later render
+        // retries via the loader's rejection-retry semantics.
+      });
+    return null;
+  };
 
   // Register components from config
   if (config.components) {
@@ -1820,12 +1866,14 @@ export const createAgentExperience = (
         toolExpansionState.add(messageId);
       }
       updateToolBubbleUI(messageId, bubble, config);
-    } else if (bubbleType === 'approval') {
+    } else if (bubbleType === 'approval' && approvalUi) {
+      // approvalUi is always set here: approval bubbles only exist after the
+      // chunk was adopted. The guard keeps a stray click on a stub harmless.
       const approvalConfig = config.approval !== false ? config.approval : undefined;
       const defaultExpanded = (approvalConfig?.detailsDisplay ?? 'collapsed') === 'expanded';
-      const expanded = approvalDetailsExpansionState.get(messageId) ?? defaultExpanded;
-      approvalDetailsExpansionState.set(messageId, !expanded);
-      updateApprovalDetailsUI(messageId, bubble, config);
+      const expanded = approvalUi.approvalDetailsExpansionState.get(messageId) ?? defaultExpanded;
+      approvalUi.approvalDetailsExpansionState.set(messageId, !expanded);
+      approvalUi.updateApprovalDetailsUI(messageId, bubble, config);
     }
     // Invalidate cached wrapper so next render rebuilds with current expansion state
     messageCache.delete(messageId);
@@ -3771,7 +3819,10 @@ export const createAgentExperience = (
   // Release this widget's pending built-in approval listeners + "Allow once"
   // popovers if it's destroyed while an approval is still open. Scoped to this
   // instance's state, so other widgets on the page are unaffected.
-  destroyCallbacks.push(teardownBuiltInApprovals);
+  destroyCallbacks.push(() => {
+    approvalUiDisposed = true;
+    teardownBuiltInApprovals?.();
+  });
 
   // `wipe` / `glyph-cycle` live in the lazy animations-extra chunk (CDN) or
   // the animations/* subpaths (npm). When config selects one that isn't
@@ -5362,6 +5413,13 @@ export const createAgentExperience = (
         // any accordion listeners survive idiomorph's `importNode`. Gate the
         // rebuild on fingerprint so interactive state (e.g. a collapsed
         // accordion) is preserved while the approval stays pending.
+        const approvalMod = ensureApprovalUi();
+        if (!approvalMod) {
+          // Chunk still in flight: hold the slot with an empty row;
+          // `onApprovalUiReady` clears the cache and re-renders the real card.
+          tempContainer.appendChild(createMessageRow(message.id, message.role));
+          return;
+        }
         const approvalPlugin =
           plugins.find((p) => typeof p.renderApproval === "function") ?? builtInApprovalPlugin;
         const lastFp = lastApprovalBubbleFingerprint.get(message.id);
@@ -5389,7 +5447,7 @@ export const createAgentExperience = (
           };
           liveBubble = approvalPlugin.renderApproval({
             message,
-            defaultRenderer: () => createApprovalBubble(message, config),
+            defaultRenderer: () => approvalMod.createApprovalBubble(message, config),
             config,
             approve: (options) => resolveDecision("approved", options),
             deny: (options) => resolveDecision("denied", options)
@@ -5405,7 +5463,7 @@ export const createAgentExperience = (
           const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
           existing?.removeAttribute("data-preserve-runtime");
           lastApprovalBubbleFingerprint.delete(message.id);
-          bubble = createApprovalBubble(message, config);
+          bubble = approvalMod.createApprovalBubble(message, config);
         } else {
           // A fresh live bubble to hydrate (needsRebuild), or fingerprint
           // unchanged so we reuse the preserved live wrapper (`bubble: null`).
@@ -5605,7 +5663,9 @@ export const createAgentExperience = (
           bubble = createToolBubble(message, config);
         } else if (message.variant === "approval" && message.approval) {
           if (config.approval === false) return;
-          bubble = createApprovalBubble(message, config);
+          const approvalMod = ensureApprovalUi();
+          if (!approvalMod) return;
+          bubble = approvalMod.createApprovalBubble(message, config);
         } else {
           // Check for custom message renderers in layout config
           const messageLayoutConfig = config.layout?.messages;
@@ -13458,6 +13518,16 @@ export const createAgentExperience = (
     // the cache and render into a detached `messagesWrapper`.
     destroyCallbacks.push(unsubscribeParsersReady);
   }
+
+  // Approval rows rendered while the approval-ui chunk was in flight are empty
+  // stubs; once it lands, rebuild them into real cards. Mirrors the markdown
+  // heal above. (`approvalUiDisposed` guards a post-destroy resolution.)
+  onApprovalUiReady = () => {
+    if (!session) return;
+    configVersion++;
+    messageCache.clear();
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+  };
 
   return controller;
 };

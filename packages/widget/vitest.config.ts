@@ -24,6 +24,10 @@ export default defineConfig({
       '@runtypelabs/persona/animations-extra': fileURLToPath(
         new URL('./src/animations-extra.ts', import.meta.url)
       ),
+      // Same for the lazy approval-ui chunk subpath.
+      '@runtypelabs/persona/approval-ui': fileURLToPath(
+        new URL('./src/approval-ui.ts', import.meta.url)
+      ),
     },
   },
   test: {

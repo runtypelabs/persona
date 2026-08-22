@@ -11,6 +11,15 @@ import type {
   AgentWidgetMessage,
 } from "./types";
 
+// The approval UI ships in a lazy chunk; provide it eagerly so this file's
+// synchronous render assertions hold. Per-file module isolation keeps the
+// async transport path covered by ui.approval-chunk.test.ts.
+import { provideApprovalUi } from "./approval-ui-loader";
+import * as approvalUiEntry from "./approval-ui-entry";
+
+provideApprovalUi(approvalUiEntry);
+
+
 const CREATED_AT = "2026-07-24T00:00:00.000Z";
 
 const createMount = (): HTMLElement => {

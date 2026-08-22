@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "190.5 kB",
+    "limit": "187 kB",
     "gzip": true
   },
   {
@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "192 kB",
+    "limit": "188.5 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "192.5 kB",
+    "limit": "189.5 kB",
     "gzip": true
   },
   {
@@ -105,6 +105,12 @@
     "name": "Lazy · wipe + glyph-cycle stream animations chunk (animations-extra.js)",
     "path": "dist/animations-extra.js",
     "limit": "2.25 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · approval UI chunk (approval-ui.js)",
+    "path": "dist/approval-ui.js",
+    "limit": "7 kB",
     "gzip": true
   }
 ]

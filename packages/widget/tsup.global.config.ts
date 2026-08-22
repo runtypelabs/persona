@@ -77,5 +77,10 @@ export default defineConfig({
     // Same scheme: sibling-URL chunk `animations-extra.js`, fetched only when
     // `features.streamAnimation.type` selects one of them.
     options.external.push("@runtypelabs/persona/animations-extra");
+
+    // Keep the approval UI (bubble + built-in plugin + plugin-kit) out of the
+    // CDN payload. Same scheme: sibling-URL chunk `approval-ui.js`, fetched
+    // when the first approval message arrives.
+    options.external.push("@runtypelabs/persona/approval-ui");
   },
 });

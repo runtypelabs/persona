@@ -7,12 +7,24 @@ import {
   humanizeToolName,
   updateApprovalDetailsUI,
 } from "./approval-bubble";
-import { recordWebMcpToolDisplayTitles } from "../webmcp-bridge";
+import {
+  getWebMcpToolDisplayTitle,
+  recordWebMcpToolDisplayTitles,
+} from "../webmcp-bridge";
 import type {
   AgentWidgetApproval,
   AgentWidgetConfig,
   AgentWidgetMessage,
 } from "../types";
+
+// The chunked approval components read icons and webmcp titles through
+// injected deps (see approval-deps.ts); wire the real core functions here the
+// way ui.ts does at chunk adoption.
+import { initApprovalUi } from "./approval-deps";
+import { renderLucideIcon } from "../utils/icons";
+
+initApprovalUi({ renderIcon: renderLucideIcon, webMcpToolTitle: getWebMcpToolDisplayTitle });
+
 
 const makeMessage = (
   approval: Partial<AgentWidgetApproval> = {}

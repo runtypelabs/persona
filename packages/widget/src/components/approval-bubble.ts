@@ -1,8 +1,14 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue } from "../utils/formatting";
-import { renderLucideIcon } from "../utils/icons";
-import { WEBMCP_TOOL_PREFIX, getWebMcpToolDisplayTitle } from "../webmcp-bridge";
+// Icon + webmcp-title lookups are injected by ui.ts at chunk adoption: this
+// module ships in the lazy approval-ui chunk and must not bundle the core
+// icon registry or read a duplicated (empty) webmcp title map. See approval-deps.
+import {
+  renderApprovalIcon as renderLucideIcon,
+  getWebMcpToolDisplayTitle,
+} from "./approval-deps";
+import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
 
 /**
  * Per-message expanded/collapsed state for the technical-details section.
