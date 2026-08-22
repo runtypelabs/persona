@@ -374,9 +374,9 @@ export class AgentWidgetClient {
         // Failed chunk fetch: clear the memoized promise so the next dispatch
         // retries (the chunk loader clears its own rejection too).
         this.webMcpBridgePromise = null;
-        if (this.debug) {
-          console.warn("[Persona] Failed to load the WebMCP runtime chunk", err);
-        }
+        // Always surface this: a silently-absent bridge means empty tool
+        // snapshots and failed webmcp resumes with no operator signal.
+        console.warn("[Persona] Failed to load the WebMCP runtime chunk", err);
         return null;
       });
   }

@@ -18,6 +18,10 @@
 // from the `markdown-parsers.js` chunk instead. Must run before any render.
 import "./markdown-parsers-eager";
 
+// Same for the extra-tier icon data: bundled npm consumers keep the all-sync
+// `renderLucideIcon` contract; the IIFE/CDN build lazy-loads `icons-extra.js`.
+import "./icons-extra-eager";
+
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";
 export { default } from "./index-core";

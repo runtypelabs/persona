@@ -244,10 +244,17 @@ const pendingIcons = new Set<PendingIcon>();
 let extraIconsLoaded = false;
 const extraReadySubscribers = new Set<() => void>();
 
-const notifyExtraIconsReady = (): void => {
-  // Snapshot + clear: fire-once semantics (mirrors onMarkdownParsersReady).
+/**
+ * Notify heal subscribers. Unlike the markdown loader's fire-once model this
+ * can fire MORE THAN ONCE: `registerIcons` may cover some pending names
+ * before the chunk adoption covers the rest, and cloning surfaces must
+ * re-render on each. Subscribers are only released once the chunk is adopted
+ * (`final`) — after that every extra-tier name resolves synchronously, so
+ * clones can no longer be created pending.
+ */
+const notifyExtraIconsReady = (final: boolean): void => {
   const subs = [...extraReadySubscribers];
-  extraReadySubscribers.clear();
+  if (final) extraReadySubscribers.clear();
   for (const cb of subs) {
     try {
       cb();
@@ -273,11 +280,13 @@ export const onExtraIconsReady = (cb: () => void): (() => void) => {
   };
 };
 
-const fillPendingIcons = (): void => {
+const fillPendingIcons = (): number => {
+  let filled = 0;
   for (const pending of [...pendingIcons]) {
     const data = runtimeIcons.get(pending.name);
     if (!data) continue;
     pendingIcons.delete(pending);
+    filled++;
     const real = renderIconNode(data, pending.size, pending.color, pending.strokeWidth);
     if (!real) continue;
     // Fill IN PLACE: the placeholder already carries the correct svg attrs,
@@ -285,6 +294,7 @@ const fillPendingIcons = (): void => {
     pending.el.removeAttribute("data-persona-icon-pending");
     while (real.firstChild) pending.el.appendChild(real.firstChild);
   }
+  return filled;
 };
 
 /**
@@ -296,7 +306,32 @@ export const registerIcons = (icons: Record<string, IconNode>): void => {
   for (const [name, data] of Object.entries(icons)) {
     runtimeIcons.set(name, data);
   }
+  // Registered names may cover pending placeholders (e.g. a self-hosted
+  // deployment that renamed the bundle and registers icons instead of the
+  // chunk). Cloning surfaces hold COPIES the in-place fill can't reach, so
+  // notify the heal subscribers whenever anything actually filled.
+  if (fillPendingIcons() > 0 && !extraIconsLoaded) {
+    notifyExtraIconsReady(false);
+  }
+};
+
+/**
+ * npm eager path (imported via `index.ts` → `icons-extra-eager.ts`): supply
+ * the extra-tier data synchronously so bundled consumers keep the historical
+ * all-sync `renderLucideIcon` contract. The IIFE/CDN build never calls this —
+ * it lazy-loads `icons-extra.js` instead. Host `registerIcons` overrides
+ * registered before this runs still win.
+ */
+export const __eagerlyProvideExtraIcons = (
+  icons: Record<string, IconNode>
+): void => {
+  if (extraIconsLoaded) return;
+  for (const [name, data] of Object.entries(icons)) {
+    if (!runtimeIcons.has(name)) runtimeIcons.set(name, data);
+  }
+  extraIconsLoaded = true;
   fillPendingIcons();
+  notifyExtraIconsReady(true);
 };
 
 let extraIconsKickFailedRetry = false;
@@ -305,16 +340,21 @@ const kickExtraIcons = (): void => {
     .then((mod) => {
       if (extraIconsLoaded) return;
       for (const [name, data] of Object.entries(mod.EXTRA_LUCIDE_ICONS)) {
-        runtimeIcons.set(name, data);
+        // The chunk is BASE data: never clobber a host's registerIcons()
+        // override ("later registrations win", and the host's came first).
+        if (!runtimeIcons.has(name)) runtimeIcons.set(name, data);
       }
       extraIconsLoaded = true;
       fillPendingIcons();
-      notifyExtraIconsReady();
+      notifyExtraIconsReady(true);
     })
-    .catch(() => {
-      // Failed fetch (ad blocker, offline): placeholders stay empty; the next
-      // extra-name render retries via the chunk loader's rejection-retry.
+    .catch((err) => {
+      // Failed fetch (ad blocker, offline, renamed self-hosted bundle):
+      // placeholders stay empty and the next extra-name render retries via
+      // the chunk loader's rejection-retry. Surface the loader's guidance
+      // (e.g. the self-hosting rename message) instead of swallowing it.
       extraIconsKickFailedRetry = true;
+      console.warn("[Persona] Failed to load the icons-extra chunk", err);
     });
 };
 
@@ -366,6 +406,13 @@ export const renderLucideIcon = (
   if ((EXTRA_ICON_NAMES as readonly string[]).includes(iconName)) {
     if (extraIconsKickFailedRetry) extraIconsKickFailedRetry = false;
     const el = createPlaceholderSvg(size, color, strokeWidth);
+    // Bounded: a permanently failing chunk (ad blocker) must not accumulate
+    // element refs without limit. Oldest entries are dropped — they simply
+    // stay empty, like any clone the fill can't reach.
+    if (pendingIcons.size >= 500) {
+      const oldest = pendingIcons.values().next().value;
+      if (oldest) pendingIcons.delete(oldest);
+    }
     pendingIcons.add({ el, name: iconName, size, color, strokeWidth });
     kickExtraIcons();
     return el;
