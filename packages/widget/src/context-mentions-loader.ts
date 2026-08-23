@@ -18,6 +18,15 @@ import type {
 
 export type ContextMentionsModule = {
   mountContextMentions: (ctx: ContextMentionMountContext) => ContextMentionEngine;
+  /** Injects core's string-name icon resolver for provider-supplied chip icons. */
+  setMentionIconRenderer: (
+    renderer: (
+      iconName: string,
+      size?: number | string,
+      color?: string,
+      strokeWidth?: number
+    ) => SVGElement | null
+  ) => void;
 };
 
 // IIFE/CDN: sibling-URL chunk via the registered loader.

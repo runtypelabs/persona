@@ -1,7 +1,8 @@
 import { createElement } from "../utils/dom";
 import { createIconButton } from "../utils/buttons";
 import { createToggleGroup } from "../utils/buttons";
-import { renderLucideIcon } from "../utils/icons";
+import { ChevronDown } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -417,7 +418,7 @@ export function createDemoCarousel(
   titleBtn.setAttribute("aria-haspopup", "listbox");
   const titleText = createElement("span", "persona-dc-title-text");
   const titleChevron = createElement("span", "persona-dc-title-chevron");
-  const chevronSvg = renderLucideIcon("chevron-down", 12, "currentColor", 2);
+  const chevronSvg = renderIconNode(ChevronDown, 12, "currentColor", 2);
   if (chevronSvg) titleChevron.appendChild(chevronSvg);
   titleBtn.append(titleText, titleChevron);
 

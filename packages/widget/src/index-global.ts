@@ -1,11 +1,11 @@
 /**
  * IIFE entry point: bundled for `<script>` tag consumers.
  *
- * This file re-exports everything from the main entry AND side-imports all
- * built-in subpath animations so they register automatically. Script-tag
- * users who include the global build don't need extra script tags or
- * registration calls: setting `features.streamAnimation.type` to any
- * built-in name just works.
+ * Script-tag users who include the global build don't need extra script tags
+ * or registration calls: setting `features.streamAnimation.type` to any
+ * built-in name just works. `letter-rise` and `word-fade` are core built-ins;
+ * `wipe` and `glyph-cycle` live in the lazy `animations-extra.js` sibling
+ * chunk, fetched by the UI the first time config selects one.
  *
  * npm consumers continue to import from the main entry (`import ... from
  * "@runtypelabs/persona"`): those animations stay in their subpath
@@ -16,12 +16,6 @@
 // dev-only helpers (`generateCodeSnippet`, `createDemoCarousel`) stay out of the
 // CDN/IIFE bundle. npm consumers still get them via the `index.ts` barrel.
 export * from "./index-core";
-
-// Side-import the remaining subpath animations so they're available to
-// script-tag consumers without an explicit import. (`letter-rise` and
-// `word-fade` are core built-ins and register automatically.)
-import "./animations/wipe";
-import "./animations/glyph-cycle";
 
 // Expose plugin-registration helpers on the global so custom animations
 // can be registered from inline `<script>` blocks or third-party CDN scripts.
@@ -76,11 +70,12 @@ setWebMcpPolyfillLoader(() => {
 //
 // This bundle is built with `./markdown-parsers-entry` external: the Markdown
 // and HTML sanitization libraries are kept out of the CDN payload. Register a
-// loader that imports the self-contained `markdown-parsers.js` chunk from a sibling
-// URL. The session prefetches it at init so it's warm before the first message.
+// loader that imports the self-contained `markdown-parsers.js` chunk from a
+// sibling URL. The UI warms it on first panel visibility (see
+// `warmMarkdownParsers` in ui.ts), so closed-launcher visitors never fetch it.
 // ---------------------------------------------------------------------------
 
-import { setMarkdownParsersLoader, loadMarkdownParsers } from "./markdown-parsers-loader";
+import { setMarkdownParsersLoader } from "./markdown-parsers-loader";
 
 setMarkdownParsersLoader(() => {
   const chunkUrl = widgetScriptSrc?.replace(
@@ -99,13 +94,6 @@ setMarkdownParsersLoader(() => {
   return import(/* @vite-ignore */ chunkUrl);
 });
 
-// Kick off the load immediately since it will likely be needed.
-loadMarkdownParsers().catch(err => {
-  // It's okay if this fails (e.g. ad blocker), it'll just fall back to plain text.
-  if (typeof console !== "undefined") {
-    console.warn("[Persona] Failed to pre-load markdown parsers", err);
-  }
-});
 // ---------------------------------------------------------------------------
 // Deferred Runtype TTS engine loading.
 //
@@ -211,6 +199,238 @@ setHistoryViewLoader(() => {
         "Could not derive the history-view.js URL from the widget script URL " +
           `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
           "rename index.global.js should host history-view.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred stream-animations loading (wipe + glyph-cycle).
+//
+// This bundle is built with `@runtypelabs/persona/animations-extra` external
+// (see `tsup.global.config.ts`): the subpath animation plugins are kept out of
+// the CDN payload and fetched only when `features.streamAnimation.type`
+// selects one (see the lazy resolver in ui.ts). Same sibling-URL scheme as the
+// chunks above.
+// ---------------------------------------------------------------------------
+
+import { setAnimationsExtraLoader } from "./animations-extra-loader";
+
+setAnimationsExtraLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "animations-extra.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the animations-extra.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host animations-extra.js alongside it, " +
+          "or register the animation plugins themselves via " +
+          "registerStreamAnimationPlugin.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred approval-ui loading.
+//
+// This bundle is built with `@runtypelabs/persona/approval-ui` external (see
+// `tsup.global.config.ts`): the approval bubble, built-in approval plugin, and
+// plugin-kit are kept out of the CDN payload and fetched only when the first
+// approval message arrives. Same sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setApprovalUiLoader } from "./approval-ui-loader";
+
+setApprovalUiLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "approval-ui.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the approval-ui.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host approval-ui.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred voice-runtime loading.
+//
+// This bundle is built with `@runtypelabs/persona/voice-runtime` external (see
+// `tsup.global.config.ts`): the voice provider factory + providers + audio
+// playback manager are kept out of the CDN payload, prefetched by the session
+// when a voice provider is configured. Same sibling-URL scheme as the chunks
+// above.
+// ---------------------------------------------------------------------------
+
+import { setVoiceRuntimeLoader } from "./voice-runtime-loader";
+
+setVoiceRuntimeLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "voice-runtime.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the voice-runtime.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host voice-runtime.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred artifacts-ui loading.
+//
+// This bundle is built with `@runtypelabs/persona/artifacts-ui` external (see
+// `tsup.global.config.ts`): the artifact pane, inline/card components, and
+// preview renderer are kept out of the CDN payload and fetched when the
+// artifacts sidebar is enabled or the first artifact directive arrives. Same
+// sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setArtifactsUiLoader } from "./artifacts-ui-loader";
+
+setArtifactsUiLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "artifacts-ui.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the artifacts-ui.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host artifacts-ui.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred forms-ui loading.
+//
+// This bundle is built with `@runtypelabs/persona/forms-ui` external (see
+// `tsup.global.config.ts`): the `[data-tv-form]` demo-forms enhancement is
+// kept out of the CDN payload and fetched when a rendered bubble first
+// contains a form placeholder. Same sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setFormsUiLoader } from "./forms-ui-loader";
+
+setFormsUiLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "forms-ui.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the forms-ui.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host forms-ui.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred extra-icons loading.
+//
+// This bundle is built with `@runtypelabs/persona/icons-extra` external (see
+// `tsup.global.config.ts`): the config-only tail of the icon registry is kept
+// out of the CDN payload and fetched the first time `renderLucideIcon` is
+// asked for one of its names. Same sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setIconsExtraLoader } from "./icons-extra-loader";
+
+setIconsExtraLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "icons-extra.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the icons-extra.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host icons-extra.js alongside it, or " +
+          "register the icons they use via registerIcons().",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred WebMCP bridge runtime loading.
+//
+// This bundle is built with `@runtypelabs/persona/webmcp-runtime` external
+// (see `tsup.global.config.ts`): the WebMcpBridge class is kept out of the
+// CDN payload and fetched by client.ts only when `config.webmcp.enabled` is
+// true. Same sibling-URL scheme as the chunks above. (The polyfill itself is
+// a separate, older chunk: `webmcp-polyfill.js`, registered further up.)
+// ---------------------------------------------------------------------------
+
+import { setWebMcpRuntimeLoader } from "./webmcp-runtime-loader";
+
+setWebMcpRuntimeLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "webmcp-runtime.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the webmcp-runtime.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host webmcp-runtime.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
+// Deferred session-reconnect loading.
+//
+// This bundle is built with `@runtypelabs/persona/session-reconnect` external
+// (see `tsup.global.config.ts`): the durable-session reconnect loop is kept
+// out of the CDN payload and fetched only when a session with a
+// `reconnectStream` transport first needs to resume. Same sibling-URL scheme
+// as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setSessionReconnectLoader } from "./session-reconnect-loader";
+
+setSessionReconnectLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "session-reconnect.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the session-reconnect.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host session-reconnect.js alongside it.",
       ),
     );
   }

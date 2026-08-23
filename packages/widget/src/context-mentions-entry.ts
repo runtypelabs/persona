@@ -97,6 +97,11 @@ export interface ContextMentionEngine {
   destroy(): void;
 }
 
+// Re-exported through the chunk module so the orchestrator (core) can inject
+// core's `renderLucideIcon` for provider-supplied chip/menu icon names — the
+// chunk itself carries no string registry (see utils/mention-icon-renderer.ts).
+export { setMentionIconRenderer } from "./utils/mention-icon-renderer";
+
 export function mountContextMentions(
   ctx: ContextMentionMountContext
 ): ContextMentionEngine {

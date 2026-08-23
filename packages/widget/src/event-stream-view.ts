@@ -12,7 +12,12 @@
  * the loader needs.
  */
 
-export { createEventStreamView } from "./event-stream-view-entry";
+export {
+  createEventStreamView,
+  EventStreamBuffer,
+  EventStreamStore,
+  ThroughputTracker,
+} from "./event-stream-view-entry";
 export type {
   EventStreamViewOptions,
   EventStreamViewHandle,

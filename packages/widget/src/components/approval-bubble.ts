@@ -1,8 +1,13 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue } from "../utils/formatting";
-import { renderLucideIcon } from "../utils/icons";
-import { WEBMCP_TOOL_PREFIX, getWebMcpToolDisplayTitle } from "../webmcp-bridge";
+// The webmcp-title lookup is injected by ui.ts at chunk adoption: this module
+// ships in the lazy approval-ui chunk and must not read a duplicated (empty)
+// webmcp title map. See approval-deps. Icons are direct lucide data imports.
+import { getWebMcpToolDisplayTitle } from "./approval-deps";
+import { ChevronDown, ChevronUp, ShieldAlert, ShieldCheck, ShieldX } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
+import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
 
 /**
  * Per-message expanded/collapsed state for the technical-details section.
@@ -58,7 +63,7 @@ const applyDetailsToggleState = (
   const chevronHolder = toggle.querySelector("[data-approval-details-chevron]") as HTMLElement | null;
   if (chevronHolder) {
     chevronHolder.innerHTML = "";
-    const chevron = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 14, "currentColor", 2);
+    const chevron = renderIconNode(expanded ? ChevronUp : ChevronDown, 14, "currentColor", 2);
     if (chevron) {
       chevronHolder.appendChild(chevron);
     }
@@ -125,14 +130,14 @@ export const updateApprovalBubbleUI = (
   const iconContainer = bubble.querySelector('[data-approval-icon]') as HTMLElement;
   if (iconContainer) {
     iconContainer.innerHTML = "";
-    const iconName = approval.status === "denied" ? "shield-x"
-      : approval.status === "timeout" ? "shield-alert"
-      : "shield-check";
+    const iconData = approval.status === "denied" ? ShieldX
+      : approval.status === "timeout" ? ShieldAlert
+      : ShieldCheck;
     const iconColor = approval.status === "approved" ? "var(--persona-feedback-success, #16a34a)"
       : approval.status === "denied" ? "var(--persona-feedback-error, #dc2626)"
       : approval.status === "timeout" ? "var(--persona-feedback-warning, #ca8a04)"
       : (approvalConfig?.titleColor ?? "currentColor");
-    const icon = renderLucideIcon(iconName, 20, iconColor, 2);
+    const icon = renderIconNode(iconData, 20, iconColor, 2);
     if (icon) {
       iconContainer.appendChild(icon);
     }
@@ -193,14 +198,14 @@ export const createApprovalBubble = (
   // Icon container
   const iconContainer = createElement("div", "persona-flex-shrink-0 persona-mt-0.5");
   iconContainer.setAttribute("data-approval-icon", "true");
-  const iconName = approval.status === "denied" ? "shield-x"
-    : approval.status === "timeout" ? "shield-alert"
-    : "shield-check";
+  const iconData = approval.status === "denied" ? ShieldX
+    : approval.status === "timeout" ? ShieldAlert
+    : ShieldCheck;
   const iconColor = approval.status === "approved" ? "var(--persona-feedback-success, #16a34a)"
     : approval.status === "denied" ? "var(--persona-feedback-error, #dc2626)"
     : approval.status === "timeout" ? "var(--persona-feedback-warning, #ca8a04)"
     : (approvalConfig?.titleColor ?? "currentColor");
-  const icon = renderLucideIcon(iconName, 20, iconColor, 2);
+  const icon = renderIconNode(iconData, 20, iconColor, 2);
   if (icon) {
     iconContainer.appendChild(icon);
   }
@@ -362,7 +367,7 @@ export const createApprovalBubble = (
     approveBtn.style.backgroundColor = approvalConfig?.approveButtonColor ?? "var(--persona-approval-approve-bg, #22c55e)";
     approveBtn.style.color = approvalConfig?.approveButtonTextColor ?? "#ffffff";
     approveBtn.setAttribute("data-approval-action", "approve");
-    const approveIcon = renderLucideIcon("shield-check", 14, approvalConfig?.approveButtonTextColor ?? "#ffffff", 2);
+    const approveIcon = renderIconNode(ShieldCheck, 14, approvalConfig?.approveButtonTextColor ?? "#ffffff", 2);
     if (approveIcon) {
       approveIcon.style.marginRight = "4px";
       approveBtn.appendChild(approveIcon);
@@ -377,7 +382,7 @@ export const createApprovalBubble = (
     denyBtn.style.color = approvalConfig?.denyButtonTextColor ?? "var(--persona-feedback-error, #dc2626)";
     denyBtn.style.border = `1px solid ${approvalConfig?.denyButtonTextColor ? approvalConfig.denyButtonTextColor : "var(--persona-palette-colors-error-200, #fca5a5)"}`;
     denyBtn.setAttribute("data-approval-action", "deny");
-    const denyIcon = renderLucideIcon("shield-x", 14, approvalConfig?.denyButtonTextColor ?? "var(--persona-feedback-error, #dc2626)", 2);
+    const denyIcon = renderIconNode(ShieldX, 14, approvalConfig?.denyButtonTextColor ?? "var(--persona-feedback-error, #dc2626)", 2);
     if (denyIcon) {
       denyIcon.style.marginRight = "4px";
       denyBtn.appendChild(denyIcon);

@@ -210,12 +210,27 @@ vi.mock("../utils/icons", () => ({
   }),
 }));
 
+// Static icons render as direct lucide data through renderIconNode (no
+// registry); mirror the mock so the Node-env fake DOM works.
+vi.mock("../utils/icon-node", () => ({
+  renderIconNode: vi.fn(() => createMockElement("svg")),
+}));
+
 // Use dynamic import to load after mocks are set up
 async function loadModule() {
   const mod = await import("./event-stream-view");
   const origCreate = mod.createEventStreamView;
   const wrappedCreate = (options: Parameters<typeof origCreate>[0]): { element: any; update: () => void; destroy: () => void } => {
-    return origCreate(options);
+    // ui.ts injects its registry resolver for config-driven icon names; mirror
+    // that here so the scroll-indicator assertions see the resolved name.
+    return origCreate({
+      renderIconByName: (name: string) => {
+        const svg = createMockElement("svg");
+        svg.__iconName = name;
+        return svg as unknown as SVGElement;
+      },
+      ...options,
+    });
   };
   return { ...mod, createEventStreamView: wrappedCreate };
 }

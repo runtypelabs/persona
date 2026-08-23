@@ -71,19 +71,19 @@ export const loadMarkdownParsers = (): Promise<MarkdownParsersModule> => {
  * If the parsers are ALREADY loaded, `cb` is not scheduled and a no-op
  * unsubscribe is returned: the caller's first render already used real markdown,
  * so there is nothing to heal (this is the ESM/CJS build's steady state, and the
- * CDN build's state after the first chunk load). Registering also kicks the load
- * so a surface that renders before anything else triggers it still heals.
- * Fires at most once per subscription.
+ * CDN build's state after the first chunk load). Fires at most once per
+ * subscription.
+ *
+ * Subscribing does NOT kick the chunk load. The fetch is owned by visibility:
+ * ui.ts warms the parsers the first time the panel is actually visible
+ * (`warmMarkdownParsers`), so closed-launcher visitors never download the
+ * chunk. A surface that renders while hidden shows escaped text in hidden DOM
+ * and heals when the warm fires. (An earlier version kicked the load here,
+ * which silently re-eagered the chunk on every page: ui.ts subscribes at init.)
  */
 export const onMarkdownParsersReady = (cb: () => void): (() => void) => {
   if (getSync()) return () => {};
   readySubscribers.add(cb);
-  // Ensure the chunk is actually being fetched; harmless if already in flight.
-  // Swallow rejection here — on failure the subscriber stays registered (see
-  // the note on `loadMarkdownParsers`) and the surface keeps its escaped
-  // fallback until a retry succeeds; this catch only avoids an unhandled
-  // rejection.
-  void loadMarkdownParsers().catch(() => {});
   return () => {
     readySubscribers.delete(cb);
   };

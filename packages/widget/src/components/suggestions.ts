@@ -1,5 +1,7 @@
 import { createElement, createNode } from "../utils/dom";
+import { ArrowRight } from "lucide";
 import { renderLucideIcon } from "../utils/icons";
+import { renderIconNode } from "../utils/icon-node";
 import { AgentWidgetSession } from "../session";
 import {
   AgentWidgetConfig,
@@ -300,7 +302,7 @@ export const createSuggestionElement = (
     button.appendChild(copy);
 
     if (variant !== "chip") {
-      const arrow = renderLucideIcon("arrow-right", 16, "currentColor", 1.8);
+      const arrow = renderIconNode(ArrowRight, 16, "currentColor", 1.8);
       if (arrow) {
         arrow.classList.add("persona-suggestion__arrow");
         button.appendChild(arrow);

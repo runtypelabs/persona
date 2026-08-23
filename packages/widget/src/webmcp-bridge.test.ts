@@ -25,8 +25,11 @@ vi.mock("@mcp-b/webmcp-polyfill", () => ({
 }));
 
 // Import AFTER vi.mock so the bridge's dynamic import resolves to the mock.
+// The class comes from the npm façade (webmcp-bridge-public): the historical
+// one-argument constructor, wired to the real core deps — so these tests also
+// exercise the deps-injection seam the lazy CDN path uses.
+import { WebMcpBridge } from "./webmcp-bridge-public";
 import {
-  WebMcpBridge,
   getWebMcpToolDisplayTitle,
   isWebMcpToolName,
   stripWebMcpPrefix,

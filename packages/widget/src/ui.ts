@@ -2,7 +2,7 @@ import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors"
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
-import { onMarkdownParsersReady, getMarkdownParsersSync } from "./markdown-parsers-loader";
+import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
 import {
   AgentWidgetSession,
   AgentWidgetSessionStatus,
@@ -62,7 +62,9 @@ import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme } from "./utils/theme";
 import { resolveTokenValue } from "./utils/tokens";
-import { renderLucideIcon } from "./utils/icons";
+import { Activity, Check, Copy } from "lucide";
+import { renderLucideIcon, onExtraIconsReady } from "./utils/icons";
+import { renderIconNode } from "./utils/icon-node";
 import { createElement, createNode, cx } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
 import { attachTooltip, configureTooltipTiming } from "./utils/tooltip";
@@ -76,8 +78,9 @@ import {
   formatCombo,
   parseCombo,
 } from "./utils/shortcuts";
-import { downloadInfoFor, triggerArtifactDownload } from "./utils/artifact-file";
-import { artifactCopyText } from "./components/artifact-preview";
+// The artifact download/copy helpers live in the lazy artifacts-ui chunk;
+// reached via getArtifactsUiSync() in the delegated click handlers (which can
+// only fire on DOM the adopted chunk rendered).
 import { morphMessages } from "./utils/morph";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
@@ -108,10 +111,13 @@ import {
   createStreamCaret,
   detachAllPlugins,
   ensurePluginActive,
+  LAZY_BUILTIN_STREAM_ANIMATIONS,
+  registerStreamAnimationPlugin,
   resolveStreamAnimation,
   resolveStreamAnimationPlugin,
   wrapStreamAnimation,
 } from "./utils/stream-animation";
+import { loadAnimationsExtra } from "./animations-extra-loader";
 import { syncOverlayHostStacking } from "./utils/overlay-host-stacking";
 import { acquireScrollLock } from "./utils/scroll-lock";
 import { isComposerBarMountMode, isDockedMountMode, resolveDockConfig } from "./utils/dock";
@@ -167,23 +173,28 @@ import {
   resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
 import { formatElapsedMs } from "./utils/formatting";
-import { approvalDetailsExpansionState, createApprovalBubble, updateApprovalDetailsUI } from "./components/approval-bubble";
-import { createBuiltInApprovalPlugin } from "./components/approval-actions";
+import { loadApprovalUi, getApprovalUiSync, type ApprovalUiModule } from "./approval-ui-loader";
+import { getWebMcpToolDisplayTitle } from "./webmcp-bridge";
+import type { AgentWidgetPlugin } from "./plugins/types";
 import {
   createSuggestionElement,
   createSuggestions,
   normalizeSuggestion,
 } from "./components/suggestions";
-import { EventStreamBuffer } from "./utils/event-stream-buffer";
-import { EventStreamStore } from "./utils/event-stream-store";
-import { ThroughputTracker } from "./utils/throughput-tracker";
+// Type-only: the capture/persistence classes ship in the lazy
+// event-stream-view chunk and are constructed at chunk adoption.
+import type { EventStreamBuffer } from "./utils/event-stream-buffer";
+import type { EventStreamStore } from "./utils/event-stream-store";
+import type { ThroughputTracker } from "./utils/throughput-tracker";
 import { loadEventStreamView } from "./event-stream-view-loader";
 import type { EventStreamViewHandle } from "./event-stream-view-entry";
-import { createArtifactPane, type ArtifactPaneApi } from "./components/artifact-pane";
+import type { ArtifactPaneApi } from "./components/artifact-pane";
 import {
-  hasLiveInlineArtifactBlock,
-  updateInlineArtifactBlocks
-} from "./components/artifact-inline";
+  loadArtifactsUi,
+  getArtifactsUiSync,
+  onArtifactsUiReady,
+  type ArtifactsUiModule,
+} from "./artifacts-ui-loader";
 import {
   artifactsSidebarEnabled,
   applyArtifactLayoutCssVars,
@@ -199,7 +210,7 @@ import {
   readFlexGapPx,
   resolveArtifactPaneWidthPx,
 } from "./utils/artifact-resize";
-import { enhanceWithForms } from "./components/forms";
+import { loadFormsUi, getFormsUiSync } from "./forms-ui-loader";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults, DEFAULT_FLOATING_LAUNCHER_WIDTH } from "./defaults";
 import { mergeConfigUpdate } from "./utils/config-merge";
@@ -798,8 +809,89 @@ export const createAgentExperience = (
   // The built-in approval renderer, shaped as a plugin. Resolved as a FALLBACK
   // (not pushed into `plugins`) so a user `renderApproval` plugin always wins
   // and a later config-update plugin push can't reorder ahead of it.
-  const { plugin: builtInApprovalPlugin, teardown: teardownBuiltInApprovals } =
-    createBuiltInApprovalPlugin();
+  //
+  // The whole approval UI (bubble + built-in plugin) lives in the lazy
+  // approval-ui chunk: nothing loads until the first approval message arrives.
+  // While the chunk is in flight that message renders as an empty preserved
+  // row; `onApprovalUiReady` (assigned at the end of the factory) clears the
+  // cache and re-renders so the real card appears. The approval is parked on
+  // the user's decision anyway, so the delay costs nothing semantically.
+  let approvalUi: ApprovalUiModule | null = null;
+  let builtInApprovalPlugin: AgentWidgetPlugin | null = null;
+  let teardownBuiltInApprovals: (() => void) | null = null;
+  let approvalUiDisposed = false;
+  let onApprovalUiReady: (() => void) | null = null;
+  const adoptApprovalUi = (mod: ApprovalUiModule): void => {
+    approvalUi = mod;
+    // Inject the core bridge's webmcp title map: the chunk is bundled
+    // noExternal and must not read its own (empty) copy.
+    mod.initApprovalUi({
+      webMcpToolTitle: getWebMcpToolDisplayTitle,
+    });
+    const built = mod.createBuiltInApprovalPlugin();
+    builtInApprovalPlugin = built.plugin;
+    teardownBuiltInApprovals = built.teardown;
+  };
+  const ensureApprovalUi = (): ApprovalUiModule | null => {
+    if (approvalUi) return approvalUi;
+    // Synchronous when the module was provided eagerly (tests) or already
+    // loaded by another widget instance on the page.
+    const sync = getApprovalUiSync();
+    if (sync) {
+      adoptApprovalUi(sync);
+      return sync;
+    }
+    // No local in-flight flag: the chunk loader dedupes concurrent loads,
+    // caches success, and clears a rejection so the next render retries.
+    void loadApprovalUi()
+      .then((mod) => {
+        if (approvalUiDisposed || approvalUi) return;
+        adoptApprovalUi(mod);
+        onApprovalUiReady?.();
+      })
+      .catch(() => {
+        // Failed fetch: renders keep holding empty rows; a later render
+        // retries via the loader's rejection-retry semantics.
+      });
+    return null;
+  };
+
+  // The `[data-tv-form]` placeholder enhancement lives in the lazy forms-ui
+  // chunk: nothing loads until a rendered bubble actually contains a
+  // placeholder. While the chunk is in flight the placeholder stays the bare
+  // div the postprocessor emitted; `onFormsUiReady` (assigned at the end of
+  // the factory) clears the cache and re-renders so the form appears — the
+  // same heal as approval-ui above.
+  let formsUiDisposed = false;
+  let formsUiReadyNotified = false;
+  let onFormsUiReady: (() => void) | null = null;
+  const enhanceWithFormsLazy = (
+    bubble: HTMLElement,
+    message: AgentWidgetMessage,
+    widgetConfig: AgentWidgetConfig,
+    widgetSession: AgentWidgetSession
+  ): void => {
+    if (!bubble.querySelector("[data-tv-form]")) return;
+    const sync = getFormsUiSync();
+    if (sync) {
+      sync.enhanceWithForms(bubble, message, widgetConfig, widgetSession);
+      return;
+    }
+    // No local in-flight flag: the chunk loader dedupes concurrent loads,
+    // caches success, and clears a rejection so the next render retries.
+    void loadFormsUi()
+      .then(() => {
+        // A resolution before the factory-end assignment needs no heal: the
+        // module is cached, so the next render enhances synchronously.
+        if (formsUiDisposed || formsUiReadyNotified || !onFormsUiReady) return;
+        formsUiReadyNotified = true;
+        onFormsUiReady();
+      })
+      .catch(() => {
+        // Failed fetch: the placeholder stays bare; a later render retries
+        // via the loader's rejection-retry semantics.
+      });
+  };
 
   // Register components from config
   if (config.components) {
@@ -985,15 +1077,76 @@ export const createAgentExperience = (
     (typeof config.persistState === 'object' ? config.persistState?.keyPrefix : undefined) ?? "persona-";
   const persistKeyPrefix = currentKeyPrefix();
   const eventStreamDbName = `${persistKeyPrefix}event-stream`;
-  let eventStreamStore = showEventStreamToggle ? new EventStreamStore(eventStreamDbName) : null;
+  // The capture runtime (store + buffer + throughput tracker) lives in the
+  // lazy event-stream-view chunk; when the toggle is on, the chunk is fetched
+  // at init and the instances are constructed at adoption. Events tapped while
+  // the chunk is in flight are staged in `pendingEventStreamEvents` and
+  // replayed in order.
+  let eventStreamStore: EventStreamStore | null = null;
   const eventStreamMaxEvents = config.features?.eventStream?.maxEvents ?? 2000;
-  let eventStreamBuffer = showEventStreamToggle ? new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore) : null;
+  let eventStreamBuffer: EventStreamBuffer | null = null;
   // Passive output-throughput tracker, fed from the same SSE tap as the buffer.
-  let throughputTracker = showEventStreamToggle ? new ThroughputTracker() : null;
+  let throughputTracker: ThroughputTracker | null = null;
+  let pendingEventStreamEvents: Array<{ type: string; payload: unknown }> | null = null;
+  let eventStreamRuntimeDisposed = false;
   let eventStreamView: EventStreamViewHandle | null = null;
   let eventStreamVisible = false;
   let eventStreamRAF: number | null = null;
   let eventStreamLastUpdate = 0;
+
+  const pushToEventStreamBuffer = (type: string, payload: unknown): void => {
+    eventStreamBuffer?.push({
+      id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      type,
+      timestamp: Date.now(),
+      payload: JSON.stringify(payload),
+    });
+  };
+
+  /** SSE tap target: buffers live events, stages them while the chunk loads. */
+  const feedEventStream = (type: string, payload: unknown): void => {
+    throughputTracker?.processEvent(type, payload);
+    if (eventStreamBuffer) {
+      pushToEventStreamBuffer(type, payload);
+    } else if (pendingEventStreamEvents) {
+      // Stage bounded to the buffer's own cap: keep the newest, like the ring.
+      if (pendingEventStreamEvents.length >= eventStreamMaxEvents) {
+        pendingEventStreamEvents.shift();
+      }
+      pendingEventStreamEvents.push({ type, payload });
+    }
+  };
+
+  const ensureEventStreamRuntime = (): void => {
+    if (eventStreamBuffer || !showEventStreamToggle) return;
+    pendingEventStreamEvents ??= [];
+    // The chunk loader dedupes concurrent loads and clears a rejection so a
+    // later call retries.
+    void loadEventStreamView()
+      .then((mod) => {
+        if (eventStreamRuntimeDisposed || eventStreamBuffer || !showEventStreamToggle) return;
+        eventStreamStore = new mod.EventStreamStore(eventStreamDbName);
+        eventStreamBuffer = new mod.EventStreamBuffer(eventStreamMaxEvents, eventStreamStore);
+        throughputTracker = throughputTracker ?? new mod.ThroughputTracker();
+        // Open IndexedDB and restore persisted events into the buffer.
+        eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(err => {
+          if (config.debug) console.warn('[AgentWidget] IndexedDB not available for event stream:', err);
+        });
+        // Replay events tapped while the chunk was in flight, in order. (Live
+        // pushes race the async restore the same way they always have.)
+        const staged = pendingEventStreamEvents ?? [];
+        pendingEventStreamEvents = null;
+        for (const evt of staged) {
+          throughputTracker?.processEvent(evt.type, evt.payload);
+          pushToEventStreamBuffer(evt.type, evt.payload);
+        }
+      })
+      .catch(() => {
+        // Failed fetch: staged events keep accumulating (bounded below) and
+        // the next ensure call retries.
+      });
+  };
+  if (showEventStreamToggle) ensureEventStreamRuntime();
 
   // --- history (Messages) shell state ---------------------------------------
   // Declared here because the scroll-affordance gate, `syncPanelChrome`, and the
@@ -1012,12 +1165,6 @@ export const createAgentExperience = (
   const fullPanelOverlayVisible = (): boolean =>
     eventStreamVisible || (historyVisible && historyPresentation === "panel");
 
-  // Open IndexedDB store and restore persisted events into the buffer
-  eventStreamStore?.open().then(() => {
-    return eventStreamBuffer?.restore();
-  }).catch(err => {
-    if (config.debug) console.warn('[AgentWidget] IndexedDB not available for event stream:', err);
-  });
 
   // Create message action callbacks that emit events and optionally send to API
   const messageActionCallbacks: MessageActionCallbacks = {
@@ -1302,7 +1449,12 @@ export const createAgentExperience = (
   };
 
   const toggleEventStreamOn = () => {
-    if (!eventStreamBuffer) return;
+    if (!eventStreamBuffer) {
+      // Runtime chunk not adopted yet (or a failed fetch): retry the load; the
+      // user can click again once it lands.
+      ensureEventStreamRuntime();
+      return;
+    }
     eventStreamVisible = true;
     if (!eventStreamView) {
       // The panel lives in a lazy chunk; mount when it resolves, unless the
@@ -1318,6 +1470,8 @@ export const createAgentExperience = (
             plugins,
             getThroughput: () =>
               throughputTracker?.getMetric() ?? { status: "idle" },
+            // Inject the string-name resolver: the chunk carries no registry.
+            renderIconByName: renderLucideIcon,
           });
           mountEventStreamView();
         })
@@ -1382,7 +1536,7 @@ export const createAgentExperience = (
     eventStreamToggleBtn.type = "button";
     eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
     eventStreamToggleBtn.title = "Event Stream";
-    const activityIcon = renderLucideIcon("activity", "18px", "currentColor", 1.5);
+    const activityIcon = renderIconNode(Activity, "18px", "currentColor", 1.5);
     if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
 
     // Insert before clear chat button wrapper or close button wrapper
@@ -1818,12 +1972,14 @@ export const createAgentExperience = (
         toolExpansionState.add(messageId);
       }
       updateToolBubbleUI(messageId, bubble, config);
-    } else if (bubbleType === 'approval') {
+    } else if (bubbleType === 'approval' && approvalUi) {
+      // approvalUi is always set here: approval bubbles only exist after the
+      // chunk was adopted. The guard keeps a stray click on a stub harmless.
       const approvalConfig = config.approval !== false ? config.approval : undefined;
       const defaultExpanded = (approvalConfig?.detailsDisplay ?? 'collapsed') === 'expanded';
-      const expanded = approvalDetailsExpansionState.get(messageId) ?? defaultExpanded;
-      approvalDetailsExpansionState.set(messageId, !expanded);
-      updateApprovalDetailsUI(messageId, bubble, config);
+      const expanded = approvalUi.approvalDetailsExpansionState.get(messageId) ?? defaultExpanded;
+      approvalUi.approvalDetailsExpansionState.set(messageId, !expanded);
+      approvalUi.updateApprovalDetailsUI(messageId, bubble, config);
     }
     // Invalidate cached wrapper so next render rebuilds with current expansion state
     messageCache.delete(messageId);
@@ -1936,14 +2092,14 @@ export const createAgentExperience = (
         navigator.clipboard.writeText(textToCopy).then(() => {
           // Show success feedback - swap icon temporarily
           actionBtn.classList.add("persona-message-action-success");
-          const checkIcon = renderLucideIcon("check", 14, "currentColor", 2);
+          const checkIcon = renderIconNode(Check, 14, "currentColor", 2);
           if (checkIcon) {
             actionBtn.innerHTML = "";
             actionBtn.appendChild(checkIcon);
           }
           setTimeout(() => {
             actionBtn.classList.remove("persona-message-action-success");
-            const originalIcon = renderLucideIcon("copy", 14, "currentColor", 2);
+            const originalIcon = renderIconNode(Copy, 14, "currentColor", 2);
             if (originalIcon) {
               actionBtn.innerHTML = "";
               actionBtn.appendChild(originalIcon);
@@ -2066,6 +2222,8 @@ export const createAgentExperience = (
   });
 
   let artifactPaneApi: ArtifactPaneApi | null = null;
+  // Guards the deferred pane graft against post-destroy chunk adoption.
+  let artifactsUiDisposed = false;
   let artifactPanelResizeObs: ResizeObserver | null = null;
   // Re-runs panel chrome when the split-chrome mode flips (pane
   // open/close/appearance change). Assigned once applyFullHeightStyles exists.
@@ -2164,9 +2322,12 @@ export const createAgentExperience = (
     if (dlPrevented === true) return;
     const { markdown, title, file } = resolveCardArtifactContent(dlBtn, artifactId);
     if (!markdown) return;
+    // The button only exists on chunk-rendered DOM, so the module is adopted.
+    const artifactsUi = getArtifactsUiSync();
+    if (!artifactsUi) return;
     // File artifacts download the raw unfenced source under their real name/MIME;
     // non-file markdown artifacts keep the legacy `<title>.md` / text/markdown path.
-    triggerArtifactDownload(downloadInfoFor({ title, markdown, file }));
+    artifactsUi.triggerArtifactDownload(artifactsUi.downloadInfoFor({ title, markdown, file }));
   });
 
   // Click delegation for integrator-supplied card action buttons. Actions are
@@ -2219,13 +2380,16 @@ export const createAgentExperience = (
     // Prefer the live record (covers component JSON); fall back to the persisted
     // markdown / file source parsed from the inline block's message rawContent.
     const artifact = session.getArtifactById(artifactId);
+    // The button only exists on chunk-rendered DOM, so the module is adopted.
+    const artifactsUi = getArtifactsUiSync();
+    if (!artifactsUi) return;
     let text = '';
     if (artifact) {
-      text = artifactCopyText(artifact);
+      text = artifactsUi.artifactCopyText(artifact);
     } else {
       const { markdown, file, artifactType } = resolveCardArtifactContent(copyBtn, artifactId);
       if (artifactType === 'markdown') {
-        text = artifactCopyText({
+        text = artifactsUi.artifactCopyText({
           id: artifactId,
           artifactType: 'markdown',
           status: 'complete',
@@ -2237,11 +2401,11 @@ export const createAgentExperience = (
     if (!text) return;
     navigator.clipboard.writeText(text).then(() => {
       // Lightweight feedback: swap the copy glyph for a check briefly.
-      const checkIcon = renderLucideIcon('check', 16, 'currentColor', 2);
+      const checkIcon = renderIconNode(Check, 16, 'currentColor', 2);
       if (checkIcon) {
         copyBtn.replaceChildren(checkIcon);
         setTimeout(() => {
-          const copyIcon = renderLucideIcon('copy', 16, 'currentColor', 2);
+          const copyIcon = renderIconNode(Copy, 16, 'currentColor', 2);
           if (copyIcon) copyBtn.replaceChildren(copyIcon);
         }, 1500);
       }
@@ -2879,6 +3043,13 @@ export const createAgentExperience = (
   };
 
   if (artifactsSidebarEnabled(config)) {
+    // The split-root SKELETON is built synchronously so panel layout is
+    // byte-identical from first paint; the pane itself lives in the lazy
+    // artifacts-ui chunk and is grafted in at adoption. The pane element
+    // starts `persona-hidden` and only becomes visible once artifacts exist
+    // (`syncArtifactPane`), so deferred attachment is invisible; an artifact
+    // arriving while the chunk is in flight is adopted by the
+    // `syncArtifactPane()` call below.
     panel.style.position = "relative";
     const chatColumn = createElement(
       "div",
@@ -2889,37 +3060,59 @@ export const createAgentExperience = (
       "persona-flex persona-h-full persona-w-full persona-min-h-0 persona-artifact-split-root"
     );
     chatColumn.appendChild(container);
-    artifactPaneApi = createArtifactPane(config, {
-      onSelect: (id) => sessionRef.current?.selectArtifact(id),
-      onDismiss: () => {
-        artifactsPaneUserHidden = true;
-        syncArtifactPane();
-      },
-      onToggleExpand: () => {
-        const next = !artifactPaneExpanded;
-        const artifactId =
-          lastArtifactsState.selectedId ??
-          lastArtifactsState.artifacts[lastArtifactsState.artifacts.length - 1]?.id ??
-          null;
-        const prevented = config.features?.artifacts?.onArtifactAction?.({
-          type: "expand",
-          artifactId,
-          expanded: next,
-        });
-        if (prevented === true) return;
-        artifactPaneExpanded = next;
-        if (!next) artifactPaneExpandedPinned = false;
-        syncArtifactPane();
-      }
-    });
-    artifactPaneApi.element.classList.add("persona-hidden");
     artifactSplitRoot = splitRoot;
     splitRoot.appendChild(chatColumn);
-    splitRoot.appendChild(artifactPaneApi.element);
-    if (artifactPaneApi.backdrop) {
-      panel.appendChild(artifactPaneApi.backdrop);
-    }
     panel.appendChild(splitRoot);
+
+    const graftArtifactPane = (mod: ArtifactsUiModule): void => {
+        if (artifactsUiDisposed || artifactPaneApi) return;
+        artifactPaneApi = mod.createArtifactPane(config, {
+          onSelect: (id) => sessionRef.current?.selectArtifact(id),
+          onDismiss: () => {
+            artifactsPaneUserHidden = true;
+            syncArtifactPane();
+          },
+          onToggleExpand: () => {
+            const next = !artifactPaneExpanded;
+            const artifactId =
+              lastArtifactsState.selectedId ??
+              lastArtifactsState.artifacts[lastArtifactsState.artifacts.length - 1]?.id ??
+              null;
+            const prevented = config.features?.artifacts?.onArtifactAction?.({
+              type: "expand",
+              artifactId,
+              expanded: next,
+            });
+            if (prevented === true) return;
+            artifactPaneExpanded = next;
+            if (!next) artifactPaneExpandedPinned = false;
+            syncArtifactPane();
+          }
+        });
+        artifactPaneApi.element.classList.add("persona-hidden");
+        splitRoot.appendChild(artifactPaneApi.element);
+        if (artifactPaneApi.backdrop) {
+          panel.appendChild(artifactPaneApi.backdrop);
+        }
+        // Adopt anything that streamed in while the chunk was in flight.
+        reconcileArtifactResize();
+        syncArtifactPane();
+    };
+    // Graft on ADOPTION (not this load promise): if this initial fetch fails,
+    // a later artifact render's kick (component-middleware) can still resolve
+    // the chunk, and the ready subscriber grafts the pane then.
+    const syncMod = getArtifactsUiSync();
+    if (syncMod) {
+      graftArtifactPane(syncMod);
+    } else {
+      onArtifactsUiReady(() => {
+        const mod = getArtifactsUiSync();
+        if (mod) graftArtifactPane(mod);
+      });
+      void loadArtifactsUi().catch(() => {
+        // Failed fetch: the sidebar stays absent until a retry succeeds.
+      });
+    }
 
     reconcileArtifactResize = () => {
       if (!artifactSplitRoot || !artifactPaneApi) return;
@@ -3682,6 +3875,9 @@ export const createAgentExperience = (
   };
 
   const destroyCallbacks: Array<() => void> = [];
+  destroyCallbacks.push(() => {
+    artifactsUiDisposed = true;
+  });
   // Drops every binding (config and plugin) with the document listener.
   destroyCallbacks.push(() => {
     releaseShortcuts.forEach((release) => release());
@@ -3730,6 +3926,8 @@ export const createAgentExperience = (
   // Event stream cleanup
   if (showEventStreamToggle) {
     destroyCallbacks.push(() => {
+      eventStreamRuntimeDisposed = true;
+      pendingEventStreamEvents = null;
       if (eventStreamRAF !== null) {
         cancelAnimationFrame(eventStreamRAF);
         eventStreamRAF = null;
@@ -3769,7 +3967,50 @@ export const createAgentExperience = (
   // Release this widget's pending built-in approval listeners + "Allow once"
   // popovers if it's destroyed while an approval is still open. Scoped to this
   // instance's state, so other widgets on the page are unaffected.
-  destroyCallbacks.push(teardownBuiltInApprovals);
+  destroyCallbacks.push(() => {
+    approvalUiDisposed = true;
+    teardownBuiltInApprovals?.();
+  });
+
+  // Guard the forms-ui heal the same way: a chunk resolution after destroy
+  // must not re-render into a detached transcript.
+  destroyCallbacks.push(() => {
+    formsUiDisposed = true;
+  });
+
+  // `wipe` / `glyph-cycle` live in the lazy animations-extra chunk (CDN) or
+  // the animations/* subpaths (npm). When config selects one that isn't
+  // registered yet, kick the chunk load and activate on arrival: text streams
+  // unanimated until the chunk lands, then subsequent renders animate.
+  // Unregistered custom names never trigger a fetch.
+  let streamAnimationLoadDisposed = false;
+  destroyCallbacks.push(() => {
+    streamAnimationLoadDisposed = true;
+  });
+  const resolveStreamAnimationPluginLazy: typeof resolveStreamAnimationPlugin = (
+    type,
+    overrides
+  ) => {
+    const plugin = resolveStreamAnimationPlugin(type, overrides);
+    if (plugin || !LAZY_BUILTIN_STREAM_ANIMATIONS.includes(type)) return plugin;
+    void loadAnimationsExtra()
+      .then((mod) => {
+        if (streamAnimationLoadDisposed) return;
+        // Register the chunk's plugin objects into CORE's registry explicitly.
+        // The chunk is bundled noExternal, so its import-time self-registration
+        // lands in the chunk's own copy of the registry Map — invisible to
+        // core's resolver. Idempotent when both copies are one module (ESM/tests).
+        registerStreamAnimationPlugin(mod.wipe);
+        registerStreamAnimationPlugin(mod.glyphCycle);
+        const loaded = resolveStreamAnimationPlugin(type, overrides);
+        if (loaded) ensurePluginActive(loaded, mount);
+      })
+      .catch(() => {
+        // Failed fetch: renders fall back to unanimated text; the next
+        // resolve retries via the chunk loader's rejection-retry semantics.
+      });
+    return null;
+  };
 
   // Activate the stream-animation plugin for this widget instance. Plugins
   // with `styles` inject their CSS into the widget root once; plugins with
@@ -3778,14 +4019,13 @@ export const createAgentExperience = (
   // deferred to widget destroy.
   const streamAnimationConfig = config.features?.streamAnimation;
   if (streamAnimationConfig?.type && streamAnimationConfig.type !== "none") {
-    const plugin = resolveStreamAnimationPlugin(
+    const plugin = resolveStreamAnimationPluginLazy(
       streamAnimationConfig.type,
       streamAnimationConfig.plugins
     );
-    if (plugin) {
-      ensurePluginActive(plugin, mount);
-      destroyCallbacks.push(() => detachAllPlugins(mount));
-    }
+    if (plugin) ensurePluginActive(plugin, mount);
+    // Push unconditionally: a lazily-loaded plugin can activate after init.
+    destroyCallbacks.push(() => detachAllPlugins(mount));
   }
 
   // Reassignable: a composer rebuild swaps the row this manager renders into.
@@ -5333,6 +5573,13 @@ export const createAgentExperience = (
         // any accordion listeners survive idiomorph's `importNode`. Gate the
         // rebuild on fingerprint so interactive state (e.g. a collapsed
         // accordion) is preserved while the approval stays pending.
+        const approvalMod = ensureApprovalUi();
+        if (!approvalMod) {
+          // Chunk still in flight: hold the slot with an empty row;
+          // `onApprovalUiReady` clears the cache and re-renders the real card.
+          tempContainer.appendChild(createMessageRow(message.id, message.role));
+          return;
+        }
         const approvalPlugin =
           plugins.find((p) => typeof p.renderApproval === "function") ?? builtInApprovalPlugin;
         const lastFp = lastApprovalBubbleFingerprint.get(message.id);
@@ -5360,7 +5607,7 @@ export const createAgentExperience = (
           };
           liveBubble = approvalPlugin.renderApproval({
             message,
-            defaultRenderer: () => createApprovalBubble(message, config),
+            defaultRenderer: () => approvalMod.createApprovalBubble(message, config),
             config,
             approve: (options) => resolveDecision("approved", options),
             deny: (options) => resolveDecision("denied", options)
@@ -5376,7 +5623,7 @@ export const createAgentExperience = (
           const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
           existing?.removeAttribute("data-preserve-runtime");
           lastApprovalBubbleFingerprint.delete(message.id);
-          bubble = createApprovalBubble(message, config);
+          bubble = approvalMod.createApprovalBubble(message, config);
         } else {
           // A fresh live bubble to hydrate (needsRebuild), or fingerprint
           // unchanged so we reuse the preserved live wrapper (`bubble: null`).
@@ -5422,7 +5669,7 @@ export const createAgentExperience = (
                 }
               );
               if (message.role !== "user") {
-                enhanceWithForms(b, message, config, session);
+                enhanceWithFormsLazy(b, message, config, session);
               }
               return b;
             },
@@ -5486,7 +5733,7 @@ export const createAgentExperience = (
                 fresh &&
                 live &&
                 live !== fresh &&
-                hasLiveInlineArtifactBlock(live)
+                getArtifactsUiSync()?.hasLiveInlineArtifactBlock(live)
               ) {
                 if (fresh === componentBubble) componentBubble = live;
                 else fresh.replaceWith(live);
@@ -5576,7 +5823,9 @@ export const createAgentExperience = (
           bubble = createToolBubble(message, config);
         } else if (message.variant === "approval" && message.approval) {
           if (config.approval === false) return;
-          bubble = createApprovalBubble(message, config);
+          const approvalMod = ensureApprovalUi();
+          if (!approvalMod) return;
+          bubble = approvalMod.createApprovalBubble(message, config);
         } else {
           // Check for custom message renderers in layout config
           const messageLayoutConfig = config.layout?.messages;
@@ -5606,7 +5855,7 @@ export const createAgentExperience = (
             );
           }
           if (message.role !== "user" && bubble) {
-            enhanceWithForms(bubble, message, config, session);
+            enhanceWithFormsLazy(bubble, message, config, session);
           }
         }
       }
@@ -5982,11 +6231,32 @@ export const createAgentExperience = (
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic.
   // Re-apply read-aloud button state after each render so a playing/paused
   // message keeps its icon across idiomorph DOM morphs.
+  // Markdown parsers (marked + DOMPurify) live in a lazy sibling chunk. Warm
+  // them the first time the panel is actually visible OR the first time a
+  // non-empty transcript renders (restored history, intro/injected messages —
+  // content that would otherwise paint escaped while closed and flash at
+  // open), instead of at page load: visitors who never open the launcher and
+  // have no messages never fetch the ~21 kB chunk. Renders that still beat the
+  // chunk show escaped text and self-heal via onMarkdownParsersReady
+  // (subscriber at the end of the factory).
+  let markdownParsersWarmed = false;
+  const warmMarkdownParsers = () => {
+    if (markdownParsersWarmed) return;
+    markdownParsersWarmed = true;
+    loadMarkdownParsers().catch(() => {
+      // Failed fetch (ad blocker, offline): allow the next visibility change
+      // or render to retry; the chunk loader resets its cached promise on
+      // rejection.
+      markdownParsersWarmed = false;
+    });
+  };
+
   const renderMessagesWithPlugins = (
     container: HTMLElement,
     messages: AgentWidgetMessage[],
     transform: MessageTransform
   ) => {
+    if (messages.length > 0) warmMarkdownParsers();
     renderMessagesWithPluginsImpl(container, messages, transform);
     refreshReadAloudButtons();
   };
@@ -6135,7 +6405,7 @@ export const createAgentExperience = (
     const streamAnimation = resolveStreamAnimation(feature);
     const plugin =
       streamAnimation.type !== "none"
-        ? resolveStreamAnimationPlugin(streamAnimation.type, feature?.plugins)
+        ? resolveStreamAnimationPluginLazy(streamAnimation.type, feature?.plugins)
         : null;
     const pluginStillAnimating =
       plugin?.isAnimating?.(lastAssistant) === true;
@@ -6415,6 +6685,9 @@ export const createAgentExperience = (
   };
 
   const updateOpenState = () => {
+    // Before the toggleable check: docked/fullscreen panels are visible from
+    // init but never toggle, and must still warm the markdown chunk.
+    if (open) warmMarkdownParsers();
     if (!isPanelToggleable()) return;
 
     // Composer-bar mode morphs the wrapper between collapsed pill and
@@ -7164,7 +7437,7 @@ export const createAgentExperience = (
     // Freshly (re)built inline artifact blocks render from their persisted
     // props; sync them with the live registry so a block created after the
     // last onArtifactsState emission still shows current content.
-    updateInlineArtifactBlocks(messagesWrapper, lastArtifactsState.artifacts, {
+    getArtifactsUiSync()?.updateInlineArtifactBlocks(messagesWrapper, lastArtifactsState.artifacts, {
       suppressTransition: isStreaming,
     });
     ensureToolElapsedTimer();
@@ -7366,7 +7639,7 @@ export const createAgentExperience = (
       // streaming: it captures the whole document, and cross-fading a stale
       // snapshot over still-moving message text reads as ghosting/motion blur
       // on the transcript.
-      updateInlineArtifactBlocks(messagesWrapper, state.artifacts, {
+      getArtifactsUiSync()?.updateInlineArtifactBlocks(messagesWrapper, state.artifacts, {
         suppressTransition: isStreaming,
       });
       syncArtifactPane();
@@ -7797,6 +8070,8 @@ export const createAgentExperience = (
   let railShell: HTMLElement | null = null;
   let railHost: HTMLElement | null = null;
   let railColumn: HTMLElement | null = null;
+  /** Stand-in element holding the docked column while the chunk loads. */
+  let railPlaceholder: HTMLElement | null = null;
   /** Container order the rail borrows from and hands back, header first. */
   const railBorrowed = (): Array<HTMLElement | null> => [
     header,
@@ -8129,6 +8404,8 @@ export const createAgentExperience = (
 
   let railTriggerButton: HTMLButtonElement | null = null;
   let railTriggerWrapper: HTMLElement | null = null;
+  /** Docking opens awaiting the history chunk; the trigger hides for them. */
+  let railPinPendingOpens = 0;
   let railOverlayHost: HTMLElement | null = null;
   let railGraceTimer: ReturnType<typeof setTimeout> | null = null;
   /** Pointer is over the trigger or over the floating rail. */
@@ -8360,7 +8637,8 @@ export const createAgentExperience = (
     // Leading edge of the conversation header, mirrored for a right rail.
     const lead = railSide() !== "right" ? header.firstChild : null;
     if ((lead ?? header.lastChild) !== wrapper) header.insertBefore(wrapper, lead);
-    wrapper.style.display = railPinned() ? "none" : "";
+    wrapper.style.display =
+      railPinned() || railPinPendingOpens > 0 ? "none" : "";
     button.setAttribute("aria-label", historyShellCopy.expandLabel);
     button.setAttribute("aria-expanded", historyVisible ? "true" : "false");
     // The floating rail hangs from this control, so a rebuild or a resize that
@@ -8553,6 +8831,14 @@ export const createAgentExperience = (
    * next to the host, and the shell takes the header's old container slot.
    */
   const mountRailHost = (element: HTMLElement): void => {
+    // A pending docking open already built the shell around a placeholder;
+    // the arriving view takes its slot with no reflow around it.
+    if (railPlaceholder && railHost) {
+      railPlaceholder.replaceWith(element);
+      railPlaceholder = null;
+      applyRailChrome();
+      return;
+    }
     const shell = createElement("div", "persona-history-rail-shell");
     shell.style.cssText = "display:flex;flex-direction:row;flex:1 1 auto;min-height:0";
     const column = createElement("div", "persona-history-rail-conversation");
@@ -8575,6 +8861,31 @@ export const createAgentExperience = (
     railHost = host;
     railColumn = column;
     applyRailChrome();
+  };
+
+  /**
+   * Space reservation for a docking open that still awaits the chunk: the full
+   * rail shell mounts around an empty stand-in at the final width, so the
+   * conversation and its header paint at their docked geometry from the first
+   * frame instead of being pushed over when the view lands.
+   */
+  const mountRailPlaceholder = (): void => {
+    if (railShell) return;
+    const placeholder = createElement(
+      "div",
+      "persona-history-rail-placeholder"
+    );
+    placeholder.style.cssText = "flex:1 1 auto;min-height:0";
+    railPlaceholder = placeholder;
+    mountRailHost(placeholder);
+    repinAnchoredMessage();
+  };
+
+  /** Hands the reserved column back (failed or re-presented open). */
+  const clearRailPlaceholder = (): void => {
+    if (!railPlaceholder) return;
+    unmountHistoryHosts();
+    repinAnchoredMessage();
   };
 
   /**
@@ -8628,6 +8939,7 @@ export const createAgentExperience = (
       railShell = null;
       railHost = null;
       railColumn = null;
+      railPlaceholder = null;
     }
   };
 
@@ -8644,6 +8956,11 @@ export const createAgentExperience = (
   /** The chunk owns its own classes/labels; the shell only picks the host. */
   const mountHistoryElement = (element: HTMLElement): void => {
     prepareHistoryElement(element);
+    // The open that reserved the column can resolve to another host (a width
+    // change mid-load re-presents as panel); the stand-in must not outlive it.
+    if (historyPresentation !== "rail" || railOverlayOpen) {
+      clearRailPlaceholder();
+    }
     if (historyPresentation !== "rail") mountPanelHost(element);
     else if (railOverlayOpen) mountRailOverlayHost(element);
     else mountRailHost(element);
@@ -8746,14 +9063,34 @@ export const createAgentExperience = (
     historyReturnSurface = opts?.returnSurface ?? "conversation";
     historyInvoker = opts?.invoker ?? historyButton;
 
+    // An open that will dock the rail takes its final geometry for the chunk
+    // load: the trigger hides (painted, the glyph flashes at the header's
+    // leading edge and then jumps to the mounted rail's own toggle) and the
+    // column is reserved (unreserved, the conversation header paints at the
+    // widget edge and is pushed over when the rail lands).
+    const pinPending = railTriggerApplies() && !railOverlayOpen;
+    if (pinPending) {
+      railPinPendingOpens += 1;
+      syncRailOverlayTrigger();
+      mountRailPlaceholder();
+    }
     let module: Awaited<ReturnType<typeof loadHistoryView>>;
     try {
       module = await loadHistoryView();
     } catch {
       // Lazy-chunk failure keeps the invoking surface interactive and retryable.
       announceHistory(historyShellCopy.openHistoryLabel);
+      if (pinPending) {
+        railPinPendingOpens -= 1;
+        // A superseded open leaves the shared chrome to its successor.
+        if (token === historyOpenToken) {
+          clearRailPlaceholder();
+          syncRailOverlayTrigger();
+        }
+      }
       return;
     }
+    if (pinPending) railPinPendingOpens -= 1;
     if (token !== historyOpenToken || historyVisible) return;
 
     // One scope for the whole opened view; every operation reuses it.
@@ -9789,17 +10126,12 @@ export const createAgentExperience = (
       });
   }
 
-  // Wire up optional SSE tap (host) + event stream buffer to capture SSE events
-  if (eventStreamBuffer || config.onSSEEvent) {
+  // Wire up optional SSE tap (host) + event stream buffer to capture SSE
+  // events. `feedEventStream` stages events while the lazy chunk is in flight.
+  if (showEventStreamToggle || config.onSSEEvent) {
     session.setSSEEventCallback((type: string, payload: unknown) => {
       config.onSSEEvent?.(type, payload);
-      throughputTracker?.processEvent(type, payload);
-      eventStreamBuffer?.push({
-        id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        type,
-        timestamp: Date.now(),
-        payload: JSON.stringify(payload)
-      });
+      feedEventStream(type, payload);
     });
   }
 
@@ -9831,6 +10163,9 @@ export const createAgentExperience = (
           } finally {
             suppressScrollSend = false;
           }
+          // Restored markdown exists before the first open: warm the parsers
+          // now so opening paints markdown instead of flashing escaped text.
+          warmMarkdownParsers();
         }
         if (state.artifacts?.length) {
           session.hydrateArtifacts(
@@ -11454,22 +11789,14 @@ export const createAgentExperience = (
 
       // Handle dynamic event stream feature flag toggling
       if (showEventStreamToggle && !prevShowEventStreamToggle) {
-        // Flag changed from false to true - create buffer/store if needed
+        // Flag changed from false to true - fetch the chunk and construct the
+        // runtime at adoption; stage events tapped meanwhile.
         if (!eventStreamBuffer) {
-          eventStreamStore = new EventStreamStore(eventStreamDbName);
-          eventStreamBuffer = new EventStreamBuffer(eventStreamMaxEvents, eventStreamStore);
-          throughputTracker = throughputTracker ?? new ThroughputTracker();
-          eventStreamStore.open().then(() => eventStreamBuffer?.restore()).catch(() => {});
+          ensureEventStreamRuntime();
           // Register the SSE event callback (host tap + buffer + throughput)
           session.setSSEEventCallback((type: string, payload: unknown) => {
             config.onSSEEvent?.(type, payload);
-            throughputTracker?.processEvent(type, payload);
-            eventStreamBuffer!.push({
-              id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-              type,
-              timestamp: Date.now(),
-              payload: JSON.stringify(payload)
-            });
+            feedEventStream(type, payload);
           });
         }
         // Add header toggle button if not present
@@ -11483,7 +11810,7 @@ export const createAgentExperience = (
           eventStreamToggleBtn.type = "button";
           eventStreamToggleBtn.setAttribute("aria-label", "Event Stream");
           eventStreamToggleBtn.title = "Event Stream";
-          const activityIcon = renderLucideIcon("activity", "18px", "currentColor", 1.5);
+          const activityIcon = renderIconNode(Activity, "18px", "currentColor", 1.5);
           if (activityIcon) eventStreamToggleBtn.appendChild(activityIcon);
           const clearChatWrapper = panelElements.clearChatButtonWrapper;
           const closeWrapper = panelElements.closeButtonWrapper;
@@ -11514,6 +11841,7 @@ export const createAgentExperience = (
         eventStreamStore = null;
         throughputTracker?.reset();
         throughputTracker = null;
+        pendingEventStreamEvents = null;
       }
 
       if (config.launcher?.enabled === false && launcherSurfaceInstance) {
@@ -11686,7 +12014,7 @@ export const createAgentExperience = (
         nextStreamAnimationType &&
         nextStreamAnimationType !== "none"
       ) {
-        const streamAnimationPlugin = resolveStreamAnimationPlugin(
+        const streamAnimationPlugin = resolveStreamAnimationPluginLazy(
           nextStreamAnimationType,
           config.features?.streamAnimation?.plugins
         );
@@ -12849,18 +13177,12 @@ export const createAgentExperience = (
     },
     /** Push a raw event into the event stream buffer (for testing/debugging) */
     __pushEventStreamEvent(event: { type: string; payload: unknown }): void {
-      if (eventStreamBuffer) {
-        throughputTracker?.processEvent(event.type, event.payload);
-        eventStreamBuffer.push({
-          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          type: event.type,
-          timestamp: Date.now(),
-          payload: JSON.stringify(event.payload)
-        });
-      }
+      if (!showEventStreamToggle) return;
+      ensureEventStreamRuntime();
+      feedEventStream(event.type, event.payload);
     },
     showEventStream(): void {
-      if (!showEventStreamToggle || !eventStreamBuffer) return;
+      if (!showEventStreamToggle) return;
       toggleEventStreamOn();
     },
     hideEventStream(): void {
@@ -13410,6 +13732,65 @@ export const createAgentExperience = (
     // the cache and render into a detached `messagesWrapper`.
     destroyCallbacks.push(unsubscribeParsersReady);
   }
+
+  // Approval rows rendered while the approval-ui chunk was in flight are empty
+  // stubs; once it lands, rebuild them into real cards. Mirrors the markdown
+  // heal above. (`approvalUiDisposed` guards a post-destroy resolution.)
+  onApprovalUiReady = () => {
+    if (!session) return;
+    configVersion++;
+    messageCache.clear();
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+  };
+
+  // Synchronously restored/seeded transcripts (sync storage adapter,
+  // initialMessages, onStateLoaded) exist before any render or open — a
+  // floating launcher starts closed. Warm the parsers now so the first open
+  // paints markdown instead of flashing escaped text. The async-adapter path
+  // warms in its hydration `.then` above; fresh empty sessions fetch nothing.
+  if (session.getMessages().length > 0) warmMarkdownParsers();
+
+  // Form placeholders rendered while the forms-ui chunk was in flight are the
+  // bare divs the postprocessor emitted; once the chunk lands, rebuild them
+  // into real forms. Mirrors the markdown heal above. (`formsUiDisposed`
+  // guards a post-destroy resolution.)
+  onFormsUiReady = () => {
+    if (!session) return;
+    configVersion++;
+    messageCache.clear();
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+  };
+
+  // Extra-tier icons rendered into the transcript fill their placeholders in
+  // place, but the fingerprint cache + idiomorph CLONE nodes — a cloned
+  // pending placeholder never self-fills. Re-render once the icons-extra
+  // chunk lands so cloned copies rebuild with real data. Chrome surfaces
+  // (header, composer, launcher) keep their original elements and fill in
+  // place without this.
+  const unsubscribeExtraIcons = onExtraIconsReady(() => {
+    if (!session) return;
+    configVersion++;
+    messageCache.clear();
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+  });
+  destroyCallbacks.push(unsubscribeExtraIcons);
+
+  // Artifact directives rendered while the artifacts-ui chunk was in flight
+  // are empty placeholders; once it's adopted, rebuild them into real
+  // cards/inline blocks and sync the pane. Same heal shape as above.
+  const unsubscribeArtifactsUi = onArtifactsUiReady(() => {
+    if (!session) return;
+    configVersion++;
+    messageCache.clear();
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+    getArtifactsUiSync()?.updateInlineArtifactBlocks(
+      messagesWrapper,
+      lastArtifactsState.artifacts,
+      { suppressTransition: true }
+    );
+    syncArtifactPane();
+  });
+  destroyCallbacks.push(unsubscribeArtifactsUi);
 
   return controller;
 };

@@ -13,6 +13,13 @@
 export { createEventStreamView } from "./components/event-stream-view";
 export type { EventStreamViewOptions } from "./components/event-stream-view";
 
+// The capture/persistence runtime rides in the same chunk: nothing event-stream
+// related is worth core bytes on pages where the toggle (default false) is off.
+// ui.ts constructs these at chunk adoption and stages tapped events meanwhile.
+export { EventStreamBuffer } from "./utils/event-stream-buffer";
+export { EventStreamStore } from "./utils/event-stream-store";
+export { ThroughputTracker } from "./utils/throughput-tracker";
+
 import type { createEventStreamView as CreateEventStreamView } from "./components/event-stream-view";
 
 /** Mounted-view handle: what `createEventStreamView` returns. */

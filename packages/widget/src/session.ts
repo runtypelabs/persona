@@ -64,23 +64,28 @@ import {
   divergentDisplayProjection,
   mergeWireMessagesById,
 } from "./utils/history-messages";
+// Read-aloud stays eager (small, and speech synthesis is gesture-adjacent);
+// the provider runtime (factory + Runtype/browser providers + audio playback)
+// ships in the lazy voice-runtime chunk, loaded in setupVoice. Support
+// detection uses the eager construction-free probe.
+import { BrowserSpeechEngine, pickBestVoice } from "./voice/browser-speech-engine";
 import {
-  createVoiceProvider,
-  isVoiceSupported,
-  BrowserSpeechEngine,
-  pickBestVoice,
   ReadAloudController,
-  type ReadAloudListener
-} from "./voice";
+  type ReadAloudListener,
+} from "./voice/read-aloud-controller";
+import { isVoiceSupportedProbe } from "./utils/voice-support";
+import { loadVoiceRuntime } from "./voice-runtime-loader";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
-// Type-only (erased at build): the runtime reconnect machinery is reached via a
-// dynamic import in `beginReconnect`, so it never lands in bundles that don't
-// opt into durable reconnect (see ./session-reconnect.ts).
+// Type-only (erased at build): the runtime reconnect machinery ships in the
+// lazy session-reconnect chunk, reached via `session-reconnect-loader.ts` in
+// `beginReconnect`, so it never lands in bundles that don't opt into durable
+// reconnect.
 import type {
   ReconnectController,
   ReconnectHost,
 } from "./session-reconnect";
+import { loadSessionReconnect } from "./session-reconnect-loader";
 
 export type AgentWidgetSessionStatus =
   | "idle"
@@ -376,6 +381,10 @@ export class AgentWidgetSession {
 
   // Voice support
   private voiceProvider: VoiceProvider | null = null;
+  /** In-flight setupVoice chunk load; toggleVoice awaits it when racing setup. */
+  private voiceSetupPromise: Promise<void> | null = null;
+  /** Bumped by setupVoice/cleanupVoice so a stale chunk load can't install. */
+  private voiceSetupGeneration = 0;
   private voiceActive = false;
   private voiceStatus: VoiceStatus = 'disconnected';
 
@@ -442,6 +451,19 @@ export class AgentWidgetSession {
     }
     this.callbacks.onStatusChanged(this.status);
     this.prefetchRuntypeTts();
+    this.prefetchVoiceRuntime();
+  }
+
+  /**
+   * Warm the deferred voice-runtime chunk (provider factory + providers) at
+   * init when a voice provider is configured, so setupVoice / the first mic
+   * click resolve against a warm module. Module fetch only — WebSocket and
+   * AudioContext still wait for their own triggers. Errors are swallowed: the
+   * setupVoice path retries via the chunk loader's rejection-retry.
+   */
+  private prefetchVoiceRuntime(): void {
+    if (!this.config.voiceRecognition?.provider) return;
+    void loadVoiceRuntime().catch(() => {});
   }
 
   /**
@@ -505,7 +527,7 @@ export class AgentWidgetSession {
    * Check if voice is supported
    */
   public isVoiceSupported(): boolean {
-    return isVoiceSupported(this.config.voiceRecognition?.provider);
+    return isVoiceSupportedProbe(this.config.voiceRecognition?.provider);
   }
 
   /**
@@ -650,7 +672,35 @@ export class AgentWidgetSession {
         throw new Error('Voice configuration not provided');
       }
 
-      this.voiceProvider = createVoiceProvider(voiceConfig);
+      // The provider runtime ships in the lazy voice-runtime chunk. The sync
+      // signature is preserved: construction + wiring + connect() happen when
+      // the chunk resolves (prefetched at session construction when a
+      // provider is configured, so this is warm in practice). A stale
+      // resolution (cleanupVoice or a newer setupVoice ran meanwhile) is
+      // discarded via the generation token.
+      const generation = ++this.voiceSetupGeneration;
+      this.voiceSetupPromise = loadVoiceRuntime()
+        .then((mod) => {
+          if (generation !== this.voiceSetupGeneration) return;
+          this.wireVoiceProvider(mod.createVoiceProvider(voiceConfig));
+        })
+        .catch((error) => {
+          console.error('Failed to setup voice:', error);
+        })
+        .finally(() => {
+          if (generation === this.voiceSetupGeneration) {
+            this.voiceSetupPromise = null;
+          }
+        });
+    } catch (error) {
+      console.error('Failed to setup voice:', error);
+    }
+  }
+
+  /** Wire callbacks onto a freshly constructed provider and connect it. */
+  private wireVoiceProvider(provider: VoiceProvider): void {
+    try {
+      this.voiceProvider = provider;
 
       // Read configurable text from widget config
       const voiceRecognitionConfig = this.config.voiceRecognition ?? {};
@@ -789,6 +839,11 @@ export class AgentWidgetSession {
    * Toggle voice recognition on/off
    */
   public async toggleVoice() {
+    // A click can race the setup chunk load; wait for it rather than
+    // erroring (prefetch at construction makes this window ~one microtask).
+    if (!this.voiceProvider && this.voiceSetupPromise) {
+      await this.voiceSetupPromise;
+    }
     if (!this.voiceProvider) {
       console.error('Voice not configured');
       return;
@@ -811,6 +866,8 @@ export class AgentWidgetSession {
    * Cleanup voice resources
    */
   public cleanupVoice() {
+    this.voiceSetupGeneration++;
+    this.voiceSetupPromise = null;
     if (this.voiceProvider) {
       this.voiceProvider.disconnect();
       this.voiceProvider = null;
@@ -4373,7 +4430,7 @@ export class AgentWidgetSession {
       return Promise.resolve(this.reconnectController);
     }
     if (!this.reconnectControllerPromise) {
-      this.reconnectControllerPromise = import("./session-reconnect").then(
+      this.reconnectControllerPromise = loadSessionReconnect().then(
         ({ createReconnectController }) => {
           const controller = createReconnectController(
             this.buildReconnectHost()
@@ -4382,6 +4439,11 @@ export class AgentWidgetSession {
           return controller;
         }
       );
+      // A failed chunk fetch must not poison the memoized promise: clear it so
+      // the next reconnect trigger retries the load.
+      this.reconnectControllerPromise.catch(() => {
+        this.reconnectControllerPromise = null;
+      });
     }
     return this.reconnectControllerPromise;
   }

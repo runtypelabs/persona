@@ -10,6 +10,12 @@ import type {
   AgentWidgetContextMentionItem,
   AgentWidgetContextMentionSource,
 } from "../types";
+// The chunked menu resolves icon names through an injected renderer; wire the
+// real registry here the way the orchestrator does after the chunk loads.
+import { setMentionIconRenderer } from "../utils/mention-icon-renderer";
+import { renderLucideIcon } from "../utils/icons";
+
+setMentionIconRenderer(renderLucideIcon);
 
 const source: AgentWidgetContextMentionSource = {
   id: "files",

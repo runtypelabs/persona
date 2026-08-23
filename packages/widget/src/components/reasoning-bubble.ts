@@ -1,7 +1,8 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/formatting";
-import { renderLucideIcon } from "../utils/icons";
+import { ChevronDown, ChevronUp } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
 import { appendCharSpans } from "../utils/tool-loading-animation";
 
 // Expansion state per widget instance
@@ -48,7 +49,7 @@ export const updateReasoningBubbleUI = (messageId: string, bubble: HTMLElement):
   if (toggleIcon) {
     toggleIcon.innerHTML = "";
     const iconColor = "currentColor";
-    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+    const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
     if (chevronIcon) {
       toggleIcon.appendChild(chevronIcon);
     } else {
@@ -265,7 +266,7 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
   if (expandable) {
     toggleIcon = createElement("div", "persona-flex persona-items-center");
     const iconColor = "currentColor";
-    const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+    const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
     if (chevronIcon) {
       toggleIcon.appendChild(chevronIcon);
     } else {
@@ -333,7 +334,7 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
     if (toggleIcon) {
       toggleIcon.innerHTML = "";
       const iconColor = "currentColor";
-      const chevronIcon = renderLucideIcon(expanded ? "chevron-up" : "chevron-down", 16, iconColor, 2);
+      const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
       if (chevronIcon) {
         toggleIcon.appendChild(chevronIcon);
       } else {

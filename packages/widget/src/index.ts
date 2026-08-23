@@ -18,6 +18,10 @@
 // from the `markdown-parsers.js` chunk instead. Must run before any render.
 import "./markdown-parsers-eager";
 
+// Same for the extra-tier icon data: bundled npm consumers keep the all-sync
+// `renderLucideIcon` contract; the IIFE/CDN build lazy-loads `icons-extra.js`.
+import "./icons-extra-eager";
+
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";
 export { default } from "./index-core";
@@ -37,6 +41,27 @@ export type {
   DemoCarouselOptions,
   DemoCarouselHandle
 } from "./components/demo-carousel";
+
+// Voice provider factory (npm-only values). The CDN path reaches the provider
+// runtime lazily via the voice-runtime chunk inside session.setupVoice.
+export {
+  createVoiceProvider,
+  createBestAvailableVoiceProvider,
+  isVoiceSupported,
+} from "./voice";
+
+// WebMCP bridge class (npm-only value; historical one-argument constructor).
+// The CDN path reaches the runtime lazily via the webmcp-runtime chunk.
+export { WebMcpBridge } from "./webmcp-bridge-public";
+
+// Context mention helpers (for building config.contextMentions.sources).
+// npm-only values: kept off `index-core.ts` so the CDN global doesn't carry
+// mention-matcher (script-tag hosts pass plain source objects in config).
+export {
+  defaultMentionFilter,
+  createStaticMentionSource,
+  createSlashCommandsSource,
+} from "./utils/mention-matcher";
 
 // Accessible roving-tabindex tablist helper for custom artifact tab bars
 // (features.artifacts.renderTabBar).

@@ -14,7 +14,8 @@ import {
 } from "../utils/artifact-status-label";
 import { artifactRecordActionContext, buildArtifactActionButton } from "../utils/artifact-custom-actions";
 import { createIconButton, createToggleGroup } from "../utils/buttons";
-import { renderLucideIcon } from "../utils/icons";
+import { FileText } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
 import {
   renderArtifactPreviewBody,
   runArtifactBodyTransition,
@@ -656,7 +657,7 @@ function renderDefaultArtifactInline(
     "span",
     "persona-flex persona-items-center persona-flex-shrink-0"
   );
-  const icon = renderLucideIcon("file-text", 16, "currentColor", 2);
+  const icon = renderIconNode(FileText, 16, "currentColor", 2);
   if (icon) iconWrap.appendChild(icon);
   const titleEl = createElement(
     "span",

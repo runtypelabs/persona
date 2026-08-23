@@ -20,6 +20,38 @@ export default defineConfig({
       '@runtypelabs/persona/history-view': fileURLToPath(
         new URL('./src/history-view.ts', import.meta.url)
       ),
+      // Same for the lazy stream-animations chunk subpath.
+      '@runtypelabs/persona/animations-extra': fileURLToPath(
+        new URL('./src/animations-extra.ts', import.meta.url)
+      ),
+      // Same for the lazy approval-ui chunk subpath.
+      '@runtypelabs/persona/approval-ui': fileURLToPath(
+        new URL('./src/approval-ui.ts', import.meta.url)
+      ),
+      // Same for the lazy event-stream-view chunk subpath.
+      '@runtypelabs/persona/event-stream-view': fileURLToPath(
+        new URL('./src/event-stream-view.ts', import.meta.url)
+      ),
+      // Same for the lazy session-reconnect chunk subpath.
+      '@runtypelabs/persona/session-reconnect': fileURLToPath(
+        new URL('./src/session-reconnect.ts', import.meta.url)
+      ),
+      // Same for the lazy webmcp-runtime chunk subpath.
+      '@runtypelabs/persona/webmcp-runtime': fileURLToPath(
+        new URL('./src/webmcp-runtime.ts', import.meta.url)
+      ),
+      // Same for the lazy icons-extra chunk subpath.
+      '@runtypelabs/persona/icons-extra': fileURLToPath(
+        new URL('./src/icons-extra.ts', import.meta.url)
+      ),
+      // Same for the lazy artifacts-ui chunk subpath.
+      '@runtypelabs/persona/artifacts-ui': fileURLToPath(
+        new URL('./src/artifacts-ui.ts', import.meta.url)
+      ),
+      // Same for the lazy voice-runtime chunk subpath.
+      '@runtypelabs/persona/voice-runtime': fileURLToPath(
+        new URL('./src/voice-runtime.ts', import.meta.url)
+      ),
     },
   },
   test: {

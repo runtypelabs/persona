@@ -1,5 +1,6 @@
 import { createElement } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import { Check, ChevronDown, ChevronRight, Clipboard as ClipboardIcon, ClipboardCopy, Search, X, type IconNode } from "lucide";
+import { renderIconNode } from "../utils/icon-node";
 import {
   createFollowStateController,
   isElementNearBottom,
@@ -288,8 +289,8 @@ function renderEventRow(
       "span",
       "persona-flex-shrink-0 persona-text-persona-muted persona-w-4 persona-text-center persona-flex persona-items-center persona-justify-center"
     );
-    const chevronIcon = renderLucideIcon(
-      isExpanded ? "chevron-down" : "chevron-right",
+    const chevronIcon = renderIconNode(
+      isExpanded ? ChevronDown : ChevronRight,
       "14px",
       "currentColor",
       2
@@ -349,8 +350,8 @@ function renderEventRow(
       "button",
       "persona-text-persona-muted hover:persona-text-persona-primary persona-cursor-pointer persona-flex-shrink-0 persona-border-none persona-bg-transparent persona-p-0"
     );
-    const clipIcon = renderLucideIcon(
-      "clipboard",
+    const clipIcon = renderIconNode(
+      ClipboardIcon,
       "12px",
       "currentColor",
       1.5
@@ -361,8 +362,8 @@ function renderEventRow(
       await copyToClipboard(formatEventForCopy(event));
       // Visual feedback
       copyBtn.innerHTML = "";
-      const checkIcon = renderLucideIcon(
-        "check",
+      const checkIcon = renderIconNode(
+        Check,
         "12px",
         "currentColor",
         1.5
@@ -370,8 +371,8 @@ function renderEventRow(
       if (checkIcon) copyBtn.appendChild(checkIcon);
       setTimeout(() => {
         copyBtn.innerHTML = "";
-        const restoreIcon = renderLucideIcon(
-          "clipboard",
+        const restoreIcon = renderIconNode(
+          ClipboardIcon,
           "12px",
           "currentColor",
           1.5
@@ -418,6 +419,18 @@ export type EventStreamViewOptions = {
    * summary row is rendered and refreshed on each update.
    */
   getThroughput?: () => ThroughputMetric;
+  /**
+   * Resolver for host-configurable icon names (`scrollToBottom.iconName`).
+   * Injected by ui.ts (its `renderLucideIcon`): this chunk must not import
+   * the string registry — `noExternal` would duplicate all ~113 icons into
+   * it. Statically-known icons above use direct lucide data imports instead.
+   */
+  renderIconByName?: (
+    iconName: string,
+    size?: number | string,
+    color?: string,
+    strokeWidth?: number
+  ) => SVGElement | null;
 };
 
 export function createEventStreamView(
@@ -435,6 +448,9 @@ export function createEventStreamView(
     plugins = [],
     getThroughput,
   } = options;
+  // Missing injection (direct mounts in tests) degrades to no icon, the same
+  // as an unknown registry name.
+  const renderConfigIcon = options.renderIconByName ?? (() => null);
   const scrollToBottomConfig = config?.features?.scrollToBottom;
   const scrollToBottomEnabled = scrollToBottomConfig?.enabled !== false;
   const scrollToBottomIconName = scrollToBottomConfig?.iconName ?? "arrow-down";
@@ -602,8 +618,8 @@ export function createEventStreamView(
       ) as HTMLButtonElement;
       copyAllBtn.type = "button";
       copyAllBtn.title = "Copy All";
-      const copyAllIcon = renderLucideIcon(
-        "clipboard-copy",
+      const copyAllIcon = renderIconNode(
+        ClipboardCopy,
         "12px",
         "currentColor",
         1.5
@@ -629,8 +645,8 @@ export function createEventStreamView(
       applyCustomClasses(searchBar, customClasses?.searchBar);
 
       // Search icon
-      const searchIcon = renderLucideIcon(
-        "search",
+      const searchIcon = renderIconNode(
+        Search,
         "14px",
         "var(--persona-muted, #9ca3af)",
         1.5
@@ -655,8 +671,8 @@ export function createEventStreamView(
       ) as HTMLButtonElement;
       searchClearBtn.type = "button";
       searchClearBtn.style.display = "none";
-      const clearSearchIcon = renderLucideIcon(
-        "x",
+      const clearSearchIcon = renderIconNode(
+        X,
         "12px",
         "currentColor",
         2
@@ -757,7 +773,7 @@ export function createEventStreamView(
       "data-persona-scroll-to-bottom-has-label",
       scrollToBottomLabel ? "true" : "false"
     );
-    const arrowIcon = renderLucideIcon(
+    const arrowIcon = renderConfigIcon(
       scrollToBottomIconName,
       "14px",
       "currentColor",
@@ -1083,13 +1099,13 @@ export function createEventStreamView(
     // ========================================================================
 
     const swapCopyAllIcon = (
-      iconName: string,
+      iconData: IconNode,
       restoreAfterMs: number
     ) => {
       if (!copyAllBtn) return;
       copyAllBtn.innerHTML = "";
-      const icon = renderLucideIcon(
-        iconName,
+      const icon = renderIconNode(
+        iconData,
         "12px",
         "currentColor",
         1.5
@@ -1100,8 +1116,8 @@ export function createEventStreamView(
       copyAllBtn.appendChild(label);
       setTimeout(() => {
         copyAllBtn.innerHTML = "";
-        const original = renderLucideIcon(
-          "clipboard-copy",
+        const original = renderIconNode(
+          ClipboardCopy,
           "12px",
           "currentColor",
           1.5
@@ -1139,9 +1155,9 @@ export function createEventStreamView(
         await navigator.clipboard.writeText(
           JSON.stringify(parsed, null, 2)
         );
-        swapCopyAllIcon("check", 1500);
+        swapCopyAllIcon(Check, 1500);
       } catch {
-        swapCopyAllIcon("x", 1500);
+        swapCopyAllIcon(X, 1500);
       }
     };
 

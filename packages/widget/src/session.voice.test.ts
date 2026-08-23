@@ -35,18 +35,17 @@ const h = vi.hoisted(() => {
   return { state, fakeProvider };
 });
 
-vi.mock('./voice', async (importOriginal) => {
-  // Keep the real exports (ReadAloudController, BrowserSpeechEngine, …) and
-  // override only the provider factories so the realtime voice flow uses the
-  // fake provider.
-  const actual = await importOriginal<typeof import('./voice')>();
-  return {
-    ...actual,
-    createVoiceProvider: () => h.fakeProvider,
-    createBestAvailableVoiceProvider: () => h.fakeProvider,
-    isVoiceSupported: () => true,
-  };
-});
+// The session reaches the provider factory through the lazy voice-runtime
+// chunk loader; mock the loader so setupVoice adopts the fake provider.
+vi.mock('./voice-runtime-loader', () => ({
+  setVoiceRuntimeLoader: () => {},
+  loadVoiceRuntime: () =>
+    Promise.resolve({
+      createVoiceProvider: () => h.fakeProvider,
+      createBestAvailableVoiceProvider: () => h.fakeProvider,
+      isVoiceSupported: () => true,
+    }),
+}));
 
 import { AgentWidgetSession } from './session';
 import { setRuntypeTtsLoader } from './voice/runtype-tts-loader';
@@ -63,7 +62,7 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
     isFinal: boolean,
   ) => h.state.transcriptCb!(role, text, isFinal);
 
-  beforeEach(() => {
+  beforeEach(async () => {
     h.state.transcriptCb = null;
     h.state.metricsCb = null;
     messages = [];
@@ -93,6 +92,10 @@ describe('AgentWidgetSession - realtime voice onTranscript (Option B)', () => {
       },
     );
     session.setupVoice();
+    // Provider construction now happens when the lazy voice-runtime chunk
+    // resolves (the vitest alias makes that a few microtask hops); wait for
+    // the wiring before the synchronous assertions below.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
   it('registers an onTranscript handler', () => {

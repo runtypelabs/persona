@@ -72,5 +72,47 @@ export default defineConfig({
     // scheme: sibling-URL chunk `event-stream-view.js`, fetched only when the
     // visitor first opens the panel via the header toggle.
     options.external.push("@runtypelabs/persona/event-stream-view");
+
+    // Keep the wipe + glyph-cycle stream animations out of the CDN payload.
+    // Same scheme: sibling-URL chunk `animations-extra.js`, fetched only when
+    // `features.streamAnimation.type` selects one of them.
+    options.external.push("@runtypelabs/persona/animations-extra");
+
+    // Keep the approval UI (bubble + built-in plugin + plugin-kit) out of the
+    // CDN payload. Same scheme: sibling-URL chunk `approval-ui.js`, fetched
+    // when the first approval message arrives.
+    options.external.push("@runtypelabs/persona/approval-ui");
+
+    // Keep the durable-session reconnect loop out of the CDN payload. Same
+    // scheme: sibling-URL chunk `session-reconnect.js`, fetched only when a
+    // session with a `reconnectStream` transport first needs to resume.
+    options.external.push("@runtypelabs/persona/session-reconnect");
+
+    // Keep the WebMCP bridge runtime (the WebMcpBridge class) out of the CDN
+    // payload. Same scheme: sibling-URL chunk `webmcp-runtime.js`, fetched by
+    // client.ts only when `config.webmcp.enabled === true`.
+    options.external.push("@runtypelabs/persona/webmcp-runtime");
+
+    // Keep the config-only tail of the icon registry out of the CDN payload.
+    // Same scheme: sibling-URL chunk `icons-extra.js`, fetched the first time
+    // `renderLucideIcon` is asked for one of its names.
+    options.external.push("@runtypelabs/persona/icons-extra");
+
+    // Keep the artifacts UI (pane + inline/card components + preview) out of
+    // the CDN payload. Same scheme: sibling-URL chunk `artifacts-ui.js`,
+    // fetched when the sidebar is enabled or the first artifact directive
+    // arrives.
+    options.external.push("@runtypelabs/persona/artifacts-ui");
+
+    // Keep the voice provider runtime (factory + Runtype/browser providers +
+    // audio playback) out of the CDN payload. Same scheme: sibling-URL chunk
+    // `voice-runtime.js`, prefetched by the session when a voice provider is
+    // configured.
+    options.external.push("@runtypelabs/persona/voice-runtime");
+
+    // Keep the `[data-tv-form]` demo-forms enhancement out of the CDN payload.
+    // Same scheme: sibling-URL chunk `forms-ui.js`, fetched when a rendered
+    // bubble first contains a form placeholder.
+    options.external.push("@runtypelabs/persona/forms-ui");
   },
 });

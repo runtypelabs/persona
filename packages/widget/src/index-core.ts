@@ -293,8 +293,10 @@ export {
 } from "./session";
 export { AgentWidgetClient } from "./client";
 export type { SSEEventCallback } from "./client";
+// `WebMcpBridge` (the class VALUE) ships from `index.ts` (npm only): the CDN
+// global constructs the runtime lazily inside client.ts from the
+// webmcp-runtime chunk, so the class stays out of the IIFE payload.
 export {
-  WebMcpBridge,
   WEBMCP_TOOL_PREFIX,
   isWebMcpToolName,
   stripWebMcpPrefix
@@ -348,12 +350,10 @@ export {
   fileToImagePart,
   validateImageFile
 } from "./utils/content";
-// Context mention helpers (for building config.contextMentions.sources)
-export {
-  defaultMentionFilter,
-  createStaticMentionSource,
-  createSlashCommandsSource,
-} from "./utils/mention-matcher";
+// Context mention helper TYPES only. The value helpers (defaultMentionFilter,
+// createStaticMentionSource, createSlashCommandsSource) ship from `index.ts`
+// (npm) so the CDN global doesn't carry mention-matcher: script-tag hosts pass
+// plain source objects in config; no shipped demo reaches these via the global.
 export type { SlashCommandDefinition } from "./utils/mention-matcher";
 export {
   collectEnrichedPageContext,
@@ -404,8 +404,8 @@ export type { AgentWidgetPluginStorage } from "./utils/plugin-storage";
 export { pluginRegistry } from "./plugins/registry";
 
 // Stream animation plugin API: lets consumers register custom animations
-// that match the built-in surface (typewriter, pop-bubble) and subpath
-// modules (letter-rise, word-fade, wipe, glyph-cycle).
+// that match the core built-ins (typewriter, pop-bubble, letter-rise,
+// word-fade) and the subpath modules (wipe, glyph-cycle).
 export {
   registerStreamAnimationPlugin,
   unregisterStreamAnimationPlugin,
@@ -442,8 +442,9 @@ export { createDropdownMenu } from "./utils/dropdown";
 export type { DropdownMenuItem, CreateDropdownOptions, DropdownMenuHandle } from "./utils/dropdown";
 
 // Icon utility exports
-export { renderLucideIcon } from "./utils/icons";
+export { renderLucideIcon, registerIcons } from "./utils/icons";
 export type { IconName } from "./utils/icons";
+export type { IconNode } from "lucide";
 
 // Button utility exports
 export { createIconButton, createLabelButton, createToggleGroup, createComboButton, createSplitButton } from "./utils/buttons";
@@ -593,12 +594,10 @@ export {
 } from "./components/feedback";
 export type { CSATFeedbackOptions, NPSFeedbackOptions } from "./components/feedback";
 
-// Voice module exports
-export {
-  createVoiceProvider,
-  createBestAvailableVoiceProvider,
-  isVoiceSupported
-} from "./voice";
+// Voice module TYPE exports. The factory VALUES (createVoiceProvider,
+// createBestAvailableVoiceProvider, isVoiceSupported) ship from `index.ts`
+// (npm) so the CDN global doesn't carry the provider runtime — the CDN path
+// reaches it lazily via the voice-runtime chunk inside session.setupVoice.
 export type {
   VoiceProvider,
   VoiceResult,
@@ -614,11 +613,14 @@ export type {
   SpeechCallbacks
 } from "./types";
 
+// Direct-file imports (NOT the ./voice barrel): the barrel re-exports the
+// provider factory + providers, which live in the lazy voice-runtime chunk
+// and must not be dragged back into the core bundles.
 export {
   BrowserSpeechEngine,
-  pickBestVoice,
-  ReadAloudController
-} from "./voice";
+  pickBestVoice
+} from "./voice/browser-speech-engine";
+export { ReadAloudController } from "./voice/read-aloud-controller";
 export type {
   BrowserSpeechEngineOptions,
   ReadAloudListener,
