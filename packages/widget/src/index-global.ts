@@ -323,6 +323,34 @@ setArtifactsUiLoader(() => {
 });
 
 // ---------------------------------------------------------------------------
+// Deferred forms-ui loading.
+//
+// This bundle is built with `@runtypelabs/persona/forms-ui` external (see
+// `tsup.global.config.ts`): the `[data-tv-form]` demo-forms enhancement is
+// kept out of the CDN payload and fetched when a rendered bubble first
+// contains a form placeholder. Same sibling-URL scheme as the chunks above.
+// ---------------------------------------------------------------------------
+
+import { setFormsUiLoader } from "./forms-ui-loader";
+
+setFormsUiLoader(() => {
+  const chunkUrl = widgetScriptSrc?.replace(
+    /index\.global\.js($|\?)/,
+    "forms-ui.js$1",
+  );
+  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+    return Promise.reject(
+      new Error(
+        "Could not derive the forms-ui.js URL from the widget script URL " +
+          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+          "rename index.global.js should host forms-ui.js alongside it.",
+      ),
+    );
+  }
+  return import(/* @vite-ignore */ chunkUrl);
+});
+
+// ---------------------------------------------------------------------------
 // Deferred extra-icons loading.
 //
 // This bundle is built with `@runtypelabs/persona/icons-extra` external (see

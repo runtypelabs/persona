@@ -24,7 +24,8 @@
       "@runtypelabs/persona/webmcp-runtime": ["src/webmcp-runtime.ts"],
       "@runtypelabs/persona/icons-extra": ["src/icons-extra.ts"],
       "@runtypelabs/persona/artifacts-ui": ["src/artifacts-ui.ts"],
-      "@runtypelabs/persona/voice-runtime": ["src/voice-runtime.ts"]
+      "@runtypelabs/persona/voice-runtime": ["src/voice-runtime.ts"],
+      "@runtypelabs/persona/forms-ui": ["src/forms-ui.ts"]
     },
     "declaration": true,
     "outDir": "dist"

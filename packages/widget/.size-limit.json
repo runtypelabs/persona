@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "163.25 kB",
+    "limit": "162 kB",
     "gzip": true
   },
   {
@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "174.5 kB",
+    "limit": "173.75 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "175.5 kB",
+    "limit": "174.75 kB",
     "gzip": true
   },
   {
@@ -141,6 +141,12 @@
     "name": "Lazy · voice provider runtime chunk (voice-runtime.js)",
     "path": "dist/voice-runtime.js",
     "limit": "4 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · demo-forms enhancement chunk (forms-ui.js)",
+    "path": "dist/forms-ui.js",
+    "limit": "1.5 kB",
     "gzip": true
   }
 ]

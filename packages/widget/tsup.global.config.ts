@@ -109,5 +109,10 @@ export default defineConfig({
     // `voice-runtime.js`, prefetched by the session when a voice provider is
     // configured.
     options.external.push("@runtypelabs/persona/voice-runtime");
+
+    // Keep the `[data-tv-form]` demo-forms enhancement out of the CDN payload.
+    // Same scheme: sibling-URL chunk `forms-ui.js`, fetched when a rendered
+    // bubble first contains a form placeholder.
+    options.external.push("@runtypelabs/persona/forms-ui");
   },
 });

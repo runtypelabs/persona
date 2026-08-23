@@ -210,7 +210,7 @@ import {
   readFlexGapPx,
   resolveArtifactPaneWidthPx,
 } from "./utils/artifact-resize";
-import { enhanceWithForms } from "./components/forms";
+import { loadFormsUi, getFormsUiSync } from "./forms-ui-loader";
 import { pluginRegistry } from "./plugins/registry";
 import { mergeWithDefaults, DEFAULT_FLOATING_LAUNCHER_WIDTH } from "./defaults";
 import { mergeConfigUpdate } from "./utils/config-merge";
@@ -854,6 +854,43 @@ export const createAgentExperience = (
         // retries via the loader's rejection-retry semantics.
       });
     return null;
+  };
+
+  // The `[data-tv-form]` placeholder enhancement lives in the lazy forms-ui
+  // chunk: nothing loads until a rendered bubble actually contains a
+  // placeholder. While the chunk is in flight the placeholder stays the bare
+  // div the postprocessor emitted; `onFormsUiReady` (assigned at the end of
+  // the factory) clears the cache and re-renders so the form appears — the
+  // same heal as approval-ui above.
+  let formsUiDisposed = false;
+  let formsUiReadyNotified = false;
+  let onFormsUiReady: (() => void) | null = null;
+  const enhanceWithFormsLazy = (
+    bubble: HTMLElement,
+    message: AgentWidgetMessage,
+    widgetConfig: AgentWidgetConfig,
+    widgetSession: AgentWidgetSession
+  ): void => {
+    if (!bubble.querySelector("[data-tv-form]")) return;
+    const sync = getFormsUiSync();
+    if (sync) {
+      sync.enhanceWithForms(bubble, message, widgetConfig, widgetSession);
+      return;
+    }
+    // No local in-flight flag: the chunk loader dedupes concurrent loads,
+    // caches success, and clears a rejection so the next render retries.
+    void loadFormsUi()
+      .then(() => {
+        // A resolution before the factory-end assignment needs no heal: the
+        // module is cached, so the next render enhances synchronously.
+        if (formsUiDisposed || formsUiReadyNotified || !onFormsUiReady) return;
+        formsUiReadyNotified = true;
+        onFormsUiReady();
+      })
+      .catch(() => {
+        // Failed fetch: the placeholder stays bare; a later render retries
+        // via the loader's rejection-retry semantics.
+      });
   };
 
   // Register components from config
@@ -3935,6 +3972,12 @@ export const createAgentExperience = (
     teardownBuiltInApprovals?.();
   });
 
+  // Guard the forms-ui heal the same way: a chunk resolution after destroy
+  // must not re-render into a detached transcript.
+  destroyCallbacks.push(() => {
+    formsUiDisposed = true;
+  });
+
   // `wipe` / `glyph-cycle` live in the lazy animations-extra chunk (CDN) or
   // the animations/* subpaths (npm). When config selects one that isn't
   // registered yet, kick the chunk load and activate on arrival: text streams
@@ -5626,7 +5669,7 @@ export const createAgentExperience = (
                 }
               );
               if (message.role !== "user") {
-                enhanceWithForms(b, message, config, session);
+                enhanceWithFormsLazy(b, message, config, session);
               }
               return b;
             },
@@ -5812,7 +5855,7 @@ export const createAgentExperience = (
             );
           }
           if (message.role !== "user" && bubble) {
-            enhanceWithForms(bubble, message, config, session);
+            enhanceWithFormsLazy(bubble, message, config, session);
           }
         }
       }
@@ -13686,6 +13729,17 @@ export const createAgentExperience = (
   // stubs; once it lands, rebuild them into real cards. Mirrors the markdown
   // heal above. (`approvalUiDisposed` guards a post-destroy resolution.)
   onApprovalUiReady = () => {
+    if (!session) return;
+    configVersion++;
+    messageCache.clear();
+    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+  };
+
+  // Form placeholders rendered while the forms-ui chunk was in flight are the
+  // bare divs the postprocessor emitted; once the chunk lands, rebuild them
+  // into real forms. Mirrors the markdown heal above. (`formsUiDisposed`
+  // guards a post-destroy resolution.)
+  onFormsUiReady = () => {
     if (!session) return;
     configVersion++;
     messageCache.clear();
