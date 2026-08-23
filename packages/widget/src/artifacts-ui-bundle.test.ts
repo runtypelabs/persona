@@ -75,4 +75,19 @@ describe("artifacts-ui bundle split", () => {
     expect(existsSync(dist("artifacts-ui.cjs"))).toBe(true);
     expect(existsSync(dist("artifacts-ui.d.ts"))).toBe(true);
   });
+
+  it.runIf(iifeBuilt)(
+    "ships a resolvable markdown-parsers-entry shim for bundlers",
+    () => {
+      // The dead `./markdown-parsers-entry` import above must RESOLVE for
+      // bundlers that follow the artifacts-ui subpath statically (webpack in a
+      // Next.js consumer fails the whole build otherwise). The shim re-exports
+      // the markdown-parsers chunk, built from the same source module (written
+      // by tsup.markdown-parsers.config.ts onSuccess).
+      expect(existsSync(dist("markdown-parsers-entry.js"))).toBe(true);
+      expect(readFileSync(dist("markdown-parsers-entry.js"), "utf8")).toContain(
+        './markdown-parsers.js'
+      );
+    }
+  );
 });
