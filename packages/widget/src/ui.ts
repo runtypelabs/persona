@@ -6231,11 +6231,32 @@ export const createAgentExperience = (
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic.
   // Re-apply read-aloud button state after each render so a playing/paused
   // message keeps its icon across idiomorph DOM morphs.
+  // Markdown parsers (marked + DOMPurify) live in a lazy sibling chunk. Warm
+  // them the first time the panel is actually visible OR the first time a
+  // non-empty transcript renders (restored history, intro/injected messages —
+  // content that would otherwise paint escaped while closed and flash at
+  // open), instead of at page load: visitors who never open the launcher and
+  // have no messages never fetch the ~21 kB chunk. Renders that still beat the
+  // chunk show escaped text and self-heal via onMarkdownParsersReady
+  // (subscriber at the end of the factory).
+  let markdownParsersWarmed = false;
+  const warmMarkdownParsers = () => {
+    if (markdownParsersWarmed) return;
+    markdownParsersWarmed = true;
+    loadMarkdownParsers().catch(() => {
+      // Failed fetch (ad blocker, offline): allow the next visibility change
+      // or render to retry; the chunk loader resets its cached promise on
+      // rejection.
+      markdownParsersWarmed = false;
+    });
+  };
+
   const renderMessagesWithPlugins = (
     container: HTMLElement,
     messages: AgentWidgetMessage[],
     transform: MessageTransform
   ) => {
+    if (messages.length > 0) warmMarkdownParsers();
     renderMessagesWithPluginsImpl(container, messages, transform);
     refreshReadAloudButtons();
   };
@@ -6661,22 +6682,6 @@ export const createAgentExperience = (
     s.top = expandedTopOffset;
     s.width = expandedMaxWidth;
     s.maxWidth = viewportClamp;
-  };
-
-  // Markdown parsers (marked + DOMPurify) live in a lazy sibling chunk. Warm
-  // them the first time the panel is actually visible instead of at page load:
-  // visitors who never open the launcher never fetch the ~21 kB chunk. Renders
-  // that beat the chunk show escaped text and self-heal via
-  // onMarkdownParsersReady (subscriber below).
-  let markdownParsersWarmed = false;
-  const warmMarkdownParsers = () => {
-    if (markdownParsersWarmed) return;
-    markdownParsersWarmed = true;
-    loadMarkdownParsers().catch(() => {
-      // Failed fetch (ad blocker, offline): allow the next visibility change
-      // to retry; the chunk loader resets its cached promise on rejection.
-      markdownParsersWarmed = false;
-    });
   };
 
   const updateOpenState = () => {
@@ -10158,6 +10163,9 @@ export const createAgentExperience = (
           } finally {
             suppressScrollSend = false;
           }
+          // Restored markdown exists before the first open: warm the parsers
+          // now so opening paints markdown instead of flashing escaped text.
+          warmMarkdownParsers();
         }
         if (state.artifacts?.length) {
           session.hydrateArtifacts(
@@ -13734,6 +13742,13 @@ export const createAgentExperience = (
     messageCache.clear();
     renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
   };
+
+  // Synchronously restored/seeded transcripts (sync storage adapter,
+  // initialMessages, onStateLoaded) exist before any render or open — a
+  // floating launcher starts closed. Warm the parsers now so the first open
+  // paints markdown instead of flashing escaped text. The async-adapter path
+  // warms in its hydration `.then` above; fresh empty sessions fetch nothing.
+  if (session.getMessages().length > 0) warmMarkdownParsers();
 
   // Form placeholders rendered while the forms-ui chunk was in flight are the
   // bare divs the postprocessor emitted; once the chunk lands, rebuild them

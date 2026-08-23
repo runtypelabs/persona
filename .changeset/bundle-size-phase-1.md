@@ -16,7 +16,7 @@ Lazy sibling chunks (fetched on demand from next to `index.global.js`):
 - `forms-ui.js` — the `[data-tv-form]` demo-forms enhancement, fetched when a rendered bubble first contains a form placeholder. While the chunk is in flight the placeholder stays the bare div the postprocessor emitted, then heals into the real form when it lands.
 - The event-stream capture runtime (buffer, IndexedDB store, throughput tracker) rides the existing `event-stream-view.js` chunk, and the icon registry is no longer duplicated into the event-stream and context-mentions chunks.
 
-Markdown parsers now warm on first panel visibility instead of at script evaluation (renders that beat the chunk self-heal), and statically-known icons throughout the widget use tree-shaken per-icon lucide data imports.
+Markdown parsers now warm on first panel visibility instead of at script evaluation (renders that beat the chunk self-heal). Sessions that start with restored or seeded messages — the one case where pre-open content could flash escaped text at first open — warm the chunk at init instead, so only fresh visitors who never open the launcher skip the fetch. Statically-known icons throughout the widget use tree-shaken per-icon lucide data imports.
 
 CDN-global-only surface narrowing (following the existing dev-helpers precedent; npm exports unchanged): `window.AgentWidget` no longer exposes the mention-source helpers (`createStaticMentionSource`, `createSlashCommandsSource`, `defaultMentionFilter`), the `WebMcpBridge` class, or the voice factory values (`createVoiceProvider`, `createBestAvailableVoiceProvider`, `isVoiceSupported`) — script-tag integrations configure these features via config; no shipped demo used them via the global.
 
