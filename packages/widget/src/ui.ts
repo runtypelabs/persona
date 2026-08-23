@@ -8022,6 +8022,8 @@ export const createAgentExperience = (
   let railShell: HTMLElement | null = null;
   let railHost: HTMLElement | null = null;
   let railColumn: HTMLElement | null = null;
+  /** Stand-in element holding the docked column while the chunk loads. */
+  let railPlaceholder: HTMLElement | null = null;
   /** Container order the rail borrows from and hands back, header first. */
   const railBorrowed = (): Array<HTMLElement | null> => [
     header,
@@ -8354,6 +8356,8 @@ export const createAgentExperience = (
 
   let railTriggerButton: HTMLButtonElement | null = null;
   let railTriggerWrapper: HTMLElement | null = null;
+  /** Docking opens awaiting the history chunk; the trigger hides for them. */
+  let railPinPendingOpens = 0;
   let railOverlayHost: HTMLElement | null = null;
   let railGraceTimer: ReturnType<typeof setTimeout> | null = null;
   /** Pointer is over the trigger or over the floating rail. */
@@ -8585,7 +8589,8 @@ export const createAgentExperience = (
     // Leading edge of the conversation header, mirrored for a right rail.
     const lead = railSide() !== "right" ? header.firstChild : null;
     if ((lead ?? header.lastChild) !== wrapper) header.insertBefore(wrapper, lead);
-    wrapper.style.display = railPinned() ? "none" : "";
+    wrapper.style.display =
+      railPinned() || railPinPendingOpens > 0 ? "none" : "";
     button.setAttribute("aria-label", historyShellCopy.expandLabel);
     button.setAttribute("aria-expanded", historyVisible ? "true" : "false");
     // The floating rail hangs from this control, so a rebuild or a resize that
@@ -8778,6 +8783,14 @@ export const createAgentExperience = (
    * next to the host, and the shell takes the header's old container slot.
    */
   const mountRailHost = (element: HTMLElement): void => {
+    // A pending docking open already built the shell around a placeholder;
+    // the arriving view takes its slot with no reflow around it.
+    if (railPlaceholder && railHost) {
+      railPlaceholder.replaceWith(element);
+      railPlaceholder = null;
+      applyRailChrome();
+      return;
+    }
     const shell = createElement("div", "persona-history-rail-shell");
     shell.style.cssText = "display:flex;flex-direction:row;flex:1 1 auto;min-height:0";
     const column = createElement("div", "persona-history-rail-conversation");
@@ -8800,6 +8813,31 @@ export const createAgentExperience = (
     railHost = host;
     railColumn = column;
     applyRailChrome();
+  };
+
+  /**
+   * Space reservation for a docking open that still awaits the chunk: the full
+   * rail shell mounts around an empty stand-in at the final width, so the
+   * conversation and its header paint at their docked geometry from the first
+   * frame instead of being pushed over when the view lands.
+   */
+  const mountRailPlaceholder = (): void => {
+    if (railShell) return;
+    const placeholder = createElement(
+      "div",
+      "persona-history-rail-placeholder"
+    );
+    placeholder.style.cssText = "flex:1 1 auto;min-height:0";
+    railPlaceholder = placeholder;
+    mountRailHost(placeholder);
+    repinAnchoredMessage();
+  };
+
+  /** Hands the reserved column back (failed or re-presented open). */
+  const clearRailPlaceholder = (): void => {
+    if (!railPlaceholder) return;
+    unmountHistoryHosts();
+    repinAnchoredMessage();
   };
 
   /**
@@ -8853,6 +8891,7 @@ export const createAgentExperience = (
       railShell = null;
       railHost = null;
       railColumn = null;
+      railPlaceholder = null;
     }
   };
 
@@ -8869,6 +8908,11 @@ export const createAgentExperience = (
   /** The chunk owns its own classes/labels; the shell only picks the host. */
   const mountHistoryElement = (element: HTMLElement): void => {
     prepareHistoryElement(element);
+    // The open that reserved the column can resolve to another host (a width
+    // change mid-load re-presents as panel); the stand-in must not outlive it.
+    if (historyPresentation !== "rail" || railOverlayOpen) {
+      clearRailPlaceholder();
+    }
     if (historyPresentation !== "rail") mountPanelHost(element);
     else if (railOverlayOpen) mountRailOverlayHost(element);
     else mountRailHost(element);
@@ -8971,14 +9015,34 @@ export const createAgentExperience = (
     historyReturnSurface = opts?.returnSurface ?? "conversation";
     historyInvoker = opts?.invoker ?? historyButton;
 
+    // An open that will dock the rail takes its final geometry for the chunk
+    // load: the trigger hides (painted, the glyph flashes at the header's
+    // leading edge and then jumps to the mounted rail's own toggle) and the
+    // column is reserved (unreserved, the conversation header paints at the
+    // widget edge and is pushed over when the rail lands).
+    const pinPending = railTriggerApplies() && !railOverlayOpen;
+    if (pinPending) {
+      railPinPendingOpens += 1;
+      syncRailOverlayTrigger();
+      mountRailPlaceholder();
+    }
     let module: Awaited<ReturnType<typeof loadHistoryView>>;
     try {
       module = await loadHistoryView();
     } catch {
       // Lazy-chunk failure keeps the invoking surface interactive and retryable.
       announceHistory(historyShellCopy.openHistoryLabel);
+      if (pinPending) {
+        railPinPendingOpens -= 1;
+        // A superseded open leaves the shared chrome to its successor.
+        if (token === historyOpenToken) {
+          clearRailPlaceholder();
+          syncRailOverlayTrigger();
+        }
+      }
       return;
     }
+    if (pinPending) railPinPendingOpens -= 1;
     if (token !== historyOpenToken || historyVisible) return;
 
     // One scope for the whole opened view; every operation reuses it.
