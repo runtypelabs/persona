@@ -1,25 +1,18 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/formatting";
-import { ChevronDown, ChevronUp } from "lucide";
-import { renderIconNode } from "../utils/icon-node";
 import { appendCharSpans } from "../utils/tool-loading-animation";
+import {
+  appendHeaderToggle,
+  applyExpansionDisplay,
+  createCollapsedPreviewSection,
+  createExpandableBubbleShell,
+  createExpandableHeader,
+  updateExpandableBubbleUI,
+} from "./expandable-bubble";
 
 // Expansion state per widget instance
 export const reasoningExpansionState = new Set<string>();
-
-const appendRenderedValue = (
-  container: HTMLElement,
-  value: HTMLElement | string | null | undefined
-): boolean => {
-  if (value == null) return false;
-  if (typeof value === "string") {
-    container.textContent = value;
-    return true;
-  }
-  container.appendChild(value);
-  return true;
-};
 
 const getReasoningPreviewText = (message: AgentWidgetMessage, maxLines: number): string => {
   const text = message.reasoning?.chunks.join("").trim() ?? "";
@@ -34,59 +27,16 @@ const getReasoningPreviewText = (message: AgentWidgetMessage, maxLines: number):
 
 // Helper function to update reasoning bubble UI after expansion state changes
 export const updateReasoningBubbleUI = (messageId: string, bubble: HTMLElement): void => {
-  const expanded = reasoningExpansionState.has(messageId);
-  const header = bubble.querySelector('button[data-expand-header="true"]') as HTMLElement;
-  const content = bubble.querySelector('.persona-border-t') as HTMLElement;
-  const preview = bubble.querySelector('[data-persona-collapsed-preview="reasoning"]') as HTMLElement | null;
-  
-  if (!header || !content) return;
-  
-  header.setAttribute("aria-expanded", expanded ? "true" : "false");
-  
-  // Find toggle icon container - it's the direct child div of headerMeta (which has persona-ml-auto)
-  const headerMeta = header.querySelector('.persona-ml-auto') as HTMLElement;
-  const toggleIcon = headerMeta?.querySelector(':scope > .persona-flex.persona-items-center') as HTMLElement;
-  if (toggleIcon) {
-    toggleIcon.innerHTML = "";
-    const iconColor = "currentColor";
-    const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
-    if (chevronIcon) {
-      toggleIcon.appendChild(chevronIcon);
-    } else {
-      toggleIcon.textContent = expanded ? "Hide" : "Show";
-    }
-  }
-  
-  content.style.display = expanded ? "" : "none";
-  if (preview) {
-    preview.style.display = expanded
-      ? "none"
-      : ((preview.textContent || preview.childNodes.length) ? "" : "none");
-  }
+  updateExpandableBubbleUI(messageId, bubble, {
+    stateSet: reasoningExpansionState,
+    previewKind: "reasoning",
+    iconColor: "currentColor",
+  });
 };
 
 export const createReasoningBubble = (message: AgentWidgetMessage, config?: AgentWidgetConfig): HTMLElement => {
   const reasoning = message.reasoning;
-  const bubble = createElement(
-    "div",
-    [
-      "persona-message-bubble",
-      "persona-reasoning-bubble",
-      "persona-w-full",
-      "persona-rounded-2xl",
-      "persona-bg-persona-surface",
-      "persona-border",
-      "persona-border-persona-message-border",
-      "persona-text-persona-primary",
-      "persona-shadow-sm",
-      "persona-overflow-hidden",
-      "persona-px-0",
-      "persona-py-0"
-    ].join(" ")
-  );
-  // Set id for idiomorph matching
-  bubble.id = `bubble-${message.id}`;
-  bubble.setAttribute("data-message-id", message.id);
+  const bubble = createExpandableBubbleShell("persona-reasoning-bubble", message.id);
 
   if (!reasoning) {
     return bubble;
@@ -94,21 +44,10 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
 
   const reasoningDisplayConfig = config?.features?.reasoningDisplay ?? {};
   const expandable = reasoningDisplayConfig.expandable !== false;
-  let expanded = expandable && reasoningExpansionState.has(message.id);
+  const expanded = expandable && reasoningExpansionState.has(message.id);
   const isActive = reasoning.status !== "complete";
   const previewText = getReasoningPreviewText(message, reasoningDisplayConfig.previewMaxLines ?? 3);
-  const header = createElement(
-    "button",
-    expandable
-      ? "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
-      : "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-default persona-border-none"
-  ) as HTMLButtonElement;
-  header.type = "button";
-  if (expandable) {
-    header.setAttribute("aria-expanded", expanded ? "true" : "false");
-    header.setAttribute("data-expand-header", "true");
-  }
-  header.setAttribute("data-bubble-type", "reasoning");
+  const header = createExpandableHeader({ expandable, expanded, bubbleType: "reasoning" });
 
   const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
   const title = createElement("span", "persona-text-xs persona-text-persona-primary");
@@ -262,49 +201,31 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
     }
   }
 
-  let toggleIcon: HTMLElement | null = null;
-  if (expandable) {
-    toggleIcon = createElement("div", "persona-flex persona-items-center");
-    const iconColor = "currentColor";
-    const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
-    if (chevronIcon) {
-      toggleIcon.appendChild(chevronIcon);
-    } else {
-      toggleIcon.textContent = expanded ? "Hide" : "Show";
-    }
+  const iconColor = "currentColor";
+  const toggleIcon = appendHeaderToggle(header, headerContent, {
+    expandable,
+    expanded,
+    iconColor,
+    metaGap: false,
+  });
 
-    const headerMeta = createElement("div", "persona-flex persona-items-center persona-ml-auto");
-    headerMeta.append(toggleIcon);
-    header.append(headerContent, headerMeta);
-  } else {
-    header.append(headerContent);
-  }
-
-  const collapsedPreview = createElement(
-    "div",
-    "persona-px-4 persona-py-3 persona-text-xs persona-leading-snug persona-text-persona-muted"
-  );
-  collapsedPreview.setAttribute("data-persona-collapsed-preview", "reasoning");
-  collapsedPreview.style.display = "none";
-  collapsedPreview.style.whiteSpace = "pre-wrap";
-
-  if (!expanded && isActive && reasoningDisplayConfig.activePreview && previewText) {
-    const renderedPreview = config?.reasoning?.renderCollapsedPreview?.({
-      message,
-      reasoning,
-      defaultPreview: previewText,
-      isActive,
-      config: config ?? {},
-    });
-    if (!appendRenderedValue(collapsedPreview, renderedPreview)) {
-      collapsedPreview.textContent = previewText;
-    }
-    collapsedPreview.style.display = "";
-  }
-
-  if (!expanded && isActive && reasoningDisplayConfig.activeMinHeight) {
-    bubble.style.minHeight = reasoningDisplayConfig.activeMinHeight;
-  }
+  const collapsedPreview = createCollapsedPreviewSection({
+    bubble,
+    previewKind: "reasoning",
+    expanded,
+    isActive,
+    previewText,
+    activePreview: reasoningDisplayConfig.activePreview,
+    activeMinHeight: reasoningDisplayConfig.activeMinHeight,
+    renderPreview: () =>
+      config?.reasoning?.renderCollapsedPreview?.({
+        message,
+        reasoning,
+        defaultPreview: previewText,
+        isActive,
+        config: config ?? {},
+      }),
+  });
 
   if (!expandable) {
     bubble.append(header, collapsedPreview);
@@ -329,26 +250,8 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
       : "Waiting for details…");
   content.appendChild(body);
 
-  const applyExpansionState = () => {
-    header.setAttribute("aria-expanded", expanded ? "true" : "false");
-    if (toggleIcon) {
-      toggleIcon.innerHTML = "";
-      const iconColor = "currentColor";
-      const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
-      if (chevronIcon) {
-        toggleIcon.appendChild(chevronIcon);
-      } else {
-        toggleIcon.textContent = expanded ? "Hide" : "Show";
-      }
-    }
-    content.style.display = expanded ? "" : "none";
-    collapsedPreview.style.display = expanded ? "none" : ((collapsedPreview.textContent || collapsedPreview.childNodes.length) ? "" : "none");
-  };
-
-  applyExpansionState();
+  applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor });
 
   bubble.append(header, collapsedPreview, content);
   return bubble;
 };
-
-

@@ -130,6 +130,7 @@ import {
   COMPOSER_BAR_CLOSE_ICON_SIZE,
 } from "./components/panel";
 import { buildPillComposer } from "./components/pill-composer-builder";
+import { createMicButton } from "./components/composer-parts";
 import { createWidgetView, resolveLauncher } from "./components/widget-view";
 import {
   animateWelcomeOut,
@@ -10690,99 +10691,6 @@ export const createAgentExperience = (
     }
   };
 
-  // Function to create mic button dynamically
-  const createMicButton = (voiceConfig: AgentWidgetConfig['voiceRecognition'], sendButtonConfig: AgentWidgetConfig['sendButton']): { micButton: HTMLButtonElement; micButtonWrapper: HTMLElement } | null => {
-    const hasSpeechRecognition =
-      typeof window !== 'undefined' &&
-      (typeof (window as any).webkitSpeechRecognition !== 'undefined' ||
-       typeof (window as any).SpeechRecognition !== 'undefined');
-    const hasRuntypeProvider = voiceConfig?.provider?.type === 'runtype';
-    // Bring-your-own (`custom`) providers own their own input pipeline (cloud
-    // STT, etc.), so the mic should render regardless of Web Speech support.
-    const hasCustomProvider = voiceConfig?.provider?.type === 'custom';
-    const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider || hasCustomProvider;
-
-    if (!hasVoiceInput) return null;
-
-    const micButtonWrapper = createElement("div", "persona-send-button-wrapper");
-    const micButton = createElement(
-      "button",
-      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer"
-    ) as HTMLButtonElement;
-    
-    micButton.type = "button";
-    const tooltipText = voiceConfig?.tooltipText ?? "Start voice recognition";
-    micButton.setAttribute("aria-label", tooltipText);
-    
-    const micIconName = voiceConfig?.iconName ?? "mic";
-    const buttonSize = sendButtonConfig?.size ?? "40px";
-    const micIconSize = voiceConfig?.iconSize ?? buttonSize;
-    const micIconSizeNum = parseFloat(micIconSize) || 24;
-    
-    // Use dedicated colors from voice recognition config, fallback to send button colors
-    const backgroundColor = voiceConfig?.backgroundColor ?? sendButtonConfig?.backgroundColor;
-    const iconColor = voiceConfig?.iconColor ?? sendButtonConfig?.textColor;
-    
-    micButton.style.width = micIconSize;
-    micButton.style.height = micIconSize;
-    micButton.style.minWidth = micIconSize;
-    micButton.style.minHeight = micIconSize;
-    micButton.style.fontSize = "18px";
-    micButton.style.lineHeight = "1";
-    
-    // Set mic button foreground from config or theme token
-    if (iconColor) {
-      micButton.style.color = iconColor;
-    } else {
-      micButton.style.color = "var(--persona-text, #111827)";
-    }
-
-    // Use Lucide mic icon (stroke width 1.5 for minimalist outline style)
-    const iconColorValue = iconColor || "currentColor";
-    const micIconSvg = renderLucideIcon(micIconName, micIconSizeNum, iconColorValue, 1.5);
-    if (micIconSvg) {
-      micButton.appendChild(micIconSvg);
-    } else {
-      micButton.textContent = "🎤";
-    }
-
-    // Apply background color
-    if (backgroundColor) {
-      micButton.style.backgroundColor = backgroundColor;
-    } else {
-      micButton.style.backgroundColor = "";
-    }
-    
-    // Apply border styling
-    if (voiceConfig?.borderWidth) {
-      micButton.style.borderWidth = voiceConfig.borderWidth;
-      micButton.style.borderStyle = "solid";
-    }
-    if (voiceConfig?.borderColor) {
-      micButton.style.borderColor = voiceConfig.borderColor;
-    }
-    
-    // Apply padding styling
-    if (voiceConfig?.paddingX) {
-      micButton.style.paddingLeft = voiceConfig.paddingX;
-      micButton.style.paddingRight = voiceConfig.paddingX;
-    }
-    if (voiceConfig?.paddingY) {
-      micButton.style.paddingTop = voiceConfig.paddingY;
-      micButton.style.paddingBottom = voiceConfig.paddingY;
-    }
-    
-    micButtonWrapper.appendChild(micButton);
-    const showTooltip = voiceConfig?.showTooltip ?? false;
-    attachTooltip({
-      anchor: micButton,
-      trigger: micButtonWrapper,
-      text: () => micButton.getAttribute("aria-label") ?? tooltipText,
-      enabled: showTooltip,
-    });
-    
-    return { micButton, micButtonWrapper };
-  };
 
   // --- Helpers to store/restore original mic button state ---
 
@@ -12474,11 +12382,11 @@ export const createAgentExperience = (
         // Create or update mic button
         if (!micButton || !micButtonWrapper) {
           // Create new mic button
-          const micButtonResult = createMicButton(config.voiceRecognition, config.sendButton);
+          const micButtonResult = createMicButton(config);
           if (micButtonResult) {
             // Update the mutable references
-            micButton = micButtonResult.micButton;
-            micButtonWrapper = micButtonResult.micButtonWrapper;
+            micButton = micButtonResult.button;
+            micButtonWrapper = micButtonResult.wrapper;
             
             // Insert into right actions before send button wrapper
             rightActions.insertBefore(micButtonWrapper, sendButtonWrapper);

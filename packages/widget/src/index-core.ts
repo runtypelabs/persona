@@ -481,14 +481,8 @@ export {
   THEME_ZONES
 } from "./utils/tokens";
 export type { ThemeZone } from "./utils/tokens";
-export {
-  accessibilityPlugin,
-  animationsPlugin,
-  brandPlugin,
-  reducedMotionPlugin,
-  highContrastPlugin,
-  createPlugin
-} from "./utils/plugins";
+// Theme-plugin factories live in index.ts (npm-only): no runtime path builds
+// them, so exporting here would ship all of utils/plugins.ts in the CDN IIFE.
 export type {
   DeepPartial,
   PersonaTheme,
