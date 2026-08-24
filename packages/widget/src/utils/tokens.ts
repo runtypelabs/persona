@@ -18,6 +18,13 @@ import {
 export const DEFAULT_PANEL_INSET = '16px';
 export const DEFAULT_PANEL_CANVAS_BACKGROUND = 'transparent';
 
+const spacing = (() => {
+  const s: Record<number, string> = {};
+  for (const k of [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 56, 64])
+    s[k] = k === 0 ? '0px' : `${k / 4}rem`;
+  return s as Record<0 | 1 | 2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 16 | 20 | 24 | 32 | 40 | 48 | 56 | 64, string>;
+})();
+
 export const DEFAULT_PALETTE = {
   colors: {
     primary: {
@@ -122,26 +129,7 @@ export const DEFAULT_PALETTE = {
       950: '#172554',
     },
   },
-  spacing: {
-    0: '0px',
-    1: '0.25rem',
-    2: '0.5rem',
-    3: '0.75rem',
-    4: '1rem',
-    5: '1.25rem',
-    6: '1.5rem',
-    8: '2rem',
-    10: '2.5rem',
-    12: '3rem',
-    16: '4rem',
-    20: '5rem',
-    24: '6rem',
-    32: '8rem',
-    40: '10rem',
-    48: '12rem',
-    56: '14rem',
-    64: '16rem',
-  },
+  spacing,
   typography: {
     fontFamily: {
       sans: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
@@ -731,6 +719,26 @@ export function createTheme(
 /** Coerce a unitless "0" to "0px" for vars consumed inside length calc()s. */
 const zeroLength = (value: string): string => (value.trim() === '0' ? '0px' : value);
 
+const V = '--persona-';
+
+/**
+ * Each row: [aliasSuffix, ...sources]. A source starting with '=' is a
+ * literal; anything else is a cssVars lookup by suffix. First defined wins;
+ * rows with no defined source emit nothing. Row order is significant.
+ */
+type AliasRow = [string, ...string[]];
+
+const emitAliases = (cssVars: Record<string, string>, rows: AliasRow[]): void => {
+  for (const [alias, ...sources] of rows) {
+    let value: string | undefined;
+    for (const s of sources) {
+      value = s.charCodeAt(0) === 61 /* '=' */ ? s.slice(1) : cssVars[V + s];
+      if (value !== undefined) break;
+    }
+    if (value !== undefined) cssVars[V + alias] = value;
+  }
+};
+
 export function themeToCssVariables(theme: PersonaTheme): Record<string, string> {
   const resolved = resolveTokens(theme);
   const cssVars: Record<string, string> = {};
@@ -740,59 +748,46 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars[`--persona-${varName}`] = token.value;
   }
 
-  cssVars['--persona-primary'] = cssVars['--persona-semantic-colors-primary'] ?? cssVars['--persona-palette-colors-primary-500'];
-  cssVars['--persona-secondary'] = cssVars['--persona-semantic-colors-secondary'] ?? cssVars['--persona-palette-colors-secondary-500'];
-  cssVars['--persona-accent'] = cssVars['--persona-semantic-colors-accent'] ?? cssVars['--persona-palette-colors-accent-500'];
-  cssVars['--persona-surface'] = cssVars['--persona-semantic-colors-surface'] ?? cssVars['--persona-palette-colors-gray-50'];
-  cssVars['--persona-background'] = cssVars['--persona-semantic-colors-background'] ?? cssVars['--persona-palette-colors-gray-50'];
-  cssVars['--persona-container'] = cssVars['--persona-semantic-colors-container'] ?? cssVars['--persona-palette-colors-gray-100'];
-  cssVars['--persona-text'] = cssVars['--persona-semantic-colors-text'] ?? cssVars['--persona-palette-colors-gray-900'];
-  cssVars['--persona-text-muted'] = cssVars['--persona-semantic-colors-text-muted'] ?? cssVars['--persona-palette-colors-gray-500'];
-  cssVars['--persona-text-inverse'] = cssVars['--persona-semantic-colors-text-inverse'] ?? cssVars['--persona-palette-colors-gray-50'];
-  cssVars['--persona-border'] = cssVars['--persona-semantic-colors-border'] ?? cssVars['--persona-palette-colors-gray-200'];
-  cssVars['--persona-divider'] = cssVars['--persona-semantic-colors-divider'] ?? cssVars['--persona-palette-colors-gray-200'];
-  cssVars['--persona-muted'] = cssVars['--persona-text-muted'];
-
-  cssVars['--persona-voice-recording-indicator'] = cssVars['--persona-components-voice-recording-indicator'] ?? cssVars['--persona-palette-colors-error-500'];
-  cssVars['--persona-voice-recording-bg'] = cssVars['--persona-components-voice-recording-background'] ?? cssVars['--persona-palette-colors-error-50'];
-  cssVars['--persona-voice-processing-icon'] = cssVars['--persona-components-voice-processing-icon'] ?? cssVars['--persona-palette-colors-primary-500'];
-  cssVars['--persona-voice-speaking-icon'] = cssVars['--persona-components-voice-speaking-icon'] ?? cssVars['--persona-palette-colors-success-500'];
-
-  cssVars['--persona-approval-bg'] = cssVars['--persona-components-approval-requested-background'] ?? cssVars['--persona-surface'];
-  cssVars['--persona-approval-border'] = cssVars['--persona-components-approval-requested-border'] ?? cssVars['--persona-border'];
-  cssVars['--persona-approval-text'] = cssVars['--persona-components-approval-requested-text'] ?? cssVars['--persona-palette-colors-gray-900'];
-  cssVars['--persona-approval-shadow'] = cssVars['--persona-components-approval-requested-shadow'] ?? '0 1px 2px 0 rgba(11, 11, 11, 0.06), 0 2px 8px 0 rgba(11, 11, 11, 0.04)';
-  cssVars['--persona-approval-approve-bg'] = cssVars['--persona-components-approval-approve-background'] ?? cssVars['--persona-button-primary-bg'];
-  cssVars['--persona-approval-deny-bg'] = cssVars['--persona-components-approval-deny-background'] ?? cssVars['--persona-container'];
-
-  cssVars['--persona-attachment-image-bg'] = cssVars['--persona-components-attachment-image-background'] ?? cssVars['--persona-palette-colors-gray-100'];
-  cssVars['--persona-attachment-image-border'] = cssVars['--persona-components-attachment-image-border'] ?? cssVars['--persona-palette-colors-gray-200'];
-
-  // Typography shorthand aliases
-  cssVars['--persona-font-family'] = cssVars['--persona-semantic-typography-fontFamily'] ?? cssVars['--persona-palette-typography-fontFamily-sans'];
-  cssVars['--persona-font-size'] = cssVars['--persona-semantic-typography-fontSize'] ?? cssVars['--persona-palette-typography-fontSize-base'];
-  cssVars['--persona-font-weight'] = cssVars['--persona-semantic-typography-fontWeight'] ?? cssVars['--persona-palette-typography-fontWeight-normal'];
-  cssVars['--persona-line-height'] = cssVars['--persona-semantic-typography-lineHeight'] ?? cssVars['--persona-palette-typography-lineHeight-normal'];
-
-  cssVars['--persona-input-font-family'] = cssVars['--persona-font-family'];
-  cssVars['--persona-input-font-weight'] = cssVars['--persona-font-weight'];
-
-  // Radius aliases used throughout the existing widget CSS.
-  cssVars['--persona-radius-sm'] = cssVars['--persona-palette-radius-sm'] ?? '0.125rem';
-  cssVars['--persona-radius-md'] = cssVars['--persona-palette-radius-md'] ?? '0.375rem';
-  cssVars['--persona-radius-lg'] = cssVars['--persona-palette-radius-lg'] ?? '0.5rem';
-  cssVars['--persona-radius-xl'] = cssVars['--persona-palette-radius-xl'] ?? '0.75rem';
-  cssVars['--persona-radius-full'] = cssVars['--persona-palette-radius-full'] ?? '9999px';
-  cssVars['--persona-launcher-radius'] =
-    cssVars['--persona-components-launcher-borderRadius'] ??
-    cssVars['--persona-palette-radius-full'] ??
-    '9999px';
-  cssVars['--persona-launcher-bg'] =
-    cssVars['--persona-components-launcher-background'] ??
-    cssVars['--persona-surface'];
-  cssVars['--persona-launcher-fg'] =
-    cssVars['--persona-components-launcher-foreground'] ??
-    cssVars['--persona-primary'];
+  emitAliases(cssVars, [
+    ['primary', 'semantic-colors-primary', 'palette-colors-primary-500'],
+    ['secondary', 'semantic-colors-secondary', 'palette-colors-secondary-500'],
+    ['accent', 'semantic-colors-accent', 'palette-colors-accent-500'],
+    ['surface', 'semantic-colors-surface', 'palette-colors-gray-50'],
+    ['background', 'semantic-colors-background', 'palette-colors-gray-50'],
+    ['container', 'semantic-colors-container', 'palette-colors-gray-100'],
+    ['text', 'semantic-colors-text', 'palette-colors-gray-900'],
+    ['text-muted', 'semantic-colors-text-muted', 'palette-colors-gray-500'],
+    ['text-inverse', 'semantic-colors-text-inverse', 'palette-colors-gray-50'],
+    ['border', 'semantic-colors-border', 'palette-colors-gray-200'],
+    ['divider', 'semantic-colors-divider', 'palette-colors-gray-200'],
+    ['muted', 'text-muted'],
+    ['voice-recording-indicator', 'components-voice-recording-indicator', 'palette-colors-error-500'],
+    ['voice-recording-bg', 'components-voice-recording-background', 'palette-colors-error-50'],
+    ['voice-processing-icon', 'components-voice-processing-icon', 'palette-colors-primary-500'],
+    ['voice-speaking-icon', 'components-voice-speaking-icon', 'palette-colors-success-500'],
+    ['approval-bg', 'components-approval-requested-background', 'surface'],
+    ['approval-border', 'components-approval-requested-border', 'border'],
+    ['approval-text', 'components-approval-requested-text', 'palette-colors-gray-900'],
+    ['approval-shadow', 'components-approval-requested-shadow', '=0 1px 2px 0 rgba(11, 11, 11, 0.06), 0 2px 8px 0 rgba(11, 11, 11, 0.04)'],
+    ['approval-approve-bg', 'components-approval-approve-background', 'button-primary-bg'],
+    ['approval-deny-bg', 'components-approval-deny-background', 'container'],
+    ['attachment-image-bg', 'components-attachment-image-background', 'palette-colors-gray-100'],
+    ['attachment-image-border', 'components-attachment-image-border', 'palette-colors-gray-200'],
+    ['font-family', 'semantic-typography-fontFamily', 'palette-typography-fontFamily-sans'],
+    ['font-size', 'semantic-typography-fontSize', 'palette-typography-fontSize-base'],
+    ['font-weight', 'semantic-typography-fontWeight', 'palette-typography-fontWeight-normal'],
+    ['line-height', 'semantic-typography-lineHeight', 'palette-typography-lineHeight-normal'],
+    ['input-font-family', 'font-family'],
+    ['input-font-weight', 'font-weight'],
+    ['radius-sm', 'palette-radius-sm', '=0.125rem'],
+    ['radius-md', 'palette-radius-md', '=0.375rem'],
+    ['radius-lg', 'palette-radius-lg', '=0.5rem'],
+    ['radius-xl', 'palette-radius-xl', '=0.75rem'],
+    ['radius-full', 'palette-radius-full', '=9999px'],
+    ['launcher-radius', 'components-launcher-borderRadius', 'palette-radius-full', '=9999px'],
+    ['launcher-bg', 'components-launcher-background', 'surface'],
+    ['launcher-fg', 'components-launcher-foreground', 'primary'],
+  ]);
   // Subtitle keeps the shared muted tone while the foreground is stock (it
   // resolves to primary); a custom foreground washes to 70% so both pill
   // text lines recolor together. Compared by resolved value, not key
@@ -803,68 +798,49 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     launcherFg && launcherFg !== cssVars['--persona-primary']
       ? `color-mix(in srgb, ${launcherFg} 70%, transparent)`
       : cssVars['--persona-muted'];
-  cssVars['--persona-launcher-border'] =
-    cssVars['--persona-components-launcher-border'] ??
-    cssVars['--persona-border'];
-  cssVars['--persona-button-primary-bg'] =
-    cssVars['--persona-components-button-primary-background'] ??
-    cssVars['--persona-primary'];
-  cssVars['--persona-button-primary-fg'] =
-    cssVars['--persona-components-button-primary-foreground'] ??
-    cssVars['--persona-text-inverse'];
-  cssVars['--persona-button-radius'] =
-    cssVars['--persona-components-button-primary-borderRadius'] ??
-    cssVars['--persona-palette-radius-full'] ??
-    '9999px';
+
+  emitAliases(cssVars, [
+    ['launcher-border', 'components-launcher-border', 'border'],
+    ['button-primary-bg', 'components-button-primary-background', 'primary'],
+    ['button-primary-fg', 'components-button-primary-foreground', 'text-inverse'],
+    ['button-radius', 'components-button-primary-borderRadius', 'palette-radius-full', '=9999px'],
+  ]);
+
   // Ghost variant: transparent, neutral-foreground icon buttons (the composer's
   // attachment + mention affordances). Wired to `components.button.ghost.*`.
-  cssVars['--persona-button-ghost-bg'] =
-    cssVars['--persona-components-button-ghost-background'] ??
-    'transparent';
-  cssVars['--persona-button-ghost-fg'] =
-    cssVars['--persona-components-button-ghost-foreground'] ??
-    cssVars['--persona-text'];
-  cssVars['--persona-button-ghost-radius'] =
-    cssVars['--persona-components-button-ghost-borderRadius'] ??
-    cssVars['--persona-radius-md'] ??
-    '0.375rem';
-  cssVars['--persona-button-ghost-hover-bg'] =
-    cssVars['--persona-components-button-ghost-hoverBackground'] ??
-    'rgba(0, 0, 0, 0.05)';
-  cssVars['--persona-panel-radius'] =
-    cssVars['--persona-components-panel-borderRadius'] ??
-    cssVars['--persona-radius-xl'] ??
-    '0.75rem';
+  emitAliases(cssVars, [
+    ['button-ghost-bg', 'components-button-ghost-background', '=transparent'],
+    ['button-ghost-fg', 'components-button-ghost-foreground', 'text'],
+    ['button-ghost-radius', 'components-button-ghost-borderRadius', 'radius-md', '=0.375rem'],
+    ['button-ghost-hover-bg', 'components-button-ghost-hoverBackground', '=rgba(0, 0, 0, 0.05)'],
+    ['panel-radius', 'components-panel-borderRadius', 'radius-xl', '=0.75rem'],
+  ]);
+
   cssVars['--persona-panel-border'] =
     cssVars['--persona-components-panel-border'] ?? `1px solid ${cssVars['--persona-border']}`;
-  cssVars['--persona-panel-shadow'] =
-    cssVars['--persona-components-panel-shadow'] ??
-    cssVars['--persona-palette-shadows-xl'] ??
-    '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
+
+  emitAliases(cssVars, [
+    ['panel-shadow', 'components-panel-shadow', 'palette-shadows-xl', '=0 25px 50px -12px rgba(0, 0, 0, 0.25)'],
+  ]);
+
   cssVars['--persona-panel-inset'] =
     cssVars['--persona-components-panel-inset'] ?? DEFAULT_PANEL_INSET;
   cssVars['--persona-panel-canvas-bg'] =
     cssVars['--persona-components-panel-canvasBackground'] ?? DEFAULT_PANEL_CANVAS_BACKGROUND;
-  cssVars['--persona-launcher-shadow'] =
-    cssVars['--persona-components-launcher-shadow'] ??
-    '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)';
-  cssVars['--persona-input-radius'] =
-    cssVars['--persona-components-input-borderRadius'] ??
-    cssVars['--persona-radius-lg'] ??
-    '0.5rem';
-  cssVars['--persona-message-user-radius'] =
-    cssVars['--persona-components-message-user-borderRadius'] ??
-    cssVars['--persona-radius-lg'] ??
-    '0.5rem';
-  cssVars['--persona-message-assistant-radius'] =
-    cssVars['--persona-components-message-assistant-borderRadius'] ??
-    cssVars['--persona-radius-lg'] ??
-    '0.5rem';
+
+  emitAliases(cssVars, [
+    ['launcher-shadow', 'components-launcher-shadow', '=0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)'],
+    ['input-radius', 'components-input-borderRadius', 'radius-lg', '=0.5rem'],
+    ['message-user-radius', 'components-message-user-borderRadius', 'radius-lg', '=0.5rem'],
+    ['message-assistant-radius', 'components-message-assistant-borderRadius', 'radius-lg', '=0.5rem'],
+  ]);
 
   // Component-level color overrides: these map component tokens to
   // dedicated CSS variables that the widget CSS reads for individual elements.
-  cssVars['--persona-header-bg'] =
-    cssVars['--persona-components-header-background'] ?? cssVars['--persona-surface'];
+  emitAliases(cssVars, [
+    ['header-bg', 'components-header-background', 'surface'],
+  ]);
+
   // The background/foreground pair anchors every other header color: unset
   // text and border keys mix the two rather than falling back to page chrome.
   const headerBg = cssVars['--persona-header-bg'];
@@ -874,10 +850,12 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-header-border'] ??
     (headerFg ? `color-mix(in srgb, ${headerFg} 14%, ${headerBg})` : undefined) ??
     cssVars['--persona-divider'];
-  cssVars['--persona-header-icon-bg'] =
-    cssVars['--persona-components-header-iconBackground'] ?? cssVars['--persona-primary'];
-  cssVars['--persona-header-icon-fg'] =
-    cssVars['--persona-components-header-iconForeground'] ?? cssVars['--persona-text-inverse'];
+
+  emitAliases(cssVars, [
+    ['header-icon-bg', 'components-header-iconBackground', 'primary'],
+    ['header-icon-fg', 'components-header-iconForeground', 'text-inverse'],
+  ]);
+
   // `title.color` / `subtitle.color` supersede the legacy *Foreground tokens.
   cssVars['--persona-header-title-fg'] =
     cssVars['--persona-components-header-title-color'] ??
@@ -893,15 +871,16 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-header-actionIconForeground'] ??
     headerMutedFg ??
     cssVars['--persona-muted'];
+
   // Unified header control box. Every header icon button reads these two from
   // the stylesheet; per-control config keys stay inline and win. The third
   // control token, `header.controlStrokeWidth`, needs no alias: widget.css
   // reads its auto-emitted `--persona-components-header-controlStrokeWidth`
   // directly and carries the 1.5 default in the var() fallback.
-  cssVars['--persona-header-control-size'] =
-    cssVars['--persona-components-header-controlSize'] ?? '32px';
-  cssVars['--persona-header-control-icon-size'] =
-    cssVars['--persona-components-header-controlIconSize'] ?? '20px';
+  emitAliases(cssVars, [
+    ['header-control-size', 'components-header-controlSize', '=32px'],
+    ['header-control-icon-size', 'components-header-controlIconSize', '=20px'],
+  ]);
 
   const headerTokens = theme.components?.header;
   if (headerTokens?.shadow) cssVars['--persona-header-shadow'] = headerTokens.shadow;
@@ -1014,10 +993,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // The full-path `--persona-components-introCard-*` variables auto-emit above.
   // Default is flat (transparent, no shadow): the greeting renders as plain
   // text on the transcript background; set introCard tokens for a card look.
-  cssVars['--persona-intro-card-bg'] =
-    cssVars['--persona-components-introCard-background'] ?? 'transparent';
-  cssVars['--persona-intro-card-radius'] =
-    cssVars['--persona-components-introCard-borderRadius'] ?? '1rem';
+  emitAliases(cssVars, [
+    ['intro-card-bg', 'components-introCard-background', '=transparent'],
+    ['intro-card-radius', 'components-introCard-borderRadius', '=1rem'],
+  ]);
+
   // Flat cards (transparent background, no shadow) drop the horizontal
   // component of the stock padding so the welcome text shares the content
   // column's left edge instead of carrying an invisible card inset. Compared
@@ -1033,105 +1013,48 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     cssVars['--persona-components-introCard-padding'] ?? '1.5rem';
   cssVars['--persona-intro-card-padding'] =
     introCardFlat && introPadding === '1.5rem' ? '1.5rem 0' : introPadding;
-  cssVars['--persona-intro-card-shadow'] =
-    cssVars['--persona-components-introCard-shadow'] ?? 'none';
-  cssVars['--persona-intro-card-border'] =
-    cssVars['--persona-components-introCard-border'] ?? 'none';
 
-  cssVars['--persona-input-background'] =
-    cssVars['--persona-components-input-background'] ?? cssVars['--persona-surface'];
-  cssVars['--persona-input-placeholder'] =
-    cssVars['--persona-components-input-placeholder'] ?? cssVars['--persona-text-muted'];
+  emitAliases(cssVars, [
+    ['intro-card-shadow', 'components-introCard-shadow', '=none'],
+    ['intro-card-border', 'components-introCard-border', '=none'],
+    ['input-background', 'components-input-background', 'surface'],
+    ['input-placeholder', 'components-input-placeholder', 'text-muted'],
+    ['message-user-bg', 'components-message-user-background', 'accent'],
+    ['message-user-text', 'components-message-user-text', 'text-inverse'],
+    ['message-user-shadow', 'components-message-user-shadow', '=0 5px 15px rgba(15, 23, 42, 0.08)'],
+    ['message-assistant-bg', 'components-message-assistant-background', 'surface'],
+    ['message-assistant-text', 'components-message-assistant-text', 'text'],
+    ['message-assistant-border', 'components-message-assistant-border', 'border'],
+    ['message-assistant-shadow', 'components-message-assistant-shadow', '=0 1px 2px 0 rgb(0 0 0 / 0.05)'],
+    ['scroll-to-bottom-bg', 'components-scrollToBottom-background', 'button-primary-bg', 'accent'],
+    ['scroll-to-bottom-fg', 'components-scrollToBottom-foreground', 'button-primary-fg', 'text-inverse'],
+    ['scroll-to-bottom-border', 'components-scrollToBottom-border', 'primary'],
+    ['scroll-to-bottom-size', 'components-scrollToBottom-size', '=40px'],
+    ['scroll-to-bottom-radius', 'components-scrollToBottom-borderRadius', 'button-radius', 'radius-full', '=9999px'],
+    ['scroll-to-bottom-shadow', 'components-scrollToBottom-shadow', 'palette-shadows-sm', '=0 1px 2px 0 rgb(0 0 0 / 0.05)'],
+    ['scroll-to-bottom-padding', 'components-scrollToBottom-padding', '=0.5rem 0.875rem'],
+    ['scroll-to-bottom-gap', 'components-scrollToBottom-gap', '=0.5rem'],
+    ['scroll-to-bottom-font-size', 'components-scrollToBottom-fontSize', 'palette-typography-fontSize-sm', '=0.875rem'],
+    ['scroll-to-bottom-icon-size', 'components-scrollToBottom-iconSize', '=14px'],
+    ['tool-bubble-shadow', 'components-toolBubble-shadow', '=0 5px 15px rgba(15, 23, 42, 0.08)'],
+    ['reasoning-bubble-shadow', 'components-reasoningBubble-shadow', '=0 5px 15px rgba(15, 23, 42, 0.08)'],
+    ['composer-shadow', 'components-composer-shadow', '=none'],
+  ]);
 
-  cssVars['--persona-message-user-bg'] =
-    cssVars['--persona-components-message-user-background'] ?? cssVars['--persona-accent'];
-  cssVars['--persona-message-user-text'] =
-    cssVars['--persona-components-message-user-text'] ?? cssVars['--persona-text-inverse'];
-  cssVars['--persona-message-user-shadow'] =
-    cssVars['--persona-components-message-user-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
-  cssVars['--persona-message-assistant-bg'] =
-    cssVars['--persona-components-message-assistant-background'] ?? cssVars['--persona-surface'];
-  cssVars['--persona-message-assistant-text'] =
-    cssVars['--persona-components-message-assistant-text'] ?? cssVars['--persona-text'];
-  cssVars['--persona-message-assistant-border'] =
-    cssVars['--persona-components-message-assistant-border'] ?? cssVars['--persona-border'];
-  cssVars['--persona-message-assistant-shadow'] =
-    cssVars['--persona-components-message-assistant-shadow'] ?? '0 1px 2px 0 rgb(0 0 0 / 0.05)';
-  cssVars['--persona-scroll-to-bottom-bg'] =
-    cssVars['--persona-components-scrollToBottom-background'] ??
-    cssVars['--persona-button-primary-bg'] ??
-    cssVars['--persona-accent'];
-  cssVars['--persona-scroll-to-bottom-fg'] =
-    cssVars['--persona-components-scrollToBottom-foreground'] ??
-    cssVars['--persona-button-primary-fg'] ??
-    cssVars['--persona-text-inverse'];
-  cssVars['--persona-scroll-to-bottom-border'] =
-    cssVars['--persona-components-scrollToBottom-border'] ??
-    cssVars['--persona-primary'];
-  cssVars['--persona-scroll-to-bottom-size'] =
-    cssVars['--persona-components-scrollToBottom-size'] ??
-    '40px';
-  cssVars['--persona-scroll-to-bottom-radius'] =
-    cssVars['--persona-components-scrollToBottom-borderRadius'] ??
-    cssVars['--persona-button-radius'] ??
-    cssVars['--persona-radius-full'] ??
-    '9999px';
-  cssVars['--persona-scroll-to-bottom-shadow'] =
-    cssVars['--persona-components-scrollToBottom-shadow'] ??
-    cssVars['--persona-palette-shadows-sm'] ??
-    '0 1px 2px 0 rgb(0 0 0 / 0.05)';
-  cssVars['--persona-scroll-to-bottom-padding'] =
-    cssVars['--persona-components-scrollToBottom-padding'] ??
-    '0.5rem 0.875rem';
-  cssVars['--persona-scroll-to-bottom-gap'] =
-    cssVars['--persona-components-scrollToBottom-gap'] ??
-    '0.5rem';
-  cssVars['--persona-scroll-to-bottom-font-size'] =
-    cssVars['--persona-components-scrollToBottom-fontSize'] ??
-    cssVars['--persona-palette-typography-fontSize-sm'] ??
-    '0.875rem';
-  cssVars['--persona-scroll-to-bottom-icon-size'] =
-    cssVars['--persona-components-scrollToBottom-iconSize'] ??
-    '14px';
-
-  cssVars['--persona-tool-bubble-shadow'] =
-    cssVars['--persona-components-toolBubble-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
-  cssVars['--persona-reasoning-bubble-shadow'] =
-    cssVars['--persona-components-reasoningBubble-shadow'] ?? '0 5px 15px rgba(15, 23, 42, 0.08)';
-  cssVars['--persona-composer-shadow'] =
-    cssVars['--persona-components-composer-shadow'] ?? 'none';
   // Composer spacing/type. Fallbacks reproduce the utility classes the form
   // used to carry (`px-4 py-3`, `gap-2`, `text-sm`) exactly.
-  cssVars['--persona-composer-padding'] =
-    cssVars['--persona-components-composer-padding'] ?? '0.75rem 1rem';
-  cssVars['--persona-composer-gap'] =
-    cssVars['--persona-components-composer-gap'] ?? '0.5rem';
-  cssVars['--persona-composer-font-size'] =
-    cssVars['--persona-components-composer-fontSize'] ?? '0.875rem';
-  cssVars['--persona-composer-line-height'] =
-    cssVars['--persona-components-composer-lineHeight'] ?? '1.25rem';
-  cssVars['--persona-composer-border-color'] =
-    cssVars['--persona-components-composer-borderColor'] ??
-    cssVars['--persona-border'] ??
-    '#e5e7eb';
-
-  // Scrollbars (every scroller in the widget consumes these two)
-  cssVars['--persona-scrollbar-thumb'] =
-    cssVars['--persona-components-scrollbar-thumb'] ??
-    cssVars['--persona-border'] ??
-    '#e5e7eb';
-  cssVars['--persona-scrollbar-track'] =
-    cssVars['--persona-components-scrollbar-track'] ?? 'transparent';
-
-  cssVars['--persona-md-inline-code-bg'] =
-    cssVars['--persona-components-markdown-inlineCode-background'] ?? cssVars['--persona-container'];
-  cssVars['--persona-md-inline-code-color'] =
-    cssVars['--persona-components-markdown-inlineCode-foreground'] ?? cssVars['--persona-text'];
-
-  cssVars['--persona-md-link-color'] =
-    cssVars['--persona-components-markdown-link-foreground'] ??
-    cssVars['--persona-accent'] ??
-    '#0f0f0f';
+  emitAliases(cssVars, [
+    ['composer-padding', 'components-composer-padding', '=0.75rem 1rem'],
+    ['composer-gap', 'components-composer-gap', '=0.5rem'],
+    ['composer-font-size', 'components-composer-fontSize', '=0.875rem'],
+    ['composer-line-height', 'components-composer-lineHeight', '=1.25rem'],
+    ['composer-border-color', 'components-composer-borderColor', 'border', '=#e5e7eb'],
+    ['scrollbar-thumb', 'components-scrollbar-thumb', 'border', '=#e5e7eb'],
+    ['scrollbar-track', 'components-scrollbar-track', '=transparent'],
+    ['md-inline-code-bg', 'components-markdown-inlineCode-background', 'container'],
+    ['md-inline-code-color', 'components-markdown-inlineCode-foreground', 'text'],
+    ['md-link-color', 'components-markdown-link-foreground', 'accent', '=#0f0f0f'],
+  ]);
 
   const mdH1Size = cssVars['--persona-components-markdown-heading-h1-fontSize'];
   if (mdH1Size) cssVars['--persona-md-h1-size'] = mdH1Size;
@@ -1148,38 +1071,35 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   }
 
   // Markdown code block
-  cssVars['--persona-md-code-block-bg'] =
-    cssVars['--persona-components-markdown-codeBlock-background'] ?? cssVars['--persona-container'];
-  cssVars['--persona-md-code-block-border-color'] =
-    cssVars['--persona-components-markdown-codeBlock-borderColor'] ?? cssVars['--persona-border'];
-  cssVars['--persona-md-code-block-text-color'] =
-    cssVars['--persona-components-markdown-codeBlock-textColor'] ?? 'inherit';
+  emitAliases(cssVars, [
+    ['md-code-block-bg', 'components-markdown-codeBlock-background', 'container'],
+    ['md-code-block-border-color', 'components-markdown-codeBlock-borderColor', 'border'],
+    ['md-code-block-text-color', 'components-markdown-codeBlock-textColor', '=inherit'],
+  ]);
+
   // Follows the palette radius so square-corner themes get square code blocks;
   // the 0.375rem fallback matches palette.radius.md's default.
-  cssVars['--persona-md-code-block-border-radius'] =
-    cssVars['--persona-components-markdown-codeBlock-borderRadius'] ??
-    cssVars['--persona-radius-md'] ??
-    '0.375rem';
+  emitAliases(cssVars, [
+    ['md-code-block-border-radius', 'components-markdown-codeBlock-borderRadius', 'radius-md', '=0.375rem'],
+  ]);
 
   // Markdown table
-  cssVars['--persona-md-table-header-bg'] =
-    cssVars['--persona-components-markdown-table-headerBackground'] ?? cssVars['--persona-container'];
-  cssVars['--persona-md-table-border-color'] =
-    cssVars['--persona-components-markdown-table-borderColor'] ?? cssVars['--persona-border'];
+  emitAliases(cssVars, [
+    ['md-table-header-bg', 'components-markdown-table-headerBackground', 'container'],
+    ['md-table-border-color', 'components-markdown-table-borderColor', 'border'],
+  ]);
 
   // Markdown HR
-  cssVars['--persona-md-hr-color'] =
-    cssVars['--persona-components-markdown-hr-color'] ?? cssVars['--persona-divider'];
+  emitAliases(cssVars, [
+    ['md-hr-color', 'components-markdown-hr-color', 'divider'],
+  ]);
 
   // Markdown blockquote
-  cssVars['--persona-md-blockquote-border-color'] =
-    cssVars['--persona-components-markdown-blockquote-borderColor'] ??
-    cssVars['--persona-palette-colors-gray-900'];
-  cssVars['--persona-md-blockquote-bg'] =
-    cssVars['--persona-components-markdown-blockquote-background'] ?? 'transparent';
-  cssVars['--persona-md-blockquote-text-color'] =
-    cssVars['--persona-components-markdown-blockquote-textColor'] ??
-    cssVars['--persona-palette-colors-gray-500'];
+  emitAliases(cssVars, [
+    ['md-blockquote-border-color', 'components-markdown-blockquote-borderColor', 'palette-colors-gray-900'],
+    ['md-blockquote-bg', 'components-markdown-blockquote-background', '=transparent'],
+    ['md-blockquote-text-color', 'components-markdown-blockquote-textColor', 'palette-colors-gray-500'],
+  ]);
 
   // Collapsible widget chrome (tool/reasoning/approval bubbles)
   cssVars['--cw-container'] =
@@ -1189,9 +1109,9 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   cssVars['--cw-border'] =
     cssVars['--persona-components-collapsibleWidget-border'] ?? cssVars['--persona-border'];
 
-  // Message border
-  cssVars['--persona-message-border'] =
-    cssVars['--persona-components-message-border'] ?? cssVars['--persona-border'];
+  emitAliases(cssVars, [
+    ['message-border', 'components-message-border', 'border'],
+  ]);
 
   // Icon button tokens
   const components = theme.components;
