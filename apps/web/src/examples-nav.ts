@@ -318,17 +318,6 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["launcher"],
   },
   {
-    slug: "chat-patterns",
-    href: "/chat-patterns.html",
-    title: "Four Shapes of AI Chat",
-    blurb:
-      "Pattern study: pill, assistant, generative, and canvas as live embeds, then the parts that are table stakes versus the parts that are still rare.",
-    badge: "Essay",
-    tier: "patterns",
-    tags: ["patterns", "welcome", "artifacts", "composer", "theming"],
-    modes: ["inline", "launcher"],
-  },
-  {
     slug: "scroll-engineering",
     href: "/scroll-engineering.html",
     title: "Scroll Engineering",
