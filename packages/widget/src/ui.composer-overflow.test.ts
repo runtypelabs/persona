@@ -180,6 +180,8 @@ describe("composer overflow menu in the live widget", () => {
   it("closes a tooltip that was already open when the control folds", () => {
     const { mount, controller } = makeController({
       attachments: { enabled: true, buttonTooltipText: "Add photos and files" },
+      // Hover assertions are synchronous; drop the hover-intent delay.
+      tooltip: { delayMs: 0, skipDelayMs: 0 },
       composer: {
         actions: [action("folded", { presentation: "overflow" })],
         actionOverflow: { enabled: true },
@@ -203,6 +205,8 @@ describe("composer overflow menu in the live widget", () => {
   it("restores bar tooltip behavior after the control unfolds", () => {
     const { mount, controller } = makeController({
       attachments: { enabled: true, buttonTooltipText: "Add photos and files" },
+      // Hover assertions are synchronous; drop the hover-intent delay.
+      tooltip: { delayMs: 0, skipDelayMs: 0 },
       composer: {
         actions: [action("folded", { presentation: "overflow" })],
         actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
