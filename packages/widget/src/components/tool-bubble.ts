@@ -1,26 +1,29 @@
 import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue, describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/formatting";
-import { ChevronDown, ChevronUp } from "lucide";
-import { renderIconNode } from "../utils/icon-node";
 import { appendCharSpans } from "../utils/tool-loading-animation";
+import {
+  appendHeaderToggle,
+  applyExpansionDisplay,
+  createCollapsedPreviewSection,
+  createExpandableBubbleShell,
+  createExpandableHeader,
+  updateExpandableBubbleUI,
+} from "./expandable-bubble";
 
 // Expansion state per widget instance
 export const toolExpansionState = new Set<string>();
 
-
-const appendRenderedValue = (
-  container: HTMLElement,
-  value: HTMLElement | string | null | undefined
-): boolean => {
-  if (value == null) return false;
-  if (typeof value === "string") {
-    container.textContent = value;
-    return true;
-  }
-  container.appendChild(value);
-  return true;
-};
+// Default the toggle chevron to the tool-call title color so it stays
+// readable on whatever surface the title does. The title falls back to
+// `.persona-text-persona-primary` (var(--persona-primary)) when no
+// `headerTextColor` is set, so mirror that here instead of `currentColor`.
+const toolChevronColor = (
+  toolCallConfig: NonNullable<AgentWidgetConfig["toolCall"]>
+): string =>
+  toolCallConfig.toggleTextColor ||
+  toolCallConfig.headerTextColor ||
+  "var(--persona-primary, #171717)";
 
 const getToolPreviewText = (message: AgentWidgetMessage, maxLines: number): string => {
   const tool = message.toolCall;
@@ -98,69 +101,18 @@ const getToolSummaryText = (
 
 // Helper function to update tool bubble UI after expansion state changes
 export const updateToolBubbleUI = (messageId: string, bubble: HTMLElement, config?: AgentWidgetConfig): void => {
-  const expanded = toolExpansionState.has(messageId);
-  const toolCallConfig = config?.toolCall ?? {};
-  const header = bubble.querySelector('button[data-expand-header="true"]') as HTMLElement;
-  const content = bubble.querySelector('.persona-border-t') as HTMLElement;
-  const preview = bubble.querySelector('[data-persona-collapsed-preview="tool"]') as HTMLElement | null;
-  
-  if (!header || !content) return;
-  
-  header.setAttribute("aria-expanded", expanded ? "true" : "false");
-  
-  // Find toggle icon container - it's the direct child div of headerMeta (which has persona-ml-auto)
-  const headerMeta = header.querySelector('.persona-ml-auto') as HTMLElement;
-  const toggleIcon = headerMeta?.querySelector(':scope > .persona-flex.persona-items-center') as HTMLElement;
-  if (toggleIcon) {
-    toggleIcon.innerHTML = "";
-    // Default the toggle chevron to the tool-call title color so it stays
-    // readable on whatever surface the title does. The title falls back to
-    // `.persona-text-persona-primary` (var(--persona-primary)) when no
-    // `headerTextColor` is set, so mirror that here instead of `currentColor`.
-    const iconColor =
-      toolCallConfig.toggleTextColor ||
-      toolCallConfig.headerTextColor ||
-      "var(--persona-primary, #171717)";
-    const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
-    if (chevronIcon) {
-      toggleIcon.appendChild(chevronIcon);
-    } else {
-      toggleIcon.textContent = expanded ? "Hide" : "Show";
-    }
-  }
-  
-  content.style.display = expanded ? "" : "none";
-  if (preview) {
-    preview.style.display = expanded
-      ? "none"
-      : ((preview.textContent || preview.childNodes.length) ? "" : "none");
-  }
+  updateExpandableBubbleUI(messageId, bubble, {
+    stateSet: toolExpansionState,
+    previewKind: "tool",
+    iconColor: toolChevronColor(config?.toolCall ?? {}),
+  });
 };
 
 export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidgetConfig): HTMLElement => {
   const tool = message.toolCall;
   const toolCallConfig = config?.toolCall ?? {};
-  
-  const bubble = createElement(
-    "div",
-    [
-      "persona-message-bubble",
-      "persona-tool-bubble",
-      "persona-w-full",
-      "persona-rounded-2xl",
-      "persona-bg-persona-surface",
-      "persona-border",
-      "persona-border-persona-message-border",
-      "persona-text-persona-primary",
-      "persona-shadow-sm",
-      "persona-overflow-hidden",
-      "persona-px-0",
-      "persona-py-0"
-    ].join(" ")
-  );
-  // Set id for idiomorph matching
-  bubble.id = `bubble-${message.id}`;
-  bubble.setAttribute("data-message-id", message.id);
+
+  const bubble = createExpandableBubbleShell("persona-tool-bubble", message.id);
 
   // Apply bubble-level styles
   if (toolCallConfig.backgroundColor) {
@@ -186,21 +138,10 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
 
   const toolDisplayConfig = config?.features?.toolCallDisplay ?? {};
   const expandable = toolDisplayConfig.expandable !== false;
-  let expanded = expandable && toolExpansionState.has(message.id);
+  const expanded = expandable && toolExpansionState.has(message.id);
   const { summary, previewText, isActive } = getToolSummaryText(message, config);
 
-  const header = createElement(
-    "button",
-    expandable
-      ? "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-pointer persona-border-none"
-      : "persona-flex persona-w-full persona-items-center persona-justify-between persona-gap-3 persona-bg-transparent persona-px-4 persona-py-3 persona-text-left persona-cursor-default persona-border-none"
-  ) as HTMLButtonElement;
-  header.type = "button";
-  if (expandable) {
-    header.setAttribute("aria-expanded", expanded ? "true" : "false");
-    header.setAttribute("data-expand-header", "true");
-  }
-  header.setAttribute("data-bubble-type", "tool");
+  const header = createExpandableHeader({ expandable, expanded, bubbleType: "tool" });
 
   // Apply header styles
   if (toolCallConfig.headerBackgroundColor) {
@@ -336,61 +277,31 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     }
   }
 
-  let toggleIcon: HTMLElement | null = null;
-  if (expandable) {
-    toggleIcon = createElement("div", "persona-flex persona-items-center");
-    // Default the toggle chevron to the tool-call title color so it stays
-    // readable on whatever surface the title does. The title falls back to
-    // `.persona-text-persona-primary` (var(--persona-primary)) when no
-    // `headerTextColor` is set, so mirror that here instead of `currentColor`.
-    const iconColor =
-      toolCallConfig.toggleTextColor ||
-      toolCallConfig.headerTextColor ||
-      "var(--persona-primary, #171717)";
-    const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
-    if (chevronIcon) {
-      toggleIcon.appendChild(chevronIcon);
-    } else {
-      toggleIcon.textContent = expanded ? "Hide" : "Show";
-    }
+  const iconColor = toolChevronColor(toolCallConfig);
+  const toggleIcon = appendHeaderToggle(header, headerContent, {
+    expandable,
+    expanded,
+    iconColor,
+    metaGap: true,
+  });
 
-    const headerMeta = createElement("div", "persona-flex persona-items-center persona-gap-2 persona-ml-auto");
-    headerMeta.append(toggleIcon);
-    header.append(headerContent, headerMeta);
-  } else {
-    header.append(headerContent);
-  }
-
-  const collapsedPreview = createElement(
-    "div",
-    "persona-px-4 persona-py-3 persona-text-xs persona-leading-snug persona-text-persona-muted"
-  );
-  collapsedPreview.setAttribute("data-persona-collapsed-preview", "tool");
-  collapsedPreview.style.display = "none";
-  collapsedPreview.style.whiteSpace = "pre-wrap";
-
-  if (
-    !expanded &&
-    isActive &&
-    toolDisplayConfig.activePreview &&
-    previewText
-  ) {
-    const renderedPreview = toolCallConfig.renderCollapsedPreview?.({
-      message,
-      toolCall: tool,
-      defaultPreview: previewText,
-      isActive,
-      config: config ?? {},
-    });
-    if (!appendRenderedValue(collapsedPreview, renderedPreview)) {
-      collapsedPreview.textContent = previewText;
-    }
-    collapsedPreview.style.display = "";
-  }
-
-  if (!expanded && isActive && toolDisplayConfig.activeMinHeight) {
-    bubble.style.minHeight = toolDisplayConfig.activeMinHeight;
-  }
+  const collapsedPreview = createCollapsedPreviewSection({
+    bubble,
+    previewKind: "tool",
+    expanded,
+    isActive,
+    previewText,
+    activePreview: toolDisplayConfig.activePreview,
+    activeMinHeight: toolDisplayConfig.activeMinHeight,
+    renderPreview: () =>
+      toolCallConfig.renderCollapsedPreview?.({
+        message,
+        toolCall: tool,
+        defaultPreview: previewText,
+        isActive,
+        config: config ?? {},
+      }),
+  });
 
   if (!expandable) {
     bubble.append(header, collapsedPreview);
@@ -512,35 +423,8 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     content.appendChild(duration);
   }
 
-  const applyToolExpansion = () => {
-    header.setAttribute("aria-expanded", expanded ? "true" : "false");
-    if (toggleIcon) {
-      toggleIcon.innerHTML = "";
-      // Default the toggle chevron to the tool-call title color so it stays
-      // readable on whatever surface the title does. The title falls back to
-      // `.persona-text-persona-primary` (var(--persona-primary)) when no
-      // `headerTextColor` is set, so mirror that here instead of `currentColor`.
-      const iconColor =
-        toolCallConfig.toggleTextColor ||
-        toolCallConfig.headerTextColor ||
-        "var(--persona-primary, #171717)";
-      const chevronIcon = renderIconNode(expanded ? ChevronUp : ChevronDown, 16, iconColor, 2);
-      if (chevronIcon) {
-        toggleIcon.appendChild(chevronIcon);
-      } else {
-        toggleIcon.textContent = expanded ? "Hide" : "Show";
-      }
-    }
-    content.style.display = expanded ? "" : "none";
-    collapsedPreview.style.display = expanded
-      ? "none"
-      : ((collapsedPreview.textContent || collapsedPreview.childNodes.length) ? "" : "none");
-  };
-
-  applyToolExpansion();
+  applyExpansionDisplay({ expanded, header, toggleIcon, content, collapsedPreview, iconColor });
 
   bubble.append(header, collapsedPreview, content);
   return bubble;
 };
-
-

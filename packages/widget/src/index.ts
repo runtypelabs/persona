@@ -2,14 +2,15 @@
  * npm package entry (`@runtypelabs/persona`).
  *
  * This is a thin barrel over `index-core.ts` (the shared public API) that adds
- * back the **dev/config-tool-only** helpers: `generateCodeSnippet` and
- * `createDemoCarousel`. Those are kept out of `index-core.ts` so the IIFE/CDN
- * build (`index-global.ts`, which re-exports from `index-core.ts`) doesn't ship
- * them: a running widget never needs them, only build-time/demo tooling does.
+ * back the **dev/config-tool-only** helpers: the theme-plugin factories,
+ * `generateCodeSnippet`, and `createDemoCarousel`. Those are kept out of
+ * `index-core.ts` so the IIFE/CDN build (`index-global.ts`, which re-exports
+ * from `index-core.ts`) doesn't ship them: a running widget never needs them,
+ * only build-time/demo tooling does.
  *
  * Net effect: npm consumers get the full API (unchanged), while the script-tag
- * `window.AgentWidget` global no longer exposes `generateCodeSnippet` /
- * `createDemoCarousel`.
+ * `window.AgentWidget` global no longer exposes the theme-plugin factories,
+ * `generateCodeSnippet`, or `createDemoCarousel`.
  */
 
 // Register `marked` + `dompurify` synchronously for the bundled npm build so
@@ -25,6 +26,17 @@ import "./icons-extra-eager";
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";
 export { default } from "./index-core";
+
+// Theme-plugin factories: config-time helpers with no runtime caller in the
+// widget, so they stay off the CDN global (same rule as the two helpers below).
+export {
+  accessibilityPlugin,
+  animationsPlugin,
+  brandPlugin,
+  reducedMotionPlugin,
+  highContrastPlugin,
+  createPlugin
+} from "./utils/plugins";
 
 // Dev / config-tool helper: generate install snippets from a widget config.
 export { generateCodeSnippet } from "./utils/code-generators";
