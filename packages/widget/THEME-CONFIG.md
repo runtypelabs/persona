@@ -308,6 +308,12 @@ touch `--persona-primary`). Icon and tooltip text remain per-feature config
 | `placeholder` | `semantic.colors.textMuted` |
 | `focus.border` | `semantic.colors.interactive.focus` |
 | `focus.ring` | `semantic.colors.interactive.focus` |
+| `backdropFilter` | `none` (CSS var `--persona-input-backdrop-filter`) |
+
+`backdropFilter` is a raw CSS `backdrop-filter` value (e.g. `"blur(8px)"`),
+emitted with the `-webkit-` prefix as well. It pairs with an alpha `background`
+(`input.background` passes rgba through verbatim) to make an overlaid composer
+read through the transcript under `composer.placement: "overlay"`.
 
 ### Launcher (`components.launcher.*`)
 
@@ -757,6 +763,7 @@ form itself; `fontSize` and `lineHeight` set the textarea's type.
 | `lineHeight` | `"1.25rem"` | `--persona-composer-line-height` |
 | `controlSize` | `"40px"` | `--persona-composer-control-size` |
 | `controlIconSize` | `"24px"` | `--persona-composer-control-icon-size` |
+| `overlayBand` | `"transparent"` | `--persona-composer-overlay-band` |
 
 ```typescript
 const theme = createTheme({
@@ -771,6 +778,43 @@ const theme = createTheme({
   },
 });
 ```
+
+#### Overlay placement
+
+`overlayBand` only paints under `composer.placement: "overlay"`, where the
+composer footer is absolutely overlaid on the transcript. It takes any CSS
+`background` value, gradients included, so a scrim that fades the transcript
+into the composer is one token:
+
+```typescript
+theme: {
+  components: {
+    composer: {
+      overlayBand: 'linear-gradient(180deg, rgba(14, 17, 27, 0) 0, #0e111b 96px)',
+    },
+    input: { backdropFilter: 'blur(8px)' },
+  },
+}
+```
+
+The widget publishes two read-only geometry contracts on `[data-persona-root]`
+for host CSS. Both are written in either placement, and both are widget-owned:
+setting them from host CSS is overwritten on the next chrome sync.
+
+| CSS variable | Meaning |
+|--------------|---------|
+| `--persona-composer-overlay-height` | Live composer footer height in px, `0px` when the footer is hidden |
+| `--persona-composer-lift` | Current empty-state lift in px; `0px` once the conversation is active or under `welcome.anchor: "bottom"` |
+
+Two matching attributes are stamped on the same element:
+
+| Attribute | Values |
+|-----------|--------|
+| `data-persona-composer-placement` | `"block"` \| `"overlay"` (resolved, so composer-bar mount mode always reads `"block"`) |
+| `data-persona-conversation-state` | `"empty"` \| `"active"` — `"active"` from the first user message in the transcript |
+
+The config knobs themselves are `composer.placement` and `welcome.anchor` /
+`welcome.anchorComposerTop` / `welcome.composerGap`, not theme tokens.
 
 #### Control size (`controlSize` / `controlIconSize`)
 
@@ -1114,6 +1158,8 @@ Common tokens have short aliases for easier use in custom CSS:
 --persona-border          /* semantic.colors.border */
 --persona-divider         /* semantic.colors.divider */
 --persona-muted           /* alias for --persona-text-muted */
+--persona-composer-overlay-band  /* components.composer.overlayBand */
+--persona-input-backdrop-filter  /* components.input.backdropFilter */
 ```
 
 ### Scrollbars
@@ -2088,6 +2134,32 @@ layout: {
   },
 }
 ```
+
+## Composer placement (`config.composer.placement`)
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `composer.placement` | `"block"` | `"block"` keeps the footer a flex sibling below the scroll body; `"overlay"` absolutely overlays it so the transcript scrolls behind it |
+
+Under `"overlay"` the widget reserves the footer's live height as bottom padding
+on the scroll body and on a `renderWelcome` plugin overlay, and offsets the
+scroll-to-bottom affordance and the composer sheet slot by the same amount.
+Paint the band behind it with `theme.components.composer.overlayBand` and
+`theme.components.input.backdropFilter`. Ignored in composer-bar mount mode,
+which owns its own geometry.
+
+## Welcome anchoring (`config.welcome.*`)
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `welcome.anchor` | `"bottom"` | `"center"` floats the greeting and composer together in the empty conversation; they drop to the bottom on the first user message |
+| `welcome.anchorComposerTop` | `"44%"` | Under `anchor: "center"`, the composer's top edge as a percentage of the panel column height |
+| `welcome.composerGap` | `"24px"` | Under `anchor: "center"`, the gap between the bottom of the welcome surface and the top of the composer |
+
+`anchor` composes with either `composer.placement`. The `card` variant does not
+move (it is a top-of-transcript affordance, not a home screen); the `hero`
+variant, the greeting bubble, and `renderWelcome` plugin content all inherit the
+anchor. Anchoring governs the empty conversation only.
 
 ## Markdown (`config.markdown.*`)
 

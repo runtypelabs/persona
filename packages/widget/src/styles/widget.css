@@ -2521,6 +2521,67 @@
   line-height: var(--persona-composer-line-height, 1.25rem);
 }
 
+/* `components.input.backdropFilter`. Unconditional: `none` costs nothing and
+   the token is what gates it. Placed after the `:not(.persona-pill-composer)`
+   rule above so a host can blur the pill composer too. */
+[data-persona-root] .persona-widget-composer {
+  -webkit-backdrop-filter: var(--persona-input-backdrop-filter, none);
+  backdrop-filter: var(--persona-input-backdrop-filter, none);
+}
+
+/* --- Composer placement: overlay -------------------------------------- */
+/* The footer becomes an absolute child of the already-relative container.
+   Positioning lives here, never inline: a plugin-owned footer is exempt from
+   the cssText reset in applyFullHeightStyles, so an inline design would
+   diverge for plugin composers. */
+[data-persona-root][data-persona-composer-placement="overlay"] .persona-widget-footer {
+  position: absolute;
+  inset: auto 0 var(--persona-composer-lift, 0px) 0;
+  z-index: 5;
+  background: var(--persona-composer-overlay-band, transparent);
+  border-top: none;
+}
+
+/* Reserve the composer zone in the scroll body. Beats the `persona-py-6`
+   utility on specificity; the trailing gap reproduces its bottom edge. */
+[data-persona-root][data-persona-composer-placement="overlay"] .persona-widget-body {
+  padding-bottom: calc(
+    var(--persona-composer-overlay-height, 0px) +
+    var(--persona-composer-lift, 0px) +
+    var(--persona-composer-anchor-gap, 24px)
+  );
+}
+
+/* The plugin welcome host is `position: absolute; inset: 0` inside the body,
+   so body padding never reaches it. Reserve the same zone here or the
+   greeting renders behind the composer. */
+[data-persona-root][data-persona-composer-placement="overlay"]
+  .persona-welcome[data-persona-welcome-overlay] {
+  padding-bottom: calc(
+    var(--persona-composer-overlay-height, 0px) +
+    var(--persona-composer-lift, 0px) +
+    var(--persona-composer-anchor-gap, 24px)
+  );
+}
+
+/* --- Welcome anchoring: center ---------------------------------------- */
+/* End-anchored, not centered: the greeting sits directly above the composer
+   with the dead space above it. `margin-block: auto 0` keeps the no
+   `justify-content` in the scroll body constraint (see the hero rule). */
+[data-persona-root]
+  .persona-welcome[data-persona-welcome-anchor="center"][data-persona-welcome-variant="hero"] {
+  margin-block: auto 0;
+}
+
+/* The plugin overlay host scrolls in its own right and the body is frozen
+   beneath it, so `justify-content` strands nothing here. */
+[data-persona-root]
+  .persona-welcome[data-persona-welcome-anchor="center"][data-persona-welcome-overlay] {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
 .persona-form-grid {
   display: flex;
   flex-direction: column;

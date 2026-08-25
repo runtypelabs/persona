@@ -4215,7 +4215,30 @@ export type AgentWidgetComposerConfig = {
    * @default "block"
    */
   streamingSubmitBehavior?: ComposerStreamingSubmitBehavior;
+  /**
+   * Where the composer footer sits relative to the transcript.
+   *
+   * - `"block"` (default): the footer is a flex sibling below the scroll body.
+   *   Nothing scrolls behind it.
+   * - `"overlay"`: the footer is absolutely overlaid on the scroll body, so the
+   *   transcript scrolls behind it (the chatgpt.com / claude.ai model, where the
+   *   composer is sticky inside the scroller). The widget reserves the footer's
+   *   live height as bottom padding on the scroll body and on a plugin welcome
+   *   overlay, and offsets the scroll-to-bottom affordance and the composer
+   *   sheet slot by the same amount.
+   *
+   * Paint the band behind an overlaid composer with
+   * `theme.components.composer.overlayBand` (any CSS background, gradients
+   * included) and `theme.components.input.backdropFilter`.
+   *
+   * Ignored in composer-bar mount mode, which owns its own geometry.
+   * @default "block"
+   */
+  placement?: ComposerPlacement;
 };
+
+/** Composer footer placement relative to the transcript scroller. */
+export type ComposerPlacement = "block" | "overlay";
 
 /**
  * Submit-during-streaming policy.
@@ -5200,6 +5223,12 @@ export type AgentWidgetWelcomeVariant = "card" | "hero" | "none";
 export type AgentWidgetWelcomeDismiss = "never" | "on-first-message";
 
 /**
+ * Vertical anchoring of the greeting-plus-composer pair in the empty
+ * conversation.
+ */
+export type AgentWidgetWelcomeAnchor = "bottom" | "center";
+
+/**
  * Avatar or logo shown above the welcome title. Discriminated union; the
  * function form is the escape hatch for custom markup. There is deliberately
  * no raw HTML string variant (sanitization surface plus accessibility hole).
@@ -5232,6 +5261,35 @@ export interface AgentWidgetWelcomeConfig {
   variant?: AgentWidgetWelcomeVariant;
   /** @default "never" for `card`, always `"on-first-message"` for `hero`. */
   dismiss?: AgentWidgetWelcomeDismiss;
+  /**
+   * Vertical anchoring of the greeting-plus-composer pair in the EMPTY
+   * conversation only. On the first message the pair drops to the bottom
+   * (animated; see `data-persona-conversation-state`).
+   *
+   * - `"bottom"` (default): the composer stays pinned at the bottom.
+   * - `"center"`: greeting and composer float together so the composer's top
+   *   edge lands at `anchorComposerTop` of the panel column, and the welcome
+   *   surface is end-anchored `composerGap` above it.
+   *
+   * Composes with either `composer.placement`. Ignored in composer-bar mount
+   * mode. `renderWelcome` plugin content inherits the anchor: the widget
+   * positions the overlay host and reserves the composer zone.
+   * @default "bottom"
+   */
+  anchor?: AgentWidgetWelcomeAnchor;
+  /**
+   * Under `anchor: "center"`, the composer's top edge as a percentage of the
+   * panel column height. Must be a percentage string. Measured references:
+   * ChatGPT 42%, Claude 43%, Perplexity 40%, Gemini 47%.
+   * @default "44%"
+   */
+  anchorComposerTop?: string;
+  /**
+   * Under `anchor: "center"`, the gap between the bottom of the welcome
+   * surface and the top of the composer. Any CSS length.
+   * @default "24px"
+   */
+  composerGap?: string;
   /**
    * Display-only greeting bubble pinned at transcript position zero. It is UI
    * chrome derived from config, never a session message: it does not appear in

@@ -1,10 +1,16 @@
 import type {
   AgentWidgetConfig,
   AgentWidgetMessage,
+  AgentWidgetWelcomeAnchor,
   AgentWidgetWelcomeDismiss,
   AgentWidgetWelcomeIcon,
   AgentWidgetWelcomeVariant,
 } from "./types";
+import {
+  DEFAULT_ANCHOR_COMPOSER_TOP,
+  DEFAULT_COMPOSER_GAP,
+  parseAnchorFraction,
+} from "./utils/composer-placement";
 
 /**
  * Single source of truth for the welcome surface. Renderers consume the
@@ -34,6 +40,14 @@ export interface ResolvedWelcomeConfig {
   dismiss: AgentWidgetWelcomeDismiss;
   /** Undefined under `variant: "hero"`, which suppresses the greeting. */
   message?: string;
+  /**
+   * Optional on the interface, always populated by `resolveWelcomeConfig`:
+   * a plugin literal built against an older minor must still type-check.
+   */
+  anchor?: AgentWidgetWelcomeAnchor;
+  /** Percentage string; validated, falls back to "44%". */
+  anchorComposerTop?: string;
+  composerGap?: string;
 }
 
 // Keyed on the config object: the resolver runs on every render, so warnings
@@ -100,6 +114,23 @@ export const resolveWelcomeConfig = (
       'welcome.dismiss is pinned to "on-first-message" when welcome.variant is "hero".'
     );
   }
+
+  const anchor: AgentWidgetWelcomeAnchor =
+    welcome?.anchor === "center" ? "center" : "bottom";
+  const anchorTopValid = parseAnchorFraction(welcome?.anchorComposerTop) !== null;
+  if (isSet(welcome, "anchorComposerTop") && !anchorTopValid) {
+    conflicts.push(
+      'welcome.anchorComposerTop must be a percentage between 0% and 100%; falling back to "44%".'
+    );
+  }
+  if (
+    anchor !== "center" &&
+    (isSet(welcome, "anchorComposerTop") || isSet(welcome, "composerGap"))
+  ) {
+    conflicts.push(
+      'welcome.anchorComposerTop is ignored unless welcome.anchor is "center".'
+    );
+  }
   warnOnce(config, conflicts);
 
   return {
@@ -113,8 +144,26 @@ export const resolveWelcomeConfig = (
     variant,
     dismiss,
     message: variant === "hero" ? undefined : welcome?.message,
+    anchor,
+    anchorComposerTop: anchorTopValid
+      ? welcome!.anchorComposerTop!
+      : DEFAULT_ANCHOR_COMPOSER_TOP,
+    composerGap: welcome?.composerGap?.trim() || DEFAULT_COMPOSER_GAP,
   };
 };
+
+/**
+ * Conversation state for composer anchoring: `"empty"` until the transcript
+ * contains a user message. Independent of welcome visibility (a `dismiss:
+ * "never"` card stays up in an active conversation, and `variant: "none"`
+ * hides it in an empty one).
+ */
+export const resolveConversationState = (
+  messages: readonly AgentWidgetMessage[] | undefined
+): "empty" | "active" =>
+  (messages ?? []).some((message) => message.role === "user")
+    ? "active"
+    : "empty";
 
 /**
  * Derived visibility, never stored. "User activity" is the same predicate the

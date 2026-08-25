@@ -187,6 +187,12 @@ export interface InputTokens extends ComponentTokenSet {
     border: TokenReference<'color'>;
     ring: TokenReference<'color'>;
   };
+  /**
+   * `backdrop-filter` on the composer form, e.g. `"blur(8px)"`. Pairs with an
+   * alpha `background` to make an overlaid composer read through the
+   * transcript. Emitted with the `-webkit-` prefix as well.
+   */
+  backdropFilter?: string;
 }
 
 export interface LauncherTokens extends ComponentTokenSet {
@@ -615,6 +621,14 @@ export interface ComposerChromeTokens {
   controlSize?: string;
   /** Glyph box inside those controls. @default "24px" */
   controlIconSize?: string;
+  /**
+   * Background painted behind an overlaid composer footer
+   * (`composer.placement: "overlay"`). Any CSS `background` value, gradients
+   * included — same convention as the shadow tokens. Inert under
+   * `placement: "block"`.
+   * @default "transparent"
+   */
+  overlayBand?: string;
 }
 
 /**

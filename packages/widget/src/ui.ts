@@ -146,6 +146,13 @@ import { renderLucideIcon, onExtraIconsReady } from "./utils/icons";
 import { renderIconNode } from "./utils/icon-node";
 import { createElement, createNode, cx } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
+import {
+  computeComposerLift,
+  DEFAULT_ANCHOR_COMPOSER_TOP,
+  DEFAULT_COMPOSER_GAP,
+  parseAnchorFraction,
+  resolveComposerPlacement,
+} from "./utils/composer-placement";
 import { attachTooltip, configureTooltipTiming } from "./utils/tooltip";
 import {
   DEFAULT_TOOLTIP_DELAY_MS,
@@ -219,6 +226,7 @@ import {
 } from "./components/composer-parts";
 import { createWidgetView, resolveLauncher } from "./components/widget-view";
 import {
+  animateComposerLiftChange,
   animateWelcomeOut,
   applyWelcomeConfig,
   applyWelcomeVisibility,
@@ -227,7 +235,11 @@ import {
   renderWelcomeGreeting,
 } from "./components/welcome";
 import { createPluginStorageFactory } from "./utils/plugin-storage";
-import { isWelcomeVisible, resolveWelcomeConfig } from "./welcome";
+import {
+  isWelcomeVisible,
+  resolveConversationState,
+  resolveWelcomeConfig,
+} from "./welcome";
 import { HEADER_THEME_CSS } from "./components/header-builder";
 import {
   applyHeaderControlGlyph,
@@ -1490,12 +1502,70 @@ export const createAgentExperience = (
     }, 400);
   };
 
+  // Derived from the session's user messages on every welcome render; the
+  // public `data-persona-conversation-state` contract mirrors it.
+  let conversationState: "empty" | "active" = "empty";
+  // Empty-state lift under `placement: "block"`, where the footer is raised
+  // with a bottom margin instead of the overlay vars. 0 in every other case.
+  let blockCenterLiftPx = 0;
+
+  const readLiftPx = () =>
+    blockCenterLiftPx ||
+    parseFloat(mount.style.getPropertyValue("--persona-composer-lift")) ||
+    0;
+
   const updateScrollToBottomButtonOffset = () => {
     const footerHidden = footer.style.display === "none";
     const footerHeight = footerHidden ? 0 : footer.offsetHeight;
-    scrollToBottomButton.style.bottom = `${footerHeight + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
+    // Both placements raise the footer, so the affordance clears the lift too.
+    scrollToBottomButton.style.bottom = `${footerHeight + readLiftPx() + SCROLL_TO_BOTTOM_EDGE_OFFSET}px`;
   };
   updateScrollToBottomButtonOffset();
+
+  // block+center raises the footer with flex spacing, not absolute
+  // positioning: the container is a flex column with body { flex: 1 1 0% }, so
+  // a footer bottom margin shrinks the body and lifts the footer.
+  const applyBlockCenterLift = () => {
+    // A plugin-owned footer's inline state belongs to the plugin.
+    if (composerIsPluginOwned) return;
+    footer.style.marginBottom =
+      blockCenterLiftPx > 0 ? `${blockCenterLiftPx}px` : "";
+  };
+
+  // Only writer of the two px vars. Never calls back into itself:
+  // updateScrollToBottomButtonOffset reads them, never writes.
+  const syncComposerOverlayMetrics = () => {
+    const placement = resolveComposerPlacement(config, isComposerBar());
+    const resolved = resolveWelcomeConfig(config);
+    const footerHidden = footer.style.display === "none";
+    const footerHeight = footerHidden ? 0 : footer.offsetHeight;
+
+    const fraction =
+      resolved.anchor === "center" && conversationState === "empty"
+        ? parseAnchorFraction(resolved.anchorComposerTop) ??
+          parseAnchorFraction(DEFAULT_ANCHOR_COMPOSER_TOP)!
+        : null;
+    const lift =
+      fraction === null || isComposerBar()
+        ? 0
+        : computeComposerLift({
+            columnHeight: container.clientHeight,
+            footerHeight,
+            fraction,
+          });
+
+    mount.style.setProperty(
+      "--persona-composer-overlay-height",
+      `${footerHeight}px`
+    );
+    mount.style.setProperty(
+      "--persona-composer-lift",
+      `${placement === "overlay" ? lift : 0}px`
+    );
+    blockCenterLiftPx = placement === "block" ? lift : 0;
+    applyBlockCenterLift();
+    updateScrollToBottomButtonOffset();
+  };
 
   const renderScrollToBottomButton = () => {
     const hasLabel = Boolean(getScrollToBottomLabel());
@@ -4097,6 +4167,7 @@ export const createAgentExperience = (
 
       // Footer: pinned at bottom
       footer.style.flexShrink = '0';
+      applyBlockCenterLift();
 
       wasMobileFullscreen = true;
       restoreBodyScrollTop();
@@ -4363,6 +4434,8 @@ export const createAgentExperience = (
       wrapper.style.cssText += maxHeightStyles + paddingStyles + zIndexStyles;
     }
 
+    // Runs after every branch that reset footer styles above.
+    applyBlockCenterLift();
     restoreBodyScrollTop();
   };
   // Column var for plugin-rendered content (renderWelcome overlay stacks,
@@ -4373,6 +4446,31 @@ export const createAgentExperience = (
       "--persona-content-max-width",
       resolveContentMaxWidth(config, isComposerBar())
     );
+  };
+  let warnedComposerBarPlacement = false;
+  // mount.style.cssText is wiped by applyFullHeightStyles, so every
+  // mount-level var re-stamps here, next to applyContentMaxWidthVar.
+  const applyComposerPlacement = () => {
+    const placement = resolveComposerPlacement(config, isComposerBar());
+    if (
+      isComposerBar() &&
+      config.composer?.placement &&
+      config.debug === true &&
+      !warnedComposerBarPlacement
+    ) {
+      warnedComposerBarPlacement = true;
+      console.warn(
+        "[persona] composer.placement is ignored in composer-bar mount mode."
+      );
+    }
+    mount.setAttribute("data-persona-composer-placement", placement);
+    mount.setAttribute("data-persona-conversation-state", conversationState);
+    // Not `--persona-composer-gap`: that alias is components.composer.gap.
+    mount.style.setProperty(
+      "--persona-composer-anchor-gap",
+      resolveWelcomeConfig(config).composerGap ?? DEFAULT_COMPOSER_GAP
+    );
+    syncComposerOverlayMetrics();
   };
   // Floating launcher panels get a fixed pixel height (recalcPanelHeight owns
   // it on resize), but applyFullHeightStyles wipes panel.style.cssText and only
@@ -4401,6 +4499,7 @@ export const createAgentExperience = (
   applyArtifactLayoutCssVars(mount, config);
   applyArtifactPaneAppearance(mount, config);
   applyContentMaxWidthVar();
+  applyComposerPlacement();
 
   // applyFullHeightStyles wipes mount.style.cssText, so re-apply the theme +
   // artifact layout vars after it, mirroring the init sequence above.
@@ -4411,6 +4510,7 @@ export const createAgentExperience = (
     applyArtifactLayoutCssVars(mount, config);
     applyArtifactPaneAppearance(mount, config);
     applyContentMaxWidthVar();
+    applyComposerPlacement();
     // Owned here so it lands after applyArtifactPaneAppearance and derives from
     // the same resolved panel radius the chat card uses (see applyFullHeightStyles).
     if (weldedOuterRadius) {
@@ -7798,6 +7898,35 @@ export const createAgentExperience = (
   let welcomeDismissAnimation: Animation | null = null;
   // Restored history must hide the hero outright, not animate it out.
   let welcomeHydrated = !pendingStoredState;
+  let composerLiftAnimation: Animation | null = null;
+  destroyCallbacks.push(() => {
+    composerLiftAnimation?.cancel();
+    composerLiftAnimation = null;
+  });
+  // Derived from the transcript on every welcome render, so restore,
+  // injection, and clearChat all fall out with no extra wiring.
+  const syncConversationState = (
+    messages: readonly AgentWidgetMessage[] | undefined
+  ) => {
+    const next = resolveConversationState(messages);
+    if (next === conversationState) return;
+    conversationState = next;
+    mount.setAttribute("data-persona-conversation-state", next);
+    const previousLift = readLiftPx();
+    syncComposerOverlayMetrics();
+    // Restored history lands `active` before first paint; the same flag that
+    // suppresses the hero fade suppresses the drop.
+    if (welcomeHydrated) {
+      composerLiftAnimation?.cancel();
+      composerLiftAnimation = animateComposerLiftChange(
+        footer,
+        next === "active" ? previousLift : readLiftPx(),
+        next === "active" ? "drop" : "rise"
+      );
+    }
+    // The reservation shrinks by the lift in one frame, above the anchor.
+    repinAnchoredMessage();
+  };
   // Content is re-applied only when the resolved config changes: this runs on
   // every message change, including each streaming chunk.
   let lastWelcomeKey: string | null = null;
@@ -7811,7 +7940,7 @@ export const createAgentExperience = (
   let welcomePluginSuppressed = false;
   const updateWelcome = (messages?: AgentWidgetMessage[]) => {
     const resolved = resolveWelcomeConfig(config);
-    const welcomeKey = `${resolved.variant}|${resolved.dismiss}|${resolved.title}|${resolved.subtitle}`;
+    const welcomeKey = `${resolved.variant}|${resolved.dismiss}|${resolved.anchor ?? "bottom"}|${resolved.title}|${resolved.subtitle}`;
     if (welcomeKey !== lastWelcomeKey || resolved.icon !== lastWelcomeIcon) {
       lastWelcomeKey = welcomeKey;
       lastWelcomeIcon = resolved.icon;
@@ -7837,6 +7966,8 @@ export const createAgentExperience = (
 
     const current =
       messages ?? (session ? session.getMessages() : config.initialMessages);
+    // Before every return path below: a plugin welcome must get the drop too.
+    syncConversationState(current);
     // An engaged conversation-open stand-in owns the surface: the transcript is
     // replaced only at commit, so derived visibility would hold the welcome
     // above the stand-in for the rest of the fetch.
@@ -12375,6 +12506,16 @@ export const createAgentExperience = (
     }
   }
 
+  // `footer` is reassigned on a renderComposer swap, so the observer has to be
+  // re-pointed. `container` is observed too: its height feeds the lift.
+  let footerResizeObserver: ResizeObserver | null = null;
+  const observeComposerFooter = () => {
+    if (!footerResizeObserver) return;
+    footerResizeObserver.disconnect();
+    footerResizeObserver.observe(footer);
+    footerResizeObserver.observe(container);
+  };
+
   const recalcPanelHeight = () => {
     // Composer-bar mode lets CSS own all sizing: collapsed pill is auto-sized
     // by the footer; expanded fullscreen/modal are driven by CSS attribute
@@ -12449,6 +12590,7 @@ export const createAgentExperience = (
       // applyFullHeightStyles() assigns wrapper.style.cssText (e.g. display:flex !important), which
       // overwrites updateOpenState()'s display:none when docked+closed. Re-sync after every recalc.
       updateScrollToBottomButtonOffset();
+      syncComposerOverlayMetrics();
       updateOpenState();
 
       // Sync scroll lock and host stacking when viewport mode changes (e.g. orientation change)
@@ -12487,11 +12629,14 @@ export const createAgentExperience = (
   ownerWindow.addEventListener("resize", recalcPanelHeight);
   destroyCallbacks.push(() => ownerWindow.removeEventListener("resize", recalcPanelHeight));
   if (typeof ResizeObserver !== "undefined") {
-    const footerResizeObserver = new ResizeObserver(() => {
-      updateScrollToBottomButtonOffset();
+    footerResizeObserver = new ResizeObserver(() => {
+      syncComposerOverlayMetrics();
     });
-    footerResizeObserver.observe(footer);
-    destroyCallbacks.push(() => footerResizeObserver.disconnect());
+    observeComposerFooter();
+    destroyCallbacks.push(() => {
+      footerResizeObserver?.disconnect();
+      footerResizeObserver = null;
+    });
     // Rail/panel resolves against the host container, not the viewport.
     const historyHostObserver = new ResizeObserver(() => {
       syncHistoryPresentation();
@@ -12949,6 +13094,7 @@ export const createAgentExperience = (
       // chrome sync, not bare applyFullHeightStyles: the latter resets
       // mount.style.cssText, which silently drops every theme variable.
       syncPanelChrome();
+      observeComposerFooter();
       updateScrollToBottomButtonOffset();
       syncComposerCompact();
       if (hadFocus) textarea?.focus();

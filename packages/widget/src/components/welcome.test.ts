@@ -3,6 +3,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  animateComposerLiftChange,
   animateWelcomeOut,
   applyWelcomeConfig,
   applyWelcomeVisibility,
@@ -117,5 +118,71 @@ describe("hero dismiss animation", () => {
     const onFinished = vi.fn();
     expect(animateWelcomeOut(host, onFinished)).toBeNull();
     expect(onFinished).toHaveBeenCalledWith(null);
+  });
+});
+
+describe("composer lift animation", () => {
+  const makeFooter = () => {
+    const footer = document.createElement("div");
+    document.body.appendChild(footer);
+    return footer;
+  };
+
+  const stubAnimate = (footer: HTMLElement) => {
+    const animate = vi.fn(
+      (_keyframes: unknown, _options?: { fill?: string }) =>
+        ({}) as unknown as Animation
+    );
+    (footer as unknown as { animate: typeof animate }).animate = animate;
+    return animate;
+  };
+
+  it("travels on transform, never on bottom", () => {
+    const footer = makeFooter();
+    const animate = stubAnimate(footer);
+    expect(animateComposerLiftChange(footer, 240, "drop")).toBeTruthy();
+    const keyframes = animate.mock.calls[0]![0] as Array<Record<string, string>>;
+    expect(keyframes).toEqual([
+      { transform: "translateY(-240px)" },
+      { transform: "none" },
+    ]);
+    // A fill would pin a stale transform across a later re-show.
+    expect(animate.mock.calls[0]![1]?.fill).toBe("none");
+    footer.remove();
+  });
+
+  it("reverses the travel for the rise", () => {
+    const footer = makeFooter();
+    const animate = stubAnimate(footer);
+    animateComposerLiftChange(footer, 240, "rise");
+    const keyframes = animate.mock.calls[0]![0] as Array<Record<string, string>>;
+    expect(keyframes[0]!.transform).toBe("translateY(240px)");
+    footer.remove();
+  });
+
+  it("skips sub-pixel travel", () => {
+    const footer = makeFooter();
+    stubAnimate(footer);
+    expect(animateComposerLiftChange(footer, 1, "drop")).toBeNull();
+    expect(animateComposerLiftChange(footer, 0, "rise")).toBeNull();
+    footer.remove();
+  });
+
+  it("skips under prefers-reduced-motion", () => {
+    const footer = makeFooter();
+    stubAnimate(footer);
+    // jsdom ships no matchMedia; the helper treats its absence as "no
+    // preference", so the reduce path has to be installed explicitly.
+    const original = window.matchMedia;
+    window.matchMedia = (() => ({ matches: true })) as unknown as typeof window.matchMedia;
+    expect(animateComposerLiftChange(footer, 240, "drop")).toBeNull();
+    window.matchMedia = original;
+    footer.remove();
+  });
+
+  it("skips a detached footer", () => {
+    const footer = document.createElement("div");
+    stubAnimate(footer);
+    expect(animateComposerLiftChange(footer, 240, "drop")).toBeNull();
   });
 });

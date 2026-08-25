@@ -2,7 +2,7 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "179 kB",
+    "limit": "180 kB",
     "gzip": true
   },
   {
@@ -14,19 +14,19 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 browser stylesheet (widget.css)",
     "path": "dist/widget.css",
-    "limit": "20.5 kB",
+    "limit": "20.75 kB",
     "gzip": true
   },
   {
     "name": "\u26d4 CRITICAL \u00b7 ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "191.5 kB",
+    "limit": "192.25 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "192.5 kB",
+    "limit": "193.25 kB",
     "gzip": true
   },
   {

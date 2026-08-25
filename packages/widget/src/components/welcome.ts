@@ -157,6 +157,10 @@ export const applyWelcomeConfig = (
   applyWelcomeIcon(elements.iconHolder, resolved.icon);
   elements.host.setAttribute("data-persona-welcome-variant", resolved.variant);
   elements.host.setAttribute("data-persona-welcome-dismiss", resolved.dismiss);
+  elements.host.setAttribute(
+    "data-persona-welcome-anchor",
+    resolved.anchor ?? "bottom"
+  );
 };
 
 /** Marks the element a `renderWelcome` plugin returned. */
@@ -372,4 +376,35 @@ export const animateWelcomeOut = (
   };
   animation.finished.then(settle).catch(settle);
   return animation;
+};
+
+/**
+ * Empty -> active composer drop (and the clearChat rise). WAAPI, never a CSS
+ * transition: the widget re-stamps footer cssText on every chrome sync, which
+ * leaves a `bottom` transition stuck `running` at its start value.
+ *
+ * `distance` is the lift the footer just gave up; the caller has already
+ * written the final `--persona-composer-lift`, so this only replays the
+ * visual travel. Returns null when motion is skipped.
+ */
+export const animateComposerLiftChange = (
+  footer: HTMLElement,
+  distance: number,
+  direction: "drop" | "rise"
+): Animation | null => {
+  if (
+    distance <= 1 ||
+    prefersReducedMotion() ||
+    typeof footer.animate !== "function" ||
+    !footer.isConnected
+  ) {
+    return null;
+  }
+  const offset = direction === "drop" ? -distance : distance;
+  // `fill: "none"`: the resting state is already final, so a fill would only
+  // risk pinning a stale transform across a later re-show.
+  return footer.animate(
+    [{ transform: `translateY(${offset}px)` }, { transform: "none" }],
+    { duration: 260, easing: "cubic-bezier(0.2, 0, 0, 1)", fill: "none" }
+  );
 };

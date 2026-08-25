@@ -855,3 +855,41 @@ describe("composer motion", () => {
     expect(block).toContain("var(--persona-voice-recording-bg");
   });
 });
+
+describe("composer placement styles", () => {
+  it("absolutely positions the footer only under placement overlay", () => {
+    const selector =
+      '[data-persona-root][data-persona-composer-placement="overlay"] .persona-widget-footer {';
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("position: absolute");
+    expect(rule).toContain("inset: auto 0 var(--persona-composer-lift, 0px) 0");
+    expect(rule).toContain(
+      "background: var(--persona-composer-overlay-band, transparent)",
+    );
+  });
+
+  it("reserves the composer zone on the plugin welcome overlay, which body padding cannot reach", () => {
+    const selector =
+      '[data-persona-root][data-persona-composer-placement="overlay"]\n  .persona-welcome[data-persona-welcome-overlay] {';
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("--persona-composer-overlay-height");
+    expect(rule).toContain("--persona-composer-lift");
+    expect(rule).toContain("--persona-composer-anchor-gap");
+  });
+
+  it("end-anchors the centered hero without justify-content in the scroll body", () => {
+    const selector =
+      '.persona-welcome[data-persona-welcome-anchor="center"][data-persona-welcome-variant="hero"] {';
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("margin-block: auto 0");
+  });
+});

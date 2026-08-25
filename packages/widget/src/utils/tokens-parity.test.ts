@@ -84,6 +84,12 @@ const FIXTURES: Record<string, DeepPartial<PersonaTheme>> = {
       },
     },
   },
+  'composer overlay band + input backdrop filter': {
+    components: {
+      composer: { overlayBand: 'linear-gradient(180deg, rgba(0,0,0,0) 0, #000 96px)' },
+      input: { backdropFilter: 'blur(8px)' },
+    },
+  },
 };
 
 describe('token pipeline parity (golden)', () => {
