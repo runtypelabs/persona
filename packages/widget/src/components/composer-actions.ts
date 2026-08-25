@@ -10,7 +10,7 @@
  *
  *   start cluster   mention affordances  100 + channel index
  *                   attachment button    200
- *                   overflow trigger     900  (reserved, lands with the menu)
+ *                   overflow trigger     900  (default; composer.actionOverflow.order)
  *   end cluster     mic                  800
  *                   send                1000  (terminal)
  *   custom actions default to 500.
@@ -428,6 +428,8 @@ export function createComposerActionRenderer(
       "minWidth",
       "minHeight",
       "fontSize",
+      "color",
+      "backgroundColor",
     ] as const) {
       button.style[property] = "";
     }
@@ -487,6 +489,9 @@ export function createComposerActionRenderer(
     button.style.minHeight = size ?? "";
     button.style.fontSize = hasText ? "" : "18px";
     button.style.lineHeight = "1";
+    // Per-action chrome. Unset clears, so `controller.update()` can drop it.
+    button.style.color = action.iconColor ?? "";
+    button.style.backgroundColor = action.backgroundColor ?? "";
 
     button.replaceChildren();
     if (action.iconName) {
@@ -678,8 +683,19 @@ export function createComposerActionRenderer(
           break;
         }
       }
-      if (anchor) cluster.insertBefore(entry.element, anchor);
-      else cluster.appendChild(entry.element);
+      // Re-inserting a node that is already in place still detaches it, which
+      // blurs anything focused inside it (the model picker restores focus to
+      // its trigger on selection, and the store emit re-places right after).
+      if (anchor) {
+        if (
+          entry.element.parentElement !== cluster ||
+          entry.element.nextSibling !== anchor
+        ) {
+          cluster.insertBefore(entry.element, anchor);
+        }
+      } else if (cluster.lastChild !== entry.element) {
+        cluster.appendChild(entry.element);
+      }
     }
   };
 
@@ -959,16 +975,20 @@ export function createComposerActionRenderer(
       placeMenu(menu.panel, menuRows);
       menu.setItems(menuRows.map((entry) => entry.menuSlot ?? entry.element));
       menu.applyButtonSize();
-      // The trigger is a start-cluster control at order 900 like any other.
+      // The trigger is a start-cluster control ordered like any other; the
+      // 900 anchor is only its default, so `order: 0` leads the bar.
+      const triggerOrder = Number.isFinite(overflow?.order)
+        ? (overflow?.order as number)
+        : COMPOSER_ACTION_ORDER.overflow;
       const index = clusters.start.findIndex(
-        (entry) => entry.resolved.order > COMPOSER_ACTION_ORDER.overflow
+        (entry) => entry.resolved.order > triggerOrder
       );
       const triggerEntry: Entry = {
         resolved: {
           id: COMPOSER_OVERFLOW_ACTION_ID,
           placement: "start",
           presentation: "bar",
-          order: COMPOSER_ACTION_ORDER.overflow,
+          order: triggerOrder,
           sequence: -1,
           source: "core",
         },

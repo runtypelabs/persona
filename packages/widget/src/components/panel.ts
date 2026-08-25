@@ -176,6 +176,7 @@ export interface PanelElements {
   welcomeIconHolder: HTMLElement;
   /** Display-only greeting bubble host, pinned above the transcript. */
   greetingHost: HTMLElement;
+  introKicker: HTMLElement;
   introTitle: HTMLElement;
   introSubtitle: HTMLElement;
   closeButton: HTMLButtonElement;
@@ -406,6 +407,7 @@ const buildComposerBarPanel = (
     welcomeHost,
     welcomeIconHolder: welcome.iconHolder,
     greetingHost,
+    introKicker: welcome.kicker,
     introTitle,
     introSubtitle,
     closeButton,
@@ -556,6 +558,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     welcomeHost,
     welcomeIconHolder: welcome.iconHolder,
     greetingHost,
+    introKicker: welcome.kicker,
     introTitle,
     introSubtitle,
     closeButton: headerElements.closeButton,

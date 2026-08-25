@@ -17,6 +17,7 @@ export interface WelcomeHostElements {
   /** Permanent host; also carries `data-persona-intro-card` for slot parity. */
   host: HTMLElement;
   iconHolder: HTMLElement;
+  kicker: HTMLElement;
   title: HTMLElement;
   subtitle: HTMLElement;
   starterSuggestions: HTMLElement;
@@ -91,10 +92,27 @@ export const buildWelcomeHost = (
   });
   iconHolder.hidden = true;
 
-  // Typography flows through `components.introCard.title` / `.subtitle`;
-  // the CSS fallbacks reproduce the utility classes these replaced.
+  // Typography flows through `components.introCard.kicker` / `.title` /
+  // `.subtitle`; the CSS fallbacks reproduce the utility classes these replaced.
+  const kicker = createElement("p", "persona-welcome-kicker");
+  kicker.hidden = true;
   const title = createElement("h2", "persona-welcome-title");
   const subtitle = createElement("p", "persona-welcome-subtitle");
+
+  // Both wrappers are `display: contents` until `icon.placement: "inline"`
+  // turns the row into a flex line, so the default layout is unchanged.
+  const headText = createNode(
+    "div",
+    { className: "persona-welcome-head-text" },
+    kicker,
+    title
+  );
+  const titleRow = createNode(
+    "div",
+    { className: "persona-welcome-title-row" },
+    iconHolder,
+    headText
+  );
 
   // Background and box-shadow flow through the themable `components.introCard`
   // tokens; both default to flat. Docked mode always stays flat. Padding comes
@@ -118,13 +136,12 @@ export const buildWelcomeHost = (
         border: "var(--persona-intro-card-border, none)",
       },
     },
-    iconHolder,
-    title,
+    titleRow,
     subtitle,
     starterSuggestions
   );
 
-  return { host, iconHolder, title, subtitle, starterSuggestions };
+  return { host, iconHolder, kicker, title, subtitle, starterSuggestions };
 };
 
 /**
@@ -151,6 +168,9 @@ export const applyWelcomeConfig = (
   resolved: ResolvedWelcomeConfig
 ): void => {
   elements.title.textContent = resolved.title;
+  // An empty kicker omits the line entirely, margin included.
+  elements.kicker.textContent = resolved.kicker ?? "";
+  elements.kicker.hidden = !resolved.kicker;
   elements.subtitle.textContent = resolved.subtitle;
   // An empty subtitle omits the paragraph entirely, margin included.
   elements.subtitle.hidden = resolved.subtitle === "";
@@ -161,6 +181,18 @@ export const applyWelcomeConfig = (
     "data-persona-welcome-anchor",
     resolved.anchor ?? "bottom"
   );
+  // Both are stamped only when configured: an unset option must leave the host
+  // untouched so the variant defaults and host CSS keep working.
+  if (resolved.iconPlacement === "inline") {
+    elements.host.setAttribute("data-persona-welcome-icon-placement", "inline");
+  } else {
+    elements.host.removeAttribute("data-persona-welcome-icon-placement");
+  }
+  if (resolved.align) {
+    elements.host.setAttribute("data-persona-welcome-align", resolved.align);
+  } else {
+    elements.host.removeAttribute("data-persona-welcome-align");
+  }
 };
 
 /** Marks the element a `renderWelcome` plugin returned. */

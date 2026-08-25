@@ -7,6 +7,8 @@ import type {
   ComposerActionOverflowConfig,
   ComposerMode,
   ComposerModeGroup,
+  ComposerModel,
+  ComposerModelPickerConfig,
 } from "./index-core";
 
 /**
@@ -25,6 +27,9 @@ describe("index-core composer type exports", () => {
     "ComposerMode",
     "ComposerModeGroup",
     "ComposerActionOverflowConfig",
+    "ComposerModel",
+    "ComposerModelPickerConfig",
+    "ComposerModelPickerPresentation",
   ])("re-exports %s from the package entry", (name) => {
     expect(source).toMatch(new RegExp(`^\\s*${name},\\s*$`, "m"));
   });
@@ -39,7 +44,17 @@ describe("index-core composer type exports", () => {
       collapseAutoActionsBelow: 520,
     };
 
+    const models: ComposerModel[] = [
+      { id: "opus", label: "Opus 5", icon: "sparkles", description: "Deepest" },
+    ];
+    const picker: ComposerModelPickerConfig = {
+      presentation: "popover",
+      suffix: "High",
+    };
+
     expect(modes[0].groupId).toBe(groups[0].id);
     expect(overflow.enabled).toBe(true);
+    expect(models[0].description).toBe("Deepest");
+    expect(picker.presentation).toBe("popover");
   });
 });

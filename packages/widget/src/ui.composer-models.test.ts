@@ -31,7 +31,33 @@ const flush = async (times = 4) => {
 };
 
 const picker = (mount: HTMLElement) =>
-  mount.querySelector<HTMLSelectElement>("[data-persona-composer-model-picker]");
+  mount.querySelector<HTMLSelectElement>(
+    '[data-persona-composer-model-picker=""]'
+  );
+
+const trigger = (mount: HTMLElement) =>
+  mount.querySelector<HTMLButtonElement>(
+    '[data-persona-composer-model-picker="popover"]'
+  );
+
+const menu = () =>
+  document.querySelector<HTMLElement>("[data-persona-composer-model-menu]");
+
+const rows = () =>
+  Array.from(
+    menu()?.querySelectorAll<HTMLButtonElement>("[data-persona-model-option]") ??
+      []
+  );
+
+const key = (target: HTMLElement, code: string) =>
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", { key: code, bubbles: true, cancelable: true })
+  );
+
+const richModels = [
+  { id: "fast", label: "Haiku 4.5", icon: "zap", description: "Fastest" },
+  { id: "smart", label: "Opus 5", icon: "sparkles", description: "Most capable" },
+];
 
 const textareaOf = (mount: HTMLElement) =>
   mount.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]")!;
@@ -260,5 +286,231 @@ describe("composer model picker", () => {
 
     expect(seen[0]).toEqual({ selectedModelId: "fast" });
     expect(sent[0]?.composerOptions).toEqual({ selectedModelId: "smart" });
+  });
+
+  it("stays a native select when composer.modelPicker is unset", () => {
+    const { mount } = makeController({ composer: { models: richModels } });
+    const select = picker(mount)!;
+    expect(select.tagName).toBe("SELECT");
+    expect(select.getAttribute("data-persona-composer-model-picker")).toBe("");
+    expect(trigger(mount)).toBeNull();
+  });
+
+  it("keeps the native select under an explicit native presentation", () => {
+    const { mount } = makeController({
+      composer: { models, modelPicker: { presentation: "native" } },
+    });
+    expect(picker(mount)!.tagName).toBe("SELECT");
+  });
+
+  describe("popover presentation", () => {
+    const popoverConfig = (extra: Record<string, unknown> = {}) => ({
+      composer: {
+        models: richModels,
+        modelPicker: { presentation: "popover" as const },
+        ...extra,
+      },
+    });
+
+    it("renders a listbox trigger in the same wrapper as the select", () => {
+      const { mount } = makeController(popoverConfig());
+      const button = trigger(mount)!;
+      expect(button.tagName).toBe("BUTTON");
+      expect(button.getAttribute("aria-haspopup")).toBe("listbox");
+      expect(button.getAttribute("aria-expanded")).toBe("false");
+      expect(picker(mount)).toBeNull();
+      const wrapper = button.parentElement!;
+      expect(
+        wrapper.classList.contains("persona-composer-model-picker-wrapper")
+      ).toBe(true);
+      expect(wrapper.getAttribute("data-persona-composer-action")).toBe(
+        "core:model"
+      );
+      expect(
+        wrapper.querySelector(".persona-composer-model-picker-chevron")
+      ).not.toBeNull();
+      // The trigger keeps the select's class, so themed sizing is unchanged.
+      expect(button.classList.contains("persona-composer-model-picker")).toBe(
+        true
+      );
+    });
+
+    it("shows the selected label on the closed control", () => {
+      const { mount } = makeController(
+        popoverConfig({ selectedModelId: "smart" })
+      );
+      expect(
+        trigger(mount)!.querySelector(".persona-composer-model-picker-label")!
+          .textContent
+      ).toBe("Opus 5");
+    });
+
+    it("opens a listbox of rows with icon, label, and description", () => {
+      const { mount } = makeController(popoverConfig());
+      trigger(mount)!.click();
+      expect(trigger(mount)!.getAttribute("aria-expanded")).toBe("true");
+      expect(menu()!.getAttribute("role")).toBe("listbox");
+      const [first, second] = rows();
+      expect(first.getAttribute("role")).toBe("option");
+      expect(first.getAttribute("data-persona-model-option")).toBe("fast");
+      expect(first.getAttribute("aria-selected")).toBe("true");
+      expect(second.getAttribute("aria-selected")).toBe("false");
+      expect(
+        first.querySelector(".persona-composer-model-option-label")!.textContent
+      ).toBe("Haiku 4.5");
+      expect(
+        first.querySelector(".persona-composer-model-option-description")!
+          .textContent
+      ).toBe("Fastest");
+      expect(
+        first.querySelector(".persona-composer-model-option-icon svg")
+      ).not.toBeNull();
+    });
+
+    it("omits the description node for a model without one", () => {
+      const { mount } = makeController({
+        composer: {
+          models: [{ id: "plain", label: "Plain" }],
+          modelPicker: { presentation: "popover" },
+        },
+      });
+      trigger(mount)!.click();
+      expect(
+        rows()[0].querySelector(".persona-composer-model-option-description")
+      ).toBeNull();
+    });
+
+    it("writes a row selection to the same composer state the select drives", async () => {
+      const onModelChange = vi.fn();
+      const { mount, controller } = makeController(
+        popoverConfig({ selectedModelId: "fast", onModelChange })
+      );
+      trigger(mount)!.click();
+      rows()[1].click();
+      await flush();
+      expect(controller.getComposerState().selectedModelId).toBe("smart");
+      expect(onModelChange).toHaveBeenCalledExactlyOnceWith("smart");
+      // Closed, focus back on the trigger, and the label repainted.
+      expect(menu()).toBeNull();
+      expect(trigger(mount)!.getAttribute("aria-expanded")).toBe("false");
+      expect(document.activeElement).toBe(trigger(mount));
+      expect(
+        trigger(mount)!.querySelector(".persona-composer-model-picker-label")!
+          .textContent
+      ).toBe("Opus 5");
+    });
+
+    it("renders composer.modelPicker.suffix muted after the label", () => {
+      const { mount } = makeController(
+        popoverConfig({ selectedModelId: "smart" })
+      );
+      const controller = controllers[controllers.length - 1];
+      controller.update({
+        composer: {
+          models: richModels,
+          modelPicker: { presentation: "popover", suffix: "High" },
+        },
+      } as never);
+      const suffix = trigger(mount)!.querySelector(
+        ".persona-composer-model-picker-suffix"
+      )!;
+      expect(suffix.textContent).toBe("High");
+      expect(trigger(mount)!.getAttribute("aria-label")).toBe(
+        "Model: Opus 5 High"
+      );
+    });
+
+    it("leaves the suffix node empty when no suffix is configured", () => {
+      const { mount } = makeController(popoverConfig());
+      expect(
+        trigger(mount)!.querySelector(
+          ".persona-composer-model-picker-suffix"
+        )!.textContent
+      ).toBe("");
+    });
+
+    it("moves focus with the arrow keys and selects with Enter", async () => {
+      const { mount, controller } = makeController(
+        popoverConfig({ selectedModelId: "fast" })
+      );
+      const button = trigger(mount)!;
+      key(button, "ArrowDown");
+      expect(document.activeElement).toBe(rows()[0]);
+      key(rows()[0], "ArrowDown");
+      expect(document.activeElement).toBe(rows()[1]);
+      key(rows()[1], "ArrowUp");
+      expect(document.activeElement).toBe(rows()[0]);
+      key(rows()[0], "End");
+      expect(document.activeElement).toBe(rows()[1]);
+      key(rows()[0], "Home");
+      expect(document.activeElement).toBe(rows()[0]);
+      // Enter activates a button natively; jsdom needs the click.
+      rows()[1].click();
+      await flush();
+      expect(controller.getComposerState().selectedModelId).toBe("smart");
+    });
+
+    it("closes on Escape and returns focus to the trigger", () => {
+      const { mount } = makeController(popoverConfig());
+      const button = trigger(mount)!;
+      button.click();
+      key(rows()[0], "Escape");
+      expect(menu()).toBeNull();
+      expect(button.getAttribute("aria-expanded")).toBe("false");
+      expect(document.activeElement).toBe(button);
+    });
+
+    it("opens with the selected row focused", () => {
+      const { mount } = makeController(
+        popoverConfig({ selectedModelId: "smart" })
+      );
+      trigger(mount)!.click();
+      expect(document.activeElement).toBe(rows()[1]);
+    });
+
+    it("repaints its rows on controller.update()", () => {
+      const { mount, controller } = makeController(popoverConfig());
+      controller.update({
+        composer: {
+          models: [{ id: "only", label: "Only" }],
+          modelPicker: { presentation: "popover" },
+        },
+      } as never);
+      trigger(mount)!.click();
+      expect(rows().map((r) => r.getAttribute("data-persona-model-option"))).toEqual(
+        ["only"]
+      );
+    });
+
+    it("rebuilds the control when the presentation flips live", () => {
+      const { mount, controller } = makeController({
+        composer: { models: richModels },
+      });
+      expect(picker(mount)!.tagName).toBe("SELECT");
+      controller.update({
+        composer: { models: richModels, modelPicker: { presentation: "popover" } },
+      } as never);
+      expect(picker(mount)).toBeNull();
+      expect(trigger(mount)).not.toBeNull();
+    });
+
+    it("stays in the action row instead of folding into the overflow menu", () => {
+      const { mount } = makeController(popoverConfig());
+      expect(
+        trigger(mount)!.closest("[data-persona-composer-actions-end]")
+      ).not.toBeNull();
+      const wrapper = trigger(mount)!.parentElement!;
+      expect(wrapper.getAttribute("data-persona-composer-action")).toBe(
+        "core:model"
+      );
+    });
+
+    it("tears the menu down with the widget", () => {
+      const { mount, controller } = makeController(popoverConfig());
+      trigger(mount)!.click();
+      expect(menu()).not.toBeNull();
+      controller.destroy();
+      expect(menu()).toBeNull();
+    });
   });
 });

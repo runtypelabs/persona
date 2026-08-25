@@ -120,6 +120,35 @@ describe("composer modes", () => {
     ]);
   });
 
+  it("seeds composer.defaultActiveModeIds into state, chips, and pressed toggles", () => {
+    const { mount, controller } = makeController({
+      composer: { modes, modeGroups, defaultActiveModeIds: ["search", "concise"] },
+    });
+    expect(controller.getComposerState().activeModeIds).toEqual([
+      "search",
+      "concise",
+    ]);
+    expect(modeButton(mount, "search").getAttribute("aria-pressed")).toBe("true");
+    expect(chips(mount).map((chip) => chip.getAttribute("data-persona-composer-mode")))
+      .toEqual(["search", "concise"]);
+  });
+
+  it("drops default active ids that name no configured mode", () => {
+    const { controller } = makeController({
+      composer: { modes, modeGroups, defaultActiveModeIds: ["search", "ghost"] },
+    });
+    expect(controller.getComposerState().activeModeIds).toEqual(["search"]);
+  });
+
+  it("lets a default mode be toggled back off", async () => {
+    const { mount, controller } = makeController({
+      composer: { modes, modeGroups, defaultActiveModeIds: ["search"] },
+    });
+    modeButton(mount, "search").click();
+    await flush();
+    expect(controller.getComposerState().activeModeIds).toEqual([]);
+  });
+
   it("reflects selection with aria-pressed and composer state", async () => {
     const { mount, controller } = makeController({
       composer: { modes, modeGroups },

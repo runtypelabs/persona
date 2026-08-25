@@ -804,6 +804,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['button-primary-bg', 'components-button-primary-background', 'primary'],
     ['button-primary-fg', 'components-button-primary-foreground', 'text-inverse'],
     ['button-radius', 'components-button-primary-borderRadius', 'palette-radius-full', '=9999px'],
+    // Stop-state send button. No fallback source: widget.css carries the idle
+    // appearance in its var() fallbacks, so an unset token must stay undefined.
+    ['button-stop-bg', 'components-button-stop-background'],
+    ['button-stop-fg', 'components-button-stop-foreground'],
   ]);
 
   // Ghost variant: transparent, neutral-foreground icon buttons (the composer's
@@ -1060,6 +1064,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['motion-easing', 'components-motion-easing', '=cubic-bezier(0.2, 0, 0, 1)'],
     ['composer-border-color', 'components-composer-borderColor', 'border', '=#e5e7eb'],
     ['composer-overlay-band', 'components-composer-overlayBand', '=transparent'],
+    // `components.composer.segmented.*` and `.modelPicker.*` get no short
+    // aliases: the rows cost gzip in the critical launcher bundle, which never
+    // draws a composer. widget.css reads the auto-emitted full paths, like
+    // introCard title/subtitle.
     ['scrollbar-thumb', 'components-scrollbar-thumb', 'border', '=#e5e7eb'],
     ['scrollbar-track', 'components-scrollbar-track', '=transparent'],
     ['md-inline-code-bg', 'components-markdown-inlineCode-background', 'container'],
@@ -1122,6 +1130,23 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
 
   emitAliases(cssVars, [
     ['message-border', 'components-message-border', 'border'],
+  ]);
+
+  // Bubble geometry/type per role. No fallback source: the message layout
+  // preset's value is carried in the consuming var() fallback (inline on the
+  // bubble for type/padding, in widget.css for the row width cap), so an unset
+  // token must leave the variable undefined.
+  emitAliases(cssVars, [
+    ['message-user-padding', 'components-message-user-padding'],
+    ['message-user-max-width', 'components-message-user-maxWidth'],
+    ['message-user-font-size', 'components-message-user-fontSize'],
+    ['message-user-font-family', 'components-message-user-fontFamily'],
+    ['message-user-line-height', 'components-message-user-lineHeight'],
+    ['message-assistant-padding', 'components-message-assistant-padding'],
+    ['message-assistant-max-width', 'components-message-assistant-maxWidth'],
+    ['message-assistant-font-size', 'components-message-assistant-fontSize'],
+    ['message-assistant-font-family', 'components-message-assistant-fontFamily'],
+    ['message-assistant-line-height', 'components-message-assistant-lineHeight'],
   ]);
 
   // Icon button tokens

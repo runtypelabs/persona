@@ -105,3 +105,50 @@ describe("buildPostprocessor loaded path (parsers available)", () => {
     expect(out).not.toContain("&amp;#39;");
   });
 });
+
+describe("buildPostprocessor failure containment", () => {
+  it("renders escaped plain text when a custom renderer throws, and logs once", () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const transform = buildPostprocessor(
+      {
+        markdown: {
+          renderer: {
+            paragraph() {
+              throw new Error("renderer exploded");
+            },
+          },
+        },
+      } as AgentWidgetConfig,
+      undefined,
+      undefined
+    );
+    const message: AgentWidgetMessage = {
+      id: "1",
+      role: "assistant",
+      content: SAMPLE,
+      createdAt: "2026-06-17T00:00:00.000Z",
+    };
+
+    const first = transform({ text: SAMPLE, message, streaming: true });
+    const second = transform({ text: SAMPLE, message, streaming: false });
+
+    expect(first).toBe(escapeHtml(SAMPLE));
+    expect(second).toBe(escapeHtml(SAMPLE));
+    // One log per transform, so a streaming turn does not flood the console.
+    expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders escaped plain text when postprocessMessage throws", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const out = callTransform(
+      {
+        postprocessMessage: () => {
+          throw new Error("postprocessor exploded");
+        },
+      } as unknown as AgentWidgetConfig,
+      SAMPLE
+    );
+
+    expect(out).toBe(escapeHtml(SAMPLE));
+  });
+});

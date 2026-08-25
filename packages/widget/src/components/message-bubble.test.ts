@@ -332,6 +332,128 @@ describe("createStandardBubble", () => {
   });
 });
 
+describe("createStandardBubble: components.message geometry tokens", () => {
+  const geometry = (bubble: HTMLElement) => ({
+    padding: bubble.style.padding,
+    fontSize: bubble.style.fontSize,
+    lineHeight: bubble.style.lineHeight,
+    fontFamily: bubble.style.fontFamily,
+  });
+
+  const geometryConfig = (
+    message: Record<string, Record<string, string>>
+  ): AgentWidgetConfig =>
+    ({ theme: { components: { message } } }) as unknown as AgentWidgetConfig;
+
+  it("leaves geometry unstamped when no tokens are configured", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "geo-none", role: "user", content: "Hi" }),
+      ({ text }) => text
+    );
+    expect(geometry(bubble)).toEqual({
+      padding: "",
+      fontSize: "",
+      lineHeight: "",
+      fontFamily: "",
+    });
+  });
+
+  it("routes each configured property through its role token with the bubble preset as fallback", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "geo-user", role: "user", content: "Hi" }),
+      ({ text }) => text,
+      undefined,
+      undefined,
+      undefined,
+      {
+        widgetConfig: geometryConfig({
+          user: {
+            padding: "1rem",
+            fontSize: "16px",
+            lineHeight: "1.5",
+            fontFamily: "Georgia, serif",
+          },
+        }),
+      }
+    );
+    expect(geometry(bubble)).toEqual({
+      padding: "var(--persona-message-user-padding, 0.75rem 1.25rem)",
+      fontSize: "var(--persona-message-user-font-size, 0.875rem)",
+      lineHeight: "var(--persona-message-user-line-height, 1.75)",
+      fontFamily: "var(--persona-message-user-font-family, inherit)",
+    });
+  });
+
+  it("stamps only the configured keys", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "geo-partial", role: "assistant", content: "Hi" }),
+      ({ text }) => text,
+      undefined,
+      undefined,
+      undefined,
+      { widgetConfig: geometryConfig({ assistant: { fontFamily: "Georgia, serif" } }) }
+    );
+    expect(geometry(bubble)).toEqual({
+      padding: "",
+      fontSize: "",
+      lineHeight: "",
+      fontFamily: "var(--persona-message-assistant-font-family, inherit)",
+    });
+  });
+
+  it("uses the assistant token namespace for assistant and system bubbles", () => {
+    for (const role of ["assistant", "system"] as const) {
+      const bubble = createStandardBubble(
+        makeMessage({ id: `geo-${role}`, role, content: "Hi" }),
+        ({ text }) => text,
+        undefined,
+        undefined,
+        undefined,
+        { widgetConfig: geometryConfig({ assistant: { padding: "1rem" } }) }
+      );
+      expect(bubble.style.padding).toBe(
+        "var(--persona-message-assistant-padding, 0.75rem 1.25rem)"
+      );
+    }
+  });
+
+  it("carries the minimal and flat presets in the fallback, not the bubble preset", () => {
+    const minimal = createStandardBubble(
+      makeMessage({ id: "geo-minimal", role: "user", content: "Hi" }),
+      ({ text }) => text,
+      { layout: "minimal" },
+      undefined,
+      undefined,
+      { widgetConfig: geometryConfig({ user: { padding: "1rem" } }) }
+    );
+    expect(minimal.style.padding).toBe(
+      "var(--persona-message-user-padding, 0.5rem 0.75rem)"
+    );
+
+    const flat = createStandardBubble(
+      makeMessage({ id: "geo-flat", role: "assistant", content: "Hi" }),
+      ({ text }) => text,
+      { layout: "flat" },
+      undefined,
+      undefined,
+      {
+        widgetConfig: geometryConfig({
+          assistant: { padding: "1rem", fontSize: "17px", lineHeight: "1.4" },
+        }),
+      }
+    );
+    expect(flat.style.padding).toBe(
+      "var(--persona-message-assistant-padding, 0.5rem 0)"
+    );
+    expect(flat.style.fontSize).toBe(
+      "var(--persona-message-assistant-font-size, inherit)"
+    );
+    expect(flat.style.lineHeight).toBe(
+      "var(--persona-message-assistant-line-height, inherit)"
+    );
+  });
+});
+
 describe("resolveStopReasonNoticeText", () => {
   it("returns null for natural completions", () => {
     expect(resolveStopReasonNoticeText("end_turn")).toBeNull();

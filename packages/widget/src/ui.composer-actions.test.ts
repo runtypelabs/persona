@@ -110,6 +110,51 @@ describe("composer action registry in the live widget", () => {
     ).not.toBeNull();
   });
 
+  it("paints iconColor and backgroundColor on the bar button, and clears them on update()", () => {
+    const { mount, controller } = makeController({
+      composer: {
+        actions: [
+          hostAction({ iconColor: "#ffffff", backgroundColor: "#2563eb" }),
+        ],
+      },
+    });
+    const button = actionButton(mount, "host")!;
+    expect(button.style.color).toBe("rgb(255, 255, 255)");
+    expect(button.style.backgroundColor).toBe("rgb(37, 99, 235)");
+
+    controller.update({ composer: { actions: [hostAction()] } });
+    const plain = actionButton(mount, "host")!;
+    expect(plain.style.color).toBe("");
+    expect(plain.style.backgroundColor).toBe("");
+  });
+
+  it("leaves per-action chrome off the folded overflow row", () => {
+    const { mount } = makeController({
+      composer: {
+        actions: [
+          hostAction({
+            presentation: "overflow",
+            iconColor: "#ffffff",
+            backgroundColor: "#2563eb",
+          }),
+        ],
+        actionOverflow: { enabled: true },
+      },
+    });
+    mount
+      .querySelector<HTMLButtonElement>(
+        "[data-persona-composer-overflow-trigger]"
+      )!
+      .click();
+    // A folded action IS the menu row button; nothing wraps it.
+    const row = document.querySelector<HTMLButtonElement>(
+      'button[data-persona-composer-action="host"]'
+    )!;
+    expect(row.getAttribute("role")).toBe("menuitem");
+    expect(row.style.color).toBe("");
+    expect(row.style.backgroundColor).toBe("");
+  });
+
   it("keeps send terminal even when a host action asks to sort past it", () => {
     const { mount } = makeController({
       composer: {

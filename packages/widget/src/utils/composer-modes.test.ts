@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import type { ComposerMode, ComposerModeGroup } from "../types";
 import {
+  chipVisibleComposerModes,
   clearOnceComposerModes,
   composerModeActionId,
+  composerModeGroupActionId,
   composerModeOrder,
+  isSegmentedModeGroup,
   pruneComposerModes,
   resolveComposerModePlaceholder,
   toggleComposerMode,
@@ -107,9 +110,39 @@ describe("resolveComposerModePlaceholder", () => {
   });
 });
 
+describe("segmented mode groups", () => {
+  const segmented: ComposerModeGroup[] = [
+    { id: "tool", selection: "single", presentation: "segmented" },
+    { id: "style", selection: "multiple" },
+  ];
+
+  it("reads the presentation off the group", () => {
+    expect(isSegmentedModeGroup("tool", segmented)).toBe(true);
+    expect(isSegmentedModeGroup("style", segmented)).toBe(false);
+    expect(isSegmentedModeGroup("tool", groups)).toBe(false);
+    expect(isSegmentedModeGroup(undefined, segmented)).toBe(false);
+    expect(isSegmentedModeGroup("missing", segmented)).toBe(false);
+  });
+
+  it("suppresses chips for the segmented group's modes only", () => {
+    expect(chipVisibleComposerModes(modes, segmented).map((mode) => mode.id)).toEqual([
+      "concise",
+      "verbose",
+      "draft",
+    ]);
+  });
+
+  it("chips every mode when no group is segmented", () => {
+    expect(chipVisibleComposerModes(modes, groups)).toHaveLength(modes.length);
+    expect(chipVisibleComposerModes(modes, undefined)).toHaveLength(modes.length);
+    expect(chipVisibleComposerModes(undefined, segmented)).toEqual([]);
+  });
+});
+
 describe("mode action identity and ordering", () => {
   it("namespaces the registry id", () => {
     expect(composerModeActionId("search")).toBe("core:mode:search");
+    expect(composerModeGroupActionId("tool")).toBe("core:mode-group:tool");
   });
 
   it("stays inside the reserved 300-499 range", () => {

@@ -772,6 +772,74 @@ describe("model picker height", () => {
   });
 });
 
+describe("model picker popover", () => {
+  const ruleFor = (selector: string): string => {
+    const at = widgetCss.indexOf(selector);
+    expect(at, `selector not found: ${selector}`).toBeGreaterThan(-1);
+    return widgetCss.slice(at, widgetCss.indexOf("}", at));
+  };
+
+  it("keeps the trigger on the select's own pill rule", () => {
+    // The trigger carries `.persona-composer-model-picker` too, so a themed
+    // page keeps the same box; this rule only adds the label/suffix row.
+    const rule = ruleFor(
+      "[data-persona-root] .persona-composer-model-picker-trigger {"
+    );
+    expect(rule).toContain("display: inline-flex");
+    expect(rule).not.toContain("height:");
+    expect(rule).not.toContain("border-radius:");
+  });
+
+  it("hides an empty suffix so an unset value leaves no gap", () => {
+    expect(ruleFor(".persona-composer-model-picker-suffix:empty")).toContain(
+      "display: none"
+    );
+  });
+
+  it("reads every modelPicker token as a full path with a fallback", () => {
+    const menu = ruleFor(".persona-composer-model-menu {");
+    expect(menu).toContain(
+      "--persona-components-composer-modelPicker-menuBackground,"
+    );
+    expect(menu).toContain("var(--persona-surface, #ffffff)");
+    expect(menu).toContain(
+      "--persona-components-composer-modelPicker-menuBorderRadius,"
+    );
+    expect(
+      ruleFor(".persona-composer-model-picker-suffix {")
+    ).toContain("--persona-components-composer-modelPicker-suffixColor,");
+    expect(ruleFor(".persona-composer-model-option-label")).toContain(
+      "--persona-components-composer-modelPicker-labelColor,"
+    );
+    expect(ruleFor(".persona-composer-model-option-description")).toContain(
+      "--persona-components-composer-modelPicker-descriptionColor,"
+    );
+    expect(
+      ruleFor(".persona-composer-model-option:hover,")
+    ).toContain("--persona-components-composer-modelPicker-rowHoverBackground,");
+  });
+
+  it("keeps the portaled panel rules unprefixed", () => {
+    // createPopover mounts the panel outside the widget root, so a
+    // `[data-persona-root]` prefix would never match it.
+    expect(widgetCss).not.toContain(
+      "[data-persona-root] .persona-composer-model-menu"
+    );
+    expect(widgetCss).not.toContain(
+      "[data-persona-root] .persona-composer-model-option"
+    );
+  });
+
+  it("reveals the row check off aria-selected rather than rebuilding rows", () => {
+    expect(widgetCss).toContain(
+      ".persona-composer-model-option-check {\n  visibility: hidden;\n}"
+    );
+    expect(
+      ruleFor('.persona-composer-model-option[aria-selected="true"]')
+    ).toContain("visibility: visible");
+  });
+});
+
 describe("composer motion", () => {
   /** Every `@media (prefers-reduced-motion: no-preference)` block, joined. */
   const reducedMotionSafeCss = (): string => {
@@ -891,5 +959,81 @@ describe("composer placement styles", () => {
 
     expect(start).toBeGreaterThan(-1);
     expect(rule).toContain("margin-block: auto 0");
+  });
+
+  it("honors welcome.composerGap under block placement on the body and the plugin host", () => {
+    const prefix =
+      '[data-persona-root][data-persona-composer-placement="block"][data-persona-welcome-anchor="center"][data-persona-conversation-state="empty"]';
+    for (const target of [
+      ".persona-widget-body {",
+      '.persona-welcome[data-persona-welcome-overlay] {',
+    ]) {
+      const start = widgetCss.indexOf(`${prefix}\n  ${target}`);
+      expect(start).toBeGreaterThan(-1);
+      const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+      expect(rule).toContain(
+        "padding-bottom: var(--persona-composer-anchor-gap, 24px)"
+      );
+    }
+  });
+});
+
+describe("send button visibility and stop-state styles", () => {
+  it("hides only the wrapper ui.ts stamped, leaving the rest of the row intact", () => {
+    const selector = ".persona-send-button-wrapper[data-persona-send-hidden] {";
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("display: none");
+  });
+
+  it("falls back to the idle appearance of each send-button mode in stop state", () => {
+    const shared =
+      '[data-persona-root] [data-persona-composer-submit][data-persona-send-mode="stop"] {';
+    const sharedStart = widgetCss.indexOf(shared);
+    const sharedRule = widgetCss.slice(sharedStart, widgetCss.indexOf("\n}", sharedStart));
+    expect(sharedStart).toBeGreaterThan(-1);
+    expect(sharedRule).toContain("--persona-send-button-fg: var(");
+    expect(sharedRule).toContain("--persona-button-stop-fg");
+    expect(sharedRule).toContain("--persona-button-primary-fg, #ffffff");
+
+    const iconStart = widgetCss.indexOf(
+      '.persona-composer-control[data-persona-composer-submit][data-persona-send-mode="stop"] {'
+    );
+    const iconRule = widgetCss.slice(iconStart, widgetCss.indexOf("\n}", iconStart));
+    expect(iconStart).toBeGreaterThan(-1);
+    expect(iconRule).toContain("--persona-button-stop-bg");
+    expect(iconRule).toContain("--persona-button-primary-bg, var(--persona-primary");
+
+    const textStart = widgetCss.indexOf(
+      '.persona-bg-persona-accent[data-persona-composer-submit][data-persona-send-mode="stop"] {'
+    );
+    const textRule = widgetCss.slice(textStart, widgetCss.indexOf("\n}", textStart));
+    expect(textStart).toBeGreaterThan(-1);
+    expect(textRule).toContain(
+      "background-color: var(--persona-button-stop-bg, var(--persona-accent, #0f0f0f))"
+    );
+  });
+});
+
+describe("message row geometry tokens", () => {
+  it("owns the 85% row default per role so components.message.<role>.maxWidth can win", () => {
+    for (const [selector, token] of [
+      [
+        '.persona-message-row[data-message-role="user"] > * {',
+        "--persona-message-user-max-width, 85%",
+      ],
+      [
+        '.persona-message-row[data-message-role="assistant"] > *,',
+        "--persona-message-assistant-max-width, 85%",
+      ],
+    ] as const) {
+      const start = widgetCss.indexOf(selector);
+      expect(start).toBeGreaterThan(-1);
+      const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+      expect(rule).toContain("--persona-message-row-max-width");
+      expect(rule).toContain(token);
+    }
   });
 });

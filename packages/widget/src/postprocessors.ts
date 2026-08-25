@@ -13,16 +13,128 @@ export type MarkdownProcessorOptions = {
 };
 
 /**
- * Converts AgentWidgetMarkdownRendererOverrides to marked's RendererObject format
+ * Adapt `AgentWidgetMarkdownRendererOverrides` to the renderer contract of the
+ * bundled marked, which calls every method POSITIONALLY. Each wrapper rebuilds
+ * the token object the public types document from those arguments; `raw` and
+ * `tokens` are not recoverable at this layer and arrive `""` / `[]`. A `false`
+ * return still falls through to the default renderer.
  */
-const convertRendererOverrides = (
+export const convertRendererOverrides = (
   overrides?: AgentWidgetMarkdownRendererOverrides
 ): Partial<RendererObject> | undefined => {
   if (!overrides) return undefined;
-  
-  // The token-based API in marked v12+ matches our type definitions
-  // We can pass through the overrides directly
-  return overrides as Partial<RendererObject>;
+
+  const out: Record<string, unknown> = {};
+  const o = overrides;
+
+  if (o.heading) {
+    const fn = o.heading;
+    out.heading = (text: string, level: number, raw: string) =>
+      fn({
+        type: "heading",
+        raw,
+        depth: level as 1 | 2 | 3 | 4 | 5 | 6,
+        text,
+        tokens: [],
+      });
+  }
+  if (o.code) {
+    const fn = o.code;
+    out.code = (code: string, infostring: string | undefined, escaped: boolean) =>
+      fn({ type: "code", raw: "", text: code, lang: infostring, escaped });
+  }
+  if (o.blockquote) {
+    const fn = o.blockquote;
+    out.blockquote = (quote: string) =>
+      fn({ type: "blockquote", raw: "", text: quote, tokens: [] });
+  }
+  if (o.table) {
+    const fn = o.table;
+    out.table = (header: string, body: string) =>
+      fn({
+        type: "table",
+        raw: "",
+        header: [],
+        rows: [],
+        align: [],
+        headerHtml: header,
+        bodyHtml: body,
+      });
+  }
+  if (o.link) {
+    const fn = o.link;
+    out.link = (href: string, title: string | null | undefined, text: string) =>
+      fn({ type: "link", raw: "", href, title: title ?? null, text, tokens: [] });
+  }
+  if (o.image) {
+    const fn = o.image;
+    out.image = (href: string, title: string | null, text: string) =>
+      fn({ type: "image", raw: "", href, title: title ?? null, text });
+  }
+  if (o.list) {
+    const fn = o.list;
+    out.list = (body: string, ordered: boolean, start: number | "") =>
+      fn({
+        type: "list",
+        raw: "",
+        ordered,
+        start,
+        loose: false,
+        items: [],
+        itemsHtml: body,
+      });
+  }
+  if (o.listitem) {
+    const fn = o.listitem;
+    out.listitem = (text: string, task: boolean, checked: boolean) =>
+      fn({
+        type: "list_item",
+        raw: "",
+        task,
+        checked,
+        loose: false,
+        text,
+        tokens: [],
+      });
+  }
+  if (o.paragraph) {
+    const fn = o.paragraph;
+    out.paragraph = (text: string) =>
+      fn({ type: "paragraph", raw: "", text, tokens: [] });
+  }
+  if (o.codespan) {
+    const fn = o.codespan;
+    out.codespan = (text: string) => fn({ type: "codespan", raw: "", text });
+  }
+  if (o.strong) {
+    const fn = o.strong;
+    out.strong = (text: string) => fn({ type: "strong", raw: "", text, tokens: [] });
+  }
+  if (o.em) {
+    const fn = o.em;
+    out.em = (text: string) => fn({ type: "em", raw: "", text, tokens: [] });
+  }
+  if (o.del) {
+    const fn = o.del;
+    out.del = (text: string) => fn({ type: "del", raw: "", text, tokens: [] });
+  }
+  if (o.html) {
+    const fn = o.html;
+    out.html = (html: string) => fn({ type: "html", raw: html, text: html });
+  }
+  if (o.text) {
+    const fn = o.text;
+    out.text = (text: string) => fn({ type: "text", raw: text, text });
+  }
+  if (o.checkbox) {
+    const fn = o.checkbox;
+    out.checkbox = (checked: boolean) => fn({ checked });
+  }
+  // No arguments to adapt.
+  if (o.hr) out.hr = o.hr;
+  if (o.br) out.br = o.br;
+
+  return out as unknown as Partial<RendererObject>;
 };
 
 /**

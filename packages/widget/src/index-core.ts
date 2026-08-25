@@ -97,10 +97,16 @@ export type {
   ComposerActionRenderContext,
   ComposerActionContributionContext,
   ComposerActionOverflowConfig,
+  // Model picker (composer.models, composer.modelPicker)
+  ComposerModel,
+  ComposerModelPickerConfig,
+  ComposerModelPickerPresentation,
   // Composer modes + mode groups (composer.modes, composer.modeGroups)
   ComposerMode,
   ComposerModeGroup,
+  ComposerModeGroupPresentation,
   // Composer baseline configuration (submit keys, sizing, locks)
+  ComposerLayout,
   ComposerSubmitKey,
   ComposerInputAttributes,
   ComposerDisabledOption,
@@ -126,6 +132,8 @@ export type {
   // Message actions types
   AgentWidgetMessageActionsConfig,
   AgentWidgetMessageFeedback,
+  AgentWidgetCustomMessageAction,
+  AgentWidgetCustomMessageActionRole,
   // Client token types
   ClientSession,
   ClientInitResponse,
@@ -216,6 +224,9 @@ export type {
   AgentWidgetSuggestionsConfig,
   AgentWidgetWelcomeConfig,
   AgentWidgetWelcomeIcon,
+  AgentWidgetWelcomeIconBase,
+  AgentWidgetWelcomeIconPlacement,
+  AgentWidgetWelcomeAlign,
   AgentWidgetWelcomeVariant,
   AgentWidgetWelcomeDismiss
 } from "./types";

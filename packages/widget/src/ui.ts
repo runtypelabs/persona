@@ -81,6 +81,10 @@ import {
 } from "./components/composer-model-picker";
 import { createComposerModeChipRow } from "./components/composer-mode-chips";
 import {
+  createComposerSegmentedModeAction,
+  type ComposerSegmentedModeControl,
+} from "./components/composer-segmented-modes";
+import {
   COMPOSER_CHIP_ROW_SELECTOR,
   ensureComposerChipRow,
 } from "./components/composer-chip-row";
@@ -102,9 +106,11 @@ import {
   type DraftWriter
 } from "./utils/composer-draft";
 import {
+  chipVisibleComposerModes,
   clearOnceComposerModes,
   composerModeActionId,
   composerModeOrder,
+  isSegmentedModeGroup,
   pruneComposerModes,
   resolveComposerModePlaceholder,
   toggleComposerMode,
@@ -249,7 +255,12 @@ import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
 import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer, MessageActionEligibility } from "./components/message-bubble";
-import { createStandardBubble, createTypingIndicator, getBubbleClasses } from "./components/message-bubble";
+import {
+  createStandardBubble,
+  createTypingIndicator,
+  getBubbleClasses,
+  CUSTOM_MESSAGE_ACTION_PREFIX,
+} from "./components/message-bubble";
 import { createReasoningBubble, reasoningExpansionState, updateReasoningBubbleUI } from "./components/reasoning-bubble";
 import { createToolBubble, toolExpansionState, updateToolBubbleUI } from "./components/tool-bubble";
 import {
@@ -754,7 +765,12 @@ export const buildPostprocessor = (
     );
   }
 
-  return (context) => {
+  // A throwing custom renderer/postprocessor used to propagate out of the
+  // bubble builder and abort the whole streaming turn. One log per transform,
+  // then escaped plain text for the rest of the stream.
+  let reportedTransformFailure = false;
+
+  const render = (context: Parameters<MessageTransform>[0]): string => {
     let nextText = context.text ?? "";
     const rawPayload = context.message.rawContent ?? null;
 
@@ -812,6 +828,21 @@ export const buildPostprocessor = (
     }
 
     return html;
+  };
+
+  return (context) => {
+    try {
+      return render(context);
+    } catch (error) {
+      if (!reportedTransformFailure) {
+        reportedTransformFailure = true;
+        console.error(
+          "[Persona] markdown rendering failed; falling back to plain text:",
+          error
+        );
+      }
+      return escapeHtml(context.text ?? "");
+    }
   };
 };
 
@@ -1370,6 +1401,7 @@ export const createAgentExperience = (
     welcomeHost,
     welcomeIconHolder,
     greetingHost,
+    introKicker,
     introTitle,
     introSubtitle,
     closeButton,
@@ -1654,6 +1686,23 @@ export const createAgentExperience = (
 
   const composerModes = (): readonly ComposerMode[] => config.composer?.modes ?? [];
 
+  /**
+   * Modes that still earn a header chip: a segmented track shows its group's
+   * state itself, so a chip beside it would be a second copy of it.
+   */
+  const composerChipModes = (): readonly ComposerMode[] =>
+    chipVisibleComposerModes(composerModes(), config.composer?.modeGroups);
+
+  // Authored initial selection. Everything downstream reads the store, and a
+  // restored draft overwrites this in `restoreComposerDraft`.
+  {
+    const seeded = pruneComposerModes(
+      config.composer?.defaultActiveModeIds ?? [],
+      composerModes()
+    );
+    if (seeded.length) composerStore.setActiveModeIds(seeded);
+  }
+
   /** Write a selection to the store and notify the host. Config is untouched. */
   function selectComposerModel(modelId: string): void {
     if (composerStore.getState().selectedModelId === modelId) return;
@@ -1668,7 +1717,8 @@ export const createAgentExperience = (
 
   function setActiveComposerModes(ids: readonly string[]): void {
     composerStore.setActiveModeIds(ids);
-    composerModeChips?.render(ids, composerModes());
+    composerModeChips?.render(ids, composerChipModes());
+    composerSegmentedGroups.forEach((group) => group.repaint());
     // `pressed` is read off config at resolve time, so the row must re-resolve.
     composerActionRenderer?.resolve();
     updateCopy();
@@ -1688,7 +1738,11 @@ export const createAgentExperience = (
 
   /** Model picker + one toggle per configured mode, as ordinary actions. */
   let composerModelPicker: ComposerModelPicker | null = null;
+  /** Presentation the cached picker was built for; a change rebuilds it. */
+  let composerModelPickerMode: "native" | "popover" | null = null;
   let composerModeChips: ReturnType<typeof createComposerModeChipRow> | null = null;
+  /** One cached segmented track per `presentation: "segmented"` mode group. */
+  const composerSegmentedGroups = new Map<string, ComposerSegmentedModeControl>();
 
   // --- Quote / reply-to (roadmap section 13) --------------------------------
   let composerQuoteBanner: ReturnType<typeof createComposerQuoteBanner> | null = null;
@@ -1735,10 +1789,44 @@ export const createAgentExperience = (
     syncComposerCompact();
   }
 
+  /** Cached so the track keeps its element identity across re-resolves. */
+  const ensureSegmentedModeGroup = (
+    groupId: string
+  ): ComposerSegmentedModeControl => {
+    const existing = composerSegmentedGroups.get(groupId);
+    if (existing) return existing;
+    const control = createComposerSegmentedModeAction({
+      groupId,
+      getGroup: () =>
+        config.composer?.modeGroups?.find((group) => group.id === groupId),
+      getModes: () =>
+        composerModes().filter((mode) => mode.groupId === groupId),
+      getActiveIds: () => composerStore.getState().activeModeIds,
+      onSelect: (modeId) => toggleComposerModeById(modeId),
+    });
+    composerSegmentedGroups.set(groupId, control);
+    return control;
+  };
+
   const collectComposerCoreActions = (): ComposerAction[] => {
     const actions: ComposerAction[] = [];
     const active = composerStore.getState().activeModeIds;
+    const seenSegmentedGroups = new Set<string>();
     composerModes().forEach((mode, index) => {
+      // A segmented group contributes one track at its first member's slot; the
+      // members themselves contribute no loose buttons.
+      if (isSegmentedModeGroup(mode.groupId, config.composer?.modeGroups)) {
+        const groupId = mode.groupId as string;
+        if (seenSegmentedGroups.has(groupId)) return;
+        seenSegmentedGroups.add(groupId);
+        const control = ensureSegmentedModeGroup(groupId);
+        control.action.order = composerModeOrder(index);
+        control.action.label =
+          config.composer?.modeGroups?.find((group) => group.id === groupId)
+            ?.label ?? groupId;
+        actions.push(control.action);
+        return;
+      }
       actions.push({
         id: composerModeActionId(mode.id),
         kind: "button",
@@ -1759,11 +1847,18 @@ export const createAgentExperience = (
       config.composer?.models?.length &&
       !plugins.some((plugin) => plugin.renderComposer)
     ) {
-      if (!composerModelPicker) {
+      // A presentation flip is a different control, so it rebuilds: the fresh
+      // `render` identity is what makes the action registry swap the element.
+      const presentation =
+        config.composer?.modelPicker?.presentation ?? "native";
+      if (!composerModelPicker || composerModelPickerMode !== presentation) {
+        composerModelPickerMode = presentation;
         composerModelPicker = createComposerModelPickerAction({
           getModels: () => config.composer?.models ?? [],
           getSelectedModelId: () => composerStore.getState().selectedModelId,
           onSelect: (modelId) => selectComposerModel(modelId),
+          presentation,
+          getSuffix: () => config.composer?.modelPicker?.suffix,
         });
       }
       actions.push(composerModelPicker.action);
@@ -2337,7 +2432,7 @@ export const createAgentExperience = (
   const setupComposerModeChips = (): void => {
     composerModeChips?.destroy();
     composerModeChips = null;
-    if (!config.composer?.modes?.length) return;
+    if (!composerChipModes().length) return;
     const header = composerBindings?.header;
     if (!header) return;
     composerModeChips = createComposerModeChipRow({
@@ -2347,7 +2442,10 @@ export const createAgentExperience = (
       // those must not replay their entrance.
       initialIds: composerStore.getState().activeModeIds,
     });
-    composerModeChips.render(composerStore.getState().activeModeIds, composerModes());
+    composerModeChips.render(
+      composerStore.getState().activeModeIds,
+      composerChipModes()
+    );
   };
   setupComposerModeChips();
 
@@ -2393,7 +2491,10 @@ export const createAgentExperience = (
     );
     if (row) return row.childElementCount > 0;
     const state = composerStore.getState();
-    return state.mentionRefs.length > 0 || state.activeModeIds.length > 0;
+    return (
+      state.mentionRefs.length > 0 ||
+      pruneComposerModes(state.activeModeIds, composerChipModes()).length > 0
+    );
   };
   // Bound once `voiceState` exists (further down this closure); the compact
   // sweep can run before then only via a microtask, which is later still.
@@ -2418,14 +2519,30 @@ export const createAgentExperience = (
     );
   }
 
+  /**
+   * `composer.layout`. Stamped only when `"single-row"` is configured: an unset
+   * layout must leave the footer untouched so host CSS keeps owning the form.
+   * The pill composer is already one row and owns its own grid.
+   */
+  function syncComposerLayout(): void {
+    if (config.composer?.layout === "single-row" && !isComposerBar()) {
+      footer.setAttribute("data-persona-composer-layout", "single-row");
+    } else {
+      footer.removeAttribute("data-persona-composer-layout");
+    }
+  }
+  syncComposerLayout();
+
   // `visible`/`disabled` predicates re-evaluate on every composer-state change,
   // and the send button follows the same state (locks + attachment readiness).
   composerStore.subscribe(() => {
     composerActionRenderer?.sync();
     syncComposerSendAvailability();
+    syncSendButtonVisibility();
     syncComposerCompact();
     scheduleDraftPersist();
   });
+  syncSendButtonVisibility();
 
   // `messages` and `composer` are public but have never been implemented;
   // insertSlotContent drops them. Warn once per widget instead of silently
@@ -2780,6 +2897,21 @@ export const createAgentExperience = (
       historyActions?.edit(messageId);
     } else if (action === 'quote') {
       historyActions?.quote(messageId);
+    } else if (action?.startsWith(CUSTOM_MESSAGE_ACTION_PREFIX)) {
+      // Resolved off config, never off the element: the row is morphed DOM, so
+      // anything stored on the button would not survive a re-render.
+      const id = action.slice(CUSTOM_MESSAGE_ACTION_PREFIX.length);
+      const custom = config.messageActions?.custom?.find((item) => item.id === id);
+      const message = session.getMessages().find((m) => m.id === messageId);
+      if (!custom || !message) return;
+      try {
+        custom.onSelect(message);
+      } catch (error) {
+        console.error(
+          `[AgentWidget] messageActions.custom "${id}" onSelect failed:`,
+          error
+        );
+      }
     }
   });
 
@@ -4463,12 +4595,16 @@ export const createAgentExperience = (
         "[persona] composer.placement is ignored in composer-bar mount mode."
       );
     }
+    const welcome = resolveWelcomeConfig(config);
     mount.setAttribute("data-persona-composer-placement", placement);
     mount.setAttribute("data-persona-conversation-state", conversationState);
+    // Root-level mirror of the welcome host's own anchor attribute, so the
+    // block+center gap rules can target the body without :has().
+    mount.setAttribute("data-persona-welcome-anchor", welcome.anchor ?? "bottom");
     // Not `--persona-composer-gap`: that alias is components.composer.gap.
     mount.style.setProperty(
       "--persona-composer-anchor-gap",
-      resolveWelcomeConfig(config).composerGap ?? DEFAULT_COMPOSER_GAP
+      welcome.composerGap ?? DEFAULT_COMPOSER_GAP
     );
     syncComposerOverlayMetrics();
   };
@@ -5258,7 +5394,9 @@ export const createAgentExperience = (
       composerStore.setSelectedModelId(restored.selectedModelId);
       composerModelPicker?.repaint();
     }
-    if (restored.activeModeIds?.length) setActiveComposerModes(restored.activeModeIds);
+    // Unconditional: a restored draft's selection beats
+    // `composer.defaultActiveModeIds`, including when it deselected everything.
+    setActiveComposerModes(restored.activeModeIds ?? []);
     if (restored.quote) setComposerQuote(restored.quote);
     // The replay itself is not a new edit: it must not immediately rewrite the
     // stored payload it came from.
@@ -6001,8 +6139,10 @@ export const createAgentExperience = (
     const sizingRole = role === "user" ? "user" : "assistant";
     const roleLayout = config.layout?.messages?.[sizingRole];
     const width = roleLayout?.width ?? "content";
+    // Only an explicit config value is stamped inline; the 85%/100% defaults
+    // live in widget.css so `components.message.<role>.maxWidth` can win.
     const maxWidth =
-      roleLayout?.maxWidth ?? (width === "full" ? "100%" : "85%");
+      roleLayout?.maxWidth ?? (width === "full" ? "100%" : undefined);
 
     wrapper.classList.add("persona-message-row");
     wrapper.classList.remove(
@@ -6019,7 +6159,8 @@ export const createAgentExperience = (
     wrapper.classList.toggle("persona-justify-end", role === "user");
     wrapper.setAttribute("data-message-role", role);
     wrapper.setAttribute("data-message-width", width);
-    wrapper.style.setProperty("--persona-message-row-max-width", maxWidth);
+    if (maxWidth) wrapper.style.setProperty("--persona-message-row-max-width", maxWidth);
+    else wrapper.style.removeProperty("--persona-message-row-max-width");
   };
 
   const createMessageRow = (
@@ -6143,7 +6284,20 @@ export const createAgentExperience = (
     /** The live editor, re-grafted into its morphed wrapper after the pass. */
     let editHydrate: { messageId: string; element: HTMLElement } | null = null;
 
+    // `reasoningDisplay.completedVisibility: "removed"`: no row for a finished
+    // trace, so the transcript gap closes with it. Checked before the row is
+    // registered, so the cached wrapper is pruned too.
+    const dropCompletedReasoning =
+      config.features?.reasoningDisplay?.completedVisibility === "removed";
+
     messages.forEach((message) => {
+      if (
+        dropCompletedReasoning &&
+        message.variant === "reasoning" &&
+        message.reasoning?.status === "complete"
+      ) {
+        return;
+      }
       activeMessageIds.add(message.id);
       messageRolesById.set(message.id, message.role);
 
@@ -6701,7 +6855,11 @@ export const createAgentExperience = (
         // A hidden reasoning row does not create a visible break in the
         // transcript, so it should not split an otherwise contiguous tool
         // sequence into separate groups.
-        if (message.variant === "reasoning" && !showReasoning) {
+        if (
+          message.variant === "reasoning" &&
+          (!showReasoning ||
+            (dropCompletedReasoning && message.reasoning?.status === "complete"))
+        ) {
           return;
         }
         // Summary mode owns the visible row from the first tool onward. Waiting
@@ -7748,6 +7906,21 @@ export const createAgentExperience = (
     sendButton.disabled = isComposerSendBlocked() || attachmentsBlocked;
   }
 
+  /**
+   * `sendButton.visibility: "when-text"`: hide the control while there is
+   * nothing to send. Streaming always shows it, because it is Stop then.
+   */
+  function syncSendButtonVisibility(): void {
+    if (!sendButtonWrapper) return;
+    const state = composerStore.getState();
+    const hidden =
+      config.sendButton?.visibility === "when-text" &&
+      state.phase !== "streaming" &&
+      state.text.trim().length === 0 &&
+      state.attachments.length === 0;
+    sendButtonWrapper.toggleAttribute("data-persona-send-hidden", hidden);
+  }
+
   /** Render the active reason. Pill mode has no status row, so it gets a title. */
   function renderComposerLockReason(): void {
     const reason = composerLockReason();
@@ -7940,7 +8113,7 @@ export const createAgentExperience = (
   let welcomePluginSuppressed = false;
   const updateWelcome = (messages?: AgentWidgetMessage[]) => {
     const resolved = resolveWelcomeConfig(config);
-    const welcomeKey = `${resolved.variant}|${resolved.dismiss}|${resolved.anchor ?? "bottom"}|${resolved.title}|${resolved.subtitle}`;
+    const welcomeKey = `${resolved.variant}|${resolved.dismiss}|${resolved.anchor ?? "bottom"}|${resolved.align ?? ""}|${resolved.iconPlacement}|${resolved.kicker ?? ""}|${resolved.title}|${resolved.subtitle}`;
     if (welcomeKey !== lastWelcomeKey || resolved.icon !== lastWelcomeIcon) {
       lastWelcomeKey = welcomeKey;
       lastWelcomeIcon = resolved.icon;
@@ -7948,6 +8121,7 @@ export const createAgentExperience = (
         {
           host: welcomeHost,
           iconHolder: welcomeIconHolder,
+          kicker: introKicker,
           title: introTitle,
           subtitle: introSubtitle,
           starterSuggestions,
@@ -13097,6 +13271,7 @@ export const createAgentExperience = (
       observeComposerFooter();
       updateScrollToBottomButtonOffset();
       syncComposerCompact();
+      syncSendButtonVisibility();
       if (hadFocus) textarea?.focus();
     } finally {
       composerRebuilding = false;
@@ -13214,6 +13389,7 @@ export const createAgentExperience = (
     composerPendingCard?.destroy();
     composerPendingCard = null;
     composerModelPicker = null;
+    composerModelPickerMode = null;
     // Flush before the store is destroyed: the pending write reads its state.
     flushDraftPersist();
     draftWriter.destroy();
@@ -14361,7 +14537,8 @@ export const createAgentExperience = (
         if (textColor) {
           sendButton.style.color = textColor;
         } else {
-          sendButton.style.color = "var(--persona-button-primary-fg, #ffffff)";
+          sendButton.style.color =
+            "var(--persona-send-button-fg, var(--persona-button-primary-fg, #ffffff))";
         }
 
         // Skip the icon-content re-render while streaming: the button holds the
@@ -14470,6 +14647,7 @@ export const createAgentExperience = (
       if (!session.isStreaming()) {
         sendButton.setAttribute("aria-label", tooltipText);
       }
+      syncSendButtonVisibility();
       if (sendButtonWrapper) {
         attachTooltip({
           anchor: sendButton,
@@ -14479,6 +14657,8 @@ export const createAgentExperience = (
         });
       }
 
+      syncComposerLayout();
+
       // Modes can be added or removed live: drop selections whose mode is gone
       // before anything reads `activeModeIds`, and mount/unmount the mode chips.
       const prunedModes = pruneComposerModes(
@@ -14486,9 +14666,17 @@ export const createAgentExperience = (
         config.composer?.modes
       );
       composerStore.setActiveModeIds(prunedModes);
-      const wantsModeChips = Boolean(config.composer?.modes?.length);
+      const wantsModeChips = composerChipModes().length > 0;
       if (wantsModeChips !== Boolean(composerModeChips)) setupComposerModeChips();
-      composerModeChips?.render(prunedModes, composerModes());
+      composerModeChips?.render(prunedModes, composerChipModes());
+      // Drop tracks whose group is gone, then repaint the survivors: a live edit
+      // can change a group's modes, label, or presentation.
+      for (const groupId of [...composerSegmentedGroups.keys()]) {
+        if (!isSegmentedModeGroup(groupId, config.composer?.modeGroups)) {
+          composerSegmentedGroups.delete(groupId);
+        }
+      }
+      composerSegmentedGroups.forEach((group) => group.repaint());
       // A live `composer.models` edit changes options the picker built once.
       composerModelPicker?.repaint();
 

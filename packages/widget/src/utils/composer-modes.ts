@@ -23,6 +23,33 @@ export const COMPOSER_MODE_ORDER_END = 499;
 export const composerModeOrder = (index: number): number =>
   Math.min(COMPOSER_MODE_ORDER_START + index, COMPOSER_MODE_ORDER_END);
 
+/** Registry id for a segmented group's track. Namespaced like the mode ids. */
+export const composerModeGroupActionId = (groupId: string): string =>
+  `core:mode-group:${groupId}`;
+
+/** True when this group draws as one segmented track instead of loose buttons. */
+export function isSegmentedModeGroup(
+  groupId: string | undefined,
+  groups: readonly ComposerModeGroup[] | undefined
+): boolean {
+  if (!groupId) return false;
+  return (
+    groups?.find((group) => group.id === groupId)?.presentation === "segmented"
+  );
+}
+
+/**
+ * Modes that still earn a header chip. A segmented track already shows its own
+ * state, so a chip for the same mode would be a second, removable copy of it.
+ */
+export function chipVisibleComposerModes(
+  modes: readonly ComposerMode[] | undefined,
+  groups: readonly ComposerModeGroup[] | undefined
+): ComposerMode[] {
+  if (!modes?.length) return [];
+  return modes.filter((mode) => !isSegmentedModeGroup(mode.groupId, groups));
+}
+
 const groupSelection = (
   mode: ComposerMode,
   groups: readonly ComposerModeGroup[] | undefined

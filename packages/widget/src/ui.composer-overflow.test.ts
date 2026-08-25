@@ -103,6 +103,44 @@ describe("composer overflow menu in the live widget", () => {
     vi.restoreAllMocks();
   });
 
+  it("sorts the trigger at the 900 anchor by default", () => {
+    const { mount } = makeController({
+      composer: {
+        actions: [action("folded", { presentation: "overflow" })],
+        actionOverflow: { enabled: true },
+      },
+    });
+    const start = mount.querySelector<HTMLElement>(
+      "[data-persona-composer-actions-start]"
+    )!;
+    const children = Array.from(start.children);
+    const triggerIndex = children.findIndex((child) =>
+      child.querySelector("[data-persona-composer-overflow-trigger]")
+    );
+    const attachmentIndex = children.findIndex((child) =>
+      child.querySelector(".persona-attachment-button")
+    );
+    expect(attachmentIndex).toBe(0);
+    expect(triggerIndex).toBe(1);
+  });
+
+  it("leads the bar when actionOverflow.order sorts ahead of the built-ins", () => {
+    const { mount } = makeController({
+      composer: {
+        actions: [action("folded", { presentation: "overflow" })],
+        actionOverflow: { enabled: true, order: 0 },
+      },
+    });
+    const start = mount.querySelector<HTMLElement>(
+      "[data-persona-composer-actions-start]"
+    )!;
+    expect(
+      start.firstElementChild?.querySelector(
+        "[data-persona-composer-overflow-trigger]"
+      )
+    ).not.toBeNull();
+  });
+
   it("folds the attachment built-in only when includeBuiltIns names it", () => {
     const { mount } = makeController({
       composer: {

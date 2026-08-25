@@ -2,31 +2,31 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "180 kB",
+    "limit": "184 kB",
     "gzip": true
   },
   {
     "name": "\u26d4 CRITICAL \u00b7 launcher critical bundle (launcher.global.js)",
     "path": "dist/launcher.global.js",
-    "limit": "16.25 kB",
+    "limit": "16.5 kB",
     "gzip": true
   },
   {
     "name": "\u26d4 CRITICAL \u00b7 browser stylesheet (widget.css)",
     "path": "dist/widget.css",
-    "limit": "20.75 kB",
+    "limit": "21.5 kB",
     "gzip": true
   },
   {
     "name": "\u26d4 CRITICAL \u00b7 ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "192.25 kB",
+    "limit": "196.25 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "193.25 kB",
+    "limit": "197.25 kB",
     "gzip": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "name": "Opt-in \u00b7 theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "160 kB",
+    "limit": "162.75 kB",
     "gzip": true
   },
   {
@@ -134,7 +134,7 @@
   {
     "name": "Lazy · artifacts UI chunk (artifacts-ui.js)",
     "path": "dist/artifacts-ui.js",
-    "limit": "21.5 kB",
+    "limit": "21.75 kB",
     "gzip": true
   },
   {

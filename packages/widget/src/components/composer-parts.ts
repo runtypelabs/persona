@@ -212,7 +212,13 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
       useIcon && !backgroundColor && "persona-bg-persona-primary",
       !useIcon && !textColor && "persona-text-white"
     ),
-    attrs: { type: "submit", "data-persona-composer-submit": "" },
+    // `data-persona-send-mode` is the stop-state styling hook; widget.css keys
+    // `components.button.stop.*` off it in both icon and text modes.
+    attrs: {
+      type: "submit",
+      "data-persona-composer-submit": "",
+      "data-persona-send-mode": "send",
+    },
     style: {
       // Sizing is icon-mode-only (text mode is sized by its padding classes),
       // and only when `sendButton.size` is set: otherwise the control-size
@@ -224,8 +230,11 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
       fontSize: useIcon ? "18px" : undefined,
       lineHeight: useIcon ? "1" : undefined,
       // Icon mode always sets a color; text mode only when textColor is given.
+      // The `--persona-send-button-fg` hop is what lets the stop-state rule
+      // recolor an inline-styled glyph.
       color: useIcon
-        ? textColor || "var(--persona-button-primary-fg, #ffffff)"
+        ? textColor ||
+          "var(--persona-send-button-fg, var(--persona-button-primary-fg, #ffffff))"
         : textColor || undefined,
       // backgroundColor is honored in icon mode only.
       backgroundColor: useIcon ? backgroundColor || undefined : undefined,
@@ -298,6 +307,7 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     currentMode = mode;
     const label = mode === "stop" ? stopTooltipText : tooltipText;
     button.setAttribute("aria-label", label);
+    button.setAttribute("data-persona-send-mode", mode);
 
     if (useIcon) {
       // One attribute write, no DOM swap. This is also what retired the

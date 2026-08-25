@@ -86,6 +86,7 @@ const createWelcomeHarness = (
           subtitle: "Ask about orders, returns, and billing.",
           variant: "hero",
           dismiss: "on-first-message",
+          iconPlacement: "above",
         },
         variant: "hero",
         visible,

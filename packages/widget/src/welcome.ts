@@ -1,9 +1,11 @@
 import type {
   AgentWidgetConfig,
   AgentWidgetMessage,
+  AgentWidgetWelcomeAlign,
   AgentWidgetWelcomeAnchor,
   AgentWidgetWelcomeDismiss,
   AgentWidgetWelcomeIcon,
+  AgentWidgetWelcomeIconPlacement,
   AgentWidgetWelcomeVariant,
 } from "./types";
 import {
@@ -34,8 +36,17 @@ export const DEFAULT_WELCOME_SUBTITLE =
 
 export interface ResolvedWelcomeConfig {
   title: string;
+  /** Empty string when unset: the renderer omits the line. */
+  kicker?: string;
   subtitle: string;
   icon?: AgentWidgetWelcomeIcon;
+  /**
+   * Undefined means "follow the variant" and stamps no attribute, so host CSS
+   * keeps owning the alignment.
+   */
+  align?: AgentWidgetWelcomeAlign;
+  /** Resolved from the icon's own `placement`; the function form is `"above"`. */
+  iconPlacement: AgentWidgetWelcomeIconPlacement;
   variant: AgentWidgetWelcomeVariant;
   dismiss: AgentWidgetWelcomeDismiss;
   /** Undefined under `variant: "hero"`, which suppresses the greeting. */
@@ -137,10 +148,20 @@ export const resolveWelcomeConfig = (
     title: isSet(welcome, "title")
       ? welcome!.title!
       : copy?.welcomeTitle ?? DEFAULT_WELCOME_TITLE,
+    kicker: welcome?.kicker ?? "",
     subtitle: isSet(welcome, "subtitle")
       ? welcome!.subtitle!
       : copy?.welcomeSubtitle ?? DEFAULT_WELCOME_SUBTITLE,
     icon: welcome?.icon,
+    align:
+      welcome?.align === "start" || welcome?.align === "center"
+        ? welcome.align
+        : undefined,
+    iconPlacement:
+      welcome?.icon && typeof welcome.icon !== "function" &&
+      welcome.icon.placement === "inline"
+        ? "inline"
+        : "above",
     variant,
     dismiss,
     message: variant === "hero" ? undefined : welcome?.message,

@@ -43,6 +43,19 @@ describe("composer placement attributes", () => {
     const { mount } = makeController();
     expect(mount.getAttribute("data-persona-composer-placement")).toBe("block");
     expect(mount.getAttribute("data-persona-conversation-state")).toBe("empty");
+    expect(mount.getAttribute("data-persona-welcome-anchor")).toBe("bottom");
+  });
+
+  it("mirrors the welcome anchor and composerGap onto the root under block", () => {
+    const { mount } = makeController({
+      welcome: { anchor: "center", composerGap: "40px" },
+    });
+    expect(mount.getAttribute("data-persona-composer-placement")).toBe("block");
+    expect(mount.getAttribute("data-persona-welcome-anchor")).toBe("center");
+    // The block+center gap rules read this var; the overlay path shares it.
+    expect(mount.style.getPropertyValue("--persona-composer-anchor-gap")).toBe(
+      "40px"
+    );
   });
 
   it("flips the root attribute for placement overlay and publishes the height var", () => {

@@ -1264,6 +1264,36 @@ export type AgentWidgetMessageActionsConfig = {
    * automatic tracking.
    */
   onCopy?: (message: AgentWidgetMessage) => void;
+  /**
+   * Extra buttons appended to the actions row, after the built-ins. Ids are
+   * namespaced into `data-action="custom:<id>"`, so they can never collide with
+   * a built-in action.
+   *
+   * The row lives in morphed transcript DOM, so nothing is bound to the
+   * elements: activation is delegated and resolves `onSelect` off this config,
+   * which means a live `controller.update()` swaps the behavior immediately.
+   */
+  custom?: AgentWidgetCustomMessageAction[];
+};
+
+/** Which roles a custom message action appears on. */
+export type AgentWidgetCustomMessageActionRole = "user" | "assistant";
+
+/** One host-contributed message action. */
+export type AgentWidgetCustomMessageAction = {
+  /** Unique within `messageActions.custom`. */
+  id: string;
+  /** Accessible name and tooltip. */
+  label: string;
+  /** Lucide icon name from the Persona registry. @default "ellipsis" */
+  iconName?: string;
+  /**
+   * Roles this action renders on. An action listing `"user"` makes the user
+   * actions row appear on its own, without `showEdit` or `showQuote`.
+   * @default ["assistant"]
+   */
+  roles?: AgentWidgetCustomMessageActionRole[];
+  onSelect: (message: AgentWidgetMessage) => void;
 };
 
 export type AgentWidgetStateEvent = {
@@ -2241,7 +2271,27 @@ export type AgentWidgetReasoningDisplayFeature = {
    * @default "none"
    */
   loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
+  /**
+   * Lucide icon rendered at the leading edge of the collapsed reasoning row
+   * header, e.g. a sparkle. Unset renders no icon. Ignored when
+   * `reasoning.renderCollapsedSummary` returns an element: that hook owns the
+   * whole header content.
+   */
+  iconName?: string;
+  /**
+   * What happens to a reasoning row once its trace completes.
+   *
+   * - `"kept"` (default): the finished row stays in the transcript.
+   * - `"removed"`: no row is rendered at all, so the transcript gap closes with
+   *   it. The reasoning text stays on the message and in `getMessages()`.
+   *
+   * @default "kept"
+   */
+  completedVisibility?: AgentWidgetReasoningCompletedVisibility;
 };
+
+/** See `features.reasoningDisplay.completedVisibility`. */
+export type AgentWidgetReasoningCompletedVisibility = "kept" | "removed";
 
 /**
  * Reveal animation applied to assistant message text while it is streaming.
@@ -3815,7 +3865,22 @@ export type AgentWidgetSendButtonConfig = {
   stopIconName?: string;
   /** Tooltip text shown while streaming. Default: "Stop generating". */
   stopTooltipText?: string;
+  /**
+   * When the send control is shown.
+   *
+   * - `"always"` (default): the button is always mounted.
+   * - `"when-text"`: the button is hidden while the draft is empty and no
+   *   attachment is pending. Streaming always shows it, because the same
+   *   control is Stop.
+   *
+   * The hidden state is a `data-persona-send-hidden` attribute on the send
+   * button wrapper, so host CSS can restyle rather than hide.
+   */
+  visibility?: AgentWidgetSendButtonVisibility;
 };
+
+/** When the send control is mounted. See `sendButton.visibility`. */
+export type AgentWidgetSendButtonVisibility = "always" | "when-text";
 
 /**
  * Composer lifecycle phase.
@@ -3998,6 +4063,16 @@ export type ComposerButtonAction = ComposerActionBase & {
   shortLabel?: string;
   iconName?: string;
   tooltipText?: string;
+  /**
+   * Glyph and label color of the bar button, any CSS color. Ignored on the
+   * overflow-menu row, which follows the menu's own palette.
+   */
+  iconColor?: string;
+  /**
+   * Fill behind the bar button, any CSS color. Pair with `iconColor` for a
+   * tinted circular control. Ignored on the overflow-menu row.
+   */
+  backgroundColor?: string;
   /** Renders `aria-pressed`; omit for a non-toggle button. */
   pressed?: boolean;
   onSelect: (
@@ -4051,6 +4126,13 @@ export type ComposerActionOverflowConfig = {
    * itself.
    */
   includeBuiltIns?: Array<"attachments" | "mentions">;
+  /**
+   * Where the `+` trigger sorts inside the start cluster, on the same scale as
+   * `ComposerAction.order`. `0` leads the bar, ahead of the mention (100) and
+   * attachment (200) affordances.
+   * @default 900
+   */
+  order?: number;
 };
 
 /**
@@ -4086,12 +4168,32 @@ export type ComposerMode = {
 };
 
 /**
+ * How a mode group is drawn.
+ *
+ * - `"buttons"` (default): one independent pressed-state control per mode, in
+ *   the start cluster, plus a removable chip per active mode.
+ * - `"segmented"`: the group renders as ONE rounded track with its modes as
+ *   segments and the active one painted as a raised pill (the claude.ai
+ *   Chat / Cowork model). The track shows the state, so the group's modes are
+ *   suppressed from the chip row. Segmented groups always render in the action
+ *   row, never in the overflow menu.
+ */
+export type ComposerModeGroupPresentation = "buttons" | "segmented";
+
+/**
  * Selection policy for a set of modes. `"single"` deselects siblings when one
  * is chosen; `"multiple"` toggles independently.
  */
 export type ComposerModeGroup = {
   id: string;
   selection: "single" | "multiple";
+  /** @default "buttons" */
+  presentation?: ComposerModeGroupPresentation;
+  /**
+   * Accessible name for a segmented track. With it the track is a labelled
+   * `role="group"`; without it the segments stand on their own names.
+   */
+  label?: string;
 };
 
 /** Context passed to a plugin's `contributeComposerActions` hook. */
@@ -4133,6 +4235,42 @@ export type ComposerInputAttributes = {
  */
 export type ComposerDisabledOption = boolean | { reason?: string };
 
+/**
+ * One selectable model in `composer.models`. Persona attaches no meaning to an
+ * id: the backend maps it. `icon` and `description` are drawn by the popover
+ * presentation only; a native `<select>` option carries text alone.
+ */
+export type ComposerModel = {
+  id: string;
+  /** Visible text on the closed control and in the picker row. */
+  label: string;
+  /** Lucide name from the widget's built-in icon registry (see `IconName`). */
+  icon?: IconName | (string & {});
+  /** Muted second line under the label in a popover row. */
+  description?: string;
+};
+
+/**
+ * How the built-in model picker draws.
+ *
+ * - `"native"` (default): a `<select>`, unchanged.
+ * - `"popover"`: a button opening a `role="listbox"` panel whose rows carry the
+ *   model's icon, label, and description.
+ */
+export type ComposerModelPickerPresentation = "native" | "popover";
+
+/** Presentation options for the built-in model picker (`composer.models`). */
+export type ComposerModelPickerConfig = {
+  /** @default "native" */
+  presentation?: ComposerModelPickerPresentation;
+  /**
+   * Muted text after the selected label on the closed control, e.g. a reasoning
+   * effort. Drawn by the popover presentation only: a native `<select>` renders
+   * its option text and nothing else.
+   */
+  suffix?: string;
+};
+
 /** Optional composer UI state for custom `renderComposer` implementations. */
 export type AgentWidgetComposerConfig = {
   /**
@@ -4148,7 +4286,9 @@ export type AgentWidgetComposerConfig = {
    * cluster (unless a `renderComposer` plugin owns the composer, in which case
    * the list is handed to the plugin instead).
    */
-  models?: Array<{ id: string; label: string }>;
+  models?: ComposerModel[];
+  /** How the model picker draws. Omitted, it stays the native `<select>`. */
+  modelPicker?: ComposerModelPickerConfig;
   /**
    * The initial selection only. The live selection lives in composer state
    * (`controller.getComposerState().selectedModelId`); choosing a model never
@@ -4159,6 +4299,16 @@ export type AgentWidgetComposerConfig = {
   onModelChange?: (modelId: string) => void;
   /** Toggleable modes rendered in the start cluster and as header chips. */
   modes?: ComposerMode[];
+  /**
+   * Modes selected when the composer first mounts, e.g. a default Search or
+   * Chat mode. Ids with no matching `composer.modes` entry are dropped, and a
+   * group's selection policy is NOT re-applied: author a valid set.
+   *
+   * The authored initial state only. A restored draft's `activeModeIds` wins,
+   * and the live selection lives in composer state
+   * (`controller.getComposerState().activeModeIds`), never in config.
+   */
+  defaultActiveModeIds?: string[];
   /** Selection policy for the groups `composer.modes` reference by `groupId`. */
   modeGroups?: ComposerModeGroup[];
   /**
@@ -4235,10 +4385,31 @@ export type AgentWidgetComposerConfig = {
    * @default "block"
    */
   placement?: ComposerPlacement;
+  /**
+   * How the composer form arranges its editor and action clusters.
+   *
+   * - `"stacked"` (default): the card layout. Editor on its own row, the two
+   *   action clusters on a row below it.
+   * - `"single-row"`: the one-row pill (the chatgpt.com / gemini.google.com
+   *   model). The start cluster leads the editor, the end cluster trails it,
+   *   and the editor absorbs the remaining width.
+   *
+   * `"single-row"` describes the IDLE composer only. It composes with the
+   * compact state, so a wrapped draft, chips, attachment previews, a quote, a
+   * pending card, or live dictation all fall back to the stacked card, exactly
+   * as `data-persona-composer-compact` does today.
+   *
+   * Ignored in composer-bar mount mode, whose pill is already one row.
+   * @default "stacked"
+   */
+  layout?: ComposerLayout;
 };
 
 /** Composer footer placement relative to the transcript scroller. */
 export type ComposerPlacement = "block" | "overlay";
+
+/** Composer form arrangement. See `composer.layout`. */
+export type ComposerLayout = "stacked" | "single-row";
 
 /**
  * Submit-during-streaming policy.
@@ -5234,12 +5405,31 @@ export type AgentWidgetWelcomeAnchor = "bottom" | "center";
  * no raw HTML string variant (sanitization surface plus accessibility hole).
  */
 export type AgentWidgetWelcomeIcon =
-  | { type: "lucide"; name: IconName }
+  | (AgentWidgetWelcomeIconBase & { type: "lucide"; name: IconName })
   /** `alt` is required, and may be `""` for a decorative logo. */
-  | { type: "image"; url: string; alt: string }
+  | (AgentWidgetWelcomeIconBase & { type: "image"; url: string; alt: string })
   /** Emoji or short text glyph. */
-  | { type: "text"; text: string }
+  | (AgentWidgetWelcomeIconBase & { type: "text"; text: string })
   | (() => HTMLElement | SVGElement);
+
+/**
+ * Where the welcome icon sits. `"above"` (default) stacks it over the title;
+ * `"inline"` leads the title on the same row (the claude.ai sparkle line) and
+ * scales the glyph to `--persona-welcome-inline-icon-size`.
+ */
+export type AgentWidgetWelcomeIconPlacement = "above" | "inline";
+
+/** Shared by the object icon forms. The function form is always `"above"`. */
+export type AgentWidgetWelcomeIconBase = {
+  /** @default "above" */
+  placement?: AgentWidgetWelcomeIconPlacement;
+};
+
+/**
+ * Horizontal alignment of the welcome copy. Unset follows the variant: the
+ * card is start-aligned, the hero is centered.
+ */
+export type AgentWidgetWelcomeAlign = "start" | "center";
 
 /**
  * First-open welcome surface. Consolidates the deprecated
@@ -5253,10 +5443,20 @@ export type AgentWidgetWelcomeIcon =
 export interface AgentWidgetWelcomeConfig {
   /** Card or hero title. Defaults to "Hello 👋". */
   title?: string;
+  /**
+   * Small muted line above the title, e.g. a section name. Omitted when unset
+   * or empty. Typography rides `components.introCard.kicker`.
+   */
+  kicker?: string;
   /** Scope statement in the assistant's voice. Empty string omits it. */
   subtitle?: string;
-  /** Avatar or logo shown above the title. */
+  /** Avatar or logo shown above the title, or beside it under `icon.placement`. */
   icon?: AgentWidgetWelcomeIcon;
+  /**
+   * Horizontal alignment of the kicker, title, subtitle, and starter
+   * suggestions. Unset follows the variant: `card` starts, `hero` centers.
+   */
+  align?: AgentWidgetWelcomeAlign;
   /** @default "card" */
   variant?: AgentWidgetWelcomeVariant;
   /** @default "never" for `card`, always `"on-first-message"` for `hero`. */
@@ -6017,6 +6217,14 @@ export type AgentWidgetMarkdownTableToken = {
   header: Array<{ text: string; tokens: unknown[] }>;
   rows: Array<Array<{ text: string; tokens: unknown[] }>>;
   align: Array<"left" | "center" | "right" | null>;
+  /**
+   * Rendered `<tr>` HTML for the header row. The structured `header` / `rows` /
+   * `align` fields are not reconstructable from the bundled parser and arrive
+   * empty, so a table override composes from these two instead.
+   */
+  headerHtml?: string;
+  /** Rendered `<tr>` HTML for the body rows. See `headerHtml`. */
+  bodyHtml?: string;
 };
 
 export type AgentWidgetMarkdownLinkToken = {
@@ -6043,6 +6251,11 @@ export type AgentWidgetMarkdownListToken = {
   start: number | "";
   loose: boolean;
   items: unknown[];
+  /**
+   * Rendered `<li>` HTML for the list body. `items` is not reconstructable from
+   * the bundled parser and arrives empty, so a list override wraps this.
+   */
+  itemsHtml?: string;
 };
 
 export type AgentWidgetMarkdownListItemToken = {
@@ -6086,7 +6299,13 @@ export type AgentWidgetMarkdownEmToken = {
  * Custom renderer overrides for markdown elements.
  * Each method receives the token and should return an HTML string.
  * Return `false` to use the default renderer.
- * 
+ *
+ * The bundled parser hands the widget positional arguments rather than tokens,
+ * so `raw` and `tokens` are not always recoverable: they arrive as `""` and
+ * `[]` on the tokens where the parser does not supply them. Every field the
+ * parser does supply (`href`, `title`, `text`, `depth`, `lang`, ...) is
+ * populated. `text` is already-rendered inline HTML, not raw markdown.
+ *
  * @example
  * ```typescript
  * renderer: {
