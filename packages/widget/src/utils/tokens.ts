@@ -1027,6 +1027,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // widget.css falls back to the scheme-aware ghost wash and semantic text, so
   // an unset token must leave the variable undefined.
   for (const [token, alias] of [
+    ['background', 'bg'],
+    ['border', 'border'],
     ['hoverBackground', 'hover-bg'],
     ['hoverForeground', 'hover-fg'],
     ['borderRadius', 'radius'],

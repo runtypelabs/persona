@@ -4011,9 +4011,9 @@
   width: 28px;
   height: 28px;
   padding: 0;
-  border: none;
+  border: var(--persona-message-action-border, none);
   border-radius: var(--persona-message-action-radius, var(--persona-radius-md, 0.375rem));
-  background-color: transparent;
+  background-color: var(--persona-message-action-bg, transparent);
   color: var(--persona-muted, #6b7280);
   cursor: pointer;
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;

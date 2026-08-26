@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentWidgetConfig } from '../types';
-import { getActiveTheme, themeToCssVariables } from '../utils/theme';
+import { createTheme, getActiveTheme, themeToCssVariables } from '../utils/theme';
 import { BUILT_IN_PRESETS, getThemeEditorPreset } from './presets';
 
 describe('theme editor presets', () => {
@@ -39,5 +39,25 @@ describe('theme editor presets', () => {
       '--persona-text': '#f3f4f6',
       '--persona-border': '#374151',
     });
+  });
+
+  it('gives markdown links a readable foreground in the dark preset', () => {
+    // Default Dark is applied through createTheme(), not createDarkTheme(),
+    // so the shade has to live on the preset itself.
+    const darkPreset = getThemeEditorPreset('default-dark')!;
+    const fromPreset = themeToCssVariables(
+      createTheme(darkPreset.theme, { validate: false })
+    );
+    expect(fromPreset['--persona-md-link-color']).toBe('#a3a3a3');
+
+    const paired = getThemeEditorPreset('persona-default')!;
+    const config = {
+      theme: paired.theme,
+      darkTheme: paired.darkTheme,
+    } as AgentWidgetConfig;
+    const light = themeToCssVariables(getActiveTheme({ ...config, colorScheme: 'light' }));
+    const dark = themeToCssVariables(getActiveTheme({ ...config, colorScheme: 'dark' }));
+    expect(light['--persona-md-link-color']).toBe('#0f0f0f');
+    expect(dark['--persona-md-link-color']).toBe('#a3a3a3');
   });
 });

@@ -446,6 +446,10 @@ export interface TooltipTokens {
  * scheme-aware, so most themes never need this group.
  */
 export interface MessageActionsTokens {
+  /** Resting fill. Defaults to transparent. */
+  background?: TokenReference<'color'>;
+  /** Resting border shorthand (e.g. `1px solid #333`). Defaults to none. */
+  border?: string;
   /** Hover fill. Defaults to `components.button.ghost.hoverBackground`. */
   hoverBackground?: TokenReference<'color'>;
   /** Hover icon color. Defaults to `semantic.colors.text`. */
