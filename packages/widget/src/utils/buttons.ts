@@ -1,4 +1,4 @@
-import { createElement } from "./dom";
+import { createElement, cx } from "./dom";
 import { renderLucideIcon } from "./icons";
 import {
   createDropdownMenu,
@@ -22,6 +22,12 @@ export interface CreateIconButtonOptions {
   strokeWidth?: number;
   /** Extra CSS class(es) appended after "persona-icon-btn". */
   className?: string;
+  /**
+   * Omit the `persona-icon-btn` base class so `className` owns every visual
+   * state. Required for chromeless rows: the base chrome is scoped under
+   * `[data-persona-root]` and outranks bare component classes.
+   */
+  chromeless?: boolean;
   /** Click handler. */
   onClick?: (e: MouseEvent) => void;
   /** Additional ARIA attributes (e.g. { "aria-haspopup": "true" }). */
@@ -31,15 +37,16 @@ export interface CreateIconButtonOptions {
 /**
  * Creates a minimal icon-only button with accessible labelling.
  *
- * The button receives the base class `persona-icon-btn` and renders a single
- * Lucide icon inside it.
+ * The button receives the base class `persona-icon-btn` (unless `chromeless`)
+ * and renders a single Lucide icon inside it.
  */
 export function createIconButton(options: CreateIconButtonOptions): HTMLButtonElement {
-  const { icon, label, size, strokeWidth, className, onClick, aria } = options;
+  const { icon, label, size, strokeWidth, className, chromeless, onClick, aria } =
+    options;
 
   const btn = createElement(
     "button",
-    "persona-icon-btn" + (className ? " " + className : ""),
+    cx(!chromeless && "persona-icon-btn", className),
   );
   btn.type = "button";
   btn.setAttribute("aria-label", label);

@@ -46,6 +46,9 @@ const FIXTURES: Record<string, DeepPartial<PersonaTheme>> = {
   'non-flat container (hover anchoring off the flat branch)': {
     semantic: { colors: { container: 'palette.colors.gray.100' } },
   },
+  'flat dark surface (white-alpha interactive washes)': {
+    semantic: { colors: { surface: '#0e111b', background: '#0e111b', container: '#0e111b' } },
+  },
   'custom launcher foreground (subtitle wash)': {
     components: { launcher: { foreground: '#ff00ff', background: '#001122' } },
   },

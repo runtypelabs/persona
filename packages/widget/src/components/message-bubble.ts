@@ -881,11 +881,14 @@ export const createMessageActions = (
     label: string,
     dataAction: string
   ): HTMLButtonElement => {
+    // Chromeless: the icon-btn base chrome is scoped under [data-persona-root]
+    // and would outrank every .persona-message-action-btn state rule.
     const button = createIconButton({
       icon: iconName,
       label,
       size: 14,
       className: "persona-message-action-btn",
+      chromeless: true,
     });
     button.setAttribute("data-action", dataAction);
     return button;

@@ -2,13 +2,13 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "184 kB",
+    "limit": "184.25 kB",
     "gzip": true
   },
   {
     "name": "\u26d4 CRITICAL \u00b7 launcher critical bundle (launcher.global.js)",
     "path": "dist/launcher.global.js",
-    "limit": "16.5 kB",
+    "limit": "17.25 kB",
     "gzip": true
   },
   {
@@ -20,13 +20,13 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "196.25 kB",
+    "limit": "196.5 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "197.25 kB",
+    "limit": "197.5 kB",
     "gzip": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "name": "Opt-in \u00b7 theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "162.75 kB",
+    "limit": "163.5 kB",
     "gzip": true
   },
   {

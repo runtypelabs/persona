@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import {
   createStandardBubble,
+  createMessageActions,
   createMessageInlineMentions,
   isSafeImageSrc,
   isSafeMediaSrc,
@@ -888,5 +889,46 @@ describe("createStandardBubble: timestamp position", () => {
     );
     expect(below).toBeDefined();
     expect(below?.textContent).toMatch(/\d/);
+  });
+});
+
+describe("createMessageActions: chromeless action buttons", () => {
+  const actionButtons = (row: HTMLElement) =>
+    Array.from(row.querySelectorAll<HTMLButtonElement>("button[data-action]"));
+
+  it("styles every built-in action through the message-action class alone", () => {
+    const row = createMessageActions(makeMessage({ id: "actions-builtin" }), {
+      showCopy: true,
+      showReadAloud: true,
+      showUpvote: true,
+      showDownvote: true,
+    });
+
+    const buttons = actionButtons(row);
+    expect(buttons.map((btn) => btn.getAttribute("data-action"))).toEqual([
+      "copy",
+      "read-aloud",
+      "upvote",
+      "downvote",
+    ]);
+    for (const btn of buttons) {
+      expect(btn.className).toBe("persona-message-action-btn");
+    }
+  });
+
+  it("gives host-contributed custom actions the same single class", () => {
+    const row = createMessageActions(makeMessage({ id: "actions-custom" }), {
+      showCopy: false,
+      showUpvote: false,
+      showDownvote: false,
+      custom: [
+        { id: "share", label: "Share", iconName: "star", onSelect: () => {} },
+      ],
+    });
+
+    const buttons = actionButtons(row);
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].getAttribute("data-action")).toBe("custom:share");
+    expect(buttons[0].className).toBe("persona-message-action-btn");
   });
 });

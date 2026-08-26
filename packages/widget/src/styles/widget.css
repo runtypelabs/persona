@@ -4001,7 +4001,9 @@
   }
 }
 
-/* Action button base styles */
+/* Action button base styles. These buttons are built chromeless: adding
+   persona-icon-btn would outrank every rule below (it is scoped under
+   [data-persona-root]) and repaint the row with borders and a surface fill. */
 .persona-message-action-btn {
   display: inline-flex;
   align-items: center;

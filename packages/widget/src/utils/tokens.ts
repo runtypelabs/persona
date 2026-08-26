@@ -722,6 +722,48 @@ const zeroLength = (value: string): string => (value.trim() === '0' ? '0px' : va
 const V = '--persona-';
 
 /**
+ * WCAG relative luminance of a hex (3/4/6/8 digit) or rgb()/rgba() color.
+ * Returns undefined when the value is not parseable, so callers can fall back.
+ */
+const relativeLuminance = (color: string | undefined): number | undefined => {
+  if (!color) return undefined;
+  const value = color.trim().toLowerCase();
+  let channels: number[] | undefined;
+
+  if (value.charCodeAt(0) === 35 /* '#' */) {
+    const digits = value.slice(1);
+    if (!/^[0-9a-f]+$/.test(digits)) return undefined;
+    if (digits.length === 3 || digits.length === 4) {
+      channels = [0, 1, 2].map((i) => parseInt(digits[i] + digits[i], 16));
+    } else if (digits.length === 6 || digits.length === 8) {
+      channels = [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16));
+    }
+  } else {
+    const match = value.match(/^rgba?\(([^)]+)\)$/);
+    if (match) {
+      const parts = match[1].split(/[,/\s]+/).filter(Boolean);
+      if (parts.length >= 3) {
+        channels = parts.slice(0, 3).map((raw) => {
+          const pct = raw.endsWith('%');
+          const n = parseFloat(pct ? raw.slice(0, -1) : raw);
+          return pct ? (n / 100) * 255 : n;
+        });
+      }
+    }
+  }
+
+  if (!channels || channels.some((c) => !Number.isFinite(c))) return undefined;
+  const [r, g, b] = channels.map((c) => {
+    const v = Math.max(0, Math.min(255, c)) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+/** Below the WCAG white/black crossover luminance, white text reads better. */
+const DARK_SURFACE_LUMINANCE = 0.179;
+
+/**
  * Each row: [aliasSuffix, ...sources]. A source starting with '=' is a
  * literal; anything else is a cssVars lookup by suffix. First defined wins;
  * rows with no defined source emit nothing. Row order is significant.
@@ -1304,6 +1346,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // Interactive-state defaults. The default preset resolves container === surface,
   // which turns every hover/active rule that falls back to --persona-container
   // into a visual no-op; anchor those states one gray step down in that case.
+  // A flat DARK surface takes white-alpha washes instead: light grays paint a
+  // near-white pill under light text. Unparseable surfaces keep the grays.
   // Component config emitted above must keep winning, so only fill vars not set.
   const stateSurface = cssVars['--persona-surface'];
   const stateContainer = cssVars['--persona-container'];
@@ -1311,13 +1355,18 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   const gray200 = cssVars['--persona-palette-colors-gray-200'] ?? '#e5e7eb';
   const gray300 = cssVars['--persona-palette-colors-gray-300'] ?? '#d1d5db';
   const flatTheme = !stateContainer || stateContainer === stateSurface;
-  const hoverBgDefault = flatTheme ? gray100 : stateContainer;
-  const activeBgDefault = flatTheme ? gray200 : stateContainer;
+  const flatLuminance = relativeLuminance(stateSurface ?? cssVars['--persona-background']);
+  const flatDark = flatTheme && flatLuminance !== undefined && flatLuminance < DARK_SURFACE_LUMINANCE;
+  const flatHoverBg = flatDark ? 'rgba(255, 255, 255, 0.08)' : gray100;
+  const flatActiveBg = flatDark ? 'rgba(255, 255, 255, 0.12)' : gray200;
+  const flatActiveBorder = flatDark ? 'rgba(255, 255, 255, 0.16)' : gray300;
+  const hoverBgDefault = flatTheme ? flatHoverBg : stateContainer;
+  const activeBgDefault = flatTheme ? flatActiveBg : stateContainer;
   cssVars['--persona-icon-btn-hover-bg'] = cssVars['--persona-icon-btn-hover-bg'] ?? hoverBgDefault;
   cssVars['--persona-icon-btn-active-bg'] = cssVars['--persona-icon-btn-active-bg'] ?? activeBgDefault;
   if (flatTheme) {
     cssVars['--persona-icon-btn-active-border'] =
-      cssVars['--persona-icon-btn-active-border'] ?? gray300;
+      cssVars['--persona-icon-btn-active-border'] ?? flatActiveBorder;
   }
   cssVars['--persona-label-btn-hover-bg'] = cssVars['--persona-label-btn-hover-bg'] ?? hoverBgDefault;
   cssVars['--persona-artifact-tab-hover-bg'] =
