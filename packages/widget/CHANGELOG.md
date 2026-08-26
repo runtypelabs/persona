@@ -1,5 +1,147 @@
 # @runtypelabs/persona
 
+## 4.19.0
+
+### Minor Changes
+
+- bb094a2: Bundle size program: the CDN bundle drops from 191.7 to 161.8 kB gzip (-16%), the critical launcher from 18.9 to 16.4 kB (-13%), and npm's ESM bundle from ~191.5 to ~173.5 kB — with the npm public API surface unchanged. The markdown-parsers chunk (~21.8 kB gzip) additionally no longer downloads at page load for visitors who never open the launcher.
+
+  Lazy sibling chunks (fetched on demand from next to `index.global.js`):
+
+  - `animations-extra.js` — wipe + glyph-cycle stream animations, fetched when `features.streamAnimation.type` selects one (npm `animations/*` subpaths unchanged).
+  - `approval-ui.js` — approval bubble + built-in approval plugin + plugin-kit, fetched when the first approval message arrives.
+  - `session-reconnect.js` — the durable-session reconnect loop (its old dynamic import was silently inlined), fetched when a `reconnectStream` session first resumes.
+  - `webmcp-runtime.js` — the WebMcpBridge class, fetched when `webmcp.enabled` is true. npm keeps the one-argument `WebMcpBridge` constructor.
+  - `icons-extra.js` — the config-only tail of the icon registry (63 names). Core keeps the 55 names the widget itself emits plus all config defaults, so nothing the widget renders by default ever waits; an extra-tier configured icon paints a correctly-sized placeholder and fills within one round-trip (both the widget and the launcher register loaders for it). New public `registerIcons()` extends the registry with custom icons; bundled npm consumers keep the historical all-sync `renderLucideIcon` contract.
+  - `artifacts-ui.js` — the artifact pane, inline/card transcript components, and preview renderer (the largest single cut, -13.2 kB). The split-root layout skeleton still builds synchronously; the pane grafts at chunk adoption, and artifact directives that render mid-flight heal into real blocks.
+  - `voice-runtime.js` — the voice provider factory + Runtype/browser providers + audio playback manager, prefetched when a voice provider is configured. `setupVoice` keeps its synchronous signature; `toggleVoice` awaits an in-flight setup.
+  - `forms-ui.js` — the `[data-tv-form]` demo-forms enhancement, fetched when a rendered bubble first contains a form placeholder. While the chunk is in flight the placeholder stays the bare div the postprocessor emitted, then heals into the real form when it lands.
+  - The event-stream capture runtime (buffer, IndexedDB store, throughput tracker) rides the existing `event-stream-view.js` chunk, and the icon registry is no longer duplicated into the event-stream and context-mentions chunks.
+
+  Markdown parsers now warm on first panel visibility instead of at script evaluation (renders that beat the chunk self-heal). Sessions that start with restored or seeded messages — the one case where pre-open content could flash escaped text at first open — warm the chunk at init instead, so only fresh visitors who never open the launcher skip the fetch. Statically-known icons throughout the widget use tree-shaken per-icon lucide data imports.
+
+  CDN-global-only surface narrowing (following the existing dev-helpers precedent; npm exports unchanged): `window.AgentWidget` no longer exposes the mention-source helpers (`createStaticMentionSource`, `createSlashCommandsSource`, `defaultMentionFilter`), the `WebMcpBridge` class, or the voice factory values (`createVoiceProvider`, `createBestAvailableVoiceProvider`, `isVoiceSupported`) — script-tag integrations configure these features via config; no shipped demo used them via the global.
+
+  Self-hosted deployments that copy `dist/` wholesale get all new chunks automatically; deployments that cherry-pick files should ship every `*.js` sibling next to `index.global.js` (and `icons-extra.js` next to `launcher.global.js`). `dist/` also gains a tiny `markdown-parsers-entry.js` shim so bundlers that statically follow the `artifacts-ui` subpath (e.g. webpack in a Next.js app) can resolve its intentionally-dead markdown fallback import instead of failing the consumer build.
+
+- 0cad70c: Composer interaction history, streaming input behavior, and the motion system.
+
+  History and asynchronous interaction:
+
+  - `session.resubmitFrom(messageId, { replacement?, reason })` re-runs a user turn: it identifies the full turn boundary, cancels an active stream, truncates the active tail, and dispatches a fresh attempt with new ids. Retry replays every stored field (content parts, `llmContent`, raw content, mentions, inline segments, quote, composer options, voice flag) and persistence follows a single atomic emit.
+  - `messageActions.showRegenerate` renders on the final retryable assistant turn; `messageActions.showEdit` renders on text-only user messages and swaps the bubble for a morph-safe inline editor (Escape cancels, save resubmits from that turn). Both default false.
+  - `composer.streamingSubmitBehavior` (default `"block"`, unchanged) adds `"defer-one"`, which captures one immutable pending submission into a header card (edit and remove, auto-send on completion, held on Stop or error), and `"interrupt"`, which supersedes the running turn on the client-token transport via `submitMode` and a fresh `turnId` with stale-event suppression; other transports fall back to `"block"`.
+  - Draft persistence: the unsent draft (text, mention tokens, inline segments, model, modes, quote) rides the conversation storage payload, debounced, flushed on destroy and page hide, cleared on send and clear chat, governed by `persistState` and the new `persistState.persist.draft` flag. Mention tokens rehydrate only while their source still exists, otherwise the draft degrades to plain text.
+  - Quote and reply-to: `controller.setQuote()` and `clearQuote()` drive a dismissible banner; the sent message keeps the structured quote and the model sees a clearly delimited fenced block ahead of the user's text. `messageActions.showQuote` quotes from the transcript. Sends without a quote are byte-identical to before.
+
+  Motion:
+
+  - `theme.components.motion` tokens (`durationFast` 120ms, `durationBase` 200ms, `easing`) drive every composer transition and keyframe; `0ms` disables that motion, and everything is additionally gated behind `prefers-reduced-motion`.
+  - The mic publishes `data-state` (`idle`, `recording`, `processing`, `speaking`) with a default pulse ring while recording and a rotating glyph while processing. The send button keeps both glyphs mounted and crossfades by `data-mode`, making the doubled-glyph failure unreachable. Mode and mention chips animate in and out without replaying on rebuild, and mode toggles pick up a pressed tick.
+  - `--persona-voice-level` publishes live 0 to 1 voice amplitude on the mic wrapper and the footer while recording, quantized and skip-on-unchanged, feeding the default ring modulation and any theme-side waveform. The `runtype` provider derives it from its existing capture loop; Web Speech paths hold a fixed midpoint; a `custom` provider opts in via the new `VoiceProvider.onLevel`. The variable is data, not motion: it keeps updating under reduced motion while the ring's animation is gated. See THEME-CONFIG.md for the state hooks, the waveform example, and the footer-versus-transcript animation rule.
+
+- 864c748: Add `composer.placement: "block" | "overlay"` and `welcome.anchor: "bottom" | "center"`.
+
+  `placement: "overlay"` overlays the composer footer on the transcript so content
+  scrolls behind it, reserving the footer's live height on the scroll body, on a
+  `renderWelcome` plugin overlay, on the scroll-to-bottom affordance, and on the
+  composer sheet slot. `anchor: "center"` floats the greeting and composer together
+  in the empty conversation, with `welcome.anchorComposerTop` (default `"44%"`) and
+  `welcome.composerGap` (default `"24px"`), and drops them to the bottom on the
+  first message. The two compose freely.
+
+  New tokens: `components.composer.overlayBand` (any CSS background, gradients
+  included) and `components.input.backdropFilter`. New host-readable contracts on
+  `[data-persona-root]`: `data-persona-conversation-state`,
+  `data-persona-composer-placement`, `--persona-composer-overlay-height`, and
+  `--persona-composer-lift`.
+
+- 50d92d3: Composer, welcome, bubble, and reasoning presentation seams that replace page-level CSS hacks, plus a custom model picker popover and two markdown-pipeline fixes. Defaults are unchanged.
+
+  Composer:
+
+  - `composer.layout: "stacked" | "single-row"` (default `"stacked"`) lays the idle composer out as one pill: the start cluster leads the editor, the end cluster trails it, and the editor absorbs the remaining width. Stamps `data-persona-composer-layout="single-row"` on the footer only when configured, and the core rules are gated on the existing `data-persona-composer-compact` state, so multi-line drafts, chips, attachment previews, quotes, and pending cards fall back to the stacked card. Ignored in composer-bar mount mode.
+  - `sendButton.visibility: "always" | "when-text"` hides the send control while the draft is empty and nothing is streaming. The hidden state is `data-persona-send-hidden` on `.persona-send-button-wrapper`.
+  - `composer.defaultActiveModeIds` selects modes at first mount. A restored draft's `activeModeIds` still wins.
+  - `composer.actionOverflow.order` moves the `+` trigger off its fixed 900 anchor, so `order: 0` leads the action row.
+  - `ComposerAction.iconColor` and `.backgroundColor` style a bar button directly.
+  - `components.button.stop.background` / `.foreground` restyle the send button while it shows Stop. The button now carries `data-persona-send-mode="send" | "stop"`.
+  - `ComposerModeGroup.presentation: "buttons" | "segmented"` (default `"buttons"`) draws a mode group as one rounded track with its modes as segments and the active one painted as a raised pill. Segments are real buttons with `aria-pressed`; the optional `ComposerModeGroup.label` names the track as a `role="group"`. A segmented group renders no header chips (the track shows the state) and never folds into the overflow menu. New optional tokens under `components.composer.segmented`: `trackBackground`, `trackBorderRadius`, `padding`, `activeBackground`, `activeForeground`, `activeShadow`, `inactiveForeground`, `itemPadding`.
+  - `composer.modelPicker.presentation: "popover"` swaps the native `<select>` for a button that opens a `role="listbox"` panel, so each `composer.models` entry can carry an optional `icon` (registry glyph) and `description` (muted second line). The trigger keeps the select's class and box, so a themed page does not shift. `composer.modelPicker.suffix` renders muted after the selected label on the closed control; it is drawn by the popover presentation only, since a native `<select>` renders its option text and nothing else. Keyboard and ARIA follow the overflow menu: `aria-haspopup="listbox"` plus `aria-expanded` on the trigger, `role="option"` and `aria-selected` on the rows, arrow keys and Home/End to move, Enter or Space to select, Escape or Tab to close with focus restored to the trigger. Pages can key on `data-persona-composer-model-picker="popover"` and `data-persona-model-option="<id>"`. Like a segmented mode track, the popover trigger always renders in the action row and never folds into the overflow menu; the native select still folds as before. New optional tokens under `components.composer.modelPicker`: `menuBackground`, `menuBorderRadius`, `rowHoverBackground`, `labelColor`, `descriptionColor`, `suffixColor`. They read as full-path variables with no short alias, keeping the critical launcher bundle out of it.
+
+  Messages, reasoning, and welcome:
+
+  - `components.message.user` / `.assistant` take `padding`, `maxWidth`, `fontSize`, `fontFamily`, and `lineHeight`. Every key is unset by default and falls back to the layout preset's value.
+  - `messageActions.custom: [{ id, label, iconName, roles, onSelect }]` appends host-contributed buttons to the message actions row, after the built-ins, as `data-action="custom:<id>"`. Assistant-only by default; listing `"user"` brings up the user actions row on its own. Activation is delegated and resolves `onSelect` off live config, so it survives transcript morphs and follows `controller.update()`.
+  - `features.reasoningDisplay.iconName` renders a leading glyph in the collapsed reasoning header.
+  - `features.reasoningDisplay.completedVisibility: "kept" | "removed"` drops the whole transcript row for a finished reasoning trace, closing the gap with it.
+  - Welcome presentation: `welcome.kicker` renders a small muted line above the title (typography via the new `components.introCard.kicker` text tokens), `welcome.align: "start" | "center"` overrides the variant's alignment, and `welcome.icon.placement: "inline"` leads the title with the icon on one row instead of stacking it. All three stamp nothing when unset. New hooks: `.persona-welcome-kicker`, `.persona-welcome-title-row`, `.persona-welcome-head-text`, `data-persona-welcome-align`, `data-persona-welcome-icon-placement`, and the `--persona-welcome-inline-icon-size` / `--persona-welcome-inline-icon-gap` variables.
+  - `welcome.composerGap` now applies under `composer.placement: "block"` as well, and the resolved anchor is mirrored on the root as `data-persona-welcome-anchor`.
+
+  Fixes:
+
+  - Custom `markdown.renderer` overrides were handed the bundled parser's positional arguments instead of the token objects the public types document, so every documented field arrived `undefined`. Each override is now adapted to the documented token shape. `table` and `list` additionally carry the parser's rendered children as `headerHtml` / `bodyHtml` / `itemsHtml`, since their structured fields are not reconstructable.
+  - A throwing custom renderer or `postprocessMessage` propagated out of the bubble builder and silently aborted the whole streaming turn. The message now falls back to escaped plain text and logs one error, and the stream continues.
+  - The composer action-row placement pass re-inserted every managed element on each sync, which detached and blurred whatever was focused inside one. It now skips elements already in position.
+
+  Size budgets bumped for the added CSS and runtime: `index.global.js` 184 kB, `index.js` 196.25 kB, `index.cjs` 197.25 kB, `theme-editor-preview.js` 162.75 kB, `widget.css` 21.5 kB, `launcher.global.js` 16.5 kB, `artifacts-ui.js` 21.75 kB (all gzip). `components.composer.segmented` and `components.composer.modelPicker` deliberately get no short token aliases, so the launcher's theme system stays out of those rows and their CSS reads the auto-emitted full-path variables.
+
+- 0cad70c: The composer is now a stateful, extensible subsystem: one public state view, one submission pipeline, one action registry, and declarative configuration for the controls flagship products ship. Everything below is additive; defaults are unchanged.
+
+  State and submission:
+
+  - `controller.getComposerState()` returns a frozen `ComposerState` (text, attachments, mention refs, model and mode selection, quote, pending submission, phase, locks), mirrored by a coalesced `persona:composer:state` DOM event. Mention refs sync the moment a mention is committed, including mouse selection.
+  - `composer.onBeforeSend(snapshot, { signal })` intercepts every send: return `false` to cancel, or a `{ text, options }` patch to rewrite the outgoing snapshot without touching the visible draft. Cancel, throw, or abort always leaves the draft, attachments, and chips intact.
+  - Every submission path builds one immutable snapshot in a documented order (draft, inline slash command, attachment readiness, `onBeforeSend`, mention resolution, dispatch). Wire payloads and the content priority chain are unchanged.
+
+  Actions:
+
+  - `composer.actions` and the new `contributeComposerActions` plugin hook feed one registry alongside the built-ins. Every plugin's hook runs, ids are namespaced per plugin, duplicates resolve to the first contributor, and documented order ranges (mentions 100, attachment 200, custom 500, mic 800, send 1000, send terminal) place controls deterministically in both the full and pill composers.
+  - `visible`, `disabled`, and `pressed` re-evaluate on state changes and `controller.update()`; async `onSelect` gets a busy state; custom actions own their element and cleanup.
+  - `composer.actionOverflow` presents the registry in an accessible `+` menu (`role="menu"`, roving focus, Escape and outside dismissal, Shadow DOM safe). `presentation: "bar" | "overflow" | "auto"` places each action, `collapseAutoActionsBelow` folds `auto` actions by measured footer width, and built-ins fold only when named in `includeBuiltIns`. Folded built-ins render as real labeled menu rows: bar chrome and tooltips are suppressed, activation closes the menu, and rows shade on hover and keyboard focus only.
+
+  Baseline configuration:
+
+  - `composer.submitKey` (`"enter"` default, `"mod-enter"`, `"none"`) plus `composer.insertNewlineOnTouchEnter` for coarse pointers; `enterKeyHint` derives from the effective mode. Mention and slash menus keep first refusal and IME stays protected under every mode.
+  - `composer.maxLines` caps growth for the textarea, the pill, and the inline mention editor. `composer.inputAttributes` allowlists `autocomplete`, `autocapitalize`, `spellcheck`, `inputmode`, and `ariaLabel`.
+  - `composer.inputDisabled` locks composition entirely; `composer.sendDisabled` keeps composition and blocks every submission path. Both take `{ reason }`, announced politely in the status region. Streaming sets neither and Stop keeps working.
+  - `attachments.onChange` reports the public `ComposerAttachmentState[]`; `attachments.adapter` (`add(file, { signal, onProgress })`, optional `remove`) enables eager upload with progress, retry, abort on remove and clear and destroy, and send gating until every attachment is ready. Base64 stays the default adapter.
+
+  Models and modes:
+
+  - `composer.models` renders a built-in picker in the end cluster (token-height pill, themed chevron, RTL aware). Selection lives in composer state and never mutates `config.agent`; `composer.onModelChange` observes it.
+  - `composer.modes` and `composer.modeGroups` add toggleable modes with single or multiple selection, `once` or `sticky` persistence, removable header chips, and per-mode placeholder overrides. Mode and mention chips share one wrapping header rail, modes first.
+  - Each send ships the selection as an optional top-level `composerOptions` on the request, visible to `requestMiddleware` and `customFetch`. An inline client agent maps an allowed model onto that turn only; server-pinned routes are governed by the proxy.
+  - `voiceRecognition.completionBehavior: "review"` leaves the dictation transcript in the composer instead of auto-sending (default stays `"send"`).
+
+  Sizing and chrome:
+
+  - `theme.components.composer.controlSize` (default 40px) and `controlIconSize` (24px) size every bar control from one token, live-updatable, with per-control config keys (`sendButton.size`, `voiceRecognition.iconSize` and padding) as explicit overrides and a 40px hit-area floor on coarse pointers. Notable consequences: those per-control keys no longer carry defaults in `DEFAULT_WIDGET_CONFIG`, the attachment and mention buttons no longer inherit from `sendButton.size`, the mic is a true 40px box, and an unrelated `update()` no longer resizes the send glyph.
+  - The footer carries `data-persona-composer-compact` while the composer is idle; core CSS attaches no layout to it.
+  - `ComposerMode`, `ComposerModeGroup`, and `ComposerActionOverflowConfig` are exported from the package entry, and the `quote` icon is registered.
+
+- 4e38439: Add `components.messageActions.background` and `components.messageActions.border` theme tokens for the resting state of the per-message action row, so bordered or filled action buttons no longer require host page CSS.
+
+### Patch Changes
+
+- 5b1aef4: Shrink the CDN bundle by removing duplicated implementations: the WebMCP single-call resolver now delegates to the batch resolver, the composer mic button uses the shared composer-parts factory instead of a verbatim copy in ui.ts, and the tool/reasoning bubbles share one expandable-bubble chrome module (emitted DOM is byte-identical). The theme-plugin factories (`accessibilityPlugin`, `animationsPlugin`, `brandPlugin`, `reducedMotionPlugin`, `highContrastPlugin`, `createPlugin`) move to npm-only exports: they are config-time helpers with no runtime caller, so the script-tag `window.AgentWidget` global no longer exposes them (same rule as `generateCodeSnippet`); npm imports are unchanged.
+- 0cad70c: Composer fixes to existing behavior and documentation.
+
+  - Documentation drift corrected: `attachments.buttonIconName` documents its real default (`paperclip`), `buttonTooltipText` documents `Attach file`, `allowedTypes` documents the shipped image plus document MIME defaults, `copy.inputPlaceholder` has one canonical default (`How can I help...`), and `voiceRecognition.enabled` documents that it defaults to true.
+  - The legacy Web Speech path honors `voiceRecognition.provider.browser.language` and `provider.browser.continuous` instead of hardcoding them, and the composer builder renders the mic for a `custom` voice provider, matching the runtime-created button.
+  - `renderComposer` arbitration re-runs against the current plugin registry on every composer rebuild, and the right action cluster and send wrapper are rebound after a composer swap, so controls created by a later `update()` land in the live composer instead of a detached subtree.
+  - `contextMentions` changes passed to `controller.update()` now apply: enabling, disabling, or reconfiguring mentions live previously did nothing.
+  - The attachment preview strip left-aligns inside a capped composer column: with `layout.contentMaxWidth` engaged, centered composer children now get an explicit width, so the flex-item previews row fills the column instead of shrink-wrapping to one centered tile. `controller.update()` had a divergent copy of this rule that skipped the previews row entirely; both paths now share it.
+  - The end action cluster uses the same 8px gap as the start cluster (it was 4px), and every composer control draws its focus ring inside its border box from the input focus-ring token instead of falling back to the browser's outward default, so a focused control no longer grows into its neighbor.
+  - `layout.slots.composer` and `layout.slots.messages` are marked deprecated and unsupported: they have never been implemented, and configuring either now warns in debug mode. The composer textarea and inline editor set `dir="auto"`, and the textarea sets `enterkeyhint` and `autocomplete="off"`.
+
+- 4e38439: Fix unreadable markdown links in dark mode: the default link token now uses a light primary shade so it contrasts against charcoal assistant bubbles.
+- d6cb225: Fix hover and active state defaults on flat dark themes: icon buttons, label buttons, and artifact tabs and cards now fall back to white alpha washes instead of light grays when the resolved surface is dark.
+- d6cb225: Fix message action buttons rendering with icon button chrome: the copy, read aloud, vote, and custom actions no longer pick up the bordered surface fill, so their resting, hover, voted, and copy success states follow the message action theme tokens on every theme.
+- b0030c9: Fix header layout shift when `showHistory()` docks an overlay rail on page load. While the lazy history chunk loads, the widget now takes the docked geometry up front: the collapsed-rail trigger no longer paints at the header's leading edge (the sidebar glyph used to flash on the left, then jump to the mounted rail's own collapse toggle), and the rail column's space is reserved by a placeholder shell (the conversation header used to paint at the widget edge and get pushed over when the rail landed). When the chunk arrives, the view takes the placeholder's slot in the same shell with no reflow; if it fails to load, the trigger and the borrowed column are restored.
+- 7006974: Sync the generated Runtype OpenAPI contract with the live spec. `execution_start` now includes optional `resumed`, which was breaking the `check:runtype-types` CI gate.
+- 38bd7b3: Shrink the theme token pipeline: the mechanical alias/fallback chains in `themeToCssVariables` now run from a data table through a tiny interpreter, and the default spacing scale is generated from its keys. Pure representation change — a golden parity test locks the full CSS-variable output for default light/dark themes and override fixtures, and the exported `DEFAULT_PALETTE`/`DEFAULT_SEMANTIC`/`DEFAULT_COMPONENTS` objects keep their exact shapes.
+
 ## 4.18.0
 
 ### Minor Changes
