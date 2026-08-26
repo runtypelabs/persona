@@ -225,7 +225,7 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
     ).not.toBe(input);
   });
 
-  it("re-attaches the mention context row and affordance buttons", () => {
+  it("re-attaches the shared chip row and affordance buttons", () => {
     const { plugin, state } = createGatePlugin();
     const { mount } = makeController({
       plugins: [plugin],
@@ -246,18 +246,18 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
 
     const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
     expect(footer.querySelector(".persona-mention-button")).not.toBeNull();
-    const textarea = textareaOf(mount)!;
-    const contextRow = textarea.parentElement!.querySelector(
-      "[data-persona-mention-context-row]"
-    );
-    expect(contextRow).not.toBeNull();
+    // Mentions render into the header's shared chip row, not a row of their own.
+    const chipRow = footer.querySelector("[data-persona-composer-chip-row]");
+    expect(chipRow).not.toBeNull();
+    expect(chipRow!.closest("[data-persona-composer-header]")).not.toBeNull();
+    expect(footer.querySelector("[data-persona-mention-context-row]")).toBeNull();
 
-    // Rebuild again: exactly one context row and one affordance button remain.
+    // Rebuild again: exactly one chip row and one affordance button remain.
     state.ctx!.requestRender();
     const rebuilt = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
     expect(rebuilt.querySelectorAll(".persona-mention-button").length).toBe(1);
     expect(
-      rebuilt.querySelectorAll("[data-persona-mention-context-row]").length
+      rebuilt.querySelectorAll("[data-persona-composer-chip-row]").length
     ).toBe(1);
   });
 
@@ -487,6 +487,79 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
     getItem.mockRestore();
   });
 
+  it("re-arbitrates renderComposer against the current plugin registry", () => {
+    const { plugin: first, state } = createGatePlugin();
+    const second: AgentWidgetPlugin = {
+      id: "second",
+      renderComposer: () => {
+        const footer = document.createElement("div");
+        footer.setAttribute("data-test-second", "");
+        return footer;
+      },
+    };
+    const { mount, controller } = makeController({ plugins: [first] });
+
+    expect(mount.querySelector("[data-test-gate]")).not.toBeNull();
+
+    // Live registry swap: the next rebuild must ask the CURRENT plugin list,
+    // not the one arbitrated at mount.
+    controller.update({ plugins: [second] } as never);
+    state.ctx!.requestRender();
+
+    expect(mount.querySelector("[data-test-second]")).not.toBeNull();
+    expect(mount.querySelector("[data-test-gate]")).toBeNull();
+  });
+
+  it("falls back to the default composer when the composer plugin is removed", () => {
+    const { plugin, state } = createGatePlugin();
+    const { mount, controller } = makeController({ plugins: [plugin] });
+
+    controller.update({ plugins: [] } as never);
+    state.ctx!.requestRender();
+
+    expect(mount.querySelector("[data-test-gate]")).toBeNull();
+    expect(textareaOf(mount)).not.toBeNull();
+  });
+
+  it("inserts a newly enabled mic into the rebound right-action cluster", () => {
+    vi.stubGlobal(
+      "SpeechRecognition",
+      class {
+        continuous = false;
+        interimResults = false;
+        lang = "";
+        start = vi.fn();
+        stop = vi.fn();
+        abort = vi.fn();
+      }
+    );
+
+    const { plugin, state } = createGatePlugin();
+    const { mount, controller } = makeController({
+      plugins: [plugin],
+      voiceRecognition: { enabled: false },
+    });
+
+    // Plugin footer, then the default composer: `rightActions` must follow.
+    state.gated = false;
+    state.ctx!.requestRender();
+    expect(mount.querySelector("[data-persona-composer-mic]")).toBeNull();
+
+    controller.update({ voiceRecognition: { enabled: true } });
+
+    const mic = mount.querySelector<HTMLButtonElement>("[data-persona-composer-mic]");
+    expect(mic).not.toBeNull();
+    const right = mount.querySelector<HTMLElement>(
+      ".persona-widget-composer__right-actions"
+    )!;
+    expect(right.contains(mic!)).toBe(true);
+    // Mic sits before the send button, as in a freshly built composer.
+    const send = mount.querySelector<HTMLElement>("[data-persona-composer-submit]")!;
+    expect(
+      mic!.compareDocumentPosition(send) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
   it("keeps the composer suggestion row live after a rebuild", () => {
     const { plugin, state } = createGatePlugin();
     const { mount } = makeController({
@@ -508,5 +581,171 @@ describe("rebuildComposer (composer ctx requestRender)", () => {
     )!;
     expect(row.hidden).toBe(false);
     expect(row.querySelectorAll("button.persona-suggestion").length).toBe(1);
+  });
+});
+
+describe("composer surface bindings", () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+  });
+
+  afterEach(() => {
+    controllers.splice(0).forEach((controller) => {
+      try {
+        controller.destroy();
+      } catch {
+        /* already destroyed in the test */
+      }
+    });
+    mounts.splice(0).forEach((mount) => mount.remove());
+    document.body.innerHTML = "";
+    window.localStorage.clear();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("restores focus to the rebuilt input", () => {
+    const { plugin, state } = createGatePlugin();
+    const { mount } = makeController({ plugins: [plugin] });
+
+    state.gated = false;
+    state.ctx!.requestRender();
+
+    const first = textareaOf(mount)!;
+    first.focus();
+    expect(document.activeElement).toBe(first);
+
+    state.ctx!.requestRender();
+
+    const rebuilt = textareaOf(mount)!;
+    expect(rebuilt).not.toBe(first);
+    expect(document.activeElement).toBe(rebuilt);
+  });
+
+  it("synthesizes the regions a bound plugin composer omits", () => {
+    const plugin: AgentWidgetPlugin = {
+      id: "bare",
+      renderComposer: () => {
+        const footer = document.createElement("div");
+        const form = document.createElement("form");
+        form.setAttribute("data-persona-composer-form", "");
+        const input = document.createElement("textarea");
+        input.setAttribute("data-persona-composer-input", "");
+        form.appendChild(input);
+        footer.appendChild(form);
+        return footer;
+      },
+    };
+    const { mount } = makeController({ plugins: [plugin] });
+
+    const footer = mount.querySelector<HTMLElement>(
+      "[data-persona-composer-form]"
+    )!.parentElement!;
+    for (const attribute of [
+      "data-persona-composer-header",
+      "data-persona-composer-actions-start",
+      "data-persona-composer-actions-end",
+      "data-persona-composer-suggestions",
+      "data-persona-composer-status",
+    ]) {
+      const region = footer.querySelector<HTMLElement>(`[${attribute}]`);
+      expect(region).not.toBeNull();
+      expect(region!.hasAttribute("data-persona-composer-synthesized")).toBe(true);
+      // No box of its own: an empty synthesized region cannot shift the layout.
+      expect(region!.style.display).toBe("contents");
+    }
+  });
+
+  it("bails without throwing when a plugin composer has no bindable input", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const plugin: AgentWidgetPlugin = {
+      id: "formless",
+      renderComposer: () => {
+        const footer = document.createElement("div");
+        footer.setAttribute("data-test-formless", "");
+        return footer;
+      },
+    };
+    const { mount, controller } = makeController({ plugins: [plugin] });
+
+    expect(mount.querySelector("[data-test-formless]")).not.toBeNull();
+    expect(warn).toHaveBeenCalled();
+    expect(String(warn.mock.calls[0][0])).toContain("form, input");
+    // Nothing composer-scoped stayed wired to the previous surface.
+    expect(controller.getMessages()).toHaveLength(0);
+    warn.mockRestore();
+  });
+
+  it("throws in debug mode on a half-marked composer surface", () => {
+    const plugin: AgentWidgetPlugin = {
+      id: "half",
+      renderComposer: () => {
+        const footer = document.createElement("div");
+        const form = document.createElement("form");
+        form.setAttribute("data-persona-composer-form", "");
+        footer.appendChild(form);
+        return footer;
+      },
+    };
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    mounts.push(mount);
+
+    expect(() =>
+      createAgentExperience(mount, {
+        apiUrl: "https://api.example.com/chat",
+        launcher: { enabled: false },
+        persistState: false,
+        debug: true,
+        plugins: [plugin],
+      } as unknown as Parameters<typeof createAgentExperience>[1])
+    ).toThrow(/composer surface is missing/);
+  });
+
+  it("warns instead of throwing for a gating composer, even in debug", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const plugin: AgentWidgetPlugin = {
+      id: "gate-only",
+      renderComposer: () => {
+        const footer = document.createElement("div");
+        footer.setAttribute("data-test-gate", "");
+        return footer;
+      },
+    };
+    const mount = document.createElement("div");
+    document.body.appendChild(mount);
+    mounts.push(mount);
+
+    const controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      persistState: false,
+      debug: true,
+      plugins: [plugin],
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+    controllers.push(controller);
+
+    expect(mount.querySelector("[data-test-gate]")).not.toBeNull();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("destroy unwires the composer surface", async () => {
+    const { mount, controller } = makeController();
+    const textarea = textareaOf(mount)!;
+    const form = mount.querySelector<HTMLFormElement>(
+      "[data-persona-composer-form]"
+    )!;
+
+    controller.destroy();
+
+    textarea.value = "after destroy";
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    textarea.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true })
+    );
+    await flush();
+
+    expect(controller.getMessages()).toHaveLength(0);
   });
 });

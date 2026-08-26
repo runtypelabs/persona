@@ -677,6 +677,8 @@ export default defineConfig({
         'history-demo': path.resolve(__dirname, 'history-demo.html'),
         // Internal fixture for the Playwright history suite (e2e/); not in examples-nav.
         'history-e2e': path.resolve(__dirname, 'history-e2e.html'),
+        'composer-actions-demo': path.resolve(__dirname, 'composer-actions-demo.html'),
+        'composer-suite': path.resolve(__dirname, 'composer-suite.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
         'stream-animations-demo': path.resolve(__dirname, 'stream-animations-demo.html'),
         'streaming-table-demo': path.resolve(__dirname, 'streaming-table-demo.html'),

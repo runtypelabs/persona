@@ -8,6 +8,53 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <title>Bring-Your-Own Voice Provider</title>
+  <style>
+    /* Theme CSS, not widget internals.
+     *
+     * The widget publishes `--persona-voice-level` (0 to 1) on the composer
+     * footer and the mic wrapper while recording. The bar geometry below is
+     * pure CSS reading that variable: no Persona API.
+     *
+     * Custom properties inherit downward, so a waveform placed INSIDE the
+     * composer picks the value up for free. These bars sit in the sidebar,
+     * outside the widget, so the demo script copies the value onto this
+     * container each frame. That copy is the only JavaScript involved. */
+    .waveform {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 32px;
+      margin-top: 0.5rem;
+    }
+
+    .waveform span {
+      width: 4px;
+      border-radius: 2px;
+      background: var(--primary, #404040);
+      /* 4px at silence, up to 28px at full scale. */
+      height: calc(4px + (var(--persona-voice-level, 0) * 24px));
+      transition: height var(--persona-motion-duration-fast, 120ms)
+        var(--persona-motion-easing, ease-out);
+    }
+
+    /* Staggered multipliers so the bars read as a waveform, not one block. */
+    .waveform span:nth-child(2),
+    .waveform span:nth-child(6) {
+      height: calc(4px + (var(--persona-voice-level, 0) * 16px));
+    }
+
+    .waveform span:nth-child(3),
+    .waveform span:nth-child(5) {
+      height: calc(4px + (var(--persona-voice-level, 0) * 28px));
+    }
+
+    .waveform-readout {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.75rem;
+      text-align: center;
+    }
+  </style>
 </head>
 <body>
   <main class="shell-main">
@@ -22,6 +69,16 @@
         <div class="info-section">
           <h3>Status</h3>
           <p id="support-status" class="hint">Checking Web Speech support…</p>
+        </div>
+
+        <div class="info-section">
+          <h3>Live level</h3>
+          <p class="hint">These bars are plain page CSS reading <code>--persona-voice-level</code>, the 0 to 1 amplitude the widget publishes on the composer footer while the mic is recording. The recording ring around the mic modulates with the same value.</p>
+          <p class="hint">The variable inherits down the composer subtree, so a meter rendered inside the composer needs no script. These bars sit in the sidebar, so the demo copies the value across; the sizing is still pure CSS.</p>
+          <div class="waveform" data-waveform aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <p class="waveform-readout hint" data-waveform-readout>Level: idle</p>
         </div>
 
         <div class="info-section">
@@ -61,9 +118,22 @@
       </div>
 
       <div class="notes-section">
+        <h3 class="notes-section-title">Reporting a live level</h3>
+        <p>The recording ring now pulses with the speaker's voice. That comes from <code>onLevel</code>, an optional method on <code>VoiceProvider</code> that any third-party provider can implement: call it with a number from 0 to 1 and the widget publishes it as <code>--persona-voice-level</code> on the composer footer and the mic wrapper.</p>
+        <p>Web Speech exposes no audio stream of its own, so this adapter opens a second analysis-only microphone stream, runs it through an <code>AnalyserNode</code>, and reports time-domain RMS about every 60ms. The widget smooths and quantizes it on its own animation frame, so a provider does not need to match the display rate.</p>
+        <p>A provider that omits <code>onLevel</code> loses nothing: the widget holds the variable at a midpoint so meters read as present rather than dead. If the second stream is denied or unavailable here, dictation continues unchanged and the log notes it.</p>
+        <p>The variable is data rather than decoration, so it keeps updating under <code>prefers-reduced-motion</code>. Only the ring's animation is gated.</p>
+      </div>
+
+      <div class="notes-section">
         <h3 class="notes-section-title">Speech in vs. speech out</h3>
         <p>Voice <em>input</em> (this custom provider) and voice <em>output</em> (<code>textToSpeech</code>) are independent. This demo pairs the custom STT provider with browser TTS so the reply is read aloud: the same <code>textToSpeech</code> block works with the <code>browser</code> or <code>runtype</code> input providers too.</p>
         <p>A full-duplex provider (like <code>runtype</code>) instead streams its own spoken audio and skips browser TTS; in that case the provider owns playback via a <code>VoicePlaybackEngine</code>.</p>
+      </div>
+
+      <div class="notes-section" data-runtype-section>
+        <h3 class="notes-section-title">Hosted realtime voice (runtype)</h3>
+        <div data-runtype-slot></div>
       </div>
 
       <div class="notes-section">

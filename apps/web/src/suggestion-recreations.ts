@@ -1,12 +1,32 @@
 /**
- * Five commercial welcome states, recreated with nothing but public Persona
- * config: `suggestions.starters`, the `welcome` namespace, and theme tokens.
- * No plugin hooks, no CSS reaching into widget internals. Every panel uses
- * `variant: "hero"`: all five products center their empty state and dismiss
- * it on the first message, which is exactly the hero contract.
+ * Five commercial welcome states AND their composers, recreated with nothing
+ * but public Persona config: `suggestions.starters`, the `welcome` namespace,
+ * the `composer` namespace (actions, modes, the overflow menu, the model
+ * picker), and theme tokens. No plugin hooks, no CSS reaching into widget
+ * internals. Every panel uses `variant: "hero"`: all five products center their
+ * empty state and dismiss it on the first message, which is exactly the hero
+ * contract.
  *
  * Each recreation is a separate widget instance
  * with its own theme, so the page also doubles as a multi-instance test.
+ *
+ * Two ordering rules shape every composer below, so they are stated once here
+ * instead of five times:
+ *
+ * 1. The built-in order anchors are fixed: mention 100, attachment 200, modes
+ *    300 to 499, host actions 500 by default, the overflow `+` trigger 900, all
+ *    in the start cluster; model picker 700, mic 800, send 1000 in the end one.
+ *    A product whose real `+` sits LEFT of its mode toggles cannot be matched
+ *    exactly: fold the attachment button into the menu and the trigger trails
+ *    the modes, or leave it in the bar and there is no menu to open.
+ * 2. No config preselects a mode. `activeModeIds` is restored state, never an
+ *    authored default, so every exclusive group here starts empty and the
+ *    product's default selection has to be clicked.
+ *
+ * One rendering asymmetry follows from the same design: a folded built-in keeps
+ * its live element (that is what preserves the file input), so it lands in the
+ * menu as an icon-only row while contributed rows carry an icon and a label.
+ * `attachments.buttonTooltipText` is the closest thing it has to a menu label.
  */
 
 import "@runtypelabs/persona/widget.css";
@@ -14,6 +34,7 @@ import {
   createAgentExperience,
   type AgentWidgetConfig,
   type AgentWidgetController,
+  type ComposerAction,
 } from "@runtypelabs/persona";
 
 import { createDemoEchoFetch } from "./demo-echo-fetch";
@@ -46,6 +67,30 @@ const base = (): AgentWidgetConfig => ({
   messageActions: { enabled: false },
 });
 
+/**
+ * A row that exists for shape only. The real products list drive pickers and
+ * connectors in their `+` menus; nothing is wired up on this page, so the row
+ * ships disabled with the reason on its `title`. Disabled is the honest state:
+ * a live-looking row that swallows the click would read as a broken menu.
+ */
+const inertMenuAction = (
+  id: string,
+  label: string,
+  iconName: string,
+  order: number
+): ComposerAction => ({
+  id,
+  kind: "button",
+  placement: "start",
+  presentation: "overflow",
+  order,
+  label,
+  iconName,
+  disabled: true,
+  tooltipText: `${label} is a placeholder here: this recreation wires up no connectors.`,
+  onSelect: () => {},
+});
+
 // ── 1. ChatGPT (2025) ───────────────────────────────────────────────────
 // Centered question, no subtitle, a wrapped row of fully rounded category
 // pills. Their chips prefill a prompt stem rather than sending, so the labels
@@ -61,11 +106,83 @@ const chatgpt = (): AgentWidgetConfig => ({
   copy: {
     inputPlaceholder: "Ask anything",
   },
-  // Composer tune-up: the closest available config to ChatGPT's pill.
-  // Their input-on-top, action-row-below layout and the labeled "Tools"
-  // button are not expressible; this gets the leading "+", the trailing
-  // mic, and the round arrow-up send.
-  attachments: { enabled: true, buttonIconName: "plus" },
+  // Composer: one rounded pill. A single leading "+" opens the tool menu, so
+  // every start-cluster control is folded into it: the attachment built-in
+  // through `includeBuiltIns`, and each tool as a mode at `presentation:
+  // "overflow"`. Picking one from the menu is a real mode toggle, so it drops a
+  // removable chip above the input and swaps the placeholder. End cluster: mic,
+  // then the voice-mode affordance, then the black circular send.
+  //
+  // Their in-composer model label and the full-screen dictation waveform are
+  // not expressible; this gets the two buttons that open them.
+  attachments: {
+    enabled: true,
+    buttonIconName: "paperclip",
+    buttonTooltipText: "Add photos and files",
+  },
+  composer: {
+    // The trigger only appears once the menu would hold something, and folding
+    // a built-in is always explicit: enabling the menu never moves the
+    // attachment button by itself.
+    actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
+    // Menu order follows the action order anchors: the folded attachment
+    // (200) leads, then the modes in `modes` order from 300.
+    modes: [
+      {
+        id: "create-image",
+        label: "Create image",
+        iconName: "image",
+        presentation: "overflow",
+        placeholder: "Describe an image",
+      },
+      {
+        id: "deep-research",
+        label: "Deep research",
+        iconName: "search",
+        presentation: "overflow",
+        placeholder: "What should I research?",
+      },
+      {
+        id: "web-search",
+        label: "Web search",
+        iconName: "globe",
+        presentation: "overflow",
+        placeholder: "Search the web",
+      },
+      {
+        id: "think-longer",
+        label: "Think longer",
+        iconName: "lightbulb",
+        presentation: "overflow",
+        placeholder: "Ask something worth thinking about",
+      },
+      {
+        id: "agent-mode",
+        label: "Agent mode",
+        iconName: "bot",
+        presentation: "overflow",
+        placeholder: "Give the agent a task",
+      },
+    ],
+    actions: [
+      {
+        // Their voice mode opens a separate full-screen surface, which config
+        // has no seam for; this is the button that would open it, held
+        // disabled so the panel never pretends to listen. The registry has no
+        // audio-lines glyph, so `activity` stands in for the waveform.
+        id: "voice-mode",
+        kind: "button",
+        placement: "end",
+        presentation: "bar",
+        order: 850,
+        label: "Voice mode",
+        iconName: "activity",
+        disabled: true,
+        tooltipText: "Voice mode is visual only in this recreation.",
+        onSelect: () => {},
+      },
+    ],
+  },
   // Live feature, not chrome: clicking the mic starts real browser speech
   // recognition. Enabled here for visual parity with ChatGPT's empty state.
   voiceRecognition: {
@@ -130,6 +247,10 @@ const chatgpt = (): AgentWidgetConfig => ({
         gap: "16px",
         fontSize: "16px",
         lineHeight: "24px",
+        // One token sizes the "+" trigger, the mic, and the voice-mode button
+        // together; `sendButton.size` still wins for send.
+        controlSize: "36px",
+        controlIconSize: "20px",
       },
       // `semantic.colors.primary` does not reach the send button: the button
       // token defaults straight to the palette ramp, so brand it here.
@@ -137,6 +258,13 @@ const chatgpt = (): AgentWidgetConfig => ({
         primary: {
           background: "#0d0d0d",
           foreground: "#ffffff",
+          borderRadius: "9999px",
+        },
+        // Every composer icon control and the overflow menu rows read the
+        // ghost tokens: gray glyphs on a near-white hover, ChatGPT's chrome.
+        ghost: {
+          foreground: "#5d5d5d",
+          hoverBackground: "#f3f3f3",
           borderRadius: "9999px",
         },
       },
@@ -181,12 +309,54 @@ const claude = (): AgentWidgetConfig => ({
   copy: {
     inputPlaceholder: "How can I help you today?",
   },
-  // Claude's submit is a small terracotta arrow-up, not a paper plane. No
-  // attachment or mic row here: the recreation is the calm card, not the tools.
+  // Composer: a rounded card with the input on top and one action row under it.
+  // Start cluster: a "Research" mode toggle as a labeled pill, then the "+"
+  // menu holding the upload button, the web-search mode, and a connectors
+  // placeholder. End cluster: the model picker, then the terracotta send.
+  //
+  // Two mismatches worth naming. Their "+" sits left of Research; the trigger
+  // is anchored at order 900, after the mode range, so it trails instead. And
+  // the effort selector that hangs off their model picker has no config seam:
+  // effort would have to be modeled as its own single-select mode group.
+  attachments: {
+    enabled: true,
+    buttonIconName: "paperclip",
+    buttonTooltipText: "Upload a file",
+  },
+  composer: {
+    actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
+    models: [
+      { id: "sonnet-4-6", label: "Sonnet 4.6" },
+      { id: "opus-4-5", label: "Opus 4.5" },
+    ],
+    selectedModelId: "sonnet-4-6",
+    modes: [
+      {
+        id: "research",
+        label: "Research",
+        // `shortLabel` is what makes the bar button a labeled pill rather than
+        // an icon-only box, and it is the chip text once the mode is on.
+        shortLabel: "Research",
+        iconName: "search",
+        presentation: "bar",
+        placeholder: "What should I research?",
+      },
+      {
+        id: "web-search",
+        label: "Web search",
+        iconName: "globe",
+        presentation: "overflow",
+        placeholder: "Search the web and answer",
+      },
+    ],
+    actions: [inertMenuAction("connectors", "Connect apps", "link", 600)],
+  },
+  // Claude's submit is a small terracotta arrow-up, not a paper plane.
+  // No explicit size: send rides the 34px control-size token so the right
+  // rail (picker, send) sits on one height, matching the real product.
   sendButton: {
     useIcon: true,
     iconName: "arrow-up",
-    size: "32px",
     // Sparse arrow glyph: the 50% default box reads lost; 20px matches the ref.
     // Stroke is lighter for the icon
     iconSize: "20px",
@@ -242,9 +412,18 @@ const claude = (): AgentWidgetConfig => ({
         gap: "14px",
         fontSize: "16px",
         lineHeight: "24px",
+        controlSize: "34px",
+        controlIconSize: "18px",
       },
       button: {
         primary: { background: "#c96442", foreground: "#ffffff", borderRadius: "10px" },
+        // Warm ink on a cream hover, and the softly rounded rectangle Claude
+        // uses for the Research pill rather than a stadium.
+        ghost: {
+          foreground: "#83827d",
+          hoverBackground: "#f0eee6",
+          borderRadius: "8px",
+        },
       },
     },
   },
@@ -263,9 +442,48 @@ const gemini = (): AgentWidgetConfig => ({
   copy: {
     inputPlaceholder: "Ask Gemini",
   },
-  // Gemini's bar carries a leading "+" and a trailing mic; the labeled "Tools"
-  // button between them is not expressible in config.
-  attachments: { enabled: true, buttonIconName: "plus" },
+  // Composer: a rounded bar carrying their signature pair of tool toggles,
+  // Deep Research and Canvas, as labeled mode pills that chip and swap the
+  // placeholder. The "+" menu holds the upload button and an inert drive row.
+  // End cluster: model picker, mic, send.
+  //
+  // Gemini prints the model in the app header, not the composer, and config has
+  // no header seam for it; `composer.models` in the end cluster is the closest
+  // expression, and it is also the only one that rides the send as
+  // `selectedModelId`. Their "+" leads the bar; the trigger is anchored at
+  // order 900, so here it trails the two toggles.
+  attachments: {
+    enabled: true,
+    buttonIconName: "paperclip",
+    buttonTooltipText: "Upload files",
+  },
+  composer: {
+    actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
+    models: [
+      { id: "flash-2-5", label: "2.5 Flash" },
+      { id: "pro-2-5", label: "2.5 Pro" },
+    ],
+    selectedModelId: "flash-2-5",
+    modes: [
+      {
+        id: "deep-research",
+        label: "Deep Research",
+        shortLabel: "Deep Research",
+        iconName: "search",
+        presentation: "bar",
+        placeholder: "Research any topic",
+      },
+      {
+        id: "canvas",
+        label: "Canvas",
+        shortLabel: "Canvas",
+        iconName: "file-text",
+        presentation: "bar",
+        placeholder: "Draft or build something in Canvas",
+      },
+    ],
+    actions: [inertMenuAction("drive", "Add from Drive", "folder", 600)],
+  },
   // Live feature, not chrome: clicking the mic starts real browser speech
   // recognition. Enabled here for visual parity with Gemini's input bar.
   voiceRecognition: {
@@ -324,9 +542,18 @@ const gemini = (): AgentWidgetConfig => ({
         gap: "14px",
         fontSize: "16px",
         lineHeight: "24px",
+        controlSize: "36px",
+        controlIconSize: "20px",
       },
       button: {
         primary: { background: "#0b57d0", foreground: "#ffffff", borderRadius: "9999px" },
+        // Material's fully rounded tool chips: the active toggle picks up the
+        // hover tint, which is what `aria-pressed` paints with.
+        ghost: {
+          foreground: "#444746",
+          hoverBackground: "#dde3ea",
+          borderRadius: "9999px",
+        },
       },
       suggestion: {
         list: {
@@ -363,8 +590,56 @@ const copilot = (): AgentWidgetConfig => ({
   copy: {
     inputPlaceholder: "Message Copilot",
   },
-  // M365 Copilot's box shows a leading "+" and a trailing mic.
-  attachments: { enabled: true, buttonIconName: "plus" },
+  // Composer: the signature control is the response-mode selector, which is one
+  // single-select mode group rendered as three labeled bar toggles. Sticky
+  // persistence is the point: the choice survives every send, the way theirs
+  // survives a chat. Around it, the leading "+" is the attachment button (no
+  // menu here, so it keeps the bar position their box uses) and the end cluster
+  // is mic then send.
+  //
+  // Their selector opens as a dropdown with one option always chosen; config
+  // authors no initial `activeModeIds`, so the group starts empty and the first
+  // click is the user's.
+  attachments: {
+    enabled: true,
+    buttonIconName: "plus",
+    buttonTooltipText: "Add files",
+  },
+  composer: {
+    modeGroups: [{ id: "response-mode", selection: "single" }],
+    modes: [
+      {
+        id: "quick",
+        groupId: "response-mode",
+        label: "Quick response",
+        shortLabel: "Quick",
+        iconName: "zap",
+        presentation: "bar",
+        persistence: "sticky",
+        placeholder: "Ask for a quick answer",
+      },
+      {
+        id: "think-deeper",
+        groupId: "response-mode",
+        label: "Think deeper",
+        shortLabel: "Think deeper",
+        iconName: "lightbulb",
+        presentation: "bar",
+        persistence: "sticky",
+        placeholder: "Ask something worth thinking about",
+      },
+      {
+        id: "deep-research",
+        groupId: "response-mode",
+        label: "Deep research",
+        shortLabel: "Research",
+        iconName: "search",
+        presentation: "bar",
+        persistence: "sticky",
+        placeholder: "Give it a topic to research",
+      },
+    ],
+  },
   // Live feature, not chrome: clicking the mic starts real browser speech
   // recognition. Enabled here for visual parity with Copilot's input box.
   voiceRecognition: {
@@ -443,9 +718,20 @@ const copilot = (): AgentWidgetConfig => ({
         gap: "12px",
         fontSize: "16px",
         lineHeight: "24px",
+        // Three labeled toggles plus "+" plus mic plus send is a full bar, so
+        // the controls run a size below the 40px default to keep it on one row.
+        controlSize: "32px",
+        controlIconSize: "18px",
       },
       button: {
         primary: { background: "#0f6cbd", foreground: "#ffffff", borderRadius: "9999px" },
+        // Fluent's soft rectangles, and a blue-tinted active state: the pressed
+        // toggle paints with the ghost hover token.
+        ghost: {
+          foreground: "#616161",
+          hoverBackground: "#e8f1fa",
+          borderRadius: "6px",
+        },
       },
       suggestion: {
         card: {
@@ -483,14 +769,74 @@ const perplexity = (): AgentWidgetConfig => ({
   copy: {
     inputPlaceholder: "Ask anything...",
   },
-  // Search-box submit: a teal circle with a right-pointing arrow. No attachment
-  // or mic control, so the box reads as a search field rather than a chat bar.
+  // Composer: the inverted hierarchy. The modes ARE the primary control, so the
+  // exclusive Search / Research / Labs group leads the bar as labeled pills,
+  // each swapping the placeholder, and everything else trails: the "+" menu
+  // holding the folded attachment button, then the model picker and the teal
+  // send in the end cluster.
+  //
+  // Modes lead only because the attachment button is folded: the built-in sits
+  // at order 200, ahead of the mode range, so leaving it in the bar would put a
+  // paperclip in front of the tabs. Their segmented control also always has one
+  // segment lit; a mode group starts empty, and an active one adds a removable
+  // chip above the input that their tabs have no equivalent for.
+  attachments: {
+    enabled: true,
+    buttonIconName: "paperclip",
+    buttonTooltipText: "Attach a file",
+  },
+  composer: {
+    actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
+    modeGroups: [{ id: "search-mode", selection: "single" }],
+    modes: [
+      {
+        id: "search",
+        groupId: "search-mode",
+        label: "Search",
+        shortLabel: "Search",
+        iconName: "search",
+        presentation: "bar",
+        persistence: "sticky",
+        placeholder: "Ask anything...",
+      },
+      {
+        id: "research",
+        groupId: "search-mode",
+        label: "Research",
+        shortLabel: "Research",
+        iconName: "globe",
+        presentation: "bar",
+        persistence: "sticky",
+        placeholder: "Research a topic...",
+      },
+      {
+        id: "labs",
+        groupId: "search-mode",
+        label: "Labs",
+        shortLabel: "Labs",
+        iconName: "sparkles",
+        presentation: "bar",
+        persistence: "sticky",
+        placeholder: "Build something...",
+      },
+    ],
+    // Generic tier labels, deliberately: the picker shape is the recreation,
+    // and no other vendor's model names belong in it.
+    models: [
+      { id: "best", label: "Best" },
+      { id: "sonar", label: "Sonar" },
+      { id: "reasoning", label: "Reasoning" },
+    ],
+    selectedModelId: "best",
+  },
+  // Search-box submit: a teal circle with a right-pointing arrow.
+  // No explicit size: send rides the 34px control-size token so the model
+  // picker and submit share one rail height.
   sendButton: {
     useIcon: true,
     iconName: "arrow-right",
-    size: "36px",
-    // Sparse arrow glyph: the 50% default box reads lost; 25px matches the ref.
-    iconSize: "25px",
+    // Sparse arrow glyph: the 50% default box reads lost; 22px matches the ref.
+    iconSize: "22px",
     iconStrokeWidth: 1.25,
     showTooltip: false,
   },
@@ -540,9 +886,18 @@ const perplexity = (): AgentWidgetConfig => ({
         gap: "14px",
         fontSize: "16px",
         lineHeight: "24px",
+        controlSize: "34px",
+        controlIconSize: "18px",
       },
       button: {
         primary: { background: "#20808d", foreground: "#ffffff", borderRadius: "9999px" },
+        // Teal-tinted active state on the mode pills: `aria-pressed` paints
+        // with the ghost hover token, which is the only handle on it.
+        ghost: {
+          foreground: "#64645f",
+          hoverBackground: "#e3efef",
+          borderRadius: "8px",
+        },
       },
       suggestion: {
         list: {

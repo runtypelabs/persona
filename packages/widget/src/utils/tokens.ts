@@ -722,6 +722,48 @@ const zeroLength = (value: string): string => (value.trim() === '0' ? '0px' : va
 const V = '--persona-';
 
 /**
+ * WCAG relative luminance of a hex (3/4/6/8 digit) or rgb()/rgba() color.
+ * Returns undefined when the value is not parseable, so callers can fall back.
+ */
+const relativeLuminance = (color: string | undefined): number | undefined => {
+  if (!color) return undefined;
+  const value = color.trim().toLowerCase();
+  let channels: number[] | undefined;
+
+  if (value.charCodeAt(0) === 35 /* '#' */) {
+    const digits = value.slice(1);
+    if (!/^[0-9a-f]+$/.test(digits)) return undefined;
+    if (digits.length === 3 || digits.length === 4) {
+      channels = [0, 1, 2].map((i) => parseInt(digits[i] + digits[i], 16));
+    } else if (digits.length === 6 || digits.length === 8) {
+      channels = [0, 2, 4].map((i) => parseInt(digits.slice(i, i + 2), 16));
+    }
+  } else {
+    const match = value.match(/^rgba?\(([^)]+)\)$/);
+    if (match) {
+      const parts = match[1].split(/[,/\s]+/).filter(Boolean);
+      if (parts.length >= 3) {
+        channels = parts.slice(0, 3).map((raw) => {
+          const pct = raw.endsWith('%');
+          const n = parseFloat(pct ? raw.slice(0, -1) : raw);
+          return pct ? (n / 100) * 255 : n;
+        });
+      }
+    }
+  }
+
+  if (!channels || channels.some((c) => !Number.isFinite(c))) return undefined;
+  const [r, g, b] = channels.map((c) => {
+    const v = Math.max(0, Math.min(255, c)) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+
+/** Below the WCAG white/black crossover luminance, white text reads better. */
+const DARK_SURFACE_LUMINANCE = 0.179;
+
+/**
  * Each row: [aliasSuffix, ...sources]. A source starting with '=' is a
  * literal; anything else is a cssVars lookup by suffix. First defined wins;
  * rows with no defined source emit nothing. Row order is significant.
@@ -804,6 +846,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['button-primary-bg', 'components-button-primary-background', 'primary'],
     ['button-primary-fg', 'components-button-primary-foreground', 'text-inverse'],
     ['button-radius', 'components-button-primary-borderRadius', 'palette-radius-full', '=9999px'],
+    // Stop-state send button. No fallback source: widget.css carries the idle
+    // appearance in its var() fallbacks, so an unset token must stay undefined.
+    ['button-stop-bg', 'components-button-stop-background'],
+    ['button-stop-fg', 'components-button-stop-foreground'],
   ]);
 
   // Ghost variant: transparent, neutral-foreground icon buttons (the composer's
@@ -981,6 +1027,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // widget.css falls back to the scheme-aware ghost wash and semantic text, so
   // an unset token must leave the variable undefined.
   for (const [token, alias] of [
+    ['background', 'bg'],
+    ['border', 'border'],
     ['hoverBackground', 'hover-bg'],
     ['hoverForeground', 'hover-fg'],
     ['borderRadius', 'radius'],
@@ -1019,6 +1067,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['intro-card-border', 'components-introCard-border', '=none'],
     ['input-background', 'components-input-background', 'surface'],
     ['input-placeholder', 'components-input-placeholder', 'text-muted'],
+    ['input-backdrop-filter', 'components-input-backdropFilter', '=none'],
     ['message-user-bg', 'components-message-user-background', 'accent'],
     ['message-user-text', 'components-message-user-text', 'text-inverse'],
     ['message-user-shadow', 'components-message-user-shadow', '=0 5px 15px rgba(15, 23, 42, 0.08)'],
@@ -1048,7 +1097,21 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['composer-gap', 'components-composer-gap', '=0.5rem'],
     ['composer-font-size', 'components-composer-fontSize', '=0.875rem'],
     ['composer-line-height', 'components-composer-lineHeight', '=1.25rem'],
+    // Unified composer control box. Every icon control in the action row reads
+    // these two from the stylesheet; per-control config keys stay inline and win.
+    ['composer-control-size', 'components-composer-controlSize', '=40px'],
+    ['composer-control-icon-size', 'components-composer-controlIconSize', '=24px'],
+    // Motion: one timing pair + easing for every composer animation. A `0ms`
+    // duration is a kill switch; reduced-motion is enforced in CSS on top.
+    ['motion-duration-fast', 'components-motion-durationFast', '=120ms'],
+    ['motion-duration-base', 'components-motion-durationBase', '=200ms'],
+    ['motion-easing', 'components-motion-easing', '=cubic-bezier(0.2, 0, 0, 1)'],
     ['composer-border-color', 'components-composer-borderColor', 'border', '=#e5e7eb'],
+    ['composer-overlay-band', 'components-composer-overlayBand', '=transparent'],
+    // `components.composer.segmented.*` and `.modelPicker.*` get no short
+    // aliases: the rows cost gzip in the critical launcher bundle, which never
+    // draws a composer. widget.css reads the auto-emitted full paths, like
+    // introCard title/subtitle.
     ['scrollbar-thumb', 'components-scrollbar-thumb', 'border', '=#e5e7eb'],
     ['scrollbar-track', 'components-scrollbar-track', '=transparent'],
     ['md-inline-code-bg', 'components-markdown-inlineCode-background', 'container'],
@@ -1111,6 +1174,23 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
 
   emitAliases(cssVars, [
     ['message-border', 'components-message-border', 'border'],
+  ]);
+
+  // Bubble geometry/type per role. No fallback source: the message layout
+  // preset's value is carried in the consuming var() fallback (inline on the
+  // bubble for type/padding, in widget.css for the row width cap), so an unset
+  // token must leave the variable undefined.
+  emitAliases(cssVars, [
+    ['message-user-padding', 'components-message-user-padding'],
+    ['message-user-max-width', 'components-message-user-maxWidth'],
+    ['message-user-font-size', 'components-message-user-fontSize'],
+    ['message-user-font-family', 'components-message-user-fontFamily'],
+    ['message-user-line-height', 'components-message-user-lineHeight'],
+    ['message-assistant-padding', 'components-message-assistant-padding'],
+    ['message-assistant-max-width', 'components-message-assistant-maxWidth'],
+    ['message-assistant-font-size', 'components-message-assistant-fontSize'],
+    ['message-assistant-font-family', 'components-message-assistant-fontFamily'],
+    ['message-assistant-line-height', 'components-message-assistant-lineHeight'],
   ]);
 
   // Icon button tokens
@@ -1268,6 +1348,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // Interactive-state defaults. The default preset resolves container === surface,
   // which turns every hover/active rule that falls back to --persona-container
   // into a visual no-op; anchor those states one gray step down in that case.
+  // A flat DARK surface takes white-alpha washes instead: light grays paint a
+  // near-white pill under light text. Unparseable surfaces keep the grays.
   // Component config emitted above must keep winning, so only fill vars not set.
   const stateSurface = cssVars['--persona-surface'];
   const stateContainer = cssVars['--persona-container'];
@@ -1275,13 +1357,18 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   const gray200 = cssVars['--persona-palette-colors-gray-200'] ?? '#e5e7eb';
   const gray300 = cssVars['--persona-palette-colors-gray-300'] ?? '#d1d5db';
   const flatTheme = !stateContainer || stateContainer === stateSurface;
-  const hoverBgDefault = flatTheme ? gray100 : stateContainer;
-  const activeBgDefault = flatTheme ? gray200 : stateContainer;
+  const flatLuminance = relativeLuminance(stateSurface ?? cssVars['--persona-background']);
+  const flatDark = flatTheme && flatLuminance !== undefined && flatLuminance < DARK_SURFACE_LUMINANCE;
+  const flatHoverBg = flatDark ? 'rgba(255, 255, 255, 0.08)' : gray100;
+  const flatActiveBg = flatDark ? 'rgba(255, 255, 255, 0.12)' : gray200;
+  const flatActiveBorder = flatDark ? 'rgba(255, 255, 255, 0.16)' : gray300;
+  const hoverBgDefault = flatTheme ? flatHoverBg : stateContainer;
+  const activeBgDefault = flatTheme ? flatActiveBg : stateContainer;
   cssVars['--persona-icon-btn-hover-bg'] = cssVars['--persona-icon-btn-hover-bg'] ?? hoverBgDefault;
   cssVars['--persona-icon-btn-active-bg'] = cssVars['--persona-icon-btn-active-bg'] ?? activeBgDefault;
   if (flatTheme) {
     cssVars['--persona-icon-btn-active-border'] =
-      cssVars['--persona-icon-btn-active-border'] ?? gray300;
+      cssVars['--persona-icon-btn-active-border'] ?? flatActiveBorder;
   }
   cssVars['--persona-label-btn-hover-bg'] = cssVars['--persona-label-btn-hover-bg'] ?? hoverBgDefault;
   cssVars['--persona-artifact-tab-hover-bg'] =

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Composer Actions Demo</title>
+  <style>
+    .composer-actions-controls {
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <div class="info-section">
+          <h3>Three contributors, one row</h3>
+          <p>The paperclip is a core built-in. The clear-draft button comes from <code>composer.actions</code>. The emoji button and the template controls come from two separate plugins. None of them replaces the composer.</p>
+
+          <div class="composer-actions-controls btn-group">
+            <button class="composer-actions-host-button" type="button" title="Live controller.update(): the host action is added or removed without a remount, and the plugin actions are untouched.">Remove the host action</button>
+            <button class="composer-actions-extra-button" type="button" title="Adds a second host action into the end cluster, ordered ahead of mic and send.">Add an end-cluster action</button>
+          </div>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Composer actions</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">One registry, three contributors</h3>
+        <p>Core built-ins, host <code>composer.actions</code>, and every plugin's <code>contributeComposerActions</code> feed a single ordered list. Unlike <code>renderComposer</code>, where the first plugin to return an element wins, every contribution hook runs, so independent plugins coexist.</p>
+        <div class="code-block">
+initAgentWidget({
+  <span class="prop">plugins</span>: [createEmojiQuickInsertPlugin(), createPromptTemplatesPlugin()],
+  <span class="prop">composer</span>: {
+    <span class="prop">actions</span>: [{
+      <span class="prop">id</span>: <span class="string">"clear-draft"</span>,
+      <span class="prop">placement</span>: <span class="string">"start"</span>,
+      <span class="prop">order</span>: <span class="string">150</span>,
+      <span class="prop">label</span>: <span class="string">"Clear the draft"</span>,
+      <span class="prop">iconName</span>: <span class="string">"x"</span>,
+      <span class="prop">visible</span>: (state) =&gt; state.text.length &gt; <span class="string">0</span>,
+      <span class="function">onSelect</span>: (ctx) =&gt; ctx.<span class="function">setValue</span>(<span class="string">""</span>),
+    }],
+  },
+});
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Where a control lands</h3>
+        <p>Placement is logical (<code>start</code> or <code>end</code>), never physical, so DOM order and right-to-left layouts agree. Within a cluster, <code>order</code> positions a control against documented anchors. Send is terminal: an end-cluster action ordered at or after 1000 is clamped below it, so nothing can render after send.</p>
+        <div class="code-block">
+<span class="comment">// start cluster</span>
+mention affordances  <span class="string">100</span> + channel index
+attachment button    <span class="string">200</span>
+
+<span class="comment">// end cluster</span>
+mic                  <span class="string">800</span>
+send                <span class="string">1000</span>  <span class="comment">// terminal</span>
+
+<span class="comment">// custom actions default to</span> <span class="string">500</span>
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Ids are namespaced, duplicates are rejected</h3>
+        <p>A plugin action's id becomes <code>&lt;pluginId&gt;:&lt;id&gt;</code> unless it already carries a namespace, so two plugins can both ship a <code>pick</code> action. If two contributors still land on the same final id, the first one wins: core, then host config, then plugins in registry order. The later copy is dropped with a debug warning rather than silently replacing the earlier control.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">State drives visibility, not the host</h3>
+        <p><code>visible</code> and <code>disabled</code> accept a boolean or a predicate over the readonly composer state, and both re-evaluate on every state change and on <code>controller.update()</code>. Type a character and the clear-draft button appears; clear the draft and it leaves. <code>disableWhenStreaming</code> hands the control to the composer's own streaming lock.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Async actions get a busy state</h3>
+        <p>Return a promise from <code>onSelect</code> and the button reports <code>aria-busy</code> until it settles, ignoring repeat activation in the meantime. A rejection is reported through the widget's error path and the button returns to rest. The expand-draft control in this demo waits 600ms on purpose so the state is visible.</p>
+        <div class="code-block">
+{
+  <span class="prop">id</span>: <span class="string">"expand"</span>,
+  <span class="prop">placement</span>: <span class="string">"end"</span>,
+  <span class="prop">label</span>: <span class="string">"Expand the draft"</span>,
+  <span class="function">onSelect</span>: <span class="keyword">async</span> (ctx) =&gt; {
+    <span class="keyword">const</span> expanded = <span class="keyword">await</span> <span class="function">expand</span>(ctx.<span class="function">getValue</span>());
+    ctx.<span class="function">setValue</span>(expanded);
+  },
+}
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Custom actions own their markup</h3>
+        <p>A <code>kind: "custom"</code> action returns its own element, which the registry places as the accessible root with nothing wrapped around it. The returned <code>destroy()</code> runs on action removal, composer rebuild, plugin removal, and widget destroy. The template dropdown here is a plain <code>&lt;select&gt;</code>.</p>
+        <div class="code-block">
+{
+  <span class="prop">id</span>: <span class="string">"picker"</span>,
+  <span class="prop">kind</span>: <span class="string">"custom"</span>,
+  <span class="prop">placement</span>: <span class="string">"end"</span>,
+  <span class="prop">order</span>: <span class="string">600</span>,
+  <span class="prop">label</span>: <span class="string">"Prompt templates"</span>,
+  <span class="function">render</span>: (ctx) =&gt; ({ <span class="prop">element</span>, <span class="prop">destroy</span> }),
+}
+        </div>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Capabilities, not internals</h3>
+        <p>An action receives <code>getState</code>, <code>getValue</code>, <code>setValue</code>, <code>submit</code>, <code>openAttachmentPicker</code>, <code>toggleVoice</code>, and <code>requestRender</code>. There is no session and no composer DOM in that context: actions can run before the session exists, so session access would tie a plugin to private lifecycle and transport behavior.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Overflow menu</h3>
+        <p><code>presentation</code> is already part of the descriptor, with <code>bar</code>, <code>overflow</code>, and <code>auto</code>. This release renders all three in the action row; the overflow menu presentation, with real menu keyboard semantics, lands in a later release over the same registry rather than a second API.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/composer-actions-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("composer-actions-demo");
+  </script>
+</body>
+</html>

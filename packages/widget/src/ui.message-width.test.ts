@@ -65,7 +65,12 @@ const expectRowLayout = (
   expected: {
     role: "user" | "assistant" | "system";
     width: "content" | "full";
-    maxWidth: string;
+    /**
+     * The inline stamp, which exists only for an explicit
+     * `layout.messages.<role>.maxWidth` or `width: "full"`. `null` means the
+     * stylesheet default (85%, or `components.message.<role>.maxWidth`) owns it.
+     */
+    maxWidth: string | null;
   }
 ): void => {
   expect(row.classList.contains("persona-message-row")).toBe(true);
@@ -79,7 +84,7 @@ const expectRowLayout = (
   expect(row.getAttribute("data-message-width")).toBe(expected.width);
   expect(
     row.style.getPropertyValue("--persona-message-row-max-width")
-  ).toBe(expected.maxWidth);
+  ).toBe(expected.maxWidth ?? "");
 };
 
 describe("createAgentExperience: role-specific message width", () => {
@@ -98,7 +103,7 @@ describe("createAgentExperience: role-specific message width", () => {
     vi.restoreAllMocks();
   });
 
-  it("preserves content-sized 85% rows by default", () => {
+  it("leaves the content-row width default to the stylesheet", () => {
     const mount = createMount();
     const controller = createController(mount);
 
@@ -116,7 +121,7 @@ describe("createAgentExperience: role-specific message width", () => {
     expectRowLayout(getRow(mount, "user-default"), {
       role: "user",
       width: "content",
-      maxWidth: "85%",
+      maxWidth: null,
     });
     expect(getRow(mount, "user-default").classList.contains("persona-justify-end")).toBe(
       true
@@ -124,7 +129,7 @@ describe("createAgentExperience: role-specific message width", () => {
     expectRowLayout(getRow(mount, "assistant-default"), {
       role: "assistant",
       width: "content",
-      maxWidth: "85%",
+      maxWidth: null,
     });
 
     controller.destroy();
@@ -340,7 +345,7 @@ describe("createAgentExperience: role-specific message width", () => {
     expectRowLayout(getRow(mount, "update-width"), {
       role: "assistant",
       width: "content",
-      maxWidth: "85%",
+      maxWidth: null,
     });
 
     controller.update({

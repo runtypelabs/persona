@@ -1,4 +1,5 @@
 import { createElement } from "../utils/dom";
+import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/formatting";
 import { appendCharSpans } from "../utils/tool-loading-animation";
@@ -198,6 +199,22 @@ export const createReasoningBubble = (message: AgentWidgetMessage, config?: Agen
       title.style.display = "none";
     } else {
       title.style.display = "";
+    }
+  }
+
+  // `reasoningDisplay.iconName`: a leading glyph in the header row. Appended
+  // before the header content, which `appendHeaderToggle` adds next.
+  if (reasoningDisplayConfig.iconName && !skipCustomElement) {
+    const iconHost = createElement("span", "persona-reasoning-header-icon");
+    const glyph = renderLucideIcon(
+      reasoningDisplayConfig.iconName,
+      16,
+      "currentColor",
+      2
+    );
+    if (glyph) {
+      iconHost.appendChild(glyph);
+      header.appendChild(iconHost);
     }
   }
 

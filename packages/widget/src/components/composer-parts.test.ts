@@ -10,6 +10,8 @@ import {
   createSuggestionsRow,
 } from "./composer-parts";
 import type { AgentWidgetConfig } from "../types";
+import { DEFAULT_WIDGET_CONFIG } from "../defaults";
+import { ALL_SUPPORTED_MIME_TYPES } from "../utils/content";
 
 const baseConfig: AgentWidgetConfig = { apiUrl: "/api" };
 
@@ -21,6 +23,19 @@ describe("createComposerTextarea", () => {
     expect(textarea.classList.contains("persona-composer-textarea")).toBe(true);
     expect(textarea.classList.contains("persona-text-persona-text")).toBe(true);
     expect(textarea.classList.contains("persona-text-persona-primary")).toBe(false);
+  });
+
+  it("falls back to the DEFAULT_WIDGET_CONFIG placeholder (no builder drift)", () => {
+    const { textarea } = createComposerTextarea(baseConfig);
+    expect(textarea.placeholder).toBe(DEFAULT_WIDGET_CONFIG.copy?.inputPlaceholder);
+    expect(textarea.placeholder).toBe("How can I help...");
+  });
+
+  it("sets dir=auto, enterKeyHint=send and autocomplete=off", () => {
+    const { textarea } = createComposerTextarea(baseConfig);
+    expect(textarea.getAttribute("dir")).toBe("auto");
+    expect(textarea.getAttribute("enterkeyhint")).toBe("send");
+    expect(textarea.getAttribute("autocomplete")).toBe("off");
   });
 
   it("attachAutoResize wires an input listener that grows up to maxHeight", () => {
@@ -186,13 +201,42 @@ describe("createSendButton", () => {
     };
     const iconCount = (btn: HTMLElement) => btn.querySelectorAll("svg").length;
 
-    it("keeps exactly one icon across a send→stop→send cycle", () => {
+    it("keeps exactly one glyph VISIBLE across a send→stop→send cycle", () => {
+      // Both glyphs stay mounted and stacked; `data-mode` decides which one is
+      // opaque. That is what makes the doubled-arrow bug class unreachable:
+      // nothing is ever added or removed, so nothing can be left behind.
       const send = createSendButton(iconConfig);
-      expect(iconCount(send.button)).toBe(1);
+      const stack = send.glyphStack!;
+      expect(stack).not.toBeNull();
+      expect(iconCount(send.button)).toBe(2);
+      expect(stack.getAttribute("data-mode")).toBe("send");
+
       send.setMode("stop");
-      expect(iconCount(send.button)).toBe(1);
+      expect(iconCount(send.button)).toBe(2);
+      expect(stack.getAttribute("data-mode")).toBe("stop");
+
       send.setMode("send");
-      expect(iconCount(send.button)).toBe(1);
+      expect(iconCount(send.button)).toBe(2);
+      expect(stack.getAttribute("data-mode")).toBe("send");
+    });
+
+    it("stacks the two glyphs under one marked container", () => {
+      const send = createSendButton(iconConfig);
+      const stack = send.button.querySelector("[data-persona-glyph-stack]")!;
+      expect(stack).not.toBeNull();
+      expect(stack.querySelector('[data-glyph="send"]')).not.toBeNull();
+      expect(stack.querySelector('[data-glyph="stop"]')).not.toBeNull();
+      expect(stack.children).toHaveLength(2);
+    });
+
+    it("falls back to the text glyph, and no orphan stop icon, without a send glyph", () => {
+      const send = createSendButton({
+        ...baseConfig,
+        sendButton: { useIcon: true, iconText: "→", size: "40px" },
+      });
+      expect(send.glyphStack).toBeNull();
+      expect(iconCount(send.button)).toBe(0);
+      expect(send.button.textContent).toBe("→");
     });
 
     it("zeroes padding so configured padding cannot crush the glyph", () => {
@@ -241,21 +285,21 @@ describe("createSendButton", () => {
       expect(send.button.style.paddingTop).toBe("10px");
     });
 
-    it("does not stack a stale icon when an external re-render swapped the live icon node", () => {
+    it("drives a stack that an external re-render rebuilt, not its captured one", () => {
       const send = createSendButton(iconConfig);
-      // Simulate a DOM morph/re-render (e.g. a host calling controller.update())
-      // that replaces the live icon child with a clone. This detaches the
-      // captured `sendIcon` reference, so `sendIcon.parentNode !== button`.
-      // The old replaceChild/appendChild fallback then left BOTH icons mounted,
-      // producing the doubled send-arrow after the first send→stop→send cycle.
-      const live = send.button.firstElementChild as SVGElement;
-      send.button.replaceChildren(live.cloneNode(true));
-      expect(iconCount(send.button)).toBe(1);
+      const original = send.glyphStack!;
+      // Simulate the live restyle path in ui.ts rebuilding the button's glyph
+      // structure. The captured reference is now detached, so `setMode` has to
+      // resolve the live stack from the DOM or the stop state never shows.
+      const rebuilt = original.cloneNode(true) as HTMLElement;
+      send.button.replaceChildren(rebuilt);
 
       send.setMode("stop");
-      expect(iconCount(send.button)).toBe(1);
+      expect(rebuilt.getAttribute("data-mode")).toBe("stop");
+      expect(original.getAttribute("data-mode")).toBe("send");
+
       send.setMode("send");
-      expect(iconCount(send.button)).toBe(1);
+      expect(rebuilt.getAttribute("data-mode")).toBe("send");
     });
   });
 });
@@ -285,6 +329,28 @@ describe("createMicButton", () => {
     expect(mic!.button.getAttribute("data-persona-composer-mic")).toBe("");
     expect(mic!.button.type).toBe("button");
   });
+
+  it("returns a button for a custom voice provider without Web Speech support", () => {
+    const config: AgentWidgetConfig = {
+      ...baseConfig,
+      voiceRecognition: {
+        enabled: true,
+        provider: {
+          type: "custom",
+          custom: {
+            start: async () => {},
+            stop: () => {},
+            destroy: () => {},
+          } as unknown as NonNullable<
+            NonNullable<AgentWidgetConfig["voiceRecognition"]>["provider"]
+          >["custom"],
+        },
+      },
+    };
+    const mic = createMicButton(config);
+    expect(mic).not.toBeNull();
+    expect(mic!.button.getAttribute("data-persona-composer-mic")).toBe("");
+  });
 });
 
 describe("createAttachmentControls", () => {
@@ -304,6 +370,113 @@ describe("createAttachmentControls", () => {
     expect(att!.input.style.display).toBe("none");
     expect(att!.previewsContainer.classList.contains("persona-attachment-previews")).toBe(true);
     expect(att!.previewsContainer.style.display).toBe("none");
+  });
+
+  it("documents its shipped defaults: paperclip icon, 'Attach file', images + documents", () => {
+    const att = createAttachmentControls({ ...baseConfig, attachments: { enabled: true } })!;
+    expect(att.button.getAttribute("aria-label")).toBe("Attach file");
+    expect(att.input.accept.split(",")).toEqual(ALL_SUPPORTED_MIME_TYPES);
+    // 6 image + 9 document types, not images only.
+    expect(ALL_SUPPORTED_MIME_TYPES.length).toBe(15);
+    expect(att.input.accept).toContain("application/pdf");
+    // The default lucide glyph renders (name mismatch would fall back to 📎).
+    expect(att.button.querySelector("svg")).not.toBeNull();
+    expect(att.button.textContent).toBe("");
+  });
+});
+
+describe("composer control size token", () => {
+  const boxOf = (button: HTMLElement) => [
+    button.style.width,
+    button.style.height,
+    button.style.minWidth,
+    button.style.minHeight,
+  ];
+
+  it("leaves the send box to the control-size token when sendButton.size is unset", () => {
+    const send = createSendButton({
+      ...baseConfig,
+      sendButton: { useIcon: true, iconName: "send" },
+    });
+    expect(send.button.classList.contains("persona-composer-control")).toBe(true);
+    expect(boxOf(send.button)).toEqual(["", "", "", ""]);
+    // Half the 40px token, exactly what the old hardcoded default rendered.
+    expect(send.button.querySelector("svg")?.getAttribute("width")).toBe("20");
+  });
+
+  it("lets an explicit sendButton.size override the token inline", () => {
+    const send = createSendButton({
+      ...baseConfig,
+      sendButton: { useIcon: true, iconName: "send", size: "32px" },
+    });
+    expect(boxOf(send.button)).toEqual(["32px", "32px", "32px", "32px"]);
+  });
+
+  it("keeps the text-mode send button off the control box entirely", () => {
+    const send = createSendButton({
+      ...baseConfig,
+      sendButton: { useIcon: false, size: "32px" },
+    });
+    expect(send.button.classList.contains("persona-composer-control")).toBe(false);
+    expect(boxOf(send.button)).toEqual(["", "", "", ""]);
+  });
+
+  it("leaves the mic box to the token and keeps voiceRecognition padding as an override", () => {
+    const mic = createMicButton({
+      ...baseConfig,
+      voiceRecognition: {
+        enabled: true,
+        provider: { type: "custom" },
+        paddingX: "6px",
+        paddingY: "4px",
+      },
+    })!;
+    expect(mic.button.classList.contains("persona-composer-control")).toBe(true);
+    expect(mic.button.classList.contains("persona-composer-control--glyph")).toBe(
+      true,
+    );
+    expect(boxOf(mic.button)).toEqual(["", "", "", ""]);
+    expect(mic.button.style.paddingLeft).toBe("6px");
+    expect(mic.button.style.paddingTop).toBe("4px");
+  });
+
+  it("lets an explicit voiceRecognition.iconSize override the mic box and glyph", () => {
+    const mic = createMicButton({
+      ...baseConfig,
+      voiceRecognition: {
+        enabled: true,
+        provider: { type: "custom" },
+        iconSize: "28px",
+      },
+    })!;
+    expect(boxOf(mic.button)).toEqual(["28px", "28px", "28px", "28px"]);
+    // Opted out of the glyph token so the configured size still sizes the icon.
+    expect(mic.button.classList.contains("persona-composer-control--glyph")).toBe(
+      false,
+    );
+    expect(mic.button.querySelector("svg")?.getAttribute("width")).toBe("28");
+  });
+
+  it("leaves the attachment box to the token and its glyph on the icon token", () => {
+    const att = createAttachmentControls({
+      ...baseConfig,
+      attachments: { enabled: true },
+    })!;
+    expect(att.button.classList.contains("persona-composer-control")).toBe(true);
+    expect(att.button.classList.contains("persona-composer-control--glyph")).toBe(
+      true,
+    );
+    expect(boxOf(att.button)).toEqual(["", "", "", ""]);
+    expect(att.button.querySelector("svg")?.getAttribute("width")).toBe("24");
+  });
+
+  it("no longer chains the attachment box off sendButton.size", () => {
+    const att = createAttachmentControls({
+      ...baseConfig,
+      sendButton: { size: "64px" },
+      attachments: { enabled: true },
+    })!;
+    expect(boxOf(att.button)).toEqual(["", "", "", ""]);
   });
 });
 

@@ -72,6 +72,47 @@ export type {
   // Attachment config type
   AgentWidgetAttachmentsConfig,
   AgentWidgetComposerConfig,
+  // Composer state + submission snapshot (controller.getComposerState,
+  // persona:composer:state, composer.onBeforeSend)
+  ComposerState,
+  ComposerPhase,
+  ComposerAttachmentState,
+  ComposerQuote,
+  ComposerSubmissionSnapshot,
+  ComposerSubmissionOptions,
+  ComposerBeforeSendResult,
+  // History + asynchronous interaction (session.resubmitFrom,
+  // composer.streamingSubmitBehavior, persisted drafts)
+  ComposerResubmitOptions,
+  ComposerStreamingSubmitBehavior,
+  AgentWidgetStoredDraft,
+  // Composer action registry (composer.actions, contributeComposerActions)
+  ComposerAction,
+  ComposerActionBase,
+  ComposerActionPlacement,
+  ComposerActionPresentation,
+  ComposerButtonAction,
+  ComposerCustomAction,
+  ComposerActionContext,
+  ComposerActionRenderContext,
+  ComposerActionContributionContext,
+  ComposerActionOverflowConfig,
+  // Model picker (composer.models, composer.modelPicker)
+  ComposerModel,
+  ComposerModelPickerConfig,
+  ComposerModelPickerPresentation,
+  // Composer modes + mode groups (composer.modes, composer.modeGroups)
+  ComposerMode,
+  ComposerModeGroup,
+  ComposerModeGroupPresentation,
+  // Composer baseline configuration (submit keys, sizing, locks)
+  ComposerLayout,
+  ComposerSubmitKey,
+  ComposerInputAttributes,
+  ComposerDisabledOption,
+  // Attachment upload adapter (attachments.adapter)
+  AgentWidgetAttachmentAdapter,
+  AttachmentUploadContext,
   // Layout types
   AgentWidgetLayoutConfig,
   AgentWidgetHeaderLayoutConfig,
@@ -91,6 +132,8 @@ export type {
   // Message actions types
   AgentWidgetMessageActionsConfig,
   AgentWidgetMessageFeedback,
+  AgentWidgetCustomMessageAction,
+  AgentWidgetCustomMessageActionRole,
   // Client token types
   ClientSession,
   ClientInitResponse,
@@ -181,6 +224,9 @@ export type {
   AgentWidgetSuggestionsConfig,
   AgentWidgetWelcomeConfig,
   AgentWidgetWelcomeIcon,
+  AgentWidgetWelcomeIconBase,
+  AgentWidgetWelcomeIconPlacement,
+  AgentWidgetWelcomeAlign,
   AgentWidgetWelcomeVariant,
   AgentWidgetWelcomeDismiss
 } from "./types";

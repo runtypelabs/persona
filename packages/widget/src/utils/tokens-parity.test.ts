@@ -46,6 +46,9 @@ const FIXTURES: Record<string, DeepPartial<PersonaTheme>> = {
   'non-flat container (hover anchoring off the flat branch)': {
     semantic: { colors: { container: 'palette.colors.gray.100' } },
   },
+  'flat dark surface (white-alpha interactive washes)': {
+    semantic: { colors: { surface: '#0e111b', background: '#0e111b', container: '#0e111b' } },
+  },
   'custom launcher foreground (subtitle wash)': {
     components: { launcher: { foreground: '#ff00ff', background: '#001122' } },
   },
@@ -81,6 +84,69 @@ const FIXTURES: Record<string, DeepPartial<PersonaTheme>> = {
       message: {
         user: { background: '#0044ff', text: '#ffffff' },
         assistant: { background: '#f1f1f1', border: '#dddddd' },
+      },
+    },
+  },
+  'message geometry + stop button tokens': {
+    components: {
+      message: {
+        user: {
+          padding: '0.5rem 0.875rem',
+          maxWidth: '48rem',
+          fontSize: '1rem',
+          fontFamily: 'Georgia, serif',
+          lineHeight: '1.6',
+        },
+        assistant: {
+          padding: '0 0',
+          maxWidth: '100%',
+          fontSize: '1.0625rem',
+          fontFamily: 'Georgia, serif',
+        },
+      },
+      button: { stop: { background: '#e5e5e5', foreground: '#111111' } },
+    },
+  },
+  'composer overlay band + input backdrop filter': {
+    components: {
+      composer: { overlayBand: 'linear-gradient(180deg, rgba(0,0,0,0) 0, #000 96px)' },
+      input: { backdropFilter: 'blur(8px)' },
+    },
+  },
+  'intro card kicker typography': {
+    components: {
+      introCard: {
+        kicker: { fontSize: '0.75rem', letterSpacing: '0.04em', color: '#8a8a82' },
+      },
+    },
+  },
+  'composer segmented mode track': {
+    components: {
+      composer: {
+        segmented: {
+          trackBackground: '#e8e6dc',
+          trackBorderRadius: '10px',
+          padding: '3px',
+          activeBackground: '#ffffff',
+          activeForeground: '#141413',
+          activeShadow: '0 1px 3px rgba(0,0,0,0.16)',
+          inactiveForeground: '#6b6a63',
+          itemPadding: '0.3125rem 0.75rem',
+        },
+      },
+    },
+  },
+  'composer model picker popover': {
+    components: {
+      composer: {
+        modelPicker: {
+          menuBackground: '#ffffff',
+          menuBorderRadius: '12px',
+          rowHoverBackground: 'palette.colors.gray.100',
+          labelColor: '#141413',
+          descriptionColor: '#6b6a63',
+          suffixColor: '#8a8a82',
+        },
       },
     },
   },

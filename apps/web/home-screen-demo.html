@@ -15,19 +15,33 @@
       <aside class="stage-controls">
         <div class="info-section">
           <h3>Home stack</h3>
-          <p>Each toggle updates the stack in place. Options are read on every render, so nothing remounts.</p>
-          <div class="btn-row">
-            <button class="btn" type="button" data-home-toggle="cards" aria-pressed="true">What is new cards</button>
-            <button class="btn" type="button" data-home-toggle="links" aria-pressed="true">Link list</button>
+          <div class="toggle-section">
+            <label for="home-toggle-cards">What is new cards</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="home-toggle-cards" data-home-toggle="cards" checked>
+              <span class="toggle-slider"></span>
+            </label>
           </div>
+          <div class="toggle-section">
+            <label for="home-toggle-links">Link list</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="home-toggle-links" data-home-toggle="links" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p class="hint">Each toggle updates the stack in place. Options are read on every render, so nothing remounts.</p>
         </div>
 
         <div class="info-section">
           <h3>Conversation history</h3>
-          <p>History adds recent conversations to the stack and a Messages action to the header. Turning it off remounts the original blueprint.</p>
-          <div class="btn-row">
-            <button class="btn" type="button" data-home-toggle="history" aria-pressed="true">Recent conversations</button>
+          <div class="toggle-section">
+            <label for="home-toggle-history">Recent conversations</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="home-toggle-history" data-home-toggle="history" checked>
+              <span class="toggle-slider"></span>
+            </label>
           </div>
+          <p class="hint">History adds recent conversations to the stack and a Messages action to the header. Turning it off remounts the original blueprint.</p>
           <p class="hint">The demo mounts an in-memory history provider, so every state is deterministic and no API is involved.</p>
         </div>
 

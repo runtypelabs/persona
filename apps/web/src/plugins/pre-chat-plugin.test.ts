@@ -49,6 +49,7 @@ const createHarness = (
           subtitle: "Ask about anything on this page.",
           variant: "card",
           dismiss: "never",
+          iconPlacement: "above",
         },
         variant: "card",
         visible: true,

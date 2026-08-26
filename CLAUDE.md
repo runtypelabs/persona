@@ -16,14 +16,14 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI l
 **Examples:**
 - `examples/ai-sdk-webmcp` - Next.js / Vercel AI SDK WebMCP demo without Runtype
 - `examples/ai-sdk-next` - Next.js; minimal SSE adapters for the Vercel AI SDK and OpenAI Responses
-- `examples/eve-next`, `examples/openai-agents-next`, `examples/langgraph-next` - Next.js; SDK-specific backend adapters (Next.js because each SDK's own examples standardize on it). Each vendors a zero-dep `persona-wire.ts` + a `tests/wire-testing.ts` helper and is validated by an offline vitest run.
-- **Host matrix** (`examples/echo-hono`, `examples/echo-script-tag`, `examples/echo-express`, `examples/echo-sveltekit`) - the SAME canonical echo adapter re-hosted four ways. `persona-wire.ts` + the adapter are exact copies across all four; only the host wrapper changes. Hono/SvelteKit return the Web `Response` directly; Express/bare-`node:http` bridge the `(req, res)` callback style. All run keyless (echo agent) with a documented one-line swap to a real model.
+- `examples/eve-next`, `examples/openai-agents-next`, `examples/langgraph-next` - Next.js; SDK-specific backend adapters. Each vendors a zero-dep `persona-wire.ts` + a `tests/wire-testing.ts` helper and is validated by an offline vitest run.
+- **Host matrix** (`examples/echo-hono`, `examples/echo-script-tag`, `examples/echo-express`, `examples/echo-sveltekit`) - the same canonical echo adapter re-hosted four ways. `persona-wire.ts` + the adapter are exact copies across all four; only the host wrapper changes. Hono/SvelteKit return the Web `Response` directly; Express/bare-`node:http` bridge the `(req, res)` callback style. All run keyless (echo agent) with a documented one-line swap to a real model.
 - `examples/runtype-script-tag` - the no-backend path: a static `clientToken` embed talking directly to `api.runtype.com`. Mirrors `echo-script-tag` but swaps `apiUrl: "/dispatch"` for a `clientToken` (zero-dep static server; loads the published widget from jsDelivr, not the workspace build). The hosted counterpart to the BYO examples.
 - `examples/runtype-hono-proxy` - Runtype API proxy on Hono (Node/Vercel/Workers; powers `pnpm dev`)
 
 ## Requirements
 
-- **Node.js** ≥20 (see `.nvmrc`)
+- **Node.js** 24 (see `.nvmrc`)
 - **pnpm**: managed via corepack (`corepack enable` then `corepack install`)
 
 ## Common Commands
@@ -114,9 +114,8 @@ The widget uses a layered architecture:
    - `ask-user-question-tool.ts` / `suggest-replies-tool.ts` - Built-in LOCAL client tool definitions advertised via `features.*.expose`
 
 5. **Voice** (`voice/`)
-   - `browser-voice-provider.ts` - Web Audio API voice input
-   - `runtype-voice-provider.ts` - Runtype-hosted voice service
-   - `voice-activity-detector.ts` - VAD implementation
+   - `browser-voice-provider.ts` - SpeechRecognition (Web Speech API) input; no audio graph, so no live level data
+   - `runtype-voice-provider.ts` - Runtype-hosted voice service; its capture loop also feeds `--persona-voice-level`
    - `voice-factory.ts` - Provider factory
 
 6. **Extensibility**

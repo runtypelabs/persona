@@ -178,6 +178,18 @@ export interface ButtonTokens extends ComponentTokenSet {
   primary: ComponentTokenSet;
   secondary: ComponentTokenSet;
   ghost: ComponentTokenSet;
+  /**
+   * Send button while the composer shows Stop (a response is streaming). Unset
+   * keys keep the idle send appearance, so this group is purely additive.
+   * `sendButton.backgroundColor` / `.textColor` are explicit inline config and
+   * still win.
+   */
+  stop?: {
+    /** Stop-state fill. Defaults to the idle send background. */
+    background?: TokenReference<'color'>;
+    /** Stop-state glyph/label color. Defaults to the idle send foreground. */
+    foreground?: TokenReference<'color'>;
+  };
 }
 
 export interface InputTokens extends ComponentTokenSet {
@@ -187,6 +199,12 @@ export interface InputTokens extends ComponentTokenSet {
     border: TokenReference<'color'>;
     ring: TokenReference<'color'>;
   };
+  /**
+   * `backdrop-filter` on the composer form, e.g. `"blur(8px)"`. Pairs with an
+   * alpha `background` to make an overlaid composer read through the
+   * transcript. Emitted with the `-webkit-` prefix as well.
+   */
+  backdropFilter?: string;
 }
 
 export interface LauncherTokens extends ComponentTokenSet {
@@ -428,6 +446,10 @@ export interface TooltipTokens {
  * scheme-aware, so most themes never need this group.
  */
 export interface MessageActionsTokens {
+  /** Resting fill. Defaults to transparent. */
+  background?: TokenReference<'color'>;
+  /** Resting border shorthand (e.g. `1px solid #333`). Defaults to none. */
+  border?: string;
   /** Hover fill. Defaults to `components.button.ghost.hoverBackground`. */
   hoverBackground?: TokenReference<'color'>;
   /** Hover icon color. Defaults to `semantic.colors.text`. */
@@ -436,15 +458,36 @@ export interface MessageActionsTokens {
   borderRadius?: TokenReference<'radius'>;
 }
 
+/**
+ * Bubble geometry and type, per role. Every key is unset by default and each
+ * one falls back to the value the message layout preset already produced, so
+ * setting none of them changes nothing.
+ */
+export interface MessageGeometryTokens {
+  /** Bubble inset, full CSS shorthand. Defaults to the layout preset's padding. */
+  padding?: TokenReference<'spacing'>;
+  /**
+   * Width cap on the bubble's row track, any CSS length or percentage.
+   * @default "85%" (`100%` for `layout.messages.<role>.width: "full"`)
+   */
+  maxWidth?: string;
+  /** Bubble type size. Defaults to the layout preset's size. */
+  fontSize?: string;
+  /** Bubble type face. Defaults to inheriting the widget font. */
+  fontFamily?: string;
+  /** Bubble line height. Defaults to the layout preset's line height. */
+  lineHeight?: string;
+}
+
 export interface MessageTokens {
-  user: {
+  user: MessageGeometryTokens & {
     background: TokenReference<'color'>;
     text: TokenReference<'color'>;
     borderRadius: TokenReference<'radius'>;
     /** User bubble box-shadow (token ref or raw CSS, e.g. `none`). */
     shadow?: string;
   };
-  assistant: {
+  assistant: MessageGeometryTokens & {
     background: TokenReference<'color'>;
     text: TokenReference<'color'>;
     borderRadius: TokenReference<'radius'>;
@@ -470,6 +513,8 @@ export interface IntroCardTokens extends ComponentTokenSet {
   shadow?: string;
   /** Full border shorthand on the intro card (raw CSS, e.g. `"1px solid rgba(0,0,0,0.1)"`). @default "none" */
   border?: string;
+  /** Welcome kicker typography (`welcome.kicker`, the line above the title). */
+  kicker?: TextStyleTokens;
   /** Welcome title typography. */
   title?: TextStyleTokens;
   /** Welcome subtitle typography. */
@@ -591,6 +636,55 @@ export interface ScrollbarTokens {
   track?: TokenReference<'color'>;
 }
 
+/**
+ * Segmented mode-group track (`ComposerModeGroup.presentation: "segmented"`).
+ *
+ * Every key is optional and unset ones emit nothing: the stylesheet's `var()`
+ * fallbacks own the default look (a container-colored track with a raised
+ * surface-colored pill on the active segment).
+ */
+export interface ComposerSegmentedTokens {
+  /** Track fill behind the segments. @default semantic.colors.container */
+  trackBackground?: TokenReference<'color'>;
+  /** Track corner radius; each segment follows it. @default "9999px" */
+  trackBorderRadius?: TokenReference<'radius'>;
+  /** Inset between the track edge and the segments. @default "2px" */
+  padding?: string;
+  /** Fill of the active segment. @default semantic.colors.surface */
+  activeBackground?: TokenReference<'color'>;
+  /** Text and glyph color of the active segment. @default semantic.colors.text */
+  activeForeground?: TokenReference<'color'>;
+  /** Lift under the active segment (raw CSS box-shadow, `none` allowed). */
+  activeShadow?: string;
+  /** Text and glyph color of the inactive segments. @default semantic.colors.textMuted */
+  inactiveForeground?: TokenReference<'color'>;
+  /** Inner padding of one segment. @default "0.25rem 0.625rem" */
+  itemPadding?: string;
+}
+
+/**
+ * Model picker popover (`composer.modelPicker.presentation: "popover"`).
+ *
+ * Every key is optional and unset ones emit nothing: the stylesheet's `var()`
+ * fallbacks own the default look, which derives from the surface and ghost
+ * button tokens. Inert under the native `<select>` presentation, except
+ * `suffixColor`, which the native control cannot carry either.
+ */
+export interface ComposerModelPickerTokens {
+  /** Panel fill behind the rows. @default semantic.colors.surface */
+  menuBackground?: TokenReference<'color'>;
+  /** Panel corner radius. @default palette.radius.lg */
+  menuBorderRadius?: TokenReference<'radius'>;
+  /** Row fill under hover and the focused option. @default the ghost hover wash */
+  rowHoverBackground?: TokenReference<'color'>;
+  /** Row label and closed-control label color. @default inherited text */
+  labelColor?: TokenReference<'color'>;
+  /** Second line under a row label. @default semantic.colors.textMuted */
+  descriptionColor?: TokenReference<'color'>;
+  /** `composer.modelPicker.suffix` on the closed control. @default semantic.colors.textMuted */
+  suffixColor?: TokenReference<'color'>;
+}
+
 /** Composer (message input) chrome. */
 export interface ComposerChromeTokens {
   /** Box-shadow on the composer form (raw CSS, e.g. `none`). */
@@ -605,6 +699,45 @@ export interface ComposerChromeTokens {
   fontSize?: string;
   /** Composer textarea line-height. @default "1.25rem" */
   lineHeight?: string;
+  /**
+   * Edge of every icon control in the composer action row: attachment, mention,
+   * mic, registry action buttons, the overflow `+` trigger, and the icon-mode
+   * send button. Per-control config keys (`sendButton.size`,
+   * `voiceRecognition.iconSize`) still win. Coarse pointers floor the hit area
+   * at 40px regardless. @default "40px"
+   */
+  controlSize?: string;
+  /** Glyph box inside those controls. @default "24px" */
+  controlIconSize?: string;
+  /**
+   * Background painted behind an overlaid composer footer
+   * (`composer.placement: "overlay"`). Any CSS `background` value, gradients
+   * included — same convention as the shadow tokens. Inert under
+   * `placement: "block"`.
+   * @default "transparent"
+   */
+  overlayBand?: string;
+  /** Segmented mode-group track. */
+  segmented?: ComposerSegmentedTokens;
+  /** Model picker popover chrome. */
+  modelPicker?: ComposerModelPickerTokens;
+}
+
+/**
+ * Motion timing shared by every composer animation.
+ *
+ * Setting either duration to `0ms` is a kill switch: the transitions and
+ * keyframes that consume these tokens complete instantly, with no other config
+ * change. Motion is additionally suppressed wholesale under
+ * `prefers-reduced-motion: reduce`, which no token can re-enable.
+ */
+export interface MotionTokens {
+  /** State flips: pressed ticks, glyph crossfades. @default "120ms" */
+  durationFast?: string;
+  /** Enter and exit: chips, rings. @default "200ms" */
+  durationBase?: string;
+  /** @default "cubic-bezier(0.2, 0, 0, 1)" */
+  easing?: string;
 }
 
 /** Artifact toolbar chrome. */
@@ -820,6 +953,8 @@ export interface ComponentTokens {
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
   composer: ComposerChromeTokens;
+  /** Shared motion timing for composer chrome animation. */
+  motion?: MotionTokens;
   /** Scrollbar appearance for every scroller in the widget. */
   scrollbar?: ScrollbarTokens;
   /** Icon button styling tokens. */

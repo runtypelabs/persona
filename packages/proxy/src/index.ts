@@ -134,6 +134,24 @@ export type ChatProxyOptions = {
    * config.
    */
   agentConfig?: AgentConfig;
+  /**
+   * Opt in to the widget's composer model picker. Persona sends the per-turn
+   * selection as a top-level `composerOptions.selectedModelId`; without this
+   * option the field is stripped and the pinned model always wins.
+   *
+   * When set and the incoming id is in `allowed`, the proxy rewrites the model
+   * on the definition it owns locally: `agentConfig` in server-agent mode, or
+   * the enabled `flowConfig` steps that declare a model. Routes pinned by
+   * `agentId`/`flowId` have no local definition to patch, so the selection is
+   * ignored there. A disallowed id is ignored, never rejected.
+   */
+  composerModels?: { allowed: string[] };
+  /**
+   * Forward the widget's active composer mode ids to the upstream call as
+   * `context.composerModes`. Off by default: mode ids are host vocabulary and
+   * mean nothing until a flow or agent maps them.
+   */
+  forwardComposerModes?: boolean;
   flowId?: string;
   flowConfig?: RuntypeFlowConfig;
   /**
@@ -262,6 +280,52 @@ const sortAndFormatMessages = (value: unknown) => {
       content: message.content
     }));
 };
+
+/** Per-turn composer selections sent by the widget. Never forwarded verbatim. */
+export type ComposerOptionsPayload = {
+  selectedModelId?: string;
+  activeModeIds?: string[];
+};
+
+const readComposerOptions = (
+  payload: Record<string, unknown>
+): ComposerOptionsPayload => {
+  const raw = payload.composerOptions;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const value = raw as Record<string, unknown>;
+  const selectedModelId =
+    typeof value.selectedModelId === "string" ? value.selectedModelId : undefined;
+  const activeModeIds = Array.isArray(value.activeModeIds)
+    ? value.activeModeIds.filter((id): id is string => typeof id === "string")
+    : undefined;
+  return { selectedModelId, activeModeIds };
+};
+
+/**
+ * The selected model, or undefined when it is not allowlisted. Ignore, never
+ * reject: a stale or unknown id must not fail the turn.
+ */
+const allowedComposerModel = (
+  options: ComposerOptionsPayload,
+  allowlist: ChatProxyOptions["composerModels"]
+): string | undefined => {
+  const selected = options.selectedModelId;
+  if (!selected || !allowlist) return undefined;
+  return allowlist.allowed.includes(selected) ? selected : undefined;
+};
+
+/** Rewrite the model on every enabled step that already declares one. */
+const withFlowModel = (
+  flow: RuntypeFlowConfig,
+  model: string
+): RuntypeFlowConfig => ({
+  ...flow,
+  steps: flow.steps.map((step) =>
+    step.enabled && typeof step.config?.model === "string"
+      ? { ...step, config: { ...step.config, model } }
+      : step
+  ),
+});
 
 const withCors =
   (allowedOrigins: string[] | undefined, previewOriginPattern: RegExp | null) =>
@@ -554,13 +618,34 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       mode = "flow";
     }
 
+    // Composer selections never reach upstream as-is: both payload builders
+    // below are rebuilt from scratch, so `composerOptions` is dropped unless
+    // one of the explicit opt-ins maps it onto something the proxy owns.
+    const composerOptions = readComposerOptions(clientPayload);
+    const composerModel = allowedComposerModel(
+      composerOptions,
+      options.composerModels
+    );
+    const forwardedModes =
+      options.forwardComposerModes === true && composerOptions.activeModeIds?.length
+        ? composerOptions.activeModeIds
+        : undefined;
+
     let runtypePayload: Record<string, unknown>;
 
     if (mode === "server-agent") {
       const formattedMessages = sortAndFormatMessages(clientPayload.messages);
 
+      // Only an inline `agentConfig` has a model to rewrite; an `agentId` route
+      // resolves its model server side.
+      const agent = options.agentId
+        ? { agentId: options.agentId }
+        : composerModel && options.agentConfig
+          ? { ...options.agentConfig, model: composerModel }
+          : options.agentConfig;
+
       runtypePayload = {
-        agent: options.agentId ? { agentId: options.agentId } : options.agentConfig,
+        agent,
         messages: formattedMessages,
         options: {
           streamResponse: true,
@@ -614,9 +699,12 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       }
 
       if (flowId) {
+        // A published flow's model lives server side; nothing local to patch.
         runtypePayload.flow = { id: flowId };
       } else {
-        runtypePayload.flow = flowConfig;
+        runtypePayload.flow = composerModel
+          ? withFlowModel(flowConfig, composerModel)
+          : flowConfig;
       }
 
       // WebMCP: forward page-discovered tools so the upstream flow's agent step
@@ -632,6 +720,15 @@ export const createChatProxyApp = (options: ChatProxyOptions = {}) => {
       ) {
         runtypePayload.clientTools = clientPayload.clientTools;
       }
+    }
+
+    // Modes travel as ordinary context so a flow/agent can read them by name.
+    if (forwardedModes) {
+      const existing =
+        runtypePayload.context && typeof runtypePayload.context === "object"
+          ? (runtypePayload.context as Record<string, unknown>)
+          : {};
+      runtypePayload.context = { ...existing, composerModes: forwardedModes };
     }
 
     // Development only: do not log key material or full bodies in production.

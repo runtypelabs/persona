@@ -285,6 +285,106 @@ const controller = initAgentWidget({ plugins: [plugin], apiUrl: "/api/chat" });
 plugin.attach(controller);
 ```
 
+### `contributeComposerActions`
+
+Add controls to the composer action row without replacing the composer. Unlike
+`renderComposer`, where the first plugin to return an element wins, **every**
+active plugin's contribution hook runs, so independent plugins coexist. Host
+config (`composer.actions`) and Persona's own built-ins feed the same registry.
+
+```ts
+contributeComposerActions: () => [
+  {
+    id: "clear",                 // renders as "my-plugin:clear"
+    placement: "start",          // logical, never "left"/"right"
+    order: 150,
+    label: "Clear the draft",    // required accessible name
+    iconName: "x",
+    tooltipText: "Clear the draft",
+    visible: (state) => state.text.length > 0,
+    disableWhenStreaming: true,
+    onSelect: (ctx) => ctx.setValue(""),
+  },
+]
+```
+
+**Order ranges.** `order` positions a control against documented anchors:
+
+| Cluster | Control | Order |
+| --- | --- | --- |
+| `start` | mention affordances | 100 + channel index |
+| `start` | attachment button | 200 |
+| `end` | mic | 800 |
+| `end` | send | 1000 (terminal) |
+
+Custom actions default to 500. Send is terminal: an `end` action ordered at or
+after 1000 is clamped below it, so nothing renders after send. Equal orders keep
+contribution order (core, then host config, then plugins in registry order).
+
+**Ids.** A plugin action's id becomes `<pluginId>:<id>` unless it already
+contains a colon. If two contributors still produce the same final id, the first
+one keeps it and the later copy is dropped with a debug warning; a later
+contributor never silently replaces an earlier control.
+
+**Context.** `onSelect` and custom renderers receive capabilities, not
+internals: `getState`, `getValue`, `setValue`, `submit`, `openAttachmentPicker`,
+`toggleVoice`, and `requestRender`. There is no session and no composer DOM,
+because actions can run before the session is initialized.
+
+**Async.** Return a promise from `onSelect` and the button reports `aria-busy`
+until it settles, ignoring repeat activation meanwhile. A rejection is reported
+through the widget's error path and the button returns to rest.
+
+**Custom actions.** `kind: "custom"` returns your own element, placed as the
+accessible root with nothing wrapped around it. The returned `destroy()` runs on
+action removal, composer rebuild, plugin removal, and widget destroy.
+
+```ts
+{
+  id: "picker",
+  kind: "custom",
+  placement: "end",
+  order: 600,
+  label: "Prompt templates",
+  render: (ctx) => ({ element: buildSelect(ctx), destroy: () => {} }),
+}
+```
+
+**Lifecycle.** The hook re-runs on `controller.update()`, plugin changes, and
+composer rebuilds. `visible` and `disabled` predicates additionally re-evaluate
+on every composer-state change without re-running the hook, so keep them cheap.
+**Presentation.** `presentation` selects the surface, not a second registry.
+`"bar"` always renders in the action row. `"overflow"` always renders in the
+`+` menu. `"auto"` starts in the bar and moves into the menu once the composer
+footer is narrower than `composer.actionOverflow.collapseAutoActionsBelow`. All
+three render in the bar when the host has not set
+`composer.actionOverflow.enabled`, and the trigger only appears when the menu
+would hold at least one item.
+
+A button action in the menu is rebuilt as a labeled `role="menuitem"` row;
+pressed, disabled, and async busy states carry over. A **custom** action keeps
+its own live element and is moved into a `role="none"` slot inside the menu
+panel, so its internal state survives the move. If your control cannot render
+sensibly in a narrow dropdown, set `presentation: "bar"` and it will never be
+folded.
+
+Core built-ins (attachment, mention affordances) are never folded implicitly:
+the host has to name them in `composer.actionOverflow.includeBuiltIns`.
+
+**Motion.** Key any animation off your own data attributes or off public
+composer state, never off Persona's internal class names, and read the shared
+motion tokens (`--persona-motion-duration-fast`, `--persona-motion-duration-base`,
+`--persona-motion-easing`) so a host that zeroes them disables your motion too.
+Wrap it in `@media (prefers-reduced-motion: no-preference)`. Composer actions
+live in the footer, which is never morphed, so CSS transitions are safe there.
+Anything you render into the transcript IS morphed: attributes and inline styles
+applied after a render are stripped on the next one, so use the Web Animations
+API there and never a CSS transition.
+
+Two coexisting example plugins live in
+`apps/web/src/plugins/emoji-quick-insert-plugin.ts` and
+`apps/web/src/plugins/prompt-templates-plugin.ts`.
+
 ### `renderComposer`
 
 `streaming` is `true` exactly when the assistant stream is active (the same

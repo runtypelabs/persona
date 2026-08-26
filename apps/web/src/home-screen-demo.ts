@@ -326,40 +326,28 @@ setupMountMode({
   },
 });
 
-const setPressed = (selector: string, pressed: boolean): void => {
-  document
-    .querySelectorAll<HTMLButtonElement>(selector)
-    .forEach((button) => button.setAttribute("aria-pressed", String(pressed)));
-};
+const homeToggle = (name: string): HTMLInputElement | null =>
+  document.querySelector<HTMLInputElement>(`[data-home-toggle='${name}']`);
 
 // Plugin options are read at render time, so `update()` re-renders the stack
 // in place: no remount, same view state.
-document
-  .querySelector<HTMLButtonElement>("[data-home-toggle='links']")
-  ?.addEventListener("click", () => {
-    showLinks = !showLinks;
-    setPressed("[data-home-toggle='links']", showLinks);
-    homePlugin.update({ links: showLinks ? LINKS : [] });
-  });
+homeToggle("links")?.addEventListener("change", (event) => {
+  showLinks = (event.currentTarget as HTMLInputElement).checked;
+  homePlugin.update({ links: showLinks ? LINKS : [] });
+});
 
-document
-  .querySelector<HTMLButtonElement>("[data-home-toggle='cards']")
-  ?.addEventListener("click", () => {
-    showCards = !showCards;
-    setPressed("[data-home-toggle='cards']", showCards);
-    homePlugin.update({ cards: showCards ? CARDS : [] });
-  });
+homeToggle("cards")?.addEventListener("change", (event) => {
+  showCards = (event.currentTarget as HTMLInputElement).checked;
+  homePlugin.update({ cards: showCards ? CARDS : [] });
+});
 
 // History changes the widget's feature config and the plugin composition, so
 // this one remounts. With it off, the stack is the original blueprint: no
 // recent section, and "Start a conversation" just leaves home.
-document
-  .querySelector<HTMLButtonElement>("[data-home-toggle='history']")
-  ?.addEventListener("click", () => {
-    historyEnabled = !historyEnabled;
-    setPressed("[data-home-toggle='history']", historyEnabled);
-    remount();
-  });
+homeToggle("history")?.addEventListener("change", (event) => {
+  historyEnabled = (event.currentTarget as HTMLInputElement).checked;
+  remount();
+});
 
 document
   .querySelector<HTMLButtonElement>("[data-home-action='show']")

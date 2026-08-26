@@ -176,6 +176,7 @@ export interface PanelElements {
   welcomeIconHolder: HTMLElement;
   /** Display-only greeting bubble host, pinned above the transcript. */
   greetingHost: HTMLElement;
+  introKicker: HTMLElement;
   introTitle: HTMLElement;
   introSubtitle: HTMLElement;
   closeButton: HTMLButtonElement;
@@ -363,7 +364,15 @@ const buildComposerBarPanel = (
   const composerOverlay = createNode("div", {
     className: "persona-composer-overlay persona-pointer-events-none",
     attrs: { "data-persona-composer-overlay": "" },
-    style: { position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "20" },
+    style: {
+      position: "absolute",
+      left: "0",
+      right: "0",
+      // Both vars default to 0px, so `block` placement is unchanged.
+      bottom:
+        "calc(var(--persona-composer-overlay-height, 0px) + var(--persona-composer-lift, 0px))",
+      zIndex: "20",
+    },
   });
 
   // Pill composer: caller appends as a sibling of container in the panel.
@@ -398,6 +407,7 @@ const buildComposerBarPanel = (
     welcomeHost,
     welcomeIconHolder: welcome.iconHolder,
     greetingHost,
+    introKicker: welcome.kicker,
     introTitle,
     introSubtitle,
     closeButton,
@@ -508,7 +518,15 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
   const composerOverlay = createNode("div", {
     className: "persona-composer-overlay persona-pointer-events-none",
     attrs: { "data-persona-composer-overlay": "" },
-    style: { position: "absolute", left: "0", right: "0", bottom: "0", zIndex: "20" },
+    style: {
+      position: "absolute",
+      left: "0",
+      right: "0",
+      // Both vars default to 0px, so `block` placement is unchanged.
+      bottom:
+        "calc(var(--persona-composer-overlay-height, 0px) + var(--persona-composer-lift, 0px))",
+      zIndex: "20",
+    },
   });
 
   if (showFooter) {
@@ -540,6 +558,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
     welcomeHost,
     welcomeIconHolder: welcome.iconHolder,
     greetingHost,
+    introKicker: welcome.kicker,
     introTitle,
     introSubtitle,
     closeButton: headerElements.closeButton,

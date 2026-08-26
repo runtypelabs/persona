@@ -1,8 +1,18 @@
 import { createElement, createNode, cx } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import { AgentWidgetConfig } from "../types";
+import { DEFAULT_INPUT_PLACEHOLDER } from "../defaults";
 import { ALL_SUPPORTED_MIME_TYPES } from "../utils/content";
 import { attachTooltip } from "../utils/tooltip";
+import {
+  DEFAULT_COMPOSER_MAX_LINES,
+  FALLBACK_LINE_HEIGHT,
+  applyComposerEnterKeyHint,
+  applyComposerInputAttributes,
+  isCoarsePointer,
+  readLineHeightPx,
+  resolveMaxLines,
+} from "../utils/composer-input-config";
 
 /**
  * Low-level composer control factories. Both `buildComposer` (full,
@@ -16,6 +26,21 @@ import { attachTooltip } from "../utils/tooltip";
  * which builder ran.
  */
 
+/**
+ * Class hook for the shared composer control box. The stylesheet sizes it from
+ * `--persona-composer-control-size` (theme `components.composer.controlSize`).
+ */
+export const COMPOSER_CONTROL_CLASS = "persona-composer-control";
+/** Adds `--persona-composer-control-icon-size` sizing to the control's glyph. */
+export const COMPOSER_CONTROL_GLYPH_CLASS = "persona-composer-control--glyph";
+/**
+ * Token default in CSS pixels. Only used to derive JS-computed glyph sizes when
+ * a per-control size is unset; the box itself is owned by the stylesheet.
+ */
+export const COMPOSER_CONTROL_FALLBACK_PX = 40;
+/** Icon-size token default in CSS pixels, for the same JS-derived cases. */
+export const COMPOSER_CONTROL_ICON_FALLBACK_PX = 24;
+
 export interface ComposerTextareaParts {
   textarea: HTMLTextAreaElement;
   /**
@@ -27,10 +52,28 @@ export interface ComposerTextareaParts {
   attachAutoResize: () => void;
 }
 
-export const createComposerTextarea = (config?: AgentWidgetConfig): ComposerTextareaParts => {
+export interface ComposerTextareaOptions {
+  /** Line cap when `composer.maxLines` is unset. */
+  defaultMaxLines?: number;
+}
+
+export const createComposerTextarea = (
+  config?: AgentWidgetConfig,
+  options?: ComposerTextareaOptions
+): ComposerTextareaParts => {
   const textarea = createElement("textarea") as HTMLTextAreaElement;
   textarea.setAttribute("data-persona-composer-input", "");
-  textarea.placeholder = config?.copy?.inputPlaceholder ?? "Type your message…";
+  // Must stay in sync with DEFAULT_WIDGET_CONFIG.copy.inputPlaceholder.
+  textarea.placeholder = config?.copy?.inputPlaceholder ?? DEFAULT_INPUT_PLACEHOLDER;
+  // Mixed-direction drafts resolve per paragraph instead of inheriting the host.
+  textarea.dir = "auto";
+  // The hint follows `composer.submitKey`; it is not always "send".
+  applyComposerEnterKeyHint(textarea, {
+    submitKey: config?.composer?.submitKey,
+    insertNewlineOnTouchEnter: config?.composer?.insertNewlineOnTouchEnter,
+    coarsePointer: isCoarsePointer(textarea),
+  });
+  applyComposerInputAttributes(textarea, config?.composer?.inputAttributes);
   textarea.className =
     "persona-w-full persona-min-h-[24px] persona-resize-none persona-border-none persona-bg-transparent persona-text-sm persona-text-persona-text focus:persona-outline-none focus:persona-border-none persona-composer-textarea";
   textarea.rows = 1;
@@ -39,44 +82,30 @@ export const createComposerTextarea = (config?: AgentWidgetConfig): ComposerText
     'var(--persona-input-font-family, var(--persona-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif))';
   textarea.style.fontWeight = "var(--persona-input-font-weight, var(--persona-font-weight, 400))";
 
-  // Auto-resize: expand up to 3 lines for the full composer. The pill composer
-  // overrides this maxHeight after construction (allowing more growth in
-  // expanded mode), and the closure below honors whatever maxHeight is set at
-  // the time of the input event.
-  const defaultMaxLines = 3;
-  // Used only when the rendered line height can't be resolved (detached node,
-  // jsdom, `normal`); matches the `persona-text-sm` / composer default.
-  const fallbackLineHeight = 20;
-
-  // `theme.components.composer.lineHeight` (--persona-composer-line-height) can
-  // change the rendered line height, so 3 lines is only correct when measured
-  // from the live element. Read lazily: at construction the textarea is usually
-  // still detached and getComputedStyle would report nothing useful.
-  const readLineHeight = (): number => {
-    const view = textarea.ownerDocument?.defaultView;
-    if (!view?.getComputedStyle) return fallbackLineHeight;
-    // Only px values are meaningful here: `normal` and unitless ratios aren't
-    // line box heights we can multiply.
-    const computed = view.getComputedStyle(textarea).lineHeight;
-    if (!computed || !computed.trim().endsWith("px")) return fallbackLineHeight;
-    const parsed = parseFloat(computed);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackLineHeight;
-  };
+  // Auto-resize: expand up to `composer.maxLines` rendered lines (3 for the
+  // full composer, 5 for the pill). The closure honors whatever maxHeight is
+  // set at the time of the input event, so a live update re-caps growth.
+  const maxLines = resolveMaxLines(
+    config?.composer?.maxLines,
+    options?.defaultMaxLines ?? DEFAULT_COMPOSER_MAX_LINES
+  );
 
   // Tracks the last maxHeight this module wrote, so a caller's post-construction
   // override is distinguishable from our own default and always wins.
-  let managedMaxHeight = `${defaultMaxLines * fallbackLineHeight}px`;
+  let managedMaxHeight = `${maxLines * FALLBACK_LINE_HEIGHT}px`;
   textarea.style.maxHeight = managedMaxHeight;
   textarea.style.overflowY = "auto";
 
   // Read maxHeight at event time so callers can change it after construction.
+  // `theme.components.composer.lineHeight` can change the rendered line height,
+  // so the line count is only correct when measured from the live element.
   const readMaxHeight = (): number => {
     const current = textarea.style.maxHeight;
     if (current !== managedMaxHeight) {
       const overridden = parseFloat(current);
       if (Number.isFinite(overridden) && overridden > 0) return overridden;
     }
-    const derived = defaultMaxLines * readLineHeight();
+    const derived = maxLines * readLineHeightPx(textarea);
     managedMaxHeight = `${derived}px`;
     textarea.style.maxHeight = managedMaxHeight;
     return derived;
@@ -122,7 +151,35 @@ export interface SendButtonParts {
    * the label. Tooltip text and aria-label update too.
    */
   setMode: (mode: "send" | "stop") => void;
+  /**
+   * The crossfade container in icon mode, when both glyphs rendered. Null in
+   * text mode and when the send glyph fell back to `iconText`.
+   */
+  glyphStack: HTMLElement | null;
 }
+
+/** Marker for the send/stop crossfade container. */
+export const SEND_GLYPH_STACK_SELECTOR = "[data-persona-glyph-stack]";
+
+/**
+ * Stack both send/stop glyphs in one grid cell. Shared by the builder and the
+ * `controller.update()` restyle path so the two can never produce different
+ * structures for the same button.
+ */
+export const buildSendGlyphStack = (
+  sendIcon: SVGElement,
+  stopIcon: SVGElement,
+  mode: "send" | "stop" = "send"
+): HTMLElement => {
+  const stack = createNode("span", {
+    className: "persona-composer-glyph-stack",
+    attrs: { "data-mode": mode, "data-persona-glyph-stack": "" },
+  });
+  sendIcon.setAttribute("data-glyph", "send");
+  stopIcon.setAttribute("data-glyph", "stop");
+  stack.append(sendIcon, stopIcon);
+  return stack;
+};
 
 export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts => {
   const sendButtonConfig = config?.sendButton ?? {};
@@ -135,7 +192,10 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
   const sendLabel = config?.copy?.sendButtonLabel ?? "Send";
   const stopLabel = config?.copy?.stopButtonLabel ?? "Stop";
   const showTooltip = sendButtonConfig.showTooltip ?? false;
-  const buttonSize = sendButtonConfig.size ?? "40px";
+  // Unset means "follow --persona-composer-control-size"; only an explicit
+  // `sendButton.size` writes an inline box that overrides the token.
+  const buttonSize = sendButtonConfig.size;
+  const buttonSizeNum = parseFloat(buttonSize ?? "") || COMPOSER_CONTROL_FALLBACK_PX;
   const backgroundColor = sendButtonConfig.backgroundColor;
   const textColor = sendButtonConfig.textColor;
 
@@ -145,16 +205,24 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     className: cx(
       "persona-rounded-button disabled:persona-opacity-50 persona-cursor-pointer",
       useIcon
-        ? "persona-flex persona-items-center persona-justify-center"
+        ? `persona-flex persona-items-center persona-justify-center ${COMPOSER_CONTROL_CLASS}`
         : "persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold",
       // Icon mode without an explicit background falls back to the primary bg
       // class; text mode without an explicit color falls back to white text.
       useIcon && !backgroundColor && "persona-bg-persona-primary",
       !useIcon && !textColor && "persona-text-white"
     ),
-    attrs: { type: "submit", "data-persona-composer-submit": "" },
+    // `data-persona-send-mode` is the stop-state styling hook; widget.css keys
+    // `components.button.stop.*` off it in both icon and text modes.
+    attrs: {
+      type: "submit",
+      "data-persona-composer-submit": "",
+      "data-persona-send-mode": "send",
+    },
     style: {
-      // Sizing is icon-mode-only (text mode is sized by its padding classes).
+      // Sizing is icon-mode-only (text mode is sized by its padding classes),
+      // and only when `sendButton.size` is set: otherwise the control-size
+      // token drives the box from the stylesheet.
       width: useIcon ? buttonSize : undefined,
       height: useIcon ? buttonSize : undefined,
       minWidth: useIcon ? buttonSize : undefined,
@@ -162,8 +230,11 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
       fontSize: useIcon ? "18px" : undefined,
       lineHeight: useIcon ? "1" : undefined,
       // Icon mode always sets a color; text mode only when textColor is given.
+      // The `--persona-send-button-fg` hop is what lets the stop-state rule
+      // recolor an inline-styled glyph.
       color: useIcon
-        ? textColor || "var(--persona-button-primary-fg, #ffffff)"
+        ? textColor ||
+          "var(--persona-send-button-fg, var(--persona-button-primary-fg, #ffffff))"
         : textColor || undefined,
       // backgroundColor is honored in icon mode only.
       backgroundColor: useIcon ? backgroundColor || undefined : undefined,
@@ -180,9 +251,12 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     },
   });
 
-  // Both icons are pre-rendered so setMode can swap cheaply.
+  // Both icons are pre-rendered AND both stay mounted, stacked in one grid
+  // cell and crossfaded by `data-mode`. Only icon mode stacks: text mode swaps
+  // its label, which has nothing to crossfade.
   let sendIcon: SVGElement | null = null;
   let stopIcon: SVGElement | null = null;
+  let glyphStack: HTMLElement | null = null;
 
   if (useIcon) {
     // Default glyph box is half the button, the closest clean ratio to the
@@ -191,22 +265,29 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     // sparse ones (arrow-up) may want a larger explicit `iconSize`.
     const iconSize =
       parseFloat(sendButtonConfig.iconSize ?? "") ||
-      Math.round((parseFloat(buttonSize) || 24) * 0.5);
+      Math.round(buttonSizeNum * 0.5);
     const iconStroke = sendButtonConfig.iconStrokeWidth ?? 2;
     const iconColor = textColor?.trim() || "currentColor";
 
     if (iconName) {
       sendIcon = renderLucideIcon(iconName, iconSize, iconColor, iconStroke);
-      if (sendIcon) {
-        button.appendChild(sendIcon);
-      } else {
-        button.textContent = iconText;
-      }
-    } else {
-      button.textContent = iconText;
     }
-
     stopIcon = renderLucideIcon(stopIconName, iconSize, iconColor, iconStroke);
+
+    if (sendIcon && stopIcon) {
+      // One grid cell, both glyphs in it. `data-mode` on the stack decides
+      // which is opaque, so exactly one is ever visible and no swap can leave
+      // two mounted glyphs behind.
+      glyphStack = buildSendGlyphStack(sendIcon, stopIcon);
+      button.appendChild(glyphStack);
+    } else if (sendIcon) {
+      button.appendChild(sendIcon);
+    } else {
+      // No renderable send glyph: fall back to the text token, and drop the
+      // stop glyph too so the button never renders an orphan square.
+      button.textContent = iconText;
+      stopIcon = null;
+    }
   } else {
     button.textContent = sendLabel;
   }
@@ -226,26 +307,25 @@ export const createSendButton = (config?: AgentWidgetConfig): SendButtonParts =>
     currentMode = mode;
     const label = mode === "stop" ? stopTooltipText : tooltipText;
     button.setAttribute("aria-label", label);
+    button.setAttribute("data-persona-send-mode", mode);
 
     if (useIcon) {
-      if (sendIcon && stopIcon) {
-        const next = mode === "stop" ? stopIcon : sendIcon;
-        // Replace whatever icon is currently mounted: the button only ever
-        // holds the single active icon. We use replaceChildren(next) rather
-        // than replaceChild(next, prev) against a captured `prev` reference:
-        // an external re-render/morph can swap the live icon child out from
-        // under us, detaching our captured node so `prev.parentNode !== button`.
-        // The old appendChild fallback then left BOTH icons mounted, which is
-        // how the send button ended up showing two stacked arrows after the
-        // first send→stop→send cycle.
-        button.replaceChildren(next);
-      }
+      // One attribute write, no DOM swap. This is also what retired the
+      // double-icon bug class: neither glyph is ever added or removed, so no
+      // re-render or morph can leave both of them mounted and visible.
+      //
+      // Resolved from the DOM, not from the captured reference: the live
+      // restyle path in ui.ts can rebuild the stack, which would detach the
+      // node this closure captured at mount.
+      const live =
+        button.querySelector<HTMLElement>(SEND_GLYPH_STACK_SELECTOR) ?? glyphStack;
+      live?.setAttribute("data-mode", mode);
     } else {
       button.textContent = mode === "stop" ? stopLabel : sendLabel;
     }
   };
 
-  return { button, wrapper, setMode };
+  return { button, wrapper, setMode, glyphStack };
 };
 
 export interface MicButtonParts {
@@ -255,7 +335,8 @@ export interface MicButtonParts {
 
 /**
  * Returns null when voice recognition is disabled or the browser doesn't
- * support either the Web Speech API or a Runtype voice provider.
+ * support the Web Speech API and no Runtype/custom voice provider is
+ * configured.
  */
 export const createMicButton = (config?: AgentWidgetConfig): MicButtonParts | null => {
   const voiceRecognitionConfig = config?.voiceRecognition ?? {};
@@ -267,27 +348,41 @@ export const createMicButton = (config?: AgentWidgetConfig): MicButtonParts | nu
     (typeof (window as unknown as { webkitSpeechRecognition?: unknown }).webkitSpeechRecognition !== "undefined" ||
       typeof (window as unknown as { SpeechRecognition?: unknown }).SpeechRecognition !== "undefined");
   const hasRuntypeProvider = voiceRecognitionConfig.provider?.type === "runtype";
-  const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
+  // Bring-your-own (`custom`) providers own their input pipeline, so the mic
+  // renders regardless of Web Speech support (matches the runtime builder).
+  const hasCustomProvider = voiceRecognitionConfig.provider?.type === "custom";
+  const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider || hasCustomProvider;
   if (!hasVoiceInput) return null;
 
-  const buttonSize = config?.sendButton?.size ?? "40px";
   const micIconName = voiceRecognitionConfig.iconName ?? "mic";
-  const micIconSize = voiceRecognitionConfig.iconSize ?? buttonSize;
-  const micIconSizeNum = parseFloat(micIconSize) || 24;
+  // `voiceRecognition.iconSize` is the mic's per-control size override; unset
+  // means the shared control-size token owns the box.
+  const micIconSize = voiceRecognitionConfig.iconSize;
+  const micIconSizeNum =
+    parseFloat(micIconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX;
   const micBackgroundColor =
     voiceRecognitionConfig.backgroundColor ?? config?.sendButton?.backgroundColor;
   const micIconColor = voiceRecognitionConfig.iconColor ?? config?.sendButton?.textColor;
 
   const wrapper = createElement("div", "persona-send-button-wrapper");
   const button = createNode("button", {
-    className:
+    className: cx(
       "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer",
+      COMPOSER_CONTROL_CLASS,
+      // An explicit `iconSize` sized both box and glyph before the token
+      // existed; keep that by opting the glyph out of the icon-size token.
+      !micIconSize && COMPOSER_CONTROL_GLYPH_CLASS
+    ),
     attrs: {
       type: "button",
       "data-persona-composer-mic": "",
+      // Animatable state, kept in sync by ui.ts; CSS keys motion off it.
+      "data-state": "idle",
       "aria-label": voiceRecognitionConfig.tooltipText ?? "Start voice recognition",
     },
     style: {
+      // Inline only when explicitly configured; padding keys stay overrides on
+      // top of whichever box wins.
       width: micIconSize,
       height: micIconSize,
       minWidth: micIconSize,
@@ -345,8 +440,6 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
   const attachmentsConfig = config?.attachments ?? {};
   if (attachmentsConfig.enabled !== true) return null;
 
-  const buttonSize = config?.sendButton?.size ?? "40px";
-
   const previewsContainer = createElement(
     "div",
     "persona-attachment-previews persona-flex persona-flex-wrap persona-gap-2 persona-mb-2"
@@ -363,14 +456,10 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
   input.setAttribute("aria-label", "Attach files");
 
   const attachIconName = attachmentsConfig.buttonIconName ?? "paperclip";
-  const attachIconSize = buttonSize;
-  const buttonSizeNum = parseFloat(attachIconSize) || 40;
-  const attachIconSizeNum = Math.round(buttonSizeNum * 0.6);
 
   const wrapper = createElement("div", "persona-send-button-wrapper");
   const button = createNode("button", {
-    className:
-      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button",
+    className: `persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-attachment-button ${COMPOSER_CONTROL_CLASS} ${COMPOSER_CONTROL_GLYPH_CLASS}`,
     attrs: {
       type: "button",
       "data-persona-composer-attachment-button": "",
@@ -378,18 +467,20 @@ export const createAttachmentControls = (config?: AgentWidgetConfig): Attachment
     },
     style: {
       // Appearance is themed from the CSS rule for `.persona-attachment-button`
-      // via the `--persona-button-ghost-*` tokens (components.button.ghost).
-      // Only config-driven sizing is inline.
-      width: attachIconSize,
-      height: attachIconSize,
-      minWidth: attachIconSize,
-      minHeight: attachIconSize,
+      // via the `--persona-button-ghost-*` tokens (components.button.ghost);
+      // the box comes from `--persona-composer-control-size`. Nothing here is
+      // config-driven, so nothing sizing-related stays inline.
       fontSize: "18px",
       lineHeight: "1",
     },
   });
 
-  const attachIconSvg = renderLucideIcon(attachIconName, attachIconSizeNum, "currentColor", 1.5);
+  const attachIconSvg = renderLucideIcon(
+    attachIconName,
+    COMPOSER_CONTROL_ICON_FALLBACK_PX,
+    "currentColor",
+    1.5
+  );
   if (attachIconSvg) {
     button.appendChild(attachIconSvg);
   } else {

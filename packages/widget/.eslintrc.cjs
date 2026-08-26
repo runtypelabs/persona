@@ -7,6 +7,8 @@ module.exports = {
   },
   globals: {
     RequestInit: "readonly",
+    AddEventListenerOptions: "readonly",
+    EventListenerOrEventListenerObject: "readonly",
     HTMLElementTagNameMap: "readonly",
     SpeechSynthesisVoice: "readonly",
     SpeechSynthesis: "readonly",

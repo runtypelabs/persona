@@ -33,5 +33,15 @@ export function generateAssistantMessageId(): string {
   return `ast_${timestamp}_${random}`;
 }
 
+/**
+ * Generate a client-owned turn ID for the client-token chat endpoint.
+ * Format: turn_{timestamp_base36}_{random_8chars}
+ */
+export function generateTurnId(): string {
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 10);
+  return `turn_${timestamp}_${random}`;
+}
+
 
 

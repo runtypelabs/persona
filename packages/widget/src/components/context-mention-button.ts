@@ -2,6 +2,11 @@ import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
 import type { AgentWidgetContextMentionConfig } from "../types";
 import { attachTooltip } from "../utils/tooltip";
+import {
+  COMPOSER_CONTROL_CLASS,
+  COMPOSER_CONTROL_GLYPH_CLASS,
+  COMPOSER_CONTROL_ICON_FALLBACK_PX,
+} from "./composer-parts";
 
 export interface MentionButtonParts {
   button: HTMLButtonElement;
@@ -18,13 +23,9 @@ export interface MentionButtonParts {
  */
 export function createMentionButton(opts: {
   config: AgentWidgetContextMentionConfig;
-  buttonSize?: string;
   onOpen: () => void;
 }): MentionButtonParts {
   const { config, onOpen } = opts;
-  const size = opts.buttonSize ?? "40px";
-  const sizeNum = parseFloat(size) || 40;
-  const iconSize = Math.round(sizeNum * 0.6);
   // Default to a "+" signifier, not an "@" glyph: no major consumer chat app
   // (ChatGPT, Claude, Gemini, Perplexity) puts a literal "@" button in the
   // composer — "@" is a typed power-user accelerator, while "+"/"add context"
@@ -35,8 +36,7 @@ export function createMentionButton(opts: {
 
   const wrapper = createElement("div", "persona-send-button-wrapper");
   const button = createNode("button", {
-    className:
-      "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-mention-button",
+    className: `persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-mention-button ${COMPOSER_CONTROL_CLASS} ${COMPOSER_CONTROL_GLYPH_CLASS}`,
     attrs: {
       type: "button",
       "data-persona-composer-mention-button": "",
@@ -50,17 +50,19 @@ export function createMentionButton(opts: {
     style: {
       // Appearance (bg / fg / border / radius / hover) is themed from the CSS
       // rule for `.persona-mention-button` via the `--persona-button-ghost-*`
-      // tokens (components.button.ghost). Only config-driven sizing is inline.
-      width: size,
-      height: size,
-      minWidth: size,
-      minHeight: size,
+      // tokens (components.button.ghost); the box comes from
+      // `--persona-composer-control-size`. Nothing sizing-related is inline.
       fontSize: "18px",
       lineHeight: "1",
     },
   }) as HTMLButtonElement;
 
-  const icon = renderLucideIcon(iconName, iconSize, "currentColor", 1.5);
+  const icon = renderLucideIcon(
+    iconName,
+    COMPOSER_CONTROL_ICON_FALLBACK_PX,
+    "currentColor",
+    1.5
+  );
   if (icon) button.appendChild(icon);
   else button.textContent = "+";
 

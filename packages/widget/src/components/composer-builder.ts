@@ -1,4 +1,4 @@
-import { createElement, createNode } from "../utils/dom";
+import { createNode } from "../utils/dom";
 import { AgentWidgetConfig, ContentPart } from "../types";
 import {
   createAttachmentControls,
@@ -13,6 +13,12 @@ export interface ComposerElements {
   footer: HTMLElement;
   suggestions: HTMLElement;
   composerForm: HTMLFormElement;
+  /**
+   * Composer header region (section 5 of the composer roadmap): hosts the
+   * attachment previews today, mode chips and quote later. `display: contents`,
+   * so it contributes no box of its own and the existing layout is unchanged.
+   */
+  header: HTMLElement;
   textarea: HTMLTextAreaElement;
   sendButton: HTMLButtonElement;
   sendButtonWrapper: HTMLElement;
@@ -81,12 +87,19 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   const statusText = createStatusText(config);
 
   // Layout (column):
-  //   row 1: attachment previews (above textarea, smaller)
+  //   row 1: header region (attachment previews) above the textarea
   //   row 2: textarea (full width)
   //   row 3: actions (paperclip left, mic + send right)
+  const header = createNode("div", {
+    className: "persona-widget-composer__header",
+    attrs: { "data-persona-composer-header": "" },
+    style: { display: "contents" },
+  });
+  composerForm.append(header);
   if (attachment) {
     attachment.previewsContainer.style.gap = "8px";
-    composerForm.append(attachment.previewsContainer, attachment.input);
+    header.append(attachment.previewsContainer);
+    composerForm.append(attachment.input);
   }
   composerForm.append(textarea);
 
@@ -98,14 +111,18 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
       "persona-widget-composer__actions persona-flex persona-items-center persona-justify-between persona-w-full",
     attrs: { "data-persona-composer-actions": "" },
   });
-  const leftActions = createElement(
-    "div",
-    "persona-widget-composer__left-actions persona-flex persona-items-center persona-gap-2"
-  );
-  const rightActions = createElement(
-    "div",
-    "persona-widget-composer__right-actions persona-flex persona-items-center persona-gap-1"
-  );
+  const leftActions = createNode("div", {
+    className:
+      "persona-widget-composer__left-actions persona-flex persona-items-center persona-gap-2",
+    attrs: { "data-persona-composer-actions-start": "" },
+  });
+  // Both clusters share the 8px rhythm; an end cluster at 4px crowded the
+  // model picker against the send button.
+  const rightActions = createNode("div", {
+    className:
+      "persona-widget-composer__right-actions persona-flex persona-items-center persona-gap-2",
+    attrs: { "data-persona-composer-actions-end": "" },
+  });
   if (attachment) leftActions.append(attachment.wrapper);
   if (mic) rightActions.append(mic.wrapper);
   rightActions.append(send.wrapper);
@@ -133,6 +150,7 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
     footer,
     suggestions,
     composerForm,
+    header,
     textarea,
     sendButton: send.button,
     sendButtonWrapper: send.wrapper,

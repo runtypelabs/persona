@@ -34,6 +34,25 @@ describe("renderLucideIcon", () => {
     }
   );
 
+  // Every icon the message-action row asks for by string literal has to be in
+  // the registry, or the button ships with no glyph and warns on every render.
+  it.each([
+    "copy",
+    "volume-2",
+    "thumbs-up",
+    "thumbs-down",
+    "refresh-cw",
+    "pencil",
+    "quote",
+  ] as const)("has %s registered for the message action row", (name) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const svg = renderLucideIcon(name);
+    expect(svg).not.toBeNull();
+    expect(svg!.childNodes.length).toBeGreaterThan(0);
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it("returns null and warns for a name outside the registry", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(renderLucideIcon("definitely-not-an-icon")).toBeNull();

@@ -5,6 +5,8 @@ import {
   attachTooltip,
   DEFAULT_TOOLTIP_DELAY_MS,
   resetTooltipTiming,
+  hideTooltipFor,
+  TOOLTIP_SUPPRESSED_ATTR,
 } from "./tooltip";
 
 /**
@@ -367,6 +369,55 @@ describe("attachTooltip", () => {
     expect(tooltip!.style.fontFamily).toBe("Geist, sans-serif");
     // Unresolved variables are never written as empty declarations.
     expect(tooltip!.style.getPropertyValue("--persona-tooltip-padding")).toBe("");
+  });
+
+  it("never opens inside a tooltip-suppressed subtree", () => {
+    const suppressor = document.createElement("div");
+    suppressor.setAttribute(TOOLTIP_SUPPRESSED_ATTR, "");
+    const button = document.createElement("button");
+    suppressor.appendChild(button);
+    document.body.appendChild(suppressor);
+
+    const handle = attachTooltip({ anchor: button, text: "Attach file" });
+    button.dispatchEvent(new MouseEvent("mouseenter"));
+    button.focus();
+    handle.show();
+
+    expect(handle.isOpen).toBe(false);
+    expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+  });
+
+  it("re-evaluates suppression at open time, not at attach time", () => {
+    const holder = document.createElement("div");
+    const button = document.createElement("button");
+    holder.appendChild(button);
+    document.body.appendChild(holder);
+
+    const handle = attachTooltip({ anchor: button, text: "Attach file" });
+    holder.setAttribute(TOOLTIP_SUPPRESSED_ATTR, "");
+    handle.show();
+    expect(handle.isOpen).toBe(false);
+
+    // Moving back out of the suppressed subtree restores the tooltip.
+    holder.removeAttribute(TOOLTIP_SUPPRESSED_ATTR);
+    handle.show();
+    expect(handle.isOpen).toBe(true);
+  });
+
+  it("hideTooltipFor closes the tooltip attached to an anchor", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    const handle = attachTooltip({ anchor: button, text: "Attach file" });
+    handle.show();
+    expect(handle.isOpen).toBe(true);
+
+    hideTooltipFor(button);
+    expect(handle.isOpen).toBe(false);
+    expect(document.body.querySelector(".persona-control-tooltip")).toBeNull();
+  });
+
+  it("hideTooltipFor is a no-op for an element with no tooltip", () => {
+    expect(() => hideTooltipFor(document.createElement("div"))).not.toThrow();
   });
 
   it("portals into the anchor's shadow root so widget styles still apply", () => {

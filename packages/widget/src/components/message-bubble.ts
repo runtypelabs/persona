@@ -5,6 +5,7 @@ import {
   AgentWidgetAvatarConfig,
   AgentWidgetTimestampConfig,
   AgentWidgetMessageActionsConfig,
+  AgentWidgetCustomMessageAction,
   AgentWidgetMessageFeedback,
   LoadingIndicatorRenderContext,
   ImageContentPart,
@@ -16,6 +17,7 @@ import {
   AgentWidgetContextMentionTokenRenderContext,
   StopReasonKind
 } from "../types";
+import type { MessageGeometryTokens } from "../types/theme";
 import { createMentionTokenElement } from "../utils/mention-token";
 import { createIconButton } from "../utils/buttons";
 import { renderLucideIcon } from "../utils/icons";
@@ -738,6 +740,70 @@ export const getBubbleClasses = (
 };
 
 /**
+ * Padding / type each layout preset produces from its utility classes. Used as
+ * the var() fallback for the `components.message.<role>` geometry tokens, so an
+ * unset token renders exactly what the preset always did.
+ */
+const BUBBLE_GEOMETRY_DEFAULTS: Record<
+  "bubble" | "flat" | "minimal",
+  { padding: string; fontSize: string; lineHeight: string }
+> = {
+  bubble: { padding: "0.75rem 1.25rem", fontSize: "0.875rem", lineHeight: "1.75" },
+  minimal: { padding: "0.5rem 0.75rem", fontSize: "0.875rem", lineHeight: "1.75" },
+  flat: { padding: "0.5rem 0", fontSize: "inherit", lineHeight: "inherit" },
+};
+
+/**
+ * Apply the `components.message.user/assistant` geometry tokens to a bubble.
+ * Written inline as var() chains so the per-layout default stays the fallback;
+ * the values are part of the rendered markup, so they survive transcript morphs.
+ * Only configured keys are stamped: an inline pin for an unset token would
+ * beat host-page CSS on the bubble at inline priority.
+ */
+export const applyBubbleGeometry = (
+  bubble: HTMLElement,
+  role: AgentWidgetMessage["role"],
+  layout: AgentWidgetMessageLayoutConfig["layout"] = "bubble",
+  tokens?: MessageGeometryTokens
+): void => {
+  if (!tokens) return;
+  const key = role === "user" ? "user" : "assistant";
+  const preset = BUBBLE_GEOMETRY_DEFAULTS[layout ?? "bubble"] ?? BUBBLE_GEOMETRY_DEFAULTS.bubble;
+  if (tokens.padding) {
+    bubble.style.padding = `var(--persona-message-${key}-padding, ${preset.padding})`;
+  }
+  if (tokens.fontSize) {
+    bubble.style.fontSize = `var(--persona-message-${key}-font-size, ${preset.fontSize})`;
+  }
+  if (tokens.lineHeight) {
+    bubble.style.lineHeight = `var(--persona-message-${key}-line-height, ${preset.lineHeight})`;
+  }
+  if (tokens.fontFamily) {
+    bubble.style.fontFamily = `var(--persona-message-${key}-font-family, inherit)`;
+  }
+};
+
+/** `data-action` for a host-contributed action. Namespaced against built-ins. */
+export const CUSTOM_MESSAGE_ACTION_PREFIX = "custom:";
+
+export const customMessageActionDataAction = (id: string): string =>
+  `${CUSTOM_MESSAGE_ACTION_PREFIX}${id}`;
+
+/**
+ * Host-contributed actions this message's role qualifies for. Assistant-only by
+ * default, matching every built-in except edit and quote.
+ */
+export const customMessageActionsForRole = (
+  actionsConfig: AgentWidgetMessageActionsConfig | undefined,
+  role: AgentWidgetMessage["role"]
+): AgentWidgetCustomMessageAction[] => {
+  if (role !== "user" && role !== "assistant") return [];
+  return (actionsConfig?.custom ?? []).filter((action) =>
+    (action.roles ?? ["assistant"]).includes(role)
+  );
+};
+
+/**
  * Create message action buttons (copy, upvote, downvote)
  *
  * This is a pure rendering function. It creates button elements with the
@@ -750,15 +816,32 @@ export const createMessageActions = (
   message: AgentWidgetMessage,
   actionsConfig: AgentWidgetMessageActionsConfig,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _callbacks?: MessageActionCallbacks
+  _callbacks?: MessageActionCallbacks,
+  eligibility?: MessageActionEligibility
 ): HTMLElement => {
   const showCopy = actionsConfig.showCopy ?? true;
   const showUpvote = actionsConfig.showUpvote ?? true;
   const showDownvote = actionsConfig.showDownvote ?? true;
   const showReadAloud = actionsConfig.showReadAloud ?? false;
+  // Retry and edit are per-message: the config flag only opts in, the caller's
+  // eligibility decides which single message actually shows the control.
+  const showRegenerate =
+    (actionsConfig.showRegenerate ?? false) && eligibility?.canRegenerate === true;
+  const showEdit = (actionsConfig.showEdit ?? false) && eligibility?.canEdit === true;
+  const showQuote = (actionsConfig.showQuote ?? false) && eligibility?.canQuote !== false;
+  const customActions = customMessageActionsForRole(actionsConfig, message.role);
 
   // Don't render the container at all when no actions are visible
-  if (!showCopy && !showUpvote && !showDownvote && !showReadAloud) {
+  if (
+    !showCopy &&
+    !showUpvote &&
+    !showDownvote &&
+    !showReadAloud &&
+    !showRegenerate &&
+    !showEdit &&
+    !showQuote &&
+    customActions.length === 0
+  ) {
     const empty = createElement("div");
     empty.style.display = "none";
     empty.id = `actions-${message.id}`;
@@ -798,11 +881,14 @@ export const createMessageActions = (
     label: string,
     dataAction: string
   ): HTMLButtonElement => {
+    // Chromeless: the icon-btn base chrome is scoped under [data-persona-root]
+    // and would outrank every .persona-message-action-btn state rule.
     const button = createIconButton({
       icon: iconName,
       label,
       size: 14,
       className: "persona-message-action-btn",
+      chromeless: true,
     });
     button.setAttribute("data-action", dataAction);
     return button;
@@ -829,13 +915,53 @@ export const createMessageActions = (
     container.appendChild(createActionButton("thumbs-down", "Downvote", "downvote"));
   }
 
+  // Regenerate: only the final retryable assistant turn (caller-decided).
+  if (showRegenerate) {
+    container.appendChild(
+      createActionButton("refresh-cw", "Regenerate response", "regenerate")
+    );
+  }
+
+  // Edit: only text-only user messages (caller-decided).
+  if (showEdit) {
+    container.appendChild(createActionButton("pencil", "Edit message", "edit"));
+  }
+
+  if (showQuote) {
+    container.appendChild(createActionButton("quote", "Quote message", "quote"));
+  }
+
+  // Host-contributed actions close the row, in configuration order.
+  for (const action of customActions) {
+    container.appendChild(
+      createActionButton(
+        action.iconName ?? "ellipsis",
+        action.label,
+        customMessageActionDataAction(action.id)
+      )
+    );
+  }
+
   return container;
 };
 
 /**
  * Options for creating a standard message bubble
  */
+/**
+ * Which history actions this ONE message may show. Retry lives on a single
+ * assistant message and edit on qualifying user messages, so the decision is
+ * made by the transcript (which sees the whole list), not per bubble.
+ */
+export type MessageActionEligibility = {
+  canRegenerate?: boolean;
+  canEdit?: boolean;
+  canQuote?: boolean;
+};
+
 export type CreateStandardBubbleOptions = {
+  /** Per-message gate for the regenerate/edit/quote controls. */
+  actionEligibility?: MessageActionEligibility;
   /**
    * Custom loading indicator renderer for inline location
    */
@@ -875,6 +1001,14 @@ export const createStandardBubble = (
   bubble.setAttribute("data-message-id", message.id);
 
   bubble.setAttribute("data-persona-theme-zone", message.role === "user" ? "user-message" : "assistant-message");
+
+  const messageTokens = options?.widgetConfig?.theme?.components?.message;
+  applyBubbleGeometry(
+    bubble,
+    message.role,
+    layout,
+    message.role === "user" ? messageTokens?.user : messageTokens?.assistant
+  );
 
   // Apply component-level color overrides via CSS variables
   if (layout === "flat") {
@@ -1157,15 +1291,35 @@ export const createStandardBubble = (
   }
 
   // Add message actions for assistant messages (only when not streaming and has content)
-  const shouldShowActions = 
-    message.role === "assistant" && 
-    !message.streaming && 
-    message.content && 
+  const shouldShowActions =
+    message.role === "assistant" &&
+    !message.streaming &&
+    message.content &&
     message.content.trim() &&
     actionsConfig?.enabled !== false;
 
-  if (shouldShowActions && actionsConfig) {
-    const actions = createMessageActions(message, actionsConfig, actionCallbacks);
+  // User bubbles carry actions only when this message is edit- or quote-eligible;
+  // nothing else about a user bubble changes.
+  const eligibility = options?.actionEligibility;
+  const shouldShowUserActions =
+    message.role === "user" &&
+    !message.streaming &&
+    actionsConfig?.enabled !== false &&
+    ((actionsConfig?.showEdit === true && eligibility?.canEdit === true) ||
+      (actionsConfig?.showQuote === true && eligibility?.canQuote === true) ||
+      // A custom action opted into `"user"` brings the row up on its own.
+      customMessageActionsForRole(actionsConfig, "user").length > 0);
+
+  if ((shouldShowActions || shouldShowUserActions) && actionsConfig) {
+    const actions = createMessageActions(
+      message,
+      shouldShowUserActions
+        ? // A user bubble never hosts the assistant-only controls.
+          { ...actionsConfig, showCopy: false, showUpvote: false, showDownvote: false, showReadAloud: false }
+        : actionsConfig,
+      actionCallbacks,
+      eligibility
+    );
     bubble.appendChild(actions);
   }
 

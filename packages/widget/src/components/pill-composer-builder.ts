@@ -10,6 +10,7 @@ import {
   createStatusText,
   createSuggestionsRow,
 } from "./composer-parts";
+import { PILL_COMPOSER_MAX_LINES } from "../utils/composer-input-config";
 
 export interface PillPeekBanner {
   /**
@@ -94,11 +95,11 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
   const statusText = createStatusText(config);
   statusText.style.display = "none";
 
-  const { textarea, attachAutoResize } = createComposerTextarea(config);
-  // Pill textarea: starts single-line, allowed to grow up to ~5 lines so
-  // expanded mode still supports multi-line composition. attachAutoResize
-  // reads max-height at event time, so this override flows through.
-  textarea.style.maxHeight = "100px";
+  // Pill textarea: starts single-line, grows to `composer.maxLines` (5 by
+  // default) so expanded mode still supports multi-line composition.
+  const { textarea, attachAutoResize } = createComposerTextarea(config, {
+    defaultMaxLines: PILL_COMPOSER_MAX_LINES,
+  });
   attachAutoResize();
 
   const send = createSendButton(config);
@@ -120,16 +121,19 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
   // Three columns of the grid: [paperclip?] · textarea · mic + send.
   // The empty leftActions wrapper still ships when attachments are off so
   // the grid has a consistent first cell (auto width → collapses to 0).
-  const leftActions = createElement(
-    "div",
-    "persona-widget-composer__left-actions persona-pill-composer__left"
-  );
+  const leftActions = createNode("div", {
+    className: "persona-widget-composer__left-actions persona-pill-composer__left",
+    attrs: { "data-persona-composer-actions-start": "" },
+  });
   if (attachment) leftActions.append(attachment.wrapper);
 
-  const rightActions = createElement(
-    "div",
-    "persona-widget-composer__right-actions persona-pill-composer__right"
-  );
+  // Both pill clusters are spaced from CSS (`.persona-pill-composer__left/right`,
+  // 4px), symmetrically. The pill is a deliberately tighter single row, so it
+  // keeps its own rhythm rather than the full composer's 8px.
+  const rightActions = createNode("div", {
+    className: "persona-widget-composer__right-actions persona-pill-composer__right",
+    attrs: { "data-persona-composer-actions-end": "" },
+  });
   if (mic) rightActions.append(mic.wrapper);
   rightActions.append(send.wrapper);
 
@@ -150,11 +154,22 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
   composerForm.append(leftActions, textarea, rightActions);
 
   // Footer assembly:
-  //   [previews row, hidden until attachments exist]
+  //   [header region: previews row, hidden until attachments exist]
   //   [suggestions, visible only while expanded]
   //   [pill form]
   //   [hidden status]
-  if (attachment) footer.append(attachment.previewsContainer);
+  //
+  // The header floats above the pill. It is `display: contents` so an empty
+  // header adds no row to the footer's flex column (the previews row keeps its
+  // own float exactly as before); a later phase can promote it to a real box
+  // once it hosts chips/quote/pending UI.
+  const header = createNode("div", {
+    className: "persona-pill-composer__header",
+    attrs: { "data-persona-composer-header": "" },
+    style: { display: "contents" },
+  });
+  footer.append(header);
+  if (attachment) header.append(attachment.previewsContainer);
   footer.append(suggestions, composerForm, statusText);
 
   // The pill flattens left/right into the form's grid; there's no separate
@@ -170,6 +185,7 @@ export const buildPillComposer = (context: ComposerBuildContext): ComposerElemen
     footer,
     suggestions,
     composerForm,
+    header,
     textarea,
     sendButton: send.button,
     sendButtonWrapper: send.wrapper,

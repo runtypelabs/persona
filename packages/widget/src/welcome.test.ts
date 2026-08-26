@@ -6,6 +6,7 @@ import {
   DEFAULT_WELCOME_SUBTITLE,
   DEFAULT_WELCOME_TITLE,
   isWelcomeVisible,
+  resolveConversationState,
   resolveWelcomeConfig,
 } from "./welcome";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "./types";
@@ -36,6 +37,47 @@ describe("resolveWelcomeConfig", () => {
     expect(resolved.dismiss).toBe("never");
     expect(resolved.message).toBeUndefined();
     expect(resolved.icon).toBeUndefined();
+    expect(resolved.anchor).toBe("bottom");
+    expect(resolved.anchorComposerTop).toBe("44%");
+    expect(resolved.composerGap).toBe("24px");
+  });
+
+  it("keeps a valid center anchor and its geometry", () => {
+    const resolved = resolveWelcomeConfig(
+      config({
+        welcome: {
+          anchor: "center",
+          anchorComposerTop: "43%",
+          composerGap: "16px",
+        },
+      })
+    );
+    expect(resolved.anchor).toBe("center");
+    expect(resolved.anchorComposerTop).toBe("43%");
+    expect(resolved.composerGap).toBe("16px");
+  });
+
+  it("falls back to 44% for an invalid anchorComposerTop, warning once in debug", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const invalid = config({
+      debug: true,
+      welcome: { anchor: "center", anchorComposerTop: "120%" },
+    });
+    expect(resolveWelcomeConfig(invalid).anchorComposerTop).toBe("44%");
+    resolveWelcomeConfig(invalid);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain("welcome.anchorComposerTop must be");
+    warn.mockRestore();
+  });
+
+  it("warns when the anchor geometry is set without anchor center", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    resolveWelcomeConfig(config({ debug: true, welcome: { composerGap: "8px" } }));
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain(
+      'ignored unless welcome.anchor is "center"'
+    );
+    warn.mockRestore();
   });
 
   it("prefers welcome.* over the legacy copy aliases, per field", () => {
@@ -209,5 +251,26 @@ describe("isWelcomeVisible", () => {
 
   it("treats a missing message list as empty", () => {
     expect(isWelcomeVisible(hero, undefined)).toBe(true);
+  });
+});
+
+describe("resolveConversationState", () => {
+  it("stays empty until a user message exists", () => {
+    expect(resolveConversationState([])).toBe("empty");
+    expect(resolveConversationState(undefined)).toBe("empty");
+    expect(resolveConversationState([assistantMessage])).toBe("empty");
+  });
+
+  it("flips to active on the first user message", () => {
+    expect(resolveConversationState([userMessage])).toBe("active");
+    expect(resolveConversationState([assistantMessage, userMessage])).toBe(
+      "active"
+    );
+  });
+
+  it("ignores welcome.message, which is never a session message", () => {
+    const greeted = resolveWelcomeConfig(config({ welcome: { message: "Hi" } }));
+    expect(greeted.message).toBe("Hi");
+    expect(resolveConversationState([])).toBe("empty");
   });
 });

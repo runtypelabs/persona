@@ -281,9 +281,26 @@ class MockAudioContext {
     return { connect() {}, disconnect() {} };
   }
   createScriptProcessor() {
-    return { connect() {}, disconnect() {}, onaudioprocess: null as unknown };
+    const node = { connect() {}, disconnect() {}, onaudioprocess: null as unknown };
+    MockAudioContext.lastProcessor = node;
+    return node;
   }
+  static lastProcessor: { onaudioprocess: unknown } | null = null;
 }
+
+/** Feed the capture graph one buffer of samples. */
+function pumpCapture(samples: number[]): void {
+  const handler = MockAudioContext.lastProcessor?.onaudioprocess as
+    | ((e: unknown) => void)
+    | null;
+  handler?.({
+    inputBuffer: { getChannelData: () => Float32Array.from(samples) },
+  });
+}
+
+/** `n` samples of a constant amplitude, which makes RMS exactly that value. */
+const constantBuffer = (amplitude: number, n = 128): number[] =>
+  Array.from({ length: n }, (_, i) => (i % 2 === 0 ? amplitude : -amplitude));
 
 function makeStream() {
   const track = { stopped: false, stop() { track.stopped = true; } };
@@ -367,6 +384,44 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     const provider = new RuntypeVoiceProvider({ ...baseConfig(), host });
     await provider.startListening();
     expect(lastWs().url).toBe(`${expected}/ws/agents/a1/voice`);
+  });
+
+  it('publishes a 0..1 capture level from the buffer it already sends', async () => {
+    const levels: number[] = [];
+    const provider = new RuntypeVoiceProvider(baseConfig());
+    provider.onLevel((level) => levels.push(level));
+    await provider.startListening();
+    lastWs().triggerOpen();
+
+    // RMS of a constant-magnitude buffer is that magnitude; the provider
+    // scales it so a normal speaking voice lands mid-range.
+    pumpCapture(constantBuffer(0.1));
+    expect(levels).toHaveLength(1);
+    expect(levels[0]).toBeCloseTo(0.4, 5);
+
+    pumpCapture(constantBuffer(0));
+    expect(levels[1]).toBe(0);
+  });
+
+  it('clamps a loud buffer to 1 rather than overshooting', async () => {
+    const levels: number[] = [];
+    const provider = new RuntypeVoiceProvider(baseConfig());
+    provider.onLevel((level) => levels.push(level));
+    await provider.startListening();
+    lastWs().triggerOpen();
+
+    pumpCapture(constantBuffer(0.9));
+    expect(levels[0]).toBe(1);
+  });
+
+  it('still sends audio when nothing subscribed to the level', async () => {
+    const provider = new RuntypeVoiceProvider(baseConfig());
+    await provider.startListening();
+    const ws = lastWs();
+    ws.triggerOpen();
+    const before = ws.sent.length;
+    pumpCapture(constantBuffer(0.2));
+    expect(ws.sent.length).toBe(before + 1);
   });
 
   it('drives status + onTranscript from control frames', async () => {

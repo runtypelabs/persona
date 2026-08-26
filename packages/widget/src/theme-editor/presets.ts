@@ -92,6 +92,13 @@ const DEFAULT_DARK_PRESET: ThemeEditorPreset = {
         },
       },
     } as any,
+    components: {
+      markdown: {
+        // Same shade as DARK_COMPONENTS: this preset is applied via
+        // createTheme(), so the dark-scheme defaults never layer in.
+        link: { foreground: 'palette.colors.primary.300' },
+      },
+    },
   },
   preview: { primary: '#171717', surface: '#1f2937', accent: '#0f0f0f' },
   tags: ['dark'],

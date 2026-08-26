@@ -39,7 +39,10 @@ export interface ContextMentionOrchestrator {
    * channel defaults to shown; extra `/`-style channels default to hidden.
    */
   affordanceButtons: HTMLElement[];
-  /** Chip row to place above the textarea. */
+  /**
+   * Row mention chips render into: the shared composer chip row when the host
+   * passed one, otherwise a standalone row the caller places above the editor.
+   */
   contextRow: HTMLElement;
   /** Call on composer `input`; pass the event's `inputType` for paste gating. */
   handleInput: (inputType?: string) => void;
@@ -47,6 +50,8 @@ export interface ContextMentionOrchestrator {
   handleKeydown: (event: KeyboardEvent) => boolean;
   isMenuOpen: () => boolean;
   hasMentions: () => boolean;
+  /** Refs of the currently tracked chips; read-only (nothing is detached). */
+  getMentionRefs: () => AgentWidgetContextMentionRef[];
   collectForSubmit: () =>
     | { refs: AgentWidgetContextMentionRef[]; finalize: () => Promise<MentionSubmitBundle> }
     | null;
@@ -84,6 +89,11 @@ export function createContextMentionOrchestrator(opts: {
    */
   liveRegionHost: HTMLElement | ShadowRoot;
   popoverContainer?: HTMLElement | ShadowRoot;
+  /**
+   * Shared composer chip row to render mention chips into (mode chips lead it).
+   * Omit and the orchestrator creates a standalone row the caller must place.
+   */
+  chipRow?: HTMLElement;
 }): ContextMentionOrchestrator | null {
   const mentionConfig = opts.config.contextMentions;
   if (!mentionConfig?.enabled) return null;
@@ -134,10 +144,15 @@ export function createContextMentionOrchestrator(opts: {
     }
   };
 
-  const contextRow = createNode("div", {
-    className: "persona-mention-context-row",
-    attrs: { "data-persona-mention-context-row": "" },
-  });
+  // Shared row when the host supplies one; the standalone fallback keeps
+  // direct callers (and a surface with no header region) working unchanged.
+  const ownsRow = !opts.chipRow;
+  const contextRow =
+    opts.chipRow ??
+    createNode("div", {
+      className: "persona-mention-context-row",
+      attrs: { "data-persona-mention-context-row": "" },
+    });
 
   let engine: ContextMentionEngine | null = null;
   let mountPromise: Promise<ContextMentionEngine | null> | null = null;
@@ -257,7 +272,6 @@ export function createContextMentionOrchestrator(opts: {
         buttonIconName: channel.buttonIconName,
         buttonTooltipText: channel.buttonTooltipText,
       },
-      buttonSize: opts.config.sendButton?.size,
       onOpen: () => {
         void ensureEngine().then((e) => e?.openMenu(channel.trigger));
       },
@@ -327,6 +341,7 @@ export function createContextMentionOrchestrator(opts: {
 
     isMenuOpen: () => engine?.isMenuOpen() ?? false,
     hasMentions: () => engine?.hasMentions() ?? false,
+    getMentionRefs: () => engine?.getMentionRefs() ?? [],
     collectForSubmit: () => engine?.collectForSubmit() ?? null,
     takeInlineCommand: async (text) => {
       if (!looksLikeCommand(text)) return null;
@@ -343,10 +358,12 @@ export function createContextMentionOrchestrator(opts: {
       if (swapped) cb(swapped.next, swapped.prev);
     },
     destroy: () => {
+      // `engine.destroy()` clears the chips; a shared row belongs to the header
+      // (it may still hold mode chips), so only a row we created is removed.
       engine?.destroy();
       inlineDestroy?.();
       for (const parts of buttonPartsList) parts.wrapper.remove();
-      contextRow.remove();
+      if (ownsRow) contextRow.remove();
     },
   };
 }

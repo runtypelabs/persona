@@ -69,6 +69,8 @@ export interface ContextMentionEngine {
   /** Returns true when the key was consumed. */
   handleKeydown(event: KeyboardEvent): boolean;
   hasMentions(): boolean;
+  /** Refs of the currently tracked mentions; never detaches them. */
+  getMentionRefs(): AgentWidgetContextMentionRef[];
   removeLastChip(): boolean;
   /**
    * Dispatch a leading inline slash command in the composer `text` at submit
@@ -161,6 +163,7 @@ export function mountContextMentions(
     handleInput: () => controller.onInput(),
     handleKeydown: (event) => controller.handleKeydown(event),
     hasMentions: () => manager.hasMentions(),
+    getMentionRefs: () => manager.getRefs(),
     removeLastChip: () => manager.removeLast(),
     dispatchInlineCommand: (text) => controller.dispatchInlineCommand(text),
     collectForSubmit: () =>

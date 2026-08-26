@@ -16,6 +16,7 @@ export type RuntypeExecutionStreamEvent = ({
   flowName?: string;
   kind: "agent" | "flow";
   maxTurns?: number;
+  resumed?: boolean;
   seq: number;
   source?: string;
   startedAt: string;

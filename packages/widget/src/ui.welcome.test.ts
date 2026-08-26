@@ -96,7 +96,9 @@ describe("welcome surface", () => {
     expect(host).toBeTruthy();
     expect(host.getAttribute("data-persona-welcome-variant")).toBe("card");
     expect(host.querySelector("h2")?.textContent).toBe(DEFAULT_WELCOME_TITLE);
-    expect(host.querySelector("p")?.textContent).toBe(DEFAULT_WELCOME_SUBTITLE);
+    expect(host.querySelector(".persona-welcome-subtitle")?.textContent).toBe(
+      DEFAULT_WELCOME_SUBTITLE
+    );
     expect(isVisible(host)).toBe(true);
     // Back-compatible hook for layout.slots["body-top"].
     expect(host.hasAttribute("data-persona-intro-card")).toBe(true);
@@ -109,7 +111,9 @@ describe("welcome surface", () => {
 
   it("omits the subtitle paragraph when the subtitle is empty", () => {
     const { mount } = makeController({ welcome: { subtitle: "" } });
-    expect(welcomeHost(mount).querySelector("p")!.hidden).toBe(true);
+    expect(
+      welcomeHost(mount).querySelector<HTMLElement>(".persona-welcome-subtitle")!.hidden
+    ).toBe(true);
   });
 });
 
@@ -434,7 +438,9 @@ describe("welcome live updates", () => {
   it("updates the subtitle", () => {
     const { mount, controller } = makeController();
     controller.update({ welcome: { subtitle: "Updated subtitle" } });
-    expect(welcomeHost(mount).querySelector("p")?.textContent).toBe(
+    expect(
+      welcomeHost(mount).querySelector(".persona-welcome-subtitle")?.textContent
+    ).toBe(
       "Updated subtitle"
     );
   });

@@ -87,6 +87,22 @@ export interface TooltipHandle {
 
 const handles = new WeakMap<HTMLElement, TooltipHandle>();
 
+/**
+ * Marks a subtree where control tooltips must never open. The composer overflow
+ * menu sets it on each row: a menu item already shows its name as visible text,
+ * so a floating tooltip over it would be redundant and wrong.
+ */
+export const TOOLTIP_SUPPRESSED_ATTR = "data-persona-tooltip-suppressed";
+
+const isSuppressed = (anchor: HTMLElement): boolean =>
+  typeof anchor.closest === "function" &&
+  anchor.closest(`[${TOOLTIP_SUPPRESSED_ATTR}]`) !== null;
+
+/** Close the tooltip currently attached to `anchor`, if any. */
+export function hideTooltipFor(anchor: HTMLElement): void {
+  handles.get(anchor)?.hide();
+}
+
 const isShadowRoot = (root: Node): root is ShadowRoot =>
   root.nodeType === Node.DOCUMENT_FRAGMENT_NODE && "host" in root;
 
@@ -223,6 +239,9 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
 
   const show = (): void => {
     if (destroyed || !enabled || tooltip || !anchor.isConnected) return;
+    // Checked at open time, not at attach time: the same control moves in and
+    // out of a suppressing subtree as the overflow policy changes.
+    if (isSuppressed(anchor)) return;
     const copy = resolvedText();
     const container = tooltipContainer(anchor);
     if (!copy || !container) return;

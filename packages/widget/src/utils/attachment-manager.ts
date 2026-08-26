@@ -5,14 +5,14 @@
  * for the composer attachment feature. Supports both images and documents.
  */
 
-import { createElement } from "./dom";
+import { createElement, createNode } from "./dom";
 import { File as FileIcon, FileCode, FileSpreadsheet, FileText, X, type IconNode } from "lucide";
 import { renderIconNode } from "./icon-node";
+import { renderLucideIcon } from "./icons";
 import type {
+  AgentWidgetAttachmentAdapter,
   AgentWidgetAttachmentsConfig,
-  ContentPart,
-  ImageContentPart,
-  FileContentPart
+  ContentPart
 } from "../types";
 import {
   fileToContentPart,
@@ -22,14 +22,29 @@ import {
   ALL_SUPPORTED_MIME_TYPES
 } from "./content";
 
+/** Lifecycle state of one pending attachment (roadmap section 8). */
+export type PendingAttachmentStatus =
+  | "processing"
+  | "uploading"
+  | "ready"
+  | "error";
+
 /**
- * Pending attachment with preview
+ * Pending attachment with preview.
+ *
+ * `contentPart` is null until the adapter resolves: the tile appears
+ * immediately in `processing`/`uploading` and only a `ready` attachment
+ * contributes to the outgoing message.
  */
 export interface PendingAttachment {
   id: string;
   file: File;
   previewUrl: string | null; // null for non-image files
-  contentPart: ImageContentPart | FileContentPart;
+  contentPart: ContentPart | null;
+  status: PendingAttachmentStatus;
+  /** 0 to 1, only while `uploading` and only when the adapter reports it. */
+  progress?: number;
+  error?: string;
 }
 
 /**
@@ -41,7 +56,22 @@ export interface AttachmentManagerConfig {
   maxFiles?: number;
   onFileRejected?: (file: File, reason: "type" | "size" | "count") => void;
   onAttachmentsChange?: (attachments: PendingAttachment[]) => void;
+  /** Host upload adapter; without one, files convert to base64 in the browser. */
+  adapter?: AgentWidgetAttachmentAdapter;
 }
+
+/**
+ * Default adapter: the historical in-browser base64 conversion, wrapped in the
+ * public interface. Reports no progress, so its tiles show `processing`.
+ */
+const BASE64_ADAPTER: AgentWidgetAttachmentAdapter = {
+  add: (file) => fileToContentPart(file) as Promise<ContentPart>
+};
+
+const clampProgress = (value: number): number => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(1, Math.max(0, value));
+};
 
 /**
  * Default configuration values
@@ -80,8 +110,14 @@ export class AttachmentManager {
   private config: Required<
     Pick<AttachmentManagerConfig, "allowedTypes" | "maxFileSize" | "maxFiles">
   > &
-    Pick<AttachmentManagerConfig, "onFileRejected" | "onAttachmentsChange">;
+    Pick<
+      AttachmentManagerConfig,
+      "onFileRejected" | "onAttachmentsChange" | "adapter"
+    >;
   private previewsContainer: HTMLElement | null = null;
+  /** In-flight `adapter.add` per attachment id; aborted on remove/clear/destroy. */
+  private pendingAdds = new Map<string, AbortController>();
+  private destroyed = false;
 
   constructor(config: AttachmentManagerConfig = {}) {
     this.config = {
@@ -89,8 +125,20 @@ export class AttachmentManager {
       maxFileSize: config.maxFileSize ?? DEFAULTS.maxFileSize,
       maxFiles: config.maxFiles ?? DEFAULTS.maxFiles,
       onFileRejected: config.onFileRejected,
-      onAttachmentsChange: config.onAttachmentsChange
+      onAttachmentsChange: config.onAttachmentsChange,
+      adapter: config.adapter
     };
+  }
+
+  /** True when the host supplied an adapter (tiles then show upload state). */
+  private hasCustomAdapter(): boolean {
+    return typeof this.config.adapter?.add === "function";
+  }
+
+  private adapter(): AgentWidgetAttachmentAdapter {
+    return this.hasCustomAdapter()
+      ? (this.config.adapter as AgentWidgetAttachmentAdapter)
+      : BASE64_ADAPTER;
   }
 
   /**
@@ -134,6 +182,14 @@ export class AttachmentManager {
     if (config.onAttachmentsChange !== undefined) {
       this.config.onAttachmentsChange = config.onAttachmentsChange;
     }
+    if (config.adapter !== undefined) {
+      this.config.adapter = config.adapter;
+    }
+  }
+
+  /** Every attachment holds a content part; the send gate reads this. */
+  isReady(): boolean {
+    return this.attachments.every((a) => a.status === "ready");
   }
 
   /**
@@ -144,10 +200,14 @@ export class AttachmentManager {
   }
 
   /**
-   * Get content parts for all attachments
+   * Get content parts for all attachments. Attachments that are still
+   * uploading or errored contribute nothing; the send gate blocks that case
+   * before it can be reached.
    */
   getContentParts(): ContentPart[] {
-    return this.attachments.map((a) => a.contentPart);
+    return this.attachments
+      .map((a) => a.contentPart)
+      .filter((part): part is ContentPart => part !== null);
   }
 
   /**
@@ -176,8 +236,9 @@ export class AttachmentManager {
    * Handle an array of files (e.g., clipboard image paste)
    */
   async handleFiles(files: readonly File[]): Promise<void> {
-    if (!files.length) return;
+    if (!files.length || this.destroyed) return;
 
+    const accepted: PendingAttachment[] = [];
     for (const file of files) {
       // Check if we've hit the max files limit
       if (this.attachments.length >= this.config.maxFiles) {
@@ -198,39 +259,101 @@ export class AttachmentManager {
         continue;
       }
 
-      try {
-        // Convert to content part (handles both images and files)
-        const contentPart = await fileToContentPart(file);
-
-        // Create preview URL only for images
-        const previewUrl = isImageFile(file) ? URL.createObjectURL(file) : null;
-
-        const attachment: PendingAttachment = {
-          id: generateAttachmentId(),
-          file,
-          previewUrl,
-          contentPart
-        };
-
-        this.attachments.push(attachment);
-        this.renderPreview(attachment);
-      } catch (error) {
-        console.error("[AttachmentManager] Failed to process file:", error);
-      }
+      // The tile appears immediately, before the adapter has produced anything.
+      const attachment: PendingAttachment = {
+        id: generateAttachmentId(),
+        file,
+        previewUrl: isImageFile(file) ? URL.createObjectURL(file) : null,
+        contentPart: null,
+        status: this.hasCustomAdapter() ? "uploading" : "processing",
+        progress: this.hasCustomAdapter() ? 0 : undefined
+      };
+      this.attachments.push(attachment);
+      this.renderPreview(attachment);
+      accepted.push(attachment);
     }
 
     this.updatePreviewsVisibility();
-    this.config.onAttachmentsChange?.(this.getAttachments());
+    this.notify();
+
+    await Promise.all(accepted.map((attachment) => this.runAdd(attachment)));
   }
 
   /**
-   * Remove an attachment by ID
+   * Run `adapter.add` for one attachment and reconcile the result. Late
+   * completions from an aborted or removed attachment write no state and log
+   * nothing: the user already moved on.
+   */
+  private async runAdd(attachment: PendingAttachment): Promise<void> {
+    const controller = new AbortController();
+    this.pendingAdds.set(attachment.id, controller);
+
+    const stale = (): boolean =>
+      this.destroyed ||
+      controller.signal.aborted ||
+      this.pendingAdds.get(attachment.id) !== controller ||
+      !this.attachments.includes(attachment);
+
+    try {
+      const part = await this.adapter().add(attachment.file, {
+        signal: controller.signal,
+        onProgress: (progress) => {
+          if (stale() || attachment.status !== "uploading") return;
+          attachment.progress = clampProgress(progress);
+          this.updatePreview(attachment);
+          this.notify();
+        }
+      });
+      if (stale()) return;
+      attachment.contentPart = part;
+      attachment.status = "ready";
+      attachment.progress = undefined;
+      attachment.error = undefined;
+    } catch (error) {
+      if (stale()) return;
+      attachment.status = "error";
+      attachment.progress = undefined;
+      attachment.error =
+        error instanceof Error ? error.message : String(error ?? "Upload failed");
+    } finally {
+      if (this.pendingAdds.get(attachment.id) === controller) {
+        this.pendingAdds.delete(attachment.id);
+      }
+    }
+    this.updatePreview(attachment);
+    this.notify();
+  }
+
+  /** Retry a failed attachment from its error tile. */
+  retryAttachment(id: string): void {
+    const attachment = this.attachments.find((a) => a.id === id);
+    if (!attachment || attachment.status !== "error" || this.destroyed) return;
+    attachment.status = this.hasCustomAdapter() ? "uploading" : "processing";
+    attachment.progress = this.hasCustomAdapter() ? 0 : undefined;
+    attachment.error = undefined;
+    this.updatePreview(attachment);
+    this.notify();
+    void this.runAdd(attachment);
+  }
+
+  /** Abort an in-flight add without touching the attachment's own state. */
+  private abortAdd(id: string): void {
+    const controller = this.pendingAdds.get(id);
+    if (!controller) return;
+    this.pendingAdds.delete(id);
+    controller.abort();
+  }
+
+  /**
+   * Remove an attachment by ID. Aborts an in-flight upload, and hands a
+   * completed one back to the adapter so remote storage can be released.
    */
   removeAttachment(id: string): void {
     const index = this.attachments.findIndex((a) => a.id === id);
     if (index === -1) return;
 
     const attachment = this.attachments[index];
+    this.abortAdd(id);
 
     // Revoke the object URL to free memory (only for images)
     if (attachment.previewUrl) {
@@ -248,22 +371,44 @@ export class AttachmentManager {
       previewEl.remove();
     }
 
+    if (attachment.status === "ready" && attachment.contentPart) {
+      this.releasePart(attachment.contentPart);
+    }
+
     this.updatePreviewsVisibility();
-    this.config.onAttachmentsChange?.(this.getAttachments());
+    this.notify();
+  }
+
+  private releasePart(part: ContentPart): void {
+    const remove = this.config.adapter?.remove;
+    if (!remove) return;
+    try {
+      const result = remove(part, { signal: new AbortController().signal });
+      if (result && typeof (result as Promise<void>).catch === "function") {
+        void (result as Promise<void>).catch((error: unknown) => {
+          console.error("[AttachmentManager] adapter.remove failed:", error);
+        });
+      }
+    } catch (error) {
+      console.error("[AttachmentManager] adapter.remove failed:", error);
+    }
   }
 
   /**
-   * Clear all attachments
+   * Clear all attachments and abort anything in flight. This is also the
+   * post-send path, so it never calls `adapter.remove`: the parts it drops
+   * have just been handed to the model.
    */
   clearAttachments(): void {
-    // Revoke all object URLs
     for (const attachment of this.attachments) {
+      this.abortAdd(attachment.id);
       if (attachment.previewUrl) {
         URL.revokeObjectURL(attachment.previewUrl);
       }
     }
 
     this.attachments = [];
+    this.pendingAdds.clear();
 
     // Clear the previews container
     if (this.previewsContainer) {
@@ -271,6 +416,24 @@ export class AttachmentManager {
     }
 
     this.updatePreviewsVisibility();
+    this.notify();
+  }
+
+  /** Abort every in-flight upload and stop accepting new work. */
+  destroy(): void {
+    if (this.destroyed) return;
+    this.destroyed = true;
+    for (const controller of this.pendingAdds.values()) controller.abort();
+    this.pendingAdds.clear();
+    for (const attachment of this.attachments) {
+      if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+    }
+    this.attachments = [];
+    this.previewsContainer = null;
+  }
+
+  private notify(): void {
+    if (this.destroyed) return;
     this.config.onAttachmentsChange?.(this.getAttachments());
   }
 
@@ -337,7 +500,38 @@ export class AttachmentManager {
       previewWrapper.appendChild(filePreview);
     }
 
-    // Create remove button
+    // Status layer: progress bar while uploading, error affordance on failure.
+    // Always present so `updatePreview` can mutate it in place.
+    const status = createNode("div", {
+      className: "persona-attachment-status",
+      attrs: { "data-persona-attachment-status": "" },
+    });
+    const progressTrack = createElement("div", "persona-attachment-progress");
+    progressTrack.appendChild(
+      createElement("div", "persona-attachment-progress__bar")
+    );
+    const retryBtn = createNode("button", {
+      className: "persona-attachment-retry",
+      attrs: { type: "button", "aria-label": "Retry upload" },
+    }) as HTMLButtonElement;
+    const retryIcon = renderLucideIcon(
+      "rotate-cw",
+      12,
+      "var(--persona-text-inverse, #ffffff)",
+      2
+    );
+    if (retryIcon) retryBtn.appendChild(retryIcon);
+    else retryBtn.textContent = "↻";
+    retryBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.retryAttachment(attachment.id);
+    });
+    status.append(progressTrack, retryBtn);
+    previewWrapper.appendChild(status);
+
+    // Create remove button. Removal is available in every state, including
+    // while the upload is still in flight.
     const removeBtn = createElement(
       "button",
       "persona-attachment-remove persona-absolute persona-flex persona-items-center persona-justify-center"
@@ -346,7 +540,8 @@ export class AttachmentManager {
     removeBtn.setAttribute("aria-label", "Remove attachment");
     removeBtn.style.position = "absolute";
     removeBtn.style.top = "-4px";
-    removeBtn.style.right = "-4px";
+    // Logical inset so the control stays on the trailing edge under dir=rtl.
+    removeBtn.style.insetInlineEnd = "-4px";
     removeBtn.style.width = "18px";
     removeBtn.style.height = "18px";
     removeBtn.style.borderRadius = "50%";
@@ -378,6 +573,39 @@ export class AttachmentManager {
 
     previewWrapper.appendChild(removeBtn);
     this.previewsContainer.appendChild(previewWrapper);
+    this.applyPreviewState(previewWrapper, attachment);
+  }
+
+  /** Repaint only the status layer of a live tile; the thumbnail is untouched. */
+  private updatePreview(attachment: PendingAttachment): void {
+    const tile = this.previewsContainer?.querySelector<HTMLElement>(
+      `[data-attachment-id="${attachment.id}"]`
+    );
+    if (!tile) return;
+    this.applyPreviewState(tile, attachment);
+  }
+
+  private applyPreviewState(
+    tile: HTMLElement,
+    attachment: PendingAttachment
+  ): void {
+    tile.dataset.status = attachment.status;
+    const busy = attachment.status !== "ready" && attachment.status !== "error";
+    tile.setAttribute("aria-busy", busy ? "true" : "false");
+    tile.title =
+      attachment.status === "error"
+        ? `${attachment.file.name}: ${attachment.error ?? "Upload failed"}`
+        : attachment.file.name;
+    const bar = tile.querySelector<HTMLElement>(
+      ".persona-attachment-progress__bar"
+    );
+    if (bar) {
+      // An adapter that reports no progress shows an indeterminate track
+      // (CSS-driven); a reported value drives the width.
+      const value = attachment.progress;
+      bar.style.width =
+        typeof value === "number" ? `${Math.round(value * 100)}%` : "";
+    }
   }
 
   /**
@@ -396,12 +624,16 @@ export class AttachmentManager {
     config?: AgentWidgetAttachmentsConfig,
     onAttachmentsChange?: (attachments: PendingAttachment[]) => void
   ): AttachmentManager {
+    // The public `attachments.onChange` is fed from the composer store, not
+    // from here: this internal callback carries `File` handles and content
+    // parts that never reach host code.
     return new AttachmentManager({
       allowedTypes: config?.allowedTypes,
       maxFileSize: config?.maxFileSize,
       maxFiles: config?.maxFiles,
       onFileRejected: config?.onFileRejected,
-      onAttachmentsChange
+      onAttachmentsChange,
+      adapter: config?.adapter
     });
   }
 }

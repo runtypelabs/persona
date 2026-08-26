@@ -48,8 +48,13 @@ import type {
   SpeechEngine,
   AgentWidgetContentSegment,
   AgentWidgetContextMentionRef,
-  WidgetHistoryInternals
+  WidgetHistoryInternals,
+  ComposerOptionsPayload,
+  ComposerQuote,
+  ComposerResubmitOptions
 } from "./types";
+import { applyQuoteToContent } from "./utils/composer-quote";
+import { findUserTurnBoundary } from "./utils/resubmit-turn";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import type { VisitorStore, VisitorStoreChange } from "./utils/visitor-store";
 import { HistoryProviderError } from "./internal/history-provider";
@@ -385,6 +390,8 @@ export class AgentWidgetSession {
   private voiceSetupPromise: Promise<void> | null = null;
   /** Bumped by setupVoice/cleanupVoice so a stale chunk load can't install. */
   private voiceSetupGeneration = 0;
+  /** Latest 0..1 capture amplitude pushed by a provider that reports one. */
+  private voiceLevel = 0;
   private voiceActive = false;
   private voiceStatus: VoiceStatus = 'disconnected';
 
@@ -547,6 +554,15 @@ export class AgentWidgetSession {
   /**
    * Get the voice interruption mode from the provider (none/cancel/barge-in)
    */
+  /**
+   * Latest capture amplitude (0..1) from the active provider, or null when the
+   * provider exposes none. The Web Speech paths have no audio stream, so they
+   * always report null and the UI falls back to a fixed midpoint.
+   */
+  public getVoiceLevel(): number | null {
+    return this.voiceProvider?.onLevel ? this.voiceLevel : null;
+  }
+
   public getVoiceInterruptionMode(): "none" | "cancel" | "barge-in" {
     if (this.voiceProvider?.getInterruptionMode) {
       return this.voiceProvider.getInterruptionMode();
@@ -793,6 +809,16 @@ export class AgentWidgetSession {
               this.pendingVoiceAssistantMessageId = null;
             }
           }
+        });
+      }
+
+      // Live capture amplitude, when the provider owns an audio graph. Stored,
+      // not forwarded per callback: the UI samples it on its own frame loop.
+      if (this.voiceProvider.onLevel) {
+        this.voiceProvider.onLevel((level) => {
+          this.voiceLevel = Number.isFinite(level)
+            ? Math.max(0, Math.min(1, level))
+            : 0;
         });
       }
 
@@ -1981,12 +2007,19 @@ export class AgentWidgetSession {
     snapshot: AgentWidgetMessage[],
     controller: AbortController,
     assistantMessageId: string,
-    userMessageId: string
+    userMessageId: string,
+    turnOptions?: { composerOptions?: ComposerOptionsPayload; interrupt?: boolean }
   ): Promise<void> {
     this.recordDispatchedProjections(snapshot);
     try {
       await this.client.dispatch(
-        { messages: snapshot, signal: controller.signal, assistantMessageId },
+        {
+          messages: snapshot,
+          signal: controller.signal,
+          assistantMessageId,
+          composerOptions: turnOptions?.composerOptions,
+          interrupt: turnOptions?.interrupt
+        },
         this.handleEvent
       );
       return;
@@ -2002,6 +2035,7 @@ export class AgentWidgetSession {
           messages: [replacement],
           signal: controller.signal,
           assistantMessageId,
+          composerOptions: turnOptions?.composerOptions,
         },
         this.handleEvent
       );
@@ -2422,14 +2456,52 @@ export class AgentWidgetSession {
        * model still sees resolved bodies via the `mentions` bundle above.
        */
       contentSegments?: AgentWidgetContentSegment[];
+      /**
+       * Per-turn composer selections (model, active modes) captured in the
+       * submission snapshot. Rides the request as `composerOptions`; each
+       * transport decides what it means (see the type's JSDoc).
+       */
+      composerOptions?: ComposerOptionsPayload;
+      /**
+       * Quote/reply-to for this turn. The delimited block goes ahead of the
+       * user's text on the model channel; the structured source is retained on
+       * the message. Without a quote nothing about the message changes.
+       */
+      quote?: ComposerQuote;
+      /**
+       * Internal (`resubmitFrom` retry only): fields copied verbatim onto the
+       * rebuilt user message so an already-resolved turn replays without
+       * re-running mention finalizers.
+       */
+      replayFields?: Pick<
+        AgentWidgetMessage,
+        | "llmContent"
+        | "rawContent"
+        | "mentionContext"
+        | "contextMentions"
+        | "quote"
+      >;
+      /**
+       * Client-token only: this turn supersedes the in-flight one
+       * (`composer.streamingSubmitBehavior: "interrupt"`).
+       */
+      interrupt?: boolean;
     }
   ) {
     const input = rawInput.trim();
-    // Allow sending if there's text OR attachments OR mentions
+    // Allow sending if there's text OR attachments OR mentions. A retry replay
+    // also qualifies on its already-resolved model channel alone (a mention-only
+    // turn has empty display text).
+    const hasReplayContent =
+      !!options?.replayFields &&
+      (options.replayFields.llmContent !== undefined ||
+        options.replayFields.rawContent !== undefined ||
+        (options.replayFields.contextMentions?.length ?? 0) > 0);
     if (
       !input &&
       (!options?.contentParts || options.contentParts.length === 0) &&
-      (!options?.mentions || options.mentions.refs.length === 0)
+      (!options?.mentions || options.mentions.refs.length === 0) &&
+      !hasReplayContent
     )
       return;
 
@@ -2490,7 +2562,11 @@ export class AgentWidgetSession {
       // Inline mode: ordered display segments for in-prose `@token` rendering.
       ...(options?.contentSegments && options.contentSegments.length > 0 && {
         contentSegments: options.contentSegments
-      })
+      }),
+      // Retained for retry fidelity; never re-read for the current dispatch.
+      ...(options?.composerOptions && { composerOptions: options.composerOptions }),
+      // A retry replays the already-resolved model channel verbatim.
+      ...(options?.replayFields ?? {})
     };
 
     this.appendMessage(userMessage);
@@ -2521,6 +2597,26 @@ export class AgentWidgetSession {
       this.callbacks.onMessagesChanged([...this.messages]);
     }
 
+    // Quote last, so its delimited block is the outermost prefix on the model
+    // channel (ahead of any mention blocks and the user's prose). Same stored-ref
+    // rule as the mention merge above. A retry already carries resolved content,
+    // so `replayFields` skips this entirely.
+    if (options?.quote && !options.replayFields) {
+      const stored =
+        this.messages.find((m) => m.id === userMessageId) ?? userMessage;
+      const quoted = applyQuoteToContent({
+        quote: options.quote,
+        text: stored.llmContent ?? stored.content,
+        contentParts: stored.contentParts
+      });
+      if (quoted.contentParts) stored.contentParts = quoted.contentParts;
+      if (quoted.llmContent !== undefined) stored.llmContent = quoted.llmContent;
+      if (quoted.contentParts || quoted.llmContent !== undefined) {
+        stored.quote = { ...options.quote };
+        this.callbacks.onMessagesChanged([...this.messages]);
+      }
+    }
+
     const snapshot = [...this.messages];
 
     try {
@@ -2528,7 +2624,11 @@ export class AgentWidgetSession {
         snapshot,
         controller,
         assistantMessageId,
-        userMessageId
+        userMessageId,
+        {
+          composerOptions: options?.composerOptions,
+          interrupt: options?.interrupt
+        }
       );
     } catch (error) {
       // A durable drop fired the dispatch wrapper's `finally` (plain `idle`)
@@ -2576,6 +2676,100 @@ export class AgentWidgetSession {
         }
       }
     }
+  }
+
+  /**
+   * Re-run the conversation from one user turn (docs/composer-gap-analysis.md
+   * section 10). Backs both retry/regenerate and edit-and-resend.
+   *
+   * The turn is the user message plus every message the assistant produced for
+   * it (text, reasoning, tool, approval, system variants) up to the next user
+   * message. v1 replaces the active tail destructively: the turn AND everything
+   * after it are dropped, so no branch is retained and the UI must not imply
+   * one. Persistence follows one emit: the truncation is silent and the first
+   * `onMessagesChanged` a host sees already carries the new attempt, so storage
+   * never holds a transcript with the turn removed and nothing in its place.
+   *
+   * Without `replacement` the STORED user message is replayed field for field
+   * (`contentParts`, `llmContent`, `rawContent`, mention refs and context,
+   * inline segments, quote, composer options, voice flag). With one, the
+   * replacement snapshot is sent through the normal submission path. Either way
+   * the new attempt gets fresh message ids.
+   *
+   * Returns false when the id is unknown, is not a user message, or the rebuilt
+   * turn would carry no content; nothing is truncated in that case.
+   */
+  public resubmitFrom(
+    messageId: string,
+    options: ComposerResubmitOptions
+  ): boolean {
+    const boundary = findUserTurnBoundary(this.messages, messageId);
+    if (!boundary) return false;
+
+    // Operate on the STORED message, never a caller-held object: appendMessage
+    // keeps a copy (see `ensureSequence`), so the array entry is the only ref
+    // that carries the merged mention/quote content.
+    const stored = this.messages[boundary.start];
+    const replacement = options.replacement;
+
+    const text = replacement ? replacement.text : stored.content;
+    const contentParts = replacement
+      ? replacement.contentParts
+      : stored.contentParts;
+    const hasContent =
+      !!text?.trim() ||
+      (contentParts?.length ?? 0) > 0 ||
+      (!replacement && (stored.llmContent?.trim()?.length ?? 0) > 0);
+    if (!hasContent) return false;
+
+    const replay = replacement
+      ? undefined
+      : {
+          ...(stored.llmContent !== undefined && { llmContent: stored.llmContent }),
+          ...(stored.rawContent !== undefined && { rawContent: stored.rawContent }),
+          ...(stored.mentionContext && { mentionContext: stored.mentionContext }),
+          ...(stored.contextMentions && { contextMentions: stored.contextMentions }),
+          ...(stored.quote && { quote: stored.quote })
+        };
+
+    const composerOptions = replacement
+      ? this.toComposerOptionsPayload(replacement.options)
+      : stored.composerOptions;
+    const contentSegments = replacement
+      ? replacement.contentSegments
+      : stored.contentSegments;
+    const quote = replacement ? replacement.options?.quote : undefined;
+    const viaVoice = replacement ? replacement.viaVoice : stored.viaVoice;
+
+    // Cancel before history changes so no in-flight stream can write into the
+    // tail we are about to drop.
+    this.cancel();
+
+    // Silent truncation: the emit belongs to the resubmission below.
+    this.messages = this.messages.slice(0, boundary.start);
+
+    void this.sendMessage(text ?? "", {
+      ...(contentParts?.length ? { contentParts: [...contentParts] } : {}),
+      ...(contentSegments?.length ? { contentSegments: [...contentSegments] } : {}),
+      ...(composerOptions ? { composerOptions } : {}),
+      ...(quote ? { quote } : {}),
+      ...(replay && Object.keys(replay).length > 0 ? { replayFields: replay } : {}),
+      viaVoice: viaVoice === true
+    });
+    return true;
+  }
+
+  /** Submission options → the wire payload shape; quote travels separately. */
+  private toComposerOptionsPayload(
+    options: { selectedModelId?: string; activeModeIds?: string[] } | undefined
+  ): ComposerOptionsPayload | undefined {
+    if (!options) return undefined;
+    const payload: ComposerOptionsPayload = {};
+    if (options.selectedModelId) payload.selectedModelId = options.selectedModelId;
+    if (options.activeModeIds?.length) {
+      payload.activeModeIds = [...options.activeModeIds];
+    }
+    return Object.keys(payload).length > 0 ? payload : undefined;
   }
 
   /**

@@ -24,7 +24,7 @@ function longestLeadingBacktickRun(text: string): number {
  * default, four/five/… when the body itself contains a fence) so a mention body
  * can never terminate its own wrapper.
  */
-function fencedBlock(label: string, text: string): string {
+export function fencedBlock(label: string, text: string): string {
   const fence = "`".repeat(Math.max(3, longestLeadingBacktickRun(text) + 1));
   return `${fence}${label}\n${text}\n${fence}`;
 }

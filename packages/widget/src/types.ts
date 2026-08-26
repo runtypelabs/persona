@@ -614,6 +614,35 @@ export type AgentWidgetRequestPayload = {
    * the JSON-serializable surface (no `execute`).
    */
   clientTools?: ClientToolDefinition[];
+  /**
+   * Per-turn composer selections (model, active modes), snapshotted at send.
+   *
+   * Additive and optional: absent when nothing is selected. Never merged into
+   * `context` — a value in generic context does not change inference, so the
+   * selection travels in its own field and each transport decides what it
+   * means:
+   *
+   * - **Custom backend** (`requestMiddleware` / `customFetch`): the field is
+   *   visible on the payload as-is. Map it to your own protocol.
+   * - **Proxy** (`@runtypelabs/persona-proxy`): stripped before the upstream
+   *   call unless the route opts in with `composerModels.allowed` (a matching
+   *   `selectedModelId` is applied to the pinned agent/flow model) or
+   *   `forwardComposerModes` (active mode ids ride along as
+   *   `context.composerModes`). A disallowed model is ignored, never rejected.
+   * - **Inline client agent** (`config.agent`): a `selectedModelId` matching an
+   *   id in `composer.models` sets that turn's outgoing `agent.model`. The
+   *   widget config is untouched.
+   *
+   * Client-token mode does not send it: that route's agent is pinned server
+   * side.
+   */
+  composerOptions?: ComposerOptionsPayload;
+};
+
+/** Wire shape for the per-turn composer selections. */
+export type ComposerOptionsPayload = {
+  selectedModelId?: string;
+  activeModeIds?: string[];
 };
 
 // ============================================================================
@@ -757,6 +786,8 @@ export type AgentWidgetAgentRequestPayload = {
    * `AgentWidgetRequestPayload.clientTools`.
    */
   clientTools?: ClientToolDefinition[];
+  /** See {@link AgentWidgetRequestPayload.composerOptions}. */
+  composerOptions?: ComposerOptionsPayload;
 };
 
 // ============================================================================
@@ -1039,11 +1070,30 @@ export type AgentWidgetActionHandler = (
   context: AgentWidgetActionContext
 ) => AgentWidgetActionHandlerResult | void;
 
+/**
+ * Unsent composer draft carried in the conversation storage payload. 
+ * Never holds `File` objects or upload credentials: attachments are 
+ * not part of a persisted draft in v1.
+ */
+export type AgentWidgetStoredDraft = {
+  text: string;
+  mentionRefs?: AgentWidgetContextMentionRef[];
+  contentSegments?: AgentWidgetContentSegment[];
+  selectedModelId?: string;
+  activeModeIds?: string[];
+  quote?: ComposerQuote;
+};
+
 export type AgentWidgetStoredState = {
   messages?: AgentWidgetMessage[];
   metadata?: Record<string, unknown>;
   artifacts?: PersonaArtifactRecord[];
   selectedArtifactId?: string | null;
+  /**
+   * Unsent composer draft. Written debounced and flushed on destroy and page
+   * hide; cleared after a send is accepted locally and on clear chat.
+   */
+  draft?: AgentWidgetStoredDraft;
 };
 
 export interface AgentWidgetStorageAdapter {
@@ -1154,6 +1204,34 @@ export type AgentWidgetMessageActionsConfig = {
    */
   showReadAloud?: boolean;
   /**
+   * Show a "Regenerate" button that re-runs the last assistant turn.
+   *
+   * Renders only on the final retryable assistant message (one with a preceding
+   * user message) and never while that message streams. Activating it calls
+   * `session.resubmitFrom(previousUserMessageId, { reason: "retry" })`, which
+   * destructively replaces the active tail: v1 keeps no branches.
+   * @default false
+   */
+  showRegenerate?: boolean;
+  /**
+   * Show an "Edit" button on user messages that swaps the bubble for a small
+   * editor with save and cancel.
+   *
+   * Only text-only user messages qualify: no attachments or `contentParts`, no
+   * mention refs or resolved mention context, no inline segments, no structured
+   * or raw content, and no `llmContent` distinct from `content`. Rich editing
+   * needs a real embedded composer document, not a textarea that silently drops
+   * hidden context. Saving resubmits from that message.
+   * @default false
+   */
+  showEdit?: boolean;
+  /**
+   * Show a "Quote" button that loads the message text into the composer's
+   * quote banner (the same state `controller.setQuote()` writes).
+   * @default false
+   */
+  showQuote?: boolean;
+  /**
    * Visibility mode: 'always' shows buttons always, 'hover' shows on hover only
    * @default 'hover'
    */
@@ -1186,6 +1264,36 @@ export type AgentWidgetMessageActionsConfig = {
    * automatic tracking.
    */
   onCopy?: (message: AgentWidgetMessage) => void;
+  /**
+   * Extra buttons appended to the actions row, after the built-ins. Ids are
+   * namespaced into `data-action="custom:<id>"`, so they can never collide with
+   * a built-in action.
+   *
+   * The row lives in morphed transcript DOM, so nothing is bound to the
+   * elements: activation is delegated and resolves `onSelect` off this config,
+   * which means a live `controller.update()` swaps the behavior immediately.
+   */
+  custom?: AgentWidgetCustomMessageAction[];
+};
+
+/** Which roles a custom message action appears on. */
+export type AgentWidgetCustomMessageActionRole = "user" | "assistant";
+
+/** One host-contributed message action. */
+export type AgentWidgetCustomMessageAction = {
+  /** Unique within `messageActions.custom`. */
+  id: string;
+  /** Accessible name and tooltip. */
+  label: string;
+  /** Lucide icon name from the Persona registry. @default "ellipsis" */
+  iconName?: string;
+  /**
+   * Roles this action renders on. An action listing `"user"` makes the user
+   * actions row appear on its own, without `showEdit` or `showQuote`.
+   * @default ["assistant"]
+   */
+  roles?: AgentWidgetCustomMessageActionRole[];
+  onSelect: (message: AgentWidgetMessage) => void;
 };
 
 export type AgentWidgetStateEvent = {
@@ -2163,7 +2271,27 @@ export type AgentWidgetReasoningDisplayFeature = {
    * @default "none"
    */
   loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
+  /**
+   * Lucide icon rendered at the leading edge of the collapsed reasoning row
+   * header, e.g. a sparkle. Unset renders no icon. Ignored when
+   * `reasoning.renderCollapsedSummary` returns an element: that hook owns the
+   * whole header content.
+   */
+  iconName?: string;
+  /**
+   * What happens to a reasoning row once its trace completes.
+   *
+   * - `"kept"` (default): the finished row stays in the transcript.
+   * - `"removed"`: no row is rendered at all, so the transcript gap closes with
+   *   it. The reasoning text stays on the message and in `getMessages()`.
+   *
+   * @default "kept"
+   */
+  completedVisibility?: AgentWidgetReasoningCompletedVisibility;
 };
+
+/** See `features.reasoningDisplay.completedVisibility`. */
+export type AgentWidgetReasoningCompletedVisibility = "kept" | "removed";
 
 /**
  * Reveal animation applied to assistant message text while it is streaming.
@@ -3737,14 +3865,567 @@ export type AgentWidgetSendButtonConfig = {
   stopIconName?: string;
   /** Tooltip text shown while streaming. Default: "Stop generating". */
   stopTooltipText?: string;
+  /**
+   * When the send control is shown.
+   *
+   * - `"always"` (default): the button is always mounted.
+   * - `"when-text"`: the button is hidden while the draft is empty and no
+   *   attachment is pending. Streaming always shows it, because the same
+   *   control is Stop.
+   *
+   * The hidden state is a `data-persona-send-hidden` attribute on the send
+   * button wrapper, so host CSS can restyle rather than hide.
+   */
+  visibility?: AgentWidgetSendButtonVisibility;
+};
+
+/** When the send control is mounted. See `sendButton.visibility`. */
+export type AgentWidgetSendButtonVisibility = "always" | "when-text";
+
+/**
+ * Composer lifecycle phase.
+ *
+ * `preparing` spans asynchronous pre-send work (an async `onBeforeSend`, mention
+ * body resolution); `streaming` mirrors the session's streaming state.
+ */
+export type ComposerPhase = "idle" | "preparing" | "streaming";
+
+/**
+ * Public view of one pending composer attachment. Mirrors the internal
+ * attachment list without exposing `File` handles or DOM nodes.
+ *
+ * `uploading` and `progress` are reserved for the upload adapter; the built-in
+ * base64 adapter reports `processing` while a file is being read and `ready`
+ * once it holds a content part.
+ */
+export type ComposerAttachmentState = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  status: "processing" | "uploading" | "ready" | "error";
+  progress?: number;
+  error?: string;
+};
+
+/**
+ * Structured quote/reply-to state.
+ * Set through `controller.setQuote()`; cleared by `controller.clearQuote()`, a
+ * send, or the banner's dismiss button.
+ */
+export type ComposerQuote = {
+  text: string;
+  /** Transcript message the quote came from, when it came from one. */
+  messageId?: string;
+  /** Attribution shown in the banner (e.g. a page title or author). */
+  sourceLabel?: string;
+};
+
+/**
+ * Readonly snapshot of composer state, from `controller.getComposerState()` and
+ * the `persona:composer:state` DOM event. Never exposes the session, the
+ * attachment manager, DOM nodes, unresolved files, or mention finalizers.
+ *
+ */
+export type ComposerState = {
+  text: string;
+  attachments: readonly ComposerAttachmentState[];
+  mentionRefs: readonly AgentWidgetContextMentionRef[];
+  /** Current `composer.models` selection. Lives here, never in config. */
+  selectedModelId?: string;
+  /** Ids of the currently toggled `composer.modes`. */
+  activeModeIds: readonly string[];
+  /** Active quote/reply-to, from `controller.setQuote()`. */
+  quote?: ComposerQuote;
+  /** The single deferred submission under `streamingSubmitBehavior: "defer-one"`. */
+  pendingSubmission?: ComposerSubmissionSnapshot;
+  phase: ComposerPhase;
+  inputDisabled: boolean;
+  sendDisabled: boolean;
+};
+
+/**
+ * Per-submission selections captured at send time. Model and mode selections
+ * travel on the wire as `composerOptions`; `quote` becomes a delimited text part
+ * ahead of the user's own text and rides the sent message as metadata.
+ */
+export type ComposerSubmissionOptions = {
+  selectedModelId?: string;
+  activeModeIds?: string[];
+  quote?: ComposerQuote;
+};
+
+/**
+ * Immutable snapshot of one outgoing submission, built once per send and frozen
+ * before any public callback sees it. The internal snapshot may additionally
+ * carry mention finalizers and attachment handles; those never reach this view.
+ */
+export type ComposerSubmissionSnapshot = {
+  text: string;
+  contentParts?: ContentPart[];
+  mentionRefs: AgentWidgetContextMentionRef[];
+  contentSegments?: AgentWidgetContentSegment[];
+  options: ComposerSubmissionOptions;
+  viaVoice?: boolean;
+};
+
+/**
+ * `session.resubmitFrom()` options.
+ *
+ * Without a `replacement` the stored user message is replayed verbatim, keeping
+ * its `contentParts`, `llmContent`, `rawContent`, mention refs/context, inline
+ * segments, quote, composer options, and voice flag. With one, the replacement
+ * snapshot is sent instead through the normal submission path.
+ */
+export type ComposerResubmitOptions = {
+  replacement?: ComposerSubmissionSnapshot;
+  reason: "edit" | "retry";
+};
+
+/**
+ * `onBeforeSend` outcome: `undefined` proceeds unchanged, `false` cancels, and
+ * a patch rewrites the outgoing snapshot only (never the visible draft).
+ */
+export type ComposerBeforeSendResult =
+  | void
+  | false
+  | {
+      text?: string;
+      options?: Partial<ComposerSubmissionOptions>;
+    };
+
+/** Which end of the composer action row a control belongs to. */
+export type ComposerActionPlacement = "start" | "end";
+
+/**
+ * Where a control is presented. `"bar"` always stays in the action row;
+ * `"overflow"` always lives in the `+` menu; `"auto"` starts in the bar and
+ * moves into the menu under the `composer.actionOverflow` width policy.
+ *
+ * The menu only exists when `composer.actionOverflow.enabled` is true; without
+ * it, `"overflow"` and `"auto"` both render in the bar.
+ */
+export type ComposerActionPresentation = "bar" | "overflow" | "auto";
+
+/**
+ * Fields shared by every composer action.
+ *
+ * `order` places the control relative to the built-ins. Documented ranges:
+ * start cluster mention affordances 100 (plus channel index) and attachment
+ * 200; end cluster mic 800 and send 1000. Custom actions default to 500. Send
+ * is terminal, so an end-cluster action ordered at or after 1000 is clamped
+ * below it.
+ */
+export type ComposerActionBase = {
+  id: string;
+  placement: ComposerActionPlacement;
+  presentation?: ComposerActionPresentation;
+  order?: number;
+  visible?: boolean | ((state: Readonly<ComposerState>) => boolean);
+  disabled?: boolean | ((state: Readonly<ComposerState>) => boolean);
+  /** Disable while a response streams, through the composer's own mechanism. */
+  disableWhenStreaming?: boolean;
+};
+
+/**
+ * Capabilities handed to an action, never internals: no `Session`, no
+ * attachment manager, no composer DOM. Actions can run before the session is
+ * initialized, so anything session-shaped would leak private lifecycle.
+ */
+export type ComposerActionContext = {
+  getState: () => Readonly<ComposerState>;
+  getValue: () => string;
+  setValue: (value: string) => void;
+  submit: () => void;
+  openAttachmentPicker: () => void;
+  toggleVoice: () => void;
+  /** Re-run every contributor and re-place the action row. */
+  requestRender: () => void;
+};
+
+/** `ComposerActionContext` plus the identity of the action being rendered. */
+export type ComposerActionRenderContext = ComposerActionContext & {
+  /** Final id, after plugin namespacing. */
+  id: string;
+  action: ComposerCustomAction;
+};
+
+/**
+ * Icon or text button. `label` is the accessible name; `shortLabel` adds
+ * visible text. An async `onSelect` puts the button in a busy state until it
+ * settles, and repeat activation is ignored while it is pending.
+ */
+export type ComposerButtonAction = ComposerActionBase & {
+  kind?: "button";
+  /** Required accessible name. */
+  label: string;
+  /** Optional visible text. Without it the button renders icon-only. */
+  shortLabel?: string;
+  iconName?: string;
+  tooltipText?: string;
+  /**
+   * Glyph and label color of the bar button, any CSS color. Ignored on the
+   * overflow-menu row, which follows the menu's own palette.
+   */
+  iconColor?: string;
+  /**
+   * Fill behind the bar button, any CSS color. Pair with `iconColor` for a
+   * tinted circular control. Ignored on the overflow-menu row.
+   */
+  backgroundColor?: string;
+  /** Renders `aria-pressed`; omit for a non-toggle button. */
+  pressed?: boolean;
+  onSelect: (
+    context: ComposerActionContext,
+    event: Event
+  ) => void | Promise<void>;
+};
+
+/**
+ * Host-rendered control. The returned element is the accessible root: the
+ * registry places it as-is and wraps nothing around it. `destroy` runs on
+ * action removal, composer rebuild, plugin removal, and widget destroy.
+ */
+export type ComposerCustomAction = ComposerActionBase & {
+  kind: "custom";
+  /** Accessible name for the control the renderer produces. */
+  label: string;
+  render: (context: ComposerActionRenderContext) => {
+    element: HTMLElement;
+    destroy?: () => void;
+  };
+};
+
+export type ComposerAction = ComposerButtonAction | ComposerCustomAction;
+
+/**
+ * Overflow `+` menu policy.
+ *
+ * The menu is a PRESENTATION of the action registry, never a second registry:
+ * every item in it is an action that was already contributed by core, host
+ * config, or a plugin. The trigger is a ghost `+` button at order 900 in the
+ * start cluster, rendered only when the menu would hold at least one item.
+ */
+export type ComposerActionOverflowConfig = {
+  /**
+   * Enable the `+` trigger. Without it, `"overflow"` and `"auto"` actions all
+   * render in the bar.
+   * @default false
+   */
+  enabled?: boolean;
+  /**
+   * Move `presentation: "auto"` actions into the menu while the composer footer
+   * is narrower than this. A number is footer content-box width in CSS pixels;
+   * a string is any CSS length, resolved against the footer. Re-evaluated with
+   * a `ResizeObserver` on the footer. Unset: `"auto"` actions stay in the bar.
+   */
+  collapseAutoActionsBelow?: number | string;
+  /**
+   * Built-in controls that fold into the menu. Folding is always explicit:
+   * enabling the menu never moves the attachment or mention affordances by
+   * itself.
+   */
+  includeBuiltIns?: Array<"attachments" | "mentions">;
+  /**
+   * Where the `+` trigger sorts inside the start cluster, on the same scale as
+   * `ComposerAction.order`. `0` leads the bar, ahead of the mention (100) and
+   * attachment (200) affordances.
+   * @default 900
+   */
+  order?: number;
+};
+
+/**
+ * A toggleable composer mode: a tool, a persona, a reasoning setting, anything
+ * the backend maps by id. Renders as a pressed action in the start cluster and,
+ * while active, as a removable chip in the composer header.
+ *
+ * Persona attaches no meaning to an id. Vendor reasoning-effort is a mode like
+ * any other, not a built-in concept.
+ */
+export type ComposerMode = {
+  id: string;
+  /** Joins a `composer.modeGroups` entry. Without it the mode is independent. */
+  groupId?: string;
+  /** Required accessible name; also the chip text when `shortLabel` is unset. */
+  label: string;
+  /** Shorter visible text for the bar button and the chip. */
+  shortLabel?: string;
+  iconName?: string;
+  /**
+   * Replaces the composer placeholder while active. With several active modes
+   * the first one in `composer.modes` order wins.
+   */
+  placeholder?: string;
+  /**
+   * `"once"` clears the mode after a send is accepted locally; `"sticky"` keeps
+   * it selected across turns.
+   * @default "sticky"
+   */
+  persistence?: "once" | "sticky";
+  /** @default "auto" */
+  presentation?: ComposerActionPresentation;
+};
+
+/**
+ * How a mode group is drawn.
+ *
+ * - `"buttons"` (default): one independent pressed-state control per mode, in
+ *   the start cluster, plus a removable chip per active mode.
+ * - `"segmented"`: the group renders as ONE rounded track with its modes as
+ *   segments and the active one painted as a raised pill (the claude.ai
+ *   Chat / Cowork model). The track shows the state, so the group's modes are
+ *   suppressed from the chip row. Segmented groups always render in the action
+ *   row, never in the overflow menu.
+ */
+export type ComposerModeGroupPresentation = "buttons" | "segmented";
+
+/**
+ * Selection policy for a set of modes. `"single"` deselects siblings when one
+ * is chosen; `"multiple"` toggles independently.
+ */
+export type ComposerModeGroup = {
+  id: string;
+  selection: "single" | "multiple";
+  /** @default "buttons" */
+  presentation?: ComposerModeGroupPresentation;
+  /**
+   * Accessible name for a segmented track. With it the track is a labelled
+   * `role="group"`; without it the segments stand on their own names.
+   */
+  label?: string;
+};
+
+/** Context passed to a plugin's `contributeComposerActions` hook. */
+export type ComposerActionContributionContext = {
+  config: AgentWidgetConfig;
+  getState: () => Readonly<ComposerState>;
+  /** Re-run every contributor and re-place the action row. */
+  requestRender: () => void;
+};
+
+/**
+ * Which key combination submits the composer.
+ *
+ * - `"enter"` (default): Enter submits, Shift+Enter inserts a newline.
+ * - `"mod-enter"`: Ctrl+Enter (Windows/Linux) or Command+Enter (macOS) submits;
+ *   plain Enter inserts a newline.
+ * - `"none"`: only the send button and `controller.submitMessage()` submit.
+ */
+export type ComposerSubmitKey = "enter" | "mod-enter" | "none";
+
+/**
+ * The complete allowlist of attributes a host may set on the composer editor.
+ * The type IS the allowlist: anything else is structurally rejected, so Persona
+ * data attributes, form association, `disabled`, `class`, `style`, and `value`
+ * can never be overridden from config.
+ */
+export type ComposerInputAttributes = {
+  autocomplete?: string;
+  autocapitalize?: "off" | "none" | "on" | "sentences" | "words" | "characters";
+  spellcheck?: boolean;
+  inputmode?: string;
+  /** Applied as `aria-label` on the textarea or inline editor. */
+  ariaLabel?: string;
+};
+
+/**
+ * A composer lock. `true` locks without an explanation; an object adds a reason
+ * rendered in the composer status region and announced politely.
+ */
+export type ComposerDisabledOption = boolean | { reason?: string };
+
+/**
+ * One selectable model in `composer.models`. Persona attaches no meaning to an
+ * id: the backend maps it. `icon` and `description` are drawn by the popover
+ * presentation only; a native `<select>` option carries text alone.
+ */
+export type ComposerModel = {
+  id: string;
+  /** Visible text on the closed control and in the picker row. */
+  label: string;
+  /** Lucide name from the widget's built-in icon registry (see `IconName`). */
+  icon?: IconName | (string & {});
+  /** Muted second line under the label in a popover row. */
+  description?: string;
+};
+
+/**
+ * How the built-in model picker draws.
+ *
+ * - `"native"` (default): a `<select>`, unchanged.
+ * - `"popover"`: a button opening a `role="listbox"` panel whose rows carry the
+ *   model's icon, label, and description.
+ */
+export type ComposerModelPickerPresentation = "native" | "popover";
+
+/** Presentation options for the built-in model picker (`composer.models`). */
+export type ComposerModelPickerConfig = {
+  /** @default "native" */
+  presentation?: ComposerModelPickerPresentation;
+  /**
+   * Muted text after the selected label on the closed control, e.g. a reasoning
+   * effort. Drawn by the popover presentation only: a native `<select>` renders
+   * its option text and nothing else.
+   */
+  suffix?: string;
 };
 
 /** Optional composer UI state for custom `renderComposer` implementations. */
 export type AgentWidgetComposerConfig = {
-  models?: Array<{ id: string; label: string }>;
-  /** Current selection; host or plugin may update this at runtime. */
+  /**
+   * Host-contributed composer controls. Merged with the core built-ins and
+   * every plugin's `contributeComposerActions` into one ordered row, and
+   * re-resolved on `controller.update()`.
+   */
+  actions?: ComposerAction[];
+  /** Overflow `+` menu policy over the contributed actions. */
+  actionOverflow?: ComposerActionOverflowConfig;
+  /**
+   * Selectable models. Setting this renders a compact picker in the end
+   * cluster (unless a `renderComposer` plugin owns the composer, in which case
+   * the list is handed to the plugin instead).
+   */
+  models?: ComposerModel[];
+  /** How the model picker draws. Omitted, it stays the native `<select>`. */
+  modelPicker?: ComposerModelPickerConfig;
+  /**
+   * The initial selection only. The live selection lives in composer state
+   * (`controller.getComposerState().selectedModelId`); choosing a model never
+   * writes back to config and never mutates `config.agent`.
+   */
   selectedModelId?: string;
+  /** Observational: fires after the selection is written to composer state. */
+  onModelChange?: (modelId: string) => void;
+  /** Toggleable modes rendered in the start cluster and as header chips. */
+  modes?: ComposerMode[];
+  /**
+   * Modes selected when the composer first mounts, e.g. a default Search or
+   * Chat mode. Ids with no matching `composer.modes` entry are dropped, and a
+   * group's selection policy is NOT re-applied: author a valid set.
+   *
+   * The authored initial state only. A restored draft's `activeModeIds` wins,
+   * and the live selection lives in composer state
+   * (`controller.getComposerState().activeModeIds`), never in config.
+   */
+  defaultActiveModeIds?: string[];
+  /** Selection policy for the groups `composer.modes` reference by `groupId`. */
+  modeGroups?: ComposerModeGroup[];
+  /**
+   * Intercept every send after eligibility checks and before the user message
+   * is appended. Runs against an immutable snapshot on all submission paths
+   * (composer, suggestion, dictation, plugin composer, controller).
+   *
+   * Return `false` to cancel, a patch to rewrite the outgoing snapshot, or
+   * nothing to proceed. Cancelling, throwing, or aborting leaves the draft,
+   * attachments, and mention chips untouched for retry. `signal` aborts when
+   * the widget is destroyed or the send is superseded (Escape while preparing).
+   *
+   * Attachments and mentions are inspectable but not replaceable here; their
+   * own APIs own those state machines.
+   */
+  onBeforeSend?: (
+    snapshot: Readonly<ComposerSubmissionSnapshot>,
+    context: { signal: AbortSignal }
+  ) => ComposerBeforeSendResult | Promise<ComposerBeforeSendResult>;
+  /**
+   * Which key combination submits. `enterKeyHint` on the editor derives from
+   * this: `"send"` while Enter submits, `"enter"` otherwise.
+   * @default "enter"
+   */
+  submitKey?: ComposerSubmitKey;
+  /**
+   * On a coarse primary pointer (phones, tablets), Enter inserts a newline even
+   * under `submitKey: "enter"`. The send button remains the submit affordance.
+   * @default false
+   */
+  insertNewlineOnTouchEnter?: boolean;
+  /**
+   * How many lines the editor grows to before it scrolls. Applies to the full
+   * composer, the composer-bar pill, and the inline contenteditable editor.
+   * @default 3 (5 in composer-bar mode)
+   */
+  maxLines?: number;
+  /** Safe attributes for the textarea and the inline editor. */
+  inputAttributes?: ComposerInputAttributes;
+  /**
+   * Lock composition: text editing, attachment intake (button, paste, drop),
+   * mention triggers, dictation, suggestion selection, and every submission
+   * path. Streaming does NOT set this.
+   */
+  inputDisabled?: ComposerDisabledOption;
+  /**
+   * Block every submission path while composition stays fully available.
+   * Dictation still lands its transcript in the composer but does not auto
+   * send. Stop is not a submission: the button still stops an active stream.
+   */
+  sendDisabled?: ComposerDisabledOption;
+  /**
+   * What a submit does while a response is streaming.
+   * @default "block"
+   */
+  streamingSubmitBehavior?: ComposerStreamingSubmitBehavior;
+  /**
+   * Where the composer footer sits relative to the transcript.
+   *
+   * - `"block"` (default): the footer is a flex sibling below the scroll body.
+   *   Nothing scrolls behind it.
+   * - `"overlay"`: the footer is absolutely overlaid on the scroll body, so the
+   *   transcript scrolls behind it (the chatgpt.com / claude.ai model, where the
+   *   composer is sticky inside the scroller). The widget reserves the footer's
+   *   live height as bottom padding on the scroll body and on a plugin welcome
+   *   overlay, and offsets the scroll-to-bottom affordance and the composer
+   *   sheet slot by the same amount.
+   *
+   * Paint the band behind an overlaid composer with
+   * `theme.components.composer.overlayBand` (any CSS background, gradients
+   * included) and `theme.components.input.backdropFilter`.
+   *
+   * Ignored in composer-bar mount mode, which owns its own geometry.
+   * @default "block"
+   */
+  placement?: ComposerPlacement;
+  /**
+   * How the composer form arranges its editor and action clusters.
+   *
+   * - `"stacked"` (default): the card layout. Editor on its own row, the two
+   *   action clusters on a row below it.
+   * - `"single-row"`: the one-row pill (the chatgpt.com / gemini.google.com
+   *   model). The start cluster leads the editor, the end cluster trails it,
+   *   and the editor absorbs the remaining width.
+   *
+   * `"single-row"` describes the IDLE composer only. It composes with the
+   * compact state, so a wrapped draft, chips, attachment previews, a quote, a
+   * pending card, or live dictation all fall back to the stacked card, exactly
+   * as `data-persona-composer-compact` does today.
+   *
+   * Ignored in composer-bar mount mode, whose pill is already one row.
+   * @default "stacked"
+   */
+  layout?: ComposerLayout;
 };
+
+/** Composer footer placement relative to the transcript scroller. */
+export type ComposerPlacement = "block" | "overlay";
+
+/** Composer form arrangement. See `composer.layout`. */
+export type ComposerLayout = "stacked" | "single-row";
+
+/**
+ * Submit-during-streaming policy.
+ *
+ * - `"block"` (default, unchanged): the submit path is inert while streaming and
+ *   the send button acts as Stop.
+ * - `"defer-one"`: the submit captures one immutable snapshot, clears the draft,
+ *   and shows a pending card in the composer header. It auto-sends when the
+ *   assistant turn completes; an explicit Stop or a stream error leaves it
+ *   pending. A second submit while one is pending is refused, never replaced.
+ * - `"interrupt"`: the submit cancels the current run and dispatches at once
+ *   with `submitMode: "interrupt"` and a fresh `turnId`. Only the client-token
+ *   transport carries that contract; every other transport falls back to
+ *   `"block"` with a debug warning.
+ */
+export type ComposerStreamingSubmitBehavior = "block" | "defer-one" | "interrupt";
 
 export type AgentWidgetClearChatConfig = {
   enabled?: boolean;
@@ -3779,7 +4460,29 @@ export type AgentWidgetStatusIndicatorConfig = {
 };
 
 export type AgentWidgetVoiceRecognitionConfig = {
+  /**
+   * Enable the mic button and voice input. The mic still only renders when the
+   * browser supports the Web Speech API or a `runtype`/`custom` provider is
+   * configured.
+   * @default true
+   */
   enabled?: boolean;
+  /**
+   * What happens when dictation finishes on the browser (Web Speech) path.
+   *
+   * - `"send"` (default, unchanged): the transcript submits automatically after
+   *   the pause timeout, on natural end of recognition, and when the user taps
+   *   the mic to stop.
+   * - `"review"`: recognition stops and the transcript stays in the composer
+   *   for editing; the user sends it.
+   *
+   * Only the browser path is governed. The realtime `runtype` provider is full
+   * duplex and the server owns turn taking; a bring-your-own `custom` STT
+   * provider delivers a finished transcript straight to the session rather than
+   * to the composer, so there is no draft to review.
+   * @default "send"
+   */
+  completionBehavior?: "send" | "review";
   pauseDuration?: number;
   /** Text shown in the user message placeholder while voice is being processed. Default: "Processing voice..." */
   processingText?: string;
@@ -3831,7 +4534,9 @@ export type AgentWidgetVoiceRecognitionConfig = {
   provider?: {
     type: 'browser' | 'runtype' | 'custom';
     browser?: {
+      /** BCP 47 tag passed to the Web Speech API. @default 'en-US' */
       language?: string;
+      /** Keep recognizing across pauses. @default true */
       continuous?: boolean;
     };
     runtype?: {
@@ -4200,6 +4905,17 @@ export interface VoiceProvider {
 
   /** Register a callback for per-turn latency metrics (realtime path). */
   onMetrics?(callback: (metrics: VoiceMetrics) => void): void;
+
+  /**
+   * Register a callback for live capture amplitude, normalized to 0..1.
+   *
+   * Only providers that own an audio graph can answer this. The Web Speech
+   * paths (`browser`, and the legacy in-widget recognition) expose no audio
+   * stream at all, so they never call it and the widget falls back to a fixed
+   * midpoint. Fires at the provider's own capture cadence, not per frame; the
+   * widget samples the latest value on its own animation loop.
+   */
+  onLevel?(callback: (level: number) => void): void;
 
   /** Returns the current interruption mode (only meaningful for Runtype provider) */
   getInterruptionMode?(): "none" | "cancel" | "barge-in";
@@ -4678,17 +5394,42 @@ export type AgentWidgetWelcomeVariant = "card" | "hero" | "none";
 export type AgentWidgetWelcomeDismiss = "never" | "on-first-message";
 
 /**
+ * Vertical anchoring of the greeting-plus-composer pair in the empty
+ * conversation.
+ */
+export type AgentWidgetWelcomeAnchor = "bottom" | "center";
+
+/**
  * Avatar or logo shown above the welcome title. Discriminated union; the
  * function form is the escape hatch for custom markup. There is deliberately
  * no raw HTML string variant (sanitization surface plus accessibility hole).
  */
 export type AgentWidgetWelcomeIcon =
-  | { type: "lucide"; name: IconName }
+  | (AgentWidgetWelcomeIconBase & { type: "lucide"; name: IconName })
   /** `alt` is required, and may be `""` for a decorative logo. */
-  | { type: "image"; url: string; alt: string }
+  | (AgentWidgetWelcomeIconBase & { type: "image"; url: string; alt: string })
   /** Emoji or short text glyph. */
-  | { type: "text"; text: string }
+  | (AgentWidgetWelcomeIconBase & { type: "text"; text: string })
   | (() => HTMLElement | SVGElement);
+
+/**
+ * Where the welcome icon sits. `"above"` (default) stacks it over the title;
+ * `"inline"` leads the title on the same row (the claude.ai sparkle line) and
+ * scales the glyph to `--persona-welcome-inline-icon-size`.
+ */
+export type AgentWidgetWelcomeIconPlacement = "above" | "inline";
+
+/** Shared by the object icon forms. The function form is always `"above"`. */
+export type AgentWidgetWelcomeIconBase = {
+  /** @default "above" */
+  placement?: AgentWidgetWelcomeIconPlacement;
+};
+
+/**
+ * Horizontal alignment of the welcome copy. Unset follows the variant: the
+ * card is start-aligned, the hero is centered.
+ */
+export type AgentWidgetWelcomeAlign = "start" | "center";
 
 /**
  * First-open welcome surface. Consolidates the deprecated
@@ -4702,14 +5443,53 @@ export type AgentWidgetWelcomeIcon =
 export interface AgentWidgetWelcomeConfig {
   /** Card or hero title. Defaults to "Hello 👋". */
   title?: string;
+  /**
+   * Small muted line above the title, e.g. a section name. Omitted when unset
+   * or empty. Typography rides `components.introCard.kicker`.
+   */
+  kicker?: string;
   /** Scope statement in the assistant's voice. Empty string omits it. */
   subtitle?: string;
-  /** Avatar or logo shown above the title. */
+  /** Avatar or logo shown above the title, or beside it under `icon.placement`. */
   icon?: AgentWidgetWelcomeIcon;
+  /**
+   * Horizontal alignment of the kicker, title, subtitle, and starter
+   * suggestions. Unset follows the variant: `card` starts, `hero` centers.
+   */
+  align?: AgentWidgetWelcomeAlign;
   /** @default "card" */
   variant?: AgentWidgetWelcomeVariant;
   /** @default "never" for `card`, always `"on-first-message"` for `hero`. */
   dismiss?: AgentWidgetWelcomeDismiss;
+  /**
+   * Vertical anchoring of the greeting-plus-composer pair in the EMPTY
+   * conversation only. On the first message the pair drops to the bottom
+   * (animated; see `data-persona-conversation-state`).
+   *
+   * - `"bottom"` (default): the composer stays pinned at the bottom.
+   * - `"center"`: greeting and composer float together so the composer's top
+   *   edge lands at `anchorComposerTop` of the panel column, and the welcome
+   *   surface is end-anchored `composerGap` above it.
+   *
+   * Composes with either `composer.placement`. Ignored in composer-bar mount
+   * mode. `renderWelcome` plugin content inherits the anchor: the widget
+   * positions the overlay host and reserves the composer zone.
+   * @default "bottom"
+   */
+  anchor?: AgentWidgetWelcomeAnchor;
+  /**
+   * Under `anchor: "center"`, the composer's top edge as a percentage of the
+   * panel column height. Must be a percentage string. Measured references:
+   * ChatGPT 42%, Claude 43%, Perplexity 40%, Gemini 47%.
+   * @default "44%"
+   */
+  anchorComposerTop?: string;
+  /**
+   * Under `anchor: "center"`, the gap between the bottom of the welcome
+   * surface and the top of the composer. Any CSS length.
+   * @default "24px"
+   */
+  composerGap?: string;
   /**
    * Display-only greeting bubble pinned at transcript position zero. It is UI
    * chrome derived from config, never a session message: it does not appear in
@@ -5314,16 +6094,25 @@ export type AgentWidgetMessageLayoutConfig = {
 };
 
 /**
- * Available layout slots for content injection
+ * Available layout slots for content injection.
+ *
+ * `"messages"` and `"composer"` are **deprecated and unsupported**: they have
+ * never been implemented and a configured renderer for either is silently
+ * ignored (a debug-mode warning is emitted). Use `renderMessage` /
+ * `layout.messages.renderUserMessage` / `layout.messages.renderAssistantMessage`
+ * for the transcript and the `renderComposer` plugin hook for the composer.
+ * The names remain in the union until the next major release.
  */
 export type WidgetLayoutSlot =
   | "header-left"
   | "header-center"
   | "header-right"
   | "body-top"
+  /** @deprecated Unsupported no-op. Use the message render hooks instead. */
   | "messages"
   | "body-bottom"
   | "footer-top"
+  /** @deprecated Unsupported no-op. Use the `renderComposer` plugin hook instead. */
   | "composer"
   | "footer-bottom";
 
@@ -5362,7 +6151,10 @@ export type AgentWidgetLayoutConfig = {
   header?: AgentWidgetHeaderLayoutConfig;
   /** Message layout configuration */
   messages?: AgentWidgetMessageLayoutConfig;
-  /** Slot renderers for custom content injection */
+  /**
+   * Slot renderers for custom content injection. The `"messages"` and
+   * `"composer"` slots are deprecated and unsupported no-ops.
+   */
   slots?: Partial<Record<WidgetLayoutSlot, SlotRenderer>>;
   /**
    * Show/hide the header section entirely.
@@ -5425,6 +6217,14 @@ export type AgentWidgetMarkdownTableToken = {
   header: Array<{ text: string; tokens: unknown[] }>;
   rows: Array<Array<{ text: string; tokens: unknown[] }>>;
   align: Array<"left" | "center" | "right" | null>;
+  /**
+   * Rendered `<tr>` HTML for the header row. The structured `header` / `rows` /
+   * `align` fields are not reconstructable from the bundled parser and arrive
+   * empty, so a table override composes from these two instead.
+   */
+  headerHtml?: string;
+  /** Rendered `<tr>` HTML for the body rows. See `headerHtml`. */
+  bodyHtml?: string;
 };
 
 export type AgentWidgetMarkdownLinkToken = {
@@ -5451,6 +6251,11 @@ export type AgentWidgetMarkdownListToken = {
   start: number | "";
   loose: boolean;
   items: unknown[];
+  /**
+   * Rendered `<li>` HTML for the list body. `items` is not reconstructable from
+   * the bundled parser and arrives empty, so a list override wraps this.
+   */
+  itemsHtml?: string;
 };
 
 export type AgentWidgetMarkdownListItemToken = {
@@ -5494,7 +6299,13 @@ export type AgentWidgetMarkdownEmToken = {
  * Custom renderer overrides for markdown elements.
  * Each method receives the token and should return an HTML string.
  * Return `false` to use the default renderer.
- * 
+ *
+ * The bundled parser hands the widget positional arguments rather than tokens,
+ * so `raw` and `tokens` are not always recoverable: they arrive as `""` and
+ * `[]` on the tokens where the parser does not supply them. Every field the
+ * parser does supply (`href`, `title`, `text`, `depth`, `lang`, ...) is
+ * populated. `text` is already-rendered inline HTML, not raw markdown.
+ *
  * @example
  * ```typescript
  * renderer: {
@@ -5670,6 +6481,31 @@ export type AgentWidgetMarkdownConfig = {
  * }
  * ```
  */
+/** Handed to `AgentWidgetAttachmentAdapter.add` for one file. */
+export type AttachmentUploadContext = {
+  /** Aborts when the tile is removed, the composer is cleared, or on destroy. */
+  signal: AbortSignal;
+  /** Report upload progress in the range 0 to 1; values are clamped. */
+  onProgress: (progress: number) => void;
+};
+
+/**
+ * Host-owned attachment lifecycle. `add` resolves with the content part sent
+ * to the model; the tile shows an uploading state with progress until it does,
+ * an error state with a retry affordance if it rejects.
+ *
+ * `remove` runs when the user removes a tile whose upload had already
+ * completed, so the host can release remote storage. It never runs for a
+ * message that was sent.
+ */
+export type AgentWidgetAttachmentAdapter = {
+  add: (file: File, context: AttachmentUploadContext) => Promise<ContentPart>;
+  remove?: (
+    part: ContentPart,
+    context: { signal: AbortSignal }
+  ) => void | Promise<void>;
+};
+
 export type AgentWidgetAttachmentsConfig = {
   /**
    * Enable/disable file attachments.
@@ -5677,8 +6513,15 @@ export type AgentWidgetAttachmentsConfig = {
    */
   enabled?: boolean;
   /**
-   * Allowed MIME types for attachments.
-   * @default ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+   * Allowed MIME types for attachments. Defaults to every supported image and
+   * document type (`ALL_SUPPORTED_MIME_TYPES`): 6 image types (`image/png`,
+   * `image/jpeg`, `image/gif`, `image/webp`, `image/svg+xml`, `image/bmp`) and
+   * 9 document types (`application/pdf`, `text/plain`, `text/markdown`,
+   * `text/csv`, `application/msword`,
+   * `application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
+   * `application/vnd.ms-excel`,
+   * `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+   * `application/json`).
    */
   allowedTypes?: string[];
   /**
@@ -5693,18 +6536,30 @@ export type AgentWidgetAttachmentsConfig = {
   maxFiles?: number;
   /**
    * Button icon name (from Lucide icons).
-   * @default 'image-plus'
+   * @default 'paperclip'
    */
   buttonIconName?: string;
   /**
    * Tooltip text for the attachment button.
-   * @default 'Attach image'
+   * @default 'Attach file'
    */
   buttonTooltipText?: string;
   /**
    * Callback when a file is rejected (wrong type or too large).
    */
   onFileRejected?: (file: File, reason: 'type' | 'size' | 'count') => void;
+  /**
+   * Called whenever the pending attachment list changes: add, status/progress
+   * transition, remove, and clear. Receives the public attachment state only,
+   * never `File` handles, content parts, or DOM nodes.
+   */
+  onChange?: (attachments: readonly ComposerAttachmentState[]) => void;
+  /**
+   * Take ownership of turning a picked file into a content part, typically an
+   * eager upload to host storage. Without one, Persona converts the file to a
+   * base64 content part in the browser.
+   */
+  adapter?: AgentWidgetAttachmentAdapter;
   /**
    * Customize the drag-and-drop overlay that appears when files are dragged over the widget.
    */
@@ -5793,6 +6648,12 @@ export type AgentWidgetPersistStateConfig = {
      * @default true
      */
     focusInput?: boolean;
+    /**
+     * Persist the unsent composer draft (text, mention tokens, inline segments,
+     * model/mode selection, quote) through the storage adapter.
+     * @default true
+     */
+    draft?: boolean;
   };
   /**
    * Clear persisted state when chat is cleared.
@@ -6175,7 +7036,9 @@ export type AgentWidgetConfig = {
     welcomeTitle?: string;
     /** @deprecated Use `welcome.subtitle`. */
     welcomeSubtitle?: string;
+    /** Composer placeholder text. @default 'How can I help...' */
     inputPlaceholder?: string;
+    /** Send button label in text mode. @default 'Send' */
     sendButtonLabel?: string;
     /** Button label shown in text mode while a response is streaming. Default: "Stop". */
     stopButtonLabel?: string;
@@ -6933,6 +7796,18 @@ export type AgentWidgetMessage = {
    * client. Internal: set at send time from each source's `resolve().context`.
    */
   mentionContext?: Record<string, unknown>;
+  /**
+   * Quote/reply-to this (user) message was sent with, for transcript fidelity.
+   * The model-visible copy is a delimited text part ahead of the user's text;
+   * this field keeps the structured source separately.
+   */
+  quote?: ComposerQuote;
+  /**
+   * Per-turn composer selections this (user) message was sent with. Retained so
+   * `session.resubmitFrom(..., { reason: "retry" })` replays the same model and
+   * mode selection the original turn used.
+   */
+  composerOptions?: ComposerOptionsPayload;
   streaming?: boolean;
   variant?: AgentWidgetMessageVariant;
   sequence?: number;

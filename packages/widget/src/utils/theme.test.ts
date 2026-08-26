@@ -801,6 +801,43 @@ describe('theme utils', () => {
     expect(explicit['--persona-history-danger-fg']).toBe('#fecaca');
   });
 
+  it('lightens markdown link color for dark color schemes', () => {
+    // primary.600 is #0f0f0f in both palettes, so the light default is
+    // invisible on a charcoal assistant bubble. Dark schemes swap in
+    // primary.300 unless the host set an explicit link foreground.
+    const light = themeToCssVariables(getActiveTheme({ colorScheme: 'light' }));
+    expect(light['--persona-md-link-color']).toBe('#0f0f0f');
+
+    const dark = themeToCssVariables(getActiveTheme({ colorScheme: 'dark' }));
+    expect(dark['--persona-md-link-color']).toBe('#a3a3a3');
+
+    const hostDark = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: { components: { button: { primary: { background: '#22c55e' } } } },
+      } as any)
+    );
+    expect(hostDark['--persona-md-link-color']).toBe('#a3a3a3');
+
+    const explicitDark = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        darkTheme: {
+          components: { markdown: { link: { foreground: 'palette.colors.accent.400' } } },
+        },
+      } as any)
+    );
+    expect(explicitDark['--persona-md-link-color']).toBe('#22d3ee'); // accent.400
+
+    const explicitViaLight = themeToCssVariables(
+      getActiveTheme({
+        colorScheme: 'dark',
+        theme: { components: { markdown: { link: { foreground: '#60a5fa' } } } },
+      } as any)
+    );
+    expect(explicitViaLight['--persona-md-link-color']).toBe('#60a5fa');
+  });
+
   it('emits the confirm dialog danger pair and forks the fill for dark', () => {
     // Always emitted: the dialog's inline var() must resolve so the fill
     // follows a customized error palette instead of its legacy fallback.
@@ -839,6 +876,8 @@ describe('theme utils', () => {
     // widget.css chains to the ghost wash and semantic text on its own, so an
     // unset group must leave every alias undefined.
     const defaults = themeToCssVariables(createTheme());
+    expect(defaults['--persona-message-action-bg']).toBeUndefined();
+    expect(defaults['--persona-message-action-border']).toBeUndefined();
     expect(defaults['--persona-message-action-hover-bg']).toBeUndefined();
     expect(defaults['--persona-message-action-hover-fg']).toBeUndefined();
     expect(defaults['--persona-message-action-radius']).toBeUndefined();
@@ -847,6 +886,8 @@ describe('theme utils', () => {
       createTheme({
         components: {
           messageActions: {
+            background: 'palette.colors.gray.50',
+            border: '1px solid #333333',
             hoverBackground: 'palette.colors.gray.100',
             hoverForeground: 'semantic.colors.text',
             borderRadius: 'palette.radius.full',
@@ -854,6 +895,8 @@ describe('theme utils', () => {
         },
       } as any)
     );
+    expect(themed['--persona-message-action-bg']).toBe('#f9fafb'); // gray.50
+    expect(themed['--persona-message-action-border']).toBe('1px solid #333333');
     expect(themed['--persona-message-action-hover-bg']).toBe('#f3f4f6'); // gray.100
     expect(themed['--persona-message-action-hover-fg']).toBe('#111827'); // semantic text
     expect(themed['--persona-message-action-radius']).toBe('9999px');
@@ -1007,6 +1050,63 @@ describe('theme utils', () => {
     expect(cssVars['--persona-composer-gap']).toBe('0.75rem');
     expect(cssVars['--persona-composer-font-size']).toBe('1rem');
     expect(cssVars['--persona-composer-line-height']).toBe('1.5rem');
+  });
+
+  it('defaults the composer control-size tokens to 40px and 24px', () => {
+    const cssVars = themeToCssVariables(createTheme());
+
+    expect(cssVars['--persona-composer-control-size']).toBe('40px');
+    expect(cssVars['--persona-composer-control-icon-size']).toBe('24px');
+  });
+
+  it('maps composer controlSize/controlIconSize to dedicated CSS variables', () => {
+    const theme = createTheme({
+      components: {
+        composer: { controlSize: '32px', controlIconSize: '18px' },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-composer-control-size']).toBe('32px');
+    expect(cssVars['--persona-composer-control-icon-size']).toBe('18px');
+  });
+
+  it('defaults the motion tokens', () => {
+    const cssVars = themeToCssVariables(createTheme());
+
+    expect(cssVars['--persona-motion-duration-fast']).toBe('120ms');
+    expect(cssVars['--persona-motion-duration-base']).toBe('200ms');
+    expect(cssVars['--persona-motion-easing']).toBe('cubic-bezier(0.2, 0, 0, 1)');
+  });
+
+  it('maps motion tokens to dedicated CSS variables', () => {
+    const theme = createTheme({
+      components: {
+        motion: {
+          durationFast: '80ms',
+          durationBase: '260ms',
+          easing: 'linear',
+        },
+      },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-motion-duration-fast']).toBe('80ms');
+    expect(cssVars['--persona-motion-duration-base']).toBe('260ms');
+    expect(cssVars['--persona-motion-easing']).toBe('linear');
+  });
+
+  it('accepts 0ms durations as a motion kill switch', () => {
+    const theme = createTheme({
+      components: { motion: { durationFast: '0ms', durationBase: '0ms' } },
+    } as any);
+
+    const cssVars = themeToCssVariables(theme);
+
+    expect(cssVars['--persona-motion-duration-fast']).toBe('0ms');
+    expect(cssVars['--persona-motion-duration-base']).toBe('0ms');
   });
 
   it('maps scroll-to-bottom component tokens to dedicated CSS variables', () => {

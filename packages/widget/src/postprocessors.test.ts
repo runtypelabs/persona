@@ -71,6 +71,116 @@ describe("directive postprocessor + sanitization", () => {
   });
 });
 
+describe("markdown renderer overrides receive the documented token", () => {
+  it("hands link() a token with href, title, and text", () => {
+    const seen: unknown[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        link(token) {
+          seen.push(token);
+          return `<a data-custom href="${token.href}">${token.text}</a>`;
+        },
+      },
+    });
+    const html = md('[Docs](https://example.com "Handbook")');
+
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({
+      type: "link",
+      href: "https://example.com",
+      title: "Handbook",
+      text: "Docs",
+    });
+    expect(html).toContain('<a data-custom href="https://example.com">Docs</a>');
+  });
+
+  it("hands code() a token with text and lang", () => {
+    const seen: unknown[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        code(token) {
+          seen.push(token);
+          return `<pre data-lang="${token.lang}">${token.text}</pre>`;
+        },
+      },
+    });
+    const html = md("```ts\nconst x = 1;\n```");
+
+    expect(seen[0]).toMatchObject({ type: "code", lang: "ts", text: "const x = 1;" });
+    expect(html).toContain('<pre data-lang="ts">const x = 1;</pre>');
+  });
+
+  it("hands heading() a token with depth, text, and raw", () => {
+    const seen: unknown[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        heading(token) {
+          seen.push(token);
+          return `<h${token.depth} data-custom>${token.text}</h${token.depth}>`;
+        },
+      },
+    });
+    const html = md("### Section title");
+
+    expect(seen[0]).toMatchObject({
+      type: "heading",
+      depth: 3,
+      text: "Section title",
+    });
+    expect((seen[0] as { raw: string }).raw).toContain("Section title");
+    expect(html).toContain("<h3 data-custom>Section title</h3>");
+  });
+
+  it("hands image() a null title when the source declares none", () => {
+    const seen: unknown[] = [];
+    const md = createMarkdownProcessor({
+      renderer: {
+        image(token) {
+          seen.push(token);
+          return `<img data-custom src="${token.href}" alt="${token.text}">`;
+        },
+      },
+    });
+    md("![Chart](https://example.com/c.png)");
+
+    expect(seen[0]).toMatchObject({
+      type: "image",
+      href: "https://example.com/c.png",
+      title: null,
+      text: "Chart",
+    });
+  });
+
+  it("carries the parser's rendered children for table and list", () => {
+    const md = createMarkdownProcessor({
+      renderer: {
+        table(token) {
+          return `<table data-custom>${token.headerHtml}${token.bodyHtml}</table>`;
+        },
+        list(token) {
+          return `<ul data-custom data-ordered="${token.ordered}">${token.itemsHtml}</ul>`;
+        },
+      },
+    });
+
+    expect(md("- one\n- two")).toContain('<ul data-custom data-ordered="false">');
+    expect(md("- one\n- two")).toContain("one");
+    const table = md("| a | b |\n| - | - |\n| 1 | 2 |");
+    expect(table).toContain("<table data-custom>");
+    expect(table).toContain("<th>a</th>");
+  });
+
+  it("still falls through to the default renderer when an override returns false", () => {
+    const md = createMarkdownProcessor({
+      renderer: {
+        heading: () => false,
+      },
+    });
+    expect(md("# Title")).toContain("Title");
+    expect(md("# Title")).toContain("<h1");
+  });
+});
+
 describe("escapeHtml", () => {
   it("escapes all HTML special characters", () => {
     expect(escapeHtml('<script>alert("xss")&</script>')).toBe(

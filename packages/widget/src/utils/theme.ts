@@ -120,6 +120,14 @@ const DARK_COMPONENTS: DeepPartial<PersonaTheme> = {
         hoverBackground: 'rgba(255, 255, 255, 0.08)',
       },
     },
+    markdown: {
+      link: {
+        // primary.600 is #0f0f0f in both palettes; on a charcoal bubble that
+        // fails AA. primary.300 (#a3a3a3) is ~5.8:1 on gray.800 and still
+        // distinct from body text (gray.100).
+        foreground: 'palette.colors.primary.300',
+      },
+    },
     history: {
       // error-400: the light-surface error-600 red lands ~3:1 on dark
       // surfaces, under the 4.5:1 AA floor for the 14px destructive labels.
