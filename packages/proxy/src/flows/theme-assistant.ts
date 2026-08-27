@@ -35,7 +35,7 @@ export const THEME_ASSISTANT_FLOW: RuntypeFlowConfig = {
         // blocks). Both are confirmed on this model in the platform catalog.
         // If you swap models, confirm both tags first: a tool-use-only model
         // would silently break the reference-image loop.
-        model: "gemini-3.5-flash",
+        model: "google/gemini-3.5-flash-lite",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",

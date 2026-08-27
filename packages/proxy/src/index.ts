@@ -245,7 +245,7 @@ const DEFAULT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "gemini-3.7-flash",
+        model: "google/gemini-3.5-flash-lite",
         responseFormat: "markdown",
         outputVariable: "prompt_result",
         userPrompt: "{{user_message}}",

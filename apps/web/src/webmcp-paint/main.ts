@@ -102,6 +102,10 @@ function mountWidget(): void {
         // paint live; only canvas-wiping tools confirm (and ⌘Z reverses
         // everything anyway).
         autoApprove: (info) => !APPROVAL_REQUIRED_TOOL_NAMES.has(info.toolName),
+        // Every stroke selects a tool + color before it draws, so a turn
+        // that emits several strokes at once must land them one after the
+        // other; run in parallel they interleave inside jspaint.
+        execution: "sequential",
       },
       features: {
         ...DEFAULT_WIDGET_CONFIG.features,

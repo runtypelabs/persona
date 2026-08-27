@@ -18,7 +18,7 @@ export const SHOPPING_ASSISTANT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "gemini-3.7-flash",
+        model: "google/gemini-3.5-flash-lite",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",
@@ -97,7 +97,7 @@ export const SHOPPING_ASSISTANT_METADATA_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "gemini-3.7-flash",
+        model: "google/gemini-3.5-flash-lite",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",

@@ -2737,9 +2737,10 @@ export class AgentWidgetClient {
     // bubble-id segmentation on the wire in place of the legacy `partId`:
     // a new block id means a new bubble, sealed at `text_complete`/tool boundaries.
     let currentTextBlockId: string | null = null;
-    // Raw text accumulated for the open flow block before its bubble is
-    // materialized — lets a whitespace-only block resolve without a stray bubble.
-    let pendingFlowRaw = "";
+    // Raw text accumulated for the open text block, on both the flow and agent
+    // paths — lets a whitespace-only flow block resolve without a stray bubble,
+    // and gives the structured-content parser the whole block on either path.
+    let pendingTextRaw = "";
     // Nested flow-as-tool attribution (PR #4602): a text/reasoning block whose
     // `parentToolCallId` matches a `tool_start.toolCallId` belongs to a flow
     // running as that tool. Keyed by the wire block id, these route the block's
@@ -3134,20 +3135,20 @@ export class AgentWidgetClient {
       finalizeCleanup();
     };
 
-    // === Unified flow text channel ===
-    // Flow prompt-step text streams as `text_delta` blocks (segmented by
-    // `text_start`/`text_complete`) and can be structured JSON, so each block
-    // runs through the per-bubble structured-content parser — agent text stays
-    // plain. This is the legacy step_delta parser core, re-keyed from `partId`
-    // to the wire block-id bubble. The caller materializes the bubble lazily
-    // (whitespace-only blocks around tool boundaries never leave a stray bubble)
-    // and `step_complete.result.response` reconciles the authoritative final.
+    // === Unified text channel ===
+    // Prompt-step and agent text both stream as `text_delta` blocks (segmented by
+    // `text_start`/`text_complete`) and can be structured JSON, so each block runs
+    // through the per-bubble structured-content parser. This is the legacy
+    // step_delta parser core, re-keyed from `partId` to the wire block-id bubble.
+    // The caller materializes the bubble lazily (whitespace-only blocks around
+    // tool boundaries never leave a stray bubble) and `step_complete.result.response`
+    // reconciles the authoritative final.
     let lastSealedFlowBubble: AgentWidgetMessage | null = null;
 
-    // Stream one accumulated chunk of flow block text through the parser, setting
+    // Stream one accumulated chunk of block text through the parser, setting
     // display `content` (extracted) + `rawContent` (raw) and emitting. Mirrors the
     // legacy step_delta chunk path; plain text bypasses the structured parser.
-    const applyFlowTextChunk = (
+    const applyTextChunk = (
       assistant: AgentWidgetMessage,
       accumulatedRaw: string,
       chunk: string,
@@ -3773,7 +3774,7 @@ export class AgentWidgetClient {
           }
           currentTextBlockId =
             typeof payload.id === "string" ? payload.id : currentTextBlockId;
-          pendingFlowRaw = "";
+          pendingTextRaw = "";
         } else if (payloadType === "text_delta") {
           // Nested flow-as-tool text: route to the parent tool's row, through the
           // same structured-content parser, never the top-level assistant channel.
@@ -3793,7 +3794,7 @@ export class AgentWidgetClient {
               executionId: payload.executionId,
               parentToolId: nestedParent,
             };
-            applyFlowTextChunk(nested, nestedRaw, nestedDelta, undefined);
+            applyTextChunk(nested, nestedRaw, nestedDelta, undefined);
             continue;
           }
           currentTextBlockId =
@@ -3804,27 +3805,36 @@ export class AgentWidgetClient {
             // block-id bubble. Materialize lazily so a whitespace-only block
             // (newlines around a tool boundary) never leaves a stray bubble.
             const delta = typeof payload.delta === "string" ? payload.delta : "";
-            pendingFlowRaw += delta;
-            if (pendingFlowRaw.trim() === "") continue;
+            pendingTextRaw += delta;
+            if (pendingTextRaw.trim() === "") continue;
             const assistant = ensureAssistantMessage();
             assistant.agentMetadata = {
               executionId: payload.executionId,
               iteration: payload.iteration,
             };
-            applyFlowTextChunk(assistant, pendingFlowRaw, delta, undefined);
+            applyTextChunk(assistant, pendingTextRaw, delta, undefined);
             lastAssistantInTurn = assistant;
             continue;
           }
+          // Agent text can be structured JSON too, whenever the host configures a
+          // custom `streamParser` (e.g. the page-context demo's `{"text": ...}` /
+          // `{"action": "add_to_cart", ...}` envelope). Accumulate the open block's
+          // raw text and run it through the same structured-content path the flow
+          // branch uses, so the parser sees the whole block and `rawContent` stays
+          // populated for the action manager. With the default plain-text parser
+          // this is byte-identical to appending the delta, so agent demos that
+          // stream prose are unaffected.
+          const agentDelta = typeof payload.delta === "string" ? payload.delta : "";
+          pendingTextRaw += agentDelta;
           const assistant = ensureAssistantMessage();
-          assistant.content += payload.delta ?? '';
           assistant.agentMetadata = {
             executionId: payload.executionId,
             iteration: payload.iteration,
             turnId: openTurnId ?? undefined,
             agentName: agentExecution?.agentName
           };
+          applyTextChunk(assistant, pendingTextRaw, agentDelta, undefined);
           lastAssistantInTurn = assistant;
-          emitMessage(assistant);
         } else if (payloadType === "text_complete") {
           // Nested flow-as-tool text block close: seal its parent-tool-row message.
           const completeBlockId = typeof payload.id === "string" ? payload.id : null;
@@ -3857,7 +3867,7 @@ export class AgentWidgetClient {
             assistantMessage = null;
           }
           currentTextBlockId = null;
-          pendingFlowRaw = "";
+          pendingTextRaw = "";
         } else if (payloadType === "step_complete") {
           // Only process completions for prompt steps, not tool/context steps
           const stepType = (payload as any).stepType;
@@ -4201,7 +4211,7 @@ export class AgentWidgetClient {
             assistantMessage = null;
           }
           currentTextBlockId = null;
-          pendingFlowRaw = "";
+          pendingTextRaw = "";
           lastSealedFlowBubble = null;
 
           // `terminal: true` marks this as a graceful finish (not a drop). The

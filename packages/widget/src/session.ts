@@ -3566,10 +3566,12 @@ export class AgentWidgetSession {
   /**
    * Resolve one or more parallel local-tool awaits sharing one paused
    * executionId with a SINGLE `/resume` (core#3878); `resolveWebMcpToolCall`
-   * delegates size-1 resolves here after its guards. Each call is executed
-   * against the page registry concurrently: every gated call renders its own
-   * native approval bubble, and a sibling's confirm Promise never blocks
-   * another's execution. Outputs are keyed by per-call `webMcpToolCallId`
+   * delegates size-1 resolves here after its guards. By default each call is
+   * executed against the page registry concurrently: every gated call renders
+   * its own native approval bubble, and a sibling's confirm Promise never
+   * blocks another's execution. With `webmcp.execution: "sequential"` the
+   * calls run one at a time in emission order instead (see the config docs
+   * for when that matters). Outputs are keyed by per-call `webMcpToolCallId`
    * (server prefers it over tool name; name-keying remains the fallback for
    * legacy single/distinct-tool turns), so two calls to the SAME tool no longer
    * collide. The server is tolerant: any call we omit (declined-after-abort,
@@ -3599,111 +3601,125 @@ export class AgentWidgetSession {
     this.webMcpResolveControllers.add(batchController);
     this.setStreaming(true);
 
-    // Phase 1: execute every pending call concurrently. A null result means
-    // the call was deduped, aborted, or threw; it's omitted from the resume and
-    // (per the tolerant server) re-pauses for retry.
-    const executed = await Promise.all(
-      snapshots.map(async (toolMessage) => {
-        const wireToolName = toolMessage.toolCall?.name;
-        const callId = toolMessage.toolCall?.id;
-        if (!wireToolName || !callId) return null;
+    // Phase 1: execute every pending call. A null result means the call was
+    // deduped, aborted, or threw; it's omitted from the resume and (per the
+    // tolerant server) re-pauses for retry.
+    const executeOne = async (
+      toolMessage: AgentWidgetMessage,
+    ): Promise<ExecutedWebMcpTool | null> => {
+      const wireToolName = toolMessage.toolCall?.name;
+      const callId = toolMessage.toolCall?.id;
+      if (!wireToolName || !callId) return null;
 
-        const dedupeKey = `${executionId}:${callId}`;
-        if (
-          this.webMcpInflightKeys.has(dedupeKey) ||
-          this.webMcpResolvedKeys.has(dedupeKey) ||
-          this.isSuggestRepliesAlreadyResolved(toolMessage)
-        ) {
-          return null;
-        }
-        this.webMcpInflightKeys.add(dedupeKey);
-        claimedKeys.push(dedupeKey);
+      const dedupeKey = `${executionId}:${callId}`;
+      if (
+        this.webMcpInflightKeys.has(dedupeKey) ||
+        this.webMcpResolvedKeys.has(dedupeKey) ||
+        this.isSuggestRepliesAlreadyResolved(toolMessage)
+      ) {
+        return null;
+      }
+      this.webMcpInflightKeys.add(dedupeKey);
+      claimedKeys.push(dedupeKey);
 
-        // Clear the awaiting flag and keep the tool bubble running while the
-        // browser-side WebMCP promise is in flight. The initial `step_await`
-        // only means the server paused for a local tool; it is not completion.
-        const startedAt = this.markWebMcpToolRunning(toolMessage);
+      // Clear the awaiting flag and keep the tool bubble running while the
+      // browser-side WebMCP promise is in flight. The initial `step_await`
+      // only means the server paused for a local tool; it is not completion.
+      const startedAt = this.markWebMcpToolRunning(toolMessage);
 
-        // Per-call id wins for resume keying; fall back to the wire tool name
-        // for legacy servers that don't emit `webMcpToolCallId`.
-        const resumeKey =
-          toolMessage.agentMetadata?.webMcpToolCallId ?? wireToolName;
+      // Per-call id wins for resume keying; fall back to the wire tool name
+      // for legacy servers that don't emit `webMcpToolCallId`.
+      const resumeKey =
+        toolMessage.agentMetadata?.webMcpToolCallId ?? wireToolName;
 
-        // Built-in fire-and-forget tool: no bridge, no confirm gate, no
-        // browser-side execution: the chips render from the message list and
-        // the canned output joins the batch's single /resume.
-        if (wireToolName === SUGGEST_REPLIES_TOOL_NAME) {
-          return {
-            dedupeKey,
-            resumeKey,
-            output: suggestRepliesToolResult(),
-            toolMessage,
-            startedAt,
-            completedAt: Date.now(),
-          };
-        }
-
-        const execPromise = this.client.executeWebMcpToolCall(
-          wireToolName,
-          toolMessage.toolCall?.args,
-          batchController.signal,
-        );
-
-        let output: unknown;
-        if (!execPromise) {
-          output = {
-            isError: true,
-            content: [
-              { type: "text", text: "WebMCP not enabled on this widget." },
-            ],
-          };
-        } else {
-          try {
-            output = await execPromise;
-          } catch (error) {
-            const isAbortError =
-              error instanceof Error &&
-              (error.name === "AbortError" ||
-                error.message.includes("aborted") ||
-                error.message.includes("abort"));
-            if (!isAbortError) {
-              this.callbacks.onError?.(
-                error instanceof Error ? error : new Error(String(error)),
-              );
-            }
-            this.markWebMcpToolComplete(
-              toolMessage,
-              buildWebMcpErrorResult(
-                isAbortError
-                  ? "Aborted by cancel()"
-                  : getWebMcpErrorMessage(error),
-              ),
-              startedAt,
-            );
-            // Release the dedupe claim so a re-emit can retry this call.
-            this.webMcpInflightKeys.delete(dedupeKey);
-            return null;
-          }
-        }
-        if (batchController.signal.aborted) {
-          this.markWebMcpToolComplete(
-            toolMessage,
-            buildWebMcpErrorResult("Aborted by cancel()"),
-            startedAt,
-          );
-          this.webMcpInflightKeys.delete(dedupeKey);
-          return null;
-        }
+      // Built-in fire-and-forget tool: no bridge, no confirm gate, no
+      // browser-side execution: the chips render from the message list and
+      // the canned output joins the batch's single /resume.
+      if (wireToolName === SUGGEST_REPLIES_TOOL_NAME) {
         return {
           dedupeKey,
           resumeKey,
-          output,
+          output: suggestRepliesToolResult(),
           toolMessage,
           startedAt,
           completedAt: Date.now(),
         };
-      }),
-    );
+      }
+
+      const execPromise = this.client.executeWebMcpToolCall(
+        wireToolName,
+        toolMessage.toolCall?.args,
+        batchController.signal,
+      );
+
+      let output: unknown;
+      if (!execPromise) {
+        output = {
+          isError: true,
+          content: [
+            { type: "text", text: "WebMCP not enabled on this widget." },
+          ],
+        };
+      } else {
+        try {
+          output = await execPromise;
+        } catch (error) {
+          const isAbortError =
+            error instanceof Error &&
+            (error.name === "AbortError" ||
+              error.message.includes("aborted") ||
+              error.message.includes("abort"));
+          if (!isAbortError) {
+            this.callbacks.onError?.(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+          this.markWebMcpToolComplete(
+            toolMessage,
+            buildWebMcpErrorResult(
+              isAbortError
+                ? "Aborted by cancel()"
+                : getWebMcpErrorMessage(error),
+            ),
+            startedAt,
+          );
+          // Release the dedupe claim so a re-emit can retry this call.
+          this.webMcpInflightKeys.delete(dedupeKey);
+          return null;
+        }
+      }
+      if (batchController.signal.aborted) {
+        this.markWebMcpToolComplete(
+          toolMessage,
+          buildWebMcpErrorResult("Aborted by cancel()"),
+          startedAt,
+        );
+        this.webMcpInflightKeys.delete(dedupeKey);
+        return null;
+      }
+      return {
+        dedupeKey,
+        resumeKey,
+        output,
+        toolMessage,
+        startedAt,
+        completedAt: Date.now(),
+      };
+    };
+
+    // Parallel (default): a gated sibling's approval never blocks another's
+    // execution. Sequential: one at a time in emission order, so tools that
+    // share page state (a canvas, a form) don't interleave; the next call
+    // starts only once the previous one has settled, approval included.
+    let executed: Array<ExecutedWebMcpTool | null>;
+    if (this.config.webmcp?.execution === "sequential") {
+      executed = [];
+      for (const toolMessage of snapshots) {
+        executed.push(await executeOne(toolMessage));
+      }
+    } else {
+      executed = await Promise.all(snapshots.map(executeOne));
+    }
 
     let ready: ExecutedWebMcpTool[] = [];
     try {

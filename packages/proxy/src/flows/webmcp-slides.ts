@@ -31,7 +31,7 @@ export const WEBMCP_SLIDES_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "gemini-3.7-flash",
+        model: "google/gemini-3.5-flash-lite",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",
