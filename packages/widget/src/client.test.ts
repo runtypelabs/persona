@@ -4611,3 +4611,76 @@ describe('AgentWidgetClient - mention context', () => {
     expect(get().context).toBeUndefined();
   });
 });
+
+describe('AgentWidgetClient - agent text runs through the configured stream parser', () => {
+  // Regression: agent-mode text_delta used to append the raw delta straight onto
+  // `content`, bypassing `streamParser` entirely. Demos that pin a server-side
+  // agent AND reply with a JSON envelope (the page-context / smart-dom-reader
+  // demo) therefore rendered the raw `{"text": ...}` in the bubble, and never
+  // populated `rawContent`, so the action manager saw nothing to dispatch.
+  const envelopeStream = (execId: string, chunks: string[]) => [
+    sseEvent('execution_start', { kind: 'agent', executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
+    sseEvent('turn_start', { executionId: execId, id: 'turn_1', iteration: 1, role: 'assistant', seq: 2 }),
+    sseEvent('text_start', { executionId: execId, id: 'text_1', role: 'assistant', seq: 3 }),
+    ...chunks.map((delta, i) =>
+      sseEvent('text_delta', { executionId: execId, id: 'text_1', delta, seq: 4 + i })
+    ),
+    sseEvent('text_complete', { executionId: execId, id: 'text_1', seq: 90 }),
+    sseEvent('turn_complete', { executionId: execId, id: 'turn_1', iteration: 1, role: 'assistant', completedAt: new Date().toISOString(), seq: 91 }),
+    sseEvent('execution_complete', { kind: 'agent', executionId: execId, success: true, completedAt: new Date().toISOString(), seq: 92 }),
+  ];
+
+  const lastAssistant = (events: AgentWidgetEvent[]): AgentWidgetMessage | null => {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i];
+      if (e.type === 'message' && e.message.role === 'assistant') return e.message;
+    }
+    return null;
+  };
+
+  const runAgent = async (
+    chunks: string[],
+    config: Record<string, unknown> = {}
+  ): Promise<AgentWidgetMessage | null> => {
+    global.fetch = createRawStreamFetch(envelopeStream('exec_env', chunks));
+    const events: AgentWidgetEvent[] = [];
+    const client = new AgentWidgetClient({
+      apiUrl: 'http://localhost:8000',
+      agent: { name: 'Test', model: 'openai:gpt-4o-mini', systemPrompt: 'test' },
+      ...config,
+    } as any);
+    await client.dispatch(
+      { messages: [{ id: 'u1', role: 'user', content: 'Hi', createdAt: new Date().toISOString() }] },
+      (e) => events.push(e)
+    );
+    return lastAssistant(events);
+  };
+
+  it('extracts `text` from a JSON envelope streamed across agent text_delta chunks', async () => {
+    const msg = await runAgent(
+      ['{"text": "In the ', '**Featured drop**', ', we have 2 items."}'],
+      { streamParser: () => createJsonStreamParser() }
+    );
+
+    expect(msg?.content).toBe('In the **Featured drop**, we have 2 items.');
+    // The bubble must not show the envelope itself.
+    expect(msg?.content).not.toContain('{"text"');
+  });
+
+  it('keeps the raw envelope on rawContent so the action manager can dispatch it', async () => {
+    const envelope = '{"action": "add_to_cart", "product": "headphones", "text": "Added it!"}';
+    const msg = await runAgent([envelope], {
+      streamParser: () => createJsonStreamParser(),
+    });
+
+    expect(msg?.content).toBe('Added it!');
+    expect(msg?.rawContent).toBe(envelope);
+  });
+
+  it('still plain-appends agent prose when no custom parser is configured', async () => {
+    const msg = await runAgent(['Hello', ' World']);
+
+    expect(msg?.content).toBe('Hello World');
+    expect(msg?.rawContent).toBeUndefined();
+  });
+});

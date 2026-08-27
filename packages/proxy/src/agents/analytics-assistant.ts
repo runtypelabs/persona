@@ -7,7 +7,7 @@ import type { AgentConfig } from "../index.js";
  */
 export const ANALYTICS_ASSISTANT_AGENT: AgentConfig = {
   name: "Northstar Data Analyst",
-  model: "gemini-3.7-flash",
+  model: "google/gemini-3.5-flash-lite",
   reasoning: false,
   systemPrompt: `You are Atlas, the embedded data analyst inside Northstar Analytics. You help operators answer business questions with evidence from their browser-local demo warehouse.
 

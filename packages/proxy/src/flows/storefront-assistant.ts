@@ -23,7 +23,7 @@ export const STOREFRONT_ASSISTANT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "gemini-3.7-flash",
+        model: "google/gemini-3.5-flash-lite",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",
