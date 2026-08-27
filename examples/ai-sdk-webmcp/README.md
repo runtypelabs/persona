@@ -43,7 +43,7 @@ otherwise unchanged. It never learns it isn't talking to a hosted agent runtime.
 ## Run
 
 Model calls route through the **Vercel AI Gateway** (the shim uses a bare
-`nvidia/nemotron-3-ultra-550b-a55b` model id). On Vercel this authenticates
+`google/gemini-3.7-flash` model id). On Vercel this authenticates
 automatically via the deployment's OIDC token: **no key to set**. For local dev
 you need an `AI_GATEWAY_API_KEY`:
 

@@ -187,7 +187,7 @@ Keep answers concise. Use markdown formatting. When recommending a demo, briefly
  */
 export const DOCS_ASSISTANT_AGENT: AgentConfig = {
   name: "Persona Documentation Assistant",
-  model: "nemotron-3-ultra-550b-a55b",
+  model: "gemini-3.7-flash",
   systemPrompt: PERSONA_DOCS_SYSTEM_PROMPT,
   temperature: 0.5,
   tools: {

@@ -24,7 +24,7 @@ export const WEBMCP_DOCKED_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "nemotron-3-ultra-550b-a55b",
+        model: "gemini-3.7-flash",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",
