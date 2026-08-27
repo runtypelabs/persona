@@ -55,6 +55,29 @@ const focusableSelector =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /**
+ * Panel surface tokens. The panel is portaled outside the themed mount, so
+ * configured values are forwarded onto it on open; unset ones stamp nothing and
+ * the stylesheet's fallbacks stand.
+ */
+const MENU_TOKEN_VARS = [
+  "--persona-components-composer-overflowMenu-background",
+  "--persona-components-composer-overflowMenu-borderColor",
+  "--persona-components-composer-overflowMenu-borderRadius",
+  "--persona-components-composer-overflowMenu-foreground",
+  "--persona-components-composer-overflowMenu-shadow",
+] as const;
+
+const forwardMenuTokens = (from: HTMLElement, to: HTMLElement): void => {
+  const view = from.ownerDocument?.defaultView;
+  if (!view) return;
+  const computed = view.getComputedStyle(from);
+  for (const name of MENU_TOKEN_VARS) {
+    const value = computed.getPropertyValue(name).trim();
+    if (value) to.style.setProperty(name, value);
+  }
+};
+
+/**
  * Set on the menu row that holds keyboard focus. Rows that shade on
  * `:focus-visible` do not need it; wrapper rows around a live control do.
  */
@@ -249,6 +272,7 @@ export function createComposerOverflowMenu(
   const open = (focusIndex = 0, viaKeyboard = false): void => {
     if (destroyed || isOpen()) return;
     keyboardModality = viaKeyboard;
+    forwardMenuTokens(triggerButton, panel);
     ensurePopover().open();
     triggerButton.setAttribute("aria-expanded", "true");
     const targets = focusables();

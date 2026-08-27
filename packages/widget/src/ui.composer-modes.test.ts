@@ -326,3 +326,85 @@ describe("composer modes", () => {
     expect(panel.querySelector('[role="menuitem"]')?.textContent).toContain("Hidden");
   });
 });
+
+describe("modeGroups chipVisibility", () => {
+  beforeEach(() => {
+    window.scrollTo = vi.fn();
+  });
+
+  afterEach(() => {
+    controllers.splice(0).forEach((controller) => {
+      try {
+        controller.destroy();
+      } catch {
+        /* already destroyed */
+      }
+    });
+    mounts.splice(0).forEach((mount) => mount.remove());
+    document.body.innerHTML = "";
+    window.localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  const hiddenGroups: ComposerModeGroup[] = [
+    { id: "tool", selection: "single", chipVisibility: "hidden" },
+    { id: "style", selection: "multiple" },
+  ];
+
+  it("keeps the bar button but renders no chip for the opted-out group", async () => {
+    const { mount, controller } = makeController({
+      composer: { modes, modeGroups: hiddenGroups },
+    });
+
+    modeButton(mount, "search").click();
+    await flush();
+    expect(controller.getComposerState().activeModeIds).toEqual(["search"]);
+    expect(modeButton(mount, "search").getAttribute("aria-pressed")).toBe("true");
+    expect(chips(mount)).toHaveLength(0);
+  });
+
+  it("still chips a group that did not opt out", async () => {
+    const { mount } = makeController({
+      composer: { modes, modeGroups: hiddenGroups },
+    });
+
+    modeButton(mount, "search").click();
+    modeButton(mount, "concise").click();
+    await flush();
+    expect(
+      chips(mount).map((chip) => chip.getAttribute("data-persona-composer-mode"))
+    ).toEqual(["concise"]);
+  });
+
+  it("leaves no chip row gap when every active mode is suppressed", async () => {
+    const { mount } = makeController({
+      composer: {
+        modes,
+        modeGroups: hiddenGroups,
+        defaultActiveModeIds: ["search"],
+      },
+    });
+    await flush();
+    const row = chipRow(mount);
+    expect(row === null || row.style.display === "none").toBe(true);
+  });
+
+  it("follows a live update() that opts the group back in", async () => {
+    const { mount, controller } = makeController({
+      composer: {
+        modes,
+        modeGroups: hiddenGroups,
+        defaultActiveModeIds: ["search"],
+      },
+    });
+    await flush();
+    expect(chips(mount)).toHaveLength(0);
+
+    controller.update({ composer: { modes, modeGroups } });
+    await flush();
+    expect(
+      chips(mount).map((chip) => chip.getAttribute("data-persona-composer-mode"))
+    ).toEqual(["search"]);
+    expect(chipRow(mount)!.style.display).toBe("flex");
+  });
+});

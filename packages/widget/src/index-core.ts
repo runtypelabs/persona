@@ -91,6 +91,7 @@ export type {
   ComposerActionBase,
   ComposerActionPlacement,
   ComposerActionPresentation,
+  ComposerActionVisibility,
   ComposerButtonAction,
   ComposerCustomAction,
   ComposerActionContext,
@@ -103,6 +104,7 @@ export type {
   ComposerModelPickerPresentation,
   // Composer modes + mode groups (composer.modes, composer.modeGroups)
   ComposerMode,
+  ComposerModeChipVisibility,
   ComposerModeGroup,
   ComposerModeGroupPresentation,
   // Composer baseline configuration (submit keys, sizing, locks)

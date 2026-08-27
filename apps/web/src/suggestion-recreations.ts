@@ -1,11 +1,9 @@
 /**
- * Five commercial welcome states AND their composers, recreated with nothing
- * but public Persona config: `suggestions.starters`, the `welcome` namespace,
- * the `composer` namespace (actions, modes, the overflow menu, the model
- * picker), and theme tokens. No plugin hooks, no CSS reaching into widget
- * internals. Every panel uses `variant: "hero"`: all five products center their
- * empty state and dismiss it on the first message, which is exactly the hero
- * contract.
+ * Five commercial welcome states paired with the current composer presets
+ * measured in the standalone recreations. The authored surface is public
+ * Persona config throughout (`suggestions.starters`, `welcome`, `composer`,
+ * and theme tokens); the page stylesheet carries page chrome plus the heading
+ * reset that undoes this site's own global heading font.
  *
  * Each recreation is a separate widget instance
  * with its own theme, so the page also doubles as a multi-instance test.
@@ -39,6 +37,7 @@ import {
 
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { renderExamplesShell } from "./examples-nav";
+import { applyCurrentProductComposer } from "./recreation-composer-presets";
 
 renderExamplesShell("suggestion-recreations");
 
@@ -95,7 +94,7 @@ const inertMenuAction = (
 // Centered question, no subtitle, a wrapped row of fully rounded category
 // pills. Their chips prefill a prompt stem rather than sending, so the labels
 // are 2 to 3 word categories and `prompt` carries the stem.
-const chatgpt = (): AgentWidgetConfig => ({
+const chatgpt = (): AgentWidgetConfig => applyCurrentProductComposer("chatgpt", {
   ...base(),
   welcome: {
     variant: "hero",
@@ -295,7 +294,7 @@ const chatgpt = (): AgentWidgetConfig => ({
 const CLAUDE_SERIF =
   'Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif';
 
-const claude = (): AgentWidgetConfig => ({
+const claude = (): AgentWidgetConfig => applyCurrentProductComposer("claude", {
   ...base(),
   // Hero variant: one centered serif question over the composer, sparkle
   // above, no subtitle. This is the current claude.ai composition, not the
@@ -432,7 +431,7 @@ const claude = (): AgentWidgetConfig => ({
 // ── 3. Gemini (2025) ────────────────────────────────────────────────────
 // Vertical stack of tool-flavored prompts with the icons deleted in the 2025
 // simplification. Rows are transparent until hover; blue accent, pill composer.
-const gemini = (): AgentWidgetConfig => ({
+const gemini = (): AgentWidgetConfig => applyCurrentProductComposer("gemini", {
   ...base(),
   welcome: {
     variant: "hero",
@@ -580,7 +579,7 @@ const gemini = (): AgentWidgetConfig => ({
 // ── 4. Microsoft Copilot ────────────────────────────────────────────────
 // The rich-card school: a 2x2 of icon plus short title plus muted description,
 // the two-line pattern M365 kept when everyone else dropped it. Click sends.
-const copilot = (): AgentWidgetConfig => ({
+const copilot = (): AgentWidgetConfig => applyCurrentProductComposer("copilot", {
   ...base(),
   welcome: {
     variant: "hero",
@@ -759,7 +758,7 @@ const copilot = (): AgentWidgetConfig => ({
 // ── 5. Perplexity ───────────────────────────────────────────────────────
 // Search-flavored: hairline rows of full questions that send on click, teal
 // accent, offwhite paper.
-const perplexity = (): AgentWidgetConfig => ({
+const perplexity = (): AgentWidgetConfig => applyCurrentProductComposer("perplexity", {
   ...base(),
   welcome: {
     variant: "hero",

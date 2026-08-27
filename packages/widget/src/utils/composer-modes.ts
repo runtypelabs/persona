@@ -38,16 +38,33 @@ export function isSegmentedModeGroup(
   );
 }
 
+/** True when this group opts out of chips, whatever its presentation. */
+export function hasHiddenModeChips(
+  groupId: string | undefined,
+  groups: readonly ComposerModeGroup[] | undefined
+): boolean {
+  if (!groupId) return false;
+  return (
+    groups?.find((group) => group.id === groupId)?.chipVisibility === "hidden"
+  );
+}
+
 /**
  * Modes that still earn a header chip. A segmented track already shows its own
- * state, so a chip for the same mode would be a second, removable copy of it.
+ * state, so a chip for the same mode would be a second, removable copy of it;
+ * `chipVisibility: "hidden"` opts a buttons-presentation group out of the same
+ * row on the same pathway.
  */
 export function chipVisibleComposerModes(
   modes: readonly ComposerMode[] | undefined,
   groups: readonly ComposerModeGroup[] | undefined
 ): ComposerMode[] {
   if (!modes?.length) return [];
-  return modes.filter((mode) => !isSegmentedModeGroup(mode.groupId, groups));
+  return modes.filter(
+    (mode) =>
+      !isSegmentedModeGroup(mode.groupId, groups) &&
+      !hasHiddenModeChips(mode.groupId, groups)
+  );
 }
 
 const groupSelection = (

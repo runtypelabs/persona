@@ -10,11 +10,12 @@
   <title>Starter Prompt Recreations: Persona</title>
   <style>
     /* Page chrome only. Nothing here styles the widget: every panel is themed
-       through tokens in suggestion-recreations.ts. The one widget-facing rule
-       is the reset below, which undoes this site's own global heading font so
-       each recreation's typography tokens are what actually decide. The
-       welcome title is exempt: `introCard.title` owns it, and the widget's own
-       rule already falls back to `inherit`. */
+       through config and tokens in suggestion-recreations.ts and the shared
+       presets. The one widget-facing rule is the reset below, which undoes
+       this site's own global heading font so each recreation's typography
+       tokens are what actually decide. The welcome title is exempt:
+       `introCard.title` owns it, and the widget's own rule already falls back
+       to `inherit`. */
     [data-persona-root] :is(h1, h2, h3):not(.persona-welcome-title) {
       font-family: inherit;
       letter-spacing: normal;
@@ -113,15 +114,15 @@
   <main class="shell-main">
     <header class="title-strip">
       <h1>Starter Prompt Recreations</h1>
-      <p>Five commercial welcome states and their composers, rebuilt with public Persona config only: <code>suggestions.starters</code>, the <code>welcome</code> hero variant, the <code>composer</code> namespace (actions, modes, the overflow menu, the model picker), and theme tokens. No plugin hooks, no CSS reaching into the widget. Each panel is a separate widget instance with its own theme, every hero dismisses on the first message, and every composer control is live: open a menu, toggle a mode, watch the chip and the placeholder change.</p>
+      <p>Five commercial welcome states paired with the current product composer treatments from the standalone recreations: <code>suggestions.starters</code>, the <code>welcome</code> hero variant, the <code>composer</code> namespace, and theme tokens. Each panel is a separate widget instance, every hero dismisses on the first message, and every composer control is live: open a menu, switch a model, toggle a mode, and watch the placeholder change.</p>
     </header>
 
     <div class="recreations">
       <article class="recreation">
         <div class="recreation-head">
           <span class="recreation-kicker">Chip variant</span>
-          <h2 class="recreation-name">ChatGPT (2025)</h2>
-          <p class="recreation-note">One centered question, no subtitle, and a wrapped row of rounded category pills that prefill a prompt stem instead of sending. The composer is a single soft pill: one leading plus opens the tool menu, and picking deep research or think longer drops a removable chip above the input and swaps the placeholder. The end cluster runs mic, voice mode, then the black circular send.</p>
+          <h2 class="recreation-name">ChatGPT</h2>
+          <p class="recreation-note">One centered question and a wrapped row of prompt-filling category pills, paired with the current dark single-row composer: plus menu, High effort stand-in, mic, and the blue voice-to-send control.</p>
         </div>
         <div class="recreation-frame">
           <div class="recreation-stage" data-recreation="chatgpt"></div>
@@ -132,7 +133,7 @@
         <div class="recreation-head">
           <span class="recreation-kicker">No starters</span>
           <h2 class="recreation-name">Claude.ai</h2>
-          <p class="recreation-note">The minimalist school. Warm cream paper, a terracotta sparkle over a single serif question, and zero starter prompts: the strongest brands ship none, because the name already communicates capability. The composer is the calm card: a Research toggle, a plus menu holding upload, web search, and connectors, then a model picker and the terracotta send.</p>
+          <p class="recreation-note">Warm cream paper, a terracotta sparkle, and no starter prompts. The current composer carries the leading plus menu, the authored Chat/Cowork segmented control, the described Opus 5 High picker, mic, voice, and the text-triggered terracotta send.</p>
         </div>
         <div class="recreation-frame">
           <div class="recreation-stage" data-recreation="claude"></div>
@@ -142,8 +143,8 @@
       <article class="recreation">
         <div class="recreation-head">
           <span class="recreation-kicker">List variant</span>
-          <h2 class="recreation-name">Gemini (2025)</h2>
-          <p class="recreation-note">A vertical stack of tool-flavored prompts with the icons deleted in the 2025 simplification. Rows stay transparent until hover, the accent is blue, and clicking fills the composer for editing. The bar carries their signature pair, Deep Research and Canvas, as toggles that chip and rewrite the placeholder, with a plus menu, a model picker, mic, and send around them.</p>
+          <h2 class="recreation-name">Gemini</h2>
+          <p class="recreation-note">A vertical stack of prompt-fill rows over the current dark single-row composer: leading plus menu, described Pro/Fast picker, live mic, and a send control that appears only when text is present.</p>
         </div>
         <div class="recreation-frame">
           <div class="recreation-stage" data-recreation="gemini"></div>
@@ -154,7 +155,7 @@
         <div class="recreation-head">
           <span class="recreation-kicker">Card variant</span>
           <h2 class="recreation-name">Microsoft Copilot</h2>
-          <p class="recreation-note">The rich-card school: a two by two of icon plus short title plus muted description, the two-line pattern M365 kept after everyone else dropped it. Clicking sends the label as the message. The composer leads with their response-mode selector, one exclusive group of three sticky toggles, so a choice survives every send.</p>
+          <p class="recreation-note">The rich-card school: a two-by-two of icon, title, and muted description. The current glassy navy composer uses a described Smart response picker, a circled plus, waveform mic, and pale send button.</p>
         </div>
         <div class="recreation-frame">
           <div class="recreation-stage" data-recreation="copilot"></div>
@@ -165,7 +166,7 @@
         <div class="recreation-head">
           <span class="recreation-kicker">List variant</span>
           <h2 class="recreation-name">Perplexity</h2>
-          <p class="recreation-note">Search flavored. Hairline rows carrying full questions rather than tasks, a teal accent on offwhite paper, and a send-on-click behavior that treats every starter as a query. Their inverted hierarchy carries into the composer: Search, Research, and Labs lead the bar as the primary control, each with its own placeholder, and the plus menu and model picker trail behind them.</p>
+          <p class="recreation-note">Full-question rows retain the search-first starter behavior, now paired with the current dark card: leading plus menu, preselected Search and Computer modes, described Best tier picker, mic, and teal submit.</p>
         </div>
         <div class="recreation-frame">
           <div class="recreation-stage" data-recreation="perplexity"></div>

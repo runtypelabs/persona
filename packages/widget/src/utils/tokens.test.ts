@@ -95,3 +95,79 @@ describe('interactive-state defaults', () => {
     expect(css['--persona-icon-btn-active-border']).toBe('#0000ff');
   });
 });
+
+/**
+ * `components.composer.modelPicker.*` and `.overflowMenu.*` carry no short
+ * aliases (they would cost gzip in the launcher bundle, which draws no
+ * composer), so the emitted contract is the full path. The rules that read
+ * them are covered in styles/widget-styles.test.ts.
+ */
+describe('composer surface tokens', () => {
+  it('emits the model picker closed-control vars as full paths', () => {
+    const css = vars({
+      components: {
+        composer: {
+          modelPicker: {
+            background: '#303030',
+            hoverBackground: '#3f3f3f',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: '9999px',
+            labelColor: '#c4c7c5',
+          },
+        },
+      },
+    });
+
+    expect(css['--persona-components-composer-modelPicker-background']).toBe('#303030');
+    expect(css['--persona-components-composer-modelPicker-hoverBackground']).toBe('#3f3f3f');
+    expect(css['--persona-components-composer-modelPicker-borderColor']).toBe(
+      'rgba(255, 255, 255, 0.08)'
+    );
+    expect(css['--persona-components-composer-modelPicker-borderRadius']).toBe('9999px');
+    expect(css['--persona-components-composer-modelPicker-labelColor']).toBe('#c4c7c5');
+  });
+
+  it('resolves a token reference on a model picker surface key', () => {
+    const css = vars({
+      components: {
+        composer: { modelPicker: { background: 'palette.colors.gray.800' } },
+      },
+    });
+
+    expect(css['--persona-components-composer-modelPicker-background']).toBe('#1f2937');
+  });
+
+  it('emits the overflow menu panel vars as full paths', () => {
+    const css = vars({
+      components: {
+        composer: {
+          overflowMenu: {
+            background: '#353535',
+            borderColor: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: '12px',
+            foreground: '#ececec',
+            shadow: 'none',
+          },
+        },
+      },
+    });
+
+    expect(css['--persona-components-composer-overflowMenu-background']).toBe('#353535');
+    expect(css['--persona-components-composer-overflowMenu-borderColor']).toBe(
+      'rgba(255, 255, 255, 0.08)'
+    );
+    expect(css['--persona-components-composer-overflowMenu-borderRadius']).toBe('12px');
+    expect(css['--persona-components-composer-overflowMenu-foreground']).toBe('#ececec');
+    expect(css['--persona-components-composer-overflowMenu-shadow']).toBe('none');
+  });
+
+  it('leaves every composer surface var unset on the stock theme', () => {
+    const css = vars({});
+
+    for (const name of Object.keys(css)) {
+      expect(name.startsWith('--persona-components-composer-modelPicker-')).toBe(false);
+      expect(name.startsWith('--persona-components-composer-overflowMenu-')).toBe(false);
+    }
+  });
+
+});

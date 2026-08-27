@@ -4,6 +4,7 @@ import type { ComposerMode, ComposerModeGroup } from "../types";
 import {
   chipVisibleComposerModes,
   clearOnceComposerModes,
+  hasHiddenModeChips,
   composerModeActionId,
   composerModeGroupActionId,
   composerModeOrder,
@@ -136,6 +137,38 @@ describe("segmented mode groups", () => {
     expect(chipVisibleComposerModes(modes, groups)).toHaveLength(modes.length);
     expect(chipVisibleComposerModes(modes, undefined)).toHaveLength(modes.length);
     expect(chipVisibleComposerModes(undefined, segmented)).toEqual([]);
+  });
+});
+
+describe("chipVisibility on a mode group", () => {
+  const hidden: ComposerModeGroup[] = [
+    { id: "tool", selection: "single", chipVisibility: "hidden" },
+    { id: "style", selection: "multiple", chipVisibility: "auto" },
+  ];
+
+  it("reads the opt-out off the group", () => {
+    expect(hasHiddenModeChips("tool", hidden)).toBe(true);
+    expect(hasHiddenModeChips("style", hidden)).toBe(false);
+    expect(hasHiddenModeChips("tool", groups)).toBe(false);
+    expect(hasHiddenModeChips(undefined, hidden)).toBe(false);
+    expect(hasHiddenModeChips("missing", hidden)).toBe(false);
+  });
+
+  it("suppresses chips for a buttons group on the segmented pathway", () => {
+    expect(chipVisibleComposerModes(modes, hidden).map((mode) => mode.id)).toEqual([
+      "concise",
+      "verbose",
+      "draft",
+    ]);
+  });
+
+  it("leaves no chip-visible mode when every group opts out", () => {
+    const allHidden: ComposerModeGroup[] = [
+      { id: "tool", selection: "single", chipVisibility: "hidden" },
+      { id: "style", selection: "multiple", chipVisibility: "hidden" },
+    ];
+    const grouped = modes.filter((mode) => mode.groupId);
+    expect(chipVisibleComposerModes(grouped, allHidden)).toEqual([]);
   });
 });
 

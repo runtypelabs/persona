@@ -963,8 +963,31 @@ in a `+` menu instead of the action row. Built-in controls fold in only when
 | `.persona-composer-overflow-menu__slot` | Wrapper around a folded built-in or custom control |
 | `[data-persona-composer-overflow-menu]` | Stable selector for the panel |
 
-The trigger inherits the ghost button tokens (`--persona-button-ghost-*`); the
-panel uses `--persona-surface`, `--persona-border`, and `--persona-shadow-md`.
+The trigger inherits the ghost button tokens (`--persona-button-ghost-*`).
+
+Panel tokens live under `components.composer.overflowMenu`; every key is
+optional and the stylesheet owns the defaults. They read as full-path variables
+(no short alias), the same convention as `components.composer.modelPicker`. The
+panel is portaled outside the themed mount, so the menu forwards the configured
+values onto it when it opens.
+
+| CSS Variable | `components.composer.overflowMenu` key | Falls back to |
+|--------------|----------------------------------------|---------------|
+| `--persona-components-composer-overflowMenu-background` | `background` | `--persona-surface` |
+| `--persona-components-composer-overflowMenu-borderColor` | `borderColor` | `--persona-border` |
+| `--persona-components-composer-overflowMenu-borderRadius` | `borderRadius` | `--persona-radius-lg` |
+| `--persona-components-composer-overflowMenu-foreground` | `foreground` | `--persona-text` |
+| `--persona-components-composer-overflowMenu-shadow` | `shadow` | `--persona-shadow-md` |
+
+```js
+theme: {
+  components: {
+    composer: {
+      overflowMenu: { background: "#353535", borderColor: "rgba(255, 255, 255, 0.08)" },
+    },
+  },
+}
+```
 
 The trigger sorts in the start cluster at order 900 by default.
 `composer.actionOverflow.order` moves it on the same scale as
@@ -1125,14 +1148,33 @@ alias), the same convention as `components.composer.segmented`. The panel is
 portaled outside the themed mount, so the picker forwards the configured values
 onto it when it opens.
 
+The first group styles the **closed control**, which the native `<select>` and
+the popover trigger share, so one set of values themes either presentation.
+`borderColor` draws as a 1px inset ring rather than a real border, so setting it
+never resizes the control. `labelColor` also colors the chevron, so the glyph
+and the label never diverge.
+
+| CSS Variable | `components.composer.modelPicker` key | Falls back to |
+|--------------|---------------------------------------|---------------|
+| `--persona-components-composer-modelPicker-background` | `background` | `--persona-button-ghost-bg` → `transparent` |
+| `--persona-components-composer-modelPicker-hoverBackground` | `hoverBackground` | `--persona-button-ghost-hover-bg` |
+| `--persona-components-composer-modelPicker-borderColor` | `borderColor` | `transparent` (no ring) |
+| `--persona-components-composer-modelPicker-borderRadius` | `borderRadius` | `--persona-button-ghost-radius` → `--persona-radius-md` |
+| `--persona-components-composer-modelPicker-labelColor` | `labelColor` | `--persona-button-ghost-fg` → `--persona-text` |
+
+The rest style the popover panel, and are inert under the native `<select>`
+(which renders its option text and nothing else):
+
 | CSS Variable | `components.composer.modelPicker` key | Falls back to |
 |--------------|---------------------------------------|---------------|
 | `--persona-components-composer-modelPicker-menuBackground` | `menuBackground` | `--persona-surface` |
 | `--persona-components-composer-modelPicker-menuBorderRadius` | `menuBorderRadius` | `--persona-radius-lg` |
 | `--persona-components-composer-modelPicker-rowHoverBackground` | `rowHoverBackground` | `--persona-button-ghost-hover-bg` |
-| `--persona-components-composer-modelPicker-labelColor` | `labelColor` | `inherit` |
 | `--persona-components-composer-modelPicker-descriptionColor` | `descriptionColor` | `--persona-muted` |
 | `--persona-components-composer-modelPicker-suffixColor` | `suffixColor` | `--persona-muted` |
+
+`labelColor` spans both: it colors the row labels in the panel as well as the
+closed control's text.
 
 #### Quote banner (`controller.setQuote`)
 

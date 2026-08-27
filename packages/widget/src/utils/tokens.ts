@@ -1108,10 +1108,10 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['motion-easing', 'components-motion-easing', '=cubic-bezier(0.2, 0, 0, 1)'],
     ['composer-border-color', 'components-composer-borderColor', 'border', '=#e5e7eb'],
     ['composer-overlay-band', 'components-composer-overlayBand', '=transparent'],
-    // `components.composer.segmented.*` and `.modelPicker.*` get no short
-    // aliases: the rows cost gzip in the critical launcher bundle, which never
-    // draws a composer. widget.css reads the auto-emitted full paths, like
-    // introCard title/subtitle.
+    // `components.composer.segmented.*`, `.modelPicker.*`, and `.overflowMenu.*`
+    // get no short aliases: the rows cost gzip in the critical launcher bundle,
+    // which never draws a composer. widget.css reads the auto-emitted full
+    // paths, like introCard title/subtitle.
     ['scrollbar-thumb', 'components-scrollbar-thumb', 'border', '=#e5e7eb'],
     ['scrollbar-track', 'components-scrollbar-track', '=transparent'],
     ['md-inline-code-bg', 'components-markdown-inlineCode-background', 'container'],

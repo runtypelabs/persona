@@ -103,6 +103,46 @@ describe("composer overflow menu in the live widget", () => {
     vi.restoreAllMocks();
   });
 
+  it("forwards the panel surface tokens onto the portaled menu on open", () => {
+    const { mount } = makeController({
+      composer: {
+        actions: [action("folded", { presentation: "overflow" })],
+        actionOverflow: { enabled: true },
+      },
+    });
+    // The panel is portaled to document.body, so it never inherits the mount's
+    // theme vars. Stamped on the trigger here because jsdom's computed style
+    // does not inherit custom properties.
+    const trigger = triggerOf(mount)!;
+    trigger.style.setProperty(
+      "--persona-components-composer-overflowMenu-background",
+      "#353535"
+    );
+    trigger.style.setProperty(
+      "--persona-components-composer-overflowMenu-borderColor",
+      "rgba(255, 255, 255, 0.08)"
+    );
+
+    const panel = openPanel(mount)!;
+
+    expect(
+      panel.style.getPropertyValue(
+        "--persona-components-composer-overflowMenu-background"
+      )
+    ).toBe("#353535");
+    expect(
+      panel.style.getPropertyValue(
+        "--persona-components-composer-overflowMenu-borderColor"
+      )
+    ).toBe("rgba(255, 255, 255, 0.08)");
+    // Unset keys stamp nothing, so the stylesheet's fallback still stands.
+    expect(
+      panel.style.getPropertyValue(
+        "--persona-components-composer-overflowMenu-shadow"
+      )
+    ).toBe("");
+  });
+
   it("sorts the trigger at the 900 anchor by default", () => {
     const { mount } = makeController({
       composer: {

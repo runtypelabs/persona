@@ -1371,7 +1371,8 @@
  *
  * The panel is mounted by createPopover next to the widget root (or inside the
  * shadow root), so its rules are deliberately un-prefixed by
- * `[data-persona-root]` and must stand on their own. */
+ * `[data-persona-root]` and must stand on their own. It sits outside the themed
+ * mount, so the menu forwards its configured tokens onto the panel on open. */
 .persona-composer-overflow-menu {
   display: flex;
   flex-direction: column;
@@ -1380,11 +1381,27 @@
   max-height: 320px;
   overflow-y: auto;
   padding: 4px;
-  border-radius: var(--persona-radius-lg, 0.5rem);
-  border: 1px solid var(--persona-border, #e5e7eb);
-  background: var(--persona-surface, #ffffff);
-  color: var(--persona-text, #111827);
-  box-shadow: var(--persona-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
+  border-radius: var(
+    --persona-components-composer-overflowMenu-borderRadius,
+    var(--persona-radius-lg, 0.5rem)
+  );
+  border: 1px solid
+    var(
+      --persona-components-composer-overflowMenu-borderColor,
+      var(--persona-border, #e5e7eb)
+    );
+  background: var(
+    --persona-components-composer-overflowMenu-background,
+    var(--persona-surface, #ffffff)
+  );
+  color: var(
+    --persona-components-composer-overflowMenu-foreground,
+    var(--persona-text, #111827)
+  );
+  box-shadow: var(
+    --persona-components-composer-overflowMenu-shadow,
+    var(--persona-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12))
+  );
   font-family: var(--persona-font-family, inherit);
 }
 
@@ -1598,9 +1615,22 @@
   padding-inline-start: 0.625rem;
   padding-inline-end: 1.75rem;
   border: none;
-  border-radius: var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem));
-  background-color: var(--persona-button-ghost-bg, transparent);
-  color: var(--persona-button-ghost-fg, var(--persona-text, #111827));
+  border-radius: var(
+    --persona-components-composer-modelPicker-borderRadius,
+    var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem))
+  );
+  background-color: var(
+    --persona-components-composer-modelPicker-background,
+    var(--persona-button-ghost-bg, transparent)
+  );
+  color: var(
+    --persona-components-composer-modelPicker-labelColor,
+    var(--persona-button-ghost-fg, var(--persona-text, #111827))
+  );
+  /* A ring, not a border: `border-box` sizing would pull the label in by 1px on
+     every theme that never sets the token. */
+  box-shadow: inset 0 0 0 1px
+    var(--persona-components-composer-modelPicker-borderColor, transparent);
   font-family: inherit;
   font-size: 0.8125rem;
   cursor: pointer;
@@ -1616,16 +1646,19 @@
   text-align: start;
 }
 
-/* The chevron is a MASK, not a data-URI stroke color: the fill comes from the
-   ghost foreground token, so it themes with every other composer glyph. Same
-   Lucide `chevron-down` geometry as the icon registry draws. */
+/* The chevron is a MASK, not a data-URI stroke color: the fill follows the
+   closed control's own text color, so the glyph and the label never diverge.
+   Same Lucide `chevron-down` geometry as the icon registry draws. */
 .persona-composer-model-picker-chevron {
   justify-self: end;
   margin-inline-end: 0.625rem;
   width: 0.875rem;
   height: 0.875rem;
   pointer-events: none;
-  background-color: var(--persona-button-ghost-fg, var(--persona-text, #111827));
+  background-color: var(
+    --persona-components-composer-modelPicker-labelColor,
+    var(--persona-button-ghost-fg, var(--persona-text, #111827))
+  );
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   -webkit-mask-repeat: no-repeat;
@@ -1653,7 +1686,10 @@
 }
 
 [data-persona-root] .persona-composer-model-picker:hover:not(:disabled) {
-  background-color: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
+  background-color: var(
+    --persona-components-composer-modelPicker-hoverBackground,
+    var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05))
+  );
 }
 
 [data-persona-root] .persona-composer-model-picker:disabled {
