@@ -447,6 +447,16 @@ const gemini = (): AgentWidgetConfig => applyCurrentProductComposer("gemini", {
   copy: {
     inputPlaceholder: "Ask Gemini",
   },
+  // Same see-through contract as the standalone page: flush clears the
+  // container, body, and footer backgrounds, so the #1e1f20 pill reads against
+  // the canvas instead of dissolving into a footer band painted the same
+  // `surface`. Artifacts are enabled for that alone; none is ever streamed.
+  features: {
+    artifacts: {
+      enabled: true,
+      layout: { chatSurface: "flush", paneAppearance: "detached" },
+    },
+  },
   // Composer: a rounded bar carrying their signature pair of tool toggles,
   // Deep Research and Canvas, as labeled mode pills that chip and swap the
   // placeholder. The "+" menu holds the upload button and an inert drive row.
@@ -1046,6 +1056,9 @@ RECREATIONS.forEach(({ id, build }) => {
       artifacts: {
         enabled: true,
         layout: {
+          // Spread first: a panel that authors its own layout (Gemini's flush
+          // chat surface) keeps it; only the viewer's keys are forced.
+          ...config.features?.artifacts?.layout,
           // Force the drawer at any stage width, and let it cover the whole
           // widget: the config viewer is a takeover, not a side split. The
           // toolbar copy control is the export's copy affordance (file meta

@@ -477,7 +477,10 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
-        panel: { borderRadius: "0" },
+        // The backdrop behind the flush chat surface (see the panel's
+        // `features.artifacts.layout`): the pill reads as a pill only when the
+        // footer band is not its own #1e1f20.
+        panel: { borderRadius: "0", canvasBackground: "#0f0f0f" },
         introCard: {
           background: "transparent",
           shadow: "none",
