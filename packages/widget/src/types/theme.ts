@@ -663,26 +663,66 @@ export interface ComposerSegmentedTokens {
 }
 
 /**
- * Model picker popover (`composer.modelPicker.presentation: "popover"`).
+ * Model picker chrome (`composer.models`).
+ *
+ * The surface keys (`background`, `hoverBackground`, `borderColor`,
+ * `borderRadius`, `labelColor`) style the CLOSED control, so the native
+ * `<select>` and the `presentation: "popover"` trigger share one vocabulary.
+ * The `menu*`, `rowHoverBackground`, and `descriptionColor` keys style the
+ * popover panel and are inert under the native select, as is `suffixColor`,
+ * which a `<select>` cannot carry either.
  *
  * Every key is optional and unset ones emit nothing: the stylesheet's `var()`
  * fallbacks own the default look, which derives from the surface and ghost
- * button tokens. Inert under the native `<select>` presentation, except
- * `suffixColor`, which the native control cannot carry either.
+ * button tokens.
  */
 export interface ComposerModelPickerTokens {
+  /** Closed control fill. @default the ghost button fill (transparent) */
+  background?: TokenReference<'color'>;
+  /** Closed control fill under hover. @default the ghost hover wash */
+  hoverBackground?: TokenReference<'color'>;
+  /**
+   * Closed control outline, drawn as a 1px inset ring so setting it never
+   * resizes the control. @default none
+   */
+  borderColor?: TokenReference<'color'>;
+  /** Closed control corner radius. @default the ghost button radius */
+  borderRadius?: TokenReference<'radius'>;
   /** Panel fill behind the rows. @default semantic.colors.surface */
   menuBackground?: TokenReference<'color'>;
   /** Panel corner radius. @default palette.radius.lg */
   menuBorderRadius?: TokenReference<'radius'>;
   /** Row fill under hover and the focused option. @default the ghost hover wash */
   rowHoverBackground?: TokenReference<'color'>;
-  /** Row label and closed-control label color. @default inherited text */
+  /**
+   * Row label color, plus the closed control's text and chevron in both
+   * presentations. @default the ghost button foreground
+   */
   labelColor?: TokenReference<'color'>;
   /** Second line under a row label. @default semantic.colors.textMuted */
   descriptionColor?: TokenReference<'color'>;
   /** `composer.modelPicker.suffix` on the closed control. @default semantic.colors.textMuted */
   suffixColor?: TokenReference<'color'>;
+}
+
+/**
+ * Composer overflow `+` menu panel (`composer.actionOverflow`).
+ *
+ * Every key is optional and unset ones emit nothing: the stylesheet's `var()`
+ * fallbacks own the default look. The panel is portaled outside the themed
+ * mount, so the menu forwards the configured values onto it when it opens.
+ */
+export interface ComposerOverflowMenuTokens {
+  /** Panel fill behind the rows. @default semantic.colors.surface */
+  background?: TokenReference<'color'>;
+  /** Panel border color. @default semantic.colors.border */
+  borderColor?: TokenReference<'color'>;
+  /** Panel corner radius. @default palette.radius.lg */
+  borderRadius?: TokenReference<'radius'>;
+  /** Row text and glyph color. @default semantic.colors.text */
+  foreground?: TokenReference<'color'>;
+  /** Panel elevation (raw CSS box-shadow, `none` allowed). @default palette.shadows.md */
+  shadow?: string;
 }
 
 /** Composer (message input) chrome. */
@@ -719,8 +759,10 @@ export interface ComposerChromeTokens {
   overlayBand?: string;
   /** Segmented mode-group track. */
   segmented?: ComposerSegmentedTokens;
-  /** Model picker popover chrome. */
+  /** Model picker chrome (closed control plus popover panel). */
   modelPicker?: ComposerModelPickerTokens;
+  /** Overflow `+` menu panel chrome. */
+  overflowMenu?: ComposerOverflowMenuTokens;
 }
 
 /**

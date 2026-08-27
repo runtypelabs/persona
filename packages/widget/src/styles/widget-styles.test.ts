@@ -585,6 +585,38 @@ describe("overflow menu row shading", () => {
     );
     expect(widgetCss).toContain(".persona-composer-overflow-menu__slot:hover");
   });
+
+  it("reads every overflowMenu token as a full path over the stock fallback", () => {
+    const at = widgetCss.indexOf(".persona-composer-overflow-menu {");
+    expect(at, "overflow menu panel rule not found").toBeGreaterThan(-1);
+    const panel = widgetCss.slice(at, widgetCss.indexOf("}", at));
+
+    expect(panel).toContain(
+      "--persona-components-composer-overflowMenu-background,"
+    );
+    expect(panel).toContain("var(--persona-surface, #ffffff)");
+    expect(panel).toContain(
+      "--persona-components-composer-overflowMenu-borderColor,"
+    );
+    expect(panel).toContain("var(--persona-border, #e5e7eb)");
+    expect(panel).toContain(
+      "--persona-components-composer-overflowMenu-borderRadius,"
+    );
+    expect(panel).toContain(
+      "--persona-components-composer-overflowMenu-foreground,"
+    );
+    expect(panel).toContain(
+      "--persona-components-composer-overflowMenu-shadow,"
+    );
+  });
+
+  it("keeps the portaled panel rule unprefixed", () => {
+    // createPopover mounts the panel outside the widget root, so a
+    // `[data-persona-root]` prefix would never match it.
+    expect(widgetCss).not.toContain(
+      "[data-persona-root] .persona-composer-overflow-menu"
+    );
+  });
 });
 
 describe("composer control focus rings", () => {
@@ -658,7 +690,11 @@ describe("model picker chevron", () => {
 
   it("colors the chevron from the theme token, never a baked-in hex", () => {
     const rule = ruleFor(".persona-composer-model-picker-chevron");
-    expect(rule).toContain("background-color: var(--persona-button-ghost-fg");
+    // Same chain as the label, so the glyph and the text never diverge.
+    expect(rule).toContain(
+      "--persona-components-composer-modelPicker-labelColor"
+    );
+    expect(rule).toContain("var(--persona-button-ghost-fg");
     // The mask only needs opaque alpha, so the SVG's own stroke is not a color.
     expect(rule).toContain("mask-image");
     expect(rule).toContain("-webkit-mask-image");
@@ -837,6 +873,52 @@ describe("model picker popover", () => {
     expect(
       ruleFor('.persona-composer-model-option[aria-selected="true"]')
     ).toContain("visibility: visible");
+  });
+});
+
+describe("model picker closed control surface", () => {
+  const ruleFor = (selector: string): string => {
+    const at = widgetCss.indexOf(selector);
+    expect(at, `selector not found: ${selector}`).toBeGreaterThan(-1);
+    return widgetCss.slice(at, widgetCss.indexOf("}", at));
+  };
+
+  it("reads the surface tokens over the ghost button fallbacks", () => {
+    // One vocabulary for both presentations: the native select and the popover
+    // trigger share this rule, so a page that stays native still themes.
+    const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    expect(rule).toContain(
+      "--persona-components-composer-modelPicker-background,"
+    );
+    expect(rule).toContain("var(--persona-button-ghost-bg, transparent)");
+    expect(rule).toContain(
+      "--persona-components-composer-modelPicker-borderRadius,"
+    );
+    expect(rule).toContain("var(--persona-button-ghost-radius");
+    expect(rule).toContain(
+      "--persona-components-composer-modelPicker-labelColor,"
+    );
+    expect(rule).toContain("var(--persona-button-ghost-fg");
+  });
+
+  it("draws borderColor as an inset ring so the control never resizes", () => {
+    // A real border would eat 1px of the content box under `border-box` sizing
+    // and shift the label on every theme that leaves the token unset.
+    const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
+    expect(rule).toContain("border: none");
+    expect(rule).toContain(
+      "box-shadow: inset 0 0 0 1px\n    var(--persona-components-composer-modelPicker-borderColor, transparent)"
+    );
+  });
+
+  it("keeps hover on its own token so a themed fill survives the pointer", () => {
+    const rule = ruleFor(
+      "[data-persona-root] .persona-composer-model-picker:hover:not(:disabled) {"
+    );
+    expect(rule).toContain(
+      "--persona-components-composer-modelPicker-hoverBackground,"
+    );
+    expect(rule).toContain("var(--persona-button-ghost-hover-bg");
   });
 });
 

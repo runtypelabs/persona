@@ -32,6 +32,7 @@ import type {
   ComposerActionOverflowConfig,
   ComposerActionPlacement,
   ComposerActionPresentation,
+  ComposerActionVisibility,
   ComposerButtonAction,
   ComposerCustomAction,
   ComposerState,
@@ -344,6 +345,28 @@ const evaluate = (
   if (value === undefined) return fallback;
   return typeof value === "function" ? value(state) === true : value === true;
 };
+
+/**
+ * The draft state `sendButton.visibility` reads: text, a pending attachment, or
+ * a live stream all count as "there is something in flight".
+ */
+const hasDraftContent = (state: Readonly<ComposerState>): boolean =>
+  state.phase === "streaming" ||
+  state.text.trim().length > 0 ||
+  state.attachments.length > 0;
+
+/**
+ * `ComposerAction.visibility` against the current draft. Evaluated on every
+ * state-driven pass, so the answer is always render-time, never patched on.
+ */
+export function matchesComposerActionVisibility(
+  visibility: ComposerActionVisibility | undefined,
+  state: Readonly<ComposerState>
+): boolean {
+  if (!visibility || visibility === "always") return true;
+  const drafting = hasDraftContent(state);
+  return visibility === "when-text" ? drafting : !drafting;
+}
 
 const isCustom = (action: ComposerAction): action is ComposerCustomAction =>
   action.kind === "custom";
@@ -937,7 +960,10 @@ export function createComposerActionRenderer(
       let entry = entries.get(resolved.id);
       if (!entry) continue;
       const action = resolved.action;
-      const visible = action ? evaluate(action.visible, state, true) : true;
+      const visible = action
+        ? evaluate(action.visible, state, true) &&
+          matchesComposerActionVisibility(action.visibility, state)
+        : true;
       if (entry.visible !== visible) {
         entry.visible = visible;
         // Managed elements leave the DOM when hidden; the node (and any custom

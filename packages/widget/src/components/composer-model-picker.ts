@@ -18,6 +18,7 @@ import { createPopover, type PopoverHandle } from "../plugin-kit";
 import type { ComposerCustomAction, ComposerModel } from "../types";
 import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
+import { forwardMenuTokens } from "./composer-parts";
 
 export const COMPOSER_MODEL_PICKER_ACTION_ID = "core:model";
 export const COMPOSER_MODEL_PICKER_ORDER = 700;
@@ -25,9 +26,8 @@ export const COMPOSER_MODEL_PICKER_ORDER = 700;
 const ROW_ICON_SIZE = 16;
 
 /**
- * Tokens the popover panel reads. It is portaled outside the themed mount, so
- * configured values are forwarded onto it on open; unset ones stamp nothing and
- * the stylesheet's fallbacks stand.
+ * Tokens the popover panel reads, forwarded onto the portaled panel on every
+ * open; unset ones clear so the stylesheet's fallbacks stand.
  */
 const MENU_TOKEN_VARS = [
   "--persona-components-composer-modelPicker-menuBackground",
@@ -61,16 +61,6 @@ export interface ComposerModelPicker {
    */
   repaint: () => void;
 }
-
-const forwardMenuTokens = (from: HTMLElement, to: HTMLElement): void => {
-  const view = from.ownerDocument?.defaultView;
-  if (!view) return;
-  const computed = view.getComputedStyle(from);
-  for (const name of MENU_TOKEN_VARS) {
-    const value = computed.getPropertyValue(name).trim();
-    if (value) to.style.setProperty(name, value);
-  }
-};
 
 /** The wrapper both presentations share: one grid cell, control plus chevron. */
 const createWrapper = (): { wrapper: HTMLElement; chevron: HTMLElement } => {
@@ -221,7 +211,7 @@ export function createComposerModelPickerAction(
           onDismiss: () => trigger.setAttribute("aria-expanded", "false"),
         });
       }
-      forwardMenuTokens(trigger, menu);
+      forwardMenuTokens(trigger, menu, MENU_TOKEN_VARS);
       popover.open();
       trigger.setAttribute("aria-expanded", "true");
       const ids = [...rows.keys()];

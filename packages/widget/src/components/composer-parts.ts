@@ -41,6 +41,26 @@ export const COMPOSER_CONTROL_FALLBACK_PX = 40;
 /** Icon-size token default in CSS pixels, for the same JS-derived cases. */
 export const COMPOSER_CONTROL_ICON_FALLBACK_PX = 24;
 
+/**
+ * Forward theme vars onto a portaled menu panel, which lives outside the
+ * themed mount. The panel is reused across opens, so an unset var must clear
+ * any previously stamped value for the stylesheet fallback to paint again.
+ */
+export const forwardMenuTokens = (
+  from: HTMLElement,
+  to: HTMLElement,
+  names: readonly string[]
+): void => {
+  const view = from.ownerDocument?.defaultView;
+  if (!view) return;
+  const computed = view.getComputedStyle(from);
+  for (const name of names) {
+    const value = computed.getPropertyValue(name).trim();
+    if (value) to.style.setProperty(name, value);
+    else to.style.removeProperty(name);
+  }
+};
+
 export interface ComposerTextareaParts {
   textarea: HTMLTextAreaElement;
   /**

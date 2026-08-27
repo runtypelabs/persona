@@ -150,6 +150,26 @@ const FIXTURES: Record<string, DeepPartial<PersonaTheme>> = {
       },
     },
   },
+  'composer model picker closed control + overflow menu': {
+    components: {
+      composer: {
+        modelPicker: {
+          background: '#303030',
+          hoverBackground: '#3f3f3f',
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+          borderRadius: '9999px',
+          labelColor: '#c4c7c5',
+        },
+        overflowMenu: {
+          background: '#353535',
+          borderColor: 'rgba(255, 255, 255, 0.08)',
+          borderRadius: '12px',
+          foreground: '#ececec',
+          shadow: '0 12px 32px rgba(0, 0, 0, 0.4)',
+        },
+      },
+    },
+  },
 };
 
 describe('token pipeline parity (golden)', () => {

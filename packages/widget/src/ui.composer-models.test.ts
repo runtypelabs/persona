@@ -335,6 +335,43 @@ describe("composer model picker", () => {
       );
     });
 
+    it("returns the menu to the stylesheet fallback when an update unsets the token", () => {
+      const token = "--persona-components-composer-modelPicker-menuBackground";
+      const { mount, controller } = makeController({
+        ...popoverConfig(),
+        theme: {
+          components: { composer: { modelPicker: { menuBackground: "#1e1f20" } } },
+        },
+      });
+      expect(mount.style.getPropertyValue(token)).toBe("#1e1f20");
+      // The panel is portaled to document.body, so it never inherits the
+      // mount's theme vars. Stamped on the trigger here because jsdom's
+      // computed style does not inherit custom properties.
+      const button = trigger(mount)!;
+      button.style.setProperty(token, "#1e1f20");
+
+      button.click();
+      const panel = menu()!;
+      expect(panel.style.getPropertyValue(token)).toBe("#1e1f20");
+      button.click();
+
+      // Explicit undefined is the documented reset, so the mount stops
+      // carrying the var; the trigger's stand-in follows it.
+      controller.update({
+        theme: {
+          components: { composer: { modelPicker: { menuBackground: undefined } } },
+        },
+      });
+      expect(mount.style.getPropertyValue(token)).toBe("");
+      button.style.removeProperty(token);
+
+      // The menu outlives the update, so the next open has to clear the value
+      // the first one stamped; an empty inline value is the fallback state.
+      trigger(mount)!.click();
+      expect(menu()).toBe(panel);
+      expect(panel.style.getPropertyValue(token)).toBe("");
+    });
+
     it("shows the selected label on the closed control", () => {
       const { mount } = makeController(
         popoverConfig({ selectedModelId: "smart" })

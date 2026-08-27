@@ -4008,6 +4008,16 @@ export type ComposerActionPlacement = "start" | "end";
 export type ComposerActionPresentation = "bar" | "overflow" | "auto";
 
 /**
+ * When a composer action is mounted, as a function of the draft.
+ *
+ * - `"always"` (default): the control is always mounted.
+ * - `"when-empty"`: hidden as soon as the draft holds text or an attachment,
+ *   and while a response streams.
+ * - `"when-text"`: the inverse, on the same draft state the send control reads.
+ */
+export type ComposerActionVisibility = "always" | "when-empty" | "when-text";
+
+/**
  * Fields shared by every composer action.
  *
  * `order` places the control relative to the built-ins. Documented ranges:
@@ -4022,6 +4032,13 @@ export type ComposerActionBase = {
   presentation?: ComposerActionPresentation;
   order?: number;
   visible?: boolean | ((state: Readonly<ComposerState>) => boolean);
+  /**
+   * Draft-driven visibility, on the same state `sendButton.visibility` reads.
+   * Hidden removes the control from layout and tab order. Combined with
+   * `visible`: both must pass.
+   * @default "always"
+   */
+  visibility?: ComposerActionVisibility;
   disabled?: boolean | ((state: Readonly<ComposerState>) => boolean);
   /** Disable while a response streams, through the composer's own mechanism. */
   disableWhenStreaming?: boolean;
@@ -4181,6 +4198,16 @@ export type ComposerMode = {
 export type ComposerModeGroupPresentation = "buttons" | "segmented";
 
 /**
+ * Whether a group's active modes also render as removable chips.
+ *
+ * - `"auto"` (default): one chip per active mode, except under `"segmented"`
+ *   presentation, where the track already shows the state.
+ * - `"hidden"`: no chips for this group under any presentation. The pressed bar
+ *   button carries the state, and deselection stays on the button.
+ */
+export type ComposerModeChipVisibility = "auto" | "hidden";
+
+/**
  * Selection policy for a set of modes. `"single"` deselects siblings when one
  * is chosen; `"multiple"` toggles independently.
  */
@@ -4189,6 +4216,12 @@ export type ComposerModeGroup = {
   selection: "single" | "multiple";
   /** @default "buttons" */
   presentation?: ComposerModeGroupPresentation;
+  /**
+   * Chip row policy for this group's active modes. The chip row itself is
+   * derived from its children, so a group with no other chips leaves no gap.
+   * @default "auto"
+   */
+  chipVisibility?: ComposerModeChipVisibility;
   /**
    * Accessible name for a segmented track. With it the track is a labelled
    * `role="group"`; without it the segments stand on their own names.

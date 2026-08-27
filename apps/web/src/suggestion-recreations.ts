@@ -1,11 +1,9 @@
 /**
- * Five commercial welcome states AND their composers, recreated with nothing
- * but public Persona config: `suggestions.starters`, the `welcome` namespace,
- * the `composer` namespace (actions, modes, the overflow menu, the model
- * picker), and theme tokens. No plugin hooks, no CSS reaching into widget
- * internals. Every panel uses `variant: "hero"`: all five products center their
- * empty state and dismiss it on the first message, which is exactly the hero
- * contract.
+ * Five commercial welcome states paired with the current composer presets
+ * measured in the standalone recreations. The authored surface is public
+ * Persona config throughout (`suggestions.starters`, `welcome`, `composer`,
+ * and theme tokens); the page stylesheet carries page chrome plus the heading
+ * reset that undoes this site's own global heading font.
  *
  * Each recreation is a separate widget instance
  * with its own theme, so the page also doubles as a multi-instance test.
@@ -23,6 +21,12 @@
  *    authored default, so every exclusive group here starts empty and the
  *    product's default selection has to be clicked.
  *
+ * The ChatGPT and Claude presets also carry a live "/" menu (a
+ * `contextMentions` slash channel; the other three products have none). Its
+ * popover mounts on document.body, outside the per-instance theme variables, so
+ * on this multi-instance page both menus keep the widget's default chrome
+ * instead of their product palette; the standalone pages paint theirs.
+ *
  * One rendering asymmetry follows from the same design: a folded built-in keeps
  * its live element (that is what preserves the file input), so it lands in the
  * menu as an icon-only row while contributed rows carry an icon and a label.
@@ -39,6 +43,7 @@ import {
 
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { renderExamplesShell } from "./examples-nav";
+import { applyCurrentProductComposer } from "./recreation-composer-presets";
 
 renderExamplesShell("suggestion-recreations");
 
@@ -95,7 +100,7 @@ const inertMenuAction = (
 // Centered question, no subtitle, a wrapped row of fully rounded category
 // pills. Their chips prefill a prompt stem rather than sending, so the labels
 // are 2 to 3 word categories and `prompt` carries the stem.
-const chatgpt = (): AgentWidgetConfig => ({
+const chatgpt = (): AgentWidgetConfig => applyCurrentProductComposer("chatgpt", {
   ...base(),
   welcome: {
     variant: "hero",
@@ -295,7 +300,7 @@ const chatgpt = (): AgentWidgetConfig => ({
 const CLAUDE_SERIF =
   'Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif';
 
-const claude = (): AgentWidgetConfig => ({
+const claude = (): AgentWidgetConfig => applyCurrentProductComposer("claude", {
   ...base(),
   // Hero variant: one centered serif question over the composer, sparkle
   // above, no subtitle. This is the current claude.ai composition, not the
@@ -432,7 +437,7 @@ const claude = (): AgentWidgetConfig => ({
 // ── 3. Gemini (2025) ────────────────────────────────────────────────────
 // Vertical stack of tool-flavored prompts with the icons deleted in the 2025
 // simplification. Rows are transparent until hover; blue accent, pill composer.
-const gemini = (): AgentWidgetConfig => ({
+const gemini = (): AgentWidgetConfig => applyCurrentProductComposer("gemini", {
   ...base(),
   welcome: {
     variant: "hero",
@@ -441,6 +446,16 @@ const gemini = (): AgentWidgetConfig => ({
   },
   copy: {
     inputPlaceholder: "Ask Gemini",
+  },
+  // Same see-through contract as the standalone page: flush clears the
+  // container, body, and footer backgrounds, so the #1e1f20 pill reads against
+  // the canvas instead of dissolving into a footer band painted the same
+  // `surface`. Artifacts are enabled for that alone; none is ever streamed.
+  features: {
+    artifacts: {
+      enabled: true,
+      layout: { chatSurface: "flush", paneAppearance: "detached" },
+    },
   },
   // Composer: a rounded bar carrying their signature pair of tool toggles,
   // Deep Research and Canvas, as labeled mode pills that chip and swap the
@@ -580,7 +595,7 @@ const gemini = (): AgentWidgetConfig => ({
 // ── 4. Microsoft Copilot ────────────────────────────────────────────────
 // The rich-card school: a 2x2 of icon plus short title plus muted description,
 // the two-line pattern M365 kept when everyone else dropped it. Click sends.
-const copilot = (): AgentWidgetConfig => ({
+const copilot = (): AgentWidgetConfig => applyCurrentProductComposer("copilot", {
   ...base(),
   welcome: {
     variant: "hero",
@@ -759,7 +774,7 @@ const copilot = (): AgentWidgetConfig => ({
 // ── 5. Perplexity ───────────────────────────────────────────────────────
 // Search-flavored: hairline rows of full questions that send on click, teal
 // accent, offwhite paper.
-const perplexity = (): AgentWidgetConfig => ({
+const perplexity = (): AgentWidgetConfig => applyCurrentProductComposer("perplexity", {
   ...base(),
   welcome: {
     variant: "hero",
@@ -1041,6 +1056,9 @@ RECREATIONS.forEach(({ id, build }) => {
       artifacts: {
         enabled: true,
         layout: {
+          // Spread first: a panel that authors its own layout (Gemini's flush
+          // chat surface) keeps it; only the viewer's keys are forced.
+          ...config.features?.artifacts?.layout,
           // Force the drawer at any stage width, and let it cover the whole
           // widget: the config viewer is a takeover, not a side split. The
           // toolbar copy control is the export's copy affordance (file meta
