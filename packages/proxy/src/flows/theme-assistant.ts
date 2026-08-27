@@ -32,10 +32,9 @@ export const THEME_ASSISTANT_FLOW: RuntypeFlowConfig = {
         // Needs BOTH native structured tool calls (for the page-discovered
         // `clientTools[]`: text-emitted calls never execute) AND vision (the
         // user pastes reference images; screenshot_preview returns image
-        // blocks). This is why it diverges from the other flows'
-        // `nemotron-3-ultra-550b-a55b`: the platform catalog tags nemotron
-        // ultra as tool-use but NOT vision, which would silently break the
-        // reference-image loop. If you swap models, confirm both first.
+        // blocks). Both are confirmed on this model in the platform catalog.
+        // If you swap models, confirm both tags first: a tool-use-only model
+        // would silently break the reference-image loop.
         model: "gemini-3.5-flash",
         reasoning: false,
         responseFormat: "markdown",

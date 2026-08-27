@@ -20,7 +20,7 @@ export const BAKERY_ASSISTANT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "nemotron-3-ultra-550b-a55b",
+        model: "gemini-3.7-flash",
         reasoning: false,
         responseFormat: "JSON",
         outputVariable: "prompt_result",

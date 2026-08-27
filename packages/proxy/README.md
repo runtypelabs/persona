@@ -89,7 +89,7 @@ export default createChatProxyApp({
   allowedOrigins: ['https://www.example.com'],
   agentConfig: {
     name: 'Shopping Assistant',
-    model: 'nemotron-3-ultra-550b-a55b',
+    model: 'gemini-3.7-flash',
     systemPrompt: 'You are a concise shopping assistant.',
     loopConfig: { maxTurns: 6 }
   }
