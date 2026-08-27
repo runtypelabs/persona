@@ -28,7 +28,7 @@ export const WEBMCP_PAINT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "glm-5.2",
+        model: "nvidia/nemotron-3-ultra-550b-a55b",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",
