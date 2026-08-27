@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.20.0
+
+### Patch Changes
+
+- 5d1c029: Switch the bundled demo flows and server-pinned agents from `nemotron-3-ultra-550b-a55b` to `gemini-3.7-flash`.
+
 ## 4.19.0
 
 ### Minor Changes

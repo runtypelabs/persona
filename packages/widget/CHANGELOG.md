@@ -1,5 +1,24 @@
 # @runtypelabs/persona
 
+## 4.20.0
+
+### Minor Changes
+
+- 54743bd: Add `visibility` to composer actions: `"always"` (default), `"when-empty"`, or `"when-text"`. It reads the same draft state as `sendButton.visibility`, so a text draft, a pending attachment, or a live stream all count as "drafting". A hidden action is removed from the DOM, so it leaves layout and tab order rather than fading. This makes the voice-then-send swap in the composer bar pure config: give the voice action `visibility: "when-empty"` and the send button `visibility: "when-text"`, and the two controls trade places on the same state. `visibility` combines with the existing `visible` predicate, which still has the final say.
+
+  The CDN and ESM bundle budgets move up one 0.25 kB step (184.25 to 184.5 kB, 196.5 to 196.75 kB gzipped) to cover the added draft-state gate.
+
+- 54743bd: Add `chipVisibility` to `composer.modeGroups` entries: `"auto"` (default) keeps one removable chip per active mode, `"hidden"` suppresses the chips for that group whatever its presentation. It reuses the same chip-eligibility pathway that already suppresses chips for a `"segmented"` group, so a group drawn as pressed bar buttons can now carry its state on the buttons alone. The chip row is derived from its children, so suppressing every chip in it leaves no empty rail behind.
+- 54743bd: Theme the composer overflow menu. The new `components.composer.overflowMenu` group carries `background`, `borderColor`, `borderRadius`, `foreground`, and `shadow` for the `+` menu panel, matching the shape of the existing model picker menu tokens. The panel is portaled outside the themed mount, so the menu forwards the configured values onto it when it opens, the same way the model picker popover already did. Every key is optional and unset ones keep the current surface, border, and shadow fallbacks.
+
+  The two composer token seams together add about 25 bytes gzipped to `widget.css`, so its budget moves from 21.5 kB to 21.75 kB and the theme editor preview bundle, which inlines the stylesheet, moves from 163.5 kB to 163.75 kB.
+
+- 54743bd: Theme the model picker's closed control. `components.composer.modelPicker` gains `background`, `hoverBackground`, `borderColor`, and `borderRadius`, and `labelColor` now colors the closed control's text and chevron as well as the popover rows. The native `<select>` and the `presentation: "popover"` trigger read the same keys, so a page that deliberately stays on the native select can finally give it a surface without reaching past the config into widget CSS. `borderColor` draws as a 1px inset ring, so setting it never resizes the control, and every key stays optional with the stylesheet's fallbacks unchanged.
+
+### Patch Changes
+
+- 0b79750: Fix stale inline menu tokens on the portaled model picker and overflow menu panels. Both panels are reused across opens, so a `components.composer.modelPicker.*` or `components.composer.overflowMenu.*` value forwarded onto one survived a theme update that unset it. An unset token now clears the panel's inline value, so the stylesheet fallback paints again. The two components now share one forwarding helper. The CJS bundle budget moves 197.5 to 197.75 kB; the bundle sat 8 B over after the recent composer waves.
+
 ## 4.19.0
 
 ### Minor Changes
