@@ -1,9 +1,139 @@
+import { createSlashCommandsSource } from "@runtypelabs/persona";
 import type {
   AgentWidgetConfig,
+  AgentWidgetContextMentionConfig,
   ComposerAction,
+  ComposerMode,
+  SlashCommandDefinition,
 } from "@runtypelabs/persona";
 
 type ThemeConfig = NonNullable<AgentWidgetConfig["theme"]>;
+
+/**
+ * A `/`-only mention config: the implicit `@` channel is neutralized with no
+ * sources (the engine drops empty channels and paints no affordance button),
+ * so the composer grows a slash menu and nothing else.
+ */
+export function slashOnlyMentions(
+  id: string,
+  label: string,
+  commands: SlashCommandDefinition[]
+): AgentWidgetContextMentionConfig {
+  return {
+    enabled: true,
+    sources: [],
+    showButton: false,
+    triggers: [
+      {
+        trigger: "/",
+        // Both products open the menu only when "/" leads the draft.
+        triggerPosition: "input-start",
+        // Commands take a free-text argument, so the query spans spaces.
+        allowSpaces: true,
+        showButton: false,
+        sources: [createSlashCommandsSource({ id, label, commands })],
+      },
+    ],
+  };
+}
+
+/** `/doc quarterly plan` submits "Create a doc: quarterly plan"; bare `/doc`
+ *  submits the lead alone. */
+const promptFor =
+  (lead: string) =>
+  (args: string): string =>
+    args ? `${lead}: ${args}` : lead;
+
+/**
+ * Claude's "/" skills menu. Product-voiced approximations: the live rows are
+ * document skills, and the engine matches on a single-token command name, so
+ * the name is the short token and the product phrasing rides the description.
+ * Selecting one inline-completes `/name ` and the typed argument becomes the
+ * sent prompt.
+ */
+export const CLAUDE_SKILL_COMMANDS: SlashCommandDefinition[] = [
+  {
+    name: "doc",
+    description: "Create a doc",
+    iconName: "file-text",
+    argsPlaceholder: "what to write",
+    prompt: promptFor("Create a doc"),
+  },
+  {
+    name: "spreadsheet",
+    description: "Create a spreadsheet",
+    iconName: "file-spreadsheet",
+    argsPlaceholder: "what to track",
+    prompt: promptFor("Create a spreadsheet"),
+  },
+  {
+    name: "slides",
+    description: "Create a slide deck",
+    iconName: "monitor",
+    argsPlaceholder: "what to cover",
+    prompt: promptFor("Create a slide deck"),
+  },
+  {
+    name: "pdf",
+    description: "Create a PDF",
+    iconName: "file",
+    argsPlaceholder: "what to include",
+    prompt: promptFor("Create a PDF"),
+  },
+];
+
+/**
+ * ChatGPT's tool entries, the single source for the "+" overflow modes and the
+ * "/" menu so both lists carry the same labels and glyphs.
+ */
+const CHATGPT_TOOLS = [
+  {
+    id: "create-image",
+    command: "image",
+    label: "Create image",
+    iconName: "image-plus",
+    placeholder: "Describe an image",
+    argsPlaceholder: "what to picture",
+    prompt: promptFor("Create an image"),
+  },
+  {
+    id: "web-search",
+    command: "search",
+    label: "Web search",
+    iconName: "globe",
+    placeholder: "Search the web",
+    argsPlaceholder: "what to look up",
+    prompt: promptFor("Search the web"),
+  },
+  {
+    id: "deep-research",
+    command: "research",
+    label: "Deep research",
+    iconName: "search",
+    placeholder: "What should I research?",
+    argsPlaceholder: "what to research",
+    prompt: promptFor("Run deep research"),
+  },
+] as const;
+
+export const CHATGPT_TOOL_MODES: ComposerMode[] = CHATGPT_TOOLS.map((tool) => ({
+  id: tool.id,
+  label: tool.label,
+  iconName: tool.iconName,
+  presentation: "overflow",
+  placeholder: tool.placeholder,
+}));
+
+/** The same tools as slash commands; the row label is the command token. */
+export const CHATGPT_TOOL_COMMANDS: SlashCommandDefinition[] = CHATGPT_TOOLS.map(
+  (tool) => ({
+    name: tool.command,
+    description: tool.label,
+    iconName: tool.iconName,
+    argsPlaceholder: tool.argsPlaceholder,
+    prompt: tool.prompt,
+  })
+);
 
 export type ComposerRecreationProduct =
   | "chatgpt"
@@ -17,6 +147,7 @@ type ComposerPatch = Pick<
   | "attachments"
   | "colorScheme"
   | "composer"
+  | "contextMentions"
   | "copy"
   | "sendButton"
   | "voiceRecognition"
@@ -45,6 +176,8 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
   chatgpt: {
     colorScheme: "dark",
     copy: { inputPlaceholder: "Ask ChatGPT" },
+    // Their "/" tool menu, carrying the same labels and glyphs as the "+" modes.
+    contextMentions: slashOnlyMentions("tools", "Tools", CHATGPT_TOOL_COMMANDS),
     attachments: {
       enabled: true,
       buttonIconName: "image",
@@ -59,29 +192,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         { id: "high", label: "High" },
       ],
       selectedModelId: "high",
-      modes: [
-        {
-          id: "create-image",
-          label: "Create image",
-          iconName: "image-plus",
-          presentation: "overflow",
-          placeholder: "Describe an image",
-        },
-        {
-          id: "web-search",
-          label: "Web search",
-          iconName: "globe",
-          presentation: "overflow",
-          placeholder: "Search the web",
-        },
-        {
-          id: "deep-research",
-          label: "Deep research",
-          iconName: "search",
-          presentation: "overflow",
-          placeholder: "What should I research?",
-        },
-      ],
+      modes: CHATGPT_TOOL_MODES,
       actions: [
         inertAction("library", "Add from library", "folder", 250),
         inertAction("canva", "Canva", "sparkles", 600),
@@ -189,6 +300,8 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
   claude: {
     colorScheme: "light",
     copy: { inputPlaceholder: "Type / for skills" },
+    // The placeholder promises a skills menu, so "/" opens one.
+    contextMentions: slashOnlyMentions("skills", "Skills", CLAUDE_SKILL_COMMANDS),
     attachments: {
       enabled: true,
       buttonIconName: "paperclip",
@@ -649,6 +762,9 @@ export function applyCurrentProductComposer(
     copy: { ...config.copy, ...patch.copy },
     attachments: patch.attachments,
     composer: patch.composer,
+    // Only the two products with a live slash menu carry one; the rest keep
+    // whatever the page passed in (nothing today).
+    contextMentions: patch.contextMentions ?? config.contextMentions,
     voiceRecognition: patch.voiceRecognition,
     sendButton: patch.sendButton,
     theme: mergeTheme(config.theme, patch.theme),

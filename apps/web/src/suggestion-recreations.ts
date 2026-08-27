@@ -21,6 +21,12 @@
  *    authored default, so every exclusive group here starts empty and the
  *    product's default selection has to be clicked.
  *
+ * The ChatGPT and Claude presets also carry a live "/" menu (a
+ * `contextMentions` slash channel; the other three products have none). Its
+ * popover mounts on document.body, outside the per-instance theme variables, so
+ * on this multi-instance page both menus keep the widget's default chrome
+ * instead of their product palette; the standalone pages paint theirs.
+ *
  * One rendering asymmetry follows from the same design: a folded built-in keeps
  * its live element (that is what preserves the file input), so it lands in the
  * menu as an icon-only row while contributed rows carry an icon and a label.
