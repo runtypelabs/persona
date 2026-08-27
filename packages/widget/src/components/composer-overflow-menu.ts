@@ -19,6 +19,7 @@ import {
   COMPOSER_CONTROL_CLASS,
   COMPOSER_CONTROL_GLYPH_CLASS,
   COMPOSER_CONTROL_ICON_FALLBACK_PX,
+  forwardMenuTokens,
 } from "./composer-parts";
 
 export interface ComposerOverflowMenuOptions {
@@ -55,9 +56,8 @@ const focusableSelector =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 /**
- * Panel surface tokens. The panel is portaled outside the themed mount, so
- * configured values are forwarded onto it on open; unset ones stamp nothing and
- * the stylesheet's fallbacks stand.
+ * Panel surface tokens, forwarded onto the portaled panel on every open; unset
+ * ones clear so the stylesheet's fallbacks stand.
  */
 const MENU_TOKEN_VARS = [
   "--persona-components-composer-overflowMenu-background",
@@ -66,16 +66,6 @@ const MENU_TOKEN_VARS = [
   "--persona-components-composer-overflowMenu-foreground",
   "--persona-components-composer-overflowMenu-shadow",
 ] as const;
-
-const forwardMenuTokens = (from: HTMLElement, to: HTMLElement): void => {
-  const view = from.ownerDocument?.defaultView;
-  if (!view) return;
-  const computed = view.getComputedStyle(from);
-  for (const name of MENU_TOKEN_VARS) {
-    const value = computed.getPropertyValue(name).trim();
-    if (value) to.style.setProperty(name, value);
-  }
-};
 
 /**
  * Set on the menu row that holds keyboard focus. Rows that shade on
@@ -272,7 +262,7 @@ export function createComposerOverflowMenu(
   const open = (focusIndex = 0, viaKeyboard = false): void => {
     if (destroyed || isOpen()) return;
     keyboardModality = viaKeyboard;
-    forwardMenuTokens(triggerButton, panel);
+    forwardMenuTokens(triggerButton, panel, MENU_TOKEN_VARS);
     ensurePopover().open();
     triggerButton.setAttribute("aria-expanded", "true");
     const targets = focusables();

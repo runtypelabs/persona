@@ -143,6 +143,44 @@ describe("composer overflow menu in the live widget", () => {
     ).toBe("");
   });
 
+  it("returns the panel to the stylesheet fallback when an update unsets the token", () => {
+    const token = "--persona-components-composer-overflowMenu-background";
+    const { mount, controller } = makeController({
+      composer: {
+        actions: [action("folded", { presentation: "overflow" })],
+        actionOverflow: { enabled: true },
+      },
+      theme: {
+        components: { composer: { overflowMenu: { background: "#353535" } } },
+      },
+    });
+    expect(mount.style.getPropertyValue(token)).toBe("#353535");
+    // Stamped on the trigger for the same reason as the test above: jsdom's
+    // computed style does not inherit custom properties.
+    const trigger = triggerOf(mount)!;
+    trigger.style.setProperty(token, "#353535");
+
+    const panel = openPanel(mount)!;
+    expect(panel.style.getPropertyValue(token)).toBe("#353535");
+    triggerOf(mount)!.click();
+
+    // Explicit undefined is the documented reset, so the mount stops carrying
+    // the var; the trigger's stand-in follows it.
+    controller.update({
+      theme: {
+        components: { composer: { overflowMenu: { background: undefined } } },
+      },
+    });
+    expect(mount.style.getPropertyValue(token)).toBe("");
+    trigger.style.removeProperty(token);
+
+    // The panel outlives the update, so the next open has to clear the value
+    // the first one stamped; an empty inline value is the fallback state.
+    const reopened = openPanel(mount)!;
+    expect(reopened).toBe(panel);
+    expect(reopened.style.getPropertyValue(token)).toBe("");
+  });
+
   it("sorts the trigger at the 900 anchor by default", () => {
     const { mount } = makeController({
       composer: {
