@@ -28,7 +28,7 @@ export const WEBMCP_PAINT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "gemini-3.7-flash",
+        model: "glm-5.2",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",

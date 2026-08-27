@@ -908,6 +908,22 @@ export type AgentWidgetWebMcpConfig = {
    * `window.confirm` fallback only applies when no widget UI is attached.
    */
   onConfirm?: WebMcpConfirmHandler;
+  /**
+   * How the widget runs the `webmcp:*` calls of ONE turn when the model emits
+   * several at once.
+   *
+   * - `'parallel'` (default): every call executes concurrently and a gated
+   *   sibling's approval never blocks another's execution. Right for
+   *   independent, order-insensitive tools (catalog lookups, add-to-cart).
+   * - `'sequential'`: calls execute one at a time, in the order the model
+   *   emitted them; the next starts only after the previous one settles
+   *   (including its approval bubble). Use this when the page tools share
+   *   mutable state that concurrent execution would interleave, e.g. a
+   *   canvas where every stroke selects a color/tool before drawing.
+   *
+   * Either way, all outputs still return to the server in a single `/resume`.
+   */
+  execution?: 'parallel' | 'sequential';
 };
 
 /**

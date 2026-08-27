@@ -13,9 +13,10 @@ const makeSession = (overrides?: {
   resumeOk?: boolean;
   isOperational?: boolean;
   executeImpl?: () => Promise<WebMcpToolResult>;
+  webmcp?: Record<string, unknown>;
 }) => {
   const session = new AgentWidgetSession(
-    { apiUrl: "http://test", webmcp: { enabled: true } },
+    { apiUrl: "http://test", webmcp: { enabled: true, ...overrides?.webmcp } },
     {
       onMessagesChanged: () => undefined,
       onStatusChanged: () => undefined,
@@ -940,6 +941,52 @@ describe("AgentWidgetSession: WebMCP parallel batched resume (core#3878)", () =>
     await flushMicrotasks();
     expect(resumeSpy).not.toHaveBeenCalled();
     releaseA({ content: [{ type: "text", text: "a" }] });
+    await flushMicrotasks();
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    const toolOutputs = (resumeSpy.mock.calls[0]! as unknown[])[1] as Record<
+      string,
+      unknown
+    >;
+    expect(Object.keys(toolOutputs).sort()).toEqual(["toolu_A", "toolu_B"]);
+  });
+
+  it("webmcp.execution: 'sequential' runs siblings one at a time, in emission order", async () => {
+    // Paint-style tools share page state (select tool + color, then draw), so
+    // a multi-call turn must not interleave. The second execute must not even
+    // START until the first has resolved; the batch still posts ONE /resume.
+    let releaseA: (r: WebMcpToolResult) => void = () => undefined;
+    let releaseB: (r: WebMcpToolResult) => void = () => undefined;
+    const pA = new Promise<WebMcpToolResult>((r) => (releaseA = r));
+    const pB = new Promise<WebMcpToolResult>((r) => (releaseB = r));
+    const started: string[] = [];
+
+    const { session, resumeSpy } = makeSession({
+      webmcp: { execution: "sequential" },
+    });
+    const client = (session as unknown as { client: Record<string, unknown> })
+      .client;
+    (client.executeWebMcpToolCall as ReturnType<typeof vi.fn>).mockImplementation(
+      (_name: string, args: { sku: string }) => {
+        started.push(args.sku);
+        return args.sku === "SHOE-001" ? pA : pB;
+      },
+    );
+
+    feed(session, parallelAwait("toolu_A", "SHOE-001"));
+    feed(session, parallelAwait("toolu_B", "SHOE-007"));
+    endStream(session);
+    await flushMicrotasks();
+
+    // Only the first call is in flight; the second waits on it.
+    expect(started).toEqual(["SHOE-001"]);
+    expect(resumeSpy).not.toHaveBeenCalled();
+
+    releaseA({ content: [{ type: "text", text: "a" }] });
+    await flushMicrotasks();
+    expect(started).toEqual(["SHOE-001", "SHOE-007"]);
+    expect(resumeSpy).not.toHaveBeenCalled();
+
+    releaseB({ content: [{ type: "text", text: "b" }] });
     await flushMicrotasks();
     expect(resumeSpy).toHaveBeenCalledTimes(1);
     const toolOutputs = (resumeSpy.mock.calls[0]! as unknown[])[1] as Record<
