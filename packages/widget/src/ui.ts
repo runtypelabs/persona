@@ -8408,11 +8408,11 @@ export const createAgentExperience = (
     };
   }
 
-  // Visitor-history credential store, keyed on (clientToken, keyPrefix,
-  // persistence-disabled). Owned here and injected into every client the
-  // session builds; `update()` rebuilds it when that tuple changes.
+  // Exact-browser visitor credential store, keyed on (clientToken, keyPrefix,
+  // persistence-disabled). Durable reconnect and optional visitor history use
+  // the same credential but negotiate independent server capabilities.
   const historyStoreToken = (): string | null =>
-    config.features?.history?.enabled === true ? (config.clientToken ?? null) : null;
+    config.clientToken ?? null;
   const buildVisitorStore = (token: string) =>
     createVisitorStore(token, currentKeyPrefix(), config.persistState === false);
   const initialStoreToken = historyStoreToken();
@@ -8490,8 +8490,7 @@ export const createAgentExperience = (
   // and exact-browser visitor credential needed by the public reconnect route.
   // Install Persona's existing reconnect hooks by default so this mode follows
   // the same path as host-configured durable dashboard chats.
-  const clientTokenDurableReconnect =
-    Boolean(config.clientToken) && config.features?.history?.enabled === true;
+  const clientTokenDurableReconnect = Boolean(config.clientToken);
   if (clientTokenDurableReconnect) {
     const hostExecutionState = config.onExecutionState;
     config = {

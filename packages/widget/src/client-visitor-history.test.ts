@@ -35,6 +35,7 @@ const initBody = (overrides: Partial<ClientInitResponse> = {}): ClientInitRespon
   conversationId: 'conv_1',
   targetId: 'flow_1',
   conversationRevision: 'rev_1',
+  durableRecovery: { enabled: true },
   config: { welcomeMessage: null, placeholder: 'Ask...', theme: null },
   ...overrides,
 });
@@ -168,6 +169,7 @@ describe('client visitor history - init capability shape', () => {
       body: {
         token: CLIENT_TOKEN,
         visitorHistory: true,
+        durableRecovery: true,
         visitorToken: 'cvt_stored',
         sessionId: 'sess_old',
       },
@@ -175,7 +177,7 @@ describe('client visitor history - init capability shape', () => {
     expect(requests[0].body).not.toHaveProperty('conversationId');
   });
 
-  it('omits every visitor field when history is disabled', async () => {
+  it('negotiates recovery without enabling the history UI', async () => {
     await seedToken('cvt_stored');
     installFetch([ok()]);
     const h = makeClient({ history: false, storedSessionId: 'sess_old' });
@@ -184,6 +186,8 @@ describe('client visitor history - init capability shape', () => {
 
     expect(requests[0].body).toEqual({
       token: CLIENT_TOKEN,
+      durableRecovery: true,
+      visitorToken: 'cvt_stored',
       sessionId: 'sess_old',
     });
   });
@@ -348,6 +352,7 @@ describe('client visitor history - boot resume', () => {
     expect(requests[0].body).toEqual({
       token: CLIENT_TOKEN,
       visitorHistory: true,
+      durableRecovery: true,
       visitorToken: 'cvt_stored',
       conversationId: 'conv_1',
     });
@@ -452,6 +457,7 @@ describe('client visitor history - prepared sessions', () => {
     expect(requests[1].body).toEqual({
       token: CLIENT_TOKEN,
       visitorHistory: true,
+      durableRecovery: true,
       visitorToken: 'cvt_stored',
       conversationId: 'conv_other',
     });
@@ -513,6 +519,7 @@ describe('client visitor history - prepared sessions', () => {
     expect(requests[0].body).toEqual({
       token: CLIENT_TOKEN,
       visitorHistory: true,
+      durableRecovery: true,
       visitorToken: 'cvt_stored',
     });
     expect(prepared.session.sessionId).toBe('sess_new');
@@ -539,10 +546,15 @@ describe('client visitor history - 403 degrade', () => {
     expect(h.availability).toEqual([false]);
     expect(warn).toHaveBeenCalledTimes(1);
 
-    // Latched for the client's lifetime: later inits skip the visitor fields.
+    // History remains latched off, but recovery negotiates independently and
+    // can reuse the exact-browser credential plus conversation.
     h.client.clearClientSession();
     await h.client.initSession();
-    expect(requests[2].body).toEqual({ token: CLIENT_TOKEN, sessionId: 'sess_plain' });
+    expect(requests[2].body).toEqual({
+      token: CLIENT_TOKEN,
+      durableRecovery: true,
+      visitorToken: 'cvt_stored',
+    });
   });
 
   it('rejects rather than degrading a conversation resume into another record', async () => {
@@ -601,6 +613,7 @@ describe('controller wiring', () => {
     expect(requests[0].body).toEqual({
       token: CLIENT_TOKEN,
       visitorHistory: true,
+      durableRecovery: true,
       visitorToken: 'cvt_stored',
       conversationId: 'conv_stored',
     });
@@ -609,7 +622,7 @@ describe('controller wiring', () => {
     mount.remove();
   });
 
-  it('persists the built-in durable handle and clears it at terminal', async () => {
+  it('persists the built-in durable handle without history UI config and clears it at terminal', async () => {
     await seedToken('cvt_stored');
     installFetch([ok({ sessionId: 'sess_ui' })]);
     const mount = document.createElement('div');
@@ -618,7 +631,6 @@ describe('controller wiring', () => {
       apiUrl: API_URL,
       clientToken: CLIENT_TOKEN,
       launcher: { enabled: false },
-      features: { history: { enabled: true } },
     });
     await vi.waitFor(() => expect(requests).toHaveLength(1));
 

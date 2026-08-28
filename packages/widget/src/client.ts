@@ -566,27 +566,22 @@ export class AgentWidgetClient {
     return this.clientSession;
   }
 
-  /**
-   * Persona's built-in reconnect transport for history-capable client-token
-   * sessions. It deliberately reuses the exact-browser visitor credential and
-   * live session admission used by the conversation-history surface.
-   */
+  /** Persona's built-in reconnect transport for client-token sessions. */
   public async reconnectClientTokenStream(ctx: {
     executionId: string;
     after: string;
     signal: AbortSignal;
   }): Promise<Response> {
-    this.assertHistoryUsable();
     let session = await this.initSession();
     let recovered = false;
 
     for (;;) {
       const conversationId = session.conversationId;
       const visitorToken = await this.readVisitorToken();
-      if (!conversationId || !visitorToken) {
+      if (session.durableRecovery?.enabled !== true || !conversationId || !visitorToken) {
         throw new HistoryClientError(
           'visitor_token_missing',
-          'A live conversation and visitor credential are required to reconnect'
+          'Durable recovery is not enabled for this client session'
         );
       }
       const path =
@@ -767,8 +762,12 @@ export class AgentWidgetClient {
     omitVisitorFields?: boolean;
   }): Promise<ClientSession> {
     const historyCapable = this.isHistoryCapable() && !opts.omitVisitorFields;
+    // Recovery is negotiated independently from the history UI. New servers
+    // return an explicit capability bit; old strict servers reject the
+    // additive request field, which the fallback below handles once.
+    const durableRecoveryRequested = !opts.omitVisitorFields;
     let visitorToken: string | null = null;
-    if (historyCapable) {
+    if (historyCapable || durableRecoveryRequested) {
       // Never read persisted state before the controller's stored-state gate.
       await this.historyInternals.historyBootstrapReady;
       visitorToken = await this.readVisitorToken();
@@ -781,7 +780,10 @@ export class AgentWidgetClient {
       token: this.config.clientToken,
       ...(sessionTargetId && { flowId: sessionTargetId }),
       ...(historyCapable && { visitorHistory: true }),
-      ...(historyCapable && visitorToken ? { visitorToken } : {}),
+      ...(durableRecoveryRequested && { durableRecovery: true }),
+      ...((historyCapable || durableRecoveryRequested) && visitorToken
+        ? { visitorToken }
+        : {}),
       // Independent of the strict conversationId/sessionId union: a proof also
       // binds the visitor on an ordinary init.
       ...(historyCapable && opts.identityProof
@@ -794,7 +796,7 @@ export class AgentWidgetClient {
           : {}),
     };
 
-    const response = await fetch(this.getClientApiUrl('init'), {
+    let response = await fetch(this.getClientApiUrl('init'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -802,6 +804,22 @@ export class AgentWidgetClient {
       },
       body: JSON.stringify(requestBody),
     });
+
+    // Rolling/self-hosted compatibility: pre-recovery servers use a strict
+    // init schema and answer 400 to the additive field. Retry once without it;
+    // the absent response capability keeps Persona on ordinary streaming.
+    if (response.status === 400 && durableRecoveryRequested) {
+      const fallbackBody = { ...requestBody };
+      delete fallbackBody.durableRecovery;
+      response = await fetch(this.getClientApiUrl('init'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Persona-Version': VERSION,
+        },
+        body: JSON.stringify(fallbackBody),
+      });
+    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Session initialization failed' }));
@@ -815,6 +833,12 @@ export class AgentWidgetClient {
           );
         }
         return this.createClientSession({ ...opts, omitVisitorFields: true });
+      }
+      if (response.status === 403 && error.error === 'durable_recovery_disabled') {
+        throw new HistoryClientError(
+          'history_disabled',
+          'Durable recovery is disabled for this surface'
+        );
       }
       if (historyCapable && response.status === 401 && error.error === 'visitor_required') {
         throw new HistoryClientError('visitor_required', 'Visitor credential no longer resolves');
@@ -850,6 +874,7 @@ export class AgentWidgetClient {
       ...(data.conversationRevision
         ? { conversationRevision: data.conversationRevision }
         : {}),
+      ...(data.durableRecovery ? { durableRecovery: data.durableRecovery } : {}),
       ...(data.visitor ? { visitor: data.visitor } : {}),
       config: {
         welcomeMessage: data.config.welcomeMessage,
@@ -860,13 +885,6 @@ export class AgentWidgetClient {
   }
 
   private async _doInitSession(): Promise<ClientSession> {
-    if (!this.isHistoryCapable()) {
-      const storedSessionId = this.config.getStoredSessionId?.() || null;
-      const session = await this.createClientSession({ storedSessionId });
-      this.config.setStoredSessionId?.(session.sessionId);
-      return session;
-    }
-
     await this.historyInternals.historyBootstrapReady;
     const previousConversationId = this.config.getStoredConversationId?.() || null;
     const storedToken = await this.readVisitorToken();
@@ -882,7 +900,8 @@ export class AgentWidgetClient {
       } catch (error) {
         if (
           !isHistoryClientError(error, 'not_found') &&
-          !isHistoryClientError(error, 'visitor_required')
+          !isHistoryClientError(error, 'visitor_required') &&
+          !isHistoryClientError(error, 'history_disabled')
         ) {
           throw error;
         }
@@ -904,7 +923,7 @@ export class AgentWidgetClient {
     continuityBroken: boolean
   ): Promise<ClientSession> {
     const store = this.historyInternals.visitorStore;
-    if (store && this.isHistoryCapable() && !(await this.readVisitorToken())) {
+    if (store && !(await this.readVisitorToken())) {
       return store.withFirstInitLock(() =>
         this.doOrdinaryInit(previousConversationId, continuityBroken)
       );
@@ -946,7 +965,11 @@ export class AgentWidgetClient {
    * unowned; one immediate re-init with `{visitorToken, sessionId}` claims it.
    */
   private async claimFirstConversation(first: ClientSession): Promise<ClientSession> {
-    if (!first.visitor?.token || this.claimInFlight || !this.isHistoryCapable()) {
+    if (
+      !first.visitor?.token ||
+      this.claimInFlight ||
+      (!this.isHistoryCapable() && first.durableRecovery?.enabled !== true)
+    ) {
       return first;
     }
     this.claimInFlight = true;
@@ -1807,6 +1830,10 @@ export class AgentWidgetClient {
 
       // Build the standard payload to get context/metadata from middleware
       const basePayload = await this.buildPayload(options.messages);
+      const recoveryVisitorToken =
+        session.durableRecovery?.enabled === true
+          ? await this.readVisitorToken()
+          : null;
 
       // Build the chat request payload with message IDs for feedback tracking
       // Filter out sessionId from metadata if present (it's only for local storage)
@@ -1866,6 +1893,9 @@ export class AgentWidgetClient {
             headers: {
               'Content-Type': 'application/json',
               'X-Persona-Version': VERSION,
+              ...(recoveryVisitorToken
+                ? { 'X-Visitor-Token': recoveryVisitorToken }
+                : {}),
             },
             body: JSON.stringify(chatRequest),
             signal: options.signal,
@@ -2274,7 +2304,7 @@ export class AgentWidgetClient {
   public async resumeFlow(
     executionId: string,
     toolOutputs: Record<string, unknown>,
-    options?: { streamResponse?: boolean; signal?: AbortSignal }
+    options?: { streamResponse?: boolean; signal?: AbortSignal; after?: string }
   ): Promise<Response> {
     const isClientToken = this.isClientTokenMode();
     const url = isClientToken
@@ -2289,12 +2319,18 @@ export class AgentWidgetClient {
     // trusting the possibly-stale `this.clientSession`. (core#3889; BugBot
     // PR #214 r3367875360.)
     let resumeSessionId: string | undefined;
+    let resumeVisitorToken: string | null = null;
     if (isClientToken) {
-      resumeSessionId = (await this.initSession()).sessionId;
+      const session = await this.initSession();
+      resumeSessionId = session.sessionId;
+      if (session.durableRecovery?.enabled === true) {
+        resumeVisitorToken = await this.readVisitorToken();
+      }
     }
 
     let headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      ...(resumeVisitorToken ? { 'X-Visitor-Token': resumeVisitorToken } : {}),
       ...this.headers
     };
     if (this.getHeaders) {
@@ -2305,6 +2341,7 @@ export class AgentWidgetClient {
       executionId,
       toolOutputs,
       streamResponse: options?.streamResponse ?? true,
+      ...(options?.after ? { after: options.after } : {}),
     };
     // Thread the (refreshed) sessionId through like `/v1/client/chat` does.
     if (resumeSessionId) {

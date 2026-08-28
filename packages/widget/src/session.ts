@@ -3342,9 +3342,16 @@ export class AgentWidgetSession {
     }
 
     try {
-      const response = await this.client.resumeFlow(executionId, {
-        [toolName]: answer,
-      });
+      const response = await this.client.resumeFlow(
+        executionId,
+        { [toolName]: answer },
+        {
+          after:
+            this.resumable?.executionId === executionId
+              ? this.resumable.lastEventId
+              : undefined,
+        },
+      );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
@@ -3737,6 +3744,10 @@ export class AgentWidgetSession {
 
       const response = await this.client.resumeFlow(executionId, toolOutputs, {
         signal: batchController.signal,
+        after:
+          this.resumable?.executionId === executionId
+            ? this.resumable.lastEventId
+            : undefined,
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
@@ -3912,7 +3923,13 @@ export class AgentWidgetSession {
     const response = await this.client.resumeFlow(
       executionId,
       { [resumeKey]: output },
-      { signal: options?.signal },
+      {
+        signal: options?.signal,
+        after:
+          this.resumable?.executionId === executionId
+            ? this.resumable.lastEventId
+            : undefined,
+      },
     );
     if (!response.ok) {
       const errorData = await response.json().catch(() => null);
@@ -4340,9 +4357,11 @@ export class AgentWidgetSession {
       if (event.status === "connecting") {
         this.setStreaming(true);
       } else if (event.status === "idle" || event.status === "error") {
-        // Graceful terminal or terminal error: the durable turn is over, so
-        // drop the resume handle (no reconnect should arm after this).
-        this.clearResumable();
+        // A client-tool pause is an intentional stream end but NOT a terminal:
+        // retain its cursor so `/client/resume` can attach after the await
+        // frame instead of replaying the whole turn. Real terminals and
+        // ordinary non-durable idles still clear the handle.
+        if (!this.isAwaitPending()) this.clearResumable();
         // Keep the typing indicator up while a WebMCP resolve is still in
         // flight: in a chained turn the intermediate resume stream ends with an
         // idle status, but the successor tool is still executing. The resolve's
