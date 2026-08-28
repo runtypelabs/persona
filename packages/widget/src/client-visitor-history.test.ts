@@ -203,6 +203,41 @@ describe('client visitor history - init capability shape', () => {
     expect(a.flow.id).toBe('flow_1');
     expect(b.targetId).toBe('flow_7');
   });
+
+  it('uses the exact visitor credential and durable cursor for reconnect', async () => {
+    await seedToken('cvt_stored');
+    const events = new Response('event: ping\ndata: {}\n\n', {
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(ok()())
+      .mockResolvedValueOnce(events);
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const h = makeClient({});
+    await h.client.initSession();
+
+    const controller = new AbortController();
+    const response = await h.client.reconnectClientTokenStream({
+      executionId: 'exec_7',
+      after: '12',
+      signal: controller.signal,
+    });
+
+    expect(response).toBe(events);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      `${API_URL}/v1/client/conversations/conv_1/executions/exec_7/events` +
+        '?sessionId=sess_1&after=12'
+    );
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: 'GET',
+      headers: {
+        'X-Persona-Version': expect.any(String),
+        'X-Visitor-Token': 'cvt_stored',
+      },
+      signal: controller.signal,
+    });
+  });
 });
 
 describe('client visitor history - mint persistence and immediate claim', () => {
@@ -569,6 +604,52 @@ describe('controller wiring', () => {
       visitorToken: 'cvt_stored',
       conversationId: 'conv_stored',
     });
+
+    controller.destroy();
+    mount.remove();
+  });
+
+  it('persists the built-in durable handle and clears it at terminal', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ui' })]);
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      launcher: { enabled: false },
+      features: { history: { enabled: true } },
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(value) {
+        streamController = value;
+      },
+    });
+    const connected = controller.connectStream(stream);
+    const encoder = new TextEncoder();
+    streamController.enqueue(
+      encoder.encode(
+        'id: 7\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_ui","id":"text_ui","delta":"Hi"}\n\n'
+      )
+    );
+    await vi.waitFor(() =>
+      expect(controller.getPersistentMetadata().durableResume).toEqual({
+        executionId: 'exec_ui',
+        after: '7',
+      })
+    );
+
+    streamController.enqueue(
+      encoder.encode(
+        'id: 8\nevent: execution_complete\ndata: {"type":"execution_complete","executionId":"exec_ui","kind":"agent","success":true}\n\n'
+      )
+    );
+    streamController.close();
+    await connected;
+    expect(controller.getPersistentMetadata()).not.toHaveProperty('durableResume');
 
     controller.destroy();
     mount.remove();

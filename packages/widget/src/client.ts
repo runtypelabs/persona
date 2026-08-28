@@ -567,6 +567,59 @@ export class AgentWidgetClient {
   }
 
   /**
+   * Persona's built-in reconnect transport for history-capable client-token
+   * sessions. It deliberately reuses the exact-browser visitor credential and
+   * live session admission used by the conversation-history surface.
+   */
+  public async reconnectClientTokenStream(ctx: {
+    executionId: string;
+    after: string;
+    signal: AbortSignal;
+  }): Promise<Response> {
+    this.assertHistoryUsable();
+    let session = await this.initSession();
+    let recovered = false;
+
+    for (;;) {
+      const conversationId = session.conversationId;
+      const visitorToken = await this.readVisitorToken();
+      if (!conversationId || !visitorToken) {
+        throw new HistoryClientError(
+          'visitor_token_missing',
+          'A live conversation and visitor credential are required to reconnect'
+        );
+      }
+      const path =
+        `${this.clientApiBase()}/v1/client/conversations/` +
+        `${encodeURIComponent(conversationId)}/executions/` +
+        `${encodeURIComponent(ctx.executionId)}/events`;
+      const query = new URLSearchParams({
+        sessionId: session.sessionId,
+        after: ctx.after,
+      });
+      const response = await fetch(`${path}?${query}`, {
+        method: 'GET',
+        headers: {
+          'X-Persona-Version': VERSION,
+          'X-Visitor-Token': visitorToken,
+        },
+        signal: ctx.signal,
+      });
+      if (response.status === 401 && !recovered) {
+        recovered = true;
+        session = await this.recoverFromUnauthorized(
+          await this.readErrorCode(response),
+          null,
+          true
+        );
+        continue;
+      }
+      if (!response.ok) throw await this.historyErrorFor(response, true);
+      return response;
+    }
+  }
+
+  /**
    * Initialize session for client token mode.
    * Called automatically on first message if not already initialized.
    */

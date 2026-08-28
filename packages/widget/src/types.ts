@@ -5821,6 +5821,14 @@ export interface WidgetHistoryInternals {
   /** Persist the revision beside the active conversation id (internal only). */
   setStoredConversationRevision?: (revision: string | null) => void;
   getStoredConversationRevision?: () => string | null;
+  /** Internal client-token durable resume handle, persisted with widget state. */
+  setStoredResumableHandle?: (
+    handle: { executionId: string; after: string } | null
+  ) => void;
+  getStoredResumableHandle?: () => {
+    executionId: string;
+    after: string;
+  } | null;
   /** "Show earlier messages" cursor for the persisted transcript. */
   setStoredMessageCursor?: (cursor: string | null) => void;
   getStoredMessageCursor?: () => string | null;

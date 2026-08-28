@@ -8370,6 +8370,20 @@ export const createAgentExperience = (
     const stored = persistentMetadata[key];
     return typeof stored === 'string' ? stored : null;
   };
+  const readStoredResumableHandle = (): {
+    executionId: string;
+    after: string;
+  } | null => {
+    const stored = persistentMetadata.durableResume;
+    if (!stored || typeof stored !== 'object') return null;
+    const candidate = stored as Record<string, unknown>;
+    return typeof candidate.executionId === 'string' &&
+      candidate.executionId.length > 0 &&
+      typeof candidate.after === 'string' &&
+      candidate.after.length > 0
+      ? { executionId: candidate.executionId, after: candidate.after }
+      : null;
+  };
   if (config.clientToken) {
     config = {
       ...config,
@@ -8446,6 +8460,14 @@ export const createAgentExperience = (
         pendingDisplayProjections: pending,
       }));
     },
+    getStoredResumableHandle: readStoredResumableHandle,
+    setStoredResumableHandle: (handle) => {
+      if (!handle) {
+        dropMetadataKey('durableResume');
+        return;
+      }
+      updateSessionMetadata((prev) => ({ ...prev, durableResume: handle }));
+    },
     ...(hostOwnsConversationId
       ? {}
       : {
@@ -8463,6 +8485,30 @@ export const createAgentExperience = (
           },
         }),
   };
+
+  // Runtype client-token widgets already possess the session, conversation,
+  // and exact-browser visitor credential needed by the public reconnect route.
+  // Install Persona's existing reconnect hooks by default so this mode follows
+  // the same path as host-configured durable dashboard chats.
+  const clientTokenDurableReconnect =
+    Boolean(config.clientToken) && config.features?.history?.enabled === true;
+  if (clientTokenDurableReconnect) {
+    const hostExecutionState = config.onExecutionState;
+    config = {
+      ...config,
+      reconnectStream:
+        config.reconnectStream ??
+        ((ctx) => session.getClient().reconnectClientTokenStream(ctx)),
+      onExecutionState: (handle) => {
+        historyInternals.setStoredResumableHandle?.(
+          handle
+            ? { executionId: handle.executionId, after: handle.lastEventId }
+            : null
+        );
+        hostExecutionState?.(handle);
+      },
+    };
+  }
   const syncVisitorStore = () => {
     const token = historyStoreToken();
     if (
@@ -11297,8 +11343,13 @@ export const createAgentExperience = (
   // the restored conversation. Fires AFTER hydration so the trailing partial
   // assistant bubble exists for the replay to append to.
   const maybeBootResume = () => {
-    if (config.resume && typeof config.reconnectStream === "function") {
-      session.resumeFromHandle(config.resume);
+    const resume =
+      config.resume ??
+      (clientTokenDurableReconnect
+        ? historyInternals.getStoredResumableHandle?.()
+        : null);
+    if (resume && typeof config.reconnectStream === "function") {
+      session.resumeFromHandle(resume);
     }
   };
 

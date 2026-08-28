@@ -1553,6 +1553,7 @@ export class AgentWidgetSession {
 
   /** Conversation-scoped caches that must not leak across records. */
   private resetConversationScopedState(): void {
+    this.historyInternals.setStoredResumableHandle?.(null);
     this.agentExecution = null;
     this.clearArtifactState();
     this.webMcpInflightKeys.clear();
