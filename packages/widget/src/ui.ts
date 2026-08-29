@@ -61,7 +61,8 @@ import {
   ComposerQuote,
   ComposerState,
   ComposerStreamingSubmitBehavior,
-  ComposerSubmissionSnapshot
+  ComposerSubmissionSnapshot,
+  AgentWidgetReasoning
 } from "./types";
 import { AttachmentManager, type PendingAttachment } from "./utils/attachment-manager";
 import { createComposerStore } from "./utils/composer-store";
@@ -282,7 +283,7 @@ import {
   latestAgentSuggestions,
   resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
-import { formatElapsedMs } from "./utils/formatting";
+import { formatElapsedMs, isShortReasoning } from "./utils/formatting";
 import { loadApprovalUi, getApprovalUiSync, type ApprovalUiModule } from "./approval-ui-loader";
 import { getWebMcpToolDisplayTitle } from "./webmcp-bridge";
 import type { AgentWidgetPlugin } from "./plugins/types";
@@ -6284,17 +6285,40 @@ export const createAgentExperience = (
     /** The live editor, re-grafted into its morphed wrapper after the pass. */
     let editHydrate: { messageId: string; element: HTMLElement } | null = null;
 
-    // `reasoningDisplay.completedVisibility: "removed"`: no row for a finished
-    // trace, so the transcript gap closes with it. Checked before the row is
-    // registered, so the cached wrapper is pruned too.
-    const dropCompletedReasoning =
-      config.features?.reasoningDisplay?.completedVisibility === "removed";
+    // `reasoningDisplay.completedVisibility: "removed"` (or "removed-when-short"
+    // for a short completed trace): no row for the finished trace, so the
+    // transcript gap closes with it. Checked before the row is registered, so
+    // the cached wrapper is pruned too.
+    const reasoningCompletedVisibility =
+      config.features?.reasoningDisplay?.completedVisibility;
+    const dropReasoningRow = (reasoning: AgentWidgetReasoning): boolean => {
+      if (reasoningCompletedVisibility === "removed") return true;
+      if (reasoningCompletedVisibility === "removed-when-short") {
+        return isShortReasoning(
+          reasoning,
+          config.features?.reasoningDisplay?.shortThinkThreshold
+        );
+      }
+      return false;
+    };
+
+    // `toolCallDisplay.completedVisibility: "removed"`: same mechanism as
+    // reasoning removal, no threshold variant.
+    const dropCompletedToolCalls =
+      config.features?.toolCallDisplay?.completedVisibility === "removed";
 
     messages.forEach((message) => {
       if (
-        dropCompletedReasoning &&
         message.variant === "reasoning" &&
-        message.reasoning?.status === "complete"
+        message.reasoning?.status === "complete" &&
+        dropReasoningRow(message.reasoning)
+      ) {
+        return;
+      }
+      if (
+        dropCompletedToolCalls &&
+        message.variant === "tool" &&
+        message.toolCall?.status === "complete"
       ) {
         return;
       }
@@ -6849,6 +6873,12 @@ export const createAgentExperience = (
 
       messages.forEach((message) => {
         if (message.variant === "tool" && message.toolCall && showToolCalls) {
+          // A tool call hidden by `completedVisibility: "removed"` does not
+          // create a visible break in the transcript, so it should not split
+          // an otherwise contiguous group.
+          if (dropCompletedToolCalls && message.toolCall.status === "complete") {
+            return;
+          }
           currentGroup.push(message);
           return;
         }
@@ -6858,7 +6888,8 @@ export const createAgentExperience = (
         if (
           message.variant === "reasoning" &&
           (!showReasoning ||
-            (dropCompletedReasoning && message.reasoning?.status === "complete"))
+            (message.reasoning?.status === "complete" &&
+              dropReasoningRow(message.reasoning)))
         ) {
           return;
         }

@@ -2238,6 +2238,16 @@ export type AgentWidgetToolCallDisplayFeature = {
    */
   groupedMode?: "stack" | "summary";
   /**
+   * What happens to a tool call row once it completes.
+   *
+   * - `"kept"` (default): the finished row stays in the transcript.
+   * - `"removed"`: no row is rendered at all, so the transcript gap closes with
+   *   it. The tool call stays on the message and in `getMessages()`.
+   *
+   * @default "kept"
+   */
+  completedVisibility?: AgentWidgetToolCallCompletedVisibility;
+  /**
    * When false, tool call bubbles show only the collapsed summary with no
    * expand/collapse toggle. Users see tool awareness without full details.
    * @default true
@@ -2254,6 +2264,9 @@ export type AgentWidgetToolCallDisplayFeature = {
    */
   loadingAnimation?: AgentWidgetToolCallLoadingAnimation;
 };
+
+/** See `features.toolCallDisplay.completedVisibility`. */
+export type AgentWidgetToolCallCompletedVisibility = "kept" | "removed";
 
 export type AgentWidgetReasoningDisplayFeature = {
   /**
@@ -2300,14 +2313,30 @@ export type AgentWidgetReasoningDisplayFeature = {
    * - `"kept"` (default): the finished row stays in the transcript.
    * - `"removed"`: no row is rendered at all, so the transcript gap closes with
    *   it. The reasoning text stays on the message and in `getMessages()`.
+   * - `"removed-when-short"`: behaves as `"removed"` when the completed trace
+   *   is short (see `shortThinkThreshold`), and as `"kept"` otherwise.
    *
    * @default "kept"
    */
   completedVisibility?: AgentWidgetReasoningCompletedVisibility;
+  /**
+   * Thresholds used by `completedVisibility: "removed-when-short"` to decide
+   * whether a completed trace counts as short. Duration is checked first when
+   * the reasoning reports one; the character count is a fallback for traces
+   * with no reported duration.
+   * @default { durationMs: 15000, chars: 1200 }
+   */
+  shortThinkThreshold?: {
+    durationMs?: number;
+    chars?: number;
+  };
 };
 
 /** See `features.reasoningDisplay.completedVisibility`. */
-export type AgentWidgetReasoningCompletedVisibility = "kept" | "removed";
+export type AgentWidgetReasoningCompletedVisibility =
+  | "kept"
+  | "removed"
+  | "removed-when-short";
 
 /**
  * Reveal animation applied to assistant message text while it is streaming.
