@@ -8384,6 +8384,8 @@ export const createAgentExperience = (
       ? { executionId: candidate.executionId, after: candidate.after }
       : null;
   };
+  const personaOwnsClientTokenRecovery =
+    Boolean(config.clientToken) && typeof config.reconnectStream !== "function";
   if (config.clientToken) {
     config = {
       ...config,
@@ -8468,6 +8470,8 @@ export const createAgentExperience = (
       }
       updateSessionMetadata((prev) => ({ ...prev, durableResume: handle }));
     },
+    shouldResumeDurableConversation: () =>
+      personaOwnsClientTokenRecovery && readStoredResumableHandle() !== null,
     ...(hostOwnsConversationId
       ? {}
       : {
@@ -8490,20 +8494,37 @@ export const createAgentExperience = (
   // and exact-browser visitor credential needed by the public reconnect route.
   // Install Persona's existing reconnect hooks by default so this mode follows
   // the same path as host-configured durable dashboard chats.
-  const clientTokenDurableReconnect = Boolean(config.clientToken);
-  if (clientTokenDurableReconnect) {
+  if (personaOwnsClientTokenRecovery) {
     const hostExecutionState = config.onExecutionState;
+    const recoveryWindow = mount.ownerDocument.defaultView;
+    let pageExitInProgress = false;
+    const markPageExit = () => {
+      pageExitInProgress = true;
+    };
+    const markPageActive = () => {
+      pageExitInProgress = false;
+    };
+    recoveryWindow?.addEventListener("beforeunload", markPageExit);
+    recoveryWindow?.addEventListener("pagehide", markPageExit);
+    recoveryWindow?.addEventListener("pageshow", markPageActive);
+    destroyCallbacks.push(() => {
+      recoveryWindow?.removeEventListener("beforeunload", markPageExit);
+      recoveryWindow?.removeEventListener("pagehide", markPageExit);
+      recoveryWindow?.removeEventListener("pageshow", markPageActive);
+    });
     config = {
       ...config,
       reconnectStream:
         config.reconnectStream ??
         ((ctx) => session.getClient().reconnectClientTokenStream(ctx)),
       onExecutionState: (handle) => {
-        historyInternals.setStoredResumableHandle?.(
-          handle
-            ? { executionId: handle.executionId, after: handle.lastEventId }
-            : null
-        );
+        if (handle || !pageExitInProgress) {
+          historyInternals.setStoredResumableHandle?.(
+            handle
+              ? { executionId: handle.executionId, after: handle.lastEventId }
+              : null
+          );
+        }
         hostExecutionState?.(handle);
       },
     };
@@ -11344,7 +11365,7 @@ export const createAgentExperience = (
   const maybeBootResume = () => {
     const resume =
       config.resume ??
-      (clientTokenDurableReconnect
+      (personaOwnsClientTokenRecovery
         ? historyInternals.getStoredResumableHandle?.()
         : null);
     if (resume && typeof config.reconnectStream === "function") {

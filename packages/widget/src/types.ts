@@ -5833,6 +5833,8 @@ export interface WidgetHistoryInternals {
     executionId: string;
     after: string;
   } | null;
+  /** True only while Persona owns a persisted client-token recovery attempt. */
+  shouldResumeDurableConversation?: () => boolean;
   /** "Show earlier messages" cursor for the persisted transcript. */
   setStoredMessageCursor?: (cursor: string | null) => void;
   getStoredMessageCursor?: () => string | null;

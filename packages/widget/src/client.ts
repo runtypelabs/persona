@@ -757,6 +757,7 @@ export class AgentWidgetClient {
    */
   private async createClientSession(opts: {
     conversationId?: string;
+    durableResume?: boolean;
     identityProof?: string | null;
     storedSessionId?: string | null;
     omitVisitorFields?: boolean;
@@ -775,7 +776,8 @@ export class AgentWidgetClient {
 
     const routed = this.routing();
     const sessionTargetId = routed.agentId ?? routed.flowId;
-    const resumeConversationId = historyCapable ? opts.conversationId : undefined;
+    const resumeConversationId =
+      historyCapable || opts.durableResume ? opts.conversationId : undefined;
     const requestBody: Record<string, unknown> = {
       token: this.config.clientToken,
       ...(sessionTargetId && { flowId: sessionTargetId }),
@@ -840,7 +842,11 @@ export class AgentWidgetClient {
           'Durable recovery is disabled for this surface'
         );
       }
-      if (historyCapable && response.status === 401 && error.error === 'visitor_required') {
+      if (
+        (historyCapable || opts.durableResume) &&
+        response.status === 401 &&
+        error.error === 'visitor_required'
+      ) {
         throw new HistoryClientError('visitor_required', 'Visitor credential no longer resolves');
       }
       if (resumeConversationId && response.status === 404) {
@@ -888,6 +894,8 @@ export class AgentWidgetClient {
     await this.historyInternals.historyBootstrapReady;
     const previousConversationId = this.config.getStoredConversationId?.() || null;
     const storedToken = await this.readVisitorToken();
+    const durableResume =
+      this.historyInternals.shouldResumeDurableConversation?.() === true;
 
     // Boot resume: reopening the record beats replaying a possibly idle-expired
     // session id, so benign expiry never forks or wipes the conversation.
@@ -895,7 +903,11 @@ export class AgentWidgetClient {
       try {
         const resumed = await this.createClientSession({
           conversationId: previousConversationId,
+          durableResume,
         });
+        if (durableResume && resumed.durableRecovery?.enabled !== true) {
+          this.historyInternals.setStoredResumableHandle?.(null);
+        }
         return this.finishInit(resumed, previousConversationId, false);
       } catch (error) {
         if (
@@ -904,6 +916,9 @@ export class AgentWidgetClient {
           !isHistoryClientError(error, 'history_disabled')
         ) {
           throw error;
+        }
+        if (durableResume) {
+          this.historyInternals.setStoredResumableHandle?.(null);
         }
         // Record gone or credential dead: exactly one ordinary fallback, never a loop.
         return this.ordinaryInit(previousConversationId, true);
