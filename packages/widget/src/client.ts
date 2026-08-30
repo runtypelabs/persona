@@ -893,9 +893,12 @@ export class AgentWidgetClient {
   private async _doInitSession(): Promise<ClientSession> {
     await this.historyInternals.historyBootstrapReady;
     const previousConversationId = this.config.getStoredConversationId?.() || null;
-    const storedToken = await this.readVisitorToken();
     const durableResume =
       this.historyInternals.shouldResumeDurableConversation?.() === true;
+    if (!this.isHistoryCapable() && !durableResume) {
+      return this.ordinaryInit(previousConversationId, false);
+    }
+    const storedToken = await this.readVisitorToken();
 
     // Boot resume: reopening the record beats replaying a possibly idle-expired
     // session id, so benign expiry never forks or wipes the conversation.

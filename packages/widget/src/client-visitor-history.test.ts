@@ -403,7 +403,7 @@ describe('client visitor history - boot resume', () => {
     expect(h.resumableWrites).toHaveLength(0);
   });
 
-  it('keeps ordinary no-history initialization unchanged without a durable handle', async () => {
+  it('preserves the stored session without history or a durable handle', async () => {
     await seedToken('cvt_stored');
     installFetch([ok({ sessionId: 'sess_ordinary', conversationId: 'conv_2' })]);
     const h = makeClient({
@@ -418,8 +418,8 @@ describe('client visitor history - boot resume', () => {
       token: CLIENT_TOKEN,
       durableRecovery: true,
       visitorToken: 'cvt_stored',
+      sessionId: 'sess_old',
     });
-    expect(requests[0].body).not.toHaveProperty('sessionId');
     expect(requests[0].body).not.toHaveProperty('conversationId');
   });
 
@@ -654,14 +654,15 @@ describe('client visitor history - 403 degrade', () => {
     expect(h.availability).toEqual([false]);
     expect(warn).toHaveBeenCalledTimes(1);
 
-    // History remains latched off, but recovery negotiates independently and
-    // can reuse the exact-browser credential plus conversation.
+    // History remains latched off, while recovery negotiates independently
+    // without breaking ordinary session continuity.
     h.client.clearClientSession();
     await h.client.initSession();
     expect(requests[2].body).toEqual({
       token: CLIENT_TOKEN,
       durableRecovery: true,
       visitorToken: 'cvt_stored',
+      sessionId: 'sess_plain',
     });
   });
 
