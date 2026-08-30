@@ -884,6 +884,75 @@ describe('controller wiring', () => {
     mount.remove();
   });
 
+  it('keeps async transcript snapshots aligned with the durable cursor', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ui' })]);
+    const saves: AgentWidgetStoredState[] = [];
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      launcher: { enabled: false },
+      storageAdapter: {
+        save: async (state) => {
+          await Promise.resolve();
+          saves.push(state);
+        },
+      },
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(value) {
+        streamController = value;
+      },
+    });
+    const connected = controller.connectStream(stream);
+    const encoder = new TextEncoder();
+    streamController.enqueue(
+      encoder.encode(
+        'id: 7\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_async","id":"text_async","delta":"Hi"}\n\n'
+      )
+    );
+    await vi.waitFor(() =>
+      expect(controller.getPersistentMetadata().durableResume).toEqual({
+        executionId: 'exec_async',
+        after: '7',
+      })
+    );
+
+    streamController.enqueue(
+      encoder.encode(
+        'id: 8\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_async","id":"text_async","delta":" there"}\n\n'
+      )
+    );
+    let firstCompleteTranscript: AgentWidgetStoredState | undefined;
+    await vi.waitFor(() => {
+      firstCompleteTranscript = saves.find((state) =>
+        state.messages?.some(
+          (message) => message.role === 'assistant' && message.content === 'Hi there'
+        )
+      );
+      expect(firstCompleteTranscript).toBeDefined();
+    });
+    expect(firstCompleteTranscript?.metadata?.durableResume).toEqual({
+      executionId: 'exec_async',
+      after: '8',
+    });
+
+    streamController.enqueue(
+      encoder.encode(
+        'id: 9\nevent: execution_complete\ndata: {"type":"execution_complete","executionId":"exec_async","kind":"agent","success":true}\n\n'
+      )
+    );
+    streamController.close();
+    await connected;
+    controller.destroy();
+    mount.remove();
+  });
+
   it('uses Persona-owned stored recovery state to reopen the durable conversation', async () => {
     await seedToken('cvt_stored');
     global.fetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {

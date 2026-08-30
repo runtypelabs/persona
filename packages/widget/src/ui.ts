@@ -1054,6 +1054,8 @@ export const createAgentExperience = (
     messagePersistenceDisabled
       ? null
       : (config.storageAdapter ?? createLocalStorageAdapter());
+  const personaOwnsClientTokenRecovery =
+    Boolean(config.clientToken) && typeof config.reconnectStream !== "function";
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
   // Resolves once stored state has been applied (or its load failed). Every
@@ -5313,9 +5315,21 @@ export const createAgentExperience = (
         ? getMessagesForPersistence()
         : [];
 
+    const durableHandle = personaOwnsClientTokenRecovery
+      ? session?.getResumableHandle()
+      : null;
+    const metadata = durableHandle
+      ? {
+          ...persistentMetadata,
+          durableResume: {
+            executionId: durableHandle.executionId,
+            after: durableHandle.lastEventId,
+          },
+        }
+      : persistentMetadata;
     const payload: AgentWidgetStoredState = {
       messages,
-      metadata: persistentMetadata,
+      metadata,
       artifacts: lastArtifactsState.artifacts,
       selectedArtifactId: lastArtifactsState.selectedId,
       ...(currentStoredDraft ? { draft: currentStoredDraft } : {})
@@ -8384,8 +8398,6 @@ export const createAgentExperience = (
       ? { executionId: candidate.executionId, after: candidate.after }
       : null;
   };
-  const personaOwnsClientTokenRecovery =
-    Boolean(config.clientToken) && typeof config.reconnectStream !== "function";
   if (config.clientToken) {
     config = {
       ...config,
@@ -8645,6 +8657,27 @@ export const createAgentExperience = (
   let activeStreamingTextCandidate: { index: number; id: string } | null = null;
   let pendingStreamingTextMessages: AgentWidgetMessage[] | null = null;
   let streamingTextRAF: number | null = null;
+  let pendingDurablePersistenceMessages: AgentWidgetMessage[] | null = null;
+  let durablePersistenceQueued = false;
+
+  const persistMessages = (messages: AgentWidgetMessage[]) => {
+    const hasStreamingAssistant = messages.some(
+      (message) => message.role === "assistant" && message.streaming === true
+    );
+    if (!personaOwnsClientTokenRecovery || !hasStreamingAssistant) {
+      persistState(messages);
+      return;
+    }
+    pendingDurablePersistenceMessages = messages;
+    if (durablePersistenceQueued) return;
+    durablePersistenceQueued = true;
+    queueMicrotask(() => {
+      durablePersistenceQueued = false;
+      const pending = pendingDurablePersistenceMessages;
+      pendingDurablePersistenceMessages = null;
+      if (pending) persistState(pending);
+    });
+  };
 
   const applyMessagesChanged = (messages: AgentWidgetMessage[]) => {
     lastAppliedMessages = messages;
@@ -8705,7 +8738,7 @@ export const createAgentExperience = (
     }
 
     voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
-    persistState(messages);
+    persistMessages(messages);
     syncComposerBarPeek();
   };
 
