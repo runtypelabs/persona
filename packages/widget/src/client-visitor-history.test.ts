@@ -825,6 +825,65 @@ describe('controller wiring', () => {
     mount.remove();
   });
 
+  it('flushes the latest durable cursor with the transcript during page exit', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ui' })]);
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      launcher: { enabled: false },
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(value) {
+        streamController = value;
+      },
+    });
+    const connected = controller.connectStream(stream);
+    const encoder = new TextEncoder();
+    streamController.enqueue(
+      encoder.encode(
+        'id: 7\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_exit_latest","id":"text_exit_latest","delta":"Hi"}\n\n'
+      )
+    );
+    await vi.waitFor(() =>
+      expect(controller.getPersistentMetadata().durableResume).toEqual({
+        executionId: 'exec_exit_latest',
+        after: '7',
+      })
+    );
+
+    streamController.enqueue(
+      encoder.encode(
+        'id: 8\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_exit_latest","id":"text_exit_latest","delta":" there"}\n\n'
+      )
+    );
+    await vi.waitFor(() =>
+      expect(controller.getMessages().find((message) => message.role === 'assistant')?.content).toBe(
+        'Hi there'
+      )
+    );
+    expect(controller.getPersistentMetadata().durableResume).toEqual({
+      executionId: 'exec_exit_latest',
+      after: '7',
+    });
+
+    window.dispatchEvent(new Event('pagehide'));
+    expect(controller.getPersistentMetadata().durableResume).toEqual({
+      executionId: 'exec_exit_latest',
+      after: '8',
+    });
+
+    streamController.close();
+    await connected;
+    controller.destroy();
+    mount.remove();
+  });
+
   it('uses Persona-owned stored recovery state to reopen the durable conversation', async () => {
     await seedToken('cvt_stored');
     global.fetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {

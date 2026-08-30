@@ -8500,6 +8500,13 @@ export const createAgentExperience = (
     let pageExitInProgress = false;
     const markPageExit = () => {
       pageExitInProgress = true;
+      const handle = session.getResumableHandle();
+      if (handle) {
+        historyInternals.setStoredResumableHandle?.({
+          executionId: handle.executionId,
+          after: handle.lastEventId,
+        });
+      }
     };
     const markPageActive = () => {
       pageExitInProgress = false;
