@@ -825,7 +825,7 @@ describe('controller wiring', () => {
     mount.remove();
   });
 
-  it('flushes the latest durable cursor with the transcript during page exit', async () => {
+  it('persists the latest durable cursor with the transcript before page exit', async () => {
     await seedToken('cvt_stored');
     installFetch([ok({ sessionId: 'sess_ui' })]);
     const mount = document.createElement('div');
@@ -867,16 +867,14 @@ describe('controller wiring', () => {
         'Hi there'
       )
     );
-    expect(controller.getPersistentMetadata().durableResume).toEqual({
-      executionId: 'exec_exit_latest',
-      after: '7',
-    });
+    await vi.waitFor(() =>
+      expect(controller.getPersistentMetadata().durableResume).toEqual({
+        executionId: 'exec_exit_latest',
+        after: '8',
+      })
+    );
 
     window.dispatchEvent(new Event('pagehide'));
-    expect(controller.getPersistentMetadata().durableResume).toEqual({
-      executionId: 'exec_exit_latest',
-      after: '8',
-    });
 
     streamController.close();
     await connected;
@@ -941,6 +939,11 @@ describe('controller wiring', () => {
       executionId: 'exec_async',
       after: '8',
     });
+    await Promise.resolve();
+    const savesBeforeExit = saves.length;
+    window.dispatchEvent(new Event('pagehide'));
+    await Promise.resolve();
+    expect(saves).toHaveLength(savesBeforeExit);
 
     streamController.enqueue(
       encoder.encode(

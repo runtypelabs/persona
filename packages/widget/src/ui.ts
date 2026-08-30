@@ -5315,21 +5315,20 @@ export const createAgentExperience = (
         ? getMessagesForPersistence()
         : [];
 
-    const durableHandle = personaOwnsClientTokenRecovery
-      ? session?.getResumableHandle()
-      : null;
-    const metadata = durableHandle
-      ? {
-          ...persistentMetadata,
-          durableResume: {
-            executionId: durableHandle.executionId,
-            after: durableHandle.lastEventId,
-          },
-        }
-      : persistentMetadata;
+    const durableHandle =
+      personaOwnsClientTokenRecovery && session?.getResumableHandle();
+    if (durableHandle) {
+      persistentMetadata = {
+        ...persistentMetadata,
+        durableResume: {
+          executionId: durableHandle.executionId,
+          after: durableHandle.lastEventId,
+        },
+      };
+    }
     const payload: AgentWidgetStoredState = {
       messages,
-      metadata,
+      metadata: persistentMetadata,
       artifacts: lastArtifactsState.artifacts,
       selectedArtifactId: lastArtifactsState.selectedId,
       ...(currentStoredDraft ? { draft: currentStoredDraft } : {})
@@ -8510,24 +8509,11 @@ export const createAgentExperience = (
     const hostExecutionState = config.onExecutionState;
     const recoveryWindow = mount.ownerDocument.defaultView;
     let pageExitInProgress = false;
-    const markPageExit = () => {
-      pageExitInProgress = true;
-      const handle = session.getResumableHandle();
-      if (handle) {
-        historyInternals.setStoredResumableHandle?.({
-          executionId: handle.executionId,
-          after: handle.lastEventId,
-        });
-      }
-    };
-    const markPageActive = () => {
-      pageExitInProgress = false;
-    };
-    recoveryWindow?.addEventListener("beforeunload", markPageExit);
+    const markPageExit = () => (pageExitInProgress = true);
+    const markPageActive = () => (pageExitInProgress = false);
     recoveryWindow?.addEventListener("pagehide", markPageExit);
     recoveryWindow?.addEventListener("pageshow", markPageActive);
     destroyCallbacks.push(() => {
-      recoveryWindow?.removeEventListener("beforeunload", markPageExit);
       recoveryWindow?.removeEventListener("pagehide", markPageExit);
       recoveryWindow?.removeEventListener("pageshow", markPageActive);
     });
@@ -8658,24 +8644,15 @@ export const createAgentExperience = (
   let pendingStreamingTextMessages: AgentWidgetMessage[] | null = null;
   let streamingTextRAF: number | null = null;
   let pendingDurablePersistenceMessages: AgentWidgetMessage[] | null = null;
-  let durablePersistenceQueued = false;
 
   const persistMessages = (messages: AgentWidgetMessage[]) => {
-    const hasStreamingAssistant = messages.some(
-      (message) => message.role === "assistant" && message.streaming === true
-    );
-    if (!personaOwnsClientTokenRecovery || !hasStreamingAssistant) {
-      persistState(messages);
-      return;
-    }
+    if (!personaOwnsClientTokenRecovery) return persistState(messages);
     pendingDurablePersistenceMessages = messages;
-    if (durablePersistenceQueued) return;
-    durablePersistenceQueued = true;
     queueMicrotask(() => {
-      durablePersistenceQueued = false;
-      const pending = pendingDurablePersistenceMessages;
-      pendingDurablePersistenceMessages = null;
-      if (pending) persistState(pending);
+      if (pendingDurablePersistenceMessages === messages) {
+        pendingDurablePersistenceMessages = null;
+        persistState(messages);
+      }
     });
   };
 
