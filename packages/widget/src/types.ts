@@ -5690,6 +5690,8 @@ export type ClientSession = {
   targetId?: string;
   /** Opaque change token; differs whenever the conversation transcript mutated. */
   conversationRevision?: string;
+  /** Server-negotiated durable reconnect support for this client-token session. */
+  durableRecovery?: { enabled: boolean };
   /** Visitor grant backing history. `token` appears only at mint. */
   visitor?: ClientVisitorGrant;
   /** Configuration from the server */
@@ -5730,6 +5732,8 @@ export type ClientInitResponse = {
   conversationId?: string;
   targetId?: string;
   conversationRevision?: string;
+  /** Present on servers that understand the durable-recovery negotiation. */
+  durableRecovery?: { enabled: boolean };
   visitor?: ClientVisitorGrant;
   config: {
     welcomeMessage: string | null;
@@ -5821,6 +5825,16 @@ export interface WidgetHistoryInternals {
   /** Persist the revision beside the active conversation id (internal only). */
   setStoredConversationRevision?: (revision: string | null) => void;
   getStoredConversationRevision?: () => string | null;
+  /** Internal client-token durable resume handle, persisted with widget state. */
+  setStoredResumableHandle?: (
+    handle: { executionId: string; after: string } | null
+  ) => void;
+  getStoredResumableHandle?: () => {
+    executionId: string;
+    after: string;
+  } | null;
+  /** True only while Persona owns a persisted client-token recovery attempt. */
+  shouldResumeDurableConversation?: () => boolean;
   /** "Show earlier messages" cursor for the persisted transcript. */
   setStoredMessageCursor?: (cursor: string | null) => void;
   getStoredMessageCursor?: () => string | null;

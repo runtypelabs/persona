@@ -58,8 +58,10 @@ export type RuntypeExecutionStreamEvent = ({
   message: string;
 };
   executionId: string;
+  finalOutput?: string;
   kind: "agent" | "flow";
   seq: number;
+  stopReason?: string;
   type: "execution_error";
   upgradeUrl?: string;
 }) | ({

@@ -212,7 +212,7 @@ describe("history controller lifecycle", () => {
       expect(window.localStorage.getItem(keysA.storageKey)).toBe("cvt_alpha");
     });
 
-    it("drops the store entirely when history is disabled", async () => {
+    it("keeps the recovery credential store when history UI is disabled", async () => {
       await seed();
       const { controller } = mount({
         clientToken: TOKEN_A,
@@ -224,7 +224,7 @@ describe("history controller lifecycle", () => {
       await flush(20);
 
       expect(recorder.instances.length).toBe(1);
-      expect(recorder.instances[0]!.destroy).toHaveBeenCalledTimes(1);
+      expect(recorder.instances[0]!.destroy).not.toHaveBeenCalled();
       expect(recorder.instances[0]!.clear).not.toHaveBeenCalled();
     });
   });

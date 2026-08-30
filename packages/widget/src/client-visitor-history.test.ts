@@ -35,6 +35,7 @@ const initBody = (overrides: Partial<ClientInitResponse> = {}): ClientInitRespon
   conversationId: 'conv_1',
   targetId: 'flow_1',
   conversationRevision: 'rev_1',
+  durableRecovery: { enabled: true },
   config: { welcomeMessage: null, placeholder: 'Ask...', theme: null },
   ...overrides,
 });
@@ -85,6 +86,8 @@ type Harness = {
   sessionInits: ClientSession[];
   continuity: Array<{ previousConversationId: string | null; conversationId: string }>;
   availability: boolean[];
+  durableResumePending: boolean;
+  resumableWrites: Array<{ executionId: string; after: string } | null>;
   writes: string[];
 };
 
@@ -92,6 +95,7 @@ const makeClient = (options: {
   history?: boolean;
   storedSessionId?: string | null;
   storedConversationId?: string | null;
+  durableResumePending?: boolean;
   historyBootstrapReady?: Promise<void>;
   config?: Partial<AgentWidgetConfig>;
 }): Harness => {
@@ -104,6 +108,8 @@ const makeClient = (options: {
     sessionInits: [],
     continuity: [],
     availability: [],
+    durableResumePending: options.durableResumePending ?? false,
+    resumableWrites: [],
     writes: [],
   };
   const internals: WidgetHistoryInternals = {
@@ -119,6 +125,11 @@ const makeClient = (options: {
     onHistoryContinuityChanged: (info) => {
       harness.continuity!.push(info);
       harness.writes!.push(`continuity:${info.previousConversationId}->${info.conversationId}`);
+    },
+    shouldResumeDurableConversation: () => harness.durableResumePending === true,
+    setStoredResumableHandle: (handle) => {
+      harness.durableResumePending = handle !== null;
+      harness.resumableWrites!.push(handle);
     },
   };
   const config: AgentWidgetConfig = {
@@ -168,6 +179,7 @@ describe('client visitor history - init capability shape', () => {
       body: {
         token: CLIENT_TOKEN,
         visitorHistory: true,
+        durableRecovery: true,
         visitorToken: 'cvt_stored',
         sessionId: 'sess_old',
       },
@@ -175,7 +187,7 @@ describe('client visitor history - init capability shape', () => {
     expect(requests[0].body).not.toHaveProperty('conversationId');
   });
 
-  it('omits every visitor field when history is disabled', async () => {
+  it('negotiates recovery without enabling the history UI', async () => {
     await seedToken('cvt_stored');
     installFetch([ok()]);
     const h = makeClient({ history: false, storedSessionId: 'sess_old' });
@@ -184,8 +196,11 @@ describe('client visitor history - init capability shape', () => {
 
     expect(requests[0].body).toEqual({
       token: CLIENT_TOKEN,
+      durableRecovery: true,
+      visitorToken: 'cvt_stored',
       sessionId: 'sess_old',
     });
+    expect(requests[0].body).not.toHaveProperty('conversationId');
   });
 
   it('normalizes targetId, preferring the top-level field over flow.id', async () => {
@@ -202,6 +217,41 @@ describe('client visitor history - init capability shape', () => {
     expect(a.targetId).toBe('agent_9');
     expect(a.flow.id).toBe('flow_1');
     expect(b.targetId).toBe('flow_7');
+  });
+
+  it('uses the exact visitor credential and durable cursor for reconnect', async () => {
+    await seedToken('cvt_stored');
+    const events = new Response('event: ping\ndata: {}\n\n', {
+      headers: { 'Content-Type': 'text/event-stream' },
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(ok()())
+      .mockResolvedValueOnce(events);
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const h = makeClient({});
+    await h.client.initSession();
+
+    const controller = new AbortController();
+    const response = await h.client.reconnectClientTokenStream({
+      executionId: 'exec_7',
+      after: '12',
+      signal: controller.signal,
+    });
+
+    expect(response).toBe(events);
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      `${API_URL}/v1/client/conversations/conv_1/executions/exec_7/events` +
+        '?sessionId=sess_1&after=12'
+    );
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
+      method: 'GET',
+      headers: {
+        'X-Persona-Version': expect.any(String),
+        'X-Visitor-Token': 'cvt_stored',
+      },
+      signal: controller.signal,
+    });
   });
 });
 
@@ -313,6 +363,7 @@ describe('client visitor history - boot resume', () => {
     expect(requests[0].body).toEqual({
       token: CLIENT_TOKEN,
       visitorHistory: true,
+      durableRecovery: true,
       visitorToken: 'cvt_stored',
       conversationId: 'conv_1',
     });
@@ -329,6 +380,103 @@ describe('client visitor history - boot resume', () => {
 
     expect(requests[0].body).toMatchObject({ sessionId: 'sess_old' });
     expect(requests[0].body).not.toHaveProperty('conversationId');
+  });
+
+  it('reopens a durable conversation without enabling the history UI', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_resumed' })]);
+    const h = makeClient({
+      history: false,
+      storedSessionId: 'sess_old',
+      storedConversationId: 'conv_1',
+      durableResumePending: true,
+    });
+
+    await h.client.initSession();
+
+    expect(requests[0].body).toEqual({
+      token: CLIENT_TOKEN,
+      durableRecovery: true,
+      visitorToken: 'cvt_stored',
+      conversationId: 'conv_1',
+    });
+    expect(h.resumableWrites).toHaveLength(0);
+  });
+
+  it('preserves the stored session without history or a durable handle', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ordinary', conversationId: 'conv_2' })]);
+    const h = makeClient({
+      history: false,
+      storedSessionId: 'sess_old',
+      storedConversationId: 'conv_1',
+    });
+
+    await h.client.initSession();
+
+    expect(requests[0].body).toEqual({
+      token: CLIENT_TOKEN,
+      durableRecovery: true,
+      visitorToken: 'cvt_stored',
+      sessionId: 'sess_old',
+    });
+    expect(requests[0].body).not.toHaveProperty('conversationId');
+  });
+
+  it('drops a pending handle when the server does not enable recovery', async () => {
+    await seedToken('cvt_stored');
+    installFetch([
+      ok({ sessionId: 'sess_resumed', durableRecovery: { enabled: false } }),
+    ]);
+    const h = makeClient({
+      history: false,
+      storedConversationId: 'conv_1',
+      durableResumePending: true,
+    });
+
+    const session = await h.client.initSession();
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body).toMatchObject({ conversationId: 'conv_1' });
+    expect(session.durableRecovery).toEqual({ enabled: false });
+    expect(h.resumableWrites).toEqual([null]);
+  });
+
+  it('drops a pending handle when an old server omits the recovery capability', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_legacy', durableRecovery: undefined })]);
+    const h = makeClient({
+      history: false,
+      storedConversationId: 'conv_1',
+      durableResumePending: true,
+    });
+
+    const session = await h.client.initSession();
+
+    expect(session.durableRecovery).toBeUndefined();
+    expect(h.resumableWrites).toEqual([null]);
+  });
+
+  it('clears a stale pending handle before its single ordinary fallback', async () => {
+    await seedToken('cvt_stored');
+    installFetch([
+      fail(404, { error: 'Conversation not found' }),
+      ok({ sessionId: 'sess_new', conversationId: 'conv_2' }),
+    ]);
+    const h = makeClient({
+      history: false,
+      storedSessionId: 'sess_old',
+      storedConversationId: 'conv_1',
+      durableResumePending: true,
+    });
+
+    await h.client.initSession();
+
+    expect(requests).toHaveLength(2);
+    expect(requests[0].body).toMatchObject({ conversationId: 'conv_1' });
+    expect(requests[1].body).toMatchObject({ sessionId: 'sess_old' });
+    expect(requests[1].body).not.toHaveProperty('conversationId');
+    expect(h.resumableWrites).toEqual([null]);
   });
 
   it('falls back exactly once on a resume 404 and reports the continuity break', async () => {
@@ -417,6 +565,7 @@ describe('client visitor history - prepared sessions', () => {
     expect(requests[1].body).toEqual({
       token: CLIENT_TOKEN,
       visitorHistory: true,
+      durableRecovery: true,
       visitorToken: 'cvt_stored',
       conversationId: 'conv_other',
     });
@@ -478,6 +627,7 @@ describe('client visitor history - prepared sessions', () => {
     expect(requests[0].body).toEqual({
       token: CLIENT_TOKEN,
       visitorHistory: true,
+      durableRecovery: true,
       visitorToken: 'cvt_stored',
     });
     expect(prepared.session.sessionId).toBe('sess_new');
@@ -504,10 +654,16 @@ describe('client visitor history - 403 degrade', () => {
     expect(h.availability).toEqual([false]);
     expect(warn).toHaveBeenCalledTimes(1);
 
-    // Latched for the client's lifetime: later inits skip the visitor fields.
+    // History remains latched off, while recovery negotiates independently
+    // without breaking ordinary session continuity.
     h.client.clearClientSession();
     await h.client.initSession();
-    expect(requests[2].body).toEqual({ token: CLIENT_TOKEN, sessionId: 'sess_plain' });
+    expect(requests[2].body).toEqual({
+      token: CLIENT_TOKEN,
+      durableRecovery: true,
+      visitorToken: 'cvt_stored',
+      sessionId: 'sess_plain',
+    });
   });
 
   it('rejects rather than degrading a conversation resume into another record', async () => {
@@ -566,9 +722,192 @@ describe('controller wiring', () => {
     expect(requests[0].body).toEqual({
       token: CLIENT_TOKEN,
       visitorHistory: true,
+      durableRecovery: true,
       visitorToken: 'cvt_stored',
       conversationId: 'conv_stored',
     });
+
+    controller.destroy();
+    mount.remove();
+  });
+
+  it('persists the built-in durable handle without history UI config and clears it at terminal', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ui' })]);
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      launcher: { enabled: false },
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = new ReadableStream<Uint8Array>({
+      start(value) {
+        streamController = value;
+      },
+    });
+    const connected = controller.connectStream(stream);
+    const encoder = new TextEncoder();
+    streamController.enqueue(
+      encoder.encode(
+        'id: 7\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_ui","id":"text_ui","delta":"Hi"}\n\n'
+      )
+    );
+    await vi.waitFor(() =>
+      expect(controller.getPersistentMetadata().durableResume).toEqual({
+        executionId: 'exec_ui',
+        after: '7',
+      })
+    );
+
+    streamController.enqueue(
+      encoder.encode(
+        'id: 8\nevent: execution_complete\ndata: {"type":"execution_complete","executionId":"exec_ui","kind":"agent","success":true}\n\n'
+      )
+    );
+    streamController.close();
+    await connected;
+    expect(controller.getPersistentMetadata()).not.toHaveProperty('durableResume');
+
+    controller.destroy();
+    mount.remove();
+  });
+
+  it('retains the built-in durable handle during page exit', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ui' })]);
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      launcher: { enabled: false },
+    });
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+
+    let firstStreamController!: ReadableStreamDefaultController<Uint8Array>;
+    const firstStream = new ReadableStream<Uint8Array>({
+      start(value) {
+        firstStreamController = value;
+      },
+    });
+    const firstConnected = controller.connectStream(firstStream);
+    const encoder = new TextEncoder();
+    firstStreamController.enqueue(
+      encoder.encode(
+        'id: 7\nevent: text_delta\ndata: {"type":"text_delta","executionId":"exec_exit","id":"text_exit","delta":"Hi"}\n\n'
+      )
+    );
+    await vi.waitFor(() =>
+      expect(controller.getPersistentMetadata().durableResume).toEqual({
+        executionId: 'exec_exit',
+        after: '7',
+      })
+    );
+
+    window.dispatchEvent(new Event('pagehide'));
+    firstStreamController.enqueue(
+      encoder.encode(
+        'id: 8\nevent: execution_complete\ndata: {"type":"execution_complete","executionId":"exec_exit","kind":"agent","success":true}\n\n'
+      )
+    );
+    firstStreamController.close();
+    await firstConnected;
+    expect(controller.getPersistentMetadata().durableResume).toEqual({
+      executionId: 'exec_exit',
+      after: '7',
+    });
+
+    controller.destroy();
+    mount.remove();
+  });
+
+  it('uses Persona-owned stored recovery state to reopen the durable conversation', async () => {
+    await seedToken('cvt_stored');
+    global.fetch = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
+      if (String(url) === INIT_URL) {
+        requests.push({
+          url: String(url),
+          body: JSON.parse(String(options?.body)) as Record<string, unknown>,
+          headers: (options?.headers ?? {}) as Record<string, string>,
+        });
+        return new Response(
+          JSON.stringify(
+            initBody({
+              sessionId: 'sess_resumed',
+              conversationId: 'conv_durable',
+            })
+          ),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return new Response(
+        'id: 20\nevent: execution_complete\ndata: {"type":"execution_complete","executionId":"exec_durable","kind":"agent","success":true}\n\n',
+        { status: 200, headers: { 'Content-Type': 'text/event-stream' } }
+      );
+    }) as unknown as typeof fetch;
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      launcher: { enabled: false },
+      storageAdapter: {
+        load: async () => ({
+          messages: [],
+          metadata: {
+            conversationId: 'conv_durable',
+            durableResume: { executionId: 'exec_durable', after: '19' },
+          },
+        }),
+        save: () => undefined,
+      },
+    });
+
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body).toMatchObject({
+      durableRecovery: true,
+      visitorToken: 'cvt_stored',
+      conversationId: 'conv_durable',
+    });
+    expect(requests[0].body).not.toHaveProperty('visitorHistory');
+
+    controller.destroy();
+    mount.remove();
+  });
+
+  it('does not pass Persona-stored recovery state to a custom reconnect transport', async () => {
+    await seedToken('cvt_stored');
+    installFetch([ok({ sessionId: 'sess_ui' })]);
+    const reconnectStream = vi.fn(
+      () => new Promise<Response>(() => undefined)
+    );
+    const mount = document.createElement('div');
+    document.body.appendChild(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: API_URL,
+      clientToken: CLIENT_TOKEN,
+      launcher: { enabled: false },
+      reconnectStream,
+      storageAdapter: {
+        load: async () => ({
+          messages: [],
+          metadata: {
+            conversationId: 'conv_host',
+            durableResume: { executionId: 'exec_host', after: '19' },
+          },
+        }),
+        save: () => undefined,
+      },
+    });
+
+    await vi.waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests[0].body).not.toHaveProperty('conversationId');
+    expect(controller.getStatus()).toBe('idle');
+    expect(reconnectStream).not.toHaveBeenCalled();
 
     controller.destroy();
     mount.remove();

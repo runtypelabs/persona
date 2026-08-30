@@ -911,6 +911,60 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
     });
   });
 
+  it('proves the exact recovery visitor on durable client-token chat', async () => {
+    let capturedHeaders: Record<string, string> | undefined;
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: RequestInit) => {
+      capturedHeaders = options.headers as Record<string, string>;
+      const encoder = new TextEncoder();
+      return {
+        ok: true,
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+              executionId: 'exec_1',
+              agentId: 'agent_123',
+              success: true,
+              iterations: 1,
+              completedAt: new Date().toISOString(),
+              seq: 1,
+            })));
+            controller.close();
+          },
+        }),
+      };
+    });
+
+    const client = new AgentWidgetClient({
+      apiUrl: 'https://api.runtype.com',
+      clientToken: 'ct_live_demo',
+      agentId: 'agent_123',
+    });
+    (client as unknown as {
+      clientSession: {
+        sessionId: string;
+        expiresAt: Date;
+        durableRecovery: { enabled: boolean };
+      };
+    }).clientSession = {
+      sessionId: 'sess_durable',
+      expiresAt: new Date(Date.now() + 10 * 60_000),
+      durableRecovery: { enabled: true },
+    };
+    (client as unknown as { readVisitorToken: () => Promise<string> }).readVisitorToken =
+      async () => 'cvt_owner';
+
+    await client.dispatch({
+      messages: [{
+        id: 'usr_1',
+        role: 'user',
+        content: 'Hello durable agent',
+        createdAt: '2025-01-01T00:00:00.000Z',
+      }],
+    }, () => {});
+
+    expect(capturedHeaders?.['X-Visitor-Token']).toBe('cvt_owner');
+  });
+
   it('should build agent payload with agent config', async () => {
     let capturedPayload: any = null;
     global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
@@ -3011,7 +3065,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
     expect(capturedUrl).toBe('http://localhost:43111/api/chat/dispatch/resume');
   });
 
-  it('routes to /v1/client/resume with sessionId in client-token mode (core#3889)', async () => {
+  it('routes durable client-token resume with the live session, visitor proof, and cursor', async () => {
     let capturedUrl: string | undefined;
     let capturedBody: Record<string, unknown> | undefined;
     let capturedHeaders: Record<string, string> | undefined;
@@ -3027,12 +3081,21 @@ describe('AgentWidgetClient.resumeFlow', () => {
       apiUrl: 'https://api.runtype.com',
     });
     // Simulate an initialized client session (resumeFlow reads sessionId off it).
-    (client as unknown as { clientSession: { sessionId: string; expiresAt: Date } }).clientSession = {
+    (client as unknown as {
+      clientSession: {
+        sessionId: string;
+        expiresAt: Date;
+        durableRecovery: { enabled: boolean };
+      };
+    }).clientSession = {
       sessionId: 'cs_123',
       expiresAt: new Date(Date.now() + 60_000),
+      durableRecovery: { enabled: true },
     };
+    (client as unknown as { readVisitorToken: () => Promise<string> }).readVisitorToken =
+      async () => 'cvt_resume';
 
-    await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } });
+    await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } }, { after: '18' });
 
     // Session-authed sibling of /v1/client/chat: no Bearer key, sessionId in body.
     expect(capturedUrl).toBe('https://api.runtype.com/v1/client/resume');
@@ -3041,8 +3104,10 @@ describe('AgentWidgetClient.resumeFlow', () => {
       toolOutputs: { toolu_A: { ok: true } },
       streamResponse: true,
       sessionId: 'cs_123',
+      after: '18',
     });
     expect(capturedHeaders!['Authorization']).toBeUndefined();
+    expect(capturedHeaders!['X-Visitor-Token']).toBe('cvt_resume');
   });
 
   it('strips a trailing /v1/dispatch from apiUrl when building the client resume URL', async () => {
