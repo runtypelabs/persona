@@ -22,6 +22,12 @@ import {
  * - Script tag: `createSelectionExplainPlugin({ container: "#article" })`.
  *   It attaches itself when the installer fires `persona:chat-ready`.
  *
+ * `persona:chat-ready` fires once, so create the companion before the widget
+ * initializes. If it may run later, pass `controller`, call `attach()`, or set
+ * `windowKey` to adopt an already-mounted widget from `window[windowKey]`. The
+ * toolbar stays hidden until a controller is attached — it never renders
+ * actions that would silently do nothing.
+ *
  * Each action stages the selection with `controller.setQuote()`. A `"send"`
  * action then calls `submitMessage(prompt)`; a `"draft"` action calls
  * `focusInput()` so the visitor types the question. The quote rides the send
@@ -57,6 +63,12 @@ export type SelectionExplainOptions = {
    * or `attach()` call always wins.
    */
   autoAttach?: boolean;
+  /**
+   * Installer `windowKey` holding the widget handle. Checked lazily, so a
+   * companion created after `persona:chat-ready` already fired can still
+   * adopt the mounted widget.
+   */
+  windowKey?: string;
   /** Quote-banner attribution (e.g. the article title). Static or per-selection. */
   sourceLabel?: string | ((selectionText: string) => string);
   /** Minimum selected characters before the toolbar appears. Default 8. */
@@ -164,6 +176,20 @@ export function createSelectionExplainPlugin(
   let evaluateTimer: number | null = null;
   let destroyed = false;
 
+  // `persona:chat-ready` fires once; a companion created after it has missed
+  // the event. `windowKey` closes that race: the installer stores the handle
+  // on `window[windowKey]`, so check there lazily as the fallback.
+  const resolveController = (): AgentWidgetController | null => {
+    if (controller) return controller;
+    if (options.windowKey) {
+      const handle = (window as unknown as Record<string, unknown>)[
+        options.windowKey
+      ];
+      if (handle) controller = handle as AgentWidgetController;
+    }
+    return controller;
+  };
+
   // Resolved on every evaluation, so the toolbar survives SPA re-renders and
   // containers that mount after this call.
   const resolveContainer = (): HTMLElement | null => {
@@ -199,19 +225,20 @@ export function createSelectionExplainPlugin(
   };
 
   const runAction = (action: SelectionExplainAction): void => {
-    if (!controller || !currentText) return;
+    const active = resolveController();
+    if (!active || !currentText) return;
     const text = currentText;
 
-    controller.setQuote(buildQuote());
-    controller.open();
+    active.setQuote(buildQuote());
+    active.open();
 
     if (action.mode === "send" && action.prompt) {
       // `submitMessage` refuses while a reply is streaming (it returns false
       // and the composer keeps the staged quote), so fall back to the draft
       // flow instead of dropping the visitor's selection on the floor.
-      if (!controller.submitMessage(action.prompt)) controller.focusInput();
+      if (!active.submitMessage(action.prompt)) active.focusInput();
     } else {
-      controller.focusInput();
+      active.focusInput();
     }
 
     window.getSelection()?.removeAllRanges();
@@ -243,6 +270,12 @@ export function createSelectionExplainPlugin(
 
   const evaluate = (): void => {
     if (destroyed) return;
+    // No controller yet (widget not mounted, or the ready event was missed):
+    // keep the toolbar hidden rather than show actions that would no-op.
+    if (!resolveController()) {
+      dismiss();
+      return;
+    }
     const container = resolveContainer();
     const selection = window.getSelection();
     if (
