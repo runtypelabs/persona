@@ -11,7 +11,8 @@ import type {
 // calls `initializeWebMCPPolyfill()` (idempotent install of document.modelContext).
 // We stub the install as a no-op and provide `document.modelContext` ourselves,
 // modeling the strict producer-preview surface the bridge consumes:
-//   - getTools(): async; inputSchema is a JSON string; NO annotations
+//   - getTools(): async; inputSchema in either generation (see
+//     `registry.schemaShape`); NO annotations
 //   - executeTool(info, argsJson, { signal }): async; validates+runs execute(),
 //     returns JSON.stringify(rawResult) or null; honors the abort signal.
 // ---------------------------------------------------------------------------
@@ -48,17 +49,40 @@ type MockTool = {
   execute: (args: Record<string, unknown>, client: MockClient) => unknown;
 };
 
-const registry: { tools: MockTool[] } = { tools: [] };
+/**
+ * Which generation of the WebMCP `inputSchema` contract the fake emits.
+ *
+ * `"object"` is what `@mcp-b/webmcp-polyfill` v5 and Chrome 154+ return after
+ * `webmcp#241`; `"string"` is the serialized form Chrome 149-153 and 154's
+ * same-document tools still emit. Both are live in the field, so the snapshot
+ * tests run against both -- pinning this fake to one generation is exactly how
+ * the v5 bump landed green while every real dispatch 400'd.
+ */
+type SchemaShape = "object" | "string";
+
+const registry: { tools: MockTool[]; schemaShape: SchemaShape } = {
+  tools: [],
+  schemaShape: "object",
+};
 
 /** A fake `document.modelContext` exposing the strict consumer surface. */
 const makeModelContext = () => ({
   async getTools() {
-    // Mirrors the real polyfill's getRegisteredToolInfos(): `title` is always
-    // present, "" when the tool didn't declare one; annotations are absent.
+    // Mirrors the real polyfill's getTools(): `title` is always present, ""
+    // when the tool didn't declare one; annotations are absent. v5 OMITS
+    // `inputSchema` for a tool that registered none, where v4 always emitted a
+    // `{"type":"object"}` string.
     return registry.tools.map((t) => ({
       name: t.name,
       description: t.description ?? `mock ${t.name}`,
-      inputSchema: JSON.stringify(t.inputSchema ?? { type: "object" }),
+      ...(t.inputSchema === undefined
+        ? {}
+        : {
+            inputSchema:
+              registry.schemaShape === "object"
+                ? t.inputSchema
+                : JSON.stringify(t.inputSchema),
+          }),
       title: t.title ?? "",
     }));
   },
@@ -110,6 +134,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   polyfillMock.initThrows = false;
   registry.tools = [];
+  registry.schemaShape = "object";
   // location is read by snapshotForDispatch; document.modelContext is the
   // consumer surface. Both are absent in the Node test environment.
   vi.stubGlobal("location", { origin: "https://example.test" });
@@ -166,29 +191,68 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
     expect(bridge.isOperational()).toBe(false);
   });
 
-  it("ships only the JSON-serializable surface (name, description, schema, origin)", async () => {
-    registry.tools = [
-      fakeTool({
-        name: "search",
-        description: "search the shop",
-        inputSchema: { type: "object", properties: { q: { type: "string" } } },
-      }),
-    ];
-    const bridge = new WebMcpBridge({ enabled: true });
-    const snap = await bridge.snapshotForDispatch();
-    expect(snap).toHaveLength(1);
-    const tool = snap[0]!;
-    expect(tool.name).toBe("search");
-    expect(tool.description).toBe("search the shop");
-    expect(tool.parametersSchema).toEqual({
-      type: "object",
-      properties: { q: { type: "string" } },
+  // Both `inputSchema` generations must produce the same wire tool: the object
+  // form (webmcp#241 / polyfill v5 / Chrome 154+) and the serialized string
+  // Chrome 149-153 still emits.
+  it.each(["object", "string"] as const)(
+    "ships only the JSON-serializable surface (name, description, schema, origin) [%s inputSchema]",
+    async (schemaShape) => {
+      registry.schemaShape = schemaShape;
+      registry.tools = [
+        fakeTool({
+          name: "search",
+          description: "search the shop",
+          inputSchema: { type: "object", properties: { q: { type: "string" } } },
+        }),
+      ];
+      const bridge = new WebMcpBridge({ enabled: true });
+      const snap = await bridge.snapshotForDispatch();
+      expect(snap).toHaveLength(1);
+      const tool = snap[0]!;
+      expect(tool.name).toBe("search");
+      expect(tool.description).toBe("search the shop");
+      expect(tool.parametersSchema).toEqual({
+        type: "object",
+        properties: { q: { type: "string" } },
+      });
+      expect(tool.origin).toBe("webmcp");
+      expect(tool.pageOrigin).toBe("https://example.test");
+      expect((tool as unknown as { execute?: unknown }).execute).toBeUndefined();
+      // Now that the registry was read, the bridge reports operational.
+      expect(bridge.isOperational()).toBe(true);
+    },
+  );
+
+  // `parametersSchema` is required by the server's InlineClientToolSchema, and
+  // one entry missing it fails the whole DispatchRequestSchema union: a tool
+  // with no usable schema must degrade to "takes no arguments", never to an
+  // omitted key that 400s the turn.
+  it("always sends a parametersSchema, even when the tool declared none", async () => {
+    registry.tools = [fakeTool({ name: "ping" })];
+    const snap = await new WebMcpBridge({ enabled: true }).snapshotForDispatch();
+    expect(snap[0]!.parametersSchema).toEqual({ type: "object", properties: {} });
+  });
+
+  it.each([
+    ["unparseable string", "{not json"],
+    ["non-object JSON string", '"just a string"'],
+    ["JSON array string", "[1,2,3]"],
+    ["array object", [1, 2, 3]],
+    ["null", null],
+  ])("falls back to an empty schema for %s", async (_label, inputSchema) => {
+    registry.tools = [fakeTool({ name: "odd" })];
+    // Bypass the fake's shape switch: these are malformed values a page or a
+    // future runtime could hand us, not either sanctioned generation.
+    vi.stubGlobal("document", {
+      modelContext: {
+        ...makeModelContext(),
+        async getTools() {
+          return [{ name: "odd", description: "odd", inputSchema, title: "" }];
+        },
+      },
     });
-    expect(tool.origin).toBe("webmcp");
-    expect(tool.pageOrigin).toBe("https://example.test");
-    expect((tool as unknown as { execute?: unknown }).execute).toBeUndefined();
-    // Now that the registry was read, the bridge reports operational.
-    expect(bridge.isOperational()).toBe(true);
+    const snap = await new WebMcpBridge({ enabled: true }).snapshotForDispatch();
+    expect(snap[0]!.parametersSchema).toEqual({ type: "object", properties: {} });
   });
 
   it("applies client-side allowlist glob (`search_*`)", async () => {

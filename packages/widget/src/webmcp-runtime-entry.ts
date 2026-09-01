@@ -134,11 +134,10 @@ export class WebMcpBridge {
         const def: ClientToolDefinition = {
           name: info.name,
           description: info.description,
+          parametersSchema: normalizeInputSchema(info.inputSchema),
           origin: "webmcp",
           ...(pageOrigin ? { pageOrigin } : {}),
         };
-        const schema = parseSchema(info.inputSchema);
-        if (schema) def.parametersSchema = schema;
         return def;
       });
   }
@@ -404,19 +403,47 @@ const matchesGlob = (name: string, pattern: string): boolean => {
 };
 
 /**
- * Parse the JSON-string `inputSchema` from `getTools()` back into an object for
- * `parametersSchema`. Returns `undefined` for a missing or unparseable schema
- * (the server can still accept a tool with no declared parameters).
+ * A tool that declared no usable schema. Sent rather than omitted: see below.
  */
-const parseSchema = (raw: string | undefined): object | undefined => {
-  if (raw === undefined || raw === "") return undefined;
+const EMPTY_INPUT_SCHEMA = { type: "object", properties: {} } as const;
+
+/**
+ * `getTools()`'s `inputSchema`, in either generation, as the JSON Schema object
+ * `dispatch.clientTools[].parametersSchema` carries.
+ *
+ * TWO shapes are live in the field. `webmcp#241` replaced the serialized JSON
+ * string with a JSON Schema object; `@mcp-b/webmcp-polyfill` adopted that in v5
+ * and Chrome ships it from 154.0.8013 (cross-document tools first), while
+ * Chrome 149-153 -- most of the Origin Trial population -- and 154's
+ * same-document tools still emit the string. So: branch on `typeof`, and guard
+ * the parse of the string arm. Assuming one shape is a silent failure here and
+ * a loud one at dispatch, which is how the object generation shipped past us
+ * (`JSON.parse(object)` throws, every schema was dropped, every turn 400'd).
+ *
+ * ALWAYS returns an object. `parametersSchema` is required by the server's
+ * `InlineClientToolSchema`, and one entry missing it fails the whole top-level
+ * `DispatchRequestSchema` union -- 400-ing the entire turn rather than dropping
+ * the one tool, with an `INVALID_UNION` at path `""` that names nothing. A tool
+ * with no schema, or an unparseable one, degrades to "takes no arguments"
+ * instead of taking the conversation down with it.
+ */
+const normalizeInputSchema = (raw: object | string | undefined): object => {
+  if (raw === undefined || raw === "") return { ...EMPTY_INPUT_SCHEMA };
+
+  // Object generation (webmcp#241): pass through as-is. Arrays are `typeof
+  // "object"` but are not JSON Schema objects, so they fall through.
+  if (typeof raw === "object") {
+    return raw !== null && !Array.isArray(raw) ? raw : { ...EMPTY_INPUT_SCHEMA };
+  }
+
+  // String generation: guarded parse.
   try {
-    const parsed = JSON.parse(raw);
-    return parsed !== null && typeof parsed === "object"
+    const parsed: unknown = JSON.parse(raw);
+    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as object)
-      : undefined;
+      : { ...EMPTY_INPUT_SCHEMA };
   } catch {
-    return undefined;
+    return { ...EMPTY_INPUT_SCHEMA };
   }
 };
 

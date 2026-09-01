@@ -49,8 +49,22 @@ export const WEBMCP_TOOL_PREFIX = "webmcp:";
 export interface ModelContextToolInfo {
   name: string;
   description: string;
-  /** JSON-encoded JSON Schema for the tool's input. */
-  inputSchema?: string;
+  /**
+   * JSON Schema for the tool's input, in EITHER generation of the WebMCP
+   * contract. Never read it raw: `normalizeInputSchema` in
+   * `webmcp-runtime-entry.ts` collapses both shapes to the object the wire
+   * needs.
+   *
+   * `webmcp#241` changed this from a JSON-encoded string to a JSON Schema
+   * object. `@mcp-b/webmcp-polyfill` made the switch in v5, and Chrome ships it
+   * from 154.0.8013 (cross-document tools first) -- but Chrome 149-153, most of
+   * the Origin Trial population, and 154's same-document tools still emit the
+   * string. Both are live in the field, so we accept both.
+   *
+   * Absent when the tool registered no schema: v5 omits the member, where v4
+   * always emitted a `{"type":"object"}` string.
+   */
+  inputSchema?: object | string;
   /**
    * Display title declared on the tool (`ToolDescriptor.title` in the WebMCP
    * spec). The polyfill returns `""` when the tool didn't declare one. Note:
