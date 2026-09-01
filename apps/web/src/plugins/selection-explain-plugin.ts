@@ -187,15 +187,21 @@ export function createSelectionExplainPlugin(
   // registry of mounted handles — imported when this file shares the widget's
   // bundle, or via the `AgentWidget` CDN global on script-tag pages where the
   // two are separate module instances.
+  type MountedHandle = AgentWidgetController & { host?: HTMLElement };
   const registryHandles = (): AgentWidgetController[] => {
-    const imported = getAgentWidgetHandles();
-    if (imported.length) return imported;
+    const imported = getAgentWidgetHandles() as MountedHandle[];
     const cdnGlobal = (
       window as unknown as {
-        AgentWidget?: { getAgentWidgetHandles?: () => AgentWidgetController[] };
+        AgentWidget?: { getAgentWidgetHandles?: () => MountedHandle[] };
       }
     ).AgentWidget;
-    return cdnGlobal?.getAgentWidgetHandles?.() ?? [];
+    const handles = imported.length
+      ? imported
+      : (cdnGlobal?.getAgentWidgetHandles?.() ?? []);
+    // A host that drops a widget's DOM without calling destroy() leaves a
+    // zombie handle in the registry. A disconnected host can't be the widget
+    // the visitor sees, so never adopt one.
+    return handles.filter((handle) => !handle.host || handle.host.isConnected);
   };
   const resolveController = (): AgentWidgetController | null => {
     if (controller) return controller;
