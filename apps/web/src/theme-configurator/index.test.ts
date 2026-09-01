@@ -322,8 +322,15 @@ describe('theme configurator shell', () => {
     `;
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     window.dispatchEvent(new Event('beforeunload'));
+    // Installing the v5 polyfill also starts a document-level MutationObserver
+    // (the declarative form-tool scanner) plus capture-phase listeners that
+    // outlive this suite's jsdom teardown -- left running, the scanner fires
+    // after vitest removes the DOM globals (`ReferenceError: ShadowRoot is not
+    // defined`). Tear the whole install down with the polyfill's own cleanup.
+    const { cleanupWebMCPPolyfill } = await import('@mcp-b/webmcp-polyfill');
+    cleanupWebMCPPolyfill();
   });
 
   test('initializes grouped sections and preview shell', async () => {

@@ -40,7 +40,17 @@ export function mountThemeEditorMcp(
 
     const tools = [...createThemeEditorTools(state), ...(options?.extraTools ?? [])];
     for (const tool of tools) {
-      modelContext.registerTool(tool, { signal: controller.signal });
+      // `registerTool()` is async since `@mcp-b/webmcp-polyfill` v5 and
+      // REJECTS with the abort reason when the registration signal fires
+      // before it settles. Fire-and-forget turned every prompt unmount into
+      // one unhandled AbortError per tool; await each and treat abort as the
+      // expected unmount path.
+      try {
+        await modelContext.registerTool(tool, { signal: controller.signal });
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        throw error;
+      }
     }
     console.info(`[persona] Registered ${tools.length} theme-editor WebMCP tools.`);
   })();
