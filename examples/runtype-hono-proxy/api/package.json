@@ -1,0 +1,5 @@
+{
+  "name": "runtype-hono-proxy-fn",
+  "private": true,
+  "type": "module"
+}
