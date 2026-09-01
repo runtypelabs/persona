@@ -1,5 +1,22 @@
 # @runtypelabs/persona
 
+## 4.21.1
+
+### Patch Changes
+
+- a7433b9: Flush the latest durable event cursor with the persisted transcript when a page exits so reconnect does not replay text that the widget already rendered.
+
+## 4.21.0
+
+### Minor Changes
+
+- 944354b: Automatically use Persona's durable reconnect and reload-resume path for Runtype client-token widgets, independently of whether the embed exposes conversation history, and carry durable cursors and visitor proof through client-tool continuation.
+- 8b09e05: Add `webmcp.execution: "parallel" | "sequential"`. When a turn emits several `webmcp:*` tool calls at once, the widget ran them all concurrently, which interleaves page tools that share mutable state (the Paint demo's strokes each select a tool and color before drawing). `"sequential"` runs the batch one at a time in emission order, waiting for each call to settle (approval included) before starting the next; outputs still return in a single `/resume`. The default stays `"parallel"`.
+
+### Patch Changes
+
+- 8b09e05: Run agent-mode text through the configured `streamParser`. Agent `text_delta` chunks previously appended the raw delta straight onto the message, bypassing `streamParser` and leaving `rawContent` unset — so a server-pinned agent that replies with a JSON envelope rendered the raw `{"text": ...}` in the bubble and never dispatched its action. Agent text now flows through the same structured-content path as flow text. Agents using the default plain-text parser are unaffected.
+
 ## 4.20.0
 
 ### Minor Changes

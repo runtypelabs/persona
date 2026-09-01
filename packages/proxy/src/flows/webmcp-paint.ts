@@ -11,7 +11,8 @@ import type { RuntypeFlowConfig } from "../index.js";
  * `get_canvas_snapshot` returns the canvas as an MCP **image** content block
  * through `/resume`, so the model can look at what it painted and correct it
  *: the same image-tool-result path the Theme Copilot's `screenshot_preview`
- * uses, which is why this flow uses the same image-capable model.
+ * uses, which is why this flow pins a model with both vision and native tool
+ * calls rather than the demo default.
  *
  * The page also ships live canvas state as `{{paint_context}}` via the
  * widget's `contextProviders` + `requestMiddleware`: canvas dimensions,
@@ -28,7 +29,7 @@ export const WEBMCP_PAINT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "nvidia/nemotron-3-ultra-550b-a55b",
+        model: "openai/gpt-5.6-luna-fast",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",

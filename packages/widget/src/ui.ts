@@ -1055,6 +1055,8 @@ export const createAgentExperience = (
     messagePersistenceDisabled
       ? null
       : (config.storageAdapter ?? createLocalStorageAdapter());
+  const personaOwnsClientTokenRecovery =
+    Boolean(config.clientToken) && typeof config.reconnectStream !== "function";
   let persistentMetadata: Record<string, unknown> = {};
   let pendingStoredState: Promise<AgentWidgetStoredState | null> | null = null;
   // Resolves once stored state has been applied (or its load failed). Every
@@ -5314,6 +5316,17 @@ export const createAgentExperience = (
         ? getMessagesForPersistence()
         : [];
 
+    const durableHandle =
+      personaOwnsClientTokenRecovery && session?.getResumableHandle();
+    if (durableHandle) {
+      persistentMetadata = {
+        ...persistentMetadata,
+        durableResume: {
+          executionId: durableHandle.executionId,
+          after: durableHandle.lastEventId,
+        },
+      };
+    }
     const payload: AgentWidgetStoredState = {
       messages,
       metadata: persistentMetadata,
@@ -8401,6 +8414,20 @@ export const createAgentExperience = (
     const stored = persistentMetadata[key];
     return typeof stored === 'string' ? stored : null;
   };
+  const readStoredResumableHandle = (): {
+    executionId: string;
+    after: string;
+  } | null => {
+    const stored = persistentMetadata.durableResume;
+    if (!stored || typeof stored !== 'object') return null;
+    const candidate = stored as Record<string, unknown>;
+    return typeof candidate.executionId === 'string' &&
+      candidate.executionId.length > 0 &&
+      typeof candidate.after === 'string' &&
+      candidate.after.length > 0
+      ? { executionId: candidate.executionId, after: candidate.after }
+      : null;
+  };
   if (config.clientToken) {
     config = {
       ...config,
@@ -8425,11 +8452,11 @@ export const createAgentExperience = (
     };
   }
 
-  // Visitor-history credential store, keyed on (clientToken, keyPrefix,
-  // persistence-disabled). Owned here and injected into every client the
-  // session builds; `update()` rebuilds it when that tuple changes.
+  // Exact-browser visitor credential store, keyed on (clientToken, keyPrefix,
+  // persistence-disabled). Durable reconnect and optional visitor history use
+  // the same credential but negotiate independent server capabilities.
   const historyStoreToken = (): string | null =>
-    config.features?.history?.enabled === true ? (config.clientToken ?? null) : null;
+    config.clientToken ?? null;
   const buildVisitorStore = (token: string) =>
     createVisitorStore(token, currentKeyPrefix(), config.persistState === false);
   const initialStoreToken = historyStoreToken();
@@ -8477,6 +8504,16 @@ export const createAgentExperience = (
         pendingDisplayProjections: pending,
       }));
     },
+    getStoredResumableHandle: readStoredResumableHandle,
+    setStoredResumableHandle: (handle) => {
+      if (!handle) {
+        dropMetadataKey('durableResume');
+        return;
+      }
+      updateSessionMetadata((prev) => ({ ...prev, durableResume: handle }));
+    },
+    shouldResumeDurableConversation: () =>
+      personaOwnsClientTokenRecovery && readStoredResumableHandle() !== null,
     ...(hostOwnsConversationId
       ? {}
       : {
@@ -8494,6 +8531,40 @@ export const createAgentExperience = (
           },
         }),
   };
+
+  // Runtype client-token widgets already possess the session, conversation,
+  // and exact-browser visitor credential needed by the public reconnect route.
+  // Install Persona's existing reconnect hooks by default so this mode follows
+  // the same path as host-configured durable dashboard chats.
+  if (personaOwnsClientTokenRecovery) {
+    const hostExecutionState = config.onExecutionState;
+    const recoveryWindow = mount.ownerDocument.defaultView;
+    let pageExitInProgress = false;
+    const markPageExit = () => (pageExitInProgress = true);
+    const markPageActive = () => (pageExitInProgress = false);
+    recoveryWindow?.addEventListener("pagehide", markPageExit);
+    recoveryWindow?.addEventListener("pageshow", markPageActive);
+    destroyCallbacks.push(() => {
+      recoveryWindow?.removeEventListener("pagehide", markPageExit);
+      recoveryWindow?.removeEventListener("pageshow", markPageActive);
+    });
+    config = {
+      ...config,
+      reconnectStream:
+        config.reconnectStream ??
+        ((ctx) => session.getClient().reconnectClientTokenStream(ctx)),
+      onExecutionState: (handle) => {
+        if (handle || !pageExitInProgress) {
+          historyInternals.setStoredResumableHandle?.(
+            handle
+              ? { executionId: handle.executionId, after: handle.lastEventId }
+              : null
+          );
+        }
+        hostExecutionState?.(handle);
+      },
+    };
+  }
   const syncVisitorStore = () => {
     const token = historyStoreToken();
     if (
@@ -8603,6 +8674,18 @@ export const createAgentExperience = (
   let activeStreamingTextCandidate: { index: number; id: string } | null = null;
   let pendingStreamingTextMessages: AgentWidgetMessage[] | null = null;
   let streamingTextRAF: number | null = null;
+  let pendingDurablePersistenceMessages: AgentWidgetMessage[] | null = null;
+
+  const persistMessages = (messages: AgentWidgetMessage[]) => {
+    if (!personaOwnsClientTokenRecovery) return persistState(messages);
+    pendingDurablePersistenceMessages = messages;
+    queueMicrotask(() => {
+      if (pendingDurablePersistenceMessages === messages) {
+        pendingDurablePersistenceMessages = null;
+        persistState(messages);
+      }
+    });
+  };
 
   const applyMessagesChanged = (messages: AgentWidgetMessage[]) => {
     lastAppliedMessages = messages;
@@ -8663,7 +8746,7 @@ export const createAgentExperience = (
     }
 
     voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
-    persistState(messages);
+    persistMessages(messages);
     syncComposerBarPeek();
   };
 
@@ -11328,8 +11411,13 @@ export const createAgentExperience = (
   // the restored conversation. Fires AFTER hydration so the trailing partial
   // assistant bubble exists for the replay to append to.
   const maybeBootResume = () => {
-    if (config.resume && typeof config.reconnectStream === "function") {
-      session.resumeFromHandle(config.resume);
+    const resume =
+      config.resume ??
+      (personaOwnsClientTokenRecovery
+        ? historyInternals.getStoredResumableHandle?.()
+        : null);
+    if (resume && typeof config.reconnectStream === "function") {
+      session.resumeFromHandle(resume);
     }
   };
 

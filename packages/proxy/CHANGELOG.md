@@ -1,5 +1,12 @@
 # @runtypelabs/persona-proxy
 
+## 4.21.0
+
+### Patch Changes
+
+- 8b09e05: Move the demo flows and agents to `google/gemini-3.5-flash-lite`. WebMCP Paint runs on `nvidia/nemotron-3-ultra-550b-a55b`: its snapshot-and-look loop needs both vision and native tool calls.
+- b5cfcd1: Paint Pal demo flow now runs on `openai/gpt-5.6-luna-fast` instead of `nvidia/nemotron-3-ultra-550b-a55b`.
+
 ## 4.20.0
 
 ### Patch Changes
