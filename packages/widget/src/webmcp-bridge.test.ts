@@ -11,7 +11,7 @@ import type {
 // calls `initializeWebMCPPolyfill()` (idempotent install of document.modelContext).
 // We stub the install as a no-op and provide `document.modelContext` ourselves,
 // modeling the strict producer-preview surface the bridge consumes:
-//   - getTools(): async; inputSchema is a JSON string; NO annotations
+//   - getTools(): async; inputSchema is an object (webmcp#241); NO annotations
 //   - executeTool(info, argsJson, { signal }): async; validates+runs execute(),
 //     returns JSON.stringify(rawResult) or null; honors the abort signal.
 // ---------------------------------------------------------------------------
@@ -50,17 +50,29 @@ type MockTool = {
 
 const registry: { tools: MockTool[] } = { tools: [] };
 
+/**
+ * Serialize `inputSchema` the way polyfill 4.x / Chrome 149–153 did, so a test
+ * can exercise the legacy string arm of `parseSchema`.
+ */
+const legacyStringSchemas = { enabled: false };
+
 /** A fake `document.modelContext` exposing the strict consumer surface. */
 const makeModelContext = () => ({
   async getTools() {
-    // Mirrors the real polyfill's getRegisteredToolInfos(): `title` is always
-    // present, "" when the tool didn't declare one; annotations are absent.
-    return registry.tools.map((t) => ({
-      name: t.name,
-      description: t.description ?? `mock ${t.name}`,
-      inputSchema: JSON.stringify(t.inputSchema ?? { type: "object" }),
-      title: t.title ?? "",
-    }));
+    // Mirrors the real polyfill's getTools(): `title` is always present, ""
+    // when the tool didn't declare one; annotations are absent. `inputSchema`
+    // is a plain object since webmcp#241 (polyfill 5.x, Chrome 154+).
+    return registry.tools.map((t) => {
+      const schema = t.inputSchema ?? { type: "object" };
+      return {
+        name: t.name,
+        description: t.description ?? `mock ${t.name}`,
+        inputSchema: legacyStringSchemas.enabled
+          ? JSON.stringify(schema)
+          : schema,
+        title: t.title ?? "",
+      };
+    });
   },
   async executeTool(
     info: { name: string },
@@ -109,6 +121,7 @@ const allowAll: WebMcpConfirmHandler = vi.fn(async () => true);
 beforeEach(() => {
   vi.clearAllMocks();
   polyfillMock.initThrows = false;
+  legacyStringSchemas.enabled = false;
   registry.tools = [];
   // location is read by snapshotForDispatch; document.modelContext is the
   // consumer surface. Both are absent in the Node test environment.
@@ -189,6 +202,22 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
     expect((tool as unknown as { execute?: unknown }).execute).toBeUndefined();
     // Now that the registry was read, the bridge reports operational.
     expect(bridge.isOperational()).toBe(true);
+  });
+
+  it("accepts a legacy JSON-string inputSchema (polyfill 4.x / Chrome 149-153)", async () => {
+    legacyStringSchemas.enabled = true;
+    registry.tools = [
+      fakeTool({
+        name: "search",
+        inputSchema: { type: "object", properties: { q: { type: "string" } } },
+      }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true });
+    const snap = await bridge.snapshotForDispatch();
+    expect(snap[0]!.parametersSchema).toEqual({
+      type: "object",
+      properties: { q: { type: "string" } },
+    });
   });
 
   it("applies client-side allowlist glob (`search_*`)", async () => {

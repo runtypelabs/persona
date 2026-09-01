@@ -49,8 +49,12 @@ export const WEBMCP_TOOL_PREFIX = "webmcp:";
 export interface ModelContextToolInfo {
   name: string;
   description: string;
-  /** JSON-encoded JSON Schema for the tool's input. */
-  inputSchema?: string;
+  /**
+   * JSON Schema for the tool's input. An object since webmcp#241 (polyfill 5.x,
+   * Chrome 154+); Chrome 149–153 and polyfill 4.x return the JSON-encoded string
+   * that change replaced. `parseSchema` accepts both — branch on `typeof`.
+   */
+  inputSchema?: object | string;
   /**
    * Display title declared on the tool (`ToolDescriptor.title` in the WebMCP
    * spec). The polyfill returns `""` when the tool didn't declare one. Note:

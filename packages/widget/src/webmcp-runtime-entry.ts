@@ -404,12 +404,18 @@ const matchesGlob = (name: string, pattern: string): boolean => {
 };
 
 /**
- * Parse the JSON-string `inputSchema` from `getTools()` back into an object for
- * `parametersSchema`. Returns `undefined` for a missing or unparseable schema
- * (the server can still accept a tool with no declared parameters).
+ * Normalize the `inputSchema` from `getTools()` into an object for
+ * `parametersSchema`. Both generations are accepted: webmcp#241 (polyfill 5.x,
+ * Chrome 154+) returns a plain object, while Chrome 149–153 and polyfill 4.x
+ * return the JSON-encoded string it replaced. Returns `undefined` for a missing
+ * or unparseable schema (the server can still accept a tool with no declared
+ * parameters).
  */
-const parseSchema = (raw: string | undefined): object | undefined => {
+const parseSchema = (
+  raw: object | string | undefined,
+): object | undefined => {
   if (raw === undefined || raw === "") return undefined;
+  if (typeof raw === "object") return raw === null ? undefined : raw;
   try {
     const parsed = JSON.parse(raw);
     return parsed !== null && typeof parsed === "object"
