@@ -340,21 +340,50 @@ export function createSelectionExplainPlugin(
   const handleChatReady = (event: Event): void => {
     if (controller) return;
     const detail = (event as CustomEvent<AgentWidgetController>).detail;
-    if (detail) controller = detail;
+    if (detail) {
+      controller = detail;
+      clearWarnTimer();
+    }
   };
   if (autoAttach) {
     window.addEventListener("persona:chat-ready", handleChatReady);
   }
 
+  // A companion created after `persona:chat-ready` fired, with no `controller`
+  // and no `windowKey`, has no channel to the widget: the toolbar just stays
+  // hidden. Silent failure is undiagnosable, so tell the developer what to
+  // wire up if nothing attaches within the grace period.
+  let warnTimer: number | null = null;
+  const clearWarnTimer = (): void => {
+    if (warnTimer !== null) {
+      window.clearTimeout(warnTimer);
+      warnTimer = null;
+    }
+  };
+  if (autoAttach && !controller) {
+    warnTimer = window.setTimeout(() => {
+      warnTimer = null;
+      if (destroyed || resolveController()) return;
+      console.warn(
+        "[selection-explain] No widget controller attached after 4s; the toolbar will stay hidden. " +
+          "Pass `controller` (from initAgentWidget), call `attach(handle)`, or set `windowKey` to match " +
+          "your installer config. Script-tag installs must create this companion before the widget " +
+          "mounts so it can catch `persona:chat-ready`."
+      );
+    }, 4000);
+  }
+
   return {
     attach(next: AgentWidgetController) {
       controller = next;
+      clearWarnTimer();
     },
     destroy() {
       if (destroyed) return;
       destroyed = true;
       document.removeEventListener("selectionchange", handleSelectionChange);
       window.removeEventListener("persona:chat-ready", handleChatReady);
+      clearWarnTimer();
       if (evaluateTimer !== null) window.clearTimeout(evaluateTimer);
       popover?.destroy();
       popover = null;
