@@ -247,7 +247,7 @@ function renderLiveSetup(stage: HTMLElement): () => void {
   const code = document.createElement("pre");
   code.className = "code-block";
   code.textContent =
-    "VITE_CLIENT_TOKEN_HISTORY=ct_live_…\n# Optional, defaults to https://api.runtype.com:\n# VITE_HISTORY_API_URL=https://api.runtype-staging.com";
+    "VITE_CLIENT_TOKEN_HISTORY=ct_live_…\n# Optional, defaults to https://api.runtype.com:\n# VITE_HISTORY_API_URL=https://api.your-domain.com";
   panel.appendChild(code);
 
   addLine(

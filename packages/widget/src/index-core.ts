@@ -1,5 +1,6 @@
 import {
   initAgentWidget as initAgentWidgetFn,
+  getAgentWidgetHandles as getAgentWidgetHandlesFn,
   type AgentWidgetInitHandle
 } from "./runtime/init";
 
@@ -326,6 +327,7 @@ export {
 } from "./suggest-replies-tool";
 
 export { initAgentWidgetFn as initAgentWidget };
+export { getAgentWidgetHandlesFn as getAgentWidgetHandles };
 export {
   createWidgetHostLayout,
   type WidgetHostLayout,

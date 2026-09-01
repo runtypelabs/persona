@@ -432,12 +432,14 @@ export type RuntypeStopReasonKind = NonNullable<
 >;
 
 export type RuntypeClientInitRequest = {
+  durableRecovery?: boolean;
   flowId?: string;
   identityProof?: string;
   token: string;
   visitorHistory?: boolean;
   visitorToken?: string;
 } | {
+  durableRecovery?: boolean;
   flowId?: string;
   identityProof?: string;
   sessionId: string;
@@ -446,6 +448,7 @@ export type RuntypeClientInitRequest = {
   visitorToken?: string;
 } | {
   conversationId: string;
+  durableRecovery?: boolean;
   flowId?: string;
   identityProof?: string;
   token: string;
@@ -453,6 +456,7 @@ export type RuntypeClientInitRequest = {
   visitorToken: string;
 } | {
   conversationId: string;
+  durableRecovery?: boolean;
   flowId?: string;
   identityProof: string;
   token: string;
@@ -471,6 +475,9 @@ export type RuntypeClientInitResponse = {
 };
   conversationId: string;
   conversationRevision: string;
+  durableRecovery?: {
+  enabled: boolean;
+};
   expiresAt: string;
   flow?: {
   description?: string | null;
@@ -538,6 +545,7 @@ export type RuntypeClientChatRequest = {
 export type RuntypeClientChatStreamEvent = RuntypeExecutionStreamEvent;
 
 export type RuntypeClientResumeRequest = {
+  after?: string;
   assistantMessageId?: string;
   clientTools?: Array<{
   description: string;

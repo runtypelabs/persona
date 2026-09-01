@@ -46,6 +46,19 @@ const mountStyles = (root: ShadowRoot | HTMLElement, ownerDocument: Document) =>
 
 export type AgentWidgetInitHandle = AgentWidgetController & { host: HTMLElement };
 
+// Live handles for every mounted initAgentWidget() instance, oldest first.
+// `persona:chat-ready` is a one-shot broadcast and `windowKey` is opt-in, so
+// code that runs after a widget mounted previously had no way to reach it.
+// This registry closes that gap: late companions (selection toolbars, host
+// integrations) can adopt the most recent mount via
+// `getAgentWidgetHandles().at(-1)`. Handles deregister on destroy().
+const activeHandles: AgentWidgetInitHandle[] = [];
+
+/** Handles of all currently mounted widgets, oldest first. */
+export const getAgentWidgetHandles = (): AgentWidgetInitHandle[] => [
+  ...activeHandles,
+];
+
 export const initAgentWidget = (
   options: AgentWidgetInitOptions
 ): AgentWidgetInitHandle => {
@@ -154,6 +167,8 @@ export const initAgentWidget = (
     destroy() {
       destroyCurrentController();
       hostLayout.destroy();
+      const index = activeHandles.indexOf(handle);
+      if (index !== -1) activeHandles.splice(index, 1);
       if (options.windowKey && typeof window !== "undefined") {
         delete (window as any)[options.windowKey];
       }
@@ -174,6 +189,8 @@ export const initAgentWidget = (
       return typeof value === "function" ? (value as Function).bind(controller) : value;
     }
   }) as AgentWidgetInitHandle;
+
+  activeHandles.push(handle);
 
   if (options.windowKey && typeof window !== 'undefined') {
     (window as any)[options.windowKey] = handle;

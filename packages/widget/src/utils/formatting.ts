@@ -52,6 +52,28 @@ export const describeReasonStatus = (reasoning: AgentWidgetReasoning) => {
   return "";
 };
 
+/** Defaults for `features.reasoningDisplay.shortThinkThreshold`. */
+export const DEFAULT_SHORT_THINK_DURATION_MS = 15_000;
+export const DEFAULT_SHORT_THINK_CHARS = 1_200;
+
+/**
+ * A completed reasoning trace is short when its duration is under the
+ * threshold, or (with no reported duration) its streamed text is under the
+ * character threshold. Duration is preferred when available.
+ */
+export const isShortReasoning = (
+  reasoning: AgentWidgetReasoning,
+  threshold?: { durationMs?: number; chars?: number }
+): boolean => {
+  const durationThreshold = threshold?.durationMs ?? DEFAULT_SHORT_THINK_DURATION_MS;
+  const charsThreshold = threshold?.chars ?? DEFAULT_SHORT_THINK_CHARS;
+  if (typeof reasoning.durationMs === "number") {
+    return reasoning.durationMs < durationThreshold;
+  }
+  const chars = (reasoning.chunks ?? []).join("").length;
+  return chars < charsThreshold;
+};
+
 export const formatToolDuration = (tool: AgentWidgetToolCall) => {
   const durationMs =
     typeof tool.duration === "number"

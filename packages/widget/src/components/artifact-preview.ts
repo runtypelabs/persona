@@ -447,6 +447,11 @@ function setupPreviewLoading(
   const addTimer = (fn: () => void, ms: number): void => {
     const id = setTimeout(() => {
       timers.delete(id);
+      // Unit tests drop rendered blocks without running destroy(), so a
+      // pending timer can outlive the test file's DOM environment. Every
+      // callback here does DOM work; with no document left there is nothing
+      // to do (and `document.createElement` would throw).
+      if (typeof document === "undefined") return;
       fn();
     }, ms) as unknown as number;
     timers.add(id);

@@ -2054,6 +2054,7 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `grouped` | `false` | Visually group consecutive tool call rows |
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
 | `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
+| `completedVisibility` | `"kept"` | `"removed"` renders no row once the tool call completes, so the transcript gap closes with it. The tool call stays on the message and in `getMessages()` |
 
 | Property (`config.toolCall.*`) | Default | Description |
 |----------|---------|-------------|
@@ -2079,7 +2080,8 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
 | `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
 | `iconName` |: | Lucide icon at the leading edge of the collapsed header row (e.g. `"sparkles"`). Class hook: `.persona-reasoning-header-icon` |
-| `completedVisibility` | `"kept"` | `"removed"` renders no row once the trace completes, so the transcript gap closes with it. The reasoning text stays on the message and in `getMessages()` |
+| `completedVisibility` | `"kept"` | `"removed"` renders no row once the trace completes, so the transcript gap closes with it; `"removed-when-short"` does the same only for a short completed trace (see `shortThinkThreshold`). The reasoning text stays on the message and in `getMessages()` |
+| `shortThinkThreshold` | `{ durationMs: 15000, chars: 1200 }` | Thresholds used by `completedVisibility: "removed-when-short"`. Duration is checked first when reported; character count of the joined chunks is the fallback |
 
 ### Text Templates
 | Property | Default | Description |
