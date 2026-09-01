@@ -128,6 +128,22 @@ const DARK_COMPONENTS: DeepPartial<PersonaTheme> = {
         foreground: 'palette.colors.primary.300',
       },
     },
+    // Event-stream badge chips flip to a 900-tone fill with a 300-tone text
+    // (primary is the inverted dark ramp, so 800/200 lands the same way).
+    // The light defaults are 100-tone fills that read as glowing swatches on
+    // a dark panel; every pair here keeps >=4.5:1 text contrast (locked by
+    // event-stream-badge-theming.test.ts).
+    eventStream: {
+      badge: {
+        flow: { background: 'palette.colors.success.900', foreground: 'palette.colors.success.300' },
+        step: { background: 'palette.colors.primary.800', foreground: 'palette.colors.primary.200' },
+        reasoning: { background: 'palette.colors.warning.900', foreground: 'palette.colors.warning.300' },
+        tool: { background: 'palette.colors.purple.900', foreground: 'palette.colors.purple.300' },
+        agent: { background: 'palette.colors.teal.900', foreground: 'palette.colors.teal.300' },
+        error: { background: 'palette.colors.error.900', foreground: 'palette.colors.error.300' },
+        default: { background: 'palette.colors.gray.800', foreground: 'palette.colors.gray.300' },
+      },
+    },
     history: {
       // error-400: the light-surface error-600 red lands ~3:1 on dark
       // surfaces, under the 4.5:1 AA floor for the 14px destructive labels.

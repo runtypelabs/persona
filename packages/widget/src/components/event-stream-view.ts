@@ -32,17 +32,25 @@ function applyCustomClasses(el: HTMLElement, classes?: string): void {
 // Constants
 // ============================================================================
 
-const DEFAULT_BADGE_COLORS: Record<string, EventStreamBadgeColor> = {
-  flow_: { bg: "var(--persona-palette-colors-success-100, #dcfce7)", text: "var(--persona-palette-colors-success-700, #166534)" },
-  step_: { bg: "var(--persona-palette-colors-primary-100, #f5f5f5)", text: "var(--persona-palette-colors-primary-700, #0a0a0a)" },
-  reason_: { bg: "var(--persona-palette-colors-warning-100, #ffedd5)", text: "var(--persona-palette-colors-warning-700, #9a3412)" },
-  tool_: { bg: "var(--persona-palette-colors-purple-100, #f3e8ff)", text: "var(--persona-palette-colors-purple-700, #6b21a8)" },
-  agent_: { bg: "var(--persona-palette-colors-teal-100, #ccfbf1)", text: "var(--persona-palette-colors-teal-700, #115e59)" },
-  error: { bg: "var(--persona-palette-colors-error-100, #fecaca)", text: "var(--persona-palette-colors-error-700, #991b1b)" },
+// Badge families resolve through the theme pipeline: the aliases below are
+// materialized into every theme (light pairs in DEFAULT_COMPONENTS, dark pairs
+// in the built-in dark layer of createDarkTheme), so the chip follows the
+// active color scheme and re-resolves live on scheme toggles. The literal
+// fallbacks are the light pairs, for direct mounts outside a themed root.
+export const DEFAULT_BADGE_COLORS: Record<string, EventStreamBadgeColor> = {
+  flow_: { bg: "var(--persona-event-badge-flow-bg, #dcfce7)", text: "var(--persona-event-badge-flow-fg, #15803d)" },
+  step_: { bg: "var(--persona-event-badge-step-bg, #f5f5f5)", text: "var(--persona-event-badge-step-fg, #0a0a0a)" },
+  reasoning_: { bg: "var(--persona-event-badge-reasoning-bg, #fef9c3)", text: "var(--persona-event-badge-reasoning-fg, #a16207)" },
+  tool_: { bg: "var(--persona-event-badge-tool-bg, #f3e8ff)", text: "var(--persona-event-badge-tool-fg, #6b21a8)" },
+  agent_: { bg: "var(--persona-event-badge-agent-bg, #ccfbf1)", text: "var(--persona-event-badge-agent-fg, #115e59)" },
+  error: { bg: "var(--persona-event-badge-error-bg, #fee2e2)", text: "var(--persona-event-badge-error-fg, #b91c1c)" },
 };
+// The unified error event type is `error`; `execution_error` carries the same
+// severity and would otherwise fall through to the default pair.
+DEFAULT_BADGE_COLORS.execution_error = DEFAULT_BADGE_COLORS.error;
 const DEFAULT_BADGE_COLOR: EventStreamBadgeColor = {
-  bg: "var(--persona-palette-colors-gray-100, #f3f4f6)",
-  text: "var(--persona-palette-colors-gray-600, #4b5563)",
+  bg: "var(--persona-event-badge-default-bg, #f3f4f6)",
+  text: "var(--persona-event-badge-default-fg, #4b5563)",
 };
 
 const DEFAULT_DESCRIPTION_FIELDS = [
@@ -62,20 +70,42 @@ const UPDATE_THROTTLE_MS = 100;
 // Helper Functions
 // ============================================================================
 
-function getBadgeColor(
+function matchBadgeColor(
+  eventType: string,
+  colors: Record<string, EventStreamBadgeColor>
+): EventStreamBadgeColor | undefined {
+  // Exact match first, then prefix match (keys ending with "_").
+  if (colors[eventType]) return colors[eventType];
+  for (const prefix of Object.keys(colors)) {
+    if (prefix.endsWith("_") && eventType.startsWith(prefix)) {
+      return colors[prefix];
+    }
+  }
+  return undefined;
+}
+
+export function getBadgeColor(
   eventType: string,
   customColors?: Record<string, EventStreamBadgeColor>
 ): EventStreamBadgeColor {
-  const allColors = { ...DEFAULT_BADGE_COLORS, ...customColors };
-  // Exact match first
-  if (allColors[eventType]) return allColors[eventType];
-  // Prefix match (keys ending with "_")
-  for (const prefix of Object.keys(allColors)) {
-    if (prefix.endsWith("_") && eventType.startsWith(prefix)) {
-      return allColors[prefix];
-    }
-  }
-  return DEFAULT_BADGE_COLOR;
+  // Host colors are a strictly higher tier than the defaults: a host prefix
+  // (e.g. `execution_`) must not be shadowed by the built-in exact
+  // `execution_error` entry, so the maps are never merged flat.
+  return (
+    (customColors && matchBadgeColor(eventType, customColors)) ??
+    matchBadgeColor(eventType, DEFAULT_BADGE_COLORS) ??
+    DEFAULT_BADGE_COLOR
+  );
+}
+
+// The chip border is its text color at ~31% alpha. The hex-suffix trick only
+// composes on a bare 6-digit hex; every other value (var() refs like the
+// defaults above, rgb(), named colors) needs color-mix or the declaration is
+// invalid and silently dropped.
+export function getBadgeBorderColor(text: string): string {
+  return /^#[0-9a-fA-F]{6}$/.test(text)
+    ? `${text}50`
+    : `color-mix(in srgb, ${text} 31%, transparent)`;
 }
 
 function formatRelativeTimestamp(ms: number, firstEventMs: number): string {
@@ -326,7 +356,7 @@ function renderEventRow(
     );
     badge.style.backgroundColor = badgeColor.bg;
     badge.style.color = badgeColor.text;
-    badge.style.borderColor = badgeColor.text + "50";
+    badge.style.borderColor = getBadgeBorderColor(badgeColor.text);
     badge.textContent = event.type;
 
     // 5. Description (extracted from payload)
