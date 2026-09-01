@@ -218,6 +218,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "selection-explain-demo",
+    href: "/selection-explain-demo.html",
+    title: "Select-to-Explain",
+    blurb: "A selection toolbar quotes highlighted page text into the composer via setQuote().",
+    tier: "patterns",
+    tags: ["interaction", "context"],
+    modes: ["launcher"],
+  },
+  {
     slug: "ask-user-question-demo",
     href: "/ask-user-question-demo.html",
     title: "Ask User Question & Suggested Replies",

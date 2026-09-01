@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Select-to-Explain: Persona</title>
+
+    <style>
+      /* Scope article styles to the preview pane so they don't leak into the rail. */
+      .article-pane {
+        padding: 0;
+        overflow-y: auto;
+        background: #fdfcfa;
+      }
+      .article-body {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: 2.5rem 1.5rem 4rem;
+        color: #1f2937;
+        font-size: 0.95rem;
+        line-height: 1.7;
+      }
+      .article-kicker {
+        margin: 0 0 0.4rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #b45309;
+      }
+      .article-body h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.7rem;
+        line-height: 1.25;
+        color: #111827;
+      }
+      .article-standfirst {
+        margin: 0 0 2rem;
+        font-size: 1.02rem;
+        color: #6b7280;
+      }
+      .article-body h2 {
+        margin: 2rem 0 0.6rem;
+        font-size: 1.15rem;
+        color: #111827;
+      }
+      .article-body p {
+        margin: 0 0 1rem;
+      }
+      .article-body ::selection {
+        background: #fde68a;
+      }
+      .article-hint {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin: 0 0 2rem;
+        padding: 0.65rem 0.9rem;
+        border: 1px dashed #d1d5db;
+        border-radius: 8px;
+        font-size: 0.8rem;
+        color: #6b7280;
+        background: #fff;
+      }
+
+      /* Copy buttons on the notes code blocks */
+      .notes .code-block {
+        position: relative;
+      }
+      .code-copy-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        border: 1px solid color-mix(in srgb, var(--code-fg) 25%, var(--code-bg));
+        border-radius: 6px;
+        /* Opaque: the button floats over code, so text must not show through. */
+        background: color-mix(in srgb, var(--code-fg) 12%, var(--code-bg));
+        color: var(--code-fg);
+        font-family: inherit;
+        font-size: 0.68rem;
+        font-weight: 600;
+        padding: 0.25rem 0.55rem;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .code-copy-btn:hover {
+        background: color-mix(in srgb, var(--code-fg) 20%, var(--code-bg));
+      }
+
+      /* Selection action log (left rail) */
+      .selection-log-wrap[data-empty] .selection-log {
+        display: none;
+      }
+      .selection-log-wrap:not([data-empty]) .selection-log-empty {
+        display: none;
+      }
+      .selection-log-empty {
+        margin: 0;
+        font-size: 0.78rem;
+        color: #94a3b8;
+      }
+      .selection-log {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.4rem;
+      }
+      .selection-log li {
+        font-size: 0.78rem;
+        line-height: 1.4;
+        color: #334155;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        background: #fff;
+        padding: 0.45rem 0.6rem;
+      }
+      .selection-log li span {
+        color: #94a3b8;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <header class="demo-meta">
+            <h1>Select-to-Explain</h1>
+            <p>
+              A host-page toolbar appears when you select article text. It
+              quotes the selection into the widget with
+              <code>controller.setQuote()</code>, then sends it or focuses the
+              composer.
+            </p>
+            <div class="mount-toolbar" data-mount-toolbar></div>
+          </header>
+
+          <div class="info-section">
+            <h3>Try it</h3>
+            <div class="section">
+              <p style="font-size: 0.8rem; margin: 0 0 0.5rem;">
+                Highlight a sentence or two in the article. Then pick an
+                action:
+              </p>
+              <ul style="font-size: 0.8rem; margin: 0; padding-left: 1.1rem;">
+                <li><strong>Explain this</strong> — sends the selection with a canned prompt.</li>
+                <li><strong>Ask about it</strong> — quotes the selection. You type the question.</li>
+              </ul>
+              <p style="font-size: 0.8rem; margin: 0.5rem 0 0;">
+                The echo backend replies with what it received.
+              </p>
+            </div>
+          </div>
+
+          <div class="info-section selection-log-wrap" data-empty>
+            <h3>Selection actions</h3>
+            <p class="selection-log-empty">Nothing yet — highlight some text.</p>
+            <ul class="selection-log" id="selection-log"></ul>
+          </div>
+
+          <div data-config-inspector></div>
+        </aside>
+
+        <div class="stage-widget article-pane">
+          <article class="article-body">
+            <p class="article-kicker">Field Notes</p>
+            <h1>How Espresso Extraction Works</h1>
+            <p class="article-standfirst">
+              Nine bars of pressure, thirty seconds, and a surprising amount of
+              chemistry: what actually happens inside the puck.
+            </p>
+            <p class="article-hint">
+              💡 Highlight any passage below to ask the assistant about it.
+            </p>
+
+            <h2>Solubles in a hurry</h2>
+            <p>
+              Espresso is a forced-percolation brew: hot water at roughly nine
+              bars of pressure is pushed through a compacted bed of finely
+              ground coffee, dissolving and emulsifying its soluble material in
+              well under a minute. Extraction yield — the percentage of the dry
+              grounds' mass that ends up in the cup — typically lands between 18
+              and 22 percent. Below that range the shot tastes sour and thin
+              because the fast-dissolving fruit acids arrive first; above it,
+              slow-moving bitter phenolics and dry-tasting melanoidins dominate.
+            </p>
+            <p>
+              The order of dissolution is the whole game. Acids and simple
+              sugars give up quickly; caramelized sugars take longer; the harsh,
+              papery compounds emerge last. A barista chasing balance is really
+              adjusting time, temperature, and surface area so the extraction
+              stops at the right point on that curve.
+            </p>
+
+            <h2>The puck is a filter bed</h2>
+            <p>
+              Grind size sets the surface area, but the puck's real job is
+              hydraulic. Tamping compresses the grounds into a uniform filter
+              bed with predictable resistance. If the bed is uneven, water finds
+              the path of least resistance and carves a channel — a phenomenon
+              called channeling — over-extracting a narrow column of coffee
+              while leaving the rest of the puck barely touched. The result is
+              a shot that is somehow both bitter and sour at once.
+            </p>
+            <p>
+              Modern technique obsesses over puck preparation for exactly this
+              reason: distribution tools, Weiss Distribution Technique needles,
+              and precision baskets all exist to make the bed's permeability
+              boring and uniform.
+            </p>
+
+            <h2>Crema, an emulsion with a deadline</h2>
+            <p>
+              The reddish-brown foam capping a fresh shot is crema: carbon
+              dioxide trapped during roasting, released under pressure and
+              stabilized into a foam by emulsified oils and melanoidins. It is
+              also a freshness gauge — beans more than a few weeks past roast
+              have out-gassed most of their CO₂ and produce a thin, fleeting
+              crema. Contrary to café mythology, crema itself tastes mostly
+              bitter; its value is textural and diagnostic, not flavor.
+            </p>
+
+            <h2>Why ratios beat recipes</h2>
+            <p>
+              A "double shot" means little without a brew ratio: the weight of
+              beverage in the cup divided by the weight of dry grounds. A 1:2
+              ratio pulled in 25 to 30 seconds is the modern starting point — 18
+              grams in, 36 grams out. Tighter ratios (ristretto) concentrate
+              texture at the cost of clarity; longer ones (lungo) trade body for
+              extraction. Because the ratio pins down strength independently of
+              grind and time, it is the one variable worth fixing first and
+              adjusting last.
+            </p>
+          </article>
+        </div>
+      </div>
+
+      <section class="notes">
+        <h2 class="notes-heading">Notes</h2>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">How it works</h3>
+          <p>The toolbar is host-page code, not widget UI.</p>
+          <ol>
+            <li>
+              A debounced <code>selectionchange</code> listener waits for a
+              selection inside the article.
+            </li>
+            <li>
+              The toolbar opens in a plugin-kit <code>createPopover</code>
+              anchored over the selection.
+            </li>
+            <li>
+              Both actions call
+              <code>controller.setQuote({ text, sourceLabel })</code>. That
+              shows the quote banner above the composer.
+            </li>
+            <li>
+              <strong>Explain this</strong> calls
+              <code>submitMessage(prompt)</code>. <strong>Ask about it</strong>
+              calls <code>focusInput()</code>.
+            </li>
+          </ol>
+          <p>
+            On the wire, the quote travels ahead of the message as a
+            <code>```quoted-text source=…```</code> block. It is all one user
+            turn. The agent needs no extra context plumbing.
+          </p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Integrate it</h3>
+          <p>
+            Copy
+            <a
+              href="https://github.com/runtypelabs/persona/blob/main/apps/web/src/plugins/selection-explain-plugin.ts"
+              target="_blank"
+              rel="noopener"
+            ><code>selection-explain-plugin.ts</code></a>
+            into your project. Then one call wires it up:
+          </p>
+          <div class="code-block"><span class="keyword">import</span> { <span class="function">createSelectionExplainPlugin</span> } <span class="keyword">from</span> <span class="string">"./selection-explain-plugin"</span>;
+
+<span class="comment">// Bundler: pass the handle returned by initAgentWidget().</span>
+<span class="function">createSelectionExplainPlugin</span>({ <span class="prop">container</span>: <span class="string">"#article"</span>, <span class="prop">controller</span> });
+
+<span class="comment">// Script tag: omit controller. It attaches itself on persona:chat-ready.</span>
+<span class="function">createSelectionExplainPlugin</span>({ <span class="prop">container</span>: <span class="string">"#article"</span> });</div>
+          <p>
+            It is not an <code>AgentWidgetPlugin</code>, on purpose. Plugin
+            hooks render UI inside the widget and never receive the
+            controller. This toolbar lives on the page and drives the
+            controller, so it follows the companion pattern instead.
+          </p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Customize it</h3>
+          <p>Every option, annotated:</p>
+          <div class="code-block"><span class="function">createSelectionExplainPlugin</span>({
+  <span class="prop">container</span>: <span class="string">"#article"</span>,        <span class="comment">// element or selector, resolved lazily</span>
+  <span class="prop">controller</span>,                  <span class="comment">// from initAgentWidget(); omit for script-tag installs</span>
+  <span class="prop">sourceLabel</span>: <span class="string">"Field Notes"</span>, <span class="comment">// quote attribution; string or (text) =&gt; string</span>
+  <span class="prop">minLength</span>: <span class="keyword">8</span>,                <span class="comment">// characters before the toolbar shows</span>
+  <span class="prop">shouldShow</span>: ({ range }) =&gt;  <span class="comment">// veto selections, e.g. skip code blocks</span>
+    !range.commonAncestorContainer.parentElement?.closest(<span class="string">"pre"</span>),
+  <span class="prop">className</span>: <span class="string">"my-toolbar"</span>,    <span class="comment">// your CSS hook on .selection-explain</span>
+  <span class="prop">actions</span>: [                   <span class="comment">// replaces the default buttons</span>
+    {
+      <span class="prop">id</span>: <span class="string">"explain"</span>,
+      <span class="prop">label</span>: <span class="string">"Explain this"</span>,
+      <span class="prop">mode</span>: <span class="string">"send"</span>,           <span class="comment">// quotes the selection, sends prompt</span>
+      <span class="prop">prompt</span>: <span class="string">"Explain the highlighted passage in plain language."</span>,
+    },
+    {
+      <span class="prop">id</span>: <span class="string">"ask"</span>,
+      <span class="prop">label</span>: <span class="string">"Ask about it"</span>,
+      <span class="prop">mode</span>: <span class="string">"draft"</span>,          <span class="comment">// quotes the selection, focuses the composer</span>
+    },
+  ],
+  <span class="prop">onAction</span>: (action, text) =&gt; <span class="function">console</span>.<span class="function">log</span>(action.<span class="prop">id</span>, text),
+});</div>
+          <p>
+            Colors follow the <code>--persona-*</code> theme variables, so the
+            toolbar matches your widget theme by default.
+          </p>
+        </div>
+
+        <div class="notes-section">
+          <h3 class="notes-section-title">Streaming</h3>
+          <p>
+            <code>submitMessage()</code> returns <code>false</code> while a
+            reply is streaming. The toolbar falls back to the draft flow. The
+            staged quote stays in the composer.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <div id="launcher-root"></div>
+    <script type="module" src="/src/selection-explain-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("selection-explain-demo");
+    </script>
+  </body>
+</html>

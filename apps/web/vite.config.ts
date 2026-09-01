@@ -660,6 +660,8 @@ export default defineConfig({
         'approval-demo': path.resolve(__dirname, 'approval-demo.html'),
         // Focus input demo
         'focus-input-demo': path.resolve(__dirname, 'focus-input-demo.html'),
+        // Select-to-explain selection toolbar (setQuote + submitMessage)
+        'selection-explain-demo': path.resolve(__dirname, 'selection-explain-demo.html'),
         // Optional smart-dom-reader page-context provider (shadow DOM / iframes)
         'smart-dom-reader-demo': path.resolve(__dirname, 'smart-dom-reader-demo.html'),
         'event-stream-testing': path.resolve(__dirname, 'event-stream-testing.html'),
