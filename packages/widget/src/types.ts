@@ -826,6 +826,14 @@ export type ClientToolDefinition = {
     readOnlyHint?: boolean;
     untrustedContentHint?: boolean;
   };
+  /**
+   * Hoisted copy of `annotations.untrustedContentHint`. This is the field the
+   * server actually acts on (`InlineClientToolSchema`): it spotlights the
+   * tool's output before the model reads it, so instructions embedded in
+   * page-provided content (reviews, comments, emails) are not treated as
+   * instructions. `annotations` itself is trace/dashboard metadata only.
+   */
+  untrustedContentHint?: boolean;
 };
 
 /**
