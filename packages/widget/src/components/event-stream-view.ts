@@ -70,20 +70,32 @@ const UPDATE_THROTTLE_MS = 100;
 // Helper Functions
 // ============================================================================
 
+function matchBadgeColor(
+  eventType: string,
+  colors: Record<string, EventStreamBadgeColor>
+): EventStreamBadgeColor | undefined {
+  // Exact match first, then prefix match (keys ending with "_").
+  if (colors[eventType]) return colors[eventType];
+  for (const prefix of Object.keys(colors)) {
+    if (prefix.endsWith("_") && eventType.startsWith(prefix)) {
+      return colors[prefix];
+    }
+  }
+  return undefined;
+}
+
 export function getBadgeColor(
   eventType: string,
   customColors?: Record<string, EventStreamBadgeColor>
 ): EventStreamBadgeColor {
-  const allColors = { ...DEFAULT_BADGE_COLORS, ...customColors };
-  // Exact match first
-  if (allColors[eventType]) return allColors[eventType];
-  // Prefix match (keys ending with "_")
-  for (const prefix of Object.keys(allColors)) {
-    if (prefix.endsWith("_") && eventType.startsWith(prefix)) {
-      return allColors[prefix];
-    }
-  }
-  return DEFAULT_BADGE_COLOR;
+  // Host colors are a strictly higher tier than the defaults: a host prefix
+  // (e.g. `execution_`) must not be shadowed by the built-in exact
+  // `execution_error` entry, so the maps are never merged flat.
+  return (
+    (customColors && matchBadgeColor(eventType, customColors)) ??
+    matchBadgeColor(eventType, DEFAULT_BADGE_COLORS) ??
+    DEFAULT_BADGE_COLOR
+  );
 }
 
 // The chip border is its text color at ~31% alpha. The hex-suffix trick only

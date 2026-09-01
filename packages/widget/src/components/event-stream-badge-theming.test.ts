@@ -130,6 +130,20 @@ describe("event-stream badge theming", () => {
     expect(getBadgeColor("tool_complete", custom)).toBe(prefix);
   });
 
+  it("custom badgeColors: any custom match beats any default match", () => {
+    const custom = { execution_: { bg: "#222222", text: "#dddddd" } };
+    // A host prefix must cover its whole family: the built-in exact
+    // `execution_error` entry sits in the lower default tier.
+    expect(getBadgeColor("execution_error", custom)).toBe(custom.execution_);
+    expect(getBadgeColor("execution_start", custom)).toBe(custom.execution_);
+    // A narrower custom prefix wins over the default family prefix (the old
+    // merged-map lookup iterated the default `tool_` key first).
+    const narrowPair = { bg: "#333333", text: "#cccccc" };
+    expect(getBadgeColor("tool_input_delta", { ["tool_input_"]: narrowPair })).toBe(narrowPair);
+    // Unmatched custom maps still fall through to the default families.
+    expect(getBadgeColor("flow_start", custom)).toBe(DEFAULT_BADGE_COLORS.flow_);
+  });
+
   it("border composition is valid CSS for hex and non-hex text colors", () => {
     // Bare 6-digit hex keeps the historical alpha suffix.
     expect(getBadgeBorderColor("#6b21a8")).toBe("#6b21a850");
