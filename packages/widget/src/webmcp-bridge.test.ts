@@ -38,14 +38,29 @@ import {
 } from "./webmcp-bridge";
 import type { ClientToolDefinition } from "./types";
 
-type MockClient = { requestUserInteraction: (cb: () => unknown) => Promise<unknown> };
-
 type MockTool = {
   name: string;
   description?: string;
   inputSchema?: object;
   title?: string;
-  execute: (args: Record<string, unknown>, client: MockClient) => unknown;
+  execute: (args: Record<string, unknown>) => unknown;
+};
+
+/**
+ * Mirrors polyfill 5.x `serializeChromeToolResult`. Note it never returns
+ * `null`: 4.x mapped an `undefined` return to `null`, 5.x stringifies it to
+ * `"undefined"`. Objects (the common case) serialize identically in both.
+ */
+const serializeLikePolyfill = (value: unknown): string => {
+  if ((typeof value === "object" && value !== null) || typeof value === "function") {
+    try {
+      const serialized = JSON.stringify(value);
+      if (serialized) return serialized;
+    } catch {
+      /* fall through to String() */
+    }
+  }
+  return String(value) || "Operation succeeded";
 };
 
 const registry: { tools: MockTool[] } = { tools: [] };
@@ -83,11 +98,10 @@ const makeModelContext = () => ({
     const tool = registry.tools.find((t) => t.name === info.name);
     if (!tool) throw new Error(`Tool not found: ${info.name}`);
     const args = inputArgsJson ? JSON.parse(inputArgsJson) : {};
-    // The polyfill owns this client; `requestUserInteraction` is a pass-through.
-    const client: MockClient = {
-      requestUserInteraction: async (cb) => cb(),
-    };
-    const execPromise = Promise.resolve(tool.execute(args, client));
+    // Polyfill 5.x invokes `execute` with the input object only: the 4.x
+    // `client` argument (`requestUserInteraction`) was removed, and the spec's
+    // replacement second argument (`{ signal }`) is not implemented yet.
+    const execPromise = Promise.resolve(tool.execute(args));
     const raced = options?.signal
       ? Promise.race<unknown>([
           execPromise,
@@ -104,7 +118,7 @@ const makeModelContext = () => ({
         ])
       : execPromise;
     const raw = await raced;
-    return raw === undefined ? null : JSON.stringify(raw);
+    return serializeLikePolyfill(raw);
   },
 });
 
@@ -407,7 +421,8 @@ describe("WebMcpBridge.executeToolCall", () => {
     const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
     const r = await bridge.executeToolCall("webmcp:search", { q: "shoes" });
     expect(execute).toHaveBeenCalledTimes(1);
-    expect(execute).toHaveBeenCalledWith({ q: "shoes" }, expect.anything());
+    // Polyfill 5.x passes the input object and nothing else (see the mock).
+    expect(execute).toHaveBeenCalledWith({ q: "shoes" });
     expect(r.isError).toBeUndefined();
   });
 
@@ -455,23 +470,18 @@ describe("WebMcpBridge.executeToolCall", () => {
     registry.tools = [fakeTool({ name: "act", execute: () => undefined })];
     const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
     const r = await bridge.executeToolCall("webmcp:act", {});
-    expect(r).toEqual({ content: [{ type: "text", text: "" }] });
+    // Polyfill 5.x stringifies an `undefined` return to "undefined" rather than
+    // returning null as 4.x did, so a void tool surfaces that literal text.
+    expect(r).toEqual({ content: [{ type: "text", text: "undefined" }] });
   });
 
-  it("runs a tool's client.requestUserInteraction callback without a second confirm", async () => {
+  it("fires exactly one confirm gate per tool call", async () => {
     const confirmSpy = vi.fn(async () => true);
     registry.tools = [
-      fakeTool({
-        name: "sensitive",
-        execute: async (_args, client) => {
-          const ack = await client.requestUserInteraction(async () => "ok!");
-          return { ack };
-        },
-      }),
+      fakeTool({ name: "sensitive", execute: async () => ({ ack: "ok!" }) }),
     ];
     const bridge = new WebMcpBridge({ enabled: true, onConfirm: confirmSpy });
     const r = await bridge.executeToolCall("webmcp:sensitive", {});
-    // Only the single outer gate fires: the polyfill owns the in-tool callback.
     expect(confirmSpy).toHaveBeenCalledTimes(1);
     expect(r.isError).toBeUndefined();
     expect(r.content[0]).toEqual({

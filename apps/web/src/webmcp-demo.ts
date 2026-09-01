@@ -42,10 +42,8 @@ interface RegisterableModelContext {
       description: string;
       inputSchema?: object;
       annotations?: Record<string, unknown>;
-      execute: (
-        args: Record<string, unknown>,
-        client: { requestUserInteraction: (cb: () => unknown) => Promise<unknown> },
-      ) => unknown;
+      /** Polyfill 5.x invokes this with the input object only (4.x also passed a `client`). */
+      execute: (args: Record<string, unknown>) => unknown;
     },
     options?: { signal?: AbortSignal },
   ): void;

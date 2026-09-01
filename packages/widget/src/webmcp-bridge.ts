@@ -19,21 +19,30 @@
  * with no MCP-B-only extensions. The spec standardizes the *producer* side;
  * Persona is an in-page *consumer*, so it reads the registry via the
  * producer-facing preview API:
- *   - `getTools()`: async; returns `{ name, description, inputSchema }` where
- *     `inputSchema` is a JSON *string*. Annotations are not exposed here.
- *   - `executeTool(toolInfo, inputArgsJson, { signal })`: async; validates args
- *     against the tool's schema, runs `execute()`, and returns the raw result as
- *     a JSON *string* (or `null` for `undefined`). Honors `signal` for abort.
+ *   - `getTools()`: async; returns `{ name, description, inputSchema, title }`.
+ *     Since webmcp#241 (polyfill 5.x, Chrome 154+) `inputSchema` is an *object*;
+ *     Chrome 149-153 and polyfill 4.x return the JSON *string* it replaced, so
+ *     `parseSchema` accepts both. Annotations are not exposed here.
+ *   - `executeTool(toolInfo, inputArgsJson, { signal })`: async; runs `execute()`
+ *     and returns the raw result as a JSON *string*. Honors `signal` for abort.
+ *     Two 5.x caveats: it does NOT validate args against the tool's schema (4.x
+ *     did), and an `undefined` return stringifies to `"undefined"` rather than
+ *     the `null` 4.x produced. The spec has since changed the input parameter to
+ *     an object (webmcp, Aug 17 2026); the polyfill still parses a JSON string,
+ *     so we keep sending one until it moves.
  *
- * The polyfill auto-installs `document.modelContext` at module-evaluation time,
- * so it is imported *dynamically* and only when `config.webmcp.enabled === true`
- *: a static import would install the global for every widget consumer,
- * including those that never opted into WebMCP.
+ * Import shape: the polyfill is a separate `webmcp-polyfill.js` chunk pulled in
+ * *dynamically*, and only when `config.webmcp.enabled === true`, to keep it out
+ * of the core bundle for consumers that never opted into WebMCP. (Under 4.x a
+ * static import would additionally have installed `document.modelContext` as an
+ * import side effect; 5.x made initialization explicit, but the bundle-size
+ * reason stands and is guarded by `webmcp-runtime-bundle.test.ts`.)
  *
  * Confirm model: every `webmcp:*` call goes through one confirm gate before
- * `execute()` runs, regardless of `annotations.readOnlyHint`. (The polyfill owns
- * the spec's `client.requestUserInteraction` callback internally; Persona cannot
- * inject a nested confirm there, so the single outer gate is the whole story.)
+ * `execute()` runs, regardless of `annotations.readOnlyHint`. Polyfill 5.x
+ * invokes `execute(input)` with the input object alone -- the 4.x `client`
+ * argument carrying `requestUserInteraction` was removed -- so the single outer
+ * gate is the whole story.
  */
 
 import type { ClientToolDefinition } from "./types";

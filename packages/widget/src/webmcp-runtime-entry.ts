@@ -428,11 +428,14 @@ const parseSchema = (
 
 /**
  * Normalize the JSON-string result from `executeTool` into MCP `CallToolResult`
- * shape. The polyfill returns `JSON.stringify(rawResult)` (the tool's raw
- * `execute()` return, NOT pre-normalized) or `null` for an `undefined` return.
- * Already-shaped returns (with `content: [...]`) pass through; everything else
- * becomes a single text block. Tools that intentionally return MCP errors
- * should set `isError: true` themselves.
+ * shape. The polyfill returns the tool's raw `execute()` return stringified, NOT
+ * pre-normalized. Already-shaped returns (with `content: [...]`) pass through;
+ * everything else becomes a single text block. Tools that intentionally return
+ * MCP errors should set `isError: true` themselves.
+ *
+ * The `null` branch is defensive: polyfill 4.x mapped an `undefined` return to
+ * `null`, but 5.x stringifies it to `"undefined"`, which lands in the text block
+ * below. Non-JSON strings likewise fall through to the raw-text path.
  */
 const normalizeSerializedResult = (raw: string | null): WebMcpToolResult => {
   if (raw === null || raw === undefined) {

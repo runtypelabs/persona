@@ -849,9 +849,9 @@ export type WebMcpConfirmInfo = {
   };
   /**
    * Why the confirm was requested. Currently always `'gate'`: the default
-   * confirm-by-default gate that fires before every `webmcp:*` call. (The
-   * `@mcp-b/webmcp-polyfill` owns the spec's `requestUserInteraction` callback
-   * internally, so Persona no longer surfaces a nested in-tool confirm.)
+   * confirm-by-default gate that fires before every `webmcp:*` call. (There is
+   * no nested in-tool confirm to surface: `@mcp-b/webmcp-polyfill` 5.x removed
+   * the `client.requestUserInteraction` callback it passed to `execute` in 4.x.)
    */
   reason: 'gate';
 };
