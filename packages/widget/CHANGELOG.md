@@ -1,5 +1,23 @@
 # @runtypelabs/persona
 
+## 4.22.0
+
+### Minor Changes
+
+- 4b7a010: Add `features.reasoningDisplay.completedVisibility: "removed-when-short"` to drop a completed reasoning row only when the trace was short (configurable via `shortThinkThreshold`), and add `features.toolCallDisplay.completedVisibility: "kept" | "removed"` so a completed tool-call row can disappear entirely, matching the existing reasoning removal behavior.
+- 41f196f: Event stream badge chips now resolve through the theme token tree and follow the active color scheme. New `components.eventStream.badge.*` tokens hold a background/foreground pair per event family (flow, step, reasoning, tool, agent, error, default), emitted as `--persona-event-badge-<family>-{bg,fg}`; the built-in dark layer flips every family from a light 100-tone fill to a 900-tone fill with light text, so dark-scheme embeds no longer render near-invisible light chips. The default palette gains canonical `purple` and `teal` scales backing the tool and agent families. Also fixed: `reasoning_*` events now match the reasoning family (the old `reason_` prefix never matched and fell through to gray), `execution_error` routes to the error family, and the chip border (foreground at ~31% alpha) now composes via `color-mix()` for non-hex colors instead of emitting an invalid declaration that was silently dropped. Light-scheme chip colors are unchanged.
+- a1925dc: Forward WebMCP `Tool.annotations` on `dispatch.clientTools[]` and hoist `annotations.untrustedContentHint` to the top-level field the server acts on, so pages that flag a tool's output as untrusted (reviews, comments, third-party content) get server-side spotlighting before the model reads it. Annotations are returned by `@mcp-b/webmcp-polyfill` v5 and Chrome's native implementation; only the spec's two boolean hints (`readOnlyHint`, `untrustedContentHint`) are forwarded.
+- 2de876a: Add `getAgentWidgetHandles()`: a registry of every mounted `initAgentWidget()` handle, oldest first, deregistered on `destroy()`. `persona:chat-ready` is a one-shot broadcast and `windowKey` is opt-in, so host code created after a widget mounted previously had no way to reach it. Late companions (selection toolbars, host integrations) can now adopt the most recent mount via `getAgentWidgetHandles().at(-1)` — importable from the package, or `window.AgentWidget.getAgentWidgetHandles()` on CDN builds.
+
+### Patch Changes
+
+- b329261: Bump `@mcp-b/webmcp-polyfill` to 5.1.0.
+- 2b3e458: Fix WebMCP page tools being dropped from `dispatch.clientTools[]`, which 400'd every turn on a page with registered tools.
+
+  `getTools()` returns each tool's `inputSchema` as a JSON Schema **object** since `webmcp#241` — the shape `@mcp-b/webmcp-polyfill` v5 and Chrome 154+ emit. The widget still assumed the serialized JSON string of the previous generation and `JSON.parse`d it, so every schema was silently discarded, `parametersSchema` was omitted from every tool, and the server rejected the whole dispatch with `INVALID_UNION`.
+
+  The snapshot now accepts **both** generations — Chrome 149-153 and 154's same-document tools still emit the string — and always sends a `parametersSchema`, degrading a missing or malformed schema to an empty `{ type: "object" }` rather than omitting the key and failing the entire request.
+
 ## 4.21.1
 
 ### Patch Changes
