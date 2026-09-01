@@ -1,4 +1,8 @@
-import type { AgentWidgetController, ComposerQuote } from "@runtypelabs/persona";
+import {
+  getAgentWidgetHandles,
+  type AgentWidgetController,
+  type ComposerQuote,
+} from "@runtypelabs/persona";
 import {
   createPopover,
   injectStyles,
@@ -22,11 +26,12 @@ import {
  * - Script tag: `createSelectionExplainPlugin({ container: "#article" })`.
  *   It attaches itself when the installer fires `persona:chat-ready`.
  *
- * `persona:chat-ready` fires once, so create the companion before the widget
- * initializes. If it may run later, pass `controller`, call `attach()`, or set
- * `windowKey` to adopt an already-mounted widget from `window[windowKey]`. The
- * toolbar stays hidden until a controller is attached — it never renders
- * actions that would silently do nothing.
+ * Creation order does not matter. A companion created before the widget
+ * attaches on `persona:chat-ready`; one created after adopts the mounted
+ * widget from `getAgentWidgetHandles()` (most recent mount). Pass
+ * `controller` or set `windowKey` to pin a specific instance on multi-widget
+ * pages. The toolbar stays hidden until a controller is attached — it never
+ * renders actions that would silently do nothing.
  *
  * Each action stages the selection with `controller.setQuote()`. A `"send"`
  * action then calls `submitMessage(prompt)`; a `"draft"` action calls
@@ -177,8 +182,21 @@ export function createSelectionExplainPlugin(
   let destroyed = false;
 
   // `persona:chat-ready` fires once; a companion created after it has missed
-  // the event. `windowKey` closes that race: the installer stores the handle
-  // on `window[windowKey]`, so check there lazily as the fallback.
+  // the event. Two lazy fallbacks close that race: `window[windowKey]` (the
+  // installer stores the handle there when configured), then the widget's
+  // registry of mounted handles — imported when this file shares the widget's
+  // bundle, or via the `AgentWidget` CDN global on script-tag pages where the
+  // two are separate module instances.
+  const registryHandles = (): AgentWidgetController[] => {
+    const imported = getAgentWidgetHandles();
+    if (imported.length) return imported;
+    const cdnGlobal = (
+      window as unknown as {
+        AgentWidget?: { getAgentWidgetHandles?: () => AgentWidgetController[] };
+      }
+    ).AgentWidget;
+    return cdnGlobal?.getAgentWidgetHandles?.() ?? [];
+  };
   const resolveController = (): AgentWidgetController | null => {
     if (controller) return controller;
     if (options.windowKey) {
@@ -186,6 +204,10 @@ export function createSelectionExplainPlugin(
         options.windowKey
       ];
       if (handle) controller = handle as AgentWidgetController;
+    }
+    if (!controller) {
+      const mounted = registryHandles();
+      if (mounted.length) controller = mounted[mounted.length - 1];
     }
     return controller;
   };
@@ -366,9 +388,9 @@ export function createSelectionExplainPlugin(
       if (destroyed || resolveController()) return;
       console.warn(
         "[selection-explain] No widget controller attached after 4s; the toolbar will stay hidden. " +
-          "Pass `controller` (from initAgentWidget), call `attach(handle)`, or set `windowKey` to match " +
-          "your installer config. Script-tag installs must create this companion before the widget " +
-          "mounts so it can catch `persona:chat-ready`."
+          "No mounted widget was found via `persona:chat-ready` or `getAgentWidgetHandles()`. " +
+          "Mount the widget (initAgentWidget or the script installer), or wire one explicitly with " +
+          "`controller`, `attach(handle)`, or `windowKey`."
       );
     }, 4000);
   }

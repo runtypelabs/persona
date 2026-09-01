@@ -288,7 +288,8 @@
 <span class="comment">// Bundler: pass the handle returned by initAgentWidget().</span>
 <span class="function">createSelectionExplainPlugin</span>({ <span class="prop">container</span>: <span class="string">"#article"</span>, <span class="prop">controller</span> });
 
-<span class="comment">// Script tag: omit controller. It attaches itself on persona:chat-ready.</span>
+<span class="comment">// Script tag: omit controller. It attaches on persona:chat-ready, or</span>
+<span class="comment">// adopts an already-mounted widget via getAgentWidgetHandles().</span>
 <span class="function">createSelectionExplainPlugin</span>({ <span class="prop">container</span>: <span class="string">"#article"</span> });</div>
           <p>
             It is not an <code>AgentWidgetPlugin</code>, on purpose. Plugin
