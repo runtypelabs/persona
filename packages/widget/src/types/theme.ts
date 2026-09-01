@@ -26,7 +26,11 @@ export interface ColorPalette {
   warning: ColorShade;
   error: ColorShade;
   info: ColorShade;
-  [key: string]: ColorShade;
+  /** Event-stream tool badge family. */
+  purple?: ColorShade;
+  /** Event-stream agent badge family. */
+  teal?: ColorShade;
+  [key: string]: ColorShade | undefined;
 }
 
 export interface SpacingScale {
@@ -628,6 +632,40 @@ export interface ReasoningBubbleTokens {
   shadow: string;
 }
 
+/** One event-stream badge chip: fill + text pair. The chip border derives
+ * from `foreground` at ~31% alpha. */
+export interface EventStreamBadgePairTokens {
+  background: TokenReference<'color'>;
+  foreground: TokenReference<'color'>;
+}
+
+/**
+ * Event-stream inspector badge chips (`features.eventStream`), one pair per
+ * unified event family. Materialized into every theme and emitted as
+ * `--persona-event-badge-<family>-{bg,fg}`, with scheme-appropriate defaults:
+ * light themes pair a 100-tone fill with a 700-tone text, the built-in dark
+ * layer flips to a 900-tone fill with a 300-tone text. `badge.default` colors
+ * event types no family matches.
+ */
+export interface EventStreamTokens {
+  badge: {
+    /** `flow_*` events. */
+    flow: EventStreamBadgePairTokens;
+    /** `step_*` events. */
+    step: EventStreamBadgePairTokens;
+    /** `reasoning_*` events. */
+    reasoning: EventStreamBadgePairTokens;
+    /** `tool_*` events. */
+    tool: EventStreamBadgePairTokens;
+    /** `agent_*` events. */
+    agent: EventStreamBadgePairTokens;
+    /** `error` / `execution_error` events. */
+    error: EventStreamBadgePairTokens;
+    /** Any event type no other family matches. */
+    default: EventStreamBadgePairTokens;
+  };
+}
+
 /** Scrollbar appearance shared by every scroller in the widget. */
 export interface ScrollbarTokens {
   /** Thumb color. @default semantic.colors.border */
@@ -994,6 +1032,8 @@ export interface ComponentTokens {
   attachment: AttachmentTokens;
   toolBubble: ToolBubbleTokens;
   reasoningBubble: ReasoningBubbleTokens;
+  /** Event-stream inspector badge chips. */
+  eventStream?: EventStreamTokens;
   composer: ComposerChromeTokens;
   /** Shared motion timing for composer chrome animation. */
   motion?: MotionTokens;

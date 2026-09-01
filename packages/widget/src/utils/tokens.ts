@@ -128,6 +128,32 @@ export const DEFAULT_PALETTE = {
       900: '#1e3a8a',
       950: '#172554',
     },
+    purple: {
+      50: '#faf5ff',
+      100: '#f3e8ff',
+      200: '#e9d5ff',
+      300: '#d8b4fe',
+      400: '#c084fc',
+      500: '#a855f7',
+      600: '#9333ea',
+      700: '#7e22ce',
+      800: '#6b21a8',
+      900: '#581c87',
+      950: '#3b0764',
+    },
+    teal: {
+      50: '#f0fdfa',
+      100: '#ccfbf1',
+      200: '#99f6e4',
+      300: '#5eead4',
+      400: '#2dd4bf',
+      500: '#14b8a6',
+      600: '#0d9488',
+      700: '#0f766e',
+      800: '#115e59',
+      900: '#134e4a',
+      950: '#042f2e',
+    },
   },
   spacing,
   typography: {
@@ -470,6 +496,20 @@ export const DEFAULT_COMPONENTS: ComponentTokens = {
     image: {
       background: 'palette.colors.gray.100',
       border: 'palette.colors.gray.200',
+    },
+  },
+  // Event-stream badge chips: 100-tone fill / dark text per family. tool/agent
+  // keep their pre-token literals (#6b21a8 / #115e59), which sit at the 800
+  // step of the canonical purple/teal ramps.
+  eventStream: {
+    badge: {
+      flow: { background: 'palette.colors.success.100', foreground: 'palette.colors.success.700' },
+      step: { background: 'palette.colors.primary.100', foreground: 'palette.colors.primary.700' },
+      reasoning: { background: 'palette.colors.warning.100', foreground: 'palette.colors.warning.700' },
+      tool: { background: 'palette.colors.purple.100', foreground: 'palette.colors.purple.800' },
+      agent: { background: 'palette.colors.teal.100', foreground: 'palette.colors.teal.800' },
+      error: { background: 'palette.colors.error.100', foreground: 'palette.colors.error.700' },
+      default: { background: 'palette.colors.gray.100', foreground: 'palette.colors.gray.600' },
     },
   },
   scrollToBottom: {
@@ -1085,6 +1125,25 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['scroll-to-bottom-gap', 'components-scrollToBottom-gap', '=0.5rem'],
     ['scroll-to-bottom-font-size', 'components-scrollToBottom-fontSize', 'palette-typography-fontSize-sm', '=0.875rem'],
     ['scroll-to-bottom-icon-size', 'components-scrollToBottom-iconSize', '=14px'],
+    // Event-stream badge chips. Materialized in every theme (light defaults in
+    // DEFAULT_COMPONENTS, dark pairs in the built-in dark layer), so the
+    // chip's inline var() refs always resolve inside a themed root and
+    // re-resolve on scheme toggles; the literal terminals only cover unthemed
+    // direct mounts.
+    ['event-badge-flow-bg', 'components-eventStream-badge-flow-background', '=#dcfce7'],
+    ['event-badge-flow-fg', 'components-eventStream-badge-flow-foreground', '=#15803d'],
+    ['event-badge-step-bg', 'components-eventStream-badge-step-background', '=#f5f5f5'],
+    ['event-badge-step-fg', 'components-eventStream-badge-step-foreground', '=#0a0a0a'],
+    ['event-badge-reasoning-bg', 'components-eventStream-badge-reasoning-background', '=#fef9c3'],
+    ['event-badge-reasoning-fg', 'components-eventStream-badge-reasoning-foreground', '=#a16207'],
+    ['event-badge-tool-bg', 'components-eventStream-badge-tool-background', '=#f3e8ff'],
+    ['event-badge-tool-fg', 'components-eventStream-badge-tool-foreground', '=#6b21a8'],
+    ['event-badge-agent-bg', 'components-eventStream-badge-agent-background', '=#ccfbf1'],
+    ['event-badge-agent-fg', 'components-eventStream-badge-agent-foreground', '=#115e59'],
+    ['event-badge-error-bg', 'components-eventStream-badge-error-background', '=#fee2e2'],
+    ['event-badge-error-fg', 'components-eventStream-badge-error-foreground', '=#b91c1c'],
+    ['event-badge-default-bg', 'components-eventStream-badge-default-background', '=#f3f4f6'],
+    ['event-badge-default-fg', 'components-eventStream-badge-default-foreground', '=#4b5563'],
     ['tool-bubble-shadow', 'components-toolBubble-shadow', '=0 5px 15px rgba(15, 23, 42, 0.08)'],
     ['reasoning-bubble-shadow', 'components-reasoningBubble-shadow', '=0 5px 15px rgba(15, 23, 42, 0.08)'],
     ['composer-shadow', 'components-composer-shadow', '=none'],

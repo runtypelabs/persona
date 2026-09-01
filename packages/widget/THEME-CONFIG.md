@@ -160,6 +160,9 @@ Each color has shades from 50 (lightest) to 950 (darkest):
 | `success` | Success states (default: green) |
 | `warning` | Warning states (default: yellow) |
 | `error` | Error states (default: red) |
+| `info` | Informational states (default: blue) |
+| `purple` | Event-stream tool badge family |
+| `teal` | Event-stream agent badge family |
 
 ```typescript
 palette: {
@@ -1341,6 +1344,42 @@ present rather than dead:
 | `gap` | `"0.5rem"` |
 | `fontSize` | `"0.875rem"` |
 | `iconSize` | `"14px"` |
+
+### Event Stream Badges (`components.eventStream.badge.*`)
+
+Color pairs for the event-type chips in the event stream inspector
+(`features.eventStream`). Each family holds a `background` + `foreground`
+pair; the chip border derives from `foreground` at ~31% alpha. The pairs are
+scheme-aware: light themes default to a 100-tone fill with a dark text, and
+the built-in dark layer flips every family to a 900-tone fill with a 300-tone
+text, so badges stay readable on dark surfaces without any host config.
+
+| Family | Events | Light Default |
+|--------|--------|---------------|
+| `flow` | `flow_*` | `success.100` / `success.700` |
+| `step` | `step_*` | `primary.100` / `primary.700` |
+| `reasoning` | `reasoning_*` | `warning.100` / `warning.700` |
+| `tool` | `tool_*` | `purple.100` / `purple.800` |
+| `agent` | `agent_*` | `teal.100` / `teal.800` |
+| `error` | `error`, `execution_error` | `error.100` / `error.700` |
+| `default` | anything unmatched | `gray.100` / `gray.600` |
+
+Emitted as `--persona-event-badge-<family>-bg` / `--persona-event-badge-<family>-fg`.
+Per-event-type overrides that bypass the family grouping remain available via
+`features.eventStream.badgeColors`.
+
+```typescript
+components: {
+  eventStream: {
+    badge: {
+      tool: {
+        background: 'palette.colors.purple.100',
+        foreground: 'palette.colors.purple.800'
+      }
+    }
+  }
+}
+```
 
 ---
 
