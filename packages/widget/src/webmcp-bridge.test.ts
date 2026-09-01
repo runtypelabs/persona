@@ -12,7 +12,7 @@ import type {
 // We stub the install as a no-op and provide `document.modelContext` ourselves,
 // modeling the strict producer-preview surface the bridge consumes:
 //   - getTools(): async; inputSchema in either generation (see
-//     `registry.schemaShape`); NO annotations
+//     `registry.schemaShape`); annotations only when the tool declared them
 //   - executeTool(info, argsJson, { signal }): async; validates+runs execute(),
 //     returns JSON.stringify(rawResult) or null; honors the abort signal.
 // ---------------------------------------------------------------------------
@@ -46,6 +46,7 @@ type MockTool = {
   description?: string;
   inputSchema?: object;
   title?: string;
+  annotations?: Record<string, unknown>;
   execute: (args: Record<string, unknown>, client: MockClient) => unknown;
 };
 
@@ -84,6 +85,7 @@ const makeModelContext = () => ({
                 : JSON.stringify(t.inputSchema),
           }),
       title: t.title ?? "",
+      ...(t.annotations === undefined ? {} : { annotations: t.annotations }),
     }));
   },
   async executeTool(
@@ -231,6 +233,49 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
     registry.tools = [fakeTool({ name: "ping" })];
     const snap = await new WebMcpBridge({ enabled: true }).snapshotForDispatch();
     expect(snap[0]!.parametersSchema).toEqual({ type: "object", properties: {} });
+  });
+
+  it("forwards annotations and hoists untrustedContentHint to the top level", async () => {
+    registry.tools = [
+      fakeTool({
+        name: "get_reviews",
+        annotations: { readOnlyHint: true, untrustedContentHint: true },
+      }),
+    ];
+    const snap = await new WebMcpBridge({ enabled: true }).snapshotForDispatch();
+    expect(snap[0]!.annotations).toEqual({
+      readOnlyHint: true,
+      untrustedContentHint: true,
+    });
+    // The server acts on the top-level field, not the nested metadata copy.
+    expect(snap[0]!.untrustedContentHint).toBe(true);
+  });
+
+  it("omits annotations and the top-level hint when the tool declared none", async () => {
+    registry.tools = [fakeTool({ name: "search" })];
+    const snap = await new WebMcpBridge({ enabled: true }).snapshotForDispatch();
+    expect(snap[0]!).not.toHaveProperty("annotations");
+    expect(snap[0]!).not.toHaveProperty("untrustedContentHint");
+  });
+
+  it("does not hoist untrustedContentHint: false, and drops unknown annotation keys", async () => {
+    registry.tools = [
+      fakeTool({
+        name: "add_to_cart",
+        annotations: {
+          readOnlyHint: false,
+          untrustedContentHint: false,
+          destructiveHint: true, // MCP-only today; not in the WebMCP dict
+          evil: () => "not JSON",
+        },
+      }),
+    ];
+    const snap = await new WebMcpBridge({ enabled: true }).snapshotForDispatch();
+    expect(snap[0]!.annotations).toEqual({
+      readOnlyHint: false,
+      untrustedContentHint: false,
+    });
+    expect(snap[0]!).not.toHaveProperty("untrustedContentHint");
   });
 
   it.each([

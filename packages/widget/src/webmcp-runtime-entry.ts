@@ -131,12 +131,20 @@ export class WebMcpBridge {
     return infos
       .filter((info) => this.passesClientAllowlist(info.name))
       .map<ClientToolDefinition>((info) => {
+        const annotations = pickAnnotations(info.annotations);
         const def: ClientToolDefinition = {
           name: info.name,
           description: info.description,
           parametersSchema: normalizeInputSchema(info.inputSchema),
           origin: "webmcp",
           ...(pageOrigin ? { pageOrigin } : {}),
+          ...(annotations ? { annotations } : {}),
+          // Hoisted because the server acts on the TOP-LEVEL field
+          // (`InlineClientToolSchema.untrustedContentHint` gates output
+          // spotlighting); the nested `annotations` object is metadata only.
+          ...(annotations?.untrustedContentHint === true
+            ? { untrustedContentHint: true }
+            : {}),
         };
         return def;
       });
@@ -427,6 +435,31 @@ const EMPTY_INPUT_SCHEMA = { type: "object", properties: {} } as const;
  * with no schema, or an unparseable one, degrades to "takes no arguments"
  * instead of taking the conversation down with it.
  */
+/**
+ * Copy the WebMCP annotation hints onto the wire, dropping anything else.
+ *
+ * `getTools()` returns `annotations` since `@mcp-b/webmcp-polyfill` v5 (absent
+ * on v4 and when the tool declared none). Only the spec's two boolean hints are
+ * forwarded -- annotations are page-authored, so an explicit copy keeps
+ * functions/junk off the dispatch payload. Returns `undefined` when nothing
+ * usable remains so the member is omitted, matching the spec's own
+ * omit-when-empty behavior.
+ */
+const pickAnnotations = (
+  raw: ModelContextToolInfo["annotations"],
+): ClientToolDefinition["annotations"] | undefined => {
+  if (!raw || typeof raw !== "object") return undefined;
+  const picked = {
+    ...(typeof raw.readOnlyHint === "boolean"
+      ? { readOnlyHint: raw.readOnlyHint }
+      : {}),
+    ...(typeof raw.untrustedContentHint === "boolean"
+      ? { untrustedContentHint: raw.untrustedContentHint }
+      : {}),
+  };
+  return Object.keys(picked).length > 0 ? picked : undefined;
+};
+
 const normalizeInputSchema = (raw: object | string | undefined): object => {
   if (raw === undefined || raw === "") return { ...EMPTY_INPUT_SCHEMA };
 
