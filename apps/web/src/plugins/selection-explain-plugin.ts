@@ -30,8 +30,10 @@ import {
  * attaches on `persona:chat-ready`; one created after adopts the mounted
  * widget from `getAgentWidgetHandles()` (most recent mount). Pass
  * `controller` or set `windowKey` to pin a specific instance on multi-widget
- * pages. The toolbar stays hidden until a controller is attached — it never
- * renders actions that would silently do nothing.
+ * pages. If an adopted widget is destroyed and replaced (SPA remount), the
+ * toolbar drops the stale handle and re-adopts the replacement on its own.
+ * The toolbar stays hidden until a controller is attached — it never renders
+ * actions that would silently do nothing.
  *
  * Each action stages the selection with `controller.setQuote()`. A `"send"`
  * action then calls `submitMessage(prompt)`; a `"draft"` action calls
@@ -188,6 +190,16 @@ export function createSelectionExplainPlugin(
   // bundle, or via the `AgentWidget` CDN global on script-tag pages where the
   // two are separate module instances.
   type MountedHandle = AgentWidgetController & { host?: HTMLElement };
+
+  // A handle is live when it has no host to check (raw controllers stay
+  // trusted) or its host is still in the document. Destroyed widgets lose
+  // their host, so this doubles as the staleness test for cached adoptions.
+  const isLive = (candidate: AgentWidgetController | null): boolean => {
+    if (!candidate) return false;
+    const host = (candidate as MountedHandle).host;
+    return !host || host.isConnected;
+  };
+
   const registryHandles = (): AgentWidgetController[] => {
     const imported = getAgentWidgetHandles() as MountedHandle[];
     const cdnGlobal = (
@@ -204,12 +216,15 @@ export function createSelectionExplainPlugin(
     return handles.filter((handle) => !handle.host || handle.host.isConnected);
   };
   const resolveController = (): AgentWidgetController | null => {
+    // An SPA can destroy and replace the widget after adoption. A cached
+    // handle whose host left the document is stale: drop it and re-adopt.
+    if (controller && !isLive(controller)) controller = null;
     if (controller) return controller;
     if (options.windowKey) {
       const handle = (window as unknown as Record<string, unknown>)[
         options.windowKey
-      ];
-      if (handle) controller = handle as AgentWidgetController;
+      ] as MountedHandle | undefined;
+      if (handle && isLive(handle)) controller = handle;
     }
     if (!controller) {
       const mounted = registryHandles();
@@ -366,7 +381,9 @@ export function createSelectionExplainPlugin(
   // Direct `initAgentWidget()` callers pass `controller` (or call `attach`)
   // because direct init does not dispatch the event.
   const handleChatReady = (event: Event): void => {
-    if (controller) return;
+    // A live cached controller wins; a stale one (destroyed widget) yields
+    // to the replacement widget's ready event.
+    if (isLive(controller)) return;
     const detail = (event as CustomEvent<AgentWidgetController>).detail;
     if (detail) {
       controller = detail;
