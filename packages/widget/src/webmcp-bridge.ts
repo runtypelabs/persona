@@ -73,6 +73,16 @@ export interface ModelContextToolInfo {
    * channel available to us.
    */
   title?: string;
+  /**
+   * WebMCP `Tool.annotations`. Returned by `getTools()` since
+   * `@mcp-b/webmcp-polyfill` v5 (and by Chrome's native implementation);
+   * absent on v4 and whenever the tool declared none -- the spec omits the
+   * member rather than emitting an empty object.
+   */
+  annotations?: {
+    readOnlyHint?: boolean;
+    untrustedContentHint?: boolean;
+  };
 }
 
 export interface ModelContextCoreLike {
