@@ -1088,6 +1088,7 @@ export class AgentWidgetSession {
 
   /** Widget teardown: release the visitor-store subscription. */
   public destroy(): void {
+    this.cleanupVoice();
     this.visitorStoreUnsubscribe?.();
     this.visitorStoreUnsubscribe = null;
     this.subscribedVisitorStore = null;

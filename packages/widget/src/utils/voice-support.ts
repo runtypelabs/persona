@@ -1,5 +1,10 @@
 import type { VoiceConfig } from "../types";
 
+/** Providers whose microphone lifecycle is owned by ChatSession instead of browser dictation. */
+export function usesSessionVoice(config?: Partial<VoiceConfig>): boolean {
+  return config?.type === "runtype" || config?.type === "custom";
+}
+
 /**
  * Eager, construction-free replica of the voice factory's `isVoiceSupported`
  * (`voice/voice-factory.ts`, which ships in the lazy voice-runtime chunk).
