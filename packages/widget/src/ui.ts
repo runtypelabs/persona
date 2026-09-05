@@ -7926,6 +7926,10 @@ export const createAgentExperience = (
   };
 
   const isComposerInputDisabled = (): boolean => composerLock.inputDisabled;
+  const isActiveSessionVoice = (): boolean =>
+    usesSessionVoice(config.voiceRecognition?.provider) &&
+    !!session && (session.isBargeInActive() ||
+      ["listening", "processing", "speaking"].includes(session.getVoiceStatus()));
   /** Any submission path is blocked; stop is not a submission. */
   const isComposerSendBlocked = (): boolean =>
     composerLock.inputDisabled || composerLock.sendDisabled;
@@ -8034,7 +8038,7 @@ export const createAgentExperience = (
         button.disabled = locked;
       });
     }
-    if (micButton) micButton.disabled = blocked;
+    if (micButton) micButton.disabled = locked || (streaming && !isActiveSessionVoice());
 
     suggestionManagers.forEach((manager) => {
       manager.elements.forEach((element) => {
@@ -14344,7 +14348,7 @@ export const createAgentExperience = (
             );
 
             // Set disabled state
-            micButton.disabled = session.isStreaming();
+            micButton.disabled = isComposerInputDisabled() || (session.isStreaming() && !isActiveSessionVoice());
           }
         } else {
           // Update existing mic button with new config
@@ -14440,7 +14444,7 @@ export const createAgentExperience = (
 
           // Show and update disabled state
           micButtonWrapper.style.display = "";
-          micButton.disabled = session.isStreaming();
+          micButton.disabled = isComposerInputDisabled() || (session.isStreaming() && !isActiveSessionVoice());
         }
       } else {
         // Hide mic button

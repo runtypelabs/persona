@@ -851,6 +851,9 @@ export class AgentWidgetSession {
       this.voiceProvider.onStatusChange((status) => {
         this.voiceStatus = status;
         this.voiceActive = status === 'listening';
+        if (status === 'listening' || status === 'idle' || status === 'disconnected') {
+          this.settlePendingVoiceTurn(status !== 'listening');
+        }
         this.callbacks.onVoiceStatusChanged?.(status);
       });
 
@@ -900,6 +903,23 @@ export class AgentWidgetSession {
     }
     this.voiceActive = false;
     this.voiceStatus = 'disconnected';
+    this.settlePendingVoiceTurn(true);
+  }
+
+  private settlePendingVoiceTurn(includeUser: boolean): void {
+    const userId = includeUser ? this.pendingVoiceUserMessageId : null;
+    const assistantId = this.pendingVoiceAssistantMessageId;
+    if (!userId && !assistantId) return;
+    if (includeUser) this.pendingVoiceUserMessageId = null;
+    this.pendingVoiceAssistantMessageId = null;
+    if (assistantId) this.ttsSpokenMessageIds.add(assistantId);
+    this.messages = this.messages.flatMap((message) => {
+      if (message.id !== userId && message.id !== assistantId) return [message];
+      if (message.id === assistantId && !message.content.trim()) return [];
+      return [{ ...message, streaming: false, voiceProcessing: false }];
+    });
+    this.callbacks.onMessagesChanged([...this.messages]);
+    if (assistantId) this.setStreaming(false);
   }
 
   /**

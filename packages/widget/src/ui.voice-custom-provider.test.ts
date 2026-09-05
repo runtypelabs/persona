@@ -15,6 +15,7 @@ afterEach(() => {
 
 function fixture(mode: "none" | "cancel" | "barge-in" = "cancel") {
   let statusCallback: (status: VoiceStatus) => void = () => {};
+  let transcriptCallback: NonNullable<Parameters<NonNullable<VoiceProvider["onTranscript"]>>[0]> = () => {};
   let active = false;
   const provider: VoiceProvider = {
     type: "runtype",
@@ -25,6 +26,7 @@ function fixture(mode: "none" | "cancel" | "barge-in" = "cancel") {
     onResult: vi.fn(),
     onError: vi.fn(),
     onStatusChange: callback => { statusCallback = callback; },
+    onTranscript: callback => { transcriptCallback = callback; },
     getInterruptionMode: () => mode,
     isBargeInActive: () => active,
     stopPlayback: vi.fn(() => { statusCallback("listening"); }),
@@ -41,7 +43,8 @@ function fixture(mode: "none" | "cancel" | "barge-in" = "cancel") {
   });
   controllers.push(controller);
   const mic = () => mount.querySelector<HTMLButtonElement>("[data-persona-composer-mic]")!;
-  return { provider, recognition, mic, controller, emit: (status: VoiceStatus) => statusCallback(status) };
+  return { provider, recognition, mic, controller, emit: (status: VoiceStatus) => statusCallback(status),
+    transcript: (role: "user" | "assistant", text: string, final = true) => transcriptCallback(role, text, final) };
 }
 
 it("starts the custom provider from the microphone and cancels playback without hanging up", async () => {
@@ -90,4 +93,44 @@ it("routes controller start and stop to the custom provider after a composer upd
   await controller.stopVoiceRecognition();
   expect(provider.deactivateBargeIn).toHaveBeenCalledOnce();
   expect(recognition).not.toHaveBeenCalled();
+});
+
+it.each(["cancel", "barge-in"] as const)("settles a pending assistant placeholder after %s during thinking", async (mode) => {
+  const { provider, mic, emit, transcript, controller } = fixture(mode);
+  mic().click();
+  await vi.waitFor(() => expect(provider.startListening).toHaveBeenCalledOnce());
+  emit("processing");
+  transcript("user", "Tell me a story");
+  expect(controller.getMessages().some(message => message.streaming)).toBe(true);
+  if (mode === "cancel") mic().click();
+  else emit("listening");
+  expect(controller.getMessages().map(message => message.content)).toEqual(["Tell me a story"]);
+  expect(controller.getMessages().some(message => message.streaming || message.voiceProcessing)).toBe(false);
+  transcript("user", "Next question");
+  transcript("assistant", "Next answer");
+  expect(controller.getMessages().map(message => message.content)).toEqual(["Tell me a story", "Next question", "Next answer"]);
+});
+
+it("preserves partial voice content while clearing its streaming flags on hangup", async () => {
+  const { provider, mic, emit, transcript, controller } = fixture("barge-in");
+  mic().click();
+  await vi.waitFor(() => expect(provider.startListening).toHaveBeenCalledOnce());
+  transcript("user", "Explain");
+  transcript("assistant", "A partial answer", false);
+  emit("speaking");
+  mic().click();
+  expect(controller.getMessages().at(-1)).toMatchObject({ content: "A partial answer", streaming: false, voiceProcessing: false });
+});
+
+it("keeps the current user partial in one bubble when playback returns to listening", async () => {
+  const { provider, mic, emit, transcript, controller } = fixture();
+  mic().click();
+  await vi.waitFor(() => expect(provider.startListening).toHaveBeenCalledOnce());
+  transcript("user", "Hello");
+  transcript("assistant", "Hi");
+  transcript("user", "Next", false);
+  emit("listening");
+  transcript("user", "Next question");
+  transcript("assistant", "Next answer");
+  expect(controller.getMessages().filter(message => message.role === "user").map(message => message.content)).toEqual(["Hello", "Next question"]);
 });
