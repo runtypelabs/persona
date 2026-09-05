@@ -68,8 +68,6 @@ Set production secrets with `wrangler secret put RUNTYPE_API_KEY` (and optionall
 
 > **Preview CORS:** Vercel preview URLs are dynamic. The proxy reflects matching origins when `VERCEL_ENV === "preview"` or when the caller matches `PREVIEW_ORIGIN_PATTERN` (default `https://*.vercel.app`).
 
-> **Why `api/package.json` + `api/package-lock.json` exist:** Vercel's function builder runs its own `pnpm install --unsafe-perm` for the `api/` entrypoint's nearest package root, and pnpm 12's Rust CLI rejects that flag ([vercel/vercel#17560](https://github.com/vercel/vercel/issues/17560)). The empty-dependency stub makes that internal install a no-op npm call; imports still resolve from the workspace `node_modules` via Node's upward resolution. Don't delete these files until that issue is fixed.
-
 ## Other Node hosts
 
 Railway, Fly.io, or a plain Node server: run `pnpm build` then `node dist/node.js`, with the same env vars as `.env.example`.
