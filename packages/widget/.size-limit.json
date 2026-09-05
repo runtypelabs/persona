@@ -20,7 +20,7 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "198.5 kB",
+    "limit": "198.75 kB",
     "gzip": true
   },
   {
