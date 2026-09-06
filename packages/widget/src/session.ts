@@ -78,7 +78,8 @@ import {
   ReadAloudController,
   type ReadAloudListener,
 } from "./voice/read-aloud-controller";
-import { isVoiceSupportedProbe } from "./utils/voice-support";
+import { isVoiceSupportedProbe, usesSessionVoice, voiceConnectionChanged } from "./utils/voice-support";
+import { VoiceTurnTracker } from "./voice/voice-turn-tracker";
 import { loadVoiceRuntime } from "./voice-runtime-loader";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
@@ -576,6 +577,7 @@ export class AgentWidgetSession {
    */
   public stopVoicePlayback(): void {
     if (this.voiceProvider?.stopPlayback) {
+      this.voiceTurns.cancel();
       this.voiceProvider.stopPlayback();
     }
   }
@@ -595,6 +597,8 @@ export class AgentWidgetSession {
   // Pending placeholder IDs for Runtype two-phase voice flow
   private pendingVoiceUserMessageId: string | null = null;
   private pendingVoiceAssistantMessageId: string | null = null;
+  private voiceTurns = new VoiceTurnTracker();
+  private voiceDisconnectPromise: Promise<void> = Promise.resolve();
 
   // Track message IDs where the Runtype provider already played TTS audio
   // so browser TTS doesn't double-speak them
@@ -688,6 +692,9 @@ export class AgentWidgetSession {
         throw new Error('Voice configuration not provided');
       }
 
+      this.cleanupVoice();
+      const disconnected = this.voiceDisconnectPromise;
+
       // The provider runtime ships in the lazy voice-runtime chunk. The sync
       // signature is preserved: construction + wiring + connect() happen when
       // the chunk resolves (prefetched at session construction when a
@@ -696,7 +703,8 @@ export class AgentWidgetSession {
       // discarded via the generation token.
       const generation = ++this.voiceSetupGeneration;
       this.voiceSetupPromise = loadVoiceRuntime()
-        .then((mod) => {
+        .then(async (mod) => {
+          await disconnected;
           if (generation !== this.voiceSetupGeneration) return;
           this.wireVoiceProvider(mod.createVoiceProvider(voiceConfig));
         })
@@ -717,6 +725,8 @@ export class AgentWidgetSession {
   private wireVoiceProvider(provider: VoiceProvider): void {
     try {
       this.voiceProvider = provider;
+      const generation = this.voiceSetupGeneration;
+      const isCurrent = () => this.voiceProvider === provider && generation === this.voiceSetupGeneration;
 
       // Read configurable text from widget config
       const voiceRecognitionConfig = this.config.voiceRecognition ?? {};
@@ -727,6 +737,7 @@ export class AgentWidgetSession {
       // via the standard SSE chat path. Only the realtime `runtype` provider is
       // excluded here: it owns the whole turn and drives onTranscript below.
       this.voiceProvider.onResult((result) => {
+        if (!isCurrent()) return;
         if (result.provider !== 'runtype') {
           if (result.text && result.text.trim()) {
             this.sendMessage(result.text, { viaVoice: true });
@@ -741,7 +752,8 @@ export class AgentWidgetSession {
       // In-flight bubbles carry voiceProcessing=true so consumers can style
       // them via messageTransform; it clears once the text is final.
       if (this.voiceProvider.onTranscript) {
-        this.voiceProvider.onTranscript((role, text, isFinal) => {
+        this.voiceProvider.onTranscript((role, text, isFinal, metadata) => {
+          if (!isCurrent()) return;
           if (role === 'user') {
             if (!this.pendingVoiceUserMessageId) {
               const msg = this.injectMessage({
@@ -763,6 +775,7 @@ export class AgentWidgetSession {
             }
 
             if (isFinal) {
+              this.voiceTurns.start(metadata?.turnId);
               // User finished: the agent is now thinking. Release the user
               // bubble (a new interim starts a fresh turn) and show a typing
               // indicator in a fresh assistant placeholder.
@@ -777,6 +790,7 @@ export class AgentWidgetSession {
               this.setStreaming(true);
             }
           } else {
+            if (!this.voiceTurns.accepts(metadata?.turnId)) return;
             // assistant: runtype sends a single final; the isFinal=false path
             // is reserved for delta-streaming providers (future BYO).
             if (this.pendingVoiceAssistantMessageId) {
@@ -816,6 +830,7 @@ export class AgentWidgetSession {
       // not forwarded per callback: the UI samples it on its own frame loop.
       if (this.voiceProvider.onLevel) {
         this.voiceProvider.onLevel((level) => {
+          if (!isCurrent()) return;
           this.voiceLevel = Number.isFinite(level)
             ? Math.max(0, Math.min(1, level))
             : 0;
@@ -825,11 +840,13 @@ export class AgentWidgetSession {
       // Surface per-turn latency metrics to the optional config hook.
       if (this.voiceProvider.onMetrics) {
         this.voiceProvider.onMetrics((metrics) => {
+          if (!isCurrent()) return;
           this.config.voiceRecognition?.onMetrics?.(metrics);
         });
       }
 
       this.voiceProvider.onError((error) => {
+        if (!isCurrent()) return;
         console.error('Voice error:', error);
 
         // If error occurs while placeholders are pending, update assistant with error text
@@ -849,8 +866,12 @@ export class AgentWidgetSession {
       });
 
       this.voiceProvider.onStatusChange((status) => {
+        if (!isCurrent()) return;
         this.voiceStatus = status;
         this.voiceActive = status === 'listening';
+        if (status === 'listening' || status === 'idle' || status === 'disconnected') {
+          this.settlePendingVoiceTurn(status !== 'listening');
+        }
         this.callbacks.onVoiceStatusChanged?.(status);
       });
 
@@ -892,14 +913,44 @@ export class AgentWidgetSession {
    * Cleanup voice resources
    */
   public cleanupVoice() {
+    const notifyDisconnected = this.voiceProvider !== null;
     this.voiceSetupGeneration++;
     this.voiceSetupPromise = null;
     if (this.voiceProvider) {
-      this.voiceProvider.disconnect();
+      const provider = this.voiceProvider;
       this.voiceProvider = null;
+      this.voiceDisconnectPromise = this.disconnectVoice(provider);
     }
     this.voiceActive = false;
     this.voiceStatus = 'disconnected';
+    this.settlePendingVoiceTurn(true);
+    this.voiceTurns = new VoiceTurnTracker();
+    if (notifyDisconnected) this.callbacks.onVoiceStatusChanged?.('disconnected');
+  }
+
+  private async disconnectVoice(provider: VoiceProvider): Promise<void> {
+    try {
+      await provider.disconnect();
+    } catch (error) {
+      console.error('Failed to disconnect voice:', error);
+    }
+  }
+
+  private settlePendingVoiceTurn(includeUser: boolean): void {
+    const userId = includeUser ? this.pendingVoiceUserMessageId : null;
+    const assistantId = this.pendingVoiceAssistantMessageId;
+    if (!userId && !assistantId) return;
+    if (assistantId) this.voiceTurns.cancel();
+    if (includeUser) this.pendingVoiceUserMessageId = null;
+    this.pendingVoiceAssistantMessageId = null;
+    if (assistantId) this.ttsSpokenMessageIds.add(assistantId);
+    this.messages = this.messages.flatMap((message) => {
+      if (message.id !== userId && message.id !== assistantId) return [message];
+      if (message.id === assistantId && !message.content.trim()) return [];
+      return [{ ...message, streaming: false, voiceProcessing: false }];
+    });
+    this.callbacks.onMessagesChanged([...this.messages]);
+    if (assistantId) this.setStreaming(false);
   }
 
   /**
@@ -1088,6 +1139,7 @@ export class AgentWidgetSession {
 
   /** Widget teardown: release the visitor-store subscription. */
   public destroy(): void {
+    this.cleanupVoice();
     this.visitorStoreUnsubscribe?.();
     this.visitorStoreUnsubscribe = null;
     this.subscribedVisitorStore = null;
@@ -2103,6 +2155,15 @@ export class AgentWidgetSession {
   public updateConfig(next: AgentWidgetConfig) {
     const previousArtifactDisplay = this.config.features?.artifacts?.display;
     const merged = { ...this.config, ...next };
+    const replaceVoice = voiceConnectionChanged(this.config, merged);
+    const replaceClient = connectionConfigChanged(this.config, merged);
+    this.config = merged;
+    if (replaceVoice) {
+      this.cleanupVoice();
+      if (merged.voiceRecognition?.enabled === true && usesSessionVoice(merged.voiceRecognition.provider)) {
+        this.setupVoice();
+      }
+    }
     const artifactDisplayChanged =
       JSON.stringify(previousArtifactDisplay) !==
       JSON.stringify(merged.features?.artifacts?.display);
@@ -2114,8 +2175,7 @@ export class AgentWidgetSession {
     // self-styling widget work: a `webmcp:*` theme tool mutates config and
     // re-renders mid-turn; recreating the client there would abort the very
     // turn that's restyling the widget and strand the paused execution.
-    if (!connectionConfigChanged(this.config, merged)) {
-      this.config = merged;
+    if (!replaceClient) {
       this.client.updateConfig(merged);
       if (artifactDisplayChanged) this.refreshArtifactReferenceBlocks();
       return;
@@ -2132,7 +2192,6 @@ export class AgentWidgetSession {
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
     const prevSSECallback = this.client.getSSEEventCallback();
-    this.config = merged;
     this.client = new AgentWidgetClient(this.config, this.historyInternals);
     if (artifactDisplayChanged) this.refreshArtifactReferenceBlocks();
     this.wireDefaultWebMcpConfirm();

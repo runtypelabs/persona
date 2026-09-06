@@ -1,3 +1,4 @@
+import { usesSessionVoice } from "./utils/voice-support";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
@@ -5245,7 +5246,7 @@ export const createAgentExperience = (
       setTimeout(() => {
         if (!voiceState.active) {
           voiceState.manuallyDeactivated = false;
-          if (config.voiceRecognition?.provider?.type === 'runtype') {
+          if (usesSessionVoice(config.voiceRecognition?.provider)) {
             session.toggleVoice().then(() => {
               voiceState.active = session.isVoiceActive();
               emitVoiceState("restore");
@@ -7925,6 +7926,10 @@ export const createAgentExperience = (
   };
 
   const isComposerInputDisabled = (): boolean => composerLock.inputDisabled;
+  const isActiveSessionVoice = (): boolean =>
+    usesSessionVoice(config.voiceRecognition?.provider) &&
+    !!session && (session.isBargeInActive() ||
+      ["listening", "processing", "speaking"].includes(session.getVoiceStatus()));
   /** Any submission path is blocked; stop is not a submission. */
   const isComposerSendBlocked = (): boolean =>
     composerLock.inputDisabled || composerLock.sendDisabled;
@@ -8033,7 +8038,7 @@ export const createAgentExperience = (
         button.disabled = locked;
       });
     }
-    if (micButton) micButton.disabled = blocked;
+    if (micButton) micButton.disabled = locked || (streaming && !isActiveSessionVoice());
 
     suggestionManagers.forEach((manager) => {
       manager.elements.forEach((element) => {
@@ -8860,7 +8865,7 @@ export const createAgentExperience = (
       // per-state UI (e.g. a listening/speaking status dock). Fires for every
       // provider; the mic-button styling below is runtype-specific.
       eventBus.emit("voice:status", { status, timestamp: Date.now() });
-      if (config.voiceRecognition?.provider?.type !== 'runtype') return;
+      if (status !== 'disconnected' && !usesSessionVoice(config.voiceRecognition?.provider)) return;
 
       switch (status) {
         case 'listening':
@@ -8983,7 +8988,7 @@ export const createAgentExperience = (
   scrollSendSeeded = true;
 
   // Setup Runtype voice provider when configured (connects WebSocket for server-side STT)
-  if (config.voiceRecognition?.provider?.type === 'runtype') {
+  if (config.voiceRecognition?.enabled === true && usesSessionVoice(config.voiceRecognition.provider)) {
     try {
       session.setupVoice();
     } catch (err) {
@@ -12622,7 +12627,7 @@ export const createAgentExperience = (
     // Dictation is composition: a locked input takes none of it.
     if (isComposerInputDisabled()) return;
     // Runtype provider: use session.toggleVoice() (WebSocket-based STT)
-    if (config.voiceRecognition?.provider?.type === 'runtype') {
+    if (usesSessionVoice(config.voiceRecognition?.provider)) {
       const voiceStatus = session.getVoiceStatus();
       const interruptionMode = session.getVoiceInterruptionMode();
 
@@ -12693,7 +12698,7 @@ export const createAgentExperience = (
     // The click listener itself is registered by `wireComposerSurface`, so a
     // composer rebuild unwires it with the rest of the surface.
     destroyCallbacks.push(() => {
-      if (config.voiceRecognition?.provider?.type === 'runtype') {
+      if (usesSessionVoice(config.voiceRecognition?.provider)) {
         if (session.isVoiceActive()) session.toggleVoice();
         removeRuntypeMicStateStyles();
       } else {
@@ -12722,7 +12727,7 @@ export const createAgentExperience = (
     }
     setTimeout(() => {
       if (!voiceState.active && !voiceState.manuallyDeactivated) {
-        if (config.voiceRecognition?.provider?.type === 'runtype') {
+        if (usesSessionVoice(config.voiceRecognition?.provider)) {
           session.toggleVoice().then(() => {
             voiceState.active = session.isVoiceActive();
             emitVoiceState("auto");
@@ -14308,9 +14313,9 @@ export const createAgentExperience = (
         typeof window !== 'undefined' &&
         (typeof (window as any).webkitSpeechRecognition !== 'undefined' ||
          typeof (window as any).SpeechRecognition !== 'undefined');
-      const hasRuntypeProvider =
-        config.voiceRecognition?.provider?.type === 'runtype';
-      const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider;
+      const hasSessionProvider =
+        usesSessionVoice(config.voiceRecognition?.provider);
+      const hasVoiceInput = hasSpeechRecognition || hasSessionProvider;
 
       if (voiceRecognitionEnabled && hasVoiceInput) {
         // Create or update mic button
@@ -14343,7 +14348,7 @@ export const createAgentExperience = (
             );
 
             // Set disabled state
-            micButton.disabled = session.isStreaming();
+            micButton.disabled = isComposerInputDisabled() || (session.isStreaming() && !isActiveSessionVoice());
           }
         } else {
           // Update existing mic button with new config
@@ -14439,14 +14444,14 @@ export const createAgentExperience = (
 
           // Show and update disabled state
           micButtonWrapper.style.display = "";
-          micButton.disabled = session.isStreaming();
+          micButton.disabled = isComposerInputDisabled() || (session.isStreaming() && !isActiveSessionVoice());
         }
       } else {
         // Hide mic button
         if (micButton && micButtonWrapper) {
           micButtonWrapper.style.display = "none";
           // Stop any active recording if disabling
-          if (config.voiceRecognition?.provider?.type === 'runtype') {
+          if (usesSessionVoice(config.voiceRecognition?.provider)) {
             if (session.isVoiceActive()) session.toggleVoice();
           } else if (isRecording) {
             stopVoiceRecognition();
@@ -15015,8 +15020,8 @@ export const createAgentExperience = (
     },
     startVoiceRecognition(): boolean {
       if (session.isStreaming()) return false;
-      if (config.voiceRecognition?.provider?.type === 'runtype') {
-        if (session.isVoiceActive()) return true;
+      if (usesSessionVoice(config.voiceRecognition?.provider)) {
+        if (session.isVoiceActive() || session.isBargeInActive()) return true;
         if (!open && isPanelToggleable()) setOpenState(true, "system");
         voiceState.manuallyDeactivated = false;
         persistVoiceMetadata();
@@ -15037,9 +15042,12 @@ export const createAgentExperience = (
       return true;
     },
     stopVoiceRecognition(): boolean {
-      if (config.voiceRecognition?.provider?.type === 'runtype') {
-        if (!session.isVoiceActive()) return false;
-        session.toggleVoice().then(() => {
+      if (usesSessionVoice(config.voiceRecognition?.provider)) {
+        if (!session.isVoiceActive() && !session.isBargeInActive()) return false;
+        const stop = session.isBargeInActive()
+          ? session.deactivateBargeIn()
+          : session.toggleVoice();
+        stop.then(() => {
           voiceState.active = false;
           voiceState.manuallyDeactivated = true;
           persistVoiceMetadata();

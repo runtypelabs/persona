@@ -1,4 +1,21 @@
-import type { VoiceConfig } from "../types";
+import type { AgentWidgetConfig, VoiceConfig } from "../types";
+
+/** Changes that require replacing a session's capture and playback provider. */
+export function voiceConnectionChanged(previous: AgentWidgetConfig, next: AgentWidgetConfig): boolean {
+  const before = previous.voiceRecognition;
+  const after = next.voiceRecognition;
+  return (before?.enabled === true) !== (after?.enabled === true) ||
+    before?.provider?.type !== after?.provider?.type ||
+    before?.provider?.custom !== after?.provider?.custom ||
+    before?.provider?.runtype?.createPlaybackEngine !== after?.provider?.runtype?.createPlaybackEngine ||
+    JSON.stringify(before?.provider?.runtype) !== JSON.stringify(after?.provider?.runtype) ||
+    previous.agentId !== next.agentId || previous.clientToken !== next.clientToken || previous.apiUrl !== next.apiUrl;
+}
+
+/** Providers whose microphone lifecycle is owned by ChatSession instead of browser dictation. */
+export function usesSessionVoice(config?: Partial<VoiceConfig>): boolean {
+  return config?.type === "runtype" || config?.type === "custom";
+}
 
 /**
  * Eager, construction-free replica of the voice factory's `isVoiceSupported`

@@ -70,6 +70,11 @@ export type RuntypeExecutionStreamEvent = ({
   iteration?: number;
   role: "user" | "assistant" | "system";
   seq: number;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   turnIndex?: number;
   type: "turn_start";
 }) | ({
@@ -104,6 +109,11 @@ export type RuntypeExecutionStreamEvent = ({
   role: "user" | "assistant" | "system";
   seq: number;
   stopReason?: "end_turn" | "max_tool_calls" | "length" | "content_filter" | "error" | "unknown";
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   tokens?: {
   input: number;
   output: number;
@@ -118,6 +128,11 @@ export type RuntypeExecutionStreamEvent = ({
   seq: number;
   startedAt?: string;
   stepType?: string;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   totalSteps?: number;
   type: "step_start";
 } | ({
@@ -145,6 +160,11 @@ export type RuntypeExecutionStreamEvent = ({
   seq: number;
   stepType?: string;
   stopReason?: "end_turn" | "max_tool_calls" | "length" | "content_filter" | "error" | "unknown";
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   success?: boolean;
   tokensUsed?: number;
   type: "step_complete";
@@ -167,6 +187,11 @@ export type RuntypeExecutionStreamEvent = ({
   role?: "user" | "assistant" | "system";
   seq: number;
   stepId?: string;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   turnId?: string;
   type: "text_start";
 }) | {
@@ -174,11 +199,21 @@ export type RuntypeExecutionStreamEvent = ({
   executionId: string;
   id: string;
   seq: number;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   type: "text_delta";
 } | {
   executionId: string;
   id: string;
   seq: number;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   text?: string;
   type: "text_complete";
 } | ({
@@ -187,18 +222,33 @@ export type RuntypeExecutionStreamEvent = ({
   parentToolCallId?: string;
   scope?: "turn" | "loop";
   seq: number;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   type: "reasoning_start";
 }) | {
   delta: string;
   executionId: string;
   id: string;
   seq: number;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   type: "reasoning_delta";
 } | ({
   executionId: string;
   id: string;
   scope?: "turn" | "loop";
   seq: number;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   text?: string;
   type: "reasoning_complete";
 }) | ({
@@ -291,6 +341,11 @@ export type RuntypeExecutionStreamEvent = ({
   seq: number;
   startedAt?: string;
   stepId?: string;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   toolCallId: string;
   toolName: string;
   toolType: string;
@@ -299,6 +354,11 @@ export type RuntypeExecutionStreamEvent = ({
   delta: string;
   executionId: string;
   seq: number;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   toolCallId: string;
   type: "tool_input_delta";
 } | {
@@ -306,6 +366,11 @@ export type RuntypeExecutionStreamEvent = ({
   hiddenParameterNames?: Array<string>;
   parameters: Record<string, unknown>;
   seq: number;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   toolCallId: string;
   toolName?: string;
   type: "tool_input_complete";
@@ -323,6 +388,11 @@ export type RuntypeExecutionStreamEvent = ({
   result?: unknown;
   seq: number;
   stepId?: string;
+  subagent?: {
+  agentName?: string;
+  parentToolCallId?: string;
+  toolName: string;
+};
   success: boolean;
   toolCallId: string;
   toolCost?: number;
@@ -402,6 +472,19 @@ export type RuntypeExecutionStreamEvent = ({
   recoverable?: boolean;
   seq: number;
   type: "error";
+}) | ({
+  epoch: number;
+  executionId: string;
+  kind: "compaction";
+  outcome?: "ok" | "failed" | "gap" | "skipped";
+  phase: "start" | "complete";
+  reason: "threshold" | "overflow" | "manual" | "surface_policy" | "provider_mismatch";
+  seq: number;
+  strategy: "provider_native" | "summary";
+  tier: number;
+  tokensAfter?: number;
+  tokensBefore?: number;
+  type: "context_notice";
 }) | {
   executionId: string;
   seq: number;

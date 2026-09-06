@@ -4983,10 +4983,12 @@ export interface VoiceProvider {
    * `isFinal=false` is a live interim update (user partials, or assistant deltas
    * on providers that stream them); `isFinal=true` finalizes that role's text.
    * On the realtime `runtype` path, interim updates fire for the `user` only and
-   * the `assistant` arrives as a single final.
+   * the `assistant` arrives as a single final. Providers with overlapping turns
+   * must include the same turnId on user and assistant finals; without IDs,
+   * providers must discard cancelled output before emitting the next user final.
    */
   onTranscript?(
-    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean) => void,
+    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean, metadata?: { turnId?: string }) => void,
   ): void;
 
   /** Register a callback for per-turn latency metrics (realtime path). */
