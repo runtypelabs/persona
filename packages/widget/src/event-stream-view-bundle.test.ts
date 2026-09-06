@@ -23,9 +23,9 @@ const RUNTIME_MARKERS = [
   "persona-event-stream-view",
   "persona-event-stream-list",
   // Capture/persistence runtime, moved into this chunk alongside the view:
-  // IndexedDB store (createObjectStore) and throughput tracker (flow_run_start).
+  // IndexedDB store (createObjectStore) and throughput tracker (visibleCharCount).
   "createObjectStore",
-  "flow_run_start",
+  "visibleCharCount",
 ];
 
 const SUBPATH = "@runtypelabs/persona/event-stream-view";

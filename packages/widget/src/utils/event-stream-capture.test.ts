@@ -45,10 +45,10 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
     });
   });
 
-  it("should fire onSSEEvent for step_chunk events", async () => {
+  it("should fire onSSEEvent for text_delta events", async () => {
     global.fetch = createMockFetch([
       sseData({
-        type: "step_chunk",
+        type: "text_delta",
         id: "step_1",
         name: "Prompt 1",
         executionType: "prompt",
@@ -56,7 +56,7 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
         text: "Hello world"
       }),
       sseData({
-        type: "flow_complete",
+        type: "execution_complete",
         flowId: "flow_1",
         success: true,
         duration: 100
@@ -79,11 +79,11 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
 
     // Should capture both events
     const stepChunkEvents = capturedSSEEvents.filter(
-      (e) => e.eventType === "step_chunk"
+      (e) => e.eventType === "text_delta"
     );
     expect(stepChunkEvents).toHaveLength(1);
     expect(stepChunkEvents[0].payload).toMatchObject({
-      type: "step_chunk",
+      type: "text_delta",
       text: "Hello world"
     });
   });
@@ -106,7 +106,7 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
         completedAt: "2025-01-01T00:00:01.000Z"
       }),
       sseData({
-        type: "flow_complete",
+        type: "execution_complete",
         flowId: "flow_1",
         success: true,
         duration: 200
@@ -148,10 +148,10 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
     });
   });
 
-  it("should fire onSSEEvent for flow_complete events", async () => {
+  it("should fire onSSEEvent for execution_complete events", async () => {
     global.fetch = createMockFetch([
       sseData({
-        type: "flow_complete",
+        type: "execution_complete",
         flowId: "flow_1",
         success: true,
         duration: 500,
@@ -175,11 +175,11 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
     );
 
     const flowCompleteEvents = capturedSSEEvents.filter(
-      (e) => e.eventType === "flow_complete"
+      (e) => e.eventType === "execution_complete"
     );
     expect(flowCompleteEvents).toHaveLength(1);
     expect(flowCompleteEvents[0].payload).toMatchObject({
-      type: "flow_complete",
+      type: "execution_complete",
       flowId: "flow_1",
       success: true,
       duration: 500
@@ -189,7 +189,7 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
   it("should fire onSSEEvent for every event in a multi-event stream", async () => {
     global.fetch = createMockFetch([
       sseData({
-        type: "step_chunk",
+        type: "text_delta",
         id: "step_1",
         name: "Prompt 1",
         executionType: "prompt",
@@ -197,7 +197,7 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
         text: "Hello"
       }),
       sseData({
-        type: "step_chunk",
+        type: "text_delta",
         id: "step_1",
         name: "Prompt 1",
         executionType: "prompt",
@@ -218,7 +218,7 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
         duration: 50
       }),
       sseData({
-        type: "flow_complete",
+        type: "execution_complete",
         flowId: "flow_1",
         success: true,
         duration: 300
@@ -244,11 +244,11 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
 
     const types = capturedSSEEvents.map((e) => e.eventType);
     expect(types).toEqual([
-      "step_chunk",
-      "step_chunk",
+      "text_delta",
+      "text_delta",
       "tool_start",
       "tool_complete",
-      "flow_complete"
+      "execution_complete"
     ]);
   });
 
@@ -257,11 +257,11 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
     // When SSE has no event prefix, payloadType = payload.type
     global.fetch = createMockFetch([
       sseData({
-        type: "step_chunk",
+        type: "text_delta",
         text: "chunk1"
       }),
       sseData({
-        type: "flow_complete",
+        type: "execution_complete",
         success: true
       })
     ]);
@@ -281,8 +281,8 @@ describe("Event Capture Pipeline - onSSEEvent callback", () => {
     );
 
     // Event types should be resolved from payload.type
-    expect(capturedSSEEvents[0].eventType).toBe("step_chunk");
-    expect(capturedSSEEvents[1].eventType).toBe("flow_complete");
+    expect(capturedSSEEvents[0].eventType).toBe("text_delta");
+    expect(capturedSSEEvents[1].eventType).toBe("execution_complete");
   });
 });
 

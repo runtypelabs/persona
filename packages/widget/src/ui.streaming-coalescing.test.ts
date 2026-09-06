@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import type { AgentWidgetStoredState } from "./types";
-import { createUnifiedEventWrite } from "./utils/__fixtures__/unified-translator.oracle";
 
 // The approval UI ships in a lazy chunk; provide it eagerly so this file's
 // synchronous render assertions hold. Per-file module isolation keeps the
@@ -48,7 +47,7 @@ const flushMicrotasks = async (times = 20) => {
   }
 };
 
-const legacyEvent = (type: string, data: Record<string, unknown>) =>
+const sseEvent = (type: string, data: Record<string, unknown>) =>
   `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
 
 const createStreamHarness = () => {
@@ -59,9 +58,7 @@ const createStreamHarness = () => {
     new Response(new ReadableStream<Uint8Array>({
       start(streamController) {
         controller = streamController;
-        write = createUnifiedEventWrite((chunk) => {
-          streamController.enqueue(encoder.encode(chunk));
-        });
+        write = (chunk) => streamController.enqueue(encoder.encode(chunk));
       },
     }))
   );
@@ -69,7 +66,7 @@ const createStreamHarness = () => {
     fetchMock,
     send(type: string, data: Record<string, unknown>) {
       if (!write) throw new Error("stream not started");
-      write(legacyEvent(type, data));
+      write(sseEvent(type, data));
     },
     close() {
       controller?.close();
@@ -85,7 +82,7 @@ const startTurn = async (mount: HTMLElement) => {
 };
 
 const startText = (stream: ReturnType<typeof createStreamHarness>, deltas: string[]) => {
-  stream.send("flow_start", { flowId: "flow_1", flowName: "Test", totalSteps: 1 });
+  stream.send("execution_start", { kind: "flow", executionId: "exec-1", flowId: "flow_1", flowName: "Test", totalSteps: 1 });
   stream.send("step_start", {
     id: "step_1",
     name: "Prompt",
@@ -93,12 +90,12 @@ const startText = (stream: ReturnType<typeof createStreamHarness>, deltas: strin
     index: 0,
     totalSteps: 1,
   });
-  stream.send("text_start", { messageId: "message_1" });
-  deltas.forEach((text) => stream.send("step_delta", { id: "step_1", text }));
+  stream.send("text_start", { id: "message_1" });
+  deltas.forEach((text) => stream.send("text_delta", { id: "message_1", delta: text }));
 };
 
 const finishText = (stream: ReturnType<typeof createStreamHarness>) => {
-  stream.send("text_end", { messageId: "message_1" });
+  stream.send("text_complete", { id: "message_1" });
   stream.send("step_complete", {
     id: "step_1",
     name: "Prompt",
@@ -106,7 +103,7 @@ const finishText = (stream: ReturnType<typeof createStreamHarness>) => {
     success: true,
     result: { response: "Hello world" },
   });
-  stream.send("flow_complete", { flowId: "flow_1", success: true });
+  stream.send("execution_complete", { kind: "flow", executionId: "exec-1", flowId: "flow_1", success: true });
   stream.close();
 };
 
@@ -145,8 +142,8 @@ describe("pure streaming text update coalescing", () => {
     startText(stream, ["Hel"]);
     await flushMicrotasks();
     const afterFirstDelta = saves.length;
-    stream.send("step_delta", { id: "step_1", text: "lo" });
-    stream.send("step_delta", { id: "step_1", text: " world" });
+    stream.send("text_delta", { id: "message_1", delta: "lo" });
+    stream.send("text_delta", { id: "message_1", delta: " world" });
     await flushMicrotasks();
 
     expect(saves).toHaveLength(afterFirstDelta);

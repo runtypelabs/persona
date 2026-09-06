@@ -66,30 +66,35 @@ export interface AssistantTurnFramesOptions {
   turnId?: string;
   /** Assistant text content to stream. */
   text: string;
-  /** Approximate characters per `agent_turn_delta` frame. Default: 32. */
+  /** Approximate characters per `text_delta` frame. Default: 32. */
   chunkSize?: number;
 }
 
 /**
- * Builds the standard `agent_turn_start` → many `agent_turn_delta` → `agent_turn_complete`
- * frame sequence for simulating a streaming assistant reply. The frames drive the same
- * client pipeline as real SSE, so stream animations (typewriter, word-fade, etc.) engage.
+ * Builds a unified assistant turn with a text block. Execution lifecycle frames
+ * can be supplied by the caller when composing a multi-turn execution.
  */
 export function buildAssistantTurnFrames(options: AssistantTurnFramesOptions): MockSSEFrame[] {
   const { executionId, text } = options;
   const turnId = options.turnId ?? "turn-1";
+  const textId = `${turnId}-text`;
   const chunkSize = Math.max(1, options.chunkSize ?? 32);
-
-  const frames: MockSSEFrame[] = [{ type: "agent_turn_start", executionId, turnId }];
+  const frames: MockSSEFrame[] = [
+    { type: "turn_start", executionId, id: turnId, role: "assistant" },
+    { type: "text_start", executionId, id: textId, turnId, role: "assistant" },
+  ];
   for (let i = 0; i < text.length; i += chunkSize) {
     frames.push({
-      type: "agent_turn_delta",
+      type: "text_delta",
       executionId,
-      turnId,
+      id: textId,
       delta: text.slice(i, i + chunkSize),
     });
   }
-  frames.push({ type: "agent_turn_complete", executionId, turnId });
+  frames.push(
+    { type: "text_complete", executionId, id: textId, text },
+    { type: "turn_complete", executionId, id: turnId, role: "assistant", content: text },
+  );
   return frames;
 }
 

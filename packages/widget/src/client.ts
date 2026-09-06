@@ -2208,7 +2208,7 @@ export class AgentWidgetClient {
    * Returns the raw Response so the caller can pipe its SSE body through
    * `connectStream()`.
    *
-   * @param executionId - The paused execution id carried on `step_await`.
+   * @param executionId - The paused execution id carried on `await`.
    * @param toolOutputs - Map keyed by per-call `toolCallId` (core#3878),
    *   falling back to tool name for legacy servers → the tool's result value.
    */
@@ -2832,7 +2832,7 @@ export class AgentWidgetClient {
 
     let assistantMessage: AgentWidgetMessage | null = null;
     // Tracks the most recently touched assistant text message for the
-    // current agent turn so `agent_turn_complete.stopReason` can attach
+    // current agent turn so `turn_complete.stopReason` can attach
     // to the final visible text segment even after `assistantMessage`
     // has been finalized at a tool-call boundary within the turn.
     let lastAssistantInTurn: AgentWidgetMessage | null = null;
@@ -3774,16 +3774,9 @@ export class AgentWidgetClient {
             toolContext.byCall.delete(callKey);
           }
         } else if (payloadType === "await" && payload.toolName) {
-          // LOCAL tool pause. Two wire shapes resolve here, by dispatch target:
-          //  - FLOW dispatch → `step_await` + `awaitReason: "local_tool_required"`
-          //    (Runtype's prompt step throws LocalToolRequiredError when the model
-          //    calls a `toolType: "local"` tool).
-          //  - AGENT dispatch → `agent_await` (the agent runtime's native pause).
-          // Either way the server emits the tool name, params, and execution id;
-          // the execution pauses until the client POSTs /resume with toolOutputs.
-          // `agent_await` carries a BARE tool name plus an `origin`; page tools
-          // (origin "webmcp") are normalized to the `webmcp:`-prefixed form below
-          // so the bridge + session.ts `/resume` keying are identical for both.
+          // Unified LOCAL tool pause for either dispatch kind. The execution
+          // waits for /resume with toolOutputs. Page tools with origin "webmcp"
+          // may carry a bare name, normalized to the internal webmcp: prefix.
           //
           // Upsert a fully-populated tool-variant message so the existing
           // ask_user_question bubble + sheet paths fire. Mark the message with
@@ -3807,9 +3800,9 @@ export class AgentWidgetClient {
             toolCallId ?? (payload.toolId as string) ?? `local-${nextSequence()}`;
           const toolMessage = ensureToolMessage(toolId);
           const rawToolName = payload.toolName as string;
-          // `agent_await` page tools arrive with a bare name; synthesize the
+          // Page tools may arrive with a bare name; synthesize the
           // `webmcp:` prefix so isWebMcpToolName (and the bridge's prefix-strip on
-          // resume) treat them identically to a flow `step_await`.
+          // resume) treat them identically to a flow `await`.
           const toolName =
             payload.origin === "webmcp" &&
             !isWebMcpToolName(rawToolName)
@@ -3820,7 +3813,7 @@ export class AgentWidgetClient {
           tool.name = toolName;
           tool.args = payload.parameters;
           // WebMCP tools are executed asynchronously by the browser AFTER this
-          // `step_await` arrives. Keep them running until session.ts resolves
+          // `await` arrives. Keep them running until session.ts resolves
           // the page tool and records its actual elapsed time. Other local
           // tools (for example ask_user_question) keep the existing complete
           // state because they are waiting for a user interaction, not an
@@ -4285,7 +4278,7 @@ export class AgentWidgetClient {
 
             // Seal any in-flight assistant text bubble before splitting the
             // stream. Without this, an orphan bubble retains `streaming: true`
-            // forever: `agent_complete` only finalizes the latest
+            // forever: `execution_complete` only finalizes the latest
             // `assistantMessage`, so the typing/caret indicator would stay on
             // the prior bubble even though no more deltas will arrive.
             const prevAssistant = assistantMessage as AgentWidgetMessage | null;
@@ -4343,31 +4336,6 @@ export class AgentWidgetClient {
         // Tool Approval Events
         // ================================================================
         } else if (payloadType === "approval_start") {
-          const approvalId = payload.approvalId ?? `approval-${nextSequence()}`;
-          const approvalMessage: AgentWidgetMessage = {
-            id: `approval-${approvalId}`,
-            role: "assistant",
-            content: "",
-            createdAt: new Date().toISOString(),
-            streaming: false,
-            variant: "approval",
-            sequence: nextSequence(),
-            approval: {
-              id: approvalId,
-              status: "pending",
-              agentId: agentExecution?.agentId ?? 'virtual',
-              executionId: payload.executionId ?? agentExecution?.executionId ?? '',
-              toolName: payload.toolName ?? '',
-              toolType: payload.toolType,
-              description: payload.description ?? `Execute ${payload.toolName ?? 'tool'}`,
-              ...(typeof payload.reason === "string" && payload.reason
-                ? { reason: payload.reason }
-                : {}),
-              parameters: payload.parameters,
-            },
-          };
-          emitMessage(approvalMessage);
-        } else if (payloadType === "step_await" && payload.awaitReason === "approval_required") {
           const approvalId = payload.approvalId ?? `approval-${nextSequence()}`;
           const approvalMessage: AgentWidgetMessage = {
             id: `approval-${approvalId}`,
@@ -4631,31 +4599,12 @@ export class AgentWidgetClient {
             }
             onEvent({ type: "status", status: "idle" });
           }
-        } else if (
-          payloadType === "step_error" ||
-          payloadType === "dispatch_error" ||
-          payloadType === "flow_error"
-        ) {
-          let resolvedError: Error | null = null;
-          if (payload.error instanceof Error) {
-            resolvedError = payload.error;
-          } else if (payloadType === "dispatch_error") {
-            const msg = payload.message ?? payload.error;
-            if (msg != null && msg !== "") {
-              resolvedError = new Error(String(msg));
-            }
-          } else {
-            const e = payload.error;
-            if (typeof e === "string" && e !== "") {
-              resolvedError = new Error(e);
-            } else if (e != null && typeof e === "object" && Reflect.has(e, "message")) {
-              // Reflect.has, not `in` — see the note on the equivalent guard above.
-              resolvedError = new Error(String((e as { message?: unknown }).message ?? e));
-            }
-          }
-
-          if (resolvedError) {
-            onEvent({ type: "error", error: resolvedError });
+        } else if (payloadType === "dispatch_error") {
+          // Retain the custom-backend dispatch failure extension. Runtype uses
+          // execution_error; legacy flow_error / step_error frames are unsupported.
+          const message = payload.error instanceof Error ? payload.error : payload.message ?? payload.error;
+          if (message != null && message !== "") {
+            onEvent({ type: "error", error: message instanceof Error ? message : new Error(String(message)) });
             const finalMsg = assistantMessage as AgentWidgetMessage | null;
             if (finalMsg && finalMsg.streaming) {
               finalMsg.streaming = false;

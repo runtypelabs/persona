@@ -89,7 +89,7 @@
                   <button class="mode-btn active" data-chipsloop="on">On</button>
                   <button class="mode-btn" data-chipsloop="off">Off</button>
                 </div>
-                <p class="hint">When on, the mocked chat reply ends with a real <code>step_await</code> for <code>suggest_replies</code>: the full loop: send → reply → fresh chips → tap → repeat.</p>
+                <p class="hint">When on, the mocked chat reply ends with a real <code>await</code> for <code>suggest_replies</code>: the full loop: send → reply → fresh chips → tap → repeat.</p>
               </div>
 
               <div class="section">
@@ -130,7 +130,7 @@
           <p>Where <code>ask_user_question</code> blocks the execution until you answer, <code>suggest_replies</code> resolves instantly: the chips render above the composer and the widget auto-POSTs <code>/resume</code> with a canned "shown" result so the agent's turn completes. Three ways to see it here:</p>
           <ul>
             <li><strong>Presets</strong>: inject a simulated call; the event log shows the immediate auto-resume.</li>
-            <li><strong>Chips loop</strong>: type anything (or tap a chip). The mocked reply ends with a real <code>step_await</code>, so fresh chips appear after every turn: the full send → reply → chips cycle.</li>
+            <li><strong>Chips loop</strong>: type anything (or tap a chip). The mocked reply ends with a real <code>await</code>, so fresh chips appear after every turn: the full send → reply → chips cycle.</li>
             <li><strong>Soft dismiss</strong>: ignore the chips and type your own message: they clear the moment any user message lands. Latest call wins if several arrive in one turn.</li>
           </ul>
         </div>
@@ -202,7 +202,7 @@
       let resumeMockMode = "fast"; // "off" | "fast" | "slow" | "hang"
       const RESUME_MOCK_DELAYS = { off: 0, fast: 300, slow: 2000, hang: Infinity };
 
-      // When on, every mocked chat reply ends with a real `step_await` for
+      // When on, every mocked chat reply ends with a real `await` for
       // `suggest_replies`: the widget renders chips and auto-resumes, so a
       // chip tap (or any typed message) loops: send → reply → fresh chips.
       let chipsLoop = true;
@@ -231,10 +231,26 @@
         return originalFetch(input, init);
       };
 
-      // Simulated chat reply: echo the user's message, then (when the chips
-      // loop is on) pause the "execution" with a real suggest_replies
-      // step_await, exactly the wire shape a flow emits, so the widget's
-      // fire-and-forget auto-resume runs against the /resume mock above.
+      // Unified mock frames share the same serializer for dispatch and resume.
+      function mockStreamResponse(executionId, frames) {
+        const body = frames.map((frame, seq) =>
+          `data: ${JSON.stringify({ executionId, seq, ...frame })}\n\n`
+        ).join("");
+        return new Response(body, { headers: { "Content-Type": "text/event-stream" } });
+      }
+
+      function replyFrames(text, resumed = false) {
+        return [
+          { type: "execution_start", kind: "flow", startedAt: new Date().toISOString(), resumed },
+          { type: "step_start", id: "sim-step", stepType: "prompt", name: "sim" },
+          { type: "text_start", id: "sim-text", stepId: "sim-step" },
+          { type: "text_delta", id: "sim-text", delta: text },
+          { type: "text_complete", id: "sim-text", text },
+          { type: "step_complete", id: "sim-step", stepType: "prompt", success: true, result: { response: text } },
+        ];
+      }
+
+      // Echo the user, then pause for suggest_replies or finish the execution.
       function mockDispatchResponse(body) {
         let lastUserText = "";
         try {
@@ -243,61 +259,24 @@
           const last = userMsgs[userMsgs.length - 1];
           lastUserText = typeof last?.content === "string" ? last.content : "";
         } catch {}
-
         const n = ++simTurn;
-        const replyText = `You said "${lastUserText}". Here's a simulated reply (turn ${n}).`;
-        const chips = [
-          "Tell me more",
-          `Show example #${n}`,
-          "What else can you do?",
-        ];
-        const events = [
-          `data: {"type":"step_chunk","id":"sim-step-${n}","name":"sim","executionType":"prompt","index":0,"text":${JSON.stringify(replyText)}}`,
-          ``,
-          `data: {"type":"step_complete","id":"sim-step-${n}","name":"sim","executionType":"prompt","index":0,"success":true,"result":{"promptId":"sim","promptName":"sim","response":${JSON.stringify(replyText)},"tokens":{"input":0,"output":0,"total":0},"cost":0,"executionTime":120,"order":0},"executionTime":120}`,
-          ``,
-        ];
+        const frames = replyFrames(`You said "${lastUserText}". Here's a simulated reply (turn ${n}).`);
         if (chipsLoop) {
-          // Server pauses at step_await and closes the SSE: no flow_complete.
-          // The widget's auto-resume posts /resume (mocked above) to finish.
-          events.push(
-            `event: step_await`,
-            `data: ${JSON.stringify({
-              type: "step_await",
-              awaitReason: "local_tool_required",
-              id: `sim-await-${n}`,
-              name: "sim",
-              stepType: "prompt",
-              index: 1,
-              toolCallId: `sr-call-${n}`,
-              toolName: "suggest_replies",
-              executionId: `sim-exec-${n}`,
-              parameters: { suggestions: chips },
-            })}`,
-            ``,
-          );
-          log(`mock /chat → reply + suggest_replies step_await (turn ${n})`, "info");
+          frames.push({
+            type: "await",
+            awaitReason: "local_tool_required",
+            stepId: "sim-step",
+            toolCallId: `sr-call-${n}`,
+            toolName: "suggest_replies",
+            origin: "sdk",
+            parameters: { suggestions: ["Tell me more", `Show example #${n}`, "What else can you do?"] },
+          });
+          log(`mock /chat → reply + suggest_replies await (turn ${n})`, "info");
         } else {
-          events.push(
-            `data: {"type":"flow_complete","flowId":"sim-flow","success":true,"duration":120,"completedAt":${JSON.stringify(new Date().toISOString())},"totalTokensUsed":0}`,
-            ``,
-          );
+          frames.push({ type: "execution_complete", kind: "flow", success: true });
           log(`mock /chat → reply (turn ${n}, chips loop off)`, "info");
         }
-        const encoder = new TextEncoder();
-        const stream = new ReadableStream({
-          start(c) {
-            // The trailing "\n" matters: each SSE event must be terminated by
-            // a blank line, and the final step_await would otherwise be
-            // dropped as an unterminated partial when the stream closes.
-            c.enqueue(encoder.encode(events.join("\n") + "\n"));
-            c.close();
-          },
-        });
-        return Promise.resolve(new Response(stream, {
-          status: 200,
-          headers: { "Content-Type": "text/event-stream" },
-        }));
+        return Promise.resolve(mockStreamResponse(`sim-exec-${n}`, frames));
       }
 
       function mockResumeResponse(body) {
@@ -310,28 +289,16 @@
 
         // suggest_replies auto-resume (fire-and-forget): keyed by the wire
         // tool name for injected presets, or by the per-call `sr-call-*` id
-        // for chips-loop step_awaits. The agent "ends its turn" after
-        // suggesting, so reply with flow_complete only: no extra text.
+        // for chips-loop awaits. The agent "ends its turn" after
+        // suggesting, so reply with execution_complete only: no extra text.
         const isSuggestResume = Object.keys(toolOutputs).some(
           (k) => k === "suggest_replies" || k.startsWith("sr-call-"),
         );
         if (isSuggestResume) {
-          log(`mock /resume ← suggest_replies auto-resolve → flow_complete`, "answered");
-          const encoder = new TextEncoder();
-          const sse = [
-            `data: {"type":"flow_complete","flowId":"sim-flow","success":true,"duration":0,"completedAt":${JSON.stringify(new Date().toISOString())},"totalTokensUsed":0}`,
-            ``,
-          ].join("\n");
-          const stream = new ReadableStream({
-            start(c) {
-              c.enqueue(encoder.encode(sse));
-              c.close();
-            },
-          });
-          return Promise.resolve(new Response(stream, {
-            status: 200,
-            headers: { "Content-Type": "text/event-stream" },
-          }));
+          log(`mock /resume ← suggest_replies auto-resolve → execution_complete`, "answered");
+          return Promise.resolve(mockStreamResponse(parsedBody?.executionId ?? "sim-exec", [
+            { type: "execution_complete", kind: "flow", success: true },
+          ]));
         }
 
         const answer = toolOutputs.ask_user_question;
@@ -352,26 +319,11 @@
 
         return new Promise((resolve) => {
           setTimeout(() => {
-            const encoder = new TextEncoder();
             const replyText = `Thanks, I got "${answerText}". (simulated response)`;
-            const sse = [
-              `data: {"type":"step_chunk","id":"sim-step","name":"sim","executionType":"prompt","index":0,"text":${JSON.stringify(replyText)}}`,
-              ``,
-              `data: {"type":"step_complete","id":"sim-step","name":"sim","executionType":"prompt","index":0,"success":true,"result":{"promptId":"sim","promptName":"sim","response":${JSON.stringify(replyText)},"tokens":{"input":0,"output":0,"total":0},"cost":0,"executionTime":${delay},"order":0},"executionTime":${delay}}`,
-              ``,
-              `data: {"type":"flow_complete","flowId":"sim-flow","success":true,"duration":${delay},"completedAt":${JSON.stringify(new Date().toISOString())},"totalTokensUsed":0}`,
-              ``,
-            ].join("\n");
-            const stream = new ReadableStream({
-              start(c) {
-                c.enqueue(encoder.encode(sse));
-                c.close();
-              },
-            });
-            resolve(new Response(stream, {
-              status: 200,
-              headers: { "Content-Type": "text/event-stream" },
-            }));
+            resolve(mockStreamResponse(parsedBody?.executionId ?? "sim-exec", [
+              ...replyFrames(replyText, true),
+              { type: "execution_complete", kind: "flow", success: true, durationMs: delay },
+            ]));
           }, delay);
         });
       }
@@ -646,7 +598,7 @@
             },
           },
         });
-        // A real flow closes its SSE at step_await; the widget flushes the
+        // A real flow closes its SSE at await; the widget flushes the
         // auto-resume batch on stream end. Simulate that end so the injected
         // call actually fires its /resume (intercepted by the mock above).
         controller.injectTestMessage({ type: "status", status: "idle" });

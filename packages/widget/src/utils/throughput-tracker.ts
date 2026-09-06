@@ -12,7 +12,7 @@
 // then prefers exact provider usage (output tokens) when terminal events carry
 // it. A run starts when the stream starts (or lazily on the first visible
 // delta), stays "running" across intermediate step/turn completions, and only
-// finalizes on terminal `flow_complete` / `agent_complete`. Stream errors mark
+// finalizes on terminal `execution_complete`. Stream errors mark
 // the metric unavailable rather than leaving it stuck "running".
 
 export type ThroughputMetricStatus = "idle" | "running" | "complete" | "error";
@@ -47,47 +47,10 @@ interface ThroughputRunStats {
 // execution time or whole-request duration instead.
 const THROUGHPUT_MIN_DURATION_MS = 250;
 
-// Request-level lifecycle events: each marks the beginning of a NEW request.
-// The SSE tap fires for every payload type regardless of whether the client has
-// a handler for it, so any of these that the server emits starts the run with
-// an accurate `startedAt` (capturing time-to-first-token). These RESET any run
-// already in progress, so a prior stream that ended without a terminal/error
-// frame (e.g. `session.cancel()`) doesn't bleed its tokens into the next one.
-const REQUEST_START_EVENTS = new Set([
-  "flow_start",
-  "flow_run_start",
-  "agent_start",
-  "dispatch_start",
-  "run_start",
-]);
-
-// Per-step markers that fire repeatedly WITHIN a single request (a flow emits
-// one per step). These only lazily begin a run: they must never reset, or a
-// multi-step response would restart the metric between steps. If no request- or
-// step-start event is emitted, the first visible delta lazily starts the run.
-const STEP_START_EVENTS = new Set(["step_start", "execution_start"]);
-
-const VISIBLE_DELTA_EVENTS = new Set([
-  "step_delta",
-  "step_chunk",
-  "chunk",
-  "agent_turn_delta",
-]);
-
-const INTERMEDIATE_COMPLETE_EVENTS = new Set([
-  "step_complete",
-  "agent_turn_complete",
-]);
-
-const TERMINAL_COMPLETE_EVENTS = new Set(["flow_complete", "agent_complete"]);
-
-const ERROR_EVENTS = new Set([
-  "step_error",
-  "flow_error",
-  "agent_error",
-  "dispatch_error",
-  "error",
-]);
+// Execution starts reset a stale/cancelled run; step and turn starts only
+// lazily initialize it, since they can repeat within the same execution.
+const STEP_START_EVENTS = new Set(["step_start", "turn_start"]);
+const INTERMEDIATE_COMPLETE_EVENTS = new Set(["step_complete", "turn_complete"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -134,46 +97,6 @@ function resolveEventType(
   return typeof payload.type === "string" ? payload.type : eventType;
 }
 
-function getTextDelta(payload: Record<string, unknown>): string {
-  if (typeof payload.text === "string") return payload.text;
-  if (typeof payload.delta === "string") return payload.delta;
-  if (typeof payload.content === "string") return payload.content;
-  if (typeof payload.chunk === "string") return payload.chunk;
-  return "";
-}
-
-/**
- * Only count visible model output.
- *
- * For `agent_turn_delta`, count only a contentType of exactly `text` as
- * visible, matching the client renderer (which appends streaming assistant
- * text only when `contentType === "text"`); `thinking`, `tool_input`, any
- * other value, and a missing contentType are ignored so throughput never
- * includes deltas the chat UI doesn't render.
- *
- * For `step_delta` / `step_chunk`, skip tool and context steps: those carry
- * tool I/O, not model-visible text: mirroring the widget's own renderer.
- */
-function isVisibleTextDelta(
-  type: string,
-  payload: Record<string, unknown>
-): boolean {
-  if (type === "step_delta" || type === "step_chunk") {
-    return payload.stepType !== "tool" && payload.executionType !== "context";
-  }
-
-  if (type !== "agent_turn_delta") return true;
-
-  const contentType =
-    typeof payload.contentType === "string"
-      ? payload.contentType
-      : typeof payload.content_type === "string"
-        ? payload.content_type
-        : undefined;
-
-  return contentType === "text";
-}
-
 /** Extract exact output tokens from a variety of usage payload shapes. */
 function getOutputTokens(payload: Record<string, unknown>): number | undefined {
   const result = getRecord(payload, "result");
@@ -210,6 +133,7 @@ function getExecutionTimeMs(
 ): number | undefined {
   const result = getRecord(payload, "result");
   return (
+    toFiniteNumber(payload.durationMs) ??
     toFiniteNumber(payload.executionTime) ??
     toFiniteNumber(payload.executionTimeMs) ??
     toFiniteNumber(payload.execution_time) ??
@@ -286,8 +210,8 @@ export class ThroughputTracker {
 
   processEvent(eventType: string, payload: unknown): void {
     if (!isRecord(payload)) {
-      // Non-object payloads can still signal lifecycle (e.g. bare "error").
-      if (ERROR_EVENTS.has(eventType) && this.run) {
+      // Non-object payloads can still signal lifecycle (e.g. bare "execution_error").
+      if (eventType === "execution_error" && this.run) {
         this.run = null;
         this.metric = { status: "error" };
       }
@@ -297,7 +221,7 @@ export class ThroughputTracker {
     const type = resolveEventType(eventType, payload);
     const now = this.now();
 
-    if (REQUEST_START_EVENTS.has(type)) {
+    if (type === "execution_start") {
       // New request: start fresh, discarding any incomplete prior run.
       this.startRun(now);
       return;
@@ -309,9 +233,8 @@ export class ThroughputTracker {
       return;
     }
 
-    if (VISIBLE_DELTA_EVENTS.has(type)) {
-      if (!isVisibleTextDelta(type, payload)) return;
-      const text = getTextDelta(payload);
+    if (type === "text_delta") {
+      const text = typeof payload.delta === "string" ? payload.delta : "";
       if (!text) return;
 
       // Lazily start a run if the stream began without a recognized start event.
@@ -367,7 +290,7 @@ export class ThroughputTracker {
       return;
     }
 
-    if (TERMINAL_COMPLETE_EVENTS.has(type)) {
+    if (type === "execution_complete") {
       if (!this.run) return;
       const stats = this.run;
       // Prefer exact output tokens from this terminal event, else accumulated
@@ -396,7 +319,7 @@ export class ThroughputTracker {
       return;
     }
 
-    if (ERROR_EVENTS.has(type)) {
+    if (type === "execution_error" || (type === "error" && payload.recoverable === false)) {
       if (!this.run) return;
       this.run = null;
       this.metric = { status: "error" };

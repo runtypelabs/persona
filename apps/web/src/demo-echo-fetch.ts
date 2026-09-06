@@ -14,8 +14,6 @@
  * → `execution_complete`), the same frames a real Runtype dispatch produces, so
  * it drives the exact streaming pipeline: typewriter / word-fade animations,
  * auto-scroll, and the typing indicator all behave as they would in production.
- * (The legacy `agent_turn_*` frames are no longer parsed by the 4.x client, so
- * the testing module's `buildAssistantTurnFrames` would render nothing here.)
  */
 
 import {

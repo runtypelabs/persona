@@ -275,7 +275,7 @@ const getWebMcpErrorMessage = (
 };
 
 /**
- * Tool names whose `step_await` the widget resolves automatically (no user
+ * Tool names whose `await` the widget resolves automatically (no user
  * pill click): `webmcp:*` page tools and the built-in fire-and-forget
  * `suggest_replies`. These share the await-batch / dedupe / resume machinery;
  * `ask_user_question` is NOT one of them: it blocks on the answer sheet.
@@ -3169,7 +3169,7 @@ export class AgentWidgetSession {
   /**
    * Resolve a paused `ask_user_question` LOCAL tool call.
    *
-   * When the server emits `step_await` for `ask_user_question`, the widget
+   * When the server emits `await` for `ask_user_question`, the widget
    * renders the answer-pill sheet and calls this method once the user
    * picks. Steps:
    *   1. POST the answer to `/resume` via `client.resumeFlow`.
@@ -3389,10 +3389,10 @@ export class AgentWidgetSession {
   }
 
   /**
-   * Collect an auto-resolving LOCAL-tool `step_await` (`webmcp:*` page tools
+   * Collect an auto-resolving LOCAL-tool `await` (`webmcp:*` page tools
    * and the built-in `suggest_replies`) into a per-executionId batch
    * and schedule a single deferred flush. Parallel calls (core#3878) emit
-   * several `step_await`s for ONE paused execution within the same stream tick;
+   * several `await`s for ONE paused execution within the same stream tick;
    * buffering them and flushing once lets us post ONE `/resume` keyed by the
    * per-call `webMcpToolCallId` rather than racing N name-keyed resumes on the
    * same execution (which 404'd on the second and hung the turn).
@@ -3438,7 +3438,7 @@ export class AgentWidgetSession {
   /**
    * Flush every buffered local-tool await batch, one `/resume` per executionId.
    * Called once a stream ends (`status: idle` / `error`): by then all parallel
-   * `step_await`s the stream carried have been collected, even if split across
+   * `await`s the stream carried have been collected, even if split across
    * SSE chunks. Deferred via `queueMicrotask` (epoch-guarded) so the idle
    * handler returns first and the stream's end-of-stream teardown (streaming /
    * abortController) settles before a resolve grabs them: the same ordering the
@@ -3495,7 +3495,7 @@ export class AgentWidgetSession {
    * Persisted-resolution guard for `suggest_replies`. The in-memory dedupe
    * sets (`webMcpInflightKeys` / `webMcpResolvedKeys`) are cleared by
    * hydrateMessages/clearMessages/cancel, but `suggestRepliesResolved`
-   * survives on the stored message, so a stale `step_await` re-emit after a
+   * survives on the stored message, so a stale `await` re-emit after a
    * hydration must not re-POST `/resume` for an already-resolved call (the
    * historical double-resume failure mode the batching work exists to avoid).
    * Checks the LIVE message first; the handleEvent snapshot is a fresh wire
@@ -3631,7 +3631,7 @@ export class AgentWidgetSession {
       claimedKeys.push(dedupeKey);
 
       // Clear the awaiting flag and keep the tool bubble running while the
-      // browser-side WebMCP promise is in flight. The initial `step_await`
+      // browser-side WebMCP promise is in flight. The initial `await`
       // only means the server paused for a local tool; it is not completion.
       const startedAt = this.markWebMcpToolRunning(toolMessage);
 
@@ -3809,7 +3809,7 @@ export class AgentWidgetSession {
    * resumes with a canned "shown" result (the chips render from the message
    * list, not from this resolve).
    *
-   * Triggered automatically from `handleEvent` when a `step_await`-derived
+   * Triggered automatically from `handleEvent` when a `await`-derived
    * message arrives for such a tool: the user does not click a pill; the
    * bridge's confirm-bubble gate (WebMCP only) is the only interactive
    * surface.
@@ -4319,7 +4319,7 @@ export class AgentWidgetSession {
       ) {
         // Collect the await into its executionId's batch instead of resolving
         // it on the spot. Parallel same-tool calls (core#3878) arrive as
-        // separate `step_await`s in the same stream; batching lets us post ONE
+        // separate `await`s in the same stream; batching lets us post ONE
         // `/resume` keyed by per-call id (see `enqueueWebMcpAwait`).
         this.enqueueWebMcpAwait(event.message);
       }
@@ -4348,7 +4348,7 @@ export class AgentWidgetSession {
     } else if (event.type === "status") {
       // A plain `idle` (no `terminal`) on the durable lane, while the run is
       // genuinely mid-turn, is a dropped connection, not a finish and not an
-      // intentional `step_await` pause. Reconnect instead of finalizing.
+      // intentional `await` pause. Reconnect instead of finalizing.
       if (event.status === "idle" && !event.terminal && this.isDurableDrop()) {
         this.beginReconnect();
         return;
@@ -4391,7 +4391,7 @@ export class AgentWidgetSession {
             this.agentExecution.status = 'complete';
           }
         }
-        // The stream that delivered any local-tool `step_await`s has now ended,
+        // The stream that delivered any local-tool `await`s has now ended,
         // so every parallel await it carried is collected. Flush them as ONE
         // batched `/resume` per executionId (deferred: see
         // scheduleWebMcpBatchFlush). Runs AFTER the teardown above so a resolve
@@ -4455,7 +4455,7 @@ export class AgentWidgetSession {
 
   /**
    * The drop gate: is this stream-end a dropped connection we should reconnect,
-   * rather than a graceful finish or an intentional `step_await` pause? ALL must
+   * rather than a graceful finish or an intentional `await` pause? ALL must
    * hold (see plan §Design overview keystone 3).
    */
   private isDurableDrop(): boolean {
@@ -4898,7 +4898,7 @@ export class AgentWidgetSession {
       }
       // Auto-resolved local-tool equivalent (`webmcp:*` and the built-in
       // `suggest_replies`): once such a tool has started resolving (inflight)
-      // or resolved, a duplicate `step_await` re-emit must not flip
+      // or resolved, a duplicate `await` re-emit must not flip
       // `awaitingLocalTool` back to true and resurrect the "waiting on
       // local tool" UI. It also must not overwrite an existing running or
       // completed toolCall with the fresh running skeleton emitted by client.ts

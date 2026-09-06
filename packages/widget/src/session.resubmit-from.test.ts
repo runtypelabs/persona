@@ -13,7 +13,7 @@ const streamResponse = () => {
     body: new ReadableStream({
       start(controller) {
         controller.enqueue(
-          encoder.encode('data: {"type":"flow_complete","success":true}\n\n')
+          encoder.encode('data: {"type":"execution_complete","success":true}\n\n')
         );
         controller.close();
       },

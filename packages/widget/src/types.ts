@@ -999,7 +999,7 @@ export type AgentMessageMetadata = {
   awaitingLocalTool?: boolean;
   /**
    * The provider per-call id (`toolu_…`) carried on the `step_await` /
-   * `flow_await` events for a LOCAL tool (core#3878). Present only when the
+   * `await` events for a LOCAL tool (core#3878). Present only when the
    * server emits it. Two PARALLEL calls to the same tool in one turn share a
    * `toolName` (and a collapsed `toolId`) but get DISTINCT `webMcpToolCallId`s,
    * so this is the key the widget batches a single `/resume` on: preferred
@@ -3418,7 +3418,7 @@ export type EventStreamConfig = {
   /**
    * Custom badge color mappings by event type prefix or exact type.
    * Keys are matched as exact match first, then prefix match (keys ending with "_").
-   * @example { "flow_": { bg: "#dcfce7", text: "#166534" }, "error": { bg: "#fecaca", text: "#991b1b" } }
+   * @example { "execution_": { bg: "#dcfce7", text: "#166534" }, "error": { bg: "#fecaca", text: "#991b1b" } }
    */
   badgeColors?: Record<string, EventStreamBadgeColor>;
   /**
@@ -7561,16 +7561,16 @@ export type AgentWidgetConfig = {
    *
    * @example
    * ```typescript
-   * // For Runtype API format
+   * // For a custom backend (Runtype unified events are handled natively)
    * config: {
    *   parseSSEEvent: (data) => {
-   *     if ((data.type === 'step_delta' || data.type === 'step_chunk') && (data.delta || data.chunk)) {
-   *       return { text: data.delta ?? data.chunk };
+   *     if (data.type === 'token' && typeof data.value === 'string') {
+   *       return { text: data.value };
    *     }
-   *     if (data.type === 'flow_complete') {
+   *     if (data.type === 'done') {
    *       return { done: true };
    *     }
-   *     if (data.type === 'step_error') {
+   *     if (data.type === 'failure') {
    *       return { error: data.error };
    *     }
    *     return null; // Ignore other events
@@ -7787,7 +7787,7 @@ export type AgentWidgetReasoning = {
   /**
    * Reasoning channel scope (wire spec). `"turn"` is ordinary per-turn
    * thinking; `"loop"` is a cross-iteration agent reflection (the fold that
-   * replaced the legacy `agent_reflection` event). Absent for legacy streams.
+   * replaced the legacy `agent_reflection` event). Optional when the stream does not specify a scope.
    */
   scope?: "turn" | "loop";
   startedAt?: number;
@@ -7835,7 +7835,7 @@ export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "ap
 
 /**
  * Per-turn / per-step stop reason emitted by the runtime on
- * `agent_turn_complete` and `step_complete` SSE events. The vocabulary is
+ * `turn_complete` and `step_complete` SSE events. The vocabulary is
  * owned by the upstream Runtype API: do not extend without coordination.
  *
  * - `end_turn`: natural completion (no affordance needed)
@@ -7967,7 +7967,7 @@ export type AgentWidgetMessage = {
    */
   agentMetadata?: AgentMessageMetadata;
   /**
-   * Per-turn stop reason reported by the runtime on `agent_turn_complete`
+   * Per-turn stop reason reported by the runtime on `turn_complete`
    * (agent-loop path) or the last `step_complete` for a prompt step
    * (dispatch / flow path). Absent when the API did not report a value.
    *

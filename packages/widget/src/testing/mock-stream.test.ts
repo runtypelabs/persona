@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { AgentWidgetClient } from "../client";
+import type { AgentWidgetEvent, AgentWidgetMessage } from "../types";
 
 import {
   buildAssistantTurnFrames,
@@ -21,15 +23,15 @@ async function readAll(stream: ReadableStream<Uint8Array>): Promise<string> {
 describe("createMockSSEStream", () => {
   it("emits bare `data:` frames by default", async () => {
     const frames = [
-      { type: "agent_turn_start", executionId: "e-1", turnId: "t-1" },
-      { type: "agent_turn_delta", executionId: "e-1", turnId: "t-1", delta: "hi" },
-      { type: "agent_turn_complete", executionId: "e-1", turnId: "t-1" },
+      { type: "text_start", executionId: "e-1", turnId: "t-1" },
+      { type: "text_delta", executionId: "e-1", turnId: "t-1", delta: "hi" },
+      { type: "text_complete", executionId: "e-1", turnId: "t-1" },
     ];
     const text = await readAll(createMockSSEStream(frames, { delayMs: 0 }));
 
     expect(text).not.toContain("event:");
     expect(text.split("\n\n").filter(Boolean)).toHaveLength(3);
-    expect(text).toContain('"type":"agent_turn_delta"');
+    expect(text).toContain('"type":"text_delta"');
     expect(text).toContain('"delta":"hi"');
   });
 
@@ -43,7 +45,7 @@ describe("createMockSSEStream", () => {
   it("rejects reads with AbortError once the signal aborts, like a real fetch", async () => {
     const abort = new AbortController();
     const frames = Array.from({ length: 5 }, (_, i) => ({
-      type: "agent_turn_delta",
+      type: "text_delta",
       delta: `chunk-${i}`,
     }));
     const reader = createMockSSEStream(frames, {
@@ -69,24 +71,43 @@ describe("buildAssistantTurnFrames", () => {
       chunkSize: 4,
     });
 
-    expect(frames[0]).toEqual({ type: "agent_turn_start", executionId: "exec-1", turnId: "turn-1" });
-    expect(frames[frames.length - 1]).toEqual({
-      type: "agent_turn_complete",
-      executionId: "exec-1",
-      turnId: "turn-1",
-    });
-
-    const deltas = frames.filter((f) => f.type === "agent_turn_delta");
+    expect(frames.map((f) => f.type)).toEqual([
+      "turn_start", "text_start", "text_delta", "text_delta", "text_delta", "text_complete", "turn_complete",
+    ]);
+    expect(frames[0]).toMatchObject({ id: "turn-1", role: "assistant" });
+    const deltas = frames.filter((f) => f.type === "text_delta");
     expect(deltas.map((f) => f.delta)).toEqual(["abcd", "efgh", "ij"]);
-    expect(deltas.every((f) => f.executionId === "exec-1" && f.turnId === "turn-1")).toBe(true);
+    expect(deltas.every((f) => f.executionId === "exec-1" && f.id === "turn-1-text")).toBe(true);
+    expect(frames.at(-2)).toMatchObject({ id: "turn-1-text", text: "abcdefghij" });
+    expect(frames.at(-1)).toMatchObject({ id: "turn-1", content: "abcdefghij" });
   });
 
   it("defaults turnId and chunkSize", () => {
     const frames = buildAssistantTurnFrames({ executionId: "exec-2", text: "hello" });
-    expect(frames[0].turnId).toBe("turn-1");
-    const deltaCount = frames.filter((f) => f.type === "agent_turn_delta").length;
+    expect(frames[0].id).toBe("turn-1");
+    const deltaCount = frames.filter((f) => f.type === "text_delta").length;
     expect(deltaCount).toBeGreaterThanOrEqual(1);
   });
+});
+
+it("renders helper-generated turns through the real client without duplicating completed text", async () => {
+  const events: AgentWidgetEvent[] = [];
+  const client = new AgentWidgetClient({
+    apiUrl: "https://example.test/chat",
+    customFetch: async () => createMockSSEResponse([
+      { type: "execution_start", executionId: "exec-1", kind: "agent" },
+      ...buildAssistantTurnFrames({ executionId: "exec-1", turnId: "turn-1", text: "First reply", chunkSize: 3 }),
+      ...buildAssistantTurnFrames({ executionId: "exec-1", turnId: "turn-2", text: "Second reply", chunkSize: 4 }),
+      { type: "execution_complete", executionId: "exec-1", kind: "agent", success: true },
+    ], { delayMs: 0 }),
+  });
+  await client.dispatch({ messages: [] }, (event) => events.push(event));
+  const messages = new Map<string, AgentWidgetMessage>();
+  for (const event of events) {
+    if (event.type === "message") messages.set(event.message.id, { ...event.message });
+  }
+  expect([...messages.values()].map((message) => message.content)).toEqual(["First reply", "Second reply"]);
+  expect([...messages.values()].every((message) => !message.streaming)).toBe(true);
 });
 
 describe("createMockSSEResponse", () => {
