@@ -169,6 +169,8 @@ Text, images (PNG, JPEG, GIF, WebP, SVG), and documents (PDF, DOCX, TXT, CSV, JS
 ### Voice Input & Output
 Optional speech-to-text via the Web Speech API or Runtype's WebSocket voice service with barge-in interruption and voice activity detection. Text-to-speech playback for assistant responses: auto-speak via `textToSpeech`, or a per-message "Read aloud" button with play/pause/resume via `messageActions.showReadAloud`. TTS is backed by a pluggable `SpeechEngine` (browser Web Speech API by default, or a hosted engine via `textToSpeech.createEngine`). Enable via `voiceRecognition` and `textToSpeech`.
 
+Custom voice providers use the same microphone controls. Updating or disabling `voiceRecognition.provider` disconnects the old provider before installing its replacement. A provider's `disconnect()` must release its resources and callbacks. For concurrent turns, pass `{ turnId }` as the fourth `onTranscript` callback argument, using the same ID on each turn's user and assistant transcripts. Persona rejects replies belonging to cancelled or superseded identified turns. Providers that omit IDs must discard cancelled output before emitting the next user final; untagged overlapping replies cannot be correlated by the widget.
+
 ### Reasoning & Extended Thinking
 Collapsible reasoning bubbles that display model chain-of-thought with duration tracking and streaming. Controlled by `features.showReasoning`: on by default, or override the renderer with a plugin hook.
 

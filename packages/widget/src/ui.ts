@@ -8865,7 +8865,7 @@ export const createAgentExperience = (
       // per-state UI (e.g. a listening/speaking status dock). Fires for every
       // provider; the mic-button styling below is runtype-specific.
       eventBus.emit("voice:status", { status, timestamp: Date.now() });
-      if (!usesSessionVoice(config.voiceRecognition?.provider)) return;
+      if (status !== 'disconnected' && !usesSessionVoice(config.voiceRecognition?.provider)) return;
 
       switch (status) {
         case 'listening':
@@ -8988,7 +8988,7 @@ export const createAgentExperience = (
   scrollSendSeeded = true;
 
   // Setup Runtype voice provider when configured (connects WebSocket for server-side STT)
-  if (usesSessionVoice(config.voiceRecognition?.provider)) {
+  if (config.voiceRecognition?.enabled === true && usesSessionVoice(config.voiceRecognition.provider)) {
     try {
       session.setupVoice();
     } catch (err) {
