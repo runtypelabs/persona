@@ -241,7 +241,7 @@ export function createArtifactDemoStream(
       maxTurns: 1,
       startedAt: Date.now(),
     },
-    { type: "turn_start", executionId, id: turnId, iteration: 1 },
+    { type: "turn_start", executionId, id: turnId, role: "assistant", iteration: 1 },
     { type: "text_start", executionId, id: textBlockId },
   ];
 
@@ -283,14 +283,14 @@ export function createArtifactDemoStream(
     frames.push({ type: "artifact_complete", id: artifactId });
   }
 
-  frames.push({ type: "turn_complete", executionId, id: turnId, stopReason: "complete" });
+  frames.push({ type: "turn_complete", executionId, id: turnId, role: "assistant", stopReason: "end_turn" });
   frames.push({
     type: "execution_complete",
     kind: "agent",
     executionId,
     success: true,
-    stopReason: "complete",
+    stopReason: "end_turn",
   });
 
-  return createMockSSEStream(frames, { delayMs, eventName: "message" });
+  return createMockSSEStream(frames.map((frame, seq) => ({ ...frame, executionId, seq })), { delayMs, eventName: "message" });
 }

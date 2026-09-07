@@ -40,6 +40,7 @@ export const sel = {
 export type FixtureMode = "demo" | "intercepted";
 
 export interface FixtureOptions {
+  structured?: boolean;
   mode?: FixtureMode;
   presentation?: "panel" | "rail" | "auto";
   collapsedBehavior?: "overlay";
@@ -54,6 +55,7 @@ export interface FixtureOptions {
 export function fixtureUrl(options: FixtureOptions = {}): string {
   const params = new URLSearchParams();
   params.set("mode", options.mode ?? "demo");
+  if (options.structured) params.set("structured", "1");
   if (options.presentation) params.set("presentation", options.presentation);
   if (options.collapsedBehavior) {
     params.set("collapsedBehavior", options.collapsedBehavior);

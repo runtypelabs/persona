@@ -48,6 +48,11 @@ export const DEFAULT_BADGE_COLORS: Record<string, EventStreamBadgeColor> = {
 // The unified error event type is `error`; `execution_error` carries the same
 // severity and would otherwise fall through to the default pair.
 DEFAULT_BADGE_COLORS.execution_error = DEFAULT_BADGE_COLORS.error;
+// Reuse the public theme tokens, preserving existing custom themes and colors
+// for persisted events while giving current wire families meaningful badges.
+DEFAULT_BADGE_COLORS.execution_ = DEFAULT_BADGE_COLORS.flow_;
+DEFAULT_BADGE_COLORS.turn_ = DEFAULT_BADGE_COLORS.agent_;
+DEFAULT_BADGE_COLORS.text_ = DEFAULT_BADGE_COLORS.agent_;
 const DEFAULT_BADGE_COLOR: EventStreamBadgeColor = {
   bg: "var(--persona-event-badge-default-bg, #f3f4f6)",
   text: "var(--persona-event-badge-default-fg, #4b5563)",

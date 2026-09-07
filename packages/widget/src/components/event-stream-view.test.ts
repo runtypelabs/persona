@@ -308,7 +308,7 @@ describe("createEventStreamView", () => {
   describe("header bar", () => {
     it("should carry the total in the All events option (no title or count badge)", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -320,7 +320,7 @@ describe("createEventStreamView", () => {
     it("should update the total in the All events option when events change", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -328,7 +328,7 @@ describe("createEventStreamView", () => {
       expect(getAllEventsOptionText(element)).toBe("All events (1)");
 
       vi.advanceTimersByTime(150);
-      buffer.push(makeEvent("step_chunk", 2));
+      buffer.push(makeEvent("text_delta", 2));
       update();
 
       expect(getAllEventsOptionText(element)).toBe("All events (2)");
@@ -340,9 +340,9 @@ describe("createEventStreamView", () => {
     it("should populate filter options from buffer event types with counts", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("step_chunk", 2),
-        makeEvent("flow_complete", 3),
+        makeEvent("text_delta", 1),
+        makeEvent("text_delta", 2),
+        makeEvent("execution_complete", 3),
       ];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
@@ -354,14 +354,14 @@ describe("createEventStreamView", () => {
       // Should have "All events" (with total) + 2 type options
       expect(filterSelect.options.length).toBe(3);
       expect(filterSelect.options[0].textContent).toBe("All events (3)");
-      expect(filterSelect.options[1].textContent).toBe("flow_complete (1)");
-      expect(filterSelect.options[2].textContent).toBe("step_chunk (2)");
+      expect(filterSelect.options[1].textContent).toBe("execution_complete (1)");
+      expect(filterSelect.options[2].textContent).toBe("text_delta (2)");
     });
 
     it("should update counts on subsequent update() calls", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -369,24 +369,24 @@ describe("createEventStreamView", () => {
 
       const filterSelect = getFilterSelect(element);
       expect(filterSelect.options[0].textContent).toBe("All events (1)");
-      expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
+      expect(filterSelect.options[1].textContent).toBe("text_delta (1)");
 
       // Add another event and advance past throttle window
-      buffer.push(makeEvent("step_chunk", 2));
+      buffer.push(makeEvent("text_delta", 2));
       vi.advanceTimersByTime(150);
       update();
 
       expect(filterSelect.options[0].textContent).toBe("All events (2)");
-      expect(filterSelect.options[1].textContent).toBe("step_chunk (2)");
+      expect(filterSelect.options[1].textContent).toBe("text_delta (2)");
       vi.useRealTimers();
     });
 
     it("should filter events when a type is selected", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("flow_complete", 2),
-        makeEvent("step_chunk", 3),
+        makeEvent("text_delta", 1),
+        makeEvent("execution_complete", 2),
+        makeEvent("text_delta", 3),
       ];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
@@ -394,7 +394,7 @@ describe("createEventStreamView", () => {
       update();
 
       const filterSelect = getFilterSelect(element);
-      filterSelect.value = "step_chunk";
+      filterSelect.value = "text_delta";
       filterSelect.__fireEvent("change");
 
       expect(buffer.getAll).toHaveBeenCalled();
@@ -405,7 +405,7 @@ describe("createEventStreamView", () => {
     it("should debounce search input", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"message":"hello world"}')];
+      const events = [makeEvent("text_delta", 1, '{"message":"hello world"}')];
       const buffer = createMockBuffer(events);
       const { element } = createEventStreamView({ buffer: buffer as any });
 
@@ -470,7 +470,7 @@ describe("createEventStreamView", () => {
     it("should show no results message when filters produce empty results", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"data":"hello"}')];
+      const events = [makeEvent("text_delta", 1, '{"data":"hello"}')];
       const buffer = createMockBuffer(events);
       const { element } = createEventStreamView({ buffer: buffer as any });
 
@@ -494,8 +494,8 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("flow_complete", 2),
+        makeEvent("text_delta", 1),
+        makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
@@ -509,7 +509,7 @@ describe("createEventStreamView", () => {
 
       // Apply type filter
       const filterSelect = getFilterSelect(element);
-      filterSelect.value = "step_chunk";
+      filterSelect.value = "text_delta";
       filterSelect.__fireEvent("change");
 
       // Should now show "Copy Filtered (1)"
@@ -520,8 +520,8 @@ describe("createEventStreamView", () => {
     it("should copy filtered events when filters are active", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("flow_complete", 2),
+        makeEvent("text_delta", 1),
+        makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
       const getFullHistory = vi.fn().mockResolvedValue(events);
@@ -534,7 +534,7 @@ describe("createEventStreamView", () => {
       const copyAllBtn = getCopyAllBtn(element);
 
       // Apply type filter
-      filterSelect.value = "step_chunk";
+      filterSelect.value = "text_delta";
       filterSelect.__fireEvent("change");
 
       // Click copy all
@@ -553,8 +553,8 @@ describe("createEventStreamView", () => {
     it("should copy full history when no filters are active", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("flow_complete", 2),
+        makeEvent("text_delta", 1),
+        makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
       const fullHistory = [...events, makeEvent("old_event", 0)];
@@ -578,8 +578,8 @@ describe("createEventStreamView", () => {
     it("should fall back to buffer when getFullHistory returns empty", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("flow_complete", 2),
+        makeEvent("text_delta", 1),
+        makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
       const getFullHistory = vi.fn().mockResolvedValue([]);
@@ -681,7 +681,7 @@ describe("createEventStreamView", () => {
     it("should render rows with relative timestamps", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [
-        { id: "evt-1", type: "flow_start", timestamp: 1000, payload: '{"flowName":"Test"}' },
+        { id: "evt-1", type: "execution_start", timestamp: 1000, payload: '{"flowName":"Test"}' },
         { id: "evt-2", type: "step_start", timestamp: 1361, payload: '{"stepName":"Chatbot 1"}' },
       ];
       const buffer = createMockBuffer(events);
@@ -697,7 +697,7 @@ describe("createEventStreamView", () => {
 
     it("should render rows with absolute timestamps when configured", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { update } = createEventStreamView({
         buffer: buffer as any,
@@ -715,7 +715,7 @@ describe("createEventStreamView", () => {
     it("should extract description from payload fields", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [
-        { id: "evt-1", type: "flow_start", timestamp: 1000, payload: '{"flowName":"My Flow"}' },
+        { id: "evt-1", type: "execution_start", timestamp: 1000, payload: '{"flowName":"My Flow"}' },
       ];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
@@ -729,7 +729,7 @@ describe("createEventStreamView", () => {
 
     it("should hide sequence numbers when showSequenceNumbers is false", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { update } = createEventStreamView({
         buffer: buffer as any,
@@ -768,7 +768,7 @@ describe("createEventStreamView", () => {
   describe("expand/collapse", () => {
     it("should expand row to show inline payload when clicked", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"message":"hello"}')];
+      const events = [makeEvent("text_delta", 1, '{"message":"hello"}')];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -827,7 +827,7 @@ describe("createEventStreamView", () => {
     it("should preserve existing row DOM references when new events are appended", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1), makeEvent("step_chunk", 2)];
+      const events = [makeEvent("text_delta", 1), makeEvent("text_delta", 2)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -843,7 +843,7 @@ describe("createEventStreamView", () => {
 
       // Add a new event and update (Path C: incremental append)
       vi.advanceTimersByTime(150);
-      buffer.push(makeEvent("step_chunk", 3));
+      buffer.push(makeEvent("text_delta", 3));
       update();
 
       // Should now have 3 rows
@@ -859,9 +859,9 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1, '{"msg":"first"}'),
-        makeEvent("step_chunk", 2, '{"msg":"second"}'),
-        makeEvent("step_chunk", 3, '{"msg":"third"}'),
+        makeEvent("text_delta", 1, '{"msg":"first"}'),
+        makeEvent("text_delta", 2, '{"msg":"second"}'),
+        makeEvent("text_delta", 3, '{"msg":"third"}'),
       ];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
@@ -895,9 +895,9 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("flow_complete", 2),
-        makeEvent("step_chunk", 3),
+        makeEvent("text_delta", 1),
+        makeEvent("execution_complete", 2),
+        makeEvent("text_delta", 3),
       ];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
@@ -911,13 +911,13 @@ describe("createEventStreamView", () => {
       // Change filter
       vi.advanceTimersByTime(150);
       const filterSelect = getFilterSelect(element);
-      filterSelect.value = "step_chunk";
+      filterSelect.value = "text_delta";
       filterSelect.__fireEvent("change");
 
       // After filter change, rows are fully rebuilt (Path A)
       // The first row should be a different DOM reference
       expect(eventsList.children[0]).not.toBe(originalRow1);
-      // Should only show filtered events (2 step_chunk events)
+      // Should only show filtered events (2 text_delta events)
       expect(eventsList.children.length).toBe(2);
       vi.useRealTimers();
     });
@@ -927,7 +927,7 @@ describe("createEventStreamView", () => {
     it("uses icon-only arrow-down defaults when paused and new events arrive", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({
         buffer: buffer as any
@@ -942,7 +942,7 @@ describe("createEventStreamView", () => {
       eventsList.__fireEvent("wheel", { deltaY: -24 });
 
       vi.advanceTimersByTime(150);
-      buffer.push(makeEvent("step_chunk", 2));
+      buffer.push(makeEvent("text_delta", 2));
       update();
 
       const indicator = getScrollIndicator(element);
@@ -955,7 +955,7 @@ describe("createEventStreamView", () => {
     it("hides the event stream affordance when disabled", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({
         buffer: buffer as any,
@@ -978,7 +978,7 @@ describe("createEventStreamView", () => {
       eventsList.__fireEvent("wheel", { deltaY: -24 });
 
       vi.advanceTimersByTime(150);
-      buffer.push(makeEvent("step_chunk", 2));
+      buffer.push(makeEvent("text_delta", 2));
       update();
 
       expect(getScrollIndicator(element).style.display).toBe("none");
@@ -988,7 +988,7 @@ describe("createEventStreamView", () => {
     it("renders the event stream affordance as icon-only when label is empty", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({
         buffer: buffer as any,
@@ -1013,7 +1013,7 @@ describe("createEventStreamView", () => {
       eventsList.__fireEvent("wheel", { deltaY: -24 });
 
       vi.advanceTimersByTime(150);
-      buffer.push(makeEvent("step_chunk", 2));
+      buffer.push(makeEvent("text_delta", 2));
       update();
 
       const indicator = getScrollIndicator(element);
@@ -1026,7 +1026,7 @@ describe("createEventStreamView", () => {
     it("supports a configured label and icon override", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({
         buffer: buffer as any,
@@ -1051,7 +1051,7 @@ describe("createEventStreamView", () => {
       eventsList.__fireEvent("wheel", { deltaY: -24 });
 
       vi.advanceTimersByTime(150);
-      buffer.push(makeEvent("step_chunk", 2));
+      buffer.push(makeEvent("text_delta", 2));
       update();
 
       const indicator = getScrollIndicator(element);
@@ -1065,7 +1065,7 @@ describe("createEventStreamView", () => {
   describe("individual event copy", () => {
     it("should format event as structured JSON with parsed payload", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1, '{"message":"hello"}')];
+      const events = [makeEvent("text_delta", 1, '{"message":"hello"}')];
       const buffer = createMockBuffer(events);
       const { update } = createEventStreamView({ buffer: buffer as any });
 
@@ -1080,8 +1080,8 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("flow_complete", 2),
+        makeEvent("text_delta", 1),
+        makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
@@ -1106,7 +1106,7 @@ describe("createEventStreamView", () => {
     it("should recover after clear when new events arrive", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -1133,20 +1133,20 @@ describe("createEventStreamView", () => {
   describe("update throttle", () => {
     it("should render immediately on first update call", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
       update();
 
       const filterSelect = getFilterSelect(element);
-      expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
+      expect(filterSelect.options[1].textContent).toBe("text_delta (1)");
     });
 
     it("should throttle rapid update calls within 100ms", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -1154,30 +1154,30 @@ describe("createEventStreamView", () => {
       update();
 
       const filterSelect = getFilterSelect(element);
-      expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
+      expect(filterSelect.options[1].textContent).toBe("text_delta (1)");
 
       // Add more events and call update rapidly (within throttle window)
-      buffer.push(makeEvent("step_chunk", 2));
-      buffer.push(makeEvent("step_chunk", 3));
+      buffer.push(makeEvent("text_delta", 2));
+      buffer.push(makeEvent("text_delta", 3));
       update();
       update();
       update();
 
       // Should NOT have rendered yet (within 100ms throttle, rAF pending)
-      expect(filterSelect.options[1].textContent).toBe("step_chunk (1)");
+      expect(filterSelect.options[1].textContent).toBe("text_delta (1)");
 
       // Advance time to flush the rAF callback
       vi.advanceTimersByTime(20);
 
       // Now it should have rendered with all 3 events
-      expect(filterSelect.options[1].textContent).toBe("step_chunk (3)");
+      expect(filterSelect.options[1].textContent).toBe("text_delta (3)");
       vi.useRealTimers();
     });
 
     it("should render immediately after 100ms has elapsed", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -1190,17 +1190,17 @@ describe("createEventStreamView", () => {
       vi.advanceTimersByTime(150);
 
       // Add event and update: should render immediately since 150ms > 100ms
-      buffer.push(makeEvent("flow_complete", 2));
+      buffer.push(makeEvent("execution_complete", 2));
       update();
 
-      expect(filterSelect.options.length).toBe(3); // All events + flow_complete + step_chunk
+      expect(filterSelect.options.length).toBe(3); // All events + execution_complete + text_delta
       vi.useRealTimers();
     });
 
     it("should coalesce multiple rapid updates into a single render via rAF", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
+      const buffer = createMockBuffer([makeEvent("text_delta", 1)]);
       const { update } = createEventStreamView({ buffer: buffer as any });
 
       // First call: immediate render
@@ -1209,7 +1209,7 @@ describe("createEventStreamView", () => {
 
       // Rapid burst: 10 updates within throttle window
       for (let i = 2; i <= 11; i++) {
-        buffer.push(makeEvent("step_chunk", i));
+        buffer.push(makeEvent("text_delta", i));
         update();
       }
 
@@ -1227,8 +1227,8 @@ describe("createEventStreamView", () => {
     it("should render immediately for user-initiated actions (filter change)", async () => {
       const { createEventStreamView } = await loadModule();
       const events = [
-        makeEvent("step_chunk", 1),
-        makeEvent("flow_complete", 2),
+        makeEvent("text_delta", 1),
+        makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
@@ -1240,7 +1240,7 @@ describe("createEventStreamView", () => {
       const copyAllBtn = getCopyAllBtn(element);
 
       // Immediately change filter: this should bypass throttle (uses updateNow internally)
-      filterSelect.value = "step_chunk";
+      filterSelect.value = "text_delta";
       filterSelect.__fireEvent("change");
 
       // Should have updated immediately (Copy All title reflects filter)
@@ -1250,14 +1250,14 @@ describe("createEventStreamView", () => {
     it("should cancel pending rAF on destroy", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
-      const buffer = createMockBuffer([makeEvent("step_chunk", 1)]);
+      const buffer = createMockBuffer([makeEvent("text_delta", 1)]);
       const { update, destroy } = createEventStreamView({ buffer: buffer as any });
 
       // First update: immediate
       update();
 
       // Schedule a throttled update
-      buffer.push(makeEvent("step_chunk", 2));
+      buffer.push(makeEvent("text_delta", 2));
       update();
 
       // Destroy before rAF fires: should not throw
@@ -1272,7 +1272,7 @@ describe("createEventStreamView", () => {
   describe("scroll behavior", () => {
     it("should have scroll listener on events list", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const { element, update } = createEventStreamView({ buffer: buffer as any });
 
@@ -1321,7 +1321,7 @@ describe("createEventStreamView", () => {
   describe("plugin hooks", () => {
     it("should use custom renderEventStreamRow plugin when provided", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
       const customRow = createMockElement("div");
       customRow.textContent = "Custom Row";
@@ -1393,7 +1393,7 @@ describe("createEventStreamView", () => {
 
     it("should fall back to default when plugin returns null", async () => {
       const { createEventStreamView } = await loadModule();
-      const events = [makeEvent("step_chunk", 1)];
+      const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
 
       const plugin = {

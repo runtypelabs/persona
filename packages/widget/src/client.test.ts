@@ -3,7 +3,6 @@ import { AgentWidgetClient, preferFinalStructuredContent } from './client';
 import { AgentWidgetEvent, AgentWidgetMessage, AgentWidgetArtifactsFeature } from './types';
 import { createJsonStreamParser } from './utils/formatting';
 import { VERSION } from './version';
-import { createUnifiedEventWrite } from './utils/__fixtures__/unified-translator.oracle';
 
 describe('AgentWidgetClient - dispatch abort signals', () => {
   const message = {
@@ -106,7 +105,7 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -159,7 +158,7 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -209,7 +208,7 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -248,7 +247,7 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -292,7 +291,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -323,7 +322,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -352,7 +351,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -384,7 +383,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -413,7 +412,7 @@ describe('AgentWidgetClient - llmContent Priority', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         }
       });
@@ -474,91 +473,48 @@ describe('AgentWidgetClient - JSON Streaming', () => {
   });
 
   it('should stream text incrementally and not show raw JSON at the end', async () => {
-    // Simulate the SSE stream from the user's example
-    const sseEvents = [
-      'data: {"type":"flow_start","flowId":"flow_01k9pfnztzfag9tfz4t65c9c5q","flowName":"Shopping Assistant","totalSteps":1,"startedAt":"2025-11-12T23:47:39.565Z","executionId":"exec_standalone_1762991259266_7wz736k7n","executionContext":{"source":"standalone","record":{"id":"-1","name":"Streaming Chat Widget","created":false},"flow":{"id":"flow_01k9pfnztzfag9tfz4t65c9c5q","name":"Shopping Assistant","created":false}}}',
-      '',
-      'data: {"type":"step_start","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","stepType":"prompt","index":1,"totalSteps":1,"startedAt":"2025-11-12T23:47:39.565Z"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"{\\n"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" "}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" \\""}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"action"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"\\":"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" \\""}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"message"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"\\",\\n"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" "}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" \\""}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"text"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"\\":"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" \\""}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"Great"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"!"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" If"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" you"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" have"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" any"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" questions"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" or"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" need"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" help"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" finding"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" something"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":","}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" just"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" let"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" me"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":" know"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"!\\"\\n"}',
-      '',
-      'data: {"type":"step_chunk","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":2,"text":"}"}',
-      '',
-      'data: {"type":"step_complete","id":"step_01k9x5db72fzwvmdenryn0qm48","name":"Prompt 1","executionType":"prompt","index":1,"success":true,"result":{"promptId":"step_01k9x5db72fzwvmdenryn0qm48","promptName":"Prompt 1","processedPrompt":"ok","response":"{\\"\\n  \\"action\\": \\"message\\",\\n  \\"text\\": \\"Great! If you have any questions or need help finding something, just let me know!\\"\\n}","tokens":{"input":1833,"output":34,"total":1867},"cost":0.000700125,"executionTime":2222,"order":2},"executionTime":2222}',
-      '',
-      'data: {"type":"flow_complete","flowId":"flow_01k9pfnztzfag9tfz4t65c9c5q","success":true,"duration":2968,"completedAt":"2025-11-12T23:47:42.234Z","totalTokensUsed":0}'
-    ];
-
-    // Route the legacy step_chunk fixtures through the oracle as the 4.0 wire
-    // (step_chunk → step_delta → text_delta), exercising the structured
-    // JSON parser on the wire flow path: incremental text extraction, never
-    // showing raw JSON, with the assembled response reconciled at step_complete.
+    // Unified text blocks exercise incremental structured JSON parsing.
     global.fetch = createRawStreamFetch(
-      legacyToWireFrames(
-        sseEvents
-          .filter((f) => f.startsWith('data:'))
-          .map((f) => f.replace('"type":"step_chunk"', '"type":"step_delta"') + '\n\n')
-      )
+      [
+      sseEvent("execution_start", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 0, kind: "flow", startedAt: "2025-11-12T23:47:39.565Z", flowId: "flow_01k9pfnztzfag9tfz4t65c9c5q", flowName: "Shopping Assistant", totalSteps: 1 }),
+      sseEvent("step_start", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 1, id: "step_01k9x5db72fzwvmdenryn0qm48", name: "Prompt 1", stepType: "prompt", index: 1, totalSteps: 1, startedAt: "2025-11-12T23:47:39.565Z" }),
+      sseEvent("text_start", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 2, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 3, id: "text_1", delta: "{\n" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 4, id: "text_1", delta: " " }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 5, id: "text_1", delta: " \"" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 6, id: "text_1", delta: "action" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 7, id: "text_1", delta: "\":" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 8, id: "text_1", delta: " \"" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 9, id: "text_1", delta: "message" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 10, id: "text_1", delta: "\",\n" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 11, id: "text_1", delta: " " }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 12, id: "text_1", delta: " \"" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 13, id: "text_1", delta: "text" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 14, id: "text_1", delta: "\":" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 15, id: "text_1", delta: " \"" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 16, id: "text_1", delta: "Great" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 17, id: "text_1", delta: "!" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 18, id: "text_1", delta: " If" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 19, id: "text_1", delta: " you" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 20, id: "text_1", delta: " have" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 21, id: "text_1", delta: " any" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 22, id: "text_1", delta: " questions" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 23, id: "text_1", delta: " or" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 24, id: "text_1", delta: " need" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 25, id: "text_1", delta: " help" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 26, id: "text_1", delta: " finding" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 27, id: "text_1", delta: " something" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 28, id: "text_1", delta: "," }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 29, id: "text_1", delta: " just" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 30, id: "text_1", delta: " let" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 31, id: "text_1", delta: " me" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 32, id: "text_1", delta: " know" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 33, id: "text_1", delta: "!\"\n" }),
+      sseEvent("text_delta", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 34, id: "text_1", delta: "}" }),
+      sseEvent("text_complete", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 35, id: "text_1", text: "{\n  \"action\": \"message\",\n  \"text\": \"Great! If you have any questions or need help finding something, just let me know!\"\n}" }),
+      sseEvent("step_complete", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 36, id: "step_01k9x5db72fzwvmdenryn0qm48", name: "Prompt 1", success: true, durationMs: 2222, result: { promptId: "step_01k9x5db72fzwvmdenryn0qm48", promptName: "Prompt 1", processedPrompt: "ok", response: "{\"\n  \"action\": \"message\",\n  \"text\": \"Great! If you have any questions or need help finding something, just let me know!\"\n}", tokens: { input: 1833, output: 34, total: 1867 }, cost: 0.000700125, executionTime: 2222, order: 2 } }),
+      sseEvent("execution_complete", { executionId: "exec_standalone_1762991259266_7wz736k7n", seq: 37, kind: "flow", success: true, completedAt: "2025-11-12T23:47:42.234Z", durationMs: 2968 })
+    ]
     );
 
     // Dispatch and collect events
@@ -659,21 +615,6 @@ function sseEvent(eventType: string, data: Record<string, unknown>): string {
   return `event: ${eventType}\ndata: ${JSON.stringify({ type: eventType, ...data })}\n\n`;
 }
 
-/**
- * Re-encode legacy `agent_*` / `flow_*` / `step_*` / `tool_*` SSE frames into the
- * Persona wire the 4.0 API now emits, using the same encoder the API uses
- * (the vendored `createUnifiedEventWrite` oracle). The 4.0 widget only consumes the
- * wire vocabulary, so these handler tests author the rendering intent in the
- * (more readable) legacy frames and inject exactly what the client sees off the
- * wire — the bridge translates it straight back before the dispatch chain renders.
- */
-function legacyToWireFrames(legacyFrames: string[]): string[] {
-  const out: string[] = [];
-  const write = createUnifiedEventWrite((chunk) => out.push(chunk));
-  for (const frame of legacyFrames) write(frame);
-  return out;
-}
-
 /** Stream pre-built SSE frames verbatim (no re-encode) — for fixtures already in
  *  the wire vocabulary. */
 function createRawStreamFetch(frames: string[]) {
@@ -687,13 +628,6 @@ function createRawStreamFetch(frames: string[]) {
     });
     return { ok: true, body: stream };
   });
-}
-
-/**
- * Mock fetch that streams the given legacy events as the 4.0 wire.
- */
-function createAgentStreamFetch(events: string[]) {
-  return createRawStreamFetch(legacyToWireFrames(events));
 }
 
 describe('AgentWidgetClient - Agent Mode Detection', () => {
@@ -732,7 +666,7 @@ describe('AgentWidgetClient - target routing', () => {
         ok: true,
         body: new ReadableStream({
           start(controller) {
-            controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+            controller.enqueue(encoder.encode(sseEvent('execution_complete', {
               executionId: 'exec_1', agentId: 'agent_123', success: true, iterations: 1,
               completedAt: new Date().toISOString(), seq: 1,
             })));
@@ -758,7 +692,7 @@ describe('AgentWidgetClient - target routing', () => {
         ok: true,
         body: new ReadableStream({
           start(controller) {
-            controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+            controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
             controller.close();
           },
         }),
@@ -782,7 +716,7 @@ describe('AgentWidgetClient - target routing', () => {
         ok: true,
         body: new ReadableStream({
           start(controller) {
-            controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+            controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
             controller.close();
           },
         }),
@@ -816,7 +750,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+          controller.enqueue(encoder.encode(sseEvent('execution_complete', {
             executionId: 'exec_1',
             agentId: 'agent_123',
             success: true,
@@ -872,7 +806,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
         ok: true,
         body: new ReadableStream({
           start(controller) {
-            controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+            controller.enqueue(encoder.encode(sseEvent('execution_complete', {
               executionId: 'exec_1',
               agentId: 'agent_123',
               success: true,
@@ -920,7 +854,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
         ok: true,
         body: new ReadableStream({
           start(controller) {
-            controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+            controller.enqueue(encoder.encode(sseEvent('execution_complete', {
               executionId: 'exec_1',
               agentId: 'agent_123',
               success: true,
@@ -972,7 +906,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+          controller.enqueue(encoder.encode(sseEvent('execution_complete', {
             executionId: 'exec_1',
             agentId: 'virtual',
             success: true,
@@ -1034,7 +968,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+          controller.enqueue(encoder.encode(sseEvent('execution_complete', {
             executionId: 'exec_1', agentId: 'virtual', success: true,
             iterations: 1, stopReason: 'max_iterations',
             completedAt: new Date().toISOString(), seq: 1,
@@ -1073,40 +1007,15 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_1';
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_start', {
-        executionId: execId, iteration: 1, turnIndex: 0,
-        role: 'assistant', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'Hello',
-        contentType: 'text', turnId: 'turn_1', seq: 4,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: ' World',
-        contentType: 'text', turnId: 'turn_1', seq: 5,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 1, role: 'assistant',
-        turnId: 'turn_1', completedAt: new Date().toISOString(), seq: 6,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 1, toolCallsMade: 0,
-        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 7,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 8,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "Hello" }),
+      sseEvent("text_delta", { executionId: execId, seq: 4, id: "text_1", delta: " World" }),
+      sseEvent("text_complete", { executionId: execId, seq: 5, id: "text_1", text: "Hello World" }),
+      sseEvent("turn_complete", { executionId: execId, seq: 6, id: "turn_1", iteration: 1, role: "assistant", completedAt: new Date().toISOString() }),
+      sseEvent("execution_complete", { executionId: execId, seq: 7, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1139,58 +1048,19 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_2';
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 2, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      // Iteration 1
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 2,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_start', {
-        executionId: execId, iteration: 1, turnIndex: 0,
-        role: 'assistant', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'First iteration',
-        contentType: 'text', turnId: 'turn_1', seq: 4,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 1, role: 'assistant',
-        turnId: 'turn_1', completedAt: new Date().toISOString(), seq: 5,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 1, toolCallsMade: 0,
-        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 6,
-      }),
-      // Iteration 2
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 2, maxTurns: 2,
-        startedAt: new Date().toISOString(), seq: 7,
-      }),
-      sseEvent('agent_turn_start', {
-        executionId: execId, iteration: 2, turnIndex: 0,
-        role: 'assistant', turnId: 'turn_2', seq: 8,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 2, delta: 'Second iteration',
-        contentType: 'text', turnId: 'turn_2', seq: 9,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 2, role: 'assistant',
-        turnId: 'turn_2', completedAt: new Date().toISOString(), seq: 10,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 2, toolCallsMade: 0,
-        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 11,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 2, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 12,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 2 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "First iteration" }),
+      sseEvent("text_complete", { executionId: execId, seq: 4, id: "text_1", text: "First iteration" }),
+      sseEvent("turn_complete", { executionId: execId, seq: 5, id: "turn_1", iteration: 1, role: "assistant", completedAt: new Date().toISOString() }),
+      sseEvent("turn_start", { executionId: execId, seq: 6, id: "turn_2", iteration: 2, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 7, id: "text_2", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 8, id: "text_2", delta: "Second iteration" }),
+      sseEvent("text_complete", { executionId: execId, seq: 9, id: "text_2", text: "Second iteration" }),
+      sseEvent("turn_complete", { executionId: execId, seq: 10, id: "turn_2", iteration: 2, role: "assistant", completedAt: new Date().toISOString() }),
+      sseEvent("execution_complete", { executionId: execId, seq: 11, kind: "agent", success: true, iterations: 2, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1229,36 +1099,13 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_3';
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 2, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 2,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'First',
-        contentType: 'text', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 1, toolCallsMade: 0,
-        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 4,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 2, maxTurns: 2,
-        startedAt: new Date().toISOString(), seq: 5,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 2, delta: ' Second',
-        contentType: 'text', turnId: 'turn_2', seq: 6,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 2, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 7,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 2 }),
+      sseEvent("text_start", { executionId: execId, seq: 1, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 2, id: "text_1", delta: "First" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: " Second" }),
+      sseEvent("text_complete", { executionId: execId, seq: 4, id: "text_1", text: "First Second" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 5, kind: "agent", success: true, iterations: 2, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1292,38 +1139,15 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_4';
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_tool_start', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_1',
-        toolName: 'search', toolType: 'function',
-        parameters: { query: 'weather' }, seq: 3,
-      }),
-      sseEvent('agent_tool_delta', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_1',
-        delta: 'Searching...', seq: 4,
-      }),
-      sseEvent('agent_tool_complete', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_1',
-        toolName: 'search', success: true,
-        result: { temperature: 72 }, executionTime: 150, seq: 5,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'The weather is 72F.',
-        contentType: 'text', turnId: 'turn_1', seq: 6,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 7,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("tool_start", { executionId: execId, seq: 1, toolCallId: "tc_1", toolName: "search", toolType: "function", iteration: 1, parameters: { query: "weather" } }),
+      sseEvent("tool_output_delta", { executionId: execId, seq: 2, toolCallId: "tc_1", delta: "Searching..." }),
+      sseEvent("tool_complete", { executionId: execId, seq: 3, toolCallId: "tc_1", toolName: "search", success: true, result: { temperature: 72 }, executionTime: 150, iteration: 1 }),
+      sseEvent("text_start", { executionId: execId, seq: 4, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 5, id: "text_1", delta: "The weather is 72F." }),
+      sseEvent("text_complete", { executionId: execId, seq: 6, id: "text_1", text: "The weather is 72F." }),
+      sseEvent("execution_complete", { executionId: execId, seq: 7, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1364,32 +1188,16 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_5';
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'Let me think...',
-        contentType: 'thinking', turnId: 'think_1', seq: 3,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 1, role: 'assistant',
-        turnId: 'think_1', completedAt: new Date().toISOString(), seq: 4,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'The answer is 42.',
-        contentType: 'text', turnId: 'turn_1', seq: 5,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 6,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("reasoning_start", { executionId: execId, seq: 1, id: "reason_1" }),
+      sseEvent("reasoning_delta", { executionId: execId, seq: 2, id: "reason_1", delta: "Let me think..." }),
+      sseEvent("reasoning_complete", { executionId: execId, seq: 3, id: "reason_1", text: "Let me think..." }),
+      sseEvent("turn_complete", { executionId: execId, seq: 4, id: "think_1", iteration: 1, role: "assistant", completedAt: new Date().toISOString() }),
+      sseEvent("text_start", { executionId: execId, seq: 5, id: "text_2", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 6, id: "text_2", delta: "The answer is 42." }),
+      sseEvent("text_complete", { executionId: execId, seq: 7, id: "text_2", text: "The answer is 42." }),
+      sseEvent("execution_complete", { executionId: execId, seq: 8, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1428,21 +1236,10 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_6';
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_error', {
-        executionId: execId, iteration: 1,
-        error: 'Rate limit hit, retrying...',
-        recoverable: true, seq: 2,
-      }),
-      sseEvent('agent_error', {
-        executionId: execId, iteration: 1,
-        error: 'Fatal: model unavailable',
-        recoverable: false, seq: 3,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("error", { executionId: execId, seq: 1, error: "Rate limit hit, retrying...", recoverable: true }),
+      sseEvent("execution_error", { executionId: execId, seq: 2, kind: "agent", error: "Fatal: model unavailable" })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1463,13 +1260,15 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     }
   });
 
-  it('should emit error and finalize streaming on step_error', async () => {
+  it('should emit error and finalize streaming on a failed step_complete', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    global.fetch = createAgentStreamFetch([
-      'data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n',
-      'data: {"type":"step_delta","id":"s1","name":"Prompt","executionType":"prompt","text":"partial"}\n\n',
-      sseEvent('step_error', { error: 'step blew up', seq: 3 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "partial" }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "partial" }),
+      sseEvent("step_complete", { executionId: "exec-test", seq: 4, success: false, error: "step blew up" })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1498,13 +1297,18 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     expect(lastAssistant?.type === 'message' && lastAssistant.message.streaming).toBe(false);
   });
 
-  it('should emit error and finalize streaming on dispatch_error (message only)', async () => {
+  it('should emit error and finalize streaming on execution_error', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    global.fetch = createAgentStreamFetch([
-      'data: {"type":"flow_start","flowId":"f1","flowName":"Test","totalSteps":1}\n\n',
-      'data: {"type":"step_delta","id":"s1","name":"Prompt","executionType":"prompt","text":"x"}\n\n',
-      sseEvent('dispatch_error', { message: 'bad config', seq: 2 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "x" }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "x" }),
+      sseEvent("execution_error", {
+        executionId: "exec-test", seq: 4,
+        kind: "flow", error: { code: "error", message: "bad config" },
+      })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1531,20 +1335,11 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_7';
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 2, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_reflection', {
-        executionId: execId, iteration: 1,
-        reflection: 'I should try a different approach.', seq: 2,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 2, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 3,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 2 }),
+      sseEvent("reasoning_start", { executionId: execId, seq: 1, id: "reason_1", scope: "loop" }),
+      sseEvent("reasoning_complete", { executionId: execId, seq: 2, id: "reason_1", text: "I should try a different approach.", scope: "loop" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 3, kind: "agent", success: true, iterations: 2, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1573,27 +1368,17 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     expect(reflectionMessages[0].reasoning?.chunks.join('')).toBe('I should try a different approach.');
   });
 
-  it('should handle agent_ping events gracefully', async () => {
+  it('should handle ping events gracefully', async () => {
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_test_8';
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_ping', {
-        executionId: execId, timestamp: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'Hi',
-        contentType: 'text', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 4,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("ping", { executionId: execId, seq: 1, timestamp: new Date().toISOString() }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "Hi" }),
+      sseEvent("text_complete", { executionId: execId, seq: 4, id: "text_1", text: "Hi" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 5, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -1622,7 +1407,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
 });
 
 // ============================================================================
-// Wire event name support (chunk → delta, agent_tool_* → tool_* with agentContext)
+// Unified text and tool event handling
 // ============================================================================
 
 // ============================================================================
@@ -1633,20 +1418,20 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should split flow text segments at a tool boundary', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Let me search' }),
-      sseEvent('step_delta', { id: 's1', text: ' for that!' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('tool_start', { toolId: 'tc_1', name: 'search', toolType: 'mcp', startedAt: new Date().toISOString() }),
-      sseEvent('tool_complete', { toolId: 'tc_1', name: 'search', result: { found: true }, success: true, completedAt: new Date().toISOString(), executionTime: 200 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Found it! Here' }),
-      sseEvent('step_delta', { id: 's1', text: ' are the results.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("step_start", { executionId: "exec-test", seq: 1, id: "s1", name: "Prompt", stepType: "prompt", index: 0, totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 2, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 3, id: "text_1", delta: "Let me search" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 4, id: "text_1", delta: " for that!" }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 5, id: "text_1", text: "Let me search for that!" }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 6, toolCallId: "tc_1", toolName: "search", toolType: "mcp", startedAt: new Date().toISOString() }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 7, toolCallId: "tc_1", toolName: "search", success: true, result: { found: true }, executionTime: 200 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 8, id: "text_2" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 9, id: "text_2", delta: "Found it! Here" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 10, id: "text_2", delta: " are the results." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 11, id: "text_2", text: "Found it! Here are the results." }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 12, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -1690,17 +1475,17 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should split assistant messages using text_start/text_end lifecycle events', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Preamble text.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('tool_start', { toolId: 'tc_1', name: 'get_weather', toolType: 'builtin', startedAt: new Date().toISOString() }),
-      sseEvent('tool_complete', { toolId: 'tc_1', name: 'get_weather', result: { temp: 72 }, success: true, completedAt: new Date().toISOString(), executionTime: 100 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'The weather is 72F.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "Preamble text." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "Preamble text." }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 4, toolCallId: "tc_1", toolName: "get_weather", toolType: "builtin", startedAt: new Date().toISOString() }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 5, toolCallId: "tc_1", toolName: "get_weather", success: true, result: { temp: 72 }, executionTime: 100 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 6, id: "text_2" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 7, id: "text_2", delta: "The weather is 72F." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 8, id: "text_2", text: "The weather is 72F." }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 9, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -1741,15 +1526,15 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
     // Tool UI is the first meaningful output. Some providers still emit
     // newline-only text lifecycle events around the tool boundary; those must
     // not become an empty assistant message bubble.
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 1, totalSteps: 1 }),
-      sseEvent('tool_start', { toolId: 'tc_1', name: 'add_to_cart', toolType: 'local' }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: '\n' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('tool_complete', { toolId: 'tc_1', name: 'add_to_cart', success: true, completedAt: new Date().toISOString(), executionTime: 20 }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("step_start", { executionId: "exec-test", seq: 1, id: "s1", name: "Prompt", stepType: "prompt", index: 1, totalSteps: 1 }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 2, toolCallId: "tc_1", toolName: "add_to_cart", toolType: "local" }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 3, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 4, id: "text_1", delta: "\n" }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 5, id: "text_1", text: "\n" }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 6, toolCallId: "tc_1", toolName: "add_to_cart", success: true, executionTime: 20 }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 7, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -1778,11 +1563,13 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
     const events: AgentWidgetEvent[] = [];
 
     // No text_end / tool boundary between the two deltas → one text block → one bubble.
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      sseEvent('step_delta', { id: 's1', text: 'Hello ' }),
-      sseEvent('step_delta', { id: 's1', text: 'world' }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "Hello " }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 3, id: "text_1", delta: "world" }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 4, id: "text_1", text: "Hello world" }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 5, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -1809,27 +1596,22 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should handle multiple tool calls with proper text interleaving', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      // preamble segment
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Searching...' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      // tool 1
-      sseEvent('tool_start', { toolId: 'tc_1', name: 'search', toolType: 'mcp' }),
-      sseEvent('tool_complete', { toolId: 'tc_1', name: 'search', result: { id: 27 }, success: true, executionTime: 100 }),
-      // between-tools segment
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Adding to cart...' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      // tool 2
-      sseEvent('tool_start', { toolId: 'tc_2', name: 'add_to_cart', toolType: 'mcp' }),
-      sseEvent('tool_complete', { toolId: 'tc_2', name: 'add_to_cart', result: { success: true }, success: true, executionTime: 50 }),
-      // final segment
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Done! Item added.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "Searching..." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "Searching..." }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 4, toolCallId: "tc_1", toolName: "search", toolType: "mcp" }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 5, toolCallId: "tc_1", toolName: "search", success: true, result: { id: 27 }, executionTime: 100 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 6, id: "text_2" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 7, id: "text_2", delta: "Adding to cart..." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 8, id: "text_2", text: "Adding to cart..." }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 9, toolCallId: "tc_2", toolName: "add_to_cart", toolType: "mcp" }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 10, toolCallId: "tc_2", toolName: "add_to_cart", success: true, result: { success: true }, executionTime: 50 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 11, id: "text_3" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 12, id: "text_3", delta: "Done! Item added." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 13, id: "text_3", text: "Done! Item added." }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 14, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -1876,17 +1658,17 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should give split messages unique IDs even when assistantMessageId is provided', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Before tool.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('tool_start', { toolId: 'tc_1', name: 'lookup', toolType: 'mcp' }),
-      sseEvent('tool_complete', { toolId: 'tc_1', name: 'lookup', result: {}, success: true, executionTime: 50 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'After tool.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "Before tool." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "Before tool." }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 4, toolCallId: "tc_1", toolName: "lookup", toolType: "mcp" }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 5, toolCallId: "tc_1", toolName: "lookup", success: true, result: {  }, executionTime: 50 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 6, id: "text_2" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 7, id: "text_2", delta: "After tool." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 8, id: "text_2", text: "After tool." }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 9, kind: "flow", success: true })
     ]);
 
     // Use agent mode so assistantMessageId is forwarded to streamResponse
@@ -1930,19 +1712,19 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
     // (sealed by text_end → text_complete). The step's full structured response
     // (`step_complete.result.response`) reconciles rawContent without clobbering
     // either sealed bubble's displayed content.
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1, executionId: 'exec_f1' }),
-      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'First part.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('tool_start', { toolId: 'tc_1', name: 'action', toolType: 'mcp', startedAt: new Date().toISOString() }),
-      sseEvent('tool_complete', { toolId: 'tc_1', name: 'action', result: {}, success: true, completedAt: new Date().toISOString(), executionTime: 10 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Second part.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('step_complete', { id: 's1', name: 'Prompt', stepType: 'prompt', success: true, result: { response: 'First part.Second part.' }, executionTime: 500 }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec_f1", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("step_start", { executionId: "exec_f1", seq: 1, id: "s1", name: "Prompt", stepType: "prompt", index: 0, totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec_f1", seq: 2, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec_f1", seq: 3, id: "text_1", delta: "First part." }),
+      sseEvent("text_complete", { executionId: "exec_f1", seq: 4, id: "text_1", text: "First part." }),
+      sseEvent("tool_start", { executionId: "exec_f1", seq: 5, toolCallId: "tc_1", toolName: "action", toolType: "mcp", startedAt: new Date().toISOString() }),
+      sseEvent("tool_complete", { executionId: "exec_f1", seq: 6, toolCallId: "tc_1", toolName: "action", success: true, result: {  }, executionTime: 10 }),
+      sseEvent("text_start", { executionId: "exec_f1", seq: 7, id: "text_2" }),
+      sseEvent("text_delta", { executionId: "exec_f1", seq: 8, id: "text_2", delta: "Second part." }),
+      sseEvent("text_complete", { executionId: "exec_f1", seq: 9, id: "text_2", text: "Second part." }),
+      sseEvent("step_complete", { executionId: "exec_f1", seq: 10, id: "s1", name: "Prompt", stepType: "prompt", success: true, durationMs: 500, result: { response: "First part.Second part." } }),
+      sseEvent("execution_complete", { executionId: "exec_f1", seq: 11, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -1973,18 +1755,15 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
   it('should not duplicate text when step_complete follows text_end', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      // Tools fire first (no text before them)
-      sseEvent('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() }),
-      sseEvent('tool_complete', { toolId: 'tc_1', name: 'test_tool', success: true, completedAt: new Date().toISOString(), executionTime: 0 }),
-      // Then text segment
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Tool returned a result.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      // step_complete with full response (should NOT create a duplicate)
-      sseEvent('step_complete', { id: 's1', name: 'Response', stepType: 'prompt', success: true, result: { response: 'Tool returned a result.' }, executionTime: 500 }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 1, toolCallId: "tc_1", toolName: "test_tool", toolType: "custom", startedAt: new Date().toISOString() }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 2, toolCallId: "tc_1", toolName: "test_tool", success: true, executionTime: 0 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 3, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 4, id: "text_1", delta: "Tool returned a result." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 5, id: "text_1", text: "Tool returned a result." }),
+      sseEvent("step_complete", { executionId: "exec-test", seq: 6, id: "s1", name: "Response", stepType: "prompt", success: true, durationMs: 500, result: { response: "Tool returned a result." } }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 7, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -2041,26 +1820,19 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
       };
     };
 
-    // Wire (via the oracle): a single flow text block carrying partial
+    // Unified wire: a single flow text block carrying partial
     // structured JSON, sealed by text_end, then the authoritative final structured
     // response on step_complete. Exercises the async structured-content parser +
     // sealed-segment reconciliation on the wire flow path.
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      sseEvent('tool_start', { toolId: 'tc_1', name: 'test_tool', toolType: 'custom', startedAt: new Date().toISOString() }),
-      sseEvent('tool_complete', { toolId: 'tc_1', name: 'test_tool', success: true, completedAt: new Date().toISOString(), executionTime: 0 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: '{"text":"Tool returned a re' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('step_complete', {
-        id: 's1',
-        name: 'Response',
-        stepType: 'prompt',
-        success: true,
-        result: { response: opts.stepCompleteResponse },
-        executionTime: 500
-      }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 1, toolCallId: "tc_1", toolName: "test_tool", toolType: "custom", startedAt: new Date().toISOString() }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 2, toolCallId: "tc_1", toolName: "test_tool", success: true, executionTime: 0 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 3, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 4, id: "text_1", delta: "{\"text\":\"Tool returned a re" }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 5, id: "text_1", text: "{\"text\":\"Tool returned a re" }),
+      sseEvent("step_complete", { executionId: "exec-test", seq: 6, id: "s1", name: "Response", stepType: "prompt", success: true, durationMs: 500, result: { response: opts.stepCompleteResponse } }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 7, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({
@@ -2112,7 +1884,7 @@ describe('AgentWidgetClient - partId Text/Tool Interleaving', () => {
 
 describe('AgentWidgetClient - flow continuation stream without execution_start', () => {
   // A tool-driven `/resume` continues a flow on a brand-new stream that does NOT
-  // re-emit `execution_start` (`flow_start`). Each stream resolves its execution
+  // re-emit `execution_start`. Each stream resolves its execution
   // kind independently and defaults to `"agent"`, so the continuation used to
   // mis-route the final prompt-step finalization: the streamed text block was
   // sealed via the agent path (which never records it as the sealed flow bubble),
@@ -2132,16 +1904,15 @@ describe('AgentWidgetClient - flow continuation stream without execution_start',
   it('does not duplicate the final message when a flow resumes without execution_start', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    // No `flow_start`/`execution_start`: this is exactly the wire a tool-driven
+    // No `execution_start`: this is exactly the wire a tool-driven
     // `/resume` continuation delivers.
-    global.fetch = createAgentStreamFetch([
-      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Done! Added to your cart.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      // The authoritative final response mirrors the streamed text.
-      sseEvent('step_complete', { id: 's1', name: 'Prompt', stepType: 'prompt', success: true, result: { response: 'Done! Added to your cart.' }, executionTime: 500 }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("step_start", { executionId: "exec-test", seq: 0, id: "s1", name: "Prompt", stepType: "prompt", index: 0, totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "Done! Added to your cart." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "Done! Added to your cart." }),
+      sseEvent("step_complete", { executionId: "exec-test", seq: 4, id: "s1", name: "Prompt", stepType: "prompt", success: true, durationMs: 500, result: { response: "Done! Added to your cart." } }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 5, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -2161,15 +1932,15 @@ describe('AgentWidgetClient - flow continuation stream without execution_start',
   it('still reconciles in place when execution_start IS present (initial flow stream)', async () => {
     const events: AgentWidgetEvent[] = [];
 
-    // Same shape but WITH flow_start — the pre-existing, already-correct path.
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1, executionId: 'exec_f1' }),
-      sseEvent('step_start', { id: 's1', name: 'Prompt', stepType: 'prompt', index: 0, totalSteps: 1 }),
-      sseEvent('text_start', { messageId: 'msg_s1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Done! Added to your cart.' }),
-      sseEvent('text_end', { messageId: 'msg_s1' }),
-      sseEvent('step_complete', { id: 's1', name: 'Prompt', stepType: 'prompt', success: true, result: { response: 'Done! Added to your cart.' }, executionTime: 500 }),
-      sseEvent('flow_complete', { success: true }),
+    // Same shape but WITH execution_start — the pre-existing, already-correct path.
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec_f1", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("step_start", { executionId: "exec_f1", seq: 1, id: "s1", name: "Prompt", stepType: "prompt", index: 0, totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec_f1", seq: 2, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec_f1", seq: 3, id: "text_1", delta: "Done! Added to your cart." }),
+      sseEvent("text_complete", { executionId: "exec_f1", seq: 4, id: "text_1", text: "Done! Added to your cart." }),
+      sseEvent("step_complete", { executionId: "exec_f1", seq: 5, id: "s1", name: "Prompt", stepType: "prompt", success: true, durationMs: 500, result: { response: "Done! Added to your cart." } }),
+      sseEvent("execution_complete", { executionId: "exec_f1", seq: 6, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -2188,39 +1959,17 @@ describe('AgentWidgetClient - flow continuation stream without execution_start',
     const events: AgentWidgetEvent[] = [];
     const execId = 'exec_a1';
 
-    // Agent loops use `agent_*`/turn_* frames and never carry a `stepType`, so the
+    // Agent loops use `turn_*` frames and never carry a `stepType`, so the
     // flow recovery must not engage. A single streamed turn yields exactly one
     // bubble (regression guard so the recovery can't over-fire on agents).
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_start', {
-        executionId: execId, iteration: 1, turnIndex: 0,
-        role: 'assistant', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'Hi there!',
-        contentType: 'text', turnId: 'turn_1', seq: 4,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 1, role: 'assistant',
-        turnId: 'turn_1', completedAt: new Date().toISOString(), seq: 5,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 1, toolCallsMade: 0,
-        stopConditionMet: false, completedAt: new Date().toISOString(), seq: 6,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 7,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "Hi there!" }),
+      sseEvent("text_complete", { executionId: execId, seq: 4, id: "text_1", text: "Hi there!" }),
+      sseEvent("turn_complete", { executionId: execId, seq: 5, id: "turn_1", iteration: 1, role: "assistant", completedAt: new Date().toISOString() }),
+      sseEvent("execution_complete", { executionId: execId, seq: 6, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -2244,20 +1993,17 @@ describe('AgentWidgetClient - nested flow-as-tool (parentToolCallId)', () => {
   // .parentToolCallId, and the widget routes that block into the parent tool's row.
   it('routes nested flow text into the parent tool row, not the top-level assistant', async () => {
     const events: AgentWidgetEvent[] = [];
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      // top-level parent text
-      sseEvent('text_start', { messageId: 'msg_parent' }),
-      sseEvent('step_delta', { id: 's1', text: 'Parent says hi.' }),
-      sseEvent('text_end', { messageId: 'msg_parent' }),
-      // a nested flow runs as a tool
-      sseEvent('tool_start', { toolId: 'tool_nested_1', name: 'run_subflow', toolType: 'flow', startedAt: new Date().toISOString() }),
-      // nested flow text, enriched with toolContext.toolId
-      sseEvent('text_start', { messageId: 'msg_nested', toolContext: { toolId: 'tool_nested_1' } }),
-      sseEvent('step_delta', { id: 's2', text: 'Nested result.', toolContext: { toolId: 'tool_nested_1' } }),
-      sseEvent('text_end', { messageId: 'msg_nested', toolContext: { toolId: 'tool_nested_1' } }),
-      sseEvent('tool_complete', { toolId: 'tool_nested_1', name: 'run_subflow', success: true, executionTime: 100 }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "Parent says hi." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "Parent says hi." }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 4, toolCallId: "tool_nested_1", toolName: "run_subflow", toolType: "flow", startedAt: new Date().toISOString() }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 5, id: "text_2", parentToolCallId: "tool_nested_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 6, id: "text_2", delta: "Nested result." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 7, id: "text_2", text: "Nested result." }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 8, toolCallId: "tool_nested_1", toolName: "run_subflow", success: true, executionTime: 100 }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 9, kind: "flow", success: true })
     ]);
 
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
@@ -2284,12 +2030,12 @@ describe('AgentWidgetClient - nested flow-as-tool (parentToolCallId)', () => {
 
   it('does not tag top-level flow text with a parentToolId', async () => {
     const events: AgentWidgetEvent[] = [];
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      sseEvent('text_start', { messageId: 'msg_1' }),
-      sseEvent('step_delta', { id: 's1', text: 'Just top-level.' }),
-      sseEvent('text_end', { messageId: 'msg_1' }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
+      sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "Just top-level." }),
+      sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "Just top-level." }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 4, kind: "flow", success: true })
     ]);
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -2306,14 +2052,14 @@ describe('AgentWidgetClient - nested flow-as-tool (parentToolCallId)', () => {
 
   it('routes nested flow reasoning into the parent tool row', async () => {
     const events: AgentWidgetEvent[] = [];
-    global.fetch = createAgentStreamFetch([
-      sseEvent('flow_start', { flowId: 'f1', flowName: 'Test', totalSteps: 1 }),
-      sseEvent('tool_start', { toolId: 'tool_nested_2', name: 'run_subflow', toolType: 'flow', startedAt: new Date().toISOString() }),
-      sseEvent('reason_start', { toolContext: { toolId: 'tool_nested_2' } }),
-      sseEvent('reason_delta', { reasoningText: 'thinking nested', toolContext: { toolId: 'tool_nested_2' } }),
-      sseEvent('reason_complete', { toolContext: { toolId: 'tool_nested_2' } }),
-      sseEvent('tool_complete', { toolId: 'tool_nested_2', name: 'run_subflow', success: true, executionTime: 50 }),
-      sseEvent('flow_complete', { success: true }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: "exec-test", seq: 0, kind: "flow", startedAt: "2025-01-01T00:00:00.000Z", flowId: "f1", flowName: "Test", totalSteps: 1 }),
+      sseEvent("tool_start", { executionId: "exec-test", seq: 1, toolCallId: "tool_nested_2", toolName: "run_subflow", toolType: "flow", startedAt: new Date().toISOString() }),
+      sseEvent("reasoning_start", { executionId: "exec-test", seq: 2, id: "reason_1", parentToolCallId: "tool_nested_2" }),
+      sseEvent("reasoning_delta", { executionId: "exec-test", seq: 3, id: "reason_1", delta: "thinking nested" }),
+      sseEvent("reasoning_complete", { executionId: "exec-test", seq: 4, id: "reason_1", text: "thinking nested" }),
+      sseEvent("tool_complete", { executionId: "exec-test", seq: 5, toolCallId: "tool_nested_2", toolName: "run_subflow", success: true, executionTime: 50 }),
+      sseEvent("execution_complete", { executionId: "exec-test", seq: 6, kind: "flow", success: true })
     ]);
     const client = new AgentWidgetClient({ apiUrl: 'http://localhost:8000' });
     await client.dispatch(
@@ -2409,7 +2155,7 @@ describe('preferFinalStructuredContent', () => {
 });
 
 // ============================================================================
-// stopReason wiring (agent_turn_complete / step_complete)
+// stopReason wiring (turn_complete / step_complete)
 // ============================================================================
 
 describe('AgentWidgetClient - stopReason propagation', () => {
@@ -2423,7 +2169,7 @@ describe('AgentWidgetClient - stopReason propagation', () => {
     if (stopReason) data.stopReason = stopReason;
     return [
       `data: ${JSON.stringify(data)}\n\n`,
-      `data: ${JSON.stringify({ type: 'flow_complete', success: true })}\n\n`,
+      `data: ${JSON.stringify({ type: 'execution_complete', success: true })}\n\n`,
     ];
   };
 
@@ -2487,7 +2233,7 @@ describe('AgentWidgetClient - stopReason propagation', () => {
         result: { response: '' },
         stopReason: 'max_tool_calls',
       })}\n\n`,
-      `data: ${JSON.stringify({ type: 'flow_complete', success: true })}\n\n`,
+      `data: ${JSON.stringify({ type: 'execution_complete', success: true })}\n\n`,
     ]);
     const final = collectFinalAssistant(events);
     expect(final).not.toBeNull();
@@ -2495,41 +2241,18 @@ describe('AgentWidgetClient - stopReason propagation', () => {
     expect(final!.stopReason).toBe('max_tool_calls');
   });
 
-  it('agent_turn_complete.stopReason overrides any earlier step_complete value (agent-loop path)', async () => {
-    // Build an agent-mode stream that emits both events. agent_turn_complete
+  it('turn_complete.stopReason overrides any earlier step_complete value (agent-loop path)', async () => {
+    // Build an agent-mode stream that emits both events. turn_complete
     // arrives last; its stopReason should win.
     const execId = 'exec_stopreason';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_start', {
-        executionId: execId, iteration: 1, turnIndex: 0,
-        role: 'assistant', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'partial answer',
-        contentType: 'text', turnId: 'turn_1', seq: 4,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 1, role: 'assistant',
-        turnId: 'turn_1', completedAt: new Date().toISOString(),
-        stopReason: 'max_tool_calls', seq: 5,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 1, toolCallsMade: 0,
-        stopConditionMet: true, completedAt: new Date().toISOString(), seq: 6,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 7,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "partial answer" }),
+      sseEvent("text_complete", { executionId: execId, seq: 4, id: "text_1", text: "partial answer" }),
+      sseEvent("turn_complete", { executionId: execId, seq: 5, id: "turn_1", iteration: 1, role: "assistant", stopReason: "max_tool_calls", completedAt: new Date().toISOString() }),
+      sseEvent("execution_complete", { executionId: execId, seq: 6, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -2551,7 +2274,7 @@ describe('AgentWidgetClient - stopReason propagation', () => {
 
 // ============================================================================
 // Within-turn text/tool interleaving: assistant text bubbles must seal at
-// each agent_tool_start so the chronological text→tool→text→tool sequence
+// each tool_start so the chronological text→tool→text→tool sequence
 // renders as distinct timeline entries instead of one merged bubble that
 // appears below all the tool cards.
 // ============================================================================
@@ -2568,65 +2291,22 @@ describe('AgentWidgetClient - agent_turn text/tool interleaving', () => {
     return order.map((id) => byId.get(id)!);
   };
 
-  it('seals the assistant text bubble at each agent_tool_start so subsequent text creates a new bubble', async () => {
+  it('seals the assistant text bubble at each tool_start so subsequent text creates a new bubble', async () => {
     const execId = 'exec_interleave';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_start', {
-        executionId: execId, iteration: 1, turnIndex: 0,
-        role: 'assistant', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'before tool 1',
-        contentType: 'text', turnId: 'turn_1', seq: 4,
-      }),
-      sseEvent('agent_tool_start', {
-        executionId: execId, iteration: 1,
-        toolCallId: 'call_1', toolName: 'search', toolType: 'builtin', seq: 5,
-      }),
-      sseEvent('agent_tool_complete', {
-        executionId: execId, iteration: 1,
-        toolCallId: 'call_1', toolName: 'search', success: true,
-        executionTime: 10, seq: 6,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'between tools',
-        contentType: 'text', turnId: 'turn_1', seq: 7,
-      }),
-      sseEvent('agent_tool_start', {
-        executionId: execId, iteration: 1,
-        toolCallId: 'call_2', toolName: 'fetch', toolType: 'builtin', seq: 8,
-      }),
-      sseEvent('agent_tool_complete', {
-        executionId: execId, iteration: 1,
-        toolCallId: 'call_2', toolName: 'fetch', success: true,
-        executionTime: 10, seq: 9,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'after tool 2',
-        contentType: 'text', turnId: 'turn_1', seq: 10,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 1, role: 'assistant',
-        turnId: 'turn_1', completedAt: new Date().toISOString(),
-        stopReason: 'end_turn', seq: 11,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 1, toolCallsMade: 2,
-        stopConditionMet: true, completedAt: new Date().toISOString(), seq: 12,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'complete',
-        completedAt: new Date().toISOString(), seq: 13,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "before tool 1" }),
+      sseEvent("tool_start", { executionId: execId, seq: 4, toolCallId: "call_1", toolName: "search", toolType: "builtin", iteration: 1 }),
+      sseEvent("tool_complete", { executionId: execId, seq: 5, toolCallId: "call_1", toolName: "search", success: true, executionTime: 10, iteration: 1 }),
+      sseEvent("text_delta", { executionId: execId, seq: 6, id: "text_1", delta: "between tools" }),
+      sseEvent("tool_start", { executionId: execId, seq: 7, toolCallId: "call_2", toolName: "fetch", toolType: "builtin", iteration: 1 }),
+      sseEvent("tool_complete", { executionId: execId, seq: 8, toolCallId: "call_2", toolName: "fetch", success: true, executionTime: 10, iteration: 1 }),
+      sseEvent("text_delta", { executionId: execId, seq: 9, id: "text_1", delta: "after tool 2" }),
+      sseEvent("text_complete", { executionId: execId, seq: 10, id: "text_1", text: "before tool 1between toolsafter tool 2" }),
+      sseEvent("turn_complete", { executionId: execId, seq: 11, id: "turn_1", iteration: 1, role: "assistant", stopReason: "end_turn", completedAt: new Date().toISOString() }),
+      sseEvent("execution_complete", { executionId: execId, seq: 12, kind: "agent", success: true, iterations: 1, stopReason: "complete", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -2652,52 +2332,19 @@ describe('AgentWidgetClient - agent_turn text/tool interleaving', () => {
     expect(new Set(assistants.map((m) => m.id)).size).toBe(3);
   });
 
-  it('attaches agent_turn_complete.stopReason to the final assistant text segment when the turn ends with text', async () => {
+  it('attaches turn_complete.stopReason to the final assistant text segment when the turn ends with text', async () => {
     const execId = 'exec_stopreason_tail_text';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_start', {
-        executionId: execId, iteration: 1, turnIndex: 0,
-        role: 'assistant', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'first segment',
-        contentType: 'text', turnId: 'turn_1', seq: 4,
-      }),
-      sseEvent('agent_tool_start', {
-        executionId: execId, iteration: 1,
-        toolCallId: 'call_1', toolName: 'search', toolType: 'builtin', seq: 5,
-      }),
-      sseEvent('agent_tool_complete', {
-        executionId: execId, iteration: 1,
-        toolCallId: 'call_1', toolName: 'search', success: true,
-        executionTime: 10, seq: 6,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'final segment',
-        contentType: 'text', turnId: 'turn_1', seq: 7,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 1, role: 'assistant',
-        turnId: 'turn_1', completedAt: new Date().toISOString(),
-        stopReason: 'length', seq: 8,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 1, toolCallsMade: 1,
-        stopConditionMet: true, completedAt: new Date().toISOString(), seq: 9,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'complete',
-        completedAt: new Date().toISOString(), seq: 10,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "first segment" }),
+      sseEvent("tool_start", { executionId: execId, seq: 4, toolCallId: "call_1", toolName: "search", toolType: "builtin", iteration: 1 }),
+      sseEvent("tool_complete", { executionId: execId, seq: 5, toolCallId: "call_1", toolName: "search", success: true, executionTime: 10, iteration: 1 }),
+      sseEvent("text_delta", { executionId: execId, seq: 6, id: "text_1", delta: "final segment" }),
+      sseEvent("text_complete", { executionId: execId, seq: 7, id: "text_1", text: "first segmentfinal segment" }),
+      sseEvent("turn_complete", { executionId: execId, seq: 8, id: "turn_1", iteration: 1, role: "assistant", stopReason: "length", completedAt: new Date().toISOString() }),
+      sseEvent("execution_complete", { executionId: execId, seq: 9, kind: "agent", success: true, iterations: 1, stopReason: "complete", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -2720,48 +2367,18 @@ describe('AgentWidgetClient - agent_turn text/tool interleaving', () => {
     expect(assistants[1].stopReason).toBe('length');
   });
 
-  it('attaches agent_turn_complete.stopReason to the preceding text segment when the turn ends with a tool call', async () => {
+  it('attaches turn_complete.stopReason to the preceding text segment when the turn ends with a tool call', async () => {
     const execId = 'exec_stopreason_tail_tool';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_turn_start', {
-        executionId: execId, iteration: 1, turnIndex: 0,
-        role: 'assistant', turnId: 'turn_1', seq: 3,
-      }),
-      sseEvent('agent_turn_delta', {
-        executionId: execId, iteration: 1, delta: 'about to call tool',
-        contentType: 'text', turnId: 'turn_1', seq: 4,
-      }),
-      sseEvent('agent_tool_start', {
-        executionId: execId, iteration: 1,
-        toolCallId: 'call_1', toolName: 'search', toolType: 'builtin', seq: 5,
-      }),
-      sseEvent('agent_tool_complete', {
-        executionId: execId, iteration: 1,
-        toolCallId: 'call_1', toolName: 'search', success: true,
-        executionTime: 10, seq: 6,
-      }),
-      sseEvent('agent_turn_complete', {
-        executionId: execId, iteration: 1, role: 'assistant',
-        turnId: 'turn_1', completedAt: new Date().toISOString(),
-        stopReason: 'max_tool_calls', seq: 7,
-      }),
-      sseEvent('agent_iteration_complete', {
-        executionId: execId, iteration: 1, toolCallsMade: 1,
-        stopConditionMet: true, completedAt: new Date().toISOString(), seq: 8,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_tool_calls',
-        completedAt: new Date().toISOString(), seq: 9,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "about to call tool" }),
+      sseEvent("tool_start", { executionId: execId, seq: 4, toolCallId: "call_1", toolName: "search", toolType: "builtin", iteration: 1 }),
+      sseEvent("tool_complete", { executionId: execId, seq: 5, toolCallId: "call_1", toolName: "search", success: true, executionTime: 10, iteration: 1 }),
+      sseEvent("text_complete", { executionId: execId, seq: 6, id: "text_1", text: "about to call tool" }),
+      sseEvent("turn_complete", { executionId: execId, seq: 7, id: "turn_1", iteration: 1, role: "assistant", stopReason: "max_tool_calls", completedAt: new Date().toISOString() }),
+      sseEvent("execution_complete", { executionId: execId, seq: 8, kind: "agent", success: true, iterations: 1, stopReason: "max_tool_calls", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -2787,9 +2404,8 @@ describe('AgentWidgetClient - agent_turn text/tool interleaving', () => {
 // step_await (LOCAL tool pause) + resumeFlow
 // ============================================================================
 
-describe('AgentWidgetClient: step_await parsing', () => {
-  // Wire collapses the legacy flow `step_await` (a `local_tool_required` pause)
-  // into the neutral `await` event the native handler consumes.
+describe('AgentWidgetClient: unified local-tool await parsing', () => {
+  // Both dispatch kinds use the unified await event for local tools.
   const buildAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
     const body = `event: await\ndata: ${JSON.stringify({ type: 'await', ...payload })}\n\n`;
@@ -2800,8 +2416,7 @@ describe('AgentWidgetClient: step_await parsing', () => {
       },
     });
   };
-  // Legacy raw `step_await` frame — still exercised by the approval-reason guard
-  // below until Phase C removes the legacy approval branch from the handler.
+  // Unsupported legacy events must not create approval or local-tool bubbles.
   const buildStepAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
     const body = `event: step_await\ndata: ${JSON.stringify({ type: 'step_await', ...payload })}\n\n`;
@@ -2865,7 +2480,7 @@ describe('AgentWidgetClient: step_await parsing', () => {
         toolCallId: 'tc_webmcp_1',
         toolName: 'webmcp:get_product_by_url',
         executionId: 'exec_abc',
-        startedAt: 1234,
+        awaitedAt: new Date(1234).toISOString(),
         parameters: { path: '/jade/' },
       }),
     });
@@ -2893,7 +2508,7 @@ describe('AgentWidgetClient: step_await parsing', () => {
     expect(toolMsg!.agentMetadata?.awaitingLocalTool).toBe(true);
   });
 
-  it('ignores step_await events whose awaitReason is not local_tool_required', async () => {
+  it('ignores the obsolete step_await approval event', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       body: buildStepAwaitStream({
@@ -2917,17 +2532,18 @@ describe('AgentWidgetClient: step_await parsing', () => {
       .map((e) => (e as { message: AgentWidgetMessage }).message)
       .find((m) => m.agentMetadata?.awaitingLocalTool);
     expect(toolMsg).toBeUndefined();
+    expect(events.some((event) => event.type === "message" && event.message.variant === "approval")).toBe(false);
   });
 });
 
 // ============================================================================
-// agent_await (AGENT-dispatch LOCAL tool pause) — resolves through the same
-// path as step_await; carries a bare tool name + origin instead of a webmcp:
+// Agent-dispatch LOCAL tool pauses use await, with a bare name + origin
+// instead of a webmcp:
 // prefix + awaitReason.
 // ============================================================================
 
-describe('AgentWidgetClient: agent_await parsing', () => {
-  // Wire collapses the legacy `step_await`/`agent_await` pair into one `await`
+describe('AgentWidgetClient: agent await parsing', () => {
+  // Agent and flow dispatch share the same `await`
   // event; the dispatch origin survives as the `origin` field on the payload.
   const buildAgentAwaitStream = (payload: Record<string, unknown>): ReadableStream<Uint8Array> => {
     const encoder = new TextEncoder();
@@ -2940,7 +2556,7 @@ describe('AgentWidgetClient: agent_await parsing', () => {
     });
   };
 
-  it('normalizes a WebMCP agent_await (origin "webmcp") to a running webmcp: tool message', async () => {
+  it('normalizes a WebMCP await (origin "webmcp") to a running webmcp: tool message', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       body: buildAgentAwaitStream({
@@ -2979,7 +2595,7 @@ describe('AgentWidgetClient: agent_await parsing', () => {
     expect(toolMsg!.agentMetadata?.webMcpToolCallId).toBe('tc_webmcp_1');
   });
 
-  it('emits a complete tool message for a non-WebMCP agent_await (origin "sdk")', async () => {
+  it('emits a complete tool message for a non-WebMCP await (origin "sdk")', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       body: buildAgentAwaitStream({
@@ -3095,7 +2711,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
     (client as unknown as { readVisitorToken: () => Promise<string> }).readVisitorToken =
       async () => 'cvt_resume';
 
-    await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } }, { after: '18' });
+    await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } }, { after: '18.2' });
 
     // Session-authed sibling of /v1/client/chat: no Bearer key, sessionId in body.
     expect(capturedUrl).toBe('https://api.runtype.com/v1/client/resume');
@@ -3104,7 +2720,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
       toolOutputs: { toolu_A: { ok: true } },
       streamResponse: true,
       sessionId: 'cs_123',
-      after: '18',
+      after: '18.2',
     });
     expect(capturedHeaders!['Authorization']).toBeUndefined();
     expect(capturedHeaders!['X-Visitor-Token']).toBe('cvt_resume');
@@ -3164,10 +2780,10 @@ describe('AgentWidgetClient.resumeFlow', () => {
 });
 
 // ============================================================================
-// agent_media Event Handling
+// media Event Handling
 // ============================================================================
 
-describe('AgentWidgetClient - agent_media events', () => {
+describe('AgentWidgetClient - media events', () => {
   const collectMediaMessages = (events: AgentWidgetEvent[]): AgentWidgetMessage[] => {
     const byId = new Map<string, AgentWidgetMessage>();
     for (const event of events) {
@@ -3180,36 +2796,14 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('renders a base64 image (AI SDK v6 type:"media") as a synthetic message', async () => {
     const execId = 'exec_media_image';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', {
-        executionId: execId, agentId: 'virtual', agentName: 'Test',
-        maxTurns: 1, startedAt: new Date().toISOString(), seq: 1,
-      }),
-      sseEvent('agent_iteration_start', {
-        executionId: execId, iteration: 1, maxTurns: 1,
-        startedAt: new Date().toISOString(), seq: 2,
-      }),
-      sseEvent('agent_tool_start', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_shot',
-        toolName: 'browser:screenshot', startedAt: new Date().toISOString(), seq: 3,
-      }),
-      sseEvent('agent_tool_complete', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_shot',
-        toolName: 'browser:screenshot', completedAt: new Date().toISOString(), seq: 4,
-      }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_shot',
-        toolName: 'browser:screenshot',
-        media: [
-          { type: 'media', data: 'iVBORw==', mediaType: 'image/png' },
-        ],
-        seq: 5,
-      }),
-      sseEvent('agent_complete', {
-        executionId: execId, agentId: 'virtual', success: true,
-        iterations: 1, stopReason: 'max_iterations',
-        completedAt: new Date().toISOString(), seq: 6,
-      }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("tool_start", { executionId: execId, seq: 1, toolCallId: "tc_shot", toolName: "browser:screenshot", toolType: "builtin", iteration: 1 }),
+      sseEvent("tool_complete", { executionId: execId, seq: 2, toolCallId: "tc_shot", toolName: "browser:screenshot", success: true, iteration: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 3, id: "media_1", mediaType: "image/png", role: "assistant", toolCallId: "tc_shot" }),
+      sseEvent("media_delta", { executionId: execId, seq: 4, id: "media_1", delta: "iVBORw==" }),
+      sseEvent("media_complete", { executionId: execId, seq: 5, id: "media_1", mediaType: "image/png", data: "iVBORw==", toolCallId: "tc_shot" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 6, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3242,15 +2836,12 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('renders a hosted image (AI SDK v3/v4 type:"image-url") as a synthetic message', async () => {
     const execId = 'exec_media_url';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_dalle', toolName: 'dalle',
-        media: [{ type: 'image-url', url: 'https://r2.example.com/img.png' }],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "image", role: "assistant", toolCallId: "tc_dalle" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "https://r2.example.com/img.png" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "image", url: "https://r2.example.com/img.png", toolCallId: "tc_dalle" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 4, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3275,15 +2866,12 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('preserves mediaType on image-url parts when provided', async () => {
     const execId = 'exec_media_url_typed';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_dalle', toolName: 'dalle',
-        media: [{ type: 'image-url', url: 'https://r2.example.com/img.png', mediaType: 'image/png' }],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "image/png", role: "assistant", toolCallId: "tc_dalle" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "https://r2.example.com/img.png" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "image/png", url: "https://r2.example.com/img.png", toolCallId: "tc_dalle" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 4, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3306,15 +2894,12 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('renders a base64 audio part with mediaType', async () => {
     const execId = 'exec_media_audio';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_tts', toolName: 'elevenlabs-tts',
-        media: [{ type: 'media', data: 'AAAA', mediaType: 'audio/mpeg' }],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "audio/mpeg", role: "assistant", toolCallId: "tc_tts" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "AAAA" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "audio/mpeg", data: "AAAA", toolCallId: "tc_tts" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 4, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3339,19 +2924,18 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('routes file-url parts by mediaType (audio/video/file)', async () => {
     const execId = 'exec_media_file_url';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_files', toolName: 'multi',
-        media: [
-          { type: 'file-url', url: 'https://example.com/a.mp3', mediaType: 'audio/mpeg' },
-          { type: 'file-url', url: 'https://example.com/v.mp4', mediaType: 'video/mp4' },
-          { type: 'file-url', url: 'https://example.com/r.pdf', mediaType: 'application/pdf' },
-        ],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "audio/mpeg", role: "assistant", toolCallId: "tc_files" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "https://example.com/a.mp3" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "audio/mpeg", url: "https://example.com/a.mp3", toolCallId: "tc_files" }),
+      sseEvent("media_start", { executionId: execId, seq: 4, id: "media_2", mediaType: "video/mp4", role: "assistant", toolCallId: "tc_files" }),
+      sseEvent("media_delta", { executionId: execId, seq: 5, id: "media_2", delta: "https://example.com/v.mp4" }),
+      sseEvent("media_complete", { executionId: execId, seq: 6, id: "media_2", mediaType: "video/mp4", url: "https://example.com/v.mp4", toolCallId: "tc_files" }),
+      sseEvent("media_start", { executionId: execId, seq: 7, id: "media_3", mediaType: "application/pdf", role: "assistant", toolCallId: "tc_files" }),
+      sseEvent("media_delta", { executionId: execId, seq: 8, id: "media_3", delta: "https://example.com/r.pdf" }),
+      sseEvent("media_complete", { executionId: execId, seq: 9, id: "media_3", mediaType: "application/pdf", url: "https://example.com/r.pdf", toolCallId: "tc_files" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 10, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3383,19 +2967,18 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('renders each mixed media part as its own synthetic message', async () => {
     const execId = 'exec_media_mixed';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_mix', toolName: 'multi',
-        media: [
-          { type: 'media', data: 'IMG', mediaType: 'image/png' },
-          { type: 'image-url', url: 'https://example.com/dalle.png' },
-          { type: 'media', data: 'FILE', mediaType: 'application/pdf' },
-        ],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "image/png", role: "assistant", toolCallId: "tc_mix" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "IMG" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "image/png", data: "IMG", toolCallId: "tc_mix" }),
+      sseEvent("media_start", { executionId: execId, seq: 4, id: "media_2", mediaType: "image", role: "assistant", toolCallId: "tc_mix" }),
+      sseEvent("media_delta", { executionId: execId, seq: 5, id: "media_2", delta: "https://example.com/dalle.png" }),
+      sseEvent("media_complete", { executionId: execId, seq: 6, id: "media_2", mediaType: "image", url: "https://example.com/dalle.png", toolCallId: "tc_mix" }),
+      sseEvent("media_start", { executionId: execId, seq: 7, id: "media_3", mediaType: "application/pdf", role: "assistant", toolCallId: "tc_mix" }),
+      sseEvent("media_delta", { executionId: execId, seq: 8, id: "media_3", delta: "FILE" }),
+      sseEvent("media_complete", { executionId: execId, seq: 9, id: "media_3", mediaType: "application/pdf", data: "FILE", toolCallId: "tc_mix" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 10, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3422,21 +3005,22 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('inserts media between tool bubble and the next text turn', async () => {
     const execId = 'exec_media_order';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnIndex: 0, role: 'assistant', turnId: 'turn_1', seq: 3 }),
-      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Calling tool...', contentType: 'text', turnId: 'turn_1', seq: 4 }),
-      sseEvent('agent_tool_start', { executionId: execId, iteration: 1, toolCallId: 'tc_1', toolName: 'browser:screenshot', startedAt: new Date().toISOString(), seq: 5 }),
-      sseEvent('agent_tool_complete', { executionId: execId, iteration: 1, toolCallId: 'tc_1', toolName: 'browser:screenshot', completedAt: new Date().toISOString(), seq: 6 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_1', toolName: 'browser:screenshot',
-        media: [{ type: 'media', data: 'PNG', mediaType: 'image/png' }],
-        seq: 7,
-      }),
-      sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnIndex: 1, role: 'assistant', turnId: 'turn_2', seq: 8 }),
-      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Done!', contentType: 'text', turnId: 'turn_2', seq: 9 }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 10 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "Calling tool..." }),
+      sseEvent("tool_start", { executionId: execId, seq: 4, toolCallId: "tc_1", toolName: "browser:screenshot", toolType: "builtin", iteration: 1 }),
+      sseEvent("tool_complete", { executionId: execId, seq: 5, toolCallId: "tc_1", toolName: "browser:screenshot", success: true, iteration: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 6, id: "media_2", mediaType: "image/png", role: "assistant", toolCallId: "tc_1" }),
+      sseEvent("media_delta", { executionId: execId, seq: 7, id: "media_2", delta: "PNG" }),
+      sseEvent("media_complete", { executionId: execId, seq: 8, id: "media_2", mediaType: "image/png", data: "PNG", toolCallId: "tc_1" }),
+      sseEvent("text_complete", { executionId: execId, seq: 9, id: "text_1", text: "Calling tool..." }),
+      sseEvent("turn_start", { executionId: execId, seq: 10, id: "turn_2", iteration: 1, turnIndex: 1, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 11, id: "text_3", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 12, id: "text_3", delta: "Done!" }),
+      sseEvent("text_complete", { executionId: execId, seq: 13, id: "text_3", text: "Done!" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 14, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3474,19 +3058,15 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('skips malformed media parts that have neither data nor url', async () => {
     const execId = 'exec_media_empty';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_x', toolName: 'noop',
-        media: [
-          { type: 'media', mediaType: 'image/png' },         // missing data
-          { type: 'image-url' },                              // missing url
-          { type: 'unknown-shape', payload: 'whatever' },     // unknown discriminator
-        ],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "image/png", role: "assistant", toolCallId: "tc_x" }),
+      sseEvent("media_complete", { executionId: execId, seq: 2, id: "media_1", mediaType: "image/png", toolCallId: "tc_x" }),
+      sseEvent("media_start", { executionId: execId, seq: 3, id: "media_2", mediaType: "image", role: "assistant", toolCallId: "tc_x" }),
+      sseEvent("media_complete", { executionId: execId, seq: 4, id: "media_2", mediaType: "image", toolCallId: "tc_x" }),
+      sseEvent("media_start", { executionId: execId, seq: 5, id: "media_3", mediaType: "application/octet-stream", role: "assistant", toolCallId: "tc_x" }),
+      sseEvent("media_complete", { executionId: execId, seq: 6, id: "media_3", mediaType: "application/octet-stream", toolCallId: "tc_x" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 7, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3502,22 +3082,17 @@ describe('AgentWidgetClient - agent_media events', () => {
     expect(collectMediaMessages(events)).toHaveLength(0);
   });
 
-  it('produces unique ids for repeated agent_media events on the same toolCallId', async () => {
+  it('produces unique ids for repeated media events on the same toolCallId', async () => {
     const execId = 'exec_media_repeat';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_repeat', toolName: 'multi',
-        media: [{ type: 'media', data: 'A', mediaType: 'image/png' }],
-        seq: 3,
-      }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_repeat', toolName: 'multi',
-        media: [{ type: 'media', data: 'B', mediaType: 'image/png' }],
-        seq: 4,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 5 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "image/png", role: "assistant", toolCallId: "tc_repeat" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "A" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "image/png", data: "A", toolCallId: "tc_repeat" }),
+      sseEvent("media_start", { executionId: execId, seq: 4, id: "media_2", mediaType: "image/png", role: "assistant", toolCallId: "tc_repeat" }),
+      sseEvent("media_delta", { executionId: execId, seq: 5, id: "media_2", delta: "B" }),
+      sseEvent("media_complete", { executionId: execId, seq: 6, id: "media_2", mediaType: "image/png", data: "B", toolCallId: "tc_repeat" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 7, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3545,20 +3120,18 @@ describe('AgentWidgetClient - agent_media events', () => {
     expect(first).toBeDefined();
   });
 
-  it('seals an in-flight assistant text bubble before splitting on agent_media', async () => {
+  it('seals an in-flight assistant text bubble before splitting on media', async () => {
     const execId = 'exec_media_seal';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_turn_start', { executionId: execId, iteration: 1, turnIndex: 0, role: 'assistant', turnId: 'turn_1', seq: 3 }),
-      sseEvent('agent_turn_delta', { executionId: execId, iteration: 1, delta: 'Streaming...', contentType: 'text', turnId: 'turn_1', seq: 4 }),
-      // Media arrives mid-stream: earlier text bubble is still streaming.
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_seal', toolName: 'shot',
-        media: [{ type: 'media', data: 'PNG', mediaType: 'image/png' }],
-        seq: 5,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 6 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("turn_start", { executionId: execId, seq: 1, id: "turn_1", iteration: 1, turnIndex: 0, role: "assistant" }),
+      sseEvent("text_start", { executionId: execId, seq: 2, id: "text_1", role: "assistant" }),
+      sseEvent("text_delta", { executionId: execId, seq: 3, id: "text_1", delta: "Streaming..." }),
+      sseEvent("media_start", { executionId: execId, seq: 4, id: "media_2", mediaType: "image/png", role: "assistant", toolCallId: "tc_seal" }),
+      sseEvent("media_delta", { executionId: execId, seq: 5, id: "media_2", delta: "PNG" }),
+      sseEvent("media_complete", { executionId: execId, seq: 6, id: "media_2", mediaType: "image/png", data: "PNG", toolCallId: "tc_seal" }),
+      sseEvent("text_complete", { executionId: execId, seq: 7, id: "text_1", text: "Streaming..." }),
+      sseEvent("execution_complete", { executionId: execId, seq: 8, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3590,16 +3163,12 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('routes audio parts case-insensitively (RFC 7231)', async () => {
     const execId = 'exec_media_case';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_case', toolName: 'tts',
-        // Non-canonical casing should still land in the audio bucket, not the file bucket.
-        media: [{ type: 'media', data: 'AAAA', mediaType: 'Audio/MPEG' }],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "Audio/MPEG", role: "assistant", toolCallId: "tc_case" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "AAAA" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "Audio/MPEG", data: "AAAA", toolCallId: "tc_case" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 4, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3623,15 +3192,12 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('renders a base64 text/csv attachment as a file part (not silently dropped)', async () => {
     const execId = 'exec_media_csv';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_csv', toolName: 'export',
-        media: [{ type: 'media', data: 'YSxiCjEsMg==', mediaType: 'text/csv' }],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "text/csv", role: "assistant", toolCallId: "tc_csv" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "YSxiCjEsMg==" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "text/csv", data: "YSxiCjEsMg==", toolCallId: "tc_csv" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 4, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -3655,16 +3221,12 @@ describe('AgentWidgetClient - agent_media events', () => {
 
   it('defaults missing mediaType on a type:"media" part to application/octet-stream', async () => {
     const execId = 'exec_media_no_type';
-    global.fetch = createAgentStreamFetch([
-      sseEvent('agent_start', { executionId: execId, agentId: 'virtual', agentName: 'Test', maxTurns: 1, startedAt: new Date().toISOString(), seq: 1 }),
-      sseEvent('agent_iteration_start', { executionId: execId, iteration: 1, maxTurns: 1, startedAt: new Date().toISOString(), seq: 2 }),
-      sseEvent('agent_media', {
-        executionId: execId, iteration: 1, toolCallId: 'tc_blob', toolName: 'opaque',
-        // mediaType is empty: should not produce a malformed `data:;base64,...` URI.
-        media: [{ type: 'media', data: 'AAAA', mediaType: '' }],
-        seq: 3,
-      }),
-      sseEvent('agent_complete', { executionId: execId, agentId: 'virtual', success: true, iterations: 1, stopReason: 'max_iterations', completedAt: new Date().toISOString(), seq: 4 }),
+    global.fetch = createRawStreamFetch([
+      sseEvent("execution_start", { executionId: execId, seq: 0, kind: "agent", startedAt: new Date().toISOString(), agentId: "virtual", agentName: "Test", maxTurns: 1 }),
+      sseEvent("media_start", { executionId: execId, seq: 1, id: "media_1", mediaType: "", role: "assistant", toolCallId: "tc_blob" }),
+      sseEvent("media_delta", { executionId: execId, seq: 2, id: "media_1", delta: "AAAA" }),
+      sseEvent("media_complete", { executionId: execId, seq: 3, id: "media_1", mediaType: "", data: "AAAA", toolCallId: "tc_blob" }),
+      sseEvent("execution_complete", { executionId: execId, seq: 4, kind: "agent", success: true, iterations: 1, stopReason: "max_iterations", completedAt: new Date().toISOString() })
     ]);
 
     const client = new AgentWidgetClient({
@@ -4324,7 +3886,7 @@ describe('AgentWidgetClient - version header', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(c) {
-          c.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           c.close();
         },
       });
@@ -4610,7 +4172,7 @@ describe('AgentWidgetClient - Artifact display modes', () => {
 
 describe('AgentWidgetClient - mention context', () => {
   const agentDone = (controller: ReadableStreamDefaultController, encoder: TextEncoder) => {
-    controller.enqueue(encoder.encode(sseEvent('agent_complete', {
+    controller.enqueue(encoder.encode(sseEvent('execution_complete', {
       executionId: 'exec_1',
       agentId: 'agent_123',
       success: true,

@@ -120,9 +120,9 @@ describe("client-token turn identity", () => {
     await vi.waitFor(() => expect(index).toBe(2));
 
     const beforeCount = firstEvents.length;
-    first.push('data: {"type":"flow_complete","success":true}\n\n');
+    first.push('data: {"type":"execution_complete","success":true}\n\n');
     first.close();
-    second.push('data: {"type":"flow_complete","success":true}\n\n');
+    second.push('data: {"type":"execution_complete","success":true}\n\n');
     second.close();
     await Promise.all([firstDispatch, secondDispatch]);
 

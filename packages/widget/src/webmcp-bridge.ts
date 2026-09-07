@@ -232,7 +232,7 @@ export const stripWebMcpPrefix = (name: string): string =>
 
 /**
  * `true` when `wireToolName` carries the `webmcp:` prefix. Used by `client.ts`
- * to route `step_await` events.
+ * to route `await` events.
  */
 export const isWebMcpToolName = (name: string): boolean =>
   name.startsWith(WEBMCP_TOOL_PREFIX);

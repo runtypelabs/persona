@@ -1,3 +1,4 @@
+import type { RuntypeExecutionStreamEvent, RuntypeClientInitResponse } from "./generated/runtype-openapi-contract";
 import {
   AgentWidgetConfig,
   AgentWidgetMessage,
@@ -12,10 +13,8 @@ import {
   AgentWidgetSSEEventParser,
   AgentWidgetHeadersFunction,
   AgentWidgetSSEEventResult as _AgentWidgetSSEEventResult,
-  AgentExecutionState,
   StopReasonKind,
   ClientSession,
-  ClientInitResponse,
   ClientChatRequest,
   ClientToolDefinition,
   ClientFeedbackRequest,
@@ -138,15 +137,10 @@ export class HistoryClientError extends Error {
 const DISPLAY_PROJECTION_MESSAGE_CAP = 32768;
 const DISPLAY_PROJECTION_BATCH_CAP = 49152;
 
-/** Deprecated wire `flowId` is consumed here and never propagated onward. */
+/** Normalize current history metadata without leaking wire-only aliases. */
 const normalizeHistorySummary = (raw: unknown): HistoryConversationSummary => {
   const row = (raw ?? {}) as Record<string, unknown>;
-  const targetId =
-    typeof row.targetId === "string"
-      ? row.targetId
-      : typeof row.flowId === "string"
-        ? row.flowId
-        : null;
+  const targetId = typeof row.targetId === "string" ? row.targetId : null;
   return {
     id: typeof row.id === "string" ? row.id : "",
     title: typeof row.title === "string" ? row.title : "",
@@ -798,7 +792,7 @@ export class AgentWidgetClient {
           : {}),
     };
 
-    let response = await fetch(this.getClientApiUrl('init'), {
+    const response = await fetch(this.getClientApiUrl('init'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -806,22 +800,6 @@ export class AgentWidgetClient {
       },
       body: JSON.stringify(requestBody),
     });
-
-    // Rolling/self-hosted compatibility: pre-recovery servers use a strict
-    // init schema and answer 400 to the additive field. Retry once without it;
-    // the absent response capability keeps Persona on ordinary streaming.
-    if (response.status === 400 && durableRecoveryRequested) {
-      const fallbackBody = { ...requestBody };
-      delete fallbackBody.durableRecovery;
-      response = await fetch(this.getClientApiUrl('init'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Persona-Version': VERSION,
-        },
-        body: JSON.stringify(fallbackBody),
-      });
-    }
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Session initialization failed' }));
@@ -861,7 +839,7 @@ export class AgentWidgetClient {
       throw new Error(error.error || 'Failed to initialize session');
     }
 
-    const data: ClientInitResponse = await response.json();
+    const data: RuntypeClientInitResponse = await response.json();
 
     // First awaited op after parse: the server cannot re-issue a minted secret.
     if (data.visitor?.token) {
@@ -871,12 +849,10 @@ export class AgentWidgetClient {
     return {
       sessionId: data.sessionId,
       expiresAt: new Date(data.expiresAt),
-      flow: data.flow,
+      // Preserve the published session facade while consuming the current wire type.
+      flow: data.flow as ClientSession["flow"],
       ...(data.conversationId ? { conversationId: data.conversationId } : {}),
-      // New history code reads only the normalized field; `flow` stays untouched.
-      ...(data.targetId ?? data.flow?.id
-        ? { targetId: data.targetId ?? data.flow?.id }
-        : {}),
+      ...(data.targetId ? { targetId: data.targetId } : {}),
       ...(data.conversationRevision
         ? { conversationRevision: data.conversationRevision }
         : {}),
@@ -885,7 +861,7 @@ export class AgentWidgetClient {
       config: {
         welcomeMessage: data.config.welcomeMessage,
         placeholder: data.config.placeholder,
-        theme: data.config.theme,
+        theme: data.config.theme as ClientSession["config"]["theme"],
       },
     };
   }
@@ -1675,12 +1651,8 @@ export class AgentWidgetClient {
         ...(opts?.scope ? { scope: opts.scope } : {}),
       }
     );
-    const summarySource =
-      detail && typeof detail.conversation === 'object' && detail.conversation !== null
-        ? detail.conversation
-        : detail;
     return {
-      summary: normalizeHistorySummary(summarySource),
+      summary: normalizeHistorySummary(detail),
       messages: Array.isArray(detail?.messages)
         ? (detail.messages as HistoryConversationDetail['messages'])
         : [],
@@ -2208,7 +2180,7 @@ export class AgentWidgetClient {
    * Returns the raw Response so the caller can pipe its SSE body through
    * `connectStream()`.
    *
-   * @param executionId - The paused execution id carried on `step_await`.
+   * @param executionId - The paused execution id carried on `await`.
    * @param toolOutputs - Map keyed by per-call `toolCallId` (core#3878),
    *   falling back to tool name for legacy servers → the tool's result value.
    */
@@ -2832,7 +2804,7 @@ export class AgentWidgetClient {
 
     let assistantMessage: AgentWidgetMessage | null = null;
     // Tracks the most recently touched assistant text message for the
-    // current agent turn so `agent_turn_complete.stopReason` can attach
+    // current agent turn so `turn_complete.stopReason` can attach
     // to the final visible text segment even after `assistantMessage`
     // has been finalized at a tool-call boundary within the turn.
     let lastAssistantInTurn: AgentWidgetMessage | null = null;
@@ -2859,46 +2831,6 @@ export class AgentWidgetClient {
     const nestedBlockRaw = new Map<string, string>();
     const reasoningMessages = new Map<string, AgentWidgetMessage>();
     const toolMessages = new Map<string, AgentWidgetMessage>();
-    const reasoningContext = {
-      lastId: null as string | null,
-      byStep: new Map<string, string>()
-    };
-    const toolContext = {
-      lastId: null as string | null,
-      byCall: new Map<string, string>()
-    };
-
-    const normalizeKey = (value: unknown): string | null => {
-      if (value === null || value === undefined) return null;
-      try {
-        return String(value);
-      } catch (error) {
-        return null;
-      }
-    };
-
-    const getStepKey = (payload: Record<string, any>) =>
-      normalizeKey(
-        payload.stepId ??
-          payload.step_id ??
-          payload.step ??
-          payload.parentId ??
-          payload.flowStepId ??
-          payload.flow_step_id
-      );
-
-    const getToolCallKey = (payload: Record<string, any>) =>
-      normalizeKey(
-        payload.callId ??
-          payload.call_id ??
-          payload.requestId ??
-          payload.request_id ??
-          payload.toolCallId ??
-          payload.tool_call_id ??
-          payload.stepId ??
-          payload.step_id
-      );
-
     const baseAssistantId = assistantMessageId;
     let assistantIdConsumed = false;
 
@@ -2930,42 +2862,6 @@ export class AgentWidgetClient {
       return assistantMessage;
     };
 
-    const trackReasoningId = (stepKey: string | null, id: string) => {
-      reasoningContext.lastId = id;
-      if (stepKey) {
-        reasoningContext.byStep.set(stepKey, id);
-      }
-    };
-
-    const resolveReasoningId = (
-      payload: Record<string, any>,
-      allowCreate: boolean
-    ): string | null => {
-      const rawId = payload.reasoningId ?? payload.id;
-      const stepKey = getStepKey(payload);
-      if (rawId) {
-        const resolved = String(rawId);
-        trackReasoningId(stepKey, resolved);
-        return resolved;
-      }
-      if (stepKey) {
-        const existing = reasoningContext.byStep.get(stepKey);
-        if (existing) {
-          reasoningContext.lastId = existing;
-          return existing;
-        }
-      }
-      if (reasoningContext.lastId && !allowCreate) {
-        return reasoningContext.lastId;
-      }
-      if (!allowCreate) {
-        return null;
-      }
-      const generated = `reason-${nextSequence()}`;
-      trackReasoningId(stepKey, generated);
-      return generated;
-    };
-
     const ensureReasoningMessage = (reasoningId: string) => {
       const existing = reasoningMessages.get(reasoningId);
       if (existing) {
@@ -2992,19 +2888,12 @@ export class AgentWidgetClient {
       return message;
     };
 
-    const trackToolId = (callKey: string | null, id: string) => {
-      toolContext.lastId = id;
-      if (callKey) {
-        toolContext.byCall.set(callKey, id);
-      }
-    };
-
     // Track tool call IDs for artifact emit tools so we can suppress their UI
     const artifactToolCallIds = new Set<string>();
     // Track artifact block messages (reference card or inline block) so we can
     // update them on artifact_complete
     const artifactCardMessages = new Map<string, AgentWidgetMessage>();
-    // Track artifact IDs that already have a reference card (from auto-creation or transcript_insert)
+    // Track artifact IDs that already have a reference card
     const artifactIdsWithCards = new Set<string>();
     // Accumulate artifact markdown content (and component props) for embedding
     // in block props on complete. `props` accumulates across `artifact_update`
@@ -3024,35 +2913,6 @@ export class AgentWidgetClient {
       if (!name) return false;
       const normalized = name.replace(/_+/g, "_").replace(/^_|_$/g, "");
       return normalized === "emit_artifact_markdown" || normalized === "emit_artifact_component";
-    };
-
-    const resolveToolId = (
-      payload: Record<string, any>,
-      allowCreate: boolean
-    ): string | null => {
-      const rawId = payload.toolId ?? payload.id;
-      const callKey = getToolCallKey(payload);
-      if (rawId) {
-        const resolved = String(rawId);
-        trackToolId(callKey, resolved);
-        return resolved;
-      }
-      if (callKey) {
-        const existing = toolContext.byCall.get(callKey);
-        if (existing) {
-          toolContext.lastId = existing;
-          return existing;
-        }
-      }
-      if (toolContext.lastId && !allowCreate) {
-        return toolContext.lastId;
-      }
-      if (!allowCreate) {
-        return null;
-      }
-      const generated = `tool-${nextSequence()}`;
-      trackToolId(callKey, generated);
-      return generated;
     };
 
     const ensureToolMessage = (toolId: string) => {
@@ -3116,45 +2976,7 @@ export class AgentWidgetClient {
     const streamParsers = new Map<string, AgentWidgetStreamParser>();
     // Track accumulated raw content for structured formats (JSON, XML, etc.)
     const rawContentBuffers = new Map<string, string>();
-    // Rebuild incremental text by sequence so late arrivals can repair already-emitted
-    // content after the reorder buffer's gap-timeout flush.
-    const orderedChunkBuffers = new Map<string, Array<{ seq: number; text: string }>>();
-
-    const insertOrderedChunk = (key: string, seq: number, text: string): string => {
-      let chunks = orderedChunkBuffers.get(key);
-      if (!chunks) {
-        chunks = [];
-        orderedChunkBuffers.set(key, chunks);
-      }
-
-      let lo = 0;
-      let hi = chunks.length;
-      while (lo < hi) {
-        const mid = (lo + hi) >>> 1;
-        if (chunks[mid].seq < seq) {
-          lo = mid + 1;
-        } else {
-          hi = mid;
-        }
-      }
-
-      if (chunks[lo]?.seq === seq) {
-        chunks[lo] = { seq, text };
-      } else {
-        chunks.splice(lo, 0, { seq, text });
-      }
-
-      let accumulated = "";
-      for (let index = 0; index < chunks.length; index++) {
-        accumulated += chunks[index].text;
-      }
-      return accumulated;
-    };
-
-    /**
-     * After text_end + didSplitByPartId, merge the authoritative final response into the
-     * sealed message when streaming left content short (e.g. async parser lag).
-     */
+    /** Reconcile a sealed text block with its authoritative structured response. */
     const reconcileSealedAssistantWithFinalResponse = (
       msg: AgentWidgetMessage,
       finalContent: unknown
@@ -3427,11 +3249,11 @@ export class AgentWidgetClient {
     };
 
     // Ready queue of parsed wire frames awaiting a drain. The API streams the
-    // 33-event wire vocabulary; each frame is parsed in the SSE loop
+    // unified wire vocabulary; each frame is parsed in the SSE loop
     // below and rendered directly by the handler (no translation bridge), then
     // pushed here. The wire stream is a single, in-order SSE connection, so
     // frames drain straight through with no reordering.
-    const seqReadyQueue: Array<{ payloadType: string; payload: any }> = [];
+    const eventQueue: RuntypeExecutionStreamEvent[] = [];
     // Declared here so later closures can reference it; assigned after all
     // handler-scoped variables are initialised (before the SSE loop).
     let drainReadyQueue: () => void;
@@ -3440,7 +3262,7 @@ export class AgentWidgetClient {
     // synthetic message at media_complete, keyed by the block id.
     const mediaBuffers = new Map<
       string,
-      { mediaType?: string; role?: string; toolCallId?: unknown; parts: string[] }
+      { mediaType?: string; toolCallId?: string; parts: string[] }
     >();
     // Tracks the last iteration surfaced as a per-iteration message boundary, so
     // `turn_start` advancing the iteration rotates the bubble in 'separate' mode.
@@ -3462,18 +3284,15 @@ export class AgentWidgetClient {
     // from here.
     let openTurnId: string | null = null;
     // Agent execution state tracking
-    let agentExecution: AgentExecutionState | null = null;
-    // Track assistant messages per agent iteration for 'separate' mode
-    const agentIterationMessages = new Map<number, AgentWidgetMessage>();
+    let agentExecution: { executionId: string; agentId: string; agentName: string } | null = null;
     const iterationDisplay = this.config.iterationDisplay ?? 'separate';
 
-    // Drains the queued transduced events through the main event handler.
+    // Drains the queued native events through the main event handler.
     // Also invoked after the SSE loop exits so any events queued at
     // end-of-stream are processed.
     drainReadyQueue = () => {
-      for (let i = 0; i < seqReadyQueue.length; i++) {
-        const payloadType = seqReadyQueue[i].payloadType;
-        const payload = seqReadyQueue[i].payload;
+      for (let i = 0; i < eventQueue.length; i++) {
+        const payload = eventQueue[i];
 
         // Recover the execution kind on continuation streams that omit
         // `execution_start` (e.g. a tool-driven `/resume`). Flow `step_*` frames
@@ -3490,7 +3309,7 @@ export class AgentWidgetClient {
           executionKind = "flow";
         }
 
-        if (payloadType === "reasoning_start") {
+        if (payload.type === "reasoning_start") {
           // Nested flow-as-tool thinking (PR #4602): route to the parent tool's row.
           const rStartBlockId = typeof payload.id === "string" ? payload.id : null;
           const rStartParent =
@@ -3502,8 +3321,7 @@ export class AgentWidgetClient {
             ensureNestedBlockMessage(rStartBlockId, rStartParent, "reasoning");
             continue;
           }
-          const reasoningId =
-            resolveReasoningId(payload, true) ?? `reason-${nextSequence()}`;
+          const reasoningId = payload.id;
           const reasoningMessage = ensureReasoningMessage(reasoningId);
           reasoningMessage.reasoning = reasoningMessage.reasoning ?? {
             id: reasoningId,
@@ -3512,7 +3330,7 @@ export class AgentWidgetClient {
           };
           reasoningMessage.reasoning.startedAt =
             reasoningMessage.reasoning.startedAt ??
-            resolveTimestamp(payload.startedAt ?? payload.timestamp);
+            Date.now();
           reasoningMessage.reasoning.completedAt = undefined;
           reasoningMessage.reasoning.durationMs = undefined;
           if (payload.scope === "loop" || payload.scope === "turn") {
@@ -3521,7 +3339,7 @@ export class AgentWidgetClient {
           reasoningMessage.streaming = true;
           reasoningMessage.reasoning.status = "streaming";
           emitMessage(reasoningMessage);
-        } else if (payloadType === "reasoning_delta") {
+        } else if (payload.type === "reasoning_delta") {
           // Nested flow-as-tool thinking: append to the parent-tool-row message.
           const rDeltaBlockId = typeof payload.id === "string" ? payload.id : null;
           if (
@@ -3530,18 +3348,14 @@ export class AgentWidgetClient {
             nestedBlockMessages.has(rDeltaBlockId)
           ) {
             const nested = nestedBlockMessages.get(rDeltaBlockId)!;
-            const nestedChunk =
-              payload.reasoningText ?? payload.text ?? payload.delta ?? "";
-            if (nestedChunk && payload.hidden !== true && nested.reasoning) {
+            const nestedChunk = payload.delta;
+            if (nestedChunk && nested.reasoning) {
               nested.reasoning.chunks.push(String(nestedChunk));
               emitMessage(nested);
             }
             continue;
           }
-          const reasoningId =
-            resolveReasoningId(payload, false) ??
-            resolveReasoningId(payload, true) ??
-            `reason-${nextSequence()}`;
+          const reasoningId = payload.id;
           const reasoningMessage = ensureReasoningMessage(reasoningId);
           reasoningMessage.reasoning = reasoningMessage.reasoning ?? {
             id: reasoningId,
@@ -3550,38 +3364,12 @@ export class AgentWidgetClient {
           };
           reasoningMessage.reasoning.startedAt =
             reasoningMessage.reasoning.startedAt ??
-            resolveTimestamp(payload.startedAt ?? payload.timestamp);
-          const chunk =
-            payload.reasoningText ??
-            payload.text ??
-            payload.delta ??
-            "";
-          if (chunk && payload.hidden !== true) {
-            const reasonSeq = typeof payload.sequenceIndex === "number" ? payload.sequenceIndex : undefined;
-            if (reasonSeq !== undefined) {
-              // Rebuild chunks by seq so late arrivals after a gap-timeout flush
-              // are inserted at the correct position rather than appended.
-              const ordered = insertOrderedChunk(reasoningId, reasonSeq, String(chunk));
-              reasoningMessage.reasoning.chunks = [ordered];
-            } else {
-              reasoningMessage.reasoning.chunks.push(String(chunk));
-            }
-          }
-          reasoningMessage.reasoning.status = payload.done ? "complete" : "streaming";
-          if (payload.done) {
-            reasoningMessage.reasoning.completedAt = resolveTimestamp(
-              payload.completedAt ?? payload.timestamp
-            );
-            const start = reasoningMessage.reasoning.startedAt ?? Date.now();
-            reasoningMessage.reasoning.durationMs = Math.max(
-              0,
-              (reasoningMessage.reasoning.completedAt ?? Date.now()) - start
-            );
-
-          }
-          reasoningMessage.streaming = reasoningMessage.reasoning.status !== "complete";
+            Date.now();
+          if (payload.delta) reasoningMessage.reasoning.chunks.push(payload.delta);
+          reasoningMessage.reasoning.status = "streaming";
+          reasoningMessage.streaming = true;
           emitMessage(reasoningMessage);
-        } else if (payloadType === "reasoning_complete") {
+        } else if (payload.type === "reasoning_complete") {
           // Nested flow-as-tool thinking close: seal the parent-tool-row message.
           const rCompleteBlockId = typeof payload.id === "string" ? payload.id : null;
           if (
@@ -3604,10 +3392,7 @@ export class AgentWidgetClient {
             nestedBlockMessages.delete(rCompleteBlockId);
             continue;
           }
-          const reasoningId =
-            resolveReasoningId(payload, false) ??
-            resolveReasoningId(payload, true) ??
-            `reason-${nextSequence()}`;
+          const reasoningId = payload.id;
           // A close carrying text (or scope:"loop") is a cross-iteration
           // reflection fold (merged spec §4 E3): the API streams nothing for the
           // block, then delivers the whole reflection as `text` on the close.
@@ -3627,9 +3412,7 @@ export class AgentWidgetClient {
               reasoningMessage.reasoning.chunks.push(reflectionText);
             }
             reasoningMessage.reasoning.status = "complete";
-            reasoningMessage.reasoning.completedAt = resolveTimestamp(
-              payload.completedAt ?? payload.timestamp
-            );
+            reasoningMessage.reasoning.completedAt = Date.now();
             const start = reasoningMessage.reasoning.startedAt ?? Date.now();
             reasoningMessage.reasoning.durationMs = Math.max(
               0,
@@ -3639,11 +3422,7 @@ export class AgentWidgetClient {
 
             emitMessage(reasoningMessage);
           }
-          const stepKey = getStepKey(payload);
-          if (stepKey) {
-            reasoningContext.byStep.delete(stepKey);
-          }
-        } else if (payloadType === "tool_start") {
+        } else if (payload.type === "tool_start") {
           // Unified tool family (agent + flow). Seal any open assistant bubble so
           // text→tool→text interleaves chronologically (the API also emits a
           // text_complete here, so this is usually a no-op — kept for safety).
@@ -3657,17 +3436,13 @@ export class AgentWidgetClient {
           // own — can be stamped with the enclosing iteration even on tool-only
           // turns that never emit a `turn_start`.
           if (typeof payload.iteration === "number") lastIterationSeen = payload.iteration;
-          const toolId: string =
-            (typeof payload.toolCallId === "string" ? payload.toolCallId : undefined) ??
-            resolveToolId(payload, true) ??
-            `tool-${nextSequence()}`;
-          const toolName = payload.toolName ?? payload.name;
+          const toolId = payload.toolCallId;
+          const toolName = payload.toolName;
           // Suppress tool UI for artifact emit tools: artifacts are handled via artifact_* events
           if (isArtifactEmitToolName(toolName)) {
             artifactToolCallIds.add(toolId);
             continue;
           }
-          trackToolId(getToolCallKey(payload), toolId);
           const toolMessage = ensureToolMessage(toolId);
           const tool = toolMessage.toolCall ?? {
             id: toolId,
@@ -3675,14 +3450,15 @@ export class AgentWidgetClient {
           };
           tool.name = toolName ?? tool.name;
           tool.status = "running";
+          tool.success = undefined;
+          tool.error = undefined;
+          tool.duration = undefined;
           if (payload.parameters !== undefined) {
             tool.args = payload.parameters;
-          } else if (payload.args !== undefined) {
-            tool.args = payload.args;
           }
           tool.startedAt =
             tool.startedAt ??
-            resolveTimestamp(payload.startedAt ?? payload.timestamp);
+            resolveTimestamp(payload.startedAt);
           tool.completedAt = undefined;
           tool.durationMs = undefined;
           toolMessage.toolCall = tool;
@@ -3694,11 +3470,8 @@ export class AgentWidgetClient {
             };
           }
           emitMessage(toolMessage);
-        } else if (payloadType === "tool_output_delta") {
-          const toolId =
-            resolveToolId(payload, false) ??
-            resolveToolId(payload, true) ??
-            `tool-${nextSequence()}`;
+        } else if (payload.type === "tool_output_delta") {
+          const toolId = payload.toolCallId;
           if (artifactToolCallIds.has(toolId)) continue;
           const toolMessage = ensureToolMessage(toolId);
           const tool = toolMessage.toolCall ?? {
@@ -3707,9 +3480,8 @@ export class AgentWidgetClient {
           };
           tool.startedAt =
             tool.startedAt ??
-            resolveTimestamp(payload.startedAt ?? payload.timestamp);
-          const chunkText =
-            payload.text ?? payload.delta ?? payload.message ?? "";
+            Date.now();
+          const chunkText = payload.delta;
           if (chunkText) {
             tool.chunks = tool.chunks ?? [];
             tool.chunks.push(String(chunkText));
@@ -3717,19 +3489,15 @@ export class AgentWidgetClient {
           tool.status = "running";
           toolMessage.toolCall = tool;
           toolMessage.streaming = true;
-          const agentCtxChunk = payload.agentContext;
-          if (agentCtxChunk || payload.executionId) {
+          if (payload.executionId) {
             toolMessage.agentMetadata = toolMessage.agentMetadata ?? {
-              executionId: agentCtxChunk?.executionId ?? payload.executionId,
-              iteration: agentCtxChunk?.iteration ?? payload.iteration,
+              executionId: payload.executionId,
+              iteration: lastIterationSeen,
             };
           }
           emitMessage(toolMessage);
-        } else if (payloadType === "tool_complete") {
-          const toolId =
-            resolveToolId(payload, false) ??
-            resolveToolId(payload, true) ??
-            `tool-${nextSequence()}`;
+        } else if (payload.type === "tool_complete") {
+          const toolId = payload.toolCallId;
           if (artifactToolCallIds.has(toolId)) {
             artifactToolCallIds.delete(toolId);
             continue;
@@ -3743,15 +3511,14 @@ export class AgentWidgetClient {
           if (payload.result !== undefined) {
             tool.result = payload.result;
           }
-          if (typeof payload.duration === "number") {
-            tool.duration = payload.duration;
-          }
-          tool.completedAt = resolveTimestamp(
-            payload.completedAt ?? payload.timestamp
-          );
-          const durationValue = payload.duration ?? payload.executionTime;
+          tool.name = payload.toolName ?? tool.name;
+          tool.success = payload.success;
+          tool.error = payload.error;
+          tool.completedAt = Date.now();
+          const durationValue = payload.executionTime;
           if (typeof durationValue === "number") {
             tool.durationMs = durationValue;
+            tool.duration = durationValue;
           } else {
             const start = tool.startedAt ?? Date.now();
             tool.durationMs = Math.max(
@@ -3761,29 +3528,17 @@ export class AgentWidgetClient {
           }
           toolMessage.toolCall = tool;
           toolMessage.streaming = false;
-          const agentCtxComplete = payload.agentContext;
-          if (agentCtxComplete || payload.executionId) {
+          if (payload.executionId) {
             toolMessage.agentMetadata = toolMessage.agentMetadata ?? {
-              executionId: agentCtxComplete?.executionId ?? payload.executionId,
-              iteration: agentCtxComplete?.iteration ?? payload.iteration,
+              executionId: payload.executionId,
+              iteration: payload.iteration ?? lastIterationSeen,
             };
           }
           emitMessage(toolMessage);
-          const callKey = getToolCallKey(payload);
-          if (callKey) {
-            toolContext.byCall.delete(callKey);
-          }
-        } else if (payloadType === "await" && payload.toolName) {
-          // LOCAL tool pause. Two wire shapes resolve here, by dispatch target:
-          //  - FLOW dispatch → `step_await` + `awaitReason: "local_tool_required"`
-          //    (Runtype's prompt step throws LocalToolRequiredError when the model
-          //    calls a `toolType: "local"` tool).
-          //  - AGENT dispatch → `agent_await` (the agent runtime's native pause).
-          // Either way the server emits the tool name, params, and execution id;
-          // the execution pauses until the client POSTs /resume with toolOutputs.
-          // `agent_await` carries a BARE tool name plus an `origin`; page tools
-          // (origin "webmcp") are normalized to the `webmcp:`-prefixed form below
-          // so the bridge + session.ts `/resume` keying are identical for both.
+        } else if (payload.type === "await" && payload.toolName) {
+          // Unified LOCAL tool pause for either dispatch kind. The execution
+          // waits for /resume with toolOutputs. Page tools with origin "webmcp"
+          // may carry a bare name, normalized to the internal webmcp: prefix.
           //
           // Upsert a fully-populated tool-variant message so the existing
           // ask_user_question bubble + sheet paths fire. Mark the message with
@@ -3807,9 +3562,9 @@ export class AgentWidgetClient {
             toolCallId ?? (payload.toolId as string) ?? `local-${nextSequence()}`;
           const toolMessage = ensureToolMessage(toolId);
           const rawToolName = payload.toolName as string;
-          // `agent_await` page tools arrive with a bare name; synthesize the
+          // Page tools may arrive with a bare name; synthesize the
           // `webmcp:` prefix so isWebMcpToolName (and the bridge's prefix-strip on
-          // resume) treat them identically to a flow `step_await`.
+          // resume) treat them identically to a flow `await`.
           const toolName =
             payload.origin === "webmcp" &&
             !isWebMcpToolName(rawToolName)
@@ -3820,7 +3575,7 @@ export class AgentWidgetClient {
           tool.name = toolName;
           tool.args = payload.parameters;
           // WebMCP tools are executed asynchronously by the browser AFTER this
-          // `step_await` arrives. Keep them running until session.ts resolves
+          // `await` arrives. Keep them running until session.ts resolves
           // the page tool and records its actual elapsed time. Other local
           // tools (for example ask_user_question) keep the existing complete
           // state because they are waiting for a user interaction, not an
@@ -3829,7 +3584,7 @@ export class AgentWidgetClient {
           tool.chunks = tool.chunks ?? [];
           tool.startedAt =
             tool.startedAt ??
-            resolveTimestamp(payload.startedAt ?? payload.timestamp ?? payload.awaitedAt);
+            resolveTimestamp(payload.awaitedAt);
           if (webMcpTool) {
             tool.completedAt = undefined;
             tool.duration = undefined;
@@ -3849,7 +3604,7 @@ export class AgentWidgetClient {
             ...(toolCallId ? { webMcpToolCallId: toolCallId } : {}),
           };
           emitMessage(toolMessage);
-        } else if (payloadType === "text_start") {
+        } else if (payload.type === "text_start") {
           // Nested flow-as-tool text (PR #4602): a `parentToolCallId` means this
           // block belongs to a flow running as that tool — record the mapping and
           // leave the top-level assistant bubble untouched (the nested deltas route
@@ -3883,7 +3638,7 @@ export class AgentWidgetClient {
           currentTextBlockId =
             typeof payload.id === "string" ? payload.id : currentTextBlockId;
           pendingTextRaw = "";
-        } else if (payloadType === "text_delta") {
+        } else if (payload.type === "text_delta") {
           // Nested flow-as-tool text: route to the parent tool's row, through the
           // same structured-content parser, never the top-level assistant channel.
           const deltaBlockId = typeof payload.id === "string" ? payload.id : null;
@@ -3918,7 +3673,7 @@ export class AgentWidgetClient {
             const assistant = ensureAssistantMessage();
             assistant.agentMetadata = {
               executionId: payload.executionId,
-              iteration: payload.iteration,
+              iteration: lastIterationSeen,
             };
             applyTextChunk(assistant, pendingTextRaw, delta, undefined);
             lastAssistantInTurn = assistant;
@@ -3937,13 +3692,13 @@ export class AgentWidgetClient {
           const assistant = ensureAssistantMessage();
           assistant.agentMetadata = {
             executionId: payload.executionId,
-            iteration: payload.iteration,
+            iteration: lastIterationSeen,
             turnId: openTurnId ?? undefined,
             agentName: agentExecution?.agentName
           };
           applyTextChunk(assistant, pendingTextRaw, agentDelta, undefined);
           lastAssistantInTurn = assistant;
-        } else if (payloadType === "text_complete") {
+        } else if (payload.type === "text_complete") {
           // Nested flow-as-tool text block close: seal its parent-tool-row message.
           const completeBlockId = typeof payload.id === "string" ? payload.id : null;
           if (completeBlockId && nestedBlockParent.has(completeBlockId)) {
@@ -3976,11 +3731,9 @@ export class AgentWidgetClient {
           }
           currentTextBlockId = null;
           pendingTextRaw = "";
-        } else if (payloadType === "step_complete") {
+        } else if (payload.type === "step_complete") {
           // Only process completions for prompt steps, not tool/context steps
-          const stepType = (payload as any).stepType;
-          const executionType = (payload as any).executionType;
-          if (stepType === "tool" || executionType === "context") {
+          if (payload.stepType === "tool") {
             // Skip tool-related completions - they're handled by tool_complete
             continue;
           }
@@ -3989,17 +3742,7 @@ export class AgentWidgetClient {
           // event, which the wire encoder folds into a failed `step_complete`
           // — surfaces as a terminal error and finalizes the stream.
           if (payload.success === false) {
-            const e = payload.error;
-            const message =
-              typeof e === "string" && e !== ""
-                ? e
-                : // Reflect.has, not `in`: the `in` operator inside an arrow body can
-                  // be minified into a `for(init;;)` head, which Oxc mis-parses and
-                  // Rolldown (Vite 8) silently emits as an empty chunk. Same
-                  // [[HasProperty]] semantics. Enforced by scripts/check-dist-no-in-for-init.mjs.
-                  e != null && typeof e === "object" && Reflect.has(e, "message")
-                  ? String((e as { message?: unknown }).message ?? "Step failed")
-                  : "Step failed";
+            const message = payload.error || "Step failed";
             onEvent({ type: "error", error: new Error(message) });
             const finalMsg = assistantMessage as AgentWidgetMessage | null;
             if (finalMsg && finalMsg.streaming) {
@@ -4018,10 +3761,13 @@ export class AgentWidgetClient {
           {
             const sealed = lastSealedFlowBubble;
             lastSealedFlowBubble = null;
-            const flowStopReason = (payload as any).stopReason as
+            const flowStopReason = payload.stopReason as
               | StopReasonKind
               | undefined;
-            const finalResponse = payload.result?.response;
+            const result = payload.result && typeof payload.result === "object"
+              ? payload.result as Record<string, unknown>
+              : null;
+            const finalResponse = result?.response;
             if (sealed) {
               if (flowStopReason) sealed.stopReason = flowStopReason;
               if (finalResponse !== undefined && finalResponse !== null) {
@@ -4057,21 +3803,17 @@ export class AgentWidgetClient {
         // ================================================================
         // Agent Loop Execution Events
         // ================================================================
-        } else if (payloadType === "execution_start") {
+        } else if (payload.type === "execution_start") {
           executionKind = payload.kind === "flow" ? "flow" : "agent";
           executionKindResolved = true;
           if (executionKind === "agent") {
             agentExecution = {
               executionId: payload.executionId,
               agentId: payload.agentId ?? 'virtual',
-              agentName: payload.agentName ?? '',
-              status: 'running',
-              currentIteration: 0,
-              maxTurns: payload.maxTurns ?? 1,
-              startedAt: resolveTimestamp(payload.startedAt)
+              agentName: payload.agentName ?? ''
             };
           }
-        } else if (payloadType === "turn_start") {
+        } else if (payload.type === "turn_start") {
           // Unified collapsed `agent_iteration_*` into a denormalized `iteration`
           // field on the turn (merged spec §2). Reconstruct the per-iteration
           // message boundary the 'separate' renderer keys off: when the iteration
@@ -4079,13 +3821,11 @@ export class AgentWidgetClient {
           const iteration =
             typeof payload.iteration === "number" ? payload.iteration : lastIterationSeen;
           if (iteration !== lastIterationSeen) {
-            if (agentExecution) agentExecution.currentIteration = iteration;
             if (iterationDisplay === 'separate' && iteration > 1) {
               const prevMsg = assistantMessage as AgentWidgetMessage | null;
               if (prevMsg) {
                 prevMsg.streaming = false;
                 emitMessage(prevMsg);
-                agentIterationMessages.set(iteration - 1, prevMsg);
                 assistantMessage = null;
               }
             }
@@ -4096,10 +3836,10 @@ export class AgentWidgetClient {
           // turn_complete to attach stopReason to the final text segment of the
           // turn even if that segment was sealed by an intervening tool boundary.
           lastAssistantInTurn = null;
-        } else if (payloadType === "tool_input_delta") {
+        } else if (payload.type === "tool_input_delta") {
           // Streamed tool arguments (display-only; authoritative args ride
           // tool_input_complete / tool_start).
-          const toolId = payload.toolCallId ?? toolContext.lastId;
+          const toolId = payload.toolCallId;
           if (toolId) {
             const toolMessage = toolMessages.get(toolId);
             if (toolMessage?.toolCall) {
@@ -4108,16 +3848,20 @@ export class AgentWidgetClient {
               emitMessage(toolMessage);
             }
           }
-        } else if (payloadType === "tool_input_complete") {
-          // Authoritative args are set at tool_start; nothing to render here.
-          continue;
-        } else if (payloadType === "turn_complete") {
+        } else if (payload.type === "tool_input_complete") {
+          if (artifactToolCallIds.has(payload.toolCallId)) continue;
+          const toolMessage = ensureToolMessage(payload.toolCallId);
+          const tool = toolMessage.toolCall!;
+          tool.args = payload.parameters;
+          tool.name = payload.toolName ?? tool.name;
+          emitMessage(toolMessage);
+        } else if (payload.type === "turn_complete") {
           // Reasoning is sealed by its own reasoning_complete on the wire
           // vocabulary; this only attaches the turn-level stopReason to the
           // assistant message produced by this turn. Falls back to
           // lastAssistantInTurn when the bubble was sealed at a tool boundary
           // mid-turn, so the notice still attaches to the final visible segment.
-          const turnStopReason = (payload as any).stopReason as
+          const turnStopReason = payload.stopReason as
             | StopReasonKind
             | undefined;
           const stopReasonTarget = assistantMessage ?? lastAssistantInTurn;
@@ -4131,19 +3875,18 @@ export class AgentWidgetClient {
             }
           }
           if (openTurnId === payload.id) openTurnId = null;
-        } else if (payloadType === "media_start") {
+        } else if (payload.type === "media_start") {
           // Open a media block; buffer fragments until media_complete.
           const id = String(payload.id);
           mediaBuffers.set(id, {
             mediaType: typeof payload.mediaType === "string" ? payload.mediaType : undefined,
-            role: typeof payload.role === "string" ? payload.role : undefined,
             toolCallId: payload.toolCallId,
             parts: [],
           });
-        } else if (payloadType === "media_delta") {
+        } else if (payload.type === "media_delta") {
           const buf = mediaBuffers.get(String(payload.id));
           if (buf && typeof payload.delta === "string") buf.parts.push(payload.delta);
-        } else if (payloadType === "media_complete") {
+        } else if (payload.type === "media_complete") {
           // Reassemble the buffered media triad into a single AI SDK–aligned
           // `MediaContentPart`, then render it as a synthetic assistant message
           // inserted between the tool bubble and the next text turn:
@@ -4275,17 +4018,14 @@ export class AgentWidgetClient {
                 executionId: payload.executionId,
                 // Media blocks carry no iteration of their own; stamp the
                 // enclosing iteration tracked from turn/tool frames.
-                iteration:
-                  typeof payload.iteration === "number"
-                    ? payload.iteration
-                    : lastIterationSeen,
+                iteration: lastIterationSeen,
               },
             };
             emitMessage(mediaMessage);
 
             // Seal any in-flight assistant text bubble before splitting the
             // stream. Without this, an orphan bubble retains `streaming: true`
-            // forever: `agent_complete` only finalizes the latest
+            // forever: `execution_complete` only finalizes the latest
             // `assistantMessage`, so the typing/caret indicator would stay on
             // the prior bubble even though no more deltas will arrive.
             const prevAssistant = assistantMessage as AgentWidgetMessage | null;
@@ -4296,21 +4036,14 @@ export class AgentWidgetClient {
             assistantMessage = null;
             assistantMessageRef.current = null;
           }
-        } else if (payloadType === "execution_complete") {
-          const kind = payload.kind ?? executionKind;
-          if (kind === "agent" && agentExecution) {
-            agentExecution.status = payload.success ? 'complete' : 'error';
-            agentExecution.completedAt = resolveTimestamp(payload.completedAt);
-            agentExecution.stopReason = payload.stopReason;
-          }
-
+        } else if (payload.type === "execution_complete") {
           // Finalize any still-open assistant message. Per-step reconciliation
           // (step_complete.result.response) normally sealed the flow blocks
           // already; this is the defensive close for an unterminated block, and
           // for flow it runs the final structured extraction off the raw buffer.
           const finalMsg = assistantMessage as AgentWidgetMessage | null;
           if (finalMsg) {
-            if (kind === "flow" && finalMsg.streaming !== false) {
+            if (payload.kind === "flow" && finalMsg.streaming !== false) {
               finalizeFlowTextBlock(finalMsg);
             } else {
               finalMsg.streaming = false;
@@ -4327,7 +4060,7 @@ export class AgentWidgetClient {
           // `idle` the dispatch wrappers emit in their `finally` when a durable
           // connection drops mid-stream (durable-reconnect drop detection).
           onEvent({ type: "status", status: "idle", terminal: true });
-        } else if (payloadType === "execution_error") {
+        } else if (payload.type === "execution_error") {
           // Terminal failure. The non-terminal `error` is handled
           // separately (recoverable → warn).
           const errorMessage = typeof payload.error === 'string'
@@ -4337,12 +4070,12 @@ export class AgentWidgetClient {
             type: "error",
             error: new Error(errorMessage)
           });
-        } else if (payloadType === "ping") {
+        } else if (payload.type === "ping") {
           // Keep-alive heartbeat - no action needed
         // ================================================================
         // Tool Approval Events
         // ================================================================
-        } else if (payloadType === "approval_start") {
+        } else if (payload.type === "approval_start") {
           const approvalId = payload.approvalId ?? `approval-${nextSequence()}`;
           const approvalMessage: AgentWidgetMessage = {
             id: `approval-${approvalId}`,
@@ -4367,32 +4100,7 @@ export class AgentWidgetClient {
             },
           };
           emitMessage(approvalMessage);
-        } else if (payloadType === "step_await" && payload.awaitReason === "approval_required") {
-          const approvalId = payload.approvalId ?? `approval-${nextSequence()}`;
-          const approvalMessage: AgentWidgetMessage = {
-            id: `approval-${approvalId}`,
-            role: "assistant",
-            content: "",
-            createdAt: new Date().toISOString(),
-            streaming: false,
-            variant: "approval",
-            sequence: nextSequence(),
-            approval: {
-              id: approvalId,
-              status: "pending",
-              agentId: agentExecution?.agentId ?? 'virtual',
-              executionId: payload.executionId ?? agentExecution?.executionId ?? '',
-              toolName: payload.toolName ?? '',
-              toolType: payload.toolType,
-              description: payload.description ?? `Execute ${payload.toolName ?? 'tool'}`,
-              ...(typeof payload.reason === "string" && payload.reason
-                ? { reason: payload.reason }
-                : {}),
-              parameters: payload.parameters,
-            },
-          };
-          emitMessage(approvalMessage);
-        } else if (payloadType === "approval_complete") {
+        } else if (payload.type === "approval_complete") {
           const approvalId = payload.approvalId;
           if (approvalId) {
             // Find and update the existing approval message
@@ -4410,20 +4118,20 @@ export class AgentWidgetClient {
                 status: (payload.decision as "approved" | "denied") ?? "approved",
                 agentId: agentExecution?.agentId ?? 'virtual',
                 executionId: payload.executionId ?? agentExecution?.executionId ?? '',
-                toolName: payload.toolName ?? '',
-                description: payload.description ?? '',
+                toolName: '',
+                description: '',
                 resolvedAt: Date.now(),
               },
             };
             emitMessage(existingMessage);
           }
         } else if (
-          payloadType === "artifact_start" ||
-          payloadType === "artifact_delta" ||
-          payloadType === "artifact_update" ||
-          payloadType === "artifact_complete"
+          payload.type === "artifact_start" ||
+          payload.type === "artifact_delta" ||
+          payload.type === "artifact_update" ||
+          payload.type === "artifact_complete"
         ) {
-          if (payloadType === "artifact_start") {
+          if (payload.type === "artifact_start") {
             const at = payload.artifactType as PersonaArtifactKind;
             const artId = String(payload.id);
             const artTitle = typeof payload.title === "string" ? payload.title : undefined;
@@ -4453,20 +4161,13 @@ export class AgentWidgetClient {
               component: typeof payload.component === "string" ? payload.component : undefined,
               ...(artFile ? { file: artFile } : {})
             });
-            // Seed component props from artifact_start when the payload
-            // carries them; artifact_update events accumulate the rest below.
-            const startProps =
-              payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
-                ? { ...(payload.props as Record<string, unknown>) }
-                : undefined;
             artifactContent.set(artId, {
               markdown: "",
               title: artTitle,
               file: artFile,
-              ...(startProps ? { props: startProps } : {})
             });
-            // Insert the in-thread artifact block (skip if already present from
-            // transcript_insert). The resolved display mode picks the component:
+            // Insert the in-thread artifact block once per ID.
+            // The resolved display mode picks the component:
             // "card"/"panel" inject the reference card; "inline" injects the
             // inline preview block. Both share the rawContent JSON-component
             // shape so transcript persistence and hydration work unchanged.
@@ -4500,7 +4201,7 @@ export class AgentWidgetClient {
               artifactCardMessages.set(artId, cardMsg);
               emitMessage(cardMsg);
             }
-          } else if (payloadType === "artifact_delta") {
+          } else if (payload.type === "artifact_delta") {
             const deltaId = String(payload.id);
             const deltaText = typeof payload.delta === "string" ? payload.delta : String(payload.delta ?? "");
             onEvent({
@@ -4510,7 +4211,7 @@ export class AgentWidgetClient {
             });
             const acc = artifactContent.get(deltaId);
             if (acc) acc.markdown += deltaText;
-          } else if (payloadType === "artifact_update") {
+          } else if (payload.type === "artifact_update") {
             const props =
               payload.props && typeof payload.props === "object" && !Array.isArray(payload.props)
                 ? (payload.props as Record<string, unknown>)
@@ -4528,7 +4229,7 @@ export class AgentWidgetClient {
             if (updateAcc) {
               updateAcc.props = { ...(updateAcc.props ?? {}), ...props };
             }
-          } else if (payloadType === "artifact_complete") {
+          } else if (payload.type === "artifact_complete") {
             const artCompleteId = String(payload.id);
             onEvent({ type: "artifact_complete", id: artCompleteId });
             // Update the inline card to show completed state
@@ -4566,46 +4267,7 @@ export class AgentWidgetClient {
               artifactCardMessages.delete(artCompleteId);
             }
           }
-        } else if (payloadType === "transcript_insert") {
-          const m = payload.message as Record<string, unknown> | undefined;
-          if (!m || typeof m !== "object") {
-            continue;
-          }
-          const id = String(m.id ?? `msg-${nextSequence()}`);
-          const roleRaw = m.role;
-          const role =
-            roleRaw === "user" ? "user" : roleRaw === "system" ? "system" : "assistant";
-          const msg: AgentWidgetMessage = {
-            id,
-            role,
-            content: typeof m.content === "string" ? m.content : "",
-            rawContent: typeof m.rawContent === "string" ? m.rawContent : undefined,
-            createdAt:
-              typeof m.createdAt === "string" ? m.createdAt : new Date().toISOString(),
-            streaming: m.streaming === true,
-            // Omit variant unless the stream specifies it. Do not default to `"assistant"`:
-            // that value is truthy and skips the component-directive branch (`!message.variant` in ui.ts).
-            ...(typeof m.variant === "string"
-              ? { variant: m.variant as AgentWidgetMessage["variant"] }
-              : {}),
-            sequence: nextSequence()
-          };
-          emitMessage(msg);
-          // Detect artifact references in transcript_insert to prevent duplicate auto-cards
-          if (msg.rawContent) {
-            try {
-              const parsed = JSON.parse(msg.rawContent);
-              const refArtId = parsed?.props?.artifactId;
-              if (typeof refArtId === "string") {
-                artifactIdsWithCards.add(refArtId);
-              }
-            } catch { /* not JSON or no artifactId */ }
-          }
-          assistantMessage = null;
-          assistantMessageRef.current = null;
-          streamParsers.delete(id);
-          rawContentBuffers.delete(id);
-        } else if (payloadType === "error") {
+        } else if (payload.type === "error") {
           // Unified non-terminal error (merged spec). A bare `error` is
           // recoverable by default — a transient notice such as "rate limited,
           // retrying" — and the execution continues, so it must NOT surface as a
@@ -4631,41 +4293,10 @@ export class AgentWidgetClient {
             }
             onEvent({ type: "status", status: "idle" });
           }
-        } else if (
-          payloadType === "step_error" ||
-          payloadType === "dispatch_error" ||
-          payloadType === "flow_error"
-        ) {
-          let resolvedError: Error | null = null;
-          if (payload.error instanceof Error) {
-            resolvedError = payload.error;
-          } else if (payloadType === "dispatch_error") {
-            const msg = payload.message ?? payload.error;
-            if (msg != null && msg !== "") {
-              resolvedError = new Error(String(msg));
-            }
-          } else {
-            const e = payload.error;
-            if (typeof e === "string" && e !== "") {
-              resolvedError = new Error(e);
-            } else if (e != null && typeof e === "object" && Reflect.has(e, "message")) {
-              // Reflect.has, not `in` — see the note on the equivalent guard above.
-              resolvedError = new Error(String((e as { message?: unknown }).message ?? e));
-            }
-          }
 
-          if (resolvedError) {
-            onEvent({ type: "error", error: resolvedError });
-            const finalMsg = assistantMessage as AgentWidgetMessage | null;
-            if (finalMsg && finalMsg.streaming) {
-              finalMsg.streaming = false;
-              emitMessage(finalMsg);
-            }
-            onEvent({ type: "status", status: "idle" });
-          }
         }
       }
-      seqReadyQueue.length = 0;
+      eventQueue.length = 0;
     };
 
     // eslint-disable-next-line no-constant-condition
@@ -4712,7 +4343,7 @@ export class AgentWidgetClient {
           advanceCursor();
           continue;
         }
-        let payload: any;
+        let payload: unknown;
         try {
           payload = JSON.parse(data);
         } catch (error) {
@@ -4728,8 +4359,12 @@ export class AgentWidgetClient {
           continue;
         }
 
-        const payloadType =
-          eventType !== "message" ? eventType : payload.type ?? "message";
+        const record = payload !== null && typeof payload === "object" && !Array.isArray(payload)
+          ? payload as Record<string, unknown>
+          : null;
+        const payloadType = eventType !== "message"
+          ? eventType
+          : typeof record?.type === "string" ? record.type : "message";
 
         // Tap: capture raw SSE event for event stream inspector
         this.onSSEEvent?.(payloadType, payload);
@@ -4759,8 +4394,13 @@ export class AgentWidgetClient {
         // The wire is the wire vocabulary; the handler consumes it
         // natively. The stream is single-connection and in order, so each frame
         // drains straight through.
-        seqReadyQueue.push({ payloadType, payload });
-        drainReadyQueue();
+        if (record) {
+          // The raw tap and custom parser above retain the original payload.
+          // Known native branches use the generated union; unknown event types
+          // fall through without rejecting a custom backend's stream.
+          eventQueue.push({ ...record, type: payloadType } as RuntypeExecutionStreamEvent);
+          drainReadyQueue();
+        }
         advanceCursor();
       }
     }

@@ -53,16 +53,18 @@ createAgentExperience(el, {
 
 Each SSE frame is `event: <type>\ndata: <json with matching "type">`.
 
-Each frame carries one `exec_…` `executionId` for the whole run.
+Each frame carries the same `exec_…` `executionId` and a monotonically increasing
+`seq` within the response. The examples below omit `seq` for brevity.
 
 | Widget reads | JSON |
 | --- | --- |
 | run start | `execution_start` → `{type, executionId, kind:"agent", agentId, startedAt}` |
-| turn open | `turn_start` → `{type, executionId, id:"turn_…", iteration}` |
-| text delta | `text_start`·`text_delta`·`text_complete` → `{type, executionId, id:"text_…", delta, iteration}` |
+| turn open | `turn_start` → `{type, executionId, id:"turn_…", role:"assistant", iteration}` |
+| text delta | `text_start`·`text_delta`·`text_complete` → `{type, executionId, id:"text_…", delta}` |
 | **WebMCP call** | `await` → `{type, executionId, toolName:"<bare>", origin:"webmcp", toolId, toolCallId, parameters, awaitedAt}` |
-| turn done | `turn_complete` + `execution_complete` → `{type, executionId, kind:"agent", success:true, completedAt}` |
-| failure | `execution_error` → `{type, executionId, kind:"agent", error:{message}}` |
+| turn done | `turn_complete` → `{type, executionId, id:"turn_…", role:"assistant", iteration, stopReason:"end_turn"}` |
+| execution done | `execution_complete` → `{type, executionId, kind:"agent", success:true, completedAt}` |
+| failure | `execution_error` → `{type, executionId, kind:"agent", error:{code,message}}` |
 
 Three rules that bite if missed:
 

@@ -174,7 +174,7 @@ describe("renderAskUserQuestion plugin hook", () => {
       ok: true,
       body: new ReadableStream({
         start(c) {
-          c.enqueue(new TextEncoder().encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.enqueue(new TextEncoder().encode('data: {"type":"execution_complete","success":true}\n\n'));
           c.close();
         },
       }),
@@ -217,7 +217,7 @@ describe("renderAskUserQuestion plugin hook", () => {
       ok: true,
       body: new ReadableStream({
         start(c) {
-          c.enqueue(new TextEncoder().encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.enqueue(new TextEncoder().encode('data: {"type":"execution_complete","success":true}\n\n'));
           c.close();
         },
       }),
@@ -284,7 +284,7 @@ describe("renderAskUserQuestion plugin hook", () => {
       ok: true,
       body: new ReadableStream({
         start(c) {
-          c.enqueue(new TextEncoder().encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.enqueue(new TextEncoder().encode('data: {"type":"execution_complete","success":true}\n\n'));
           c.close();
         },
       }),
@@ -366,7 +366,7 @@ describe("renderAskUserQuestion plugin hook", () => {
       ok: true,
       body: new ReadableStream({
         start(c) {
-          c.enqueue(new TextEncoder().encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.enqueue(new TextEncoder().encode('data: {"type":"execution_complete","success":true}\n\n'));
           c.close();
         },
       }),
@@ -434,7 +434,7 @@ describe("renderAskUserQuestion plugin hook", () => {
       ok: true,
       body: new ReadableStream({
         start(c) {
-          c.enqueue(new TextEncoder().encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.enqueue(new TextEncoder().encode('data: {"type":"execution_complete","success":true}\n\n'));
           c.close();
         },
       }),
@@ -631,7 +631,7 @@ describe("renderAskUserQuestion plugin hook", () => {
       ok: true,
       body: new ReadableStream({
         start(c) {
-          c.enqueue(new TextEncoder().encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.enqueue(new TextEncoder().encode('data: {"type":"execution_complete","success":true}\n\n'));
           c.close();
         },
       }),
@@ -645,7 +645,7 @@ describe("renderAskUserQuestion plugin hook", () => {
       ok: true,
       body: new ReadableStream({
         start(c) {
-          c.enqueue(new TextEncoder().encode('data: {"type":"flow_complete","success":true}\n\n'));
+          c.enqueue(new TextEncoder().encode('data: {"type":"execution_complete","success":true}\n\n'));
           c.close();
         },
       }),

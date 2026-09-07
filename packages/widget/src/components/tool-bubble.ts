@@ -1,4 +1,4 @@
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue, describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/formatting";
 import { appendCharSpans } from "../utils/tool-loading-animation";
@@ -73,7 +73,9 @@ const getToolSummaryText = (
   const tool = message.toolCall;
   const toolDisplayConfig = config?.features?.toolCallDisplay;
   const collapsedMode = toolDisplayConfig?.collapsedMode ?? "tool-call";
-  const previewText = getToolPreviewText(message, toolDisplayConfig?.previewMaxLines ?? 3);
+  const previewText = tool?.success === false
+    ? tool.error || "Tool failed"
+    : getToolPreviewText(message, toolDisplayConfig?.previewMaxLines ?? 3);
   const defaultSummary = tool ? describeToolTitle(tool) : "";
 
   if (!tool) {
@@ -96,6 +98,7 @@ const getToolSummaryText = (
     summary = resolveToolHeaderText(tool, toolCallConfig.completeTextTemplate, summary);
   }
 
+  if (tool.success === false) summary += " · Failed";
   return { summary, previewText, isActive };
 };
 
@@ -386,6 +389,14 @@ export const createToolBubble = (message: AgentWidgetMessage, config?: AgentWidg
     logsPre.textContent = tool.chunks.join("");
     logsBlock.append(logsLabel, logsPre);
     content.appendChild(logsBlock);
+  }
+
+  if (tool.success === false) {
+    content.appendChild(createNode("div", {
+      className: "persona-text-sm persona-whitespace-pre-wrap",
+      text: tool.error || "Tool failed",
+      attrs: { "data-persona-tool-error": "" },
+    }));
   }
 
   if (tool.status === "complete" && tool.result !== undefined) {

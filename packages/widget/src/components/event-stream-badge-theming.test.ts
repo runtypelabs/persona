@@ -112,6 +112,9 @@ describe("event-stream badge theming", () => {
   });
 
   it("routes event types to families: prefixes, reasoning, and execution_error", () => {
+    expect(getBadgeColor("execution_start")).toBe(DEFAULT_BADGE_COLORS.flow_);
+    expect(getBadgeColor("turn_start")).toBe(DEFAULT_BADGE_COLORS.agent_);
+    expect(getBadgeColor("text_delta")).toBe(DEFAULT_BADGE_COLORS.agent_);
     expect(getBadgeColor("flow_start")).toBe(DEFAULT_BADGE_COLORS.flow_);
     expect(getBadgeColor("tool_input_delta")).toBe(DEFAULT_BADGE_COLORS.tool_);
     expect(getBadgeColor("agent_turn_start")).toBe(DEFAULT_BADGE_COLORS.agent_);

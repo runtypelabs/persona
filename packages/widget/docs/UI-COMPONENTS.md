@@ -242,7 +242,7 @@ Indicators are resolved in this order:
 
 ## Ask User Question
 
-The `ask_user_question` feature turns a LOCAL agent tool into an interactive prompt with tappable option pills. When the agent calls the `ask_user_question` tool, the server pauses execution and emits a `step_await` event; the widget renders an answer-pill sheet over the composer; the user picks / types / dismisses; the widget POSTs the answer to `/v1/dispatch/resume` and the paused execution continues with a structured `tool_result`.
+The `ask_user_question` feature turns a LOCAL agent tool into an interactive prompt with tappable option pills. When the agent calls the `ask_user_question` tool, the server pauses execution and emits an `await` event; the widget renders an answer-pill sheet over the composer; the user picks / types / dismisses; the widget POSTs the answer to `/v1/dispatch/resume` and the paused execution continues with a structured `tool_result`.
 
 This is the recommended pattern for human-in-the-loop clarifying questions.
 

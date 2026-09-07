@@ -355,7 +355,7 @@ function sseResponse(
         send(event, payload) {
           controller.enqueue(
             encoder.encode(
-              `event: ${event}\ndata: ${JSON.stringify({ type: event, seq: seq++, ...payload })}\n\n`,
+              `event: ${event}\ndata: ${JSON.stringify({ type: event, executionId, seq: seq++, ...payload })}\n\n`,
             ),
           );
         },
@@ -365,9 +365,9 @@ function sseResponse(
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         // A throw is a terminal failure → execution_error (the bridge maps it
-        // to a non-recoverable agent_error). Unified `error` is the non-terminal
+        // to the terminal execution failure). Unified `error` is the non-terminal
         // frame, so it's the wrong one for an uncaught throw.
-        send.send("execution_error", { executionId, kind: "agent", error: { message } });
+        send.send("execution_error", { executionId, kind: "agent", error: { code: "adapter_error", message } });
       } finally {
         controller.close();
       }
@@ -706,7 +706,7 @@ export function createLiteRtPersonaEngine(options: {
    */
   async function runTurn(send: SSESender, executionId: string, input: TurnInput): Promise<void> {
     const turnId = uid("turn");
-    send.send("turn_start", { executionId, id: turnId, iteration: input.iteration });
+    send.send("turn_start", { executionId, id: turnId, role: "assistant", iteration: input.iteration });
 
     const conversation = await acquireConversation(
       executionId,
@@ -820,7 +820,7 @@ export function createLiteRtPersonaEngine(options: {
       freshCalls.forEach((tc, i) => {
         const { toolCallId, toolName } = pending[i];
         // `await` carries a BARE tool name + origin:"webmcp"; the widget bridge
-        // applies the `webmcp:` prefix, maps it onto the local-tool step_await
+        // applies the `webmcp:` prefix, maps it onto the local-tool await
         // path, and keys the pause by toolCallId (parallel calls stay distinct).
         send.send("await", {
           executionId,
@@ -856,6 +856,7 @@ export function createLiteRtPersonaEngine(options: {
     await store.delete(executionId).catch(() => {});
     const completedAt = iso();
     send.send("turn_complete", {
+      role: "assistant",
       executionId,
       id: turnId,
       iteration: input.iteration,
@@ -908,7 +909,7 @@ export function createLiteRtPersonaEngine(options: {
         send.send("execution_error", {
           executionId,
           kind: "agent",
-          error: { message: "The on-device model is still loading. Try again in a moment." },
+          error: { code: "model_unavailable", message: "The on-device model is still loading. Try again in a moment." },
         });
         return;
       }
@@ -929,8 +930,10 @@ export function createLiteRtPersonaEngine(options: {
     return sseResponse(executionId, async (send) => {
       const record = await store.get(executionId);
       if (!record) {
-        send.send("error", {
-          message: `Unknown executionId "${executionId}" (the paused run expired from the resume store).`,
+        send.send("execution_error", {
+          executionId,
+          kind: "agent",
+          error: { code: "execution_not_found", message: `Unknown executionId "${executionId}" (the paused run expired from the resume store).` },
         });
         return;
       }
@@ -940,7 +943,7 @@ export function createLiteRtPersonaEngine(options: {
         send.send("execution_error", {
           executionId,
           kind: "agent",
-          error: { message: "The on-device model isn't loaded — reload it to resume this run." },
+          error: { code: "model_unavailable", message: "The on-device model isn't loaded — reload it to resume this run." },
         });
         return;
       }

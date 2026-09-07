@@ -21,10 +21,10 @@ test("a structured turn finalizes its projection and reopens without model conte
   const page = await context.newPage();
 
   api.setChatStream(
-    divergentTurnStream({ messageId: "asst_1", display: DISPLAY, raw: MODEL })
+    divergentTurnStream({ raw: MODEL })
   );
 
-  await page.goto(fixtureUrl({ mode: "intercepted" }));
+  await page.goto(fixtureUrl({ mode: "intercepted", structured: true }));
   await waitForWidget(page);
   await sendMessage(page, "show me shoes");
 
@@ -42,8 +42,10 @@ test("a structured turn finalizes its projection and reopens without model conte
     request.path.endsWith("display-projections")
   )!;
   expect(patch.method).toBe("PATCH");
+  const assistantId = (patch.body as { messages: { id: string }[] }).messages[0]!.id;
+  expect(assistantId).toBeTruthy();
   expect(patch.body).toEqual({
-    messages: [{ id: "asst_1", displayContent: DISPLAY }],
+    messages: [{ id: assistantId, displayContent: DISPLAY }],
   });
   expect(patch.headers["x-visitor-token"]).toMatch(/^cvt_/);
   // Exact-browser transport operation: never an identity-scoped read.
@@ -54,11 +56,11 @@ test("a structured turn finalizes its projection and reopens without model conte
   // What the server now holds: the model channel it stored during generation
   // plus the projection this browser just finalized, and a turn another device
   // appended afterwards (so the reload demonstrably reads from the server).
-  api.setModelContent(conversationId, "asst_1", MODEL);
+  api.setModelContent(conversationId, assistantId, MODEL);
   api.setMessages(conversationId, [
     { id: "usr_1", role: "user", content: "show me shoes", displayAvailable: true },
     {
-      id: "asst_1",
+      id: assistantId,
       role: "assistant",
       content: MODEL,
       displayContent: DISPLAY,

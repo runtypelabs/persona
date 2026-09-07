@@ -163,54 +163,40 @@ if (loadBtn) {
     }
     ctrl.injectMessageBatch(batch);
 
+    let seq = 0;
+    const push = (type: string, payload: Record<string, unknown> = {}) =>
+      ctrl.__pushEventStreamEvent({
+        type,
+        payload: { type, executionId: "inspector-demo", seq: seq++, ...payload },
+      });
+    push("execution_start", { kind: "agent", startedAt: new Date(baseTime).toISOString() });
     for (let msg = 0; msg < messageCount; msg++) {
-      const msgNum = msg + 1;
-      const isUser = msg % 2 === 0;
-      if (isUser) {
-        ctrl.__pushEventStreamEvent({
-          type: "step_delta",
-          payload: { type: "step_delta", text: batch[msg].content, stepType: "prompt" },
-        });
-        ctrl.__pushEventStreamEvent({
-          type: "step_complete",
-          payload: { type: "step_complete", result: { response: batch[msg].content } },
-        });
-      } else {
+      const role = batch[msg].role;
+      const turnId = `turn_${msg}`;
+      push("turn_start", { id: turnId, role });
+      if (role === "assistant") {
+        const id = `text_${msg}`;
+        push("text_start", { id, turnId, role });
         for (let chunk = 0; chunk < chunksPerMessage; chunk++) {
           const chunkStart = Math.floor((chunk / chunksPerMessage) * batch[msg].content.length);
           const chunkEnd = Math.floor(((chunk + 1) / chunksPerMessage) * batch[msg].content.length);
-          ctrl.__pushEventStreamEvent({
-            type: "step_delta",
-            payload: {
-              type: "step_delta",
-              text: batch[msg].content.slice(chunkStart, chunkEnd),
-              stepType: "prompt",
-              messageId: `ast_${msg}`,
-            },
-          });
+          push("text_delta", { id, delta: batch[msg].content.slice(chunkStart, chunkEnd) });
         }
-        ctrl.__pushEventStreamEvent({
-          type: "step_complete",
-          payload: { type: "step_complete", result: { response: batch[msg].content }, messageId: `ast_${msg}` },
-        });
+        push("text_complete", { id, text: batch[msg].content });
       }
+      push("turn_complete", { id: turnId, role, content: batch[msg].content });
       if (msg % 20 === 0) {
-        for (const t of ["reason_start", "reason_delta", "reason_complete", "tool_start", "tool_delta", "tool_complete"]) {
-          ctrl.__pushEventStreamEvent({
-            type: t,
-            payload: {
-              type: t,
-              text: `Simulated ${t} for msg #${msgNum}`,
-              toolName: t.startsWith("tool") ? "web_search" : undefined,
-            },
-          });
-        }
+        const reasonId = `reason_${msg}`;
+        push("reasoning_start", { id: reasonId });
+        push("reasoning_delta", { id: reasonId, delta: `Simulated reasoning for message ${msg + 1}` });
+        push("reasoning_complete", { id: reasonId });
+        const toolId = `tool_${msg}`;
+        push("tool_start", { toolCallId: toolId, toolName: "web_search", toolType: "builtin" });
+        push("tool_output_delta", { toolCallId: toolId, delta: "Searching…" });
+        push("tool_complete", { toolCallId: toolId, toolName: "web_search", success: true });
       }
     }
-    ctrl.__pushEventStreamEvent({
-      type: "flow_complete",
-      payload: { type: "flow_complete", messageCount },
-    });
+    push("execution_complete", { kind: "agent", success: true });
 
     console.log(`[Event stream demo] Injected ${messageCount} messages + events`);
     loadBtn.textContent = "Loaded!";

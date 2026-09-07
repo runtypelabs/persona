@@ -487,7 +487,7 @@ resolution order and `approval.formatDescription` for parameter-aware copy.
 doesn't expose annotations; use top-level `title`.)
 
 **Using WebMCP against a non-Runtype backend (e.g. the Vercel AI SDK)?** The
-widget's WebMCP loop expects Runtype's proxy wire protocol (a `step_await` pause
+widget's WebMCP loop expects Runtype's proxy wire protocol (an `await` pause
 → `/resume` round-trip). See
 [`docs/webmcp-without-runtype.md`](../../../docs/webmcp-without-runtype.md) for the
 exact contract and two integration paths, with a runnable Next.js example at

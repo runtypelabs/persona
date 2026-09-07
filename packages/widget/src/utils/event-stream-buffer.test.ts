@@ -37,7 +37,7 @@ describe("EventStreamBuffer", () => {
 
   it("should push and retrieve events", () => {
     const buf = new EventStreamBuffer(10);
-    const evt = makeEvent("step_chunk", 1);
+    const evt = makeEvent("text_delta", 1);
     buf.push(evt);
     expect(buf.getSize()).toBe(1);
     expect(buf.getAll()).toEqual([evt]);
@@ -85,30 +85,30 @@ describe("EventStreamBuffer", () => {
 
   it("should track unique event types", () => {
     const buf = new EventStreamBuffer(10);
-    buf.push(makeEvent("step_chunk", 1));
-    buf.push(makeEvent("flow_complete", 2));
-    buf.push(makeEvent("step_chunk", 3));
+    buf.push(makeEvent("text_delta", 1));
+    buf.push(makeEvent("execution_complete", 2));
+    buf.push(makeEvent("text_delta", 3));
     const types = buf.getEventTypes();
-    expect(types).toContain("step_chunk");
-    expect(types).toContain("flow_complete");
+    expect(types).toContain("text_delta");
+    expect(types).toContain("execution_complete");
     expect(types).toHaveLength(2);
   });
 
   it("should preserve event types after eviction", () => {
     const buf = new EventStreamBuffer(3);
-    buf.push(makeEvent("step_chunk", 1));
+    buf.push(makeEvent("text_delta", 1));
     buf.push(makeEvent("tool_start", 2));
-    buf.push(makeEvent("flow_complete", 3));
-    // Evict the step_chunk event
+    buf.push(makeEvent("execution_complete", 3));
+    // Evict the text_delta event
     buf.push(makeEvent("tool_end", 4));
     buf.push(makeEvent("tool_end", 5));
-    // step_chunk is evicted from the buffer but still tracked in types
+    // text_delta is evicted from the buffer but still tracked in types
     const all = buf.getAll();
-    expect(all.every(e => e.type !== "step_chunk")).toBe(true);
+    expect(all.every(e => e.type !== "text_delta")).toBe(true);
     const types = buf.getEventTypes();
-    expect(types).toContain("step_chunk");
+    expect(types).toContain("text_delta");
     expect(types).toContain("tool_start");
-    expect(types).toContain("flow_complete");
+    expect(types).toContain("execution_complete");
     expect(types).toContain("tool_end");
     expect(types).toHaveLength(4);
   });

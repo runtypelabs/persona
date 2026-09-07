@@ -37,3 +37,15 @@ describe("createToolBubble shadow", () => {
     expect(bubble.style.boxShadow).toBe("none");
   });
 });
+
+
+describe("tool failure presentation", () => {
+  it("shows the failure in the header and escapes its detail", () => {
+    const message = makeMessage();
+    message.toolCall = { ...message.toolCall!, success: false, error: "<script>bad()</script> timed out" };
+    const bubble = createToolBubble(message);
+    expect(bubble.textContent).toContain("Failed");
+    expect(bubble.querySelector("[data-persona-tool-error]")?.textContent).toBe(message.toolCall.error);
+    expect(bubble.querySelector("script")).toBeNull();
+  });
+});

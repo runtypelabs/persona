@@ -197,6 +197,7 @@ describe('history REST - request shape', () => {
           id: 'conv_1',
           title: 'Placeholder title',
           flowId: 'flow_1',
+          targetId: 'flow_1',
           messageCount: 4,
           createdAt: '2026-08-01T00:00:00.000Z',
           updatedAt: '2026-08-02T00:00:00.000Z',
@@ -222,7 +223,7 @@ describe('history REST - request shape', () => {
     expect(requests[1].method).toBe('GET');
     expect(requests[1].headers['X-Visitor-Token']).toBe('cvt_stored');
     expect(requests[1].headers['X-Persona-Version']).toBeTruthy();
-    // Deprecated flowId is consumed at this boundary and never re-exposed.
+    // The deprecated flowId alias is not re-exposed.
     expect(page.data[0]).toEqual({
       id: 'conv_1',
       title: 'Placeholder title',

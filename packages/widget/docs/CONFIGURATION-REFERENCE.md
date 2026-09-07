@@ -547,7 +547,7 @@ initAgentWidget({
 });
 ```
 
-For a direct AI SDK backend that translates WebMCP calls into Persona-compatible `step_await` / `/resume` traffic, see the repo-level [WebMCP without Runtype guide](../../../docs/webmcp-without-runtype.md).
+For a direct AI SDK backend that translates WebMCP calls into Persona-compatible `await` / `/resume` traffic, see the repo-level [WebMCP without Runtype guide](../../../docs/webmcp-without-runtype.md).
 
 ### Suggestions
 

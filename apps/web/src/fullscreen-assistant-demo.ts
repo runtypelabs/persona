@@ -22,7 +22,7 @@ import {
 import { setHistoryProviderFactory } from "@runtypelabs/persona/internal/history-provider-registry";
 import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-history-provider";
 import {
-  createFullscreenAssistantScriptedStream,
+  createFullscreenAssistantArtifactStream,
   FULLSCREEN_ASSISTANT_DEMO_ARTIFACT_ID,
   FULLSCREEN_ASSISTANT_SPOTLIGHT_MARKDOWN
 } from "./fullscreen-assistant-demo-sse";
@@ -621,7 +621,7 @@ const railNavSections = [
   }
 ];
 
-const newFullscreenAssistantScriptStream = () => createFullscreenAssistantScriptedStream();
+const newFullscreenAssistantScriptStream = () => createFullscreenAssistantArtifactStream();
 
 const artifactDocumentTitle = (suggestedFilename: string): string =>
   suggestedFilename.replace(/\.(md|html?)$/i, "") || "Artifact";
@@ -911,6 +911,14 @@ void (async () => {
   } catch {
     /* seed missing: the scripted stream still tells the story in a fresh chat */
   }
+  handle.injectAssistantMessage({
+    id: "m-intro",
+    content: "Here is a concise readout. Open the document on the right for the full spotlight draft.",
+  });
+  handle.injectUserMessage({
+    id: "m-user-followup",
+    content: "Tighten the checklist section and add one competitor callout.",
+  });
   await handle.connectStream(newFullscreenAssistantScriptStream());
   // Persist the streamed turns so reopening the conversation matches what was
   // on screen (the record is in-memory and rebuilt per page load).

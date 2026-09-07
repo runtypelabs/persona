@@ -10,14 +10,14 @@
  * One agent turn:
  *
  *   event: execution_start   { executionId, kind:"agent", agentId, startedAt }
- *   event: turn_start        { executionId, id:"turn_…", iteration:1 }
+ *   event: turn_start        { executionId, id:"turn_…", role:"assistant", iteration:1 }
  *   event: text_start        { executionId, id:"text_…" }
- *   event: text_delta        { executionId, id:"text_…", delta, iteration:1 }
+ *   event: text_delta        { executionId, id:"text_…", delta }
  *   …more deltas…
  *   event: text_complete     { executionId, id:"text_…" }
  *   event: tool_start        { executionId, toolCallId:"call_…", toolName, toolType, parameters }
  *   event: tool_complete     { executionId, toolCallId:"call_…", success:true, result }
- *   event: turn_complete     { executionId, id:"turn_…", iteration:1, stopReason, completedAt }
+ *   event: turn_complete     { executionId, id:"turn_…", role:"assistant", iteration:1, stopReason, completedAt }
  *   event: execution_complete{ executionId, kind:"agent", success:true, completedAt }
  *
  * The tool frames are optional; a text-only turn simply omits them. They are
@@ -43,29 +43,18 @@ export type PersonaDispatchBody = {
 /** The neutral chat message shape every adapter maps from. */
 export type ChatMessage = { role: "system" | "user" | "assistant"; content: string };
 
-type WireFrame = {
-  type: string;
-  executionId: string;
-  seq: number;
-  // lifecycle (execution_start / execution_complete / execution_error)
-  kind?: "agent" | "flow";
-  agentId?: string;
-  agentName?: string;
-  startedAt?: string;
-  completedAt?: string;
-  success?: boolean;
-  stopReason?: string;
-  error?: { message: string };
-  // turn / block (turn_start, text_start/_delta/_complete, turn_complete)
-  id?: string;
-  iteration?: number;
-  delta?: string;
-  // tool (tool_start, tool_complete)
-  toolCallId?: string;
-  toolName?: string;
-  toolType?: string;
-  parameters?: unknown;
-  result?: unknown;
+/** The event-specific payloads this standalone adapter emits. */
+type WirePayloads = {
+  execution_start: { kind: "agent"; agentId: string; agentName: string; startedAt: string };
+  turn_start: { id: string; role: "assistant"; iteration: number };
+  text_start: { id: string };
+  text_delta: { id: string; delta: string };
+  text_complete: { id: string };
+  tool_start: { toolCallId: string; toolName: string; toolType: string; parameters: unknown; iteration: number };
+  tool_complete: { toolCallId: string; success: boolean; result: unknown };
+  turn_complete: { id: string; role: "assistant"; iteration: number; stopReason: "end_turn"; completedAt: string };
+  execution_complete: { kind: "agent"; success: boolean; completedAt: string };
+  execution_error: { kind: "agent"; error: { code: string; message: string } };
 };
 
 /** The item shape `suggestReplies` accepts; a bare string is shorthand for `{ label }`. */
@@ -126,10 +115,7 @@ export function createPersonaSSEStream(
       // reads a single in-order connection so it isn't load-bearing here, but a
       // faithful reference emits it.
       let seq = 0;
-      const send = (
-        event: string,
-        payload: Omit<WireFrame, "type" | "executionId" | "seq">,
-      ) => {
+      const send = <T extends keyof WirePayloads>(event: T, payload: WirePayloads[T]) => {
         controller.enqueue(
           encoder.encode(
             `event: ${event}\ndata: ${JSON.stringify({ type: event, executionId, seq: seq++, ...payload })}\n\n`,
@@ -145,7 +131,7 @@ export function createPersonaSSEStream(
 
       const openTurn = () => {
         if (!turnOpen) {
-          send("turn_start", { id: turnId, iteration: 1 });
+          send("turn_start", { id: turnId, role: "assistant", iteration: 1 });
           turnOpen = true;
         }
       };
@@ -166,7 +152,7 @@ export function createPersonaSSEStream(
       const emit: PersonaStreamEmitter = {
         textDelta(text) {
           openTextBlock();
-          send("text_delta", { id: textBlockId!, delta: text, iteration: 1 });
+          send("text_delta", { id: textBlockId!, delta: text });
         },
         toolCall(name, parameters, options) {
           // Blocks don't nest: close any open text block first. A later
@@ -185,7 +171,6 @@ export function createPersonaSSEStream(
             toolCallId,
             success: true,
             result: options?.result ?? {},
-            completedAt: new Date().toISOString(),
           });
         },
         suggestReplies(items) {
@@ -202,6 +187,7 @@ export function createPersonaSSEStream(
           if (turnOpen) {
             send("turn_complete", {
               id: turnId,
+              role: "assistant",
               iteration: 1,
               stopReason: "end_turn",
               completedAt: new Date().toISOString(),
@@ -217,7 +203,7 @@ export function createPersonaSSEStream(
         error(message) {
           if (finished) return;
           finished = true;
-          send("execution_error", { kind: "agent", error: { message } });
+          send("execution_error", { kind: "agent", error: { code: "adapter_error", message } });
         },
       };
 

@@ -3,42 +3,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
-import { createUnifiedEventWrite } from "./utils/__fixtures__/unified-translator.oracle";
-
-const legacyEvent = (type: string, data: Record<string, unknown>) =>
-  `event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`;
+import { buildAssistantTurnFrames } from "./testing/mock-stream";
 
 /** One complete assistant turn, in the same wire shape the widget expects. */
-const unifiedFrames = (): string => {
-  let out = "";
-  const write = createUnifiedEventWrite((chunk) => {
-    out += chunk;
-  });
-  write(legacyEvent("flow_start", { flowId: "flow_1", flowName: "T", totalSteps: 1 }));
-  write(
-    legacyEvent("step_start", {
-      id: "step_1",
-      name: "Prompt",
-      stepType: "prompt",
-      index: 0,
-      totalSteps: 1,
-    })
-  );
-  write(legacyEvent("text_start", { messageId: "message_1" }));
-  write(legacyEvent("step_delta", { id: "step_1", text: "answer" }));
-  write(legacyEvent("text_end", { messageId: "message_1" }));
-  write(
-    legacyEvent("step_complete", {
-      id: "step_1",
-      name: "Prompt",
-      stepType: "prompt",
-      success: true,
-      result: { response: "answer" },
-    })
-  );
-  write(legacyEvent("flow_complete", { flowId: "flow_1", success: true }));
-  return out;
-};
+const unifiedFrames = (): string => [
+  { type: "execution_start", executionId: "exec-1", kind: "agent" },
+  ...buildAssistantTurnFrames({ executionId: "exec-1", text: "answer" }),
+  { type: "execution_complete", executionId: "exec-1", kind: "agent", success: true },
+].map((frame) => `data: ${JSON.stringify(frame)}\n\n`).join("");
 
 const mounts: HTMLElement[] = [];
 const controllers: ReturnType<typeof createAgentExperience>[] = [];

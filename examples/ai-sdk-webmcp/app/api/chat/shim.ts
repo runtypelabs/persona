@@ -121,15 +121,17 @@ export interface SSESender {
 
 /** Build a streaming SSE Response and run `handler` against a writer. */
 export function sseResponse(
+  executionId: string,
   handler: (send: SSESender) => Promise<void>,
 ): Response {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      let seq = 0;
       const send: SSESender = {
         send(event, payload) {
           controller.enqueue(
             encoder.encode(
-              `event: ${event}\ndata: ${JSON.stringify({ type: event, ...payload })}\n\n`,
+              `event: ${event}\ndata: ${JSON.stringify({ type: event, executionId, seq: seq++, ...payload })}\n\n`,
             ),
           );
         },
@@ -138,10 +140,9 @@ export function sseResponse(
         await handler(send);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        // Terminal failure of the handler → `execution_error` (the bridge
-        // maps it to a non-recoverable agent_error). Unified `error` is the
+        // A failed handler emits terminal `execution_error`. Unified `error` is the
         // NON-terminal one, so it's the wrong frame for an uncaught throw.
-        send.send("execution_error", { kind: "agent", error: { message } });
+        send.send("execution_error", { kind: "agent", error: { code: "adapter_error", message } });
       } finally {
         controller.close();
       }
@@ -238,7 +239,7 @@ async function runTurn(
 
   // turn_start opens this iteration's reasoning turn; the text block opens
   // lazily on the first delta so a tool-only turn never emits a stray text_start.
-  send.send("turn_start", { executionId, id: turnId, iteration });
+  send.send("turn_start", { executionId, id: turnId, role: "assistant", iteration });
 
   const result = streamText({
     model: MODEL, // string id → Vercel AI Gateway (see MODEL above)
@@ -254,7 +255,7 @@ async function runTurn(
         textBlockId = `text_${generateId()}`;
         send.send("text_start", { executionId, id: textBlockId });
       }
-      send.send("text_delta", { executionId, id: textBlockId, delta: part.text, iteration });
+      send.send("text_delta", { executionId, id: textBlockId, delta: part.text });
     } else if (part.type === "tool-call") {
       toolCalls.push({
         type: "tool-call",
@@ -263,7 +264,7 @@ async function runTurn(
         input: part.input,
       });
       // `await` carries a BARE tool name + origin; the widget bridge applies the
-      // `webmcp:` prefix, maps it onto the local-tool `step_await` path, and keys
+      // `webmcp:` prefix, routes it through the local-tool pause path, and keys
       // the pause by toolCallId (parallel same-tool calls stay distinct).
       send.send("await", {
         executionId,
@@ -277,7 +278,7 @@ async function runTurn(
     } else if (part.type === "error") {
       const message =
         part.error instanceof Error ? part.error.message : String(part.error);
-      send.send("execution_error", { executionId, kind: "agent", error: { message } });
+      send.send("execution_error", { executionId, kind: "agent", error: { code: "adapter_error", message } });
       return;
     }
   }
@@ -318,6 +319,7 @@ async function runTurn(
   }
   const completedAt = new Date().toISOString();
   send.send("turn_complete", {
+    role: "assistant",
     executionId,
     id: turnId,
     iteration,
@@ -338,7 +340,7 @@ export function handleDispatch(body: DispatchBody): Response {
   const messages = toModelMessages(body.messages);
   const clientTools = body.clientTools ?? [];
   const executionId = `exec_${generateId()}`;
-  return sseResponse((send) => {
+  return sseResponse(executionId, (send) => {
     send.send("execution_start", {
       executionId,
       kind: "agent",
@@ -353,11 +355,12 @@ export function handleDispatch(body: DispatchBody): Response {
 export function handleResume(body: ResumeBody): Response {
   const executionId = body.executionId ?? "";
 
-  return sseResponse(async (send) => {
+  return sseResponse(executionId, async (send) => {
     const paused = await loadPausedExecution(executionId);
     if (!paused) {
-      send.send("error", {
-        message: `Unknown executionId "${executionId}" (expired or evicted from the cache: see execution-store.ts).`,
+      send.send("execution_error", {
+        kind: "agent",
+        error: { code: "execution_not_found", message: `Unknown executionId "${executionId}" (expired or evicted from the cache: see execution-store.ts).` },
       });
       return;
     }

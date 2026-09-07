@@ -538,7 +538,7 @@ describe('AgentWidgetSession.resolveAskUserQuestion', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         },
       });
@@ -578,7 +578,7 @@ describe('AgentWidgetSession.resolveAskUserQuestion', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         },
       });
@@ -614,7 +614,7 @@ describe('AgentWidgetSession.resolveAskUserQuestion', () => {
       const encoder = new TextEncoder();
       const stream = new ReadableStream({
         start(controller) {
-          controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
           controller.close();
         },
       });
@@ -727,7 +727,7 @@ describe('AgentWidgetSession.resolveAskUserQuestion', () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+        controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
         controller.close();
       },
     });
@@ -807,7 +807,7 @@ describe('AgentWidgetSession.resolveApproval', () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       start(controller) {
-        controller.enqueue(encoder.encode('data: {"type":"flow_complete","success":true}\n\n'));
+        controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
         controller.close();
       },
     });
