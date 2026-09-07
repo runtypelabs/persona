@@ -934,6 +934,18 @@ describe('session history (Runtype transport specifics)', () => {
       expect(harness.meta.messageCursor).toBeTruthy();
     });
 
+    it('gates the first send before init resolves so boot cannot erase it', async () => {
+      harness.meta.conversationId = 'conv-b';
+      harness.meta.conversationRevision = 'rev-stale';
+      const initialize = harness.session.initializeBootConversation();
+      expect(harness.session.getHistoryState().sendBlocked).toBe(true);
+      const send = harness.session.sendMessage('first send during boot');
+      expect(harness.messages().some(message => message.content === 'first send during boot')).toBe(false);
+      await Promise.all([initialize, send]);
+      expect(harness.messages().filter(message => message.content === 'first send during boot')).toHaveLength(1);
+      expect(backend.chatRequests()).toHaveLength(1);
+    });
+
     it('blocks sending until reconciliation completes', async () => {
       await bootWith('conv-b', 'rev-stale');
 

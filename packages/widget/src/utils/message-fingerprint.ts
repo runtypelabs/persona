@@ -11,6 +11,7 @@ export type FingerprintableMessage = {
   id: string;
   role: string;
   content: string;
+  delivery?: { status: string; error?: string };
   streaming?: boolean;
   voiceProcessing?: boolean;
   variant?: string;
@@ -46,6 +47,8 @@ export function computeMessageFingerprint(
 ): string {
   return [
     message.id,
+    message.delivery?.status ?? "",
+    message.delivery?.error ?? "",
     message.role,
     message.content?.length ?? 0,
     message.content?.slice(-32) ?? "",
