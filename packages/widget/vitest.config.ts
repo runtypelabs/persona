@@ -33,6 +33,7 @@ export default defineConfig({
         new URL('./src/event-stream-view.ts', import.meta.url)
       ),
       // Same for the lazy session-reconnect chunk subpath.
+      '@runtypelabs/persona/live-input': fileURLToPath(new URL('./src/live-input.ts', import.meta.url)),
       '@runtypelabs/persona/session-reconnect': fileURLToPath(
         new URL('./src/session-reconnect.ts', import.meta.url)
       ),

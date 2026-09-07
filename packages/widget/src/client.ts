@@ -64,16 +64,10 @@ import { divergentDisplayProjection } from "./utils/history-messages";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
-export class InputDeliveryError extends Error {
-  constructor(message: string, readonly rejected: boolean) { super(message); this.name = "InputDeliveryError"; }
-}
-
-export type JoinAdmission = {
-  kind: "stream" | "receipt";
-  executionId: string;
-  deliveryId: string;
-  status: "pending" | "applied" | "settled" | "not_applied";
-};
+import { InputDeliveryError, type JoinAdmission } from "./live-input-contract";
+export { InputDeliveryError, type JoinAdmission } from "./live-input-contract";
+import { loadLiveInput } from "./live-input-loader";
+import type { JoinPayloadCache } from "./live-input";
 
 type DispatchOptions = {
   messages: AgentWidgetMessage[];
@@ -304,7 +298,7 @@ export class AgentWidgetClient {
    * matches is superseded, and every SSE frame it still receives is dropped
    */
   private currentClientTurnId: string | null = null;
-  private joinPayloads = new Map<string, { request: Omit<ClientChatRequest, "clientTools" | "clientToolsFingerprint">; tools?: ClientToolDefinition[]; conversationId?: string }>();
+  private joinPayloads: JoinPayloadCache = new Map();
   private clientSession: ClientSession | null = null;
   private sessionInitPromise: Promise<ClientSession> | null = null;
 
@@ -627,30 +621,21 @@ export class AgentWidgetClient {
     method: "GET" | "POST",
     signal?: AbortSignal,
   ): Promise<Response> {
-    const session = await this.initSession();
-    const visitorToken = await this.readVisitorToken();
-    if (
-      !session.conversationId ||
-      !visitorToken ||
-      !session.durableRecovery?.join
-    ) {
-      throw new Error("Live input joining is unavailable for this session");
-    }
-    const path = `${this.clientApiBase()}/v1/client/conversations/${encodeURIComponent(session.conversationId)}/executions/${encodeURIComponent(executionId)}/${operation}`;
-    const response = await fetch(
-      `${path}?${new URLSearchParams({ sessionId: session.sessionId })}`,
-      {
-        method,
-        headers: {
-          "X-Persona-Version": VERSION,
-          "X-Visitor-Token": visitorToken,
-        },
-        signal,
-      },
-    );
-    if (!response.ok && !(operation === "cancel" && response.status === 409))
-      throw await this.historyErrorFor(response, true);
-    return response;
+    const [session, visitorToken, liveInput] = await Promise.all([
+      this.initSession(),
+      this.readVisitorToken(),
+      loadLiveInput(),
+    ]);
+    return liveInput.clientExecutionRequest({
+      session,
+      visitorToken,
+      apiUrl: this.clientApiBase(),
+      executionId,
+      operation,
+      method,
+      signal,
+      errorFor: (response) => this.historyErrorFor(response, true),
+    });
   }
 
   public clearJoinPayloads(): void {
@@ -668,15 +653,11 @@ export class AgentWidgetClient {
       "GET",
       signal,
     );
-    const receipt = await response.json();
-    if (
-      receipt.executionId !== executionId ||
-      receipt.deliveryId !== deliveryId ||
-      !["pending", "applied", "settled", "not_applied"].includes(receipt.status)
-    ) {
-      throw new Error("Invalid live input delivery status");
-    }
-    return { kind: "receipt", executionId, deliveryId, status: receipt.status };
+    return (await loadLiveInput()).readDeliveryStatus(
+      response,
+      executionId,
+      deliveryId,
+    );
   }
 
   public async cancelClientExecution(executionId: string): Promise<void> {
@@ -685,12 +666,7 @@ export class AgentWidgetClient {
       "cancel",
       "POST",
     );
-    const result = await response.json();
-    if (
-      result.executionId !== executionId ||
-      typeof result.accepted !== "boolean"
-    )
-      throw new Error("Invalid execution cancellation acknowledgement");
+    await (await loadLiveInput()).readCancellation(response, executionId);
   }
 
   /**
@@ -1896,18 +1872,13 @@ export class AgentWidgetClient {
     try {
       // Ensure session is initialized
       const session = await this.initSession();
-      if (
-        options.join &&
-        (!session.durableRecovery?.join ||
-          options.messages.length !== 1 ||
-          options.messages[0]?.id !== options.join.turnId ||
-          options.messages.some((message) => message.role !== "user"))
-      ) {
-        throw new InputDeliveryError(
-          "Live input joining requires a supported native durable agent session and new user messages only",
-          true,
+      if (options.join)
+        (await loadLiveInput()).validateJoin(
+          session,
+          options.messages,
+          options.join.turnId,
+          InputDeliveryError,
         );
-      }
 
       // Check if session is about to expire (within 1 minute)
       if (new Date() >= new Date(session.expiresAt.getTime() - 60000)) {
@@ -1982,30 +1953,16 @@ export class AgentWidgetClient {
 
       let offeredTools = basePayload.clientTools;
       if (options.join) {
-        const cached = this.joinPayloads.get(turnId);
-        if (cached) {
-          if (cached.conversationId !== session.conversationId)
-            throw new InputDeliveryError(
-              "This delivery belongs to a different conversation",
-              true,
-            );
-          baseChatRequest = { ...cached.request, sessionId: session.sessionId };
-          offeredTools = cached.tools;
-        } else {
-          if (this.joinPayloads.size >= 32)
-            throw new InputDeliveryError(
-              "Resolve unacknowledged deliveries before sending more messages",
-              true,
-            );
-          this.joinPayloads.set(
-            turnId,
-            structuredClone({
-              request: baseChatRequest,
-              tools: offeredTools,
-              conversationId: session.conversationId,
-            }),
-          );
-        }
+        const frozen = (await loadLiveInput()).freezeJoinPayload(
+          this.joinPayloads,
+          turnId,
+          session,
+          baseChatRequest,
+          offeredTools,
+          InputDeliveryError,
+        );
+        baseChatRequest = frozen.request;
+        offeredTools = frozen.tools;
       }
 
       // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already
@@ -2100,49 +2057,18 @@ export class AgentWidgetClient {
         throw error;
       }
 
-      if (options.join && response.status === 202) {
-        const receipt = await response.json();
-        if (
-          !receipt.executionId ||
-          !receipt.deliveryId ||
-          !["pending", "applied", "settled", "not_applied"].includes(
-            receipt.deliveryStatus,
-          )
-        ) {
-          throw new Error("Invalid live input receipt");
-        }
+      if (options.join) {
+        const admission = await (
+          await loadLiveInput()
+        ).readJoinAdmission(response);
         commitClientToolsFingerprint();
         this.joinPayloads.delete(turnId);
-        options.join.onAdmission({
-          kind: "receipt",
-          executionId: receipt.executionId,
-          deliveryId: receipt.deliveryId,
-          status: receipt.deliveryStatus,
-        });
-        return;
-      }
-
-      if (options.join) {
-        const executionId = response.headers.get("X-Runtype-Execution-Id");
-        const deliveryId = response.headers.get("X-Runtype-Delivery-Id");
-        if (
-          !response.headers
-            .get("content-type")
-            ?.includes("text/event-stream") ||
-          !executionId ||
-          !deliveryId
-        ) {
-          throw new Error("Invalid live input stream admission");
+        if (admission.kind === "stream") {
+          this.currentClientTurnId = turnId;
+          streamAdmitted = true;
         }
-        this.currentClientTurnId = turnId;
-        streamAdmitted = true;
-        this.joinPayloads.delete(turnId);
-        options.join.onAdmission({
-          kind: "stream",
-          executionId,
-          deliveryId,
-          status: "pending",
-        });
+        options.join.onAdmission(admission);
+        if (admission.kind === "receipt") return;
       }
 
       if (!response.body) {

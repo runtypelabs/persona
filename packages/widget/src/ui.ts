@@ -8102,7 +8102,7 @@ export const createAgentExperience = (
     setSendButtonMode(disabled && !join ? "stop" : "send");
     if (disabled && join && sendButtonWrapper?.parentElement) {
       if (!joinStopButton) {
-        joinStopButton = createElement("button", "persona-icon-btn persona-text-xs");
+        joinStopButton = createElement("button", "persona-icon-btn persona-text-xs persona-h-10 persona-px-3");
         joinStopButton.type = "button";
         joinStopButton.textContent = "Stop";
         joinStopButton.setAttribute("aria-label", "Stop response");

@@ -1,3 +1,4 @@
+import { loadLiveInput } from "./live-input-loader";
 import {
   AgentWidgetClient,
   HistoryClientError,
@@ -292,6 +293,8 @@ export class AgentWidgetSession {
   private joinAdmissionCount = 0;
   private joinAdmissionEpoch = 0;
   private joinControllers = new Set<AbortController>();
+  private joinDispatchControllers = new Set<AbortController>();
+  private stopOnJoinAdmission = new Set<AbortController>();
   private joinWatchControllers = new Set<AbortController>();
   private joinExecutionId: string | null = null;
 
@@ -301,6 +304,8 @@ export class AgentWidgetSession {
     this.joinAdmissionTail = Promise.resolve();
     for (const controller of this.joinControllers) controller.abort();
     this.joinControllers.clear();
+    this.joinDispatchControllers.clear();
+    this.stopOnJoinAdmission.clear();
     for (const controller of this.joinWatchControllers) controller.abort();
     this.joinWatchControllers.clear();
     this.joinExecutionId = null;
@@ -356,59 +361,86 @@ export class AgentWidgetSession {
     release: () => void,
     provisional = false,
   ): Promise<void> {
-    await this.client.dispatch(
-      {
-        messages: snapshot,
-        signal: controller.signal,
-        assistantMessageId,
-        composerOptions: snapshot[0]?.composerOptions,
-        join: {
-          turnId: userMessageId,
-          onAdmission: (admission) => {
-            if (controller.signal.aborted) {
-              release();
-              return;
-            }
-            this.joinExecutionId = admission.executionId;
-            this.updateInputDelivery(userMessageId, {
-              deliveryId: admission.deliveryId,
-              executionId: admission.executionId,
-              status: admission.status,
-            });
-            if (admission.kind === "stream") {
-              this.teardownReconnect();
-              this.activeAssistantMessageId = assistantMessageId;
-              this.agentExecution = null;
-              this.abortController = controller;
-              this.setStreaming(true);
-            } else {
-              if (provisional && this.abortController === controller) {
-                this.abortController = null;
-                this.setStreaming(false);
+    const client = this.client;
+    this.joinDispatchControllers.add(controller);
+    try {
+      await client.dispatch(
+        {
+          messages: snapshot,
+          signal: controller.signal,
+          assistantMessageId,
+          composerOptions: snapshot[0]?.composerOptions,
+          join: {
+            turnId: userMessageId,
+            onAdmission: (admission) => {
+              if (controller.signal.aborted) {
+                release();
+                return;
               }
-              if (
-                !this.streaming &&
-                !this.reconnecting &&
-                !this.isAwaitPending() &&
-                admission.status !== "not_applied"
-              ) {
-                this.agentExecution = null;
-                this.resumeFromHandle({
+              if (this.stopOnJoinAdmission.has(controller)) {
+                this.updateInputDelivery(userMessageId, {
                   executionId: admission.executionId,
-                  after: "",
+                  deliveryId: admission.deliveryId,
+                  status: admission.status,
                 });
+                release();
+                controller.abort();
+                void client
+                  .cancelClientExecution(admission.executionId)
+                  .catch((error: unknown) => {
+                    this.callbacks.onError?.(
+                      error instanceof Error ? error : new Error(String(error)),
+                    );
+                  });
+                const watcher = new AbortController();
+                this.joinWatchControllers.add(watcher);
+                void this.watchInputDelivery(userMessageId, admission, watcher);
+                return;
               }
-            }
-            release();
-            this.joinControllers.delete(controller);
-            const watcher = new AbortController();
-            this.joinWatchControllers.add(watcher);
-            void this.watchInputDelivery(userMessageId, admission, watcher);
+              this.joinExecutionId = admission.executionId;
+              this.updateInputDelivery(userMessageId, {
+                deliveryId: admission.deliveryId,
+                executionId: admission.executionId,
+                status: admission.status,
+              });
+              if (admission.kind === "stream") {
+                this.teardownReconnect();
+                this.activeAssistantMessageId = assistantMessageId;
+                this.agentExecution = null;
+                this.abortController = controller;
+                this.setStreaming(true);
+              } else {
+                if (provisional && this.abortController === controller) {
+                  this.abortController = null;
+                  this.setStreaming(false);
+                }
+                if (
+                  !this.streaming &&
+                  !this.reconnecting &&
+                  !this.isAwaitPending() &&
+                  admission.status !== "not_applied"
+                ) {
+                  this.agentExecution = null;
+                  this.resumeFromHandle({
+                    executionId: admission.executionId,
+                    after: "",
+                  });
+                }
+              }
+              release();
+              this.joinControllers.delete(controller);
+              const watcher = new AbortController();
+              this.joinWatchControllers.add(watcher);
+              void this.watchInputDelivery(userMessageId, admission, watcher);
+            },
           },
         },
-      },
-      this.handleEvent,
-    );
+        this.handleEvent,
+      );
+    } finally {
+      this.joinDispatchControllers.delete(controller);
+      this.stopOnJoinAdmission.delete(controller);
+    }
   }
 
   public async retryJoinedMessage(messageId: string): Promise<void> {
@@ -485,45 +517,25 @@ export class AgentWidgetSession {
     admission: JoinAdmission,
     controller: AbortController,
   ): Promise<void> {
-    let failures = 0;
-    let receipt = admission;
     try {
-      while (!controller.signal.aborted) {
-        this.updateInputDelivery(messageId, {
-          deliveryId: receipt.deliveryId,
-          executionId: receipt.executionId,
-          status: receipt.status,
-        });
-        if (receipt.status === "settled" || receipt.status === "not_applied")
-          return;
-        await new Promise<void>((resolve) => {
-          const done = () => {
-            clearTimeout(timer);
-            controller.signal.removeEventListener("abort", done);
-            resolve();
-          };
-          const timer = setTimeout(done, Math.min(1000 * 2 ** failures, 30000));
-          controller.signal.addEventListener("abort", done, { once: true });
-        });
-        if (controller.signal.aborted) return;
-        try {
-          receipt = await this.client.getInputDelivery(
+      const liveInput = await loadLiveInput();
+      await liveInput.watchInputDelivery({
+        admission,
+        signal: controller.signal,
+        update: (state) => this.updateInputDelivery(messageId, state),
+        read: () =>
+          this.client.getInputDelivery(
             admission.executionId,
             admission.deliveryId,
             controller.signal,
-          );
-          failures = 0;
-          this.updateInputDelivery(messageId, { error: undefined });
-        } catch (error) {
-          if (controller.signal.aborted) return;
-          failures++;
-          this.updateInputDelivery(messageId, {
-            error: error instanceof Error ? error.message : String(error),
-            ...(failures >= 6 ? { status: "unknown" as const } : {}),
-          });
-          if (failures >= 6) return;
-        }
-      }
+          ),
+      });
+    } catch (error) {
+      if (!controller.signal.aborted)
+        this.updateInputDelivery(messageId, {
+          status: "unknown",
+          error: String(error),
+        });
     } finally {
       this.joinWatchControllers.delete(controller);
     }
@@ -2426,7 +2438,10 @@ export class AgentWidgetSession {
     this.config = merged;
     if (replaceVoice) {
       this.cleanupVoice();
-      if (merged.voiceRecognition?.enabled === true && usesSessionVoice(merged.voiceRecognition.provider)) {
+      if (
+        merged.voiceRecognition?.enabled === true &&
+        usesSessionVoice(merged.voiceRecognition.provider)
+      ) {
         this.setupVoice();
       }
     }
@@ -2457,6 +2472,11 @@ export class AgentWidgetSession {
     this.abortWebMcpResolves();
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
+    this.clearJoinedInputState();
+    this.abortController?.abort();
+    this.abortController = null;
+    this.teardownReconnect();
+    this.setStreaming(false);
     const prevSSECallback = this.client.getSSEEventCallback();
     this.client = new AgentWidgetClient(this.config, this.historyInternals);
     if (artifactDisplayChanged) this.refreshArtifactReferenceBlocks();
@@ -2930,6 +2950,10 @@ export class AgentWidgetSession {
         !this.reconnecting &&
         !this.isAwaitPending() &&
         this.joinAdmissionCount === 1;
+      if (provisionalJoin) {
+        this.joinExecutionId = null;
+        this.teardownReconnect();
+      }
       this.appendMessage(userMessage);
       if (!join || provisionalJoin) this.setStreaming(true);
 
@@ -4471,9 +4495,22 @@ export class AgentWidgetSession {
           error: "Acknowledgement interrupted. Retry to check delivery safely.",
         });
     }
-    for (const controller of this.joinControllers) controller.abort();
-    this.joinControllers.clear();
-    this.abortController?.abort();
+    for (const controller of this.joinControllers) {
+      if (
+        options.execution !== false &&
+        this.joinDispatchControllers.has(controller)
+      ) {
+        this.stopOnJoinAdmission.add(controller);
+      } else {
+        controller.abort();
+        this.joinControllers.delete(controller);
+      }
+    }
+    if (
+      !this.abortController ||
+      !this.stopOnJoinAdmission.has(this.abortController)
+    )
+      this.abortController?.abort();
     this.abortController = null;
     // A user stop also cancels any pending/in-flight durable reconnect and
     // clears the resume handle (the abort above already killed its fetch).
@@ -4737,12 +4774,35 @@ export class AgentWidgetSession {
       messages.map((message) => ({
         ...message,
         streaming: false,
-        sequence: message.sequence ?? this.nextSequence()
-      }))
+        sequence: message.sequence ?? this.nextSequence(),
+      })),
     );
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
+    for (const message of this.messages) {
+      const delivery = message.delivery;
+      if (
+        delivery?.executionId &&
+        delivery.deliveryId &&
+        ["pending", "applied"].includes(delivery.status)
+      ) {
+        const watcher = new AbortController();
+        this.joinWatchControllers.add(watcher);
+        void this.watchInputDelivery(
+          message.id,
+          {
+            kind: "receipt",
+            executionId: delivery.executionId,
+            deliveryId: delivery.deliveryId,
+            status: delivery.status as "pending" | "applied",
+          },
+          watcher,
+        );
+      } else if (delivery?.status === "sending") {
+        this.updateInputDelivery(message.id, { status: "unknown" });
+      }
+    }
   }
 
   public hydrateArtifacts(
