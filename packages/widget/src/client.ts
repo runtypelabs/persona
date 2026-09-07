@@ -1747,6 +1747,10 @@ export class AgentWidgetClient {
           streamAdmitted = true;
         }
         options.join.onAdmission(admission);
+        if (options.signal?.aborted) {
+          void response.body?.cancel().catch(() => {});
+          return;
+        }
         if (admission.kind === "receipt") return;
       }
 
