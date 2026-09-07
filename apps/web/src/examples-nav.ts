@@ -146,6 +146,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "live-join-demo",
+    href: "/live-join-demo.html",
+    title: "Live Input Joining",
+    blurb: "Add details while an agent works: one execution, separate delivery receipts, and explicit Stop.",
+    tier: "patterns",
+    tags: ["composer", "streaming", "agent", "durable"],
+    modes: ["inline", "launcher"],
+  },
+  {
     slug: "composer-suite",
     href: "/composer-suite.html",
     title: "Composer Suite",

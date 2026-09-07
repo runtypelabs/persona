@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/src/demo-shared.css" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>Live Input Joining · Persona</title>
+    <style>
+      .join-log {
+        font: 12px/1.6 monospace;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        max-height: 220px;
+        overflow: auto;
+      }
+      .join-steps {
+        padding-left: 20px;
+        line-height: 1.7;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell-main">
+      <div class="stage">
+        <aside class="stage-controls">
+          <div class="info-section">
+            <h3 data-source-label>Keyless simulation</h3>
+            <p data-source-description>
+              Real widget, simulated backend. No API key, network request, or
+              model spend. State lasts only until you reset or reload.
+            </p>
+            <ol class="join-steps">
+              <li>Start an availability check.</li>
+              <li>
+                Send another detail while the tool works for eight seconds.
+              </li>
+              <li>
+                Watch both deliveries settle under one execution, or press Stop
+                to cancel it.
+              </li>
+            </ol>
+            <div class="btn-group">
+              <button type="button" data-start>Start a request</button>
+              <button type="button" data-followup>Add a detail</button>
+              <button type="button" data-lose-ack>
+                Lose next join acknowledgement
+              </button>
+              <button type="button" data-reset>Reset demo</button>
+            </div>
+          </div>
+          <div class="info-section" data-log-section>
+            <h3>Admission log</h3>
+            <pre class="join-log" data-join-log role="log" aria-live="polite">
+Ready. Start a request, then add a detail.</pre
+            >
+          </div>
+        </aside>
+        <div class="stage-widget"></div>
+      </div>
+      <section class="notes">
+        <h2 class="notes-heading">Deliver, don’t interrupt</h2>
+        <div class="notes-section">
+          <p>
+            <code>composer.streamingSubmitBehavior: "join"</code> sends only the
+            new user message. It does not replace the response stream or restart
+            the active tool. Each input gets its own receipt; Stop cancels the
+            execution separately.
+          </p>
+          <p>
+            <strong>Live requirements:</strong> a saved native Runtype agent, a
+            client token for a chat surface with durable turns enabled, and an
+            API that advertises <code>durableRecovery.join</code>. Proxy, flow,
+            and older servers are not supported.
+          </p>
+          <p>
+            To use a real agent, set
+            <code>VITE_LIVE_JOIN_CLIENT_TOKEN</code> and
+            <code>VITE_LIVE_JOIN_API_URL</code> in
+            <code>apps/web/.env.local</code>, then restart Vite. Use a
+            browser-safe client token, never an API key. The Code tab’s demo URL and token are placeholders; replace them for a real integration. The simulation does not
+            demonstrate reload durability, authorization, or server-side
+            recovery.
+          </p>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/live-join-demo.ts"></script>
+    <script type="module">
+      import { renderExamplesShell } from "/src/examples-nav.ts";
+      renderExamplesShell("live-join-demo");
+    </script>
+  </body>
+</html>

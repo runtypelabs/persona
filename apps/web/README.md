@@ -258,3 +258,18 @@ Ask the AI to:
 - "Display a chart with sales data: [100, 150, 200, 180, 250]"
 - "Create a success status badge"
 - "Show an info card with a warning message"
+
+### Live Input Joining
+
+Open `/live-join-demo.html` (also listed under Patterns and in the command palette).
+The keyless demo uses the real widget with an in-memory client-token transport: start
+an eight-second tool, add details without interrupting, inspect delivery receipts,
+simulate a lost acknowledgement, and explicitly Stop. Inline and launcher modes,
+Preview/Code, and reset use the shared example helpers. Reload resets the simulation;
+it is not a substitute for server durability or authorization testing.
+
+For a real native durable agent, set `VITE_LIVE_JOIN_CLIENT_TOKEN` (browser-safe
+client token, **never an API key**) and `VITE_LIVE_JOIN_API_URL` in
+`apps/web/.env.local`, then restart Vite. Enable durable turns on its chat surface
+and allow your local origin on the client token. Real mode bypasses the simulation;
+its tool duration and model spend depend on the configured agent.

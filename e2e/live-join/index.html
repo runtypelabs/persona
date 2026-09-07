@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Persona live input test</title>
+  <link rel="stylesheet" href="/widget.css" data-persona />
+  <style>
+    body {
+      margin: 0;
+      padding: 24px;
+      background: #f0f1f3;
+      font-family: system-ui;
+    }
+    h1 {
+      font-size: 18px;
+      font-weight: 500;
+      margin: 0 0 16px;
+    }
+    #widget {
+      height: 760px;
+      max-width: 720px;
+      margin: auto;
+    }
+    @media (max-width: 600px) {
+      body {
+        padding: 12px;
+      }
+      #widget {
+        height: calc(100dvh - 68px);
+      }
+    }
+  </style>
+  <h1>Persona · Local live input validation</h1>
+  <main id="widget"></main>
+  <script src="/index.global.js"></script>
+  <script>
+    (async () => {
+      const fixture = await fetch("/fixture.json").then((response) =>
+        response.json(),
+      );
+      const params = new URLSearchParams(location.search);
+      window.joinErrors = [];
+      window.joinController = AgentWidget.initAgentWidget({
+        target: "#widget",
+        useShadowDom: false,
+        config: {
+          clientToken: fixture.token,
+          apiUrl: fixture.apiUrl,
+          launcher: { enabled: false },
+          welcome: { variant: "none" },
+          composer: { streamingSubmitBehavior: params.get("mode") || "join" },
+          features: {
+            history: { enabled: true },
+            askUserQuestion: { enabled: true, expose: params.has("questions") },
+            toolCallDisplay: { enabled: true },
+          },
+          persistState: { keyPrefix: "persona-live-join-" },
+          onError: (error) => window.joinErrors.push(error.message),
+        },
+      });
+    })();
+  </script>
+</html>
