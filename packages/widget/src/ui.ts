@@ -1424,6 +1424,7 @@ export const createAgentExperience = (
   let rightActions: HTMLElement | null = panelElements.rightActions;
   let sendButtonWrapper: HTMLElement | null = panelElements.sendButtonWrapper;
   let setSendButtonMode = panelElements.setSendButtonMode;
+  let joinStopButton: HTMLButtonElement | null = null;
 
   // Use mutable references for mic button so we can update them dynamically
   let micButton: HTMLButtonElement | null = panelElements.micButton;
@@ -1768,8 +1769,8 @@ export const createAgentExperience = (
    */
   function resolveStreamingSubmitBehavior(): ComposerStreamingSubmitBehavior {
     const configured = config.composer?.streamingSubmitBehavior ?? "block";
-    if (configured !== "interrupt") return configured;
-    if (config.clientToken) return "interrupt";
+    if (configured !== "interrupt" && configured !== "join") return configured;
+    if (config.clientToken) return configured;
     if (!warnedInterruptFallback && config.debug === true) {
       warnedInterruptFallback = true;
       if (typeof console !== "undefined") {
@@ -2715,6 +2716,12 @@ export const createAgentExperience = (
       event.preventDefault();
       handleBubbleExpansion(event);
     }
+  });
+
+  messagesWrapper.addEventListener("click", event => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("[data-persona-delivery-retry]");
+    const messageId = button?.dataset.personaDeliveryRetry;
+    if (messageId) void session.retryJoinedMessage(messageId);
   });
 
   messagesWrapper.addEventListener('keydown', (event) => {
@@ -7945,7 +7952,7 @@ export const createAgentExperience = (
    */
   function syncComposerSendAvailability(): void {
     if (!sendButton) return;
-    if (composerStore.getState().phase === "streaming") {
+    if (composerStore.getState().phase === "streaming" && resolveStreamingSubmitBehavior() !== "join") {
       sendButton.disabled = false;
       return;
     }
@@ -8091,7 +8098,25 @@ export const createAgentExperience = (
     composerStore.setStreaming(disabled);
     // The send button stays enabled while streaming: it doubles as a stop
     // button.
-    setSendButtonMode(disabled ? "stop" : "send");
+    const join = resolveStreamingSubmitBehavior() === "join";
+    setSendButtonMode(disabled && !join ? "stop" : "send");
+    if (disabled && join && sendButtonWrapper?.parentElement) {
+      if (!joinStopButton) {
+        joinStopButton = createElement("button", "persona-icon-btn persona-text-xs");
+        joinStopButton.type = "button";
+        joinStopButton.textContent = "Stop";
+        joinStopButton.setAttribute("aria-label", "Stop response");
+        joinStopButton.setAttribute("data-persona-join-stop", "");
+        joinStopButton.addEventListener("click", () => {
+          session.cancel();
+          throughputTracker?.reset();
+          eventStreamView?.update();
+        });
+      }
+      sendButtonWrapper.parentElement.insertBefore(joinStopButton, sendButtonWrapper);
+    } else {
+      joinStopButton?.remove();
+    }
     applyComposerLock();
   };
 
@@ -8949,7 +8974,7 @@ export const createAgentExperience = (
   // On teardown, cancel any in-flight turn/reconnect so a pending durable
   // reconnect's backoff timer and focus/online listeners don't outlive the
   // widget (cancel() → teardownReconnect()).
-  destroyCallbacks.push(() => session.cancel());
+  destroyCallbacks.push(() => session.cancel({ execution: false }));
   // Drop the visitor store's `storage` listener and the session's subscription
   // to it; a client rebuild must not leak either.
   destroyCallbacks.push(() => {
@@ -11382,14 +11407,10 @@ export const createAgentExperience = (
   // Pre-initialize client session when in client token mode so feedback works
   // before the user sends their first message (e.g. on restored/persisted messages)
   if (config.clientToken) {
-    session
-      .initClientSession()
-      .then(() => {
-        // Boot resume is authoritative only after reconciliation; the client
-        // already gated its init on `historyBootstrapReady`.
-        if (!historyAvailable()) return undefined;
-        return session.reconcileBootConversation({ scope: historyScope() });
-      })
+    const initialize = historyAvailable()
+      ? session.initializeBootConversation({ scope: historyScope() })
+      : session.initClientSession();
+    initialize
       .then(() => {
         syncEarlierMessagesPill();
       })
@@ -11683,6 +11704,11 @@ export const createAgentExperience = (
         sendDisabled: isComposerSendBlocked(),
       })
     ) {
+      return;
+    }
+
+    if (resolveStreamingSubmitBehavior() === "join" && !session.canAcceptJoinedInput()) {
+      showComposerNotice("Messages are still being delivered. Please wait before sending another.");
       return;
     }
 
@@ -11990,7 +12016,7 @@ export const createAgentExperience = (
     // While a response is streaming, the submit button acts as a stop button.
     // Abort the in-flight stream and leave textarea contents / attachments
     // intact so the user can edit and resend without retyping.
-    if (session.isStreaming()) {
+    if (session.isStreaming() && resolveStreamingSubmitBehavior() !== "join") {
       session.cancel();
       // Cancelling emits no terminal/error SSE frame, so reset the throughput
       // tracker (as clear-chat does) to avoid a stale `running` row lingering.
@@ -13540,7 +13566,7 @@ export const createAgentExperience = (
   });
 
   destroyCallbacks.push(() => {
-    session.cancel();
+    session.cancel({ execution: false });
   });
 
   if (launcherSurfaceInstance) {

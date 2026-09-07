@@ -1231,6 +1231,23 @@ export const createStandardBubble = (
 
   bubble.appendChild(contentDiv);
 
+  if (message.role === "user" && message.delivery) {
+    const delivery = createElement("div", "persona-mt-1 persona-text-xs persona-opacity-70");
+    delivery.setAttribute("data-persona-delivery", message.delivery.status);
+    delivery.setAttribute("role", "status");
+    const labels = { sending: "Sending…", pending: "Waiting for the agent", applied: "Received by the agent", settled: "Delivered", unknown: "Delivery unconfirmed — retry to check safely", rejected: "Message not delivered" };
+    delivery.textContent = message.delivery.status === "not_applied" ? "Not applied — the run ended before receiving this message" : labels[message.delivery.status];
+    if (message.delivery.error) delivery.title = message.delivery.error;
+    bubble.appendChild(delivery);
+    if (message.delivery.status === "unknown" || message.delivery.status === "rejected" || message.delivery.status === "not_applied") {
+      const retry = createElement("button", "persona-text-xs persona-underline persona-mt-1");
+      retry.type = "button";
+      retry.textContent = message.delivery.status === "not_applied" ? "Send again" : "Retry delivery";
+      retry.setAttribute("data-persona-delivery-retry", message.id);
+      bubble.appendChild(retry);
+    }
+  }
+
   // Add timestamp below if configured
   if (showTimestamp && timestampPosition === "below" && message.createdAt) {
     const timestamp = createTimestamp(message, timestampConfig!);
