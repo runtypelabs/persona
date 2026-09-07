@@ -5,7 +5,7 @@
  * `clientTools[]` (set `features.askUserQuestion.expose: true`): the same
  * wire surface WebMCP page tools ride. The server registers it as a LOCAL
  * tool under its bare name (`origin: 'sdk'` tools are not `webmcp:`-prefixed),
- * so when the model calls it the execution pauses with a `step_await`, the
+ * so when the model calls it the execution pauses with an `await`, the
  * widget's answer-pill sheet renders, and `session.resolveAskUserQuestion()`
  * resumes the execution with the structured answers. The public await frame
  * for a local-tool pause carries no `awaitReason`; that discriminator is

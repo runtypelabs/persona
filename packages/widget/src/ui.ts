@@ -3272,7 +3272,7 @@ export const createAgentExperience = (
 
     removeAskUserQuestionSheet(askUserOverlay, toolCallId);
 
-    // Branch: LOCAL-tool pause (step_await) resumes via /resume with structured
+    // Branch: LOCAL-tool pause (await) resumes via /resume with structured
     // toolOutputs; legacy path sends as a plain user message.
     const sourceMessage = sessionRef.current
       .getMessages()
@@ -6408,11 +6408,11 @@ export const createAgentExperience = (
       if (cachedWrapper) {
         tempContainer.appendChild(cachedWrapper.cloneNode(true));
         // Keep the overlay sheet alive only while the server is actively
-        // waiting on the user (awaitingLocalTool === true). Before step_await
+        // waiting on the user (awaitingLocalTool === true). Before await
         // fires, or after the answer resumes the flow, omit from
         // liveAskToolIds so the prune loop below removes any stale DOM sheet.
         // Guards against lingering skeleton sheets from tool_start events
-        // that never get a matching step_await (e.g. LLM-hallucinated trailing
+        // that never get a matching await (e.g. LLM-hallucinated trailing
         // ask_user_question calls at end-of-turn).
         if (
           isAskUserQuestionMessage(message) &&

@@ -127,48 +127,9 @@ export function textTurnStream(text: string, executionId = "exec_1"): string {
   );
 }
 
-/**
- * Assistant turn whose display projection diverges from the model channel:
- * `transcript_insert` sets `content` (what the visitor sees) and `rawContent`
- * (what the model produced) directly, which is what makes the widget finalize
- * the projection over PATCH .../display-projections.
- */
-export function divergentTurnStream(options: {
-  messageId: string;
-  display: string;
-  raw: string;
-  executionId?: string;
-}): string {
-  const executionId = options.executionId ?? "exec_div";
-  const now = new Date().toISOString();
-  return (
-    sseEvent("execution_start", {
-      kind: "agent",
-      executionId,
-      agentId: "virtual",
-      agentName: "E2E",
-      maxTurns: 1,
-      startedAt: now,
-      seq: 1,
-    }) +
-    sseEvent("transcript_insert", {
-      message: {
-        id: options.messageId,
-        role: "assistant",
-        content: options.display,
-        rawContent: options.raw,
-        createdAt: now,
-        streaming: false,
-      },
-    }) +
-    sseEvent("execution_complete", {
-      kind: "agent",
-      executionId,
-      success: true,
-      completedAt: now,
-      seq: 2,
-    })
-  );
+/** A structured model turn, projected to display text by the fixture's JSON parser. */
+export function divergentTurnStream(options: { raw: string; executionId?: string }): string {
+  return textTurnStream(options.raw, options.executionId ?? "exec_div");
 }
 
 export interface FakeHistoryApiOptions {

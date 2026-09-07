@@ -18,7 +18,7 @@ import type { RuntypeFlowConfig } from "../index.js";
  * (page-provided) catalog.
  *
  * Model: `gemini-3.7-flash`. WebMCP depends on the model
- * emitting **native** tool calls (each surfaces as a `step_await` the widget
+ * emitting **native** tool calls (each surfaces as a `await` the widget
  * resumes), so a tool-reliable model is required here. `responseFormat` is
  * markdown (not JSON) so the model is free to interleave tool calls with a
  * natural-language summary instead of being constrained to a JSON envelope.

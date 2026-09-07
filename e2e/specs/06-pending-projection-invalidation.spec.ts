@@ -44,14 +44,14 @@ test("a projection captured across a credential change is discarded, not retried
 
   const a = await context.newPage();
   const b = await context.newPage();
-  await a.goto(fixtureUrl({ mode: "intercepted" }));
+  await a.goto(fixtureUrl({ mode: "intercepted", structured: true }));
   await waitForWidget(a);
 
   api.setChatStream(
-    divergentTurnStream({ messageId: "asst_1", display: DISPLAY, raw: MODEL })
+    divergentTurnStream({ raw: MODEL })
   );
 
-  await b.goto(fixtureUrl({ mode: "intercepted" }));
+  await b.goto(fixtureUrl({ mode: "intercepted", structured: true }));
   await waitForWidget(b);
   await expect.poll(async () => await visitorToken(b)).toMatch(/^cvt_/);
 

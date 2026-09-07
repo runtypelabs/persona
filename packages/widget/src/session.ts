@@ -334,7 +334,7 @@ export class AgentWidgetSession {
   //                         concurrent re-fire during the resolve round-trip.
   //   webMcpResolvedKeys: /resume HTTP returned 2xx; not cleared on a new
   //                         dispatch (executionId scoping makes that
-  //                         unnecessary). Blocks stale step_await re-emits
+  //                         unnecessary). Blocks stale await re-emits
   //                         for the same execution.
   //
   // If `/resume` throws (network error, server 5xx), we DO want a retry path:
@@ -343,10 +343,10 @@ export class AgentWidgetSession {
   private webMcpInflightKeys: Set<string> = new Set();
   private webMcpResolvedKeys: Set<string> = new Set();
   // Per-resolve AbortControllers, kept in a set so multiple `webmcp:*`
-  // step_await resolves in one turn never abort one another. The shared
+  // await resolves in one turn never abort one another. The shared
   // `this.abortController` is intentionally NOT used by resolveWebMcpToolCall:
   // in a CHAINED turn (tool A → /resume → tool B, where the server emits B's
-  // step_await inside A's resume SSE stream) the shared controller is still
+  // await inside A's resume SSE stream) the shared controller is still
   // piping A's resume stream: the very stream that just delivered B. Aborting
   // it mid-chain (the prior shared-controller pre-abort) tore that stream down,
   // so B never reached execute() and its /resume was never POSTed, pausing the
@@ -369,7 +369,7 @@ export class AgentWidgetSession {
     new Map();
   private webMcpApprovalSeq = 0;
   // Parallel local-tool batching (core#3878). A single model turn can emit
-  // multiple `step_await(local_tool_required)` events for ONE paused
+  // multiple `await(local_tool_required)` events for ONE paused
   // executionId: including two PARALLEL calls to the SAME tool ("add SHOE-001
   // and SHOE-007"). Those collapse to an identical `toolId`/`index` and differ
   // only by the per-call `webMcpToolCallId`. We collect all awaits for an
@@ -377,7 +377,7 @@ export class AgentWidgetSession {
   // keyed by `webMcpToolCallId`: NOT one `/resume` per tool keyed by name
   // (which collides for same-tool calls, and whose concurrent posts on one
   // execution raced → the second 404'd → the turn hung). Keyed by executionId;
-  // `seen` dedupes duplicate step_await re-emits within a batch. Cleared on
+  // `seen` dedupes duplicate await re-emits within a batch. Cleared on
   // every teardown via `abortWebMcpResolves`.
   private webMcpAwaitBatches: Map<
     string,
@@ -3423,14 +3423,14 @@ export class AgentWidgetSession {
       batch = { snapshots: [], seen: new Set() };
       this.webMcpAwaitBatches.set(executionId, batch);
     }
-    // Duplicate step_await re-emit for a call already in this batch: ignore.
+    // Duplicate await re-emit for a call already in this batch: ignore.
     if (batch.seen.has(callId)) return;
     batch.seen.add(callId);
     batch.snapshots.push(toolMessage);
     // NB: no flush is scheduled here. Flushing happens once the stream that is
     // delivering these awaits ENDS (handleEvent's `status: idle` →
     // scheduleWebMcpBatchFlush). Flushing per-await on the next microtask would
-    // race SSE chunk boundaries: two PARALLEL step_awaits split across separate
+    // race SSE chunk boundaries: two PARALLEL awaits split across separate
     // `read()` chunks would flush the first alone and post a partial resume.
     // Waiting for stream end guarantees every parallel await is collected first.
   }
@@ -3809,12 +3809,12 @@ export class AgentWidgetSession {
    * resumes with a canned "shown" result (the chips render from the message
    * list, not from this resolve).
    *
-   * Triggered automatically from `handleEvent` when a `await`-derived
+   * Triggered automatically from `handleEvent` when an `await`-derived
    * message arrives for such a tool: the user does not click a pill; the
    * bridge's confirm-bubble gate (WebMCP only) is the only interactive
    * surface.
    *
-   * Idempotent on the message's `toolCall.id`: re-emits of the same step_await
+   * Idempotent on the message's `toolCall.id`: re-emits of the same await
    * (e.g. from message coalescing) won't double-fire `tool.execute`. Failure
    * modes, declined, timed out, throw, unknown tool, all resolve into a
    * `{ isError: true, content: [...] }` payload that resumes the dispatch
@@ -3831,7 +3831,7 @@ export class AgentWidgetSession {
     const wireToolName = toolMessage.toolCall?.name;
     const toolCallId = toolMessage.toolCall?.id;
 
-    // Malformed step_await wire shapes shouldn't silently strand the
+    // Malformed await wire shapes shouldn't silently strand the
     // server-side dispatch. Three failure modes:
     //   - no executionId: no /resume target exists; surface to the host
     //     via onError so an operator can react. This is a server-side
@@ -3846,7 +3846,7 @@ export class AgentWidgetSession {
     if (!executionId) {
       this.callbacks.onError?.(
         new Error(
-          "WebMCP step_await missing executionId: dispatch left paused.",
+          "WebMCP await missing executionId: dispatch left paused.",
         ),
       );
       return;
@@ -3870,7 +3870,7 @@ export class AgentWidgetSession {
           content: [
             {
               type: "text",
-              text: "WebMCP step_await missing toolCall.id: cannot execute the page tool.",
+              text: "WebMCP await missing toolCall.id: cannot execute the page tool.",
             },
           ],
         });
@@ -3992,7 +3992,7 @@ export class AgentWidgetSession {
     this.teardownReconnect();
     // Tear down every in-flight WebMCP resolve (each owns its own controller,
     // independent of the shared one above). Clear the inflight set so retries
-    // are possible if the user re-issues the same step_await context.
+    // are possible if the user re-issues the same await context.
     this.abortWebMcpResolves();
     this.webMcpInflightKeys.clear();
     // Stop any in-progress audio too: when the user hits "stop", they want
@@ -4283,7 +4283,7 @@ export class AgentWidgetSession {
         this.activeAssistantMessageId = event.message.id;
       }
 
-      // Local-tool auto-resolve: when a step_await emits a tool-variant
+      // Local-tool auto-resolve: when a await emits a tool-variant
       // message for a `webmcp:*` tool, or the built-in fire-and-forget
       // `suggest_replies`: resolve it and post the result to /resume.
       // Unlike ask_user_question, no user pill click is required; for WebMCP
@@ -4294,7 +4294,7 @@ export class AgentWidgetSession {
       // Defer via `queueMicrotask` so handleEvent returns FIRST. The current
       // SSE consumer is still mid-loop; once we return, the dispatch's
       // `connectStream` sees end-of-stream (server closes the SSE at
-      // step_await), flips status to "idle", and clears `abortController`
+      // await), flips status to "idle", and clears `abortController`
       // before our resolve grabs them. Without this, the original dispatch's
       // finalizer would clobber the new abort controller and `streaming=true`
       // set inside `resolveWebMcpToolCall`.
@@ -4857,7 +4857,7 @@ export class AgentWidgetSession {
       // suggest_replies equivalent: preserve the persisted fire-and-forget
       // resolution across re-emissions. It is the only dedupe signal that
       // survives a hydration (the in-memory key sets are cleared), so a
-      // stale step_await re-emit must not wipe it before
+      // stale await re-emit must not wipe it before
       // `isSuggestRepliesAlreadyResolved` checks it in the resolve path.
       if (
         existing.agentMetadata?.suggestRepliesResolved === true &&
@@ -4902,7 +4902,7 @@ export class AgentWidgetSession {
       // `awaitingLocalTool` back to true and resurrect the "waiting on
       // local tool" UI. It also must not overwrite an existing running or
       // completed toolCall with the fresh running skeleton emitted by client.ts
-      // for every step_await. resolveWebMcpToolCall's dedupe path returns
+      // for every await. resolveWebMcpToolCall's dedupe path returns
       // without re-touching the message, so correct the merge here (also avoids
       // a one-frame flash before that microtask runs).
       const reTcName = withSequence.toolCall?.name;

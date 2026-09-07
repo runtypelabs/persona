@@ -110,9 +110,9 @@ describe("ThroughputTracker: exact usage finalization", () => {
   it("accumulates exact usage from intermediate completes and uses it on terminal", () => {
     const h = makeTracker();
     h.at(1000).processEvent("text_delta", { type: "text_delta", delta: text(40) });
-    h.at(1500).processEvent("step_complete", {
-      type: "step_complete",
-      result: { tokens: { output: 50 } },
+    h.at(1500).processEvent("turn_complete", {
+      type: "turn_complete",
+      tokens: { input: 0, output: 50 },
     });
     h.at(2000).processEvent("turn_complete", {
       type: "turn_complete",
@@ -280,9 +280,9 @@ describe("ThroughputTracker: exact usage never drops mid-run", () => {
     h.at(1000).processEvent("text_delta", { type: "text_delta", delta: text(40) });
 
     // Step 1 reports exact usage; the running total switches to it.
-    h.at(1500).processEvent("step_complete", {
-      type: "step_complete",
-      result: { tokens: { output: 50 } },
+    h.at(1500).processEvent("turn_complete", {
+      type: "turn_complete",
+      tokens: { input: 0, output: 50 },
     });
     let m = h.metric();
     expect(m.outputTokens).toBe(50);
@@ -309,4 +309,16 @@ describe("ThroughputTracker: live rate decays while paused", () => {
     h.at(5000);
     expect(h.metric().tokensPerSecond).toBeCloseTo(25);
   });
+});
+
+
+it("does not mistake total token counts or user result data for output usage", () => {
+  const h = makeTracker();
+  h.at(1000).processEvent("text_delta", { type: "text_delta", delta: text(40) });
+  h.at(1500).processEvent("step_complete", {
+    type: "step_complete", tokensUsed: 900,
+    result: { tokens: { output: 500 }, usage: { outputTokens: 500 } },
+  });
+  h.at(2000).processEvent("execution_complete", { type: "execution_complete", totalTokensUsed: 900 });
+  expect(h.metric()).toMatchObject({ outputTokens: 10, source: "estimate" });
 });

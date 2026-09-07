@@ -302,7 +302,7 @@ function createRuntypeBackend() {
       const end = cursor ? Number(cursor) : conversation.messages.length;
       const start = Math.max(0, end - PAGE_SIZE);
       return respond(200, {
-        conversation: summarize(conversation),
+        ...summarize(conversation),
         messages: conversation.messages.slice(start, end),
         nextMessageCursor: start > 0 ? String(start) : null,
         conversationRevision: conversation.revision,

@@ -4,7 +4,7 @@
  * The widget can advertise this tool to the agent on every dispatch via
  * `clientTools[]` (set `suggestions.followUps.expose: true`): the same
  * wire surface as `ask_user_question` and WebMCP page tools. When the model
- * calls it, the execution pauses with a `step_await` (a local-tool pause
+ * calls it, the execution pauses with an `await` (a local-tool pause
  * carries no `awaitReason`; that discriminator is internal). Unlike
  * `ask_user_question`, the widget resolves it FIRE-AND-FORGET: it renders the
  * configured follow-up surface and immediately resumes the execution with a

@@ -88,6 +88,7 @@ const config: AgentWidgetConfig =
     ? {
         ...base,
         clientToken,
+        ...(params.get("structured") === "1" ? { parserType: "json" as const } : {}),
         apiUrl,
         persistState: persist ? { keyPrefix } : false,
       }

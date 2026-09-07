@@ -991,15 +991,15 @@ export type AgentMessageMetadata = {
    */
   parentStepId?: string;
   /**
-   * Set to `true` on a tool-variant message produced from a `step_await`
+   * Set to `true` on a tool-variant message produced from an `await`
    * event (`awaitReason: "local_tool_required"`). Signals to UI code that
    * the tool call is a LOCAL tool and the server is paused waiting for a
    * `POST /v1/dispatch/resume` with the user's answer keyed by tool name.
    */
   awaitingLocalTool?: boolean;
   /**
-   * The provider per-call id (`toolu_…`) carried on the `step_await` /
-   * `await` events for a LOCAL tool (core#3878). Present only when the
+   * The provider per-call id (`toolu_…`) carried on the `await`
+   * event for a LOCAL tool (core#3878). Present only when the
    * server emits it. Two PARALLEL calls to the same tool in one turn share a
    * `toolName` (and a collapsed `toolId`) but get DISTINCT `webMcpToolCallId`s,
    * so this is the key the widget batches a single `/resume` on: preferred
@@ -7802,6 +7802,9 @@ export type AgentWidgetToolCall = {
   args?: unknown;
   chunks?: string[];
   result?: unknown;
+  /** Whether the tool succeeded; failure does not necessarily end the execution. */
+  success?: boolean;
+  error?: string;
   duration?: number;
   startedAt?: number;
   completedAt?: number;

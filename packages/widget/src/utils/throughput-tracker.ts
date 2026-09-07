@@ -97,52 +97,15 @@ function resolveEventType(
   return typeof payload.type === "string" ? payload.type : eventType;
 }
 
-/** Extract exact output tokens from a variety of usage payload shapes. */
+/** Exact output counts are carried by turn and execution completions. */
 function getOutputTokens(payload: Record<string, unknown>): number | undefined {
-  const result = getRecord(payload, "result");
-  const candidates = [
-    getRecord(payload, "tokens"),
-    getRecord(payload, "totalTokens"),
-    result ? getRecord(result, "tokens") : undefined,
-    getRecord(payload, "usage"),
-    result ? getRecord(result, "usage") : undefined,
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    const outputTokens =
-      toFiniteNumber(candidate.output) ??
-      toFiniteNumber(candidate.outputTokens) ??
-      toFiniteNumber(candidate.completionTokens);
-    if (outputTokens !== undefined) return outputTokens;
-  }
-
-  return (
-    toFiniteNumber(payload.outputTokens) ??
-    toFiniteNumber(payload.completionTokens) ??
-    (result
-      ? (toFiniteNumber(result.outputTokens) ??
-        toFiniteNumber(result.completionTokens))
-      : undefined)
-  );
+  const tokens = getRecord(payload, "tokens") ?? getRecord(payload, "totalTokens");
+  return tokens ? toFiniteNumber(tokens.output) : undefined;
 }
 
-/** Extract provider execution time (ms) from a variety of payload shapes. */
-function getExecutionTimeMs(
-  payload: Record<string, unknown>
-): number | undefined {
-  const result = getRecord(payload, "result");
-  return (
-    toFiniteNumber(payload.durationMs) ??
-    toFiniteNumber(payload.executionTime) ??
-    toFiniteNumber(payload.executionTimeMs) ??
-    toFiniteNumber(payload.execution_time) ??
-    toFiniteNumber(payload.duration) ??
-    (result
-      ? (toFiniteNumber(result.executionTime) ??
-        toFiniteNumber(result.executionTimeMs))
-      : undefined)
-  );
+/** Current step/execution completions report elapsed milliseconds as durationMs. */
+function getExecutionTimeMs(payload: Record<string, unknown>): number | undefined {
+  return toFiniteNumber(payload.durationMs);
 }
 
 function defaultClock(): number {

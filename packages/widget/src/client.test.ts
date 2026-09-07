@@ -1297,7 +1297,7 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
     expect(lastAssistant?.type === 'message' && lastAssistant.message.streaming).toBe(false);
   });
 
-  it.each(['execution_error', 'dispatch_error'])('should emit error and finalize streaming on %s', async (errorType) => {
+  it('should emit error and finalize streaming on execution_error', async () => {
     const events: AgentWidgetEvent[] = [];
 
     global.fetch = createRawStreamFetch([
@@ -1305,11 +1305,9 @@ describe('AgentWidgetClient - Agent Event Streaming', () => {
       sseEvent("text_start", { executionId: "exec-test", seq: 1, id: "text_1" }),
       sseEvent("text_delta", { executionId: "exec-test", seq: 2, id: "text_1", delta: "x" }),
       sseEvent("text_complete", { executionId: "exec-test", seq: 3, id: "text_1", text: "x" }),
-      sseEvent(errorType, {
+      sseEvent("execution_error", {
         executionId: "exec-test", seq: 4,
-        ...(errorType === "dispatch_error"
-          ? { message: "bad config" }
-          : { kind: "flow", error: { code: "error", message: "bad config" } }),
+        kind: "flow", error: { code: "error", message: "bad config" },
       })
     ]);
 
@@ -2482,7 +2480,7 @@ describe('AgentWidgetClient: unified local-tool await parsing', () => {
         toolCallId: 'tc_webmcp_1',
         toolName: 'webmcp:get_product_by_url',
         executionId: 'exec_abc',
-        startedAt: 1234,
+        awaitedAt: new Date(1234).toISOString(),
         parameters: { path: '/jade/' },
       }),
     });
@@ -2713,7 +2711,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
     (client as unknown as { readVisitorToken: () => Promise<string> }).readVisitorToken =
       async () => 'cvt_resume';
 
-    await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } }, { after: '18' });
+    await client.resumeFlow('exec_xyz', { toolu_A: { ok: true } }, { after: '18.2' });
 
     // Session-authed sibling of /v1/client/chat: no Bearer key, sessionId in body.
     expect(capturedUrl).toBe('https://api.runtype.com/v1/client/resume');
@@ -2722,7 +2720,7 @@ describe('AgentWidgetClient.resumeFlow', () => {
       toolOutputs: { toolu_A: { ok: true } },
       streamResponse: true,
       sessionId: 'cs_123',
-      after: '18',
+      after: '18.2',
     });
     expect(capturedHeaders!['Authorization']).toBeUndefined();
     expect(capturedHeaders!['X-Visitor-Token']).toBe('cvt_resume');

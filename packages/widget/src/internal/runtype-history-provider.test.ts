@@ -128,7 +128,7 @@ describe('createRuntypeHistoryProvider', () => {
     fetchMock.mockImplementation((url: string) => {
       if (url.includes('/v1/client/init')) return initOk();
       return respond(200, {
-        conversation: {
+        ...{
           id: 'conv_1',
           title: 'Saved',
           targetId: 'flow_1',
@@ -182,7 +182,7 @@ describe('createRuntypeHistoryProvider', () => {
     fetchMock.mockImplementation((url: string) => {
       if (url.includes('/v1/client/init')) return initOk();
       return respond(200, {
-        conversation: { id: 'conv_1', title: 'Saved', targetId: null, messageCount: 1 },
+        id: 'conv_1', title: 'Saved', targetId: null, messageCount: 1,
         // No timestamps: the mapper must synthesize them under the boundary.
         messages: [{ id: 'old1', role: 'user', content: 'older', displayAvailable: true }],
         nextMessageCursor: null,

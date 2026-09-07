@@ -203,7 +203,7 @@ describe('client visitor history - init capability shape', () => {
     expect(requests[0].body).not.toHaveProperty('conversationId');
   });
 
-  it('normalizes targetId, preferring the top-level field over flow.id', async () => {
+  it('uses canonical targetId without falling back to flow metadata', async () => {
     installFetch([
       ok({ targetId: 'agent_9' }),
       ok({ sessionId: 'sess_2', targetId: undefined, flow: { id: 'flow_7', name: 'F', description: null } }),
@@ -216,7 +216,23 @@ describe('client visitor history - init capability shape', () => {
 
     expect(a.targetId).toBe('agent_9');
     expect(a.flow.id).toBe('flow_1');
-    expect(b.targetId).toBe('flow_7');
+    expect(b.targetId).toBeUndefined();
+  });
+
+  it('surfaces an init 400 without retrying a different payload', async () => {
+    installFetch([fail(400, { error: 'invalid_token' })]);
+    await expect(makeClient({}).client.initSession()).rejects.toThrow('invalid_token');
+    expect(requests).toHaveLength(1);
+    expect(requests[0].body.durableRecovery).toBe(true);
+  });
+
+  it('accepts a data-only init with no flow or target metadata', async () => {
+    installFetch([() => ({ ok: true, status: 200, json: async () => ({
+      ...initBody(), flow: undefined, targetId: undefined, app: { id: 'app_1' },
+    }) })]);
+    const session = await makeClient({}).client.initSession();
+    expect(session.targetId).toBeUndefined();
+    expect(session.conversationId).toBe('conv_1');
   });
 
   it('uses the exact visitor credential and durable cursor for reconnect', async () => {
@@ -235,14 +251,14 @@ describe('client visitor history - init capability shape', () => {
     const controller = new AbortController();
     const response = await h.client.reconnectClientTokenStream({
       executionId: 'exec_7',
-      after: '12',
+      after: '12.3',
       signal: controller.signal,
     });
 
     expect(response).toBe(events);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(
       `${API_URL}/v1/client/conversations/conv_1/executions/exec_7/events` +
-        '?sessionId=sess_1&after=12'
+        '?sessionId=sess_1&after=12.3'
     );
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({
       method: 'GET',
