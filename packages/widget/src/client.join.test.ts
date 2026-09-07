@@ -184,3 +184,17 @@ describe("client-token live input admission", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+it("does not attach or emit stream state after admission synchronously honors Stop", async () => {
+  const pending = stream();
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(pending.response));
+  const controller = new AbortController();
+  const events: AgentWidgetEvent[] = [];
+  await client().dispatch({
+    messages: [message("stop-before-ack")],
+    signal: controller.signal,
+    join: { turnId: "stop-before-ack", onAdmission: () => controller.abort() },
+  }, (event) => events.push(event));
+  expect(events).toEqual([]);
+  expect(pending.response.body?.locked).toBe(false);
+});
