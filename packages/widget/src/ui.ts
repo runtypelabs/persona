@@ -12966,7 +12966,7 @@ export const createAgentExperience = (
     },
     setMessage(message: string): boolean {
       if (!textarea) return false;
-      if (session.isStreaming()) return false;
+      if (session.isStreaming() && resolveStreamingSubmitBehavior() !== "join") return false;
       if (isComposerInputDisabled()) return false;
 
       // Auto-open widget if closed and the panel is toggleable
@@ -12980,7 +12980,7 @@ export const createAgentExperience = (
       return true;
     },
     submitMessage(message?: string): boolean {
-      if (session.isStreaming()) return false;
+      if (session.isStreaming() && resolveStreamingSubmitBehavior() !== "join") return false;
       // Every submission path is blocked, including the programmatic one.
       if (isComposerSendBlocked()) return false;
 
