@@ -23,7 +23,7 @@ function create() {
   return { session, messages: () => messages, errors };
 }
 afterEach(() => {
-  for (const session of sessions.splice(0)) session.cancel();
+  for (const session of sessions.splice(0)) session.clearMessages();
   vi.restoreAllMocks();
 });
 
@@ -189,4 +189,106 @@ describe("session additive send", () => {
     expect(fixture.messages()).toEqual([]);
     expect(fixture.session.isStreaming()).toBe(false);
   });
+});
+
+it("re-arms receipt polling for hydrated nonterminal deliveries", async () => {
+  const fixture = create();
+  const read = vi
+    .spyOn(fixture.session.getClient(), "getInputDelivery")
+    .mockResolvedValue({
+      kind: "receipt",
+      executionId: "exec_restored",
+      deliveryId: "del_restored",
+      status: "settled",
+    });
+  fixture.session.hydrateMessages([
+    {
+      id: "user_restored",
+      role: "user",
+      content: "restored",
+      createdAt: new Date().toISOString(),
+      delivery: {
+        turnId: "user_restored",
+        executionId: "exec_restored",
+        deliveryId: "del_restored",
+        status: "applied",
+      },
+    },
+  ]);
+  await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1), {
+    timeout: 3000,
+  });
+  expect(fixture.messages()[0].delivery?.status).toBe("settled");
+});
+
+it("connection updates invalidate queued joins before replacing their client", async () => {
+  const fixture = create();
+  let admit!: () => void;
+  const oldClient = fixture.session.getClient();
+  const dispatch = vi
+    .spyOn(oldClient, "dispatch")
+    .mockImplementation(async (options) => {
+      await new Promise<void>((resolve) => {
+        admit = () => {
+          options.join!.onAdmission({
+            kind: "stream",
+            executionId: "old",
+            deliveryId: "old",
+            status: "settled",
+          });
+          resolve();
+        };
+      });
+    });
+  const first = fixture.session.sendMessage("first old target");
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
+  const second = fixture.session.sendMessage("queued old target");
+  fixture.session.updateConfig({ clientToken: "ct_other" });
+  const newDispatch = vi
+    .spyOn(fixture.session.getClient(), "dispatch")
+    .mockResolvedValue();
+  admit();
+  await Promise.all([first, second]);
+  expect(dispatch.mock.calls[0][0].signal?.aborted).toBe(true);
+  expect(dispatch).toHaveBeenCalledTimes(1);
+  expect(newDispatch).not.toHaveBeenCalled();
+  expect(fixture.session.canAcceptJoinedInput()).toBe(true);
+});
+
+it("Stop during a new acknowledgement cancels the newly admitted host, not a completed one", async () => {
+  const fixture = create();
+  const internal = fixture.session as unknown as {
+    joinExecutionId: string | null;
+  };
+  internal.joinExecutionId = "completed-host";
+  let admit!: () => void;
+  const dispatch = vi
+    .spyOn(fixture.session.getClient(), "dispatch")
+    .mockImplementation(async (options) => {
+      await new Promise<void>((resolve) => {
+        admit = () => {
+          options.join!.onAdmission({
+            kind: "stream",
+            executionId: "new-host",
+            deliveryId: "new-delivery",
+            status: "settled",
+          });
+          resolve();
+        };
+      });
+    });
+  const send = fixture.session.sendMessage("new host");
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1));
+  fixture.session.cancel();
+  expect(
+    fixture.session.getClient().cancelClientExecution,
+  ).not.toHaveBeenCalled();
+  expect(dispatch.mock.calls[0][0].signal?.aborted).toBe(false);
+  admit();
+  await send;
+  expect(
+    fixture.session.getClient().cancelClientExecution,
+  ).toHaveBeenCalledExactlyOnceWith("new-host");
+  expect(dispatch.mock.calls[0][0].signal?.aborted).toBe(true);
+  expect(fixture.session.isStreaming()).toBe(false);
 });
