@@ -57,11 +57,11 @@ const assistantTurn = (
 ): MockSSEFrame[] => {
   const blockId = `${turnId}-text`;
   return [
-    { type: "turn_start", executionId, id: turnId, iteration },
+    { type: "turn_start", executionId, id: turnId, role: "assistant", iteration },
     { type: "text_start", executionId, id: blockId },
     ...deltas.map((delta) => ({ type: "text_delta", executionId, id: blockId, delta })),
     { type: "text_complete", executionId, id: blockId },
-    { type: "turn_complete", executionId, id: turnId, ...(stopReason ? { stopReason } : {}) },
+    { type: "turn_complete", executionId, id: turnId, role: "assistant", ...(stopReason ? { stopReason } : {}) },
   ];
 };
 
@@ -82,7 +82,7 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     customFetch: async () => {
       const executionId = "exec-demo-1";
       const events: MockSSEFrame[] = [
-        { type: "execution_start", kind: "agent", executionId, agentId: "demo-agent", agentName: "Demo Agent", maxTurns: 3, startedAt: Date.now() },
+        { type: "execution_start", kind: "agent", executionId, agentId: "demo-agent", agentName: "Demo Agent", maxTurns: 3, startedAt: new Date().toISOString() },
         ...assistantTurn(executionId, "turn-1", 1, ["Let me look that up in the documentation..."]),
         {
           type: "approval_start",
@@ -109,23 +109,23 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
             ...assistantTurn(data.executionId, "turn-denied", 2, [
               "The tool execution was denied. I'll try to help without using that tool.",
             ]),
-            { type: "execution_complete", kind: "agent", executionId: data.executionId, success: true, stopReason: "complete" },
+            { type: "execution_complete", kind: "agent", executionId: data.executionId, success: true, stopReason: "end_turn" },
           ];
-          return createMockSSEStream(events, { delayMs: 150 });
+          return createMockSSEStream(events.map((frame, seq) => ({ ...frame, seq })), { delayMs: 150 });
         }
         const events: MockSSEFrame[] = [
           { type: "approval_complete", executionId: data.executionId, approvalId: data.approvalId, decision: "approved", toolName: data.toolName },
-          { type: "tool_start", executionId: data.executionId, toolCallId: "tool-1", toolName: data.toolName, parameters: { query: "latest AI news 2025", numResults: 5 } },
+          { type: "tool_start", executionId: data.executionId, toolCallId: "tool-1", toolName: data.toolName, toolType: "builtin", parameters: { query: "latest AI news 2025", numResults: 5 } },
           { type: "tool_output_delta", executionId: data.executionId, toolCallId: "tool-1", delta: "Searching..." },
-          { type: "tool_complete", executionId: data.executionId, toolCallId: "tool-1", result: { results: ["Result 1: AI breakthrough", "Result 2: New model released"] }, executionTime: 1200 },
+          { type: "tool_complete", executionId: data.executionId, toolCallId: "tool-1", success: true, result: { results: ["Result 1: AI breakthrough", "Result 2: New model released"] }, executionTime: 1200 },
           ...assistantTurn(data.executionId, "turn-2", 2, [
             "Based on the search results, here are the latest AI developments:\n\n",
             "1. **AI Breakthrough** - Major advances in reasoning capabilities\n",
             "2. **New Model Released** - Next-gen models with improved performance\n",
           ]),
-          { type: "execution_complete", kind: "agent", executionId: data.executionId, success: true, stopReason: "complete" },
+          { type: "execution_complete", kind: "agent", executionId: data.executionId, success: true, stopReason: "end_turn" },
         ];
-        return createMockSSEStream(events, { delayMs: 150 });
+        return createMockSSEStream(events.map((frame, seq) => ({ ...frame, seq })), { delayMs: 150 });
       },
     },
     launcher: {

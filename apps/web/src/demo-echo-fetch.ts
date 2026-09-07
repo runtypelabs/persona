@@ -87,14 +87,14 @@ function echoFrames(executionId: string, text: string, chunkSize: number): MockS
       agentId: "demo-echo",
       agentName: "Demo Echo",
       maxTurns: 1,
-      startedAt: Date.now(),
+      startedAt: new Date().toISOString(),
     },
-    { type: "turn_start", executionId, id: turnId, iteration: 1 },
+    { type: "turn_start", executionId, id: turnId, role: "assistant", iteration: 1 },
     { type: "text_start", executionId, id: blockId },
     ...deltas,
     { type: "text_complete", executionId, id: blockId },
-    { type: "turn_complete", executionId, id: turnId, stopReason: "complete" },
-    { type: "execution_complete", kind: "agent", executionId, success: true, stopReason: "complete" },
+    { type: "turn_complete", executionId, id: turnId, role: "assistant", stopReason: "end_turn" },
+    { type: "execution_complete", kind: "agent", executionId, success: true, stopReason: "end_turn" },
   ];
 }
 
@@ -121,7 +121,7 @@ export function createDemoEchoFetch(
     // Pass the dispatch's abort signal through: cancel/clearChat must kill
     // the mock stream exactly like a real network fetch, or the client's
     // read loop keeps consuming frames after the session was cleared.
-    return createMockSSEResponse(echoFrames(executionId, reply, chunkSize), {
+    return createMockSSEResponse(echoFrames(executionId, reply, chunkSize).map((frame, seq) => ({ ...frame, seq })), {
       delayMs,
       signal: init?.signal,
     });
