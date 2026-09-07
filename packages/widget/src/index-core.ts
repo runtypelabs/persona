@@ -35,6 +35,7 @@ export type {
   ArtifactConfigPayload,
   AgentWidgetInitOptions,
   AgentWidgetMessage,
+  InputDeliveryState,
   AgentWidgetLauncherConfig,
   AgentWidgetLauncherTeaserConfig,
   AgentWidgetTooltipConfig,
