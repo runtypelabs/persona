@@ -40,3 +40,18 @@ budgets. Those changes may be refused until the current run ends.
 Only the submitted user delta is sent. Runtype supplies trusted model history;
 Persona retains visitor-facing display content separately. The transport sends no
 API key and binds receipt reads and cancellation to the current visitor session.
+
+### Loading and bundle budget
+
+Receipt parsing, visitor-scoped delivery/cancel requests, frozen retry payloads,
+and status polling load from the optional `live-input` subpath. Self-hosted
+script-tag deployments must serve `live-input.js` beside `index.global.js`.
+ESM and CJS consumers resolve it through the package export map.
+
+Synchronous FIFO reservation, admission ownership, Stop intent, and composer
+controls remain in the core so a delayed chunk cannot reorder messages or lose
+a cancellation. The feature adds 2 kB of budget to the four core-containing
+bundles; the independent receipt chunk has a 2 kB gzip ceiling. Measured locally
+with the complete feature: IIFE 188.37 kB, ESM 200.78 kB, CJS 201.63 kB, and
+preview 167.35 kB. The launcher and stylesheet budgets are unchanged. A bundle
+test keeps receipt-only code out of those core bundles.

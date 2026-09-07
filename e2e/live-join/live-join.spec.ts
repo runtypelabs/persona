@@ -244,22 +244,58 @@ test("joining while a question is awaiting input keeps the answer sheet and resu
   );
 });
 
-
-test('reloading after admission restores history and resumes the same durable execution', async ({ page }) => {
+test("reloading after admission restores history and resumes the same durable execution", async ({
+  page,
+}) => {
   await boot(page);
   await send(page, slowTool);
-  await page.waitForFunction(() => window.joinController.getMessages().some(message => message.toolCall?.name?.includes('slow_tool') && message.toolCall.status !== 'complete'));
-  const receipt = page.waitForResponse(response => new URL(response.url()).pathname === '/v1/client/chat' && response.status() === 202);
-  await send(page, '[[mock:text value=RELOAD_JOIN_RECOVERED]]');
+  await page.waitForFunction(() =>
+    window.joinController
+      .getMessages()
+      .some(
+        (message) =>
+          message.toolCall?.name?.includes("slow_tool") &&
+          message.toolCall.status !== "complete",
+      ),
+  );
+  const receipt = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/v1/client/chat" &&
+      response.status() === 202,
+  );
+  await send(page, "[[mock:text value=RELOAD_JOIN_RECOVERED]]");
   const admission = await (await receipt).json();
   const reattached: string[] = [];
-  page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/events')) reattached.push(request.url()); });
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname.endsWith("/events"))
+      reattached.push(request.url());
+  });
   await page.reload();
   await page.waitForFunction(() => !!window.joinController);
-  await page.waitForFunction(() => window.joinController.getMessages().some(message => message.role === 'assistant' && message.content.includes('RELOAD_JOIN_RECOVERED')));
-  expect(reattached.some(url => url.includes(admission.executionId))).toBe(true);
-  const users = await page.evaluate(() => window.joinController.getMessages().filter(message => message.role === 'user'));
-  expect(users.filter(message => message.content.includes('RELOAD_JOIN_RECOVERED'))).toHaveLength(1);
-  expect(users.filter(message => message.content.includes('slow_tool'))).toHaveLength(1);
+  await page.waitForFunction(() =>
+    window.joinController
+      .getMessages()
+      .some(
+        (message) =>
+          message.role === "assistant" &&
+          message.content.includes("RELOAD_JOIN_RECOVERED"),
+      ),
+  );
+  expect(reattached.some((url) => url.includes(admission.executionId))).toBe(
+    true,
+  );
+  const users = await page.evaluate(() =>
+    window.joinController
+      .getMessages()
+      .filter((message) => message.role === "user"),
+  );
+  expect(
+    users.filter((message) =>
+      message.content.includes("RELOAD_JOIN_RECOVERED"),
+    ),
+  ).toHaveLength(1);
+  expect(
+    users.filter((message) => message.content.includes("slow_tool")),
+  ).toHaveLength(1);
   expect(await page.evaluate(() => window.joinErrors)).toEqual([]);
 });
