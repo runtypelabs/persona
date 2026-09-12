@@ -2,6 +2,7 @@ import { defineConfig, type Plugin, type HtmlTagDescriptor } from "vite";
 import path from "node:path";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { createHash } from "node:crypto";
 
 const proxyPort = Number(process.env.PROXY_PORT ?? 43111);
 const PREVIEW_EMBED_CHECK_TIMEOUT_MS = 5000;
@@ -240,22 +241,55 @@ function serveWidgetDist(): Plugin {
   };
 }
 
-// Serve jspaint (the WebMCP Paint demo's embedded app) at /jspaint/ from the
-// `jspaint` git dependency (runtypelabs/jspaint fork, pinned by SHA in
-// package.json) instead of vendoring ~60MB of static files into the repo.
-// jspaint is buildless, so serving its repo files verbatim is all it takes.
-// Same-origin serving is load-bearing: the demo injects a bridge module into
-// the iframe, which cross-origin embedding (e.g. the jspaint.app CDN) forbids.
-function serveJsPaint(): Plugin {
+// Serve jspaint (the WebMCP Paint demo's embedded app) from the `jspaint` git
+// dependency (runtypelabs/jspaint fork, pinned by SHA in package.json) instead
+// of vendoring ~60MB of static files into the repo. jspaint is buildless, so
+// serving its repo files verbatim is all it takes. Same-origin serving is
+// load-bearing: the demo injects a bridge module into the iframe, which
+// cross-origin embedding (e.g. the jspaint.app CDN) forbids.
+//
+// The mount path is CONTENT-VERSIONED: `/jspaint-<hash>/`, where the hash
+// covers the pinned dependency spec and the bridge module. jspaint is ~70
+// unbundled scripts/stylesheets per load (plus cursors, icons, localization),
+// and under Vercel's default `max-age=14400, must-revalidate` every one of
+// them re-validated against the origin on every visit — in production we
+// measured 0 edge HITs across all 68 script/CSS requests, ~130ms each,
+// serialised through jspaint's module waterfall. A path that changes whenever
+// the content can change makes `Cache-Control: immutable` safe at every layer
+// (browser, Cloudflare, Vercel edge): apps/web/vercel.json sets that header
+// for `/jspaint-*/`, and this plugin mirrors it for `vite preview`. Bumping
+// the jspaint pin or editing public/jspaint-bridge.mjs yields a new path, so
+// stale caches can never serve a mismatched bridge/app pair.
+const JSPAINT_BRIDGE_FILE = path.resolve(__dirname, "public/jspaint-bridge.mjs");
+const JSPAINT_IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
+function resolveJsPaint(): { dir: string; base: string } {
   // realpath dereferences the pnpm symlink so the containment check and the
   // recursive build copy both operate on the real package directory.
-  const jspaintDir = fs.realpathSync(
+  const dir = fs.realpathSync(
     path.dirname(
       createRequire(import.meta.url).resolve("jspaint/package.json", {
         paths: [__dirname],
       })
     )
   );
+  const pkg = JSON.parse(
+    fs.readFileSync(path.resolve(__dirname, "package.json"), "utf8")
+  ) as { dependencies?: Record<string, string> };
+  const spec = pkg.dependencies?.jspaint ?? "";
+  const version = createHash("sha256")
+    .update(spec)
+    .update("\0")
+    .update(fs.readFileSync(JSPAINT_BRIDGE_FILE))
+    .digest("hex")
+    .slice(0, 12);
+  return { dir, base: `/jspaint-${version}` };
+}
+
+const JSPAINT = resolveJsPaint();
+
+function serveJsPaint(): Plugin {
+  const { dir: jspaintDir, base } = JSPAINT;
   const MIME: Record<string, string> = {
     ".html": "text/html; charset=utf-8",
     ".js": "application/javascript",
@@ -272,45 +306,61 @@ function serveJsPaint(): Plugin {
     ".woff2": "font/woff2",
   };
 
-  function middleware(req: any, res: any, next: () => void): void {
-    const url = new URL(req.url ?? "/", "http://localhost");
-    let rel = decodeURIComponent(url.pathname);
-    if (rel === "" || rel === "/") rel = "/index.html";
+  function resolveFile(rel: string): string | null {
+    // The bridge lives in public/, not in the jspaint package, but is served
+    // under the versioned base so its relative `./src/...` imports resolve to
+    // the SAME module URLs jspaint's own <script type="module"> tags use
+    // (module identity = shared live app state).
+    if (rel === "/jspaint-bridge.mjs") return JSPAINT_BRIDGE_FILE;
     const filePath = path.join(jspaintDir, rel);
     // Containment check: never serve outside the package directory.
-    if (!filePath.startsWith(jspaintDir + path.sep)) {
-      next();
-      return;
-    }
-    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-      res.setHeader(
-        "Content-Type",
-        MIME[path.extname(filePath)] ?? "application/octet-stream"
-      );
-      // The on-device litert-paint page is cross-origin isolated (COEP), and a
-      // COEP document may only embed iframes whose own document ALSO sends
-      // COEP — same-origin included. jspaint is fully self-contained
-      // (same-origin subresources only), so `credentialless` is a no-op for it
-      // standalone (webmcp-paint.html) and makes it embeddable on the isolated
-      // page. Mirrored for production in apps/web/vercel.json.
-      res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
-      fs.createReadStream(filePath).pipe(res);
-    } else {
-      next();
-    }
+    if (!filePath.startsWith(jspaintDir + path.sep)) return null;
+    return filePath;
+  }
+
+  function makeMiddleware(immutable: boolean) {
+    return function middleware(req: any, res: any, next: () => void): void {
+      const url = new URL(req.url ?? "/", "http://localhost");
+      let rel = decodeURIComponent(url.pathname);
+      if (rel === "" || rel === "/") rel = "/index.html";
+      const filePath = resolveFile(rel);
+      if (filePath && fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+        res.setHeader(
+          "Content-Type",
+          MIME[path.extname(filePath)] ?? "application/octet-stream"
+        );
+        // The on-device litert-paint page is cross-origin isolated (COEP), and a
+        // COEP document may only embed iframes whose own document ALSO sends
+        // COEP — same-origin included. jspaint is fully self-contained
+        // (same-origin subresources only), so `credentialless` is a no-op for it
+        // standalone (webmcp-paint.html) and makes it embeddable on the isolated
+        // page. Mirrored for production in apps/web/vercel.json.
+        res.setHeader("Cross-Origin-Embedder-Policy", "credentialless");
+        // Preview only: dev keeps the browser cache short so bridge edits show
+        // up on reload (the hash is computed once per server start).
+        if (immutable) {
+          res.setHeader("Cache-Control", JSPAINT_IMMUTABLE_CACHE_CONTROL);
+        }
+        fs.createReadStream(filePath).pipe(res);
+      } else {
+        next();
+      }
+    };
   }
 
   return {
     name: "serve-jspaint",
     configureServer(server) {
-      server.middlewares.use("/jspaint", middleware);
+      server.middlewares.use(base, makeMiddleware(false));
     },
     configurePreviewServer(server) {
-      server.middlewares.use("/jspaint", middleware);
+      server.middlewares.use(base, makeMiddleware(true));
     },
     writeBundle(options) {
       const outDir = options.dir ?? path.resolve(__dirname, "dist");
-      fs.cpSync(jspaintDir, path.join(outDir, "jspaint"), { recursive: true });
+      const target = path.join(outDir, base.slice(1));
+      fs.cpSync(jspaintDir, target, { recursive: true });
+      fs.copyFileSync(JSPAINT_BRIDGE_FILE, path.join(target, "jspaint-bridge.mjs"));
     },
   };
 }
@@ -573,6 +623,10 @@ function crossOriginIsolateLiteRt(): Plugin {
 
 export default defineConfig({
   base: './',
+  define: {
+    // Versioned mount path of the embedded jspaint (see serveJsPaint).
+    __JSPAINT_BASE__: JSON.stringify(JSPAINT.base),
+  },
   plugins: [
     crossOriginIsolateLiteRt(),
     serveWidgetDist(),

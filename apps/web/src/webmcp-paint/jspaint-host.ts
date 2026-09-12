@@ -44,15 +44,17 @@ async function injectBridge(iframe: HTMLIFrameElement): Promise<PaintBridge> {
   if (!frameWindow || !frameDocument) {
     throw new Error(
       "jspaint iframe is not same-origin: the bridge cannot be injected. " +
-        "Is /jspaint/ being served? (the `jspaint` git dependency is served " +
-        "by the serveJsPaint plugin in vite.config.ts; run `pnpm install`)",
+        `Is ${__JSPAINT_BASE__}/ being served? (the \`jspaint\` git dependency ` +
+        "is served by the serveJsPaint plugin in vite.config.ts; run `pnpm install`)",
     );
   }
 
   if (!frameWindow.__paintBridge) {
     const script = frameDocument.createElement("script");
     script.type = "module";
-    script.src = "/jspaint-bridge.mjs";
+    // Served under the versioned base (not /jspaint-bridge.mjs) so the
+    // bridge's relative imports hit the same module URLs jspaint itself uses.
+    script.src = `${__JSPAINT_BASE__}/jspaint-bridge.mjs`;
     frameDocument.head.appendChild(script);
   }
 
@@ -68,7 +70,9 @@ async function injectBridge(iframe: HTMLIFrameElement): Promise<PaintBridge> {
 
 export async function mountJsPaint(host: HTMLElement): Promise<PaintBridge> {
   const iframe = document.createElement("iframe");
-  iframe.src = "/jspaint/index.html";
+  // Content-versioned path (`/jspaint-<hash>/`, see serveJsPaint in
+  // vite.config.ts) so every jspaint asset can be cached as immutable.
+  iframe.src = `${__JSPAINT_BASE__}/index.html`;
   iframe.title = "JS Paint";
   iframe.className = "paint-frame";
 

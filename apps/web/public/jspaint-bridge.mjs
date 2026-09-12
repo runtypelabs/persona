@@ -8,6 +8,11 @@
 // lexical globals as bare identifiers, exposing one clean API object on the
 // iframe's `window` for the parent to call.
 //
+// This file is served from INSIDE jspaint's versioned mount path
+// (`/jspaint-<hash>/jspaint-bridge.mjs`, see serveJsPaint in vite.config.ts),
+// so the relative import below resolves to the exact module URL jspaint's own
+// <script type="module"> tags load — same URL, same module instance.
+//
 // Strokes are simulated the way jspaint's own src/simulate-random-gestures.js
 // does it: jQuery-triggered pointer events on the main canvas, which run the
 // real tool code (brush dynamics, fill tolerance, undo history, toolbox UI).
@@ -21,7 +26,7 @@ import {
 	render_history_as_gif,
 	select_tool,
 	undo,
-} from "./jspaint/src/functions.js";
+} from "./src/functions.js";
 
 // Friendly names the WebMCP tools use -> jspaint TOOL_* ids.
 const TOOL_IDS = {
