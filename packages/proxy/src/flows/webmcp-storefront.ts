@@ -17,7 +17,7 @@ import type { RuntypeFlowConfig } from "../index.js";
  * needs a tool-capable model and a system prompt that knows how to shop the
  * (page-provided) catalog.
  *
- * Model: `gemini-3.7-flash`. WebMCP depends on the model
+ * Model: `qwen3.8-27b`. WebMCP depends on the model
  * emitting **native** tool calls (each surfaces as a `await` the widget
  * resumes), so a tool-reliable model is required here. `responseFormat` is
  * markdown (not JSON) so the model is free to interleave tool calls with a
@@ -34,7 +34,7 @@ export const WEBMCP_STOREFRONT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "google/gemini-3.5-flash-lite",
+        model: "qwen3.8-27b",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",

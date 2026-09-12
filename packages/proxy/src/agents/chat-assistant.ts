@@ -7,7 +7,8 @@ import type { AgentConfig } from "../index.js";
  */
 export const CHAT_ASSISTANT_AGENT: AgentConfig = {
   name: "Chat Assistant",
-  model: "google/gemini-3.5-flash-lite",
+  model: "qwen3.8-27b",
+  reasoning: false,
   systemPrompt:
     "You are a helpful assistant. Be friendly, concise, and helpful. If you don't know something, say so.",
   artifacts: { enabled: true, types: ["markdown", "component"] },

@@ -29,8 +29,8 @@ export const WEBMCP_PAINT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "openai/gpt-5.6-luna-fast",
-        reasoning: false,
+        model: "gpt-6-astra",
+        reasoning: true,
         responseFormat: "markdown",
         outputVariable: "prompt_result",
         userPrompt: "{{user_message}}",
