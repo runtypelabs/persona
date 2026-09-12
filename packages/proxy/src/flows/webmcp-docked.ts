@@ -24,7 +24,7 @@ export const WEBMCP_DOCKED_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "google/gemini-3.5-flash-lite",
+        model: "qwen3.8-27b",
         reasoning: false,
         responseFormat: "markdown",
         outputVariable: "prompt_result",

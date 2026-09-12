@@ -6,7 +6,8 @@ import type { AgentConfig } from "../index.js";
  */
 export const TRAVEL_PLANNER_AGENT: AgentConfig = {
   name: "Travel Planner Assistant",
-  model: "google/gemini-3.5-flash-lite",
+  model: "qwen3.8-27b",
+  reasoning: false,
   systemPrompt:
     "You are a travel planning assistant with access to the Exa web search tool. " +
     "For itinerary requests, complete work in exactly 3 iterations: " +
