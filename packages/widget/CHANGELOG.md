@@ -1,5 +1,20 @@
 # @runtypelabs/persona
 
+## 4.22.1
+
+### Patch Changes
+
+- 41dc7f6: Consume canonical unified tool and reasoning fields, preserve tool call IDs across continuation streams, apply final tool arguments, and show nonterminal tool failures. Read throughput from canonical output-token fields without treating tool results as usage. Remove obsolete stream aliases, fabricated transcript events, and old init/history response fallbacks while retaining public configuration and extension hooks. Update local-tool documentation to use the supported await event.
+- 023fde7: Route custom voice providers through the widget microphone controls, status display, and call lifecycle. Custom realtime providers can now honor None, Cancel, and Barge-in modes without falling back to browser dictation.
+
+  Disconnect replaced or disabled providers, ignore callbacks from retired providers, and discard cancelled replies. Custom providers with overlapping turns can supply optional transcript turn IDs to prevent a late cancelled reply from replacing the next answer.
+
+  Refresh generated event types for additive fields and context notices already present in the public Runtype API.
+
+- f907eac: Fix output throughput tracking and the testing assistant-turn helper to consume and emit the supported unified stream vocabulary. Recoverable errors no longer stop throughput tracking, and execution completion uses current token and duration fields. Remove obsolete flow/step error and step-await approval handlers, update stream inspector badge mappings while preserving existing theme tokens, and replace legacy test fixtures and demo streams with unified events. Remove the unsupported dispatch_error extension. Existing public configuration aliases and exports remain supported.
+
+  Refresh the generated Runtype contract with the current upstream optional subagent metadata and context_notice event.
+
 ## 4.22.0
 
 ### Minor Changes
