@@ -3,6 +3,12 @@
   "installCommand": "pnpm install",
   "framework": null,
   "rewrites": [
-    { "source": "/(.*)", "destination": "/api" }
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ],
+  "regions": [
+    "sfo1"
   ]
 }
