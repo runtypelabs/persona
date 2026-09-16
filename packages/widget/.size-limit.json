@@ -2,7 +2,7 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "186.75 kB",
+    "limit": "188.75 kB",
     "gzip": true
   },
   {
@@ -20,13 +20,13 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "199.25 kB",
+    "limit": "201.25 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "200 kB",
+    "limit": "202 kB",
     "gzip": true
   },
   {
@@ -44,7 +44,7 @@
   {
     "name": "Opt-in \u00b7 theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
-    "limit": "165.75 kB",
+    "limit": "167.75 kB",
     "gzip": true
   },
   {
@@ -90,63 +90,69 @@
     "gzip": true
   },
   {
-    "name": "Lazy · history (Messages) view chunk (history-view.js)",
+    "name": "Lazy \u00b7 history (Messages) view chunk (history-view.js)",
     "path": "dist/history-view.js",
     "limit": "15.5 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · event-stream observability panel chunk (event-stream-view.js)",
+    "name": "Lazy \u00b7 event-stream observability panel chunk (event-stream-view.js)",
     "path": "dist/event-stream-view.js",
     "limit": "9 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · wipe + glyph-cycle stream animations chunk (animations-extra.js)",
+    "name": "Lazy \u00b7 wipe + glyph-cycle stream animations chunk (animations-extra.js)",
     "path": "dist/animations-extra.js",
     "limit": "2.25 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · approval UI chunk (approval-ui.js)",
+    "name": "Lazy \u00b7 approval UI chunk (approval-ui.js)",
     "path": "dist/approval-ui.js",
     "limit": "7.5 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · durable-session reconnect chunk (session-reconnect.js)",
+    "name": "Lazy \u00b7 durable-session reconnect chunk (session-reconnect.js)",
     "path": "dist/session-reconnect.js",
     "limit": "1.25 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · WebMCP bridge runtime chunk (webmcp-runtime.js)",
+    "name": "Lazy \u00b7 WebMCP bridge runtime chunk (webmcp-runtime.js)",
     "path": "dist/webmcp-runtime.js",
     "limit": "3 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · config-only icon data chunk (icons-extra.js)",
+    "name": "Lazy \u00b7 config-only icon data chunk (icons-extra.js)",
     "path": "dist/icons-extra.js",
     "limit": "4.75 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · artifacts UI chunk (artifacts-ui.js)",
+    "name": "Lazy \u00b7 artifacts UI chunk (artifacts-ui.js)",
     "path": "dist/artifacts-ui.js",
     "limit": "21.75 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · voice provider runtime chunk (voice-runtime.js)",
+    "name": "Lazy \u00b7 voice provider runtime chunk (voice-runtime.js)",
     "path": "dist/voice-runtime.js",
     "limit": "4 kB",
     "gzip": true
   },
   {
-    "name": "Lazy · demo-forms enhancement chunk (forms-ui.js)",
+    "name": "Lazy \u00b7 demo-forms enhancement chunk (forms-ui.js)",
     "path": "dist/forms-ui.js",
     "limit": "1.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy \u00b7 browser live input transport and receipts (live-input.js)",
+    "path": "dist/live-input.js",
+    "limit": "2 kB",
     "gzip": true
   }
 ]

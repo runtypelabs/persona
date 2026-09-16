@@ -1,7 +1,10 @@
+import { loadLiveInput } from "./live-input-loader";
 import {
   AgentWidgetClient,
   HistoryClientError,
+  InputDeliveryError,
   type SSEEventCallback,
+  type JoinAdmission,
 } from "./client";
 import { isWebMcpToolName } from "./webmcp-bridge";
 import {
@@ -286,6 +289,258 @@ const isAutoResolvedLocalToolName = (name: string): boolean =>
 
 export class AgentWidgetSession {
   private client: AgentWidgetClient;
+  private joinAdmissionTail: Promise<void> = Promise.resolve();
+  private joinAdmissionCount = 0;
+  private joinAdmissionEpoch = 0;
+  private joinControllers = new Set<AbortController>();
+  private joinDispatchControllers = new Set<AbortController>();
+  private stopOnJoinAdmission = new Set<AbortController>();
+  private joinWatchControllers = new Set<AbortController>();
+  private joinExecutionId: string | null = null;
+
+  private clearJoinedInputState(): void {
+    this.joinAdmissionEpoch++;
+    this.joinAdmissionCount = 0;
+    this.joinAdmissionTail = Promise.resolve();
+    for (const controller of this.joinControllers) controller.abort();
+    this.joinControllers.clear();
+    this.joinDispatchControllers.clear();
+    this.stopOnJoinAdmission.clear();
+    for (const controller of this.joinWatchControllers) controller.abort();
+    this.joinWatchControllers.clear();
+    this.joinExecutionId = null;
+    this.client.clearJoinPayloads();
+  }
+
+  public canAcceptJoinedInput(): boolean {
+    return this.joinAdmissionCount < 8;
+  }
+
+  private reserveJoinAdmission(): {
+    ready: Promise<void>;
+    release: () => void;
+  } {
+    if (this.joinAdmissionCount >= 8)
+      throw new Error(
+        "Too many messages awaiting delivery. Please wait for an acknowledgement.",
+      );
+    this.joinAdmissionCount++;
+    const epoch = this.joinAdmissionEpoch;
+    const ready = this.joinAdmissionTail;
+    let resolve!: () => void;
+    this.joinAdmissionTail = new Promise<void>((done) => {
+      resolve = done;
+    });
+    let released = false;
+    return {
+      ready,
+      release: () => {
+        if (released) return;
+        released = true;
+        if (epoch === this.joinAdmissionEpoch) this.joinAdmissionCount--;
+        void ready.then(resolve);
+      },
+    };
+  }
+
+  private updateInputDelivery(
+    messageId: string,
+    state: Partial<NonNullable<AgentWidgetMessage["delivery"]>>,
+  ): void {
+    const message = this.messages.find((item) => item.id === messageId);
+    if (!message?.delivery) return;
+    message.delivery = { ...message.delivery, ...state };
+    this.callbacks.onMessagesChanged([...this.messages]);
+  }
+
+  private async dispatchJoinedInput(
+    snapshot: AgentWidgetMessage[],
+    controller: AbortController,
+    assistantMessageId: string,
+    userMessageId: string,
+    release: () => void,
+    provisional = false,
+  ): Promise<void> {
+    const client = this.client;
+    this.joinDispatchControllers.add(controller);
+    try {
+      await client.dispatch(
+        {
+          messages: snapshot,
+          signal: controller.signal,
+          assistantMessageId,
+          composerOptions: snapshot[0]?.composerOptions,
+          join: {
+            turnId: userMessageId,
+            onAdmission: (admission) => {
+              if (controller.signal.aborted) {
+                release();
+                return;
+              }
+              if (this.stopOnJoinAdmission.has(controller)) {
+                this.updateInputDelivery(userMessageId, {
+                  executionId: admission.executionId,
+                  deliveryId: admission.deliveryId,
+                  status: admission.status,
+                });
+                release();
+                controller.abort();
+                void client
+                  .cancelClientExecution(admission.executionId)
+                  .catch((error: unknown) => {
+                    this.callbacks.onError?.(
+                      error instanceof Error ? error : new Error(String(error)),
+                    );
+                  });
+                const watcher = new AbortController();
+                this.joinWatchControllers.add(watcher);
+                void this.watchInputDelivery(userMessageId, admission, watcher);
+                return;
+              }
+              this.joinExecutionId = admission.executionId;
+              this.updateInputDelivery(userMessageId, {
+                deliveryId: admission.deliveryId,
+                executionId: admission.executionId,
+                status: admission.status,
+              });
+              if (admission.kind === "stream") {
+                this.teardownReconnect();
+                this.activeAssistantMessageId = assistantMessageId;
+                this.agentExecution = null;
+                this.abortController = controller;
+                this.setStreaming(true);
+              } else {
+                if (provisional && this.abortController === controller) {
+                  this.abortController = null;
+                  this.setStreaming(false);
+                }
+                if (
+                  !this.streaming &&
+                  !this.reconnecting &&
+                  !this.isAwaitPending() &&
+                  admission.status !== "not_applied"
+                ) {
+                  this.agentExecution = null;
+                  this.resumeFromHandle({
+                    executionId: admission.executionId,
+                    after: "",
+                  });
+                }
+              }
+              release();
+              this.joinControllers.delete(controller);
+              const watcher = new AbortController();
+              this.joinWatchControllers.add(watcher);
+              void this.watchInputDelivery(userMessageId, admission, watcher);
+            },
+          },
+        },
+        this.handleEvent,
+      );
+    } finally {
+      this.joinDispatchControllers.delete(controller);
+      this.stopOnJoinAdmission.delete(controller);
+    }
+  }
+
+  public async retryJoinedMessage(messageId: string): Promise<void> {
+    const message = this.messages.find(
+      (item) => item.id === messageId && item.role === "user",
+    );
+    if (!message?.delivery) return;
+    if (message.delivery.status === "not_applied") {
+      this.resubmitFrom(messageId, { reason: "retry" });
+      return;
+    }
+    if (!["unknown", "rejected"].includes(message.delivery.status)) return;
+    if (message.delivery.deliveryId && message.delivery.executionId) {
+      const watcher = new AbortController();
+      this.joinWatchControllers.add(watcher);
+      void this.watchInputDelivery(
+        messageId,
+        {
+          kind: "receipt",
+          executionId: message.delivery.executionId,
+          deliveryId: message.delivery.deliveryId,
+          status: "pending",
+        },
+        watcher,
+      );
+      return;
+    }
+    let queue: ReturnType<AgentWidgetSession["reserveJoinAdmission"]>;
+    try {
+      queue = this.reserveJoinAdmission();
+    } catch (error) {
+      this.callbacks.onError?.(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      return;
+    }
+    const controller = new AbortController();
+    this.joinControllers.add(controller);
+    this.updateInputDelivery(messageId, {
+      status: "sending",
+      error: undefined,
+    });
+    try {
+      await queue.ready;
+      if (controller.signal.aborted) return;
+      await this.dispatchJoinedInput(
+        [message],
+        controller,
+        generateAssistantMessageId(),
+        messageId,
+        queue.release,
+      );
+    } catch (error) {
+      if (!controller.signal.aborted && !message.delivery.deliveryId) {
+        this.updateInputDelivery(messageId, {
+          status:
+            error instanceof InputDeliveryError && error.rejected
+              ? "rejected"
+              : "unknown",
+          error: error instanceof Error ? error.message : String(error),
+        });
+        this.callbacks.onError?.(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
+    } finally {
+      queue.release();
+      if (!message.delivery.deliveryId) this.joinControllers.delete(controller);
+    }
+  }
+
+  private async watchInputDelivery(
+    messageId: string,
+    admission: JoinAdmission,
+    controller: AbortController,
+  ): Promise<void> {
+    try {
+      const liveInput = await loadLiveInput();
+      await liveInput.watchInputDelivery({
+        admission,
+        signal: controller.signal,
+        update: (state) => this.updateInputDelivery(messageId, state),
+        read: () =>
+          this.client.getInputDelivery(
+            admission.executionId,
+            admission.deliveryId,
+            controller.signal,
+          ),
+      });
+    } catch (error) {
+      if (!controller.signal.aborted)
+        this.updateInputDelivery(messageId, {
+          status: "unknown",
+          error: String(error),
+        });
+    } finally {
+      this.joinWatchControllers.delete(controller);
+    }
+  }
+
   private messages: AgentWidgetMessage[];
   private status: AgentWidgetSessionStatus = "idle";
   private streaming = false;
@@ -409,6 +664,7 @@ export class AgentWidgetSession {
   private historySendBlocked = false;
   /** Continuity wipe / boot reconciliation; dispatch waits on it. */
   private historyGate: Promise<void> | null = null;
+  private historyBootstrapGate: Promise<void> | null = null;
   /** Deduped by `(id, cursor)` so repeated clicks issue one request. */
   private olderPageRequests = new Map<string, Promise<HistoryOlderPage>>();
   /** Serializes projection finalization against every other operation. */
@@ -1139,6 +1395,8 @@ export class AgentWidgetSession {
 
   /** Widget teardown: release the visitor-store subscription. */
   public destroy(): void {
+    for (const controller of this.joinWatchControllers) controller.abort();
+    this.joinWatchControllers.clear();
     this.cleanupVoice();
     this.visitorStoreUnsubscribe?.();
     this.visitorStoreUnsubscribe = null;
@@ -1235,6 +1493,7 @@ export class AgentWidgetSession {
 
   /** Pending destructive/reconciliation work every other operation waits on. */
   public async awaitHistorySettled(): Promise<void> {
+    await this.historyBootstrapGate?.catch(() => {});
     const gate = this.historyGate;
     if (gate) await gate.catch(() => {});
     const finalization = this.projectionFinalizationPromise;
@@ -1620,6 +1879,7 @@ export class AgentWidgetSession {
    * deletion, 410 recovery, reset, and the continuity wipe.
    */
   private discardConversationState(): void {
+    this.clearJoinedInputState();
     this.stopSpeaking();
     this.abortController?.abort();
     this.abortController = null;
@@ -1757,6 +2017,24 @@ export class AgentWidgetSession {
     } catch {
       // Still pending: the dispatch's own init reports the failure normally.
     }
+  }
+
+  /** Gate sends before asynchronous initialization can race boot reconciliation. */
+  public initializeBootConversation(opts?: {
+    scope?: HistoryScope;
+  }): Promise<void> {
+    if (this.historyBootstrapGate) return this.historyBootstrapGate;
+    this.historySendBlocked = true;
+    this.emitHistoryState();
+    const run = this.initClientSession()
+      .then(() => this.reconcileBootConversation(opts))
+      .finally(() => {
+        if (this.historyBootstrapGate === run) this.historyBootstrapGate = null;
+        this.historySendBlocked = this.historyRecovery !== null;
+        this.emitHistoryState();
+      });
+    this.historyBootstrapGate = run;
+    return run;
   }
 
   /**
@@ -2160,7 +2438,10 @@ export class AgentWidgetSession {
     this.config = merged;
     if (replaceVoice) {
       this.cleanupVoice();
-      if (merged.voiceRecognition?.enabled === true && usesSessionVoice(merged.voiceRecognition.provider)) {
+      if (
+        merged.voiceRecognition?.enabled === true &&
+        usesSessionVoice(merged.voiceRecognition.provider)
+      ) {
         this.setupVoice();
       }
     }
@@ -2191,6 +2472,11 @@ export class AgentWidgetSession {
     this.abortWebMcpResolves();
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
+    this.clearJoinedInputState();
+    this.abortController?.abort();
+    this.abortController = null;
+    this.teardownReconnect();
+    this.setStreaming(false);
     const prevSSECallback = this.client.getSSEEventCallback();
     this.client = new AgentWidgetClient(this.config, this.historyInternals);
     if (artifactDisplayChanged) this.refreshArtifactReferenceBlocks();
@@ -2546,7 +2832,7 @@ export class AgentWidgetSession {
        * (`composer.streamingSubmitBehavior: "interrupt"`).
        */
       interrupt?: boolean;
-    }
+    },
   ) {
     const input = rawInput.trim();
     // Allow sending if there's text OR attachments OR mentions. A retry replay
@@ -2577,164 +2863,284 @@ export class AgentWidgetSession {
       await this.awaitHistorySendable();
     }
 
-    this.stopSpeaking();
-    this.abortController?.abort();
-    // A new user turn supersedes any in-flight WebMCP resolve from the prior
-    // turn. Tear them down here (they own controllers separate from the shared
-    // one) so a lingering resolve can't race the new dispatch or post a stale
-    // /resume against a superseded execution.
-    this.abortWebMcpResolves();
-    // A new turn also supersedes any pending durable reconnect from the prior
-    // turn (cancels backoff/listeners, clears the old resume handle).
-    this.teardownReconnect();
-
-    // Generate IDs for both user message and expected assistant response
-    const userMessageId = generateUserMessageId();
-    const assistantMessageId = generateAssistantMessageId();
-    // The active assistant bubble for a durable reconnect is captured from the
-    // real streamed message events (see handleEvent), not pre-assigned here:
-    // the proxy path auto-generates a different id than `assistantMessageId`.
-    this.activeAssistantMessageId = null;
-
-    // Fallback display text ONLY when the sole content is image attachments.
-    // A mention/command-only submit (empty text + a chip) must NOT read as
-    // "[Image]"; it renders its chips with empty text instead.
-    const imageOnlyFallback =
-      options?.contentParts && hasImages(options.contentParts)
-        ? IMAGE_ONLY_MESSAGE_FALLBACK_TEXT
-        : "";
-
-    const userMessage: AgentWidgetMessage = {
-      id: userMessageId,
-      role: "user",
-      content: input || imageOnlyFallback, // Display text (fallback if only images)
-      createdAt: new Date().toISOString(),
-      sequence: this.nextSequence(),
-      viaVoice: options?.viaVoice || false,
-      // Include contentParts if provided (for multi-modal messages)
-      ...(options?.contentParts && options.contentParts.length > 0 && {
-        contentParts: options.contentParts
-      }),
-      // Echo mention chips immediately (refs only; payloads merged below).
-      ...(options?.mentions && options.mentions.refs.length > 0 && {
-        contextMentions: options.mentions.refs
-      }),
-      // Inline mode: ordered display segments for in-prose `@token` rendering.
-      ...(options?.contentSegments && options.contentSegments.length > 0 && {
-        contentSegments: options.contentSegments
-      }),
-      // Retained for retry fidelity; never re-read for the current dispatch.
-      ...(options?.composerOptions && { composerOptions: options.composerOptions }),
-      // A retry replays the already-resolved model channel verbatim.
-      ...(options?.replayFields ?? {})
-    };
-
-    this.appendMessage(userMessage);
-    this.setStreaming(true);
-
-    // Assign the fresh controller BEFORE the mention await so cancel() (or a
-    // superseding sendMessage) during finalize() aborts THIS turn, not a stale
-    // prior controller.
-    const controller = new AbortController();
-    this.abortController = controller;
-
-    // Resolve + merge mentions AFTER the instant echo but BEFORE dispatch, so
-    // the model sees the context while the user's bubble already rendered.
-    // `appendMessage` stores a sequence-normalized COPY (see `ensureSequence`),
-    // so mutate THAT live reference — not the orphaned `userMessage` literal —
-    // or the merged `llmContent`/`contentParts`/`mentionContext` never reach the
-    // dispatch snapshot below. Re-emit so any merged parts also reach the UI.
-    if (options?.mentions) {
-      const stored =
-        this.messages.find((m) => m.id === userMessageId) ?? userMessage;
-      await this.applyMentionBundle(stored, input, options.mentions.finalize);
-      // A cancel() or new sendMessage during finalize aborted this controller
-      // (and replaced/nulled the shared ref). Bail without dispatching and
-      // leave whatever idle/streaming state that caller already set.
-      if (controller.signal.aborted || this.abortController !== controller) {
-        return;
-      }
-      this.callbacks.onMessagesChanged([...this.messages]);
+    const join =
+      !!this.config.clientToken &&
+      this.config.composer?.streamingSubmitBehavior === "join" &&
+      !options?.interrupt;
+    let admissionQueue:
+      | ReturnType<AgentWidgetSession["reserveJoinAdmission"]>
+      | undefined;
+    try {
+      if (join) admissionQueue = this.reserveJoinAdmission();
+    } catch (error) {
+      this.callbacks.onError?.(
+        error instanceof Error ? error : new Error(String(error)),
+      );
+      return;
     }
+    let preparation:
+      | { id: string; controller: AbortController; provisional: boolean }
+      | undefined;
+    try {
+      this.stopSpeaking();
+      if (!join) {
+        this.abortController?.abort();
+        // A new user turn supersedes any in-flight WebMCP resolve from the prior
+        // turn. Tear them down here (they own controllers separate from the shared
+        // one) so a lingering resolve can't race the new dispatch or post a stale
+        // /resume against a superseded execution.
+        this.abortWebMcpResolves();
+        // A new turn also supersedes any pending durable reconnect from the prior
+        // turn (cancels backoff/listeners, clears the old resume handle).
+        this.teardownReconnect();
+      }
 
-    // Quote last, so its delimited block is the outermost prefix on the model
-    // channel (ahead of any mention blocks and the user's prose). Same stored-ref
-    // rule as the mention merge above. A retry already carries resolved content,
-    // so `replayFields` skips this entirely.
-    if (options?.quote && !options.replayFields) {
-      const stored =
-        this.messages.find((m) => m.id === userMessageId) ?? userMessage;
-      const quoted = applyQuoteToContent({
-        quote: options.quote,
-        text: stored.llmContent ?? stored.content,
-        contentParts: stored.contentParts
-      });
-      if (quoted.contentParts) stored.contentParts = quoted.contentParts;
-      if (quoted.llmContent !== undefined) stored.llmContent = quoted.llmContent;
-      if (quoted.contentParts || quoted.llmContent !== undefined) {
-        stored.quote = { ...options.quote };
+      // Generate IDs for both user message and expected assistant response
+      const userMessageId = generateUserMessageId();
+      const assistantMessageId = generateAssistantMessageId();
+      // The active assistant bubble for a durable reconnect is captured from the
+      // real streamed message events (see handleEvent), not pre-assigned here:
+      // the proxy path auto-generates a different id than `assistantMessageId`.
+      if (!join) this.activeAssistantMessageId = null;
+
+      // Fallback display text ONLY when the sole content is image attachments.
+      // A mention/command-only submit (empty text + a chip) must NOT read as
+      // "[Image]"; it renders its chips with empty text instead.
+      const imageOnlyFallback =
+        options?.contentParts && hasImages(options.contentParts)
+          ? IMAGE_ONLY_MESSAGE_FALLBACK_TEXT
+          : "";
+
+      const userMessage: AgentWidgetMessage = {
+        id: userMessageId,
+        ...(join
+          ? { delivery: { turnId: userMessageId, status: "sending" as const } }
+          : {}),
+        role: "user",
+        content: input || imageOnlyFallback, // Display text (fallback if only images)
+        createdAt: new Date().toISOString(),
+        sequence: this.nextSequence(),
+        viaVoice: options?.viaVoice || false,
+        // Include contentParts if provided (for multi-modal messages)
+        ...(options?.contentParts &&
+          options.contentParts.length > 0 && {
+            contentParts: options.contentParts,
+          }),
+        // Echo mention chips immediately (refs only; payloads merged below).
+        ...(options?.mentions &&
+          options.mentions.refs.length > 0 && {
+            contextMentions: options.mentions.refs,
+          }),
+        // Inline mode: ordered display segments for in-prose `@token` rendering.
+        ...(options?.contentSegments &&
+          options.contentSegments.length > 0 && {
+            contentSegments: options.contentSegments,
+          }),
+        // Retained for retry fidelity; never re-read for the current dispatch.
+        ...(options?.composerOptions && {
+          composerOptions: options.composerOptions,
+        }),
+        // A retry replays the already-resolved model channel verbatim.
+        ...(options?.replayFields ?? {}),
+      };
+
+      const provisionalJoin =
+        join &&
+        !this.streaming &&
+        !this.reconnecting &&
+        !this.isAwaitPending() &&
+        this.joinAdmissionCount === 1;
+      if (provisionalJoin) {
+        this.joinExecutionId = null;
+        this.teardownReconnect();
+      }
+      this.appendMessage(userMessage);
+      if (!join || provisionalJoin) this.setStreaming(true);
+
+      // Assign the fresh controller BEFORE the mention await so cancel() (or a
+      // superseding sendMessage) during finalize() aborts THIS turn, not a stale
+      // prior controller.
+      const controller = new AbortController();
+      if (join) {
+        this.joinControllers.add(controller);
+        preparation = {
+          id: userMessageId,
+          controller,
+          provisional: provisionalJoin,
+        };
+      }
+      if (!join || provisionalJoin) this.abortController = controller;
+
+      // Resolve + merge mentions AFTER the instant echo but BEFORE dispatch, so
+      // the model sees the context while the user's bubble already rendered.
+      // `appendMessage` stores a sequence-normalized COPY (see `ensureSequence`),
+      // so mutate THAT live reference — not the orphaned `userMessage` literal —
+      // or the merged `llmContent`/`contentParts`/`mentionContext` never reach the
+      // dispatch snapshot below. Re-emit so any merged parts also reach the UI.
+      if (options?.mentions) {
+        const stored =
+          this.messages.find((m) => m.id === userMessageId) ?? userMessage;
+        await this.applyMentionBundle(stored, input, options.mentions.finalize);
+        // A cancel() or new sendMessage during finalize aborted this controller
+        // (and replaced/nulled the shared ref). Bail without dispatching and
+        // leave whatever idle/streaming state that caller already set.
+        if (
+          controller.signal.aborted ||
+          (!join && this.abortController !== controller)
+        ) {
+          return;
+        }
         this.callbacks.onMessagesChanged([...this.messages]);
       }
-    }
 
-    const snapshot = [...this.messages];
-
-    try {
-      await this.dispatchWithDeletedRecovery(
-        snapshot,
-        controller,
-        assistantMessageId,
-        userMessageId,
-        {
-          composerOptions: options?.composerOptions,
-          interrupt: options?.interrupt
+      // Quote last, so its delimited block is the outermost prefix on the model
+      // channel (ahead of any mention blocks and the user's prose). Same stored-ref
+      // rule as the mention merge above. A retry already carries resolved content,
+      // so `replayFields` skips this entirely.
+      if (options?.quote && !options.replayFields) {
+        const stored =
+          this.messages.find((m) => m.id === userMessageId) ?? userMessage;
+        const quoted = applyQuoteToContent({
+          quote: options.quote,
+          text: stored.llmContent ?? stored.content,
+          contentParts: stored.contentParts,
+        });
+        if (quoted.contentParts) stored.contentParts = quoted.contentParts;
+        if (quoted.llmContent !== undefined)
+          stored.llmContent = quoted.llmContent;
+        if (quoted.contentParts || quoted.llmContent !== undefined) {
+          stored.quote = { ...options.quote };
+          this.callbacks.onMessagesChanged([...this.messages]);
         }
-      );
-    } catch (error) {
-      // A durable drop fired the dispatch wrapper's `finally` (plain `idle`)
-      // first, which already flipped us into `resuming` and armed reconnect.
-      // The subsequent dispatch rejection must NOT paint a dispatch-error
-      // bubble: the turn is being resumed, not failed.
-      if (this.status === "resuming" || this.reconnecting) return;
-      // Check if this is an abort error (user canceled, navigated away, etc.)
-      // In these cases, don't show fallback - the request was intentionally interrupted
-      const isAbortError =
-        error instanceof Error &&
-        (error.name === 'AbortError' ||
-         error.message.includes('aborted') ||
-         error.message.includes('abort'));
+      }
 
-      if (!isAbortError) {
-        const content = buildDispatchErrorContent(
-          error,
-          this.config.errorMessage
+      const snapshot = join
+        ? this.messages.filter((message) => message.id === userMessageId)
+        : [...this.messages];
+
+      try {
+        if (join) {
+          await admissionQueue!.ready;
+          if (controller.signal.aborted) return;
+          this.recordDispatchedProjections(snapshot);
+          await this.dispatchJoinedInput(
+            snapshot,
+            controller,
+            assistantMessageId,
+            userMessageId,
+            admissionQueue!.release,
+            provisionalJoin,
+          );
+          return;
+        }
+        await this.dispatchWithDeletedRecovery(
+          snapshot,
+          controller,
+          assistantMessageId,
+          userMessageId,
+          {
+            composerOptions: options?.composerOptions,
+            interrupt: options?.interrupt,
+          },
         );
-        // An override that returns "" suppresses the fallback bubble entirely
-        // (onError still fires below).
-        if (content) {
-          const fallback: AgentWidgetMessage = {
-            id: assistantMessageId, // Use the pre-generated ID for fallback too
-            role: "assistant",
-            createdAt: new Date().toISOString(),
-            content,
-            sequence: this.nextSequence()
-          };
+      } catch (error) {
+        if (join) {
+          if (
+            !controller.signal.aborted &&
+            !this.messages.find((message) => message.id === userMessageId)
+              ?.delivery?.deliveryId
+          ) {
+            this.updateInputDelivery(userMessageId, {
+              status:
+                error instanceof InputDeliveryError && error.rejected
+                  ? "rejected"
+                  : "unknown",
+              error: error instanceof Error ? error.message : String(error),
+            });
+            this.callbacks.onError?.(
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+          this.joinControllers.delete(controller);
+          if (
+            provisionalJoin &&
+            this.abortController === controller &&
+            !this.messages.find((message) => message.id === userMessageId)
+              ?.delivery?.deliveryId
+          ) {
+            this.abortController = null;
+            this.setStreaming(false);
+            this.setStatus("idle");
+          }
+          return;
+        }
+        // A durable drop fired the dispatch wrapper's `finally` (plain `idle`)
+        // first, which already flipped us into `resuming` and armed reconnect.
+        // The subsequent dispatch rejection must NOT paint a dispatch-error
+        // bubble: the turn is being resumed, not failed.
+        if (this.status === "resuming" || this.reconnecting) return;
+        // Check if this is an abort error (user canceled, navigated away, etc.)
+        // In these cases, don't show fallback - the request was intentionally interrupted
+        const isAbortError =
+          error instanceof Error &&
+          (error.name === "AbortError" ||
+            error.message.includes("aborted") ||
+            error.message.includes("abort"));
 
-          this.appendMessage(fallback);
+        if (!isAbortError) {
+          const content = buildDispatchErrorContent(
+            error,
+            this.config.errorMessage,
+          );
+          // An override that returns "" suppresses the fallback bubble entirely
+          // (onError still fires below).
+          if (content) {
+            const fallback: AgentWidgetMessage = {
+              id: assistantMessageId, // Use the pre-generated ID for fallback too
+              role: "assistant",
+              createdAt: new Date().toISOString(),
+              content,
+              sequence: this.nextSequence(),
+            };
+
+            this.appendMessage(fallback);
+          }
+        }
+
+        this.setStatus("idle");
+        this.setStreaming(false);
+        this.abortController = null;
+
+        if (!isAbortError) {
+          if (error instanceof Error) {
+            this.callbacks.onError?.(error);
+          } else {
+            this.callbacks.onError?.(new Error(String(error)));
+          }
         }
       }
-
-      this.setStatus("idle");
-      this.setStreaming(false);
-      this.abortController = null;
-
-      if (!isAbortError) {
-        if (error instanceof Error) {
-          this.callbacks.onError?.(error);
-        } else {
-          this.callbacks.onError?.(new Error(String(error)));
-        }
+    } catch (error) {
+      if (!join || !preparation) throw error;
+      if (!preparation.controller.signal.aborted) {
+        this.updateInputDelivery(preparation.id, {
+          status: "rejected",
+          error: error instanceof Error ? error.message : String(error),
+        });
+        this.callbacks.onError?.(
+          error instanceof Error ? error : new Error(String(error)),
+        );
       }
+      if (
+        preparation.provisional &&
+        this.abortController === preparation.controller
+      ) {
+        this.abortController = null;
+        this.setStreaming(false);
+        this.setStatus("idle");
+      }
+    } finally {
+      admissionQueue?.release();
+      if (preparation) this.joinControllers.delete(preparation.controller);
     }
   }
 
@@ -2761,7 +3167,7 @@ export class AgentWidgetSession {
    */
   public resubmitFrom(
     messageId: string,
-    options: ComposerResubmitOptions
+    options: ComposerResubmitOptions,
   ): boolean {
     const boundary = findUserTurnBoundary(this.messages, messageId);
     if (!boundary) return false;
@@ -2771,6 +3177,15 @@ export class AgentWidgetSession {
     // that carries the merged mention/quote content.
     const stored = this.messages[boundary.start];
     const replacement = options.replacement;
+    if (
+      stored.delivery &&
+      !replacement &&
+      stored.delivery.status !== "not_applied"
+    ) {
+      if (["unknown", "rejected"].includes(stored.delivery.status))
+        void this.retryJoinedMessage(stored.id);
+      return true;
+    }
 
     const text = replacement ? replacement.text : stored.content;
     const contentParts = replacement
@@ -2785,11 +3200,19 @@ export class AgentWidgetSession {
     const replay = replacement
       ? undefined
       : {
-          ...(stored.llmContent !== undefined && { llmContent: stored.llmContent }),
-          ...(stored.rawContent !== undefined && { rawContent: stored.rawContent }),
-          ...(stored.mentionContext && { mentionContext: stored.mentionContext }),
-          ...(stored.contextMentions && { contextMentions: stored.contextMentions }),
-          ...(stored.quote && { quote: stored.quote })
+          ...(stored.llmContent !== undefined && {
+            llmContent: stored.llmContent,
+          }),
+          ...(stored.rawContent !== undefined && {
+            rawContent: stored.rawContent,
+          }),
+          ...(stored.mentionContext && {
+            mentionContext: stored.mentionContext,
+          }),
+          ...(stored.contextMentions && {
+            contextMentions: stored.contextMentions,
+          }),
+          ...(stored.quote && { quote: stored.quote }),
         };
 
     const composerOptions = replacement
@@ -2803,18 +3226,27 @@ export class AgentWidgetSession {
 
     // Cancel before history changes so no in-flight stream can write into the
     // tail we are about to drop.
-    this.cancel();
-
-    // Silent truncation: the emit belongs to the resubmission below.
-    this.messages = this.messages.slice(0, boundary.start);
+    if (
+      !(
+        this.config.clientToken &&
+        this.config.composer?.streamingSubmitBehavior === "join"
+      )
+    ) {
+      this.cancel();
+      this.messages = this.messages.slice(0, boundary.start);
+    }
 
     void this.sendMessage(text ?? "", {
       ...(contentParts?.length ? { contentParts: [...contentParts] } : {}),
-      ...(contentSegments?.length ? { contentSegments: [...contentSegments] } : {}),
+      ...(contentSegments?.length
+        ? { contentSegments: [...contentSegments] }
+        : {}),
       ...(composerOptions ? { composerOptions } : {}),
       ...(quote ? { quote } : {}),
-      ...(replay && Object.keys(replay).length > 0 ? { replayFields: replay } : {}),
-      viaVoice: viaVoice === true
+      ...(replay && Object.keys(replay).length > 0
+        ? { replayFields: replay }
+        : {}),
+      viaVoice: viaVoice === true,
     });
     return true;
   }
@@ -4043,8 +4475,42 @@ export class AgentWidgetSession {
     this.webMcpEpoch++;
   }
 
-  public cancel() {
-    this.abortController?.abort();
+  public cancel(options: { execution?: boolean } = {}) {
+    const executionId = this.joinExecutionId ?? this.resumable?.executionId;
+    if (
+      options.execution !== false &&
+      this.config.composer?.streamingSubmitBehavior === "join" &&
+      executionId
+    ) {
+      void this.client.cancelClientExecution(executionId).catch((error) => {
+        this.callbacks.onError?.(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      });
+    }
+    for (const message of this.messages) {
+      if (message.delivery?.status === "sending")
+        this.updateInputDelivery(message.id, {
+          status: "unknown",
+          error: "Acknowledgement interrupted. Retry to check delivery safely.",
+        });
+    }
+    for (const controller of this.joinControllers) {
+      if (
+        options.execution !== false &&
+        this.joinDispatchControllers.has(controller)
+      ) {
+        this.stopOnJoinAdmission.add(controller);
+      } else {
+        controller.abort();
+        this.joinControllers.delete(controller);
+      }
+    }
+    if (
+      !this.abortController ||
+      !this.stopOnJoinAdmission.has(this.abortController)
+    )
+      this.abortController?.abort();
     this.abortController = null;
     // A user stop also cancels any pending/in-flight durable reconnect and
     // clears the resume handle (the abort above already killed its fetch).
@@ -4064,6 +4530,7 @@ export class AgentWidgetSession {
   }
 
   public clearMessages() {
+    this.clearJoinedInputState();
     this.stopSpeaking();
     this.abortController?.abort();
     this.abortController = null;
@@ -4290,6 +4757,7 @@ export class AgentWidgetSession {
   }
 
   public hydrateMessages(messages: AgentWidgetMessage[]) {
+    this.clearJoinedInputState();
     this.abortController?.abort();
     this.abortController = null;
     // Hydration replaces the conversation: also cancel any pending reconnect and
@@ -4306,12 +4774,35 @@ export class AgentWidgetSession {
       messages.map((message) => ({
         ...message,
         streaming: false,
-        sequence: message.sequence ?? this.nextSequence()
-      }))
+        sequence: message.sequence ?? this.nextSequence(),
+      })),
     );
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
+    for (const message of this.messages) {
+      const delivery = message.delivery;
+      if (
+        delivery?.executionId &&
+        delivery.deliveryId &&
+        ["pending", "applied"].includes(delivery.status)
+      ) {
+        const watcher = new AbortController();
+        this.joinWatchControllers.add(watcher);
+        void this.watchInputDelivery(
+          message.id,
+          {
+            kind: "receipt",
+            executionId: delivery.executionId,
+            deliveryId: delivery.deliveryId,
+            status: delivery.status as "pending" | "applied",
+          },
+          watcher,
+        );
+      } else if (delivery?.status === "sending") {
+        this.updateInputDelivery(message.id, { status: "unknown" });
+      }
+    }
   }
 
   public hydrateArtifacts(

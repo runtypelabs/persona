@@ -4511,7 +4511,7 @@ export type ComposerLayout = "stacked" | "single-row";
  *   transport carries that contract; every other transport falls back to
  *   `"block"` with a debug warning.
  */
-export type ComposerStreamingSubmitBehavior = "block" | "defer-one" | "interrupt";
+export type ComposerStreamingSubmitBehavior = "block" | "defer-one" | "interrupt" | "join";
 
 export type AgentWidgetClearChatConfig = {
   enabled?: boolean;
@@ -5730,7 +5730,7 @@ export type ClientSession = {
   /** Opaque change token; differs whenever the conversation transcript mutated. */
   conversationRevision?: string;
   /** Server-negotiated durable reconnect support for this client-token session. */
-  durableRecovery?: { enabled: boolean };
+  durableRecovery?: { enabled: boolean; join?: boolean };
   /** Visitor grant backing history. `token` appears only at mint. */
   visitor?: ClientVisitorGrant;
   /** Configuration from the server */
@@ -5772,7 +5772,7 @@ export type ClientInitResponse = {
   targetId?: string;
   conversationRevision?: string;
   /** Present on servers that understand the durable-recovery negotiation. */
-  durableRecovery?: { enabled: boolean };
+  durableRecovery?: { enabled: boolean; join?: boolean };
   visitor?: ClientVisitorGrant;
   config: {
     welcomeMessage: string | null;
@@ -5928,7 +5928,7 @@ export type ClientChatRequest = {
   /** Stable client-owned turn ID for stale stream suppression (from Core public OpenAPI). */
   turnId?: RuntypeClientChatRequest['turnId'];
   /** Whether this turn should interrupt a prior in-flight response (from Core public OpenAPI). */
-  submitMode?: RuntypeClientChatRequest['submitMode'];
+  submitMode?: RuntypeClientChatRequest['submitMode'] | 'join';
 };
 
 /**
@@ -7854,6 +7854,15 @@ export type AgentWidgetMessageVariant = "assistant" | "reasoning" | "tool" | "ap
  */
 export type StopReasonKind = RuntypeStopReasonKind;
 
+/** Per-message acknowledgement and application state for additive input. */
+export type InputDeliveryState = {
+  turnId: string;
+  deliveryId?: string;
+  executionId?: string;
+  status: "sending" | "pending" | "applied" | "settled" | "not_applied" | "unknown" | "rejected";
+  error?: string;
+};
+
 /**
  * Represents a message in the chat conversation.
  *
@@ -7872,6 +7881,8 @@ export type StopReasonKind = RuntypeStopReasonKind;
  *                      Useful for implementing voice-specific behaviors like auto-reactivation.
  */
 export type AgentWidgetMessage = {
+  /** Acceptance is distinct from whether the active agent applied this user input. */
+  delivery?: InputDeliveryState;
   id: string;
   role: AgentWidgetMessageRole;
   content: string;
