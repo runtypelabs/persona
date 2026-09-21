@@ -90,7 +90,7 @@ Full route list: [`src/app.ts`](./src/app.ts).
 
 ## Adding a demo route
 
-Edit **`src/app.ts` only**. Node, Vercel, and Workers pick it up automatically. See [`CLAUDE.md`](../../CLAUDE.md) for the checklist (define flow in `packages/proxy`, mount in `app.ts`, rebuild proxy, point demo `apiUrl`).
+Edit **`src/app.ts` only**. Node, Vercel, and Workers pick it up automatically. See [`AGENTS.md`](../../AGENTS.md) for the checklist (define flow in `packages/proxy`, mount in `app.ts`, rebuild proxy, point demo `apiUrl`).
 
 ## Shared package
 

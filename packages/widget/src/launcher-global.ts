@@ -13,7 +13,7 @@
  * EXTRA-tier icon (`launcher.agentIconName: "shopping-cart"`) paints a
  * correctly-sized empty placeholder and fills within one round-trip of the
  * `icons-extra.js` sibling chunk (loader registered below). See the
- * "Deferred Launcher Loading" pattern in CLAUDE.md.
+ * "Deferred Launcher Loading" pattern in AGENTS.md.
  *
  * Public global (via tsup `--global-name AgentWidgetLauncher`):
  *
