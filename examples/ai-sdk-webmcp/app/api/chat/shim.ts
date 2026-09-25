@@ -167,13 +167,6 @@ export function sseResponse(
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Map widget messages → AI SDK ModelMessages. Earlier page-tool calls arrive
- * as an assistant `toolCalls` message plus a `tool` message with the matching
- * `toolResults`, named the way Runtype's model sees them (`webmcp_<name>`);
- * this backend registers bare names, so map back, and drop a pair whose tool
- * the page no longer offers (tool history without the tool is a provider 400).
- */
 /** The widget's model-facing tool name (`webmcp:Get-Slide` -> `webmcp_get_slide`). */
 function modelFacingToolName(name: string): string {
   return name
@@ -183,6 +176,13 @@ function modelFacingToolName(name: string): string {
     .replace(/^_|_$/g, "");
 }
 
+/**
+ * Map widget messages → AI SDK ModelMessages. Earlier page-tool calls arrive
+ * as an assistant `toolCalls` message plus a `tool` message with the matching
+ * `toolResults`, named the way the widget's model sees them (`webmcp_<name>`).
+ * This backend registers bare names, so map back; a tool the page no longer
+ * offers keeps its pair under the name with the prefix stripped.
+ */
 function toModelMessages(
   messages: WidgetMessage[] = [],
   clientTools: ClientToolDefinition[] = [],
@@ -190,25 +190,26 @@ function toModelMessages(
   const bareName = new Map(
     clientTools.map((t) => [modelFacingToolName(`${WEBMCP_PREFIX}${t.name}`), t.name]),
   );
+  const toBare = (name: string) => bareName.get(name) ?? name.replace(/^webmcp_/, "");
   const out: ModelMessage[] = [];
   for (const m of messages) {
     if (m.toolCalls?.length) {
-      const calls: ToolCallPart[] = m.toolCalls.flatMap((c) => {
-        const toolName = bareName.get(c.toolName);
-        return toolName
-          ? [{ type: "tool-call" as const, toolCallId: c.toolCallId, toolName, input: c.args }]
-          : [];
-      });
-      if (calls.length > 0) out.push({ role: "assistant", content: calls });
+      const calls: ToolCallPart[] = m.toolCalls.map((c) => ({
+        type: "tool-call",
+        toolCallId: c.toolCallId,
+        toolName: toBare(c.toolName),
+        input: c.args,
+      }));
+      out.push({ role: "assistant", content: calls });
       continue;
     }
     if (m.role === "tool") {
-      const results: ToolResultPart[] = (m.toolResults ?? []).flatMap((r) => {
-        const toolName = bareName.get(r.toolName);
-        return toolName
-          ? [{ type: "tool-result" as const, toolCallId: r.toolCallId, toolName, output: resultToOutput(r.result) }]
-          : [];
-      });
+      const results: ToolResultPart[] = (m.toolResults ?? []).map((r) => ({
+        type: "tool-result",
+        toolCallId: r.toolCallId,
+        toolName: toBare(r.toolName),
+        output: resultToOutput(r.result),
+      }));
       if (results.length > 0) out.push({ role: "tool", content: results });
       continue;
     }

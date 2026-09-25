@@ -120,11 +120,11 @@ describe("tool-pair replay: proxy mode", () => {
     expect(stripCreatedAt(bodies[0]!.messages)).toEqual(EXPECTED_TURN_2);
   });
 
-  it("omits the pair once the page no longer offers the tool", async () => {
+  it("keeps the pair after the page stops offering the tool", async () => {
     const client = withTools(new AgentWidgetClient({ apiUrl: "http://proxy.test/chat" }), []);
     await client.dispatch({ messages: twoTurnTranscript() }, () => undefined);
-    const roles = (bodies[0]!.messages as Array<{ role: string; toolCalls?: unknown }>).map((m) => m.role);
-    expect(roles).toEqual(["user", "assistant", "user"]);
+    expect(stripCreatedAt(bodies[0]!.messages)).toEqual(EXPECTED_TURN_2);
+    expect(bodies[0]!.clientTools).toBeUndefined();
   });
 });
 
@@ -225,25 +225,11 @@ describe("tool-pair replay: parallel and chained calls", () => {
 });
 
 describe("tool-pair replay: requestMiddleware", () => {
-  it("drops replayed pairs when the middleware removes the tools", async () => {
+  it("keeps replayed pairs when the middleware removes the tools", async () => {
     const client = withTools(
       new AgentWidgetClient({
         apiUrl: "http://proxy.test/chat",
         requestMiddleware: ({ payload }) => ({ ...payload, clientTools: undefined }),
-      }),
-      [SEARCH_TOOL],
-    );
-    await client.dispatch({ messages: twoTurnTranscript() }, () => undefined);
-    const messages = bodies[0]!.messages as Array<Record<string, unknown>>;
-    expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
-    expect(messages.some((m) => "toolCalls" in m || "toolResults" in m)).toBe(false);
-  });
-
-  it("keeps replayed pairs when the middleware leaves the tools in place", async () => {
-    const client = withTools(
-      new AgentWidgetClient({
-        apiUrl: "http://proxy.test/chat",
-        requestMiddleware: ({ payload }) => ({ ...payload, metadata: { host: "x" } }),
       }),
       [SEARCH_TOOL],
     );

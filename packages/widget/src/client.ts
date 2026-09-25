@@ -49,12 +49,7 @@ import {
 import { resolveTarget } from "./utils/target";
 import { generateTurnId } from "./utils/message-id";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
-import {
-  dropUnofferedReplayedPairs,
-  offeredClientToolNames,
-  replayedToolCallIds,
-  serializeWithToolPairs
-} from "./utils/tool-pair-replay";
+import { serializeWithToolPairs } from "./utils/tool-pair-replay";
 import {
   extractTextFromJson,
   createPlainTextParser,
@@ -2551,22 +2546,10 @@ export class AgentWidgetClient {
       throw new Error('Agent configuration required for agent mode');
     }
 
-    // Client tools: built-in widget tools (ask_user_question, when exposed)
-    // plus the per-turn WebMCP page-registry snapshot. Name collisions are
-    // impossible: WebMCP entries are `webmcp:`-prefixed server-side while
-    // `sdk`-origin built-ins keep bare names. Both kinds ride the same
-    // diff-only fingerprint path in client-token mode. Kept to a single await
-    // so dispatch microtask timing is unchanged.
-    const clientTools = [
-      ...builtInClientToolsForDispatch(this.config),
-      ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
-    ];
-
     // Filter out messages with empty content and normalize; answered
     // client-tool calls replay as paired toolCalls/toolResults messages.
     const normalizedMessages = serializeWithToolPairs(
       sortByCreatedAt(messages),
-      offeredClientToolNames(clientTools),
       (message) =>
         hasValidContent(message) &&
         (message.role === "user" || message.role === "assistant" || message.role === "system") &&
@@ -2590,6 +2573,16 @@ export class AgentWidgetClient {
     };
     if (composer) payload.composerOptions = composer;
 
+    // Client tools: built-in widget tools (ask_user_question, when exposed)
+    // plus the per-turn WebMCP page-registry snapshot. Name collisions are
+    // impossible: WebMCP entries are `webmcp:`-prefixed server-side while
+    // `sdk`-origin built-ins keep bare names. Both kinds ride the same
+    // diff-only fingerprint path in client-token mode. Kept to a single await
+    // so dispatch microtask timing is unchanged.
+    const clientTools = [
+      ...builtInClientToolsForDispatch(this.config),
+      ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
+    ];
     if (clientTools.length > 0) {
       payload.clientTools = clientTools;
     }
@@ -2605,20 +2598,12 @@ export class AgentWidgetClient {
     messages: AgentWidgetMessage[],
     composerOptions?: ComposerOptionsPayload
   ): Promise<AgentWidgetRequestPayload> {
-    // Client tools: same built-in + WebMCP merge as buildAgentPayload
-    // (flow-dispatch path).
-    const clientTools = [
-      ...builtInClientToolsForDispatch(this.config),
-      ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
-    ];
-
     // Filter out messages with empty content to prevent validation errors;
     // answered client-tool calls replay as paired toolCalls/toolResults
     // messages. Client-token mode maps `options.messages` itself and never
     // reads these, so the server stays the replay owner there.
     const normalizedMessages = serializeWithToolPairs(
       sortByCreatedAt(messages),
-      offeredClientToolNames(clientTools),
       (message) => (hasValidContent(message) ? toPayloadMessage(message) : null)
     );
 
@@ -2643,6 +2628,12 @@ export class AgentWidgetClient {
       }
     }
 
+    // Client tools: same built-in + WebMCP merge as buildAgentPayload
+    // (flow-dispatch path).
+    const clientTools = [
+      ...builtInClientToolsForDispatch(this.config),
+      ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
+    ];
     if (clientTools.length > 0) {
       payload.clientTools = clientTools;
     }
@@ -2677,15 +2668,6 @@ export class AgentWidgetClient {
             !("clientTools" in next)
           ) {
             next.clientTools = payload.clientTools;
-          }
-          // Replayed pairs were filtered against the pre-middleware tools;
-          // re-check them against the tools this request actually offers.
-          if (Array.isArray(next.messages)) {
-            next.messages = dropUnofferedReplayedPairs(
-              next.messages,
-              next.clientTools,
-              replayedToolCallIds(normalizedMessages)
-            );
           }
           return next;
         }
