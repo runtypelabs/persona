@@ -3232,7 +3232,8 @@ export class AgentWidgetSession {
     if (
       stored.delivery &&
       !replacement &&
-      stored.delivery.status !== "not_applied"
+      stored.delivery.status !== "not_applied" &&
+      stored.delivery.status !== "settled"
     ) {
       if (["unknown", "rejected"].includes(stored.delivery.status))
         void this.retryJoinedMessage(stored.id);
