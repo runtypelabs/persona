@@ -1311,6 +1311,24 @@ export class AgentWidgetClient {
     return this.config.getIdentityProof ? 'verified-user' : 'browser';
   }
 
+  private async resolveChatIdentityProof(): Promise<ClientChatRequest['identityProof']> {
+    const provider = this.config.identityProvider;
+    if (provider === undefined) return undefined;
+    if (!provider.trim() || !this.config.getIdentityProof) {
+      throw new Error('Chat identity requires identityProvider and getIdentityProof.');
+    }
+    let token: string | null;
+    try {
+      token = await this.config.getIdentityProof();
+    } catch {
+      throw new Error('The identity proof provider failed.');
+    }
+    if (typeof token !== 'string' || !token.trim()) {
+      throw new Error('A fresh identity proof is required to send this message.');
+    }
+    return { provider, token };
+  }
+
   /**
    * Resolve the proof for one logical request. `null` is an intentional
    * browser-scope fallback only while the visitor has never been bound.
@@ -1909,16 +1927,23 @@ export class AgentWidgetClient {
         const recoveryVisitorToken =
           session.durableRecovery?.enabled === true ? await this.readVisitorToken() : null;
         assertCurrentTurn();
-        return this.sendWithClientToolsDiff(session.sessionId, basePayload.clientTools, (toolFields) => {
+        return this.sendWithClientToolsDiff(session.sessionId, basePayload.clientTools, async (toolFields) => {
+          assertCurrentTurn();
+          const identityProof = await this.resolveChatIdentityProof();
+          assertCurrentTurn();
           const chatRequest: ClientChatRequest = {
             ...baseChatRequest,
             sessionId: session.sessionId,
             ...toolFields,
+            ...(identityProof && { identityProof }),
           };
 
           if (this.debug) {
             // eslint-disable-next-line no-console
-            console.debug("[AgentWidgetClient] client token dispatch", chatRequest);
+            console.debug("[AgentWidgetClient] client token dispatch", {
+              ...chatRequest,
+              ...(identityProof && { identityProof: { provider: identityProof.provider, token: '[REDACTED]' } }),
+            });
           }
 
           return fetch(this.getClientApiUrl('chat'), {
@@ -1950,6 +1975,12 @@ export class AgentWidgetClient {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({ error: 'Chat request failed' }));
+
+        if (response.status === 401 && data.error === 'invalid_identity_proof') {
+          const error = new HistoryClientError('invalid_identity_proof', PROOF_REJECTED_MESSAGE);
+          forward({ type: 'error', error });
+          throw error;
+        }
 
         if (response.status === 401) {
           // Session expired

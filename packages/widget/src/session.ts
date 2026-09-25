@@ -144,6 +144,7 @@ const CONNECTION_CONFIG_KEYS = [
   "getStoredSessionId",
   "setStoredSessionId",
   "getIdentityProof",
+  "identityProvider",
   "getStoredConversationId",
   "setStoredConversationId",
   "clearStoredConversationId",
