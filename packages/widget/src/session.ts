@@ -3818,14 +3818,30 @@ export class AgentWidgetSession {
       // may still be paused and the retry path must not show a final result.
       for (const r of ready) {
         this.webMcpResolvedKeys.add(r.dedupeKey);
+        const toolName = r.toolMessage.toolCall?.name;
+        const toolCallId = r.toolMessage.agentMetadata?.webMcpToolCallId;
         this.markWebMcpToolComplete(
           r.toolMessage,
           r.output,
           r.startedAt,
           r.completedAt,
-          r.toolMessage.toolCall?.name === SUGGEST_REPLIES_TOOL_NAME
-            ? { suggestRepliesResolved: true }
-            : undefined,
+          {
+            ...(toolName === SUGGEST_REPLIES_TOOL_NAME
+              ? { suggestRepliesResolved: true }
+              : {}),
+            // Only a provider call id can be replayed: a legacy name-keyed
+            // resume has nothing the model's transcript can reference.
+            ...(toolName && toolCallId
+              ? {
+                  clientToolAnswer: {
+                    toolCallId,
+                    toolName,
+                    args: r.toolMessage.toolCall?.args,
+                    result: r.output,
+                  },
+                }
+              : {}),
+          },
         );
       }
       if (response.body) {
@@ -4927,6 +4943,17 @@ export class AgentWidgetSession {
           suggestRepliesResolved: true,
           awaitingLocalTool: false,
         };
+      }
+      // The accepted client-tool answer is what later proxy/agent turns
+      // replay; a post-resume `tool_complete` re-emit carries a fresh
+      // metadata skeleton and must not drop it.
+      const clientToolAnswer = existing.agentMetadata?.clientToolAnswer;
+      if (
+        clientToolAnswer &&
+        merged.agentMetadata &&
+        !merged.agentMetadata.clientToolAnswer
+      ) {
+        merged.agentMetadata = { ...merged.agentMetadata, clientToolAnswer };
       }
       // Approval equivalent: `approval_complete` carries only the
       // resolution (approvalId, decision, resolvedBy): the runtime does not

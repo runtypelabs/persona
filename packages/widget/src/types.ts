@@ -593,10 +593,34 @@ export type AgentWidgetContextMentionTokenRenderContext = {
   readonly: boolean;
 };
 
+/** One earlier client-tool call replayed to the model, in `/v1/dispatch` shape. */
+export type AgentWidgetReplayedToolCall = {
+  toolCallId: string;
+  /** Model-facing (sanitized) name, e.g. `webmcp_search`. */
+  toolName: string;
+  args: Record<string, unknown>;
+};
+
+/** The browser's answer to an {@link AgentWidgetReplayedToolCall}. */
+export type AgentWidgetReplayedToolResult = {
+  toolCallId: string;
+  toolName: string;
+  result: unknown;
+};
+
+/**
+ * A message in the proxy/agent request payload. Earlier client-tool calls the
+ * browser answered replay as an assistant message carrying `toolCalls`,
+ * followed by a `tool` message carrying the matching `toolResults`; both have
+ * empty `content`. Client-token mode never sends them: the server replays
+ * from its own stored transcript there.
+ */
 export type AgentWidgetRequestPayloadMessage = {
-  role: AgentWidgetMessageRole;
+  role: AgentWidgetMessageRole | "tool";
   content: MessageContent;
   createdAt: string;
+  toolCalls?: AgentWidgetReplayedToolCall[];
+  toolResults?: AgentWidgetReplayedToolResult[];
 };
 
 export type AgentWidgetRequestPayload = {
@@ -1032,6 +1056,19 @@ export type AgentMessageMetadata = {
    * never re-resume the call.
    */
   suggestRepliesResolved?: boolean;
+  /**
+   * The client-tool answer the server accepted through `/resume`, kept so
+   * later proxy/agent turns can replay the call and its result to the model.
+   * `toolName` is the widget's internal name (`webmcp:<name>` or a bare
+   * built-in). Set only after the resume succeeds; preserved across
+   * re-emissions of the tool message.
+   */
+  clientToolAnswer?: {
+    toolCallId: string;
+    toolName: string;
+    args: unknown;
+    result: unknown;
+  };
 };
 
 export type AgentWidgetRequestMiddlewareContext = {

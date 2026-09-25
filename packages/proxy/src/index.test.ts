@@ -320,6 +320,30 @@ describe("dispatch: server-pinned agent config", () => {
     });
   });
 
+  it("forwards replayed client-tool pairs and drops a tool message without results", async () => {
+    const calls = captureUpstream();
+    const app = createChatProxyApp({ apiKey: "test-key", agentConfig });
+    const at = "2026-01-01T00:00:01.000Z";
+    const call = { toolCallId: "toolu_1", toolName: "webmcp_search", args: { q: "shoes" } };
+    const result = { toolCallId: "toolu_1", toolName: "webmcp_search", result: { content: [] } };
+    await dispatch(app, {
+      messages: [
+        { role: "user", content: "find shoes", createdAt: "2026-01-01T00:00:00.000Z" },
+        { role: "assistant", content: "", createdAt: at, toolCalls: [call] },
+        { role: "tool", content: "", createdAt: at, toolResults: [result] },
+        { role: "tool", content: "", createdAt: at },
+        { role: "user", content: "again", createdAt: "2026-01-01T00:00:02.000Z" },
+      ],
+    });
+
+    expect(calls[0]!.body?.messages).toEqual([
+      { role: "user", content: "find shoes" },
+      { role: "assistant", content: "", toolCalls: [call] },
+      { role: "tool", content: "", toolResults: [result] },
+      { role: "user", content: "again" },
+    ]);
+  });
+
   it("rejects a client-supplied agent with 400 on a non-server-agent route", async () => {
     const calls = captureUpstream();
     // No agentConfig/agentId -> flow mode. A client-supplied `agent` used to be

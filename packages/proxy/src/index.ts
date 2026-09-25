@@ -265,11 +265,21 @@ type ProxyMessage = {
   role: string;
   content: unknown;
   createdAt?: string;
+  toolCalls?: unknown;
+  toolResults?: unknown;
 };
 
+const nonEmptyArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value) && value.length > 0;
+
+// The widget replays earlier client-tool calls as an assistant `toolCalls`
+// message followed by a `tool` message with `toolResults`; both carry their
+// payload there, not in `content`, so keep the arrays and drop a `tool`
+// message that arrives without results (the API rejects it).
 const sortAndFormatMessages = (value: unknown) => {
   const messages = Array.isArray(value) ? (value as ProxyMessage[]) : [];
   return [...messages]
+    .filter((message) => message.role !== "tool" || nonEmptyArray(message.toolResults))
     .sort((a, b) => {
       const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -277,7 +287,11 @@ const sortAndFormatMessages = (value: unknown) => {
     })
     .map((message) => ({
       role: message.role,
-      content: message.content
+      content: message.content,
+      ...(message.role === "assistant" && nonEmptyArray(message.toolCalls)
+        ? { toolCalls: message.toolCalls }
+        : {}),
+      ...(message.role === "tool" ? { toolResults: message.toolResults } : {})
     }));
 };
 
