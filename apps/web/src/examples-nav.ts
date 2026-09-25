@@ -146,9 +146,9 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
-    slug: "live-join-demo",
-    href: "/live-join-demo.html",
-    title: "Live Input Joining",
+    slug: "live-steer-demo",
+    href: "/live-steer-demo.html",
+    title: "Live Input Steering",
     blurb: "Add details while an agent works: one execution, separate delivery receipts, and explicit Stop.",
     tier: "patterns",
     tags: ["composer", "streaming", "agent", "durable"],

@@ -1,16 +1,16 @@
-# Live input joining
+# Live input steering
 
 For client-token chat with a saved native Runtype agent, opt in to additive input:
 
 ```ts
 const config = {
   clientToken: 'YOUR_PUBLIC_CLIENT_TOKEN',
-  composer: { streamingSubmitBehavior: 'join' },
+  composer: { streamingSubmitBehavior: 'steer' },
 };
 ```
 
 The token must target a chat surface with durable turns enabled. Client init must
-advertise `durableRecovery.join: true`. This mode does not support flows, external
+advertise `durableRecovery.steer: true`. This mode does not support flows, external
 agents, or proxy/custom transports. Unsupported sessions fail explicitly rather
 than silently interrupting the response. The default remains `block`.
 
@@ -32,11 +32,16 @@ Each message has its own delivery state:
   the original identity, or rechecks an already acknowledged receipt. It never
   silently replaces the active response.
 
-Edits and regeneration of completed turns append a new message instead of erasing
-prior conversation. Pending admissions are FIFO and bounded at eight; when full,
-the composer keeps its draft.
-Programmatic `submitMessage()` also returns `false` when admission is full.
-A joined message cannot change the active run's model, tools, authorization, or
+Edits and regeneration of completed steered turns append a new message instead of
+erasing prior conversation, even if the host later disables steer mode or changes
+transport. Pending admissions are FIFO and bounded at eight; when full, the
+composer keeps its draft, attachments, mentions, and one-shot state.
+Programmatic `submitMessage()` returns `false` when admission is already full or
+another submission is still preparing. A `true` return starts preparation; it
+does not guarantee delivery. If capacity fills during an asynchronous
+`onBeforeSend` hook or history transition, the draft stays intact and the composer
+shows a retry notice. Composer content is consumed only after local admission.
+A steered message cannot change the active run's model, tools, authorization, or
 budgets. Those changes may be refused until the current run ends.
 
 Only the submitted user delta is sent. Runtype supplies trusted model history;

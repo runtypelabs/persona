@@ -40,8 +40,8 @@
         response.json(),
       );
       const params = new URLSearchParams(location.search);
-      window.joinErrors = [];
-      window.joinController = AgentWidget.initAgentWidget({
+      window.steerErrors = [];
+      window.steerController = AgentWidget.initAgentWidget({
         target: "#widget",
         useShadowDom: false,
         config: {
@@ -49,14 +49,14 @@
           apiUrl: fixture.apiUrl,
           launcher: { enabled: false },
           welcome: { variant: "none" },
-          composer: { streamingSubmitBehavior: params.get("mode") || "join" },
+          composer: { streamingSubmitBehavior: params.get("mode") || "steer" },
           features: {
             history: { enabled: true },
             askUserQuestion: { enabled: true, expose: params.has("questions") },
             toolCallDisplay: { enabled: true },
           },
-          persistState: { keyPrefix: "persona-live-join-" },
-          onError: (error) => window.joinErrors.push(error.message),
+          persistState: { keyPrefix: "persona-live-steer-" },
+          onError: (error) => window.steerErrors.push(error.message),
         },
       });
     })();

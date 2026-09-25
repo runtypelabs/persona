@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { defineConfig, devices } from "@playwright/test";
-const port = Number(process.env.PERSONA_JOIN_PORT || 4318);
+const port = Number(process.env.PERSONA_STEER_PORT || 4318);
 export default defineConfig({
   testDir: ".",
   testMatch: "*.spec.ts",
@@ -18,7 +18,7 @@ export default defineConfig({
   },
   webServer: {
     cwd: resolve(__dirname, "../.."),
-    command: "node e2e/live-join/server.mjs",
+    command: "node e2e/live-steer/server.mjs",
     url: `http://127.0.0.1:${port}`,
     timeout: 30_000,
     reuseExistingServer: false,

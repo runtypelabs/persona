@@ -8,19 +8,19 @@ import { renderDemoScaffold } from "./demo-scaffold";
 import { createDemoConfigInspector } from "./demo-config-inspector";
 import { runWidgetMountWithInspector, setupMountMode } from "./mount-mode";
 import {
-  LIVE_JOIN_DEMO_ORIGIN,
-  createLiveJoinDemoTransport,
-} from "./live-join-demo-transport";
+  LIVE_STEER_DEMO_ORIGIN,
+  createLiveSteerDemoTransport,
+} from "./live-steer-demo-transport";
 import type { Mode } from "./examples-nav";
 
-const token = import.meta.env.VITE_LIVE_JOIN_CLIENT_TOKEN?.trim();
+const token = import.meta.env.VITE_LIVE_STEER_CLIENT_TOKEN?.trim();
 const live = Boolean(token);
-const scaffold = renderDemoScaffold({ slug: "live-join-demo" });
-const inspector = createDemoConfigInspector({ title: "Live input joining" });
-const log = document.querySelector<HTMLElement>("[data-join-log]")!;
+const scaffold = renderDemoScaffold({ slug: "live-steer-demo" });
+const inspector = createDemoConfigInspector({ title: "Live input steering" });
+const log = document.querySelector<HTMLElement>("[data-steer-log]")!;
 const lines: string[] = [];
 let controller: AgentWidgetController | undefined;
-let transport: ReturnType<typeof createLiveJoinDemoTransport> | undefined;
+let transport: ReturnType<typeof createLiveSteerDemoTransport> | undefined;
 let reset = () => {};
 const originalFetch = window.fetch;
 const scopedFetch: typeof fetch = (input, init) => {
@@ -28,7 +28,7 @@ const scopedFetch: typeof fetch = (input, init) => {
     input instanceof Request ? input.url : String(input),
     location.href,
   );
-  return url.origin === LIVE_JOIN_DEMO_ORIGIN && transport
+  return url.origin === LIVE_STEER_DEMO_ORIGIN && transport
     ? transport.fetch(input, init)
     : originalFetch.call(window, input, init);
 };
@@ -45,10 +45,10 @@ const config = (mode: Mode): AgentWidgetConfig => ({
   ...DEFAULT_WIDGET_CONFIG,
   clientToken: token || "demo-client-token-not-a-credential",
   apiUrl: live
-    ? import.meta.env.VITE_LIVE_JOIN_API_URL || "https://api.runtype.com"
-    : LIVE_JOIN_DEMO_ORIGIN,
+    ? import.meta.env.VITE_LIVE_STEER_API_URL || "https://api.runtype.com"
+    : LIVE_STEER_DEMO_ORIGIN,
   persistState: false,
-  composer: { streamingSubmitBehavior: "join" },
+  composer: { streamingSubmitBehavior: "steer" },
   welcome: {
     title: "Keep the conversation moving",
     subtitle:
@@ -59,7 +59,7 @@ const config = (mode: Mode): AgentWidgetConfig => ({
     ...DEFAULT_WIDGET_CONFIG.launcher,
     enabled: mode === "launcher",
     width: mode === "launcher" ? "min(420px, 94vw)" : "100%",
-    title: "Live input joining",
+    title: "Live input steering",
   },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
@@ -71,7 +71,7 @@ const config = (mode: Mode): AgentWidgetConfig => ({
   },
 });
 setupMountMode({
-  slug: "live-join-demo",
+  slug: "live-steer-demo",
   modes: ["inline", "launcher"],
   mount(mode, { stage }) {
     let teardown: (() => void) | undefined;
@@ -82,7 +82,7 @@ setupMountMode({
       log.textContent = "Ready. Start a request, then add a detail.";
       transport = live
         ? undefined
-        : createLiveJoinDemoTransport({
+        : createLiveSteerDemoTransport({
             onEvent(message) {
               lines.push(message);
               log.textContent = lines.slice(-20).join("\n");
