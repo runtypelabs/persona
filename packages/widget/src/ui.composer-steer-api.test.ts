@@ -9,9 +9,9 @@ afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });
-describe("programmatic composer sends during live joining", () => {
+describe("programmatic composer sends during live steering", () => {
   it.each([undefined, "Explicit message"])(
-    "preserves the draft when join admission is full (message: %s)",
+    "preserves the draft when steer admission is full (message: %s)",
     async (message) => {
       vi.spyOn(
         AgentWidgetSession.prototype,
@@ -21,18 +21,20 @@ describe("programmatic composer sends during live joining", () => {
         true,
       );
       const capacity = vi
-        .spyOn(AgentWidgetSession.prototype, "canAcceptJoinedInput")
+        .spyOn(AgentWidgetSession.prototype, "canAcceptSteeredInput")
         .mockReturnValue(false);
       const send = vi
         .spyOn(AgentWidgetSession.prototype, "sendMessage")
-        .mockResolvedValue();
+        .mockImplementation(async (_text, options) => {
+          options?.onAccepted?.();
+        });
       const mount = document.createElement("div");
       document.body.append(mount);
       controller = createAgentExperience(mount, {
         clientToken: "demo-token",
         launcher: { enabled: false },
         persistState: false,
-        composer: { streamingSubmitBehavior: "join" },
+        composer: { streamingSubmitBehavior: "steer" },
       });
       expect(controller.setMessage("Keep this draft")).toBe(true);
       expect(controller.submitMessage(message)).toBe(false);
@@ -47,7 +49,7 @@ describe("programmatic composer sends during live joining", () => {
     },
   );
 
-  it.each(["join", "block", "interrupt", "defer-one"] as const)(
+  it.each(["steer", "block", "interrupt", "defer-one"] as const)(
     "honors %s policy without bypassing composer locks",
     async (behavior) => {
       vi.spyOn(AgentWidgetSession.prototype, "isStreaming").mockReturnValue(
@@ -55,11 +57,13 @@ describe("programmatic composer sends during live joining", () => {
       );
       vi.spyOn(
         AgentWidgetSession.prototype,
-        "canAcceptJoinedInput",
+        "canAcceptSteeredInput",
       ).mockReturnValue(true);
       const send = vi
         .spyOn(AgentWidgetSession.prototype, "sendMessage")
-        .mockResolvedValue();
+        .mockImplementation(async (_text, options) => {
+          options?.onAccepted?.();
+        });
       const mount = document.createElement("div");
       document.body.append(mount);
       controller = createAgentExperience(mount, {
@@ -68,11 +72,11 @@ describe("programmatic composer sends during live joining", () => {
         persistState: false,
         composer: { streamingSubmitBehavior: behavior },
       });
-      expect(controller.setMessage("Another detail")).toBe(behavior === "join");
+      expect(controller.setMessage("Another detail")).toBe(behavior === "steer");
       expect(controller.submitMessage("Another detail")).toBe(
-        behavior === "join",
+        behavior === "steer",
       );
-      if (behavior === "join")
+      if (behavior === "steer")
         await vi.waitFor(() => expect(send).toHaveBeenCalledOnce());
       else expect(send).not.toHaveBeenCalled();
       controller.update({

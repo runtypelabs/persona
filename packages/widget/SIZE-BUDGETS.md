@@ -98,11 +98,11 @@ the session_end After above):
 
 `index.global.js` stays within its existing budgets (164.05 kB gzip).
 
-## Live input joining
+## Live input steering
 
-The joined-input admission queue and composer controls remain synchronous in the
+The steered-input admission queue and composer controls remain synchronous in the
 core; receipt transport and polling load from the optional `live-input` chunk.
-Compared with a clean build of `main` at `25812447`, joining adds 2.94 kB gzip to
+Compared with a clean build of `main` at `25812447`, steering adds 2.94 kB gzip to
 the browser bundle, 3.01 kB to ESM, and 2.96 kB to CJS. The four core-containing
 gzip budgets therefore increase by 3 kB from the preview budgets above:
 

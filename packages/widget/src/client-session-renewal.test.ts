@@ -89,19 +89,19 @@ afterEach(() => {
 
 describe("client token session renewal", () => {
   it.each([30_000, 600_000])(
-    "preserves joined delivery identity across renewal with %i ms left",
+    "preserves steered delivery identity across renewal with %i ms left",
     async (milliseconds) => {
       const h = await setup(milliseconds);
       (h.client as unknown as { clientSession: ClientSession }).clientSession =
         {
           ...session(milliseconds),
-          durableRecovery: { enabled: true, join: true },
+          durableRecovery: { enabled: true, steer: true },
         };
       h.initialize.mockImplementation(() =>
         Response.json({
           ...session(),
           sessionId: "session-new",
-          durableRecovery: { enabled: true, join: true },
+          durableRecovery: { enabled: true, steer: true },
         }),
       );
       h.chat.mockImplementation(() =>
@@ -119,7 +119,7 @@ describe("client token session renewal", () => {
       await h.client.dispatch(
         {
           ...options,
-          join: { turnId: message.id, onAdmission },
+          steer: { turnId: message.id, onAdmission },
         },
         (event) => h.events.push(event),
       );
@@ -129,7 +129,7 @@ describe("client token session renewal", () => {
       expect(bodies.at(-1)).toMatchObject({
         sessionId: "session-new",
         turnId: message.id,
-        submitMode: "join",
+        submitMode: "steer",
         messages: [{ id: message.id }],
       });
       if (milliseconds > 60_000)
@@ -146,18 +146,18 @@ describe("client token session renewal", () => {
     },
   );
 
-  it("fails closed if renewal withdraws join support", async () => {
+  it("fails closed if renewal withdraws steer support", async () => {
     const h = await setup();
     (h.client as unknown as { clientSession: ClientSession }).clientSession = {
       ...session(),
-      durableRecovery: { enabled: true, join: true },
+      durableRecovery: { enabled: true, steer: true },
     };
     h.chat.mockImplementationOnce(expired);
     await expect(
       h.client.dispatch(
         {
           ...options,
-          join: { turnId: message.id, onAdmission: vi.fn() },
+          steer: { turnId: message.id, onAdmission: vi.fn() },
         },
         (event) => h.events.push(event),
       ),

@@ -6,7 +6,7 @@ const dist = (file: string) => resolve(__dirname, "..", "dist", file);
 const markers = [
   "Resolve unacknowledged deliveries before sending more messages",
   "Invalid live input receipt",
-  "Live input joining is unavailable for this session",
+  "Live input steering is unavailable for this session",
 ];
 describe("live-input bundle split", () => {
   it.runIf(existsSync(dist("live-input.js")))("ships receipt handling only in the optional chunk", () => {

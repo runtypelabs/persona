@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AgentWidgetClient,
   InputDeliveryError,
-  type JoinAdmission,
+  type SteerAdmission,
 } from "./client";
 import type { AgentWidgetEvent, AgentWidgetMessage } from "./types";
 
@@ -33,13 +33,13 @@ function stream(executionId = "exec_1", deliveryId = "delivery_1") {
     }),
   };
 }
-function client(join = true) {
+function client(steer = true) {
   const instance = new AgentWidgetClient({ clientToken: "ct_test" });
   vi.spyOn(instance, "initSession").mockResolvedValue({
     sessionId: "cs_1",
     conversationId: "conv_1",
     expiresAt: new Date(Date.now() + 300_000),
-    durableRecovery: { enabled: true, join },
+    durableRecovery: { enabled: true, steer },
     config: {},
   } as never);
   return instance;
@@ -69,11 +69,11 @@ describe("client-token live input admission", () => {
     const instance = client();
     const firstEvents: AgentWidgetEvent[] = [];
     const secondEvents: AgentWidgetEvent[] = [];
-    const admissions: JoinAdmission[] = [];
+    const admissions: SteerAdmission[] = [];
     const running = instance.dispatch(
       {
         messages: [message("first")],
-        join: {
+        steer: {
           turnId: "first",
           onAdmission: (value) => admissions.push(value),
         },
@@ -84,7 +84,7 @@ describe("client-token live input admission", () => {
     await instance.dispatch(
       {
         messages: [message("second")],
-        join: {
+        steer: {
           turnId: "second",
           onAdmission: (value) => admissions.push(value),
         },
@@ -118,7 +118,7 @@ describe("client-token live input admission", () => {
         messages: [
           { ...message("delta"), content: "display", llmContent: "model only" },
         ],
-        join: { turnId: "delta", onAdmission: () => {} },
+        steer: { turnId: "delta", onAdmission: () => {} },
       },
       () => {},
     );
@@ -126,7 +126,7 @@ describe("client-token live input admission", () => {
     expect(fetcher.mock.calls[0][1].body).toBe(fetcher.mock.calls[1][1].body);
     const sent = JSON.parse(fetcher.mock.calls[0][1].body);
     expect(sent.turnId).toBe("delta");
-    expect(sent.submitMode).toBe("join");
+    expect(sent.submitMode).toBe("steer");
     expect(sent.messages).toEqual([
       { id: "delta", role: "user", content: "model only" },
     ]);
@@ -146,7 +146,7 @@ describe("client-token live input admission", () => {
       client().dispatch(
         {
           messages: [message("delta")],
-          join: { turnId: "delta", onAdmission: () => {} },
+          steer: { turnId: "delta", onAdmission: () => {} },
         },
         (event) => events.push(event),
       ),
@@ -161,7 +161,7 @@ describe("client-token live input admission", () => {
       client(false).dispatch(
         {
           messages: [message("delta")],
-          join: { turnId: "delta", onAdmission: () => {} },
+          steer: { turnId: "delta", onAdmission: () => {} },
         },
         () => {},
       ),
@@ -169,14 +169,14 @@ describe("client-token live input admission", () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
-  it("refuses a browser-supplied assistant transcript for join", async () => {
+  it("refuses a browser-supplied assistant transcript for steer", async () => {
     const fetcher = vi.fn();
     vi.stubGlobal("fetch", fetcher);
     await expect(
       client().dispatch(
         {
           messages: [{ ...message("old"), role: "assistant" }],
-          join: { turnId: "delta", onAdmission: () => {} },
+          steer: { turnId: "delta", onAdmission: () => {} },
         },
         () => {},
       ),
@@ -193,7 +193,7 @@ it("does not attach or emit stream state after admission synchronously honors St
   await client().dispatch({
     messages: [message("stop-before-ack")],
     signal: controller.signal,
-    join: { turnId: "stop-before-ack", onAdmission: () => controller.abort() },
+    steer: { turnId: "stop-before-ack", onAdmission: () => controller.abort() },
   }, (event) => events.push(event));
   expect(events).toEqual([]);
   expect(pending.response.body?.locked).toBe(false);

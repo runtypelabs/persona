@@ -2,7 +2,7 @@ export class InputDeliveryError extends Error {
   constructor(message: string, readonly rejected: boolean) { super(message); this.name = "InputDeliveryError"; }
 }
 
-export type JoinAdmission = {
+export type SteerAdmission = {
   kind: "stream" | "receipt";
   executionId: string;
   deliveryId: string;

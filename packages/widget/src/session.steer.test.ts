@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentWidgetSession } from "./session";
 import { InputDeliveryError } from "./client";
-import type { AgentWidgetMessage } from "./types";
+import type { AgentWidgetConfig, AgentWidgetMessage } from "./types";
 
 const sessions: AgentWidgetSession[] = [];
 function create() {
   let messages: AgentWidgetMessage[] = [];
   const errors: Error[] = [];
   const session = new AgentWidgetSession(
-    { clientToken: "ct_test", composer: { streamingSubmitBehavior: "join" } },
+    { clientToken: "ct_test", composer: { streamingSubmitBehavior: "steer" } },
     {
       onMessagesChanged: (next) => {
         messages = next;
@@ -28,6 +28,56 @@ afterEach(() => {
 });
 
 describe("session additive send", () => {
+  it.each([
+    { composer: { streamingSubmitBehavior: "block" } },
+    { clientToken: undefined, apiUrl: "https://example.com/chat" },
+  ] satisfies AgentWidgetConfig[])(
+    "preserves restored steered history after configuration changes: %j",
+    async (config) => {
+      for (const status of ["settled", "not_applied"] as const) {
+        for (const reason of ["retry", "edit"] as const) {
+          const fixture = create();
+          const restored: AgentWidgetMessage[] = [
+            {
+              id: "steered",
+              role: "user",
+              content: "original",
+              createdAt: new Date().toISOString(),
+              delivery: { turnId: "steered", status },
+            },
+            {
+              id: "later",
+              role: "assistant",
+              content: "keep this response",
+              createdAt: new Date().toISOString(),
+            },
+          ];
+          fixture.session.hydrateMessages(restored);
+          fixture.session.updateConfig(config);
+          const dispatch = vi
+            .spyOn(fixture.session.getClient(), "dispatch")
+            .mockResolvedValue();
+          expect(
+            fixture.session.resubmitFrom("steered", {
+              reason,
+              ...(reason === "edit" && {
+                replacement: { text: "edited", mentionRefs: [], options: {} },
+              }),
+            }),
+          ).toBe(true);
+          await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce());
+          expect(fixture.messages().map((message) => message.content)).toEqual([
+            "original",
+            "keep this response",
+            reason === "edit" ? "edited" : "original",
+          ]);
+          expect(fixture.messages()[0].id).toBe("steered");
+          expect(fixture.messages()[2].id).not.toBe("steered");
+        }
+      }
+    },
+  );
+
   it.each(["settled", "not_applied"] as const)(
     "regenerates a %s delivery with a new identity and preserves later messages",
     async (status) => {
@@ -35,7 +85,7 @@ describe("session additive send", () => {
       const dispatch = vi
         .spyOn(fixture.session.getClient(), "dispatch")
         .mockImplementation(async (options, onEvent) => {
-          options.join!.onAdmission({
+          options.steer!.onAdmission({
             kind: "stream",
             executionId: "exec_1",
             deliveryId: "del_1",
@@ -59,7 +109,7 @@ describe("session additive send", () => {
       const replay = dispatch.mock.calls[1][0];
       expect(replay.messages).toHaveLength(1);
       expect(replay.messages[0].llmContent).toBe("model text");
-      expect(replay.join?.turnId).not.toBe(id);
+      expect(replay.steer?.turnId).not.toBe(id);
       expect(
         fixture.session.getClient().cancelClientExecution,
       ).not.toHaveBeenCalled();
@@ -86,14 +136,14 @@ describe("session additive send", () => {
     const second = fixture.session.sendMessage("second");
     await Promise.resolve();
     expect(dispatch).toHaveBeenCalledTimes(1);
-    requests[0].join!.onAdmission({
+    requests[0].steer!.onAdmission({
       kind: "stream",
       executionId: "exec_1",
       deliveryId: "del_1",
       status: "settled",
     });
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2));
-    requests[1].join!.onAdmission({
+    requests[1].steer!.onAdmission({
       kind: "receipt",
       executionId: "exec_1",
       deliveryId: "del_2",
@@ -151,7 +201,7 @@ describe("session additive send", () => {
       .spyOn(fixture.session.getClient(), "dispatch")
       .mockRejectedValueOnce(new TypeError("lost acknowledgement"))
       .mockImplementationOnce(async (options) => {
-        options.join!.onAdmission({
+        options.steer!.onAdmission({
           kind: "receipt",
           executionId: "exec_1",
           deliveryId: "del_1",
@@ -161,9 +211,9 @@ describe("session additive send", () => {
     await fixture.session.sendMessage("uncertain");
     const id = fixture.messages()[0].id;
     fixture.session.injectAssistantMessage({ content: "incumbent response" });
-    await fixture.session.retryJoinedMessage(id);
-    expect(dispatch.mock.calls[0][0].join?.turnId).toBe(
-      dispatch.mock.calls[1][0].join?.turnId,
+    await fixture.session.retrySteeredMessage(id);
+    expect(dispatch.mock.calls[0][0].steer?.turnId).toBe(
+      dispatch.mock.calls[1][0].steer?.turnId,
     );
     expect(fixture.messages().map((message) => message.content)).toEqual([
       "uncertain",
@@ -171,12 +221,12 @@ describe("session additive send", () => {
     ]);
     expect(fixture.messages()[0].delivery?.status).toBe("settled");
   });
-  it("editing a joined message appends a new delivery without cancelling or truncating", async () => {
+  it("editing a steered message appends a new delivery without cancelling or truncating", async () => {
     const fixture = create();
     const dispatch = vi
       .spyOn(fixture.session.getClient(), "dispatch")
       .mockImplementation(async (options) => {
-        options.join!.onAdmission({
+        options.steer!.onAdmission({
           kind: "stream",
           executionId: "exec_1",
           deliveryId: "del_1",
@@ -198,7 +248,7 @@ describe("session additive send", () => {
       "keep this response",
       "edited addition",
     ]);
-    expect(dispatch.mock.calls[1][0].join?.turnId).not.toBe(id);
+    expect(dispatch.mock.calls[1][0].steer?.turnId).not.toBe(id);
   });
 
   it("clearing the transcript ignores a late admission from its old conversation", async () => {
@@ -208,7 +258,7 @@ describe("session additive send", () => {
       async (options) => {
         await new Promise<void>((resolve) => {
           admit = () => {
-            options.join!.onAdmission({
+            options.steer!.onAdmission({
               kind: "stream",
               executionId: "old",
               deliveryId: "old",
@@ -259,7 +309,7 @@ it("re-arms receipt polling for hydrated nonterminal deliveries", async () => {
   expect(fixture.messages()[0].delivery?.status).toBe("settled");
 });
 
-it("connection updates invalidate queued joins before replacing their client", async () => {
+it("connection updates invalidate queued steers before replacing their client", async () => {
   const fixture = create();
   let admit!: () => void;
   const oldClient = fixture.session.getClient();
@@ -268,7 +318,7 @@ it("connection updates invalidate queued joins before replacing their client", a
     .mockImplementation(async (options) => {
       await new Promise<void>((resolve) => {
         admit = () => {
-          options.join!.onAdmission({
+          options.steer!.onAdmission({
             kind: "stream",
             executionId: "old",
             deliveryId: "old",
@@ -290,22 +340,22 @@ it("connection updates invalidate queued joins before replacing their client", a
   expect(dispatch.mock.calls[0][0].signal?.aborted).toBe(true);
   expect(dispatch).toHaveBeenCalledTimes(1);
   expect(newDispatch).not.toHaveBeenCalled();
-  expect(fixture.session.canAcceptJoinedInput()).toBe(true);
+  expect(fixture.session.canAcceptSteeredInput()).toBe(true);
 });
 
 it("Stop during a new acknowledgement cancels the newly admitted host, not a completed one", async () => {
   const fixture = create();
   const internal = fixture.session as unknown as {
-    joinExecutionId: string | null;
+    steerExecutionId: string | null;
   };
-  internal.joinExecutionId = "completed-host";
+  internal.steerExecutionId = "completed-host";
   let admit!: () => void;
   const dispatch = vi
     .spyOn(fixture.session.getClient(), "dispatch")
     .mockImplementation(async (options) => {
       await new Promise<void>((resolve) => {
         admit = () => {
-          options.join!.onAdmission({
+          options.steer!.onAdmission({
             kind: "stream",
             executionId: "new-host",
             deliveryId: "new-delivery",
