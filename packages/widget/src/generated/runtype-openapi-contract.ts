@@ -78,6 +78,7 @@ export type RuntypeExecutionStreamEvent = ({
   turnIndex?: number;
   type: "turn_start";
 }) | ({
+  attributes?: Record<string, string | number | boolean>;
   completedAt?: string;
   content?: string;
   cost?: number;
@@ -136,7 +137,8 @@ export type RuntypeExecutionStreamEvent = ({
 };
   turnId?: string;
   type: "model_call_start";
-} | {
+} | ({
+  attributes?: Record<string, string | number | boolean>;
   completedAt?: string;
   cost?: number;
   durationMs?: number;
@@ -160,10 +162,11 @@ export type RuntypeExecutionStreamEvent = ({
   cacheWrite?: number;
   input: number;
   output: number;
+  reasoning?: number;
 };
   turnId?: string;
   type: "model_call_complete";
-} | {
+}) | {
   executionId: string;
   id: string;
   index?: number;
@@ -558,38 +561,50 @@ export type RuntypeStopReasonKind = NonNullable<
   RuntypeTurnCompleteEvent["stopReason"] | RuntypeStepCompleteEvent["stopReason"]
 >;
 
-export type RuntypeClientInitRequest = {
+export type RuntypeClientInitRequest = ({
   durableRecovery?: boolean;
   flowId?: string;
-  identityProof?: string;
+  identityProof?: string | {
+  provider: string;
+  token: string;
+};
   token: string;
   visitorHistory?: boolean;
   visitorToken?: string;
-} | {
+}) | ({
   durableRecovery?: boolean;
   flowId?: string;
-  identityProof?: string;
+  identityProof?: string | {
+  provider: string;
+  token: string;
+};
   sessionId: string;
   token: string;
   visitorHistory?: boolean;
   visitorToken?: string;
-} | {
+}) | ({
   conversationId: string;
   durableRecovery?: boolean;
   flowId?: string;
-  identityProof?: string;
+  identityProof?: string | {
+  provider: string;
+  token: string;
+};
   token: string;
   visitorHistory?: boolean;
   visitorToken: string;
-} | {
+}) | ({
   conversationId: string;
   durableRecovery?: boolean;
   flowId?: string;
-  identityProof: string;
+  identityProof: string | {
+  provider: string;
+  token: string;
+};
   token: string;
   visitorHistory?: boolean;
   visitorToken?: string;
-};
+});
 
 export type RuntypeClientInitResponse = {
   app?: {
