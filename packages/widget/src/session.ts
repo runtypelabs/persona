@@ -3816,6 +3816,7 @@ export class AgentWidgetSession {
       // re-emits don't re-execute the page tool, then complete each bubble.
       // Do this only after /resume HTTP success; if /resume fails, the server
       // may still be paused and the retry path must not show a final result.
+      const batch = ready[0]!.dedupeKey;
       for (const r of ready) {
         this.webMcpResolvedKeys.add(r.dedupeKey);
         const toolName = r.toolMessage.toolCall?.name;
@@ -3838,6 +3839,7 @@ export class AgentWidgetSession {
                     toolName,
                     args: r.toolMessage.toolCall?.args,
                     result: r.output,
+                    batch,
                   },
                 }
               : {}),

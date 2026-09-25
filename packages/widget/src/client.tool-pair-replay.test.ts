@@ -173,28 +173,82 @@ describe("tool-pair replay: bubbles that must not replay", () => {
   });
 });
 
-describe("tool-pair replay: parallel calls", () => {
-  it("groups one turn's parallel answers into one call message and one result message", async () => {
+describe("tool-pair replay: parallel and chained calls", () => {
+  type Sent = Array<{
+    role: string;
+    toolCalls?: Array<{ toolCallId: string }>;
+    toolResults?: Array<{ toolCallId: string }>;
+  }>;
+  const inBatch = (toolCallId: string, at: number, batch: string) => {
+    const message = answeredTool(toolCallId, at);
+    message.agentMetadata!.clientToolAnswer!.batch = batch;
+    return message;
+  };
+
+  it("groups answers from one /resume batch into one call message and one result message", async () => {
     const client = withTools(new AgentWidgetClient({ apiUrl: "http://proxy.test/chat" }), [SEARCH_TOOL]);
     await client.dispatch(
       {
         messages: [
           user("u1", "compare", 1_000),
-          answeredTool("toolu_a", 2_000),
-          answeredTool("toolu_b", 2_001),
+          inBatch("toolu_a", 2_000, "b1"),
+          inBatch("toolu_b", 2_001, "b1"),
           assistant("a1", "done", 3_000),
         ],
       },
       () => undefined,
     );
-    const messages = bodies[0]!.messages as Array<{
-      role: string;
-      toolCalls?: Array<{ toolCallId: string }>;
-      toolResults?: Array<{ toolCallId: string }>;
-    }>;
+    const messages = bodies[0]!.messages as Sent;
     expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant"]);
     expect(messages[1]!.toolCalls!.map((c) => c.toolCallId)).toEqual(["toolu_a", "toolu_b"]);
     expect(messages[2]!.toolResults!.map((r) => r.toolCallId)).toEqual(["toolu_a", "toolu_b"]);
+  });
+
+  it("keeps a chained call (a later /resume batch, no text between) as its own pair", async () => {
+    const client = withTools(new AgentWidgetClient({ apiUrl: "http://proxy.test/chat" }), [SEARCH_TOOL]);
+    await client.dispatch(
+      {
+        messages: [
+          user("u1", "look it up, then look up the related item", 1_000),
+          inBatch("toolu_a", 2_000, "b1"),
+          inBatch("toolu_b", 2_500, "b2"),
+          assistant("a1", "done", 3_000),
+        ],
+      },
+      () => undefined,
+    );
+    const messages = bodies[0]!.messages as Sent;
+    expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "tool", "assistant", "tool", "assistant"]);
+    expect(messages[1]!.toolCalls!.map((c) => c.toolCallId)).toEqual(["toolu_a"]);
+    expect(messages[3]!.toolCalls!.map((c) => c.toolCallId)).toEqual(["toolu_b"]);
+  });
+});
+
+describe("tool-pair replay: requestMiddleware", () => {
+  it("drops replayed pairs when the middleware removes the tools", async () => {
+    const client = withTools(
+      new AgentWidgetClient({
+        apiUrl: "http://proxy.test/chat",
+        requestMiddleware: ({ payload }) => ({ ...payload, clientTools: undefined }),
+      }),
+      [SEARCH_TOOL],
+    );
+    await client.dispatch({ messages: twoTurnTranscript() }, () => undefined);
+    const messages = bodies[0]!.messages as Array<Record<string, unknown>>;
+    expect(messages.map((m) => m.role)).toEqual(["user", "assistant", "user"]);
+    expect(messages.some((m) => "toolCalls" in m || "toolResults" in m)).toBe(false);
+  });
+
+  it("keeps replayed pairs when the middleware leaves the tools in place", async () => {
+    const client = withTools(
+      new AgentWidgetClient({
+        apiUrl: "http://proxy.test/chat",
+        requestMiddleware: ({ payload }) => ({ ...payload, metadata: { host: "x" } }),
+      }),
+      [SEARCH_TOOL],
+    );
+    await client.dispatch({ messages: twoTurnTranscript() }, () => undefined);
+    expect(stripCreatedAt(bodies[0]!.messages)).toEqual(EXPECTED_TURN_2);
   });
 });
 
@@ -262,6 +316,7 @@ describe("session records the accepted client-tool answer", () => {
       toolName: "webmcp:search_catalog",
       args: { q: "sku 42" },
       result: RESULT,
+      batch: expect.any(String),
     });
 
     (session as unknown as { upsertMessage: (m: AgentWidgetMessage) => void }).upsertMessage({

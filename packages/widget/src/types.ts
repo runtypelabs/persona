@@ -1068,6 +1068,11 @@ export type AgentMessageMetadata = {
     toolName: string;
     args: unknown;
     result: unknown;
+    /**
+     * Shared by the answers posted in one `/resume`, i.e. one assistant
+     * turn's parallel calls; a chained call gets a new batch.
+     */
+    batch?: string;
   };
 };
 

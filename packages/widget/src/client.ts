@@ -50,7 +50,9 @@ import { resolveTarget } from "./utils/target";
 import { generateTurnId } from "./utils/message-id";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
 import {
+  dropUnofferedReplayedPairs,
   offeredClientToolNames,
+  replayedToolCallIds,
   serializeWithToolPairs
 } from "./utils/tool-pair-replay";
 import {
@@ -2675,6 +2677,15 @@ export class AgentWidgetClient {
             !("clientTools" in next)
           ) {
             next.clientTools = payload.clientTools;
+          }
+          // Replayed pairs were filtered against the pre-middleware tools;
+          // re-check them against the tools this request actually offers.
+          if (Array.isArray(next.messages)) {
+            next.messages = dropUnofferedReplayedPairs(
+              next.messages,
+              next.clientTools,
+              replayedToolCallIds(normalizedMessages)
+            );
           }
           return next;
         }

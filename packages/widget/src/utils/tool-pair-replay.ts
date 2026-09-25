@@ -64,9 +64,10 @@ const replayablePair = (
 
 /**
  * Serialize time-ordered messages, interleaving replayable tool pairs.
- * `toPayload` maps an ordinary message (or returns null to drop it). Answered
- * tool bubbles with no ordinary message between them are one assistant turn's
- * parallel calls, so they group into one call message and one result message.
+ * `toPayload` maps an ordinary message (or returns null to drop it). Answers
+ * posted in the same `/resume` batch are one assistant turn's parallel calls,
+ * so they group into one call message and one result message; a later batch
+ * (a chained call) starts a new pair even with no text between them.
  */
 export const serializeWithToolPairs = (
   messages: readonly AgentWidgetMessage[],
@@ -77,6 +78,7 @@ export const serializeWithToolPairs = (
   let calls: AgentWidgetReplayedToolCall[] = [];
   let results: AgentWidgetReplayedToolResult[] = [];
   let groupCreatedAt = "";
+  let groupBatch: string | undefined;
 
   const flush = () => {
     if (calls.length === 0) return;
@@ -91,7 +93,12 @@ export const serializeWithToolPairs = (
   for (const message of messages) {
     const pair = replayablePair(message, offered);
     if (pair) {
-      if (calls.length === 0) groupCreatedAt = message.createdAt;
+      const batch = message.agentMetadata?.clientToolAnswer?.batch;
+      if (calls.length > 0 && (batch === undefined || batch !== groupBatch)) flush();
+      if (calls.length === 0) {
+        groupCreatedAt = message.createdAt;
+        groupBatch = batch;
+      }
       if (!calls.some((call) => call.toolCallId === pair.call.toolCallId)) {
         calls.push(pair.call);
         results.push(pair.result);
@@ -106,3 +113,40 @@ export const serializeWithToolPairs = (
   flush();
   return out;
 };
+
+/**
+ * Drop replayed pairs whose tool the final request no longer offers, e.g.
+ * after `requestMiddleware` removed or replaced `clientTools`. Only the
+ * `replayedIds` this module emitted are touched; other messages pass through.
+ */
+export const dropUnofferedReplayedPairs = (
+  messages: AgentWidgetRequestPayloadMessage[],
+  clientTools: readonly ClientToolDefinition[] | undefined,
+  replayedIds: ReadonlySet<string>,
+): AgentWidgetRequestPayloadMessage[] => {
+  if (replayedIds.size === 0) return messages;
+  const offered = new Set(
+    [...offeredClientToolNames(clientTools)].map(modelFacingToolName),
+  );
+  const keep = (entry: { toolCallId: string; toolName: string }) =>
+    !replayedIds.has(entry.toolCallId) || offered.has(entry.toolName);
+  return messages.flatMap((message) => {
+    if (message.toolCalls) {
+      const toolCalls = message.toolCalls.filter(keep);
+      if (toolCalls.length === message.toolCalls.length) return [message];
+      return toolCalls.length > 0 ? [{ ...message, toolCalls }] : [];
+    }
+    if (message.role === "tool" && message.toolResults) {
+      const toolResults = message.toolResults.filter(keep);
+      if (toolResults.length === message.toolResults.length) return [message];
+      return toolResults.length > 0 ? [{ ...message, toolResults }] : [];
+    }
+    return [message];
+  });
+};
+
+/** The tool-call ids of the pairs in `messages`. */
+export const replayedToolCallIds = (
+  messages: readonly AgentWidgetRequestPayloadMessage[],
+): Set<string> =>
+  new Set(messages.flatMap((m) => (m.toolCalls ?? []).map((c) => c.toolCallId)));

@@ -174,12 +174,21 @@ export function sseResponse(
  * this backend registers bare names, so map back, and drop a pair whose tool
  * the page no longer offers (tool history without the tool is a provider 400).
  */
+/** The widget's model-facing tool name (`webmcp:Get-Slide` -> `webmcp_get_slide`). */
+function modelFacingToolName(name: string): string {
+  return name
+    .replace(/[^a-zA-Z0-9_]/g, "_")
+    .toLowerCase()
+    .replace(/_+/g, "_")
+    .replace(/^_|_$/g, "");
+}
+
 function toModelMessages(
   messages: WidgetMessage[] = [],
   clientTools: ClientToolDefinition[] = [],
 ): ModelMessage[] {
   const bareName = new Map(
-    clientTools.map((t) => [`webmcp_${t.name}`.toLowerCase(), t.name]),
+    clientTools.map((t) => [modelFacingToolName(`${WEBMCP_PREFIX}${t.name}`), t.name]),
   );
   const out: ModelMessage[] = [];
   for (const m of messages) {
