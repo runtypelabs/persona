@@ -1,4 +1,4 @@
-export const LIVE_JOIN_DEMO_ORIGIN = "https://persona-live-join.invalid";
+export const LIVE_STEER_DEMO_ORIGIN = "https://persona-live-steer.invalid";
 
 type Delivery = {
   executionId: string;
@@ -18,7 +18,7 @@ type Host = {
 };
 
 /** In-memory teaching transport, not a durable backend or a security implementation. */
-export function createLiveJoinDemoTransport(
+export function createLiveSteerDemoTransport(
   options: {
     delayMs?: number;
     onEvent?: (message: string) => void;
@@ -133,16 +133,16 @@ export function createLiveJoinDemoTransport(
     const request = new Request(input, init);
     if (request.signal.aborted) throw new DOMException("Aborted", "AbortError");
     const url = new URL(request.url);
-    if (url.origin !== LIVE_JOIN_DEMO_ORIGIN)
+    if (url.origin !== LIVE_STEER_DEMO_ORIGIN)
       throw new Error("Not a demo request");
     if (url.pathname === "/v1/client/init") {
       return Response.json({
-        sessionId: "cs_live_join_demo",
-        conversationId: "record_live_join_demo",
+        sessionId: "cs_live_steer_demo",
+        conversationId: "record_live_steer_demo",
         expiresAt: new Date(Date.now() + 3600000).toISOString(),
         config: {},
         visitor: { token: "demo-visitor-not-a-credential" },
-        durableRecovery: { enabled: true, join: true },
+        durableRecovery: { enabled: true, steer: true },
       });
     }
     if (url.pathname.endsWith("/cancel")) {
@@ -174,13 +174,13 @@ export function createLiveJoinDemoTransport(
     const body = await request.json();
     const message = body.messages?.[0];
     if (
-      body.submitMode !== "join" ||
+      body.submitMode !== "steer" ||
       body.messages?.length !== 1 ||
       message?.role !== "user" ||
       message.id !== body.turnId ||
       typeof message.content !== "string"
     ) {
-      return Response.json({ error: "invalid_join_message" }, { status: 400 });
+      return Response.json({ error: "invalid_steer_message" }, { status: 400 });
     }
     const previous = deliveries.get(body.turnId);
     if (previous) {
@@ -197,7 +197,7 @@ export function createLiveJoinDemoTransport(
         { error: "Demo full: reset to start again" },
         { status: 429 },
       );
-    const joined = Boolean(active);
+    const steered = Boolean(active);
     let response: Response | undefined;
     if (!active) {
       const id = `demo-execution-${++executionCount}`;
@@ -237,12 +237,12 @@ export function createLiveJoinDemoTransport(
       deliveryId: `delivery-${body.turnId}`,
       turnId: body.turnId,
       content: message.content,
-      status: joined ? "pending" : "applied",
+      status: steered ? "pending" : "applied",
     };
     deliveries.set(body.turnId, delivery);
     host.deliveries.push(delivery);
-    if (joined) {
-      log(`${host.id}: joined input ${host.deliveries.length} → 202 pending`);
+    if (steered) {
+      log(`${host.id}: steered input ${host.deliveries.length} → 202 pending`);
       if (loseAck) {
         loseAck = false;
         log("Simulated lost acknowledgement; retry must reuse the receipt");
@@ -257,7 +257,7 @@ export function createLiveJoinDemoTransport(
       type: "execution_start",
       kind: "agent",
       agentId: "demo-agent",
-      agentName: "Live join demo",
+      agentName: "Live steer demo",
       maxTurns: 6,
       startedAt: new Date().toISOString(),
     });
@@ -281,7 +281,7 @@ export function createLiveJoinDemoTransport(
     fetch: fetchDemo,
     loseNextAcknowledgement() {
       loseAck = true;
-      log("Next joined acknowledgement will be dropped once");
+      log("Next steered acknowledgement will be dropped once");
     },
     dispose() {
       for (const host of hosts) finish(host, true);

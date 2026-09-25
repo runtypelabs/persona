@@ -4573,7 +4573,7 @@ export type ComposerLayout = "stacked" | "single-row";
  *   transport carries that contract; every other transport falls back to
  *   `"block"` with a debug warning.
  */
-export type ComposerStreamingSubmitBehavior = "block" | "defer-one" | "interrupt" | "join";
+export type ComposerStreamingSubmitBehavior = "block" | "defer-one" | "interrupt" | "steer";
 
 export type AgentWidgetClearChatConfig = {
   enabled?: boolean;
@@ -5807,7 +5807,7 @@ export type ClientSession = {
   /** Opaque change token; differs whenever the conversation transcript mutated. */
   conversationRevision?: string;
   /** Server-negotiated durable reconnect support for this client-token session. */
-  durableRecovery?: { enabled: boolean; join?: boolean };
+  durableRecovery?: { enabled: boolean; steer?: boolean };
   /** Visitor grant backing history. `token` appears only at mint. */
   visitor?: ClientVisitorGrant;
   /** Configuration from the server */
@@ -5849,7 +5849,7 @@ export type ClientInitResponse = {
   targetId?: string;
   conversationRevision?: string;
   /** Present on servers that understand the durable-recovery negotiation. */
-  durableRecovery?: { enabled: boolean; join?: boolean };
+  durableRecovery?: { enabled: boolean; steer?: boolean };
   visitor?: ClientVisitorGrant;
   config: {
     welcomeMessage: string | null;
@@ -6007,7 +6007,7 @@ export type ClientChatRequest = {
   /** Stable client-owned turn ID for stale stream suppression (from Core public OpenAPI). */
   turnId?: RuntypeClientChatRequest['turnId'];
   /** Whether this turn should interrupt a prior in-flight response (from Core public OpenAPI). */
-  submitMode?: RuntypeClientChatRequest['submitMode'] | 'join';
+  submitMode?: RuntypeClientChatRequest['submitMode'] | 'steer';
 };
 
 /**

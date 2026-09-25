@@ -1,19 +1,19 @@
 import type { AgentWidgetMessage, ClientChatRequest, ClientSession, ClientToolDefinition } from "./types";
-import type { JoinAdmission } from "./live-input-contract";
+import type { SteerAdmission } from "./live-input-contract";
 import { VERSION } from "./version";
 
 type DeliveryError = new (message: string, rejected: boolean) => Error;
-type JoinPayload = { request: Omit<ClientChatRequest, "clientTools" | "clientToolsFingerprint">; tools?: ClientToolDefinition[]; conversationId?: string };
-export type JoinPayloadCache = Map<string, JoinPayload>;
+type SteerPayload = { request: Omit<ClientChatRequest, "clientTools" | "clientToolsFingerprint">; tools?: ClientToolDefinition[]; conversationId?: string };
+export type SteerPayloadCache = Map<string, SteerPayload>;
 const DELIVERY_STATES = ["pending", "applied", "settled", "not_applied"];
 
-export function validateJoin(session: ClientSession, messages: AgentWidgetMessage[], turnId: string, ErrorType: DeliveryError): void {
-  if (!session.durableRecovery?.join || messages.length !== 1 || messages[0]?.id !== turnId || messages[0]?.role !== "user") {
-    throw new ErrorType("Live input joining requires a supported native durable agent session and new user messages only", true);
+export function validateSteer(session: ClientSession, messages: AgentWidgetMessage[], turnId: string, ErrorType: DeliveryError): void {
+  if (!session.durableRecovery?.steer || messages.length !== 1 || messages[0]?.id !== turnId || messages[0]?.role !== "user") {
+    throw new ErrorType("Live input steering requires a supported native durable agent session and new user messages only", true);
   }
 }
 
-export function freezeJoinPayload(cache: JoinPayloadCache, turnId: string, session: ClientSession, request: JoinPayload["request"], tools: JoinPayload["tools"], ErrorType: DeliveryError): JoinPayload {
+export function freezeSteerPayload(cache: SteerPayloadCache, turnId: string, session: ClientSession, request: SteerPayload["request"], tools: SteerPayload["tools"], ErrorType: DeliveryError): SteerPayload {
   const cached = cache.get(turnId);
   if (cached) {
     if (cached.conversationId !== session.conversationId) throw new ErrorType("This delivery belongs to a different conversation", true);
@@ -24,7 +24,7 @@ export function freezeJoinPayload(cache: JoinPayloadCache, turnId: string, sessi
   return { request, tools };
 }
 
-export async function readJoinAdmission(response: Response): Promise<JoinAdmission> {
+export async function readSteerAdmission(response: Response): Promise<SteerAdmission> {
   if (response.status === 202) {
     const receipt = await response.json();
     if (!receipt.executionId || !receipt.deliveryId || !DELIVERY_STATES.includes(receipt.deliveryStatus)) throw new Error("Invalid live input receipt");
@@ -42,7 +42,7 @@ export async function clientExecutionRequest(input: {
   errorFor: (response: Response) => Promise<Error>;
 }): Promise<Response> {
   const { session, visitorToken, executionId, operation, method, signal } = input;
-  if (!session.conversationId || !visitorToken || !session.durableRecovery?.join) throw new Error("Live input joining is unavailable for this session");
+  if (!session.conversationId || !visitorToken || !session.durableRecovery?.steer) throw new Error("Live input steering is unavailable for this session");
   const path = `${input.apiUrl}/v1/client/conversations/${encodeURIComponent(session.conversationId)}/executions/${encodeURIComponent(executionId)}/${operation}`;
   const response = await fetch(`${path}?${new URLSearchParams({ sessionId: session.sessionId })}`, {
     method, headers: { "X-Persona-Version": VERSION, "X-Visitor-Token": visitorToken }, signal,
@@ -51,7 +51,7 @@ export async function clientExecutionRequest(input: {
   return response;
 }
 
-export async function readDeliveryStatus(response: Response, executionId: string, deliveryId: string): Promise<JoinAdmission> {
+export async function readDeliveryStatus(response: Response, executionId: string, deliveryId: string): Promise<SteerAdmission> {
   const receipt = await response.json();
   if (receipt.executionId !== executionId || receipt.deliveryId !== deliveryId || !DELIVERY_STATES.includes(receipt.status)) throw new Error("Invalid live input delivery status");
   return { kind: "receipt", executionId, deliveryId, status: receipt.status };
@@ -63,9 +63,9 @@ export async function readCancellation(response: Response, executionId: string):
 }
 
 export async function watchInputDelivery(input: {
-  admission: JoinAdmission; signal: AbortSignal;
+  admission: SteerAdmission; signal: AbortSignal;
   update: (state: Partial<NonNullable<AgentWidgetMessage["delivery"]>>) => void;
-  read: () => Promise<JoinAdmission>;
+  read: () => Promise<SteerAdmission>;
 }): Promise<void> {
   const { signal, update } = input;
   let failures = 0;

@@ -1,12 +1,12 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { resolve, extname } from "node:path";
-const port = Number(process.env.PERSONA_JOIN_PORT || 4318);
-const dist = resolve(process.env.PERSONA_JOIN_DIST || "packages/widget/dist");
-const fixtureFile = process.env.PERSONA_JOIN_FIXTURE;
+const port = Number(process.env.PERSONA_STEER_PORT || 4318);
+const dist = resolve(process.env.PERSONA_STEER_DIST || "packages/widget/dist");
+const fixtureFile = process.env.PERSONA_STEER_FIXTURE;
 if (!fixtureFile)
   throw new Error(
-    "PERSONA_JOIN_FIXTURE must point to a locally provisioned Core fixture",
+    "PERSONA_STEER_FIXTURE must point to a locally provisioned Core fixture",
   );
 const types = {
   ".js": "application/javascript",
@@ -19,7 +19,7 @@ createServer(async (req, res) => {
     const pathname = new URL(req.url, "http://localhost").pathname;
     const file =
       pathname === "/"
-        ? resolve("e2e/live-join/index.html")
+        ? resolve("e2e/live-steer/index.html")
         : pathname === "/fixture.json"
           ? fixtureFile
           : resolve(dist, `.${pathname}`);
@@ -41,5 +41,5 @@ createServer(async (req, res) => {
     res.writeHead(404).end();
   }
 }).listen(port, "127.0.0.1", () =>
-  console.log(`Persona live join fixture on ${port}`),
+  console.log(`Persona live steer fixture on ${port}`),
 );

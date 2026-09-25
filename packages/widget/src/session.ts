@@ -4,7 +4,7 @@ import {
   HistoryClientError,
   InputDeliveryError,
   type SSEEventCallback,
-  type JoinAdmission,
+  type SteerAdmission,
 } from "./client";
 import { isWebMcpToolName } from "./webmcp-bridge";
 import {
@@ -290,46 +290,46 @@ const isAutoResolvedLocalToolName = (name: string): boolean =>
 
 export class AgentWidgetSession {
   private client: AgentWidgetClient;
-  private joinAdmissionTail: Promise<void> = Promise.resolve();
-  private joinAdmissionCount = 0;
-  private joinAdmissionEpoch = 0;
-  private joinControllers = new Set<AbortController>();
-  private joinDispatchControllers = new Set<AbortController>();
-  private stopOnJoinAdmission = new Set<AbortController>();
-  private joinWatchControllers = new Set<AbortController>();
-  private joinExecutionId: string | null = null;
+  private steerAdmissionTail: Promise<void> = Promise.resolve();
+  private steerAdmissionCount = 0;
+  private steerAdmissionEpoch = 0;
+  private steerControllers = new Set<AbortController>();
+  private steerDispatchControllers = new Set<AbortController>();
+  private stopOnSteerAdmission = new Set<AbortController>();
+  private steerWatchControllers = new Set<AbortController>();
+  private steerExecutionId: string | null = null;
 
-  private clearJoinedInputState(): void {
-    this.joinAdmissionEpoch++;
-    this.joinAdmissionCount = 0;
-    this.joinAdmissionTail = Promise.resolve();
-    for (const controller of this.joinControllers) controller.abort();
-    this.joinControllers.clear();
-    this.joinDispatchControllers.clear();
-    this.stopOnJoinAdmission.clear();
-    for (const controller of this.joinWatchControllers) controller.abort();
-    this.joinWatchControllers.clear();
-    this.joinExecutionId = null;
-    this.client.clearJoinPayloads();
+  private clearSteeredInputState(): void {
+    this.steerAdmissionEpoch++;
+    this.steerAdmissionCount = 0;
+    this.steerAdmissionTail = Promise.resolve();
+    for (const controller of this.steerControllers) controller.abort();
+    this.steerControllers.clear();
+    this.steerDispatchControllers.clear();
+    this.stopOnSteerAdmission.clear();
+    for (const controller of this.steerWatchControllers) controller.abort();
+    this.steerWatchControllers.clear();
+    this.steerExecutionId = null;
+    this.client.clearSteerPayloads();
   }
 
-  public canAcceptJoinedInput(): boolean {
-    return this.joinAdmissionCount < 8;
+  public canAcceptSteeredInput(): boolean {
+    return this.steerAdmissionCount < 8;
   }
 
-  private reserveJoinAdmission(): {
+  private reserveSteerAdmission(): {
     ready: Promise<void>;
     release: () => void;
   } {
-    if (this.joinAdmissionCount >= 8)
+    if (this.steerAdmissionCount >= 8)
       throw new Error(
         "Too many messages awaiting delivery. Please wait for an acknowledgement.",
       );
-    this.joinAdmissionCount++;
-    const epoch = this.joinAdmissionEpoch;
-    const ready = this.joinAdmissionTail;
+    this.steerAdmissionCount++;
+    const epoch = this.steerAdmissionEpoch;
+    const ready = this.steerAdmissionTail;
     let resolve!: () => void;
-    this.joinAdmissionTail = new Promise<void>((done) => {
+    this.steerAdmissionTail = new Promise<void>((done) => {
       resolve = done;
     });
     let released = false;
@@ -338,7 +338,7 @@ export class AgentWidgetSession {
       release: () => {
         if (released) return;
         released = true;
-        if (epoch === this.joinAdmissionEpoch) this.joinAdmissionCount--;
+        if (epoch === this.steerAdmissionEpoch) this.steerAdmissionCount--;
         void ready.then(resolve);
       },
     };
@@ -354,7 +354,7 @@ export class AgentWidgetSession {
     this.callbacks.onMessagesChanged([...this.messages]);
   }
 
-  private async dispatchJoinedInput(
+  private async dispatchSteeredInput(
     snapshot: AgentWidgetMessage[],
     controller: AbortController,
     assistantMessageId: string,
@@ -363,7 +363,7 @@ export class AgentWidgetSession {
     provisional = false,
   ): Promise<void> {
     const client = this.client;
-    this.joinDispatchControllers.add(controller);
+    this.steerDispatchControllers.add(controller);
     try {
       await client.dispatch(
         {
@@ -371,14 +371,14 @@ export class AgentWidgetSession {
           signal: controller.signal,
           assistantMessageId,
           composerOptions: snapshot[0]?.composerOptions,
-          join: {
+          steer: {
             turnId: userMessageId,
             onAdmission: (admission) => {
               if (controller.signal.aborted) {
                 release();
                 return;
               }
-              if (this.stopOnJoinAdmission.has(controller)) {
+              if (this.stopOnSteerAdmission.has(controller)) {
                 this.updateInputDelivery(userMessageId, {
                   executionId: admission.executionId,
                   deliveryId: admission.deliveryId,
@@ -394,11 +394,11 @@ export class AgentWidgetSession {
                     );
                   });
                 const watcher = new AbortController();
-                this.joinWatchControllers.add(watcher);
+                this.steerWatchControllers.add(watcher);
                 void this.watchInputDelivery(userMessageId, admission, watcher);
                 return;
               }
-              this.joinExecutionId = admission.executionId;
+              this.steerExecutionId = admission.executionId;
               this.updateInputDelivery(userMessageId, {
                 deliveryId: admission.deliveryId,
                 executionId: admission.executionId,
@@ -429,9 +429,9 @@ export class AgentWidgetSession {
                 }
               }
               release();
-              this.joinControllers.delete(controller);
+              this.steerControllers.delete(controller);
               const watcher = new AbortController();
-              this.joinWatchControllers.add(watcher);
+              this.steerWatchControllers.add(watcher);
               void this.watchInputDelivery(userMessageId, admission, watcher);
             },
           },
@@ -439,12 +439,12 @@ export class AgentWidgetSession {
         this.handleEvent,
       );
     } finally {
-      this.joinDispatchControllers.delete(controller);
-      this.stopOnJoinAdmission.delete(controller);
+      this.steerDispatchControllers.delete(controller);
+      this.stopOnSteerAdmission.delete(controller);
     }
   }
 
-  public async retryJoinedMessage(messageId: string): Promise<void> {
+  public async retrySteeredMessage(messageId: string): Promise<void> {
     const message = this.messages.find(
       (item) => item.id === messageId && item.role === "user",
     );
@@ -456,7 +456,7 @@ export class AgentWidgetSession {
     if (!["unknown", "rejected"].includes(message.delivery.status)) return;
     if (message.delivery.deliveryId && message.delivery.executionId) {
       const watcher = new AbortController();
-      this.joinWatchControllers.add(watcher);
+      this.steerWatchControllers.add(watcher);
       void this.watchInputDelivery(
         messageId,
         {
@@ -469,9 +469,9 @@ export class AgentWidgetSession {
       );
       return;
     }
-    let queue: ReturnType<AgentWidgetSession["reserveJoinAdmission"]>;
+    let queue: ReturnType<AgentWidgetSession["reserveSteerAdmission"]>;
     try {
-      queue = this.reserveJoinAdmission();
+      queue = this.reserveSteerAdmission();
     } catch (error) {
       this.callbacks.onError?.(
         error instanceof Error ? error : new Error(String(error)),
@@ -479,7 +479,7 @@ export class AgentWidgetSession {
       return;
     }
     const controller = new AbortController();
-    this.joinControllers.add(controller);
+    this.steerControllers.add(controller);
     this.updateInputDelivery(messageId, {
       status: "sending",
       error: undefined,
@@ -487,7 +487,7 @@ export class AgentWidgetSession {
     try {
       await queue.ready;
       if (controller.signal.aborted) return;
-      await this.dispatchJoinedInput(
+      await this.dispatchSteeredInput(
         [message],
         controller,
         generateAssistantMessageId(),
@@ -509,13 +509,13 @@ export class AgentWidgetSession {
       }
     } finally {
       queue.release();
-      if (!message.delivery.deliveryId) this.joinControllers.delete(controller);
+      if (!message.delivery.deliveryId) this.steerControllers.delete(controller);
     }
   }
 
   private async watchInputDelivery(
     messageId: string,
-    admission: JoinAdmission,
+    admission: SteerAdmission,
     controller: AbortController,
   ): Promise<void> {
     try {
@@ -538,7 +538,7 @@ export class AgentWidgetSession {
           error: String(error),
         });
     } finally {
-      this.joinWatchControllers.delete(controller);
+      this.steerWatchControllers.delete(controller);
     }
   }
 
@@ -1396,8 +1396,8 @@ export class AgentWidgetSession {
 
   /** Widget teardown: release the visitor-store subscription. */
   public destroy(): void {
-    for (const controller of this.joinWatchControllers) controller.abort();
-    this.joinWatchControllers.clear();
+    for (const controller of this.steerWatchControllers) controller.abort();
+    this.steerWatchControllers.clear();
     this.cleanupVoice();
     this.visitorStoreUnsubscribe?.();
     this.visitorStoreUnsubscribe = null;
@@ -1880,7 +1880,7 @@ export class AgentWidgetSession {
    * deletion, 410 recovery, reset, and the continuity wipe.
    */
   private discardConversationState(): void {
-    this.clearJoinedInputState();
+    this.clearSteeredInputState();
     this.stopSpeaking();
     this.abortController?.abort();
     this.abortController = null;
@@ -2473,7 +2473,7 @@ export class AgentWidgetSession {
     this.abortWebMcpResolves();
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
-    this.clearJoinedInputState();
+    this.clearSteeredInputState();
     this.abortController?.abort();
     this.abortController = null;
     this.teardownReconnect();
@@ -2784,6 +2784,8 @@ export class AgentWidgetSession {
     rawInput: string,
     options?: {
       viaVoice?: boolean;
+      /** Runs after local admission, before the message is appended or prepared. */
+      onAccepted?: () => void;
       /** Multi-modal content parts (e.g., images) to include with the message */
       contentParts?: ContentPart[];
       /**
@@ -2864,15 +2866,15 @@ export class AgentWidgetSession {
       await this.awaitHistorySendable();
     }
 
-    const join =
+    const steer =
       !!this.config.clientToken &&
-      this.config.composer?.streamingSubmitBehavior === "join" &&
+      this.config.composer?.streamingSubmitBehavior === "steer" &&
       !options?.interrupt;
     let admissionQueue:
-      | ReturnType<AgentWidgetSession["reserveJoinAdmission"]>
+      | ReturnType<AgentWidgetSession["reserveSteerAdmission"]>
       | undefined;
     try {
-      if (join) admissionQueue = this.reserveJoinAdmission();
+      if (steer) admissionQueue = this.reserveSteerAdmission();
     } catch (error) {
       this.callbacks.onError?.(
         error instanceof Error ? error : new Error(String(error)),
@@ -2883,8 +2885,11 @@ export class AgentWidgetSession {
       | { id: string; controller: AbortController; provisional: boolean }
       | undefined;
     try {
+      // History gates and steer capacity must accept the send before the UI
+      // consumes its draft, attachments, or mention chips.
+      options?.onAccepted?.();
       this.stopSpeaking();
-      if (!join) {
+      if (!steer) {
         this.abortController?.abort();
         // A new user turn supersedes any in-flight WebMCP resolve from the prior
         // turn. Tear them down here (they own controllers separate from the shared
@@ -2902,7 +2907,7 @@ export class AgentWidgetSession {
       // The active assistant bubble for a durable reconnect is captured from the
       // real streamed message events (see handleEvent), not pre-assigned here:
       // the proxy path auto-generates a different id than `assistantMessageId`.
-      if (!join) this.activeAssistantMessageId = null;
+      if (!steer) this.activeAssistantMessageId = null;
 
       // Fallback display text ONLY when the sole content is image attachments.
       // A mention/command-only submit (empty text + a chip) must NOT read as
@@ -2914,7 +2919,7 @@ export class AgentWidgetSession {
 
       const userMessage: AgentWidgetMessage = {
         id: userMessageId,
-        ...(join
+        ...(steer
           ? { delivery: { turnId: userMessageId, status: "sending" as const } }
           : {}),
         role: "user",
@@ -2945,32 +2950,32 @@ export class AgentWidgetSession {
         ...(options?.replayFields ?? {}),
       };
 
-      const provisionalJoin =
-        join &&
+      const provisionalSteer =
+        steer &&
         !this.streaming &&
         !this.reconnecting &&
         !this.isAwaitPending() &&
-        this.joinAdmissionCount === 1;
-      if (provisionalJoin) {
-        this.joinExecutionId = null;
+        this.steerAdmissionCount === 1;
+      if (provisionalSteer) {
+        this.steerExecutionId = null;
         this.teardownReconnect();
       }
       this.appendMessage(userMessage);
-      if (!join || provisionalJoin) this.setStreaming(true);
+      if (!steer || provisionalSteer) this.setStreaming(true);
 
       // Assign the fresh controller BEFORE the mention await so cancel() (or a
       // superseding sendMessage) during finalize() aborts THIS turn, not a stale
       // prior controller.
       const controller = new AbortController();
-      if (join) {
-        this.joinControllers.add(controller);
+      if (steer) {
+        this.steerControllers.add(controller);
         preparation = {
           id: userMessageId,
           controller,
-          provisional: provisionalJoin,
+          provisional: provisionalSteer,
         };
       }
-      if (!join || provisionalJoin) this.abortController = controller;
+      if (!steer || provisionalSteer) this.abortController = controller;
 
       // Resolve + merge mentions AFTER the instant echo but BEFORE dispatch, so
       // the model sees the context while the user's bubble already rendered.
@@ -2987,7 +2992,7 @@ export class AgentWidgetSession {
         // leave whatever idle/streaming state that caller already set.
         if (
           controller.signal.aborted ||
-          (!join && this.abortController !== controller)
+          (!steer && this.abortController !== controller)
         ) {
           return;
         }
@@ -3015,22 +3020,22 @@ export class AgentWidgetSession {
         }
       }
 
-      const snapshot = join
+      const snapshot = steer
         ? this.messages.filter((message) => message.id === userMessageId)
         : [...this.messages];
 
       try {
-        if (join) {
+        if (steer) {
           await admissionQueue!.ready;
           if (controller.signal.aborted) return;
           this.recordDispatchedProjections(snapshot);
-          await this.dispatchJoinedInput(
+          await this.dispatchSteeredInput(
             snapshot,
             controller,
             assistantMessageId,
             userMessageId,
             admissionQueue!.release,
-            provisionalJoin,
+            provisionalSteer,
           );
           return;
         }
@@ -3045,7 +3050,7 @@ export class AgentWidgetSession {
           },
         );
       } catch (error) {
-        if (join) {
+        if (steer) {
           if (
             !controller.signal.aborted &&
             !this.messages.find((message) => message.id === userMessageId)
@@ -3062,9 +3067,9 @@ export class AgentWidgetSession {
               error instanceof Error ? error : new Error(String(error)),
             );
           }
-          this.joinControllers.delete(controller);
+          this.steerControllers.delete(controller);
           if (
-            provisionalJoin &&
+            provisionalSteer &&
             this.abortController === controller &&
             !this.messages.find((message) => message.id === userMessageId)
               ?.delivery?.deliveryId
@@ -3121,7 +3126,7 @@ export class AgentWidgetSession {
         }
       }
     } catch (error) {
-      if (!join || !preparation) throw error;
+      if (!steer || !preparation) throw error;
       if (!preparation.controller.signal.aborted) {
         this.updateInputDelivery(preparation.id, {
           status: "rejected",
@@ -3141,7 +3146,7 @@ export class AgentWidgetSession {
       }
     } finally {
       admissionQueue?.release();
-      if (preparation) this.joinControllers.delete(preparation.controller);
+      if (preparation) this.steerControllers.delete(preparation.controller);
     }
   }
 
@@ -3185,7 +3190,7 @@ export class AgentWidgetSession {
       stored.delivery.status !== "settled"
     ) {
       if (["unknown", "rejected"].includes(stored.delivery.status))
-        void this.retryJoinedMessage(stored.id);
+        void this.retrySteeredMessage(stored.id);
       return true;
     }
 
@@ -3226,12 +3231,14 @@ export class AgentWidgetSession {
     const quote = replacement ? replacement.options?.quote : undefined;
     const viaVoice = replacement ? replacement.viaVoice : stored.viaVoice;
 
-    // Cancel before history changes so no in-flight stream can write into the
-    // tail we are about to drop.
+    // Steered messages stay append-only even when restored under a different
+    // transport or composer policy. Their provenance outlives configuration.
+    // For legacy turns, cancel before dropping the tail.
     if (
+      !stored.delivery &&
       !(
         this.config.clientToken &&
-        this.config.composer?.streamingSubmitBehavior === "join"
+        this.config.composer?.streamingSubmitBehavior === "steer"
       )
     ) {
       this.cancel();
@@ -4496,10 +4503,10 @@ export class AgentWidgetSession {
   }
 
   public cancel(options: { execution?: boolean } = {}) {
-    const executionId = this.joinExecutionId ?? this.resumable?.executionId;
+    const executionId = this.steerExecutionId ?? this.resumable?.executionId;
     if (
       options.execution !== false &&
-      this.config.composer?.streamingSubmitBehavior === "join" &&
+      this.config.composer?.streamingSubmitBehavior === "steer" &&
       executionId
     ) {
       void this.client.cancelClientExecution(executionId).catch((error) => {
@@ -4515,20 +4522,20 @@ export class AgentWidgetSession {
           error: "Acknowledgement interrupted. Retry to check delivery safely.",
         });
     }
-    for (const controller of this.joinControllers) {
+    for (const controller of this.steerControllers) {
       if (
         options.execution !== false &&
-        this.joinDispatchControllers.has(controller)
+        this.steerDispatchControllers.has(controller)
       ) {
-        this.stopOnJoinAdmission.add(controller);
+        this.stopOnSteerAdmission.add(controller);
       } else {
         controller.abort();
-        this.joinControllers.delete(controller);
+        this.steerControllers.delete(controller);
       }
     }
     if (
       !this.abortController ||
-      !this.stopOnJoinAdmission.has(this.abortController)
+      !this.stopOnSteerAdmission.has(this.abortController)
     )
       this.abortController?.abort();
     this.abortController = null;
@@ -4550,7 +4557,7 @@ export class AgentWidgetSession {
   }
 
   public clearMessages() {
-    this.clearJoinedInputState();
+    this.clearSteeredInputState();
     this.stopSpeaking();
     this.abortController?.abort();
     this.abortController = null;
@@ -4777,7 +4784,7 @@ export class AgentWidgetSession {
   }
 
   public hydrateMessages(messages: AgentWidgetMessage[]) {
-    this.clearJoinedInputState();
+    this.clearSteeredInputState();
     this.abortController?.abort();
     this.abortController = null;
     // Hydration replaces the conversation: also cancel any pending reconnect and
@@ -4808,7 +4815,7 @@ export class AgentWidgetSession {
         ["pending", "applied"].includes(delivery.status)
       ) {
         const watcher = new AbortController();
-        this.joinWatchControllers.add(watcher);
+        this.steerWatchControllers.add(watcher);
         void this.watchInputDelivery(
           message.id,
           {

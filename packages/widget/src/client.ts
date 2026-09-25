@@ -65,10 +65,10 @@ import { divergentDisplayProjection } from "./utils/history-messages";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
-import { InputDeliveryError, type JoinAdmission } from "./live-input-contract";
-export { InputDeliveryError, type JoinAdmission } from "./live-input-contract";
+import { InputDeliveryError, type SteerAdmission } from "./live-input-contract";
+export { InputDeliveryError, type SteerAdmission } from "./live-input-contract";
 import { loadLiveInput } from "./live-input-loader";
-import type { JoinPayloadCache } from "./live-input";
+import type { SteerPayloadCache } from "./live-input";
 
 type DispatchOptions = {
   messages: AgentWidgetMessage[];
@@ -87,7 +87,7 @@ type DispatchOptions = {
    * `submitMode: "interrupt"` so the server cancels the prior run.
    */
   interrupt?: boolean;
-  join?: { turnId: string; onAdmission: (admission: JoinAdmission) => void };
+  steer?: { turnId: string; onAdmission: (admission: SteerAdmission) => void };
 };
 
 type SSEHandler = (event: AgentWidgetEvent) => void;
@@ -311,7 +311,7 @@ export class AgentWidgetClient {
    * matches is superseded, and every SSE frame it still receives is dropped
    */
   private currentClientTurnId: string | null = null;
-  private joinPayloads: JoinPayloadCache = new Map();
+  private steerPayloads: SteerPayloadCache = new Map();
   private clientSession: ClientSession | null = null;
   private sessionInitPromise: Promise<ClientSession> | null = null;
 
@@ -651,15 +651,15 @@ export class AgentWidgetClient {
     });
   }
 
-  public clearJoinPayloads(): void {
-    this.joinPayloads.clear();
+  public clearSteerPayloads(): void {
+    this.steerPayloads.clear();
   }
 
   public async getInputDelivery(
     executionId: string,
     deliveryId: string,
     signal?: AbortSignal,
-  ): Promise<JoinAdmission> {
+  ): Promise<SteerAdmission> {
     const response = await this.clientExecutionRequest(
       executionId,
       `deliveries/${encodeURIComponent(deliveryId)}`,
@@ -1907,23 +1907,23 @@ export class AgentWidgetClient {
     // Claim the turn before any await: a later dispatch that interrupts this one
     // takes the claim, and every event this call still receives is then stale.
     let streamAdmitted = false;
-    const turnId = options.join?.turnId ?? generateTurnId();
-    if (!options.join) this.currentClientTurnId = turnId;
+    const turnId = options.steer?.turnId ?? generateTurnId();
+    if (!options.steer) this.currentClientTurnId = turnId;
     const isCurrentTurn = () => this.currentClientTurnId === turnId;
     // Terminal frames of a superseded run must not reopen the composer or paint
     // into the new turn's bubble; status frames are equally misleading.
     const forward: SSEHandler = (event) => {
-      if (!isCurrentTurn() || (options.join && !streamAdmitted)) return;
+      if (!isCurrentTurn() || (options.steer && !streamAdmitted)) return;
       onEvent(event);
     };
 
-    if (!options.join) onEvent({ type: "status", status: "connecting" });
+    if (!options.steer) onEvent({ type: "status", status: "connecting" });
 
     try {
       const assertCurrentTurn = () => {
         options.signal?.throwIfAborted();
-        // A joined admission does not own the stream until the server grants it.
-        if (!options.join && !isCurrentTurn()) throw new DOMException('Turn superseded', 'AbortError');
+        // A steered admission does not own the stream until the server grants it.
+        if (!options.steer && !isCurrentTurn()) throw new DOMException('Turn superseded', 'AbortError');
       };
       let session = this.clientSession ?? (await this.initSession());
       assertCurrentTurn();
@@ -1949,11 +1949,11 @@ export class AgentWidgetClient {
           throw new Error('Session renewal did not preserve this conversation.');
         }
         session = this.finishInit(renewed, previous.conversationId ?? null, false);
-        if (options.join)
-          (await loadLiveInput()).validateJoin(
+        if (options.steer)
+          (await loadLiveInput()).validateSteer(
             session,
             options.messages,
-            options.join.turnId,
+            options.steer.turnId,
             InputDeliveryError,
           );
         assertCurrentTurn();
@@ -1965,11 +1965,11 @@ export class AgentWidgetClient {
         await renewSession();
       }
 
-      if (options.join)
-        (await loadLiveInput()).validateJoin(
+      if (options.steer)
+        (await loadLiveInput()).validateSteer(
           session,
           options.messages,
-          options.join.turnId,
+          options.steer.turnId,
           InputDeliveryError,
         );
 
@@ -2026,14 +2026,14 @@ export class AgentWidgetClient {
         // Every client-token turn carries a turnId so the server can suppress a
         // superseded run and this client can drop its stale events below.
         turnId,
-        ...(options.join && { submitMode: "join" as const }),
+        ...(options.steer && { submitMode: "steer" as const }),
         ...(options.interrupt && { submitMode: "interrupt" as const }),
       };
 
       let offeredTools = basePayload.clientTools;
-      if (options.join) {
-        const frozen = (await loadLiveInput()).freezeJoinPayload(
-          this.joinPayloads,
+      if (options.steer) {
+        const frozen = (await loadLiveInput()).freezeSteerPayload(
+          this.steerPayloads,
           turnId,
           session,
           baseChatRequest,
@@ -2087,7 +2087,7 @@ export class AgentWidgetClient {
           });
           // Retry an ambiguous admission with the same body and delivery identity.
           return post().catch((error) => {
-            if (!options.join || options.signal?.aborted) throw error;
+            if (!options.steer || options.signal?.aborted) throw error;
             return post();
           });
         });
@@ -2109,7 +2109,7 @@ export class AgentWidgetClient {
         const data = await response
           .json()
           .catch(() => ({ error: "Chat request failed" }));
-        if (options.join) {
+        if (options.steer) {
           const rejected = response.status < 500 && response.status !== 408;
           throw new InputDeliveryError(
             data.error || "Failed to deliver message",
@@ -2159,17 +2159,17 @@ export class AgentWidgetClient {
         throw error;
       }
 
-      if (options.join) {
+      if (options.steer) {
         const admission = await (
           await loadLiveInput()
-        ).readJoinAdmission(response);
+        ).readSteerAdmission(response);
         commitClientToolsFingerprint();
-        this.joinPayloads.delete(turnId);
+        this.steerPayloads.delete(turnId);
         if (admission.kind === "stream") {
           this.currentClientTurnId = turnId;
           streamAdmitted = true;
         }
-        options.join.onAdmission(admission);
+        options.steer.onAdmission(admission);
         if (options.signal?.aborted) {
           void response.body?.cancel().catch(() => {});
           return;
