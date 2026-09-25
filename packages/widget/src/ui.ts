@@ -15250,6 +15250,10 @@ export const createAgentExperience = (
       if (session.isStreaming() && resolveStreamingSubmitBehavior() !== "join") return false;
       // Every submission path is blocked, including the programmatic one.
       if (isComposerSendBlocked()) return false;
+      if (resolveStreamingSubmitBehavior() === "join" && !session.canAcceptJoinedInput()) {
+        showComposerNotice("Messages are still being delivered. Please wait before sending another.");
+        return false;
+      }
 
       const valueToSubmit = message?.trim() || textarea.value.trim();
       if (!valueToSubmit) return false;

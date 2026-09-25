@@ -28,6 +28,44 @@ afterEach(() => {
 });
 
 describe("session additive send", () => {
+  it.each(["settled", "not_applied"] as const)(
+    "regenerates a %s delivery with a new identity and preserves later messages",
+    async (status) => {
+      const fixture = create();
+      const dispatch = vi
+        .spyOn(fixture.session.getClient(), "dispatch")
+        .mockImplementation(async (options, onEvent) => {
+          options.join!.onAdmission({
+            kind: "stream",
+            executionId: "exec_1",
+            deliveryId: "del_1",
+            status,
+          });
+          onEvent({ type: "status", status: "idle", terminal: true });
+        });
+      await fixture.session.sendMessage("display text", {
+        replayFields: { llmContent: "model text" },
+      });
+      const id = fixture.messages()[0].id;
+      fixture.session.injectAssistantMessage({ content: "keep this response" });
+      expect(fixture.session.isStreaming()).toBe(false);
+      expect(fixture.session.resubmitFrom(id, { reason: "retry" })).toBe(true);
+      await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2));
+      expect(fixture.messages().map((message) => message.content)).toEqual([
+        "display text",
+        "keep this response",
+        "display text",
+      ]);
+      const replay = dispatch.mock.calls[1][0];
+      expect(replay.messages).toHaveLength(1);
+      expect(replay.messages[0].llmContent).toBe("model text");
+      expect(replay.join?.turnId).not.toBe(id);
+      expect(
+        fixture.session.getClient().cancelClientExecution,
+      ).not.toHaveBeenCalled();
+    },
+  );
+
   it("serializes only admission and keeps the active controller and response intact", async () => {
     const fixture = create();
     const requests: Parameters<

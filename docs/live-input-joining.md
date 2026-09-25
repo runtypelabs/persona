@@ -32,8 +32,10 @@ Each message has its own delivery state:
   the original identity, or rechecks an already acknowledged receipt. It never
   silently replaces the active response.
 
-Edits append a new message instead of erasing prior conversation. Pending
-admissions are FIFO and bounded at eight; when full, the composer keeps its draft.
+Edits and regeneration of completed turns append a new message instead of erasing
+prior conversation. Pending admissions are FIFO and bounded at eight; when full,
+the composer keeps its draft.
+Programmatic `submitMessage()` also returns `false` when admission is full.
 A joined message cannot change the active run's model, tools, authorization, or
 budgets. Those changes may be refused until the current run ends.
 
@@ -50,8 +52,10 @@ ESM and CJS consumers resolve it through the package export map.
 
 Synchronous FIFO reservation, admission ownership, Stop intent, and composer
 controls remain in the core so a delayed chunk cannot reorder messages or lose
-a cancellation. The feature adds 2 kB of budget to the four core-containing
+a cancellation. The feature adds 3 kB of gzip budget to the four core-containing
 bundles; the independent receipt chunk has a 2 kB gzip ceiling. Measured locally
-with the complete feature: IIFE 188.37 kB, ESM 200.78 kB, CJS 201.63 kB, and
-preview 167.35 kB. The launcher and stylesheet budgets are unchanged. A bundle
-test keeps receipt-only code out of those core bundles.
+after rebasing onto the current defaults and session-renewal changes: IIFE
+196.34 kB, ESM 209.08 kB, CJS 209.88 kB, and preview 175.61 kB. The browser
+Brotli budget is 158 KiB (measured 156.64 KiB). The launcher and stylesheet
+budgets are unchanged. A bundle test keeps receipt-only code out of those core
+bundles. See `packages/widget/SIZE-BUDGETS.md` for the baseline comparison.

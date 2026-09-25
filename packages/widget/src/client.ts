@@ -1922,6 +1922,7 @@ export class AgentWidgetClient {
     try {
       const assertCurrentTurn = () => {
         options.signal?.throwIfAborted();
+        // A joined admission does not own the stream until the server grants it.
         if (!options.join && !isCurrentTurn()) throw new DOMException('Turn superseded', 'AbortError');
       };
       let session = this.clientSession ?? (await this.initSession());
@@ -1948,6 +1949,14 @@ export class AgentWidgetClient {
           throw new Error('Session renewal did not preserve this conversation.');
         }
         session = this.finishInit(renewed, previous.conversationId ?? null, false);
+        if (options.join)
+          (await loadLiveInput()).validateJoin(
+            session,
+            options.messages,
+            options.join.turnId,
+            InputDeliveryError,
+          );
+        assertCurrentTurn();
         this.clientSession = session;
         this.resetClientToolsFingerprint();
         this.config.onSessionInit?.(session);
