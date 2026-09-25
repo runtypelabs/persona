@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.23.2
+
+### Patch Changes
+
+- eb818bb: Forward the widget's replayed client-tool pairs upstream. The proxy rebuilt each message as `{ role, content }`, which stripped `toolCalls` and `toolResults`; it now keeps them on assistant and `tool` messages, and drops a `tool` message that carries no results.
+
 ## 4.22.1
 
 ### Patch Changes
