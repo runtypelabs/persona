@@ -680,22 +680,28 @@ export class AgentWidgetClient {
       return this.sessionInitPromise;
     }
 
-    this.sessionInitPromise = this._doInitSession();
-    try {
-      const session = await this.sessionInitPromise;
-      this.clientSession = session;
-      this.sessionWarmLatch = false;
-      // A freshly-minted session must resend the full WebMCP tool list on its
-      // next turn: drop any diff-only fingerprint cached under a prior session,
-      // so we never claim "unchanged" against a session the server didn't store
-      // the set under. (Belt-and-suspenders with the sessionId comparison in the
-      // send decision and the server's 409 resend signal.)
-      this.resetClientToolsFingerprint();
-      this.config.onSessionInit?.(session);
-      return session;
-    } finally {
-      this.sessionInitPromise = null;
-    }
+    // Callers that dedupe share this promise, so the stale check below covers
+    // them too (the send reusing an early init included).
+    const pending: Promise<ClientSession> = (this.sessionInitPromise = this._doInitSession()
+      .then((session) => {
+        // A clear or replacement (credential change, start-new, proof re-init)
+        // while this was in flight makes the result stale: never install it.
+        if (this.sessionInitPromise !== pending) return this.initSession();
+        this.clientSession = session;
+        this.sessionWarmLatch = false;
+        // A freshly-minted session must resend the full WebMCP tool list on its
+        // next turn: drop any diff-only fingerprint cached under a prior session,
+        // so we never claim "unchanged" against a session the server didn't store
+        // the set under. (Belt-and-suspenders with the sessionId comparison in the
+        // send decision and the server's 409 resend signal.)
+        this.resetClientToolsFingerprint();
+        this.config.onSessionInit?.(session);
+        return session;
+      })
+      .finally(() => {
+        if (this.sessionInitPromise === pending) this.sessionInitPromise = null;
+      }));
+    return pending;
   }
 
   /** Visitor history rides on client-token init only, and latches off after a 403 degrade. */

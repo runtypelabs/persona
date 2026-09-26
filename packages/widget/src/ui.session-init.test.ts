@@ -127,6 +127,35 @@ describe("sessionInit: 'input' (default)", () => {
     expect(w.inits).toHaveLength(1);
   });
 
+  it("keeps the server welcome ahead of a send that raced the early init", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const w = mountWidget({}, [
+      async () => {
+        await gate;
+        return Response.json({
+          sessionId: "session-1",
+          expiresAt: new Date(Date.now() + 600_000).toISOString(),
+          flow: { id: "agent-1", name: "Agent", description: null },
+          config: { welcomeMessage: "Hi! How can I help?", placeholder: "Ask...", theme: null },
+        });
+      },
+    ]);
+    w.type("hello");
+    await vi.waitFor(() => expect(w.inits).toHaveLength(1));
+    w.submit();
+    await settle();
+    release();
+    await vi.waitFor(() => expect(w.chats).toHaveLength(1));
+    await vi.waitFor(() =>
+      expect(controller!.getMessages().map((m) => [m.role, m.content]).slice(0, 2)).toEqual([
+        ["assistant", "Hi! How can I help?"],
+        ["user", "hello"],
+      ])
+    );
+    expect(w.inits).toHaveLength(1);
+  });
+
   it("swallows an early-init failure and the send retries init", async () => {
     const onSessionExpired = vi.fn();
     const w = mountWidget({ onSessionExpired }, [

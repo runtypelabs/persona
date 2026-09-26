@@ -1040,10 +1040,13 @@ export class AgentWidgetSession {
    * UI. The send re-runs `initSession()` and reports them as it always has.
    */
   public warmClientSession(): void {
+    // The visitor may send before this resolves; the server welcome still
+    // belongs ahead of that first turn when the transcript started empty.
+    const pristine = !this.messages.length;
     void this.client.warmSession().then((session) => {
       // A start-new or credential re-init may have replaced it meanwhile.
       if (session && this.client.getClientSession() === session) {
-        this.setClientSession(session);
+        this.setClientSession(session, pristine);
       }
     });
   }
@@ -1051,9 +1054,9 @@ export class AgentWidgetSession {
   /**
    * Set the client session after initialization
    */
-  public setClientSession(session: ClientSession): void {
+  public setClientSession(session: ClientSession, pristine?: boolean): void {
     this.clientSession = session;
-    this.injectWelcomeMessage(session);
+    this.injectWelcomeMessage(session, pristine);
   }
 
   /**
@@ -1061,15 +1064,20 @@ export class AgentWidgetSession {
    * reopening a stored conversation is not a new thread, and the hydrated
    * transcript would otherwise race a welcome bubble.
    */
-  private injectWelcomeMessage(session: ClientSession): void {
+  private injectWelcomeMessage(
+    session: ClientSession,
+    pristine = !this.messages.length
+  ): void {
     if (this.suppressWelcomeInjection) return;
-    if (!session.config.welcomeMessage || this.messages.length !== 0) return;
+    if (!session.config.welcomeMessage || !pristine) return;
+    // A late welcome (the first send raced the init) sorts ahead of that turn.
+    const first = this.messages[0];
     const welcomeMessage: AgentWidgetMessage = {
       id: `welcome-${Date.now()}`,
       role: "assistant",
       content: session.config.welcomeMessage,
-      createdAt: new Date().toISOString(),
-      sequence: this.nextSequence()
+      createdAt: first?.createdAt ?? new Date().toISOString(),
+      sequence: first ? (first.sequence ?? 0) - 1 : this.nextSequence()
     };
     this.appendMessage(welcomeMessage);
   }

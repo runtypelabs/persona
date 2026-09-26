@@ -164,6 +164,28 @@ describe("AgentWidgetClient.warmSession", () => {
     expect(initRequests).toHaveLength(2);
   });
 
+  it("never installs an init that a clear superseded while in flight", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const { client, initRequests, onSessionInit } = setup([
+      async () => {
+        await gate;
+        return Response.json(initBody("session-stale"));
+      },
+    ]);
+    const warmed = client.warmSession();
+    const sent = client.initSession();
+    await vi.waitFor(() => expect(initRequests).toHaveLength(1));
+    // e.g. a sibling tab replaced the visitor credential
+    client.handleExternalCredentialChange();
+    release();
+    await expect(sent).resolves.toMatchObject({ sessionId: "session-2" });
+    await expect(warmed).resolves.toMatchObject({ sessionId: "session-2" });
+    expect(client.getClientSession()?.sessionId).toBe("session-2");
+    expect(initRequests).toHaveLength(2);
+    expect(onSessionInit.mock.calls.map(([s]) => s.sessionId)).toEqual(["session-2"]);
+  });
+
   it("does nothing outside client token mode", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
