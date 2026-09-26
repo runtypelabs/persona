@@ -29,7 +29,7 @@ export const WEBMCP_PAINT_FLOW: RuntypeFlowConfig = {
       type: "prompt",
       enabled: true,
       config: {
-        model: "gpt-6-astra",
+        model: "gpt-6-sol",
         reasoning: true,
         responseFormat: "markdown",
         outputVariable: "prompt_result",
