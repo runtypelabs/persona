@@ -1311,17 +1311,33 @@ export class AgentWidgetClient {
     return this.config.getIdentityProof ? 'verified-user' : 'browser';
   }
 
-  private async resolveChatIdentityProof(): Promise<ClientChatRequest['identityProof']> {
+  private async resolveChatIdentityProof(signal?: AbortSignal): Promise<ClientChatRequest['identityProof']> {
+    signal?.throwIfAborted();
     const provider = this.config.identityProvider;
     if (provider === undefined) return undefined;
-    if (!provider.trim() || !this.config.getIdentityProof) {
+    const getIdentityProof = this.config.getIdentityProof;
+    if (!provider.trim() || !getIdentityProof) {
       throw new Error('Chat identity requires identityProvider and getIdentityProof.');
     }
     let token: string | null;
+    let onAbort: (() => void) | undefined;
     try {
-      token = await this.config.getIdentityProof();
+      const proof = Promise.resolve().then(() => getIdentityProof());
+      token = signal
+        ? await Promise.race([
+            proof,
+            new Promise<never>((_, reject) => {
+              onAbort = () => reject(signal.reason);
+              signal.addEventListener('abort', onAbort, { once: true });
+              if (signal.aborted) onAbort();
+            }),
+          ])
+        : await proof;
     } catch {
+      signal?.throwIfAborted();
       throw new Error('The identity proof provider failed.');
+    } finally {
+      if (onAbort) signal?.removeEventListener('abort', onAbort);
     }
     if (typeof token !== 'string' || !token.trim()) {
       throw new Error('A fresh identity proof is required to send this message.');
@@ -1929,7 +1945,7 @@ export class AgentWidgetClient {
         assertCurrentTurn();
         return this.sendWithClientToolsDiff(session.sessionId, basePayload.clientTools, async (toolFields) => {
           assertCurrentTurn();
-          const identityProof = await this.resolveChatIdentityProof();
+          const identityProof = await this.resolveChatIdentityProof(options.signal);
           assertCurrentTurn();
           const chatRequest: ClientChatRequest = {
             ...baseChatRequest,

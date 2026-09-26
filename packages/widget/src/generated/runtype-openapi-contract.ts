@@ -619,7 +619,7 @@ export type RuntypeClientInitResponse = {
   conversationRevision: string;
   durableRecovery?: {
   enabled: boolean;
-  join?: boolean;
+  steer?: boolean;
 };
   expiresAt: string;
   flow?: {
@@ -681,7 +681,7 @@ export type RuntypeClientChatRequest = {
 }>;
   metadata?: Record<string, unknown>;
   sessionId: string;
-  submitMode?: "normal" | "interrupt" | "join";
+  submitMode?: "normal" | "interrupt" | "steer";
   turnId?: string;
 };
 

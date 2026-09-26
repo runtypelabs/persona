@@ -141,6 +141,40 @@ describe('client token execution identity', () => {
     expect(h.chat).not.toHaveBeenCalled();
   });
 
+  it('settles cancellation even when the identity provider never resolves', async () => {
+    const h = setup();
+    h.getIdentityProof.mockReturnValue(new Promise<string>(() => {}));
+    const abort = new AbortController();
+    const settled = vi.fn();
+    const running = h.run(abort.signal).then(settled, settled);
+    await vi.waitFor(() => expect(h.getIdentityProof).toHaveBeenCalled());
+    abort.abort();
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' })));
+    await running;
+    expect(h.chat).not.toHaveBeenCalled();
+
+    h.getIdentityProof.mockReturnValue('replacement-proof');
+    await h.run();
+    expect(h.chatBodies()).toHaveLength(1);
+    expect(h.chatBodies()[0].identityProof).toEqual({ provider: 'clerk', token: 'replacement-proof' });
+  });
+
+  it('handles a provider rejection after cancellation without exposing it', async () => {
+    const h = setup();
+    let rejectProof!: (error: Error) => void;
+    h.getIdentityProof.mockReturnValue(new Promise<string>((_, reject) => { rejectProof = reject; }));
+    const abort = new AbortController();
+    const settled = vi.fn();
+    const running = h.run(abort.signal).then(settled, settled);
+    await vi.waitFor(() => expect(h.getIdentityProof).toHaveBeenCalled());
+    abort.abort();
+    await vi.waitFor(() => expect(settled).toHaveBeenCalledWith(expect.objectContaining({ name: 'AbortError' })));
+    rejectProof(new Error('secret-from-late-provider-failure'));
+    await running;
+    expect(h.chat).not.toHaveBeenCalled();
+    expect(h.events.filter((e) => e.type === 'error').map((e) => e.error.message).join()).not.toContain('secret-from');
+  });
+
   it('does not log the proof in debug mode', async () => {
     const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
     const h = setup({ debug: true });

@@ -146,6 +146,8 @@ This example assumes Clerk is initialized and the user is signed in. For organiz
 
 Persona sends `identityProof: { provider: 'clerk', token }` at the top level of each `/v1/client/chat` request. It obtains another proof before each retry, including session renewal and client-tool registry recovery. If the callback fails or returns no token, Persona reports an error and sends no chat request. An API rejection of the proof is reported as an identity error, not an expired chat session.
 
+Cancelling a turn stops waiting for its proof, even if the callback never resolves. A late result cannot send the cancelled message. Persona does not cancel the callback's underlying network request.
+
 An identity admitted during initialization binds visitor history; it does not replace the proof required for each execution. Chat identity does not enable history or change its scope. Without `identityProvider`, `getIdentityProof` retains its history-only behavior and is not called by chat dispatch. Custom-backend and proxy transports are unchanged.
 
 After logout or an organization change, reset the previous identity's conversation state before starting a new conversation. If you enabled verified history, use `resetHistoryIdentity()` to clear the visitor binding. Never reuse another user's session or visitor credentials.
