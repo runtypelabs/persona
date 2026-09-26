@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.24.0
+
+### Patch Changes
+
+- 5b97f2a: Switch the Paint Pal demo flow to `gpt-6-sol`.
+
 ## 4.23.2
 
 ### Patch Changes

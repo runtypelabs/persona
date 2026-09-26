@@ -1,5 +1,55 @@
 # @runtypelabs/persona
 
+## 4.24.0
+
+### Minor Changes
+
+- 143686f: Wire header padding, transcript gap, panel dimensions, and per-mode panel chrome to theme tokens while preserving the existing default layout. Keep legacy sizing options as aliases with their existing precedence. Add prefixed collapsible-widget CSS variables while retaining the legacy aliases.
+- fc20eb2: Add configurable tool and reasoning activity rows with status icons, elapsed durations, automatic disclosure, and collapsible tool groups. Use rows by default with future.v5Defaults while preserving the legacy card default in V4. Expose shared activity tokens and retain legacy theme overrides.
+
+  Match the V5 header background to the transcript container for a continuous surface in light and dark themes, while preserving explicit header overrides.
+
+  Add configurable transcript top-edge fading, enabled by default in V5 and hidden at the start of the conversation. Expose layout.topFade and the message.topFadeHeight theme token.
+
+- 9f190ca: Add welcome.layout with centered V5 greetings, responsive starter defaults, and a reduced-motion-aware fullscreen composer transition while preserving V4 defaults.
+
+  Use lighter V5 welcome, header, and suggestion typography with pill input corners. Expose suggestion variant weights as theme tokens in both defaults modes.
+
+- 17510df: Add the opt-in `future.v5Defaults` flag and shared versioned config and theme defaults. Both states initially render the same defaults. Preserve the selected state through the installer, deferred launcher, theme editor, and generated configs, and expose it as `data-persona-defaults` on the widget root.
+- 0a7ee80: Keep V5 tool and reasoning activity rows collapsed while streaming by default. Set autoExpand to true to opt into automatic expansion; V4 defaults are unchanged.
+
+  Use text-only hover feedback for activity rows, preserving the background hover treatment on legacy cards.
+
+  Flatten V5 activity indentation and tighten expanded content spacing, with configurable groupIndent, groupGap, groupPadding, bodyPadding, and sectionGap activity tokens.
+
+  Use 4px between consecutive V5 activity entries and 12px before assistant responses, configurable with activity.transcriptGap and activity.responseGap.
+
+  Pause automatic scrolling when users toggle tool, reasoning, or approval details so expanded content stays at their reading position.
+
+- db8a3f9: Keep composer layout stable when audio capture starts or remains active in both V4 and V5. Recording feedback remains on the microphone; wrapped or multiline text and other composer content still expand the layout. No new configuration option is needed.
+- f7a60cc: Refine opt-in V5 header controls with muted icons, softly rounded hover surfaces, and a keyboard focus ring. Add theme tokens while preserving per-button overrides.
+- b144f68: Use the same compact spacing for consecutive V5 reasoning and tool activity rows, with no extra transcript gap. Preserve the 12px gap before assistant responses and explicit activity spacing overrides.
+
+  Use 13px regular-weight expanded V5 reasoning text with 1.5 line height. Add activity bodySize, bodyLineHeight, and bodyFontWeight tokens for customization.
+
+  Add iconVisibility to tool and reasoning row configuration. V5 hides successful completion icons by default, retaining active and attention-needed indicators; always and never modes are also available.
+
+- cae9da2: Add pill and circle launcher variants, defaulting to a themeable 48px circle under V5 while preserving the V4 pill. Share variant defaults and rendering across deferred and full launchers.
+- cae9da2: Default the V5 composer to overlay placement with a theme-aware 24px fade. Preserve V4 placement and explicit composer placement/background overrides.
+- e141b7e: Refine V5 composer defaults with a circular submit button, smaller upward-arrow icon, and no footer divider. Expose sendIconSize, sendButtonRadius, and footerBorder theme tokens in both defaults states while preserving V4 rendering.
+
+  Add a subtle neutral composer focus border and outer ring to V5. Expose focusBorderColor and focusRing theme tokens in both defaults states; preserve V4 focus appearance and custom resting shadows without layout shift.
+
+- b51c2aa: Opt into the v5 transcript, compact header, single-row composer, and panel defaults with `future.v5Defaults`. Add a transient connection status mode that renders above the composer. Existing v4 defaults remain unchanged, and explicit configuration and theme tokens continue to take precedence.
+- 2f87874: Add an opt-in V5 dark palette with dark neutral surfaces, readable controls and markdown colors, and preserved dark shades when overriding individual palette tokens. Enable with `future.v5Defaults: true`; V4 defaults remain unchanged.
+- 6e74f78: Use Request and Response blocks for opt-in V5 tool details. Omit empty requests, replace streamed output with the final response, and offer contextual copy icons with copied feedback. Preserve V4 rendering and explicit tool colors.
+
+### Patch Changes
+
+- 6ed9009: Add `identityProvider` to forward fresh `getIdentityProof` tokens on client-token chat requests without requiring history. Refresh proofs on retries, stop requests when proof retrieval fails, let cancelled turns stop waiting for a stalled provider, and redact proofs from debug logs.
+- a96c2b9: Preserve nested tool and reasoning display defaults when overriding individual options. Isolate expansion state between widget instances and clear it with chat history. Align header icon and feedback fallbacks with the defaults, inherit the theme font in suggestion chips, and cap legacy starter chips at four. Remove unreachable shadow and legacy approval color fallbacks.
+- 1883da0: Keep inline widgets at host width unless a width is explicitly configured. Rebase inherited theme-editor defaults when switching V4/V5, preserving authored values and undo/redo history.
+
 ## 4.23.2
 
 ### Patch Changes
