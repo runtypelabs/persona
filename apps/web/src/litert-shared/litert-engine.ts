@@ -135,12 +135,12 @@ export interface ModelInfo {
   blurb: string;
 }
 
-// 0.14.0: same Engine/Conversation surface as 0.13.1 (engine.d.ts is
-// unchanged); the wrapped `{type:'function', function:{…}}` tool shape and
-// the `{type:'tool_response', name, response}` content item we send are now the
-// documented canonical forms. Bumped because the larger Gemma 4 web builds
-// (12B / 26B-A4B) shipped alongside this runtime release.
-const LITERT_VERSION = "0.14.0";
+// 0.17.1: additive over 0.14.0 (Conversation/Session `clone()`, image/audio
+// content parts, an embedding engine); nothing we call changed. The wrapped
+// `{type:'function', function:{…}}` tool shape and the
+// `{type:'tool_response', name, response}` content item we send remain the
+// documented canonical forms (since 0.14.0).
+const LITERT_VERSION = "0.17.1";
 const HF = "https://huggingface.co/litert-community";
 
 export const MODELS: Record<ModelId, ModelInfo> = {
@@ -148,7 +148,7 @@ export const MODELS: Record<ModelId, ModelInfo> = {
     id: "e2b",
     label: "Gemma 4 E2B",
     url: `${HF}/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm`,
-    approxSize: "~1.4 GB",
+    approxSize: "~2.0 GB",
     blurb: "Smaller / faster. Quick to load, snappier tokens.",
   },
   e4b: {
