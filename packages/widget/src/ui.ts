@@ -11654,19 +11654,29 @@ export const createAgentExperience = (
   // whenever `update()` swaps in a different function, cleaning up the old one.
   let sessionInitHook: AgentWidgetSessionInitHook | undefined;
   let sessionInitHookCleanup: ReturnType<AgentWidgetSessionInitHook>;
+  // Host hook code may throw; neither its setup nor its cleanup may leave
+  // mount, update() or destroy() half done. The send still inits either way.
+  const releaseSessionInitHook = () => {
+    const cleanup = sessionInitHookCleanup;
+    sessionInitHookCleanup = undefined;
+    try {
+      if (typeof cleanup === "function") cleanup();
+    } catch {
+      // ignored, see above
+    }
+  };
   const syncSessionInitHook = () => {
     const next =
       config.clientToken && typeof config.sessionInit === "function"
         ? config.sessionInit
         : undefined;
     if (next === sessionInitHook) return;
-    if (typeof sessionInitHookCleanup === "function") sessionInitHookCleanup();
-    sessionInitHookCleanup = undefined;
+    releaseSessionInitHook();
     sessionInitHook = next;
     try {
       sessionInitHookCleanup = next?.({ warm: warmSession, mount });
     } catch {
-      // A throwing host hook must not break mount; the send still inits.
+      // ignored, see above
     }
   };
   syncSessionInitHook();
@@ -11674,7 +11684,7 @@ export const createAgentExperience = (
     sessionInitEvents.forEach((type) =>
       mount.removeEventListener(type, handleSessionInitIntent)
     );
-    if (typeof sessionInitHookCleanup === "function") sessionInitHookCleanup();
+    releaseSessionInitHook();
   });
 
   // Wire up optional SSE tap (host) + event stream buffer to capture SSE

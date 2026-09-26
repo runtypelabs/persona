@@ -264,6 +264,24 @@ describe("custom sessionInit hooks", () => {
     expect(secondCleanup).toHaveBeenCalledTimes(1);
   });
 
+  it("a throwing hook cleanup does not block the replacement hook or destroy", async () => {
+    const throwingCleanup = vi.fn(() => {
+      throw new Error("host bug");
+    });
+    const next = vi.fn();
+    mountWidget({ sessionInit: () => throwingCleanup });
+    expect(() => controller!.update({ sessionInit: next })).not.toThrow();
+    expect(throwingCleanup).toHaveBeenCalledTimes(1);
+    expect(next).toHaveBeenCalledTimes(1);
+    // The failed cleanup is not retried on later updates.
+    controller!.update({ sessionInit: "send" });
+    expect(throwingCleanup).toHaveBeenCalledTimes(1);
+    controller!.update({ sessionInit: () => throwingCleanup });
+    expect(() => controller!.destroy()).not.toThrow();
+    controller = undefined;
+    expect(throwingCleanup).toHaveBeenCalledTimes(2);
+  });
+
   it("controller.warmSession() inits imperatively", async () => {
     const w = mountWidget({ sessionInit: "send" });
     controller!.warmSession();
