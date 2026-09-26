@@ -106,6 +106,10 @@ When `clientToken` is set, the widget uses `/v1/client/*` endpoints directly fro
 | `onSessionExpired` | `() => void` | Called when the session expires or errors. Prompt the user to refresh. |
 | `getStoredSessionId` | `() => string \| null` | Return a previously stored session ID for session resumption. |
 | `setStoredSessionId` | `(sessionId: string) => void` | Persist the session ID so conversations can be resumed later. |
+| `identityProvider` | `string?` | Provider name registered with Runtype, such as `clerk`. Enables fresh identity proofs on every client-token chat POST, independently of history. |
+| `getIdentityProof` | `() => string \| null \| Promise<string \| null>` | Return a fresh identity token. With `identityProvider`, a missing token or callback failure stops the chat request. Also supplies proofs for verified history operations. Tokens are not cached or persisted by Persona. |
+| `features.history.enabled` | `boolean?` | Enable conversation history. Not required for chat identity. Defaults to disabled. |
+| `features.history.scope` | `'browser' \| 'verified-user'` | History access scope. Defaults to `verified-user` when `getIdentityProof` is configured, otherwise `browser`. Does not change execution identity. |
 
 ```typescript
 config: {
@@ -117,6 +121,38 @@ config: {
   setStoredSessionId: (id) => localStorage.setItem('session_id', id)
 }
 ```
+
+#### Verified execution identity
+
+Register your identity provider with Runtype and enable Identity Exchange admission for your organization. Then configure the provider name and a callback that obtains a fresh token. For Clerk, use a JWT template with the audience and organization claims expected by your Runtype integration:
+
+```typescript
+config: {
+  clientToken: 'YOUR_CLIENT_TOKEN',
+  agentId: 'YOUR_AGENT_ID',
+  identityProvider: 'clerk',
+  getIdentityProof: async () => {
+    const token = await Clerk.session?.getToken({
+      template: 'runtype',
+      skipCache: true,
+    });
+    return token ?? null;
+  },
+  features: { history: { enabled: false } },
+}
+```
+
+This example assumes Clerk is initialized and the user is signed in. For organization-scoped agents, select an active Clerk organization before sending a message. Keep management API keys out of the browser.
+
+Persona sends `identityProof: { provider: 'clerk', token }` at the top level of each `/v1/client/chat` request. It obtains another proof before each retry, including session renewal and client-tool registry recovery. If the callback fails or returns no token, Persona reports an error and sends no chat request. An API rejection of the proof is reported as an identity error, not an expired chat session.
+
+Cancelling a turn stops waiting for its proof, even if the callback never resolves. A late result cannot send the cancelled message. Persona does not cancel the callback's underlying network request.
+
+An identity admitted during initialization binds visitor history; it does not replace the proof required for each execution. Chat identity does not enable history or change its scope. Without `identityProvider`, `getIdentityProof` retains its history-only behavior and is not called by chat dispatch. Custom-backend and proxy transports are unchanged.
+
+After logout or an organization change, reset the previous identity's conversation state before starting a new conversation. If you enabled verified history, use `resetHistoryIdentity()` to clear the visitor binding. Never reuse another user's session or visitor credentials.
+
+See [end-user identity](https://docs.runtype.com/developer-guides/guides/end-user-identity) for provider registration and agent isolation, and [conversation history](https://docs.runtype.com/developer-guides/guides/client-conversation-history) for history admission and scope.
 
 ### Agent Mode
 

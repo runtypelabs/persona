@@ -3095,8 +3095,8 @@ export interface AgentWidgetHistoryFeature {
    * otherwise `"browser"`) and narrows it to what the provider advertises, so a
    * browser-only provider is never asked for a scope it cannot serve. An
    * explicit `features.history.scope` is a hard request and still fails closed
-   * with `unsupported_scope`. `getIdentityProof` is never called for a supplied
-   * provider, and `HistoryOperationContext` carries only the resolved scope;
+   * with `unsupported_scope`. History operations on a supplied provider never
+   * call `getIdentityProof`, and `HistoryOperationContext` carries only the resolved scope;
    * report your own identity through `getIdentityStatus()` /
    * `subscribeIdentityStatus()`, which is what the scope banner and its retry
    * affordance read.
@@ -5976,6 +5976,8 @@ export interface WidgetHistoryInternals {
  */
 export type ClientChatRequest = {
   sessionId: string;
+  /** Fresh identity proof for this execution, independent of visitor history. */
+  identityProof?: RuntypeClientChatRequest['identityProof'];
   messages: Array<{
     id?: string;
     role: 'user' | 'assistant' | 'system';
@@ -7185,13 +7187,20 @@ export type AgentWidgetConfig = {
    */
   setStoredSessionId?: (sessionId: string) => void;
   /**
-   * Called immediately before any cross-device history request and before a
+   * With identityProvider, called before every client-token chat POST, including retries, independently of history.
+   * Also called immediately before any cross-device history request and before a
    * conversationId resume of a conversation discovered on another device.
-   * Return a fresh end-user access token (rt_eu_… / JWT). Null uses exact-browser
-   * scope only for a never-bound visitor; a previously bound visitor fails closed
-   * until resetHistoryIdentity() runs. Never cached by the widget.
+   * Return a fresh end-user access token (rt_eu_… / JWT). Null stops identity-enabled chat.
+   * For history only, null uses exact-browser scope for a never-bound visitor;
+   * a bound visitor fails closed until resetHistoryIdentity(). Never cached.
    */
   getIdentityProof?: () => string | null | Promise<string | null>;
+  /**
+   * Provider name registered with Runtype, for example "clerk". Enables per-request
+   * chat identity through getIdentityProof without enabling history. A missing or
+   * failed proof stops the turn; omitting this preserves history-only callbacks.
+   */
+  identityProvider?: string;
   /**
    * Read the persisted active conversation id (client token mode only).
    * Called only after the internal stored-state bootstrap gate resolves.
