@@ -56,6 +56,14 @@ export const resolvePanelGeometry = (config?: AgentWidgetConfig): PanelGeometry 
   };
 };
 
+/** Inline embeds fill their host unless the caller explicitly supplied a width. */
+export const resolveInlinePanelWidth = (config?: AgentWidgetConfig): string => {
+  const aliases = getPanelAliasProvenance(config);
+  const hasWidth = aliases.launcherWidth || aliases.legacyLauncherWidth ||
+    config?.theme?.components?.panel?.width !== undefined;
+  return hasWidth ? resolvePanelGeometry(config).width : "100%";
+};
+
 /**
  * Composer-bar chrome sizes. Not header controls: these float over the
  * composer, so they opt out of the header control-size token with explicit
@@ -151,11 +159,7 @@ export const createWrapper = (config?: AgentWidgetConfig): PanelWrapper => {
     );
     
     // Apply width from config, defaulting to 100% for inline embed mode
-    const aliases = getPanelAliasProvenance(config);
-    const hasWidth = aliases.launcherWidth || aliases.legacyLauncherWidth ||
-      config?.theme?.components?.panel?.width !== undefined;
-    const inlineWidth = hasWidth ? resolvePanelGeometry(config).width : "100%";
-    wrapper.style.width = inlineWidth;
+    wrapper.style.width = resolveInlinePanelWidth(config);
     panel.style.width = "100%";
     
     wrapper.appendChild(panel);

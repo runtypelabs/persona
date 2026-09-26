@@ -226,6 +226,7 @@ import {
   COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE,
   COMPOSER_BAR_CLOSE_ICON_SIZE,
   resolvePanelGeometry,
+  resolveInlinePanelWidth,
 } from "./components/panel";
 import { buildPillComposer } from "./components/pill-composer-builder";
 import {
@@ -4442,7 +4443,8 @@ export const createAgentExperience = (
     // Re-apply panel width/maxWidth from initial setup
     const geometry = resolvePanelGeometry(config);
     if (!sidebarMode && !dockedMode) {
-      if (isInlineEmbed && fullHeight) {
+      if (isInlineEmbed) {
+        wrapper.style.width = resolveInlinePanelWidth(config);
         panel.style.width = "100%";
         panel.style.maxWidth = "100%";
       } else {
@@ -13077,7 +13079,11 @@ export const createAgentExperience = (
 
       if (!launcherEnabled && !dockedMode) {
         panel.style.height = "";
-        panel.style.width = "";
+        if (!sidebarMode) {
+          wrapper.style.width = resolveInlinePanelWidth(config);
+          panel.style.width = "100%";
+          panel.style.maxWidth = "100%";
+        }
         return;
       }
 
