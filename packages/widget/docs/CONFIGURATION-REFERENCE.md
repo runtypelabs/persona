@@ -104,6 +104,7 @@ When `clientToken` is set, the widget uses `/v1/client/*` endpoints directly fro
 | `clientToken` | `string` | Runtype client token for direct browser-to-API communication (e.g. `ct_live_...`). Mutually exclusive with `headers` auth. |
 | `onSessionInit` | `(session: ClientSession) => void` | Called when the session is initialized. Receives session ID, expiry, flow info. |
 | `onSessionExpired` | `() => void` | Called when the session expires or errors. Prompt the user to refresh. |
+| `sessionInit` | `'input' \| 'focus' \| 'mount' \| 'send' \| (ctx) => void \| (() => void)` | When to call `/v1/client/init` ahead of the first send. Default `'input'`. See [Session init timing](#session-init-timing). |
 | `getStoredSessionId` | `() => string \| null` | Return a previously stored session ID for session resumption. |
 | `setStoredSessionId` | `(sessionId: string) => void` | Persist the session ID so conversations can be resumed later. |
 | `identityProvider` | `string?` | Provider name registered with Runtype, such as `clerk`. Enables fresh identity proofs on every client-token chat POST, independently of history. |
@@ -119,6 +120,35 @@ config: {
   onSessionExpired: () => alert('Session expired: please refresh.'),
   getStoredSessionId: () => localStorage.getItem('session_id'),
   setStoredSessionId: (id) => localStorage.setItem('session_id', id)
+}
+```
+
+#### Session init timing
+
+In client token mode the widget calls `/v1/client/init` when the visitor shows intent to send, not when the widget mounts, and not only when the first message is sent. Starting init early removes its round trip from the first message. It also gives the server time to prepare the conversation, and init does real work server-side, so page views that never chat don't pay for one.
+
+| `sessionInit` | Fires |
+| --- | --- |
+| `'input'` (default) | On the first user keystroke, paste, or drop that leaves non-empty text in the composer. Programmatic edits (restored drafts, `setMessage()`, history recall) do not count. |
+| `'focus'` | When the visitor clicks, taps, or tabs into the composer (first input also counts). Programmatic focus, including `autoFocusInput` on open or mount, does not count. |
+| `'mount'` | When the widget mounts (the behavior before 4.23). Use it when your client token has a server-configured welcome message: that message arrives with the init response, so with later triggers it only shows once init has run. |
+| `'send'` | Never early; the first send initializes the session. |
+| function | Your own trigger. Called once on mount with `{ warm, mount }`; call `warm()` whenever you like and optionally return a cleanup that runs on `destroy()`. Replaces the built-in triggers. |
+
+The early init sends exactly the same request the send would, runs at most once per session lifetime (re-armed when the session expires or a new conversation starts), and is fire-and-forget: a failure is swallowed and resurfaces normally when the send retries init. A send during an in-flight early init reuses it, so there is only ever one `/v1/client/init`. With `features.history.enabled`, the widget still initializes on mount to restore the conversation. Upvote/downvote on a restored transcript initializes on demand. Outside client token mode the option is ignored.
+
+You can also trigger init from your own code with `controller.warmSession()`, for example when the visitor hovers your own "Chat with us" button:
+
+```typescript
+const widget = initAgentWidget({ target: '#chat', config: { clientToken: 'ct_live_...', sessionInit: 'send' } });
+document.querySelector('#help-button')?.addEventListener('pointerenter', () => widget.warmSession(), { once: true });
+
+// or declaratively, e.g. when the pointer enters the widget:
+config: {
+  clientToken: 'ct_live_...',
+  sessionInit: ({ warm, mount }) => {
+    mount.addEventListener('pointerenter', warm, { once: true });
+  },
 }
 ```
 

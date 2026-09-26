@@ -1035,6 +1035,21 @@ export class AgentWidgetSession {
   }
 
   /**
+   * Early, fire-and-forget client-token init (`sessionInit` trigger or
+   * `controller.initSession()`). Failures stay silent here: no `onError`, no
+   * UI. The send re-runs `initSession()` and reports them as it always has.
+   */
+  public warmClientSession(): void {
+    if (!this.isClientTokenMode()) return;
+    void this.client.warmSession().then((session) => {
+      // A start-new or credential re-init may have replaced it meanwhile.
+      if (!session || this.client.getClientSession() !== session) return;
+      if (this.clientSession?.sessionId === session.sessionId) return;
+      this.setClientSession(session);
+    });
+  }
+
+  /**
    * Set the client session after initialization
    */
   public setClientSession(session: ClientSession): void {

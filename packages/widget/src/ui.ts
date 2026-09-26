@@ -15,6 +15,7 @@ import {
 import {
   AgentWidgetConfig,
   AgentWidgetConfigPatch,
+  AgentWidgetSessionInitHook,
   AgentWidgetApprovalDecisionOptions,
   AgentWidgetMessage,
   AgentWidgetEvent,
@@ -707,6 +708,13 @@ type Controller = {
   ) => Promise<void>;
   /** Clean local state plus a new owned server conversation. `focus` as on `openConversation`. */
   startNewConversation: (opts?: { focus?: boolean }) => Promise<void>;
+  /**
+   * Client token mode: start `/v1/client/init` now, ahead of the first send
+   * (e.g. when the visitor hovers your own "Chat with us" button).
+   * Fire-and-forget, at most once per session lifetime, errors swallowed; the
+   * send reuses the in-flight init. No-op in other modes. See `sessionInit`.
+   */
+  warmSession: () => void;
   /** Permanently delete one server record; the active one is replaced. */
   deleteConversation: (conversationId: string) => Promise<void>;
   /**
@@ -11584,9 +11592,15 @@ export const createAgentExperience = (
     historySurface = null;
   });
 
-  // Pre-initialize client session when in client token mode so feedback works
-  // before the user sends their first message (e.g. on restored/persisted messages)
-  if (config.clientToken) {
+  // Client-token init on mount is reserved for widgets that need a session at
+  // boot: visitor history (boot reconciliation) and `sessionInit: 'mount'`.
+  // Everything else inits on intent (the `sessionInit` triggers below) or at
+  // send, since init is no longer free server-side (it pre-allocates the
+  // conversation's session owner).
+  if (
+    config.clientToken &&
+    (config.features?.history?.enabled === true || config.sessionInit === "mount")
+  ) {
     session
       .initClientSession()
       .then(() => {
@@ -11605,6 +11619,83 @@ export const createAgentExperience = (
         }
       });
   }
+
+  // Early session init on visitor intent (`sessionInit`). Delegated on the
+  // mount so composer rebuilds stay covered, and read `config` at event time so
+  // `update()` applies without re-wiring.
+  const warmSession = () => {
+    if (!config.clientToken) return;
+    session.warmClientSession();
+  };
+  const isComposerTarget = (target: EventTarget | null): boolean => {
+    const input = composerBindings?.input ?? textarea;
+    return !!input && target === input;
+  };
+  const isInsideComposer = (target: EventTarget | null): boolean => {
+    const form = composerBindings?.form ?? composerForm;
+    return !!form && target instanceof Node && form.contains(target);
+  };
+  const handleSessionInitInput = (event: Event) => {
+    if (!config.clientToken) return;
+    const mode = config.sessionInit ?? "input";
+    if (mode !== "input" && mode !== "focus") return;
+    if (!isComposerTarget(event.target)) return;
+    // Real typing, paste, drop and IME always arrive as an InputEvent with an
+    // inputType; the widget's own programmatic edits dispatch a plain Event.
+    const inputType = (event as InputEvent).inputType;
+    if (typeof inputType !== "string" || inputType === "") return;
+    const value = (event.target as HTMLTextAreaElement).value;
+    if (typeof value !== "string" || value.trim() === "") return;
+    warmSession();
+  };
+  // Pointer or Tab into the composer is a user focus; `.focus()` (autofocus on
+  // open/mount) produces neither, so it never counts.
+  const handleSessionInitPointer = (event: Event) => {
+    if (!config.clientToken || config.sessionInit !== "focus") return;
+    if (!isInsideComposer(event.target)) return;
+    warmSession();
+  };
+  const handleSessionInitKeyup = (event: KeyboardEvent) => {
+    if (!config.clientToken || config.sessionInit !== "focus" || event.key !== "Tab") {
+      return;
+    }
+    if (!isComposerTarget(event.target)) return;
+    warmSession();
+  };
+  mount.addEventListener("input", handleSessionInitInput);
+  mount.addEventListener("pointerdown", handleSessionInitPointer);
+  mount.addEventListener("keyup", handleSessionInitKeyup);
+  let sessionInitHook: AgentWidgetSessionInitHook | null = null;
+  let sessionInitHookCleanup: (() => void) | null = null;
+  const syncSessionInitHook = () => {
+    const next =
+      config.clientToken && typeof config.sessionInit === "function"
+        ? config.sessionInit
+        : null;
+    if (next === sessionInitHook) return;
+    sessionInitHookCleanup?.();
+    sessionInitHookCleanup = null;
+    sessionInitHook = next;
+    if (!next) return;
+    try {
+      const cleanup = next({ warm: warmSession, mount });
+      if (typeof cleanup === "function") sessionInitHookCleanup = cleanup;
+    } catch (err) {
+      if (config.debug) {
+        // eslint-disable-next-line no-console
+        console.warn("[AgentWidget] sessionInit hook threw:", err);
+      }
+    }
+  };
+  syncSessionInitHook();
+  destroyCallbacks.push(() => {
+    mount.removeEventListener("input", handleSessionInitInput);
+    mount.removeEventListener("pointerdown", handleSessionInitPointer);
+    mount.removeEventListener("keyup", handleSessionInitKeyup);
+    sessionInitHookCleanup?.();
+    sessionInitHookCleanup = null;
+    sessionInitHook = null;
+  });
 
   // Wire up optional SSE tap (host) + event stream buffer to capture SSE
   // events. `feedEventStream` stages events while the lazy chunk is in flight.
@@ -14496,6 +14587,7 @@ export const createAgentExperience = (
       // Re-key the visitor store before any client rebuild sees the new config.
       syncVisitorStore();
       session.updateConfig(config);
+      syncSessionInitHook();
       if (
         (config.features?.history?.enabled === true) !== previousHistoryEnabled ||
         config.features?.history?.provider !== previousHistoryProvider ||
@@ -15406,6 +15498,9 @@ export const createAgentExperience = (
     },
     startNewConversation(opts?: { focus?: boolean }): Promise<void> {
       return startNewConversation({ focusComposer: opts?.focus === true });
+    },
+    warmSession(): void {
+      warmSession();
     },
     deleteConversation(conversationId: string): Promise<void> {
       return deleteHistoryConversation(conversationId);
