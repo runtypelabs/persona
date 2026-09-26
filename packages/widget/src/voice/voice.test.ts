@@ -368,7 +368,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     await provider.startListening();
 
     const ws = lastWs();
-    expect(ws.url).toBe('wss://api.example.com/ws/agents/a1/voice');
+    expect(ws.url).toBe('wss://api.example.com/ws/agents/a1/voice?voiceCapabilities=full-duplex-v1');
     expect(ws.protocols).toEqual(['runtype.bearer', 'ct_secret']);
     expect(ws.binaryType).toBe('arraybuffer');
     expect(ws.url).not.toContain('token=');
@@ -383,7 +383,16 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
   ])('derives ws base %s -> %s', async (host, expected) => {
     const provider = new RuntypeVoiceProvider({ ...baseConfig(), host });
     await provider.startListening();
-    expect(lastWs().url).toBe(`${expected}/ws/agents/a1/voice`);
+    expect(lastWs().url).toBe(`${expected}/ws/agents/a1/voice?voiceCapabilities=full-duplex-v1`);
+  });
+
+  it('declares full duplex without the browser-protocol param that 503s Cloudflare agents', async () => {
+    const provider = new RuntypeVoiceProvider(baseConfig());
+    await provider.startListening();
+    const url = new URL(lastWs().url);
+    expect(url.searchParams.get('voiceCapabilities')).toBe('full-duplex-v1');
+    expect(url.searchParams.has('voiceProtocol')).toBe(false);
+    expect([...url.searchParams.keys()]).toEqual(['voiceCapabilities']);
   });
 
   it('publishes a 0..1 capture level from the buffer it already sends', async () => {
@@ -534,5 +543,185 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     statuses.length = 0;
     engine.finishedCb?.(); // playback drained
     expect(statuses).toEqual(['listening']);
+  });
+
+  it('re-arms the one-shot drain callback so later replies also return to listening', async () => {
+    const engine = makeFakeEngine();
+    const statuses: string[] = [];
+    const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => engine });
+    provider.onStatusChange((s) => statuses.push(s));
+    await provider.startListening();
+    lastWs().triggerOpen();
+
+    lastWs().triggerMessage(makeWavFrame([1, 2]));
+    const firstDrain = engine.finishedCb;
+    engine.finishedCb = null;
+    firstDrain?.(); // engines clear their callbacks once they fire
+    lastWs().triggerMessage(makeWavFrame([3, 4]));
+    const rearmed = engine.finishedCb as (() => void) | null;
+    expect(rearmed).toBeTypeOf('function');
+    statuses.length = 0;
+    rearmed?.();
+    expect(statuses).toEqual(['listening']);
+  });
+
+  it('passes no turn metadata on the legacy transcript frames', async () => {
+    const calls: unknown[][] = [];
+    const provider = new RuntypeVoiceProvider(baseConfig());
+    provider.onTranscript((...args) => calls.push(args));
+    await provider.startListening();
+    lastWs().triggerOpen();
+    lastWs().triggerMessage(JSON.stringify({ type: 'transcript_final', role: 'user', text: 'hi' }));
+    expect(calls).toEqual([['user', 'hi', true]]);
+  });
+
+  describe('full duplex (speech-to-speech)', () => {
+    const PCM_100MS = 4800; // 2400 samples @ 24 kHz, 16-bit
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function startFullDuplexCall() {
+      const engine = makeFakeEngine();
+      const statuses: string[] = [];
+      const transcripts: unknown[][] = [];
+      const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => engine });
+      provider.onStatusChange((s) => statuses.push(s));
+      provider.onTranscript((...args) => transcripts.push(args));
+      await provider.startListening();
+      const ws = lastWs();
+      ws.triggerOpen();
+      ws.triggerMessage(
+        JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in', speechMode: 'speech_to_speech' }),
+      );
+      statuses.length = 0;
+      return { engine, statuses, transcripts, provider, ws };
+    }
+
+    const pcm = (bytes: number) => new Uint8Array(bytes).buffer;
+    const sentJson = (ws: MockWebSocket) =>
+      (ws.sent as unknown[]).filter((d): d is string => typeof d === 'string').map((d) => JSON.parse(d));
+
+    it('records speech_to_speech and keeps it across the follow-up session_config', async () => {
+      const { provider, ws } = await startFullDuplexCall();
+      expect(provider.isFullDuplex()).toBe(true);
+      ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in' }));
+      expect(provider.isFullDuplex()).toBe(true);
+    });
+
+    it('forwards transcript_update with its turnId and ignores malformed frames', async () => {
+      const { transcripts, ws } = await startFullDuplexCall();
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'hel', turnId: 'u1', final: false }));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'assistant', text: 'Hi', turnId: 'a1', final: true }));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'x' }));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'system', text: 'x', turnId: 't' }));
+      expect(transcripts).toEqual([
+        ['user', 'hel', false, { turnId: 'u1' }],
+        ['assistant', 'Hi', true, { turnId: 'a1' }],
+      ]);
+    });
+
+    it('plays continuously: releases speaking after the queued audio, never ends the stream', async () => {
+      const { engine, statuses, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS));
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(statuses).toEqual(['speaking']);
+      expect(engine.enqueued).toHaveLength(2);
+
+      vi.advanceTimersByTime(450); // 200ms of audio + 300ms grace not yet elapsed
+      expect(statuses).toEqual(['speaking']);
+      vi.advanceTimersByTime(100);
+      expect(statuses).toEqual(['speaking', 'listening']);
+      expect(engine.streamEnded).toBe(false);
+
+      // The next reply's audio plays through the same, never-ended stream.
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(engine.enqueued).toHaveLength(3);
+      expect(statuses).toEqual(['speaking', 'listening', 'speaking']);
+    });
+
+    it('shows processing during a delegation and returns to listening after it', async () => {
+      const { statuses, ws } = await startFullDuplexCall();
+      ws.triggerMessage(JSON.stringify({ type: 'delegation_started', turnId: 'd1' }));
+      expect(statuses).toEqual(['processing']);
+      ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1' }));
+      expect(statuses).toEqual(['processing', 'listening']);
+    });
+
+    it('keeps speaking through a delegation that starts mid-reply, then shows processing', async () => {
+      const { statuses, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS));
+      ws.triggerMessage(JSON.stringify({ type: 'delegation_started', turnId: 'd1' }));
+      expect(statuses).toEqual(['speaking']);
+      vi.advanceTimersByTime(1000);
+      expect(statuses).toEqual(['speaking', 'processing']);
+      ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1' }));
+      expect(statuses).toEqual(['speaking', 'processing', 'listening']);
+    });
+
+    it('flushes playback immediately on audio_clear and returns to listening', async () => {
+      const { engine, statuses, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS * 10));
+      ws.triggerMessage(JSON.stringify({ type: 'audio_clear' }));
+      expect(engine.flushed).toBe(true);
+      expect(statuses).toEqual(['speaking', 'listening']);
+      vi.advanceTimersByTime(5000); // the cleared reply's drain timer is gone
+      expect(statuses).toEqual(['speaking', 'listening']);
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(statuses).toEqual(['speaking', 'listening', 'speaking']);
+    });
+
+    it('stopPlayback cancels server-side and drops the reply until audio_clear', async () => {
+      const { engine, statuses, transcripts, provider, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS));
+      provider.stopPlayback();
+      expect(sentJson(ws)).toEqual([{ type: 'cancel' }]);
+      expect(engine.flushed).toBe(true);
+      expect(statuses).toEqual(['speaking', 'listening']);
+
+      const enqueued = engine.enqueued.length;
+      ws.triggerMessage(pcm(PCM_100MS));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'assistant', text: 'late', turnId: 'a1', final: true }));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'next', turnId: 'u2', final: false }));
+      expect(engine.enqueued).toHaveLength(enqueued);
+      expect(transcripts).toEqual([['user', 'next', false, { turnId: 'u2' }]]);
+
+      ws.triggerMessage(JSON.stringify({ type: 'audio_clear' }));
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(engine.enqueued).toHaveLength(enqueued + 1);
+    });
+
+    it('accepts audio again if the cancel acknowledgement never arrives', async () => {
+      const { engine, provider, ws } = await startFullDuplexCall();
+      provider.stopPlayback();
+      vi.advanceTimersByTime(2000);
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(engine.enqueued).toHaveLength(1);
+    });
+
+    it('leaves the legacy path without a drain timer or a server cancel', async () => {
+      const engine = makeFakeEngine();
+      const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => engine });
+      await provider.startListening();
+      const ws = lastWs();
+      ws.triggerOpen();
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(vi.getTimerCount()).toBe(0);
+      provider.stopPlayback();
+      expect(sentJson(ws)).toEqual([]);
+      expect(provider.isFullDuplex()).toBe(false);
+    });
+
+    it('forgets full-duplex state on hang-up', async () => {
+      const { provider } = await startFullDuplexCall();
+      await provider.stopListening();
+      expect(provider.isFullDuplex()).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 });

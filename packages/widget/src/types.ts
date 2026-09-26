@@ -5051,10 +5051,17 @@ export interface VoiceProvider {
    * Register a callback for incremental transcript updates during a voice turn.
    * `isFinal=false` is a live interim update (user partials, or assistant deltas
    * on providers that stream them); `isFinal=true` finalizes that role's text.
-   * On the realtime `runtype` path, interim updates fire for the `user` only and
-   * the `assistant` arrives as a single final. Providers with overlapping turns
-   * must include the same turnId on user and assistant finals; without IDs,
-   * providers must discard cancelled output before emitting the next user final.
+   * On the classic realtime `runtype` path, interim updates fire for the `user`
+   * only and the `assistant` arrives as a single final; without a turnId the
+   * session assumes strictly alternating turns, and providers must discard
+   * cancelled output before emitting the next user final.
+   *
+   * When `metadata.turnId` is present (full-duplex / speech-to-speech, e.g.
+   * GPT-Live), the session reconciles by `(turnId, role)`: each pair owns one
+   * bubble that later updates replace in place, turns may overlap or arrive in
+   * any order, and no empty assistant placeholder is injected. User and
+   * assistant may share a turnId (a late user bubble then renders above its
+   * reply) or use distinct ones (bubbles order by first arrival).
    */
   onTranscript?(
     callback: (role: 'user' | 'assistant', text: string, isFinal: boolean, metadata?: { turnId?: string }) => void,
