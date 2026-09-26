@@ -28,7 +28,7 @@ const DEFAULT_PREBUFFER_MS = 150;
 
 // The worklet reads its waterline from `processorOptions.waterlineSamples`, so a
 // single registered processor serves any prebuffer size.
-const WORKLET_SOURCE = `
+export const WORKLET_SOURCE = `
 class PersonaPcmPlayerProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super()
@@ -47,9 +47,16 @@ class PersonaPcmPlayerProcessor extends AudioWorkletProcessor {
     // consumer can flip UI from loading→playing only when audio is truly audible.
     // A mid-reply underrun re-buffers (waiting=true) but must NOT re-signal.
     this.startedSignaled = false
+    // Continuous (speech-to-speech) streams never send eos, so a tail held below
+    // the waterline is released once input has been quiet for one waterline.
+    this.continuous = false
+    this.idle = 0
     this.port.onmessage = (e) => {
       const msg = e.data
-      if (msg.type === 'push') {
+      if (msg.type === 'continuous') {
+        this.continuous = msg.enabled
+      } else if (msg.type === 'push') {
+        this.idle = 0
         this.eosSeen = false
         this.chunks.push(msg.samples)
         this.buffered += msg.samples.length
@@ -85,7 +92,15 @@ class PersonaPcmPlayerProcessor extends AudioWorkletProcessor {
   }
   process(inputs, outputs) {
     const out = outputs[0][0]
-    if (!out || this.waiting) return true // outputs are pre-zeroed: silence
+    if (!out) return true
+    if (this.waiting) {
+      // outputs are pre-zeroed: silence while (re)buffering
+      if (!this.continuous || this.buffered === 0) return true
+      this.idle += out.length
+      if (this.idle < this.waterline) return true
+      this.waiting = false
+      this.signalStarted()
+    }
     let i = 0
     while (i < out.length && this.buffered > 0) {
       const chunk = this.chunks[0]
@@ -218,6 +233,9 @@ export async function createPcmStreamPlayer(
       const samples = pcm16ToFloat32(data);
       if (samples.length === 0) return;
       node.port.postMessage({ type: "push", samples }, [samples.buffer]);
+    },
+    setContinuousMode(enabled: boolean) {
+      node.port.postMessage({ type: "continuous", enabled });
     },
     markStreamEnd() {
       node.port.postMessage({ type: "eos" });

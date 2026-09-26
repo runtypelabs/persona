@@ -4965,6 +4965,13 @@ export interface VoicePlaybackEngine {
   onFinished(callback: () => void): void;
   /** Release all audio resources. */
   destroy(): Promise<void> | void;
+  /**
+   * Optional. Speech-to-speech calls stream reply audio with no end-of-stream
+   * marker, so an engine that holds audio below a prebuffer waterline must, while
+   * continuous, release that held tail on its own (e.g. after a short input gap)
+   * instead of waiting for {@link markStreamEnd}. Engines without a prebuffer can omit it.
+   */
+  setContinuousMode?(enabled: boolean): void;
 }
 
 /**

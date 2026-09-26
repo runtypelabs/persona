@@ -314,6 +314,8 @@ function makeFakeEngine() {
     flushed: false,
     destroyed: false,
     finishedCb: null as null | (() => void),
+    continuous: undefined as boolean | undefined,
+    setContinuousMode(enabled: boolean) { engine.continuous = enabled; },
     enqueue(p: Uint8Array) { engine.enqueued.push(p); },
     markStreamEnd() { engine.streamEnded = true; },
     flush() { engine.flushed = true; },
@@ -572,7 +574,9 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     await provider.startListening();
     lastWs().triggerOpen();
     lastWs().triggerMessage(JSON.stringify({ type: 'transcript_final', role: 'user', text: 'hi' }));
-    expect(calls).toEqual([['user', 'hi', true]]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].slice(0, 3)).toEqual(['user', 'hi', true]);
+    expect(calls[0][3]).toBeUndefined();
   });
 
   describe('full duplex (speech-to-speech)', () => {
@@ -607,19 +611,20 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     const sentJson = (ws: MockWebSocket) =>
       (ws.sent as unknown[]).filter((d): d is string => typeof d === 'string').map((d) => JSON.parse(d));
 
-    it('records speech_to_speech and keeps it across the follow-up session_config', async () => {
-      const { provider, ws } = await startFullDuplexCall();
-      expect(provider.isFullDuplex()).toBe(true);
+    it('puts the engine in continuous mode and keeps it across the follow-up session_config', async () => {
+      const { engine, provider, ws } = await startFullDuplexCall();
+      expect(engine.continuous).toBe(true);
       ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in' }));
-      expect(provider.isFullDuplex()).toBe(true);
+      expect(engine.continuous).toBe(true);
+      provider.stopPlayback(); // still speech-to-speech: the stop is sent to the server
+      expect(sentJson(ws)).toEqual([{ type: 'cancel' }]);
     });
 
-    it('forwards transcript_update with its turnId and ignores malformed frames', async () => {
+    it('forwards transcript_update with its turnId and ignores frames without one', async () => {
       const { transcripts, ws } = await startFullDuplexCall();
       ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'hel', turnId: 'u1', final: false }));
       ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'assistant', text: 'Hi', turnId: 'a1', final: true }));
       ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'x' }));
-      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'system', text: 'x', turnId: 't' }));
       expect(transcripts).toEqual([
         ['user', 'hel', false, { turnId: 'u1' }],
         ['assistant', 'Hi', true, { turnId: 'a1' }],
@@ -714,14 +719,20 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
       expect(vi.getTimerCount()).toBe(0);
       provider.stopPlayback();
       expect(sentJson(ws)).toEqual([]);
-      expect(provider.isFullDuplex()).toBe(false);
+      expect(engine.continuous).toBeUndefined();
     });
 
     it('forgets full-duplex state on hang-up', async () => {
-      const { provider } = await startFullDuplexCall();
+      const { provider, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS));
       await provider.stopListening();
-      expect(provider.isFullDuplex()).toBe(false);
       expect(vi.getTimerCount()).toBe(0);
+
+      await provider.startListening(); // next call starts in the classic mode
+      const next = lastWs();
+      next.triggerOpen();
+      provider.stopPlayback();
+      expect(sentJson(next)).toEqual([]);
     });
   });
 });

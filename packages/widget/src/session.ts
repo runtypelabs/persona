@@ -80,6 +80,7 @@ import {
 } from "./voice/read-aloud-controller";
 import { isVoiceSupportedProbe, usesSessionVoice, voiceConnectionChanged } from "./utils/voice-support";
 import { VoiceTurnTracker } from "./voice/voice-turn-tracker";
+import type { KeyedVoiceTranscript } from "./voice/keyed-voice-transcript";
 import { loadVoiceRuntime } from "./voice-runtime-loader";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
@@ -156,14 +157,6 @@ function connectionConfigChanged(
 ): boolean {
   return CONNECTION_CONFIG_KEYS.some((key) => prev[key] !== next[key]);
 }
-
-/** Bubbles owned by one provider turnId in a turn-keyed voice transcript. */
-type KeyedVoiceTurn = {
-  userId?: string;
-  assistantId?: string;
-  userFinal: boolean;
-  assistantFinal: boolean;
-};
 
 type SessionCallbacks = {
   onMessagesChanged: (messages: AgentWidgetMessage[]) => void;
@@ -586,7 +579,7 @@ export class AgentWidgetSession {
   public stopVoicePlayback(): void {
     if (this.voiceProvider?.stopPlayback) {
       this.voiceTurns.cancel();
-      this.cancelKeyedVoiceTurns();
+      this.keyedVoice?.cancel();
       this.voiceProvider.stopPlayback();
     }
   }
@@ -608,18 +601,9 @@ export class AgentWidgetSession {
   private pendingVoiceAssistantMessageId: string | null = null;
   private voiceTurns = new VoiceTurnTracker();
   private voiceDisconnectPromise: Promise<void> = Promise.resolve();
+  // Turn-keyed (full-duplex) transcript reconciler, from the lazy voice runtime.
+  private keyedVoice: KeyedVoiceTranscript | null = null;
 
-  // Turn-keyed voice transcripts (full-duplex providers such as GPT-Live): one
-  // entry per provider turnId, each owning at most one user and one assistant
-  // bubble. Used instead of the pending* ids above whenever a transcript
-  // carries `metadata.turnId`, because keyed turns can overlap and arrive in
-  // any order.
-  private voiceKeyedTurns = new Map<string, KeyedVoiceTurn>();
-  private latestVoiceKeyedTurnId: string | null = null;
-  // Set when a cancel hit a turn still waiting for its reply: a provider that
-  // keys the reply under a new turnId must not surface it. Cleared by the next
-  // user turn, mirroring VoiceTurnTracker's untagged semantics.
-  private suppressNewVoiceAssistantTurns = false;
 
   // Track message IDs where the Runtype provider already played TTS audio
   // so browser TTS doesn't double-speak them
@@ -727,7 +711,7 @@ export class AgentWidgetSession {
         .then(async (mod) => {
           await disconnected;
           if (generation !== this.voiceSetupGeneration) return;
-          this.wireVoiceProvider(mod.createVoiceProvider(voiceConfig));
+          this.wireVoiceProvider(mod.createVoiceProvider(voiceConfig), mod.KeyedVoiceTranscript);
         })
         .catch((error) => {
           console.error('Failed to setup voice:', error);
@@ -743,9 +727,29 @@ export class AgentWidgetSession {
   }
 
   /** Wire callbacks onto a freshly constructed provider and connect it. */
-  private wireVoiceProvider(provider: VoiceProvider): void {
+  private wireVoiceProvider(
+    provider: VoiceProvider,
+    Keyed?: typeof KeyedVoiceTranscript
+  ): void {
     try {
       this.voiceProvider = provider;
+      this.keyedVoice = Keyed
+        ? new Keyed({
+            find: (id) => this.messages.find((m) => m.id === id),
+            inject: (options) => this.injectMessage(options),
+            upsert: (message) => this.upsertMessage(message),
+            settle: (ids) => {
+              this.messages = this.messages.map((m) =>
+                ids.has(m.id) ? { ...m, streaming: false, voiceProcessing: false } : m
+              );
+              this.callbacks.onMessagesChanged([...this.messages]);
+            },
+            setStreaming: (streaming) => this.setStreaming(streaming),
+            markSpoken: (id) => {
+              this.ttsSpokenMessageIds.add(id);
+            }
+          })
+        : null;
       const generation = this.voiceSetupGeneration;
       const isCurrent = () => this.voiceProvider === provider && generation === this.voiceSetupGeneration;
 
@@ -776,7 +780,7 @@ export class AgentWidgetSession {
         this.voiceProvider.onTranscript((role, text, isFinal, metadata) => {
           if (!isCurrent()) return;
           if (metadata?.turnId) {
-            this.applyKeyedVoiceTranscript(role, text, isFinal, metadata.turnId);
+            this.keyedVoice?.apply(role, text, isFinal, metadata.turnId);
             return;
           }
           if (role === 'user') {
@@ -888,7 +892,7 @@ export class AgentWidgetSession {
           this.pendingVoiceUserMessageId = null;
           this.pendingVoiceAssistantMessageId = null;
         }
-        this.failAwaitingKeyedVoiceTurn(processingErrorText);
+        this.keyedVoice?.fail(processingErrorText);
       });
 
       this.voiceProvider.onStatusChange((status) => {
@@ -900,7 +904,7 @@ export class AgentWidgetSession {
         }
         // Keyed turns overlap listening (full duplex), so only a call end settles them.
         if (status === 'idle' || status === 'disconnected') {
-          this.settleKeyedVoiceTurns();
+          this.keyedVoice?.settle();
         }
         this.callbacks.onVoiceStatusChanged?.(status);
       });
@@ -954,7 +958,8 @@ export class AgentWidgetSession {
     this.voiceActive = false;
     this.voiceStatus = 'disconnected';
     this.settlePendingVoiceTurn(true);
-    this.settleKeyedVoiceTurns();
+    this.keyedVoice?.settle();
+    this.keyedVoice = null;
     this.voiceTurns = new VoiceTurnTracker();
     if (notifyDisconnected) this.callbacks.onVoiceStatusChanged?.('disconnected');
   }
@@ -982,176 +987,6 @@ export class AgentWidgetSession {
     });
     this.callbacks.onMessagesChanged([...this.messages]);
     if (assistantId) this.setStreaming(false);
-  }
-
-  /**
-   * Reconcile one turn-keyed transcript frame. Each (turnId, role) owns one
-   * bubble that every later frame replaces in place, so overlapping turns (a
-   * new user turn while the previous reply still streams) stay separate. No
-   * empty assistant placeholder is injected: the standalone typing indicator
-   * (streaming with no streaming assistant bubble) covers the wait instead.
-   */
-  private applyKeyedVoiceTranscript(
-    role: 'user' | 'assistant',
-    text: string,
-    isFinal: boolean,
-    turnId: string
-  ): void {
-    let turn = this.voiceKeyedTurns.get(turnId);
-    if (!turn) {
-      if (role === 'user') this.suppressNewVoiceAssistantTurns = false;
-      else if (this.suppressNewVoiceAssistantTurns) this.voiceTurns.cancelTurn(turnId);
-      turn = { userFinal: false, assistantFinal: false };
-      this.voiceKeyedTurns.set(turnId, turn);
-      this.latestVoiceKeyedTurnId = turnId;
-    }
-
-    if (role === 'user') {
-      turn.userFinal = isFinal;
-      const existing = turn.userId ? this.findMessage(turn.userId) : undefined;
-      if (existing) {
-        this.upsertMessage({ ...existing, content: text, voiceProcessing: !isFinal });
-      } else {
-        // A user transcript that lands after its own turn's reply started still
-        // renders above that reply: borrow the reply's timestamp and sort just
-        // ahead of its sequence.
-        const reply = turn.assistantId ? this.findMessage(turn.assistantId) : undefined;
-        const msg = this.injectMessage({
-          role: 'user',
-          content: text,
-          streaming: false,
-          voiceProcessing: !isFinal,
-          ...(reply && {
-            createdAt: reply.createdAt,
-            sequence: (reply.sequence ?? 0) - 0.5
-          })
-        });
-        turn.userId = msg.id;
-      }
-    } else if (!this.voiceTurns.isTurnCancelled(turnId)) {
-      turn.assistantFinal = isFinal;
-      const existing = turn.assistantId ? this.findMessage(turn.assistantId) : undefined;
-      if (existing) {
-        this.upsertMessage({
-          ...existing,
-          content: text,
-          streaming: !isFinal,
-          voiceProcessing: !isFinal
-        });
-      } else if (text.trim()) {
-        const msg = this.injectMessage({
-          role: 'assistant',
-          content: text,
-          streaming: !isFinal,
-          voiceProcessing: !isFinal
-        });
-        turn.assistantId = msg.id;
-      }
-      // The provider plays this reply's audio: mark it spoken so browser TTS
-      // doesn't double-speak once streaming clears below.
-      if (isFinal && turn.assistantId) this.ttsSpokenMessageIds.add(turn.assistantId);
-    }
-
-    this.syncKeyedVoiceStreaming();
-  }
-
-  private findMessage(id: string): AgentWidgetMessage | undefined {
-    return this.messages.find((m) => m.id === id);
-  }
-
-  /** A turn whose assistant bubble is visible but not yet final. */
-  private isKeyedReplyInFlight(turnId: string, turn: KeyedVoiceTurn): boolean {
-    return !!turn.assistantId && !turn.assistantFinal && !this.voiceTurns.isTurnCancelled(turnId);
-  }
-
-  /** The newest turn has a final user utterance and no reply text yet. */
-  private awaitingKeyedVoiceTurnId(): string | null {
-    const id = this.latestVoiceKeyedTurnId;
-    const turn = id ? this.voiceKeyedTurns.get(id) : undefined;
-    if (!id || !turn) return null;
-    if (!turn.userFinal || turn.assistantId || this.voiceTurns.isTurnCancelled(id)) return null;
-    return id;
-  }
-
-  private syncKeyedVoiceStreaming(): void {
-    let pending = this.awaitingKeyedVoiceTurnId() !== null;
-    for (const [id, turn] of this.voiceKeyedTurns) {
-      if (this.isKeyedReplyInFlight(id, turn)) pending = true;
-    }
-    this.setStreaming(pending);
-  }
-
-  /**
-   * Explicit stop: discard the rest of every in-flight keyed reply, or, when
-   * nothing is speaking yet, the reply the newest turn is waiting for.
-   */
-  private cancelKeyedVoiceTurns(): void {
-    if (this.voiceKeyedTurns.size === 0) return;
-    const targets = [...this.voiceKeyedTurns]
-      .filter(([id, turn]) => this.isKeyedReplyInFlight(id, turn))
-      .map(([id]) => id);
-    if (targets.length === 0) {
-      const awaiting = this.awaitingKeyedVoiceTurnId();
-      if (!awaiting) return;
-      targets.push(awaiting);
-      this.suppressNewVoiceAssistantTurns = true;
-    }
-    const settledIds = new Set<string>();
-    for (const id of targets) {
-      this.voiceTurns.cancelTurn(id);
-      const assistantId = this.voiceKeyedTurns.get(id)?.assistantId;
-      if (assistantId) {
-        settledIds.add(assistantId);
-        this.ttsSpokenMessageIds.add(assistantId);
-      }
-    }
-    this.clearVoiceFlags(settledIds);
-    this.syncKeyedVoiceStreaming();
-  }
-
-  /** Call ended: freeze every keyed bubble as-is and forget the turns. */
-  private settleKeyedVoiceTurns(): void {
-    if (this.voiceKeyedTurns.size === 0) return;
-    const wasPending =
-      this.awaitingKeyedVoiceTurnId() !== null ||
-      [...this.voiceKeyedTurns].some(([id, turn]) => this.isKeyedReplyInFlight(id, turn));
-    const ids = new Set<string>();
-    for (const turn of this.voiceKeyedTurns.values()) {
-      if (turn.userId) ids.add(turn.userId);
-      if (turn.assistantId) {
-        ids.add(turn.assistantId);
-        this.ttsSpokenMessageIds.add(turn.assistantId);
-      }
-    }
-    this.voiceKeyedTurns.clear();
-    this.latestVoiceKeyedTurnId = null;
-    this.suppressNewVoiceAssistantTurns = false;
-    this.clearVoiceFlags(ids);
-    if (wasPending) this.setStreaming(false);
-  }
-
-  /** A voice error while the newest keyed turn awaited its reply shows the error text. */
-  private failAwaitingKeyedVoiceTurn(errorText: string): void {
-    const id = this.awaitingKeyedVoiceTurnId();
-    const turn = id ? this.voiceKeyedTurns.get(id) : undefined;
-    if (!turn) return;
-    const msg = this.injectMessage({
-      role: 'assistant',
-      content: errorText,
-      streaming: false,
-      voiceProcessing: false
-    });
-    turn.assistantId = msg.id;
-    turn.assistantFinal = true;
-    this.syncKeyedVoiceStreaming();
-  }
-
-  private clearVoiceFlags(ids: Set<string>): void {
-    if (ids.size === 0) return;
-    this.messages = this.messages.map((message) =>
-      ids.has(message.id) ? { ...message, streaming: false, voiceProcessing: false } : message
-    );
-    this.callbacks.onMessagesChanged([...this.messages]);
   }
 
   /**

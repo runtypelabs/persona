@@ -51,13 +51,17 @@ const h = vi.hoisted(() => {
 // chunk loader; mock the loader so setupVoice adopts the fake provider.
 vi.mock('./voice-runtime-loader', () => ({
   setVoiceRuntimeLoader: () => {},
+  // The body runs after module init, so the statically imported class is bound.
   loadVoiceRuntime: () =>
     Promise.resolve({
       createVoiceProvider: () => h.fakeProvider,
       createBestAvailableVoiceProvider: () => h.fakeProvider,
       isVoiceSupported: () => true,
+      KeyedVoiceTranscript,
     }),
 }));
+
+import { KeyedVoiceTranscript } from './voice/keyed-voice-transcript';
 
 import { AgentWidgetSession } from './session';
 import { setRuntypeTtsLoader } from './voice/runtype-tts-loader';
@@ -345,6 +349,24 @@ describe('AgentWidgetSession - turn-keyed (full-duplex) voice transcripts', () =
       ['assistant', 'Voice processing failed. Please try again.'],
     ]);
     expect(streaming).toBe(false);
+  });
+
+  it('closes a partially streamed reply on a voice error so the composer unlocks', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    drive('user', 'hello', true, 'u1');
+    drive('assistant', 'Hi, I was saying', false, 'a1');
+    expect(streaming).toBe(true);
+    h.state.errorCb!(new Error('boom'));
+    consoleError.mockRestore();
+    expect(view()).toEqual([
+      ['user', 'hello'],
+      ['assistant', 'Hi, I was saying'],
+      ['assistant', 'Voice processing failed. Please try again.'],
+    ]);
+    expect(messages.some((m) => m.streaming || m.voiceProcessing)).toBe(false);
+    expect(streaming).toBe(false);
+    expect(session.isStreaming()).toBe(false);
+    expect(spoken(byContent('Hi, I was saying').id)).toBe(true);
   });
 
   it('keeps the untagged alternating path for transcripts without a turnId', () => {

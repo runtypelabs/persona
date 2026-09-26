@@ -121,10 +121,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Full-duplex (speech-to-speech) session state; reset on every cleanup.
   private speechToSpeech = false;
   private delegating = false;
-  private awaitingClear = false;
-  private awaitingClearTimer: ReturnType<typeof setTimeout> | null = null;
+  // Until this time, audio and assistant text belong to a reply the client cancelled.
+  private cancelledUntil = 0;
   private playbackEndsAt = 0;
-  private drainTimer: ReturnType<typeof setTimeout> | null = null;
+  private drainTimer: ReturnType<typeof setTimeout> | undefined;
   // Engine `onFinished` callbacks are one-shot (cleared on fire and on flush),
   // so the provider re-registers before each reply that may need it.
   private finishedArmed = false;
@@ -193,8 +193,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         return;
       }
       this.playback = engine;
-      this.finishedArmed = false;
-      this.armPlaybackFinished(engine, generation);
+      this.armPlaybackFinished();
 
       // The token never goes in the URL; the capability param is not a secret.
       const wsUrl = `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice?voiceCapabilities=${FULL_DUPLEX_CAPABILITY}`;
@@ -266,24 +265,15 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * until its `audio_clear` acknowledgement arrives.
    */
   stopPlayback(): void {
-    this.clearLocalPlayback(this.callGeneration);
+    this.clearLocalPlayback();
     const ws = this.ws;
-    if (this.speechToSpeech && ws && ws.readyState === WebSocket.OPEN) {
-      this.beginAwaitingClear(this.callGeneration);
-      try {
-        ws.send(JSON.stringify({ type: "cancel" }));
-      } catch {
-        // The close handler reports a dead socket.
-      }
-    }
     if (ws && ws.readyState === WebSocket.OPEN) {
+      if (this.speechToSpeech) {
+        this.cancelledUntil = Date.now() + CANCEL_ACK_TIMEOUT_MS;
+        ws.send('{"type":"cancel"}');
+      }
       this.emitStatus("listening");
     }
-  }
-
-  /** True once the server announced a speech-to-speech (full-duplex) session. */
-  isFullDuplex(): boolean {
-    return this.speechToSpeech;
   }
 
   // --- Barge-in surface (constants for the continuous hot-mic model) --------
@@ -369,41 +359,34 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     switch (msg.type) {
       case "session_config":
         // The follow-up session_config carries only interruptionMode: keep the mode.
-        if (typeof msg.speechMode === "string") {
+        if (msg.speechMode) {
           this.speechToSpeech = msg.speechMode === "speech_to_speech";
+          this.playback?.setContinuousMode?.(this.speechToSpeech);
         }
         break;
 
       case "transcript_update": {
-        if (
-          typeof msg.text !== "string" ||
-          typeof msg.turnId !== "string" ||
-          (msg.role !== "user" && msg.role !== "assistant")
-        ) {
-          break;
-        }
+        const role = msg.role === "assistant" ? "assistant" : "user";
         // A reply the client cancelled keeps streaming until the server clears it.
-        if (msg.role === "assistant" && this.awaitingClear) break;
-        this.emitTranscript(msg.role, msg.text, msg.final === true, {
-          turnId: msg.turnId,
+        if (!msg.turnId || (role === "assistant" && this.isCancelling())) break;
+        this.emitTranscript(role, msg.text ?? "", msg.final === true, {
+          turnId: String(msg.turnId),
         });
         break;
       }
 
       case "delegation_started":
-        this.delegating = true;
-        if (!this.isSpeaking && !this.awaitingClear) this.emitStatus("processing");
-        break;
-
       case "delegation_completed":
-        this.delegating = false;
-        if (!this.isSpeaking && !this.awaitingClear) this.emitStatus("listening");
+        this.delegating = msg.type === "delegation_started";
+        if (!this.isSpeaking && !this.isCancelling()) {
+          this.emitStatus(this.delegating ? "processing" : "listening");
+        }
         break;
 
       case "audio_clear":
         // Barge-in (or our own cancel acknowledged): stop playback now.
-        this.clearLocalPlayback(generation);
-        this.endAwaitingClear();
+        this.clearLocalPlayback();
+        this.cancelledUntil = 0;
         this.emitStatus("listening");
         break;
 
@@ -448,23 +431,28 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private handleAudioFrame(buf: ArrayBuffer, generation: number): void {
     if (generation !== this.callGeneration) return;
     if (!this.playback) return;
-    if (this.awaitingClear) return; // audio of a reply the client cancelled
+    if (this.isCancelling()) return;
     const pcm = stripWavHeader(buf);
     if (pcm.length === 0) return;
     if (!this.isSpeaking) {
       this.isSpeaking = true;
       this.emitStatus("speaking");
     }
-    this.armPlaybackFinished(this.playback, generation);
+    this.armPlaybackFinished();
     this.playback.enqueue(pcm);
-    if (this.speechToSpeech) this.scheduleContinuousDrain(pcm.length, generation);
+    if (this.speechToSpeech) this.scheduleContinuousDrain(pcm.length);
+  }
+
+  private isCancelling(): boolean {
+    return Date.now() < this.cancelledUntil;
   }
 
   /** Register the (one-shot) engine drain callback if none is pending. */
-  private armPlaybackFinished(engine: VoicePlaybackEngine, generation: number): void {
-    if (this.finishedArmed) return;
+  private armPlaybackFinished(): void {
+    if (this.finishedArmed || !this.playback) return;
     this.finishedArmed = true;
-    engine.onFinished(() => {
+    const generation = this.callGeneration;
+    this.playback.onFinished(() => {
       if (generation !== this.callGeneration) return;
       this.finishedArmed = false;
       this.handlePlaybackDrained();
@@ -477,21 +465,20 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * engine is never marked ended, so the next reply's audio plays through the
    * same stream untouched and an underrun is never mistaken for a reply end.
    */
-  private scheduleContinuousDrain(byteLength: number, generation: number): void {
+  private scheduleContinuousDrain(byteLength: number): void {
     const now = Date.now();
-    const durationMs = (byteLength / 2 / PLAYBACK_SAMPLE_RATE) * 1000;
-    this.playbackEndsAt = Math.max(now, this.playbackEndsAt) + durationMs;
-    if (this.drainTimer) clearTimeout(this.drainTimer);
-    this.drainTimer = setTimeout(() => {
-      this.drainTimer = null;
-      if (generation !== this.callGeneration) return;
-      this.playbackEndsAt = 0;
-      this.handlePlaybackDrained();
-    }, this.playbackEndsAt - now + CONTINUOUS_DRAIN_GRACE_MS);
+    // PCM16 @ 24 kHz: 48 bytes per millisecond.
+    this.playbackEndsAt = Math.max(now, this.playbackEndsAt) + byteLength / 48;
+    clearTimeout(this.drainTimer);
+    this.drainTimer = setTimeout(
+      () => this.handlePlaybackDrained(),
+      this.playbackEndsAt - now + CONTINUOUS_DRAIN_GRACE_MS,
+    );
   }
 
   private handlePlaybackDrained(): void {
     this.isSpeaking = false;
+    this.playbackEndsAt = 0;
     // Reply drained: the call stays open, so return to listening (or to
     // processing while an agent delegation is still running).
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
@@ -500,37 +487,14 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /** Drop queued audio locally and reset the speaking/drain bookkeeping. */
-  private clearLocalPlayback(generation: number): void {
-    if (this.playback) {
-      this.playback.flush();
-      // flush() discards registered callbacks: re-arm for the next reply.
-      this.finishedArmed = false;
-      this.armPlaybackFinished(this.playback, generation);
-    }
+  private clearLocalPlayback(): void {
+    this.playback?.flush();
+    // flush() discards registered callbacks: re-arm for the next reply.
+    this.finishedArmed = false;
+    this.armPlaybackFinished();
     this.isSpeaking = false;
     this.playbackEndsAt = 0;
-    if (this.drainTimer) {
-      clearTimeout(this.drainTimer);
-      this.drainTimer = null;
-    }
-  }
-
-  private beginAwaitingClear(generation: number): void {
-    this.awaitingClear = true;
-    if (this.awaitingClearTimer) clearTimeout(this.awaitingClearTimer);
-    this.awaitingClearTimer = setTimeout(() => {
-      this.awaitingClearTimer = null;
-      if (generation !== this.callGeneration) return;
-      this.awaitingClear = false;
-    }, CANCEL_ACK_TIMEOUT_MS);
-  }
-
-  private endAwaitingClear(): void {
-    this.awaitingClear = false;
-    if (this.awaitingClearTimer) {
-      clearTimeout(this.awaitingClearTimer);
-      this.awaitingClearTimer = null;
-    }
+    clearTimeout(this.drainTimer);
   }
 
   // --- Teardown --------------------------------------------------------------
@@ -543,12 +507,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.speechToSpeech = false;
     this.delegating = false;
     this.finishedArmed = false;
+    this.cancelledUntil = 0;
     this.playbackEndsAt = 0;
-    if (this.drainTimer) {
-      clearTimeout(this.drainTimer);
-      this.drainTimer = null;
-    }
-    this.endAwaitingClear();
+    clearTimeout(this.drainTimer);
 
     if (this.processor) {
       this.processor.onaudioprocess = null;
@@ -618,9 +579,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     isFinal: boolean,
     metadata?: TranscriptMetadata,
   ): void {
-    this.transcriptCallbacks.forEach((cb) =>
-      metadata ? cb(role, text, isFinal, metadata) : cb(role, text, isFinal),
-    );
+    this.transcriptCallbacks.forEach((cb) => cb(role, text, isFinal, metadata));
   }
 
   private emitMetrics(metrics: VoiceMetrics): void {
