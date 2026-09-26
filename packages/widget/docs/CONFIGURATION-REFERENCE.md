@@ -133,7 +133,7 @@ In client token mode the widget calls `/v1/client/init` when the visitor shows i
 | `'focus'` | When the visitor clicks, taps, or tabs into the composer (first input also counts). Programmatic focus, including `autoFocusInput` on open or mount, does not count. |
 | `'mount'` | When the widget mounts (the behavior before 4.23). Use it when your client token has a server-configured welcome message: that message arrives with the init response, so with later triggers it only shows once init has run. |
 | `'send'` | Never early; the first send initializes the session. |
-| function | Your own trigger. Called once on mount with `{ warm, mount }`; call `warm()` whenever you like and optionally return a cleanup that runs on `destroy()`. Replaces the built-in triggers. |
+| function | Your own trigger. Called on mount with `{ warm, mount }` (and again if `update()` swaps in a different function); call `warm()` whenever you like and optionally return a cleanup that runs on `destroy()` or replacement. Replaces the built-in triggers. |
 
 The early init sends exactly the same request the send would, runs at most once per session lifetime (re-armed when the session expires or a new conversation starts), and is fire-and-forget: a failure is swallowed and resurfaces normally when the send retries init. A send during an in-flight early init reuses it, so there is only ever one `/v1/client/init`. With `features.history.enabled`, the widget still initializes on mount to restore the conversation. Upvote/downvote on a restored transcript initializes on demand. Outside client token mode the option is ignored.
 

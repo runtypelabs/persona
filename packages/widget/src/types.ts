@@ -6995,9 +6995,10 @@ export type AgentWidgetLoadingIndicatorConfig = {
 export type AgentWidgetSessionInitTrigger = 'input' | 'focus' | 'mount' | 'send';
 
 /**
- * Custom `sessionInit` trigger. Runs once when the widget mounts in client token
- * mode. Call `warm()` whenever the visitor shows intent (it is safe to call
- * repeatedly). Return a cleanup to run when the widget is destroyed.
+ * Custom `sessionInit` trigger. Runs when the widget mounts in client token mode,
+ * and again if `update()` swaps in a different function. Call `warm()` whenever
+ * the visitor shows intent (it is safe to call repeatedly). Return a cleanup to
+ * run when the widget is destroyed or the hook is replaced.
  */
 export type AgentWidgetSessionInitHook = (context: {
   /** Fire-and-forget early session init; latched and error-swallowing. */
@@ -7184,9 +7185,10 @@ export type AgentWidgetConfig = {
    *   existed). Use it when a server-configured welcome message, which arrives
    *   with the init response, must show before the visitor types.
    * - `'send'`: no early init; the first send initializes the session.
-   * - A function: custom trigger. Called once on mount with a `warm` callback
-   *   to call whenever you decide (e.g. on hover); may return a cleanup that
-   *   runs on destroy. Replaces the built-in triggers.
+   * - A function: custom trigger. Called on mount (and when `update()` swaps
+   *   in a different function) with a `warm` callback to call whenever you
+   *   decide (e.g. on hover); may return a cleanup that runs on destroy or
+   *   replacement. Replaces the built-in triggers.
    *
    * The early init is fire-and-forget: it runs at most once per session
    * lifetime (re-armed after expiry or a new conversation), sends exactly the

@@ -11650,14 +11650,26 @@ export const createAgentExperience = (
   };
   const sessionInitEvents = ["input", "pointerdown", "keyup"];
   sessionInitEvents.forEach((type) => mount.addEventListener(type, handleSessionInitIntent));
+  // The custom trigger (a `sessionInit` function) runs on mount and again
+  // whenever `update()` swaps in a different function, cleaning up the old one.
+  let sessionInitHook: AgentWidgetSessionInitHook | undefined;
   let sessionInitHookCleanup: ReturnType<AgentWidgetSessionInitHook>;
-  if (config.clientToken && typeof config.sessionInit === "function") {
+  const syncSessionInitHook = () => {
+    const next =
+      config.clientToken && typeof config.sessionInit === "function"
+        ? config.sessionInit
+        : undefined;
+    if (next === sessionInitHook) return;
+    if (typeof sessionInitHookCleanup === "function") sessionInitHookCleanup();
+    sessionInitHookCleanup = undefined;
+    sessionInitHook = next;
     try {
-      sessionInitHookCleanup = config.sessionInit({ warm: warmSession, mount });
+      sessionInitHookCleanup = next?.({ warm: warmSession, mount });
     } catch {
       // A throwing host hook must not break mount; the send still inits.
     }
-  }
+  };
+  syncSessionInitHook();
   destroyCallbacks.push(() => {
     sessionInitEvents.forEach((type) =>
       mount.removeEventListener(type, handleSessionInitIntent)
@@ -14555,6 +14567,7 @@ export const createAgentExperience = (
       // Re-key the visitor store before any client rebuild sees the new config.
       syncVisitorStore();
       session.updateConfig(config);
+      syncSessionInitHook();
       if (
         (config.features?.history?.enabled === true) !== previousHistoryEnabled ||
         config.features?.history?.provider !== previousHistoryProvider ||

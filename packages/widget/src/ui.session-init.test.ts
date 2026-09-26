@@ -242,6 +242,28 @@ describe("custom sessionInit hooks", () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it("update() swaps a custom trigger: old cleanup runs, new hook starts", async () => {
+    const firstCleanup = vi.fn();
+    const first = vi.fn(() => firstCleanup);
+    const secondCleanup = vi.fn();
+    const second = vi.fn(({ warm, mount }: { warm: () => void; mount: HTMLElement }) => {
+      mount.addEventListener("pointerenter", warm);
+      return secondCleanup;
+    });
+    const w = mountWidget({ sessionInit: first });
+    expect(first).toHaveBeenCalledTimes(1);
+    controller!.update({ sessionInit: second });
+    expect(firstCleanup).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(1);
+    // An unrelated update does not re-run the same hook.
+    controller!.update({ debug: false });
+    expect(second).toHaveBeenCalledTimes(1);
+    w.mount.dispatchEvent(new Event("pointerenter"));
+    await vi.waitFor(() => expect(w.inits).toHaveLength(1));
+    controller!.update({ sessionInit: "send" });
+    expect(secondCleanup).toHaveBeenCalledTimes(1);
+  });
+
   it("controller.warmSession() inits imperatively", async () => {
     const w = mountWidget({ sessionInit: "send" });
     controller!.warmSession();
