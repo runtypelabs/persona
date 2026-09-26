@@ -1040,12 +1040,11 @@ export class AgentWidgetSession {
    * UI. The send re-runs `initSession()` and reports them as it always has.
    */
   public warmClientSession(): void {
-    if (!this.isClientTokenMode()) return;
     void this.client.warmSession().then((session) => {
       // A start-new or credential re-init may have replaced it meanwhile.
-      if (!session || this.client.getClientSession() !== session) return;
-      if (this.clientSession?.sessionId === session.sessionId) return;
-      this.setClientSession(session);
+      if (session && this.client.getClientSession() === session) {
+        this.setClientSession(session);
+      }
     });
   }
 

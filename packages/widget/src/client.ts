@@ -642,12 +642,15 @@ export class AgentWidgetClient {
    * Resolves with the session this call initialized, or `null` when it was
    * skipped or failed. It never rejects.
    */
-  public warmSession(): Promise<ClientSession | null> {
-    if (!this.isClientTokenMode() || this.sessionInitPromise) return Promise.resolve(null);
+  public async warmSession(): Promise<ClientSession | null> {
     const current = this.clientSession;
-    if (current && new Date() < current.expiresAt) return Promise.resolve(null);
-    if (this.sessionWarmLatch !== false && this.sessionWarmLatch === current) {
-      return Promise.resolve(null);
+    if (
+      !this.isClientTokenMode() ||
+      this.sessionInitPromise ||
+      (current && new Date() < current.expiresAt) ||
+      this.sessionWarmLatch === current
+    ) {
+      return null;
     }
     this.sessionWarmLatch = current;
     // Swallowed on purpose: the send's own initSession() reports failures.
@@ -1263,20 +1266,6 @@ export class AgentWidgetClient {
   }
 
   /**
-   * Session for a feedback submission. With `sessionInit` deferring init to
-   * visitor intent, feedback on a restored transcript can precede any init;
-   * the feedback click is intent enough, so init on demand.
-   */
-  private async feedbackSession(): Promise<ClientSession> {
-    const session = this.getClientSession();
-    if (session) return session;
-    if (!this.isClientTokenMode()) {
-      throw new Error('No active session. Please initialize session first.');
-    }
-    return this.initSession();
-  }
-
-  /**
    * Submit message feedback (upvote, downvote, or copy).
    * Convenience method for sendFeedback with message-level feedback.
    * 
@@ -1287,7 +1276,9 @@ export class AgentWidgetClient {
     messageId: string, 
     type: 'upvote' | 'downvote' | 'copy'
   ): Promise<void> {
-    const session = await this.feedbackSession();
+    // Feedback on a restored transcript can precede any init (`sessionInit`
+    // defers it to intent); the feedback click is intent enough.
+    const session = this.getClientSession() ?? (await this.initSession());
 
     return this.sendFeedback({
       sessionId: session.sessionId,
@@ -1304,7 +1295,7 @@ export class AgentWidgetClient {
    * @param comment - Optional comment
    */
   public async submitCSATFeedback(rating: number, comment?: string): Promise<void> {
-    const session = await this.feedbackSession();
+    const session = this.getClientSession() ?? (await this.initSession());
 
     return this.sendFeedback({
       sessionId: session.sessionId,
@@ -1322,7 +1313,7 @@ export class AgentWidgetClient {
    * @param comment - Optional comment
    */
   public async submitNPSFeedback(rating: number, comment?: string): Promise<void> {
-    const session = await this.feedbackSession();
+    const session = this.getClientSession() ?? (await this.initSession());
 
     return this.sendFeedback({
       sessionId: session.sessionId,
