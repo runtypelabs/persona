@@ -140,7 +140,7 @@
   {
     "name": "Lazy · voice provider runtime chunk (voice-runtime.js)",
     "path": "dist/voice-runtime.js",
-    "limit": "4 kB",
+    "limit": "5.25 kB",
     "gzip": true
   },
   {

@@ -8,6 +8,17 @@
 //           JSON control frames (transcript_interim / transcript_final /
 //           audio_end / metrics).
 //
+// Full duplex (speech-to-speech, e.g. GPT-Live): the client always declares
+// `voiceCapabilities=full-duplex-v1`; engines that don't speak it ignore the
+// param. A full-duplex session announces itself with
+// `session_config{speechMode:'speech_to_speech'}` and then sends turn-keyed
+// `transcript_update{role,text,turnId,final}` frames (later frames replace the
+// text for the same (turnId, role); user and assistant turns can overlap),
+// `delegation_started/completed` around agent tool turns, and `audio_clear` on
+// barge-in. Reply audio has no per-turn end marker in that mode, so playback is
+// treated as continuous: the "speaking" status is released by a timer derived
+// from the queued audio duration rather than by the engine's end-of-stream.
+//
 // The server's STT owns turn-taking, so the client streams continuously and
 // has no client-side VAD, barge-in monitoring, or batch upload. Auth rides the
 // `Sec-WebSocket-Protocol` subprotocol (`['runtype.bearer', clientToken]`),
@@ -37,6 +48,26 @@ const CAPTURE_BUFFER_SIZE = 4096;
  */
 const LEVEL_RMS_SCALE = 4;
 const RIFF_MAGIC = 0x52494646; // "RIFF"
+/** Declared on every call; non-full-duplex engines ignore it. */
+const FULL_DUPLEX_CAPABILITY = "full-duplex-v1";
+/**
+ * Slack added to the computed end of queued speech-to-speech audio before the
+ * provider reports the reply as drained (covers engine prebuffer + scheduling).
+ */
+const CONTINUOUS_DRAIN_GRACE_MS = 300;
+/**
+ * How long a client `cancel` waits for the server's `audio_clear` before audio
+ * is accepted again, so a lost acknowledgement can't mute the call for good.
+ */
+const CANCEL_ACK_TIMEOUT_MS = 2000;
+
+type TranscriptMetadata = { turnId?: string };
+type TranscriptCallback = (
+  role: "user" | "assistant",
+  text: string,
+  isFinal: boolean,
+  metadata?: TranscriptMetadata,
+) => void;
 
 /**
  * Strip the canonical 44-byte WAV header (if present) and return the raw PCM16
@@ -87,14 +118,21 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Distinguishes a user-initiated close (code 1000) from a dropped connection.
   private intentionalClose = false;
 
+  // Full-duplex (speech-to-speech) session state; reset on every cleanup.
+  private speechToSpeech = false;
+  private delegating = false;
+  // Until this time, audio and assistant text belong to a reply the client cancelled.
+  private cancelledUntil = 0;
+  private playbackEndsAt = 0;
+  private drainTimer: ReturnType<typeof setTimeout> | undefined;
+  // Engine `onFinished` callbacks are one-shot (cleared on fire and on flush),
+  // so the provider re-registers before each reply that may need it.
+  private finishedArmed = false;
+
   private resultCallbacks: ((result: VoiceResult) => void)[] = [];
   private errorCallbacks: ((error: Error) => void)[] = [];
   private statusCallbacks: ((status: VoiceStatus) => void)[] = [];
-  private transcriptCallbacks: ((
-    role: "user" | "assistant",
-    text: string,
-    isFinal: boolean,
-  ) => void)[] = [];
+  private transcriptCallbacks: TranscriptCallback[] = [];
   private metricsCallbacks: ((metrics: VoiceMetrics) => void)[] = [];
 
   constructor(private config: VoiceConfig["runtype"]) {}
@@ -155,16 +193,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         return;
       }
       this.playback = engine;
-      engine.onFinished(() => {
-        if (generation !== this.callGeneration) return;
-        this.isSpeaking = false;
-        // Reply drained: the call stays open, so return to listening.
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.emitStatus("listening");
-        }
-      });
+      this.armPlaybackFinished();
 
-      const wsUrl = `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice`;
+      // The token never goes in the URL; the capability param is not a secret.
+      const wsUrl = `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice?voiceCapabilities=${FULL_DUPLEX_CAPABILITY}`;
       // Token rides the subprotocol; `runtype.bearer` is the marker the server
       // echoes as the negotiated subprotocol (browsers fail the handshake if an
       // offered subprotocol goes unanswered).
@@ -227,11 +259,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.metricsCallbacks = [];
   }
 
-  /** Stop the spoken reply without ending the call. */
+  /**
+   * Stop the spoken reply without ending the call. In a speech-to-speech
+   * session this also asks the server to cancel the response; audio is dropped
+   * until its `audio_clear` acknowledgement arrives.
+   */
   stopPlayback(): void {
-    if (this.playback) this.playback.flush();
-    this.isSpeaking = false;
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+    this.clearLocalPlayback();
+    const ws = this.ws;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      if (this.speechToSpeech) {
+        this.cancelledUntil = Date.now() + CANCEL_ACK_TIMEOUT_MS;
+        ws.send('{"type":"cancel"}');
+      }
       this.emitStatus("listening");
     }
   }
@@ -317,6 +357,39 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     }
 
     switch (msg.type) {
+      case "session_config":
+        // The follow-up session_config carries only interruptionMode: keep the mode.
+        if (msg.speechMode) {
+          this.speechToSpeech = msg.speechMode === "speech_to_speech";
+          this.playback?.setContinuousMode?.(this.speechToSpeech);
+        }
+        break;
+
+      case "transcript_update": {
+        const role = msg.role === "assistant" ? "assistant" : "user";
+        // A reply the client cancelled keeps streaming until the server clears it.
+        if (!msg.turnId || (role === "assistant" && this.isCancelling())) break;
+        this.emitTranscript(role, msg.text ?? "", msg.final === true, {
+          turnId: String(msg.turnId),
+        });
+        break;
+      }
+
+      case "delegation_started":
+      case "delegation_completed":
+        this.delegating = msg.type === "delegation_started";
+        if (!this.isSpeaking && !this.isCancelling()) {
+          this.emitStatus(this.delegating ? "processing" : "listening");
+        }
+        break;
+
+      case "audio_clear":
+        // Barge-in (or our own cancel acknowledged): stop playback now.
+        this.clearLocalPlayback();
+        this.cancelledUntil = 0;
+        this.emitStatus("listening");
+        break;
+
       case "transcript_interim":
         this.emitStatus("listening");
         this.emitTranscript("user", msg.text ?? "", false);
@@ -358,13 +431,70 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private handleAudioFrame(buf: ArrayBuffer, generation: number): void {
     if (generation !== this.callGeneration) return;
     if (!this.playback) return;
+    if (this.isCancelling()) return;
     const pcm = stripWavHeader(buf);
     if (pcm.length === 0) return;
     if (!this.isSpeaking) {
       this.isSpeaking = true;
       this.emitStatus("speaking");
     }
+    this.armPlaybackFinished();
     this.playback.enqueue(pcm);
+    if (this.speechToSpeech) this.scheduleContinuousDrain(pcm.length);
+  }
+
+  private isCancelling(): boolean {
+    return Date.now() < this.cancelledUntil;
+  }
+
+  /** Register the (one-shot) engine drain callback if none is pending. */
+  private armPlaybackFinished(): void {
+    if (this.finishedArmed || !this.playback) return;
+    this.finishedArmed = true;
+    const generation = this.callGeneration;
+    this.playback.onFinished(() => {
+      if (generation !== this.callGeneration) return;
+      this.finishedArmed = false;
+      this.handlePlaybackDrained();
+    });
+  }
+
+  /**
+   * Speech-to-speech replies never get an end-of-stream, so estimate when the
+   * queued audio finishes from its duration and release "speaking" then. The
+   * engine is never marked ended, so the next reply's audio plays through the
+   * same stream untouched and an underrun is never mistaken for a reply end.
+   */
+  private scheduleContinuousDrain(byteLength: number): void {
+    const now = Date.now();
+    // PCM16 @ 24 kHz: 48 bytes per millisecond.
+    this.playbackEndsAt = Math.max(now, this.playbackEndsAt) + byteLength / 48;
+    clearTimeout(this.drainTimer);
+    this.drainTimer = setTimeout(
+      () => this.handlePlaybackDrained(),
+      this.playbackEndsAt - now + CONTINUOUS_DRAIN_GRACE_MS,
+    );
+  }
+
+  private handlePlaybackDrained(): void {
+    this.isSpeaking = false;
+    this.playbackEndsAt = 0;
+    // Reply drained: the call stays open, so return to listening (or to
+    // processing while an agent delegation is still running).
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.emitStatus(this.delegating ? "processing" : "listening");
+    }
+  }
+
+  /** Drop queued audio locally and reset the speaking/drain bookkeeping. */
+  private clearLocalPlayback(): void {
+    this.playback?.flush();
+    // flush() discards registered callbacks: re-arm for the next reply.
+    this.finishedArmed = false;
+    this.armPlaybackFinished();
+    this.isSpeaking = false;
+    this.playbackEndsAt = 0;
+    clearTimeout(this.drainTimer);
   }
 
   // --- Teardown --------------------------------------------------------------
@@ -374,6 +504,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.callGeneration += 1;
     this.callLive = false;
     this.isSpeaking = false;
+    this.speechToSpeech = false;
+    this.delegating = false;
+    this.finishedArmed = false;
+    this.cancelledUntil = 0;
+    this.playbackEndsAt = 0;
+    clearTimeout(this.drainTimer);
 
     if (this.processor) {
       this.processor.onaudioprocess = null;
@@ -421,9 +557,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.statusCallbacks.push(callback);
   }
 
-  onTranscript(
-    callback: (role: "user" | "assistant", text: string, isFinal: boolean) => void,
-  ): void {
+  onTranscript(callback: TranscriptCallback): void {
     this.transcriptCallbacks.push(callback);
   }
 
@@ -443,8 +577,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     role: "user" | "assistant",
     text: string,
     isFinal: boolean,
+    metadata?: TranscriptMetadata,
   ): void {
-    this.transcriptCallbacks.forEach((cb) => cb(role, text, isFinal));
+    this.transcriptCallbacks.forEach((cb) => cb(role, text, isFinal, metadata));
   }
 
   private emitMetrics(metrics: VoiceMetrics): void {

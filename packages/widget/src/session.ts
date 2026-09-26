@@ -80,6 +80,7 @@ import {
 } from "./voice/read-aloud-controller";
 import { isVoiceSupportedProbe, usesSessionVoice, voiceConnectionChanged } from "./utils/voice-support";
 import { VoiceTurnTracker } from "./voice/voice-turn-tracker";
+import type { KeyedVoiceTranscript } from "./voice/keyed-voice-transcript";
 import { loadVoiceRuntime } from "./voice-runtime-loader";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
@@ -579,6 +580,7 @@ export class AgentWidgetSession {
   public stopVoicePlayback(): void {
     if (this.voiceProvider?.stopPlayback) {
       this.voiceTurns.cancel();
+      this.keyedVoice?.cancel();
       this.voiceProvider.stopPlayback();
     }
   }
@@ -600,6 +602,9 @@ export class AgentWidgetSession {
   private pendingVoiceAssistantMessageId: string | null = null;
   private voiceTurns = new VoiceTurnTracker();
   private voiceDisconnectPromise: Promise<void> = Promise.resolve();
+  // Turn-keyed (full-duplex) transcript reconciler, from the lazy voice runtime.
+  private keyedVoice: KeyedVoiceTranscript | null = null;
+
 
   // Track message IDs where the Runtype provider already played TTS audio
   // so browser TTS doesn't double-speak them
@@ -707,7 +712,7 @@ export class AgentWidgetSession {
         .then(async (mod) => {
           await disconnected;
           if (generation !== this.voiceSetupGeneration) return;
-          this.wireVoiceProvider(mod.createVoiceProvider(voiceConfig));
+          this.wireVoiceProvider(mod.createVoiceProvider(voiceConfig), mod.KeyedVoiceTranscript);
         })
         .catch((error) => {
           console.error('Failed to setup voice:', error);
@@ -723,9 +728,29 @@ export class AgentWidgetSession {
   }
 
   /** Wire callbacks onto a freshly constructed provider and connect it. */
-  private wireVoiceProvider(provider: VoiceProvider): void {
+  private wireVoiceProvider(
+    provider: VoiceProvider,
+    Keyed?: typeof KeyedVoiceTranscript
+  ): void {
     try {
       this.voiceProvider = provider;
+      this.keyedVoice = Keyed
+        ? new Keyed({
+            find: (id) => this.messages.find((m) => m.id === id),
+            inject: (options) => this.injectMessage(options),
+            upsert: (message) => this.upsertMessage(message),
+            settle: (ids) => {
+              this.messages = this.messages.map((m) =>
+                ids.has(m.id) ? { ...m, streaming: false, voiceProcessing: false } : m
+              );
+              this.callbacks.onMessagesChanged([...this.messages]);
+            },
+            setStreaming: (streaming) => this.setStreaming(streaming),
+            markSpoken: (id) => {
+              this.ttsSpokenMessageIds.add(id);
+            }
+          })
+        : null;
       const generation = this.voiceSetupGeneration;
       const isCurrent = () => this.voiceProvider === provider && generation === this.voiceSetupGeneration;
 
@@ -755,6 +780,10 @@ export class AgentWidgetSession {
       if (this.voiceProvider.onTranscript) {
         this.voiceProvider.onTranscript((role, text, isFinal, metadata) => {
           if (!isCurrent()) return;
+          if (metadata?.turnId) {
+            this.keyedVoice?.apply(role, text, isFinal, metadata.turnId);
+            return;
+          }
           if (role === 'user') {
             if (!this.pendingVoiceUserMessageId) {
               const msg = this.injectMessage({
@@ -864,6 +893,7 @@ export class AgentWidgetSession {
           this.pendingVoiceUserMessageId = null;
           this.pendingVoiceAssistantMessageId = null;
         }
+        this.keyedVoice?.fail(processingErrorText);
       });
 
       this.voiceProvider.onStatusChange((status) => {
@@ -872,6 +902,10 @@ export class AgentWidgetSession {
         this.voiceActive = status === 'listening';
         if (status === 'listening' || status === 'idle' || status === 'disconnected') {
           this.settlePendingVoiceTurn(status !== 'listening');
+        }
+        // Keyed turns overlap listening (full duplex), so only a call end settles them.
+        if (status === 'idle' || status === 'disconnected') {
+          this.keyedVoice?.settle();
         }
         this.callbacks.onVoiceStatusChanged?.(status);
       });
@@ -925,6 +959,8 @@ export class AgentWidgetSession {
     this.voiceActive = false;
     this.voiceStatus = 'disconnected';
     this.settlePendingVoiceTurn(true);
+    this.keyedVoice?.settle();
+    this.keyedVoice = null;
     this.voiceTurns = new VoiceTurnTracker();
     if (notifyDisconnected) this.callbacks.onVoiceStatusChanged?.('disconnected');
   }
