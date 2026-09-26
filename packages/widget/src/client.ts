@@ -65,6 +65,11 @@ import { divergentDisplayProjection } from "./utils/history-messages";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
+import { InputDeliveryError, type SteerAdmission } from "./live-input-contract";
+export { InputDeliveryError, type SteerAdmission } from "./live-input-contract";
+import { loadLiveInput } from "./live-input-loader";
+import type { SteerPayloadCache } from "./live-input";
+
 type DispatchOptions = {
   messages: AgentWidgetMessage[];
   signal?: AbortSignal;
@@ -82,6 +87,7 @@ type DispatchOptions = {
    * `submitMode: "interrupt"` so the server cancels the prior run.
    */
   interrupt?: boolean;
+  steer?: { turnId: string; onAdmission: (admission: SteerAdmission) => void };
 };
 
 type SSEHandler = (event: AgentWidgetEvent) => void;
@@ -305,6 +311,7 @@ export class AgentWidgetClient {
    * matches is superseded, and every SSE frame it still receives is dropped
    */
   private currentClientTurnId: string | null = null;
+  private steerPayloads: SteerPayloadCache = new Map();
   private clientSession: ClientSession | null = null;
   private sessionInitPromise: Promise<ClientSession> | null = null;
 
@@ -619,6 +626,60 @@ export class AgentWidgetClient {
       if (!response.ok) throw await this.historyErrorFor(response, true);
       return response;
     }
+  }
+
+  private async clientExecutionRequest(
+    executionId: string,
+    operation: string,
+    method: "GET" | "POST",
+    signal?: AbortSignal,
+  ): Promise<Response> {
+    const [session, visitorToken, liveInput] = await Promise.all([
+      this.initSession(),
+      this.readVisitorToken(),
+      loadLiveInput(),
+    ]);
+    return liveInput.clientExecutionRequest({
+      session,
+      visitorToken,
+      apiUrl: this.clientApiBase(),
+      executionId,
+      operation,
+      method,
+      signal,
+      errorFor: (response) => this.historyErrorFor(response, true),
+    });
+  }
+
+  public clearSteerPayloads(): void {
+    this.steerPayloads.clear();
+  }
+
+  public async getInputDelivery(
+    executionId: string,
+    deliveryId: string,
+    signal?: AbortSignal,
+  ): Promise<SteerAdmission> {
+    const response = await this.clientExecutionRequest(
+      executionId,
+      `deliveries/${encodeURIComponent(deliveryId)}`,
+      "GET",
+      signal,
+    );
+    return (await loadLiveInput()).readDeliveryStatus(
+      response,
+      executionId,
+      deliveryId,
+    );
+  }
+
+  public async cancelClientExecution(executionId: string): Promise<void> {
+    const response = await this.clientExecutionRequest(
+      executionId,
+      "cancel",
+      "POST",
+    );
+    await (await loadLiveInput()).readCancellation(response, executionId);
   }
 
   /**
@@ -1839,25 +1900,30 @@ export class AgentWidgetClient {
   /**
    * Client token mode dispatch
    */
-  private async dispatchClientToken(options: DispatchOptions, onEvent: SSEHandler) {
+  private async dispatchClientToken(
+    options: DispatchOptions,
+    onEvent: SSEHandler,
+  ) {
     // Claim the turn before any await: a later dispatch that interrupts this one
     // takes the claim, and every event this call still receives is then stale.
-    const turnId = generateTurnId();
-    this.currentClientTurnId = turnId;
+    let streamAdmitted = false;
+    const turnId = options.steer?.turnId ?? generateTurnId();
+    if (!options.steer) this.currentClientTurnId = turnId;
     const isCurrentTurn = () => this.currentClientTurnId === turnId;
     // Terminal frames of a superseded run must not reopen the composer or paint
     // into the new turn's bubble; status frames are equally misleading.
     const forward: SSEHandler = (event) => {
-      if (!isCurrentTurn()) return;
+      if (!isCurrentTurn() || (options.steer && !streamAdmitted)) return;
       onEvent(event);
     };
 
-    onEvent({ type: "status", status: "connecting" });
+    if (!options.steer) onEvent({ type: "status", status: "connecting" });
 
     try {
       const assertCurrentTurn = () => {
         options.signal?.throwIfAborted();
-        if (!isCurrentTurn()) throw new DOMException('Turn superseded', 'AbortError');
+        // A steered admission does not own the stream until the server grants it.
+        if (!options.steer && !isCurrentTurn()) throw new DOMException('Turn superseded', 'AbortError');
       };
       let session = this.clientSession ?? (await this.initSession());
       assertCurrentTurn();
@@ -1883,6 +1949,14 @@ export class AgentWidgetClient {
           throw new Error('Session renewal did not preserve this conversation.');
         }
         session = this.finishInit(renewed, previous.conversationId ?? null, false);
+        if (options.steer)
+          (await loadLiveInput()).validateSteer(
+            session,
+            options.messages,
+            options.steer.turnId,
+            InputDeliveryError,
+          );
+        assertCurrentTurn();
         this.clientSession = session;
         this.resetClientToolsFingerprint();
         this.config.onSessionInit?.(session);
@@ -1891,6 +1965,14 @@ export class AgentWidgetClient {
         await renewSession();
       }
 
+      if (options.steer)
+        (await loadLiveInput()).validateSteer(
+          session,
+          options.messages,
+          options.steer.turnId,
+          InputDeliveryError,
+        );
+
       // Build the standard payload to get context/metadata from middleware
       const basePayload = await this.buildPayload(options.messages);
 
@@ -1898,16 +1980,21 @@ export class AgentWidgetClient {
       // Filter out sessionId from metadata if present (it's only for local storage)
       const sanitizedMetadata = basePayload.metadata
         ? Object.fromEntries(
-            Object.entries(basePayload.metadata).filter(([key]) => key !== 'sessionId' && key !== 'session_id')
+            Object.entries(basePayload.metadata).filter(
+              ([key]) => key !== "sessionId" && key !== "session_id",
+            ),
           )
         : undefined;
-      
+
       // Common (tools-independent) fields for the chat request.
       const historyCapable = this.isHistoryCapable();
-      const baseChatRequest: Omit<ClientChatRequest, 'clientTools' | 'clientToolsFingerprint'> = {
+      let baseChatRequest: Omit<
+        ClientChatRequest,
+        "clientTools" | "clientToolsFingerprint"
+      > = {
         sessionId: session.sessionId,
         // Filter out messages with empty content to prevent validation errors
-        messages: options.messages.filter(hasValidContent).map(m => {
+        messages: options.messages.filter(hasValidContent).map((m) => {
           // The visitor-visible projection rides along only where it diverges
           // from the model channel, and only on the history-capable plane.
           const displayContent = historyCapable
@@ -1917,21 +2004,45 @@ export class AgentWidgetClient {
             id: m.id, // Include message ID for tracking
             role: m.role,
             // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
-            content: m.contentParts ?? m.llmContent ?? m.rawContent ?? m.content,
+            content:
+              m.contentParts ?? m.llmContent ?? m.rawContent ?? m.content,
             ...(displayContent !== undefined && { displayContent }),
           };
         }),
         // Include pre-generated assistant message ID if provided
-        ...(options.assistantMessageId && { assistantMessageId: options.assistantMessageId }),
+        ...(options.assistantMessageId && {
+          assistantMessageId: options.assistantMessageId,
+        }),
         // Include metadata/context from middleware if present (excluding sessionId)
-        ...(sanitizedMetadata && Object.keys(sanitizedMetadata).length > 0 && { metadata: sanitizedMetadata }),
-        ...(basePayload.inputs && Object.keys(basePayload.inputs).length > 0 && { inputs: basePayload.inputs }),
+        ...(sanitizedMetadata &&
+          Object.keys(sanitizedMetadata).length > 0 && {
+            metadata: sanitizedMetadata,
+          }),
+        ...(basePayload.inputs &&
+          Object.keys(basePayload.inputs).length > 0 && {
+            inputs: basePayload.inputs,
+          }),
         ...(basePayload.context && { context: basePayload.context }),
         // Every client-token turn carries a turnId so the server can suppress a
         // superseded run and this client can drop its stale events below.
         turnId,
-        ...(options.interrupt && { submitMode: 'interrupt' as const }),
+        ...(options.steer && { submitMode: "steer" as const }),
+        ...(options.interrupt && { submitMode: "interrupt" as const }),
       };
+
+      let offeredTools = basePayload.clientTools;
+      if (options.steer) {
+        const frozen = (await loadLiveInput()).freezeSteerPayload(
+          this.steerPayloads,
+          turnId,
+          session,
+          baseChatRequest,
+          offeredTools,
+          InputDeliveryError,
+        );
+        baseChatRequest = frozen.request;
+        offeredTools = frozen.tools;
+      }
 
       // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already
       // snapshotted the full set; `sendWithClientToolsDiff` decides whether to
@@ -1943,7 +2054,7 @@ export class AgentWidgetClient {
         const recoveryVisitorToken =
           session.durableRecovery?.enabled === true ? await this.readVisitorToken() : null;
         assertCurrentTurn();
-        return this.sendWithClientToolsDiff(session.sessionId, basePayload.clientTools, async (toolFields) => {
+        return this.sendWithClientToolsDiff(session.sessionId, offeredTools, async (toolFields) => {
           assertCurrentTurn();
           const identityProof = await this.resolveChatIdentityProof(options.signal);
           assertCurrentTurn();
@@ -1962,7 +2073,7 @@ export class AgentWidgetClient {
             });
           }
 
-          return fetch(this.getClientApiUrl('chat'), {
+          const post = () => fetch(this.getClientApiUrl('chat'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -1973,6 +2084,11 @@ export class AgentWidgetClient {
             },
             body: JSON.stringify(chatRequest),
             signal: options.signal,
+          });
+          // Retry an ambiguous admission with the same body and delivery identity.
+          return post().catch((error) => {
+            if (!options.steer || options.signal?.aborted) throw error;
+            return post();
           });
         });
       };
@@ -1990,7 +2106,16 @@ export class AgentWidgetClient {
       const { response, commit: commitClientToolsFingerprint } = result;
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: 'Chat request failed' }));
+        const data = await response
+          .json()
+          .catch(() => ({ error: "Chat request failed" }));
+        if (options.steer) {
+          const rejected = response.status < 500 && response.status !== 408;
+          throw new InputDeliveryError(
+            data.error || "Failed to deliver message",
+            rejected,
+          );
+        }
 
         if (response.status === 401 && data.error === 'invalid_identity_proof') {
           const error = new HistoryClientError('invalid_identity_proof', PROOF_REJECTED_MESSAGE);
@@ -2002,13 +2127,17 @@ export class AgentWidgetClient {
           // Session expired
           this.clearClientSession();
           this.config.onSessionExpired?.();
-          const error = new Error('Session expired. Please refresh to continue.');
+          const error = new Error(
+            "Session expired. Please refresh to continue.",
+          );
           forward({ type: "error", error });
           throw error;
         }
 
         if (response.status === 429) {
-          const error = new Error(data.hint || 'Message limit reached for this session.');
+          const error = new Error(
+            data.hint || "Message limit reached for this session.",
+          );
           forward({ type: "error", error });
           throw error;
         }
@@ -2016,22 +2145,40 @@ export class AgentWidgetClient {
         // The active record was deleted elsewhere. No client-level retry: the
         // old payload would recreate the transcript in a fresh record, so
         // WidgetSession owns recovery.
-        if (response.status === 410 && data.error === 'conversation_deleted') {
+        if (response.status === 410 && data.error === "conversation_deleted") {
           const error = new HistoryClientError(
-            'conversation_deleted',
-            'This conversation was deleted'
+            "conversation_deleted",
+            "This conversation was deleted",
           );
           forward({ type: "error", error });
           throw error;
         }
 
-        const error = new Error(data.error || 'Failed to send message');
+        const error = new Error(data.error || "Failed to send message");
         forward({ type: "error", error });
         throw error;
       }
 
+      if (options.steer) {
+        const admission = await (
+          await loadLiveInput()
+        ).readSteerAdmission(response);
+        commitClientToolsFingerprint();
+        this.steerPayloads.delete(turnId);
+        if (admission.kind === "stream") {
+          this.currentClientTurnId = turnId;
+          streamAdmitted = true;
+        }
+        options.steer.onAdmission(admission);
+        if (options.signal?.aborted) {
+          void response.body?.cancel().catch(() => {});
+          return;
+        }
+        if (admission.kind === "receipt") return;
+      }
+
       if (!response.body) {
-        const error = new Error('No response body received');
+        const error = new Error("No response body received");
         forward({ type: "error", error });
         throw error;
       }
@@ -2045,7 +2192,11 @@ export class AgentWidgetClient {
 
       // Stream the response (same SSE handling as proxy mode)
       try {
-        await this.streamResponse(response.body, forward, options.assistantMessageId);
+        await this.streamResponse(
+          response.body,
+          forward,
+          options.assistantMessageId,
+        );
       } finally {
         forward({ type: "status", status: "idle" });
       }
@@ -2054,8 +2205,8 @@ export class AgentWidgetClient {
       // Only emit error if it wasn't already emitted
       if (
         !(err instanceof HistoryClientError) &&
-        !err.message.includes('Session expired') &&
-        !err.message.includes('Message limit')
+        !err.message.includes("Session expired") &&
+        !err.message.includes("Message limit")
       ) {
         forward({ type: "error", error: err });
       }

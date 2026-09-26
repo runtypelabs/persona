@@ -86,6 +86,7 @@ export default defineConfig({
     // Keep the durable-session reconnect loop out of the CDN payload. Same
     // scheme: sibling-URL chunk `session-reconnect.js`, fetched only when a
     // session with a `reconnectStream` transport first needs to resume.
+    options.external.push("@runtypelabs/persona/live-input");
     options.external.push("@runtypelabs/persona/session-reconnect");
 
     // Keep the WebMCP bridge runtime (the WebMcpBridge class) out of the CDN

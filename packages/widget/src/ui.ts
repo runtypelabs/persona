@@ -537,6 +537,7 @@ type Controller = {
   toggle: () => void;
   clearChat: () => void;
   setMessage: (message: string) => boolean;
+  /** Starts submission preparation; async hooks/admission may still decline it, preserving the draft. */
   submitMessage: (message?: string) => boolean;
   /**
    * Frozen snapshot of composer state (text, attachments, mentions, phase).
@@ -1452,6 +1453,7 @@ export const createAgentExperience = (
   let rightActions: HTMLElement | null = panelElements.rightActions;
   let sendButtonWrapper: HTMLElement | null = panelElements.sendButtonWrapper;
   let setSendButtonMode = panelElements.setSendButtonMode;
+  let steerStopButton: HTMLButtonElement | null = null;
 
   // Use mutable references for mic button so we can update them dynamically
   let micButton: HTMLButtonElement | null = panelElements.micButton;
@@ -1825,8 +1827,8 @@ export const createAgentExperience = (
    */
   function resolveStreamingSubmitBehavior(): ComposerStreamingSubmitBehavior {
     const configured = config.composer?.streamingSubmitBehavior ?? "block";
-    if (configured !== "interrupt") return configured;
-    if (config.clientToken) return "interrupt";
+    if (configured !== "interrupt" && configured !== "steer") return configured;
+    if (config.clientToken) return configured;
     if (!warnedInterruptFallback && config.debug === true) {
       warnedInterruptFallback = true;
       if (typeof console !== "undefined") {
@@ -2793,6 +2795,12 @@ export const createAgentExperience = (
   messagesWrapper.addEventListener('click', (event) => {
     // Assistive technologies activate buttons with a click rather than a pointer.
     if (event.detail === 0 && (event.target as HTMLElement).closest('.persona-activity-row')) handleBubbleExpansion(event);
+  });
+
+  messagesWrapper.addEventListener("click", event => {
+    const button = (event.target as Element).closest<HTMLButtonElement>("[data-persona-delivery-retry]");
+    const messageId = button?.dataset.personaDeliveryRetry;
+    if (messageId) void session.retrySteeredMessage(messageId);
   });
 
   messagesWrapper.addEventListener('keydown', (event) => {
@@ -8147,7 +8155,7 @@ export const createAgentExperience = (
    */
   function syncComposerSendAvailability(): void {
     if (!sendButton) return;
-    if (composerStore.getState().phase === "streaming") {
+    if (composerStore.getState().phase === "streaming" && resolveStreamingSubmitBehavior() !== "steer") {
       sendButton.disabled = false;
       return;
     }
@@ -8294,7 +8302,25 @@ export const createAgentExperience = (
     composerStore.setStreaming(disabled);
     // The send button stays enabled while streaming: it doubles as a stop
     // button.
-    setSendButtonMode(disabled ? "stop" : "send");
+    const steer = resolveStreamingSubmitBehavior() === "steer";
+    setSendButtonMode(disabled && !steer ? "stop" : "send");
+    if (disabled && steer && sendButtonWrapper?.parentElement) {
+      if (!steerStopButton) {
+        steerStopButton = createElement("button", "persona-icon-btn persona-text-xs persona-h-10 persona-px-3");
+        steerStopButton.type = "button";
+        steerStopButton.textContent = "Stop";
+        steerStopButton.setAttribute("aria-label", "Stop response");
+        steerStopButton.setAttribute("data-persona-steer-stop", "");
+        steerStopButton.addEventListener("click", () => {
+          session.cancel();
+          throughputTracker?.reset();
+          eventStreamView?.update();
+        });
+      }
+      sendButtonWrapper.parentElement.insertBefore(steerStopButton, sendButtonWrapper);
+    } else {
+      steerStopButton?.remove();
+    }
     applyComposerLock();
   };
 
@@ -9153,7 +9179,7 @@ export const createAgentExperience = (
   // On teardown, cancel any in-flight turn/reconnect so a pending durable
   // reconnect's backoff timer and focus/online listeners don't outlive the
   // widget (cancel() → teardownReconnect()).
-  destroyCallbacks.push(() => session.cancel());
+  destroyCallbacks.push(() => session.cancel({ execution: false }));
   // Drop the visitor store's `storage` listener and the session's subscription
   // to it; a client rebuild must not leak either.
   destroyCallbacks.push(() => {
@@ -11587,14 +11613,10 @@ export const createAgentExperience = (
   // Pre-initialize client session when in client token mode so feedback works
   // before the user sends their first message (e.g. on restored/persisted messages)
   if (config.clientToken) {
-    session
-      .initClientSession()
-      .then(() => {
-        // Boot resume is authoritative only after reconciliation; the client
-        // already gated its init on `historyBootstrapReady`.
-        if (!historyAvailable()) return undefined;
-        return session.reconcileBootConversation({ scope: historyScope() });
-      })
+    const initialize = historyAvailable()
+      ? session.initializeBootConversation({ scope: historyScope() })
+      : session.initClientSession();
+    initialize
       .then(() => {
         syncEarlierMessagesPill();
       })
@@ -11892,6 +11914,11 @@ export const createAgentExperience = (
       return;
     }
 
+    if (resolveStreamingSubmitBehavior() === "steer" && !session.canAcceptSteeredInput()) {
+      showComposerNotice("Messages are still being delivered. Please wait before sending another.");
+      return;
+    }
+
     // Submit while a response streams (roadmap section 11). `block` never gets
     // here: the Enter path stays inert and the button is Stop. A replay of an
     // already-captured pending item is not a new capture.
@@ -11956,68 +11983,86 @@ export const createAgentExperience = (
     snapshot.contentParts = buildContentParts();
 
     const dispatchSubmission = () => {
-      // Editing is independent of the composer, but a send supersedes it.
-      cancelMessageEdit();
-      maybeExpandComposerBar();
-      // Detaches the chips and captures the composer text; `finalize()` resolves
-      // the mention bodies inside `sendMessage`.
-      const chipMentions = mentionOrchestrator?.collectForSubmit() ?? null;
-      const mentions = mergeSubmitMentions(chipMentions, serverMentions);
+      // Read refs without detaching chips. The session can still refuse local
+      // admission after an async hook or history gate; only acceptance consumes
+      // composer state. Finalization runs after onAccepted fills this bundle.
+      let mentions: SubmitMentions | null = null;
       const contentParts = buildContentParts();
-      if (intent.consumeDraft !== false) clearComposerDraft();
       const composerOptions: ComposerOptionsPayload = {
         selectedModelId: snapshot.options.selectedModelId,
         activeModeIds: snapshot.options.activeModeIds,
       };
-      // Interrupt supersedes the in-flight run instead of queueing behind it.
       const interrupt = streamingBehavior === "interrupt";
-      if (interrupt) session.cancel();
-      session.sendMessage(snapshot.text, {
+      let accepted = false;
+      let finishAdmission!: () => void;
+      const admission = new Promise<void>((resolve) => { finishAdmission = resolve; });
+      const sending = session.sendMessage(snapshot.text, {
         contentParts,
-        mentions: mentions ?? undefined,
+        ...(snapshot.mentionRefs.length > 0 && {
+          mentions: {
+            refs: snapshot.mentionRefs,
+            finalize: () => mentions?.finalize() ?? Promise.resolve(mergeFinalizedMentions([])),
+          },
+        }),
         contentSegments: snapshot.contentSegments,
         viaVoice: snapshot.viaVoice,
         composerOptions,
         ...(snapshot.options.quote && { quote: snapshot.options.quote }),
         ...(interrupt && { interrupt: true }),
+        onAccepted: () => {
+          cancelMessageEdit();
+          maybeExpandComposerBar();
+          const chipMentions = mentionOrchestrator?.collectForSubmit() ?? null;
+          mentions = mergeSubmitMentions(chipMentions, serverMentions);
+          if (intent.consumeDraft !== false) clearComposerDraft();
+          if (interrupt) session.cancel();
+          if (attachmentManager?.hasAttachments()) attachmentManager.clearAttachments();
+          if (chipMentions) mentionOrchestrator?.clear();
+          syncComposerMentions();
+          // One-shot state clears only after the session reserves admission.
+          const activeModes = composerStore.getState().activeModeIds;
+          const remaining = clearOnceComposerModes(activeModes, config.composer?.modes);
+          if (remaining.length !== activeModes.length) setActiveComposerModes(remaining);
+          if (composerStore.getState().quote) setComposerQuote(undefined);
+          clearPersistedDraft();
+          composerCompactLatch.release();
+          syncComposerCompact();
+          accepted = true;
+          finishAdmission();
+        },
       });
-      if (attachmentManager?.hasAttachments()) attachmentManager.clearAttachments();
-      if (chipMentions) mentionOrchestrator?.clear();
-      syncComposerMentions();
-      // Step 8: one-shot modes and the quote clear only after local acceptance.
-      const activeModes = composerStore.getState().activeModeIds;
-      const remaining = clearOnceComposerModes(activeModes, config.composer?.modes);
-      if (remaining.length !== activeModes.length) setActiveComposerModes(remaining);
-      if (composerStore.getState().quote) setComposerQuote(undefined);
-      // The accepted draft is no longer worth restoring on the next mount.
-      clearPersistedDraft();
-      // A sent draft releases the wrap latch: the next single line is compact.
-      composerCompactLatch.release();
-      syncComposerCompact();
+      // Keep preparation locked across a history gate, but release it as soon
+      // as local admission succeeds, without waiting for the response stream.
+      void sending.then(() => {
+        if (!accepted) showComposerNotice("Message was not sent. Your draft was preserved; please try again.");
+        finishAdmission();
+      }, (error: unknown) => {
+        reportSubmissionError(error);
+        finishAdmission();
+      });
+      return accepted ? undefined : admission;
     };
 
     const hook = config.composer?.onBeforeSend;
     if (!hook) {
-      dispatchSubmission();
-      return;
+      return dispatchSubmission();
     }
 
     const abort = new AbortController();
     submissionAbort = abort;
-    const settle = (outcome: BeforeSendOutcome): void => {
+    const settle = (outcome: BeforeSendOutcome): void | Promise<void> => {
       submissionAbort = null;
       if (outcome.status === "error") {
         reportSubmissionError(outcome.error);
         return;
       }
       if (outcome.status !== "proceed") return;
-      dispatchSubmission();
+      return dispatchSubmission();
     };
 
     const outcome = runBeforeSend(hook, snapshot, abort.signal);
     if (!(outcome instanceof Promise)) {
-      settle(outcome);
-      return;
+      return settle(outcome);
     }
     composerStore.setPreparing(true);
     return outcome
@@ -12162,8 +12207,7 @@ export const createAgentExperience = (
   function submitSuggestionPrompt(prompt: string): void {
     // A blocked send must not destroy the draft on its way to being refused.
     if (isComposerSendBlocked()) return;
-    clearComposerDraft();
-    submitText(prompt, { consumeDraft: false });
+    submitText(prompt);
   }
 
   /**
@@ -12196,7 +12240,7 @@ export const createAgentExperience = (
     // While a response is streaming, the submit button acts as a stop button.
     // Abort the in-flight stream and leave textarea contents / attachments
     // intact so the user can edit and resend without retyping.
-    if (session.isStreaming()) {
+    if (session.isStreaming() && resolveStreamingSubmitBehavior() !== "steer") {
       session.cancel();
       // Cancelling emits no terminal/error SSE frame, so reset the throughput
       // tracker (as clear-chat does) to avoid a stale `running` row lingering.
@@ -13760,7 +13804,7 @@ export const createAgentExperience = (
   });
 
   destroyCallbacks.push(() => {
-    session.cancel();
+    session.cancel({ execution: false });
   });
 
   if (launcherSurfaceInstance) {
@@ -15207,7 +15251,7 @@ export const createAgentExperience = (
     },
     setMessage(message: string): boolean {
       if (!textarea) return false;
-      if (session.isStreaming()) return false;
+      if (session.isStreaming() && resolveStreamingSubmitBehavior() !== "steer") return false;
       if (isComposerInputDisabled()) return false;
 
       // Auto-open widget if closed and the panel is toggleable
@@ -15221,9 +15265,14 @@ export const createAgentExperience = (
       return true;
     },
     submitMessage(message?: string): boolean {
-      if (session.isStreaming()) return false;
+      if (submitInFlight) return false;
+      if (session.isStreaming() && resolveStreamingSubmitBehavior() !== "steer") return false;
       // Every submission path is blocked, including the programmatic one.
       if (isComposerSendBlocked()) return false;
+      if (resolveStreamingSubmitBehavior() === "steer" && !session.canAcceptSteeredInput()) {
+        showComposerNotice("Messages are still being delivered. Please wait before sending another.");
+        return false;
+      }
 
       const valueToSubmit = message?.trim() || textarea.value.trim();
       if (!valueToSubmit) return false;
@@ -15235,10 +15284,7 @@ export const createAgentExperience = (
 
       // Composer submission (no explicit text) runs the full snapshot pipeline;
       // an explicit message is a programmatic send that still consumes the draft.
-      textarea.value = "";
-      textarea.style.height = "auto"; // Reset height after clearing
-      syncComposerText();
-      submitText(valueToSubmit, { consumeDraft: false });
+      submitText(valueToSubmit);
       return true;
     },
     getComposerState(): Readonly<ComposerState> {
