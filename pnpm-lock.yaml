@@ -374,9 +374,12 @@ importers:
       '@runtypelabs/persona':
         specifier: workspace:^
         version: link:../../packages/widget
+      ai:
+        specifier: 7.0.0-beta.178
+        version: 7.0.0-beta.178(zod@4.5.4)
       eve:
         specifier: ^0.11.6
-        version: 0.11.6(@opentelemetry/api@1.9.1)(@sveltejs/kit@2.66.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.56.3)(typescript@6.0.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(@vercel/functions@3.7.1(ws@8.20.1))(ai@6.0.208(zod@4.5.4))(chokidar@4.0.3)(dotenv@16.6.1)(lru-cache@11.2.6)(miniflare@4.20260611.0)(next@16.2.9(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(svelte@5.56.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))(wrangler@4.100.0(@cloudflare/workers-types@4.20260612.1))
+        version: 0.11.6(@opentelemetry/api@1.9.1)(@sveltejs/kit@2.66.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.56.3)(typescript@6.0.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(@vercel/functions@3.7.1(ws@8.20.1))(ai@7.0.0-beta.178(zod@4.5.4))(chokidar@4.0.3)(dotenv@16.6.1)(lru-cache@11.2.6)(miniflare@4.20260611.0)(next@16.2.9(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(svelte@5.56.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))(wrangler@4.100.0(@cloudflare/workers-types@4.20260612.1))
       next:
         specifier: ^16.2.9
         version: 16.2.9(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -646,6 +649,12 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/gateway@4.0.0-beta.109':
+    resolution: {integrity: sha512-W/1kLlPb6Bgbhwep3CA3R6do0HD7SXV5gyuz2XBLY1YABqgxYkw+IhEcjOYlmn9v+Tifjqy5yJqmWdSHMJhyPQ==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/openai@3.0.71':
     resolution: {integrity: sha512-j6eBAa5oHFZ4U5CxpIV3T4zXNM/BviodNCZCL1qHkA4aqkwK9iQ18TWYz2DZcXpw4BO5pikKzqpXORxb1EnZGA==}
     engines: {node: '>=18'}
@@ -664,9 +673,19 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.0-beta.49':
+    resolution: {integrity: sha512-7xnpAQLpW0KGIsh0CQERcIZuXEGqv7FtFW2BdFk14iuMxRMVpXhTVvEQyqkm6tWAbQ7OsGQJhO6M0Me9gHQ52g==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@3.0.10':
     resolution: {integrity: sha512-Q3BZ27qfpYqnCYGvE3vt+Qi6LGOF9R5Nmzn+9JoM1lCRsD9mYaIhfJLkSunN48nfGXJ6n+XNV0J/XVpqGQl7Dw==}
     engines: {node: '>=18'}
+
+  '@ai-sdk/provider@4.0.0-beta.19':
+    resolution: {integrity: sha512-Aca/KiGeRtMM7rOJ38Qio+Dc2V45PpiGoWgdrdtIkgM9zkhYpS043t0ggKoNOWgm/csv99XWGrfSF63PSkVeHw==}
+    engines: {node: '>=22'}
 
   '@asamuzakjp/css-color@5.0.1':
     resolution: {integrity: sha512-2SZFvqMyvboVV1d15lMf7XiI3m7SDqXUuKaTymJYLN6dSGadqp+fVojqJlVoMlbZnlTmu3S0TLwLTJpvBMO1Aw==}
@@ -2441,6 +2460,9 @@ packages:
   '@vitest/utils@4.1.9':
     resolution: {integrity: sha512-A51o8ymO5PpqlWNnBP9ZHPXDIpuMtTLlGSjN7la4US+LJzoUMyhwjA5QXlm39JexgwHKW4Xjs8Z2d3dLCXOeuA==}
 
+  '@workflow/serde@4.1.0':
+    resolution: {integrity: sha512-pav4F2BoirECWR7Nf1TKt+2eETcBj7jj4cBefQ8VXQCA6NPkaKeLfj/zMgi+3zYV5ZIBT4GuUiphsj0/b9hPQQ==}
+
   accepts@2.0.0:
     resolution: {integrity: sha512-5cvg6CtKwfgdmVqY1WIiXKc3Q1bkRqGLi+2W/6ao+6Y7gu/RCwRuAhGEzh5B4KlszSuTLgZYuqFqo5bImjNKng==}
     engines: {node: '>= 0.6'}
@@ -2462,6 +2484,12 @@ packages:
   ai@6.0.208:
     resolution: {integrity: sha512-STz+AaZqJ4ZjH7UkpXkbHx+bjgIDOsE8fIUoZjkZ2whoZcfVmG9K/TqEKouJZ03SuZuD7lagntlU3zBhAEkRpQ==}
     engines: {node: '>=18'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  ai@7.0.0-beta.178:
+    resolution: {integrity: sha512-kOfIbf23FDkvvfDHOS1gIjImBF9MlYut8fEMlps57vvS622VKL1PeEDLJ181aVd2LPSiDr3SupAMSzI2rEaW3w==}
+    engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
@@ -4940,6 +4968,13 @@ snapshots:
       '@vercel/oidc': 3.2.0
       zod: 4.5.4
 
+  '@ai-sdk/gateway@4.0.0-beta.109(zod@4.5.4)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0-beta.19
+      '@ai-sdk/provider-utils': 5.0.0-beta.49(zod@4.5.4)
+      '@vercel/oidc': 3.2.0
+      zod: 4.5.4
+
   '@ai-sdk/openai@3.0.71(zod@4.5.4)':
     dependencies:
       '@ai-sdk/provider': 3.0.10
@@ -4960,7 +4995,19 @@ snapshots:
       eventsource-parser: 3.1.0
       zod: 4.5.4
 
+  '@ai-sdk/provider-utils@5.0.0-beta.49(zod@4.5.4)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.0-beta.19
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.1.0
+      zod: 4.5.4
+
   '@ai-sdk/provider@3.0.10':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.0-beta.19':
     dependencies:
       json-schema: 0.4.0
 
@@ -6526,6 +6573,8 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
+  '@workflow/serde@4.1.0': {}
+
   accepts@2.0.0:
     dependencies:
       mime-types: 3.0.2
@@ -6545,6 +6594,13 @@ snapshots:
       '@ai-sdk/provider': 3.0.10
       '@ai-sdk/provider-utils': 4.0.30(zod@4.5.4)
       '@opentelemetry/api': 1.9.1
+      zod: 4.5.4
+
+  ai@7.0.0-beta.178(zod@4.5.4):
+    dependencies:
+      '@ai-sdk/gateway': 4.0.0-beta.109(zod@4.5.4)
+      '@ai-sdk/provider': 4.0.0-beta.19
+      '@ai-sdk/provider-utils': 5.0.0-beta.49(zod@4.5.4)
       zod: 4.5.4
 
   ajv-formats@3.0.1(ajv@8.20.0):
@@ -7067,9 +7123,9 @@ snapshots:
 
   etag@1.8.1: {}
 
-  eve@0.11.6(@opentelemetry/api@1.9.1)(@sveltejs/kit@2.66.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.56.3)(typescript@6.0.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(@vercel/functions@3.7.1(ws@8.20.1))(ai@6.0.208(zod@4.5.4))(chokidar@4.0.3)(dotenv@16.6.1)(lru-cache@11.2.6)(miniflare@4.20260611.0)(next@16.2.9(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(svelte@5.56.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))(wrangler@4.100.0(@cloudflare/workers-types@4.20260612.1)):
+  eve@0.11.6(@opentelemetry/api@1.9.1)(@sveltejs/kit@2.66.0(@opentelemetry/api@1.9.1)(@sveltejs/vite-plugin-svelte@7.1.2(svelte@5.56.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(svelte@5.56.3)(typescript@6.0.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0)))(@vercel/functions@3.7.1(ws@8.20.1))(ai@7.0.0-beta.178(zod@4.5.4))(chokidar@4.0.3)(dotenv@16.6.1)(lru-cache@11.2.6)(miniflare@4.20260611.0)(next@16.2.9(@opentelemetry/api@1.9.1)(@playwright/test@1.62.1)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(svelte@5.56.3)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))(wrangler@4.100.0(@cloudflare/workers-types@4.20260612.1)):
     dependencies:
-      ai: 6.0.208(zod@4.5.4)
+      ai: 7.0.0-beta.178(zod@4.5.4)
       nitro: 3.0.260610-beta(@vercel/functions@3.7.1(ws@8.20.1))(chokidar@4.0.3)(dotenv@16.6.1)(lru-cache@11.2.6)(miniflare@4.20260611.0)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.28.1)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))(wrangler@4.100.0(@cloudflare/workers-types@4.20260612.1))
     optionalDependencies:
       '@opentelemetry/api': 1.9.1

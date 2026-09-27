@@ -1,33 +1,38 @@
 name: Runtype agents
 
 # Converges the config-as-code Runtype agents behind the showcase site
-# (apps/web/runtype/). PRs get a dry-run plan; main applies it and deploys to
-# the `live` alias. The docs agent reuses the proxy's DOCS_ASSISTANT_AGENT
-# prompt, so edits there trigger this too.
+# (apps/web/runtype/) and deploys them to the `live` alias. The docs agent
+# reuses the proxy's DOCS_ASSISTANT_AGENT prompt, so edits there trigger this too.
+#
+# Deliberately NOT run on pull_request: a same-repo PR can edit the script it
+# runs, so PR code must never see the write-capable RUNTYPE_API_KEY. Preview a
+# change locally with `RUNTYPE_DRY_RUN=1 pnpm --filter web runtype:ensure`, or
+# dispatch this workflow with dry_run on main.
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "apps/web/runtype/**"
-      - "packages/proxy/src/agents/docs-assistant.ts"
-      - ".github/workflows/runtype-agents.yml"
   push:
     branches: [main]
     paths:
       - "apps/web/runtype/**"
+      - "apps/web/package.json"
       - "packages/proxy/src/agents/docs-assistant.ts"
+      - "pnpm-lock.yaml"
       - ".github/workflows/runtype-agents.yml"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Print the plan without writing"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 jobs:
   ensure:
-    # Fork PRs get no secrets; skip rather than fail.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Only ever run trusted main-branch code with the key.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,6 +57,6 @@ jobs:
         working-directory: apps/web
         env:
           RUNTYPE_API_KEY: ${{ secrets.RUNTYPE_API_KEY }}
-          RUNTYPE_DRY_RUN: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+          RUNTYPE_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
           GIT_SHA: ${{ github.sha }}
         run: pnpm runtype:ensure

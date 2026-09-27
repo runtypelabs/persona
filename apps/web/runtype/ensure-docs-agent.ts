@@ -49,9 +49,21 @@ const agent = await Runtype.agents.ensure(docsAssistantAgent, {
     ? { dryRun: true }
     : { version: { label: process.env.GIT_SHA ?? process.env.VERCEL_GIT_COMMIT_SHA } }),
 });
+const existing = (await client.clientTokens.list()).find((t) => t.name === TOKEN_NAME);
+
 if (agent.result === "plan") {
   const keys = agent.changedKeys.length ? ` (${agent.changedKeys.join(", ")})` : "";
   console.log(`agent plan: ${agent.changes}${keys}`);
+  if (!existing) {
+    console.log("client token plan: create");
+  } else {
+    // A new agent has no id yet, so it always changes the token's agentIds.
+    const sameAgent = agent.agentId !== undefined && existing.agentIds.join() === agent.agentId;
+    const sameOrigins =
+      [...existing.allowedOrigins].sort().join() === [...allowedOrigins].sort().join();
+    const changed = [!sameAgent && "agentIds", !sameOrigins && "allowedOrigins"].filter(Boolean);
+    console.log(`client token plan: ${changed.length ? `update (${changed.join(", ")})` : "none"}`);
+  }
   process.exit(0);
 }
 console.log(`agent: ${agent.result} ${agent.agentId} (${agent.contentHash})`);
@@ -60,8 +72,6 @@ const tokenFields = {
   agentIds: [agent.agentId],
   allowedOrigins,
 };
-const existing = (await client.clientTokens.list()).find((t) => t.name === TOKEN_NAME);
-
 let tokenValue: string | null = null;
 if (existing) {
   await client.clientTokens.update(existing.id, tokenFields);
