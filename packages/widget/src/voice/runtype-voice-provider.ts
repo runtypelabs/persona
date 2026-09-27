@@ -16,6 +16,14 @@
 // A continuous always-hot mic is, in UX terms, a permanent barge-in session, so
 // `getInterruptionMode()` reports the constant `'barge-in'` and the existing
 // mic-button wiring (ui.ts) treats a click as "hang up at any state" unchanged.
+//
+// Prewarm (`prewarm()`, called on mic intent): by default a fire-and-forget
+// `POST /v1/client/agents/:agentId/voice/prewarm`. With `prewarmMode: 'attach'`
+// the WebSocket opens early with `clientCapabilities=attach` and the extra
+// `runtype.attach` subprotocol. If the server negotiates `runtype.attach`, the
+// socket idles (no call) until `startListening()` sends `{"type":"start"}`; if
+// it negotiates plain `runtype.bearer`, it ignored attach and the call is
+// already live, so `startListening()` adopts it as is.
 
 import type {
   VoiceProvider,
@@ -37,6 +45,29 @@ const CAPTURE_BUFFER_SIZE = 4096;
  */
 const LEVEL_RMS_SCALE = 4;
 const RIFF_MAGIC = 0x52494646; // "RIFF"
+/** `prewarm()` warms at most once per this window per provider instance. */
+const PREWARM_THROTTLE_MS = 30_000;
+/** How long `startListening()` waits on an attach still handshaking. */
+const ATTACH_HANDSHAKE_TIMEOUT_MS = 5_000;
+/** Attached-socket idle window: server default and clamp range. */
+const ATTACH_IDLE_DEFAULT_MS = 30_000;
+const ATTACH_IDLE_MIN_MS = 30_000;
+const ATTACH_IDLE_MAX_MS = 600_000;
+
+/** A socket opened by an `'attach'` prewarm, waiting for the click. */
+type AttachedSocket = {
+  ws: WebSocket;
+  /**
+   * `connecting` until the handshake completes; then `attached` (no call yet,
+   * needs `start`) or `live` (the server ignored attach and the call is live).
+   */
+  state: "connecting" | "attached" | "live";
+  /** Settles when the handshake completes, fails, or the socket is released. */
+  ready: Promise<void>;
+  settle: () => void;
+  openedAt: number;
+  idleTimer: ReturnType<typeof setTimeout> | undefined;
+};
 
 /**
  * Strip the canonical 44-byte WAV header (if present) and return the raw PCM16
@@ -63,6 +94,16 @@ function toWsBase(host: string): string {
   return `${secure ? "wss:" : "ws:"}//${trimmed}`;
 }
 
+/** Derive an http(s):// base URL from a configured host (the ws base, reversed). */
+function toHttpBase(host: string): string {
+  return toWsBase(host).replace(/^ws/i, "http");
+}
+
+function clampAttachIdleMs(ms: number | undefined): number {
+  if (typeof ms !== "number" || !Number.isFinite(ms)) return ATTACH_IDLE_DEFAULT_MS;
+  return Math.min(ATTACH_IDLE_MAX_MS, Math.max(ATTACH_IDLE_MIN_MS, Math.round(ms)));
+}
+
 export class RuntypeVoiceProvider implements VoiceProvider {
   type: "runtype" = "runtype";
 
@@ -87,6 +128,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Distinguishes a user-initiated close (code 1000) from a dropped connection.
   private intentionalClose = false;
 
+  // Prewarm latch and the (at most one) socket an `'attach'` prewarm opened.
+  private lastPrewarmAt = Number.NEGATIVE_INFINITY;
+  private attached: AttachedSocket | null = null;
+
   private resultCallbacks: ((result: VoiceResult) => void)[] = [];
   private errorCallbacks: ((error: Error) => void)[] = [];
   private statusCallbacks: ((status: VoiceStatus) => void)[] = [];
@@ -103,6 +148,153 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   /** No-op: the WS session opens lazily in `startListening` (the "call"). */
   async connect(): Promise<void> {}
+
+  /**
+   * Warm the voice path ahead of the click. Fire-and-forget and throttled to
+   * once per {@link PREWARM_THROTTLE_MS}; never emits an error or a status.
+   */
+  prewarm(): void {
+    if (this.callLive || this.attached) return;
+    const agentId = this.config?.agentId;
+    const token = this.config?.clientToken;
+    const host = this.config?.host;
+    if (!agentId || !token || !host) return;
+    const now = Date.now();
+    if (now - this.lastPrewarmAt < PREWARM_THROTTLE_MS) return;
+    this.lastPrewarmAt = now;
+    try {
+      if (this.config?.prewarmMode === "attach") {
+        this.attach(host, agentId, token);
+      } else {
+        this.requestPrewarm(host, agentId, token);
+      }
+    } catch {
+      // A prewarm must never surface an error; the click connects normally.
+    }
+  }
+
+  private requestPrewarm(host: string, agentId: string, token: string): void {
+    if (typeof fetch !== "function") return;
+    const url = `${toHttpBase(host)}/v1/client/agents/${encodeURIComponent(agentId)}/voice/prewarm`;
+    void fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  private attach(host: string, agentId: string, token: string): void {
+    const params = new URLSearchParams({ clientCapabilities: "attach" });
+    const configuredIdleMs = this.config?.attachIdleMs;
+    const idleMs = clampAttachIdleMs(configuredIdleMs);
+    if (configuredIdleMs !== undefined) params.set("attachIdleMs", String(idleMs));
+    const ws = new WebSocket(`${this.voiceSocketUrl(host, agentId)}?${params}`, [
+      "runtype.bearer",
+      "runtype.attach",
+      token,
+    ]);
+    ws.binaryType = "arraybuffer";
+    let settle: () => void = () => {};
+    const ready = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const entry: AttachedSocket = {
+      ws,
+      state: "connecting",
+      ready,
+      settle,
+      openedAt: 0,
+      idleTimer: undefined,
+    };
+    this.attached = entry;
+
+    ws.onopen = () => {
+      if (this.attached !== entry) return;
+      entry.state = ws.protocol === "runtype.attach" ? "attached" : "live";
+      entry.openedAt = Date.now();
+      this.armAttachIdle(entry, idleMs);
+      if (entry.state === "attached") ws.send('{"type":"ping"}');
+      entry.settle();
+    };
+    ws.onmessage = (event) => {
+      if (this.attached !== entry || typeof event.data !== "string") return;
+      let msg: { type?: unknown; idleMs?: unknown };
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      // The server's idle window is authoritative; close no later than it does.
+      if (msg.type === "attached" && typeof msg.idleMs === "number") {
+        this.armAttachIdle(entry, msg.idleMs - (Date.now() - entry.openedAt));
+      }
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => {
+      if (this.attached === entry) this.releaseAttached();
+    };
+  }
+
+  private armAttachIdle(entry: AttachedSocket, ms: number): void {
+    clearTimeout(entry.idleTimer);
+    entry.idleTimer = setTimeout(() => {
+      if (this.attached === entry) this.releaseAttached();
+    }, Math.max(0, ms));
+  }
+
+  /** Close and forget the prewarmed socket, if any. Silent by design. */
+  private releaseAttached(): void {
+    const entry = this.attached;
+    if (!entry) return;
+    this.attached = null;
+    clearTimeout(entry.idleTimer);
+    const { ws } = entry;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
+    entry.settle();
+    if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.close(1000, "prewarm released");
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  /**
+   * Hand the prewarmed socket to the call, waiting up to
+   * {@link ATTACH_HANDSHAKE_TIMEOUT_MS} for a handshake still in flight.
+   * Resolves `null` when there is none, it stalled, or it dropped, so the
+   * caller opens a fresh socket.
+   */
+  private async takeAttachedSocket(): Promise<{ ws: WebSocket; live: boolean } | null> {
+    const entry = this.attached;
+    if (!entry) return null;
+    if (entry.state === "connecting") {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        entry.ready,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, ATTACH_HANDSHAKE_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+    }
+    if (this.attached !== entry) return null;
+    if (entry.state === "connecting" || entry.ws.readyState !== WebSocket.OPEN) {
+      this.releaseAttached();
+      return null;
+    }
+    this.attached = null;
+    clearTimeout(entry.idleTimer);
+    return { ws: entry.ws, live: entry.state === "live" };
+  }
+
+  private voiceSocketUrl(host: string, agentId: string): string {
+    return `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice`;
+  }
 
   /** Start the call: acquire mic, open the WS, stream PCM until hang-up. */
   async startListening(): Promise<void> {
@@ -164,11 +356,25 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         }
       });
 
-      const wsUrl = `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice`;
+      const adopted = await this.takeAttachedSocket();
+      if (generation !== this.callGeneration) {
+        adopted?.ws.close(1000, "client ended call");
+        return;
+      }
+      if (adopted) {
+        const { ws } = adopted;
+        this.ws = ws;
+        this.bindCallSocket(ws, generation);
+        if (!adopted.live) ws.send('{"type":"start"}');
+        this.emitStatus("listening");
+        this.startCapture(captureContext, stream, ws, generation);
+        return;
+      }
+
       // Token rides the subprotocol; `runtype.bearer` is the marker the server
       // echoes as the negotiated subprotocol (browsers fail the handshake if an
       // offered subprotocol goes unanswered).
-      const ws = new WebSocket(wsUrl, ["runtype.bearer", token]);
+      const ws = new WebSocket(this.voiceSocketUrl(host, agentId), ["runtype.bearer", token]);
       ws.binaryType = "arraybuffer";
       this.ws = ws;
 
@@ -177,37 +383,41 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         this.emitStatus("listening");
         this.startCapture(captureContext, stream, ws, generation);
       };
-
-      ws.onmessage = (event) => this.handleMessage(event, generation);
-
-      ws.onerror = () => {
-        if (generation !== this.callGeneration) return;
-        this.emitError(new Error("Voice connection failed"));
-        this.emitStatus("error");
-        this.cleanup();
-      };
-
-      ws.onclose = (evt) => {
-        if (this.intentionalClose) {
-          this.intentionalClose = false;
-          return;
-        }
-        if (generation !== this.callGeneration) return;
-        if (evt.code !== 1000) {
-          const codeMsg = evt.code ? ` (code ${evt.code})` : "";
-          this.emitError(new Error(`Voice connection closed${codeMsg}`));
-          this.emitStatus("error");
-        } else {
-          this.emitStatus("idle");
-        }
-        this.cleanup();
-      };
+      this.bindCallSocket(ws, generation);
     } catch (error) {
       this.cleanup();
       this.emitError(error as Error);
       this.emitStatus("error");
       throw error;
     }
+  }
+
+  /** Route a call socket's frames, errors, and close into this call. */
+  private bindCallSocket(ws: WebSocket, generation: number): void {
+    ws.onmessage = (event) => this.handleMessage(event, generation);
+
+    ws.onerror = () => {
+      if (generation !== this.callGeneration) return;
+      this.emitError(new Error("Voice connection failed"));
+      this.emitStatus("error");
+      this.cleanup();
+    };
+
+    ws.onclose = (evt) => {
+      if (this.intentionalClose) {
+        this.intentionalClose = false;
+        return;
+      }
+      if (generation !== this.callGeneration) return;
+      if (evt.code !== 1000) {
+        const codeMsg = evt.code ? ` (code ${evt.code})` : "";
+        this.emitError(new Error(`Voice connection closed${codeMsg}`));
+        this.emitStatus("error");
+      } else {
+        this.emitStatus("idle");
+      }
+      this.cleanup();
+    };
   }
 
   /** End the call (hang up). */
@@ -374,6 +584,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.callGeneration += 1;
     this.callLive = false;
     this.isSpeaking = false;
+    this.releaseAttached();
 
     if (this.processor) {
       this.processor.onaudioprocess = null;

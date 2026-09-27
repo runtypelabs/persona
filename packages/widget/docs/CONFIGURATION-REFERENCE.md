@@ -456,6 +456,7 @@ config: {
 | `processingErrorText` | `string?` | Error text on voice failure. Default: `'Voice processing failed. Please try again.'`. |
 | `autoResume` | `boolean \| 'assistant'?` | Auto-resume listening after playback. `'assistant'` resumes after assistant finishes. |
 | `provider` | `{ type, browser?, runtype?, custom? }?` | Voice provider configuration (see below). |
+| `prewarm` | `'hover' \| false \| (ctx) => void \| (() => void)` | Warm the voice path on mic intent, before the click. Default `'hover'` in client token mode, otherwise `false`. See [Voice prewarm](#voice-prewarm). |
 | `iconName`, `iconSize`, `iconColor`, `backgroundColor`, `borderColor`, `borderWidth`, `paddingX`, `paddingY`, `tooltipText`, `showTooltip`, `recordingIconColor`, `recordingBackgroundColor`, `recordingBorderColor`, `showRecordingIndicator` | various | Styling options for the voice button. See [THEME-CONFIG.md](../THEME-CONFIG.md). |
 
 **`provider.browser`**
@@ -473,6 +474,8 @@ config: {
 | `clientToken` | `string?` | Runtype client token for authentication. Defaults to top-level `clientToken` when omitted. |
 | `host` | `string?` | API host override. |
 | `voiceId` | `string?` | Voice ID for TTS. |
+| `prewarmMode` | `'request' \| 'attach'?` | How the prewarm warms the call. Default `'request'`. See [Voice prewarm](#voice-prewarm). |
+| `attachIdleMs` | `number?` | `'attach'` mode: how long (ms) the early socket waits for the click. The server clamps it to 30000 to 600000. Default: `30000`. |
 | `pauseDuration` | `number?` | Silence duration (ms) before auto-stop. Default: `2000`. |
 | `silenceThreshold` | `number?` | RMS volume threshold for silence detection. Default: `0.01`. |
 
@@ -496,6 +499,42 @@ config: {
   }
 }
 ```
+
+#### Voice prewarm
+
+The widget can warm the voice path when the visitor shows intent to talk, so the call starts faster after the click. In client token mode this is on by default: hovering the mic button, focusing it, or the first touch on it starts the warm-up. No configuration is needed.
+
+| `voiceRecognition.prewarm` | Fires |
+| --- | --- |
+| `'hover'` (default in client token mode) | When the pointer enters the mic button, the button receives focus, or (on touch) the first pointer-down on it. |
+| `false` (default otherwise) | Never. |
+| function | Your own trigger. Called with `{ warm, micButton, mount }` while the mic button exists, and again when the button is rebuilt or `update()` swaps in a different function. Call `warm()` whenever you like and optionally return a cleanup that runs on `destroy()`, rebuild, or replacement. Replaces the built-in trigger. |
+
+What `warm()` does depends on the provider:
+
+- **`runtype`**: sends `POST {host}/v1/client/agents/{agentId}/voice/prewarm` with the client token. It runs at most once every 30 seconds per provider.
+- **`custom`**: calls the provider's optional `prewarm()` method, if it has one.
+- **Browser (Web Speech)**: speech recognition cannot start before the click, so the warm-up starts the client-token session init instead (the same request `sessionInit` sends).
+
+Warming is fire-and-forget: it never shows an error or changes the mic state. If it fails, the click connects as usual.
+
+```typescript
+// Opt out
+voiceRecognition: { enabled: true, prewarm: false, provider: { type: 'runtype', runtype: { agentId: 'agent_01abc' } } }
+
+// Warm when the visitor hovers your own "Talk to us" button instead
+voiceRecognition: {
+  enabled: true,
+  provider: { type: 'runtype', runtype: { agentId: 'agent_01abc' } },
+  prewarm: ({ warm }) => {
+    const button = document.querySelector('#talk-to-us');
+    button?.addEventListener('pointerenter', warm);
+    return () => button?.removeEventListener('pointerenter', warm);
+  },
+}
+```
+
+**Attach mode.** With `provider.runtype.prewarmMode: 'attach'`, the warm-up opens the voice WebSocket early instead of sending the HTTP request. The socket is attached but no call starts until the click, which reuses it. If the visitor does not click within `attachIdleMs` (default 30 seconds), the socket closes. If the click comes while the socket is still connecting, the widget waits up to 5 seconds for it and then opens a fresh connection. Attach mode can create server work before the visitor clicks, so it is opt-in.
 
 ### Text-to-Speech
 

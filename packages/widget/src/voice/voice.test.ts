@@ -217,14 +217,17 @@ describe('Voice Support Check', () => {
 const WS_OPEN = 1;
 
 class MockWebSocket {
+  static CONNECTING = 0;
   static OPEN = WS_OPEN;
   static instances: MockWebSocket[] = [];
 
   url: string;
   protocols: string | string[] | undefined;
+  /** Negotiated subprotocol, set by the test before `triggerOpen()`. */
+  protocol = '';
   binaryType = '';
   readyState = 0;
-  sent: ArrayBuffer[] = [];
+  sent: Array<ArrayBuffer | string> = [];
   closeCalls: Array<{ code?: number; reason?: string }> = [];
   onopen: (() => void) | null = null;
   onmessage: ((ev: { data: unknown }) => void) | null = null;
@@ -237,7 +240,7 @@ class MockWebSocket {
     MockWebSocket.instances.push(this);
   }
 
-  send(data: ArrayBuffer) {
+  send(data: ArrayBuffer | string) {
     this.sent.push(data);
   }
 
@@ -534,5 +537,272 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     statuses.length = 0;
     engine.finishedCb?.(); // playback drained
     expect(statuses).toEqual(['listening']);
+  });
+});
+
+describe('RuntypeVoiceProvider prewarm', () => {
+  let getUserMedia: ReturnType<typeof vi.fn>;
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    MockWebSocket.instances = [];
+    getUserMedia = vi.fn(async () => makeStream().stream);
+    fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('WebSocket', MockWebSocket);
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
+    vi.stubGlobal('fetch', fetchMock);
+    (globalThis as any).window.AudioContext = MockAudioContext;
+    (globalThis as any).window.webkitAudioContext = MockAudioContext;
+    (globalThis as any).window.location = { protocol: 'https:' };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    delete (globalThis as any).window.AudioContext;
+    delete (globalThis as any).window.webkitAudioContext;
+    delete (globalThis as any).window.location;
+  });
+
+  const config = (extra: Partial<NonNullable<VoiceConfig['runtype']>> = {}) => ({
+    agentId: 'agent/1',
+    clientToken: 'ct_secret',
+    host: 'https://api.example.com',
+    ...extra,
+  });
+  const attachConfig = (extra: Partial<NonNullable<VoiceConfig['runtype']>> = {}) =>
+    config({ prewarmMode: 'attach', ...extra });
+  const lastWs = () => MockWebSocket.instances[MockWebSocket.instances.length - 1];
+  const openAs = (ws: MockWebSocket, protocol: string) => {
+    ws.protocol = protocol;
+    ws.triggerOpen();
+  };
+
+  describe("'request' mode (default)", () => {
+    it('POSTs the prewarm endpoint with the bearer token and no body', () => {
+      new RuntypeVoiceProvider(config()).prewarm();
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://api.example.com/v1/client/agents/agent%2F1/voice/prewarm');
+      expect(init).toEqual({
+        method: 'POST',
+        headers: { Authorization: 'Bearer ct_secret' },
+        keepalive: true,
+      });
+      expect(MockWebSocket.instances).toHaveLength(0);
+    });
+
+    it.each([
+      ['http://localhost:8787', 'http://localhost:8787'],
+      ['wss://api.example.com', 'https://api.example.com'],
+      ['api.example.com', 'https://api.example.com'],
+    ])('derives the http base from %s', (host, base) => {
+      new RuntypeVoiceProvider(config({ host })).prewarm();
+      expect(fetchMock.mock.calls[0][0]).toBe(`${base}/v1/client/agents/agent%2F1/voice/prewarm`);
+    });
+
+    it('fires at most once per 30s per provider', () => {
+      const provider = new RuntypeVoiceProvider(config());
+      provider.prewarm();
+      provider.prewarm();
+      vi.advanceTimersByTime(29_999);
+      provider.prewarm();
+      expect(fetchMock).toHaveBeenCalledOnce();
+      vi.advanceTimersByTime(1);
+      provider.prewarm();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('swallows rejected and throwing fetches without emitting errors or status', async () => {
+      const errors: Error[] = [];
+      const statuses: string[] = [];
+      fetchMock.mockRejectedValueOnce(new Error('offline'));
+      const provider = new RuntypeVoiceProvider(config());
+      provider.onError((e) => errors.push(e));
+      provider.onStatusChange((s) => statuses.push(s));
+      provider.prewarm();
+      await vi.advanceTimersByTimeAsync(30_000);
+      fetchMock.mockImplementationOnce(() => {
+        throw new Error('sync');
+      });
+      expect(() => provider.prewarm()).not.toThrow();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(errors).toEqual([]);
+      expect(statuses).toEqual([]);
+    });
+
+    it('does nothing without credentials or during a live call', async () => {
+      new RuntypeVoiceProvider(config({ clientToken: undefined })).prewarm();
+      expect(fetchMock).not.toHaveBeenCalled();
+
+      const provider = new RuntypeVoiceProvider(config());
+      await provider.startListening();
+      provider.prewarm();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("'attach' mode", () => {
+    it('opens the voice socket with the attach capability and subprotocol, then pings', () => {
+      new RuntypeVoiceProvider(attachConfig()).prewarm();
+
+      const ws = lastWs();
+      expect(ws.url).toBe('wss://api.example.com/ws/agents/agent%2F1/voice?clientCapabilities=attach');
+      expect(ws.protocols).toEqual(['runtype.bearer', 'runtype.attach', 'ct_secret']);
+      expect(fetchMock).not.toHaveBeenCalled();
+      openAs(ws, 'runtype.attach');
+      expect(ws.sent).toEqual(['{"type":"ping"}']);
+    });
+
+    it('sends a clamped attachIdleMs when configured', () => {
+      new RuntypeVoiceProvider(attachConfig({ attachIdleMs: 5_000 })).prewarm();
+      expect(lastWs().url).toContain('clientCapabilities=attach&attachIdleMs=30000');
+    });
+
+    it('never attaches twice concurrently', () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.prewarm();
+      vi.advanceTimersByTime(60_000);
+      provider.prewarm();
+      expect(MockWebSocket.instances).toHaveLength(1);
+    });
+
+    it('reuses an attached socket on click: sends start and captures on it', async () => {
+      const statuses: string[] = [];
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.onStatusChange((s) => statuses.push(s));
+      provider.prewarm();
+      const ws = lastWs();
+      openAs(ws, 'runtype.attach');
+      ws.triggerMessage('{"type":"attached","idleMs":30000}');
+
+      await provider.startListening();
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(ws.sent).toEqual(['{"type":"ping"}', '{"type":"start"}']);
+      expect(statuses).toEqual(['listening']);
+      pumpCapture(constantBuffer(0.1));
+      expect(ws.sent).toHaveLength(3);
+      // The call owns the socket now: the attach idle timer no longer closes it.
+      vi.advanceTimersByTime(600_000);
+      expect(ws.closeCalls).toEqual([]);
+    });
+
+    it('adopts a socket whose server ignored attach without sending start', async () => {
+      const transcripts: string[] = [];
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.onTranscript((_role, text) => transcripts.push(text));
+      provider.prewarm();
+      const ws = lastWs();
+      openAs(ws, 'runtype.bearer');
+      expect(ws.sent).toEqual([]);
+
+      await provider.startListening();
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(ws.sent).toEqual([]);
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_final', role: 'user', text: 'hi' }));
+      expect(transcripts).toEqual(['hi']);
+    });
+
+    it('opens a fresh socket when the attached one dropped before the click', async () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.prewarm();
+      const attached = lastWs();
+      openAs(attached, 'runtype.attach');
+      attached.triggerClose(4408);
+
+      await provider.startListening();
+
+      expect(MockWebSocket.instances).toHaveLength(2);
+      expect(lastWs().url).toBe('wss://api.example.com/ws/agents/agent%2F1/voice');
+      expect(lastWs().protocols).toEqual(['runtype.bearer', 'ct_secret']);
+    });
+
+    it('abandons a handshake stalled for 5s and opens a fresh socket', async () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.prewarm();
+      const stalled = lastWs();
+
+      const started = provider.startListening();
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(MockWebSocket.instances).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      await started;
+
+      expect(stalled.closeCalls).toEqual([{ code: 1000, reason: 'prewarm released' }]);
+      expect(MockWebSocket.instances).toHaveLength(2);
+      expect(lastWs().protocols).toEqual(['runtype.bearer', 'ct_secret']);
+    });
+
+    it('uses an attach that completes while the click waits on it', async () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.prewarm();
+      const ws = lastWs();
+
+      const started = provider.startListening();
+      await vi.advanceTimersByTimeAsync(1_000);
+      openAs(ws, 'runtype.attach');
+      await started;
+
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(ws.sent).toContain('{"type":"start"}');
+    });
+
+    it('closes an unused attached socket at the idle window', () => {
+      const errors: Error[] = [];
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.onError((e) => errors.push(e));
+      provider.prewarm();
+      const ws = lastWs();
+      openAs(ws, 'runtype.attach');
+
+      vi.advanceTimersByTime(29_999);
+      expect(ws.closeCalls).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(ws.closeCalls).toEqual([{ code: 1000, reason: 'prewarm released' }]);
+      expect(errors).toEqual([]);
+    });
+
+    it("follows the server's idle window from the attached reply", () => {
+      const provider = new RuntypeVoiceProvider(attachConfig({ attachIdleMs: 120_000 }));
+      provider.prewarm();
+      const ws = lastWs();
+      openAs(ws, 'runtype.attach');
+      vi.advanceTimersByTime(1_000);
+      ws.triggerMessage('{"type":"attached","idleMs":60000}');
+
+      vi.advanceTimersByTime(58_999);
+      expect(ws.closeCalls).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(ws.closeCalls).toHaveLength(1);
+    });
+
+    it('closes the attaching socket when the call is hung up mid-handshake', async () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.prewarm();
+      const ws = lastWs();
+
+      const started = provider.startListening();
+      await vi.advanceTimersByTimeAsync(100);
+      await provider.stopListening();
+      await started;
+
+      expect(ws.closeCalls).toEqual([{ code: 1000, reason: 'prewarm released' }]);
+      expect(MockWebSocket.instances).toHaveLength(1);
+      expect(provider.isBargeInActive()).toBe(false);
+    });
+
+    it('disconnect closes an attached socket', async () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.prewarm();
+      const ws = lastWs();
+      openAs(ws, 'runtype.attach');
+      await provider.disconnect();
+      expect(ws.closeCalls).toEqual([{ code: 1000, reason: 'prewarm released' }]);
+    });
   });
 });

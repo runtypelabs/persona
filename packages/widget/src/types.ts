@@ -4614,6 +4614,24 @@ export type AgentWidgetStatusIndicatorConfig = {
   resumingText?: string;
 };
 
+/** Built-in `voiceRecognition.prewarm` triggers. See {@link AgentWidgetVoiceRecognitionConfig.prewarm}. */
+export type AgentWidgetVoicePrewarmTrigger = 'hover';
+
+/**
+ * Custom `voiceRecognition.prewarm` trigger. Runs while the composer has a mic
+ * button, and again when the button is rebuilt or `update()` swaps in a
+ * different function. Call `warm()` whenever the visitor shows intent to talk
+ * (it is safe to call repeatedly). Return a cleanup to run on replacement.
+ */
+export type AgentWidgetVoicePrewarmHook = (context: {
+  /** Fire-and-forget voice warm-up; latched and error-swallowing. */
+  warm: () => void;
+  /** The composer's current mic button. */
+  micButton: HTMLButtonElement;
+  /** The widget's mount element. */
+  mount: HTMLElement;
+}) => void | (() => void);
+
 export type AgentWidgetVoiceRecognitionConfig = {
   /**
    * Enable the mic button and voice input. The mic still only renders when the
@@ -4685,6 +4703,30 @@ export type AgentWidgetVoiceRecognitionConfig = {
    */
   onMetrics?: (metrics: VoiceMetrics) => void;
 
+  /**
+   * Warm the voice path when the visitor shows intent to talk, before the mic
+   * click, so the call starts faster.
+   *
+   * - `'hover'`: when the pointer enters the mic button, it receives focus, or
+   *   (on touch) the first pointer-down on it.
+   * - `false`: never.
+   * - A function: custom trigger. Called with `{ warm, micButton, mount }`
+   *   while the mic button exists (and again when the button is rebuilt or
+   *   `update()` swaps in a different function); call `warm()` whenever you
+   *   decide, e.g. when the panel opens. May return a cleanup that runs on
+   *   destroy, rebuild, or replacement. Replaces the built-in trigger.
+   *
+   * What `warm()` does depends on the provider: `runtype` fires its prewarm
+   * (see `provider.runtype.prewarmMode`), a `custom` provider's optional
+   * {@link VoiceProvider.prewarm} runs, and the browser (Web Speech) path
+   * starts the client-token session init (as `sessionInit` does), since speech
+   * recognition itself cannot start before the click. Warming is
+   * fire-and-forget, latched, and never surfaces an error or UI state.
+   *
+   * @default 'hover' in client token mode, otherwise `false`
+   */
+  prewarm?: AgentWidgetVoicePrewarmTrigger | AgentWidgetVoicePrewarmHook | false;
+
   // Voice provider configuration
   provider?: {
     type: 'browser' | 'runtype' | 'custom';
@@ -4707,6 +4749,23 @@ export type AgentWidgetVoiceRecognitionConfig = {
        * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
        */
       createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
+      /**
+       * How `prewarm()` warms the voice path (see `voiceRecognition.prewarm`).
+       *
+       * - `'request'` (default): a fire-and-forget
+       *   `POST {host}/v1/client/agents/{agentId}/voice/prewarm`.
+       * - `'attach'`: open the voice WebSocket ahead of the click without
+       *   starting a call; the click then starts the call on that socket. It can
+       *   create server work before the visitor clicks, so it is opt-in.
+       * @default 'request'
+       */
+      prewarmMode?: 'request' | 'attach';
+      /**
+       * `'attach'` mode: how long (ms) an attached socket waits for the click
+       * before it closes. The server clamps it to 30000..600000.
+       * @default 30000
+       */
+      attachIdleMs?: number;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
       pauseDuration?: number;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5014,6 +5073,10 @@ export type VoiceConfig = {
      * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
      */
     createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
+    /** See `voiceRecognition.provider.runtype.prewarmMode`. @default 'request' */
+    prewarmMode?: 'request' | 'attach';
+    /** See `voiceRecognition.provider.runtype.attachIdleMs`. @default 30000 */
+    attachIdleMs?: number;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
     pauseDuration?: number;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5085,6 +5148,14 @@ export interface VoiceProvider {
 
   /** Stop playback / cancel in-flight request without starting recording */
   stopPlayback?(): void;
+
+  /**
+   * Warm the provider ahead of `startListening()` (the widget calls it on mic
+   * intent, see `voiceRecognition.prewarm`). Must be fire-and-forget: never
+   * throw, emit errors or status, or acquire the microphone. May be called
+   * repeatedly; throttle as needed.
+   */
+  prewarm?(): void;
 }
 
 /**

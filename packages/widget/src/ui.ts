@@ -16,6 +16,7 @@ import {
   AgentWidgetConfig,
   AgentWidgetConfigPatch,
   AgentWidgetSessionInitHook,
+  AgentWidgetVoicePrewarmHook,
   AgentWidgetApprovalDecisionOptions,
   AgentWidgetMessage,
   AgentWidgetEvent,
@@ -12981,6 +12982,62 @@ export const createAgentExperience = (
 
   composerVoiceBridge = handleMicButtonClick;
 
+  // Voice prewarm on mic intent (`voiceRecognition.prewarm`). Delegated on the
+  // mount so composer rebuilds stay covered, and `config` is read at event time
+  // so `update()` applies without re-wiring. Default: 'hover' in client token
+  // mode, off otherwise.
+  const warmVoice = () => session.prewarmVoice();
+  const voicePrewarmSetting = () => {
+    const voice = config.voiceRecognition;
+    if (voice?.enabled !== true) return false;
+    return voice.prewarm ?? (config.clientToken ? "hover" : false);
+  };
+  // `pointerover` covers mouse hover and precedes a touch's pointer-down;
+  // `focusin` covers keyboard focus.
+  const handleVoicePrewarmIntent = (event: Event) => {
+    if (voicePrewarmSetting() !== "hover") return;
+    if (micButton?.contains(event.target as Node)) warmVoice();
+  };
+  const voicePrewarmEvents = ["pointerover", "pointerdown", "focusin"];
+  voicePrewarmEvents.forEach((type) => mount.addEventListener(type, handleVoicePrewarmIntent));
+  // A custom prewarm hook is bound to one mic button: it re-runs (after its
+  // cleanup) when the button is rebuilt or `update()` swaps the function.
+  let voicePrewarmHook: AgentWidgetVoicePrewarmHook | undefined;
+  let voicePrewarmHookButton: HTMLButtonElement | null = null;
+  let voicePrewarmHookCleanup: ReturnType<AgentWidgetVoicePrewarmHook>;
+  // Host hook code may throw; neither setup nor cleanup may break the widget.
+  const releaseVoicePrewarmHook = () => {
+    const cleanup = voicePrewarmHookCleanup;
+    voicePrewarmHookCleanup = undefined;
+    try {
+      if (typeof cleanup === "function") cleanup();
+    } catch {
+      // ignored, see above
+    }
+  };
+  const syncVoicePrewarmHook = () => {
+    const setting = voicePrewarmSetting();
+    const next = typeof setting === "function" && micButton ? setting : undefined;
+    const button = next ? micButton : null;
+    if (next === voicePrewarmHook && button === voicePrewarmHookButton) return;
+    releaseVoicePrewarmHook();
+    voicePrewarmHook = next;
+    voicePrewarmHookButton = button;
+    if (!next || !button) return;
+    try {
+      voicePrewarmHookCleanup = next({ warm: warmVoice, micButton: button, mount });
+    } catch {
+      // ignored, see above
+    }
+  };
+  syncVoicePrewarmHook();
+  destroyCallbacks.push(() => {
+    voicePrewarmEvents.forEach((type) =>
+      mount.removeEventListener(type, handleVoicePrewarmIntent)
+    );
+    releaseVoicePrewarmHook();
+  });
+
   if (micButton) {
     // The click listener itself is registered by `wireComposerSurface`, so a
     // composer rebuild unwires it with the rest of the surface.
@@ -13578,6 +13635,7 @@ export const createAgentExperience = (
     if (micButton) {
       composerBindings.addListener(micButton, "click", handleMicButtonClick);
     }
+    syncVoicePrewarmHook();
   };
 
   wireComposerSurface();
@@ -14764,6 +14822,7 @@ export const createAgentExperience = (
           }
         }
       }
+      syncVoicePrewarmHook();
 
       // Update attachment button visibility based on attachments config
       const attachmentsEnabled = config.attachments?.enabled === true;

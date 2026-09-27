@@ -13,7 +13,8 @@ const h = vi.hoisted(() => {
       | ((role: 'user' | 'assistant', text: string, isFinal: boolean) => void)
       | null;
     metricsCb: ((m: VoiceMetrics) => void) | null;
-  } = { transcriptCb: null, metricsCb: null };
+    prewarms: number;
+  } = { transcriptCb: null, metricsCb: null, prewarms: 0 };
 
   const fakeProvider = {
     type: 'runtype' as const,
@@ -29,6 +30,9 @@ const h = vi.hoisted(() => {
     },
     onMetrics: (cb: typeof state.metricsCb) => {
       state.metricsCb = cb;
+    },
+    prewarm: () => {
+      state.prewarms += 1;
     },
   };
 
@@ -210,5 +214,72 @@ describe('AgentWidgetSession - Runtype TTS config', () => {
     } finally {
       setRuntypeTtsLoader(null);
     }
+  });
+});
+
+describe('AgentWidgetSession - prewarmVoice', () => {
+  const callbacks = {
+    onMessagesChanged: () => {},
+    onStatusChanged: () => {},
+    onStreamingChanged: () => {},
+    onError: () => {},
+  };
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const runtypeSession = () =>
+    new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:8000',
+        voiceRecognition: {
+          enabled: true,
+          provider: { type: 'runtype', runtype: { agentId: 'a1' } },
+        },
+      },
+      callbacks,
+    );
+
+  beforeEach(() => {
+    h.state.prewarms = 0;
+  });
+
+  it("calls the provider's prewarm once setup has installed it", async () => {
+    const session = runtypeSession();
+    session.setupVoice();
+    await flush();
+    session.prewarmVoice();
+    await flush();
+    expect(h.state.prewarms).toBe(1);
+  });
+
+  it('waits for a setup still loading the voice runtime', async () => {
+    const session = runtypeSession();
+    session.setupVoice();
+    session.prewarmVoice();
+    expect(h.state.prewarms).toBe(0);
+    await flush();
+    expect(h.state.prewarms).toBe(1);
+  });
+
+  it('drops a prewarm whose setup was torn down meanwhile', async () => {
+    const session = runtypeSession();
+    session.setupVoice();
+    session.prewarmVoice();
+    session.cleanupVoice();
+    await flush();
+    expect(h.state.prewarms).toBe(0);
+  });
+
+  it('warms the client session on the browser (Web Speech) path', () => {
+    const session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:8000',
+        clientToken: 'ct_test',
+        voiceRecognition: { enabled: true, provider: { type: 'browser' } },
+      },
+      callbacks,
+    );
+    const warm = vi.spyOn(session, 'warmClientSession').mockImplementation(() => {});
+    session.prewarmVoice();
+    expect(warm).toHaveBeenCalledOnce();
+    expect(h.state.prewarms).toBe(0);
   });
 });
