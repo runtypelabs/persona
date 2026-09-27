@@ -15,6 +15,7 @@ import {
 import { GALLERY_EXAMPLES } from "./examples-nav";
 import { STANDALONE_EXAMPLES } from "./standalone-nav";
 import { editorialWidgetTheme } from "./editorial-widget-theme";
+import { createDeepWikiToolPlugin } from "./plugins/deepwiki-tool-plugin";
 
 installCommandPalette({
   trigger: document.querySelector<HTMLElement>("[data-command-palette-trigger]"),
@@ -173,6 +174,9 @@ const sharedWidgetConfig: NonNullable<
   },
   features: {
     showEventStreamToggle: true,
+    // The docs model's reasoning is sub-second, so a reasoning bubble just
+    // flickers in and out; the typing indicator covers that beat.
+    showReasoning: false,
     // Scroll: anchor-top (ChatGPT-style — pin the sent message near the top and
     // stream the reply below) is now the library default, so no per-instance
     // scrollBehavior override is needed here.
@@ -196,6 +200,9 @@ const sharedWidgetConfig: NonNullable<
   },
   storageAdapter: sharedWidgetStorage,
   suggestionChips: [...homeDemoSuggestionChips],
+  // DeepWiki lookups render as a branded card; any other tool keeps the
+  // default bubble.
+  plugins: [createDeepWikiToolPlugin({ defaultRepo: "runtypelabs/persona" })],
   // Client-token session init on hover instead of the default first keystroke,
   // so `/v1/client/init` has already fired by the time a starter chip is
   // clicked (touch fires pointerenter too). `keydown` covers keyboard users and

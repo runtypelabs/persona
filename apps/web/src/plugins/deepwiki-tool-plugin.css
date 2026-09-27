@@ -1,0 +1,319 @@
+/* DeepWiki tool card (deepwiki-tool-plugin.ts).
+   Structure (fonts, radius, shadow) follows the widget's theme variables so it
+   sits in any Persona theme; the palette is DeepWiki's own, a dark indigo-lit
+   card that reads as "an outside service is working" next to the agent's
+   bubbles. Hosts can re-skin it by setting the --persona-deepwiki-* variables
+   anywhere above the card (e.g. on the widget root). */
+
+.persona-deepwiki-card {
+  --dw-bg: var(--persona-deepwiki-bg, #0f1422);
+  --dw-bg-raised: var(--persona-deepwiki-bg-raised, #161d30);
+  --dw-line: var(--persona-deepwiki-line, #26304a);
+  --dw-text: var(--persona-deepwiki-text, #e4e8f4);
+  --dw-muted: var(--persona-deepwiki-muted, #8a93ad);
+  --dw-accent: var(--persona-deepwiki-accent, #7c9bff);
+  --dw-accent-2: var(--persona-deepwiki-accent-2, #5ee6d0);
+  --dw-danger: var(--persona-deepwiki-danger, #ff7a70);
+  --dw-mono: var(--persona-font-mono, ui-monospace, SFMono-Regular, monospace);
+
+  position: relative;
+  width: 100%;
+  max-width: 85%;
+  overflow: hidden;
+  background: var(--dw-bg);
+  border: 1px solid var(--dw-line);
+  border-radius: var(--persona-radius-md, 0.5rem);
+  box-shadow: var(--persona-tool-bubble-shadow, none);
+  color: var(--dw-text);
+  font-family: var(--persona-font-family, system-ui, sans-serif);
+}
+
+/* Faint dot grid, like a wiki sitemap drawn on graph paper. */
+.persona-deepwiki-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(color-mix(in srgb, var(--dw-accent) 12%, transparent) 1px, transparent 1px);
+  background-size: 12px 12px;
+  pointer-events: none;
+}
+
+.persona-deepwiki-card > * {
+  position: relative;
+}
+
+.persona-deepwiki-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--dw-line);
+  background: var(--dw-bg-raised);
+  font-family: var(--dw-mono);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.persona-deepwiki-card__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dw-accent);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.persona-deepwiki-card__glyph {
+  display: inline-flex;
+}
+
+.persona-deepwiki-card__repo {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dw-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persona-deepwiki-card__status,
+.persona-deepwiki-card__clock {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--dw-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.persona-deepwiki-card[data-state="done"] .persona-deepwiki-card__status {
+  color: var(--dw-accent-2);
+}
+
+.persona-deepwiki-card[data-state="error"] {
+  border-color: color-mix(in srgb, var(--dw-danger) 50%, transparent);
+}
+
+.persona-deepwiki-card[data-state="error"] .persona-deepwiki-card__status {
+  color: var(--dw-danger);
+}
+
+/* Live elapsed clock, CSS-only: a tool call can go 10s+ without a re-render.
+   Integer custom properties animate in whole steps; the negative delay set
+   from the call's startedAt keeps it honest across re-renders. */
+@property --dw-s {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --dw-t {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.persona-deepwiki-card__clock {
+  counter-reset: dw-s var(--dw-s) dw-t var(--dw-t);
+  animation:
+    dw-seconds 600s steps(600, end) var(--dw-delay, 0s) forwards,
+    dw-tenths 1s steps(10, end) var(--dw-delay, 0s) infinite;
+}
+
+.persona-deepwiki-card__clock::after {
+  content: counter(dw-s) '.' counter(dw-t) 's';
+}
+
+/* Running stage: page scanner + narration. */
+.persona-deepwiki-card__stage {
+  display: flex;
+  gap: 14px;
+  padding: 14px 12px 16px;
+}
+
+.persona-deepwiki-card__page {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 54px;
+  height: 68px;
+  padding: 9px 8px;
+  overflow: hidden;
+  background: var(--dw-bg-raised);
+  border: 1px solid var(--dw-line);
+  border-radius: calc(var(--persona-radius-md, 0.5rem) / 2);
+}
+
+.persona-deepwiki-card__page i {
+  display: block;
+  height: 3px;
+  background: var(--dw-line);
+  animation: dw-row 2.4s ease-in-out infinite;
+}
+
+.persona-deepwiki-card__page i:nth-child(1) { width: 70%; height: 5px; animation-delay: 0s; }
+.persona-deepwiki-card__page i:nth-child(2) { width: 100%; animation-delay: 0.25s; }
+.persona-deepwiki-card__page i:nth-child(3) { width: 85%; animation-delay: 0.5s; }
+.persona-deepwiki-card__page i:nth-child(4) { width: 95%; animation-delay: 0.75s; }
+.persona-deepwiki-card__page i:nth-child(5) { width: 60%; animation-delay: 1s; }
+.persona-deepwiki-card__page i:nth-child(6) { width: 90%; animation-delay: 1.25s; }
+.persona-deepwiki-card__page i:nth-child(7) { width: 75%; animation-delay: 1.5s; }
+
+.persona-deepwiki-card__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 14px;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--dw-accent) 35%, transparent), transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--dw-accent) 70%, transparent);
+  animation: dw-band 2.4s ease-in-out infinite;
+}
+
+.persona-deepwiki-card__copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.persona-deepwiki-card__action {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+/* Phrases stack in one line box; phrase i shows from i × --dw-phrase for one
+   slot, then hands off. The last holds. Works for any number of phrases. */
+.persona-deepwiki-card__ticker {
+  display: grid;
+  height: 18px;
+  margin-top: 4px;
+  overflow: hidden;
+  font-family: var(--dw-mono);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.persona-deepwiki-card__ticker span {
+  grid-area: 1 / 1;
+  overflow: hidden;
+  color: var(--dw-accent-2);
+  opacity: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: dw-phrase var(--dw-phrase, 3.2s) var(--persona-motion-easing, ease)
+    calc(var(--dw-delay, 0s) + var(--dw-i, 0) * var(--dw-phrase, 3.2s)) both;
+}
+
+.persona-deepwiki-card__ticker span[data-last] {
+  animation-name: dw-phrase-last;
+}
+
+.persona-deepwiki-card__ticker span::before {
+  content: '› ';
+  color: var(--dw-muted);
+}
+
+.persona-deepwiki-card__question {
+  margin: 10px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--dw-accent);
+  color: var(--dw-text);
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+/* Indeterminate progress along the bottom edge. */
+.persona-deepwiki-card__progress {
+  height: 2px;
+  background:
+    linear-gradient(90deg, transparent, var(--dw-accent) 35%, var(--dw-accent-2) 65%, transparent)
+    no-repeat -100% 0 / 40% 100%,
+    var(--dw-line);
+  animation: dw-progress 1.6s var(--persona-motion-easing, ease) infinite;
+}
+
+/* Settled body. */
+.persona-deepwiki-card__body {
+  padding: 12px;
+}
+
+.persona-deepwiki-card[data-state="done"] .persona-deepwiki-card__action,
+.persona-deepwiki-card[data-state="error"] .persona-deepwiki-card__action {
+  font-size: 13px;
+}
+
+.persona-deepwiki-card__body .persona-deepwiki-card__question {
+  margin-top: 8px;
+  color: var(--dw-muted);
+  border-left-color: var(--dw-line);
+}
+
+.persona-deepwiki-card__peek {
+  display: -webkit-box;
+  margin: 10px 0 0;
+  overflow: hidden;
+  color: var(--dw-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.persona-deepwiki-card__link {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--dw-accent);
+  font-family: var(--dw-mono);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.persona-deepwiki-card__link:hover {
+  text-decoration: underline;
+}
+
+@keyframes dw-seconds { to { --dw-s: 600; } }
+@keyframes dw-tenths { to { --dw-t: 10; } }
+
+@keyframes dw-band {
+  0% { transform: translateY(-14px); }
+  100% { transform: translateY(68px); }
+}
+
+@keyframes dw-row {
+  0%, 100% { opacity: 0.55; }
+  35% { opacity: 1; background: var(--dw-accent); }
+}
+
+@keyframes dw-phrase {
+  0% { opacity: 0; transform: translateY(8px); }
+  10%, 88% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+
+@keyframes dw-phrase-last {
+  0% { opacity: 0; transform: translateY(8px); }
+  10%, 100% { opacity: 1; transform: none; }
+}
+
+@keyframes dw-progress {
+  to { background-position: 200% 0, 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-deepwiki-card__page i,
+  .persona-deepwiki-card__band,
+  .persona-deepwiki-card__progress {
+    animation: none;
+  }
+
+  /* No ticker: just the settled last phrase. */
+  .persona-deepwiki-card__ticker span {
+    animation: none;
+  }
+
+  .persona-deepwiki-card__ticker span[data-last] {
+    opacity: 1;
+  }
+}
