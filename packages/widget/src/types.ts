@@ -6991,6 +6991,22 @@ export type AgentWidgetLoadingIndicatorConfig = {
   renderIdle?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
 };
 
+/** Built-in `sessionInit` triggers. See {@link AgentWidgetConfig.sessionInit}. */
+export type AgentWidgetSessionInitTrigger = 'input' | 'focus' | 'mount' | 'send';
+
+/**
+ * Custom `sessionInit` trigger. Runs when the widget mounts in client token mode,
+ * and again if `update()` swaps in a different function. Call `warm()` whenever
+ * the visitor shows intent (it is safe to call repeatedly). Return a cleanup to
+ * run when the widget is destroyed or the hook is replaced.
+ */
+export type AgentWidgetSessionInitHook = (context: {
+  /** Fire-and-forget early session init; latched and error-swallowing. */
+  warm: () => void;
+  /** The widget's mount element. */
+  mount: HTMLElement;
+}) => void | (() => void);
+
 export type AgentWidgetConfig = {
   /** Opt in to upcoming major-version defaults without changing explicit settings. */
   future?: {
@@ -7155,6 +7171,46 @@ export type AgentWidgetConfig = {
    * ```
    */
   onSessionExpired?: () => void;
+  /**
+   * When the widget calls `/v1/client/init` in client token mode, ahead of the
+   * first send. Ignored outside client token mode.
+   *
+   * - `'input'` (default): on the composer's first user keystroke that leaves
+   *   non-empty text. Programmatic value changes (restored drafts,
+   *   `setMessage()`, history recall) do not count.
+   * - `'focus'`: when the visitor focuses the composer by pointer or Tab (and
+   *   on first input, as a fallback). Programmatic focus, such as
+   *   `autoFocusInput` on open or mount, does not count.
+   * - `'mount'`: as soon as the widget mounts (the behavior before this option
+   *   existed). Use it when a server-configured welcome message, which arrives
+   *   with the init response, must show before the visitor types.
+   * - `'send'`: no early init; the first send initializes the session.
+   * - A function: custom trigger. Called on mount (and when `update()` swaps
+   *   in a different function) with a `warm` callback to call whenever you
+   *   decide (e.g. on hover); may return a cleanup that runs on destroy or
+   *   replacement. Replaces the built-in triggers.
+   *
+   * The early init is fire-and-forget: it runs at most once per session
+   * lifetime (re-armed after expiry or a new conversation), sends exactly the
+   * same request the send would, and swallows errors. A failure resurfaces
+   * when the send retries init. A send during an in-flight early init reuses
+   * it, so only one `/v1/client/init` is issued. When visitor history is
+   * enabled the widget still initializes on mount to restore the conversation.
+   * Hosts can also trigger it imperatively with `controller.warmSession()`.
+   *
+   * @default 'input'
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   clientToken: 'ct_live_...',
+   *   sessionInit: ({ warm, mount }) => {
+   *     mount.addEventListener('pointerenter', warm, { once: true });
+   *   }
+   * }
+   * ```
+   */
+  sessionInit?: AgentWidgetSessionInitTrigger | AgentWidgetSessionInitHook;
   /**
    * Get stored session ID for session resumption (client token mode only).
    * Called when initializing a new session to check if there's a previous session_id

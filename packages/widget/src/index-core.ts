@@ -9,6 +9,8 @@ export type {
   AgentWidgetStorageAdapter,
   AgentWidgetStoredState,
   AgentWidgetConfigPatch,
+  AgentWidgetSessionInitTrigger,
+  AgentWidgetSessionInitHook,
   TargetResolver,
   ResolvedTarget,
   AgentWidgetFeatureFlags,

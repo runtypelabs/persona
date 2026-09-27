@@ -307,6 +307,14 @@ export class AgentWidgetClient {
   private currentClientTurnId: string | null = null;
   private clientSession: ClientSession | null = null;
   private sessionInitPromise: Promise<ClientSession> | null = null;
+  /**
+   * Early-init latch for `warmSession()`. `false` = armed. Otherwise it holds
+   * the session value (`null` or an expired session) the one early attempt was
+   * made against, so a failed attempt is not retried on every keystroke. It is
+   * re-armed when a session is installed or cleared, so each session lifetime
+   * gets one early init.
+   */
+  private sessionWarmLatch: ClientSession | null | false = false;
 
   // Diff-only / send-once WebMCP tool dispatch (client-token mode ONLY).
   // Fingerprint of the clientTools[] last *sent in full* and confirmed by a
@@ -622,8 +630,40 @@ export class AgentWidgetClient {
   }
 
   /**
+   * Fire-and-forget early `initSession()` for client-token mode, driven by the
+   * widget's `sessionInit` trigger (or a host calling it directly, e.g. on
+   * hover). It fires at most once per session lifetime and is a no-op while a
+   * session is live or an init is already in flight. Errors are swallowed, with
+   * no `onSessionExpired` and no UI: a send calls `initSession()` again and
+   * reuses the in-flight promise, so any failure resurfaces there exactly as it
+   * would without the early init. Sends nothing new on the wire. Outside
+   * client-token mode this does nothing.
+   *
+   * Resolves with the session this call initialized, or `null` when it was
+   * skipped or failed. It never rejects.
+   */
+  public async warmSession(): Promise<ClientSession | null> {
+    const current = this.clientSession;
+    if (
+      !this.isClientTokenMode() ||
+      this.sessionInitPromise ||
+      (current && new Date() < current.expiresAt) ||
+      this.sessionWarmLatch === current
+    ) {
+      return null;
+    }
+    this.sessionWarmLatch = current;
+    // Swallowed on purpose: the send's own initSession() reports failures.
+    return this.initSession().catch(() => null);
+  }
+
+  /**
    * Initialize session for client token mode.
-   * Called automatically on first message if not already initialized.
+   * Called by the send if no live session exists. The widget normally calls
+   * it earlier, when the visitor shows intent to send (see the `sessionInit`
+   * config option and `warmSession()`), and concurrent calls share one
+   * in-flight request, so a send racing an early init issues a single
+   * `/v1/client/init`.
    */
   public async initSession(): Promise<ClientSession> {
     if (!this.isClientTokenMode()) {
@@ -640,21 +680,28 @@ export class AgentWidgetClient {
       return this.sessionInitPromise;
     }
 
-    this.sessionInitPromise = this._doInitSession();
-    try {
-      const session = await this.sessionInitPromise;
-      this.clientSession = session;
-      // A freshly-minted session must resend the full WebMCP tool list on its
-      // next turn: drop any diff-only fingerprint cached under a prior session,
-      // so we never claim "unchanged" against a session the server didn't store
-      // the set under. (Belt-and-suspenders with the sessionId comparison in the
-      // send decision and the server's 409 resend signal.)
-      this.resetClientToolsFingerprint();
-      this.config.onSessionInit?.(session);
-      return session;
-    } finally {
-      this.sessionInitPromise = null;
-    }
+    // Callers that dedupe share this promise, so the stale check below covers
+    // them too (the send reusing an early init included).
+    const pending: Promise<ClientSession> = (this.sessionInitPromise = this._doInitSession()
+      .then((session) => {
+        // A clear or replacement (credential change, start-new, proof re-init)
+        // while this was in flight makes the result stale: never install it.
+        if (this.sessionInitPromise !== pending) return this.initSession();
+        this.clientSession = session;
+        this.sessionWarmLatch = false;
+        // A freshly-minted session must resend the full WebMCP tool list on its
+        // next turn: drop any diff-only fingerprint cached under a prior session,
+        // so we never claim "unchanged" against a session the server didn't store
+        // the set under. (Belt-and-suspenders with the sessionId comparison in the
+        // send decision and the server's 409 resend signal.)
+        this.resetClientToolsFingerprint();
+        this.config.onSessionInit?.(session);
+        return session;
+      })
+      .finally(() => {
+        if (this.sessionInitPromise === pending) this.sessionInitPromise = null;
+      }));
+    return pending;
   }
 
   /** Visitor history rides on client-token init only, and latches off after a 403 degrade. */
@@ -966,6 +1013,7 @@ export class AgentWidgetClient {
     const installed = this.finishInit(session, previousConversationId, false);
     this.clientSession = installed;
     this.sessionInitPromise = null;
+    this.sessionWarmLatch = false;
     this.resetClientToolsFingerprint();
     return installed;
   }
@@ -1032,6 +1080,7 @@ export class AgentWidgetClient {
         if (settled) return;
         settled = true;
         this.clientSession = session;
+        this.sessionWarmLatch = false;
         this.resetClientToolsFingerprint();
       },
       discard: () => {
@@ -1102,6 +1151,7 @@ export class AgentWidgetClient {
   public clearClientSession(): void {
     this.clientSession = null;
     this.sessionInitPromise = null;
+    this.sessionWarmLatch = false;
     this.resetClientToolsFingerprint();
   }
 
@@ -1212,6 +1262,7 @@ export class AgentWidgetClient {
       
       if (response.status === 401) {
         this.clientSession = null;
+        this.sessionWarmLatch = false;
         this.config.onSessionExpired?.();
         throw new Error('Session expired. Please refresh to continue.');
       }
@@ -1231,10 +1282,9 @@ export class AgentWidgetClient {
     messageId: string, 
     type: 'upvote' | 'downvote' | 'copy'
   ): Promise<void> {
-    const session = this.getClientSession();
-    if (!session) {
-      throw new Error('No active session. Please initialize session first.');
-    }
+    // Feedback on a restored transcript can precede any init (`sessionInit`
+    // defers it to intent); the feedback click is intent enough.
+    const session = this.getClientSession() ?? (await this.initSession());
 
     return this.sendFeedback({
       sessionId: session.sessionId,
@@ -1251,10 +1301,7 @@ export class AgentWidgetClient {
    * @param comment - Optional comment
    */
   public async submitCSATFeedback(rating: number, comment?: string): Promise<void> {
-    const session = this.getClientSession();
-    if (!session) {
-      throw new Error('No active session. Please initialize session first.');
-    }
+    const session = this.getClientSession() ?? (await this.initSession());
 
     return this.sendFeedback({
       sessionId: session.sessionId,
@@ -1272,10 +1319,7 @@ export class AgentWidgetClient {
    * @param comment - Optional comment
    */
   public async submitNPSFeedback(rating: number, comment?: string): Promise<void> {
-    const session = this.getClientSession();
-    if (!session) {
-      throw new Error('No active session. Please initialize session first.');
-    }
+    const session = this.getClientSession() ?? (await this.initSession());
 
     return this.sendFeedback({
       sessionId: session.sessionId,
@@ -1884,6 +1928,7 @@ export class AgentWidgetClient {
         }
         session = this.finishInit(renewed, previous.conversationId ?? null, false);
         this.clientSession = session;
+        this.sessionWarmLatch = false;
         this.resetClientToolsFingerprint();
         this.config.onSessionInit?.(session);
       };
