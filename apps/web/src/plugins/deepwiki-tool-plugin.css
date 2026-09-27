@@ -1,17 +1,20 @@
 /* DeepWiki tool card (deepwiki-tool-plugin.ts).
-   Deliberately *not* the site's paper voice: a dark, indigo-lit card so a
-   lookup reads as "an outside service is working" next to Persona's own
-   bubbles. Square corners keep it in the editorial grid. */
+   Structure (fonts, radius, shadow) follows the widget's theme variables so it
+   sits in any Persona theme; the palette is DeepWiki's own, a dark indigo-lit
+   card that reads as "an outside service is working" next to the agent's
+   bubbles. Hosts can re-skin it by setting the --persona-deepwiki-* variables
+   anywhere above the card (e.g. on the widget root). */
 
 .persona-deepwiki-card {
-  --dw-bg: #0f1422;
-  --dw-bg-raised: #161d30;
-  --dw-line: #26304a;
-  --dw-text: #e4e8f4;
-  --dw-muted: #8a93ad;
-  --dw-accent: #7c9bff;
-  --dw-accent-2: #5ee6d0;
-  --dw-danger: #ff7a70;
+  --dw-bg: var(--persona-deepwiki-bg, #0f1422);
+  --dw-bg-raised: var(--persona-deepwiki-bg-raised, #161d30);
+  --dw-line: var(--persona-deepwiki-line, #26304a);
+  --dw-text: var(--persona-deepwiki-text, #e4e8f4);
+  --dw-muted: var(--persona-deepwiki-muted, #8a93ad);
+  --dw-accent: var(--persona-deepwiki-accent, #7c9bff);
+  --dw-accent-2: var(--persona-deepwiki-accent-2, #5ee6d0);
+  --dw-danger: var(--persona-deepwiki-danger, #ff7a70);
+  --dw-mono: var(--persona-font-mono, ui-monospace, SFMono-Regular, monospace);
 
   position: relative;
   width: 100%;
@@ -19,9 +22,10 @@
   overflow: hidden;
   background: var(--dw-bg);
   border: 1px solid var(--dw-line);
-  box-shadow: 6px 6px 0 -1px rgba(29, 28, 23, 0.12);
+  border-radius: var(--persona-radius-md, 0.5rem);
+  box-shadow: var(--persona-tool-bubble-shadow, none);
   color: var(--dw-text);
-  font-family: var(--font-body, 'Geist', -apple-system, sans-serif);
+  font-family: var(--persona-font-family, system-ui, sans-serif);
 }
 
 /* Faint dot grid, like a wiki sitemap drawn on graph paper. */
@@ -29,7 +33,7 @@
   content: '';
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(124, 155, 255, 0.12) 1px, transparent 1px);
+  background-image: radial-gradient(color-mix(in srgb, var(--dw-accent) 12%, transparent) 1px, transparent 1px);
   background-size: 12px 12px;
   pointer-events: none;
 }
@@ -45,7 +49,7 @@
   padding: 9px 12px;
   border-bottom: 1px solid var(--dw-line);
   background: var(--dw-bg-raised);
-  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-family: var(--dw-mono);
   font-size: 11px;
   line-height: 1;
 }
@@ -77,6 +81,7 @@
   flex-shrink: 0;
   color: var(--dw-muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .persona-deepwiki-card[data-state="done"] .persona-deepwiki-card__status {
@@ -84,7 +89,7 @@
 }
 
 .persona-deepwiki-card[data-state="error"] {
-  border-color: rgba(255, 122, 112, 0.5);
+  border-color: color-mix(in srgb, var(--dw-danger) 50%, transparent);
 }
 
 .persona-deepwiki-card[data-state="error"] .persona-deepwiki-card__status {
@@ -136,6 +141,7 @@
   overflow: hidden;
   background: var(--dw-bg-raised);
   border: 1px solid var(--dw-line);
+  border-radius: calc(var(--persona-radius-md, 0.5rem) / 2);
 }
 
 .persona-deepwiki-card__page i {
@@ -145,7 +151,7 @@
   animation: dw-row 2.4s ease-in-out infinite;
 }
 
-.persona-deepwiki-card__page i:nth-child(1) { width: 70%; height: 5px; background: #33406a; animation-delay: 0s; }
+.persona-deepwiki-card__page i:nth-child(1) { width: 70%; height: 5px; animation-delay: 0s; }
 .persona-deepwiki-card__page i:nth-child(2) { width: 100%; animation-delay: 0.25s; }
 .persona-deepwiki-card__page i:nth-child(3) { width: 85%; animation-delay: 0.5s; }
 .persona-deepwiki-card__page i:nth-child(4) { width: 95%; animation-delay: 0.75s; }
@@ -159,8 +165,8 @@
   right: 0;
   top: 0;
   height: 14px;
-  background: linear-gradient(180deg, transparent, rgba(124, 155, 255, 0.35), transparent);
-  border-bottom: 1px solid rgba(124, 155, 255, 0.7);
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--dw-accent) 35%, transparent), transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--dw-accent) 70%, transparent);
   animation: dw-band 2.4s ease-in-out infinite;
 }
 
@@ -175,31 +181,34 @@
   letter-spacing: -0.005em;
 }
 
+/* Phrases stack in one line box; phrase i shows from i × --dw-phrase for one
+   slot, then hands off. The last holds. Works for any number of phrases. */
 .persona-deepwiki-card__ticker {
+  display: grid;
   height: 18px;
   margin-top: 4px;
   overflow: hidden;
-  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-family: var(--dw-mono);
   font-size: 11px;
   line-height: 18px;
 }
 
-.persona-deepwiki-card__ticker-track {
-  display: flex;
-  flex-direction: column;
-  animation: dw-ticker 16s var(--ease-smooth, ease) var(--dw-delay, 0s) forwards;
-}
-
-.persona-deepwiki-card__ticker-track span {
-  display: block;
-  height: 18px;
+.persona-deepwiki-card__ticker span {
+  grid-area: 1 / 1;
   overflow: hidden;
   color: var(--dw-accent-2);
+  opacity: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
+  animation: dw-phrase var(--dw-phrase, 3.2s) var(--persona-motion-easing, ease)
+    calc(var(--dw-delay, 0s) + var(--dw-i, 0) * var(--dw-phrase, 3.2s)) both;
 }
 
-.persona-deepwiki-card__ticker-track span::before {
+.persona-deepwiki-card__ticker span[data-last] {
+  animation-name: dw-phrase-last;
+}
+
+.persona-deepwiki-card__ticker span::before {
   content: '› ';
   color: var(--dw-muted);
 }
@@ -221,12 +230,12 @@
     linear-gradient(90deg, transparent, var(--dw-accent) 35%, var(--dw-accent-2) 65%, transparent)
     no-repeat -100% 0 / 40% 100%,
     var(--dw-line);
-  animation: dw-progress 1.6s var(--ease-smooth, ease) infinite;
+  animation: dw-progress 1.6s var(--persona-motion-easing, ease) infinite;
 }
 
 /* Settled body. */
 .persona-deepwiki-card__body {
-  padding: 12px 12px 12px;
+  padding: 12px;
 }
 
 .persona-deepwiki-card[data-state="done"] .persona-deepwiki-card__action,
@@ -255,7 +264,7 @@
   display: inline-block;
   margin-top: 10px;
   color: var(--dw-accent);
-  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-family: var(--dw-mono);
   font-size: 11px;
   text-decoration: none;
 }
@@ -277,13 +286,15 @@
   35% { opacity: 1; background: var(--dw-accent); }
 }
 
-/* Five phrases, ~3.2s each; the last one holds (animation-fill: forwards). */
-@keyframes dw-ticker {
-  0%, 18% { transform: translateY(0); }
-  20%, 38% { transform: translateY(-18px); }
-  40%, 58% { transform: translateY(-36px); }
-  60%, 78% { transform: translateY(-54px); }
-  80%, 100% { transform: translateY(-72px); }
+@keyframes dw-phrase {
+  0% { opacity: 0; transform: translateY(8px); }
+  10%, 88% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-8px); }
+}
+
+@keyframes dw-phrase-last {
+  0% { opacity: 0; transform: translateY(8px); }
+  10%, 100% { opacity: 1; transform: none; }
 }
 
 @keyframes dw-progress {
@@ -295,5 +306,14 @@
   .persona-deepwiki-card__band,
   .persona-deepwiki-card__progress {
     animation: none;
+  }
+
+  /* No ticker: just the settled last phrase. */
+  .persona-deepwiki-card__ticker span {
+    animation: none;
+  }
+
+  .persona-deepwiki-card__ticker span[data-last] {
+    opacity: 1;
   }
 }
