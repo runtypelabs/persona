@@ -123,8 +123,9 @@ const homeDemoConnection =
     ? {
         clientToken: runtypeClientToken,
         agentId: runtypeDocsAgentId,
-        // Only set to target a non-production Runtype API (e.g. staging).
-        ...(runtypeApiUrl ? { apiUrl: runtypeApiUrl } : {}),
+        // Always set: overrides DEFAULT_WIDGET_CONFIG's proxy-style apiUrl so
+        // client routes resolve against api.runtype.com, or a staging API.
+        apiUrl: runtypeApiUrl,
       }
     : { apiUrl: proxyUrl };
 
@@ -195,6 +196,21 @@ const sharedWidgetConfig: NonNullable<
   },
   storageAdapter: sharedWidgetStorage,
   suggestionChips: [...homeDemoSuggestionChips],
+  // Client-token session init on hover instead of the default first keystroke,
+  // so `/v1/client/init` has already fired by the time a starter chip is
+  // clicked (touch fires pointerenter too). `keydown` covers keyboard users and
+  // the replaced keystroke trigger; unlike `focusin` it never fires for
+  // autofocus, so page views alone don't spend an init. `warm` is latched and
+  // re-arms after "clear chat", so the listeners stay attached rather than
+  // `once`. Ignored on the proxy fallback.
+  sessionInit: ({ warm, mount }) => {
+    mount.addEventListener("pointerenter", warm);
+    mount.addEventListener("keydown", warm);
+    return () => {
+      mount.removeEventListener("pointerenter", warm);
+      mount.removeEventListener("keydown", warm);
+    };
+  },
   postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 };
 
