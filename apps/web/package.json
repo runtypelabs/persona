@@ -7,7 +7,8 @@
     "build": "pnpm --filter @runtypelabs/persona build && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test:run": "vitest run src"
+    "test:run": "vitest run src",
+    "runtype:ensure": "node runtype/ensure-docs-agent.ts"
   },
   "dependencies": {
     "@mcp-b/global": "^4.0.0",
@@ -25,6 +26,8 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
+    "@runtypelabs/persona-proxy": "workspace:^",
+    "@runtypelabs/sdk": "^10.3.1",
     "jsdom": "^28.1.0",
     "typescript": "^5.4.5",
     "vite": "^5.4.1",

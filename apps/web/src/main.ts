@@ -103,11 +103,30 @@ const homeDemoSuggestionChips = [
 ] as const;
 
 
+// The docs agent is defined as code (apps/web/runtype/docs-assistant.agent.ts)
+// and converged into Runtype by `pnpm --filter web runtype:ensure`, which also
+// mints the public client token. With both set, the widget talks to Runtype
+// directly in client-token mode. Without them (e.g. a fresh local checkout) it
+// falls back to the proxy's server-pinned `/api/chat/dispatch-docs` route.
+const runtypeClientToken: string | undefined = import.meta.env.VITE_RUNTYPE_CLIENT_TOKEN;
+const runtypeDocsAgentId: string | undefined = import.meta.env.VITE_RUNTYPE_DOCS_AGENT_ID;
+const runtypeApiUrl: string | undefined = import.meta.env.VITE_RUNTYPE_API_URL;
+
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
   import.meta.env.VITE_PROXY_URL ?
     `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-docs` :
     `http://localhost:${proxyPort}/api/chat/dispatch-docs`;
+
+const homeDemoConnection =
+  runtypeClientToken && runtypeDocsAgentId
+    ? {
+        clientToken: runtypeClientToken,
+        agentId: runtypeDocsAgentId,
+        // Only set to target a non-production Runtype API (e.g. staging).
+        ...(runtypeApiUrl ? { apiUrl: runtypeApiUrl } : {}),
+      }
+    : { apiUrl: proxyUrl };
 
 const homeDemoWelcomeTitle = "Welcome to Persona";
 const homeDemoWelcomeSubtitle =
@@ -140,7 +159,7 @@ const sharedWidgetConfig: NonNullable<
   Parameters<typeof createAgentExperience>[1]
 > = {
   ...DEFAULT_WIDGET_CONFIG,
-  apiUrl: proxyUrl,
+  ...homeDemoConnection,
   ...homeDemoSharedAssistant,
   // Match the page's editorial/terminal design: paper surfaces, square
   // corners, ink text, teal accents, mono/Geist type. Shared so embedded
@@ -158,11 +177,10 @@ const sharedWidgetConfig: NonNullable<
     // scrollBehavior override is needed here.
   },
   // Read aloud uses Runtype-hosted TTS (provider: 'runtype'): the button
-  // streams audio from Runtype's per-agent `/speak` endpoint. This demo talks
-  // to a proxy with no clientToken/agentId, so `browserFallback` transparently
-  // speaks with the OS voice today and auto-upgrades to the Runtype voice once a
-  // real clientToken + agentId (and the endpoint) are wired in. `enabled: false`
-  // keeps auto-speak off — only the per-message button uses the engine.
+  // streams audio from Runtype's per-agent `/speak` endpoint, using the
+  // clientToken + agentId above. On the proxy fallback there is no token, so
+  // `browserFallback` speaks with the OS voice instead. `enabled: false` keeps
+  // auto-speak off — only the per-message button uses the engine.
   textToSpeech: {
     enabled: false,
     provider: "runtype",

@@ -1,0 +1,57 @@
+name: Runtype agents
+
+# Converges the config-as-code Runtype agents behind the showcase site
+# (apps/web/runtype/). PRs get a dry-run plan; main applies it and deploys to
+# the `live` alias. The docs agent reuses the proxy's DOCS_ASSISTANT_AGENT
+# prompt, so edits there trigger this too.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/web/runtype/**"
+      - "packages/proxy/src/agents/docs-assistant.ts"
+      - ".github/workflows/runtype-agents.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/runtype/**"
+      - "packages/proxy/src/agents/docs-assistant.ts"
+      - ".github/workflows/runtype-agents.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ensure:
+    # Fork PRs get no secrets; skip rather than fail.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The agent definition imports DOCS_ASSISTANT_AGENT from the built proxy.
+      - name: Build proxy
+        run: pnpm build:proxy
+
+      - name: Ensure docs agent
+        working-directory: apps/web
+        env:
+          RUNTYPE_API_KEY: ${{ secrets.RUNTYPE_API_KEY }}
+          RUNTYPE_DRY_RUN: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+          GIT_SHA: ${{ github.sha }}
+        run: pnpm runtype:ensure
