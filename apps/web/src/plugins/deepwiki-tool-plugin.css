@@ -1,0 +1,299 @@
+/* DeepWiki tool card (deepwiki-tool-plugin.ts).
+   Deliberately *not* the site's paper voice: a dark, indigo-lit card so a
+   lookup reads as "an outside service is working" next to Persona's own
+   bubbles. Square corners keep it in the editorial grid. */
+
+.persona-deepwiki-card {
+  --dw-bg: #0f1422;
+  --dw-bg-raised: #161d30;
+  --dw-line: #26304a;
+  --dw-text: #e4e8f4;
+  --dw-muted: #8a93ad;
+  --dw-accent: #7c9bff;
+  --dw-accent-2: #5ee6d0;
+  --dw-danger: #ff7a70;
+
+  position: relative;
+  width: 100%;
+  max-width: 85%;
+  overflow: hidden;
+  background: var(--dw-bg);
+  border: 1px solid var(--dw-line);
+  box-shadow: 6px 6px 0 -1px rgba(29, 28, 23, 0.12);
+  color: var(--dw-text);
+  font-family: var(--font-body, 'Geist', -apple-system, sans-serif);
+}
+
+/* Faint dot grid, like a wiki sitemap drawn on graph paper. */
+.persona-deepwiki-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(124, 155, 255, 0.12) 1px, transparent 1px);
+  background-size: 12px 12px;
+  pointer-events: none;
+}
+
+.persona-deepwiki-card > * {
+  position: relative;
+}
+
+.persona-deepwiki-card__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--dw-line);
+  background: var(--dw-bg-raised);
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.persona-deepwiki-card__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--dw-accent);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.persona-deepwiki-card__glyph {
+  display: inline-flex;
+}
+
+.persona-deepwiki-card__repo {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dw-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persona-deepwiki-card__status,
+.persona-deepwiki-card__clock {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--dw-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.persona-deepwiki-card[data-state="done"] .persona-deepwiki-card__status {
+  color: var(--dw-accent-2);
+}
+
+.persona-deepwiki-card[data-state="error"] {
+  border-color: rgba(255, 122, 112, 0.5);
+}
+
+.persona-deepwiki-card[data-state="error"] .persona-deepwiki-card__status {
+  color: var(--dw-danger);
+}
+
+/* Live elapsed clock, CSS-only: a tool call can go 10s+ without a re-render.
+   Integer custom properties animate in whole steps; the negative delay set
+   from the call's startedAt keeps it honest across re-renders. */
+@property --dw-s {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --dw-t {
+  syntax: '<integer>';
+  inherits: false;
+  initial-value: 0;
+}
+
+.persona-deepwiki-card__clock {
+  counter-reset: dw-s var(--dw-s) dw-t var(--dw-t);
+  animation:
+    dw-seconds 600s steps(600, end) var(--dw-delay, 0s) forwards,
+    dw-tenths 1s steps(10, end) var(--dw-delay, 0s) infinite;
+}
+
+.persona-deepwiki-card__clock::after {
+  content: counter(dw-s) '.' counter(dw-t) 's';
+}
+
+/* Running stage: page scanner + narration. */
+.persona-deepwiki-card__stage {
+  display: flex;
+  gap: 14px;
+  padding: 14px 12px 16px;
+}
+
+.persona-deepwiki-card__page {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 54px;
+  height: 68px;
+  padding: 9px 8px;
+  overflow: hidden;
+  background: var(--dw-bg-raised);
+  border: 1px solid var(--dw-line);
+}
+
+.persona-deepwiki-card__page i {
+  display: block;
+  height: 3px;
+  background: var(--dw-line);
+  animation: dw-row 2.4s ease-in-out infinite;
+}
+
+.persona-deepwiki-card__page i:nth-child(1) { width: 70%; height: 5px; background: #33406a; animation-delay: 0s; }
+.persona-deepwiki-card__page i:nth-child(2) { width: 100%; animation-delay: 0.25s; }
+.persona-deepwiki-card__page i:nth-child(3) { width: 85%; animation-delay: 0.5s; }
+.persona-deepwiki-card__page i:nth-child(4) { width: 95%; animation-delay: 0.75s; }
+.persona-deepwiki-card__page i:nth-child(5) { width: 60%; animation-delay: 1s; }
+.persona-deepwiki-card__page i:nth-child(6) { width: 90%; animation-delay: 1.25s; }
+.persona-deepwiki-card__page i:nth-child(7) { width: 75%; animation-delay: 1.5s; }
+
+.persona-deepwiki-card__band {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 14px;
+  background: linear-gradient(180deg, transparent, rgba(124, 155, 255, 0.35), transparent);
+  border-bottom: 1px solid rgba(124, 155, 255, 0.7);
+  animation: dw-band 2.4s ease-in-out infinite;
+}
+
+.persona-deepwiki-card__copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.persona-deepwiki-card__action {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.persona-deepwiki-card__ticker {
+  height: 18px;
+  margin-top: 4px;
+  overflow: hidden;
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.persona-deepwiki-card__ticker-track {
+  display: flex;
+  flex-direction: column;
+  animation: dw-ticker 16s var(--ease-smooth, ease) var(--dw-delay, 0s) forwards;
+}
+
+.persona-deepwiki-card__ticker-track span {
+  display: block;
+  height: 18px;
+  overflow: hidden;
+  color: var(--dw-accent-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.persona-deepwiki-card__ticker-track span::before {
+  content: '› ';
+  color: var(--dw-muted);
+}
+
+.persona-deepwiki-card__question {
+  margin: 10px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--dw-accent);
+  color: var(--dw-text);
+  font-size: 13px;
+  line-height: 1.45;
+  opacity: 0.9;
+}
+
+/* Indeterminate progress along the bottom edge. */
+.persona-deepwiki-card__progress {
+  height: 2px;
+  background:
+    linear-gradient(90deg, transparent, var(--dw-accent) 35%, var(--dw-accent-2) 65%, transparent)
+    no-repeat -100% 0 / 40% 100%,
+    var(--dw-line);
+  animation: dw-progress 1.6s var(--ease-smooth, ease) infinite;
+}
+
+/* Settled body. */
+.persona-deepwiki-card__body {
+  padding: 12px 12px 12px;
+}
+
+.persona-deepwiki-card[data-state="done"] .persona-deepwiki-card__action,
+.persona-deepwiki-card[data-state="error"] .persona-deepwiki-card__action {
+  font-size: 13px;
+}
+
+.persona-deepwiki-card__body .persona-deepwiki-card__question {
+  margin-top: 8px;
+  color: var(--dw-muted);
+  border-left-color: var(--dw-line);
+}
+
+.persona-deepwiki-card__peek {
+  display: -webkit-box;
+  margin: 10px 0 0;
+  overflow: hidden;
+  color: var(--dw-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.persona-deepwiki-card__link {
+  display: inline-block;
+  margin-top: 10px;
+  color: var(--dw-accent);
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.persona-deepwiki-card__link:hover {
+  text-decoration: underline;
+}
+
+@keyframes dw-seconds { to { --dw-s: 600; } }
+@keyframes dw-tenths { to { --dw-t: 10; } }
+
+@keyframes dw-band {
+  0% { transform: translateY(-14px); }
+  100% { transform: translateY(68px); }
+}
+
+@keyframes dw-row {
+  0%, 100% { opacity: 0.55; }
+  35% { opacity: 1; background: var(--dw-accent); }
+}
+
+/* Five phrases, ~3.2s each; the last one holds (animation-fill: forwards). */
+@keyframes dw-ticker {
+  0%, 18% { transform: translateY(0); }
+  20%, 38% { transform: translateY(-18px); }
+  40%, 58% { transform: translateY(-36px); }
+  60%, 78% { transform: translateY(-54px); }
+  80%, 100% { transform: translateY(-72px); }
+}
+
+@keyframes dw-progress {
+  to { background-position: 200% 0, 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-deepwiki-card__page i,
+  .persona-deepwiki-card__band,
+  .persona-deepwiki-card__progress {
+    animation: none;
+  }
+}

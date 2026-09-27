@@ -1,0 +1,145 @@
+/* Persona thinking block (persona-thinking-plugin.ts).
+   A tiny persona.js terminal in the editorial paper/ink/teal voice. Falls back
+   to literal values so it renders on pages without editorial-tokens.css. */
+
+.persona-thinking {
+  width: 100%;
+  max-width: 85%;
+  background: var(--paper, #fef9f1);
+  border: 1px solid rgba(29, 28, 23, 0.18);
+  color: var(--ink, #1d1c17);
+  font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+}
+
+.persona-thinking > summary {
+  display: block;
+  cursor: pointer;
+  list-style: none;
+}
+
+.persona-thinking > summary::-webkit-details-marker {
+  display: none;
+}
+
+.persona-thinking__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.persona-thinking[data-state="running"] .persona-thinking__bar,
+.persona-thinking[open] .persona-thinking__bar {
+  border-bottom: 1px solid rgba(29, 28, 23, 0.1);
+}
+
+/* The persona.js mark (persona-logo.ts), ink via currentColor. */
+.persona-thinking__logo {
+  display: block;
+  flex-shrink: 0;
+  color: var(--ink, #1d1c17);
+}
+
+.persona-thinking__logo .persona-logo__sparkle {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.persona-thinking[data-state="running"] .persona-logo__sparkle {
+  fill: var(--teal-ink, #006b5b);
+  animation: persona-thinking-sparkle 1.6s var(--ease-smooth, ease) infinite;
+}
+
+/* Settled blocks go quiet: grey traffic lights until hovered. */
+.persona-thinking[data-state="done"]:not(:hover) .persona-logo__light {
+  fill: rgba(29, 28, 23, 0.2);
+}
+
+.persona-thinking__label {
+  color: rgba(29, 28, 23, 0.55);
+}
+
+.persona-thinking__label::before {
+  content: '— ';
+  color: rgba(29, 28, 23, 0.3);
+}
+
+.persona-thinking__meta {
+  margin-left: auto;
+  white-space: nowrap;
+  color: rgba(29, 28, 23, 0.45);
+  font-variant-numeric: tabular-nums;
+}
+
+.persona-thinking[data-state="done"] .persona-thinking__meta::after {
+  content: ' ▸';
+  display: inline-block;
+  margin-left: 4px;
+  transition: transform 0.2s var(--ease-smooth, ease);
+}
+
+.persona-thinking[open] .persona-thinking__meta::after {
+  transform: rotate(90deg);
+}
+
+/* Live tail: newest thoughts at the bottom, older ones fading out the top. */
+.persona-thinking__stream {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: 4.8em;
+  overflow: hidden;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 45%);
+  mask-image: linear-gradient(to bottom, transparent, #000 45%);
+}
+
+.persona-thinking__text {
+  color: var(--ink-soft, #444748);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.persona-thinking__text::before {
+  content: '> ';
+  color: var(--teal-ink, #006b5b);
+}
+
+.persona-thinking__cursor {
+  display: inline-block;
+  width: 6px;
+  height: 1.1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--teal, #26fedc);
+  animation: persona-thinking-blink 1s steps(2, jump-none) infinite;
+}
+
+.persona-thinking__full {
+  max-height: 16em;
+  overflow: auto;
+  padding: 8px 10px 10px;
+  color: var(--ink-soft, #444748);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+@keyframes persona-thinking-sparkle {
+  0%, 100% { transform: scale(0.7) rotate(0deg); opacity: 0.6; }
+  50% { transform: scale(1.5) rotate(90deg); opacity: 1; }
+}
+
+@keyframes persona-thinking-blink {
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .persona-thinking * {
+    animation: none !important;
+  }
+}

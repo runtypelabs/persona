@@ -15,6 +15,8 @@ import {
 import { GALLERY_EXAMPLES } from "./examples-nav";
 import { STANDALONE_EXAMPLES } from "./standalone-nav";
 import { editorialWidgetTheme } from "./editorial-widget-theme";
+import { createDeepWikiToolPlugin } from "./plugins/deepwiki-tool-plugin";
+import { createPersonaThinkingPlugin } from "./plugins/persona-thinking-plugin";
 
 installCommandPalette({
   trigger: document.querySelector<HTMLElement>("[data-command-palette-trigger]"),
@@ -196,6 +198,9 @@ const sharedWidgetConfig: NonNullable<
   },
   storageAdapter: sharedWidgetStorage,
   suggestionChips: [...homeDemoSuggestionChips],
+  // Reasoning renders under the persona.js mark, DeepWiki lookups as a branded
+  // card; any other tool keeps the default bubble.
+  plugins: [createPersonaThinkingPlugin(), createDeepWikiToolPlugin()],
   // Client-token session init on hover instead of the default first keystroke,
   // so `/v1/client/init` has already fired by the time a starter chip is
   // clicked (touch fires pointerenter too). `keydown` covers keyboard users and
