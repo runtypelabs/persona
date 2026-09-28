@@ -123,10 +123,14 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     },
     theme: {
       ...DEFAULT_WIDGET_CONFIG.theme,
-      primary: "#0f172a",
-      accent: "#2563eb",
-      surface: "#f8fafc",
-      muted: "#64748b",
+      semantic: {
+        colors: {
+          primary: "#0f172a",
+          accent: "#2563eb",
+          surface: "#f8fafc",
+          textMuted: "#64748b",
+        },
+      },
     },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
