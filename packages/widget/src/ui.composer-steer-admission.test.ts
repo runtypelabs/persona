@@ -27,6 +27,7 @@ it.each(["hook", "history"] as const)(
     document.body.append(mount);
     controller = createAgentExperience(mount, {
       clientToken: "demo-token",
+      sessionInit: "mount",
       launcher: { enabled: false },
       persistState: false,
       attachments: { enabled: true },
