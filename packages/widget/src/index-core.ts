@@ -11,6 +11,8 @@ export type {
   AgentWidgetConfigPatch,
   AgentWidgetSessionInitTrigger,
   AgentWidgetSessionInitHook,
+  AgentWidgetVoicePrewarmTrigger,
+  AgentWidgetVoicePrewarmHook,
   TargetResolver,
   ResolvedTarget,
   AgentWidgetFeatureFlags,

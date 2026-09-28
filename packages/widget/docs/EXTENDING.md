@@ -237,6 +237,12 @@ config; `isVoiceSupported()` feature-detects. The hosted Runtype read-aloud
 engine ships from the `@runtypelabs/persona/voice-worklet-player` subpath and is
 selected with `textToSpeech: { provider: "runtype" }` (no import needed).
 
+A custom provider can also implement the optional `prewarm()` method. The widget
+calls it on mic intent (see `voiceRecognition.prewarm` in the
+[Configuration Reference](./CONFIGURATION-REFERENCE.md#voice-prewarm)) so the
+provider can open connections before the click. It must be fire-and-forget:
+never throw, emit errors or status, or acquire the microphone.
+
 ## Sanitization
 
 All rendered markdown/HTML passes through DOMPurify by default. `config.sanitize`

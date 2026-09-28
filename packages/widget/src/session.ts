@@ -911,6 +911,33 @@ export class AgentWidgetSession {
   }
 
   /**
+   * Warm the voice path ahead of the mic click (`voiceRecognition.prewarm`).
+   * Session-owned providers (`runtype`, `custom`) get `provider.prewarm()` once
+   * the lazy voice runtime has installed them; the browser (Web Speech) path
+   * warms the client-token session instead. Fire-and-forget and silent.
+   */
+  public prewarmVoice(): void {
+    if (!usesSessionVoice(this.config.voiceRecognition?.provider)) {
+      this.warmClientSession();
+      return;
+    }
+    const generation = this.voiceSetupGeneration;
+    const run = () => {
+      const provider = this.voiceProvider;
+      if (!provider?.prewarm || generation !== this.voiceSetupGeneration) return;
+      if (this.voiceActive || this.isBargeInActive()) return;
+      void Promise.resolve()
+        .then(() => provider.prewarm?.())
+        .catch(() => {});
+    };
+    if (!this.voiceProvider && this.voiceSetupPromise) {
+      void this.voiceSetupPromise.then(run, () => {});
+      return;
+    }
+    run();
+  }
+
+  /**
    * Cleanup voice resources
    */
   public cleanupVoice() {
@@ -975,7 +1002,9 @@ export class AgentWidgetSession {
             clientToken: providerConfig.runtype?.clientToken ?? this.config.clientToken,
             host: providerConfig.runtype?.host ?? this.config.apiUrl,
             voiceId: providerConfig.runtype?.voiceId,
-            createPlaybackEngine: providerConfig.runtype?.createPlaybackEngine
+            createPlaybackEngine: providerConfig.runtype?.createPlaybackEngine,
+            prewarmMode: providerConfig.runtype?.prewarmMode,
+            attachIdleMs: providerConfig.runtype?.attachIdleMs
           }
         };
       
