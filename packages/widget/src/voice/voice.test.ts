@@ -850,7 +850,7 @@ describe('RuntypeVoiceProvider prewarm', () => {
       new RuntypeVoiceProvider(attachConfig()).prewarm();
 
       const ws = lastWs();
-      expect(ws.url).toBe('wss://api.example.com/ws/agents/agent%2F1/voice?clientCapabilities=attach');
+      expect(ws.url).toBe('wss://api.example.com/ws/agents/agent%2F1/voice?voiceCapabilities=full-duplex-v1&clientCapabilities=attach');
       expect(ws.protocols).toEqual(['runtype.bearer', 'runtype.attach', 'ct_secret']);
       expect(fetchMock).not.toHaveBeenCalled();
       openAs(ws, 'runtype.attach');
@@ -918,7 +918,7 @@ describe('RuntypeVoiceProvider prewarm', () => {
       await provider.startListening();
 
       expect(MockWebSocket.instances).toHaveLength(2);
-      expect(lastWs().url).toBe('wss://api.example.com/ws/agents/agent%2F1/voice');
+      expect(lastWs().url).toBe('wss://api.example.com/ws/agents/agent%2F1/voice?voiceCapabilities=full-duplex-v1');
       expect(lastWs().protocols).toEqual(['runtype.bearer', 'ct_secret']);
     });
 
