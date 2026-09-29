@@ -393,8 +393,9 @@ export interface AgentWidgetPlugin {
    * don't-ask-again policy for future approvals.
    *
    * `renderApproval` is called again whenever the approval's status changes, so
-   * branch on `message.approval?.status` to render the resolved state (and tear
-   * down any global listeners you added while pending).
+   * branch on `message.approval?.status` to render the resolved state. Linked
+   * execution changes also trigger a render. Use `signal` to clean up listeners;
+   * unchanged renders preserve both the element and its lifetime signal.
    *
    * @example
    * ```typescript
@@ -424,6 +425,10 @@ export interface AgentWidgetPlugin {
    */
   renderApproval?: (context: {
     message: AgentWidgetMessage;
+    /** State from an explicitly linked tool call; absent when no reliable link exists. */
+    execution?: { status: "running" | "completed" | "failed"; toolCallId: string };
+    /** Aborted before this rendered element is replaced, removed, or destroyed. */
+    signal?: AbortSignal;
     defaultRenderer: () => HTMLElement;
     config: AgentWidgetConfig;
     /** Resolve this approval as approved. Pass `{ remember: true }` for an "Always allow" affordance. */

@@ -595,9 +595,10 @@ describe("AgentWidgetSession: WebMCP resolve", () => {
     const spy = client.executeWebMcpToolCall as ReturnType<typeof vi.fn>;
     expect(spy).toHaveBeenCalledTimes(1);
     const call = spy.mock.calls[0]!;
-    // Args: (wireToolName, args, signal?)
+    // Args: (wireToolName, args, signal?, toolCallId?)
     expect(call[0]).toBe("webmcp:search");
     expect(call[2]).toBeInstanceOf(AbortSignal);
+    expect(call[3]).toBe("tool-1");
   });
 
   it("does not construct the bridge when config.webmcp.enabled is false", () => {
@@ -1109,8 +1110,10 @@ describe("AgentWidgetSession: WebMCP parallel batched resume (core#3878)", () =>
     feed(session, parallelAwait("toolu_B", "SHOE-007"));
     const pending = session.requestWebMcpApproval({
       toolName: "add_to_cart",
+      toolCallId: "toolu_A",
       args: { sku: "SHOE-001" },
     } as WebMcpConfirmInfo);
+    expect(session.getMessages().find((m) => m.variant === "approval")?.approval?.toolCallId).toBe("toolu_A");
     expect(s.webMcpAwaitBatches.size).toBe(1); // one batch keyed by executionId
     expect(s.webMcpApprovalResolvers.size).toBe(1);
 

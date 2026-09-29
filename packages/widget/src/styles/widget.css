@@ -7453,3 +7453,48 @@
 .persona-tool-detail-copy:focus-visible { outline: 2px solid var(--persona-primary); outline-offset: 2px; }
 @media (hover: none) { .persona-tool-detail-copy { opacity: 1; } }
 @media (pointer: coarse) { .persona-tool-detail-copy { width: 40px; height: 40px; top: 2px; right: 2px; } }
+
+.persona-approval-status {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--persona-muted, #6b7280);
+}
+
+
+/* Resolved approvals share activity density; only their disclosure has an icon. */
+.persona-approval-row { width: 100%; min-width: 0; }
+.persona-approval-row > .persona-approval-head {
+  min-height: var(--persona-components-activity-rowHeight, 32px);
+  padding: 4px 0;
+}
+.persona-approval-row .persona-approval-title {
+  font-size: var(--persona-components-activity-labelSize, 13px);
+  color: var(--persona-muted, #6b7280);
+}
+.persona-approval-row .persona-approval-status { display: inline; padding: 0; font: inherit; color: inherit; }
+.persona-approval-row > .persona-approval-body {
+  margin-left: var(--persona-components-activity-indent, 24px);
+  padding: var(--persona-components-activity-bodyPadding, 8px 0);
+  background: var(--persona-components-activity-bodySurface, transparent);
+}
+.persona-approval-row > .persona-approval-body[hidden] { display: none; }
+.persona-approval-row .persona-approval-details { margin: 0; }
+.persona-approval-row .persona-approval-reason { margin-bottom: 0; }
+.persona-approval-row > .persona-approval-head:focus-visible {
+  outline: 2px solid var(--persona-focus-ring, currentColor);
+  outline-offset: 2px;
+}
+
+/* Compact approval disclosures share the tool detail surfaces. */
+.persona-approval-row .persona-approval-details {
+  display: grid;
+  gap: 8px;
+}
+.persona-approval-row .persona-approval-details[hidden] { display: none; }
+.persona-approval-row .persona-tool-detail > .persona-approval-desc,
+.persona-approval-row .persona-tool-detail > .persona-approval-reason {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.persona-approval-row .persona-tool-detail > :last-child { margin-bottom: 0; }

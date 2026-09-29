@@ -27,3 +27,9 @@
 }
 
 #v5-host { height:100%; min-height:0; }
+
+.v5-custom-approval { border:1px solid var(--persona-border-color, currentColor); border-radius:12px; padding:16px; font-size:13px; line-height:1.5; }
+.v5-custom-approval p { margin:8px 0; opacity:.8; }
+.v5-custom-approval button { color:inherit; font:inherit; background:transparent; border:1px solid currentColor; border-radius:8px; padding:7px 12px; margin:4px 8px 0 0; cursor:pointer; }
+.v5-custom-approval button:focus-visible { outline:2px solid currentColor; outline-offset:3px; }
+.v5-custom-approval button:disabled { opacity:.5; cursor:default; }

@@ -3045,6 +3045,7 @@ export class AgentWidgetSession {
       agentId: "",
       executionId: "",
       toolName: info.toolName,
+      ...(info.toolCallId ? { toolCallId: info.toolCallId } : {}),
       toolType: "webmcp",
       description:
         info.description ?? `Allow the assistant to run ${info.toolName}?`,
@@ -3717,6 +3718,7 @@ export class AgentWidgetSession {
         wireToolName,
         toolMessage.toolCall?.args,
         batchController.signal,
+        toolMessage.toolCall?.id,
       );
 
       let output: unknown;
@@ -4977,6 +4979,7 @@ export class AgentWidgetSession {
           ...prior,
           ...incoming,
           executionId: incoming.executionId || prior.executionId,
+          toolCallId: incoming.toolCallId || prior.toolCallId,
           toolName: incoming.toolName || prior.toolName,
           description: incoming.description || prior.description,
           toolType: incoming.toolType ?? prior.toolType,

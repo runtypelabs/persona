@@ -1,6 +1,7 @@
 import type { AgentWidgetConfig, AgentWidgetLauncherConfig } from "./types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
 import { deepMerge } from "./utils/deep-merge";
+import { DEFAULT_APPROVAL_V5 } from "./utils/approval-config";
 import { inheritDefaultProvenance } from "./utils/defaults-provenance";
 import { inheritPanelAliasProvenance } from "./utils/panel-config";
 import {
@@ -264,6 +265,7 @@ export const DEFAULT_LAUNCHER_V5: Partial<AgentWidgetLauncherConfig> = {
   headerIconSize: "20px",
 };
 export const DEFAULTS_V5: Partial<AgentWidgetConfig> = {
+  approval: DEFAULT_APPROVAL_V5,
   launcher: DEFAULT_LAUNCHER_V5,
   features: {
     toolCallDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, grouped: true, groupedMode: "collapsible", loadingAnimation: "shimmer" },
@@ -325,6 +327,10 @@ export function mergeWithDefaults(
   return inheritDefaultProvenance(inheritPanelAliasProvenance({
     ...defaults,
     ...config,
+    ...((defaults.approval || config.approval !== undefined) ? { approval: config.approval === false ? false : {
+      ...(defaults.approval || {}),
+      ...config.approval,
+    } } : {}),
     theme: mergeThemePartials(defaults.theme, config.theme),
     darkTheme: mergeThemePartials(defaults.darkTheme, config.darkTheme),
     launcher: {

@@ -174,6 +174,7 @@ export class WebMcpBridge {
     wireToolName: string,
     args: unknown,
     signal?: AbortSignal,
+    toolCallId?: string,
   ): Promise<WebMcpToolResult> {
     await this.ensureReady();
     if (this.config.enabled !== true) {
@@ -239,6 +240,7 @@ export class WebMcpBridge {
     const displayTitle = this.deps.getToolDisplayTitle(bareName);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
+      ...(toolCallId ? { toolCallId } : {}),
       args,
       description: info.description,
       ...(displayTitle ? { title: displayTitle } : {}),
@@ -574,4 +576,3 @@ const safeStringify = (value: unknown): string => {
     return String(value);
   }
 };
-

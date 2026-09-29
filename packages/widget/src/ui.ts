@@ -2725,6 +2725,16 @@ export const createAgentExperience = (
     void copyToolDetail(button);
   });
 
+  // Approval plugins own their disclosure clicks. Pause follow in capture,
+  // before their listener grows the details and ResizeObserver follows it.
+  messagesWrapper.addEventListener("click", (event) => {
+    const target = event.target;
+    if (target instanceof Element && target.closest('.persona-approval-head[data-action="toggle-params"]')) {
+      markReaderEngaged();
+      pauseAutoScroll();
+    }
+  }, { capture: true });
+
   // Add event delegation for reasoning and tool bubble expansion
   // This handles clicks even after idiomorph morphs the DOM
   const handleBubbleExpansion = (event: Event) => {
@@ -5217,6 +5227,16 @@ export const createAgentExperience = (
   // a collapsed accordion) is not reset on every pass while the approval is
   // pending.
   const lastApprovalBubbleFingerprint = new Map<string, string>();
+  const approvalRenderControllers = new Map<string, AbortController>();
+  const disposeApprovalRender = (id: string): void => {
+    approvalRenderControllers.get(id)?.abort();
+    approvalRenderControllers.delete(id);
+    lastApprovalBubbleFingerprint.delete(id);
+  };
+  const disposeApprovalRenders = (): void => {
+    for (const id of approvalRenderControllers.keys()) disposeApprovalRender(id);
+  };
+  destroyCallbacks.push(disposeApprovalRenders);
 
   // --- Edit-and-resend (roadmap section 10) ---------------------------------
   // "Editing message X" is UI state consumed BY the render path, never a
@@ -6330,6 +6350,11 @@ export const createAgentExperience = (
     return wrapper;
   };
 
+  // Attribute lookup stays local even when sibling widgets use identical ids.
+  const findMessageRow = (container: HTMLElement, id: string): HTMLElement | undefined =>
+    Array.from(container.querySelectorAll<HTMLElement>("[data-wrapper-id]"))
+      .find((row) => row.getAttribute("data-wrapper-id") === id);
+
   const renderMessagesWithPluginsImpl = (
     container: HTMLElement,
     messages: AgentWidgetMessage[],
@@ -6429,6 +6454,7 @@ export const createAgentExperience = (
       messageId: string;
       fingerprint: string;
       bubble: HTMLElement | null;
+      focusDefault?: boolean;
     };
     const approvalPluginHydrate: ApprovalPluginHydrate[] = [];
 
@@ -6516,16 +6542,16 @@ export const createAgentExperience = (
       // If a message stops being an approval-plugin bubble, strip
       // `data-preserve-runtime` so the next morph can replace the live wrapper.
       if (!approvalWithPlugin && lastApprovalBubbleFingerprint.has(message.id)) {
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageRow(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
-        lastApprovalBubbleFingerprint.delete(message.id);
+        disposeApprovalRender(message.id);
       }
 
       // If a message previously rendered as a directive bubble but no longer
       // does (e.g. content was rewritten), strip `data-preserve-runtime` from
       // the live wrapper so the next morph can replace it.
       if (!hasDirectiveBubble && lastComponentDirectiveFingerprint.has(message.id)) {
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageRow(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
         lastComponentDirectiveFingerprint.delete(message.id);
       }
@@ -6553,8 +6579,24 @@ export const createAgentExperience = (
       const eligibilityKey = `${actionEligibility.canRegenerate ? "r" : ""}${
         actionEligibility.canEdit ? "e" : ""
       }${actionEligibility.canQuote ? "q" : ""}`;
+      // A turn/execution id can contain many calls. Only an explicit per-call
+      // link is safe; approval acceptance never implies tool completion.
+      const linkedTools = message.approval?.toolCallId
+        ? messages.filter((candidate) =>
+            candidate.variant === "tool" &&
+            candidate.toolCall?.id === message.approval?.toolCallId &&
+            (!candidate.agentMetadata?.executionId || !message.approval?.executionId ||
+              candidate.agentMetadata.executionId === message.approval.executionId))
+        : [];
+      const linkedTool = linkedTools.length === 1 ? linkedTools[0].toolCall : undefined;
+      const execution: Parameters<NonNullable<AgentWidgetPlugin["renderApproval"]>>[0]["execution"] =
+        linkedTool && linkedTool.status !== "pending"
+          ? { toolCallId: linkedTool.id, status: linkedTool.status === "running"
+              ? "running" : linkedTool.success === false || linkedTool.error ? "failed" : "completed" }
+          : undefined;
       const fingerprint =
-        computeMessageFingerprint(message, configVersion) + askMeta + `:${eligibilityKey}`;
+        computeMessageFingerprint(message, configVersion) + askMeta + `:${eligibilityKey}` +
+        (approvalWithPlugin ? `:${message.approval?.toolCallId ?? ""}:${JSON.stringify(execution)}` : "");
       const cachedWrapper = (askWithPlugin || approvalWithPlugin || hasDirectiveBubble)
         ? null
         : getCachedWrapper(messageCache, message.id, fingerprint);
@@ -6621,7 +6663,7 @@ export const createAgentExperience = (
         // Drop any previously-mounted plugin bubble so the morph pass
         // removes the now-stale interactive sheet.
         lastAskBubbleFingerprint.delete(message.id);
-        const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
+        const existing = findMessageRow(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
         return;
       }
@@ -6734,12 +6776,14 @@ export const createAgentExperience = (
         const lastFp = lastApprovalBubbleFingerprint.get(message.id);
         const needsRebuild = lastFp !== fingerprint;
         let liveBubble: HTMLElement | null = null;
+        let focusDefault = false;
 
         if (needsRebuild && approvalPlugin?.renderApproval) {
           // Re-find the live message at decision time so we resolve against
           // current state, and route WebMCP gate approvals to the local
           // resolver: mirroring the built-in delegated handler.
           const approvalMessageId = message.id;
+          let decisionSent = false;
           const resolveDecision = (
             decision: "approved" | "denied",
             options?: AgentWidgetApprovalDecisionOptions
@@ -6747,46 +6791,59 @@ export const createAgentExperience = (
             const live = sessionRef.current
               ?.getMessages()
               .find((m) => m.id === approvalMessageId);
-            if (!live?.approval) return;
+            if (decisionSent || live?.approval?.status !== "pending") return;
+            decisionSent = true;
             if (live.approval.toolType === "webmcp") {
               sessionRef.current?.resolveWebMcpApproval(live.id, decision);
             } else {
               sessionRef.current?.resolveApproval(live.approval, decision, options);
             }
           };
-          liveBubble = approvalPlugin.renderApproval({
+          // Retire the previous lifetime before any replacement renderer runs.
+          disposeApprovalRender(message.id);
+          const lifetime = new AbortController();
+          approvalRenderControllers.set(message.id, lifetime);
+          const context: Parameters<NonNullable<AgentWidgetPlugin["renderApproval"]>>[0] = {
             message,
-            defaultRenderer: () => approvalMod.createApprovalBubble(message, config, approvalDetailsExpansionState),
+            execution,
+            signal: lifetime.signal,
+            // The configured built-in plugin owns defaults, shortcuts and cleanup.
+            defaultRenderer: () => renderDefault(),
             config,
-            approve: (options) => resolveDecision("approved", options),
-            deny: (options) => resolveDecision("denied", options)
-          });
+            approve: (options) => {
+              if (!lifetime.signal.aborted) resolveDecision("approved", options);
+            },
+            deny: (options) => {
+              if (!lifetime.signal.aborted) resolveDecision("denied", options);
+            }
+          };
+          let defaultBubble: HTMLElement | null = null;
+          const defaultLifetime = new AbortController();
+          lifetime.signal.addEventListener("abort", () => defaultLifetime.abort(), { once: true });
+          const renderDefault = (): HTMLElement => {
+            defaultBubble ??= builtInApprovalPlugin?.renderApproval?.({ ...context, signal: defaultLifetime.signal }) ??
+              approvalMod.createApprovalBubble(message, config, approvalDetailsExpansionState);
+            return defaultBubble;
+          };
+          liveBubble = approvalPlugin === builtInApprovalPlugin
+            ? renderDefault()
+            : approvalPlugin.renderApproval(context) ?? renderDefault();
+          const usesDefault = defaultBubble !== null &&
+            (liveBubble === defaultBubble || liveBubble.contains(defaultBubble));
+          if (!usesDefault) defaultLifetime.abort();
+          const root = mount.getRootNode() as Document | ShadowRoot;
+          focusDefault = usesDefault && lastFp === undefined &&
+            message.approval?.status === "pending" && config.approval !== false &&
+            config.approval?.keyboardShortcuts === "focused" &&
+            mount.contains(root.activeElement);
         }
 
-        if (needsRebuild && liveBubble === null) {
-          // Plugin opted out for this state (e.g. a resolved approval, where the
-          // demo plugin defers to the built-in approved/denied bubble). Render
-          // the built-in bubble: it resolves via the delegated `messagesWrapper`
-          // handler and morphs normally, and drop any preserved live wrapper so
-          // morph can replace the now-stale pending bubble.
-          const existing = container.querySelector<HTMLElement>(`#wrapper-${message.id}`);
-          existing?.removeAttribute("data-preserve-runtime");
-          lastApprovalBubbleFingerprint.delete(message.id);
-          bubble = approvalMod.createApprovalBubble(message, config, approvalDetailsExpansionState);
-        } else {
-          // A fresh live bubble to hydrate (needsRebuild), or fingerprint
-          // unchanged so we reuse the preserved live wrapper (`bubble: null`).
-          const stub = createMessageRow(message.id, message.role);
-          stub.setAttribute("data-approval-plugin-stub", "true");
-          stub.setAttribute("data-preserve-runtime", "true");
-          tempContainer.appendChild(stub);
-          approvalPluginHydrate.push({
-            messageId: message.id,
-            fingerprint,
-            bubble: liveBubble
-          });
-          return;
-        }
+        const stub = createMessageRow(message.id, message.role);
+        stub.setAttribute("data-approval-plugin-stub", "true");
+        stub.setAttribute("data-preserve-runtime", "true");
+        tempContainer.appendChild(stub);
+        approvalPluginHydrate.push({ messageId: message.id, fingerprint, bubble: liveBubble, focusDefault });
+        return;
       } else if (matchingPlugin) {
         if (message.variant === "reasoning" && message.reasoning && matchingPlugin.renderReasoning) {
           if (!showReasoning) return;
@@ -7177,6 +7234,11 @@ export const createAgentExperience = (
 
     activityLifecycle.prune(activityIds);
 
+    // Abort removed renderers before the morph detaches their live elements.
+    for (const id of approvalRenderControllers.keys()) {
+      if (!activeMessageIds.has(id)) disposeApprovalRender(id);
+    }
+
     // Remove cache entries for messages that no longer exist
     pruneCache(messageCache, activeMessageIds);
 
@@ -7360,7 +7422,7 @@ export const createAgentExperience = (
         messageId: string;
         element: HTMLElement;
       };
-      const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+      const wrapper = findMessageRow(container, messageId);
       if (wrapper && element.parentElement !== wrapper) {
         applyMessageRowLayout(wrapper, messageRolesById.get(messageId) ?? "user");
         wrapper.replaceChildren(element);
@@ -7373,7 +7435,7 @@ export const createAgentExperience = (
     // the real, listener-bearing bubble directly into the live DOM.
     if (askPluginHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of askPluginHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+        const wrapper = findMessageRow(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -7404,7 +7466,7 @@ export const createAgentExperience = (
     // the ask-question hydration above.
     if (componentDirectiveHydrate.length > 0) {
       for (const { messageId, fingerprint, bubble } of componentDirectiveHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+        const wrapper = findMessageRow(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -7431,8 +7493,8 @@ export const createAgentExperience = (
     // Hydrate plugin-rendered approval bubbles into their stub wrappers,
     // mirroring the ask-question / component-directive hydration above.
     if (approvalPluginHydrate.length > 0) {
-      for (const { messageId, fingerprint, bubble } of approvalPluginHydrate) {
-        const wrapper = container.querySelector<HTMLElement>(`#wrapper-${messageId}`);
+      for (const { messageId, fingerprint, bubble, focusDefault } of approvalPluginHydrate) {
+        const wrapper = findMessageRow(container, messageId);
         if (!wrapper) continue;
         applyMessageRowLayout(
           wrapper,
@@ -7447,6 +7509,7 @@ export const createAgentExperience = (
         wrapper.replaceChildren(bubble);
         wrapper.setAttribute("data-bubble-fp", fingerprint);
         lastApprovalBubbleFingerprint.set(messageId, fingerprint);
+        if (focusDefault) bubble.querySelector<HTMLButtonElement>('[data-action="allow"]')?.focus();
       }
     }
 
@@ -15150,6 +15213,7 @@ export const createAgentExperience = (
     },
     clearChat() {
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
+      disposeApprovalRenders();
       artifactsPaneUserHidden = false;
       activityLifecycle.clear();
       toolExpansionState.clear();

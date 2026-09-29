@@ -3,6 +3,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
+import { provideApprovalUi } from "./approval-ui-loader";
+import * as approvalUiEntry from "./approval-ui-entry";
+
+provideApprovalUi(approvalUiEntry);
 
 type RafCallback = (time: number) => void;
 
@@ -848,6 +852,33 @@ describe("createAgentExperience streaming scroll", () => {
       expect(metrics.getScrollTop()).toBe(600);
       controller.destroy();
     });
+  });
+
+  it.each(["pending", "approved"] as const)("preserves the viewport when a %s approval disclosure grows", status => {
+    const raf = installRafMock();
+    const resize = installResizeObserverMock();
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/test", future: { v5Defaults: true }, launcher: { enabled: false },
+    });
+    const body = mount.querySelector<HTMLElement>("#persona-scroll-container")!;
+    const metrics = installScrollMetrics(body, { scrollHeight: 1000, clientHeight: 400 });
+    controller.injectTestMessage({ type: "message", message: {
+      id: "approval-scroll", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
+      variant: "approval", approval: { id: "approval-scroll", agentId: "agent", executionId: "execution", status, toolName: "Search", parameters: { query: "docs" } },
+    } });
+    raf.flush();
+    metrics.setScrollTop(600);
+    const header = mount.querySelector<HTMLButtonElement>(".persona-approval-head")!;
+    header.click();
+    expect(header.getAttribute("aria-expanded")).toBe("true");
+    metrics.setScrollHeight(1400);
+    resize.trigger(); raf.flush();
+    expect(metrics.getScrollTop()).toBe(600);
+    metrics.setScrollHeight(1600);
+    resize.trigger(); raf.flush();
+    expect(metrics.getScrollTop()).toBe(600);
+    controller.destroy();
   });
 
   it("does not yank a paused reader when content grows without a render event", () => {

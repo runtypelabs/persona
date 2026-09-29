@@ -865,6 +865,8 @@ export type ClientToolDefinition = {
  * call executes. Every WebMCP tool routes through this single gate.
  */
 export type WebMcpConfirmInfo = {
+  /** Stable tool-call identifier when confirmation originates from a dispatched call. */
+  toolCallId?: string;
   /** Bare tool name (no `webmcp:` prefix). */
   toolName: string;
   args: unknown;
@@ -5109,6 +5111,16 @@ export type AgentWidgetApprovalDecisionOptions = {
  * Controls styling, labels, and behavior of the approval UI.
  */
 export type AgentWidgetApprovalConfig = {
+  /** Resolved approvals: compact inspectable row (V5 default), retained card with status,
+   * or legacy trace with approved approvals hidden (V4 default). */
+  resolvedDisplay?: "row" | "status-line" | "trace";
+  /** Primary action when enableAlwaysAllow is enabled. V5 defaults to allow-once. */
+  primaryAction?: "allow-once" | "always-allow";
+  /** Focused: Enter allows once / Escape denies only inside the approval card.
+   * Legacy: opt-in always-allow shortcuts at document scope. False disables shortcuts. */
+  keyboardShortcuts?: "focused" | "legacy" | false;
+  /** Menu label for remembered permission in allow-once primary mode. */
+  alwaysAllowLabel?: string;
   /** Background color of the approval bubble */
   backgroundColor?: string;
   /** Border color of the approval bubble */
@@ -5163,7 +5175,8 @@ export type AgentWidgetApprovalConfig = {
    * Offer an "Always allow" affordance in the default approval bubble.
    *
    * Default `false`. When `false`, the bubble shows a single "Allow" (allow
-   * once) plus "Deny". When `true`, the primary action becomes a split control:
+   * once) plus "Deny". V5 keeps Allow primary with remembered permission in
+   * the menu. In V4, when `true`, the primary action becomes a split control:
    * "Always allow" (resolves with `{ remember: true }`) with a dropdown for
    * "Allow once", plus "Deny", and keyboard shortcuts (Enter = Always allow,
    * Cmd/Ctrl+Enter = Allow once, Esc = Deny).
@@ -7909,6 +7922,8 @@ export type AgentWidgetToolCall = {
  * Created when the agent requires human approval before executing a tool.
  */
 export type AgentWidgetApproval = {
+  /** Explicit stable id of the tool call this decision authorizes, when supplied by the backend. */
+  toolCallId?: string;
   id: string;
   status: "pending" | "approved" | "denied" | "timeout";
   agentId: string;

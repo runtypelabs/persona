@@ -486,6 +486,7 @@ export class AgentWidgetClient {
     wireToolName: string,
     args: unknown,
     signal?: AbortSignal,
+    toolCallId?: string,
   ): Promise<import("./types").WebMcpToolResult> | null {
     // Route on CONFIG, not bridge presence: the lazily-loaded bridge may not
     // have adopted yet, and returning null would misroute the call to the
@@ -493,7 +494,7 @@ export class AgentWidgetClient {
     if (this.config.webmcp?.enabled !== true) return null;
     return this.getWebMcpBridge().then((bridge) =>
       bridge
-        ? bridge.executeToolCall(wireToolName, args, signal)
+        ? bridge.executeToolCall(wireToolName, args, signal, toolCallId)
         : {
             isError: true,
             content: [
@@ -4134,6 +4135,9 @@ export class AgentWidgetClient {
               status: "pending",
               agentId: agentExecution?.agentId ?? 'virtual',
               executionId: payload.executionId ?? agentExecution?.executionId ?? '',
+              ...(typeof payload.toolCallId === "string" && payload.toolCallId
+                ? { toolCallId: payload.toolCallId }
+                : {}),
               toolName: payload.toolName ?? '',
               toolType: payload.toolType,
               description: payload.description ?? `Execute ${payload.toolName ?? 'tool'}`,

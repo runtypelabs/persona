@@ -67,3 +67,13 @@ it("keeps the legacy defaults when the opt-in is missing", () => {
   expect(resolveDefaultsVersion({ future: {} })).toBe("v4");
   expect(JSON.stringify(mergeWithDefaults())).toBe(JSON.stringify(DEFAULT_WIDGET_CONFIG));
 });
+
+
+it("merges approval options independently and preserves disabling", () => {
+  const future = { v5Defaults: true };
+  const partial = mergeWithDefaults({ future, approval: { approveLabel: "Proceed" } });
+  expect(partial.approval).toMatchObject({ resolvedDisplay: "row", primaryAction: "allow-once", keyboardShortcuts: "focused", approveLabel: "Proceed" });
+  expect(mergeWithDefaults({ future, approval: false }).approval).toBe(false);
+  expect(mergeWithDefaults({ future, approval: { resolvedDisplay: "trace", primaryAction: "always-allow", keyboardShortcuts: false } }).approval).toEqual({ resolvedDisplay: "trace", primaryAction: "always-allow", keyboardShortcuts: false });
+  expect(mergeWithDefaults({}).approval).toBeUndefined();
+});

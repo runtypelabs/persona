@@ -754,7 +754,11 @@ tracks your theme), not the old warning/success/error palette:
 
 | Property | Description |
 |----------|-------------|
-| `enableAlwaysAllow` | `false` by default. `true` adds the split "Always allow / Allow once" control + keyboard shortcuts; forwards `{ remember: true }` to `onDecision` (needs a backend to persist the policy) |
+| `enableAlwaysAllow` | `false` by default. Enables the remembered-permission action, forwarding `{ remember: true }` to `onDecision`; the host must implement its policy. V5 keeps one-time approval primary and puts remembered permission in the menu. |
+| `resolvedDisplay` | `"row"` (V5) shows a compact tool-and-status row with inspectable decision details; `"status-line"` retains the full card with decision/execution status; `"trace"` (V4) hides approved cards and retains denied/timed-out traces. |
+| `primaryAction` | `"always-allow"` (V4) / `"allow-once"` (V5). Applies when `enableAlwaysAllow` is enabled. |
+| `keyboardShortcuts` | `"legacy"` (V4, active only with `enableAlwaysAllow`) / `"focused"` (V5) / `false`. Focused shortcuts handle Enter for one-time approval and Escape for denial only within the approval card; modified Enter never grants remembered permission. |
+| `alwaysAllowLabel` | Label for the remembered-permission menu item in allow-once mode. Use an accurate scope such as `"Allow for this session"` only if your integration implements that scope. |
 | `detailsDisplay` | `"collapsed"` (default) / `"expanded"` / `"hidden"` — initial state of the tool-arguments disclosure |
 | `showDetailsLabel` / `hideDetailsLabel` | Disclosure toggle labels |
 | `backgroundColor` / `borderColor` | Card container styling |
@@ -765,6 +769,58 @@ tracks your theme), not the old warning/success/error palette:
 | `denyLabel` / `denyButtonColor` / `denyButtonTextColor` | Deny button |
 
 > The legacy yellow look: set `config.approval.backgroundColor`/`borderColor` (or the `components.approval.requested.*` tokens) back to the warning palette to restore it. The `--persona-approval-*` aliases are still honored fallback-first.
+
+Resolved rows show “Allowed” when execution is unknown, “Allowed · running”,
+“Completed”, “Failed”, “Denied”, or “Timed out”. Their disclosure retains the
+description, parameters, and attributed agent reason; pending approvals keep
+the full decision card. Linked tool results remain separate and inspectable.
+Set `approval.resolvedDisplay: "status-line"` to retain the resolved card.
+
+These options work independently of `future.v5Defaults`; the flag selects their
+defaults. In focused mode, approval arrival moves focus to Allow only when the
+widget already owns focus. It does not take focus from the host page.
+
+Resolved status lines show **Allowed** when execution is unknown, **Allowed ·
+running** while the linked tool runs, and **Completed** or **Failed** when its
+outcome is known. Denied and timed-out requests retain their decision. Approval
+alone never implies successful execution.
+
+#### Custom approval renderers
+
+The `renderApproval` plugin hook can replace the entire approval UI or wrap
+`defaultRenderer()`. Returning `null` uses the same configured built-in renderer.
+Custom renderers own their focus and keyboard behavior; built-in behavior runs
+only when the built-in renderer is used.
+
+```typescript
+import type { AgentWidgetPlugin } from "@runtypelabs/persona";
+
+const approvalPlugin: AgentWidgetPlugin = {
+  id: "custom-approval",
+  renderApproval: ({ message, approve, defaultRenderer, signal }) => {
+    if (message.approval?.status !== "pending") return defaultRenderer();
+    const button = document.createElement("button");
+    button.textContent = "Allow once";
+    button.addEventListener("click", () => approve(), { signal });
+    return button;
+  },
+};
+```
+
+The optional `execution` context has `{ toolCallId, status }`, where status is
+`"running"`, `"completed"`, or `"failed"`. It is supplied only when the approval's
+`toolCallId` reliably identifies a tool in that widget's session. Server
+`approval_start` events can supply this field; native WebMCP approvals carry the
+local call ID. A run-wide `executionId` or a matching tool name is not sufficient.
+The renderer is called again when approval or linked execution state changes.
+
+The optional `signal` is an `AbortSignal` for that rendered instance. It aborts
+before replacement and when the approval is removed, the conversation clears,
+or the widget is destroyed. Use it for listener cleanup, or register an abort
+handler to unmount a framework component. Unchanged renders keep their element
+and signal. Each widget owns its own lifecycle, even when IDs overlap across
+widgets. Existing hooks that only accept `message`, `approve`, and `deny` keep
+working.
 
 ### Attachment (`components.attachment.*`)
 
@@ -1545,6 +1601,9 @@ Partial V5 palette overrides preserve the remaining dark shades.
 | Turn gap | 12px | 20px; 28px in full-height/fullscreen views |
 | `layout.contentMaxWidth` | Unset | 768px where supported |
 | `statusIndicator.mode` | `"always"` | `"transient"` |
+| `approval.resolvedDisplay` | `"trace"` | `"row"` |
+| `approval.primaryAction` | `"always-allow"` when enabled | `"allow-once"` |
+| `approval.keyboardShortcuts` | `"legacy"`, requires `enableAlwaysAllow` | `"focused"` |
 
 Floating widths still shrink to fit narrow viewports. Dock/sidebar defaults are
 400px under v5 and remain 420px under v4. Compact composer fallbacks

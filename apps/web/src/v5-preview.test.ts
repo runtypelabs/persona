@@ -44,4 +44,65 @@ describe("V5 preview", () => {
     expect(mocks.inject).toHaveBeenCalledTimes(count);
     expect(document.querySelector<HTMLButtonElement>("#v5-stream")!.disabled).toBe(false);
   });
+  it("shows each approval outcome and keeps decisions local", async () => {
+    vi.useFakeTimers();
+    await start();
+    choose("scene", "approval");
+    const approvals = mocks.inject.mock.calls.map(([event]) => event.message.approval).filter(Boolean);
+    expect(approvals.map((approval) => approval.id)).toEqual(["running", "completed", "failed", "denied", "unknown", "interactive"]);
+    expect(approvals.find((approval) => approval.id === "unknown").toolCallId).toBeUndefined();
+    const config = mocks.init.mock.lastCall?.[0].config;
+    expect(config.approval.approveLabel).toBe("Allow once");
+    expect(config.plugins).toBeUndefined();
+    const response = await config.approval.onDecision({ approvalId: "interactive", toolName: "Search sample documentation" }, "approved");
+    expect(response.status).toBe(204);
+    expect(mocks.inject.mock.lastCall?.[0].message.toolCall.status).toBe("running");
+    vi.advanceTimersByTime(1800);
+    expect(mocks.inject.mock.lastCall?.[0].message.toolCall.status).toBe("complete");
+    const count = mocks.inject.mock.calls.length;
+    await config.approval.onDecision({ approvalId: "interactive" }, "denied");
+    expect(mocks.inject).toHaveBeenCalledTimes(count);
+  });
+  it("cleans up custom approval controls and distinguishes permission from execution", async () => {
+    await start();
+    choose("scene", "approval-custom");
+    const render = mocks.init.mock.lastCall?.[0].config.plugins[0].renderApproval;
+    const approve = vi.fn();
+    const controller = new AbortController();
+    const context = { message: { approval: { status: "pending", toolName: "Sample search" } }, approve, deny: vi.fn(), signal: controller.signal };
+    const pending = render(context);
+    expect(pending.textContent).toContain("Allow once");
+    controller.abort();
+    pending.querySelector("button").click();
+    expect(approve).not.toHaveBeenCalled();
+    const resolved = render({ ...context, message: { approval: { status: "approved", toolName: "Sample search" } } });
+    expect(resolved.textContent).toContain("Approved · execution unknown");
+    expect(resolved.querySelector("button")).toBeNull();
+    const completed = render({ ...context, message: { approval: { status: "approved", toolName: "Sample search" } }, execution: { status: "completed", toolCallId: "sample" } });
+    expect(completed.textContent).toContain("Approved · completed");
+  });
+  it("cancels simulated approval execution when changing scenes", async () => {
+    vi.useFakeTimers();
+    await start();
+    choose("scene", "approval");
+    await mocks.init.mock.lastCall?.[0].config.approval.onDecision({ approvalId: "interactive", toolName: "Sample search" }, "approved");
+    choose("scene", "welcome");
+    const count = mocks.inject.mock.calls.length;
+    vi.advanceTimersByTime(2000);
+    expect(mocks.inject).toHaveBeenCalledTimes(count);
+  });
+
+});
+
+
+it("compares compact approvals, retained cards and legacy traces independently", async () => {
+  await start();
+  choose("scene", "approval");
+  expect(mocks.init.mock.lastCall?.[0].config.approval.resolvedDisplay).toBeUndefined();
+  for (const value of ["row", "status-line", "trace"]) {
+    choose("approval-display", value);
+    expect(mocks.init.mock.lastCall?.[0].config.approval.resolvedDisplay).toBe(value);
+  }
+  choose("approval-display", "default");
+  expect(mocks.init.mock.lastCall?.[0].config.approval.resolvedDisplay).toBeUndefined();
 });

@@ -978,6 +978,7 @@ describe('AgentWidgetSession - approval context across approval_complete', () =>
         executionId: 'exec_abc',
         approvalId: 'appr_1',
         toolName: 'send_email',
+        toolCallId: 'call_email_1',
         toolType: 'external',
         description: 'Send an email to the customer',
         reason: 'The user asked me to notify the customer.',
@@ -996,6 +997,7 @@ describe('AgentWidgetSession - approval context across approval_complete', () =>
     expect(bubble?.approval?.status).toBe('approved');
     expect(bubble?.approval?.resolvedAt).toBeDefined();
     expect(bubble?.approval?.toolName).toBe('send_email');
+    expect(bubble?.approval?.toolCallId).toBe('call_email_1');
     expect(bubble?.approval?.toolType).toBe('external');
     expect(bubble?.approval?.description).toBe('Send an email to the customer');
     expect(bubble?.approval?.reason).toBe('The user asked me to notify the customer.');

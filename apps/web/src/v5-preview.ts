@@ -1,6 +1,6 @@
 import "@runtypelabs/persona/widget.css";
 import "./v5-preview.css";
-import { initAgentWidget, type AgentWidgetConfig, type AgentWidgetMessage } from "@runtypelabs/persona";
+import { initAgentWidget, type AgentWidgetConfig, type AgentWidgetMessage, type AgentWidgetPlugin } from "@runtypelabs/persona";
 import { renderExamplesShell } from "./examples-nav";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 // Reuse the documented application-level hook; this is not a library default.
@@ -17,6 +17,79 @@ let epoch = Date.now();
 let serial = 0;
 const order = new Map<string, number>();
 
+// Application-owned renderer: each invocation owns its listeners until Persona
+// aborts the render signal. Approval and execution are deliberately separate.
+const approvalPlugin: AgentWidgetPlugin = {
+  id: "preview-approval",
+  renderApproval: ({ message, execution, signal, approve, deny }) => {
+    const approval = message.approval;
+    if (!approval) return null;
+    const root = document.createElement("section");
+    root.className = "v5-custom-approval";
+    const title = document.createElement("strong");
+    title.textContent = approval.toolName;
+    const state = document.createElement("p");
+    state.textContent = approval.status === "pending" ? "Permission requested · local sample"
+      : approval.status === "denied" ? "Denied · did not run"
+      : approval.status === "timeout" ? "Expired · execution unknown"
+      : `Approved · ${execution?.status ?? "execution unknown"}`;
+    state.setAttribute("role", "status");
+    root.append(title, state);
+    if (approval.status === "pending") {
+      let decided = false;
+      const buttons: HTMLButtonElement[] = [];
+      const cleanup: (() => void)[] = [];
+      for (const [label, action] of [["Allow once", approve], ["Deny", deny]] as const) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        const click = () => {
+          if (decided || signal?.aborted) return;
+          decided = true;
+          buttons.forEach((item) => { item.disabled = true; });
+          action();
+        };
+        button.addEventListener("click", click);
+        cleanup.push(() => button.removeEventListener("click", click));
+        buttons.push(button);
+        root.append(button);
+      }
+      const dispose = () => {
+        cleanup.forEach((remove) => remove());
+        buttons.forEach((button) => { button.disabled = true; });
+      };
+      if (signal?.aborted) dispose();
+      else signal?.addEventListener("abort", dispose, { once: true });
+    }
+    return root;
+  },
+};
+function approvalSample(id: string, state: "pending" | "approved" | "denied", linked = true) {
+  inject({ id: `approval-${id}`, variant: "approval", approval: {
+    id, status: state, agentId: "preview-agent", executionId: "preview-approval",
+    toolName: "Search sample documentation", description: "Search the in-browser sample documentation.",
+    reason: "I want to find the theme configuration examples.", parameters: { query: "Persona themes" },
+    ...(linked ? { toolCallId: `approval-tool-${id}` } : {}),
+  } });
+}
+function approvalScene() {
+  inject({ id: "user", role: "user", content: "Show me how permission and execution appear in the conversation." });
+  inject({ id: "approval-intro", content: "These are local samples. Approval is permission to try an action; its execution has a separate outcome." });
+  for (const outcome of ["running", "completed", "failed", "denied", "unknown"] as const) {
+    inject({ id: `label-${outcome}`, content: `**${outcome[0].toUpperCase() + outcome.slice(1)} sample**` });
+    approvalSample(outcome, outcome === "denied" ? "denied" : "approved", outcome !== "unknown");
+    if (outcome === "running" || outcome === "completed" || outcome === "failed") {
+      tool(`approval-tool-${outcome}`, "Search sample documentation", {
+        status: outcome === "running" ? "running" : "complete", success: outcome !== "failed",
+        ...(outcome === "running" ? { durationMs: undefined, chunks: ["Searching sample pages…"] }
+          : outcome === "failed" ? { error: "The sample search failed." } : { result: "Found three sample pages." }),
+      });
+    }
+  }
+  inject({ id: "approval-try", content: "**Try it yourself** · Allow once starts a simulated search. Deny leaves it unexecuted. Reset the scene to try again." });
+  approvalSample("interactive", "pending");
+  status.textContent = "Try Allow once or Deny below. Scroll up for running, completed, failed, denied, and unknown samples. Nothing leaves your browser.";
+}
 function cancelStream() {
   timers.forEach(clearTimeout);
   timers = [];
@@ -28,6 +101,7 @@ function configuration(): AgentWidgetConfig {
   const variant = select("variant").value as "default" | "row" | "card";
   const activityStyle = variant === "default" ? {} : { variant };
   const grouping = select("group").value;
+  const resolvedDisplay = select("approval-display").value as "default" | "row" | "status-line" | "trace";
   const icons = select("icons").value as "default" | "always" | "active" | "never";
   const display: NonNullable<NonNullable<AgentWidgetConfig["features"]>["toolCallDisplay"]> = {
     ...activityStyle,
@@ -41,6 +115,25 @@ function configuration(): AgentWidgetConfig {
     apiUrl: "/v5-local-demo",
     customFetch: createDemoEchoFetch({ reply: () => "This is a local preview reply. Try opening tool details, switching themes, or comparing V4 and V5. No message is sent to a model." }),
     future: { v5Defaults: v5 },
+    ...(select("scene").value.startsWith("approval") ? {
+      approval: {
+        approveLabel: "Allow once",
+        ...(resolvedDisplay === "default" ? {} : { resolvedDisplay }),
+        onDecision: async (data, decision) => {
+          if (decision === "approved") {
+            const id = `approval-tool-${data.approvalId}`;
+            tool(id, data.toolName, { status: "running", durationMs: undefined, chunks: ["Searching sample pages…"] });
+            timers.push(setTimeout(() => {
+              tool(id, data.toolName, { result: "Found three sample pages." });
+              status.textContent = "Local search completed. Reset the scene to try another decision.";
+            }, 1800));
+          } else status.textContent = "Permission denied. The sample search did not run.";
+          // An explicit local response keeps the demo independent of any API.
+          return new Response(null, { status: 204 });
+        },
+      },
+      ...(select("scene").value === "approval-custom" ? { plugins: [approvalPlugin] } : {}),
+    } : {}),
     colorScheme: select("theme").value as "light" | "dark",
     persistState: false,
     launcher: { enabled: false, fullHeight: true },
@@ -65,8 +158,10 @@ function reset() {
   const config = configuration();
   widget = initAgentWidget({ target: host, config });
   const { customFetch: _fetch, ...shown } = config;
-  document.querySelector("#v5-config")!.textContent = JSON.stringify(shown, (_key, value) => typeof value === "function" ? "renderToolActivitySummary (example hook)" : value, 2);
+  document.querySelector("#v5-config")!.textContent = JSON.stringify(shown, (_key, value) => typeof value === "function" ? `${_key} (local example hook)` : value, 2);
   document.querySelector<HTMLElement>("#v5-hook-note")!.hidden = select("group").value !== "descriptive";
+  document.querySelector<HTMLElement>("#v5-approval-hook-note")!.hidden = select("scene").value !== "approval-custom";
+  streamButton.textContent = select("scene").value.startsWith("approval") ? "Replay approvals" : "Run stream";
   document.querySelector("#v5-caption")!.textContent = `${select("version").value.toUpperCase()} ${select("theme").value} · ${select("scene").selectedOptions[0].textContent}`;
 }
 function inject(message: Partial<AgentWidgetMessage> & Pick<AgentWidgetMessage, "id">) {
@@ -93,6 +188,7 @@ function openDetails() {
 function loadScene() {
   reset();
   const scene = select("scene").value;
+  if (scene.startsWith("approval")) { approvalScene(); return; }
   if (scene === "welcome") {
     status.textContent = "Try a suggestion or type a message. Replies are simulated locally.";
     return;
@@ -120,6 +216,7 @@ function loadScene() {
   status.textContent = scene === "states" ? "Sample running and failed states. Expand a call to inspect its output." : scene === "details" ? "The first tool is open. The service-status tool demonstrates a response without a request." : "Open a group, then a tool. Manual expansion preserves your reading position.";
 }
 function runStream() {
+  if (select("scene").value.startsWith("approval")) { loadScene(); return; }
   reset();
   streamButton.disabled = true;
   status.textContent = "Streaming sample activity. Open details manually, or try auto-expand.";
