@@ -25,6 +25,13 @@
   box-sizing: border-box;
 }
 
+/* Keep host-page selection colors from overriding the widget's theme. */
+[data-persona-root]::selection,
+[data-persona-root] *::selection {
+  background: color-mix(in srgb, var(--persona-primary, #2563eb) 25%, var(--persona-container, #f3f4f6));
+  color: var(--persona-text, #111827);
+}
+
 .persona-flex {
   display: flex;
 }
