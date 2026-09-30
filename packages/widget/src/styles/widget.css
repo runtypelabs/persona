@@ -2752,6 +2752,7 @@
 }
 
 .persona-widget-body {
+  background: var(--persona-transcript-background, var(--persona-container));
   overscroll-behavior: contain;
 }
 
@@ -2852,6 +2853,7 @@
 }
 
 .persona-widget-container {
+  background: var(--persona-panel-background, var(--persona-surface));
   position: relative;
   border-radius: var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem));
 }
@@ -2951,6 +2953,12 @@
    Positioning lives here, never inline: a plugin-owned footer is exempt from
    the cssText reset in applyFullHeightStyles, so an inline design would
    diverge for plugin composers. */
+
+/* Shell tokens are reset on each themed root, including nested instances. */
+.persona-widget-footer {
+  background: var(--persona-composer-footer-background, var(--persona-surface));
+  padding: var(--persona-composer-footer-padding, 1rem 1.5rem);
+}
 
 /* Optional composer chrome tokens retain the legacy fallback in V4. */
 .persona-widget-footer.persona-border-t-persona-divider {
@@ -3371,6 +3379,7 @@
 }
 
 .persona-message-bubble pre code {
+  color: inherit;
   font-size: inherit;
   background-color: transparent;
   padding: 0;
@@ -3519,6 +3528,7 @@
 }
 
 [data-persona-root] .persona-markdown-bubble pre {
+  color: var(--persona-md-code-block-text-color, inherit);
   background-color: var(--persona-md-code-block-bg);
   border: 1px solid var(--persona-md-code-block-border-color);
   border-radius: var(--persona-radius-md, 0.375rem);
@@ -3526,6 +3536,9 @@
   overflow-x: auto;
   font-size: 0.8125rem;
 }
+
+/* Keep host element-level code colors from bypassing the block text token. */
+[data-persona-root] .persona-markdown-bubble pre code { color: inherit; }
 
 /* Ensure all links in chat bubbles have underlines */
 .persona-message-bubble a {
@@ -7382,7 +7395,7 @@
 
 /* Keep the top edge soft only while earlier transcript content is out of view. */
 .persona-widget-container:has(> .persona-widget-body[data-persona-top-fade="true"]) {
-  background-color: var(--persona-container);
+  background-color: var(--persona-transcript-top-fade-background, var(--persona-container));
 }
 .persona-widget-body[data-persona-top-fade="true"] {
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--persona-components-message-topFadeHeight, 18px));

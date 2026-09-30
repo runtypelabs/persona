@@ -3100,3 +3100,123 @@ For optional descriptive group labels without additional configuration APIs,
 see the [frontend mapping recipe](../../examples/ai-sdk-next/README.md#optional-descriptive-group-labels).
 It uses `toolCall.renderGroupedSummary` with explicit tool categories, deduplicated
 labels, and a built-in-summary fallback for unknown tools or attention states.
+
+### Frameless inline embeds
+
+`layout.embedded: true` opts an inline widget into a transparent, frameless
+presentation that fills a bounded host. It requires `launcher.enabled: false`;
+other mount modes ignore it. This works with either V4 or V5 defaults and does
+not require `launcher.fullHeight`. The header is hidden by default; set
+`layout.showHeader: true` to show it. Explicit panel chrome and surface tokens
+still win. Use `composer.placement: "block"` when the composer should occupy a
+fixed row below the scrolling transcript (V5 otherwise keeps its overlay default).
+
+```html
+<style>
+  .chat-host {
+    height: 600px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: linear-gradient(135deg, #edf5fa, #f6f0fa);
+    --app-composer: #ffffffdd;
+  }
+</style>
+<div class="chat-host" id="embedded-chat"></div>
+<script type="module">
+  import { initAgentWidget } from "@runtypelabs/persona";
+  initAgentWidget({
+    target: document.querySelector("#embedded-chat"),
+    config: {
+      apiUrl: "/api/chat",
+      launcher: { enabled: false },
+      layout: { embedded: true, topFade: true },
+      composer: { placement: "block" },
+      theme: { components: {
+        input: { background: "var(--app-composer)" },
+        composer: { footerPadding: "12px 20px" },
+      } },
+    },
+  });
+</script>
+```
+
+The host must provide a definite height. In a larger flex layout, each ancestor
+that must shrink also needs `min-height: 0`. Persona owns the shrinkable chain
+inside its mount: the transcript scrolls and the footer does not shrink. No
+selectors targeting Persona internals are needed. The V5 preview's **Embedded ·
+transparent flex host** scenario demonstrates a 600px patterned host in both
+schemes, with a long transcript and a separately colored code block.
+
+The embedded default makes the shell, transcript, footer, and optional header
+transparent. Bubbles, the input, activity details, menus, and code remain
+independent surfaces. A top fade masks the transcript; its exposed shell fill
+follows the transcript background, so scrolling does not introduce an opaque
+strip. These narrowly scoped tokens can customize those surfaces:
+
+| Theme token | Public CSS variable | Default |
+| --- | --- | --- |
+| `components.panel.background` | `--persona-panel-background` | `semantic.colors.surface`; embedded: transparent |
+| `components.message.background` | `--persona-transcript-background` | `semantic.colors.container`; embedded: transparent |
+| `components.message.topFadeBackground` | `--persona-transcript-top-fade-background` | Transcript background |
+| `components.message.topFadeHeight` | `--persona-components-message-topFadeHeight` | 18px when fade enabled |
+| `components.composer.footerBackground` | `--persona-composer-footer-background` | `semantic.colors.surface`; embedded: transparent |
+| `components.composer.footerPadding` | `--persona-composer-footer-padding` | `1rem 1.5rem` |
+
+`footerBackground` applies to block placement. Overlay placement uses the
+existing `components.composer.overlayBand` token; embedded defaults it to
+transparent. Existing `components.panel.modes.inline` tokens control border,
+radius, and shadow; `launcher.detachedPanel` deliberately selects floating card
+chrome instead. For composer decoration, use the existing `components.input`
+background/borderRadius/backdrop filter and `components.composer` shadow, border,
+focus, padding, gap, control sizing, segmented, model-picker, and overflow-menu
+tokens. Message spacing already uses `components.message.gap`/`fullscreenGap`;
+scroll-to-bottom controls already have `components.scrollToBottom` tokens.
+Avatar content belongs to `layout.messages.avatar`, and custom content belongs
+to `layout.slots`.
+
+#### Theme and CSS boundaries
+
+Persona continues to write resolved theme variables on each widget root. The
+precedence is component-specific explicit theme tokens over embedded/default
+tokens; in dark mode `darkTheme` overrides `theme`. Generic panel chrome retains
+its existing precedence over mode defaults. Ordinary variables placed on an
+ancestor cannot replace Persona's generated root values. Bind an explicit token
+to a host-owned variable (`background: "var(--app-composer)"` above) to opt into
+host CSS control; those references also cross a Shadow DOM boundary. Give each
+host its own variable values when different widgets need different appearances.
+Direct changes to generated root styles may be overwritten by a theme or layout
+update. A stylesheet `!important` declaration follows normal CSS precedence but
+is not required for the supported host-variable approach.
+
+Each root writes its own shell aliases, so a nested widget receives its own
+scheme and shell defaults instead of inheriting its parent's transparent shell.
+The existing raw CSS extension variables below are intentionally inherited;
+set them on each host when distinct nested appearances are needed. They do not
+have generated root defaults or a competing config option:
+
+- Mode chips: `--persona-mode-chip-bg`, `--persona-mode-chip-border`,
+  `--persona-mode-chip-fg`.
+- Mention chips: `--persona-mention-chip-bg`, `--persona-mention-chip-border`,
+  `--persona-mention-chip-fg`, `--persona-mention-chip-height`,
+  `--persona-mention-chip-radius`, `--persona-mention-chip-font-size`,
+  `--persona-mention-chip-gap`, `--persona-mention-row-gap`.
+
+These are the supported extension points for those controls; other internal
+variables are not automatically a stable public contract. There is no global
+change to root-variable inheritance in embedded mode.
+
+#### Code and activity surfaces
+
+Use `components.markdown.codeBlock.background` for Markdown code blocks and
+`components.collapsibleWidget.surface` for collapsible code-widget surfaces.
+With V5 defaults, changing the latter no longer recolors activity details.
+Use `components.activity.bodySurface` for shared tool/reasoning details;
+explicit `components.toolBubble.bodySurface` or
+`components.reasoningBubble.bodySurface` wins for that kind.
+
+V4 retains the historical fallback from an explicitly supplied
+`collapsibleWidget.surface` to `activity.bodySurface`. An explicit activity
+surface overrides that fallback. This compatibility behavior also applies to a
+V4 embedded widget: opt into V5 or set the activity surface explicitly to
+separate it from collapsible code widgets.

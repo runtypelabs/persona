@@ -865,7 +865,7 @@ describe("createAgentExperience streaming scroll", () => {
     const metrics = installScrollMetrics(body, { scrollHeight: 1000, clientHeight: 400 });
     controller.injectTestMessage({ type: "message", message: {
       id: "approval-scroll", role: "assistant", content: "", createdAt: STREAM_CREATED_AT,
-      variant: "approval", approval: { id: "approval-scroll", agentId: "agent", executionId: "execution", status, toolName: "Search", parameters: { query: "docs" } },
+      variant: "approval", approval: { id: "approval-scroll", agentId: "agent", executionId: "execution", status, toolName: "Search", description: "Search documentation", parameters: { query: "docs" } },
     } });
     raf.flush();
     metrics.setScrollTop(600);

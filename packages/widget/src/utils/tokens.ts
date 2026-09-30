@@ -870,11 +870,13 @@ export function createTheme(
   const activity = userConfig?.components?.activity;
   for (const kind of ['toolBubble', 'reasoningBubble'] as const) {
     for (const field of ['rowHeight', 'labelSize', 'iconSize', 'indent', 'bodySurface'] as const) {
-      if (activity?.[field] !== undefined) theme.components[kind][field] = activity[field];
+      if (activity?.[field] !== undefined && (field !== 'bodySurface' || userConfig?.components?.[kind]?.bodySurface === undefined)) theme.components[kind][field] = activity[field];
     }
   }
   const legacySurface = userConfig?.components?.collapsibleWidget?.surface;
-  if (legacySurface !== undefined && activity?.bodySurface === undefined) {
+  // V4 keeps the historical shared surface. V5 separates activity from code
+  // widgets; callers use activity.bodySurface (or the per-kind override).
+  if (resolveDefaultsVersion(options) === 'v4' && legacySurface !== undefined && activity?.bodySurface === undefined) {
     theme.components.activity = { ...theme.components.activity, bodySurface: legacySurface };
   }
 
@@ -1302,6 +1304,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   // Composer spacing/type. Fallbacks reproduce the utility classes the form
   // used to carry (`px-4 py-3`, `gap-2`, `text-sm`) exactly.
   emitAliases(cssVars, [
+    ['panel-background', 'components-panel-background', 'surface'],
+    ['transcript-background', 'components-message-background', 'container'],
+    ['transcript-top-fade-background', 'components-message-topFadeBackground', 'transcript-background'],
+    ['composer-footer-background', 'components-composer-footerBackground', 'surface'],
+    ['composer-footer-padding', 'components-composer-footerPadding', '=1rem 1.5rem'],
     ['composer-padding', 'components-composer-padding', '=0.75rem 1rem'],
     ['composer-gap', 'components-composer-gap', '=0.5rem'],
     ['composer-font-size', 'components-composer-fontSize', '=0.875rem'],

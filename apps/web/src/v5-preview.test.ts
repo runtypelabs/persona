@@ -26,6 +26,19 @@ describe("V5 preview", () => {
     expect(config.features.toolCallDisplay).toEqual({});
     expect(mocks.inject.mock.calls.map(([event]) => event.message.id)).toEqual(["user", "reason", "search", "read", "final"]);
   });
+  it("demonstrates a bounded embedded host using public configuration", async () => {
+    await start();
+    choose("scene", "embedded");
+    const config = mocks.init.mock.lastCall?.[0].config;
+    expect(config.launcher).toEqual({ enabled: false });
+    expect(config.layout.embedded).toBe(true);
+    expect(config.composer.placement).toBe("block");
+    expect(config.theme.components.input.background).toBe("var(--demo-composer-surface)");
+    expect(document.querySelector(".v5-embedded-frame")).not.toBeNull();
+    expect(mocks.inject.mock.calls.some(([event]) => event.message.id === "embedded-code")).toBe(true);
+    choose("scene", "welcome");
+    expect(document.querySelector(".v5-embedded-frame")).toBeNull();
+  });
   it("compares V4 and opts into descriptive labels without changing the default", async () => {
     await start();
     choose("version", "v4");

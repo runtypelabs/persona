@@ -1458,10 +1458,10 @@ describe.each([false, true])('activity aliases (V5 %s)', v5Defaults => {
   });
   it('keeps legacy values usable while preferring explicit activity tokens', () => {
     const vars = (activity?: { labelSize?: string; bodySurface?: string }) => themeToCssVariables(getActiveTheme({ future: { v5Defaults }, theme: { components: {
-      toolBubble: { labelSize: '17px', shadow: 'none' }, collapsibleWidget: { surface: '#123456' }, activity,
+      toolBubble: { labelSize: '17px', shadow: 'none' }, collapsibleWidget: { surface: '#123456' }, ...(activity ? { activity } : {}),
     } } }));
     expect(vars()['--persona-components-toolBubble-labelSize']).toBe('17px');
-    expect(vars()['--persona-components-activity-bodySurface']).toBe('#123456');
+    expect(vars()['--persona-components-activity-bodySurface']).toBe(v5Defaults ? 'transparent' : '#123456');
     expect(vars({ labelSize: '15px', bodySurface: '#abcdef' })['--persona-components-toolBubble-labelSize']).toBe('15px');
     expect(vars({ bodySurface: '#abcdef' })['--persona-components-activity-bodySurface']).toBe('#abcdef');
   });

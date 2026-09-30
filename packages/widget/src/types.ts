@@ -6339,6 +6339,15 @@ export type SlotRenderer = (context: SlotRenderContext) => HTMLElement | null;
  * ```
  */
 export type AgentWidgetLayoutConfig = {
+  /**
+   * Frameless, transparent presentation filling a bounded inline host. Requires
+   * launcher.enabled: false; ignored in floating, sidebar, docked and composer-bar
+   * mounts. Enables the shrinkable full-height layout without launcher.fullHeight.
+   * Hides the header unless showHeader is explicitly true. Theme overrides win.
+   * The host must provide a definite height and min-height: 0 in flex layouts.
+   * @default false
+   */
+  embedded?: boolean;
   /** Header layout configuration */
   header?: AgentWidgetHeaderLayoutConfig;
   /** Message layout configuration */
@@ -6351,7 +6360,7 @@ export type AgentWidgetLayoutConfig = {
   /**
    * Show/hide the header section entirely.
    * When false, the header (including icon, title, buttons) is completely hidden.
-   * @default true
+   * @default true (false in embedded presentation)
    */
   showHeader?: boolean;
   /**

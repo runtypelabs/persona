@@ -229,6 +229,8 @@ export interface LauncherTokens extends ComponentTokenSet {
 }
 
 export interface PanelTokens extends ComponentTokenSet {
+  /** Chat shell background. Defaults to semantic.colors.surface; embedded: transparent. */
+  background?: TokenReference<'color'>;
   width: string;
   maxWidth: string;
   height: string;
@@ -509,6 +511,10 @@ export interface MessageGeometryTokens {
 }
 
 export interface MessageTokens {
+  /** Transcript surface, independent of code and activity surfaces. */
+  background?: TokenReference<'color'>;
+  /** Shell fill exposed by the top fade. Defaults to the transcript background. */
+  topFadeBackground?: TokenReference<'color'>;
   /** Height of the optional transcript top fade. Default 18px. */
   topFadeHeight?: string;
   /** Vertical gap between transcript turns. @default "12px" */
@@ -827,6 +833,10 @@ export interface ComposerOverflowMenuTokens {
 
 /** Composer (message input) chrome. */
 export interface ComposerChromeTokens {
+  /** Footer background in block placement. Embedded default: transparent. */
+  footerBackground?: TokenReference<'color'>;
+  /** Footer padding (CSS shorthand), independent of the input form padding. */
+  footerPadding?: string;
   /** Box-shadow on the composer form (raw CSS, e.g. `none`). */
   shadow: string;
   /** Border color of the composer form. @default semantic.colors.border */

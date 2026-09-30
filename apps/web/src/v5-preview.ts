@@ -97,6 +97,7 @@ function cancelStream() {
 }
 function configuration(): AgentWidgetConfig {
   const v5 = select("version").value === "v5";
+  const embedded = select("scene").value === "embedded";
   const detail = select("details").value;
   const variant = select("variant").value as "default" | "row" | "card";
   const activityStyle = variant === "default" ? {} : { variant };
@@ -136,8 +137,20 @@ function configuration(): AgentWidgetConfig {
     } : {}),
     colorScheme: select("theme").value as "light" | "dark",
     persistState: false,
-    launcher: { enabled: false, fullHeight: true },
-    ...(select("fade").value === "default" ? {} : { layout: { topFade: select("fade").value === "on" } }),
+    launcher: { enabled: false, ...(embedded ? {} : { fullHeight: true }) },
+    layout: {
+      ...(embedded ? { embedded: true } : {}),
+      ...(select("fade").value === "default" ? {} : { topFade: select("fade").value === "on" }),
+    },
+    ...(embedded ? {
+      composer: { placement: "block" },
+      theme: { components: {
+        input: { background: "var(--demo-composer-surface)" },
+        composer: { footerPadding: "12px 20px" },
+        markdown: { codeBlock: { background: "var(--demo-code-surface)", textColor: "var(--demo-code-text)" } },
+        activity: { bodySurface: "transparent" },
+      } },
+    } : {}),
     ...(select("scene").value === "welcome" ? {
       welcome: { title: "What would you like to explore?" },
       suggestions: { starters: { behavior: "fill", items: ["Explore the new defaults", "Help me get started", "Plan a project"] } },
@@ -155,6 +168,9 @@ function reset() {
   widget?.destroy();
   host.replaceChildren();
   epoch = Date.now(); serial = 0; order.clear();
+  const frame = host.parentElement!;
+  frame.classList.toggle("v5-embedded-frame", select("scene").value === "embedded");
+  frame.dataset.scheme = select("theme").value;
   const config = configuration();
   widget = initAgentWidget({ target: host, config });
   const { customFetch: _fetch, ...shown } = config;
@@ -194,13 +210,16 @@ function loadScene() {
     return;
   }
   if (scene !== "long") inject({ id: "user", role: "user", content: "Check the theme documentation and show me what you find." });
-  if (scene === "long") {
+  if (scene === "long" || scene === "embedded") {
     for (let i = 0; i < 8; i++) {
       inject({ id: `user-${i}`, role: "user", content: i ? "What should I consider next?" : "Help me plan a project." });
       inject({ id: `answer-${i}`, content: "Keep each step small and reviewable. Start with a clear goal, explore the options, and verify the result.\n\nScroll back to compare earlier steps. The composer remains available while you read." });
     }
   }
-  if (scene === "activity" || scene === "long") reasoning();
+  if (scene === "embedded") {
+    inject({ id: "embedded-code", content: "The host owns the background. Code keeps its own surface.\n\n```js\nlayout: { embedded: true }\n```" });
+  }
+  if (scene === "activity" || scene === "long" || scene === "embedded") reasoning();
   tool("search", "search_docs", { args: { query: "Persona theme configuration" }, result: "Found the theme guide and three examples covering colors, typography, and tool activity." });
   tool("read", "read_file", { args: { path: "docs/theme-guide.md" }, result: scene === "details" ? Array.from({ length: 18 }, (_, i) => `Section ${i + 1}: Explicit theme overrides are preserved. Compare both light and dark styles.`).join("\n") : "Read the relevant configuration examples." });
   if (scene === "details") {

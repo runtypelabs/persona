@@ -332,7 +332,7 @@ import { loadFormsUi, getFormsUiSync } from "./forms-ui-loader";
 import { pluginRegistry } from "./plugins/registry";
 import { DEFAULT_HEADER_ICON_SIZE, mergeWithDefaults } from "./defaults";
 import { mergeConfigUpdate } from "./utils/config-merge";
-import { getPanelAliasProvenance } from "./utils/panel-config";
+import { getPanelAliasProvenance, isEmbeddedLayout, isHeaderVisible } from "./utils/panel-config";
 import { createEventBus } from "./utils/events";
 import {
   createActionManager,
@@ -4168,7 +4168,7 @@ export const createAgentExperience = (
     }
     const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
+    const fullHeight = isEmbeddedLayout(config) || dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
     /** Script-tag / div embed: launcher off, host supplies a sized mount. */
     const isInlineEmbed = config.launcher?.enabled === false;
     /** Detached appearance: inset card over a canvas instead of flush chrome. */
@@ -4540,6 +4540,7 @@ export const createAgentExperience = (
       mount.style.flexDirection = 'column';
       mount.style.height = '100%';
       mount.style.minHeight = '0';
+      if (isEmbeddedLayout(config)) mount.style.flex = '1 1 0%';
       // min-width:0 baseline is applied above (outside this branch) for every
       // fill mount, including the launcher-off, no-fullHeight embed.
       if (isInlineEmbed) {
@@ -4769,7 +4770,7 @@ export const createAgentExperience = (
     if (isComposerBar()) return;
     const dockedMode = isDockedMountMode(config);
     const sidebarMode = config.launcher?.sidebarMode ?? false;
-    const fullHeight = dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
+    const fullHeight = isEmbeddedLayout(config) || dockedMode || sidebarMode || (config.launcher?.fullHeight ?? false);
     if (fullHeight || !launcherEnabled) return;
     const ownerWindow = mount.ownerDocument.defaultView ?? window;
     const mobileFullscreen = config.launcher?.mobileFullscreen ?? true;
@@ -9459,7 +9460,7 @@ export const createAgentExperience = (
   const shownHeaderDisplay = (): string =>
     header === capturedPanelHeader
       ? capturedPanelHeaderDisplay
-      : config.layout?.showHeader === false
+      : !isHeaderVisible(config)
         ? "none"
         : "";
 
@@ -9472,7 +9473,7 @@ export const createAgentExperience = (
     historyPresentation === "panel" &&
     !!historyViewHandle &&
     historyMountedElement === historyViewHandle.element &&
-    config.layout?.showHeader !== false &&
+    isHeaderVisible(config) &&
     shownHeaderDisplay() !== "none";
 
   const suppressHeaderChildren = (): void => {
@@ -9604,7 +9605,7 @@ export const createAgentExperience = (
       setHistoryHostInert(capturedHeader, false);
       if (header !== capturedHeader) {
         // A replacement carries no captured state; only config decides it.
-        header.style.display = config.layout?.showHeader === false ? "none" : "";
+        header.style.display = !isHeaderVisible(config) ? "none" : "";
         setHistoryHostInert(header, false);
       }
     };
@@ -10647,7 +10648,7 @@ export const createAgentExperience = (
     // host re-decides on mount, so this only avoids a needless first insert.
     const initialHeaderPlacement: HistoryHeaderPlacement =
       historyPresentation === "panel" &&
-      config.layout?.showHeader !== false &&
+      isHeaderVisible(config) &&
       header.style.display !== "none"
         ? "external"
         : "inline";
@@ -14067,7 +14068,7 @@ export const createAgentExperience = (
       }
 
       // Update header visibility based on layout.showHeader
-      const showHeader = config.layout?.showHeader !== false; // default to true
+      const showHeader = isHeaderVisible(config);
       if (header) {
         header.style.display = showHeader ? "" : "none";
       }

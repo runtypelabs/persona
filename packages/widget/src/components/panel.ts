@@ -19,7 +19,7 @@ import {
 } from "./welcome";
 import { isWelcomeVisible, resolveWelcomeConfig } from "../welcome";
 import { resolveContentMaxWidth } from "../utils/content-width";
-import { getPanelAliasProvenance, PANEL_WIDTH_VAR } from "../utils/panel-config";
+import { getPanelAliasProvenance, isHeaderVisible, PANEL_WIDTH_VAR } from "../utils/panel-config";
 
 const PANEL_MAX_WIDTH_VAR = "var(--persona-components-panel-maxWidth)";
 const PANEL_HEIGHT_VAR = "var(--persona-components-panel-height)";
@@ -491,7 +491,7 @@ export const buildPanel = (config?: AgentWidgetConfig, showClose = true): PanelE
 
   // Build header using layout config if available, otherwise use standard builder
   const headerLayoutConfig = config?.layout?.header;
-  const showHeader = config?.layout?.showHeader !== false; // default to true
+  const showHeader = isHeaderVisible(config);
   const headerElements: HeaderElements = headerLayoutConfig
     ? buildHeaderWithLayout(config!, headerLayoutConfig, { showClose })
     : buildHeader({ config, showClose });

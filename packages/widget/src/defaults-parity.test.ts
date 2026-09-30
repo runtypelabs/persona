@@ -121,6 +121,11 @@ describe("4.22.0 defaults parity (flag off)", () => {
       "--persona-components-panel-maxWidth": ["440px", "none"],
     };
     const addedTokens: Record<string, string> = {
+      "--persona-panel-background": baseline.themeCssVariables["--persona-surface"],
+      "--persona-transcript-background": baseline.themeCssVariables["--persona-container"],
+      "--persona-transcript-top-fade-background": baseline.themeCssVariables["--persona-container"],
+      "--persona-composer-footer-background": baseline.themeCssVariables["--persona-surface"],
+      "--persona-composer-footer-padding": "1rem 1.5rem",
       "--persona-components-header-minimalPadding": "16px 24px",
       "--persona-components-message-gap": "12px",
       "--persona-cw-container": "#f9fafb",

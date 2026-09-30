@@ -3,6 +3,7 @@ import type { CreateThemeOptions, DeepPartial, PersonaTheme } from '../types/the
 import type { AgentWidgetConfig } from '../types';
 import { resolveDefaultsVersion } from '../defaults';
 import { createTheme, resolveTokens, themeToCssVariables, DEFAULT_COMPONENTS_V4 } from './tokens';
+import { isEmbeddedLayout } from "./panel-config";
 import { deepMerge } from './deep-merge';
 
 export type ColorScheme = 'light' | 'dark' | 'auto';
@@ -340,8 +341,18 @@ export const getActiveTheme = (config?: WidgetConfig): PersonaTheme => {
   const launcherDefaults = resolveLauncherVariant(config) === 'circle'
     ? CIRCLE_LAUNCHER_TOKENS
     : { ...DEFAULT_COMPONENTS_V4.launcher, ...(config?.future?.v5Defaults ? { offset: '1.5rem' } : {}) };
+  // Scope presentation defaults below caller tokens, including dark overrides.
+  const embedded = isEmbeddedLayout(config as Partial<AgentWidgetConfig>);
   const lightThemeConfig = deepMerge(
-    { components: { launcher: launcherDefaults } }, explicitTheme
+    { components: {
+      launcher: launcherDefaults,
+      ...(embedded ? {
+        panel: { background: 'transparent', modes: { inline: { border: 'none', shadow: 'none', borderRadius: '0' } } },
+        header: { background: 'transparent' },
+        message: { background: 'transparent' },
+        composer: { footerBackground: 'transparent', footerBorder: 'none', overlayBand: 'transparent' },
+      } : {}),
+    } }, explicitTheme
   ) as DeepPartial<PersonaTheme>;
   const darkThemeConfig = normalizeThemeConfig(config?.darkTheme);
 
