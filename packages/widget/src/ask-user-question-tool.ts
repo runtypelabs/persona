@@ -24,7 +24,7 @@ import {
   ASK_USER_QUESTION_TOOL_NAME,
 } from "./components/ask-user-question-bubble";
 import {
-  SUGGEST_REPLIES_CLIENT_TOOL,
+  configuredSuggestRepliesTool,
   resolveFollowUpsFeature,
 } from "./suggest-replies-tool";
 import type { AgentWidgetConfig, ClientToolDefinition } from "./types";
@@ -133,7 +133,7 @@ export const builtInClientToolsForDispatch = (
     tools.push(ASK_USER_QUESTION_CLIENT_TOOL);
   }
   if (resolveFollowUpsFeature(config).expose) {
-    tools.push(SUGGEST_REPLIES_CLIENT_TOOL);
+    tools.push(configuredSuggestRepliesTool(config));
   }
   return tools;
 };

@@ -4998,6 +4998,8 @@ export const createAgentExperience = (
   // once another user message appends or a newer suggest_replies message lands.
   let hostFollowUpsUserCount = 0;
   let hostFollowUpsAgentId: string | null = null;
+  const dismissedFollowUpIds = new Set<string>();
+  destroyCallbacks.push(() => dismissedFollowUpIds.clear());
 
   const countUserMessages = (messages: AgentWidgetMessage[]): number =>
     messages.reduce(
@@ -5048,6 +5050,12 @@ export const createAgentExperience = (
   const renderSuggestions = (messages?: AgentWidgetMessage[]) => {
     if (!session) return;
     const current = messages ?? session.getMessages();
+    if (dismissedFollowUpIds.size) {
+      const currentIds = new Set(current.map((message) => message.id));
+      for (const id of dismissedFollowUpIds) {
+        if (!currentIds.has(id)) dismissedFollowUpIds.delete(id);
+      }
+    }
     const clearManager = (manager: ReturnType<typeof createSuggestions>) => {
       manager.render([], session, textarea, current);
     };
@@ -5070,9 +5078,16 @@ export const createAgentExperience = (
     // still render.
     const followUpsFeature = resolveFollowUpsFeature(config);
     hintFollowUpsNeverCalled(current, followUpsFeature);
-    const agentSuggestions = followUpsFeature.enabled
-      ? latestAgentSuggestions(current)
+    const latestFollowUpId = latestSuggestRepliesId(current);
+    const agentSuggestions = followUpsFeature.enabled &&
+      !(config.future?.v5Defaults && latestFollowUpId && dismissedFollowUpIds.has(latestFollowUpId))
+      ? latestAgentSuggestions(current, config.suggestions?.followUps?.maxItems ??
+          (config.future?.v5Defaults ? 5 : 4))
       : null;
+    if (config.future?.v5Defaults && session.isStreaming()) {
+      suggestionManagers.forEach(clearManager);
+      return;
+    }
     const followUpSuggestions = hostFollowUps ?? agentSuggestions;
     const followUpSource: AgentWidgetSuggestionSource = hostFollowUps
       ? "host"
@@ -5104,11 +5119,10 @@ export const createAgentExperience = (
           surface: "followUp",
           variant: followUps?.variant ?? "chip",
           behavior: followUps?.behavior ?? "send",
-          // Wrap by default: 2-4 compact chips always fit at widget width,
-          // and a scroll strip hides most of the set behind a fade. Hosts
-          // with large sets opt back in with overflow: "scroll".
-          overflow: followUps?.overflow ?? "wrap",
-          maxItems: followUps?.maxItems ?? 4,
+          overflow: followUps?.overflow ?? (config.future?.v5Defaults ? "scroll" : "wrap"),
+          maxItems: followUps?.maxItems ?? (config.future?.v5Defaults
+            ? isWelcomeFullscreen() ? 5 : 3
+            : 4),
           config,
           plugins,
           submitPrompt: submitSuggestionPrompt,
@@ -5187,6 +5201,15 @@ export const createAgentExperience = (
         submitPrompt: submitSuggestionPrompt,
       }
     );
+  };
+
+  // Dismiss only the current set: fresh suggestions from the next run may render.
+  const dismissFollowUps = () => {
+    if (!config.future?.v5Defaults || !session) return;
+    hostFollowUps = null;
+    const id = latestSuggestRepliesId(session.getMessages());
+    if (id) dismissedFollowUpIds.add(id);
+    renderSuggestions();
   };
 
   const clearHostFollowUps = () => {
@@ -7287,7 +7310,7 @@ export const createAgentExperience = (
         config,
         streaming: true,
         location: 'standalone',
-        defaultRenderer: createTypingIndicator
+        defaultRenderer: () => createTypingIndicator(config)
       };
 
       // Try plugin renderLoadingIndicator first
@@ -7305,7 +7328,7 @@ export const createAgentExperience = (
 
       // Fall back to default
       if (typingIndicator === null) {
-        typingIndicator = createTypingIndicator();
+        typingIndicator = createTypingIndicator(config);
       }
 
       // Only render if we have an indicator (allows hiding via returning null)
@@ -8963,6 +8986,7 @@ export const createAgentExperience = (
   };
 
   const applyMessagesChanged = (messages: AgentWidgetMessage[]) => {
+    if (!messages.length && config.future?.v5Defaults) hostFollowUps = null;
     lastAppliedMessages = messages;
     let lastUserMessage: AgentWidgetMessage | undefined;
     let lastAssistantMessage: AgentWidgetMessage | undefined;
@@ -9102,6 +9126,8 @@ export const createAgentExperience = (
         }
       }
       isStreaming = streaming;
+      if (streaming) dismissFollowUps();
+      else if (config.future?.v5Defaults) renderSuggestions();
       setComposerDisabled(streaming);
       historyChromeSync();
       // Re-render messages to show/hide typing indicator
@@ -12316,6 +12342,7 @@ export const createAgentExperience = (
     // is not user typing: it must neither open the mention menu (an undefined
     // inputType reads as menu-opening) nor exit history-navigation mode.
     if (suppressHistoryReset) return;
+    dismissFollowUps();
     // Drive the mention menu (open/update/close) + lazy-load on first trigger.
     // Skip while an IME composition is active: the intermediate value isn't the
     // user's committed text, so it must not open or filter the menu.
@@ -14111,7 +14138,9 @@ export const createAgentExperience = (
       const toolCallConfigChanged = JSON.stringify(config.toolCall) !== JSON.stringify(previousToolCallConfig);
       const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
       const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
-      const loadingIndicatorChanged = config.loadingIndicator?.render !== previousLoadingIndicator?.render
+      const loadingIndicatorChanged = config.loadingIndicator?.variant !== previousLoadingIndicator?.variant
+        || config.loadingIndicator?.label !== previousLoadingIndicator?.label
+        || config.loadingIndicator?.render !== previousLoadingIndicator?.render
         || config.loadingIndicator?.renderIdle !== previousLoadingIndicator?.renderIdle
         || config.loadingIndicator?.showBubble !== previousLoadingIndicator?.showBubble;
       const iterationDisplayChanged = config.iterationDisplay !== previousIterationDisplay;

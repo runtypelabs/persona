@@ -153,8 +153,8 @@ function configuration(): AgentWidgetConfig {
     } : {}),
     ...(select("scene").value === "welcome" ? {
       welcome: { title: "What would you like to explore?" },
-      suggestions: { starters: { behavior: "fill", items: ["Explore the new defaults", "Help me get started", "Plan a project"] } },
-    } : { welcome: { variant: "none" }, suggestions: { starters: { items: [] } } }),
+      suggestions: { ...(select("suggestion-edges").value === "default" ? {} : { followUps: { placement: "composer" as const, edgeStyle: select("suggestion-edges").value as "clip" | "fade" } }), starters: { behavior: "fill", items: ["Explore the new defaults", "Help me get started", "Plan a project"] } },
+    } : { welcome: { variant: "none" }, suggestions: { ...(select("suggestion-edges").value === "default" ? {} : { followUps: { placement: "composer" as const, edgeStyle: select("suggestion-edges").value as "clip" | "fade" } }), starters: { items: [] } } }),
     features: {
       showToolCalls: true, showReasoning: true,
       toolCallDisplay: display,
@@ -201,10 +201,27 @@ function openDetails() {
   host.querySelector<HTMLButtonElement>('[data-persona-tool-group] > button[aria-expanded="false"]')?.click();
   host.querySelector<HTMLButtonElement>('[data-message-id="search"] > button[aria-expanded="false"]')?.click();
 }
+function showFollowUps() {
+  tool("follow-ups", "suggest_replies", { args: { suggestions: [
+    "Explain the theme options in more detail",
+    "Show a complete configuration example",
+    "How does this work on mobile?",
+    "Compare the V4 and V5 defaults",
+    "Help me customize the colors",
+    "Show more integration examples",
+  ] } });
+}
 function loadScene() {
   reset();
   const scene = select("scene").value;
   if (scene.startsWith("approval")) { approvalScene(); return; }
+  if (scene === "streaming") {
+    inject({ id: "user", role: "user", content: "Show me the new streaming defaults." });
+    inject({ id: "final", content: "The response is ready. Try the follow-up row below, then run the stream to see the waiting indicator. Typing a new question clears these suggestions." });
+    showFollowUps();
+    status.textContent = "Run the stream to compare V5’s label with V4’s dots. This full-height preview uses the fullscreen suggestion limit.";
+    return;
+  }
   if (scene === "welcome") {
     status.textContent = "Try a suggestion or type a message. Replies are simulated locally.";
     return;
@@ -236,6 +253,21 @@ function loadScene() {
 }
 function runStream() {
   if (select("scene").value.startsWith("approval")) { loadScene(); return; }
+  if (select("scene").value === "streaming") {
+    reset();
+    streamButton.disabled = true;
+    status.textContent = "Waiting for the first text, then streaming a local response…";
+    inject({ id: "user", role: "user", content: "Show me the new streaming defaults." });
+    inject({ id: "loading-answer", content: "", streaming: true });
+    timers.push(setTimeout(() => inject({ id: "loading-answer", content: "Here is a locally simulated response", streaming: true }), 2400));
+    timers.push(setTimeout(() => {
+      inject({ id: "loading-answer", content: "Here is a locally simulated response. You can explore the suggested next questions, or type your own.", streaming: false });
+      showFollowUps();
+      streamButton.disabled = false;
+      status.textContent = "Complete. Follow-ups are available again. Type to dismiss them, or compare V4.";
+    }, 4200));
+    return;
+  }
   reset();
   streamButton.disabled = true;
   status.textContent = "Streaming sample activity. Open details manually, or try auto-expand.";

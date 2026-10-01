@@ -1143,6 +1143,48 @@ describe('theme utils', () => {
     expect(cssVars['--persona-scroll-to-bottom-icon-size']).toBe('14px');
   });
 
+  it('maps count badge overrides without changing the scroll pill', () => {
+    const cssVars = themeToCssVariables(createTheme({
+      components: {
+        scrollToBottom: {
+          border: '#123456',
+          countBadge: {
+            background: 'palette.colors.accent.500',
+            foreground: '#ffffff',
+            border: '#654321',
+            borderRadius: '4px',
+            size: '22px',
+            padding: '0 7px',
+            fontSize: '12px',
+            fontWeight: '700',
+          },
+        },
+      },
+    }));
+    expect(cssVars['--persona-scroll-to-bottom-border']).toBe('#123456');
+    expect(cssVars['--persona-scroll-to-bottom-count-bg']).toBe('#06b6d4');
+    expect(cssVars['--persona-scroll-to-bottom-count-fg']).toBe('#ffffff');
+    expect(cssVars['--persona-scroll-to-bottom-count-border']).toBe('#654321');
+    expect(cssVars['--persona-scroll-to-bottom-count-radius']).toBe('4px');
+    expect(cssVars['--persona-scroll-to-bottom-count-size']).toBe('22px');
+    expect(cssVars['--persona-scroll-to-bottom-count-padding']).toBe('0 7px');
+    expect(cssVars['--persona-scroll-to-bottom-count-font-size']).toBe('12px');
+    expect(cssVars['--persona-scroll-to-bottom-count-font-weight']).toBe('700');
+  });
+
+  it.each([false, true])('preserves CSS count badge fallbacks with V5=%s', (v5Defaults) => {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      const cssVars = themeToCssVariables(getActiveTheme({
+        apiUrl: '/api', future: { v5Defaults }, colorScheme,
+        theme: { components: { scrollToBottom: { border: '#123456' } } },
+        darkTheme: { components: { scrollToBottom: { border: '#123456' } } },
+      }));
+      expect(cssVars['--persona-scroll-to-bottom-border']).toBe('#123456');
+      expect(Object.keys(cssVars).filter(key => key.startsWith('--persona-scroll-to-bottom-count-'))).toEqual([]);
+      expect(cssVars['--persona-scroll-to-bottom-shadow']).toBe(cssVars['--persona-palette-shadows-sm']);
+    }
+  });
+
   it('maps introCard component tokens to dedicated CSS variables', () => {
     const theme = createTheme({
       components: {

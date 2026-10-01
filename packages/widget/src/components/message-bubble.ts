@@ -514,7 +514,15 @@ const createMessageFilePreviews = (
 };
 
 // Create typing indicator element
-export const createTypingIndicator = (): HTMLElement => {
+export const createTypingIndicator = (config?: import("../types").AgentWidgetConfig): HTMLElement => {
+  const variant = config?.loadingIndicator?.variant ?? (config?.future?.v5Defaults ? "label" : "dots");
+  if (variant === "label") {
+    const label = document.createElement("div");
+    label.className = "persona-loading-label";
+    label.textContent = config?.loadingIndicator?.label ?? "Thinking…";
+    label.setAttribute("role", "status");
+    return label;
+  }
   const container = document.createElement("div");
   container.className = "persona-flex persona-items-center persona-space-x-1 persona-h-5 persona-mt-2";
 
@@ -562,7 +570,7 @@ export const renderLoadingIndicatorWithFallback = (
     config: widgetConfig ?? ({} as import("../types").AgentWidgetConfig),
     streaming: true,
     location,
-    defaultRenderer: createTypingIndicator
+    defaultRenderer: () => createTypingIndicator(widgetConfig)
   };
 
   // Try custom renderer first
@@ -574,7 +582,7 @@ export const renderLoadingIndicatorWithFallback = (
   }
 
   // Fall back to default
-  return createTypingIndicator();
+  return createTypingIndicator(widgetConfig);
 };
 
 /**

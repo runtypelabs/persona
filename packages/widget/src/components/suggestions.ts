@@ -349,6 +349,20 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
 
   const syncOverflowAffordance = () => {
     overflowFrame = null;
+    container.toggleAttribute("data-edge-to-edge", container.hasAttribute("data-hide-scrollbar") && (container.hasAttribute("data-persona-composer-suggestions") || container.dataset.personaSuggestions === "follow-up") && container.dataset.variant === "chip" && container.dataset.overflow === "scroll");
+    if (container.hasAttribute("data-edge-to-edge") && container.parentElement) {
+      const parent = container.parentElement;
+      const style = getComputedStyle(parent);
+      const left = parseFloat(style.paddingLeft) || 0;
+      const right = parseFloat(style.paddingRight) || 0;
+      container.style.setProperty("--persona-suggestion-bleed-left", `${left}px`);
+      container.style.setProperty("--persona-suggestion-bleed-right", `${right}px`);
+      const form = parent.closest(".persona-widget-container")?.querySelector("form");
+      const bounds = parent.getBoundingClientRect();
+      const formBounds = form?.getBoundingClientRect();
+      container.style.setProperty("--persona-suggestion-inset-left", `${formBounds?.width ? formBounds.left - bounds.left : left}px`);
+      container.style.setProperty("--persona-suggestion-inset-right", `${formBounds?.width ? bounds.right - formBounds.right : right}px`);
+    }
     if (
       container.hidden ||
       container.dataset.variant !== "chip" ||
@@ -423,6 +437,8 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
     const overflow = opts?.overflow ?? "wrap";
     const widgetConfig = opts?.config ?? ({} as AgentWidgetConfig);
     const plugins = opts?.plugins ?? [];
+    container.toggleAttribute("data-hide-scrollbar", widgetConfig.future?.v5Defaults === true);
+    container.dataset.edgeStyle = widgetConfig.suggestions?.[isFollowUp ? "followUps" : "starters"]?.edgeStyle ?? "fade";
     const maxItems =
       typeof opts?.maxItems === "number"
         ? Math.max(0, Math.floor(opts.maxItems))

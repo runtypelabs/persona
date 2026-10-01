@@ -5489,13 +5489,16 @@ export type AgentWidgetSuggestionSurfaceConfig = {
   /** Default click behavior, overridable per item. Defaults to `send`. */
   behavior?: AgentWidgetSuggestionBehavior;
   /**
-   * Layout for items past the surface width. Defaults to `wrap` on every
-   * surface; `scroll` opts into a horizontal strip for large sets. Applies
+   * Layout for items past the surface width. Defaults to `scroll` for V5
+   * follow-ups and `wrap` otherwise. Applies
    * to the `chip` variant only; the `card` and `list` layouts manage their
    * own stacking.
    */
   overflow?: "scroll" | "wrap";
-  /** Maximum visible items. Defaults to 4, or 3 for V5 non-fullscreen starters. */
+  /** Horizontal chip edges. Defaults to a fade. */
+  edgeStyle?: "clip" | "fade";
+  /** Maximum visible items. Defaults to 4. V5 follow-ups default to 3, or 5
+   * in fullscreen; V5 non-fullscreen starters default to 3. */
   maxItems?: number;
 };
 
@@ -6970,6 +6973,11 @@ export type IdleIndicatorRenderContext = {
  * ```
  */
 export type AgentWidgetLoadingIndicatorConfig = {
+  /** Built-in waiting indicator. Defaults to dots in V4 and label in V5. */
+  variant?: "dots" | "label";
+  /** Text for the label variant. @default "Thinking…" */
+  label?: string;
+
   /**
    * Whether to show the bubble background and border around the standalone loading indicator.
    * Set to false to render the loading indicator without any bubble styling.

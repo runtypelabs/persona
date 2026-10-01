@@ -9,6 +9,13 @@ import {
 describe.each([false, true])("defaults resolver (v5Defaults: %s)", (v5Defaults) => {
   const future = { v5Defaults };
 
+  it("leaves V5 suggestion weight to theme tokens and preserves explicit legacy overrides", () => {
+    expect(mergeWithDefaults({ future }).suggestionChipsConfig?.fontWeight)
+      .toBe(v5Defaults ? undefined : "500");
+    expect(mergeWithDefaults({ future, suggestionChipsConfig: { fontWeight: "600" } })
+      .suggestionChipsConfig?.fontWeight).toBe("600");
+  });
+
   it("selects the requested version and its documented defaults", () => {
     expect(resolveDefaultsVersion({ future })).toBe(v5Defaults ? "v5" : "v4");
     const defaults = resolveDefaults({ future });

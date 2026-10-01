@@ -26,6 +26,12 @@ describe("V5 preview", () => {
     expect(config.features.toolCallDisplay).toEqual({});
     expect(mocks.inject.mock.calls.map(([event]) => event.message.id)).toEqual(["user", "reason", "search", "read", "final"]);
   });
+  it("switches suggestion edges without dropping starter settings", async () => {
+    await start();
+    choose("suggestion-edges", "fade");
+    expect(mocks.init.mock.lastCall?.[0].config.suggestions.followUps.edgeStyle).toBe("fade");
+    expect(mocks.init.mock.lastCall?.[0].config.suggestions.starters.items).toEqual([]);
+  });
   it("demonstrates a bounded embedded host using public configuration", async () => {
     await start();
     choose("scene", "embedded");
@@ -45,6 +51,21 @@ describe("V5 preview", () => {
     expect(mocks.init.mock.lastCall?.[0].config.future.v5Defaults).toBe(false);
     choose("group", "descriptive");
     expect(mocks.init.mock.lastCall?.[0].config.toolCall.renderGroupedSummary).toBeTypeOf("function");
+  });
+  it("shows follow-ups after the loading sample and cancels stale transitions", async () => {
+    vi.useFakeTimers();
+    await start();
+    choose("scene", "streaming");
+    const suggestions = mocks.inject.mock.calls.find(([event]) => event.message.toolCall?.name === "suggest_replies")?.[0].message.toolCall.args.suggestions;
+    expect(suggestions).toHaveLength(6);
+    document.querySelector<HTMLButtonElement>("#v5-stream")!.click();
+    expect(mocks.inject.mock.lastCall?.[0].message).toMatchObject({ content: "", streaming: true });
+    vi.advanceTimersByTime(2400);
+    expect(mocks.inject.mock.lastCall?.[0].message.content).toContain("locally simulated");
+    choose("scene", "welcome");
+    const count = mocks.inject.mock.calls.length;
+    vi.advanceTimersByTime(5000);
+    expect(mocks.inject).toHaveBeenCalledTimes(count);
   });
   it("cancels the sample stream when another scene is selected", async () => {
     vi.useFakeTimers();

@@ -1215,6 +1215,17 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   if (theme.components?.tooltip?.arrow === false)
     cssVars['--persona-tooltip-arrow-display'] = 'none';
 
+  // Keep badge defaults in CSS so an omitted badge border follows the pill,
+  // and its colors follow semantic overrides without freezing resolved values.
+  for (const [token, alias] of [
+    ['background', 'bg'], ['foreground', 'fg'], ['border', 'border'],
+    ['borderRadius', 'radius'], ['size', 'size'], ['padding', 'padding'],
+    ['fontSize', 'font-size'], ['fontWeight', 'font-weight'],
+  ]) {
+    const value = cssVars[`--persona-components-scrollToBottom-countBadge-${token}`];
+    if (value) cssVars[`--persona-scroll-to-bottom-count-${alias}`] = value;
+  }
+
   // Per-message action row (copy, vote, read aloud). Same conditional rule:
   // widget.css falls back to the scheme-aware ghost wash and semantic text, so
   // an unset token must leave the variable undefined.

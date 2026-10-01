@@ -1478,6 +1478,13 @@ present rather than dead:
 | `fontSize` | `"0.875rem"` |
 | `iconSize` | `"14px"` |
 
+The optional unread count uses `components.scrollToBottom.countBadge`.
+Its controls are `background`, `foreground`, `border`, `borderRadius`,
+`size`, `padding`, `fontSize`, and `fontWeight`. When omitted, the badge
+retains its 18px minimum size, 11px/600 type, pill radius, and semantic
+surface/primary colors. These controls apply to the jump-to-latest unread
+count, not other badge families.
+
 ### Event Stream Badges (`components.eventStream.badge.*`)
 
 Color pairs for the event-type chips in the event stream inspector
@@ -2466,8 +2473,8 @@ suggestions: {
 | `variant` | `"chip"` | `"chip" \| "card" \| "list"` |
 | `placement` | `"auto"` | `"auto" \| "after-message" \| "composer"`; `auto` uses `"after-message"` in regular panels and `"composer"` in composer-bar mode |
 | `behavior` | `"send"` | `"send" \| "fill"` |
-| `overflow` | `"scroll"` | `"scroll" \| "wrap"` |
-| `maxItems` | `4` | Maximum number shown |
+| `overflow` | V4: `"wrap"`; V5: `"scroll"` | `"scroll" \| "wrap"` |
+| `maxItems` | V4: `4`; V5: `3` regular / `5` fullscreen | Maximum number rendered; explicit values override the defaults |
 
 Each rich item supports `id`, `label`, `prompt`, `description`, `icon`,
 `iconColor`, `behavior`, and `emphasis`. Per-item `behavior` overrides the
@@ -3220,3 +3227,21 @@ V4 retains the historical fallback from an explicitly supplied
 surface overrides that fallback. This compatibility behavior also applies to a
 V4 embedded widget: opt into V5 or set the activity surface explicitly to
 separate it from collapsible code widgets.
+
+### Waiting for response text
+
+`loadingIndicator.variant` selects `"dots"` or `"label"` independently of
+the defaults version. V4 uses dots; V5 uses a muted 13px “Thinking…” label
+with a 20px minimum height and subtle shimmer. Reduced-motion preferences
+disable the shimmer. Set `loadingIndicator.label` to localize or replace
+the text. Existing custom rendering hooks remain available.
+
+V5 follow-ups use a single scrolling row with the existing edge fade.
+They clear when the user types, sends, or starts another run, and stay hidden
+while the assistant is running. New suggestions may appear after completion.
+The preview's **Loading & follow-ups** scene demonstrates the waiting state,
+streamed text, and suggestion overflow without a backend.
+
+V5 horizontally scrolling suggestion chips hide the native scrollbar, including while hovered or scrolling. Edge fades, touch scrolling, and keyboard focus navigation remain available. V4 scrolling keeps its existing scrollbar behavior.
+
+Use `suggestions.followUps.edgeStyle` (or `suggestions.starters.edgeStyle`) to choose `"clip"` or `"fade"` for horizontal chips. Both versions default to fades and scroll freely without snapping. V5 composer rows extend to the footer edges and initially align with the composer inset. Native overscroll feedback remains platform-dependent.

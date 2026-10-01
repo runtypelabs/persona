@@ -1057,6 +1057,18 @@ export interface ScrollToBottomTokens extends ComponentTokenSet {
   gap?: string;
   fontSize?: string;
   iconSize?: string;
+  /** Unread-count badge; omitted values retain the current pill/semantic colors. */
+  countBadge?: {
+    background?: TokenReference<'color'>;
+    foreground?: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
+    borderRadius?: TokenReference<'radius'>;
+    /** Minimum width and height. Defaults to 18px. */
+    size?: string;
+    padding?: string;
+    fontSize?: string;
+    fontWeight?: string;
+  };
 }
 
 /** Visual tokens shared by one suggestion presentation variant. */

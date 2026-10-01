@@ -480,7 +480,8 @@
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   scrollbar-width: thin;
-  scroll-snap-type: inline proximity;
+  scroll-snap-type: none;
+  scroll-padding-inline: var(--persona-suggestion-scroll-fade-size);
   padding: 2px;
 }
 
@@ -568,7 +569,6 @@
 
 .persona-suggestion--chip {
   flex: 0 0 auto;
-  scroll-snap-align: start;
   min-height: var(--persona-components-suggestion-chip-minHeight, 36px);
   gap: var(--persona-components-suggestion-chip-gap, 0.5rem);
   padding: var(
@@ -5132,7 +5132,7 @@
   border: 1px solid var(--persona-scroll-to-bottom-border, var(--persona-primary, #111827));
   background: var(--persona-scroll-to-bottom-bg, var(--persona-button-primary-bg, var(--persona-accent, #0f0f0f)));
   color: var(--persona-scroll-to-bottom-fg, var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff)));
-  box-shadow: var(--persona-scroll-to-bottom-shadow, 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1));
+  box-shadow: var(--persona-scroll-to-bottom-shadow, var(--persona-palette-shadows-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05)));
   font-size: var(--persona-scroll-to-bottom-font-size, 0.875rem);
   line-height: 1;
 }
@@ -5159,16 +5159,16 @@
   top: -6px;
   right: -6px;
   box-sizing: border-box;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: var(--persona-radius-full, 9999px);
-  border: 1px solid var(--persona-scroll-to-bottom-border, var(--persona-primary, #111827));
+  min-width: var(--persona-scroll-to-bottom-count-size, 18px);
+  height: var(--persona-scroll-to-bottom-count-size, 18px);
+  padding: var(--persona-scroll-to-bottom-count-padding, 0 5px);
+  border-radius: var(--persona-scroll-to-bottom-count-radius, var(--persona-radius-full, 9999px));
+  border: 1px solid var(--persona-scroll-to-bottom-count-border, var(--persona-scroll-to-bottom-border, var(--persona-primary, #111827)));
   background: var(--persona-scroll-to-bottom-count-bg, var(--persona-surface, #ffffff));
   color: var(--persona-scroll-to-bottom-count-fg, var(--persona-primary, #111827));
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
+  font-size: var(--persona-scroll-to-bottom-count-font-size, 11px);
+  font-weight: var(--persona-scroll-to-bottom-count-font-weight, 600);
+  line-height: calc(var(--persona-scroll-to-bottom-count-size, 18px) - 2px);
   text-align: center;
 }
 
@@ -7518,3 +7518,53 @@
   overflow-wrap: anywhere;
 }
 .persona-approval-row .persona-tool-detail > :last-child { margin-bottom: 0; }
+
+/* Built-in waiting label; keep readable text when motion is disabled. */
+.persona-loading-label {
+  min-height:20px;
+  font-size:13px;
+  line-height:20px;
+  color:var(--persona-muted);
+  width:fit-content;
+  background:linear-gradient(90deg, var(--persona-muted) 35%, var(--persona-text) 50%, var(--persona-muted) 65%);
+  background-size:200% 100%;
+  background-clip:text;
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:persona-activity-shimmer 2s linear infinite;
+}
+@media (prefers-reduced-motion:reduce), (forced-colors:active) {
+  .persona-loading-label {
+    animation:none;
+    background:none;
+    -webkit-text-fill-color:currentColor;
+  }
+}
+
+/* Keep V5 chip strips quiet even while hovered or actively scrolling. */
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-hide-scrollbar] {
+  scrollbar-width: none;
+}
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-hide-scrollbar]::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* The viewport reaches the panel sides; initial chips align with the composer. */
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-edge-to-edge] {
+  box-sizing: border-box;
+  width: calc(100% + var(--persona-suggestion-bleed-left, 0px) + var(--persona-suggestion-bleed-right, 0px)) !important;
+  max-width: none !important;
+  margin-left: calc(-1 * var(--persona-suggestion-bleed-left, 0px)) !important;
+  margin-right: calc(-1 * var(--persona-suggestion-bleed-right, 0px)) !important;
+  padding-left: var(--persona-suggestion-inset-left, 24px);
+  padding-right: var(--persona-suggestion-inset-right, 24px);
+  scroll-padding-left: var(--persona-suggestion-inset-left, 24px);
+  scroll-padding-right: var(--persona-suggestion-inset-right, 24px);
+  --persona-suggestion-scroll-fade-size: min(16px, var(--persona-suggestion-inset-left, 24px));
+}
+.persona-suggestions.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-edge-style="clip"] {
+  mask-image: none;
+  -webkit-mask-image: none;
+}

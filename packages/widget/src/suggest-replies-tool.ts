@@ -84,6 +84,28 @@ export const SUGGEST_REPLIES_CLIENT_TOOL: ClientToolDefinition = {
   annotations: { readOnlyHint: true },
 };
 
+/** V5 permits five replies for fullscreen; the active UI applies its own limit. */
+export const configuredSuggestRepliesTool = (config: AgentWidgetConfig | undefined): ClientToolDefinition => {
+  const limit = config?.suggestions?.followUps?.maxItems;
+  const maxItems = typeof limit === "number" && Number.isFinite(limit)
+    ? Math.max(1, Math.floor(limit))
+    : config?.future?.v5Defaults ? 5 : SUGGEST_REPLIES_MAX;
+  if (maxItems === SUGGEST_REPLIES_MAX) return SUGGEST_REPLIES_CLIENT_TOOL;
+  return {
+    ...SUGGEST_REPLIES_CLIENT_TOOL,
+    parametersSchema: {
+      ...SUGGEST_REPLIES_PARAMETERS_SCHEMA,
+      properties: {
+        suggestions: {
+          ...SUGGEST_REPLIES_PARAMETERS_SCHEMA.properties.suggestions,
+          maxItems,
+          description: `1-${maxItems} short, distinct follow-up replies, phrased in the user's voice.`,
+        },
+      },
+    },
+  };
+};
+
 /**
  * The canned tool output posted to `/resume` the moment the chips render.
  * MCP content shape, matching what the WebMCP resume path posts for page
@@ -110,7 +132,8 @@ export const isSuggestRepliesMessage = (
  * Hosts add id, icon, behavior, and emphasis via `transformSuggestions`.
  */
 export const parseSuggestRepliesPayload = (
-  args: unknown
+  args: unknown,
+  maxItems = SUGGEST_REPLIES_MAX,
 ): AgentWidgetSuggestion[] => {
   let parsed: unknown = args;
   if (typeof parsed === "string") {
@@ -142,11 +165,11 @@ export const parseSuggestRepliesPayload = (
     }
     return [suggestion];
   });
-  if (suggestions.length > SUGGEST_REPLIES_MAX) {
+  if (suggestions.length > maxItems) {
     console.warn(
-      `[persona] suggest_replies: ${suggestions.length} suggestions exceeds the cap of ${SUGGEST_REPLIES_MAX}; extra suggestions dropped.`,
+      `[persona] suggest_replies: ${suggestions.length} suggestions exceeds the cap of ${maxItems}; extra suggestions dropped.`,
     );
-    return suggestions.slice(0, SUGGEST_REPLIES_MAX);
+    return suggestions.slice(0, maxItems);
   }
   return suggestions;
 };
@@ -159,12 +182,13 @@ export const parseSuggestRepliesPayload = (
  */
 export const latestAgentSuggestions = (
   messages: AgentWidgetMessage[],
+  maxItems = SUGGEST_REPLIES_MAX,
 ): AgentWidgetSuggestion[] | null => {
   for (let i = messages.length - 1; i >= 0; i--) {
     const message = messages[i];
     if (message.role === "user") return null;
     if (!isSuggestRepliesMessage(message)) continue;
-    const chips = parseSuggestRepliesPayload(message.toolCall?.args);
+    const chips = parseSuggestRepliesPayload(message.toolCall?.args, maxItems);
     return chips.length > 0 ? chips : null;
   }
   return null;
