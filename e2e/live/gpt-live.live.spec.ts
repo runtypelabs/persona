@@ -19,6 +19,11 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *                             answers itself, nothing is delegated, the reply renders
  *   LIVE_EXPECT_USER_TURN_ID=0  core predates Amendment 2 (no userTurnId)
  *   LIVE_ALLOW_UNPROMPTED=1     tolerate GPT-Live speaking before the visitor
+ *   LIVE_APPROVE=allow|deny     the delegated turn parks on a tool approval (e.g. an order WAV):
+ *                               check the spoken ask, click the decision, then expect a
+ *                               delegation_followup (Allow: matching LIVE_FOLLOWUP, default an
+ *                               order id like JB-1234) and its folded read-back
+ *   LIVE_APPROVAL_TOOL          humanized tool name the ask must mention (place pickup order)
  *   LIVE_FIRST_AUDIO_SLACK_MS   slack on the first mic frame after the socket opens (200)
  *
  * Artifacts land in e2e/live/.out/results: frames.json (every voice frame both
@@ -38,6 +43,9 @@ const TYPED = process.env.LIVE_TYPED ?? "Do you sell gift cards?";
 const CALL_CONTEXT = process.env.LIVE_CALL_CONTEXT ?? "Live e2e: the visitor is testing voice.";
 const EXPECT_DELEGATION = process.env.LIVE_EXPECT_DELEGATION !== "0";
 const EXPECT_SMALL_TALK = process.env.LIVE_EXPECT_SMALL_TALK === "1";
+const APPROVE = process.env.LIVE_APPROVE as "allow" | "deny" | undefined;
+const APPROVAL_TOOL = env("LIVE_APPROVAL_TOOL", "place pickup order");
+const FOLLOWUP = new RegExp(env("LIVE_FOLLOWUP", "JB-\\d+"), "i");
 // One capture buffer (4096 samples at 16 kHz) plus scheduling slack.
 const CAPTURE_BUFFER_MS = 256;
 // The provider's pre-open audio cap (PRE_OPEN_AUDIO_MAX_BYTES at 16 kHz PCM16).
@@ -73,6 +81,16 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       chatRequests.push(request.postDataJSON());
     }
   });
+  // Chat failures (e.g. core's 501 APPROVAL_MODE_UNSUPPORTED), for the failure message.
+  const chatErrors: string[] = [];
+  page.on("response", async (response) => {
+    if (!/\/v1\/(client\/chat|agents\/[^/]+\/approve)$/.test(new URL(response.url()).pathname)) return;
+    if (response.status() >= 400) {
+      chatErrors.push(`${response.status()} ${(await response.text().catch(() => "")).slice(0, 300)}`);
+    }
+  });
+  const chatOk = (ok: unknown) =>
+    expect(ok, `the delegated chat turn failed; chat responses: ${JSON.stringify(chatErrors)}`).toBe(true);
   let voiceSocket: PwWebSocket | undefined;
   page.on("websocket", (ws) => {
     if (!/\/ws\/agents\/[^/]+\/voice/.test(ws.url())) return;
@@ -244,6 +262,79 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').filter({ hasText: ANSWER }).first(),
       ).toBeVisible();
       testInfo.annotations.push({ type: "reply", description: replyText() ?? "" });
+    } else if (APPROVE) {
+      // The turn parks on an approval: GPT-Live gets the approval script now
+      // and asks; the decision's outcome comes back as a delegation_followup.
+      await expect.poll(() => json("in", "delegation_requested").length, { timeout: 45_000 }).toBeGreaterThan(0);
+      const requested = json("in", "delegation_requested")[0]!;
+      await expect.poll(() => json("out", "delegation_result").length, { timeout: 60_000 }).toBeGreaterThan(0);
+      const result = json("out", "delegation_result")[0]!;
+      const script = String(result.text);
+      testInfo.annotations.push({ type: "approval-script", description: script });
+      expect(result.turnId).toBe(requested.turnId);
+      chatOk(result.ok);
+      // No approval script: the agent asked a clarifying question (or did
+      // something else) instead of ordering. Fail plainly, don't loop.
+      expect(
+        script,
+        `the agent did not ask for approval; it answered: ${JSON.stringify(script.slice(0, 300))}`,
+      ).toMatch(/needs? the user's approval in the chat/);
+      expect(script.toLowerCase()).toContain(APPROVAL_TOOL);
+      expect(script).toMatch(/croissant/i);
+      expect(script).toContain("Don't claim it's done.");
+      expect(script, "the ask claims the order is already placed").not.toMatch(FOLLOWUP);
+
+      // GPT-Live asks (folded: the approval card is the ask), then the visitor decides.
+      await expect
+        .poll(() => json("in", "delegation_completed").some((f) => f.turnId === requested.turnId), { timeout: 30_000 })
+        .toBe(true);
+      const button = page.getByRole("button", { name: APPROVE === "allow" ? "Allow" : "Deny", exact: true });
+      await expect(button).toBeVisible({ timeout: 30_000 });
+      // Let GPT-Live finish asking before deciding, as a visitor would.
+      await page.waitForTimeout(3_000);
+      const decidedAt = Date.now() - t0;
+      await button.click();
+
+      await expect
+        .poll(() => json("out", "delegation_followup").length, {
+          timeout: 60_000,
+          message: "no delegation_followup after the decision (does session_config announce followUpFrames?)",
+        })
+        .toBeGreaterThan(0);
+      expect(config.followUpFrames).toBe(true);
+      const followUp = json("out", "delegation_followup")[0]!;
+      testInfo.annotations.push({ type: "followup", description: String(followUp.text) });
+      expect(followUp.turnId).toBe(requested.turnId);
+      expect(String(followUp.text).trim()).not.toBe("");
+      if (APPROVE === "allow") expect(String(followUp.text)).toMatch(FOLLOWUP);
+      else expect(String(followUp.text)).not.toMatch(FOLLOWUP);
+
+      // Core speaks it as a late result: a second delegation_completed, whose
+      // read-back is folded (the answer already renders in the chat).
+      await expect
+        .poll(() => json("in", "delegation_completed").filter((f) => f.turnId === requested.turnId).length, {
+          timeout: 30_000,
+        })
+        .toBeGreaterThanOrEqual(2);
+      const secondAt = frames.filter((f) => f.json?.type === "delegation_completed" && f.json.turnId === requested.turnId)[1]!.at;
+      const finalsAfter = () =>
+        frames.filter((f) => f.at > secondAt && f.json?.type === "transcript_update" && f.json.role === "assistant" && f.json.final);
+      await expect.poll(() => finalsAfter().length, { timeout: 30_000 }).toBeGreaterThan(0);
+      await page.waitForTimeout(1_000);
+      const readback = normalize(String(finalsAfter()[0]!.json!.text));
+      const bubbles = (await page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').allTextContents()).map(normalize);
+      expect(bubbles, "the follow-up read-back rendered as a second bubble").not.toContain(readback);
+      if (APPROVE === "allow") {
+        expect(bubbles.some((text) => FOLLOWUP.test(text)), "the confirmation did not render").toBe(true);
+        if (!FOLLOWUP.test(readback) && !/croissant|order/i.test(readback)) warn(`read-back "${readback}" does not mention the order`);
+      }
+
+      const spoken = (from: number, to: number) =>
+        frames
+          .filter((f) => f.at > from && f.at <= to && f.json?.type === "transcript_update" && f.json.role === "assistant" && f.json.final)
+          .map((f) => String(f.json!.text).trim());
+      testInfo.annotations.push({ type: "spoken-before-decision", description: JSON.stringify(spoken(0, decidedAt)) });
+      testInfo.annotations.push({ type: "spoken-after-decision", description: JSON.stringify(spoken(decidedAt, Infinity)) });
     } else if (EXPECT_DELEGATION) {
       await expect.poll(() => json("in", "delegation_requested").length, { timeout: 45_000 }).toBeGreaterThan(0);
       const requested = json("in", "delegation_requested")[0]!;
@@ -263,7 +354,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       await expect.poll(() => json("out", "delegation_result").length, { timeout: 60_000 }).toBeGreaterThan(0);
       const result = json("out", "delegation_result")[0]!;
       expect(result.turnId).toBe(requested.turnId);
-      expect(result.ok).toBe(true);
+      chatOk(result.ok);
       expect(String(result.text).trim()).not.toBe("");
       expect(String(result.text), "the delegated turn did not answer the question").toMatch(ANSWER);
 
