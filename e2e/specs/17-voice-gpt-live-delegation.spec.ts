@@ -119,14 +119,23 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   expect(call.url.search).not.toContain("ct_e2e_voice");
   expect(call.delegationGranted).toBe(true);
 
-  // The context is held until the visitor first speaks (GPT-Live answers
-  // context it gets in silence): nothing at call start.
+  // The context is held until the visitor's first final transcript (or the
+  // first delegation): GPT-Live answers context it gets in silence. Nothing
+  // at call start.
   await page.waitForTimeout(400);
   expect(call.framesOf("context")).toEqual([]);
+  // A partial does not release it either: an append while the visitor is
+  // mid-sentence makes GPT-Live answer early or skip the delegation.
   call.send({ type: "transcript_update", role: "user", text: "What are", turnId: "in_1", final: false, startMs: 1200, endMs: 1700 });
+  await page.waitForTimeout(400);
+  expect(call.framesOf("context")).toEqual([]);
 
-  // Released by the first user partial: the typed turn plus the host's
-  // string, one frame, without the in-progress utterance.
+  // The visitor finishes speaking: the first FINAL user transcript releases it.
+  await call.utterance({ role: "user", turnId: "in_1", text: SPOKEN_QUESTION, startMs: 1200 });
+  await expect(page.locator(voiceSel.userBubble).filter({ hasText: SPOKEN_QUESTION })).toHaveCount(1);
+
+  // One frame: the typed turn plus the host's string, built before the call's
+  // first utterance, so it never contains it.
   const contextFrame = await call.waitForFrame("context");
   const contextText = String(contextFrame.text);
   expect(contextText).toContain("Conversation so far:");
@@ -137,12 +146,8 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
     contextText.indexOf(`Assistant: ${TYPED_ANSWER}`),
   );
   expect(contextText.length).toBeLessThanOrEqual(8000);
-  expect(contextText).not.toContain("What are");
+  expect(contextText).not.toContain("What are your");
   expect(call.framesOf("context")).toHaveLength(1);
-
-  // The visitor speaks.
-  await call.utterance({ role: "user", turnId: "in_1", text: SPOKEN_QUESTION, startMs: 1200 });
-  await expect(page.locator(voiceSel.userBubble).filter({ hasText: SPOKEN_QUESTION })).toHaveCount(1);
 
   // GPT-Live delegates; its filler shows while the widget runs the turn.
   call.send({ type: "delegation_started", turnId: "dlg_1" });
