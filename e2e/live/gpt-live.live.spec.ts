@@ -12,7 +12,8 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *   LIVE_AGENT_ID       agent id            (agent_live_local)
  *   LIVE_QUESTION       regex the user transcript must match (hours)
  *   LIVE_ANSWER         regex the rendered answer must match (Monday|hours|open)
- *   LIVE_TYPED          a message typed before the call (must reach `context`)
+ *   LIVE_TYPED          a message typed before the call (must reach `context`); "" skips it
+ *   LIVE_CALL_CONTEXT   host callContext string; "" sends none
  *   LIVE_EXPECT_DELEGATION=0  expect the server-side path (old server) instead
  *   LIVE_EXPECT_USER_TURN_ID=0  core predates Amendment 2 (no userTurnId)
  *   LIVE_ALLOW_UNPROMPTED=1     tolerate GPT-Live speaking before the visitor
@@ -29,7 +30,9 @@ const CLIENT_TOKEN = env("LIVE_CLIENT_TOKEN", "ct_live_local");
 const AGENT_ID = env("LIVE_AGENT_ID", "agent_live_local");
 const QUESTION = new RegExp(env("LIVE_QUESTION", "hours"), "i");
 const ANSWER = new RegExp(env("LIVE_ANSWER", "Monday|hours|open"), "i");
-const TYPED = env("LIVE_TYPED", "Do you sell gift cards?");
+// Set to "" to skip the typed turn (and with LIVE_CALL_CONTEXT="" send no context).
+const TYPED = process.env.LIVE_TYPED ?? "Do you sell gift cards?";
+const CALL_CONTEXT = process.env.LIVE_CALL_CONTEXT ?? "Live e2e: the visitor is testing voice.";
 const EXPECT_DELEGATION = process.env.LIVE_EXPECT_DELEGATION !== "0";
 
 type Frame = { at: number; dir: "in" | "out"; json?: Record<string, unknown>; bytes?: number };
@@ -80,17 +83,20 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       apiUrl: API_URL,
       clientToken: CLIENT_TOKEN,
       agentId: AGENT_ID,
-      callContext: "Live e2e: the visitor is testing voice.",
     });
+    if (CALL_CONTEXT) params.set("callContext", CALL_CONTEXT);
     await page.goto(`/voice-e2e.html?${params}`);
     await expect(page.locator(".persona-widget-container")).toBeVisible();
 
     // A typed turn first, so the call-start context has history to carry.
-    const input = page.locator(".persona-widget-footer textarea").first();
-    await input.fill(TYPED);
-    await input.press("Enter");
-    await expect.poll(() => chatRequests.length).toBe(1);
-    await expect(page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]')).toHaveCount(1);
+    if (TYPED) {
+      const input = page.locator(".persona-widget-footer textarea").first();
+      await input.fill(TYPED);
+      await input.press("Enter");
+      await expect.poll(() => chatRequests.length).toBe(1);
+      await expect(page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]')).toHaveCount(1);
+    }
+    const typedRequests = chatRequests.length;
 
     // Start the call; the WAV starts playing as the mic opens.
     await page.locator("[data-persona-composer-mic]").click();
@@ -98,12 +104,15 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     const config = json("in", "session_config")[0]!;
     expect(config.speechMode).toBe("speech_to_speech");
     expect(Boolean(config.clientDelegation)).toBe(EXPECT_DELEGATION);
-    if (config.contextFrames === true) {
+    if (config.contextFrames === true && (TYPED || CALL_CONTEXT)) {
       await expect.poll(() => json("out", "context").length).toBe(1);
       const contextText = String(json("out", "context")[0]!.text);
-      expect(contextText).toContain("Conversation so far:");
-      expect(contextText).toContain(`User: ${TYPED}`);
-      expect(contextText).toMatch(/\nAssistant: \S/);
+      if (TYPED) {
+        expect(contextText).toContain("Conversation so far:");
+        expect(contextText).toContain(`User: ${TYPED}`);
+        expect(contextText).toMatch(/\nAssistant: \S/);
+      }
+      if (CALL_CONTEXT) expect(contextText).toContain(CALL_CONTEXT);
     } else {
       expect(json("out", "context")).toEqual([]);
     }
@@ -155,8 +164,8 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       // Exactly one delegated chat submission (after the typed one), carrying
       // the spoken request once, as its LAST message, with none of GPT-Live's
       // own captions (filler) in the history.
-      expect(chatRequests).toHaveLength(2);
-      const messages = (chatRequests[1]!.messages ?? []).map((m) => ({
+      expect(chatRequests).toHaveLength(typedRequests + 1);
+      const messages = (chatRequests[typedRequests]!.messages ?? []).map((m) => ({
         role: String(m.role),
         text: typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? ""),
       }));
@@ -205,7 +214,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         .poll(() => json("in", "delegation_completed").length, { timeout: 60_000 })
         .toBeGreaterThan(0);
       expect(json("out", "delegation_result")).toEqual([]);
-      expect(chatRequests).toHaveLength(1);
+      expect(chatRequests).toHaveLength(typedRequests);
     }
 
     // Hang up (force: the live level animation never lets the button settle).
