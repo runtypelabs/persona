@@ -118,9 +118,15 @@ importers:
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
+      '@types/ws':
+        specifier: ^8.18.2
+        version: 8.18.2
       concurrently:
         specifier: ^8.2.2
         version: 8.2.2
+      ws:
+        specifier: ^8.20.1
+        version: 8.20.1
 
   apps/web:
     dependencies:
@@ -2278,6 +2284,9 @@ packages:
 
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
+  '@types/ws@8.18.2':
+    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
 
   '@typescript-eslint/eslint-plugin@7.18.0':
     resolution: {integrity: sha512-94EQTWZ40mzBc42ATNIBimBEDltSJ9RQHCC8vc/PDbxi4k8dVwUAv4o98dk50M1zB+JGFxp43FP7f8+FP8R6Sw==}
@@ -6312,6 +6321,10 @@ snapshots:
   '@types/trusted-types@2.0.7': {}
 
   '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 25.9.3
+
+  '@types/ws@8.18.2':
     dependencies:
       '@types/node': 25.9.3
 

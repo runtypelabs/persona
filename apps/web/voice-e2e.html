@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <title>Voice e2e fixture</title>
+  <style>
+    /* Internal fixture: deliberately plain so nothing competes with the widget. */
+    html, body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { padding: 16px; background: #f6f6f6; }
+    #e2e-host {
+      width: 720px;
+      height: 760px;
+      max-width: 100%;
+      display: flex;
+      background: #fff;
+      border: 1px solid #ddd;
+      box-sizing: border-box;
+    }
+    #e2e-status { font: 12px/1.6 ui-monospace, monospace; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <!--
+    Internal end-to-end fixture for the Playwright full-duplex voice suite
+    (e2e/specs/voice-*.spec.ts) and the live GPT-Live harness (e2e/live/).
+    Deliberately absent from examples-nav: it is a test surface, not a demo.
+
+    Query parameters:
+      voiceHost=<ws(s)://host:port>  voice socket base (the fake voice server)
+      apiUrl=<url>                   chat/client API base (default /e2e-api)
+      clientToken=<token>            client token (default ct_e2e_voice)
+      agentId=<id>                   voice agent id (default agent_e2e_voice)
+      clientDelegation=0             opt the widget out of client delegation
+      callContext=<text>             host-supplied call context string
+  -->
+  <div id="e2e-status">booting</div>
+  <div id="e2e-host"></div>
+  <script type="module" src="/src/voice-e2e.ts"></script>
+</body>
+</html>

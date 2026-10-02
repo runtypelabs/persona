@@ -12,6 +12,12 @@ import { defineConfig, devices } from "@playwright/test";
  * The deterministic server is the `apps/web` preview build: the in-memory
  * history provider for UI scenarios, and Playwright route interception of
  * `/v1/client/*` for transport scenarios.
+ *
+ * The full-duplex voice specs (GPT-Live client delegation) also run here: a
+ * fake mic (Chromium flags set per spec), the `voice-e2e.html` fixture, and a
+ * scripted fake of core's voice socket (`fixtures/fake-voice-server.ts`). The
+ * live harness against real services lives in `e2e/live/` and is NOT part of
+ * this config.
  */
 
 const PORT = Number(process.env.E2E_PORT ?? 4317);
