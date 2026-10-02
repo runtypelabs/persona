@@ -105,7 +105,16 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     expect(config.speechMode).toBe("speech_to_speech");
     expect(Boolean(config.clientDelegation)).toBe(EXPECT_DELEGATION);
     if (config.contextFrames === true && (TYPED || CALL_CONTEXT)) {
-      await expect.poll(() => json("out", "context").length).toBe(1);
+      // Held until the visitor first speaks (or the first delegation request).
+      await expect.poll(() => json("out", "context").length, { timeout: 45_000 }).toBe(1);
+      const contextAt = frames.findIndex((f) => f.dir === "out" && f.json?.type === "context");
+      const releasedBy = frames.findIndex(
+        (f) =>
+          f.dir === "in" &&
+          ((f.json?.type === "transcript_update" && f.json.role === "user") || f.json?.type === "delegation_requested"),
+      );
+      expect(releasedBy, "context went out before the visitor spoke").toBeGreaterThanOrEqual(0);
+      expect(releasedBy).toBeLessThan(contextAt);
       const contextText = String(json("out", "context")[0]!.text);
       if (TYPED) {
         expect(contextText).toContain("Conversation so far:");

@@ -119,7 +119,14 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   expect(call.url.search).not.toContain("ct_e2e_voice");
   expect(call.delegationGranted).toBe(true);
 
-  // Call-start context: the typed turn plus the host's string, one frame.
+  // The context is held until the visitor first speaks (GPT-Live answers
+  // context it gets in silence): nothing at call start.
+  await page.waitForTimeout(400);
+  expect(call.framesOf("context")).toEqual([]);
+  call.send({ type: "transcript_update", role: "user", text: "What are", turnId: "in_1", final: false, startMs: 1200, endMs: 1700 });
+
+  // Released by the first user partial: the typed turn plus the host's
+  // string, one frame, without the in-progress utterance.
   const contextFrame = await call.waitForFrame("context");
   const contextText = String(contextFrame.text);
   expect(contextText).toContain("Conversation so far:");
@@ -130,6 +137,7 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
     contextText.indexOf(`Assistant: ${TYPED_ANSWER}`),
   );
   expect(contextText.length).toBeLessThanOrEqual(8000);
+  expect(contextText).not.toContain("What are");
   expect(call.framesOf("context")).toHaveLength(1);
 
   // The visitor speaks.
@@ -327,7 +335,7 @@ test("userTurnId before its transcript: the bubble is created from userText and 
   context,
 }) => {
   const api = await installFakeHistoryApi(context);
-  await openVoicePage(page, { voiceHost: voice.host });
+  await openVoicePage(page, { voiceHost: voice.host, callContext: HOST_CONTEXT });
   api.setChatStream(textTurnStream(RESULT_MARKDOWN, "exec_early"));
   const call = await startCall(page);
 
@@ -337,6 +345,12 @@ test("userTurnId before its transcript: the bubble is created from userText and 
   await expect(page.locator(voiceSel.userBubble).filter({ hasText: "What are your opening hours" })).toHaveCount(1);
   await call.utterance({ role: "user", turnId: "in_e", text: " What are your opening hours?", startMs: 2000 });
   await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_e");
+
+  // A delegation before any user transcript releases the held context, and
+  // the context goes out before that delegation's result.
+  const types = call.frames.map((f) => f.type);
+  expect(types.filter((t) => t === "context")).toHaveLength(1);
+  expect(types.indexOf("context")).toBeLessThan(types.indexOf("delegation_result"));
 
   await expect(page.locator(voiceSel.userBubble)).toHaveCount(1);
   await expect.poll(() => api.requestsTo("chat").length).toBe(1);
@@ -411,10 +425,17 @@ test("contextFrames without delegation: context is sent, the agent turn stays on
   await seedTypedTurn(page, api);
 
   const call = await startCall(page);
-  const contextFrame = await call.waitForFrame("context");
-  expect(String(contextFrame.text)).toContain(`User: ${TYPED_QUESTION}`);
+  // An unprompted greeting is assistant speech: it does not release the context.
+  await call.utterance({ role: "assistant", turnId: "out_hi", text: "Hi there!", startMs: 200 });
+  await page.waitForTimeout(400);
+  expect(call.framesOf("context")).toEqual([]);
 
   await call.utterance({ role: "user", turnId: "in_1", text: SPOKEN_QUESTION, startMs: 1200 });
+  const contextFrame = await call.waitForFrame("context");
+  expect(String(contextFrame.text)).toContain(`User: ${TYPED_QUESTION}`);
+  expect(String(contextFrame.text)).not.toContain(SPOKEN_QUESTION);
+  expect(call.framesOf("context")).toHaveLength(1);
+
   call.send({ type: "delegation_started", turnId: "dlg_1" });
   call.send({ type: "delegation_completed", turnId: "dlg_1", speak: true, text: RESULT_SPEECH });
   await call.utterance({ role: "assistant", turnId: "out_1", text: READBACK, startMs: 6000 });
