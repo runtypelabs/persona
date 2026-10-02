@@ -199,6 +199,50 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   expect(await call.closed).toBe(1000);
 });
 
+test("real GPT-Live ordering: delegation arrives before the user transcript is final", async ({
+  page,
+  context,
+}) => {
+  // Captured from a live GPT-Live call: delegation_started/requested land
+  // ~100-600 ms BEFORE the user utterance's final transcript (core finalizes
+  // after a 900 ms quiet window), and userText keeps GPT-Live's leading space
+  // and lacks punctuation.
+  const api = await installFakeHistoryApi(context);
+  await openVoicePage(page, { voiceHost: voice.host });
+  api.setChatStream(
+    toolThenMarkdownStream({
+      toolName: "get_opening_hours",
+      parameters: {},
+      result: { weekdays: "8-18" },
+      markdown: RESULT_MARKDOWN,
+    }),
+  );
+  const call = await startCall(page);
+
+  for (const partial of [" What", " What are your", " What are your opening hours"]) {
+    call.send({ type: "transcript_update", role: "user", text: partial, turnId: "in_live", final: false, startMs: 2200, endMs: 3800 });
+  }
+  call.send({ type: "delegation_started", turnId: "item_live" });
+  call.send({
+    type: "delegation_requested",
+    turnId: "item_live",
+    userText: " What are your opening hours",
+    messages: [{ role: "user", content: " What are your opening hours" }],
+  });
+  call.send({ type: "transcript_update", role: "user", text: " What are your opening hours", turnId: "in_live", final: true, startMs: 2200, endMs: 3800 });
+
+  const result = await call.waitForFrame("delegation_result", (f) => f.turnId === "item_live");
+  expect(result.ok).toBe(true);
+  await expect.poll(() => api.requestsTo("chat").length).toBe(1);
+  const asked = chatMessages(api.requestsTo("chat")[0]!.body).filter(
+    (m) => m.role === "user" && m.text.includes("What are your opening hours"),
+  );
+  expect(asked).toHaveLength(1);
+  await expect(page.locator(voiceSel.userBubble)).toHaveCount(1);
+  await expect(page.locator(voiceSel.userBubble)).toHaveText("What are your opening hours");
+  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Opening hours" })).toHaveCount(1);
+});
+
 test("bubbles order by startMs: a late user transcript renders above the reply it prompted", async ({
   page,
   context,

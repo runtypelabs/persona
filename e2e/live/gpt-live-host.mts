@@ -33,6 +33,8 @@ import WebSocket, { WebSocketServer } from "ws";
 const CORE_DIR = process.env.CORE_DIR;
 if (!CORE_DIR) throw new Error("Set CORE_DIR to a core checkout (feat/gpt-live-client-delegation).");
 const PORT = Number(process.env.LIVE_HOST_PORT ?? 4399);
+/** Delay before the local chat agent answers, to mimic a real agent turn. */
+const CHAT_DELAY_MS = Number(process.env.LIVE_CHAT_DELAY_MS ?? 0);
 
 async function gatewayKey(): Promise<string> {
   let local: Record<string, string | undefined> = {};
@@ -104,7 +106,10 @@ const chats: unknown[] = [];
 
 const server = createServer(async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", req.headers.origin ?? "*");
-  res.setHeader("Access-Control-Allow-Headers", "authorization, content-type, x-visitor-token, x-session-id");
+  res.setHeader(
+    "Access-Control-Allow-Headers",
+    String(req.headers["access-control-request-headers"] ?? "authorization, content-type"),
+  );
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Expose-Headers", "X-History-Identity-Status");
   if (req.method === "OPTIONS") return void res.writeHead(204).end();
@@ -138,6 +143,7 @@ const server = createServer(async (req, res) => {
     const parsed = JSON.parse(body || "{}") as { messages?: Array<{ role: string; content: unknown }> };
     chats.push(parsed);
     const last = [...(parsed.messages ?? [])].reverse().find((m) => m.role === "user");
+    if (CHAT_DELAY_MS > 0) await new Promise((resolve) => setTimeout(resolve, CHAT_DELAY_MS));
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
     return void res.end(chatAnswer(typeof last?.content === "string" ? last.content : JSON.stringify(last?.content ?? "")));
   }
