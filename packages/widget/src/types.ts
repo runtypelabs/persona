@@ -5229,6 +5229,8 @@ export type VoiceDelegationRequest = {
   turnId: string;
   /** What the visitor asked, as the voice model heard it. */
   userText: string;
+  /** The `turnId` of the user transcript `userText` came from, when known. */
+  userTurnId?: string;
 };
 
 /** The finished turn, sent back for the voice model to read aloud. */

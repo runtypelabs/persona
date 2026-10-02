@@ -338,6 +338,15 @@ describe('AgentWidgetSession - turn-keyed (full-duplex) voice transcripts', () =
     expect(spoken(byContent('The answer you asked for.').id)).toBe(true);
   });
 
+  it('re-positions a bubble when its startMs arrives on a later update', () => {
+    drive('user', 'first', true, 'u1');
+    h.state.transcriptCb!('assistant', 'reply', true, { turnId: 'a1', startMs: 2000 });
+    h.state.transcriptCb!('user', 'spoke ear', false, { turnId: 'u2' }); // no timestamp yet
+    expect(view().map((v) => v[1])).toEqual(['first', 'reply', 'spoke ear']);
+    h.state.transcriptCb!('user', 'spoke early', true, { turnId: 'u2', startMs: 1000 });
+    expect(view().map((v) => v[1])).toEqual(['first', 'spoke early', 'reply']);
+  });
+
   it('orders a late-arriving utterance by its startMs among the call\'s bubbles', () => {
     const at = (role: 'user' | 'assistant', text: string, turnId: string, startMs?: number) =>
       h.state.transcriptCb!(role, text, true, { turnId, ...(startMs !== undefined && { startMs }) });
@@ -680,6 +689,84 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       ok: true,
       text: 'I can do that.\n\nI need your answer in the chat before I can continue.',
     });
+  });
+
+  it('answers right away when a WebMCP tool parks the turn on the visitor\'s approval', async () => {
+    drive('user', 'add it to my cart', true, 'u1');
+    const internals = session as unknown as { webMcpResolveControllers: Set<AbortController> };
+    const resolve = new AbortController();
+    dispatch.mockImplementation(async (_options, onEvent) => {
+      reply(onEvent, 'Adding it now.');
+      // The page tool's resolve is in flight and waiting on the confirm bubble.
+      internals.webMcpResolveControllers.add(resolve);
+      void session.requestWebMcpApproval({ toolName: 'add_to_cart', args: {}, reason: 'gate' });
+    });
+    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'add it to my cart' });
+    expect(result).toEqual({
+      ok: true,
+      text: 'Adding it now.\n\nI need your answer in the chat before I can continue.',
+    });
+    internals.webMcpResolveControllers.delete(resolve);
+  });
+
+  it('fails a delegated turn that a typed send replaces, and leaves the typed reply alone', async () => {
+    drive('user', 'long voice task', true, 'u1');
+    dispatch.mockImplementationOnce(
+      (options) =>
+        new Promise((_resolve, reject) => {
+          options.signal?.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          );
+        }),
+    );
+    dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Typed answer.', 'assistant-typed'));
+    const delegated = h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'long voice task' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await session.sendMessage('never mind, typed instead');
+    expect(await delegated).toEqual({ ok: false, text: '' });
+    expect(spoken('assistant-typed')).toBe(false);
+  });
+
+  it('claims the bubble named by userTurnId over a text match', async () => {
+    drive('user', 'book a table', true, 'u1');
+    drive('user', 'book a table', true, 'u2');
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Booked.'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'book a table', userTurnId: 'u1' });
+    const sent = dispatch.mock.calls[0][0].messages;
+    expect(sent[sent.length - 1].id).toBe(messages.find((m) => m.role === 'user')!.id); // the first bubble
+  });
+
+  it('creates the bubble for a userTurnId not transcribed yet, which its transcript then fills', async () => {
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine.'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'opening hours', userTurnId: 'u1' });
+    h.state.transcriptCb!('user', 'Opening hours?', true, { turnId: 'u1', caption: true });
+    expect(view()).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'Opening hours?'],
+      ['assistant', 'Nine.'],
+    ]);
+    expect(messages[1].voiceCaption).toBeUndefined();
+  });
+
+  it('claims a prefix match when the request beats the final transcript', async () => {
+    drive('user', 'What are your opening', false, 'u1');
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine.'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'What are your opening hours?' });
+    expect(messages.filter((m) => m.role === 'user')).toHaveLength(1);
+    expect(dispatch.mock.calls[0][0].messages.filter((m) => m.role === 'user')[0]).toMatchObject({
+      content: 'What are your opening',
+      llmContent: 'What are your opening hours?',
+    });
+  });
+
+  it('claims nothing rather than another utterance\'s bubble', async () => {
+    drive('user', 'how is the weather', true, 'u1');
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'turn on dark mode' });
+    const users = messages.filter((m) => m.role === 'user').map((m) => m.content);
+    expect(users).toEqual(['how is the weather', 'turn on dark mode']);
+    const sent = dispatch.mock.calls[0][0].messages;
+    expect(sent[sent.length - 1].content).toBe('turn on dark mode');
   });
 
   it('waits for a chat turn already in flight instead of aborting it', async () => {

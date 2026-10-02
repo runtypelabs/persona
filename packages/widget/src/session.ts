@@ -768,9 +768,10 @@ export class AgentWidgetSession {
           createBridge({
             messages: () => this.messages,
             busy: () => this.chatTurnBusy(),
-            claim: (text) => this.keyedVoice?.claimUserTurn(text) ?? null,
-            send: (text, voiceUserMessageId) =>
-              this.sendMessage(text, { viaVoice: true, voiceUserMessageId }),
+            parked: () => this.webMcpApprovalResolvers.size > 0,
+            claim: (text, userTurnId) => this.keyedVoice?.claimUserTurn(text, userTurnId) ?? null,
+            send: (text, userMessageId) =>
+              this.sendMessage(text, { viaVoice: true, voiceTurn: { userMessageId } }),
             track: (capture) => {
               this.voiceDelegation = capture;
             }
@@ -2676,11 +2677,12 @@ export class AgentWidgetSession {
        */
       interrupt?: boolean;
       /**
-       * Internal (voice client delegation): submit this existing voice
-       * transcript bubble as the turn's user message instead of appending a
-       * new one, so the spoken request appears (and is sent) exactly once.
+       * Internal (voice client delegation): this is the delegated voice turn.
+       * `userMessageId` names an existing transcript bubble to submit as the
+       * turn's user message instead of appending a new one, so the spoken
+       * request appears (and is sent) exactly once.
        */
-      voiceUserMessageId?: string;
+      voiceTurn?: { userMessageId?: string };
     }
   ) {
     const input = rawInput.trim();
@@ -2699,6 +2701,13 @@ export class AgentWidgetSession {
       !hasReplayContent
     )
       return;
+
+    // Any other send replaces a delegated voice turn still in flight: that
+    // turn fails, and this one's reply is neither its answer nor voice-spoken.
+    if (this.voiceDelegation && !options?.voiceTurn) {
+      this.voiceDelegation.failed = true;
+      this.voiceDelegation = null;
+    }
 
     // History transitions (continuity wipe, boot reconciliation, projection
     // finalization, replacement init, external credential change) own the
@@ -2723,8 +2732,9 @@ export class AgentWidgetSession {
     // turn (cancels backoff/listeners, clears the old resume handle).
     this.teardownReconnect();
 
-    const voiceBubble = options?.voiceUserMessageId
-      ? this.messages.find((m) => m.id === options.voiceUserMessageId && m.role === "user")
+    const voiceBubbleId = options?.voiceTurn?.userMessageId;
+    const voiceBubble = voiceBubbleId
+      ? this.messages.find((m) => m.id === voiceBubbleId && m.role === "user")
       : undefined;
     // Generate IDs for both user message and expected assistant response
     const userMessageId = voiceBubble?.id ?? generateUserMessageId();

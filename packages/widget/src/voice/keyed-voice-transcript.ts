@@ -72,7 +72,14 @@ export class KeyedVoiceTranscript {
       turn.userFinal = isFinal;
       const existing = turn.userId ? host.find(turn.userId) : undefined;
       if (existing) {
-        host.upsert({ ...existing, content: text, voiceProcessing: !isFinal });
+        const moved = turn.userStartMs === undefined && startMs !== undefined;
+        if (moved) turn.userStartMs = startMs;
+        host.upsert({
+          ...existing,
+          content: text,
+          voiceProcessing: !isFinal,
+          ...(moved && this.placeBefore(this.startedAfter(startMs))),
+        });
       } else {
         // A user transcript that lands after its own turn's reply started still
         // renders above that reply: borrow the reply's timestamp, sort just ahead.
@@ -91,7 +98,16 @@ export class KeyedVoiceTranscript {
       turn.assistantFinal = isFinal;
       const existing = turn.assistantId ? host.find(turn.assistantId) : undefined;
       if (existing) {
-        host.upsert({ ...existing, content: text, streaming: !isFinal, voiceProcessing: !isFinal });
+        // A timestamp that arrives after the bubble did re-positions it.
+        const moved = turn.assistantStartMs === undefined && startMs !== undefined;
+        if (moved) turn.assistantStartMs = startMs;
+        host.upsert({
+          ...existing,
+          content: text,
+          streaming: !isFinal,
+          voiceProcessing: !isFinal,
+          ...(moved && this.placeBefore(this.startedAfter(startMs))),
+        });
       } else if (text) {
         turn.assistantStartMs = startMs;
         turn.assistantId = host.inject({
@@ -109,21 +125,40 @@ export class KeyedVoiceTranscript {
   }
 
   /**
-   * The user bubble a delegated request came from: the newest unclaimed one
-   * whose text matches, else the newest unclaimed one. Claimed bubbles are
-   * submitted once; `null` when there is none.
+   * The user bubble a delegated request came from, claimed so it is submitted
+   * once. With `userTurnId` it is that utterance's bubble; one that hasn't been
+   * transcribed yet is created now (from `userText`), so its transcript later
+   * fills it instead of adding a second bubble. Without an id it is the newest
+   * unclaimed bubble whose text matches exactly, else one where either text
+   * is a prefix of the other (the request can beat the final transcript).
+   * `null` when nothing matches: never someone else's bubble.
    */
-  claimUserTurn(userText: string): string | null {
-    const want = normalize(userText);
+  claimUserTurn(userText: string, userTurnId?: string): string | null {
     let pick: KeyedTurn | undefined;
-    for (const turn of [...this.turns.values()].reverse()) {
-      const bubble = turn.userId && !turn.claimed ? this.host.find(turn.userId) : undefined;
-      if (!bubble) continue;
-      pick ??= turn;
-      if (normalize(bubble.content) === want) {
-        pick = turn;
-        break;
+    if (userTurnId) {
+      pick = this.turns.get(userTurnId);
+      if (!pick) {
+        pick = {};
+        this.turns.set(userTurnId, pick);
       }
+      if (pick.claimed) return null;
+      if (!pick.userId || !this.host.find(pick.userId)) {
+        pick.userFinal = true;
+        pick.userId = this.host.inject({ role: "user", content: userText.trim() }).id;
+      }
+    } else {
+      const want = normalize(userText);
+      const open = [...this.turns.values()]
+        .reverse()
+        .flatMap((turn) => {
+          const bubble = turn.userId && !turn.claimed ? this.host.find(turn.userId) : undefined;
+          return bubble ? [{ turn, text: normalize(bubble.content) }] : [];
+        })
+        .filter(({ text }) => text && want);
+      pick = (
+        open.find(({ text }) => text === want) ??
+        open.find(({ text }) => text.startsWith(want) || want.startsWith(text))
+      )?.turn;
     }
     if (!pick) return null;
     // No sync: the chat turn about to start owns the streaming flag.

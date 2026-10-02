@@ -938,6 +938,28 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         ]);
       });
 
+      it('folds only the first new utterance after completion, so later speech still renders', async () => {
+        const { ws, transcripts, pending } = await startDelegatedCall();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+        await flush();
+        pending[0]({ ok: true, text: 'It is sunny.' });
+        await flush();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1', speak: true, text: 'It is sunny.' }));
+        ws.triggerMessage(update('assistant', 'It is sunny.', 'r1')); // read-back
+        ws.triggerMessage(update('assistant', 'Anything else?', 'a2')); // a separate utterance
+        ws.triggerMessage(update('assistant', 'Anything else I can do?', 'a2'));
+        expect(transcripts.map((t) => t[1])).toEqual(['Anything else?', 'Anything else I can do?']);
+      });
+
+      it('forwards userTurnId to the bridge', async () => {
+        const { ws, calls } = await startDelegatedCall();
+        ws.triggerMessage(
+          JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', userTurnId: 'u7', messages: [] }),
+        );
+        await flush();
+        expect(calls).toEqual([{ turnId: 'd1', userText: 'q', userTurnId: 'u7' }]);
+      });
+
       it('does not fold after a failed delegation', async () => {
         const { ws, transcripts, pending } = await startDelegatedCall();
         ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));

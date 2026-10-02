@@ -43,9 +43,9 @@
 // `delegation_requested{turnId,userText}` instead of running the agent turn
 // itself; the bridge runs it through the widget's chat pipeline (one at a
 // time) and the provider answers `delegation_result{turnId,text,ok}`. The voice
-// model's spoken read-back of a successful result (assistant utterances that
-// start after its `delegation_completed`, until the next user utterance) is
-// folded: the rendered chat message already shows it. Transcripts in such a
+// model's spoken read-back of a successful result (the first new assistant
+// utterance after its `delegation_completed`, unless the visitor speaks first)
+// is folded: the rendered chat message already shows it. Transcripts in such a
 // call are display-only captions, never sent to the agent as conversation; a
 // user bubble becomes conversation only when it is submitted. Separately, a
 // server that announces `session_config{contextFrames:true}` gets one
@@ -670,8 +670,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         if (role === "user") {
           this.foldReadback = false;
         } else {
-          // Read-back of a delegated result: the chat already renders it.
-          if (this.foldReadback && !this.assistantTurns.has(turnId)) this.foldedTurns.add(turnId);
+          // Read-back of a delegated result: core rotates the assistant id at
+          // completion, so it is the first new id after it. The chat renders it.
+          if (this.foldReadback && !this.assistantTurns.has(turnId)) {
+            this.foldedTurns.add(turnId);
+            this.foldReadback = false;
+          }
           this.assistantTurns.add(turnId);
           if (this.foldedTurns.has(turnId)) break;
         }
@@ -686,7 +690,14 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       }
 
       case "delegation_requested":
-        if (this.clientDelegation) this.runDelegation(String(msg.turnId), String(msg.userText ?? ""), generation);
+        if (this.clientDelegation) {
+          this.runDelegation(
+            String(msg.turnId),
+            String(msg.userText ?? ""),
+            typeof msg.userTurnId === "string" ? msg.userTurnId : undefined,
+            generation,
+          );
+        }
         break;
 
       case "delegation_started":
@@ -765,12 +776,17 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /** Run a delegated turn through the session bridge (one at a time) and answer it. */
-  private runDelegation(turnId: string, userText: string, generation: number): void {
+  private runDelegation(
+    turnId: string,
+    userText: string,
+    userTurnId: string | undefined,
+    generation: number,
+  ): void {
     const bridge = this.bridge!;
     this.delegations = this.delegations.then(async () => {
       if (generation !== this.callGeneration) return;
       const result = await bridge
-        .runDelegatedTurn({ turnId, userText })
+        .runDelegatedTurn({ turnId, userText, ...(userTurnId && { userTurnId }) })
         .catch(() => ({ ok: false, text: "" }));
       const ws = this.ws;
       if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
