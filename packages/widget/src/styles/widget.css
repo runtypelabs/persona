@@ -4075,7 +4075,8 @@
 
   /* Room for the hover pill so it never covers text. Right-aligned: an inline
      spacer as wide as its buttons ends the last line (it wraps to a line of its
-     own when the last line is full). Left/center: a line below the text. */
+     own when the last line is full). Left/center, or six or more buttons: a
+     line below the text. */
   .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill.persona-message-actions-right)
     .persona-message-content
     > :last-child::after,
@@ -4102,7 +4103,14 @@
     --persona-message-actions-count: 5;
   }
 
+  /* Six or more buttons: no inline spacer, a line below the text instead. */
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(6)) {
+    --persona-message-actions-count: 0;
+  }
+
   .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill:not(.persona-message-actions-right))
+    .persona-message-content::after,
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(6))
     .persona-message-content::after {
     content: "";
     display: block;
