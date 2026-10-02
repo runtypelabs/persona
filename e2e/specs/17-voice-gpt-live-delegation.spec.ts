@@ -157,6 +157,11 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   const voiceTurn = chatMessages(api.requestsTo("chat")[1]!.body);
   const asked = voiceTurn.filter((m) => m.role === "user" && m.text.includes(SPOKEN_QUESTION));
   expect(asked).toHaveLength(1);
+  // The delegated turn ends on the spoken request, and GPT-Live's own
+  // captions (the filler) never reach the agent as conversation history.
+  expect(voiceTurn.at(-1)).toMatchObject({ role: "user" });
+  expect(voiceTurn.at(-1)!.text).toContain(SPOKEN_QUESTION);
+  expect(voiceTurn.filter((m) => m.text.includes(FILLER))).toEqual([]);
   // ...and its history is the same conversation the typed turn started.
   expect(voiceTurn.some((m) => m.text.includes(TYPED_QUESTION))).toBe(true);
 
@@ -223,6 +228,8 @@ test("real GPT-Live ordering: delegation arrives before the user transcript is f
     call.send({ type: "transcript_update", role: "user", text: partial, turnId: "in_live", final: false, startMs: 2200, endMs: 3800 });
   }
   call.send({ type: "delegation_started", turnId: "item_live" });
+  // Live, GPT-Live's filler starts ~100 ms before the request reaches the widget.
+  call.send({ type: "transcript_update", role: "assistant", text: " Yeah, I'll find out.", turnId: "out_live", final: false, startMs: 4600, endMs: 5800 });
   call.send({
     type: "delegation_requested",
     turnId: "item_live",
@@ -234,10 +241,12 @@ test("real GPT-Live ordering: delegation arrives before the user transcript is f
   const result = await call.waitForFrame("delegation_result", (f) => f.turnId === "item_live");
   expect(result.ok).toBe(true);
   await expect.poll(() => api.requestsTo("chat").length).toBe(1);
-  const asked = chatMessages(api.requestsTo("chat")[0]!.body).filter(
-    (m) => m.role === "user" && m.text.includes("What are your opening hours"),
-  );
+  const sent = chatMessages(api.requestsTo("chat")[0]!.body);
+  const asked = sent.filter((m) => m.role === "user" && m.text.includes("What are your opening hours"));
   expect(asked).toHaveLength(1);
+  expect(sent.at(-1)).toMatchObject({ role: "user" });
+  expect(sent.at(-1)!.text).toContain("What are your opening hours");
+  expect(sent.filter((m) => m.text.includes("find out"))).toEqual([]);
   await expect(page.locator(voiceSel.userBubble)).toHaveCount(1);
   await expect(page.locator(voiceSel.userBubble)).toHaveText("What are your opening hours");
   await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Opening hours" })).toHaveCount(1);

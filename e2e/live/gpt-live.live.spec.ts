@@ -12,6 +12,7 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *   LIVE_AGENT_ID       agent id            (agent_live_local)
  *   LIVE_QUESTION       regex the user transcript must match (hours)
  *   LIVE_ANSWER         regex the rendered answer must match (Monday|hours|open)
+ *   LIVE_TYPED          a message typed before the call (must reach `context`)
  *   LIVE_EXPECT_DELEGATION=0  expect the server-side path (old server) instead
  *
  * Artifacts land in e2e/live/.out/results: frames.json (every voice frame both
@@ -26,6 +27,7 @@ const CLIENT_TOKEN = env("LIVE_CLIENT_TOKEN", "ct_live_local");
 const AGENT_ID = env("LIVE_AGENT_ID", "agent_live_local");
 const QUESTION = new RegExp(env("LIVE_QUESTION", "hours"), "i");
 const ANSWER = new RegExp(env("LIVE_ANSWER", "Monday|hours|open"), "i");
+const TYPED = env("LIVE_TYPED", "Do you sell gift cards?");
 const EXPECT_DELEGATION = process.env.LIVE_EXPECT_DELEGATION !== "0";
 
 type Frame = { at: number; dir: "in" | "out"; json?: Record<string, unknown>; bytes?: number };
@@ -39,7 +41,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
   // Audio is high-volume: count every binary frame, log every 50th.
   const audio = { in: { frames: 0, bytes: 0 }, out: { frames: 0, bytes: 0 } };
   const consoleLines: string[] = [];
-  const chatRequests: unknown[] = [];
+  const chatRequests: Array<{ messages?: Array<{ role?: string; content?: unknown }> }> = [];
   const t0 = Date.now();
   page.on("console", (m) => consoleLines.push(`${Date.now() - t0}ms [${m.type()}] ${m.text()}`));
   page.on("request", (request) => {
@@ -81,6 +83,13 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     await page.goto(`/voice-e2e.html?${params}`);
     await expect(page.locator(".persona-widget-container")).toBeVisible();
 
+    // A typed turn first, so the call-start context has history to carry.
+    const input = page.locator(".persona-widget-footer textarea").first();
+    await input.fill(TYPED);
+    await input.press("Enter");
+    await expect.poll(() => chatRequests.length).toBe(1);
+    await expect(page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]')).toHaveCount(1);
+
     // Start the call; the WAV starts playing as the mic opens.
     await page.locator("[data-persona-composer-mic]").click();
     await expect.poll(() => json("in", "session_config").length, { timeout: 20_000 }).toBeGreaterThan(0);
@@ -89,6 +98,10 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     expect(Boolean(config.clientDelegation)).toBe(EXPECT_DELEGATION);
     if (config.contextFrames === true) {
       await expect.poll(() => json("out", "context").length).toBe(1);
+      const contextText = String(json("out", "context")[0]!.text);
+      expect(contextText).toContain("Conversation so far:");
+      expect(contextText).toContain(`User: ${TYPED}`);
+      expect(contextText).toMatch(/\nAssistant: \S/);
     } else {
       expect(json("out", "context")).toEqual([]);
     }
@@ -115,11 +128,24 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(result.ok).toBe(true);
       expect(String(result.text)).toMatch(ANSWER);
 
-      // Exactly one chat submission, carrying the spoken request once.
-      expect(chatRequests).toHaveLength(1);
-      const sent = JSON.stringify(chatRequests[0]);
-      const spoken = String(requested.userText ?? userText);
-      expect(sent.split(spoken).length - 1).toBe(1);
+      // Exactly one delegated chat submission (after the typed one), carrying
+      // the spoken request once, as its LAST message, with none of GPT-Live's
+      // own captions (filler) in the history.
+      expect(chatRequests).toHaveLength(2);
+      const messages = (chatRequests[1]!.messages ?? []).map((m) => ({
+        role: String(m.role),
+        text: typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? ""),
+      }));
+      const spoken = normalize(String(requested.userText ?? userText));
+      expect(messages.filter((m) => normalize(m.text).includes(spoken))).toHaveLength(1);
+      expect(messages.at(-1)?.role).toBe("user");
+      expect(normalize(messages.at(-1)!.text)).toContain(spoken);
+      const captions = json("in", "transcript_update")
+        .filter((f) => f.role === "assistant" && String(f.text).trim())
+        .map((f) => normalize(String(f.text)));
+      for (const message of messages) {
+        for (const caption of captions) expect(normalize(message.text)).not.toBe(caption);
+      }
 
       // The answer renders as a normal assistant message.
       const answer = page
@@ -154,7 +180,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         .poll(() => json("in", "delegation_completed").length, { timeout: 60_000 })
         .toBeGreaterThan(0);
       expect(json("out", "delegation_result")).toEqual([]);
-      expect(chatRequests).toHaveLength(0);
+      expect(chatRequests).toHaveLength(1);
     }
 
     // Hang up (force: the live level animation never lets the button settle).
