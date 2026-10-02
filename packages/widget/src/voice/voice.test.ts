@@ -1,6 +1,6 @@
 // Voice SDK Tests
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import type { VoiceConfig, VoiceDelegationResult, VoiceSessionBridge } from '../types';
+import type { VoiceConfig, VoiceDelegationFollowUp, VoiceDelegationResult, VoiceSessionBridge } from '../types';
 import { RuntypeVoiceProvider, buildCallContext } from './runtype-voice-provider';
 import { BrowserVoiceProvider } from './browser-voice-provider';
 import { createVoiceProvider, createBestAvailableVoiceProvider, isVoiceSupported } from './voice-factory';
@@ -1120,6 +1120,30 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(transcripts).toHaveLength(1);
       });
 
+      it('offers the AI disclosure once a speech-to-speech call is live, unless disabled', async () => {
+        const statuses: string[] = [];
+        const { provider, ws } = await startDelegatedCall();
+        expect(provider.getDisclosure()).toBe("You're talking to an AI assistant. Voice is processed by OpenAI.");
+        await provider.stopListening();
+        expect(provider.getDisclosure()).toBeNull();
+        void ws;
+
+        const custom = await startDelegatedCall({ disclosureText: 'AI voice by OpenAI.' });
+        expect(custom.provider.getDisclosure()).toBe('AI voice by OpenAI.');
+        const hidden = await startDelegatedCall({ disclosureText: false });
+        expect(hidden.provider.getDisclosure()).toBeNull();
+
+        // session_config re-announces "listening" so the UI can read the disclosure.
+        const late = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => makeFakeEngine() });
+        late.onStatusChange((s) => statuses.push(s));
+        await late.startListening();
+        lastWs().triggerOpen();
+        expect(late.getDisclosure()).toBeNull(); // not known to be speech-to-speech yet
+        lastWs().triggerMessage(JSON.stringify({ type: 'session_config', speechMode: 'speech_to_speech' }));
+        expect(statuses.filter((s) => s === 'listening')).toHaveLength(2);
+        expect(late.getDisclosure()).not.toBeNull();
+      });
+
       it('drops a result that finishes after hang-up', async () => {
         const { ws, provider, pending } = await startDelegatedCall();
         ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
@@ -1133,17 +1157,24 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
       describe('approval follow-up', () => {
         /** A parked result whose follow-up the test settles, recording the signal it got. */
         const parked = () => {
-          let settle!: (text: string) => void;
-          let signal: AbortSignal | undefined;
+          let settle!: (followUp: VoiceDelegationFollowUp | null) => void;
+          let options: { signal: AbortSignal; approvalTimeoutMs?: number } | undefined;
           const result: VoiceDelegationResult = {
             ok: true,
+            status: 'pending_approval',
             text: 'Approve it in the chat.',
-            followUp: (s) => {
-              signal = s;
+            followUp: (o) => {
+              options = o;
               return new Promise((resolve) => (settle = resolve));
             },
           };
-          return { result, settle: (text: string) => settle(text), signal: () => signal };
+          return {
+            result,
+            settle: (text: string, status: VoiceDelegationFollowUp['status'] = 'completed') =>
+              settle(text ? { status, text } : null),
+            signal: () => options?.signal,
+            options: () => options,
+          };
         };
         const request = (ws: MockWebSocket) =>
           ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
@@ -1191,6 +1222,44 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           park.settle('too late');
           await flush();
           expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
+        });
+
+        it('sends status on the result and follow-up only to a server that announces approvalState', async () => {
+          const { ws, pending } = await startDelegatedCall(
+            { approvalTimeoutMs: 1_500 },
+            { clientDelegation: true, followUpFrames: true, approvalState: true },
+          );
+          const park = parked();
+          request(ws);
+          await flush();
+          pending[0](park.result);
+          await flush();
+          expect(sentJson(ws)).toEqual([
+            { type: 'delegation_result', turnId: 'd1', text: 'Approve it in the chat.', ok: true, status: 'pending_approval' },
+          ]);
+          expect(park.options()!.approvalTimeoutMs).toBe(1_500);
+          park.settle('That place pickup order request expired, so nothing was done.', 'expired');
+          await flush();
+          expect(sentJson(ws).at(-1)).toEqual({
+            type: 'delegation_followup',
+            turnId: 'd1',
+            text: 'That place pickup order request expired, so nothing was done.',
+            status: 'expired',
+          });
+
+          // Without approvalState: no status field on either frame.
+          const legacy = await startDelegatedCall({}, { clientDelegation: true, followUpFrames: true });
+          const parkLegacy = parked();
+          request(legacy.ws);
+          await flush();
+          legacy.pending[0](parkLegacy.result);
+          await flush();
+          parkLegacy.settle('Done.');
+          await flush();
+          expect(sentJson(legacy.ws)).toEqual([
+            { type: 'delegation_result', turnId: 'd1', text: 'Approve it in the chat.', ok: true },
+            { type: 'delegation_followup', turnId: 'd1', text: 'Done.' },
+          ]);
         });
 
         it('sends nothing for an empty follow-up', async () => {

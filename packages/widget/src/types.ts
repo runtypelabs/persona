@@ -4789,6 +4789,21 @@ export type AgentWidgetVoiceRecognitionConfig = {
        * context (they announce it in `session_config`).
        */
       callContext?: string | (() => string | Promise<string>);
+      /**
+       * Full-duplex calls with client delegation: how long a tool approval
+       * that a spoken request raised may wait before it is declined as
+       * expired (and the voice model says so). Server-side approval gates
+       * keep their own timeout too. Hanging up never declines it: the
+       * approval card in the chat stays usable.
+       * @default 300000
+       */
+      approvalTimeoutMs?: number;
+      /**
+       * Speech-to-speech calls: the one-line notice shown in the composer
+       * status area when the call starts. `false` hides it.
+       * @default "You're talking to an AI assistant. Voice is processed by OpenAI."
+       */
+      disclosureText?: string | false;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
       pauseDuration?: number;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5111,6 +5126,10 @@ export type VoiceConfig = {
     clientDelegation?: boolean;
     /** See `voiceRecognition.provider.runtype.callContext`. */
     callContext?: string | (() => string | Promise<string>);
+    /** See `voiceRecognition.provider.runtype.approvalTimeoutMs`. @default 300000 */
+    approvalTimeoutMs?: number;
+    /** See `voiceRecognition.provider.runtype.disclosureText`. */
+    disclosureText?: string | false;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
     pauseDuration?: number;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5208,6 +5227,8 @@ export interface VoiceProvider {
    * ({@link VoiceSessionBridge}). Providers without client delegation omit it.
    */
   setSessionBridge?(bridge: VoiceSessionBridge): void;
+  /** The AI-disclosure notice for the live call, if one should show (speech-to-speech). */
+  getDisclosure?(): string | null;
 }
 
 /** Metadata on a {@link VoiceProvider.onTranscript} update. */
@@ -5239,17 +5260,30 @@ export type VoiceDelegationRequest = {
   userTurnIds?: string[];
 };
 
+/** How a delegated turn (or its follow-up) ended (contract Amendment 4). */
+export type VoiceDelegationStatus = 'completed' | 'pending_approval' | 'declined' | 'expired' | 'failed';
+
+/** The late result of a turn that parked on approvals. */
+export type VoiceDelegationFollowUp = {
+  status: Exclude<VoiceDelegationStatus, 'pending_approval'>;
+  /** What to read aloud (Markdown allowed). */
+  text: string;
+};
+
 /** The finished turn, sent back for the voice model to read aloud. */
 export type VoiceDelegationResult = {
   ok: boolean;
   /** The final assistant text (Markdown allowed). */
   text: string;
+  /** Sent to servers that announce `approvalState`. Absent: `ok` decides. */
+  status?: VoiceDelegationStatus;
   /**
    * Set when the turn parked on approvals (`text` then asks for the decision).
-   * Resolves with the answer once the visitor decides and the resumed turn
-   * finishes, or "" when there is nothing to say or `signal` aborts first.
+   * Resolves once the visitor decides (or the approval is replaced, declined
+   * by voice, or unanswered for `approvalTimeoutMs`) and the resumed turn
+   * finishes; `null` when there is nothing to say or `signal` aborts first.
    */
-  followUp?: (signal: AbortSignal) => Promise<string>;
+  followUp?: (options: { signal: AbortSignal; approvalTimeoutMs?: number }) => Promise<VoiceDelegationFollowUp | null>;
 };
 
 /**

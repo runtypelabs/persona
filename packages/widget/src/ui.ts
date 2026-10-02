@@ -5354,6 +5354,8 @@ export const createAgentExperience = (
     string,
     { streaming?: boolean; role: AgentWidgetMessage["role"] }
   >();
+  // The live call already showed its AI-disclosure notice.
+  let voiceDisclosed = false;
   const voiceState = {
     active: false,
     manuallyDeactivated: false,
@@ -9082,6 +9084,14 @@ export const createAgentExperience = (
 
       switch (status) {
         case 'listening':
+          // A speech-to-speech call discloses that it's an AI, once per call.
+          if (!voiceDisclosed) {
+            const notice = session.getVoiceDisclosure();
+            if (notice) {
+              voiceDisclosed = true;
+              showComposerNotice(notice, 10_000);
+            }
+          }
           // A continuous realtime call re-enters `listening` after every spoken
           // reply, so reassert the recording styles here (they were replaced by
           // the `processing`/`speaking` states during the turn). The initial
@@ -9107,6 +9117,7 @@ export const createAgentExperience = (
             micButton?.setAttribute("aria-label", "End voice session");
           } else {
             voiceState.active = false;
+            voiceDisclosed = false;
             removeRuntypeMicStateStyles();
             emitVoiceState("system");
             persistVoiceMetadata();
@@ -11852,7 +11863,7 @@ export const createAgentExperience = (
   let composerNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Transient message in the status region; a lock reason always outranks it. */
-  function showComposerNotice(text: string): void {
+  function showComposerNotice(text: string, ms = 4000): void {
     announce(text);
     if (isComposerBar() || !statusText) return;
     if (statusText.hasAttribute(COMPOSER_REASON_ATTR)) return;
@@ -11877,7 +11888,7 @@ export const createAgentExperience = (
           status
         );
       }
-    }, 4000);
+    }, ms);
   }
 
   /** Put the deferred submission back in the editable draft and drop the card. */

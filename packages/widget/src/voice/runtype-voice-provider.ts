@@ -125,6 +125,7 @@ const CANCEL_ACK_TIMEOUT_MS = 2000;
  */
 const CONTEXT_BEFORE_RESULT_TIMEOUT_MS = 2000;
 const CLIENT_DELEGATION_CAPABILITY = "client-delegation";
+const DISCLOSURE_TEXT = "You're talking to an AI assistant. Voice is processed by OpenAI.";
 /** Call-start context frame: total cap, host share, history window, per-message cap. */
 const CONTEXT_MAX_CHARS = 8000;
 const CONTEXT_HOST_MAX_CHARS = 4000;
@@ -248,6 +249,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private clientDelegation = false;
   // The server accepts `delegation_followup` (session_config.followUpFrames).
   private followUpFrames = false;
+  // The server understands `status` on results and follow-ups (session_config.approvalState).
+  private approvalState = false;
   // Aborts pending approval follow-ups when the call ends.
   private followUps: AbortController | null = null;
   // Call-start context, built at session_config and held until the visitor's
@@ -560,6 +563,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     };
   }
 
+  /** The AI-disclosure notice for a live speech-to-speech call (`disclosureText`; `false` hides it). */
+  getDisclosure(): string | null {
+    const text = this.config?.disclosureText;
+    return this.callLive && this.speechToSpeech && text !== false ? text || DISCLOSURE_TEXT : null;
+  }
+
   /** End the call (hang up). */
   async stopListening(): Promise<void> {
     this.cleanup();
@@ -697,6 +706,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
             this.speechToSpeech && msg.clientDelegation === true && !!this.bridge;
         }
         if (msg.followUpFrames === true) this.followUpFrames = true;
+        if (msg.approvalState === true) this.approvalState = true;
+        // Speech-to-speech is known only now: let the UI show its disclosure.
+        if (this.speechToSpeech && !this.isSpeaking) this.emitStatus("listening");
         // Only a server that announces contextFrames accepts `context`.
         if (msg.contextFrames === true && !this.contextSent) {
           this.contextSent = true;
@@ -878,14 +890,23 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       const ws = this.ws;
       if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
       if (result.ok) this.answered.add(turnId);
-      ws.send(JSON.stringify({ type: "delegation_result", turnId, text: result.text, ok: result.ok }));
+      const status = this.approvalState ? result.status : undefined;
+      ws.send(JSON.stringify({ type: "delegation_result", turnId, text: result.text, ok: result.ok, ...(status && { status }) }));
       // Parked on an approval: read the outcome back once the visitor decides.
       if (!result.followUp || !this.followUpFrames) return;
-      void result.followUp((this.followUps ??= new AbortController()).signal).then((text) => {
-        const live = this.ws;
-        if (!text || generation !== this.callGeneration || live?.readyState !== WebSocket.OPEN) return;
-        live.send(JSON.stringify({ type: "delegation_followup", turnId, text }));
-      });
+      void result
+        .followUp({
+          signal: (this.followUps ??= new AbortController()).signal,
+          approvalTimeoutMs: this.config?.approvalTimeoutMs,
+        })
+        .then((followUp) => {
+          const live = this.ws;
+          if (!followUp?.text || generation !== this.callGeneration || live?.readyState !== WebSocket.OPEN) return;
+          const { text, status } = followUp;
+          live.send(
+            JSON.stringify({ type: "delegation_followup", turnId, text, ...(this.approvalState && { status }) }),
+          );
+        });
     });
   }
 
@@ -970,6 +991,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.delegating = false;
     this.clientDelegation = false;
     this.followUpFrames = false;
+    this.approvalState = false;
     this.followUps?.abort();
     this.followUps = null;
     this.contextSent = false;

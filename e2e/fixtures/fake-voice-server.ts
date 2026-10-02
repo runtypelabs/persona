@@ -30,6 +30,8 @@ export interface FakeVoiceServerOptions {
   contextFrames?: boolean;
   /** Advertise `followUpFrames: true` (accept `delegation_followup`, Amendment 3). @default false */
   followUpFrames?: boolean;
+  /** Advertise `approvalState: true` (`status` on results and follow-ups, Amendment 4). @default false */
+  approvalState?: boolean;
 }
 
 export type ClientJsonFrame = { type: string; [key: string]: unknown };
@@ -115,6 +117,7 @@ export async function startFakeVoiceServer(
     clientDelegation: true,
     contextFrames: true,
     followUpFrames: false,
+    approvalState: false,
     ...initial,
   };
   const prewarms: string[] = [];
@@ -229,6 +232,7 @@ function createCall(
       ...(delegationGranted ? { clientDelegation: true } : {}),
       ...(options.contextFrames ? { contextFrames: true } : {}),
       ...(followUps ? { followUpFrames: true } : {}),
+      ...(delegationGranted && options.approvalState ? { approvalState: true } : {}),
     });
     resolveReady();
   };

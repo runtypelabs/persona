@@ -656,6 +656,8 @@ export type {
   VoiceTranscriptMetadata,
   VoiceDelegationRequest,
   VoiceDelegationResult,
+  VoiceDelegationStatus,
+  VoiceDelegationFollowUp,
   VoiceSessionBridge,
   PcmStreamPlayer,
   AgentWidgetVoiceStatusEvent,

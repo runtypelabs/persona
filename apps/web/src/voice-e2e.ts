@@ -23,6 +23,9 @@ const agentId = params.get("agentId") ?? "agent_e2e_voice";
 const voiceHost = params.get("voiceHost") ?? apiUrl;
 const callContext = params.get("callContext") ?? undefined;
 const clientDelegation = params.get("clientDelegation") === "0" ? false : undefined;
+const approvalTimeoutMs = params.has("approvalTimeoutMs") ? Number(params.get("approvalTimeoutMs")) : undefined;
+const disclosure = params.get("disclosureText");
+const disclosureText = disclosure === "0" ? false : (disclosure ?? undefined);
 
 const host = document.getElementById("e2e-host") as HTMLElement;
 const status = document.getElementById("e2e-status") as HTMLElement;
@@ -47,6 +50,8 @@ const config: AgentWidgetConfig = {
         host: voiceHost,
         ...(clientDelegation === false ? { clientDelegation } : {}),
         ...(callContext ? { callContext } : {}),
+        ...(approvalTimeoutMs ? { approvalTimeoutMs } : {}),
+        ...(disclosureText !== undefined ? { disclosureText } : {}),
       },
     },
   },

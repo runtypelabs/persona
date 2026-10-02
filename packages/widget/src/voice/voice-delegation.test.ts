@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentWidgetApproval } from "../types";
-import { buildApprovalScript } from "./voice-delegation";
+import { buildApprovalScript, isVoiceDecline } from "./voice-delegation";
 
 const approval = (extra: Partial<AgentWidgetApproval>): AgentWidgetApproval => ({
   id: "ap",
@@ -37,4 +37,35 @@ describe("buildApprovalScript", () => {
     expect(script).toContain("- tool 4");
     expect(script.endsWith("Don't claim it's done.")).toBe(true);
   });
+});
+
+describe("isVoiceDecline", () => {
+  it.each([
+    "No.",
+    "no thanks",
+    "Cancel that.",
+    "cancel it",
+    "Cancel the order",
+    "cancel my pickup order",
+    "No, cancel that.",
+    "Don't place it.",
+    "don't do that",
+    "Don't place the pickup order",
+    "Never mind.",
+    "nevermind",
+    "Decline it",
+    " Nope ",
+  ])("declines on %j", (text) => expect(isVoiceDecline(text)).toBe(true));
+
+  it.each([
+    "yes",
+    "go ahead",
+    "no wait, make it three",
+    "cancel the cake and add bread",
+    "don't forget the coffee",
+    "I said no sugar",
+    "can you cancel it later",
+    "not now",
+    "",
+  ])("runs %j as a normal turn", (text) => expect(isVoiceDecline(text)).toBe(false));
 });

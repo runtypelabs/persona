@@ -1,6 +1,7 @@
 import type {
   AgentWidgetApproval,
   AgentWidgetMessage,
+  VoiceDelegationFollowUp,
   VoiceDelegationRequest,
   VoiceDelegationResult,
   VoiceSessionBridge,
@@ -22,11 +23,30 @@ export interface VoiceDelegationHost {
   send(userText: string, userMessageId: string | undefined): Promise<void>;
   /** Route the chat stream's assistant messages and failures into `capture` (or stop). */
   track(capture: VoiceDelegationCapture | null): void;
+  /** Deny a pending approval (server gate or WebMCP) by its message id. */
+  decide(approvalMessageId: string): void;
 }
 
 const SETTLE_POLL_MS = 50;
 const WAITING_FOR_INPUT = "I need your answer in the chat before I can continue.";
 const APPROVAL_SCRIPT_MAX_CHARS = 1000;
+/** How long a voice-originated approval waits for the visitor (Amendment 4). */
+const APPROVAL_TTL_MS = 5 * 60_000;
+// Unambiguous spoken declines only (on normalized text); anything else runs as
+// a normal turn. Nothing is ever approved by voice.
+const DECLINE_PHRASE =
+  "no|nope|never ?mind|decline(?: it| that)?|cancel(?: it| that| this)?(?: (?:the|my|that|this) (?:[a-z]+ )?(?:order|request))?|don'?t (?:do|place) (?:it|that|the (?:[a-z]+ )?order)";
+const VOICE_DECLINE = new RegExp(`^(?:${DECLINE_PHRASE})(?: (?:${DECLINE_PHRASE}))?(?: thanks| thank you)?$`);
+/** Whether `userText` is an unambiguous spoken decline ("cancel that", "never mind"). */
+export const isVoiceDecline = (userText: string) =>
+  VOICE_DECLINE.test(
+    userText
+      .toLowerCase()
+      .replace(/[^a-z' ]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+
 const APPROVAL_GUIDANCE =
   "Briefly tell the user what you're about to do and ask them to approve or decline it in the chat. Don't claim it's done.";
 
@@ -96,6 +116,17 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   let active: VoiceDelegationCapture | null = null;
   let following: VoiceDelegationCapture | null = null;
   const retrack = () => host.track(active ?? following);
+  // Voice-originated approval parks still awaiting a decision or follow-up.
+  type Parked = { approvals: string[]; at: number; outcome?: VoiceDelegationFollowUp };
+  const parks: Parked[] = [];
+  const message = (id: string) => host.messages().find((m) => m.id === id);
+  const pendingOf = (park: Parked) => park.approvals.filter((id) => message(id)?.approval?.status === "pending");
+  const toolOf = (id: string) => humanize(message(id)?.approval?.toolName ?? "");
+  /** Decide a park's outcome now, denying whatever of it is still pending. */
+  const settle = (park: Parked, status: VoiceDelegationFollowUp["status"], text: string) => {
+    park.outcome = { status, text };
+    for (const id of pendingOf(park)) host.decide(id);
+  };
   const answerOf = (ids: string[]) =>
     ids
       .flatMap((id) => host.messages().find((m) => m.id === id) ?? [])
@@ -128,8 +159,21 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       userTurnId,
       userTurnIds,
     }: VoiceDelegationRequest): Promise<VoiceDelegationResult> {
-      // Queue behind a turn already in flight rather than aborting it.
-      if (host.busy()) await settled();
+      const live = parks.filter((park) => pendingOf(park).length);
+      const pendingIds = live.flatMap(pendingOf);
+      // "Cancel that" while exactly one voice approval waits: deny it here; its
+      // own follow-up stays silent, since this answer says so.
+      if (pendingIds.length === 1 && isVoiceDecline(userText)) {
+        const tool = toolOf(pendingIds[0]);
+        settle(live[0], "declined", "");
+        return { ok: true, status: "declined", text: `Okay, I cancelled the ${tool} request. Nothing was done.` };
+      }
+      // A voice-originated WebMCP approval holds the chat turn open: this turn
+      // replaces it (a new send declines it), so don't wait on it. Anything
+      // else in flight finishes first.
+      const replacing =
+        host.parked() && host.messages().every((m) => !isPendingApproval(m) || pendingIds.includes(m.id));
+      if (host.busy() && !replacing) await settled();
       const before = new Set(host.messages().map((m) => m.id));
       const raised = () => host.messages().filter((m) => !before.has(m.id) && m.variant === "approval");
       const capture: VoiceDelegationCapture = { ids: [], failed: false };
@@ -148,15 +192,32 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       const replies = capture.ids.flatMap((id) => host.messages().find((m) => m.id === id) ?? []);
       let text = answerOf(capture.ids);
       const pending = capture.failed ? [] : raised().filter(isPendingApproval);
+
+      // An earlier voice approval for the same tool is replaced by this one; a
+      // WebMCP one this turn displaced (and so declined) is reported as such.
+      const tools = new Set(pending.map((m) => humanize(m.approval!.toolName)));
+      for (const park of live) {
+        if (park.outcome) continue;
+        const tool = toolOf(park.approvals[0]);
+        if (tools.has(tool)) {
+          settle(park, "declined", `The earlier ${tool} request was replaced by the new one; it was not done.`);
+        } else if (replacing && park.approvals.every((id) => message(id)?.approval?.status === "denied")) {
+          settle(park, "declined", `The earlier ${tool} request was cancelled by the new one; it was not done.`);
+        }
+      }
+
       if (pending.length) {
         const own = new Set(pending.map((m) => m.id));
+        const park: Parked = { approvals: [...own], at: Date.now() };
+        parks.push(park);
         // Parked on approvals: answer now, so the voice model asks for the
         // decision, then read the outcome back once the visitor decides.
         text = `${text}\n\n${buildApprovalScript(pending.map((m) => m.approval!))}`.trim();
         return {
           ok: true,
+          status: "pending_approval",
           text,
-          followUp: async (signal) => {
+          followUp: async ({ signal, approvalTimeoutMs = APPROVAL_TTL_MS }) => {
             const follow: VoiceDelegationCapture = { ids: [], failed: false };
             // This turn's approvals, and any its resumed stream chains into
             // (not another turn's).
@@ -164,8 +225,15 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
             following = follow;
             retrack();
             try {
-              // Every approval of this turn decided, and the resumed turn finished.
-              while (!signal.aborted && (host.busy() || host.parked() || mine().some(isPendingApproval))) {
+              // Every approval of this turn decided (or replaced, cancelled,
+              // expired), and the resumed turn finished.
+              while (!signal.aborted && !park.outcome && (active || host.busy() || mine().some(isPendingApproval))) {
+                // Unanswered too long: decline it, but never by aborting a
+                // turn in flight (a parked WebMCP turn is the one waiting).
+                if (Date.now() - park.at >= approvalTimeoutMs && pendingOf(park).length && (!host.busy() || host.parked())) {
+                  settle(park, "expired", `That ${toolOf(park.approvals[0])} request expired, so nothing was done.`);
+                  break;
+                }
                 await sleep();
               }
             } finally {
@@ -173,12 +241,17 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
                 following = null;
                 retrack();
               }
+              // Hang-up stops voice follow-ups; the approval card stays usable.
+              parks.splice(parks.indexOf(park), 1);
             }
-            if (signal.aborted || follow.failed) return "";
+            if (signal.aborted) return null;
+            if (park.outcome) return park.outcome.text ? park.outcome : null;
+            if (follow.failed) return { status: "failed", text: `The ${toolOf(park.approvals[0])} request didn't complete.` };
             const declined = mine()
               .filter((m) => m.approval?.status === "denied")
               .map((m) => humanize(m.approval!.toolName));
-            return answerOf(follow.ids) || (declined.length ? `The user declined: ${declined.join(", ")}.` : "");
+            const answer = answerOf(follow.ids) || (declined.length ? `The user declined: ${declined.join(", ")}.` : "");
+            return answer ? { status: declined.length ? "declined" : "completed", text: answer } : null;
           },
         };
       }
@@ -193,9 +266,10 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
             !m.toolCall?.name?.startsWith("webmcp:"),
         )
       ) {
-        text = `${text}\n\n${WAITING_FOR_INPUT}`.trim();
+        return { ok: !capture.failed, text: `${text}\n\n${WAITING_FOR_INPUT}`.trim() };
       }
-      return { ok: !capture.failed && !!text, text };
+      const ok = !capture.failed && !!text;
+      return { ok, status: ok ? "completed" : "failed", text };
     },
   };
 }

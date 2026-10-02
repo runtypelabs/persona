@@ -555,6 +555,11 @@ export class AgentWidgetSession {
     return this.voiceStatus;
   }
 
+  /** The live call's AI-disclosure notice, if it shows one. */
+  public getVoiceDisclosure(): string | null {
+    return this.voiceProvider?.getDisclosure?.() ?? null;
+  }
+
   /**
    * Get the voice interruption mode from the provider (none/cancel/barge-in)
    */
@@ -775,6 +780,11 @@ export class AgentWidgetSession {
               this.sendMessage(text, { viaVoice: true, voiceTurn: { userMessageId } }),
             track: (capture) => {
               this.voiceDelegation = capture;
+            },
+            decide: (id) => {
+              if (this.webMcpApprovalResolvers.has(id)) return this.resolveWebMcpApproval(id, 'denied');
+              const approval = this.messages.find((m) => m.id === id)?.approval;
+              if (approval?.status === 'pending') void this.resolveApproval(approval, 'denied');
             }
           })
         );
@@ -1081,7 +1091,9 @@ export class AgentWidgetSession {
             prewarmMode: providerConfig.runtype?.prewarmMode,
             attachIdleMs: providerConfig.runtype?.attachIdleMs,
             clientDelegation: providerConfig.runtype?.clientDelegation,
-            callContext: providerConfig.runtype?.callContext
+            callContext: providerConfig.runtype?.callContext,
+            approvalTimeoutMs: providerConfig.runtype?.approvalTimeoutMs,
+            disclosureText: providerConfig.runtype?.disclosureText
           }
         };
       

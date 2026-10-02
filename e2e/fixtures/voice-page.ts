@@ -19,12 +19,17 @@ export interface VoicePageOptions {
   voiceHost: string;
   clientDelegation?: boolean;
   callContext?: string;
+  approvalTimeoutMs?: number;
+  /** `false` hides the AI-disclosure notice. */
+  disclosureText?: string | false;
 }
 
 export function voiceFixtureUrl(options: VoicePageOptions): string {
   const params = new URLSearchParams({ voiceHost: options.voiceHost });
   if (options.clientDelegation === false) params.set("clientDelegation", "0");
   if (options.callContext) params.set("callContext", options.callContext);
+  if (options.approvalTimeoutMs) params.set("approvalTimeoutMs", String(options.approvalTimeoutMs));
+  if (options.disclosureText !== undefined) params.set("disclosureText", options.disclosureText || "0");
   return `/voice-e2e.html?${params.toString()}`;
 }
 

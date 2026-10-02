@@ -470,7 +470,7 @@ test("clientDelegation: false opts out of the capability", async ({ page, contex
 });
 
 /** A turn that says a line, then parks on a `place_pickup_order` approval. */
-function approvalParkStream(executionId: string): string {
+function approvalParkStream(executionId: string, approvalId = "apr_order"): string {
   let seq = 0;
   const ev = (type: string, data: Record<string, unknown>) => sseEvent(type, { executionId, seq: ++seq, ...data });
   return (
@@ -486,7 +486,7 @@ function approvalParkStream(executionId: string): string {
     ev("text_delta", { id: "text_1", delta: "I can place that order for you." }) +
     ev("text_complete", { id: "text_1" }) +
     ev("approval_start", {
-      approvalId: "apr_order",
+      approvalId,
       toolName: "place_pickup_order",
       toolType: "custom",
       description: "Place a pickup order at the bakery",
@@ -573,4 +573,125 @@ test("approval during a call: natural ask, approve in chat, the outcome is read 
   expect(call.rejected).toEqual([]);
   await clickLiveMic(page);
   expect(await call.closed).toBe(1000);
+});
+
+/** A call on an Amendment 4 server, with the approve endpoint recorded. */
+async function approvalCall(
+  page: import("@playwright/test").Page,
+  context: import("@playwright/test").BrowserContext,
+  options: { approvalTimeoutMs?: number } = {},
+) {
+  const api = await installFakeHistoryApi(context);
+  const decisions: Array<Record<string, unknown>> = [];
+  await context.route("**/e2e-api/v1/agents/*/approve", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    decisions.push(body);
+    await route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+      body: textTurnStream(body.decision === "approved" ? "Order placed." : "Okay, I won't place it.", "exec_order"),
+    });
+  });
+  voice.setOptions({ followUpFrames: true, approvalState: true });
+  await openVoicePage(page, { voiceHost: voice.host, ...options });
+  const call = await startCall(page);
+  let turn = 0;
+  /** One spoken order that parks on an approval; resolves with its delegation_result. */
+  const order = async (approvalId: string) => {
+    turn += 1;
+    api.setChatStream(approvalParkStream("exec_order", approvalId));
+    await call.utterance({ role: "user", turnId: `in_${turn}`, text: "Order two almond croissants", startMs: turn * 10_000 });
+    call.send({ type: "delegation_requested", turnId: `dlg_${turn}`, userTurnId: `in_${turn}`, userText: "Order two almond croissants", messages: [] });
+    return call.waitForFrame("delegation_result", (f) => f.turnId === `dlg_${turn}`);
+  };
+  return { api, call, decisions, order };
+}
+
+test("Amendment 4: status rides results and follow-ups; the disclosure notice shows once per call", async ({
+  page,
+  context,
+}) => {
+  const { call, order } = await approvalCall(page, context);
+  // A speech-to-speech call says it's an AI, in the composer status line.
+  await expect(page.locator("[data-persona-composer-status]")).toHaveText(
+    "You're talking to an AI assistant. Voice is processed by OpenAI.",
+  );
+  const result = await order("apr_1");
+  expect(result).toMatchObject({ ok: true, status: "pending_approval" });
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  const followUp = await call.waitForFrame("delegation_followup");
+  expect(followUp).toEqual({ type: "delegation_followup", turnId: "dlg_1", text: "Order placed.", status: "completed" });
+  expect(call.rejected).toEqual([]);
+});
+
+test("Amendment 4: disclosureText false hides the notice", async ({ page, context }) => {
+  await installFakeHistoryApi(context);
+  await openVoicePage(page, { voiceHost: voice.host, disclosureText: false });
+  await startCall(page);
+  await page.waitForTimeout(500);
+  await expect(page.locator("[data-persona-composer-status]")).not.toContainText("AI assistant");
+});
+
+test("Amendment 4: a spoken \"cancel that\" declines the one pending approval; nothing is approved by voice", async ({
+  page,
+  context,
+}) => {
+  const { api, call, decisions, order } = await approvalCall(page, context);
+  await order("apr_1");
+  const chats = api.requestsTo("chat").length;
+
+  // "Yes" is never an approval: it runs as a normal turn and the card stays.
+  api.setChatStream(textTurnStream("Please tap Allow in the chat.", "exec_yes"));
+  await call.utterance({ role: "user", turnId: "in_yes", text: "Yes, do it", startMs: 20_000 });
+  call.send({ type: "delegation_requested", turnId: "dlg_yes", userTurnId: "in_yes", userText: "Yes, do it", messages: [] });
+  expect(await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_yes")).toMatchObject({ status: "completed" });
+  expect(decisions).toEqual([]);
+  await expect(page.getByRole("button", { name: "Allow", exact: true })).toBeVisible();
+
+  await call.utterance({ role: "user", turnId: "in_no", text: "No, cancel that.", startMs: 30_000 });
+  call.send({ type: "delegation_requested", turnId: "dlg_no", userTurnId: "in_no", userText: "No, cancel that.", messages: [] });
+  const declined = await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_no");
+  expect(declined).toEqual({
+    type: "delegation_result",
+    turnId: "dlg_no",
+    ok: true,
+    status: "declined",
+    text: "Okay, I cancelled the place pickup order request. Nothing was done.",
+  });
+  await expect.poll(() => decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "denied" })]);
+  expect(api.requestsTo("chat").length).toBe(chats + 1); // only the "yes" turn ran
+  // The parked turn's own follow-up stays silent: the decline already said it.
+  await page.waitForTimeout(500);
+  expect(call.framesOf("delegation_followup")).toEqual([]);
+});
+
+test("Amendment 4: a new order for the same tool supersedes the earlier pending one", async ({ page, context }) => {
+  const { call, decisions, order } = await approvalCall(page, context);
+  await order("apr_1");
+  const second = await order("apr_2");
+  expect(second).toMatchObject({ status: "pending_approval" });
+  await expect.poll(() => decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "denied" })]);
+  const followUp = await call.waitForFrame("delegation_followup", (f) => f.turnId === "dlg_1");
+  expect(followUp).toEqual({
+    type: "delegation_followup",
+    turnId: "dlg_1",
+    status: "declined",
+    text: "The earlier place pickup order request was replaced by the new one; it was not done.",
+  });
+  // Only the newer card is still actionable.
+  await expect(page.getByRole("button", { name: "Allow", exact: true })).toHaveCount(1);
+});
+
+test("Amendment 4: an unanswered voice approval expires after approvalTimeoutMs", async ({ page, context }) => {
+  const { call, decisions, order } = await approvalCall(page, context, { approvalTimeoutMs: 1_500 });
+  await order("apr_1");
+  const followUp = await call.waitForFrame("delegation_followup", () => true, 10_000);
+  expect(followUp).toEqual({
+    type: "delegation_followup",
+    turnId: "dlg_1",
+    status: "expired",
+    text: "That place pickup order request expired, so nothing was done.",
+  });
+  await expect.poll(() => decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "denied" })]);
+  await expect(page.getByRole("button", { name: "Allow", exact: true })).toHaveCount(0);
 });

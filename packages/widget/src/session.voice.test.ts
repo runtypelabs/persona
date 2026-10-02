@@ -522,7 +522,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       userText: "What's the weather in Paris?",
     });
 
-    expect(result).toEqual({ ok: true, text: 'It is **sunny** in Paris.' });
+    expect(result).toEqual({ ok: true, status: 'completed', text: 'It is **sunny** in Paris.' });
     const sent = dispatch.mock.calls[0][0].messages;
     const userTurns = sent.filter((m) => m.role === 'user');
     expect(userTurns).toHaveLength(1);
@@ -636,7 +636,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('appends a user message when no transcript bubble is available', async () => {
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
     const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'Turn on dark mode' });
-    expect(result).toEqual({ ok: true, text: 'Done.' });
+    expect(result).toEqual({ ok: true, status: 'completed', text: 'Done.' });
     expect(view()).toEqual([
       ['assistant', 'Welcome! How can I help?'],
       ['user', 'Turn on dark mode'],
@@ -669,7 +669,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     const pending = h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'long task' });
     await new Promise((resolve) => setTimeout(resolve, 0));
     session.cancel();
-    expect(await pending).toEqual({ ok: false, text: '' });
+    expect(await pending).toEqual({ ok: false, status: 'failed', text: '' });
   });
 
   const parkOnApproval = (approval: Partial<NonNullable<AgentWidgetMessage['approval']>> = {}, key = 'ap1') =>
@@ -743,10 +743,10 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
     const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
-    const followUp = result.followUp!(new AbortController().signal);
+    const followUp = result.followUp!({ signal: new AbortController().signal });
     resumeWith('Your order is in: pickup today at 4pm.');
     await session.resolveApproval(approvalOf(), 'approved');
-    expect(await followUp).toBe('Your order is in: pickup today at 4pm.');
+    expect(await followUp).toEqual({ status: 'completed', text: 'Your order is in: pickup today at 4pm.' });
     expect(spoken('assistant-after')).toBe(true);
   });
 
@@ -754,7 +754,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
     const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
-    const followUp = first.followUp!(new AbortController().signal);
+    const followUp = first.followUp!({ signal: new AbortController().signal });
     drive('user', 'and a cake', true, 'u2');
     parkOnApproval({ toolName: 'order_cake' }, 'ap2');
     await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'and a cake' });
@@ -762,18 +762,119 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
     resumeWith('Croissants ordered.');
     await session.resolveApproval(approvalOf(), 'approved');
-    expect(await followUp).toBe('Croissants ordered.');
+    expect(await followUp).toEqual({ status: 'completed', text: 'Croissants ordered.' });
     expect(approvalOf('ap2').status).toBe('pending');
+  });
+
+  describe('Amendment 4: voice decline, supersede, expiry', () => {
+    const park = async (key = 'ap1', toolName = 'place_pickup_order') => {
+      parkOnApproval({ toolName }, key);
+      const result = await h.state.bridge!.runDelegatedTurn({ turnId: `d-${key}`, userText: 'order two croissants' });
+      return { result, followUp: result.followUp!({ signal: new AbortController().signal }) };
+    };
+
+    it('declines the one pending voice approval on an unambiguous "cancel that", silently for its follow-up', async () => {
+      const first = await park();
+      expect(first.result.status).toBe('pending_approval');
+      resumeWith(null);
+      const decline = await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: ' No, cancel that.' });
+      expect(decline).toEqual({
+        ok: true,
+        status: 'declined',
+        text: 'Okay, I cancelled the place pickup order request. Nothing was done.',
+      });
+      expect(dispatch).toHaveBeenCalledTimes(1); // no chat turn for the decline
+      expect(approvalOf().status).toBe('denied');
+      expect(await first.followUp).toBeNull();
+    });
+
+    it.each(['no wait, make it three', 'yes', 'sure, go ahead', 'cancel the cake and add bread'])(
+      'never decides by voice on "%s": the turn runs normally',
+      async (userText) => {
+        await park();
+        dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Okay.', 'assistant-next'));
+        const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText });
+        expect(result.status).toBe('completed');
+        expect(dispatch).toHaveBeenCalledTimes(2);
+        expect(approvalOf().status).toBe('pending');
+      },
+    );
+
+    it('runs "cancel" normally when more than one voice approval waits', async () => {
+      await park('ap1');
+      await park('ap2', 'order_cake');
+      dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Which one?', 'assistant-next'));
+      const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd3', userText: 'cancel it' });
+      expect(result.status).toBe('completed');
+      expect(approvalOf('ap1').status).toBe('pending');
+      expect(approvalOf('ap2').status).toBe('pending');
+    });
+
+    it('supersedes an earlier pending approval for the same tool, and leaves other tools alone', async () => {
+      const first = await park('ap1');
+      const cake = await park('ap2', 'order_cake');
+      resumeWith(null);
+      const second = await park('ap3');
+      expect(second.result.status).toBe('pending_approval');
+      expect(approvalOf('ap1').status).toBe('denied');
+      expect(approvalOf('ap2').status).toBe('pending');
+      expect(await first.followUp).toEqual({
+        status: 'declined',
+        text: 'The earlier place pickup order request was replaced by the new one; it was not done.',
+      });
+      void cake;
+    });
+
+    it('expires an unanswered voice approval after approvalTimeoutMs', async () => {
+      parkOnApproval();
+      const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+      resumeWith(null);
+      const followUp = await result.followUp!({ signal: new AbortController().signal, approvalTimeoutMs: 60 });
+      expect(followUp).toEqual({ status: 'expired', text: 'That place pickup order request expired, so nothing was done.' });
+      expect(approvalOf().status).toBe('denied');
+    });
+
+    it('leaves the approval pending on hang-up (no auto-decline)', async () => {
+      parkOnApproval();
+      const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+      const call = new AbortController();
+      const followUp = result.followUp!({ signal: call.signal, approvalTimeoutMs: 60 });
+      call.abort();
+      expect(await followUp).toBeNull();
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      expect(approvalOf().status).toBe('pending');
+    });
+
+    it('a new request replaces a parked voice WebMCP approval instead of waiting on it', async () => {
+      const internals = session as unknown as { webMcpResolveControllers: Set<AbortController> };
+      dispatch.mockImplementationOnce(async (_options, onEvent) => {
+        reply(onEvent, 'Adding it now.');
+        internals.webMcpResolveControllers.add(new AbortController());
+        void session.requestWebMcpApproval({ toolName: 'add_to_cart', args: { sku: 'AB-1' }, reason: 'gate' });
+      });
+      const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'add it to my cart' });
+      expect(first.status).toBe('pending_approval');
+      const followUp = first.followUp!({ signal: new AbortController().signal });
+
+      dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'We open at nine.', 'assistant-hours'));
+      const second = await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'when do you open' });
+      expect(second).toEqual({ ok: true, status: 'completed', text: 'We open at nine.' });
+      expect(messages.find((m) => m.variant === 'approval')!.approval!.status).toBe('denied');
+      expect(await followUp).toEqual({
+        status: 'declined',
+        text: 'The earlier add to cart request was cancelled by the new one; it was not done.',
+      });
+    });
   });
 
   it('follows up with the decline when a denied approval brings no reply', async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
     const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
-    const followUp = result.followUp!(new AbortController().signal);
+    const followUp = result.followUp!({ signal: new AbortController().signal });
     resumeWith(null);
     await session.resolveApproval(approvalOf(), 'denied');
-    expect(await followUp).toBe('The user declined: place pickup order.');
+    expect(await followUp).toEqual({ status: 'declined', text: 'The user declined: place pickup order.' });
   });
 
   it('drops the follow-up when the call ends before the visitor decides', async () => {
@@ -781,9 +882,9 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     parkOnApproval();
     const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
     const call = new AbortController();
-    const followUp = result.followUp!(call.signal);
+    const followUp = result.followUp!({ signal: call.signal });
     call.abort();
-    expect(await followUp).toBe('');
+    expect(await followUp).toBeNull();
     expect(approvalOf().status).toBe('pending');
   });
 
@@ -837,7 +938,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(result.text).toMatch(/^Adding it now\.\n\nThis action needs the user's approval in the chat before it happens:\n- add to cart \(/);
 
     // Approved: the page tool runs, and the resumed turn's answer follows up.
-    const followUp = result.followUp!(new AbortController().signal);
+    const followUp = result.followUp!({ signal: new AbortController().signal });
     const approval = messages.find((m) => m.variant === 'approval')!;
     session.resolveWebMcpApproval(approval.id, 'approved');
     (session as unknown as { handleEvent: (event: AgentWidgetEvent) => void }).handleEvent({
@@ -845,7 +946,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       message: { id: 'after', role: 'assistant', content: 'Added to your cart.', createdAt: new Date().toISOString() },
     });
     internals.webMcpResolveControllers.delete(resolve);
-    expect(await followUp).toBe('Added to your cart.');
+    expect(await followUp).toEqual({ status: 'completed', text: 'Added to your cart.' });
   });
 
   it('fails a delegated turn that a typed send replaces, and leaves the typed reply alone', async () => {
@@ -862,7 +963,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     const delegated = h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'long voice task' });
     await new Promise((resolve) => setTimeout(resolve, 0));
     await session.sendMessage('never mind, typed instead');
-    expect(await delegated).toEqual({ ok: false, text: '' });
+    expect(await delegated).toEqual({ ok: false, status: 'failed', text: '' });
     expect(spoken('assistant-typed')).toBe(false);
   });
 
@@ -978,7 +1079,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
     finishTyped();
     await typed;
-    expect(await delegated).toEqual({ ok: true, text: 'Voice answer.' });
+    expect(await delegated).toEqual({ ok: true, status: 'completed', text: 'Voice answer.' });
     expect(dispatch).toHaveBeenCalledTimes(2);
     expect(dispatch.mock.calls[0][0].signal?.aborted).toBe(false);
     expect(messages.find((m) => m.id === 'assistant-typed')?.content).toBe('Typed answer.');
