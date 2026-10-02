@@ -36,29 +36,39 @@
 // it negotiates plain `runtype.bearer`, it ignored attach and the call is
 // already live, so `startListening()` adopts it as is.
 //
+// Wire vocabulary v1 (contract Amendment 5). Every socket sends
+// `voiceProtocol=runtype-browser-v1`, `clientVersion=persona/<version>` and the
+// snake_case `clientCapabilities` it supports. The server answers with
+// `session_config.capabilities` (the negotiated intersection), the only gate
+// for the client frames `context`, `delegation_update` and client delegation:
+// a server without `capabilities` gets none of them. Receivers ignore unknown
+// frames, fields and enum values; an `error` with `fatal: false` doesn't end
+// the call.
+//
 // Client delegation (full duplex, when the session supplied a bridge and
-// `clientDelegation` isn't false): the socket also declares
-// `clientCapabilities=client-delegation`. A server that accepts it confirms
-// with `session_config{clientDelegation:true}` and then sends
-// `delegation_requested{turnId,userText}` instead of running the agent turn
-// itself; the bridge runs it through the widget's chat pipeline (one at a
-// time) and the provider answers `delegation_result{turnId,text,ok}`. The voice
-// model's spoken read-back of a successful result (the first new assistant
-// utterance after its `delegation_completed`, unless the visitor speaks first)
-// is folded: the rendered chat message already shows it. Transcripts in such a
-// call are display-only captions, never sent to the agent as conversation; a
-// user bubble becomes conversation only when it is submitted. Separately, a
-// server that announces `session_config{contextFrames:true}` gets one
-// `context{text}` frame (chat history as of call start plus the host's
-// `callContext`), held until the visitor's first final transcript or first
-// delegation. Servers that announce neither get neither frame: an unknown
-// client frame type ends the call on older servers.
+// `clientDelegation` isn't false, and `client_delegation` was negotiated): a
+// `delegation_started{delegationId, input}` asks the widget to run the turn
+// through its chat pipeline (one at a time). The provider answers with exactly
+// one terminal `delegation_result{delegationId, status, text}`. A turn that
+// parks on a tool approval first sends the non-terminal
+// `delegation_update{delegationId, status:'pending_approval', text}`, then the
+// terminal result once the visitor decides (or the approval lapses or is
+// replaced). `delegation_cancelled{delegationId}` stops all frames for that id;
+// the chat turn still renders. The voice model's spoken read-back after each
+// `delegation_completed` of an answered delegation (the first new assistant
+// utterance, unless the visitor speaks first) is folded: the chat already shows
+// it. Transcripts in such a call are display-only captions, never sent to the
+// agent as conversation; a user bubble becomes conversation only when it is
+// submitted. With `context` negotiated, one `context{text}` frame (chat history
+// as of call start plus the host's `callContext`) is held until the visitor's
+// first final transcript or first delegation.
 
 import type {
   VoiceProvider,
   VoiceResult,
   VoiceStatus,
   VoiceConfig,
+  VoiceDelegationRequest,
   VoiceDelegationResult,
   VoiceMetrics,
   VoicePlaybackEngine,
@@ -66,6 +76,7 @@ import type {
   VoiceTranscriptMetadata,
 } from "../types";
 import { AudioPlaybackManager } from "./audio-playback-manager";
+import { VERSION } from "../version";
 
 const CAPTURE_SAMPLE_RATE = 16000;
 const PLAYBACK_SAMPLE_RATE = 24000;
@@ -124,7 +135,7 @@ const CANCEL_ACK_TIMEOUT_MS = 2000;
  * the result goes out and that context is dropped.
  */
 const CONTEXT_BEFORE_RESULT_TIMEOUT_MS = 2000;
-const CLIENT_DELEGATION_CAPABILITY = "client-delegation";
+const VOICE_PROTOCOL = "runtype-browser-v1";
 const DISCLOSURE_TEXT = "You're talking to an AI assistant. Voice is processed by OpenAI.";
 /** Call-start context frame: total cap, host share, history window, per-message cap. */
 const CONTEXT_MAX_CHARS = 8000;
@@ -247,12 +258,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Client delegation (see header); per-call state reset on every cleanup.
   private bridge: VoiceSessionBridge | null = null;
   private clientDelegation = false;
-  // The server accepts `delegation_followup` (session_config.followUpFrames).
-  private followUpFrames = false;
-  // The server understands `status` on results and follow-ups (session_config.approvalState).
-  private approvalState = false;
-  // Aborts pending approval follow-ups when the call ends.
-  private followUps: AbortController | null = null;
+  // session_config.capabilities: the negotiated client frame types.
+  private capabilities = new Set<string>();
+  // Per delegation: aborts its pending approval follow-up (cancelled, or call end).
+  private followUps = new Map<string, AbortController>();
+  // Delegations the server cancelled: no more frames for them.
+  private cancelledDelegations = new Set<string>();
   // Call-start context, built at session_config and held until the visitor's
   // first final transcript (sent earlier, the voice model tends to answer it).
   private contextSent = false;
@@ -318,7 +329,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   private attach(host: string, agentId: string, token: string): void {
-    const params = new URLSearchParams({ clientCapabilities: "attach" });
+    const params = new URLSearchParams();
     const configuredIdleMs = this.config?.attachIdleMs;
     const idleMs = clampAttachIdleMs(configuredIdleMs);
     if (configuredIdleMs !== undefined) params.set("attachIdleMs", String(idleMs));
@@ -431,16 +442,17 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * `extra` adds params (e.g. an attach prewarm's). The token never goes in
    * the URL, and these params are not secrets.
    */
-  private voiceSocketUrl(host: string, agentId: string, extra?: URLSearchParams): string {
-    const params = new URLSearchParams({ voiceCapabilities: FULL_DUPLEX_CAPABILITY });
-    extra?.forEach((value, key) => params.set(key, value));
-    if (this.bridge && this.config?.clientDelegation !== false) {
-      const declared = params.get("clientCapabilities");
-      params.set(
-        "clientCapabilities",
-        declared ? `${declared},${CLIENT_DELEGATION_CAPABILITY}` : CLIENT_DELEGATION_CAPABILITY,
-      );
-    }
+  private voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
+    const capabilities = ["partial_transcript", "context"];
+    if (this.bridge && this.config?.clientDelegation !== false) capabilities.push("client_delegation", "delegation_update");
+    if (attach) capabilities.unshift("attach");
+    const params = new URLSearchParams({
+      voiceProtocol: VOICE_PROTOCOL,
+      clientVersion: `persona/${VERSION}`,
+      voiceCapabilities: FULL_DUPLEX_CAPABILITY,
+      clientCapabilities: capabilities.join(","),
+    });
+    attach?.forEach((value, key) => params.set(key, value));
     return `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice?${params}`;
   }
 
@@ -702,15 +714,14 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         if (msg.speechMode) {
           this.speechToSpeech = msg.speechMode === "speech_to_speech";
           this.playback?.setContinuousMode?.(this.speechToSpeech);
-          this.clientDelegation =
-            this.speechToSpeech && msg.clientDelegation === true && !!this.bridge;
         }
-        if (msg.followUpFrames === true) this.followUpFrames = true;
-        if (msg.approvalState === true) this.approvalState = true;
+        // The negotiated client frame types. A server without `capabilities`
+        // predates them: no client delegation, context or updates.
+        if (Array.isArray(msg.capabilities)) this.capabilities = new Set(msg.capabilities);
+        this.clientDelegation = this.speechToSpeech && this.capabilities.has("client_delegation") && !!this.bridge;
         // Speech-to-speech is known only now: let the UI show its disclosure.
         if (this.speechToSpeech && !this.isSpeaking) this.emitStatus("listening");
-        // Only a server that announces contextFrames accepts `context`.
-        if (msg.contextFrames === true && !this.contextSent) {
+        if (this.capabilities.has("context") && !this.contextSent) {
           this.contextSent = true;
           this.pendingContext = this.buildContextText();
         }
@@ -719,8 +730,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       case "transcript_update": {
         const role = msg.role === "assistant" ? "assistant" : "user";
         // A reply the client cancelled keeps streaming until the server clears it.
-        if (!msg.turnId || (role === "assistant" && this.isCancelling())) break;
-        const turnId = String(msg.turnId);
+        const utteranceId = msg.utteranceId ?? msg.turnId;
+        if (!utteranceId || (role === "assistant" && this.isCancelling())) break;
+        const turnId = String(utteranceId);
         if (role === "user") {
           // Release on a final user transcript, not a partial: a mid-utterance
           // context append makes the voice model answer early (or not delegate).
@@ -746,28 +758,29 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         break;
       }
 
-      case "delegation_requested":
-        this.flushCallContext(generation);
-        if (this.clientDelegation) {
-          this.runDelegation(
-            String(msg.turnId),
-            String(msg.userText ?? ""),
-            typeof msg.userTurnId === "string" ? msg.userTurnId : undefined,
-            Array.isArray(msg.userTurnIds)
-              ? msg.userTurnIds.filter((id: unknown): id is string => typeof id === "string")
-              : undefined,
-            generation,
-          );
-        }
-        break;
-
       case "delegation_started":
-      case "delegation_completed":
-        if (
-          msg.type === "delegation_completed" &&
-          msg.speak !== false &&
-          this.answered.has(String(msg.turnId))
-        ) {
+      case "delegation_completed": {
+        const delegationId = String(msg.delegationId ?? msg.turnId);
+        if (msg.type === "delegation_started") {
+          this.flushCallContext(generation);
+          // `input`: run this turn through the chat pipeline (client delegation).
+          const input = msg.input;
+          if (this.clientDelegation && input) {
+            this.runDelegation(
+              delegationId,
+              {
+                delegationId,
+                userText: String(input.text ?? ""),
+                userUtteranceIds: Array.isArray(input.userUtteranceIds)
+                  ? input.userUtteranceIds.filter((id: unknown): id is string => typeof id === "string")
+                  : [],
+                messages: Array.isArray(input.messages) ? input.messages : [],
+              },
+              generation,
+            );
+          }
+        } else if (msg.speak !== false && this.answered.has(delegationId)) {
+          // Every spoken phase (the approval ask, the late result) is read back.
           this.foldReadback = true;
         }
         this.delegating = msg.type === "delegation_started";
@@ -775,6 +788,16 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           this.emitStatus(this.delegating ? "processing" : "listening");
         }
         break;
+      }
+
+      case "delegation_cancelled": {
+        // The server gave up on it (its timeout, or the call ending): no more
+        // frames for it, and its approval timers stop. The chat turn still renders.
+        const delegationId = String(msg.delegationId);
+        this.cancelledDelegations.add(delegationId);
+        this.followUps.get(delegationId)?.abort();
+        break;
+      }
 
       case "audio_clear":
         // Barge-in (or our own cancel acknowledged): stop playback now.
@@ -815,6 +838,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         break;
 
       case "error":
+        // `fatal: false` (an unknown or malformed client frame): the call goes on.
+        if (msg.fatal === false) break;
         this.emitError(new Error(msg.error || "Voice error"));
         this.emitStatus("error");
         break;
@@ -868,47 +893,43 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /** Run a delegated turn through the session bridge (one at a time) and answer it. */
-  private runDelegation(
-    turnId: string,
-    userText: string,
-    userTurnId: string | undefined,
-    userTurnIds: string[] | undefined,
-    generation: number,
-  ): void {
+  private runDelegation(delegationId: string, request: VoiceDelegationRequest, generation: number): void {
     const bridge = this.bridge!;
+    /** Send a frame for this delegation, unless the call or the delegation ended. */
+    const send = (type: "delegation_update" | "delegation_result", status: string, text: string) => {
+      const ws = this.ws;
+      if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return false;
+      if (this.cancelledDelegations.has(delegationId)) return false;
+      ws.send(JSON.stringify({ type, delegationId, status, text }));
+      return true;
+    };
     this.delegations = this.delegations.then(async () => {
       if (generation !== this.callGeneration) return;
       const result: VoiceDelegationResult = await bridge
-        .runDelegatedTurn({
-          turnId,
-          userText,
-          ...(userTurnId && { userTurnId }),
-          ...(userTurnIds?.length && { userTurnIds }),
-        })
-        .catch(() => ({ ok: false, text: "" }));
+        .runDelegatedTurn(request)
+        .catch(() => ({ status: "failed", text: "" }));
       await this.awaitContextSend();
-      const ws = this.ws;
-      if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
-      if (result.ok) this.answered.add(turnId);
-      const status = this.approvalState ? result.status : undefined;
-      ws.send(JSON.stringify({ type: "delegation_result", turnId, text: result.text, ok: result.ok, ...(status && { status }) }));
-      // Parked on an approval: read the outcome back once the visitor decides
-      // (to servers that accept it). The expiry runs either way.
+      // Parked on an approval: ask now (non-terminal), answer once the visitor
+      // decides. A server that can't take an update gets the ask as the result.
+      const parked = !!result.followUp;
+      const update = parked && this.capabilities.has("delegation_update");
+      const sent = send(
+        update ? "delegation_update" : "delegation_result",
+        parked && !update ? "completed" : result.status,
+        result.text,
+      );
+      if (!sent) return;
+      if (result.status !== "failed") this.answered.add(delegationId);
       if (!result.followUp) return;
-      const readBack = this.followUpFrames;
+      // The approval bookkeeping (expiry, supersede) runs either way.
+      const abort = new AbortController();
+      this.followUps.set(delegationId, abort);
       void result
-        .followUp({
-          signal: (this.followUps ??= new AbortController()).signal,
-          approvalTimeoutMs: this.config?.approvalTimeoutMs,
-          readBack,
-        })
+        .followUp({ signal: abort.signal, approvalTimeoutMs: this.config?.approvalTimeoutMs, readBack: update })
         .then((followUp) => {
-          const live = this.ws;
-          if (!readBack || !followUp?.text || generation !== this.callGeneration || live?.readyState !== WebSocket.OPEN) return;
-          const { text, status } = followUp;
-          live.send(
-            JSON.stringify({ type: "delegation_followup", turnId, text, ...(this.approvalState && { status }) }),
-          );
+          this.followUps.delete(delegationId);
+          // Hang-up and cancellation send nothing.
+          if (update && followUp && !abort.signal.aborted) send("delegation_result", followUp.status, followUp.text);
         });
     });
   }
@@ -993,10 +1014,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.speechToSpeech = false;
     this.delegating = false;
     this.clientDelegation = false;
-    this.followUpFrames = false;
-    this.approvalState = false;
-    this.followUps?.abort();
-    this.followUps = null;
+    this.capabilities = new Set();
+    for (const abort of this.followUps.values()) abort.abort();
+    this.followUps.clear();
+    this.cancelledDelegations.clear();
     this.contextSent = false;
     this.pendingContext = null;
     this.contextSend = null;

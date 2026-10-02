@@ -8,9 +8,17 @@ import type {
   AgentWidgetEvent,
   AgentWidgetMessage,
   VoiceMetrics,
+  VoiceDelegationRequest,
   VoiceSessionBridge,
   VoiceTranscriptMetadata,
 } from './types';
+
+/** A delegation request; utterance ids and messages default to empty. */
+const req = (request: Partial<VoiceDelegationRequest> & { delegationId: string; userText: string }) => ({
+  userUtteranceIds: [],
+  messages: [],
+  ...request,
+});
 
 // vi.mock is hoisted above module init, so the shared fake must be hoisted too.
 const h = vi.hoisted(() => {
@@ -517,12 +525,11 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     drive('assistant', 'Let me check that.', true, 'f1'); // filler stays visible
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'It is **sunny** in Paris.'));
 
-    const result = await h.state.bridge!.runDelegatedTurn({
-      turnId: 'd1',
-      userText: "What's the weather in Paris?",
-    });
+    const result = await h.state.bridge!.runDelegatedTurn(req({
+      delegationId: 'd1',
+      userText: "What's the weather in Paris?" }));
 
-    expect(result).toEqual({ ok: true, status: 'completed', text: 'It is **sunny** in Paris.' });
+    expect(result).toEqual({ status: 'completed', text: 'It is **sunny** in Paris.' });
     const sent = dispatch.mock.calls[0][0].messages;
     const userTurns = sent.filter((m) => m.role === 'user');
     expect(userTurns).toHaveLength(1);
@@ -549,7 +556,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     caption('assistant', "Yeah, I'll", false, 'f1'); // filler, still streaming
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'We open at nine.'));
 
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'What are your opening hours' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'What are your opening hours' }));
 
     const sent = dispatch.mock.calls[0][0].messages;
     const conversation = sent.filter((m) => !m.voiceCaption);
@@ -584,7 +591,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('trims GPT-Live\'s leading space from bubbles and the submitted request', async () => {
     h.state.transcriptCb!('user', ' What are your opening hours', true, { turnId: 'u1', caption: true });
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: ' What are your opening hours' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: ' What are your opening hours' }));
     const user = dispatch.mock.calls[0][0].messages.find((m) => m.role === 'user')!;
     expect(user.content).toBe('What are your opening hours');
     expect(user.llmContent).toBeUndefined();
@@ -599,7 +606,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     caption('user', 'What are your opening hours', true, 'u1');
     caption('assistant', "Yeah, I'll", false, 'f1');
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'We open at nine.'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'What are your opening hours' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'What are your opening hours' }));
     caption('assistant', "Yeah, I'll check.", true, 'f1'); // late final, after delegation_completed
 
     const filler = messages.find((m) => m.content === "Yeah, I'll check.")!;
@@ -618,7 +625,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Typed answer.', 'assistant-typed'));
     await session.sendMessage('typed question');
     dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Voice answer.'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'voice question' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'voice question' }));
     const sent = dispatch.mock.calls[1][0].messages;
     expect(sent[sent.length - 1]).toMatchObject({ role: 'user', content: 'voice question' });
     expect(sent.filter((m) => m.content === 'voice question')).toHaveLength(1);
@@ -627,7 +634,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('keeps the transcript text as-is when it matches the request', async () => {
     drive('user', 'Book a table.', true, 'u1');
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Booked.'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'Book a table.' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'Book a table.' }));
     const user = dispatch.mock.calls[0][0].messages.find((m) => m.role === 'user')!;
     expect(user.content).toBe('Book a table.');
     expect(user.llmContent).toBeUndefined();
@@ -635,8 +642,8 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
   it('appends a user message when no transcript bubble is available', async () => {
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'Turn on dark mode' });
-    expect(result).toEqual({ ok: true, status: 'completed', text: 'Done.' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'Turn on dark mode' }));
+    expect(result).toEqual({ status: 'completed', text: 'Done.' });
     expect(view()).toEqual([
       ['assistant', 'Welcome! How can I help?'],
       ['user', 'Turn on dark mode'],
@@ -649,9 +656,9 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     drive('user', 'do the thing', true, 'u1');
     dispatch.mockRejectedValue(new Error('upstream exploded'));
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'do the thing' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'do the thing' }));
     consoleError.mockRestore();
-    expect(result.ok).toBe(false);
+    expect(result.status).toBe('failed');
     // The visible user message is still exactly the transcript bubble.
     expect(messages.filter((m) => m.role === 'user')).toHaveLength(1);
   });
@@ -666,10 +673,10 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
           );
         }),
     );
-    const pending = h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'long task' });
+    const pending = h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'long task' }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     session.cancel();
-    expect(await pending).toEqual({ ok: false, status: 'failed', text: '' });
+    expect(await pending).toEqual({ status: 'failed', text: '' });
   });
 
   const parkOnApproval = (approval: Partial<NonNullable<AgentWidgetMessage['approval']>> = {}, key = 'ap1') =>
@@ -727,8 +734,8 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('asks for a parked approval in words the voice model can say', async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
-    expect(result.ok).toBe(true);
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
+    expect(result.status).not.toBe('failed');
     expect(result.text).toBe(
       'I can do that.\n\n' +
         "This action needs the user's approval in the chat before it happens:\n" +
@@ -742,7 +749,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('follows up with the answer once the visitor approves, kept off browser TTS', async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
     const followUp = result.followUp!({ signal: new AbortController().signal });
     resumeWith('Your order is in: pickup today at 4pm.');
     await session.resolveApproval(approvalOf(), 'approved');
@@ -753,11 +760,11 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it("follows up once its own approval is decided, not another turn's", async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
-    const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    const first = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
     const followUp = first.followUp!({ signal: new AbortController().signal });
     drive('user', 'and a cake', true, 'u2');
     parkOnApproval({ toolName: 'order_cake' }, 'ap2');
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'and a cake' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText: 'and a cake' }));
     expect(approvalOf('ap2').status).toBe('pending');
 
     resumeWith('Croissants ordered.');
@@ -769,7 +776,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   describe('Amendment 4: voice decline, supersede, expiry', () => {
     const park = async (key = 'ap1', toolName = 'place_pickup_order') => {
       parkOnApproval({ toolName }, key);
-      const result = await h.state.bridge!.runDelegatedTurn({ turnId: `d-${key}`, userText: 'order two croissants' });
+      const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: `d-${key}`, userText: 'order two croissants' }));
       return { result, followUp: result.followUp!({ signal: new AbortController().signal }) };
     };
 
@@ -777,15 +784,15 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       const first = await park();
       expect(first.result.status).toBe('pending_approval');
       resumeWith(null);
-      const decline = await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: ' No, cancel that.' });
+      const decline = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText: ' No, cancel that.' }));
       expect(decline).toEqual({
-        ok: true,
-        status: 'declined',
+        status: 'denied',
         text: 'Okay, I cancelled the place pickup order request. Nothing was done.',
       });
       expect(dispatch).toHaveBeenCalledTimes(1); // no chat turn for the decline
       expect(approvalOf().status).toBe('denied');
-      expect(await first.followUp).toBeNull();
+      // The parked delegation still gets its one terminal result, with nothing to say.
+      expect(await first.followUp).toEqual({ status: 'denied', text: '' });
     });
 
     it.each(['no wait, make it three', 'yes', 'sure, go ahead', 'cancel the cake and add bread'])(
@@ -793,7 +800,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       async (userText) => {
         await park();
         dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Okay.', 'assistant-next'));
-        const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText });
+        const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText }));
         expect(result.status).toBe('completed');
         expect(dispatch).toHaveBeenCalledTimes(2);
         expect(approvalOf().status).toBe('pending');
@@ -804,7 +811,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       await park('ap1');
       await park('ap2', 'order_cake');
       dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Which one?', 'assistant-next'));
-      const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd3', userText: 'cancel it' });
+      const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd3', userText: 'cancel it' }));
       expect(result.status).toBe('completed');
       expect(approvalOf('ap1').status).toBe('pending');
       expect(approvalOf('ap2').status).toBe('pending');
@@ -819,7 +826,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       expect(approvalOf('ap1').status).toBe('denied');
       expect(approvalOf('ap2').status).toBe('pending');
       expect(await first.followUp).toEqual({
-        status: 'declined',
+        status: 'cancelled',
         text: 'The earlier place pickup order request was replaced by the new one; it was not done.',
       });
       void cake;
@@ -827,16 +834,16 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
     it('expires an unanswered voice approval after approvalTimeoutMs', async () => {
       parkOnApproval();
-      const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+      const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
       resumeWith(null);
       const followUp = await result.followUp!({ signal: new AbortController().signal, approvalTimeoutMs: 60 });
-      expect(followUp).toEqual({ status: 'expired', text: 'That place pickup order request expired, so nothing was done.' });
+      expect(followUp).toEqual({ status: 'timeout', text: 'That place pickup order request expired, so nothing was done.' });
       expect(approvalOf().status).toBe('denied');
     });
 
     it('leaves the approval pending on hang-up (no auto-decline)', async () => {
       parkOnApproval();
-      const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+      const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
       const call = new AbortController();
       const followUp = result.followUp!({ signal: call.signal, approvalTimeoutMs: 60 });
       call.abort();
@@ -877,11 +884,11 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
   it('replaces only the same-tool approval of an earlier turn, keeping its other approvals', async () => {
     parkTwo();
-    const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'croissants and a cake' });
+    const first = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'croissants and a cake' }));
     const followUp = first.followUp!({ signal: new AbortController().signal });
     resumeWith(null);
     parkOnApproval({}, 'ap3');
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'make it three croissants' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText: 'make it three croissants' }));
     expect(approvalOf('ap1').status).toBe('denied');
     expect(approvalOf('ap2').status).toBe('pending'); // the cake still waits
     resumeLater('Cake ordered.');
@@ -894,7 +901,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
   it('reads back an allowed action and states the declined one when a turn gets both decisions', async () => {
     parkTwo();
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'croissants and a cake' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'croissants and a cake' }));
     const followUp = result.followUp!({ signal: new AbortController().signal });
     resumeLater('Croissants ordered: JB-1234.');
     await session.resolveApproval(approvalOf('ap1'), 'approved');
@@ -908,23 +915,23 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
   it('expires an approval even when nothing will be read back (server without followUpFrames)', async () => {
     parkOnApproval();
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
     resumeWith(null);
     const followUp = await result.followUp!({
       signal: new AbortController().signal,
       approvalTimeoutMs: 60,
       readBack: false,
     });
-    expect(followUp?.status).toBe('expired');
+    expect(followUp?.status).toBe('timeout');
     expect(approvalOf().status).toBe('denied');
   });
 
   it('reads each parked turn back with its own answer when both wait at once', async () => {
     parkOnApproval({}, 'ap1');
-    const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order croissants' });
+    const first = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
     const firstFollowUp = first.followUp!({ signal: new AbortController().signal });
     parkOnApproval({ toolName: 'order_cake' }, 'ap2');
-    const second = await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'and a cake' });
+    const second = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText: 'and a cake' }));
     const secondFollowUp = second.followUp!({ signal: new AbortController().signal });
 
     resumeLater('Croissants ordered.');
@@ -942,17 +949,17 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
         internals.webMcpResolveControllers.add(new AbortController());
         void session.requestWebMcpApproval({ toolName: 'add_to_cart', args: { sku: 'AB-1' }, reason: 'gate' });
       });
-      const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'add it to my cart' });
+      const first = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'add it to my cart' }));
       expect(first.status).toBe('pending_approval');
       const followUp = first.followUp!({ signal: new AbortController().signal });
 
       dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'We open at nine.', 'assistant-hours'));
-      const second = await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'when do you open' });
-      expect(second).toEqual({ ok: true, status: 'completed', text: 'We open at nine.' });
+      const second = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText: 'when do you open' }));
+      expect(second).toEqual({ status: 'completed', text: 'We open at nine.' });
       expect(messages.find((m) => m.variant === 'approval')!.approval!.status).toBe('denied');
       expect(await followUp).toEqual({
-        status: 'declined',
-        text: 'The earlier add to cart request was cancelled by the new one; it was not done.',
+        status: 'cancelled',
+        text: 'The earlier add to cart request was replaced by the new one; it was not done.',
       });
     });
   });
@@ -960,12 +967,12 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('states a decline plainly, even when the agent replies by re-asking', async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
     const followUp = result.followUp!({ signal: new AbortController().signal });
     resumeWith('Just to confirm: two almond croissants for 4pm, right?');
     await session.resolveApproval(approvalOf(), 'denied');
     expect(await followUp).toEqual({
-      status: 'declined',
+      status: 'denied',
       text: 'The user declined the place pickup order request in the chat, so nothing was done.',
     });
   });
@@ -973,12 +980,12 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('follows up with the decline when a denied approval brings no reply', async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
     const followUp = result.followUp!({ signal: new AbortController().signal });
     resumeWith(null);
     await session.resolveApproval(approvalOf(), 'denied');
     expect(await followUp).toEqual({
-      status: 'declined',
+      status: 'denied',
       text: 'The user declined the place pickup order request in the chat, so nothing was done.',
     });
   });
@@ -986,7 +993,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('drops the follow-up when the call ends before the visitor decides', async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order two croissants' }));
     const call = new AbortController();
     const followUp = result.followUp!({ signal: call.signal });
     call.abort();
@@ -1020,7 +1027,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       });
       onEvent({ type: 'status', status: 'idle' });
     });
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'delete my account' });
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'delete my account' }));
     expect(result.text).toBe(
       'I can do that.\n\n' +
         "This action needs the user's approval in the chat before it happens:\n" +
@@ -1039,8 +1046,8 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       internals.webMcpResolveControllers.add(resolve);
       void session.requestWebMcpApproval({ toolName: 'add_to_cart', args: {}, reason: 'gate' });
     });
-    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'add it to my cart' });
-    expect(result.ok).toBe(true);
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'add it to my cart' }));
+    expect(result.status).not.toBe('failed');
     expect(result.text).toMatch(/^Adding it now\.\n\nThis action needs the user's approval in the chat before it happens:\n- add to cart \(/);
 
     // Approved: the page tool runs, and the resumed turn's answer follows up.
@@ -1066,10 +1073,10 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
         }),
     );
     dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Typed answer.', 'assistant-typed'));
-    const delegated = h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'long voice task' });
+    const delegated = h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'long voice task' }));
     await new Promise((resolve) => setTimeout(resolve, 0));
     await session.sendMessage('never mind, typed instead');
-    expect(await delegated).toEqual({ ok: false, status: 'failed', text: '' });
+    expect(await delegated).toEqual({ status: 'failed', text: '' });
     expect(spoken('assistant-typed')).toBe(false);
   });
 
@@ -1077,14 +1084,14 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     drive('user', 'book a table', true, 'u1');
     drive('user', 'book a table', true, 'u2');
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Booked.'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'book a table', userTurnId: 'u1' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'book a table', userUtteranceIds: ['u1'] }));
     const sent = dispatch.mock.calls[0][0].messages;
     expect(sent[sent.length - 1].id).toBe(messages.find((m) => m.role === 'user')!.id); // the first bubble
   });
 
   it('creates the bubble for a userTurnId not transcribed yet, which its transcript then fills', async () => {
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine.'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'opening hours', userTurnId: 'u1' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'opening hours', userUtteranceIds: ['u1'] }));
     h.state.transcriptCb!('user', 'Opening hours?', true, { turnId: 'u1', caption: true });
     expect(view()).toEqual([
       ['assistant', 'Welcome! How can I help?'],
@@ -1100,12 +1107,9 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     caption('What are your', 'u1');
     caption('opening hours', 'u2');
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));
-    await h.state.bridge!.runDelegatedTurn({
-      turnId: 'd1',
-      userText: 'What are your opening hours',
-      userTurnId: 'u2',
-      userTurnIds: ['u1', 'u2'],
-    });
+    await h.state.bridge!.runDelegatedTurn(req({
+      delegationId: 'd1',
+      userText: 'What are your opening hours', userUtteranceIds: ['u1', 'u2'] }));
 
     const sent = dispatch.mock.calls[0][0].messages.filter((m) => !m.voiceCaption);
     expect(sent.filter((m) => m.role === 'user')).toEqual([
@@ -1122,7 +1126,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
     // The joined utterance is never claimed again by a later request.
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Sure.', 'assistant-r2'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'What are your' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText: 'What are your' }));
     expect(messages.filter((m) => m.content === 'What are your')).toHaveLength(2);
     expect(messages.find((m) => m.content === 'What are your' && !m.voiceCaption)).toBeDefined();
   });
@@ -1130,11 +1134,12 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('reserves a listed utterance not transcribed yet, so it later renders as a caption', async () => {
     h.state.transcriptCb!('user', 'and on sundays', true, { turnId: 'u2', caption: true });
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Closed on Sundays.'));
-    await h.state.bridge!.runDelegatedTurn({
-      turnId: 'd1',
+    await h.state.bridge!.runDelegatedTurn(req({
+      delegationId: 'd1',
       userText: 'Your hours and on sundays',
-      userTurnIds: ['u1', 'u2'], // no userTurnId: the last listed one is the request's
-    });
+      // The last listed utterance is the request's.
+      userUtteranceIds: ['u1', 'u2'],
+    }));
     h.state.transcriptCb!('user', 'Your hours', true, { turnId: 'u1', caption: true }); // late
     const late = messages.find((m) => m.content === 'Your hours')!;
     expect(late.voiceCaption).toBe(true);
@@ -1147,7 +1152,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('claims a prefix match when the request beats the final transcript', async () => {
     drive('user', 'What are your opening', false, 'u1');
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine.'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'What are your opening hours?' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'What are your opening hours?' }));
     expect(messages.filter((m) => m.role === 'user')).toHaveLength(1);
     expect(dispatch.mock.calls[0][0].messages.filter((m) => m.role === 'user')[0]).toMatchObject({
       content: 'What are your opening',
@@ -1158,7 +1163,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   it('claims nothing rather than another utterance\'s bubble', async () => {
     drive('user', 'how is the weather', true, 'u1');
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
-    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'turn on dark mode' });
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'turn on dark mode' }));
     const users = messages.filter((m) => m.role === 'user').map((m) => m.content);
     expect(users).toEqual(['how is the weather', 'turn on dark mode']);
     const sent = dispatch.mock.calls[0][0].messages;
@@ -1179,13 +1184,13 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Voice answer.'));
     const typed = session.sendMessage('typed question');
     drive('user', 'voice question', true, 'u1');
-    const delegated = h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'voice question' });
+    const delegated = h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'voice question' }));
     await new Promise((resolve) => setTimeout(resolve, 120));
     expect(dispatch).toHaveBeenCalledTimes(1);
 
     finishTyped();
     await typed;
-    expect(await delegated).toEqual({ ok: true, status: 'completed', text: 'Voice answer.' });
+    expect(await delegated).toEqual({ status: 'completed', text: 'Voice answer.' });
     expect(dispatch).toHaveBeenCalledTimes(2);
     expect(dispatch.mock.calls[0][0].signal?.aborted).toBe(false);
     expect(messages.find((m) => m.id === 'assistant-typed')?.content).toBe('Typed answer.');

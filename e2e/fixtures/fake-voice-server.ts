@@ -5,18 +5,18 @@ import { WebSocketServer, type WebSocket } from "ws";
 /**
  * Deterministic stand-in for core's GPT-Live browser voice socket
  * (`GET /ws/agents/:agentId/voice`, `voice-openai-live-browser-handler.ts`),
- * speaking the SERVER side of the client-delegation contract
- * (gpt-live-contract.md):
+ * speaking the SERVER side of wire vocabulary v1 (gpt-live-contract.md,
+ * Amendment 5):
  *
  *   - echoes the `runtype.bearer` subprotocol and records the bearer token;
  *   - like core, sends `session_config` only after the first client frame
  *     (core initializes the engine lazily on the first message);
- *   - `clientDelegation: true` only when the server is configured for it AND
- *     the client declared `clientCapabilities=client-delegation`;
- *   - `contextFrames: true` (Amendment 1) when configured, delegation or not;
- *   - rejects unknown client frame types the way today's core does (an
- *     `error` frame + close 1011), so a client that sends `context` or
- *     `delegation_result` to a server that never offered them fails loudly.
+ *   - `session_config.capabilities` is the intersection of what the client
+ *     declared and what this server is configured for (`client_delegation`,
+ *     `context`, `delegation_update`); `legacy: true` omits it (an old server);
+ *   - an unknown or ungranted client frame type gets a non-fatal
+ *     `error{code:'UNKNOWN_FRAME', fatal:false}` and the call goes on; the
+ *     frame is recorded in `rejected`, so specs still catch it.
  *
  * Everything after `session_config` is scripted by the spec through the
  * returned {@link FakeVoiceCall}: transcript/delegation frames, PCM audio, and
@@ -24,14 +24,14 @@ import { WebSocketServer, type WebSocket } from "ws";
  */
 
 export interface FakeVoiceServerOptions {
-  /** Grant client delegation when the client declares it. @default true */
+  /** Grant `client_delegation` when the client declares it. @default true */
   clientDelegation?: boolean;
-  /** Advertise `contextFrames: true` (accept `context`). @default true */
+  /** Grant `context` when the client declares it. @default true */
   contextFrames?: boolean;
-  /** Advertise `followUpFrames: true` (accept `delegation_followup`, Amendment 3). @default false */
-  followUpFrames?: boolean;
-  /** Advertise `approvalState: true` (`status` on results and follow-ups, Amendment 4). @default false */
-  approvalState?: boolean;
+  /** Grant `delegation_update` when the client declares it. @default true */
+  delegationUpdate?: boolean;
+  /** An old server: `session_config` carries no `capabilities`. @default false */
+  legacy?: boolean;
 }
 
 export type ClientJsonFrame = { type: string; [key: string]: unknown };
@@ -68,6 +68,10 @@ export interface FakeVoiceCall {
     timeoutMs?: number,
   ): Promise<ClientJsonFrame>;
   send(frame: Record<string, unknown>): void;
+  /** `delegation_started` with `input`: the client runs this turn through its chat pipeline. */
+  delegate(options: { delegationId: string; text: string; userUtteranceIds?: string[] }): void;
+  /** `delegation_completed` for a spoken phase (`final: false` after an update's read-back). */
+  completed(delegationId: string, options?: { final?: boolean; text?: string }): void;
   /**
    * Stream one utterance the way core projects GPT-Live transcript deltas:
    * growing `final:false` frames for the same turnId, then a `final:true`.
@@ -116,8 +120,8 @@ export async function startFakeVoiceServer(
   let options: Required<FakeVoiceServerOptions> = {
     clientDelegation: true,
     contextFrames: true,
-    followUpFrames: false,
-    approvalState: false,
+    delegationUpdate: true,
+    legacy: false,
     ...initial,
   };
   const prewarms: string[] = [];
@@ -201,13 +205,17 @@ function createCall(
     .split(",")
     .map((c) => c.trim())
     .filter(Boolean);
-  const delegationGranted =
-    options.clientDelegation && clientCapabilities.includes("client-delegation");
+  const supported = [
+    ...(options.clientDelegation ? ["client_delegation"] : []),
+    ...(options.contextFrames ? ["context"] : []),
+    ...(options.delegationUpdate ? ["delegation_update"] : []),
+  ];
+  const capabilities = options.legacy ? [] : supported.filter((c) => clientCapabilities.includes(c));
+  const delegationGranted = capabilities.includes("client_delegation");
   const accepted = new Set(BASE_CLIENT_TYPES);
-  if (options.contextFrames) accepted.add("context");
+  if (capabilities.includes("context")) accepted.add("context");
   if (delegationGranted) accepted.add("delegation_result");
-  const followUps = delegationGranted && options.followUpFrames;
-  if (followUps) accepted.add("delegation_followup");
+  if (delegationGranted && capabilities.includes("delegation_update")) accepted.add("delegation_update");
 
   const frames: ClientJsonFrame[] = [];
   const rejected: ClientJsonFrame[] = [];
@@ -229,10 +237,9 @@ function createCall(
       type: "session_config",
       interruptionMode: "barge-in",
       speechMode: "speech_to_speech",
-      ...(delegationGranted ? { clientDelegation: true } : {}),
-      ...(options.contextFrames ? { contextFrames: true } : {}),
-      ...(followUps ? { followUpFrames: true } : {}),
-      ...(delegationGranted && options.approvalState ? { approvalState: true } : {}),
+      ...(options.legacy
+        ? {}
+        : { protocolVersion: "runtype-browser-v1", sessionId: "vs_fake", capabilities }),
     });
     resolveReady();
   };
@@ -251,10 +258,9 @@ function createCall(
     }
     frames.push(frame);
     if (!accepted.has(frame.type)) {
-      // Today's core: an unknown client frame is fatal to the call.
+      // v1: an unknown client frame is logged and refused, never fatal.
       rejected.push(frame);
-      send({ type: "error", error: `Unsupported voice message: ${frame.type}` });
-      ws.close(1011, "Voice unavailable");
+      send({ type: "error", error: `Unsupported voice message: ${frame.type}`, code: "UNKNOWN_FRAME", fatal: false });
     }
     for (const wake of frameWaiters.splice(0)) wake();
   });
@@ -294,6 +300,17 @@ function createCall(
       }
     },
     send,
+    delegate({ delegationId, text, userUtteranceIds = [] }) {
+      send({
+        type: "delegation_started",
+        delegationId,
+        turnId: delegationId,
+        input: { text, userUtteranceIds, messages: [{ role: "user", content: text }] },
+      });
+    },
+    completed(delegationId, { final = true, text = "" } = {}) {
+      send({ type: "delegation_completed", delegationId, turnId: delegationId, speak: true, text, final });
+    },
     async utterance({ role, turnId, text, startMs, wordsPerFrame = 2, gapMs = 40 }) {
       const words = text.split(" ");
       let endMs = startMs;
@@ -303,6 +320,7 @@ function createCall(
           type: "transcript_update",
           role,
           text: words.slice(0, n).join(" "),
+          utteranceId: turnId,
           turnId,
           final: false,
           ...(startMs !== undefined ? { startMs, endMs } : {}),
@@ -314,6 +332,7 @@ function createCall(
         type: "transcript_update",
         role,
         text,
+        utteranceId: turnId,
         turnId,
         final: true,
         ...(startMs !== undefined ? { startMs, endMs } : {}),

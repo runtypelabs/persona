@@ -18,7 +18,7 @@ export interface VoiceDelegationHost {
   /** A local (WebMCP) tool is waiting on the visitor's approval. */
   parked(): boolean;
   /** The transcript bubble the request came from (see KeyedVoiceTranscript.claimUserTurn). */
-  claim(userText: string, userTurnId?: string, userTurnIds?: string[]): string | null;
+  claim(userText: string, userUtteranceIds: string[]): string | null;
   /** sendMessage as a voice turn, submitting `userMessageId`'s bubble when given. */
   send(userText: string, userMessageId: string | undefined): Promise<void>;
   /** Route the chat stream's assistant messages and failures into `capture` (or stop). */
@@ -157,8 +157,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
 
     async runDelegatedTurn({
       userText,
-      userTurnId,
-      userTurnIds,
+      userUtteranceIds,
     }: VoiceDelegationRequest): Promise<VoiceDelegationResult> {
       const live = parks.filter((park) => pendingOf(park).length);
       const pendingIds = live.flatMap(pendingOf);
@@ -166,8 +165,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       // own follow-up stays silent, since this answer says so.
       if (pendingIds.length === 1 && isVoiceDecline(userText)) {
         const tool = toolOf(pendingIds[0]);
-        settle(live[0], "declined", "");
-        return { ok: true, status: "declined", text: `Okay, I cancelled the ${tool} request. Nothing was done.` };
+        // The parked delegation still gets its one terminal result, silently.
+        settle(live[0], "denied", "");
+        return { status: "denied", text: `Okay, I cancelled the ${tool} request. Nothing was done.` };
       }
       // A voice-originated WebMCP approval holds the chat turn open: this turn
       // replaces it (a new send declines it), so don't wait on it. Anything
@@ -181,7 +181,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       active = capture;
       retrack();
       try {
-        await host.send(userText, host.claim(userText, userTurnId, userTurnIds) ?? undefined);
+        await host.send(userText, host.claim(userText, userUtteranceIds) ?? undefined);
         // Local tools and approvals may continue the turn past the first stream.
         await settled(capture);
       } catch {
@@ -206,9 +206,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         }
         const tool = toolOf(park.approvals[0]);
         if (park.approvals.every((id) => park.replaced.has(id))) {
-          park.outcome = { status: "declined", text: `The earlier ${tool} request was replaced by the new one; it was not done.` };
+          park.outcome = { status: "cancelled", text: `The earlier ${tool} request was replaced by the new one; it was not done.` };
         } else if (replacing && park.approvals.every((id) => message(id)?.approval?.status === "denied")) {
-          park.outcome = { status: "declined", text: `The earlier ${tool} request was cancelled by the new one; it was not done.` };
+          park.outcome = { status: "cancelled", text: `The earlier ${tool} request was replaced by the new one; it was not done.` };
         }
       }
 
@@ -220,7 +220,6 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         // decision, then read the outcome back once the visitor decides.
         text = `${text}\n\n${buildApprovalScript(pending.map((m) => m.approval!))}`.trim();
         return {
-          ok: true,
           status: "pending_approval",
           text,
           followUp: async ({ signal, approvalTimeoutMs = APPROVAL_TTL_MS, readBack = true }) => {
@@ -243,7 +242,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
                 // Unanswered too long: decline it, but never by aborting a
                 // turn in flight (a parked WebMCP turn is the one waiting).
                 if (Date.now() - park.at >= approvalTimeoutMs && pendingOf(park).length && (!host.busy() || host.parked())) {
-                  settle(park, "expired", `That ${toolOf(park.approvals[0])} request expired, so nothing was done.`);
+                  settle(park, "timeout", `That ${toolOf(park.approvals[0])} request expired, so nothing was done.`);
                   break;
                 }
                 await sleep();
@@ -257,7 +256,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
               parks.splice(parks.indexOf(park), 1);
             }
             if (signal.aborted) return null;
-            if (park.outcome) return park.outcome.text ? park.outcome : null;
+            if (park.outcome) return park.outcome;
             if (follow.failed) return { status: "failed", text: `The ${toolOf(park.approvals[0])} request didn't complete.` };
             const decided = mine();
             const names = (pick: (m: AgentWidgetMessage) => boolean) =>
@@ -277,8 +276,10 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
             ]
               .filter(Boolean)
               .join("\n\n");
-            if (!text) return null;
-            return { status: approved ? "completed" : declined || replaced ? "declined" : "expired", text };
+            return {
+              status: approved ? "completed" : declined ? "denied" : replaced ? "cancelled" : timedOut ? "timeout" : "completed",
+              text,
+            };
           },
         };
       }
@@ -293,10 +294,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
             !m.toolCall?.name?.startsWith("webmcp:"),
         )
       ) {
-        return { ok: !capture.failed, text: `${text}\n\n${WAITING_FOR_INPUT}`.trim() };
+        return { status: capture.failed ? "failed" : "completed", text: `${text}\n\n${WAITING_FOR_INPUT}`.trim() };
       }
-      const ok = !capture.failed && !!text;
-      return { ok, status: ok ? "completed" : "failed", text };
+      return { status: !capture.failed && text ? "completed" : "failed", text };
     },
   };
 }

@@ -26,7 +26,7 @@ import {
  * GPT-Live browser handler (fixtures/fake-voice-server.ts); the chat transport
  * is the route-intercepted `/v1/client/*` fake the history suite uses.
  *
- * Contract: gpt-live-contract.md (client-delegation extension + Amendment 1).
+ * Contract: gpt-live-contract.md, wire vocabulary v1 (Amendment 5).
  * The flow under test: typed history → call starts → `context` frame carries
  * the history → spoken request becomes ONE user bubble → the widget submits it
  * through its normal chat pipeline exactly once → the Markdown answer (with a
@@ -118,7 +118,11 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   // subprotocol, never the URL.
   expect(call.url.pathname).toBe("/ws/agents/agent_e2e_voice/voice");
   expect(call.url.searchParams.get("voiceCapabilities")).toBe("full-duplex-v1");
-  expect(call.clientCapabilities).toContain("client-delegation");
+  expect(call.url.searchParams.get("voiceProtocol")).toBe("runtype-browser-v1");
+  expect(call.url.searchParams.get("clientVersion")).toMatch(/^persona\/\d+\.\d+\.\d+/);
+  expect(call.clientCapabilities).toEqual(
+    expect.arrayContaining(["client_delegation", "context", "delegation_update", "partial_transcript"]),
+  );
   expect(call.protocol).toBe("runtype.bearer");
   expect(call.token).toBe("ct_e2e_voice");
   expect(call.url.search).not.toContain("ct_e2e_voice");
@@ -155,7 +159,7 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   expect(call.framesOf("context")).toHaveLength(1);
 
   // GPT-Live delegates; its filler shows while the widget runs the turn.
-  call.send({ type: "delegation_started", turnId: "dlg_1" });
+  call.delegate({ delegationId: "dlg_1", text: SPOKEN_QUESTION, userUtteranceIds: ["in_1"] });
   await call.utterance({ role: "assistant", turnId: "out_1", text: FILLER, startMs: 4100 });
   // A caption is display-only: no copy (or any other) message action.
   const filler = page.locator(voiceSel.assistantBubble).filter({ hasText: FILLER });
@@ -163,16 +167,11 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   await filler.hover();
   await expect(filler.locator(".persona-message-actions button")).toHaveCount(0);
   await call.sendAudio(200);
-  call.send({
-    type: "delegation_requested",
-    turnId: "dlg_1",
-    userTurnId: "in_1",
-    userText: SPOKEN_QUESTION,
-    messages: [{ role: "user", content: SPOKEN_QUESTION }],
-  });
 
-  const result = await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_1");
-  expect(result.ok).toBe(true);
+  // One terminal result, v1 shape: delegationId + status, no `ok`.
+  const result = await call.waitForFrame("delegation_result", (f) => f.delegationId === "dlg_1");
+  expect(result.status).toBe("completed");
+  expect(result).not.toHaveProperty("ok");
   expect(String(result.text)).toContain("Monday to Friday: 8am to 6pm");
   expect(String(result.text)).toContain("Sunday: closed");
 
@@ -196,7 +195,7 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   await expect(answer.locator("li")).toHaveCount(3);
 
   // GPT-Live reads the result back: audio plays, no second bubble appears.
-  call.send({ type: "delegation_completed", turnId: "dlg_1", speak: true, text: RESULT_SPEECH });
+  call.completed("dlg_1", { text: RESULT_SPEECH });
   await call.utterance({ role: "assistant", turnId: "out_2", text: READBACK, startMs: 9000 });
   await call.sendAudio(400);
   // Let the reconciler process every read-back frame before asserting absence.
@@ -265,20 +264,13 @@ test("real GPT-Live ordering: delegation arrives before the user transcript is f
   for (const partial of [" What", " What are your", " What are your opening hours"]) {
     call.send({ type: "transcript_update", role: "user", text: partial, turnId: "in_live", final: false, startMs: 2200, endMs: 3800 });
   }
-  call.send({ type: "delegation_started", turnId: "item_live" });
   // Live, GPT-Live's filler starts ~100 ms before the request reaches the widget.
   call.send({ type: "transcript_update", role: "assistant", text: " Yeah, I'll find out.", turnId: "out_live", final: false, startMs: 4600, endMs: 5800 });
-  call.send({
-    type: "delegation_requested",
-    turnId: "item_live",
-    userTurnId: "in_live",
-    userText: " What are your opening hours",
-    messages: [{ role: "user", content: " What are your opening hours" }],
-  });
+  call.delegate({ delegationId: "item_live", text: " What are your opening hours", userUtteranceIds: ["in_live"] });
   call.send({ type: "transcript_update", role: "user", text: " What are your opening hours", turnId: "in_live", final: true, startMs: 2200, endMs: 3800 });
 
-  const result = await call.waitForFrame("delegation_result", (f) => f.turnId === "item_live");
-  expect(result.ok).toBe(true);
+  const result = await call.waitForFrame("delegation_result", (f) => f.delegationId === "item_live");
+  expect(result.status).toBe("completed");
   await expect.poll(() => api.requestsTo("chat").length).toBe(1);
   const sent = chatMessages(api.requestsTo("chat")[0]!.body);
   const asked = sent.filter((m) => m.role === "user" && m.text.includes("What are your opening hours"));
@@ -295,7 +287,7 @@ test("read-back fold covers only the first new assistant turn after completion (
   page,
   context,
 }) => {
-  // Also the text-match fallback: this request carries no userTurnId.
+  // Also the text-match fallback: this request carries no userUtteranceIds.
   // Core rotates the assistant transcript id at delegation_completed, so a
   // filler finalized after completion keeps its own id and bubble; the FIRST
   // new id after completion is the read-back; anything after that renders.
@@ -305,12 +297,11 @@ test("read-back fold covers only the first new assistant turn after completion (
   const call = await startCall(page);
 
   await call.utterance({ role: "user", turnId: "in_1", text: SPOKEN_QUESTION, startMs: 1000 });
-  call.send({ type: "delegation_started", turnId: "dlg_1" });
   call.send({ type: "transcript_update", role: "assistant", text: "Sure, let me", turnId: "out_filler", final: false, startMs: 3000, endMs: 3500 });
-  // No userTurnId: an older core; the client falls back to text matching.
-  call.send({ type: "delegation_requested", turnId: "dlg_1", userText: SPOKEN_QUESTION, messages: [] });
-  await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_1");
-  call.send({ type: "delegation_completed", turnId: "dlg_1", speak: true, text: RESULT_SPEECH });
+  // No userUtteranceIds: the client falls back to text matching.
+  call.delegate({ delegationId: "dlg_1", text: SPOKEN_QUESTION });
+  await call.waitForFrame("delegation_result", (f) => f.delegationId === "dlg_1");
+  call.completed("dlg_1", { text: RESULT_SPEECH });
   // The filler finishes after completion under its original id.
   call.send({ type: "transcript_update", role: "assistant", text: FILLER, turnId: "out_filler", final: true, startMs: 3000, endMs: 4200 });
   await call.utterance({ role: "assistant", turnId: "out_readback", text: READBACK, startMs: 5000 });
@@ -322,7 +313,7 @@ test("read-back fold covers only the first new assistant turn after completion (
   await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Opening hours" })).toHaveCount(1);
 });
 
-test("delegation_requested.userTurnId claims that exact bubble, even when the text differs", async ({
+test("input.userUtteranceIds claims that exact bubble, even when the text differs", async ({
   page,
   context,
 }) => {
@@ -334,8 +325,8 @@ test("delegation_requested.userTurnId claims that exact bubble, even when the te
   await call.utterance({ role: "user", turnId: "in_a", text: "What are your opening hours", startMs: 1000 });
   await call.utterance({ role: "user", turnId: "in_b", text: "Also do you deliver", startMs: 4000 });
   // userText is the engine's (differently punctuated/cased) attribution of in_a.
-  call.send({ type: "delegation_requested", turnId: "dlg_a", userTurnId: "in_a", userText: "what are your OPENING hours??", messages: [] });
-  await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_a");
+  call.delegate({ delegationId: "dlg_a", text: "what are your OPENING hours??", userUtteranceIds: ["in_a"] });
+  await call.waitForFrame("delegation_result", (f) => f.delegationId === "dlg_a");
 
   await expect.poll(() => api.requestsTo("chat").length).toBe(1);
   const sent = chatMessages(api.requestsTo("chat")[0]!.body);
@@ -345,7 +336,7 @@ test("delegation_requested.userTurnId claims that exact bubble, even when the te
   expect(sent.filter((m) => m.text.includes("Also do you deliver"))).toEqual([]);
 });
 
-test("userTurnId before its transcript: the bubble is created from userText and filled in place", async ({
+test("an utterance id before its transcript: the bubble is created from the request text and filled in place", async ({
   page,
   context,
 }) => {
@@ -355,11 +346,10 @@ test("userTurnId before its transcript: the bubble is created from userText and 
   const call = await startCall(page);
 
   // The request lands before ANY transcript for its utterance.
-  call.send({ type: "delegation_started", turnId: "dlg_e" });
-  call.send({ type: "delegation_requested", turnId: "dlg_e", userTurnId: "in_e", userText: " What are your opening hours", messages: [] });
+  call.delegate({ delegationId: "dlg_e", text: " What are your opening hours", userUtteranceIds: ["in_e"] });
   await expect(page.locator(voiceSel.userBubble).filter({ hasText: "What are your opening hours" })).toHaveCount(1);
   await call.utterance({ role: "user", turnId: "in_e", text: " What are your opening hours?", startMs: 2000 });
-  await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_e");
+  await call.waitForFrame("delegation_result", (f) => f.delegationId === "dlg_e");
 
   // A delegation before any user transcript releases the held context, and
   // the context goes out before that delegation's result.
@@ -397,11 +387,11 @@ test("bubbles order by startMs: a late user transcript renders above the reply i
   ]);
 });
 
-test("old server (no clientDelegation, no contextFrames): today's server-side behaviour", async ({
+test("old server (no session_config.capabilities): server-side delegation, no new client frames", async ({
   page,
   context,
 }) => {
-  voice.setOptions({ clientDelegation: false, contextFrames: false });
+  voice.setOptions({ legacy: true });
   const api = await installFakeHistoryApi(context);
   await openVoicePage(page, { voiceHost: voice.host, callContext: HOST_CONTEXT });
   await seedTypedTurn(page, api);
@@ -410,8 +400,8 @@ test("old server (no clientDelegation, no contextFrames): today's server-side be
   expect(call.delegationGranted).toBe(false);
 
   await call.utterance({ role: "user", turnId: "in_1", text: SPOKEN_QUESTION, startMs: 1200 });
-  call.send({ type: "delegation_started", turnId: "dlg_1" });
-  call.send({ type: "delegation_completed", turnId: "dlg_1", speak: true, text: RESULT_SPEECH });
+  call.send({ type: "delegation_started", delegationId: "dlg_1", turnId: "dlg_1" });
+  call.completed("dlg_1", { text: RESULT_SPEECH });
   await call.utterance({ role: "assistant", turnId: "out_1", text: READBACK, startMs: 6000 });
   await call.sendAudio(300);
 
@@ -430,7 +420,7 @@ test("old server (no clientDelegation, no contextFrames): today's server-side be
   expect(await call.closed).toBe(1000);
 });
 
-test("contextFrames without delegation: context is sent, the agent turn stays on the server", async ({
+test("context negotiated without client_delegation: context is sent, the agent turn stays on the server", async ({
   page,
   context,
 }) => {
@@ -451,8 +441,8 @@ test("contextFrames without delegation: context is sent, the agent turn stays on
   expect(String(contextFrame.text)).not.toContain(SPOKEN_QUESTION);
   expect(call.framesOf("context")).toHaveLength(1);
 
-  call.send({ type: "delegation_started", turnId: "dlg_1" });
-  call.send({ type: "delegation_completed", turnId: "dlg_1", speak: true, text: RESULT_SPEECH });
+  call.send({ type: "delegation_started", delegationId: "dlg_1", turnId: "dlg_1" });
+  call.completed("dlg_1", { text: RESULT_SPEECH });
   await call.utterance({ role: "assistant", turnId: "out_1", text: READBACK, startMs: 6000 });
 
   await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "We're open Monday" })).toHaveCount(1);
@@ -465,7 +455,8 @@ test("clientDelegation: false opts out of the capability", async ({ page, contex
   await installFakeHistoryApi(context);
   await openVoicePage(page, { voiceHost: voice.host, clientDelegation: false });
   const call = await startCall(page);
-  expect(call.clientCapabilities).not.toContain("client-delegation");
+  expect(call.clientCapabilities).not.toContain("client_delegation");
+  expect(call.clientCapabilities).not.toContain("delegation_update");
   expect(call.delegationGranted).toBe(false);
 });
 
@@ -503,79 +494,7 @@ function approvalParkStream(executionId: string, approvalId = "apr_order"): stri
   );
 }
 
-test("approval during a call: natural ask, approve in chat, the outcome is read back (Amendment 3)", async ({
-  page,
-  context,
-}) => {
-  const ORDER_DONE = "Your order is placed: pickup today at 4pm.";
-  const api = await installFakeHistoryApi(context);
-  const approvals: Array<Record<string, unknown>> = [];
-  await context.route("**/e2e-api/v1/agents/*/approve", async (route) => {
-    approvals.push(route.request().postDataJSON());
-    await route.fulfill({
-      status: 200,
-      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
-      body: textTurnStream(ORDER_DONE, "exec_order"),
-    });
-  });
-  voice.setOptions({ followUpFrames: true });
-  await openVoicePage(page, { voiceHost: voice.host });
-  api.setChatStream(approvalParkStream("exec_order"));
-  const call = await startCall(page);
-
-  await call.utterance({ role: "user", turnId: "in_1", text: "Order two almond croissants and a sourdough loaf", startMs: 1000 });
-  call.send({ type: "delegation_started", turnId: "dlg_order" });
-  call.send({
-    type: "delegation_requested",
-    turnId: "dlg_order",
-    userTurnId: "in_1",
-    userText: "Order two almond croissants and a sourdough loaf",
-    messages: [],
-  });
-
-  // The parked turn answers at once, with what is about to happen and how to
-  // ask for it, not a canned line.
-  const result = await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_order");
-  expect(result.ok).toBe(true);
-  const script = String(result.text);
-  expect(script).toContain("I can place that order for you.");
-  expect(script).toContain("- place pickup order (Place a pickup order at the bakery)");
-  expect(script).toContain("items: 2 almond croissants, 1 sourdough loaf; pickup time: today 4pm; customer name: Nathan");
-  expect(script).toContain("because: The visitor asked to order for pickup");
-  expect(script).toContain("ask them to approve or decline it in the chat. Don't claim it's done.");
-  expect(script.length).toBeLessThanOrEqual(1_000);
-
-  // GPT-Live asks; that read-back is folded (the approval bubble is the ask).
-  call.send({ type: "delegation_completed", turnId: "dlg_order", speak: true, text: script });
-  await call.utterance({ role: "assistant", turnId: "out_ask", text: "Shall I place it? Please approve it in the chat.", startMs: 5000 });
-  const approve = page.getByRole("button", { name: "Allow", exact: true });
-  await expect(approve).toBeVisible();
-  await page.waitForTimeout(500);
-  expect(call.framesOf("delegation_followup")).toEqual([]);
-  await expect(page.locator(voiceSel.bubble).filter({ hasText: "Shall I place it?" })).toHaveCount(0);
-
-  // The visitor approves in the chat: the resumed turn's answer renders and
-  // goes back to GPT-Live as a follow-up for the parked turn.
-  await approve.click();
-  const followUp = await call.waitForFrame("delegation_followup");
-  expect(followUp).toEqual({ type: "delegation_followup", turnId: "dlg_order", text: ORDER_DONE });
-  expect(approvals).toEqual([expect.objectContaining({ approvalId: "apr_order", decision: "approved" })]);
-  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: ORDER_DONE })).toHaveCount(1);
-
-  // Core reads it back under a fresh assistant id: folded like any read-back.
-  call.send({ type: "delegation_completed", turnId: "dlg_order", speak: true, text: ORDER_DONE });
-  await call.utterance({ role: "assistant", turnId: "out_done", text: "All set, your order is placed for 4pm.", startMs: 12000 });
-  await page.waitForTimeout(750);
-  await expect(page.locator(voiceSel.bubble).filter({ hasText: "All set, your order" })).toHaveCount(0);
-
-  expect(call.framesOf("delegation_followup")).toHaveLength(1);
-  expect(call.framesOf("delegation_result")).toHaveLength(1);
-  expect(call.rejected).toEqual([]);
-  await clickLiveMic(page);
-  expect(await call.closed).toBe(1000);
-});
-
-/** A call on an Amendment 4 server, with the approve endpoint recorded. */
+/** A call with the approve endpoint recorded (server gate: Allow / Deny post here). */
 async function approvalCall(
   page: import("@playwright/test").Page,
   context: import("@playwright/test").BrowserContext,
@@ -589,42 +508,93 @@ async function approvalCall(
     await route.fulfill({
       status: 200,
       headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
-      body: textTurnStream(body.decision === "approved" ? "Order placed." : "Okay, I won't place it.", "exec_order"),
+      body: textTurnStream(body.decision === "approved" ? "Order placed: JB-1234." : "Okay, I won't place it.", "exec_order"),
     });
   });
-  voice.setOptions({ followUpFrames: true, approvalState: true });
   await openVoicePage(page, { voiceHost: voice.host, ...options });
   const call = await startCall(page);
   let turn = 0;
-  /** One spoken order that parks on an approval; resolves with its delegation_result. */
+  /** One spoken order that parks on an approval; resolves with its delegation_update. */
   const order = async (approvalId: string) => {
     turn += 1;
     api.setChatStream(approvalParkStream("exec_order", approvalId));
     await call.utterance({ role: "user", turnId: `in_${turn}`, text: "Order two almond croissants", startMs: turn * 10_000 });
-    call.send({ type: "delegation_requested", turnId: `dlg_${turn}`, userTurnId: `in_${turn}`, userText: "Order two almond croissants", messages: [] });
-    return call.waitForFrame("delegation_result", (f) => f.turnId === `dlg_${turn}`);
+    call.delegate({ delegationId: `dlg_${turn}`, text: "Order two almond croissants", userUtteranceIds: [`in_${turn}`] });
+    return call.waitForFrame("delegation_update", (f) => f.delegationId === `dlg_${turn}`);
   };
-  return { api, call, decisions, order };
+  const resultFor = (delegationId: string, timeoutMs?: number) =>
+    call.waitForFrame("delegation_result", (f) => f.delegationId === delegationId, timeoutMs);
+  return { api, call, decisions, order, resultFor };
 }
 
-test("Amendment 4: status rides results and follow-ups; the disclosure notice shows once per call", async ({
+test("approval lifecycle: delegation_update asks naturally, Allow, one terminal delegation_result, both read-backs folded", async ({
   page,
   context,
 }) => {
-  const { call, order } = await approvalCall(page, context);
+  const { call, decisions, order, resultFor } = await approvalCall(page, context);
   // A speech-to-speech call says it's an AI, in the composer status line.
   await expect(page.locator("[data-persona-composer-status]")).toHaveText(
     "You're talking to an AI assistant. Voice is processed by OpenAI.",
   );
-  const result = await order("apr_1");
-  expect(result).toMatchObject({ ok: true, status: "pending_approval" });
-  await page.getByRole("button", { name: "Allow", exact: true }).click();
-  const followUp = await call.waitForFrame("delegation_followup");
-  expect(followUp).toEqual({ type: "delegation_followup", turnId: "dlg_1", text: "Order placed.", status: "completed" });
+
+  // Parked: the non-terminal update carries the approval script (not a canned line).
+  const update = await order("apr_1");
+  expect(update.status).toBe("pending_approval");
+  const script = String(update.text);
+  expect(script).toContain("I can place that order for you.");
+  expect(script).toContain("- place pickup order (Place a pickup order at the bakery)");
+  expect(script).toContain("items: 2 almond croissants, 1 sourdough loaf; pickup time: today 4pm; customer name: Nathan");
+  expect(script).toContain("because: The visitor asked to order for pickup");
+  expect(script).toContain("ask them to approve or decline it in the chat. Don't claim it's done.");
+  expect(script.length).toBeLessThanOrEqual(1_000);
+  expect(call.framesOf("delegation_result")).toEqual([]);
+
+  // GPT-Live asks; that read-back is folded (the approval card is the ask).
+  call.completed("dlg_1", { final: false, text: script });
+  await call.utterance({ role: "assistant", turnId: "out_ask", text: "Shall I place it? Please approve it in the chat.", startMs: 15_000 });
+  const allow = page.getByRole("button", { name: "Allow", exact: true });
+  await expect(allow).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(call.framesOf("delegation_result")).toEqual([]);
+  await expect(page.locator(voiceSel.bubble).filter({ hasText: "Shall I place it?" })).toHaveCount(0);
+
+  await allow.click();
+  expect(await resultFor("dlg_1")).toEqual({
+    type: "delegation_result",
+    delegationId: "dlg_1",
+    status: "completed",
+    text: "Order placed: JB-1234.",
+  });
+  expect(decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "approved" })]);
+  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Order placed: JB-1234." })).toHaveCount(1);
+
+  // The late result's read-back gets a fresh assistant id: folded like any other.
+  call.completed("dlg_1", { final: true, text: "Order placed." });
+  await call.utterance({ role: "assistant", turnId: "out_done", text: "All set, your order is placed.", startMs: 25_000 });
+  await page.waitForTimeout(750);
+  await expect(page.locator(voiceSel.bubble).filter({ hasText: "All set, your order" })).toHaveCount(0);
+
+  // The whole wire for the delegation, in order.
+  expect(call.frames.filter((f) => f.delegationId === "dlg_1").map((f) => `${f.type}:${f.status}`)).toEqual([
+    "delegation_update:pending_approval",
+    "delegation_result:completed",
+  ]);
   expect(call.rejected).toEqual([]);
+  await clickLiveMic(page);
+  expect(await call.closed).toBe(1000);
 });
 
-test("Amendment 4: disclosureText false hides the notice", async ({ page, context }) => {
+test("approval: Deny in the chat closes the delegation as denied, stated plainly", async ({ page, context }) => {
+  const { order, resultFor } = await approvalCall(page, context);
+  await order("apr_1");
+  await page.getByRole("button", { name: "Deny", exact: true }).click();
+  expect(await resultFor("dlg_1")).toMatchObject({
+    status: "denied",
+    text: "The user declined the place pickup order request in the chat, so nothing was done.",
+  });
+});
+
+test("disclosureText false hides the AI-disclosure notice", async ({ page, context }) => {
   await installFakeHistoryApi(context);
   await openVoicePage(page, { voiceHost: voice.host, disclosureText: false });
   await startCall(page);
@@ -632,66 +602,87 @@ test("Amendment 4: disclosureText false hides the notice", async ({ page, contex
   await expect(page.locator("[data-persona-composer-status]")).not.toContainText("AI assistant");
 });
 
-test("Amendment 4: a spoken \"cancel that\" declines the one pending approval; nothing is approved by voice", async ({
+test("a spoken \"cancel that\" denies the one pending approval; nothing is approved by voice", async ({
   page,
   context,
 }) => {
-  const { api, call, decisions, order } = await approvalCall(page, context);
+  const { api, call, decisions, order, resultFor } = await approvalCall(page, context);
   await order("apr_1");
   const chats = api.requestsTo("chat").length;
 
   // "Yes" is never an approval: it runs as a normal turn and the card stays.
   api.setChatStream(textTurnStream("Please tap Allow in the chat.", "exec_yes"));
   await call.utterance({ role: "user", turnId: "in_yes", text: "Yes, do it", startMs: 20_000 });
-  call.send({ type: "delegation_requested", turnId: "dlg_yes", userTurnId: "in_yes", userText: "Yes, do it", messages: [] });
-  expect(await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_yes")).toMatchObject({ status: "completed" });
+  call.delegate({ delegationId: "dlg_yes", text: "Yes, do it", userUtteranceIds: ["in_yes"] });
+  expect(await resultFor("dlg_yes")).toMatchObject({ status: "completed" });
   expect(decisions).toEqual([]);
   await expect(page.getByRole("button", { name: "Allow", exact: true })).toBeVisible();
 
   await call.utterance({ role: "user", turnId: "in_no", text: "No, cancel that.", startMs: 30_000 });
-  call.send({ type: "delegation_requested", turnId: "dlg_no", userTurnId: "in_no", userText: "No, cancel that.", messages: [] });
-  const declined = await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_no");
-  expect(declined).toEqual({
+  call.delegate({ delegationId: "dlg_no", text: "No, cancel that.", userUtteranceIds: ["in_no"] });
+  expect(await resultFor("dlg_no")).toEqual({
     type: "delegation_result",
-    turnId: "dlg_no",
-    ok: true,
-    status: "declined",
+    delegationId: "dlg_no",
+    status: "denied",
     text: "Okay, I cancelled the place pickup order request. Nothing was done.",
   });
   await expect.poll(() => decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "denied" })]);
   expect(api.requestsTo("chat").length).toBe(chats + 1); // only the "yes" turn ran
-  // The parked turn's own follow-up stays silent: the decline already said it.
-  await page.waitForTimeout(500);
-  expect(call.framesOf("delegation_followup")).toEqual([]);
+  // The parked delegation still closes, once, with nothing more to say.
+  expect(await resultFor("dlg_1")).toEqual({ type: "delegation_result", delegationId: "dlg_1", status: "denied", text: "" });
+  await page.waitForTimeout(300);
+  expect(call.framesOf("delegation_result").filter((f) => f.delegationId === "dlg_1")).toHaveLength(1);
 });
 
-test("Amendment 4: a new order for the same tool supersedes the earlier pending one", async ({ page, context }) => {
-  const { call, decisions, order } = await approvalCall(page, context);
+test("a new order for the same tool cancels the earlier pending one", async ({ page, context }) => {
+  const { decisions, order, resultFor } = await approvalCall(page, context);
   await order("apr_1");
-  const second = await order("apr_2");
-  expect(second).toMatchObject({ status: "pending_approval" });
+  expect(await order("apr_2")).toMatchObject({ status: "pending_approval" });
   await expect.poll(() => decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "denied" })]);
-  const followUp = await call.waitForFrame("delegation_followup", (f) => f.turnId === "dlg_1");
-  expect(followUp).toEqual({
-    type: "delegation_followup",
-    turnId: "dlg_1",
-    status: "declined",
+  expect(await resultFor("dlg_1")).toEqual({
+    type: "delegation_result",
+    delegationId: "dlg_1",
+    status: "cancelled",
     text: "The earlier place pickup order request was replaced by the new one; it was not done.",
   });
   // Only the newer card is still actionable.
   await expect(page.getByRole("button", { name: "Allow", exact: true })).toHaveCount(1);
 });
 
-test("Amendment 4: an unanswered voice approval expires after approvalTimeoutMs", async ({ page, context }) => {
-  const { call, decisions, order } = await approvalCall(page, context, { approvalTimeoutMs: 1_500 });
+test("an unanswered voice approval times out after approvalTimeoutMs", async ({ page, context }) => {
+  const { decisions, order, resultFor } = await approvalCall(page, context, { approvalTimeoutMs: 1_500 });
   await order("apr_1");
-  const followUp = await call.waitForFrame("delegation_followup", () => true, 10_000);
-  expect(followUp).toEqual({
-    type: "delegation_followup",
-    turnId: "dlg_1",
-    status: "expired",
+  expect(await resultFor("dlg_1", 10_000)).toEqual({
+    type: "delegation_result",
+    delegationId: "dlg_1",
+    status: "timeout",
     text: "That place pickup order request expired, so nothing was done.",
   });
   await expect.poll(() => decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "denied" })]);
   await expect(page.getByRole("button", { name: "Allow", exact: true })).toHaveCount(0);
+});
+
+test("delegation_cancelled: no frames for that delegation; its approval card stays usable", async ({ page, context }) => {
+  const { api, call, decisions } = await approvalCall(page, context);
+  api.setChatStream(approvalParkStream("exec_order", "apr_1"));
+  await call.utterance({ role: "user", turnId: "in_1", text: "Order two almond croissants", startMs: 1_000 });
+  call.send({ type: "delegation_cancelled", delegationId: "dlg_unknown", reason: "session_ending" }); // unknown id: ignored
+  const update = await (async () => {
+    call.delegate({ delegationId: "dlg_1", text: "Order two almond croissants", userUtteranceIds: ["in_1"] });
+    return call.waitForFrame("delegation_update", (f) => f.delegationId === "dlg_1");
+  })();
+  expect(update.status).toBe("pending_approval");
+  call.send({ type: "delegation_cancelled", delegationId: "dlg_1", reason: "timeout" });
+  // Unknown frames and fields from a newer server are ignored, and a non-fatal error keeps the call.
+  call.send({ type: "agent_state", state: "listening" });
+  call.send({ type: "error", error: "Unknown frame", code: "UNKNOWN_FRAME", fatal: false });
+
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  await expect.poll(() => decisions).toEqual([expect.objectContaining({ decision: "approved" })]);
+  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Order placed: JB-1234." })).toHaveCount(1);
+  await page.waitForTimeout(500);
+  expect(call.framesOf("delegation_result")).toEqual([]);
+  // The call is still up: hanging up closes it cleanly.
+  await clickLiveMic(page);
+  expect(await call.closed).toBe(1000);
 });

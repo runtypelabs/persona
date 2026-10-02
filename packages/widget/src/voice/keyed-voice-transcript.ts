@@ -126,31 +126,31 @@ export class KeyedVoiceTranscript {
 
   /**
    * The user bubble a delegated request came from, claimed so it is submitted
-   * once. With `userTurnId` it is that utterance's bubble; one that hasn't been
+   * once. With utterance ids it is the last one's bubble; one that hasn't been
    * transcribed yet is created now (from `userText`), so its transcript later
    * fills it instead of adding a second bubble. Without an id it is the newest
    * unclaimed bubble whose text matches exactly, else one where either text
    * is a prefix of the other (the request can beat the final transcript).
    * `null` when nothing matches: never someone else's bubble.
    *
-   * `userTurnIds` lists every utterance a split request joins (the last is
-   * the one submitted). The others are claimed too: they stay displayed as
+   * `userUtteranceIds` lists every utterance a split request joins (the last
+   * is the one submitted). The others are claimed too: they stay displayed as
    * captions, never sent and never claimed again. One not transcribed yet
    * is reserved, so its transcript later renders as a caption.
    */
-  claimUserTurn(userText: string, userTurnId?: string, userTurnIds?: string[]): string | null {
-    userTurnId ??= userTurnIds?.[userTurnIds.length - 1];
-    for (const id of userTurnIds ?? []) {
-      if (id === userTurnId) continue;
+  claimUserTurn(userText: string, userUtteranceIds: string[] = []): string | null {
+    const requestId = userUtteranceIds[userUtteranceIds.length - 1];
+    for (const id of userUtteranceIds) {
+      if (id === requestId) continue;
       if (!this.turns.has(id)) this.turns.set(id, {});
       this.turns.get(id)!.claimed = true;
     }
     let pick: KeyedTurn | undefined;
-    if (userTurnId) {
-      pick = this.turns.get(userTurnId);
+    if (requestId) {
+      pick = this.turns.get(requestId);
       if (!pick) {
         pick = {};
-        this.turns.set(userTurnId, pick);
+        this.turns.set(requestId, pick);
       }
       if (pick.claimed) return null;
       if (!pick.userId || !this.host.find(pick.userId)) {

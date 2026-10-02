@@ -5248,40 +5248,57 @@ export type VoiceTranscriptMetadata = {
 
 /** An agent turn a full-duplex voice model handed to the widget. */
 export type VoiceDelegationRequest = {
-  turnId: string;
+  /** The voice model's delegation id (`delegation_started.delegationId`). */
+  delegationId: string;
   /** What the visitor asked, as the voice model heard it. */
   userText: string;
-  /** The `turnId` of the user transcript `userText` came from, when known. */
-  userTurnId?: string;
   /**
-   * Every user transcript `turnId` `userText` joins (oldest first, the last
-   * one being `userTurnId`), when the request spans several utterances.
+   * The user transcript utterances `userText` joins, oldest first (the last
+   * is the one it came from). May be empty.
    */
-  userTurnIds?: string[];
+  userUtteranceIds: string[];
+  /** The voice model's view of the conversation it delegated from. */
+  messages: Array<{ role: string; content: unknown }>;
 };
 
-/** How a delegated turn (or its follow-up) ended (contract Amendment 4). */
-export type VoiceDelegationStatus = 'completed' | 'pending_approval' | 'declined' | 'expired' | 'failed';
+/**
+ * How a delegated turn ended, or that it waits on an approval (contract
+ * Amendment 5). `pending_approval` is the only non-terminal status. Open:
+ * a receiver treats an unknown terminal status as `failed`.
+ * - `completed`: the work ran.
+ * - `denied`: the visitor said no (Deny tap, or a spoken decline).
+ * - `timeout`: the approval lapsed (`approvalTimeoutMs`, or the server's own timeout).
+ * - `cancelled`: replaced by a newer request, or abandoned by the system.
+ * - `failed`: an error.
+ */
+export type VoiceDelegationStatus =
+  | 'completed'
+  | 'pending_approval'
+  | 'denied'
+  | 'timeout'
+  | 'cancelled'
+  | 'failed'
+  | (string & {});
 
-/** The late result of a turn that parked on approvals. */
+/** The terminal result of a turn that parked on approvals. */
 export type VoiceDelegationFollowUp = {
-  status: Exclude<VoiceDelegationStatus, 'pending_approval'>;
-  /** What to read aloud (Markdown allowed). */
+  status: VoiceDelegationStatus;
+  /** What to read aloud (Markdown allowed). May be empty: nothing more to say. */
   text: string;
 };
 
-/** The finished turn, sent back for the voice model to read aloud. */
+/** The delegated turn's answer, sent back for the voice model to read aloud. */
 export type VoiceDelegationResult = {
-  ok: boolean;
-  /** The final assistant text (Markdown allowed). */
+  /** `pending_approval` when `followUp` is set; otherwise terminal. */
+  status: VoiceDelegationStatus;
+  /** The assistant text (Markdown allowed). */
   text: string;
-  /** Sent to servers that announce `approvalState`. Absent: `ok` decides. */
-  status?: VoiceDelegationStatus;
   /**
    * Set when the turn parked on approvals (`text` then asks for the decision).
-   * Resolves once the visitor decides (or the approval is replaced, declined
-   * by voice, or unanswered for `approvalTimeoutMs`) and the resumed turn
-   * finishes; `null` when there is nothing to say or `signal` aborts first.
+   * Resolves with the terminal result once the visitor decides (or the
+   * approval is replaced, declined by voice, or unanswered for
+   * `approvalTimeoutMs`) and the resumed turn finishes; `null` only when
+   * `signal` aborts first (hang-up, or the server cancelled the delegation).
    */
   followUp?: (options: {
     signal: AbortSignal;

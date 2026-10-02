@@ -17,11 +17,11 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *   LIVE_EXPECT_DELEGATION=0  expect the server-side path (old server) instead
  *   LIVE_EXPECT_SMALL_TALK=1  the question is small talk ("Who are you?"): GPT-Live
  *                             answers itself, nothing is delegated, the reply renders
- *   LIVE_EXPECT_USER_TURN_ID=0  core predates Amendment 2 (no userTurnId)
+ *   LIVE_EXPECT_USER_TURN_ID=0  the delegation input carries no userUtteranceIds
  *   LIVE_ALLOW_UNPROMPTED=1     tolerate GPT-Live speaking before the visitor
  *   LIVE_APPROVE=allow|deny     the delegated turn parks on a tool approval (e.g. an order WAV):
  *                               check the spoken ask, click the decision, then expect a
- *                               delegation_followup (Allow: matching LIVE_FOLLOWUP, default an
+ *                               terminal delegation_result (Allow: matching LIVE_FOLLOWUP, default an
  *                               order id like JB-1234) and its folded read-back
  *   LIVE_APPROVAL_TOOL          humanized tool name the ask must mention (place pickup order)
  *   LIVE_WEBMCP=1               register the page's gated place_pickup_order WebMCP tool
@@ -114,6 +114,14 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
   });
   const json = (dir: "in" | "out", type: string) =>
     frames.filter((f) => f.dir === dir && f.json?.type === type).map((f) => f.json!);
+  // Wire v1 (Amendment 5): delegation frames key on delegationId, transcripts on
+  // utteranceId (turnId is the deprecated mirror on the shipped frames).
+  const did = (f: Record<string, unknown> | undefined) => f?.delegationId ?? f?.turnId;
+  const uid = (f: Record<string, unknown> | undefined) => f?.utteranceId ?? f?.turnId;
+  /** delegation_started frames that ask the client to run the turn (client delegation). */
+  const delegations = () => json("in", "delegation_started").filter((f) => f.input);
+  const input = (f: Record<string, unknown>) =>
+    f.input as { text?: string; userUtteranceIds?: string[]; messages?: unknown[] };
 
   // Time the voice socket in the page: Playwright reports no open event, and
   // the first-audio check needs the open-to-first-frame gap to the millisecond.
@@ -170,7 +178,9 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     await expect.poll(() => json("in", "session_config").length, { timeout: 20_000 }).toBeGreaterThan(0);
     const config = json("in", "session_config")[0]!;
     expect(config.speechMode).toBe("speech_to_speech");
-    expect(Boolean(config.clientDelegation)).toBe(EXPECT_DELEGATION);
+    const capabilities = Array.isArray(config.capabilities) ? (config.capabilities as string[]) : [];
+    expect(config.protocolVersion).toBe("runtype-browser-v1");
+    expect(capabilities.includes("client_delegation")).toBe(EXPECT_DELEGATION);
 
     // The mic must not wait on the socket upgrade (about 3 s on staging): audio
     // captured meanwhile is buffered and flushed on open. Without that, the
@@ -196,14 +206,15 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         PRE_OPEN_BUFFER_MS,
       );
     }
-    if (config.contextFrames === true && (TYPED || CALL_CONTEXT)) {
+    if (capabilities.includes("context") && (TYPED || CALL_CONTEXT)) {
       // Held until the visitor first speaks (or the first delegation request).
       await expect.poll(() => json("out", "context").length, { timeout: 45_000 }).toBe(1);
       const contextAt = frames.findIndex((f) => f.dir === "out" && f.json?.type === "context");
       const releasedBy = frames.findIndex(
         (f) =>
           f.dir === "in" &&
-          ((f.json?.type === "transcript_update" && f.json.role === "user") || f.json?.type === "delegation_requested"),
+          ((f.json?.type === "transcript_update" && f.json.role === "user") ||
+            (f.json?.type === "delegation_started" && Boolean(f.json.input))),
       );
       expect(releasedBy, "context went out before the visitor spoke").toBeGreaterThanOrEqual(0);
       expect(releasedBy).toBeLessThan(contextAt);
@@ -256,7 +267,6 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       await expect.poll(replyText, { timeout: 30_000 }).toBeTruthy();
       // A late delegation would land within seconds of the reply: wait 10 s.
       await page.waitForTimeout(10_000);
-      expect(json("in", "delegation_requested")).toEqual([]);
       expect(json("in", "delegation_started")).toEqual([]);
       expect(json("out", "delegation_result")).toEqual([]);
       expect(chatRequests).toHaveLength(typedRequests);
@@ -266,15 +276,20 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       testInfo.annotations.push({ type: "reply", description: replyText() ?? "" });
     } else if (APPROVE) {
       // The turn parks on an approval: GPT-Live gets the approval script now
-      // and asks; the decision's outcome comes back as a delegation_followup.
-      await expect.poll(() => json("in", "delegation_requested").length, { timeout: 45_000 }).toBeGreaterThan(0);
-      const requested = json("in", "delegation_requested")[0]!;
-      await expect.poll(() => json("out", "delegation_result").length, { timeout: 60_000 }).toBeGreaterThan(0);
-      const result = json("out", "delegation_result")[0]!;
-      const script = String(result.text);
+      // (a non-terminal delegation_update) and asks; the decision's outcome
+      // comes back as the one terminal delegation_result.
+      await expect.poll(() => delegations().length, { timeout: 45_000 }).toBeGreaterThan(0);
+      const requested = delegations()[0]!;
+      const id = did(requested);
+      await expect
+        .poll(() => [...json("out", "delegation_update"), ...json("out", "delegation_result")].length, { timeout: 60_000 })
+        .toBeGreaterThan(0);
+      const early = json("out", "delegation_result").find((f) => did(f) === id);
+      // A terminal result first: the turn failed, or never parked (no approval).
+      if (early) chatOk(early.status !== "failed");
+      const ask = json("out", "delegation_update").find((f) => did(f) === id);
+      const script = String((ask ?? early)!.text);
       testInfo.annotations.push({ type: "approval-script", description: script });
-      expect(result.turnId).toBe(requested.turnId);
-      chatOk(result.ok);
       // No approval script: the agent asked a clarifying question (or did
       // something else) instead of ordering. Fail plainly, don't loop.
       expect(
@@ -285,15 +300,16 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(script).toMatch(/croissant/i);
       expect(script).toContain("Don't claim it's done.");
       expect(script, "the ask claims the order is already placed").not.toMatch(FOLLOWUP);
+      expect(ask, "the ask went out as a terminal result, not a delegation_update").toMatchObject({ status: "pending_approval" });
 
       // GPT-Live asks (folded: the approval card is the ask), then the visitor decides.
       await expect
-        .poll(() => json("in", "delegation_completed").some((f) => f.turnId === requested.turnId), { timeout: 30_000 })
+        .poll(() => json("in", "delegation_completed").some((f) => did(f) === id), { timeout: 30_000 })
         .toBe(true);
       const button = page.getByRole("button", { name: APPROVE === "allow" ? "Allow" : "Deny", exact: true });
       await expect(button).toBeVisible({ timeout: 30_000 });
       // The visitor must hear the ask before deciding (GPT-Live paraphrases it).
-      const askedAt = frames.find((f) => f.json?.type === "delegation_completed" && f.json.turnId === requested.turnId)!.at;
+      const askedAt = frames.find((f) => f.json?.type === "delegation_completed" && did(f.json) === id)!.at;
       const spokenSince = (from: number) =>
         frames
           .filter((f) => f.at > from && f.json?.type === "transcript_update" && f.json.role === "assistant" && f.json.final)
@@ -305,27 +321,36 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       await button.click();
 
       await expect
-        .poll(() => json("out", "delegation_followup").length, {
+        .poll(() => json("out", "delegation_result").filter((f) => did(f) === id).length, {
           timeout: 60_000,
-          message: "no delegation_followup after the decision (does session_config announce followUpFrames?)",
+          message: "no terminal delegation_result after the decision",
         })
         .toBeGreaterThan(0);
-      expect(config.followUpFrames).toBe(true);
-      const followUp = json("out", "delegation_followup")[0]!;
-      testInfo.annotations.push({ type: "followup", description: String(followUp.text) });
-      expect(followUp.turnId).toBe(requested.turnId);
+      expect(capabilities).toContain("delegation_update");
+      const terminal = json("out", "delegation_result").filter((f) => did(f) === id);
+      expect(terminal, "more than one terminal result for the delegation").toHaveLength(1);
+      const followUp = terminal[0]!;
+      testInfo.annotations.push({ type: "followup", description: `${followUp.status}: ${followUp.text}` });
+      expect(followUp).not.toHaveProperty("ok");
       expect(String(followUp.text).trim()).not.toBe("");
-      if (APPROVE === "allow") expect(String(followUp.text)).toMatch(FOLLOWUP);
-      else expect(String(followUp.text)).toMatch(/declined .* nothing was done/);
+      if (APPROVE === "allow") {
+        expect(followUp.status).toBe("completed");
+        expect(String(followUp.text)).toMatch(FOLLOWUP);
+      } else {
+        expect(followUp.status).toBe("denied");
+        expect(String(followUp.text)).toMatch(/declined .* nothing was done/);
+      }
 
       // Core speaks it as a late result: a second delegation_completed, whose
       // read-back is folded (the answer already renders in the chat).
       await expect
-        .poll(() => json("in", "delegation_completed").filter((f) => f.turnId === requested.turnId).length, {
+        .poll(() => json("in", "delegation_completed").filter((f) => did(f) === id).length, {
           timeout: 30_000,
         })
         .toBeGreaterThanOrEqual(2);
-      const secondAt = frames.filter((f) => f.json?.type === "delegation_completed" && f.json.turnId === requested.turnId)[1]!.at;
+      const completions = json("in", "delegation_completed").filter((f) => did(f) === id);
+      expect(completions.map((f) => f.final)).toEqual([false, true]);
+      const secondAt = frames.filter((f) => f.json?.type === "delegation_completed" && did(f.json) === id)[1]!.at;
       const finalsAfter = () =>
         frames.filter((f) => f.at > secondAt && f.json?.type === "transcript_update" && f.json.role === "assistant" && f.json.final);
       await expect.poll(() => finalsAfter().length, { timeout: 30_000 }).toBeGreaterThan(0);
@@ -347,25 +372,29 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       testInfo.annotations.push({ type: "spoken-before-decision", description: JSON.stringify(before) });
       testInfo.annotations.push({ type: "spoken-after-decision", description: JSON.stringify(after) });
     } else if (EXPECT_DELEGATION) {
-      await expect.poll(() => json("in", "delegation_requested").length, { timeout: 45_000 }).toBeGreaterThan(0);
-      const requested = json("in", "delegation_requested")[0]!;
-      // Amendment 2: the request names the user utterance it came from.
+      await expect.poll(() => delegations().length, { timeout: 45_000 }).toBeGreaterThan(0);
+      const requested = delegations()[0]!;
+      const id = did(requested);
+      // The request names the user utterances it came from.
+      const userUtteranceIds = input(requested).userUtteranceIds ?? [];
+      const requestedUtterance = userUtteranceIds.at(-1);
       if (process.env.LIVE_EXPECT_USER_TURN_ID !== "0") {
-        const userTurnIds = new Set(
-          json("in", "transcript_update").filter((f) => f.role === "user").map((f) => f.turnId),
+        const userUtterances = new Set(
+          json("in", "transcript_update").filter((f) => f.role === "user").map((f) => uid(f)),
         );
-        expect(requested.userTurnId).toBeTruthy();
-        expect(userTurnIds.has(requested.userTurnId)).toBe(true);
+        expect(requestedUtterance).toBeTruthy();
+        expect(userUtterances.has(requestedUtterance)).toBe(true);
         const heard = String(
-          json("in", "transcript_update").find((f) => f.turnId === requested.userTurnId && f.final)?.text ??
-            requested.userText,
+          json("in", "transcript_update").find((f) => uid(f) === requestedUtterance && f.final)?.text ??
+            input(requested).text,
         );
         if (!QUESTION.test(heard)) warn(`delegated utterance "${heard}" does not match ${QUESTION}`);
       }
       await expect.poll(() => json("out", "delegation_result").length, { timeout: 60_000 }).toBeGreaterThan(0);
       const result = json("out", "delegation_result")[0]!;
-      expect(result.turnId).toBe(requested.turnId);
-      chatOk(result.ok);
+      expect(did(result)).toBe(id);
+      expect(result).not.toHaveProperty("ok");
+      chatOk(result.status === "completed");
       expect(String(result.text).trim()).not.toBe("");
       expect(String(result.text), "the delegated turn did not answer the question").toMatch(ANSWER);
 
@@ -377,7 +406,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         role: String(m.role),
         text: typeof m.content === "string" ? m.content : JSON.stringify(m.content ?? ""),
       }));
-      const spoken = normalize(String(requested.userText ?? userText));
+      const spoken = normalize(String(input(requested).text ?? userText));
       expect(messages.filter((m) => normalize(m.text).includes(spoken))).toHaveLength(1);
       expect(messages.at(-1)?.role).toBe("user");
       expect(normalize(messages.at(-1)!.text)).toContain(spoken);
@@ -401,7 +430,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
 
       // GPT-Live reads it back; that read-back is folded, not a second bubble.
       await expect
-        .poll(() => json("in", "delegation_completed").some((f) => f.turnId === requested.turnId), { timeout: 30_000 })
+        .poll(() => json("in", "delegation_completed").some((f) => did(f) === id), { timeout: 30_000 })
         .toBe(true);
       const completedAt = frames.find((f) => f.json?.type === "delegation_completed")!.at;
       await expect
@@ -420,21 +449,21 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       for (const spokenReadback of readback) {
         expect(bubbles.map(normalize)).not.toContain(spokenReadback);
       }
-      // Amendment 2: only the FIRST new assistant turnId after completion is
-      // the read-back. Any later, separate utterance (a follow-up) renders.
+      // Only the FIRST new assistant utterance after completion is the
+      // read-back. Any later, separate utterance (a follow-up) renders.
       const seenBefore = new Set(
-        frames.filter((f) => f.at <= completedAt && f.json?.type === "transcript_update").map((f) => f.json!.turnId),
+        frames.filter((f) => f.at <= completedAt && f.json?.type === "transcript_update").map((f) => uid(f.json)),
       );
       const newIds = [
         ...new Set(
           frames
             .filter((f) => f.at > completedAt && f.json?.type === "transcript_update" && f.json.role === "assistant")
-            .map((f) => f.json!.turnId)
-            .filter((id) => !seenBefore.has(id)),
+            .map((f) => uid(f.json))
+            .filter((utterance) => !seenBefore.has(utterance)),
         ),
       ];
-      const followUps = newIds.slice(1).flatMap((id) => {
-        const last = frames.filter((f) => f.json?.turnId === id && f.json?.role === "assistant").at(-1);
+      const followUps = newIds.slice(1).flatMap((utterance) => {
+        const last = frames.filter((f) => uid(f.json) === utterance && f.json?.role === "assistant").at(-1);
         return last && String(last.json!.text).trim() ? [normalize(String(last.json!.text))] : [];
       });
       testInfo.annotations.push({ type: "follow-ups", description: JSON.stringify(followUps) });
@@ -464,11 +493,8 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       [
         ...json("in", "transcript_update")
           .filter((f) => f.role === "user")
-          .map((f) => f.turnId),
-        ...json("in", "delegation_requested").flatMap((f) => [
-          f.userTurnId,
-          ...(Array.isArray(f.userTurnIds) ? f.userTurnIds : []),
-        ]),
+          .map((f) => uid(f)),
+        ...delegations().flatMap((f) => input(f).userUtteranceIds ?? []),
       ].filter(Boolean),
     );
     const finalUserCount = json("in", "transcript_update").filter((f) => f.role === "user" && f.final).length;

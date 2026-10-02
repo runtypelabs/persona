@@ -774,8 +774,7 @@ export class AgentWidgetSession {
             messages: () => this.messages,
             busy: () => this.chatTurnBusy(),
             parked: () => this.webMcpApprovalResolvers.size > 0,
-            claim: (text, userTurnId, userTurnIds) =>
-              this.keyedVoice?.claimUserTurn(text, userTurnId, userTurnIds) ?? null,
+            claim: (text, userUtteranceIds) => this.keyedVoice?.claimUserTurn(text, userUtteranceIds) ?? null,
             send: (text, userMessageId) =>
               this.sendMessage(text, { viaVoice: true, voiceTurn: { userMessageId } }),
             track: (capture) => {
