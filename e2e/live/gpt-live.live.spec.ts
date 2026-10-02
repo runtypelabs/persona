@@ -294,14 +294,23 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     }
 
     // Split questions may add bubbles, one per distinct user utterance; a
-    // duplicate (e.g. delegation re-adding the request) must not.
+    // duplicate (e.g. delegation re-adding the request) must not. A bubble can
+    // open on a partial or a delegation request, so count their turnIds too
+    // (and the finals, for a core without turnIds).
     const userTurns = new Set(
-      json("in", "transcript_update")
-        .filter((f) => f.role === "user" && f.final)
-        .map((f, index) => f.turnId ?? `untagged-${index}`),
+      [
+        ...json("in", "transcript_update")
+          .filter((f) => f.role === "user")
+          .map((f) => f.turnId),
+        ...json("in", "delegation_requested").flatMap((f) => [
+          f.userTurnId,
+          ...(Array.isArray(f.userTurnIds) ? f.userTurnIds : []),
+        ]),
+      ].filter(Boolean),
     );
+    const finalUserCount = json("in", "transcript_update").filter((f) => f.role === "user" && f.final).length;
     expect(await userBubbles.count(), "more user bubbles than user utterances").toBeLessThanOrEqual(
-      (TYPED ? 1 : 0) + userTurns.size,
+      (TYPED ? 1 : 0) + Math.max(userTurns.size, finalUserCount),
     );
 
     // Hang up (force: the live level animation never lets the button settle).
