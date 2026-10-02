@@ -800,7 +800,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(lastWs().url).toBe('wss://api.example.com/ws/agents/a1/voice?voiceCapabilities=full-duplex-v1');
       });
 
-      it('holds the context frame until the visitor first speaks, then sends it once', async () => {
+      it('holds the context frame until the visitor\'s first final transcript, then sends it once', async () => {
         const history: Array<{ role: 'user' | 'assistant'; content: string }> = [
           { role: 'user', content: 'Hi there' },
           { role: 'assistant', content: 'Hello!\n\nHow can I help?' },
@@ -815,9 +815,14 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         await flush();
         expect(sentJson(ws)).toEqual([]);
 
-        // The in-progress utterance's bubble lands in the chat before the frame goes out.
+        // A partial doesn't release it: a mid-utterance append makes the model answer early.
         history.push({ role: 'user', content: 'what are' });
         ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'what are', turnId: 'u1', final: false }));
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+
+        // The final does; the frame still holds only the history from before the call.
+        ws.triggerMessage(update('user', 'what are your hours', 'u1'));
         await flush();
         expect(sentJson(ws)).toEqual([
           {
@@ -825,7 +830,6 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
             text: 'Conversation so far:\nUser: Hi there\nAssistant: Hello! How can I help?\n\nVisitor is on /pricing.',
           },
         ]);
-        ws.triggerMessage(update('user', 'what are your hours', 'u1'));
         ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in', contextFrames: true }));
         ws.triggerMessage(update('user', 'and sundays', 'u2'));
         await flush();

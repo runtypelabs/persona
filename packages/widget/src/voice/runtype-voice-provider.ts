@@ -50,7 +50,8 @@
 // user bubble becomes conversation only when it is submitted. Separately, a
 // server that announces `session_config{contextFrames:true}` gets one
 // `context{text}` frame (chat history as of call start plus the host's
-// `callContext`), held until the visitor first speaks or delegates. Servers that announce neither get neither frame: an unknown
+// `callContext`), held until the visitor's first final transcript or first
+// delegation. Servers that announce neither get neither frame: an unknown
 // client frame type ends the call on older servers.
 
 import type {
@@ -235,8 +236,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Client delegation (see header); per-call state reset on every cleanup.
   private bridge: VoiceSessionBridge | null = null;
   private clientDelegation = false;
-  // Call-start context, built at session_config and held until the visitor
-  // first speaks (sent earlier, the voice model tends to answer it unprompted).
+  // Call-start context, built at session_config and held until the visitor's
+  // first final transcript (sent earlier, the voice model tends to answer it).
   private contextSent = false;
   private pendingContext: Promise<string> | null = null;
   // The released context's send; settles once it went out (or never will).
@@ -679,7 +680,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         if (!msg.turnId || (role === "assistant" && this.isCancelling())) break;
         const turnId = String(msg.turnId);
         if (role === "user") {
-          this.flushCallContext(generation);
+          // Release on a final user transcript, not a partial: a mid-utterance
+          // context append makes the voice model answer early (or not delegate).
+          if (msg.final === true) this.flushCallContext(generation);
           this.foldReadback = false;
         } else {
           // Read-back of a delegated result: core rotates the assistant id at
@@ -790,7 +793,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     return buildCallContext(history, extra);
   }
 
-  /** Send the held call-start context, once: when the visitor first speaks or delegates. */
+  /** Send the held call-start context, once: at the first final user transcript or delegation. */
   private flushCallContext(generation: number): void {
     const pending = this.pendingContext;
     if (!pending) return;

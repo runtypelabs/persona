@@ -477,7 +477,7 @@ config: {
 | `prewarmMode` | `'request' \| 'attach'?` | How the prewarm warms the call. Default `'request'`. See [Voice prewarm](#voice-prewarm). |
 | `attachIdleMs` | `number?` | `'attach'` mode: how long (ms) the early socket waits for the click. The server clamps it to 30000 to 600000. Default: `30000`. |
 | `clientDelegation` | `boolean?` | Full-duplex (speech-to-speech) calls: run the agent turns the voice model hands off through the widget's chat pipeline. Default: `true`. See [Full-duplex voice](#full-duplex-voice). |
-| `callContext` | `string \| (() => string \| Promise<string>)?` | Full-duplex calls: extra context for the voice model, after the chat history as of call start. Sent when the visitor first speaks. Capped at 4000 characters. |
+| `callContext` | `string \| (() => string \| Promise<string>)?` | Full-duplex calls: extra context for the voice model, after the chat history as of call start. Sent when the visitor finishes their first utterance. Capped at 4000 characters. |
 | `pauseDuration` | `number?` | Silence duration (ms) before auto-stop. Default: `2000`. |
 | `silenceThreshold` | `number?` | RMS volume threshold for silence detection. Default: `0.01`. |
 
@@ -551,7 +551,9 @@ With `provider.runtype.clientDelegation` on (the default), the widget runs each 
 - If a turn stops for an approval or a question, the voice model tells the visitor to answer it in the chat.
 - A hand-off that arrives while another chat turn is still streaming waits for that turn to finish.
 
-When the visitor first speaks, the widget sends the voice model the last 12 chat messages from before the call (at most 8000 characters) and the `callContext` text, so it can refer to what was already said. It waits for the visitor because the voice model tends to answer context that arrives before anyone has spoken. This works whether `clientDelegation` is on or off.
+When the visitor finishes their first utterance, the widget sends the voice model the last 12 chat messages from before the call (at most 8000 characters) and the `callContext` text, so it can refer to what was already said. If the voice model hands off a turn first, the context goes out then. It waits because the voice model tends to answer context that arrives earlier: before anyone speaks, or partway through the visitor's sentence. This works whether `clientDelegation` is on or off.
+
+Known gap: the voice model usually hands off the first turn about half a second before the visitor's final transcript. So it decides whether to answer the first turn itself without the earlier chat history. Later turns and the read-back have the history, and the agent turn itself always runs with the full chat history.
 
 These features need a server that supports them. Older servers run the agent turn on the server and transcribe its spoken reply instead. Set `clientDelegation: false` to always run the agent turn on the server.
 

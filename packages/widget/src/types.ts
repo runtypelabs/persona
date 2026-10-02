@@ -4782,7 +4782,8 @@ export type AgentWidgetVoiceRecognitionConfig = {
       /**
        * Full-duplex calls: extra context for the voice model (for example the
        * page the visitor is on), sent after the chat history as of call start.
-       * The frame goes out once, when the visitor first speaks. A function is
+       * The frame goes out once, when the visitor finishes their first
+       * utterance (or at the first agent hand-off). A function is
        * called at call start and may be async. This text is capped at 4000 characters and the whole frame
        * (history included) at 8000. Sent only to servers that accept call
        * context (they announce it in `session_config`).
