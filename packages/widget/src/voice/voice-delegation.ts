@@ -117,7 +117,8 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   let following: VoiceDelegationCapture | null = null;
   const retrack = () => host.track(active ?? following);
   // Voice-originated approval parks still awaiting a decision or follow-up.
-  type Parked = { approvals: string[]; at: number; outcome?: VoiceDelegationFollowUp };
+  // `replaced`: approvals this bridge declined because a newer request for the same tool came in.
+  type Parked = { approvals: string[]; at: number; replaced: Set<string>; outcome?: VoiceDelegationFollowUp };
   const parks: Parked[] = [];
   const message = (id: string) => host.messages().find((m) => m.id === id);
   const pendingOf = (park: Parked) => park.approvals.filter((id) => message(id)?.approval?.status === "pending");
@@ -198,17 +199,22 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       const tools = new Set(pending.map((m) => humanize(m.approval!.toolName)));
       for (const park of live) {
         if (park.outcome) continue;
+        // Only the approvals for the same tool are replaced; the park's others stand.
+        for (const id of pendingOf(park).filter((id) => tools.has(toolOf(id)))) {
+          park.replaced.add(id);
+          host.decide(id);
+        }
         const tool = toolOf(park.approvals[0]);
-        if (tools.has(tool)) {
-          settle(park, "declined", `The earlier ${tool} request was replaced by the new one; it was not done.`);
+        if (park.approvals.every((id) => park.replaced.has(id))) {
+          park.outcome = { status: "declined", text: `The earlier ${tool} request was replaced by the new one; it was not done.` };
         } else if (replacing && park.approvals.every((id) => message(id)?.approval?.status === "denied")) {
-          settle(park, "declined", `The earlier ${tool} request was cancelled by the new one; it was not done.`);
+          park.outcome = { status: "declined", text: `The earlier ${tool} request was cancelled by the new one; it was not done.` };
         }
       }
 
       if (pending.length) {
         const own = new Set(pending.map((m) => m.id));
-        const park: Parked = { approvals: [...own], at: Date.now() };
+        const park: Parked = { approvals: [...own], at: Date.now(), replaced: new Set() };
         parks.push(park);
         // Parked on approvals: answer now, so the voice model asks for the
         // decision, then read the outcome back once the visitor decides.
@@ -217,17 +223,23 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
           ok: true,
           status: "pending_approval",
           text,
-          followUp: async ({ signal, approvalTimeoutMs = APPROVAL_TTL_MS }) => {
+          followUp: async ({ signal, approvalTimeoutMs = APPROVAL_TTL_MS, readBack = true }) => {
             const follow: VoiceDelegationCapture = { ids: [], failed: false };
             // This turn's approvals, and any its resumed stream chains into
             // (not another turn's).
             const mine = () => raised().filter((m) => own.has(m.id) || follow.ids.includes(m.id));
-            following = follow;
-            retrack();
+            const claim = () => {
+              following = follow;
+              retrack();
+            };
+            if (readBack) claim();
             try {
               // Every approval of this turn decided (or replaced, cancelled,
               // expired), and the resumed turn finished.
               while (!signal.aborted && !park.outcome && (active || host.busy() || mine().some(isPendingApproval))) {
+                // With several turns parked, the one whose approvals were just
+                // decided takes the capture slot back: its resumed stream is next.
+                if (readBack && following !== follow && !pendingOf(park).length) claim();
                 // Unanswered too long: decline it, but never by aborting a
                 // turn in flight (a parked WebMCP turn is the one waiting).
                 if (Date.now() - park.at >= approvalTimeoutMs && pendingOf(park).length && (!host.busy() || host.parked())) {
@@ -247,16 +259,26 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
             if (signal.aborted) return null;
             if (park.outcome) return park.outcome.text ? park.outcome : null;
             if (follow.failed) return { status: "failed", text: `The ${toolOf(park.approvals[0])} request didn't complete.` };
-            const declined = mine()
-              .filter((m) => m.approval?.status === "denied")
-              .map((m) => humanize(m.approval!.toolName));
-            // A decline is stated plainly: the agent's own reply to it often
-            // re-asks for confirmation, which the voice model would repeat.
-            if (declined.length) {
-              return { status: "declined", text: `The user declined the ${declined.join(", ")} request in the chat, so nothing was done.` };
-            }
-            const answer = answerOf(follow.ids);
-            return answer ? { status: "completed", text: answer } : null;
+            const decided = mine();
+            const names = (pick: (m: AgentWidgetMessage) => boolean) =>
+              decided.filter(pick).map((m) => humanize(m.approval!.toolName)).join(", ");
+            const approved = decided.some((m) => m.approval?.status === "approved");
+            const declined = names((m) => m.approval?.status === "denied" && !park.replaced.has(m.id));
+            const replaced = names((m) => park.replaced.has(m.id));
+            const timedOut = names((m) => m.approval?.status === "timeout");
+            // An approved action's result is read back; a decline is stated
+            // plainly, since the agent's own reply to it often re-asks for
+            // confirmation, which the voice model would repeat.
+            const text = [
+              approved ? answerOf(follow.ids) : "",
+              declined && `The user declined the ${declined} request in the chat, so ${approved ? "that part was not done" : "nothing was done"}.`,
+              replaced && `The earlier ${replaced} request was replaced by the new one; it was not done.`,
+              timedOut && `The ${timedOut} request timed out, so it was not done.`,
+            ]
+              .filter(Boolean)
+              .join("\n\n");
+            if (!text) return null;
+            return { status: approved ? "completed" : declined || replaced ? "declined" : "expired", text };
           },
         };
       }

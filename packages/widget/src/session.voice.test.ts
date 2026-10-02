@@ -845,7 +845,97 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       expect(approvalOf().status).toBe('pending');
     });
 
-    it('a new request replaces a parked voice WebMCP approval instead of waiting on it', async () => {
+    /** One turn that parks on two approvals: a pickup order and a cake. */
+  const parkTwo = () =>
+    dispatch.mockImplementationOnce(async (_options, onEvent) => {
+      const createdAt = new Date().toISOString();
+      onEvent({ type: 'status', status: 'connecting' });
+      for (const [key, toolName] of [['ap1', 'place_pickup_order'], ['ap2', 'order_cake']]) {
+        onEvent({
+          type: 'message',
+          message: {
+            id: `approval-${key}`,
+            role: 'assistant',
+            content: '',
+            createdAt,
+            variant: 'approval',
+            approval: { id: key, status: 'pending', agentId: 'a1', executionId: 'e1', toolName, description: '' },
+          },
+        });
+      }
+      onEvent({ type: 'status', status: 'idle' });
+    });
+  /** Like resumeWith, but the resumed stream arrives after a network-like delay. */
+  const resumeLater = (text: string) => {
+    internals().client.resolveApproval = async () => new ReadableStream();
+    vi.spyOn(session, 'connectStream').mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      reply(internals().handleEvent, text, `assistant-${text.length}`);
+      internals().abortController = null;
+    });
+  };
+
+  it('replaces only the same-tool approval of an earlier turn, keeping its other approvals', async () => {
+    parkTwo();
+    const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'croissants and a cake' });
+    const followUp = first.followUp!({ signal: new AbortController().signal });
+    resumeWith(null);
+    parkOnApproval({}, 'ap3');
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'make it three croissants' });
+    expect(approvalOf('ap1').status).toBe('denied');
+    expect(approvalOf('ap2').status).toBe('pending'); // the cake still waits
+    resumeLater('Cake ordered.');
+    await session.resolveApproval(approvalOf('ap2'), 'approved');
+    expect(await followUp).toEqual({
+      status: 'completed',
+      text: 'Cake ordered.\n\nThe earlier place pickup order request was replaced by the new one; it was not done.',
+    });
+  });
+
+  it('reads back an allowed action and states the declined one when a turn gets both decisions', async () => {
+    parkTwo();
+    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'croissants and a cake' });
+    const followUp = result.followUp!({ signal: new AbortController().signal });
+    resumeLater('Croissants ordered: JB-1234.');
+    await session.resolveApproval(approvalOf('ap1'), 'approved');
+    resumeWith(null);
+    await session.resolveApproval(approvalOf('ap2'), 'denied');
+    expect(await followUp).toEqual({
+      status: 'completed',
+      text: 'Croissants ordered: JB-1234.\n\nThe user declined the order cake request in the chat, so that part was not done.',
+    });
+  });
+
+  it('expires an approval even when nothing will be read back (server without followUpFrames)', async () => {
+    parkOnApproval();
+    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    resumeWith(null);
+    const followUp = await result.followUp!({
+      signal: new AbortController().signal,
+      approvalTimeoutMs: 60,
+      readBack: false,
+    });
+    expect(followUp?.status).toBe('expired');
+    expect(approvalOf().status).toBe('denied');
+  });
+
+  it('reads each parked turn back with its own answer when both wait at once', async () => {
+    parkOnApproval({}, 'ap1');
+    const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order croissants' });
+    const firstFollowUp = first.followUp!({ signal: new AbortController().signal });
+    parkOnApproval({ toolName: 'order_cake' }, 'ap2');
+    const second = await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'and a cake' });
+    const secondFollowUp = second.followUp!({ signal: new AbortController().signal });
+
+    resumeLater('Croissants ordered.');
+    await session.resolveApproval(approvalOf('ap1'), 'approved');
+    expect(await firstFollowUp).toEqual({ status: 'completed', text: 'Croissants ordered.' });
+    resumeLater('Cake ordered!');
+    await session.resolveApproval(approvalOf('ap2'), 'approved');
+    expect(await secondFollowUp).toEqual({ status: 'completed', text: 'Cake ordered!' });
+  });
+
+  it('a new request replaces a parked voice WebMCP approval instead of waiting on it', async () => {
       const internals = session as unknown as { webMcpResolveControllers: Set<AbortController> };
       dispatch.mockImplementationOnce(async (_options, onEvent) => {
         reply(onEvent, 'Adding it now.');

@@ -5354,8 +5354,10 @@ export const createAgentExperience = (
     string,
     { streaming?: boolean; role: AgentWidgetMessage["role"] }
   >();
-  // The live call already showed its AI-disclosure notice.
+  // The live call already showed its AI-disclosure notice; in the composer bar
+  // (no status line) it holds the input placeholder, restored at hang-up.
   let voiceDisclosed = false;
+  let placeholderBeforeDisclosure: string | null = null;
   const voiceState = {
     active: false,
     manuallyDeactivated: false,
@@ -9089,7 +9091,13 @@ export const createAgentExperience = (
             const notice = session.getVoiceDisclosure();
             if (notice) {
               voiceDisclosed = true;
-              showComposerNotice(notice, 10_000);
+              if (isComposerBar()) {
+                placeholderBeforeDisclosure = textarea.placeholder;
+                textarea.placeholder = notice;
+                announce(notice);
+              } else {
+                showComposerNotice(notice, 10_000);
+              }
             }
           }
           // A continuous realtime call re-enters `listening` after every spoken
@@ -9118,6 +9126,10 @@ export const createAgentExperience = (
           } else {
             voiceState.active = false;
             voiceDisclosed = false;
+            if (placeholderBeforeDisclosure !== null) {
+              textarea.placeholder = placeholderBeforeDisclosure;
+              placeholderBeforeDisclosure = null;
+            }
             removeRuntypeMicStateStyles();
             emitVoiceState("system");
             persistVoiceMetadata();

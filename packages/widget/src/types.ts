@@ -5283,7 +5283,12 @@ export type VoiceDelegationResult = {
    * by voice, or unanswered for `approvalTimeoutMs`) and the resumed turn
    * finishes; `null` when there is nothing to say or `signal` aborts first.
    */
-  followUp?: (options: { signal: AbortSignal; approvalTimeoutMs?: number }) => Promise<VoiceDelegationFollowUp | null>;
+  followUp?: (options: {
+    signal: AbortSignal;
+    approvalTimeoutMs?: number;
+    /** `false`: run only the approval bookkeeping (expiry, supersede); nothing will be read back. @default true */
+    readBack?: boolean;
+  }) => Promise<VoiceDelegationFollowUp | null>;
 };
 
 /**

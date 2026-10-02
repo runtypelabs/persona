@@ -892,16 +892,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       if (result.ok) this.answered.add(turnId);
       const status = this.approvalState ? result.status : undefined;
       ws.send(JSON.stringify({ type: "delegation_result", turnId, text: result.text, ok: result.ok, ...(status && { status }) }));
-      // Parked on an approval: read the outcome back once the visitor decides.
-      if (!result.followUp || !this.followUpFrames) return;
+      // Parked on an approval: read the outcome back once the visitor decides
+      // (to servers that accept it). The expiry runs either way.
+      if (!result.followUp) return;
+      const readBack = this.followUpFrames;
       void result
         .followUp({
           signal: (this.followUps ??= new AbortController()).signal,
           approvalTimeoutMs: this.config?.approvalTimeoutMs,
+          readBack,
         })
         .then((followUp) => {
           const live = this.ws;
-          if (!followUp?.text || generation !== this.callGeneration || live?.readyState !== WebSocket.OPEN) return;
+          if (!readBack || !followUp?.text || generation !== this.callGeneration || live?.readyState !== WebSocket.OPEN) return;
           const { text, status } = followUp;
           live.send(
             JSON.stringify({ type: "delegation_followup", turnId, text, ...(this.approvalState && { status }) }),

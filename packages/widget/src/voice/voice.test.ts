@@ -1199,14 +1199,16 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           expect(transcripts.map((t) => t[1])).toEqual(['yes']);
         });
 
-        it('never asks for a follow-up from a server without followUpFrames', async () => {
+        it('runs only the expiry bookkeeping, and sends nothing, for a server without followUpFrames', async () => {
           const { ws, pending } = await startDelegatedCall();
           const park = parked();
           request(ws);
           await flush();
           pending[0](park.result);
           await flush();
-          expect(park.signal()).toBeUndefined();
+          expect(park.options()).toMatchObject({ readBack: false });
+          park.settle('That place pickup order request expired, so nothing was done.', 'expired');
+          await flush();
           expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
         });
 
