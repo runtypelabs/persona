@@ -1268,6 +1268,18 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_update']);
         });
 
+        it('never starts a delegation cancelled while it waited behind another', async () => {
+          const { ws, calls, pending } = await startDelegatedCall();
+          delegate(ws, 'd1', 'first');
+          delegate(ws, 'd2', 'second');
+          await flush();
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd2', reason: 'timeout' }));
+          pending[0]({ status: 'completed', text: 'one' });
+          await flush();
+          expect(calls.map((c) => c.delegationId)).toEqual(['d1']);
+          expect(sentJson(ws).map((f) => f.delegationId)).toEqual(['d1']);
+        });
+
         it('sends no result for a delegation cancelled while its turn still runs', async () => {
           const { ws, pending } = await startDelegatedCall();
           delegate(ws, 'd1', 'q');

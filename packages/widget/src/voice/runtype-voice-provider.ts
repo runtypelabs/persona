@@ -904,7 +904,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       return true;
     };
     this.delegations = this.delegations.then(async () => {
-      if (generation !== this.callGeneration) return;
+      // Cancelled while queued behind another turn: never start it.
+      if (generation !== this.callGeneration || this.cancelledDelegations.has(delegationId)) return;
       const result: VoiceDelegationResult = await bridge
         .runDelegatedTurn(request)
         .catch(() => ({ status: "failed", text: "" }));
