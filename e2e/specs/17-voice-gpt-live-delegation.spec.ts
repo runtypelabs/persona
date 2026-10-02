@@ -202,6 +202,20 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   // Hang up: a clean close.
   await clickLiveMic(page);
   expect(await call.closed).toBe(1000);
+
+  // A later typed turn's history keeps the delegated request and its answer,
+  // but none of GPT-Live's captions: filler, read-back, or the undelegated
+  // follow-up utterance and its reply.
+  api.setChatStream(textTurnStream("Anything else?", "exec_after"));
+  await typeMessage(page, "One more question");
+  await expect.poll(() => api.requestsTo("chat").length).toBe(3);
+  const later = chatMessages(api.requestsTo("chat")[2]!.body);
+  expect(later.at(-1)).toMatchObject({ role: "user", text: "One more question" });
+  expect(later.filter((m) => m.role === "user" && m.text.includes(SPOKEN_QUESTION))).toHaveLength(1);
+  expect(later.some((m) => m.role === "assistant" && m.text.includes("Monday to Friday"))).toBe(true);
+  for (const caption of [FILLER, "We're open Monday", "Thanks!", "You're welcome!"]) {
+    expect(later.filter((m) => m.text.includes(caption))).toEqual([]);
+  }
 });
 
 test("real GPT-Live ordering: delegation arrives before the user transcript is final", async ({
