@@ -36,6 +36,8 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
   page,
 }, testInfo) => {
   const frames: Frame[] = [];
+  // Audio is high-volume: count every binary frame, log every 50th.
+  const audio = { in: { frames: 0, bytes: 0 }, out: { frames: 0, bytes: 0 } };
   const consoleLines: string[] = [];
   const chatRequests: unknown[] = [];
   const t0 = Date.now();
@@ -56,8 +58,10 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         } catch {
           frames.push({ at: Date.now() - t0, dir, json: { raw: event.payload } });
         }
-      } else if (frames.filter((f) => f.dir === dir && f.bytes).length % 50 === 0) {
-        frames.push({ at: Date.now() - t0, dir, bytes: event.payload.length });
+      } else {
+        audio[dir].frames += 1;
+        audio[dir].bytes += event.payload.length;
+        if (audio[dir].frames % 50 === 1) frames.push({ at: Date.now() - t0, dir, bytes: event.payload.length });
       }
     };
     ws.on("framereceived", record("in"));
@@ -160,7 +164,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
   } finally {
     await page.screenshot({ path: testInfo.outputPath("final.png"), fullPage: true }).catch(() => {});
     const fs = await import("node:fs/promises");
-    await fs.writeFile(testInfo.outputPath("frames.json"), JSON.stringify(frames, null, 2));
+    await fs.writeFile(testInfo.outputPath("frames.json"), JSON.stringify({ audio, frames }, null, 2));
     await fs.writeFile(testInfo.outputPath("console.txt"), consoleLines.join("\n"));
     await fs.writeFile(testInfo.outputPath("chat-requests.json"), JSON.stringify(chatRequests, null, 2));
     console.log(`live artifacts: ${testInfo.outputDir}`);

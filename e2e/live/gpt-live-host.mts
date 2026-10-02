@@ -100,7 +100,14 @@ function chatAnswer(userText: string): string {
 // ---- Frame log ----------------------------------------------------------------
 
 type LoggedFrame = { at: number; dir: "in" | "out"; json?: unknown; bytes?: number };
-type LoggedCall = { url: string; protocols: string[]; frames: LoggedFrame[]; closedCode?: number };
+type AudioCount = { frames: number; bytes: number };
+type LoggedCall = {
+  url: string;
+  protocols: string[];
+  frames: LoggedFrame[];
+  audio: { in: AudioCount; out: AudioCount };
+  closedCode?: number;
+};
 const calls: LoggedCall[] = [];
 const chats: unknown[] = [];
 
@@ -172,7 +179,7 @@ server.on("upgrade", (request, socket, head) => {
     (url.searchParams.get("clientCapabilities") ?? "").split(",").map((c) => c.trim()).filter(Boolean),
   );
   wss.handleUpgrade(request, socket, head, (browser) => {
-    const logged: LoggedCall = { url: url.pathname + url.search, protocols: protocols.filter((p) => p.startsWith("runtype.")), frames: [] };
+    const logged: LoggedCall = { url: url.pathname + url.search, protocols: protocols.filter((p) => p.startsWith("runtype.")), frames: [], audio: { in: { frames: 0, bytes: 0 }, out: { frames: 0, bytes: 0 } } };
     calls.push(logged);
     const log = (dir: "in" | "out", data: unknown) => {
       if (typeof data === "string") {
@@ -183,9 +190,10 @@ server.on("upgrade", (request, socket, head) => {
         }
       } else {
         const bytes = data instanceof ArrayBuffer ? data.byteLength : (data as Uint8Array).byteLength;
-        // Audio is high-volume: keep only every 50th binary frame marker.
-        const binaries = logged.frames.filter((f) => f.dir === dir && f.bytes !== undefined).length;
-        if (binaries % 50 === 0) logged.frames.push({ at: Date.now(), dir, bytes });
+        // Audio is high-volume: count every binary frame, log every 50th.
+        logged.audio[dir].frames += 1;
+        logged.audio[dir].bytes += bytes;
+        if (logged.audio[dir].frames % 50 === 1) logged.frames.push({ at: Date.now(), dir, bytes });
       }
     };
     const handler = createOpenAILiveBrowserEngineHandler(
