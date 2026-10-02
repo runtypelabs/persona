@@ -18,14 +18,27 @@ type KeyedTurn = {
   assistantId?: string;
   userFinal?: boolean;
   assistantFinal?: boolean;
+  userStartMs?: number;
+  assistantStartMs?: number;
+  /** Submitted as a chat turn: the chat pipeline renders its reply. */
+  claimed?: boolean;
 };
+
+/** Loose text match between a transcript and the delegated request text. */
+const normalize = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
 
 /**
  * Reconciles turn-keyed voice transcripts (full-duplex providers such as
  * GPT-Live) into chat bubbles: each `(turnId, role)` owns one bubble that later
  * frames replace in place, so overlapping turns stay separate and may arrive in
  * any order. No empty assistant placeholder is injected; the session's
- * `streaming` flag drives the standalone typing indicator instead.
+ * `streaming` flag drives the standalone typing indicator instead. A new bubble
+ * with a `startMs` sorts above any keyed bubble of the call that started later,
+ * so a late user transcript still renders above the reply it prompted.
+ *
+ * Cancelled output is the provider's to drop (until the server acknowledges
+ * the cancel): every reply that reaches `apply` after a stop renders, which
+ * keeps a later answer (e.g. a delegation result) visible while its audio plays.
  *
  * Ships in the lazy voice-runtime chunk: only sessions with a voice provider
  * ever construct one.
@@ -34,18 +47,19 @@ export class KeyedVoiceTranscript {
   private turns = new Map<string, KeyedTurn>();
   private latestId: string | null = null;
   private cancelled = new Set<string>();
-  // A cancel that hit a turn still waiting for its reply also drops replies
-  // keyed under a new turnId, until the next user turn starts.
-  private suppressNewReplies = false;
 
   constructor(private host: KeyedVoiceTranscriptHost) {}
 
-  apply(role: "user" | "assistant", text: string, isFinal: boolean, turnId: string): void {
+  apply(
+    role: "user" | "assistant",
+    text: string,
+    isFinal: boolean,
+    turnId: string,
+    startMs?: number,
+  ): void {
     const host = this.host;
     let turn = this.turns.get(turnId);
     if (!turn) {
-      if (role === "user") this.suppressNewReplies = false;
-      else if (this.suppressNewReplies) this.cancelled.add(turnId);
       turn = {};
       this.turns.set(turnId, turn);
       this.latestId = turnId;
@@ -59,13 +73,14 @@ export class KeyedVoiceTranscript {
       } else {
         // A user transcript that lands after its own turn's reply started still
         // renders above that reply: borrow the reply's timestamp, sort just ahead.
+        turn.userStartMs = startMs;
         const reply = turn.assistantId ? host.find(turn.assistantId) : undefined;
         turn.userId = host.inject({
           role: "user",
           content: text,
           streaming: false,
           voiceProcessing: !isFinal,
-          ...(reply && { createdAt: reply.createdAt, sequence: (reply.sequence ?? 0) - 0.5 }),
+          ...this.placeBefore(this.startedAfter(startMs) ?? reply),
         }).id;
       }
     } else if (!this.cancelled.has(turnId)) {
@@ -74,16 +89,41 @@ export class KeyedVoiceTranscript {
       if (existing) {
         host.upsert({ ...existing, content: text, streaming: !isFinal, voiceProcessing: !isFinal });
       } else if (text.trim()) {
+        turn.assistantStartMs = startMs;
         turn.assistantId = host.inject({
           role: "assistant",
           content: text,
           streaming: !isFinal,
           voiceProcessing: !isFinal,
+          ...this.placeBefore(this.startedAfter(startMs)),
         }).id;
       }
       if (isFinal && turn.assistantId) host.markSpoken(turn.assistantId);
     }
     this.sync();
+  }
+
+  /**
+   * The user bubble a delegated request came from: the newest unclaimed one
+   * whose text matches, else the newest unclaimed one. Claimed bubbles are
+   * submitted once; `null` when there is none.
+   */
+  claimUserTurn(userText: string): string | null {
+    const want = normalize(userText);
+    let pick: KeyedTurn | undefined;
+    for (const turn of [...this.turns.values()].reverse()) {
+      const bubble = turn.userId && !turn.claimed ? this.host.find(turn.userId) : undefined;
+      if (!bubble) continue;
+      pick ??= turn;
+      if (normalize(bubble.content) === want) {
+        pick = turn;
+        break;
+      }
+    }
+    if (!pick) return null;
+    // No sync: the chat turn about to start owns the streaming flag.
+    pick.claimed = true;
+    return pick.userId!;
   }
 
   /** Explicit stop: drop the rest of every in-flight reply, else the awaited one. */
@@ -93,7 +133,6 @@ export class KeyedVoiceTranscript {
       const awaiting = this.awaiting();
       if (!awaiting) return;
       targets = [awaiting];
-      this.suppressNewReplies = true;
     }
     for (const id of targets) this.cancelled.add(id);
     this.closeReplies(targets);
@@ -138,9 +177,30 @@ export class KeyedVoiceTranscript {
     }
     this.turns.clear();
     this.latestId = null;
-    this.suppressNewReplies = false;
     this.host.settle(ids);
     if (wasPending) this.host.setStreaming(false);
+  }
+
+  /** The call's earliest-starting keyed bubble that began after `startMs`. */
+  private startedAfter(startMs: number | undefined): AgentWidgetMessage | undefined {
+    if (startMs === undefined) return undefined;
+    let best: { start: number; id: string } | undefined;
+    for (const turn of this.turns.values()) {
+      for (const [id, start] of [
+        [turn.userId, turn.userStartMs],
+        [turn.assistantId, turn.assistantStartMs],
+      ] as const) {
+        if (id && start !== undefined && start > startMs && (!best || start < best.start)) {
+          best = { start, id };
+        }
+      }
+    }
+    return best && this.host.find(best.id);
+  }
+
+  /** Sort a new bubble just ahead of `next` (messages order by time, then sequence). */
+  private placeBefore(next: AgentWidgetMessage | undefined) {
+    return next && { createdAt: next.createdAt, sequence: (next.sequence ?? 0) - 0.001 };
   }
 
   private closeReplies(turnIds: string[]): void {
@@ -169,7 +229,9 @@ export class KeyedVoiceTranscript {
     const id = this.latestId;
     if (!id) return null;
     const turn = this.turns.get(id);
-    return turn?.userFinal && !turn.assistantId && !this.cancelled.has(id) ? id : null;
+    return turn?.userFinal && !turn.assistantId && !turn.claimed && !this.cancelled.has(id)
+      ? id
+      : null;
   }
 
   private pending(): boolean {
