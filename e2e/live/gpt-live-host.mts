@@ -72,7 +72,10 @@ const { createOpenAILiveBrowserEngineHandler } = (await import(
 const { buildOpenAILiveInstructions } = (await import(
   pathToFileURL(`${CORE_DIR}/packages/runtime/dist/internal/voice/call.mjs`).href
 )) as { buildOpenAILiveInstructions(source: Record<string, unknown>): string };
-const INSTRUCTIONS = buildOpenAILiveInstructions({
+// LIVE_AGENT_IDENTITY=generic passes no instructions (core's generic default), to
+// measure delegation for agents with no name or description.
+const GENERIC_IDENTITY = process.env.LIVE_AGENT_IDENTITY === "generic";
+const INSTRUCTIONS = GENERIC_IDENTITY ? undefined : buildOpenAILiveInstructions({
   name: process.env.LIVE_AGENT_NAME ?? "Juniper Bakery",
   description:
     process.env.LIVE_AGENT_DESCRIPTION ??
@@ -214,7 +217,7 @@ server.on("upgrade", (request, socket, head) => {
     };
     const handler = createOpenAILiveBrowserEngineHandler(
       match[1]!,
-      { voice: "marin", instructions: INSTRUCTIONS },
+      { voice: "marin", ...(INSTRUCTIONS ? { instructions: INSTRUCTIONS } : {}) },
       {
         connect: () =>
           new Promise((resolve, reject) => {
@@ -265,7 +268,9 @@ server.on("upgrade", (request, socket, head) => {
   });
 });
 
-server.listen(PORT, "127.0.0.1", () => console.log(`gpt-live host ready on http://127.0.0.1:${PORT}`));
+server.listen(PORT, "127.0.0.1", () =>
+  console.log(`gpt-live host ready on http://127.0.0.1:${PORT} (identity: ${GENERIC_IDENTITY ? "generic" : "agent"})`),
+);
 for (const signal of ["SIGINT", "SIGTERM"] as const)
   process.on(signal, () => {
     wss.close();

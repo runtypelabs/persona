@@ -22,7 +22,7 @@ e2e/live/make-question-wav.sh "What are your opening hours?"
 E2E_PORT=4391 ./node_modules/.bin/playwright test --config e2e/live/playwright.live.config.ts
 ```
 
-`LIVE_CHAT_DELAY_MS` mimics a real agent's latency. Without it, the answer comes back before GPT-Live speaks its filler line.
+`LIVE_AGENT_IDENTITY=generic` drops the agent name/description/tools from the GPT-Live instructions (core's generic default), for measuring delegation on thin-identity agents. `LIVE_CHAT_DELAY_MS` mimics a real agent's latency. Without it, the answer comes back before GPT-Live speaks its filler line.
 
 ## Mode B: deployed core (full route admission)
 
