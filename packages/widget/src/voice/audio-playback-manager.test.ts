@@ -190,4 +190,27 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
     m.enqueue(pcm(100));
     expect(startedAgain).toHaveBeenCalledTimes(1);
   });
+
+  it("ignores onended from sources a flush stopped, so the next reply drains on its own audio", () => {
+    const m = new AudioPlaybackManager(24000);
+    m.enqueue(pcm(100));
+    m.enqueue(pcm(100));
+    const ctx = MockAudioContext.instances[0];
+    // Browsers fire onended for stopped sources after flush(); capture the
+    // handlers as the browser would have them queued.
+    const staleEnded = ctx.sources.map((s) => s.onended);
+    m.flush();
+    expect(ctx.sources.every((s) => s.onended === null)).toBe(true);
+
+    const finished = vi.fn();
+    m.onFinished(finished);
+    m.enqueue(pcm(100)); // the next reply
+    m.markStreamEnd();
+    for (const ended of staleEnded) ended?.();
+    expect(finished).not.toHaveBeenCalled();
+    expect(m.isPlaying()).toBe(true);
+
+    ctx.sources[2].onended?.();
+    expect(finished).toHaveBeenCalledTimes(1);
+  });
 });

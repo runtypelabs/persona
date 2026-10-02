@@ -151,6 +151,9 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    */
   flush(): void {
     for (const source of this.activeSources) {
+      // A stopped source still fires `onended` later; detach it so a flushed
+      // batch can't decrement the next reply's pendingCount and drain it early.
+      source.onended = null;
       try {
         source.stop();
         source.disconnect();
@@ -277,7 +280,9 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
     source.onended = () => {
       const idx = this.activeSources.indexOf(source);
-      if (idx !== -1) this.activeSources.splice(idx, 1);
+      // Not active: removed by flush(), so it no longer counts toward a drain.
+      if (idx === -1) return;
+      this.activeSources.splice(idx, 1);
       this.pendingCount--;
       this.checkFinished();
     };
