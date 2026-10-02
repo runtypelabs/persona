@@ -155,9 +155,10 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(unprompted, "GPT-Live spoke before the visitor did").toEqual([]);
     }
     const userText = String((userFinals.find((f) => QUESTION.test(String(f.text))) ?? userFinals[0]!).text);
-    await expect(page.locator('[data-message-id][data-persona-theme-zone="user-message"]')).toHaveCount(
-      (TYPED ? 1 : 0) + 1,
-    );
+    // GPT-Live may split one spoken question into two utterances (two bubbles).
+    const userBubbles = page.locator('[data-message-id][data-persona-theme-zone="user-message"]');
+    await expect.poll(() => userBubbles.count()).toBeGreaterThanOrEqual((TYPED ? 1 : 0) + 1);
+    if (userFinals.length > 1) warn(`GPT-Live split the question: ${JSON.stringify(userFinals.map((f) => f.text))}`);
 
     if (EXPECT_SMALL_TALK) {
       // GPT-Live answers from its own identity: a final assistant reply that
