@@ -10,6 +10,8 @@ import { defineConfig, devices } from "@playwright/test";
  */
 
 const PORT = Number(process.env.E2E_PORT ?? 4317);
+// One directory per invocation, so repeated runs keep every run's artifacts.
+const runId = process.env.LIVE_RUN_ID ?? new Date().toISOString().replace(/[:.]/g, "-");
 const wav = path.resolve(process.env.LIVE_WAV ?? path.join(__dirname, ".out/question.wav"));
 
 export default defineConfig({
@@ -20,7 +22,7 @@ export default defineConfig({
   reporter: [["list"]],
   timeout: 120_000,
   expect: { timeout: 30_000 },
-  outputDir: path.join(__dirname, ".out/results"),
+  outputDir: path.join(__dirname, ".out/results", runId),
   use: {
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: "on",

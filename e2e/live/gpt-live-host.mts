@@ -64,6 +64,22 @@ const { createOpenAILiveBrowserEngineHandler } = (await import(
   };
 };
 
+// GPT-Live session instructions, built the way core's route builds them from the
+// agent row (name, description, enabled tool names). Without an identity the
+// generic default leaves "what are your opening hours?" reading as "when are
+// YOU available", and GPT-Live answers it itself ("I'm available 24/7") instead
+// of delegating: 6 of 10 live runs did so with no context frame.
+const { buildOpenAILiveInstructions } = (await import(
+  pathToFileURL(`${CORE_DIR}/packages/runtime/dist/internal/voice/call.mjs`).href
+)) as { buildOpenAILiveInstructions(source: Record<string, unknown>): string };
+const INSTRUCTIONS = buildOpenAILiveInstructions({
+  name: process.env.LIVE_AGENT_NAME ?? "Juniper Bakery",
+  description:
+    process.env.LIVE_AGENT_DESCRIPTION ??
+    "Juniper Bakery is a neighborhood bakery; the backend agent knows its opening hours, location, and menu.",
+  toolNames: ["get_opening_hours"],
+});
+
 // ---- The deterministic chat agent (LIVE_API=local) ---------------------------
 
 const HOURS_MARKDOWN =
@@ -198,7 +214,7 @@ server.on("upgrade", (request, socket, head) => {
     };
     const handler = createOpenAILiveBrowserEngineHandler(
       match[1]!,
-      { voice: "marin" },
+      { voice: "marin", instructions: INSTRUCTIONS },
       {
         connect: () =>
           new Promise((resolve, reject) => {

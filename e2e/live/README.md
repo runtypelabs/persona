@@ -1,6 +1,6 @@
 # Live GPT-Live harness (not CI)
 
-This harness runs a real Chromium with a synthesized WAV as its microphone. The audio goes through real GPT-Live (OpenAI Live via Vercel AI Gateway), and the voice model delegates the turn to the widget's chat pipeline (client delegation). The spec checks the same flow as `e2e/specs/17-voice-gpt-live-delegation.spec.ts`. It saves `frames.json` (every voice frame in both directions, with audio recorded as byte counts), `console.txt`, `chat-requests.json`, `final.png` and a trace to `e2e/live/.out/results/`.
+This harness runs a real Chromium with a synthesized WAV as its microphone. The audio goes through real GPT-Live (OpenAI Live via Vercel AI Gateway), and the voice model delegates the turn to the widget's chat pipeline (client delegation). The spec checks the same flow as `e2e/specs/17-voice-gpt-live-delegation.spec.ts`. It saves `frames.json` (every voice frame in both directions, with audio recorded as byte counts), `console.txt`, `chat-requests.json`, `final.png` and a trace to `e2e/live/.out/results/<run id>/` (`LIVE_RUN_ID`, default a timestamp).
 
 ## Mode A: local host (no deployed core)
 
