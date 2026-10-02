@@ -48,8 +48,9 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
   const frames: Frame[] = [];
   // Audio is high-volume: count every binary frame, log every 50th.
   const audio = { in: { frames: 0, bytes: 0 }, out: { frames: 0, bytes: 0 } };
-  // Speech-recognition wording is GPT-Live's, not ours: a mismatch is recorded,
-  // never a failure. Pass = delegation → result → rendered answer.
+  // Speech-recognition wording is GPT-Live's, not ours: a question mismatch is
+  // recorded, never a failure (the local host routes on keywords). The answer is
+  // ours: it must match LIVE_ANSWER, both in the result and in the rendered bubble.
   const warnings: string[] = [];
   const warn = (message: string) => {
     warnings.push(message);
@@ -203,7 +204,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(result.turnId).toBe(requested.turnId);
       expect(result.ok).toBe(true);
       expect(String(result.text).trim()).not.toBe("");
-      if (!ANSWER.test(String(result.text))) warn(`result text does not match ${ANSWER}`);
+      expect(String(result.text), "the delegated turn did not answer the question").toMatch(ANSWER);
 
       // Exactly one delegated chat submission (after the typed one), carrying
       // the spoken request once, as its LAST message, with none of GPT-Live's
@@ -228,13 +229,12 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       // The answer renders as a normal assistant message (the result's first
       // line, as rendered text: Markdown syntax stripped).
       const firstLine = String(result.text).split("\n").find((line) => line.trim())!.replace(/[*_`#>-]/g, "").trim();
-      await expect
-        .poll(async () =>
-          (await page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').allTextContents())
-            .map(normalize)
-            .some((text) => text.includes(normalize(firstLine))),
-        )
-        .toBe(true);
+      const renderedAnswer = async () =>
+        (await page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').allTextContents()).find(
+          (text) => normalize(text).includes(normalize(firstLine)),
+        );
+      await expect.poll(renderedAnswer).toBeTruthy();
+      expect(await renderedAnswer(), "the rendered answer does not match LIVE_ANSWER").toMatch(ANSWER);
 
       // GPT-Live reads it back; that read-back is folded, not a second bubble.
       await expect
@@ -293,6 +293,17 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(chatRequests).toHaveLength(typedRequests);
     }
 
+    // Split questions may add bubbles, one per distinct user utterance; a
+    // duplicate (e.g. delegation re-adding the request) must not.
+    const userTurns = new Set(
+      json("in", "transcript_update")
+        .filter((f) => f.role === "user" && f.final)
+        .map((f, index) => f.turnId ?? `untagged-${index}`),
+    );
+    expect(await userBubbles.count(), "more user bubbles than user utterances").toBeLessThanOrEqual(
+      (TYPED ? 1 : 0) + userTurns.size,
+    );
+
     // Hang up (force: the live level animation never lets the button settle).
     await page.locator("[data-persona-composer-mic]").click({ force: true });
     await expect.poll(() => voiceSocket?.isClosed() ?? false).toBe(true);
@@ -304,13 +315,16 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     // telling a GPT-Live no-show from a core hold-up. Absent against real core.
     let upstream: unknown = null;
     try {
-      const hostFrames = await fetch(VOICE_HOST.replace(/^ws/, "http") + "/frames");
+      // Bounded: a stalled host must not hold up the artifact writes below.
+      const hostFrames = await fetch(VOICE_HOST.replace(/^ws/, "http") + "/frames", {
+        signal: AbortSignal.timeout(3_000),
+      });
       if (hostFrames.ok) {
         const { calls } = (await hostFrames.json()) as { calls: Array<{ upstream?: Array<{ at: number }> }> };
         upstream = (calls.at(-1)?.upstream ?? []).map((event) => ({ ...event, at: event.at - t0 }));
       }
     } catch {
-      // Not the local host.
+      // Not the local host, or it timed out.
     }
     await fs.writeFile(
       testInfo.outputPath("frames.json"),
