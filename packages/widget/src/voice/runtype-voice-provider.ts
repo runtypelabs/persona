@@ -49,8 +49,8 @@
 // call are display-only captions, never sent to the agent as conversation; a
 // user bubble becomes conversation only when it is submitted. Separately, a
 // server that announces `session_config{contextFrames:true}` gets one
-// `context{text}` frame at call start (recent chat history plus the host's
-// `callContext`). Servers that announce neither get neither frame: an unknown
+// `context{text}` frame (chat history as of call start plus the host's
+// `callContext`), held until the visitor first speaks or delegates. Servers that announce neither get neither frame: an unknown
 // client frame type ends the call on older servers.
 
 import type {
@@ -229,7 +229,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Client delegation (see header); per-call state reset on every cleanup.
   private bridge: VoiceSessionBridge | null = null;
   private clientDelegation = false;
+  // Call-start context, built at session_config and held until the visitor
+  // first speaks (sent earlier, the voice model tends to answer it unprompted).
   private contextSent = false;
+  private pendingContext: Promise<string> | null = null;
   private delegations: Promise<void> = Promise.resolve();
   // Delegations answered ok: their spoken read-back is folded.
   private answered = new Set<string>();
@@ -658,7 +661,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         // Only a server that announces contextFrames accepts `context`.
         if (msg.contextFrames === true && !this.contextSent) {
           this.contextSent = true;
-          void this.sendCallContext(generation);
+          this.pendingContext = this.buildContextText();
         }
         break;
 
@@ -668,6 +671,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         if (!msg.turnId || (role === "assistant" && this.isCancelling())) break;
         const turnId = String(msg.turnId);
         if (role === "user") {
+          this.flushCallContext(generation);
           this.foldReadback = false;
         } else {
           // Read-back of a delegated result: core rotates the assistant id at
@@ -690,6 +694,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       }
 
       case "delegation_requested":
+        this.flushCallContext(generation);
         if (this.clientDelegation) {
           this.runDelegation(
             String(msg.turnId),
@@ -761,7 +766,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /** Send the call-start `context` frame (history + host context), if any. */
-  private async sendCallContext(generation: number): Promise<void> {
+  /**
+   * The call-start `context` text. History is read now, before any of this
+   * call's voice bubbles exist, so it never includes the utterance in progress.
+   */
+  private async buildContextText(): Promise<string> {
+    const history = this.bridge?.getHistory() ?? [];
     let extra = "";
     try {
       const source = this.config?.callContext;
@@ -769,10 +779,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     } catch {
       // A failing host callback only loses its own part of the context.
     }
-    const ws = this.ws;
-    if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
-    const text = buildCallContext(this.bridge?.getHistory() ?? [], extra);
-    if (text) ws.send(JSON.stringify({ type: "context", text }));
+    return buildCallContext(history, extra);
+  }
+
+  /** Send the held call-start context, once: when the visitor first speaks or delegates. */
+  private flushCallContext(generation: number): void {
+    const pending = this.pendingContext;
+    if (!pending) return;
+    this.pendingContext = null;
+    void pending.then((text) => {
+      const ws = this.ws;
+      if (!text || generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: "context", text }));
+    });
   }
 
   /** Run a delegated turn through the session bridge (one at a time) and answer it. */
@@ -876,6 +895,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.delegating = false;
     this.clientDelegation = false;
     this.contextSent = false;
+    this.pendingContext = null;
     this.delegations = Promise.resolve();
     this.answered.clear();
     this.foldReadback = false;

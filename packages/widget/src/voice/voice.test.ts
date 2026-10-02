@@ -800,24 +800,45 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(lastWs().url).toBe('wss://api.example.com/ws/agents/a1/voice?voiceCapabilities=full-duplex-v1');
       });
 
-      it('sends one context frame with the history and host context once confirmed', async () => {
+      it('holds the context frame until the visitor first speaks, then sends it once', async () => {
+        const history: Array<{ role: 'user' | 'assistant'; content: string }> = [
+          { role: 'user', content: 'Hi there' },
+          { role: 'assistant', content: 'Hello!\n\nHow can I help?' },
+        ];
         const { ws } = await startDelegatedCall(
           { callContext: async () => 'Visitor is on /pricing.' },
           { clientDelegation: true, contextFrames: true },
-          [
-            { role: 'user', content: 'Hi there' },
-            { role: 'assistant', content: 'Hello!\n\nHow can I help?' },
-          ],
+          history,
         );
+        expect(sentJson(ws)).toEqual([]); // nothing at call start
+        ws.triggerMessage(update('assistant', 'Hi! What can I do?', 'g1')); // a greeting doesn't release it
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+
+        // The in-progress utterance's bubble lands in the chat before the frame goes out.
+        history.push({ role: 'user', content: 'what are' });
+        ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'what are', turnId: 'u1', final: false }));
+        await flush();
         expect(sentJson(ws)).toEqual([
           {
             type: 'context',
             text: 'Conversation so far:\nUser: Hi there\nAssistant: Hello! How can I help?\n\nVisitor is on /pricing.',
           },
         ]);
-        ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in' }));
+        ws.triggerMessage(update('user', 'what are your hours', 'u1'));
+        ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in', contextFrames: true }));
+        ws.triggerMessage(update('user', 'and sundays', 'u2'));
         await flush();
         expect(sentJson(ws)).toHaveLength(1);
+      });
+
+      it('sends the held context on a delegation that comes first, ahead of its result', async () => {
+        const { ws, pending } = await startDelegatedCall({ callContext: 'On /docs.' });
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+        await flush();
+        pending[0]({ ok: true, text: 'Answer.' });
+        await flush();
+        expect(sentJson(ws).map((f) => f.type)).toEqual(['context', 'delegation_result']);
       });
 
       it('sends context on contextFrames alone, with delegation off', async () => {
@@ -827,21 +848,36 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           [{ role: 'user', content: 'Hi' }],
         );
         expect(lastWs().url).not.toContain('clientCapabilities');
+        ws.triggerMessage(update('user', 'hello', 'u1'));
+        await flush();
         expect(sentJson(ws)).toEqual([{ type: 'context', text: 'Conversation so far:\nUser: Hi\n\nOn /docs.' }]);
         ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'x', messages: [] }));
         await flush();
         expect(calls).toEqual([]);
+        expect(sentJson(ws)).toHaveLength(1);
       });
 
       it('sends no context when the server does not announce contextFrames', async () => {
         const { ws } = await startDelegatedCall({ callContext: 'On /docs.' }, { clientDelegation: true }, [
           { role: 'user', content: 'Hi' },
         ]);
+        ws.triggerMessage(update('user', 'hello', 'u1'));
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+      });
+
+      it('drops a held context when the call ends before the visitor speaks', async () => {
+        const { ws, provider } = await startDelegatedCall({ callContext: 'On /docs.' });
+        await provider.stopListening();
+        ws.triggerMessage(update('user', 'hello', 'u1'));
+        await flush();
         expect(sentJson(ws)).toEqual([]);
       });
 
       it('skips the context frame when there is nothing to say', async () => {
         const { ws } = await startDelegatedCall();
+        ws.triggerMessage(update('user', 'hello', 'u1'));
+        await flush();
         expect(sentJson(ws)).toEqual([]);
       });
 
