@@ -918,6 +918,26 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(transcripts.map((t) => t[1])).toEqual(['Let me check.', 'Let me check. Okay.', 'thanks', 'You are welcome.']);
       });
 
+      it('keeps a late final for the pre-completion filler id and folds the rotated read-back', async () => {
+        const { ws, transcripts, pending } = await startDelegatedCall();
+        const partial = (role: string, text: string, turnId: string, final: boolean) =>
+          JSON.stringify({ type: 'transcript_update', role, text, turnId, final });
+        ws.triggerMessage(partial('assistant', " Yeah, I'll", 'f1', false));
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_started', turnId: 'd1' }));
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+        await flush();
+        pending[0]({ ok: true, text: 'We open at nine.' });
+        await flush();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1', speak: true, text: 'We open at nine.' }));
+        ws.triggerMessage(partial('assistant', " Yeah, I'll check.", 'f1', true)); // late final, old id
+        ws.triggerMessage(partial('assistant', ' We open', 'r1', false)); // rotated id: read-back
+        ws.triggerMessage(partial('assistant', ' We open at nine.', 'r1', true));
+        expect(transcripts.map((t) => [t[1], t[2]])).toEqual([
+          [" Yeah, I'll", false],
+          [" Yeah, I'll check.", true],
+        ]);
+      });
+
       it('does not fold after a failed delegation', async () => {
         const { ws, transcripts, pending } = await startDelegatedCall();
         ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));

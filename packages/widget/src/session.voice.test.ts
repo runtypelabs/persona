@@ -558,6 +558,38 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     ]);
   });
 
+  it('trims GPT-Live\'s leading space from bubbles and the submitted request', async () => {
+    h.state.transcriptCb!('user', ' What are your opening hours', true, { turnId: 'u1', caption: true });
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: ' What are your opening hours' });
+    const user = dispatch.mock.calls[0][0].messages.find((m) => m.role === 'user')!;
+    expect(user.content).toBe('What are your opening hours');
+    expect(user.llmContent).toBeUndefined();
+  });
+
+  it('keeps a filler finalized after delegation completes, beside the rendered result', async () => {
+    // Core rotates the assistant transcript id at delegation_completed: the
+    // filler's late final keeps its old id (and its bubble), while the
+    // read-back under the new id is folded by the provider before it gets here.
+    const caption = (role: 'user' | 'assistant', text: string, isFinal: boolean, turnId: string) =>
+      h.state.transcriptCb!(role, text, isFinal, { turnId, caption: true });
+    caption('user', 'What are your opening hours', true, 'u1');
+    caption('assistant', "Yeah, I'll", false, 'f1');
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'We open at nine.'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'What are your opening hours' });
+    caption('assistant', "Yeah, I'll check.", true, 'f1'); // late final, after delegation_completed
+
+    const filler = messages.find((m) => m.content === "Yeah, I'll check.")!;
+    expect(filler).toMatchObject({ streaming: false, voiceProcessing: false, voiceCaption: true });
+    expect(view()).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'What are your opening hours'],
+      ['assistant', "Yeah, I'll check."],
+      ['assistant', 'We open at nine.'],
+    ]);
+    expect(session.isStreaming()).toBe(false);
+  });
+
   it('ends the request on the submitted bubble even when a typed turn finished after it', async () => {
     drive('user', 'voice question', true, 'u1');
     dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Typed answer.', 'assistant-typed'));

@@ -59,6 +59,8 @@ export class KeyedVoiceTranscript {
     caption?: boolean,
   ): void {
     const host = this.host;
+    // Speech-to-speech transcripts can carry a leading space (" What are…").
+    text = text.trim();
     let turn = this.turns.get(turnId);
     if (!turn) {
       turn = {};
@@ -90,7 +92,7 @@ export class KeyedVoiceTranscript {
       const existing = turn.assistantId ? host.find(turn.assistantId) : undefined;
       if (existing) {
         host.upsert({ ...existing, content: text, streaming: !isFinal, voiceProcessing: !isFinal });
-      } else if (text.trim()) {
+      } else if (text) {
         turn.assistantStartMs = startMs;
         turn.assistantId = host.inject({
           role: "assistant",
