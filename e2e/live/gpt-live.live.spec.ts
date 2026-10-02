@@ -208,6 +208,33 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       for (const spokenReadback of readback) {
         expect(bubbles.map(normalize)).not.toContain(spokenReadback);
       }
+      // Amendment 2: only the FIRST new assistant turnId after completion is
+      // the read-back. Any later, separate utterance (a follow-up) renders.
+      const seenBefore = new Set(
+        frames.filter((f) => f.at <= completedAt && f.json?.type === "transcript_update").map((f) => f.json!.turnId),
+      );
+      const newIds = [
+        ...new Set(
+          frames
+            .filter((f) => f.at > completedAt && f.json?.type === "transcript_update" && f.json.role === "assistant")
+            .map((f) => f.json!.turnId)
+            .filter((id) => !seenBefore.has(id)),
+        ),
+      ];
+      const followUps = newIds.slice(1).flatMap((id) => {
+        const last = frames.filter((f) => f.json?.turnId === id && f.json?.role === "assistant").at(-1);
+        return last && String(last.json!.text).trim() ? [normalize(String(last.json!.text))] : [];
+      });
+      testInfo.annotations.push({ type: "follow-ups", description: JSON.stringify(followUps) });
+      for (const followUp of followUps) {
+        await expect
+          .poll(async () =>
+            (await page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').allTextContents())
+              .map(normalize)
+              .some((text) => text.includes(followUp)),
+          )
+          .toBe(true);
+      }
     } else {
       // Server-side delegation: the spoken reply is the rendered answer.
       await expect

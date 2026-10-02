@@ -322,6 +322,29 @@ test("delegation_requested.userTurnId claims that exact bubble, even when the te
   expect(sent.filter((m) => m.text.includes("Also do you deliver"))).toEqual([]);
 });
 
+test("userTurnId before its transcript: the bubble is created from userText and filled in place", async ({
+  page,
+  context,
+}) => {
+  const api = await installFakeHistoryApi(context);
+  await openVoicePage(page, { voiceHost: voice.host });
+  api.setChatStream(textTurnStream(RESULT_MARKDOWN, "exec_early"));
+  const call = await startCall(page);
+
+  // The request lands before ANY transcript for its utterance.
+  call.send({ type: "delegation_started", turnId: "dlg_e" });
+  call.send({ type: "delegation_requested", turnId: "dlg_e", userTurnId: "in_e", userText: " What are your opening hours", messages: [] });
+  await expect(page.locator(voiceSel.userBubble).filter({ hasText: "What are your opening hours" })).toHaveCount(1);
+  await call.utterance({ role: "user", turnId: "in_e", text: " What are your opening hours?", startMs: 2000 });
+  await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_e");
+
+  await expect(page.locator(voiceSel.userBubble)).toHaveCount(1);
+  await expect.poll(() => api.requestsTo("chat").length).toBe(1);
+  const sent = chatMessages(api.requestsTo("chat")[0]!.body);
+  expect(sent.filter((m) => m.role === "user")).toHaveLength(1);
+  expect(sent.at(-1)?.role).toBe("user");
+});
+
 test("bubbles order by startMs: a late user transcript renders above the reply it prompted", async ({
   page,
   context,
