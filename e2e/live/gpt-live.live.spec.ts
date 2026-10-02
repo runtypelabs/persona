@@ -140,6 +140,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(messages.filter((m) => normalize(m.text).includes(spoken))).toHaveLength(1);
       expect(messages.at(-1)?.role).toBe("user");
       expect(normalize(messages.at(-1)!.text)).toContain(spoken);
+      expect(messages.at(-1)!.text).toBe(messages.at(-1)!.text.trim());
       const captions = json("in", "transcript_update")
         .filter((f) => f.role === "assistant" && String(f.text).trim())
         .map((f) => normalize(String(f.text)));

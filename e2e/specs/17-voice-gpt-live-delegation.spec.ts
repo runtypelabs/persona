@@ -258,12 +258,66 @@ test("real GPT-Live ordering: delegation arrives before the user transcript is f
   const sent = chatMessages(api.requestsTo("chat")[0]!.body);
   const asked = sent.filter((m) => m.role === "user" && m.text.includes("What are your opening hours"));
   expect(asked).toHaveLength(1);
-  expect(sent.at(-1)).toMatchObject({ role: "user" });
-  expect(sent.at(-1)!.text).toContain("What are your opening hours");
+  // GPT-Live's leading space is trimmed before the text reaches the agent.
+  expect(sent.at(-1)).toEqual({ role: "user", text: "What are your opening hours" });
   expect(sent.filter((m) => m.text.includes("find out"))).toEqual([]);
   await expect(page.locator(voiceSel.userBubble)).toHaveCount(1);
   await expect(page.locator(voiceSel.userBubble)).toHaveText("What are your opening hours");
   await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Opening hours" })).toHaveCount(1);
+});
+
+test("read-back fold covers only the first new assistant turn after completion (Amendment 2)", async ({
+  page,
+  context,
+}) => {
+  // Core rotates the assistant transcript id at delegation_completed, so a
+  // filler finalized after completion keeps its own id and bubble; the FIRST
+  // new id after completion is the read-back; anything after that renders.
+  const api = await installFakeHistoryApi(context);
+  await openVoicePage(page, { voiceHost: voice.host });
+  api.setChatStream(textTurnStream(RESULT_MARKDOWN, "exec_fold"));
+  const call = await startCall(page);
+
+  await call.utterance({ role: "user", turnId: "in_1", text: SPOKEN_QUESTION, startMs: 1000 });
+  call.send({ type: "delegation_started", turnId: "dlg_1" });
+  call.send({ type: "transcript_update", role: "assistant", text: "Sure, let me", turnId: "out_filler", final: false, startMs: 3000, endMs: 3500 });
+  call.send({ type: "delegation_requested", turnId: "dlg_1", userText: SPOKEN_QUESTION, messages: [] });
+  await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_1");
+  call.send({ type: "delegation_completed", turnId: "dlg_1", speak: true, text: RESULT_SPEECH });
+  // The filler finishes after completion under its original id.
+  call.send({ type: "transcript_update", role: "assistant", text: FILLER, turnId: "out_filler", final: true, startMs: 3000, endMs: 4200 });
+  await call.utterance({ role: "assistant", turnId: "out_readback", text: READBACK, startMs: 5000 });
+  await call.utterance({ role: "assistant", turnId: "out_more", text: "Anything else I can help with?", startMs: 9000 });
+
+  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Anything else I can help with?" })).toHaveCount(1);
+  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: FILLER })).toHaveCount(1);
+  await expect(page.locator(voiceSel.bubble).filter({ hasText: "We're open Monday" })).toHaveCount(0);
+  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Opening hours" })).toHaveCount(1);
+});
+
+// Amendment 2 `userTurnId`: neither core (merged 7cfe92a5) nor Persona
+// (d7e5dbac) implements it yet. Unskip when the client claims by id.
+test.fixme("delegation_requested.userTurnId claims that exact bubble, even when the text differs", async ({
+  page,
+  context,
+}) => {
+  const api = await installFakeHistoryApi(context);
+  await openVoicePage(page, { voiceHost: voice.host });
+  api.setChatStream(textTurnStream(RESULT_MARKDOWN, "exec_claim"));
+  const call = await startCall(page);
+
+  await call.utterance({ role: "user", turnId: "in_a", text: "What are your opening hours", startMs: 1000 });
+  await call.utterance({ role: "user", turnId: "in_b", text: "Also do you deliver", startMs: 4000 });
+  // userText is the engine's (differently punctuated/cased) attribution of in_a.
+  call.send({ type: "delegation_requested", turnId: "dlg_a", userTurnId: "in_a", userText: "what are your OPENING hours??", messages: [] });
+  await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_a");
+
+  await expect.poll(() => api.requestsTo("chat").length).toBe(1);
+  const sent = chatMessages(api.requestsTo("chat")[0]!.body);
+  expect(sent.at(-1)?.role).toBe("user");
+  await expect(page.locator(voiceSel.userBubble)).toHaveCount(2);
+  // in_a was submitted (no longer a caption); in_b stays a display-only caption.
+  expect(sent.filter((m) => m.text.includes("Also do you deliver"))).toEqual([]);
 });
 
 test("bubbles order by startMs: a late user transcript renders above the reply it prompted", async ({
