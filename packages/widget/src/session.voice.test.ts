@@ -4,7 +4,13 @@
 // mock the voice factory to a fake provider and drive its onTranscript/onMetrics
 // callbacks to verify how session.setupVoice() feeds the chat thread.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import type { AgentWidgetMessage, VoiceMetrics } from './types';
+import type {
+  AgentWidgetEvent,
+  AgentWidgetMessage,
+  VoiceMetrics,
+  VoiceSessionBridge,
+  VoiceTranscriptMetadata,
+} from './types';
 
 // vi.mock is hoisted above module init, so the shared fake must be hoisted too.
 const h = vi.hoisted(() => {
@@ -14,14 +20,15 @@ const h = vi.hoisted(() => {
           role: 'user' | 'assistant',
           text: string,
           isFinal: boolean,
-          metadata?: { turnId?: string },
+          metadata?: VoiceTranscriptMetadata,
         ) => void)
       | null;
     metricsCb: ((m: VoiceMetrics) => void) | null;
     statusCb: ((s: string) => void) | null;
     errorCb: ((e: Error) => void) | null;
+    bridge: VoiceSessionBridge | null;
     prewarms: number;
-  } = { transcriptCb: null, metricsCb: null, statusCb: null, errorCb: null, prewarms: 0 };
+  } = { transcriptCb: null, metricsCb: null, statusCb: null, errorCb: null, bridge: null, prewarms: 0 };
 
   const fakeProvider = {
     type: 'runtype' as const,
@@ -46,6 +53,9 @@ const h = vi.hoisted(() => {
     prewarm: () => {
       state.prewarms += 1;
     },
+    setSessionBridge: (bridge: VoiceSessionBridge) => {
+      state.bridge = bridge;
+    },
   };
 
   return { state, fakeProvider };
@@ -62,10 +72,12 @@ vi.mock('./voice-runtime-loader', () => ({
       createBestAvailableVoiceProvider: () => h.fakeProvider,
       isVoiceSupported: () => true,
       KeyedVoiceTranscript,
+      createVoiceSessionBridge,
     }),
 }));
 
 import { KeyedVoiceTranscript } from './voice/keyed-voice-transcript';
+import { createVoiceSessionBridge } from './voice/voice-delegation';
 
 import { AgentWidgetSession } from './session';
 import { setRuntypeTtsLoader } from './voice/runtype-tts-loader';
@@ -311,17 +323,37 @@ describe('AgentWidgetSession - turn-keyed (full-duplex) voice transcripts', () =
     ]);
   });
 
-  it('stopping while a turn awaits its reply drops that reply until the next user turn', () => {
+  it('stopping while a turn awaits its reply still renders a later reply under a new turnId', () => {
+    // The provider drops the cancelled reply until the server acknowledges the
+    // stop; anything after that (e.g. a delegation result the stop didn't
+    // cancel) is audible, so it must get a bubble.
     drive('user', 'old question', true, 'u1');
     session.stopVoicePlayback();
     expect(streaming).toBe(false);
-    drive('assistant', 'cancelled answer', true, 'a1');
-    drive('user', 'new question', true, 'u2');
-    drive('assistant', 'new answer', true, 'a2');
+    drive('assistant', 'The answer you asked for.', true, 'a1');
     expect(view()).toEqual([
       ['user', 'old question'],
-      ['user', 'new question'],
-      ['assistant', 'new answer'],
+      ['assistant', 'The answer you asked for.'],
+    ]);
+    expect(spoken(byContent('The answer you asked for.').id)).toBe(true);
+  });
+
+  it('orders a late-arriving utterance by its startMs among the call\'s bubbles', () => {
+    const at = (role: 'user' | 'assistant', text: string, turnId: string, startMs?: number) =>
+      h.state.transcriptCb!(role, text, true, { turnId, ...(startMs !== undefined && { startMs }) });
+    at('user', 'first', 'u1', 0);
+    at('assistant', 'reply one', 'a1', 2000);
+    at('assistant', 'reply two', 'a2', 5000);
+    at('user', 'spoke at one second', 'u2', 1000); // transcribed late
+    at('user', 'spoke at four seconds', 'u3', 4000);
+    at('user', 'no timestamp', 'u4');
+    expect(view()).toEqual([
+      ['user', 'first'],
+      ['user', 'spoke at one second'],
+      ['assistant', 'reply one'],
+      ['user', 'spoke at four seconds'],
+      ['assistant', 'reply two'],
+      ['user', 'no timestamp'],
     ]);
   });
 
@@ -379,6 +411,203 @@ describe('AgentWidgetSession - turn-keyed (full-duplex) voice transcripts', () =
       ['user', 'hi', false],
       ['assistant', '', true], // legacy placeholder is still injected
     ]);
+  });
+});
+
+describe('AgentWidgetSession - voice client delegation bridge', () => {
+  type Dispatch = (
+    options: { messages: AgentWidgetMessage[]; signal?: AbortSignal },
+    onEvent: (event: AgentWidgetEvent) => void,
+  ) => Promise<void>;
+
+  let session: AgentWidgetSession;
+  let messages: AgentWidgetMessage[] = [];
+  let dispatch: ReturnType<typeof vi.fn<Dispatch>>;
+
+  const drive = (role: 'user' | 'assistant', text: string, isFinal: boolean, turnId: string) =>
+    h.state.transcriptCb!(role, text, isFinal, { turnId });
+  const view = () => messages.map((m) => [m.role, m.content]);
+  const spoken = (id: string) =>
+    (session as unknown as { ttsSpokenMessageIds: Set<string> }).ttsSpokenMessageIds.has(id);
+  const reply = (onEvent: (event: AgentWidgetEvent) => void, text: string, id = 'assistant-r1') => {
+    const base = { id, role: 'assistant' as const, createdAt: new Date().toISOString() };
+    onEvent({ type: 'status', status: 'connecting' });
+    onEvent({ type: 'message', message: { ...base, content: text.slice(0, 4), streaming: true } });
+    onEvent({ type: 'message', message: { ...base, content: text, streaming: false } });
+    onEvent({ type: 'status', status: 'idle' });
+  };
+
+  beforeEach(async () => {
+    h.state.transcriptCb = null;
+    h.state.bridge = null;
+    messages = [];
+    session = new AgentWidgetSession(
+      {
+        apiUrl: 'http://localhost:8000',
+        initialMessages: [
+          { id: 'm0', role: 'assistant', content: 'Welcome! How can I help?', createdAt: '2026-01-01T00:00:00.000Z' },
+        ],
+        voiceRecognition: {
+          enabled: true,
+          provider: { type: 'runtype', runtype: { agentId: 'a1' } },
+        },
+      },
+      {
+        onMessagesChanged: (m) => {
+          messages = m;
+        },
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: () => {},
+      },
+    );
+    dispatch = vi.fn<Dispatch>();
+    (session as unknown as { client: { dispatch: Dispatch } }).client.dispatch = dispatch;
+    session.setupVoice();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  it('hands the provider a bridge whose history is the visible settled messages', () => {
+    drive('user', 'still talk', false, 'u1'); // interim: not part of the context
+    expect(h.state.bridge!.getHistory()).toEqual([
+      { role: 'assistant', content: 'Welcome! How can I help?' },
+    ]);
+  });
+
+  it('submits the transcript bubble as the user message once and answers with the reply', async () => {
+    drive('user', 'whats the weather in paris', true, 'u1');
+    drive('assistant', 'Let me check that.', true, 'f1'); // filler stays visible
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'It is **sunny** in Paris.'));
+
+    const result = await h.state.bridge!.runDelegatedTurn({
+      turnId: 'd1',
+      userText: "What's the weather in Paris?",
+    });
+
+    expect(result).toEqual({ ok: true, text: 'It is **sunny** in Paris.' });
+    const sent = dispatch.mock.calls[0][0].messages;
+    const userTurns = sent.filter((m) => m.role === 'user');
+    expect(userTurns).toHaveLength(1);
+    expect(userTurns[0]).toMatchObject({
+      content: 'whats the weather in paris',
+      llmContent: "What's the weather in Paris?",
+      viaVoice: true,
+    });
+    expect(view()).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'whats the weather in paris'],
+      ['assistant', 'Let me check that.'],
+      ['assistant', 'It is **sunny** in Paris.'],
+    ]);
+    expect(spoken('assistant-r1')).toBe(true);
+    expect(session.isStreaming()).toBe(false);
+  });
+
+  it('keeps the transcript text as-is when it matches the request', async () => {
+    drive('user', 'Book a table.', true, 'u1');
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Booked.'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'Book a table.' });
+    const user = dispatch.mock.calls[0][0].messages.find((m) => m.role === 'user')!;
+    expect(user.content).toBe('Book a table.');
+    expect(user.llmContent).toBeUndefined();
+  });
+
+  it('appends a user message when no transcript bubble is available', async () => {
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
+    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'Turn on dark mode' });
+    expect(result).toEqual({ ok: true, text: 'Done.' });
+    expect(view()).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'Turn on dark mode'],
+      ['assistant', 'Done.'],
+    ]);
+    expect(messages[1].viaVoice).toBe(true);
+  });
+
+  it('answers ok:false when the turn errors', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    drive('user', 'do the thing', true, 'u1');
+    dispatch.mockRejectedValue(new Error('upstream exploded'));
+    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'do the thing' });
+    consoleError.mockRestore();
+    expect(result.ok).toBe(false);
+    // The visible user message is still exactly the transcript bubble.
+    expect(messages.filter((m) => m.role === 'user')).toHaveLength(1);
+  });
+
+  it('answers ok:false when the visitor stops the turn', async () => {
+    drive('user', 'long task', true, 'u1');
+    dispatch.mockImplementation(
+      (options) =>
+        new Promise((_resolve, reject) => {
+          options.signal?.addEventListener('abort', () =>
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
+          );
+        }),
+    );
+    const pending = h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'long task' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    session.cancel();
+    expect(await pending).toEqual({ ok: false, text: '' });
+  });
+
+  it('answers with a pointer to the chat when the turn stops for an approval', async () => {
+    drive('user', 'delete my account', true, 'u1');
+    dispatch.mockImplementation(async (_options, onEvent) => {
+      const createdAt = new Date().toISOString();
+      onEvent({ type: 'status', status: 'connecting' });
+      onEvent({ type: 'message', message: { id: 'r1', role: 'assistant', content: 'I can do that.', createdAt } });
+      onEvent({
+        type: 'message',
+        message: {
+          id: 'ap1',
+          role: 'assistant',
+          content: '',
+          createdAt,
+          variant: 'approval',
+          approval: {
+            id: 'ap1',
+            status: 'pending',
+            agentId: 'a1',
+            executionId: 'e1',
+            toolName: 'delete_account',
+            description: 'Delete the account',
+          },
+        },
+      });
+      onEvent({ type: 'status', status: 'idle' });
+    });
+    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'delete my account' });
+    expect(result).toEqual({
+      ok: true,
+      text: 'I can do that.\n\nI need your answer in the chat before I can continue.',
+    });
+  });
+
+  it('waits for a chat turn already in flight instead of aborting it', async () => {
+    let finishTyped!: () => void;
+    dispatch.mockImplementationOnce(
+      (_options, onEvent) =>
+        new Promise<void>((resolve) => {
+          finishTyped = () => {
+            reply(onEvent, 'Typed answer.', 'assistant-typed');
+            resolve();
+          };
+        }),
+    );
+    dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Voice answer.'));
+    const typed = session.sendMessage('typed question');
+    drive('user', 'voice question', true, 'u1');
+    const delegated = h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'voice question' });
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(dispatch).toHaveBeenCalledTimes(1);
+
+    finishTyped();
+    await typed;
+    expect(await delegated).toEqual({ ok: true, text: 'Voice answer.' });
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch.mock.calls[0][0].signal?.aborted).toBe(false);
+    expect(messages.find((m) => m.id === 'assistant-typed')?.content).toBe('Typed answer.');
   });
 });
 

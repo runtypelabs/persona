@@ -35,6 +35,20 @@
 // socket idles (no call) until `startListening()` sends `{"type":"start"}`; if
 // it negotiates plain `runtype.bearer`, it ignored attach and the call is
 // already live, so `startListening()` adopts it as is.
+//
+// Client delegation (full duplex, when the session supplied a bridge and
+// `clientDelegation` isn't false): the socket also declares
+// `clientCapabilities=client-delegation`. A server that accepts it confirms
+// with `session_config{clientDelegation:true}` and then sends
+// `delegation_requested{turnId,userText}` instead of running the agent turn
+// itself; the bridge runs it through the widget's chat pipeline (one at a
+// time) and the provider answers `delegation_result{turnId,text,ok}`. The voice
+// model's spoken read-back of a successful result (assistant utterances that
+// start after its `delegation_completed`, until the next user utterance) is
+// folded: the rendered chat message already shows it. Such a server also gets
+// one `context{text}` frame at call start (recent chat history plus the host's
+// `callContext`). Servers that don't confirm get neither frame: an unknown
+// client frame type ends the call on older servers.
 
 import type {
   VoiceProvider,
@@ -43,6 +57,8 @@ import type {
   VoiceConfig,
   VoiceMetrics,
   VoicePlaybackEngine,
+  VoiceSessionBridge,
+  VoiceTranscriptMetadata,
 } from "../types";
 import { AudioPlaybackManager } from "./audio-playback-manager";
 
@@ -91,14 +107,49 @@ const CONTINUOUS_DRAIN_GRACE_MS = 300;
  * is accepted again, so a lost acknowledgement can't mute the call for good.
  */
 const CANCEL_ACK_TIMEOUT_MS = 2000;
+const CLIENT_DELEGATION_CAPABILITY = "client-delegation";
+/** Call-start context frame: total cap, host share, history window, per-message cap. */
+const CONTEXT_MAX_CHARS = 8000;
+const CONTEXT_HOST_MAX_CHARS = 4000;
+const CONTEXT_MESSAGES = 12;
+const CONTEXT_MESSAGE_MAX_CHARS = 2000;
 
-type TranscriptMetadata = { turnId?: string };
 type TranscriptCallback = (
   role: "user" | "assistant",
   text: string,
   isFinal: boolean,
-  metadata?: TranscriptMetadata,
+  metadata?: VoiceTranscriptMetadata,
 ) => void;
+
+/**
+ * The call-start `context` text: "Conversation so far:" plus the last
+ * {@link CONTEXT_MESSAGES} messages (newest kept when over budget), then the
+ * host's extra context (at most {@link CONTEXT_HOST_MAX_CHARS}, so history
+ * always fits). Capped at {@link CONTEXT_MAX_CHARS}; "" when empty.
+ */
+export function buildCallContext(
+  history: Array<{ role: "user" | "assistant"; content: string }>,
+  extra: string,
+): string {
+  const header = "Conversation so far:";
+  const tail = extra.slice(0, CONTEXT_HOST_MAX_CHARS).trim();
+  let budget = CONTEXT_MAX_CHARS - (tail ? tail.length + 2 : 0) - header.length;
+  const lines: string[] = [];
+  for (const message of history.slice(-CONTEXT_MESSAGES).reverse()) {
+    let text = message.content.replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    if (text.length > CONTEXT_MESSAGE_MAX_CHARS) {
+      text = `${text.slice(0, CONTEXT_MESSAGE_MAX_CHARS - 1)}…`;
+    }
+    const line = `${message.role === "user" ? "User" : "Assistant"}: ${text}`;
+    if (line.length + 1 > budget) break;
+    budget -= line.length + 1;
+    lines.unshift(line);
+  }
+  const parts = lines.length > 0 ? [`${header}\n${lines.join("\n")}`] : [];
+  if (tail) parts.push(tail);
+  return parts.join("\n\n");
+}
 
 /**
  * Strip the canonical 44-byte WAV header (if present) and return the raw PCM16
@@ -172,6 +223,15 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Engine `onFinished` callbacks are one-shot (cleared on fire and on flush),
   // so the provider re-registers before each reply that may need it.
   private finishedArmed = false;
+  // Client delegation (see header); per-call state reset on every cleanup.
+  private bridge: VoiceSessionBridge | null = null;
+  private clientDelegation = false;
+  private delegations: Promise<void> = Promise.resolve();
+  // Delegations answered ok: their spoken read-back is folded.
+  private answered = new Set<string>();
+  private foldReadback = false;
+  private assistantTurns = new Set<string>();
+  private foldedTurns = new Set<string>();
 
   private resultCallbacks: ((result: VoiceResult) => void)[] = [];
   private errorCallbacks: ((error: Error) => void)[] = [];
@@ -185,6 +245,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   /** No-op: the WS session opens lazily in `startListening` (the "call"). */
   async connect(): Promise<void> {}
+
+  setSessionBridge(bridge: VoiceSessionBridge): void {
+    this.bridge = bridge;
+  }
 
   /**
    * Warm the voice path ahead of the click. Fire-and-forget and throttled to
@@ -337,6 +401,13 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private voiceSocketUrl(host: string, agentId: string, extra?: URLSearchParams): string {
     const params = new URLSearchParams({ voiceCapabilities: FULL_DUPLEX_CAPABILITY });
     extra?.forEach((value, key) => params.set(key, value));
+    if (this.bridge && this.config?.clientDelegation !== false) {
+      const declared = params.get("clientCapabilities");
+      params.set(
+        "clientCapabilities",
+        declared ? `${declared},${CLIENT_DELEGATION_CAPABILITY}` : CLIENT_DELEGATION_CAPABILITY,
+      );
+    }
     return `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice?${params}`;
   }
 
@@ -577,6 +648,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         if (msg.speechMode) {
           this.speechToSpeech = msg.speechMode === "speech_to_speech";
           this.playback?.setContinuousMode?.(this.speechToSpeech);
+          this.clientDelegation =
+            this.speechToSpeech && msg.clientDelegation === true && !!this.bridge;
+          if (this.clientDelegation) void this.sendCallContext(generation);
         }
         break;
 
@@ -584,14 +658,36 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         const role = msg.role === "assistant" ? "assistant" : "user";
         // A reply the client cancelled keeps streaming until the server clears it.
         if (!msg.turnId || (role === "assistant" && this.isCancelling())) break;
+        const turnId = String(msg.turnId);
+        if (role === "user") {
+          this.foldReadback = false;
+        } else {
+          // Read-back of a delegated result: the chat already renders it.
+          if (this.foldReadback && !this.assistantTurns.has(turnId)) this.foldedTurns.add(turnId);
+          this.assistantTurns.add(turnId);
+          if (this.foldedTurns.has(turnId)) break;
+        }
         this.emitTranscript(role, msg.text ?? "", msg.final === true, {
-          turnId: String(msg.turnId),
+          turnId,
+          ...(typeof msg.startMs === "number" && { startMs: msg.startMs }),
+          ...(typeof msg.endMs === "number" && { endMs: msg.endMs }),
         });
         break;
       }
 
+      case "delegation_requested":
+        if (this.clientDelegation) this.runDelegation(String(msg.turnId), String(msg.userText ?? ""), generation);
+        break;
+
       case "delegation_started":
       case "delegation_completed":
+        if (
+          msg.type === "delegation_completed" &&
+          msg.speak !== false &&
+          this.answered.has(String(msg.turnId))
+        ) {
+          this.foldReadback = true;
+        }
         this.delegating = msg.type === "delegation_started";
         if (!this.isSpeaking && !this.isCancelling()) {
           this.emitStatus(this.delegating ? "processing" : "listening");
@@ -641,6 +737,36 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         this.emitStatus("error");
         break;
     }
+  }
+
+  /** Send the call-start `context` frame (history + host context), if any. */
+  private async sendCallContext(generation: number): Promise<void> {
+    let extra = "";
+    try {
+      const source = this.config?.callContext;
+      extra = String((typeof source === "function" ? await source() : source) ?? "");
+    } catch {
+      // A failing host callback only loses its own part of the context.
+    }
+    const ws = this.ws;
+    if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
+    const text = buildCallContext(this.bridge?.getHistory() ?? [], extra);
+    if (text) ws.send(JSON.stringify({ type: "context", text }));
+  }
+
+  /** Run a delegated turn through the session bridge (one at a time) and answer it. */
+  private runDelegation(turnId: string, userText: string, generation: number): void {
+    const bridge = this.bridge!;
+    this.delegations = this.delegations.then(async () => {
+      if (generation !== this.callGeneration) return;
+      const result = await bridge
+        .runDelegatedTurn({ turnId, userText })
+        .catch(() => ({ ok: false, text: "" }));
+      const ws = this.ws;
+      if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
+      if (result.ok) this.answered.add(turnId);
+      ws.send(JSON.stringify({ type: "delegation_result", turnId, text: result.text, ok: result.ok }));
+    });
   }
 
   private handleAudioFrame(buf: ArrayBuffer, generation: number): void {
@@ -722,6 +848,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.releaseAttached();
     this.speechToSpeech = false;
     this.delegating = false;
+    this.clientDelegation = false;
+    this.delegations = Promise.resolve();
+    this.answered.clear();
+    this.foldReadback = false;
+    this.assistantTurns.clear();
+    this.foldedTurns.clear();
     this.finishedArmed = false;
     this.cancelledUntil = 0;
     this.playbackEndsAt = 0;
@@ -793,7 +925,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     role: "user" | "assistant",
     text: string,
     isFinal: boolean,
-    metadata?: TranscriptMetadata,
+    metadata?: VoiceTranscriptMetadata,
   ): void {
     this.transcriptCallbacks.forEach((cb) => cb(role, text, isFinal, metadata));
   }

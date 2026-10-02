@@ -4766,6 +4766,28 @@ export type AgentWidgetVoiceRecognitionConfig = {
        * @default 30000
        */
       attachIdleMs?: number;
+      /**
+       * Full-duplex (speech-to-speech, e.g. GPT-Live) calls: run the turns the
+       * voice model hands off to the agent through this widget's normal chat
+       * pipeline. The spoken request becomes the user message, and the answer
+       * renders as a regular assistant message (streaming, tool and approval
+       * UI, WebMCP page tools, persistence) that the voice model then reads
+       * aloud. Only takes effect when the server supports it (it confirms in
+       * `session_config`); otherwise the agent turn runs on the server and its
+       * spoken reply is transcribed, as before. Set `false` to always keep the
+       * agent turn on the server.
+       * @default true
+       */
+      clientDelegation?: boolean;
+      /**
+       * Full-duplex calls: extra context for the voice model, sent once when
+       * the call starts, after the recent chat history (for example the page
+       * the visitor is on). A function is called at call start and may be
+       * async. This text is capped at 4000 characters and the whole frame
+       * (history included) at 8000. Sent only when the server confirms client
+       * delegation, so it needs `clientDelegation` on.
+       */
+      callContext?: string | (() => string | Promise<string>);
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
       pauseDuration?: number;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5084,6 +5106,10 @@ export type VoiceConfig = {
     prewarmMode?: 'request' | 'attach';
     /** See `voiceRecognition.provider.runtype.attachIdleMs`. @default 30000 */
     attachIdleMs?: number;
+    /** See `voiceRecognition.provider.runtype.clientDelegation`. @default true */
+    clientDelegation?: boolean;
+    /** See `voiceRecognition.provider.runtype.callContext`. */
+    callContext?: string | (() => string | Promise<string>);
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
     pauseDuration?: number;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5131,10 +5157,14 @@ export interface VoiceProvider {
    * bubble that later updates replace in place, turns may overlap or arrive in
    * any order, and no empty assistant placeholder is injected. User and
    * assistant may share a turnId (a late user bubble then renders above its
-   * reply) or use distinct ones (bubbles order by first arrival).
+   * reply) or use distinct ones. `metadata.startMs` (call-relative ms when the
+   * utterance began) orders a new bubble among the call's other keyed bubbles;
+   * without it bubbles order by first arrival. After a stop, keyed providers
+   * must drop the cancelled reply's output until the server acknowledges the
+   * cancel: the session renders every reply it receives.
    */
   onTranscript?(
-    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean, metadata?: { turnId?: string }) => void,
+    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean, metadata?: VoiceTranscriptMetadata) => void,
   ): void;
 
   /** Register a callback for per-turn latency metrics (realtime path). */
@@ -5170,6 +5200,53 @@ export interface VoiceProvider {
    * repeatedly; throttle as needed.
    */
   prewarm?(): void;
+
+  /**
+   * Called by the session once after construction with the chat-side surface
+   * a full-duplex provider uses to hand agent turns to the chat pipeline
+   * ({@link VoiceSessionBridge}). Providers without client delegation omit it.
+   */
+  setSessionBridge?(bridge: VoiceSessionBridge): void;
+}
+
+/** Metadata on a {@link VoiceProvider.onTranscript} update. */
+export type VoiceTranscriptMetadata = {
+  /** Groups updates that belong to one utterance bubble (full duplex). */
+  turnId?: string;
+  /** Call-relative ms when the utterance began; orders late bubbles. */
+  startMs?: number;
+  /** Call-relative ms of the latest audio this update covers. */
+  endMs?: number;
+};
+
+/** An agent turn a full-duplex voice model handed to the widget. */
+export type VoiceDelegationRequest = {
+  turnId: string;
+  /** What the visitor asked, as the voice model heard it. */
+  userText: string;
+};
+
+/** The finished turn, sent back for the voice model to read aloud. */
+export type VoiceDelegationResult = {
+  ok: boolean;
+  /** The final assistant text (Markdown allowed). */
+  text: string;
+};
+
+/**
+ * Chat-side surface the session hands a full-duplex provider: the visible
+ * history (for the call-start context) and a way to run a delegated turn
+ * through the normal chat pipeline.
+ */
+export interface VoiceSessionBridge {
+  /** Visible user/assistant messages, oldest first. */
+  getHistory(): Array<{ role: 'user' | 'assistant'; content: string }>;
+  /**
+   * Submit the turn as the visitor's message (reusing its transcript bubble)
+   * and resolve with the assistant's final answer once the turn settles.
+   * Waits for any chat turn already in flight first. Never rejects.
+   */
+  runDelegatedTurn(request: VoiceDelegationRequest): Promise<VoiceDelegationResult>;
 }
 
 /**

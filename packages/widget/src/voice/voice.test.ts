@@ -1,7 +1,7 @@
 // Voice SDK Tests
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import type { VoiceConfig } from '../types';
-import { RuntypeVoiceProvider } from './runtype-voice-provider';
+import type { VoiceConfig, VoiceDelegationResult, VoiceSessionBridge } from '../types';
+import { RuntypeVoiceProvider, buildCallContext } from './runtype-voice-provider';
 import { BrowserVoiceProvider } from './browser-voice-provider';
 import { createVoiceProvider, createBestAvailableVoiceProvider, isVoiceSupported } from './voice-factory';
 
@@ -737,6 +737,179 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
       provider.stopPlayback();
       expect(sentJson(next)).toEqual([]);
     });
+
+    it('passes transcript startMs/endMs through as metadata', async () => {
+      const { transcripts, ws } = await startFullDuplexCall();
+      ws.triggerMessage(
+        JSON.stringify({ type: 'transcript_update', role: 'user', text: 'hi', turnId: 'u1', final: true, startMs: 1200, endMs: 1800 }),
+      );
+      expect(transcripts).toEqual([['user', 'hi', true, { turnId: 'u1', startMs: 1200, endMs: 1800 }]]);
+    });
+
+    describe('client delegation', () => {
+      const flush = async () => {
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+      };
+
+      function makeBridge(history: Array<{ role: 'user' | 'assistant'; content: string }> = []) {
+        const calls: Array<{ turnId: string; userText: string }> = [];
+        const pending: Array<(r: VoiceDelegationResult) => void> = [];
+        const bridge: VoiceSessionBridge = {
+          getHistory: () => history,
+          runDelegatedTurn: (request) => {
+            calls.push(request);
+            return new Promise((resolve) => pending.push(resolve));
+          },
+        };
+        return { bridge, calls, pending };
+      }
+
+      async function startDelegatedCall(
+        extra: Partial<NonNullable<VoiceConfig['runtype']>> = {},
+        sessionConfig: Record<string, unknown> = { clientDelegation: true },
+        history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+      ) {
+        const engine = makeFakeEngine();
+        const transcripts: unknown[][] = [];
+        const { bridge, calls, pending } = makeBridge(history);
+        const provider = new RuntypeVoiceProvider({ ...baseConfig(), ...extra, createPlaybackEngine: () => engine });
+        provider.setSessionBridge(bridge);
+        provider.onTranscript((...args) => transcripts.push(args));
+        await provider.startListening();
+        const ws = lastWs();
+        ws.triggerOpen();
+        ws.triggerMessage(
+          JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in', speechMode: 'speech_to_speech', ...sessionConfig }),
+        );
+        await flush();
+        return { provider, ws, transcripts, calls, pending };
+      }
+
+      const update = (role: string, text: string, turnId: string) =>
+        JSON.stringify({ type: 'transcript_update', role, text, turnId, final: true });
+
+      it('declares client-delegation only with a bridge and the switch on', async () => {
+        const { ws } = await startDelegatedCall();
+        expect(ws.url).toBe(
+          'wss://api.example.com/ws/agents/a1/voice?voiceCapabilities=full-duplex-v1&clientCapabilities=client-delegation',
+        );
+        await startDelegatedCall({ clientDelegation: false });
+        expect(lastWs().url).toBe('wss://api.example.com/ws/agents/a1/voice?voiceCapabilities=full-duplex-v1');
+        const plain = new RuntypeVoiceProvider(baseConfig()); // no session bridge
+        await plain.startListening();
+        expect(lastWs().url).toBe('wss://api.example.com/ws/agents/a1/voice?voiceCapabilities=full-duplex-v1');
+      });
+
+      it('sends one context frame with the history and host context once confirmed', async () => {
+        const { ws } = await startDelegatedCall(
+          { callContext: async () => 'Visitor is on /pricing.' },
+          { clientDelegation: true },
+          [
+            { role: 'user', content: 'Hi there' },
+            { role: 'assistant', content: 'Hello!\n\nHow can I help?' },
+          ],
+        );
+        expect(sentJson(ws)).toEqual([
+          {
+            type: 'context',
+            text: 'Conversation so far:\nUser: Hi there\nAssistant: Hello! How can I help?\n\nVisitor is on /pricing.',
+          },
+        ]);
+        ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in' }));
+        await flush();
+        expect(sentJson(ws)).toHaveLength(1);
+      });
+
+      it('skips the context frame when there is nothing to say', async () => {
+        const { ws } = await startDelegatedCall();
+        expect(sentJson(ws)).toEqual([]);
+      });
+
+      it('keeps today\'s behavior when the server does not confirm delegation', async () => {
+        const { ws, calls, transcripts } = await startDelegatedCall(
+          { callContext: 'page context' },
+          {},
+          [{ role: 'user', content: 'Hi' }],
+        );
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'x', messages: [] }));
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1', speak: true, text: 'Result' }));
+        ws.triggerMessage(update('assistant', 'Result', 'a9'));
+        await flush();
+        expect(calls).toEqual([]);
+        expect(sentJson(ws)).toEqual([]); // no context, no delegation_result
+        expect(transcripts).toEqual([['assistant', 'Result', true, { turnId: 'a9' }]]);
+      });
+
+      it('runs a delegation through the bridge and answers delegation_result', async () => {
+        const { ws, calls, pending } = await startDelegatedCall();
+        ws.triggerMessage(
+          JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'Weather?', messages: [{ role: 'user', content: 'Weather?' }] }),
+        );
+        await flush();
+        expect(calls).toEqual([{ turnId: 'd1', userText: 'Weather?' }]);
+        pending[0]({ ok: true, text: 'It is **sunny**.' });
+        await flush();
+        expect(sentJson(ws)).toEqual([{ type: 'delegation_result', turnId: 'd1', text: 'It is **sunny**.', ok: true }]);
+      });
+
+      it('answers ok:false when the bridge fails', async () => {
+        const { ws, provider } = await startDelegatedCall();
+        provider.setSessionBridge({
+          getHistory: () => [],
+          runDelegatedTurn: () => Promise.reject(new Error('nope')),
+        });
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'x', messages: [] }));
+        await flush();
+        expect(sentJson(ws)).toEqual([{ type: 'delegation_result', turnId: 'd1', text: '', ok: false }]);
+      });
+
+      it('runs delegations one at a time', async () => {
+        const { ws, calls, pending } = await startDelegatedCall();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'one', messages: [] }));
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd2', userText: 'two', messages: [] }));
+        await flush();
+        expect(calls.map((c) => c.turnId)).toEqual(['d1']);
+        pending[0]({ ok: true, text: 'first' });
+        await flush();
+        expect(calls.map((c) => c.turnId)).toEqual(['d1', 'd2']);
+      });
+
+      it('folds the spoken read-back of a rendered result until the next user utterance', async () => {
+        const { ws, transcripts, pending } = await startDelegatedCall();
+        ws.triggerMessage(update('assistant', 'Let me check.', 'f1'));
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+        await flush();
+        pending[0]({ ok: true, text: 'It is sunny.' });
+        await flush();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1', speak: true, text: 'It is sunny.' }));
+        ws.triggerMessage(update('assistant', 'Let me check. Okay.', 'f1')); // filler already showing: keeps updating
+        ws.triggerMessage(update('assistant', 'It is sunny.', 'r1')); // read-back: folded
+        ws.triggerMessage(update('user', 'thanks', 'u2'));
+        ws.triggerMessage(update('assistant', 'You are welcome.', 'a2'));
+        expect(transcripts.map((t) => t[1])).toEqual(['Let me check.', 'Let me check. Okay.', 'thanks', 'You are welcome.']);
+      });
+
+      it('does not fold after a failed delegation', async () => {
+        const { ws, transcripts, pending } = await startDelegatedCall();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+        await flush();
+        pending[0]({ ok: false, text: '' });
+        await flush();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1', speak: true, text: 'Sorry' }));
+        ws.triggerMessage(update('assistant', "Sorry, I couldn't complete that.", 'r1'));
+        expect(transcripts).toHaveLength(1);
+      });
+
+      it('drops a result that finishes after hang-up', async () => {
+        const { ws, provider, pending } = await startDelegatedCall();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+        await flush();
+        await provider.stopListening();
+        pending[0]({ ok: true, text: 'late' });
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+      });
+    });
   });
 });
 
@@ -855,6 +1028,15 @@ describe('RuntypeVoiceProvider prewarm', () => {
       expect(fetchMock).not.toHaveBeenCalled();
       openAs(ws, 'runtype.attach');
       expect(ws.sent).toEqual(['{"type":"ping"}']);
+    });
+
+    it('combines attach with client-delegation when a session bridge is set', () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.setSessionBridge({ getHistory: () => [], runDelegatedTurn: async () => ({ ok: true, text: '' }) });
+      provider.prewarm();
+      expect(lastWs().url).toBe(
+        'wss://api.example.com/ws/agents/agent%2F1/voice?voiceCapabilities=full-duplex-v1&clientCapabilities=attach%2Cclient-delegation',
+      );
     });
 
     it('sends a clamped attachIdleMs when configured', () => {
@@ -1004,5 +1186,32 @@ describe('RuntypeVoiceProvider prewarm', () => {
       await provider.disconnect();
       expect(ws.closeCalls).toEqual([{ code: 1000, reason: 'prewarm released' }]);
     });
+  });
+});
+describe('buildCallContext', () => {
+  it('keeps the last 12 messages, newest first when over budget, and caps at 8000 chars', () => {
+    const history = Array.from({ length: 20 }, (_, i) => ({
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `message ${i} ${'x'.repeat(1000)}`,
+    }));
+    const text = buildCallContext(history, '');
+    expect(text.length).toBeLessThanOrEqual(8000);
+    expect(text.startsWith('Conversation so far:\n')).toBe(true);
+    expect(text).toContain('message 19');
+    expect(text).not.toContain('message 7 '); // outside the 12-message window
+    expect(text).not.toContain('message 8 '); // dropped: oldest over budget
+  });
+
+  it('truncates a single huge message and always fits the host context', () => {
+    const text = buildCallContext([{ role: 'assistant', content: 'y'.repeat(50_000) }], 'host '.repeat(3000));
+    expect(text.length).toBeLessThanOrEqual(8000);
+    expect(text).toContain('Assistant: yyy');
+    expect(text).toContain('…');
+    expect(text.endsWith('host')).toBe(true); // host share capped, still present
+  });
+
+  it('returns only the host context without history, and "" when both are empty', () => {
+    expect(buildCallContext([], ' On /docs ')).toBe('On /docs');
+    expect(buildCallContext([{ role: 'user', content: '   ' }], '')).toBe('');
   });
 });
