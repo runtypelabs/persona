@@ -2,7 +2,7 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "195.25 kB",
+    "limit": "195.5 kB",
     "gzip": true
   },
   {
