@@ -203,6 +203,8 @@ function filenameFromMediaType(mediaType: string): string {
  *
  */
 const hasValidContent = (message: AgentWidgetMessage): boolean => {
+  // Display-only voice captions are never conversation.
+  if (message.voiceCaption) return false;
   // Check contentParts (multi-modal content)
   if (message.contentParts && message.contentParts.length > 0) {
     return true;

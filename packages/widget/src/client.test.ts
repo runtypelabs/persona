@@ -152,6 +152,35 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
     expect(hasEmptyContent).toBe(false);
   });
 
+  it('never sends display-only voice captions', async () => {
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch(
+      {
+        messages: [
+          { id: 'u0', role: 'user', content: 'small talk', voiceCaption: true, createdAt: '2025-01-01T00:00:00.000Z' },
+          { id: 'u1', role: 'user', content: 'What are your opening hours', createdAt: '2025-01-01T00:00:01.000Z' },
+          { id: 'a1', role: 'assistant', content: "Yeah, I'll", voiceCaption: true, createdAt: '2025-01-01T00:00:02.000Z' },
+        ],
+      },
+      (event) => events.push(event)
+    );
+
+    expect(capturedPayload.messages).toEqual([
+      expect.objectContaining({ role: 'user', content: 'What are your opening hours' }),
+    ]);
+  });
+
   it('should filter out messages with whitespace-only content', async () => {
     global.fetch = vi.fn().mockImplementation(async (url: string, options: any) => {
       capturedPayload = JSON.parse(options.body);

@@ -547,6 +547,7 @@ With `provider.runtype.clientDelegation` on (the default), the widget runs each 
 - The visitor's transcript bubble becomes the user message. The request is sent once, in the same conversation as typed messages.
 - The answer streams in as a regular assistant message. Tool and approval UI, WebMCP page tools, and conversation history work as they do for typed messages.
 - The voice model then reads the answer aloud. Its spoken read-back is not added as a second bubble, and browser text-to-speech skips the answer. Short phrases it says while the agent works, such as "let me check", still show.
+- The voice model's own speech, and anything the visitor said that wasn't handed off, shows as captions. Captioned messages carry `voiceCaption: true` and are never sent to the agent as conversation.
 - If a turn stops for an approval or a question, the voice model tells the visitor to answer it in the chat.
 - A hand-off that arrives while another chat turn is still streaming waits for that turn to finish.
 

@@ -857,7 +857,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         await flush();
         expect(calls).toEqual([]);
         expect(sentJson(ws)).toEqual([]); // no context, no delegation_result
-        expect(transcripts).toEqual([['assistant', 'Result', true, { turnId: 'a9' }]]);
+        expect(transcripts).toEqual([['assistant', 'Result', true, { turnId: 'a9' }]]); // no caption flag
       });
 
       it('runs a delegation through the bridge and answers delegation_result', async () => {
@@ -892,6 +892,15 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         pending[0]({ ok: true, text: 'first' });
         await flush();
         expect(calls.map((c) => c.turnId)).toEqual(['d1', 'd2']);
+      });
+
+      it('marks transcripts as captions only when delegation is negotiated', async () => {
+        const { ws, transcripts } = await startDelegatedCall();
+        ws.triggerMessage(update('assistant', 'One moment.', 'f1'));
+        expect(transcripts).toEqual([['assistant', 'One moment.', true, { turnId: 'f1', caption: true }]]);
+        const legacy = await startDelegatedCall({}, {});
+        legacy.ws.triggerMessage(update('assistant', 'One moment.', 'f1'));
+        expect(legacy.transcripts).toEqual([['assistant', 'One moment.', true, { turnId: 'f1' }]]);
       });
 
       it('folds the spoken read-back of a rendered result until the next user utterance', async () => {

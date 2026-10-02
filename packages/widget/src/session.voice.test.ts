@@ -518,6 +518,57 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(session.isStreaming()).toBe(false);
   });
 
+  it('captions speech in a delegated call and ends the request on the submitted bubble', async () => {
+    const caption = (role: 'user' | 'assistant', text: string, isFinal: boolean, turnId: string) =>
+      h.state.transcriptCb!(role, text, isFinal, { turnId, caption: true });
+    caption('user', 'hi there', true, 'u0'); // never delegated
+    caption('user', 'What are your opening hours', true, 'u1');
+    caption('assistant', "Yeah, I'll", false, 'f1'); // filler, still streaming
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'We open at nine.'));
+
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'What are your opening hours' });
+
+    const sent = dispatch.mock.calls[0][0].messages;
+    const conversation = sent.filter((m) => !m.voiceCaption);
+    expect(conversation.map((m) => [m.role, m.content])).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'What are your opening hours'],
+    ]);
+    expect(sent[sent.length - 1].content).toBe('What are your opening hours');
+    // The display keeps every caption, in spoken order.
+    expect(view()).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'hi there'],
+      ['user', 'What are your opening hours'],
+      ['assistant', "Yeah, I'll"],
+      ['assistant', 'We open at nine.'],
+    ]);
+    expect(messages.find((m) => m.content === 'What are your opening hours')!.voiceCaption).toBeUndefined();
+    expect(messages.find((m) => m.content === "Yeah, I'll")!.voiceCaption).toBe(true);
+
+    // A later typed turn doesn't send the captions either.
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Yes.', 'assistant-r2'));
+    await session.sendMessage('and on sundays?');
+    const typed = dispatch.mock.calls[1][0].messages.filter((m) => !m.voiceCaption);
+    expect(typed.map((m) => m.content)).toEqual([
+      'Welcome! How can I help?',
+      'What are your opening hours',
+      'We open at nine.',
+      'and on sundays?',
+    ]);
+  });
+
+  it('ends the request on the submitted bubble even when a typed turn finished after it', async () => {
+    drive('user', 'voice question', true, 'u1');
+    dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Typed answer.', 'assistant-typed'));
+    await session.sendMessage('typed question');
+    dispatch.mockImplementationOnce(async (_options, onEvent) => reply(onEvent, 'Voice answer.'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'voice question' });
+    const sent = dispatch.mock.calls[1][0].messages;
+    expect(sent[sent.length - 1]).toMatchObject({ role: 'user', content: 'voice question' });
+    expect(sent.filter((m) => m.content === 'voice question')).toHaveLength(1);
+  });
+
   it('keeps the transcript text as-is when it matches the request', async () => {
     drive('user', 'Book a table.', true, 'u1');
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Booked.'));

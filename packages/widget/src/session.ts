@@ -807,7 +807,7 @@ export class AgentWidgetSession {
         this.voiceProvider.onTranscript((role, text, isFinal, metadata) => {
           if (!isCurrent()) return;
           if (metadata?.turnId) {
-            this.keyedVoice?.apply(role, text, isFinal, metadata.turnId, metadata.startMs);
+            this.keyedVoice?.apply(role, text, isFinal, metadata.turnId, metadata.startMs, metadata.caption);
             return;
           }
           if (role === 'user') {
@@ -2382,6 +2382,7 @@ export class AgentWidgetSession {
       sequence,
       streaming = false,
       voiceProcessing,
+      voiceCaption,
       rawContent
     } = options;
 
@@ -2405,6 +2406,7 @@ export class AgentWidgetSession {
       ...(llmContent !== undefined && { llmContent }),
       ...(contentParts !== undefined && { contentParts }),
       ...(voiceProcessing !== undefined && { voiceProcessing }),
+      ...(voiceCaption && { voiceCaption }),
       ...(rawContent !== undefined && { rawContent })
     };
 
@@ -2769,6 +2771,7 @@ export class AgentWidgetSession {
       // The transcript bubble is the user message: the model gets the request
       // text the voice model delegated, the bubble keeps what was heard.
       voiceBubble.viaVoice = true;
+      delete voiceBubble.voiceCaption;
       if (voiceBubble.content.trim() !== input) voiceBubble.llmContent = input;
       this.callbacks.onMessagesChanged([...this.messages]);
     } else {
@@ -2821,7 +2824,14 @@ export class AgentWidgetSession {
       }
     }
 
-    const snapshot = [...this.messages];
+    // A submitted voice bubble may sit above captions or a turn that finished
+    // while it waited: the request still ends on it.
+    const snapshot = voiceBubble
+      ? [
+          ...this.messages.filter((m) => m !== voiceBubble),
+          { ...voiceBubble, createdAt: new Date().toISOString() }
+        ]
+      : [...this.messages];
 
     try {
       await this.dispatchWithDeletedRecovery(

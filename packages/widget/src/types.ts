@@ -5217,6 +5217,11 @@ export type VoiceTranscriptMetadata = {
   startMs?: number;
   /** Call-relative ms of the latest audio this update covers. */
   endMs?: number;
+  /**
+   * The bubble only captions speech (see `AgentWidgetMessage.voiceCaption`).
+   * The chat pipeline owns the conversation, as with client delegation.
+   */
+  caption?: boolean;
 };
 
 /** An agent turn a full-duplex voice model handed to the widget. */
@@ -8254,6 +8259,13 @@ export type AgentWidgetMessage = {
    */
   voiceProcessing?: boolean;
   /**
+   * Display-only caption of full-duplex voice speech, such as the voice
+   * model's own words, or something the visitor said that wasn't submitted
+   * as a chat turn. It renders in the transcript but is never sent to the
+   * model as conversation.
+   */
+  voiceCaption?: boolean;
+  /**
    * Raw structured payload for this message (e.g., JSON action response).
    * Populated automatically when structured parsers run.
    */
@@ -8381,6 +8393,9 @@ export type InjectMessageOptions = {
    * Consumers can detect this in `messageTransform` to render custom UI.
    */
   voiceProcessing?: boolean;
+
+  /** See {@link AgentWidgetMessage.voiceCaption}. */
+  voiceCaption?: boolean;
 
   /**
    * Raw structured payload (typically a JSON string) representing the

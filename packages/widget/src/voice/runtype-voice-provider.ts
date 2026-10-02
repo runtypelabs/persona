@@ -45,11 +45,13 @@
 // time) and the provider answers `delegation_result{turnId,text,ok}`. The voice
 // model's spoken read-back of a successful result (assistant utterances that
 // start after its `delegation_completed`, until the next user utterance) is
-// folded: the rendered chat message already shows it. Separately, a server that
-// announces `session_config{contextFrames:true}` gets one `context{text}` frame
-// at call start (recent chat history plus the host's `callContext`). Servers
-// that announce neither get neither frame: an unknown client frame type ends
-// the call on older servers.
+// folded: the rendered chat message already shows it. Transcripts in such a
+// call are display-only captions, never sent to the agent as conversation; a
+// user bubble becomes conversation only when it is submitted. Separately, a
+// server that announces `session_config{contextFrames:true}` gets one
+// `context{text}` frame at call start (recent chat history plus the host's
+// `callContext`). Servers that announce neither get neither frame: an unknown
+// client frame type ends the call on older servers.
 
 import type {
   VoiceProvider,
@@ -677,6 +679,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           turnId,
           ...(typeof msg.startMs === "number" && { startMs: msg.startMs }),
           ...(typeof msg.endMs === "number" && { endMs: msg.endMs }),
+          // The chat pipeline owns the conversation: speech is only captioned.
+          ...(this.clientDelegation && { caption: true }),
         });
         break;
       }

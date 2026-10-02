@@ -56,6 +56,7 @@ export class KeyedVoiceTranscript {
     isFinal: boolean,
     turnId: string,
     startMs?: number,
+    caption?: boolean,
   ): void {
     const host = this.host;
     let turn = this.turns.get(turnId);
@@ -80,6 +81,7 @@ export class KeyedVoiceTranscript {
           content: text,
           streaming: false,
           voiceProcessing: !isFinal,
+          voiceCaption: caption,
           ...this.placeBefore(this.startedAfter(startMs) ?? reply),
         }).id;
       }
@@ -95,6 +97,7 @@ export class KeyedVoiceTranscript {
           content: text,
           streaming: !isFinal,
           voiceProcessing: !isFinal,
+          voiceCaption: caption,
           ...this.placeBefore(this.startedAfter(startMs)),
         }).id;
       }
