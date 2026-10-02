@@ -467,6 +467,21 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
+  it('passes clientDelegation and callContext through to the runtype provider config', () => {
+    const config = (
+      session as unknown as { getVoiceConfigFromConfig(): { runtype?: Record<string, unknown> } }
+    );
+    const callContext = () => 'ctx';
+    session.updateConfig({
+      apiUrl: 'http://localhost:8000',
+      voiceRecognition: {
+        enabled: true,
+        provider: { type: 'runtype', runtype: { agentId: 'a1', clientDelegation: false, callContext } },
+      },
+    });
+    expect(config.getVoiceConfigFromConfig().runtype).toMatchObject({ clientDelegation: false, callContext });
+  });
+
   it('hands the provider a bridge whose history is the visible settled messages', () => {
     drive('user', 'still talk', false, 'u1'); // interim: not part of the context
     expect(h.state.bridge!.getHistory()).toEqual([

@@ -550,9 +550,11 @@ With `provider.runtype.clientDelegation` on (the default), the widget runs each 
 - If a turn stops for an approval or a question, the voice model tells the visitor to answer it in the chat.
 - A hand-off that arrives while another chat turn is still streaming waits for that turn to finish.
 
-When the call starts, the widget sends the voice model the last 12 chat messages (at most 8000 characters) and the `callContext` text. The voice model can then refer to what was already said.
+When the call starts, the widget sends the voice model the last 12 chat messages (at most 8000 characters) and the `callContext` text, so it can refer to what was already said. This works whether `clientDelegation` is on or off.
 
 These features need a server that supports them. Older servers run the agent turn on the server and transcribe its spoken reply instead. Set `clientDelegation: false` to always run the agent turn on the server.
+
+Known gap: when a turn stops for an approval, the voice model tells the visitor to finish it in the chat, but the result that arrives after the approval is not read aloud.
 
 ```typescript
 voiceRecognition: {

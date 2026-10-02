@@ -45,10 +45,11 @@
 // time) and the provider answers `delegation_result{turnId,text,ok}`. The voice
 // model's spoken read-back of a successful result (assistant utterances that
 // start after its `delegation_completed`, until the next user utterance) is
-// folded: the rendered chat message already shows it. Such a server also gets
-// one `context{text}` frame at call start (recent chat history plus the host's
-// `callContext`). Servers that don't confirm get neither frame: an unknown
-// client frame type ends the call on older servers.
+// folded: the rendered chat message already shows it. Separately, a server that
+// announces `session_config{contextFrames:true}` gets one `context{text}` frame
+// at call start (recent chat history plus the host's `callContext`). Servers
+// that announce neither get neither frame: an unknown client frame type ends
+// the call on older servers.
 
 import type {
   VoiceProvider,
@@ -226,6 +227,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Client delegation (see header); per-call state reset on every cleanup.
   private bridge: VoiceSessionBridge | null = null;
   private clientDelegation = false;
+  private contextSent = false;
   private delegations: Promise<void> = Promise.resolve();
   // Delegations answered ok: their spoken read-back is folded.
   private answered = new Set<string>();
@@ -650,7 +652,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           this.playback?.setContinuousMode?.(this.speechToSpeech);
           this.clientDelegation =
             this.speechToSpeech && msg.clientDelegation === true && !!this.bridge;
-          if (this.clientDelegation) void this.sendCallContext(generation);
+        }
+        // Only a server that announces contextFrames accepts `context`.
+        if (msg.contextFrames === true && !this.contextSent) {
+          this.contextSent = true;
+          void this.sendCallContext(generation);
         }
         break;
 
@@ -849,6 +855,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.speechToSpeech = false;
     this.delegating = false;
     this.clientDelegation = false;
+    this.contextSent = false;
     this.delegations = Promise.resolve();
     this.answered.clear();
     this.foldReadback = false;

@@ -766,7 +766,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
 
       async function startDelegatedCall(
         extra: Partial<NonNullable<VoiceConfig['runtype']>> = {},
-        sessionConfig: Record<string, unknown> = { clientDelegation: true },
+        sessionConfig: Record<string, unknown> = { clientDelegation: true, contextFrames: true },
         history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
       ) {
         const engine = makeFakeEngine();
@@ -803,7 +803,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
       it('sends one context frame with the history and host context once confirmed', async () => {
         const { ws } = await startDelegatedCall(
           { callContext: async () => 'Visitor is on /pricing.' },
-          { clientDelegation: true },
+          { clientDelegation: true, contextFrames: true },
           [
             { role: 'user', content: 'Hi there' },
             { role: 'assistant', content: 'Hello!\n\nHow can I help?' },
@@ -818,6 +818,26 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in' }));
         await flush();
         expect(sentJson(ws)).toHaveLength(1);
+      });
+
+      it('sends context on contextFrames alone, with delegation off', async () => {
+        const { ws, calls } = await startDelegatedCall(
+          { clientDelegation: false, callContext: 'On /docs.' },
+          { contextFrames: true },
+          [{ role: 'user', content: 'Hi' }],
+        );
+        expect(lastWs().url).not.toContain('clientCapabilities');
+        expect(sentJson(ws)).toEqual([{ type: 'context', text: 'Conversation so far:\nUser: Hi\n\nOn /docs.' }]);
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'x', messages: [] }));
+        await flush();
+        expect(calls).toEqual([]);
+      });
+
+      it('sends no context when the server does not announce contextFrames', async () => {
+        const { ws } = await startDelegatedCall({ callContext: 'On /docs.' }, { clientDelegation: true }, [
+          { role: 'user', content: 'Hi' },
+        ]);
+        expect(sentJson(ws)).toEqual([]);
       });
 
       it('skips the context frame when there is nothing to say', async () => {

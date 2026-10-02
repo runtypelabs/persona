@@ -4784,8 +4784,8 @@ export type AgentWidgetVoiceRecognitionConfig = {
        * the call starts, after the recent chat history (for example the page
        * the visitor is on). A function is called at call start and may be
        * async. This text is capped at 4000 characters and the whole frame
-       * (history included) at 8000. Sent only when the server confirms client
-       * delegation, so it needs `clientDelegation` on.
+       * (history included) at 8000. Sent only to servers that accept call
+       * context (they announce it in `session_config`).
        */
       callContext?: string | (() => string | Promise<string>);
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */

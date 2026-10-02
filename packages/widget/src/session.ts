@@ -1077,7 +1077,9 @@ export class AgentWidgetSession {
             voiceId: providerConfig.runtype?.voiceId,
             createPlaybackEngine: providerConfig.runtype?.createPlaybackEngine,
             prewarmMode: providerConfig.runtype?.prewarmMode,
-            attachIdleMs: providerConfig.runtype?.attachIdleMs
+            attachIdleMs: providerConfig.runtype?.attachIdleMs,
+            clientDelegation: providerConfig.runtype?.clientDelegation,
+            callContext: providerConfig.runtype?.callContext
           }
         };
       
