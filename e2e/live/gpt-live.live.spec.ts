@@ -40,6 +40,8 @@ const EXPECT_DELEGATION = process.env.LIVE_EXPECT_DELEGATION !== "0";
 const EXPECT_SMALL_TALK = process.env.LIVE_EXPECT_SMALL_TALK === "1";
 // One capture buffer (4096 samples at 16 kHz) plus scheduling slack.
 const CAPTURE_BUFFER_MS = 256;
+// The provider's pre-open audio cap (PRE_OPEN_AUDIO_MAX_BYTES at 16 kHz PCM16).
+const PRE_OPEN_BUFFER_MS = 8_000;
 const FIRST_AUDIO_SLACK_MS = Number(env("LIVE_FIRST_AUDIO_SLACK_MS", "200"));
 
 type Frame = { at: number; dir: "in" | "out"; json?: Record<string, unknown>; bytes?: number };
@@ -168,6 +170,11 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         call.firstAudioAt,
         `first mic frame ${lagMs} ms after the socket opened (upgrade ${upgradeMs} ms): pre-open audio was not buffered`,
       ).toBeLessThanOrEqual(Math.max(call.openAt, call.createdAt + CAPTURE_BUFFER_MS) + FIRST_AUDIO_SLACK_MS);
+      // The provider holds 8 s; a longer upgrade drops the oldest audio, so the
+      // prompt first frame above would hide the loss.
+      expect(upgradeMs, "the socket upgrade outlasted the widget's 8 s pre-open buffer").toBeLessThan(
+        PRE_OPEN_BUFFER_MS,
+      );
     }
     if (config.contextFrames === true && (TYPED || CALL_CONTEXT)) {
       // Held until the visitor first speaks (or the first delegation request).
