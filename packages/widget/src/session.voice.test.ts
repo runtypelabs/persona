@@ -762,6 +762,56 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(messages[1].voiceCaption).toBeUndefined();
   });
 
+  it('submits a split request once: the last utterance carries it, the earlier ones stay captions', async () => {
+    const caption = (text: string, turnId: string) =>
+      h.state.transcriptCb!('user', text, true, { turnId, caption: true });
+    caption('What are your', 'u1');
+    caption('opening hours', 'u2');
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));
+    await h.state.bridge!.runDelegatedTurn({
+      turnId: 'd1',
+      userText: 'What are your opening hours',
+      userTurnId: 'u2',
+      userTurnIds: ['u1', 'u2'],
+    });
+
+    const sent = dispatch.mock.calls[0][0].messages.filter((m) => !m.voiceCaption);
+    expect(sent.filter((m) => m.role === 'user')).toEqual([
+      expect.objectContaining({ content: 'opening hours', llmContent: 'What are your opening hours' }),
+    ]);
+    expect(sent[sent.length - 1].content).toBe('opening hours');
+    expect(view()).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'What are your'],
+      ['user', 'opening hours'],
+      ['assistant', 'Nine to five.'],
+    ]);
+    expect(messages.find((m) => m.content === 'What are your')!.voiceCaption).toBe(true);
+
+    // The joined utterance is never claimed again by a later request.
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Sure.', 'assistant-r2'));
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'What are your' });
+    expect(messages.filter((m) => m.content === 'What are your')).toHaveLength(2);
+    expect(messages.find((m) => m.content === 'What are your' && !m.voiceCaption)).toBeDefined();
+  });
+
+  it('reserves a listed utterance not transcribed yet, so it later renders as a caption', async () => {
+    h.state.transcriptCb!('user', 'and on sundays', true, { turnId: 'u2', caption: true });
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Closed on Sundays.'));
+    await h.state.bridge!.runDelegatedTurn({
+      turnId: 'd1',
+      userText: 'Your hours and on sundays',
+      userTurnIds: ['u1', 'u2'], // no userTurnId: the last listed one is the request's
+    });
+    h.state.transcriptCb!('user', 'Your hours', true, { turnId: 'u1', caption: true }); // late
+    const late = messages.find((m) => m.content === 'Your hours')!;
+    expect(late.voiceCaption).toBe(true);
+    expect(messages.find((m) => m.content === 'and on sundays')).toMatchObject({
+      llmContent: 'Your hours and on sundays',
+    });
+    expect(messages.filter((m) => m.role === 'user')).toHaveLength(2);
+  });
+
   it('claims a prefix match when the request beats the final transcript', async () => {
     drive('user', 'What are your opening', false, 'u1');
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine.'));

@@ -16,7 +16,7 @@ export interface VoiceDelegationHost {
   /** A local (WebMCP) tool is waiting on the visitor's approval. */
   parked(): boolean;
   /** The transcript bubble the request came from (see KeyedVoiceTranscript.claimUserTurn). */
-  claim(userText: string, userTurnId?: string): string | null;
+  claim(userText: string, userTurnId?: string, userTurnIds?: string[]): string | null;
   /** sendMessage as a voice turn, submitting `userMessageId`'s bubble when given. */
   send(userText: string, userMessageId: string | undefined): Promise<void>;
   /** Route the chat stream's assistant messages and failures into `capture` (or stop). */
@@ -52,13 +52,17 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
           : [],
       ),
 
-    async runDelegatedTurn({ userText, userTurnId }: VoiceDelegationRequest): Promise<VoiceDelegationResult> {
+    async runDelegatedTurn({
+      userText,
+      userTurnId,
+      userTurnIds,
+    }: VoiceDelegationRequest): Promise<VoiceDelegationResult> {
       // Queue behind a turn already in flight rather than aborting it.
       if (host.busy()) await settled();
       const capture: VoiceDelegationCapture = { ids: [], failed: false };
       host.track(capture);
       try {
-        await host.send(userText, host.claim(userText, userTurnId) ?? undefined);
+        await host.send(userText, host.claim(userText, userTurnId, userTurnIds) ?? undefined);
         // Local tools and approvals may continue the turn past the first stream.
         await settled(capture);
       } catch {

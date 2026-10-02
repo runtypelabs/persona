@@ -1033,6 +1033,22 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(calls).toEqual([{ turnId: 'd1', userText: 'q', userTurnId: 'u7' }]);
       });
 
+      it('forwards userTurnIds (strings only) to the bridge', async () => {
+        const { ws, calls } = await startDelegatedCall();
+        ws.triggerMessage(
+          JSON.stringify({
+            type: 'delegation_requested',
+            turnId: 'd1',
+            userText: 'a b',
+            userTurnId: 'u2',
+            userTurnIds: ['u1', 7, 'u2'],
+            messages: [],
+          }),
+        );
+        await flush();
+        expect(calls).toEqual([{ turnId: 'd1', userText: 'a b', userTurnId: 'u2', userTurnIds: ['u1', 'u2'] }]);
+      });
+
       it('does not fold after a failed delegation', async () => {
         const { ws, transcripts, pending } = await startDelegatedCall();
         ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));

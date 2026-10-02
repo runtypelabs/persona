@@ -711,6 +711,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
             String(msg.turnId),
             String(msg.userText ?? ""),
             typeof msg.userTurnId === "string" ? msg.userTurnId : undefined,
+            Array.isArray(msg.userTurnIds)
+              ? msg.userTurnIds.filter((id: unknown): id is string => typeof id === "string")
+              : undefined,
             generation,
           );
         }
@@ -827,13 +830,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     turnId: string,
     userText: string,
     userTurnId: string | undefined,
+    userTurnIds: string[] | undefined,
     generation: number,
   ): void {
     const bridge = this.bridge!;
     this.delegations = this.delegations.then(async () => {
       if (generation !== this.callGeneration) return;
       const result = await bridge
-        .runDelegatedTurn({ turnId, userText, ...(userTurnId && { userTurnId }) })
+        .runDelegatedTurn({
+          turnId,
+          userText,
+          ...(userTurnId && { userTurnId }),
+          ...(userTurnIds?.length && { userTurnIds }),
+        })
         .catch(() => ({ ok: false, text: "" }));
       await this.awaitContextSend();
       const ws = this.ws;

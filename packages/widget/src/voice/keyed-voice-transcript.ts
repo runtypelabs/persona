@@ -132,8 +132,19 @@ export class KeyedVoiceTranscript {
    * unclaimed bubble whose text matches exactly, else one where either text
    * is a prefix of the other (the request can beat the final transcript).
    * `null` when nothing matches: never someone else's bubble.
+   *
+   * `userTurnIds` lists every utterance a split request joins (the last is
+   * the one submitted). The others are claimed too: they stay displayed as
+   * captions, never sent and never claimed again. One not transcribed yet
+   * is reserved, so its transcript later renders as a caption.
    */
-  claimUserTurn(userText: string, userTurnId?: string): string | null {
+  claimUserTurn(userText: string, userTurnId?: string, userTurnIds?: string[]): string | null {
+    userTurnId ??= userTurnIds?.[userTurnIds.length - 1];
+    for (const id of userTurnIds ?? []) {
+      if (id === userTurnId) continue;
+      if (!this.turns.has(id)) this.turns.set(id, {});
+      this.turns.get(id)!.claimed = true;
+    }
     let pick: KeyedTurn | undefined;
     if (userTurnId) {
       pick = this.turns.get(userTurnId);

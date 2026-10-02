@@ -5232,6 +5232,11 @@ export type VoiceDelegationRequest = {
   userText: string;
   /** The `turnId` of the user transcript `userText` came from, when known. */
   userTurnId?: string;
+  /**
+   * Every user transcript `turnId` `userText` joins (oldest first, the last
+   * one being `userTurnId`), when the request spans several utterances.
+   */
+  userTurnIds?: string[];
 };
 
 /** The finished turn, sent back for the voice model to read aloud. */
