@@ -653,3 +653,50 @@ describe("artifact pane lazy preview (no double iframe in hidden inline pane)", 
     controller.destroy();
   });
 });
+
+
+describe("V5 transcript artifact feature gate", () => {
+  afterEach(() => { document.body.innerHTML = ""; localStorage.clear(); });
+
+  it.each([
+    [false, undefined, true], [false, false, true], [true, undefined, true],
+    [true, false, false], [true, true, true],
+  ] as const)("V5=%s, enabled=%s renders transcript=%s independently from pane auto-open", (v5Defaults, enabled, visible) => {
+    const mount = document.createElement("div");
+    document.body.append(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/chat", persistState: false, launcher: { enabled: false },
+      future: { v5Defaults }, features: { artifacts: { ...(enabled === undefined ? {} : { enabled }), display: "collapsed" } },
+    });
+    controller.upsertArtifact({ id: "gate-card", title: "Guide", artifactType: "markdown", content: "# Guide" });
+    // Restored/server transcript references can exist even when manual upsert
+    // is gated off with the pane. Exercise the renderer gate independently.
+    controller.injectAssistantMessage({ id: "artifact-ref-gate-card", content: "", rawContent: JSON.stringify({
+      component: "PersonaArtifactCard", props: { artifactId: "gate-card", title: "Guide", artifactType: "markdown", status: "complete" },
+    }) });
+    const card = mount.querySelector<HTMLElement>('[data-open-artifact="gate-card"]');
+    expect(Boolean(card)).toBe(visible);
+    expect(mount.querySelector(".persona-artifact-pane:not(.persona-hidden)")).toBeNull();
+    if (enabled === true || (v5Defaults && enabled === undefined)) {
+      card!.click();
+      expect(mount.querySelector(".persona-artifact-pane:not(.persona-hidden)")).not.toBeNull();
+    }
+    controller.destroy();
+  });
+
+  it("keeps disabled inline artifacts and custom hooks out of the transcript", () => {
+    const mount = document.createElement("div");
+    document.body.append(mount);
+    const renderInline = vi.fn(() => document.createElement("article"));
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/chat", persistState: false, launcher: { enabled: false }, future: { v5Defaults: true },
+      features: { artifacts: { enabled: false, display: "inline", renderInline } },
+    });
+    controller.injectAssistantMessage({ content: "", rawContent: JSON.stringify({
+      component: "PersonaArtifactInline", props: { artifactId: "gate-inline", title: "Guide", artifactType: "markdown", status: "complete", markdown: "# Guide" },
+    }) });
+    expect(renderInline).not.toHaveBeenCalled();
+    expect(mount.querySelector(".persona-artifact-inline")).toBeNull();
+    controller.destroy();
+  });
+});

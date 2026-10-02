@@ -116,6 +116,7 @@ function configuration(): AgentWidgetConfig {
     apiUrl: "/v5-local-demo",
     customFetch: createDemoEchoFetch({ reply: () => "This is a local preview reply. Try opening tool details, switching themes, or comparing V4 and V5. No message is sent to a model." }),
     future: { v5Defaults: v5 },
+    ...(select("error-display").value === "default" ? {} : { errorDisplay: select("error-display").value as "bubble" | "block" }),
     ...(select("scene").value.startsWith("approval") ? {
       approval: {
         approveLabel: "Allow once",
@@ -157,6 +158,10 @@ function configuration(): AgentWidgetConfig {
     } : { welcome: { variant: "none" }, suggestions: { ...(select("suggestion-edges").value === "default" ? {} : { followUps: { placement: "composer" as const, edgeStyle: select("suggestion-edges").value as "clip" | "fade" } }), starters: { items: [] } } }),
     features: {
       showToolCalls: true, showReasoning: true,
+      ...(select("scene").value === "artifacts" || select("artifacts").value !== "default" ? { artifacts: {
+        ...(select("artifacts").value === "default" ? {} : { enabled: select("artifacts").value === "on" }),
+        display: "collapsed", allowedTypes: ["markdown", "component"],
+      } } : {}),
       toolCallDisplay: display,
       reasoningDisplay: { ...activityStyle, ...(icons === "default" ? {} : { iconVisibility: icons }) },
     },
@@ -215,6 +220,32 @@ function loadScene() {
   reset();
   const scene = select("scene").value;
   if (scene.startsWith("approval")) { approvalScene(); return; }
+  if (scene === "errors") {
+    inject({ id: "user", role: "user", content: "Help me compare the theme options." });
+    inject({ id: "partial", content: "You can customize colors, typography, and spacing. Here is what I found before the connection ended…" });
+    inject({ id: "sample-error", dispatchError: true, content: "The sample connection was interrupted before the answer finished. Your partial response is preserved above. Retry will produce a complete local response.\n\nThis is a simulated error with extra detail to demonstrate disclosure. No network request failed and no message is sent to a model." });
+    status.textContent = "Compare the V4 bubble and V5 alert block. Retry runs a local response; reset to restore the error.";
+    return;
+  }
+  if (scene === "actions") {
+    inject({ id: "user", role: "user", content: "What can I customize?" });
+    inject({ id: "earlier-answer", content: "Start with colors, typography, and spacing." });
+    inject({ id: "next-user", role: "user", content: "How can I review the result?" });
+    inject({ id: "latest-answer", content: "Compare light and dark themes, then try a narrow screen. The latest answer keeps its actions available; hover or focus the earlier answer to find its actions." });
+    status.textContent = "Compare earlier and latest answer actions. Run the stream to inspect actions while a response is being written.";
+    return;
+  }
+  if (scene === "artifacts") {
+    inject({ id: "user", role: "user", content: "Create a short theme checklist." });
+    inject({ id: "artifact-intro", content: "Here is a sample artifact. Open its card to read the checklist, or disable artifacts to compare the V4 and V5 behavior." });
+    const markdown = "# Theme checklist\n\n- Check light and dark colors.\n- Read long answers at a narrow width.\n- Verify keyboard focus and reduced motion.\n- Try a custom theme.";
+    widget.upsertArtifact({ id: "theme-checklist", title: "Theme checklist", artifactType: "markdown", content: markdown, transcript: false });
+    // A restored/server-supplied reference exercises the renderer gate even
+    // when the controller's artifact APIs are disabled.
+    inject({ id: "artifact-card", rawContent: JSON.stringify({ component: "PersonaArtifactCard", props: { artifactId: "theme-checklist", title: "Theme checklist", artifactType: "markdown", status: "complete", markdown } }) });
+    status.textContent = "Artifacts are enabled by default in V5; V4 requires Enabled. This sample uses collapsed cards. Choose Disabled to compare transcript behavior.";
+    return;
+  }
   if (scene === "streaming") {
     inject({ id: "user", role: "user", content: "Show me the new streaming defaults." });
     inject({ id: "final", content: "The response is ready. Try the follow-up row below, then run the stream to see the waiting indicator. Typing a new question clears these suggestions." });
@@ -253,6 +284,17 @@ function loadScene() {
 }
 function runStream() {
   if (select("scene").value.startsWith("approval")) { loadScene(); return; }
+  if (select("scene").value === "errors" || select("scene").value === "artifacts") { loadScene(); return; }
+  if (select("scene").value === "actions") {
+    loadScene();
+    streamButton.disabled = true;
+    inject({ id: "latest-answer", content: "Comparing the available theme options…", streaming: true });
+    timers.push(setTimeout(() => {
+      inject({ id: "latest-answer", content: "The comparison is ready. Message actions are available again.", streaming: false });
+      streamButton.disabled = false;
+    }, 4000));
+    return;
+  }
   if (select("scene").value === "streaming") {
     reset();
     streamButton.disabled = true;

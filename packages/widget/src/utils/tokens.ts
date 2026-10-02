@@ -587,6 +587,13 @@ export const DEFAULT_SEMANTIC = DEFAULT_SEMANTIC_V4;
 export const DEFAULT_COMPONENTS_V4 = DEFAULT_COMPONENTS_BASE;
 export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
   ...DEFAULT_COMPONENTS_BASE,
+  messageActions: {
+    background: 'transparent',
+    border: 'none',
+    hoverBackground: 'components.button.ghost.hoverBackground',
+    hoverForeground: 'semantic.colors.text',
+    borderRadius: 'palette.radius.md',
+  },
   launcher: CIRCLE_LAUNCHER_TOKENS,
   activity: { rowHeight: "32px", labelSize: "13px", iconSize: "16px", indent: "0px", groupIndent: "0px", groupGap: "0px", groupPadding: "0px", transcriptGap: "0px", responseGap: "12px", bodyPadding: "4px 0", bodySize: "13px", bodyLineHeight: "1.5", bodyFontWeight: "400", sectionGap: "8px", bodySurface: "transparent" },
   toolBubble: { shadow: "none" },
@@ -632,6 +639,25 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
       background: 'transparent', border: 'transparent', borderWidth: '0px',
       borderRadius: '0px', shadow: 'none', padding: '0px',
       fontSize: '14px', lineHeight: '1.55',
+    },
+  },
+  artifact: {
+    ...DEFAULT_COMPONENTS_BASE.artifact,
+    card: {
+      background: 'semantic.colors.surface',
+      border: '1px solid var(--persona-border)',
+      borderRadius: 'palette.radius.lg',
+      hoverBackground: 'components.button.ghost.hoverBackground',
+      hoverBorderColor: 'semantic.colors.border',
+    },
+    inline: {
+      background: 'semantic.colors.surface',
+      border: '1px solid var(--persona-border)',
+      borderRadius: 'palette.radius.lg',
+      chromeBackground: 'semantic.colors.surface',
+      chromeBorder: 'semantic.colors.border',
+      titleColor: 'semantic.colors.text',
+      mutedColor: 'semantic.colors.textMuted',
     },
   },
   composer: {
@@ -1226,9 +1252,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     if (value) cssVars[`--persona-scroll-to-bottom-count-${alias}`] = value;
   }
 
-  // Per-message action row (copy, vote, read aloud). Same conditional rule:
-  // widget.css falls back to the scheme-aware ghost wash and semantic text, so
-  // an unset token must leave the variable undefined.
+  // V5 materializes message-action defaults in the theme; V4 retains the CSS
+  // fallbacks. References follow ghost/semantic overrides in either scheme.
   for (const [token, alias] of [
     ['background', 'bg'],
     ['border', 'border'],
@@ -1533,11 +1558,11 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
   }
   if (artifact?.card) {
     const t = artifact.card;
-    if (t.background) cssVars['--persona-artifact-card-bg'] = t.background;
+    if (t.background) cssVars['--persona-artifact-card-bg'] = resolveTokenValue(theme, t.background) ?? t.background;
     if (t.border) cssVars['--persona-artifact-card-border'] = t.border;
-    if (t.borderRadius) cssVars['--persona-artifact-card-radius'] = t.borderRadius;
-    if (t.hoverBackground) cssVars['--persona-artifact-card-hover-bg'] = t.hoverBackground;
-    if (t.hoverBorderColor) cssVars['--persona-artifact-card-hover-border'] = t.hoverBorderColor;
+    if (t.borderRadius) cssVars['--persona-artifact-card-radius'] = resolveTokenValue(theme, t.borderRadius) ?? t.borderRadius;
+    if (t.hoverBackground) cssVars['--persona-artifact-card-hover-bg'] = resolveTokenValue(theme, t.hoverBackground) ?? t.hoverBackground;
+    if (t.hoverBorderColor) cssVars['--persona-artifact-card-hover-border'] = resolveTokenValue(theme, t.hoverBorderColor) ?? t.hoverBorderColor;
   }
   if (artifact?.inline) {
     const t = artifact.inline;
@@ -1546,7 +1571,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
         resolveTokenValue(theme, t.background) ?? t.background;
     }
     if (t.border) cssVars['--persona-artifact-inline-border'] = t.border;
-    if (t.borderRadius) cssVars['--persona-artifact-inline-radius'] = t.borderRadius;
+    if (t.borderRadius) cssVars['--persona-artifact-inline-radius'] = resolveTokenValue(theme, t.borderRadius) ?? t.borderRadius;
     if (t.chromeBackground) {
       cssVars['--persona-artifact-inline-chrome-bg'] =
         resolveTokenValue(theme, t.chromeBackground) ?? t.chromeBackground;

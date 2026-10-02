@@ -826,7 +826,8 @@ export const createMessageActions = (
   actionsConfig: AgentWidgetMessageActionsConfig,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _callbacks?: MessageActionCallbacks,
-  eligibility?: MessageActionEligibility
+  eligibility?: MessageActionEligibility,
+  adaptiveVisibility = false
 ): HTMLElement => {
   const showCopy = actionsConfig.showCopy ?? true;
   const showUpvote = actionsConfig.showUpvote ?? false;
@@ -858,7 +859,8 @@ export const createMessageActions = (
     return empty;
   }
 
-  const visibility = actionsConfig.visibility ?? "hover";
+  const visibility = actionsConfig.visibility ??
+    (adaptiveVisibility && eligibility?.isLastAssistant ? "always" : "hover");
   const align = actionsConfig.align ?? "right";
   const layout = actionsConfig.layout ?? "pill-inside";
 
@@ -879,7 +881,7 @@ export const createMessageActions = (
     "div",
     `persona-message-actions persona-flex persona-items-center persona-gap-1 persona-mt-2 ${alignClass} ${layoutClass} ${
       visibility === "hover" ? "persona-message-actions-hover" : ""
-    }`
+    } ${adaptiveVisibility ? "persona-message-actions-adaptive" : ""}`
   );
   // Set id for idiomorph matching (prevents recreation on morph)
   container.id = `actions-${message.id}`;
@@ -963,6 +965,8 @@ export const createMessageActions = (
  * made by the transcript (which sees the whole list), not per bubble.
  */
 export type MessageActionEligibility = {
+  /** Latest ordinary assistant message, including an in-flight response. */
+  isLastAssistant?: boolean;
   canRegenerate?: boolean;
   canEdit?: boolean;
   canQuote?: boolean;
@@ -1330,7 +1334,8 @@ export const createStandardBubble = (
           { ...actionsConfig, showCopy: false, showUpvote: false, showDownvote: false, showReadAloud: false }
         : actionsConfig,
       actionCallbacks,
-      eligibility
+      eligibility,
+      options?.widgetConfig?.future?.v5Defaults === true && actionsConfig.visibility === undefined
     );
     bubble.appendChild(actions);
   }

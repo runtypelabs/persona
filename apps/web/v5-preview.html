@@ -23,6 +23,9 @@
           <option value="welcome">Welcome &amp; composer</option>
           <option value="states">Running &amp; failed tools</option>
           <option value="streaming">Loading &amp; follow-ups</option>
+          <option value="errors">Errors &amp; retry</option>
+          <option value="actions">Message actions</option>
+          <option value="artifacts">Artifacts</option>
           <option value="approval">Approval decisions &amp; outcomes</option>
           <option value="approval-custom">Approval · custom renderer</option>
           <option value="embedded">Embedded · transparent flex host</option>
@@ -38,6 +41,8 @@
         <label>Tool details<select id="v5-details"><option value="default">Default</option><option value="auto">Auto-expand while streaming</option><option value="summary">Summary only</option></select></label>
         <label>Status icons<select id="v5-icons"><option value="default">Default</option><option value="always">Always</option><option value="active">Active / attention only</option><option value="never">Never</option></select></label>
         <label>Suggestion edges<select id="v5-suggestion-edges"><option value="default">Default</option><option value="clip">Clip</option><option value="fade">Fade</option></select></label>
+        <label>Error display<select id="v5-error-display"><option value="default">Default</option><option value="block">Alert block</option><option value="bubble">Message bubble</option></select></label>
+        <label>Artifacts<select id="v5-artifacts"><option value="default">Default</option><option value="on">Enabled</option><option value="off">Disabled</option></select></label>
         <label>Top fade<select id="v5-fade"><option value="default">Default</option><option value="on">On</option><option value="off">Off</option></select></label>
         <div class="v5-actions"><button type="button" id="v5-stream">Run stream</button><button type="button" id="v5-reset">Reset scene</button></div>
         <p id="v5-status" role="status" aria-live="polite"></p>

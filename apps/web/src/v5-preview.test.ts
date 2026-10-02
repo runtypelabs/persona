@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import pageHtml from "../v5-preview.html?raw";
 import { afterEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ init: vi.fn(), inject: vi.fn(), destroy: vi.fn() }));
+const mocks = vi.hoisted(() => ({ init: vi.fn(), inject: vi.fn(), destroy: vi.fn(), upsertArtifact: vi.fn() }));
 vi.mock("@runtypelabs/persona", () => ({ initAgentWidget: mocks.init }));
 vi.mock("./examples-nav", () => ({ renderExamplesShell: vi.fn() }));
 vi.mock("./demo-echo-fetch", () => ({ createDemoEchoFetch: () => vi.fn() }));
 async function start() {
   vi.resetModules();
-  mocks.init.mockReturnValue({ injectTestMessage: mocks.inject, destroy: mocks.destroy });
+  mocks.init.mockReturnValue({ injectTestMessage: mocks.inject, destroy: mocks.destroy, upsertArtifact: mocks.upsertArtifact });
   document.body.innerHTML = pageHtml;
   await import("./v5-preview");
 }
@@ -18,6 +18,24 @@ function choose(id: string, value: string) {
 }
 afterEach(() => { window.dispatchEvent(new Event("pagehide")); vi.useRealTimers(); vi.clearAllMocks(); document.body.innerHTML = ""; });
 describe("V5 preview", () => {
+  it("preserves partial output before the sample error and exposes display overrides", async () => {
+    await start();
+    mocks.inject.mockClear();
+    choose("scene", "errors");
+    expect(mocks.inject.mock.calls.map(([event]) => event.message.id)).toEqual(["user", "partial", "sample-error"]);
+    expect(mocks.inject.mock.lastCall?.[0].message.dispatchError).toBe(true);
+    choose("error-display", "bubble");
+    expect(mocks.init.mock.lastCall?.[0].config.errorDisplay).toBe("bubble");
+  });
+  it("registers an artifact behind its transcript card and keeps the disabled setting explicit", async () => {
+    await start();
+    choose("scene", "artifacts");
+    expect(mocks.upsertArtifact).toHaveBeenCalledWith(expect.objectContaining({ id: "theme-checklist", artifactType: "markdown" }));
+    expect(mocks.upsertArtifact.mock.lastCall?.[0].transcript).toBe(false);
+    expect(mocks.inject.mock.lastCall?.[0].message.rawContent).toContain("PersonaArtifactCard");
+    choose("artifacts", "off");
+    expect(mocks.init.mock.lastCall?.[0].config.features.artifacts.enabled).toBe(false);
+  });
   it("starts on real V5 defaults with local replies and stable sample order", async () => {
     await start();
     const config = mocks.init.mock.calls[0][0].config;

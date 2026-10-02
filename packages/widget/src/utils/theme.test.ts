@@ -872,7 +872,7 @@ describe('theme utils', () => {
     expect(explicit['--persona-history-confirm-scrim']).toBe('rgba(0, 0, 0, 0.6)');
   });
 
-  it('emits messageActions aliases only when the group is configured', () => {
+  it('preserves V4 messageActions aliases only when the group is configured', () => {
     // widget.css chains to the ghost wash and semantic text on its own, so an
     // unset group must leave every alias undefined.
     const defaults = themeToCssVariables(createTheme());
@@ -907,6 +907,28 @@ describe('theme utils', () => {
     );
     expect(partial['--persona-message-action-radius']).toBe('2px');
     expect(partial['--persona-message-action-hover-bg']).toBeUndefined();
+  });
+
+  it.each(['light', 'dark'] as const)('materializes V5 message action tokens in the %s scheme', (colorScheme) => {
+    const config = { future: { v5Defaults: true }, colorScheme };
+    const defaults = themeToCssVariables(getActiveTheme(config));
+    expect(defaults['--persona-message-action-bg']).toBe('transparent');
+    expect(defaults['--persona-message-action-border']).toBe('none');
+    expect(defaults['--persona-message-action-hover-bg']).toBe(
+      colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'
+    );
+    expect(defaults['--persona-message-action-hover-fg']).toBe(defaults['--persona-text']);
+    expect(defaults['--persona-message-action-radius']).toBe('8px');
+
+    const theme = { components: {
+      button: { ghost: { hoverBackground: '#123456' } },
+      messageActions: { borderRadius: '3px', hoverForeground: '#abcdef' },
+    } };
+    const custom = themeToCssVariables(getActiveTheme({ ...config, theme, darkTheme: theme }));
+    expect(custom['--persona-message-action-hover-bg']).toBe('#123456');
+    expect(custom['--persona-message-action-hover-fg']).toBe('#abcdef');
+    expect(custom['--persona-message-action-radius']).toBe('3px');
+    expect(custom['--persona-message-action-bg']).toBe('transparent');
   });
 
   it('defaults artifact pane fill from semantic container and resolves toolbar background token refs', () => {
@@ -1532,4 +1554,41 @@ describe('V5 header control surfaces', () => {
     expect(custom['--persona-components-header-controlBorderRadius']).toBe('4px');
     expect(custom['--persona-components-header-controlHoverBackground']).toBe('red');
   });
+});
+
+
+it.each(['light', 'dark'] as const)('emits V5 artifact card and inline defaults in %s', colorScheme => {
+  const config = { future: { v5Defaults: true }, colorScheme };
+  const css = themeToCssVariables(getActiveTheme(config));
+  expect(css['--persona-artifact-card-bg']).toBe(css['--persona-surface']);
+  expect(css['--persona-artifact-card-border']).toBe('1px solid var(--persona-border)');
+  expect(css['--persona-artifact-card-radius']).toBe('12px');
+  expect(css['--persona-artifact-card-hover-border']).toBe(css['--persona-border']);
+  expect(css['--persona-artifact-card-hover-bg']).toBe(colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)');
+  expect(css['--persona-artifact-inline-bg']).toBe(css['--persona-surface']);
+  expect(css['--persona-artifact-inline-border']).toBe('1px solid var(--persona-border)');
+  expect(css['--persona-artifact-inline-radius']).toBe('12px');
+  expect(css['--persona-artifact-inline-chrome-bg']).toBe(css['--persona-surface']);
+  expect(css['--persona-artifact-inline-chrome-border']).toBe(css['--persona-border']);
+  expect(css['--persona-artifact-inline-title-color']).toBe(css['--persona-text']);
+  expect(css['--persona-artifact-inline-muted-color']).toBe(css['--persona-muted']);
+  const theme = { components: { artifact: {
+    card: { background: '#123456', borderRadius: '3px', hoverBackground: '#234567' },
+    inline: { borderRadius: '4px', chromeBackground: '#345678', titleColor: '#abcdef' },
+  } } };
+  const custom = themeToCssVariables(getActiveTheme({ ...config, theme, darkTheme: theme }));
+  expect(custom['--persona-artifact-card-bg']).toBe('#123456');
+  expect(custom['--persona-artifact-card-radius']).toBe('3px');
+  expect(custom['--persona-artifact-card-hover-bg']).toBe('#234567');
+  expect(custom['--persona-artifact-inline-radius']).toBe('4px');
+  expect(custom['--persona-artifact-inline-chrome-bg']).toBe('#345678');
+  expect(custom['--persona-artifact-inline-title-color']).toBe('#abcdef');
+});
+
+it('preserves V4 artifact card and inline CSS fallbacks', () => {
+  const css = themeToCssVariables(getActiveTheme({}));
+  expect(css['--persona-artifact-card-bg']).toBeUndefined();
+  expect(css['--persona-artifact-card-radius']).toBeUndefined();
+  expect(css['--persona-artifact-inline-bg']).toBeUndefined();
+  expect(css['--persona-artifact-inline-radius']).toBeUndefined();
 });

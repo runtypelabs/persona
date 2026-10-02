@@ -1300,8 +1300,9 @@ export type AgentWidgetMessageActionsConfig = {
    */
   showQuote?: boolean;
   /**
-   * Visibility mode: 'always' shows buttons always, 'hover' shows on hover only
-   * @default 'hover'
+   * Explicit visibility overrides the default behavior. V4 defaults to hover;
+   * V5 shows actions on the last assistant message, coarse pointers, and widths
+   * below 640px, and otherwise reveals them on hover or keyboard focus.
    */
   visibility?: "always" | "hover";
   /**
@@ -1749,7 +1750,7 @@ export type PersonaArtifactCustomAction = {
 };
 
 export type AgentWidgetArtifactsFeature = {
-  /** When true, Persona shows the artifact pane and handles artifact_* SSE events */
+  /** Enables artifact UI. Defaults to true in V5; V4 requires explicit opt-in. */
   enabled?: boolean;
   /** If set, artifact events for other types are ignored */
   allowedTypes?: PersonaArtifactKind[];
@@ -7078,9 +7079,8 @@ export type AgentWidgetConfig = {
    */
   targetProviders?: Record<string, TargetResolver>;
   /**
-   * Override the assistant-bubble copy shown when a dispatch fails before any
-   * response streams back (connection refused, CORS, 4xx/5xx, malformed
-   * stream). Provide a static string, or a function of the error so you can
+   * Override the detail shown when a dispatch fails, in either error display
+   * mode (connection refused, CORS, 4xx/5xx, malformed stream). Provide a static string, or a function of the error so you can
    * tailor the message per failure and decide whether to surface the raw
    * reason. When omitted, a default message is shown that includes the
    * underlying error detail.
@@ -7102,6 +7102,8 @@ export type AgentWidgetConfig = {
    * ```
    */
   errorMessage?: string | ((error: Error) => string);
+  /** Dispatch failure presentation. Defaults to "bubble" in V4, "block" in V5. */
+  errorDisplay?: "bubble" | "block";
   /**
    * Agent configuration for agent execution mode.
    * When provided, the widget uses agent loop execution instead of flow dispatch.
@@ -8037,6 +8039,8 @@ export type AgentWidgetMessage = {
    */
   composerOptions?: ComposerOptionsPayload;
   streaming?: boolean;
+  /** Dispatch failure detail; rendered according to `errorDisplay`. */
+  dispatchError?: boolean;
   variant?: AgentWidgetMessageVariant;
   sequence?: number;
   reasoning?: AgentWidgetReasoning;
@@ -8131,6 +8135,8 @@ export type AgentWidgetMessage = {
  * }
  */
 export type InjectMessageOptions = {
+  /** Mark assistant content as dispatch failure detail for `errorDisplay`. */
+  dispatchError?: boolean;
   /**
    * Message role: "assistant", "user", or "system"
    */

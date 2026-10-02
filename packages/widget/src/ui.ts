@@ -6486,9 +6486,18 @@ export const createAgentExperience = (
     // regenerate control lives on exactly one message and only while the thread
     // is settled.
     const actionsCfg = config.messageActions;
+    let lastAssistantId: string | undefined;
+    if (config.future?.v5Defaults && actionsCfg?.visibility === undefined) {
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === "assistant" && !messages[i].variant) {
+          lastAssistantId = messages[i].id;
+          break;
+        }
+      }
+    }
     const retryableAssistantId =
-      actionsCfg?.showRegenerate === true &&
-      actionsCfg.enabled !== false &&
+      (actionsCfg?.showRegenerate === true || config.errorDisplay === "block") &&
+      actionsCfg?.enabled !== false &&
       // The first pass paints restored history before the session exists.
       sessionRef.current?.isStreaming() !== true
         ? findRetryableAssistantMessageId(messages)
@@ -6592,7 +6601,9 @@ export const createAgentExperience = (
           }`
         : "";
       const actionEligibility: MessageActionEligibility = {
-        canRegenerate: retryableAssistantId === message.id,
+        isLastAssistant: message.id === lastAssistantId,
+        canRegenerate: retryableAssistantId === message.id &&
+          (actionsCfg?.showRegenerate === true || message.dispatchError === true),
         canEdit: editEnabled && isEditableUserMessage(message),
         canQuote:
           quoteEnabled && !message.variant && (message.content?.trim().length ?? 0) > 0,
@@ -6602,7 +6613,7 @@ export const createAgentExperience = (
       // transcript grows.
       const eligibilityKey = `${actionEligibility.canRegenerate ? "r" : ""}${
         actionEligibility.canEdit ? "e" : ""
-      }${actionEligibility.canQuote ? "q" : ""}`;
+      }${actionEligibility.canQuote ? "q" : ""}${actionEligibility.isLastAssistant ? "l" : ""}`;
       // A turn/execution id can contain many calls. Only an explicit per-call
       // link is safe; approval acceptance never implies tool completion.
       const linkedTools = message.approval?.toolCallId
@@ -6621,7 +6632,8 @@ export const createAgentExperience = (
       const fingerprint =
         computeMessageFingerprint(message, configVersion) + askMeta + `:${eligibilityKey}` +
         (approvalWithPlugin ? `:${message.approval?.toolCallId ?? ""}:${JSON.stringify(execution)}` : "");
-      const cachedWrapper = (askWithPlugin || approvalWithPlugin || hasDirectiveBubble)
+      const cachedWrapper = (askWithPlugin || approvalWithPlugin || hasDirectiveBubble ||
+        (message.dispatchError && config.errorDisplay === "block" && !approvalUi))
         ? null
         : getCachedWrapper(messageCache, message.id, fingerprint);
       if (cachedWrapper) {
@@ -6647,6 +6659,18 @@ export const createAgentExperience = (
 
       let bubble: HTMLElement | null = null;
 
+      const renderDefaultMessage = (): HTMLElement => {
+        if (message.dispatchError && config.errorDisplay === "block") {
+          const mod = ensureApprovalUi();
+          if (mod) return mod.createErrorBlock(message, transform, actionEligibility.canRegenerate === true);
+        }
+        // Keep the detail readable even while the secondary UI chunk loads.
+        return createStandardBubble(message, transform, config.layout?.messages,
+          config.messageActions, messageActionCallbacks, {
+            loadingIndicatorRenderer: inlineLoadingRenderer, widgetConfig: config, actionEligibility
+          });
+      };
+
       // Try plugins first
       const matchingPlugin = plugins.find((p) => {
         if (message.variant === "reasoning" && p.renderReasoning) {
@@ -6663,9 +6687,6 @@ export const createAgentExperience = (
         }
         return false;
       });
-
-      // Get message layout config
-      const messageLayoutConfig = config.layout?.messages;
 
       // ask_user_question has two rendering modes while waiting for an answer:
       //   1. Plugin `renderAskUserQuestion`: returns an inline transcript
@@ -6887,18 +6908,7 @@ export const createAgentExperience = (
           bubble = matchingPlugin.renderMessage({
             message,
             defaultRenderer: () => {
-              const b = createStandardBubble(
-                message,
-                transform,
-                messageLayoutConfig,
-                config.messageActions,
-                messageActionCallbacks,
-                {
-                  loadingIndicatorRenderer: inlineLoadingRenderer,
-                  widgetConfig: config,
-                  actionEligibility
-                }
-              );
+              const b = renderDefaultMessage();
               if (message.role !== "user") {
                 enhanceWithFormsLazy(b, message, config, session);
               }
@@ -7073,19 +7083,9 @@ export const createAgentExperience = (
               streaming: Boolean(message.streaming)
             });
           } else {
-            bubble = createStandardBubble(
-              message,
-              transform,
-              messageLayoutConfig,
-              config.messageActions,
-              messageActionCallbacks,
-              {
-                loadingIndicatorRenderer: inlineLoadingRenderer,
-                widgetConfig: config,
-                actionEligibility
-              }
-            );
+            bubble = renderDefaultMessage();
           }
+
           if (message.role !== "user" && bubble) {
             enhanceWithFormsLazy(bubble, message, config, session);
           }
@@ -14137,7 +14137,9 @@ export const createAgentExperience = (
       // Re-render messages if config affecting message rendering changed
       const toolCallConfigChanged = JSON.stringify(config.toolCall) !== JSON.stringify(previousToolCallConfig);
       const messageActionsChanged = JSON.stringify(config.messageActions) !== JSON.stringify(previousMessageActions);
-      const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages);
+      const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages)
+        || config.layout?.messages?.renderAssistantMessage !== previousLayoutMessages?.renderAssistantMessage
+        || config.layout?.messages?.renderUserMessage !== previousLayoutMessages?.renderUserMessage;
       const loadingIndicatorChanged = config.loadingIndicator?.variant !== previousLoadingIndicator?.variant
         || config.loadingIndicator?.label !== previousLoadingIndicator?.label
         || config.loadingIndicator?.render !== previousLoadingIndicator?.render
@@ -14150,7 +14152,8 @@ export const createAgentExperience = (
         || JSON.stringify(config.features?.reasoningDisplay) !== JSON.stringify(previousReasoningDisplay);
       const messagesConfigChanged = (config.future?.v5Defaults === true) !== previousDefaultsVersion
         || toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged
-        || loadingIndicatorChanged || iterationDisplayChanged || featuresChanged;
+        || loadingIndicatorChanged || iterationDisplayChanged || featuresChanged
+        || "errorDisplay" in nextConfig;
       if (messagesConfigChanged && session) {
         configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);

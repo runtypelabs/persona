@@ -913,6 +913,13 @@ function renderDefaultArtifactInline(
 }
 
 export const PersonaArtifactInline: ComponentRenderer = (props, context) => {
+  // V4 historically showed transcript references even when its pane was off.
+  // V5 applies the feature gate before custom renderers or preview work runs.
+  if (context?.config?.future?.v5Defaults === true && context.config.features?.artifacts?.enabled !== true) {
+    const hidden = document.createElement("div");
+    hidden.hidden = true;
+    return hidden;
+  }
   const customRenderer = context?.config?.features?.artifacts?.renderInline;
   if (customRenderer) {
     const title =

@@ -3245,3 +3245,13 @@ streamed text, and suggestion overflow without a backend.
 V5 horizontally scrolling suggestion chips hide the native scrollbar, including while hovered or scrolling. Edge fades, touch scrolling, and keyboard focus navigation remain available. V4 scrolling keeps its existing scrollbar behavior.
 
 Use `suggestions.followUps.edgeStyle` (or `suggestions.starters.edgeStyle`) to choose `"clip"` or `"fade"` for horizontal chips. Both versions default to fades and scroll freely without snapping. V5 composer rows extend to the footer edges and initially align with the composer inset. Native overscroll feedback remains platform-dependent.
+
+### Errors, message actions, and artifacts
+
+`errorDisplay` accepts `"bubble"` (V4 default) or `"block"` (V5 default), independently of the defaults version. The block announces a dispatch failure with `role="alert"`, preserves partial response text above it, and offers expandable detail and Retry when a preceding user message can be retried. `errorMessage` supplies the detail in either presentation. Custom message renderers remain available. Disabling message actions also disables the block's Retry control.
+
+V5's default assistant actions stay visible on the latest answer. Earlier answers reveal actions on hover or keyboard focus; on coarse-pointer devices or viewports below 640px they stay visible. An answer being streamed has no action row. Explicit `messageActions.visibility: "hover"` or `"always"` keeps the requested behavior. V4 retains its existing visibility default. Style these controls through `theme.components.messageActions`.
+
+Artifacts are enabled by default in V5; V4 requires `features.artifacts.enabled: true`. Explicit `false` disables V5 transcript artifact cards, inline previews, and the pane. When enabled, the separate artifact UI module loads at widget initialization; the pane stays hidden until there is an artifact to show. Presentation still defaults to `"panel"`; choose `features.artifacts.display: "collapsed"` for click-to-open cards or `"inline"` for transcript previews. An enabled artifact can still use a custom renderer. Style its transcript card and inline body through `theme.components.artifact.card` and `.inline`; explicit theme values take precedence over the V5 defaults.
+
+The V5 preview includes **Errors & retry**, **Message actions**, and **Artifacts** scenes. Retry uses a local response, and the artifact scene can compare enabled and disabled behavior without a backend.

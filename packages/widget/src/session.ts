@@ -237,8 +237,7 @@ export class SessionHistoryError extends Error {
 }
 
 /**
- * Build the user-facing content shown when a dispatch fails before any
- * assistant content streamed back. This fires on real network/server errors
+ * Build the user-facing detail shown when a dispatch fails. This fires on real network/server errors
  * (connection refused, CORS, 4xx/5xx, malformed stream): not just an
  * un-wired proxy, so the copy stays honest about the failure and surfaces the
  * underlying reason to help with debugging.
@@ -2245,6 +2244,14 @@ export class AgentWidgetSession {
    * });
    */
   public injectMessage(options: InjectMessageOptions): AgentWidgetMessage {
+    const message = this.createInjectedMessage(options);
+    // Use upsert to handle both new messages and updates (streaming).
+    this.upsertMessage(message);
+    return message;
+  }
+
+  /** Shared by single and batch injection, including dispatch error detail. */
+  private createInjectedMessage(options: InjectMessageOptions): AgentWidgetMessage {
     const {
       role,
       content,
@@ -2267,7 +2274,7 @@ export class AgentWidgetSession {
           ? generateAssistantMessageId()
           : `system-${Date.now()}-${Math.random().toString(16).slice(2)}`);
 
-    const message: AgentWidgetMessage = {
+    return {
       id: messageId,
       role,
       content,
@@ -2278,13 +2285,10 @@ export class AgentWidgetSession {
       ...(llmContent !== undefined && { llmContent }),
       ...(contentParts !== undefined && { contentParts }),
       ...(voiceProcessing !== undefined && { voiceProcessing }),
-      ...(rawContent !== undefined && { rawContent })
+      ...(rawContent !== undefined && { rawContent }),
+      ...(options.dispatchError !== undefined && { dispatchError: options.dispatchError })
     };
 
-    // Use upsert to handle both new messages and updates (streaming)
-    this.upsertMessage(message);
-
-    return message;
   }
 
   /**
@@ -2346,45 +2350,7 @@ export class AgentWidgetSession {
    * Inject multiple messages in a single batch with one sort and one render pass.
    */
   public injectMessageBatch(optionsList: InjectMessageOptions[]): AgentWidgetMessage[] {
-    const results: AgentWidgetMessage[] = [];
-
-    for (const options of optionsList) {
-      const {
-        role,
-        content,
-        llmContent,
-        contentParts,
-        id,
-        createdAt,
-        sequence,
-        streaming = false,
-        voiceProcessing,
-        rawContent
-      } = options;
-
-      const messageId =
-        id ??
-        (role === "user"
-          ? generateUserMessageId()
-          : role === "assistant"
-            ? generateAssistantMessageId()
-            : `system-${Date.now()}-${Math.random().toString(16).slice(2)}`);
-
-      const message: AgentWidgetMessage = {
-        id: messageId,
-        role,
-        content,
-        createdAt: createdAt ?? new Date().toISOString(),
-        sequence: sequence ?? this.nextSequence(),
-        streaming,
-        ...(llmContent !== undefined && { llmContent }),
-        ...(contentParts !== undefined && { contentParts }),
-        ...(voiceProcessing !== undefined && { voiceProcessing }),
-        ...(rawContent !== undefined && { rawContent })
-      };
-
-      results.push(message);
-    }
+    const results = optionsList.map((options) => this.createInjectedMessage(options));
 
     // Add all messages, sort once, notify once
     this.messages = this.sortMessages([...this.messages, ...results]);
@@ -2705,23 +2671,7 @@ export class AgentWidgetSession {
          error.message.includes('abort'));
 
       if (!isAbortError) {
-        const content = buildDispatchErrorContent(
-          error,
-          this.config.errorMessage
-        );
-        // An override that returns "" suppresses the fallback bubble entirely
-        // (onError still fires below).
-        if (content) {
-          const fallback: AgentWidgetMessage = {
-            id: assistantMessageId, // Use the pre-generated ID for fallback too
-            role: "assistant",
-            createdAt: new Date().toISOString(),
-            content,
-            sequence: this.nextSequence()
-          };
-
-          this.appendMessage(fallback);
-        }
+        this.appendDispatchError(error);
       }
 
       this.setStatus("idle");
@@ -2893,23 +2843,7 @@ export class AgentWidgetSession {
          error.message.includes('abort'));
 
       if (!isAbortError) {
-        const content = buildDispatchErrorContent(
-          error,
-          this.config.errorMessage
-        );
-        // An override that returns "" suppresses the fallback bubble entirely
-        // (onError still fires below).
-        if (content) {
-          const fallback: AgentWidgetMessage = {
-            id: assistantMessageId,
-            role: "assistant",
-            createdAt: new Date().toISOString(),
-            content,
-            sequence: this.nextSequence()
-          };
-
-          this.appendMessage(fallback);
-        }
+        this.appendDispatchError(error);
       }
       this.setStatus("idle");
       this.setStreaming(false);
@@ -4890,6 +4824,24 @@ export class AgentWidgetSession {
     this.readAloud.stop();
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel();
+    }
+  }
+
+  /** Preserve streamed output and give its failure a distinct transcript row. */
+  private appendDispatchError(error: unknown): void {
+    for (const message of this.messages) message.streaming = false;
+    const content = buildDispatchErrorContent(error, this.config.errorMessage);
+    if (content) {
+      this.appendMessage({
+        id: generateAssistantMessageId(),
+        role: "assistant",
+        content,
+        dispatchError: true,
+        createdAt: new Date().toISOString(),
+        sequence: this.nextSequence(),
+      });
+    } else {
+      this.callbacks.onMessagesChanged([...this.messages]);
     }
   }
 

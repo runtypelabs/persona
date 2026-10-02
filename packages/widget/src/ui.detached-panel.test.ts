@@ -66,7 +66,7 @@ const queryEmbedRefs = (mount: HTMLElement) => {
   const container = mount.querySelector<HTMLElement>(".persona-widget-container");
   return {
     wrapper: mount.firstElementChild as HTMLElement | null,
-    panel: (container?.parentElement ?? null) as HTMLElement | null,
+    panel: mount.firstElementChild?.firstElementChild as HTMLElement | null,
     container,
   };
 };

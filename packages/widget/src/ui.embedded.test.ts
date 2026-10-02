@@ -23,9 +23,16 @@ describe.each([false, true])("embedded presentation (v5=%s)", v5 => {
     const root = mount();
     mounted.push(createAgentExperience(root, config(v5, scheme)));
     const container = root.querySelector<HTMLElement>(".persona-widget-container")!;
-    for (const node of [root, root.firstElementChild, container.parentElement, container] as HTMLElement[]) {
+    for (const node of [root, root.firstElementChild, root.firstElementChild?.firstElementChild, container] as HTMLElement[]) {
       expect(node.style.display).toBe("flex");
       expect(node.style.minHeight).toBe("0px");
+    }
+    // Artifact-enabled layouts insert flex wrappers between the panel and chat.
+    if (v5) {
+      for (const node of [container.parentElement, container.parentElement?.parentElement]) {
+        expect(node?.classList.contains("persona-flex")).toBe(true);
+        expect(node?.classList.contains("persona-min-h-0")).toBe(true);
+      }
     }
     expect(root.querySelector<HTMLElement>(".persona-widget-body")!.style.overflowY).toBe("auto");
     expect(root.querySelector<HTMLElement>(".persona-widget-footer")!.style.flexShrink).toBe("0");

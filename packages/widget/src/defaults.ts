@@ -265,12 +265,15 @@ export const DEFAULT_LAUNCHER_V5: Partial<AgentWidgetLauncherConfig> = {
   headerIconSize: "20px",
 };
 export const DEFAULTS_V5: Partial<AgentWidgetConfig> = {
+  errorDisplay: "block",
+  messageActions: { visibility: undefined },
   // Let the suggestion theme token control weight; explicit legacy overrides still win.
   suggestionChipsConfig: { fontWeight: undefined },
   approval: DEFAULT_APPROVAL_V5,
   loadingIndicator: { variant: "label" },
   launcher: DEFAULT_LAUNCHER_V5,
   features: {
+    artifacts: { enabled: true },
     toolCallDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, grouped: true, groupedMode: "collapsible", loadingAnimation: "shimmer" },
     reasoningDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, loadingAnimation: "shimmer" },
   },

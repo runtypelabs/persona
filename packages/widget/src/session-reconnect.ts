@@ -170,6 +170,7 @@ export function createReconnectController(
     );
     if (content) {
       host.appendMessage({
+        dispatchError: true,
         id: `reconnect-failed-${handle?.executionId ?? host.nextSequence()}`,
         role: "assistant",
         content,

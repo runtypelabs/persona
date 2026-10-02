@@ -910,6 +910,19 @@ describe("createMessageActions: chromeless action buttons", () => {
   const actionButtons = (row: HTMLElement) =>
     Array.from(row.querySelectorAll<HTMLButtonElement>("button[data-action]"));
 
+  it.each([false, true])("hides built-in and custom actions until streaming ends (V5: %s)", (v5Defaults) => {
+    const render = (streaming: boolean) => createStandardBubble(
+      makeMessage({ content: "Partial answer", streaming }),
+      ({ text }) => text,
+      undefined,
+      { visibility: "always", custom: [{ id: "share", label: "Share", onSelect: () => {} }] },
+      undefined,
+      { widgetConfig: { future: { v5Defaults } } as AgentWidgetConfig, actionEligibility: { isLastAssistant: true } }
+    );
+    expect(render(true).querySelector("[data-actions-for]")).toBeNull();
+    expect(actionButtons(render(false)).map((button) => button.dataset.action)).toEqual(["copy", "custom:share"]);
+  });
+
   it("keeps voting controls hidden unless explicitly enabled", () => {
     const row = createMessageActions(makeMessage({ id: "actions-default-votes" }), {});
 

@@ -12,6 +12,7 @@ import type { ApprovalUiDeps } from "./components/approval-deps";
  * `history-view-loader.ts` for the full rationale).
  */
 export type ApprovalUiModule = {
+  createErrorBlock: typeof import("./components/error-block").createErrorBlock;
   createApprovalBubble: (
     message: AgentWidgetMessage,
     config?: AgentWidgetConfig,

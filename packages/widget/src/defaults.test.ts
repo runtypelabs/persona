@@ -9,6 +9,16 @@ import {
 describe.each([false, true])("defaults resolver (v5Defaults: %s)", (v5Defaults) => {
   const future = { v5Defaults };
 
+  it("enables artifacts only by default in V5 and preserves explicit choices", () => {
+    expect(mergeWithDefaults({ future }).features?.artifacts?.enabled === true).toBe(v5Defaults);
+    expect(mergeWithDefaults({ future, features: { artifacts: { display: "collapsed" } } })
+      .features?.artifacts?.enabled === true).toBe(v5Defaults);
+    for (const enabled of [false, true]) {
+      expect(mergeWithDefaults({ future, features: { artifacts: { enabled } } })
+        .features?.artifacts?.enabled).toBe(enabled);
+    }
+  });
+
   it("leaves V5 suggestion weight to theme tokens and preserves explicit legacy overrides", () => {
     expect(mergeWithDefaults({ future }).suggestionChipsConfig?.fontWeight)
       .toBe(v5Defaults ? undefined : "500");

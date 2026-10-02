@@ -3650,7 +3650,9 @@
 }
 
 .persona-message-assistant-bubble p,
-.persona-message-assistant-bubble li {
+.persona-message-assistant-bubble li,
+.persona-error-detail p,
+.persona-error-detail li {
   color: inherit;
 }
 
@@ -4100,6 +4102,18 @@
     /* Keep normal flow positioning on mobile */
     position: static;
     opacity: 1;
+  }
+}
+
+/* The V5 default also stays reachable on hybrid touch devices and narrow
+   viewports. Explicit hover/always modes retain their existing behavior. */
+@media (pointer: coarse), (max-width: 639px) {
+  .persona-message-actions-adaptive.persona-message-actions-hover {
+    position: static;
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+    margin-top: 0.5rem;
   }
 }
 
@@ -7567,4 +7581,45 @@
 .persona-suggestions.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-edge-style="clip"] {
   mask-image: none;
   -webkit-mask-image: none;
+}
+
+/* Dispatch errors retain partial output in the preceding transcript row. */
+.persona-error-block {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--persona-danger, #dc2626) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--persona-danger, #dc2626) 22%, transparent);
+  color: var(--persona-text, #111827);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.persona-error-title { display: block; font-weight: 600; }
+.persona-error-summary { display: block; cursor: pointer; list-style: none; }
+.persona-error-summary::-webkit-details-marker { display: none; }
+.persona-error-detail { margin-top: 4px; overflow-wrap: anywhere; }
+.persona-error-details:not([open]) .persona-error-detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.persona-error-more, .persona-error-less { font-size: 12px; text-decoration: underline; }
+.persona-error-less, .persona-error-details[open] .persona-error-more { display: none; }
+.persona-error-details[open] .persona-error-less { display: inline; }
+.persona-error-retry {
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  margin-top: 10px;
+  padding: 4px 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.persona-error-summary:focus-visible, .persona-error-retry:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
 }

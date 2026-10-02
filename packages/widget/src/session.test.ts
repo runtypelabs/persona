@@ -1142,6 +1142,29 @@ describe('AgentWidgetSession - dispatch error fallback', () => {
     expect(errors).toHaveLength(0);
   });
 
+  it('retains partial output with unique ids and settles it before the error row', async () => {
+    const session = new AgentWidgetSession(
+      { apiUrl: 'http://example.invalid/chat', errorMessage: 'Connection lost' },
+      { onMessagesChanged: () => {}, onStatusChanged: () => {}, onStreamingChanged: () => {} }
+    );
+    // Fail after the client has already emitted content using the reserved id.
+    const client = (session as unknown as { client: { dispatch: (...args: unknown[]) => Promise<void> } }).client;
+    vi.spyOn(client, 'dispatch').mockImplementation(async (...args) => {
+      const request = args[0] as { assistantMessageId: string };
+      session.injectTestEvent({ type: 'message', message: {
+        id: request.assistantMessageId, role: 'assistant', content: 'Partial output',
+        streaming: true, createdAt: new Date().toISOString(),
+      } });
+      throw new Error('broken stream');
+    });
+    await session.sendMessage('Hello');
+    const assistants = session.getMessages().filter((m) => m.role === 'assistant');
+    expect(assistants.map((m) => m.content)).toEqual(['Partial output', 'Connection lost']);
+    expect(new Set(assistants.map((m) => m.id)).size).toBe(2);
+    expect(assistants.every((m) => !m.streaming)).toBe(true);
+    expect(assistants[1].dispatchError).toBe(true);
+  });
+
   it('applies the override on continueConversation failures too', async () => {
     failFetchWith(new Error('boom'));
     const session = new AgentWidgetSession(
