@@ -164,7 +164,8 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
           .map((f) => String(f.json!.text))
           .find((text) => ANSWER.test(text));
       await expect.poll(replyText, { timeout: 30_000 }).toBeTruthy();
-      await page.waitForTimeout(3_000);
+      // A late delegation would land within seconds of the reply: wait 10 s.
+      await page.waitForTimeout(10_000);
       expect(json("in", "delegation_requested")).toEqual([]);
       expect(json("in", "delegation_started")).toEqual([]);
       expect(json("out", "delegation_result")).toEqual([]);
