@@ -149,6 +149,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       let text = answerOf(capture.ids);
       const pending = capture.failed ? [] : raised().filter(isPendingApproval);
       if (pending.length) {
+        const own = new Set(pending.map((m) => m.id));
         // Parked on approvals: answer now, so the voice model asks for the
         // decision, then read the outcome back once the visitor decides.
         text = `${text}\n\n${buildApprovalScript(pending.map((m) => m.approval!))}`.trim();
@@ -157,12 +158,14 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
           text,
           followUp: async (signal) => {
             const follow: VoiceDelegationCapture = { ids: [], failed: false };
+            // This turn's approvals, and any its resumed stream chains into
+            // (not another turn's).
+            const mine = () => raised().filter((m) => own.has(m.id) || follow.ids.includes(m.id));
             following = follow;
             retrack();
             try {
-              // Every approval the turn raised (or chains into) decided, and
-              // the resumed turn finished.
-              while (!signal.aborted && (host.busy() || host.parked() || raised().some(isPendingApproval))) {
+              // Every approval of this turn decided, and the resumed turn finished.
+              while (!signal.aborted && (host.busy() || host.parked() || mine().some(isPendingApproval))) {
                 await sleep();
               }
             } finally {
@@ -172,7 +175,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
               }
             }
             if (signal.aborted || follow.failed) return "";
-            const declined = raised()
+            const declined = mine()
               .filter((m) => m.approval?.status === "denied")
               .map((m) => humanize(m.approval!.toolName));
             return answerOf(follow.ids) || (declined.length ? `The user declined: ${declined.join(", ")}.` : "");

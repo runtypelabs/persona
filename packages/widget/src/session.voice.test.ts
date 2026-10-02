@@ -672,21 +672,21 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(await pending).toEqual({ ok: false, text: '' });
   });
 
-  const parkOnApproval = (approval: Partial<NonNullable<AgentWidgetMessage['approval']>> = {}) =>
+  const parkOnApproval = (approval: Partial<NonNullable<AgentWidgetMessage['approval']>> = {}, key = 'ap1') =>
     dispatch.mockImplementationOnce(async (_options, onEvent) => {
       const createdAt = new Date().toISOString();
       onEvent({ type: 'status', status: 'connecting' });
-      onEvent({ type: 'message', message: { id: 'r1', role: 'assistant', content: 'I can do that.', createdAt } });
+      onEvent({ type: 'message', message: { id: `r-${key}`, role: 'assistant', content: 'I can do that.', createdAt } });
       onEvent({
         type: 'message',
         message: {
-          id: 'approval-ap1',
+          id: `approval-${key}`,
           role: 'assistant',
           content: '',
           createdAt,
           variant: 'approval',
           approval: {
-            id: 'ap1',
+            id: key,
             status: 'pending',
             agentId: 'a1',
             executionId: 'e1',
@@ -722,7 +722,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       internals().abortController = null;
     });
   };
-  const approvalOf = () => messages.find((m) => m.id === 'approval-ap1')!.approval!;
+  const approvalOf = (key = 'ap1') => messages.find((m) => m.id === `approval-${key}`)!.approval!;
 
   it('asks for a parked approval in words the voice model can say', async () => {
     drive('user', 'order two croissants', true, 'u1');
@@ -748,6 +748,22 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     await session.resolveApproval(approvalOf(), 'approved');
     expect(await followUp).toBe('Your order is in: pickup today at 4pm.');
     expect(spoken('assistant-after')).toBe(true);
+  });
+
+  it("follows up once its own approval is decided, not another turn's", async () => {
+    drive('user', 'order two croissants', true, 'u1');
+    parkOnApproval();
+    const first = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    const followUp = first.followUp!(new AbortController().signal);
+    drive('user', 'and a cake', true, 'u2');
+    parkOnApproval({ toolName: 'order_cake' }, 'ap2');
+    await h.state.bridge!.runDelegatedTurn({ turnId: 'd2', userText: 'and a cake' });
+    expect(approvalOf('ap2').status).toBe('pending');
+
+    resumeWith('Croissants ordered.');
+    await session.resolveApproval(approvalOf(), 'approved');
+    expect(await followUp).toBe('Croissants ordered.');
+    expect(approvalOf('ap2').status).toBe('pending');
   });
 
   it('follows up with the decline when a denied approval brings no reply', async () => {
