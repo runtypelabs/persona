@@ -4072,6 +4072,42 @@
     opacity: 1;
     pointer-events: auto;
   }
+
+  /* Room for the hover pill so it never covers text. Right-aligned: an inline
+     spacer as wide as its buttons ends the last line (it wraps to a line of its
+     own when the last line is full). Left/center: a line below the text. */
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill.persona-message-actions-right)
+    .persona-message-content
+    > :last-child::after,
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill.persona-message-actions-right)
+    .persona-message-content:not(:has(*))::after {
+    content: "";
+    display: inline-block;
+    width: calc(var(--persona-message-actions-count, 1) * 32px - 4px);
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(2)) {
+    --persona-message-actions-count: 2;
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(3)) {
+    --persona-message-actions-count: 3;
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(4)) {
+    --persona-message-actions-count: 4;
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(5)) {
+    --persona-message-actions-count: 5;
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill:not(.persona-message-actions-right))
+    .persona-message-content::after {
+    content: "";
+    display: block;
+    height: 28px;
+  }
 }
 
 /* On touch devices (no hover support), show inline and always visible */

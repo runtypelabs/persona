@@ -157,6 +157,11 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   // GPT-Live delegates; its filler shows while the widget runs the turn.
   call.send({ type: "delegation_started", turnId: "dlg_1" });
   await call.utterance({ role: "assistant", turnId: "out_1", text: FILLER, startMs: 4100 });
+  // A caption is display-only: no copy (or any other) message action.
+  const filler = page.locator(voiceSel.assistantBubble).filter({ hasText: FILLER });
+  await expect(filler).toHaveCount(1);
+  await filler.hover();
+  await expect(filler.locator(".persona-message-actions button")).toHaveCount(0);
   await call.sendAudio(200);
   call.send({
     type: "delegation_requested",
