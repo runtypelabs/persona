@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.ico" />
+    <title>WebMCP Flights — Skylark Air</title>
+  </head>
+  <body class="sk-body">
+    <header class="sk-toolbar">
+      <span class="sk-logo">Skylark<span>Air</span></span>
+      <span class="sk-badge">WebMCP demo</span>
+    </header>
+
+    <main class="sk-main">
+      <!-- The docked Persona panel wraps this target and docks beside it,
+           shrinking the booking page — same pattern as webmcp-slides. -->
+      <div id="booking-dock-target"></div>
+    </main>
+
+    <footer class="sk-footer">
+      <p>
+        A multi-step booking form driven by WebMCP page tools. The Copilot and
+        the on-page controls share one store, so seat picks, passenger details,
+        and flight selections render the same either way. Only
+        <strong>Confirm&nbsp;booking</strong> asks for approval.
+      </p>
+    </footer>
+
+    <script type="module" src="/src/webmcp-flights/main.ts"></script>
+  </body>
+</html>
