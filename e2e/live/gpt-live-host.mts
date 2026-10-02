@@ -23,6 +23,11 @@
  *
  * GET /frames returns every frame of every call (binary as byte counts) for
  * the spec to assert on. POST /frames/reset clears them.
+ *
+ * Binds 127.0.0.1 only, and answers only the harness page's origin
+ * (http://127.0.0.1:$E2E_PORT, default 4317; LIVE_ALLOWED_ORIGINS overrides,
+ * comma-separated). Other origins get 403 on every route and WebSocket; the
+ * frame log also accepts Origin-less local tooling such as curl.
  */
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -130,16 +135,36 @@ type LoggedCall = {
 const calls: LoggedCall[] = [];
 const chats: unknown[] = [];
 
+// SAFETY: the host records chat bodies and voice frames, so only the harness page
+// may talk to it: any other page open in the browser gets a 403, not the log.
+const ALLOWED_ORIGINS = new Set(
+  (process.env.LIVE_ALLOWED_ORIGINS ?? `http://127.0.0.1:${process.env.E2E_PORT ?? 4317}`)
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+);
+const originAllowed = (origin: string | undefined) => origin !== undefined && ALLOWED_ORIGINS.has(origin);
+
 const server = createServer(async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", req.headers.origin ?? "*");
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    String(req.headers["access-control-request-headers"] ?? "authorization, content-type"),
-  );
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Expose-Headers", "X-History-Identity-Status");
-  if (req.method === "OPTIONS") return void res.writeHead(204).end();
+  const origin = req.headers.origin;
   const url = new URL(req.url ?? "/", `http://127.0.0.1:${PORT}`);
+  // Browsers always send Origin cross-origin; only local tooling (curl, the
+  // spec's node side) may omit it, and only for the frame log.
+  const isFrameLog = url.pathname === "/frames" || url.pathname === "/frames/reset";
+  if (!(originAllowed(origin) || (isFrameLog && origin === undefined))) {
+    return void res.writeHead(403).end();
+  }
+  res.setHeader("Vary", "Origin");
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      String(req.headers["access-control-request-headers"] ?? "authorization, content-type"),
+    );
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Expose-Headers", "X-History-Identity-Status");
+  }
+  if (req.method === "OPTIONS") return void res.writeHead(204).end();
   let body = "";
   for await (const chunk of req) body += chunk;
 
@@ -189,6 +214,11 @@ server.on("upgrade", (request, socket, head) => {
     .split(",")
     .map((p) => p.trim())
     .filter(Boolean);
+  // WebSockets bypass CORS: refuse any page but the harness outright.
+  if (!originAllowed(request.headers.origin)) {
+    socket.end("HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n");
+    return;
+  }
   // Same GPT-Live admission rules core's route applies before the handler.
   if (!match || !protocols.includes("runtype.bearer") || url.searchParams.get("voiceCapabilities") !== "full-duplex-v1") {
     socket.end("HTTP/1.1 422 Unprocessable Entity\r\nConnection: close\r\n\r\n");

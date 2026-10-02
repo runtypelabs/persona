@@ -13,7 +13,7 @@ cd /tmp/core-live && pnpm install --frozen-lockfile --ignore-scripts
 ./node_modules/.bin/turbo run build --filter=@runtypelabs/shared... --filter=@runtypelabs/runtime
 
 # 2. The host (gateway key: AI_GATEWAY_API_KEY, else PLATFORM_VERCEL_GATEWAY_KEY from CORE_DEV_VARS)
-CORE_DIR=/tmp/core-live CORE_DEV_VARS=~/GitHub/core/apps/api/.dev.vars \
+E2E_PORT=4391 CORE_DIR=/tmp/core-live CORE_DEV_VARS=~/GitHub/core/apps/api/.dev.vars \
   LIVE_CHAT_DELAY_MS=4000 /tmp/core-live/node_modules/.bin/tsx e2e/live/gpt-live-host.mts
 
 # 3. Question audio + widget preview + run (from the persona repo root)
@@ -22,7 +22,7 @@ e2e/live/make-question-wav.sh "What are your opening hours?"
 E2E_PORT=4391 ./node_modules/.bin/playwright test --config e2e/live/playwright.live.config.ts
 ```
 
-For a small-talk check, `e2e/live/make-question-wav.sh "Who are you?" e2e/live/.out/who.wav` and run with `LIVE_WAV=…/who.wav LIVE_QUESTION="who are you" LIVE_ANSWER="juniper|bakery" LIVE_EXPECT_SMALL_TALK=1` (expects no delegation). `LIVE_AGENT_IDENTITY=generic` drops the agent name/description/tools from the GPT-Live instructions (core's generic default), for measuring delegation on thin-identity agents. `LIVE_CHAT_DELAY_MS` mimics a real agent's latency. Without it, the answer comes back before GPT-Live speaks its filler line.
+For a small-talk check, `e2e/live/make-question-wav.sh "Who are you?" e2e/live/.out/who.wav` and run with `LIVE_WAV=…/who.wav LIVE_QUESTION="who are you" LIVE_ANSWER="juniper|bakery" LIVE_EXPECT_SMALL_TALK=1` (expects no delegation). `LIVE_AGENT_IDENTITY=generic` drops the agent name/description/tools from the GPT-Live instructions (core's generic default), for measuring delegation on thin-identity agents. The host answers only the harness page origin (`http://127.0.0.1:$E2E_PORT`; set the same `E2E_PORT` for host and Playwright, or `LIVE_ALLOWED_ORIGINS`). `LIVE_CHAT_DELAY_MS` mimics a real agent's latency. Without it, the answer comes back before GPT-Live speaks its filler line.
 
 ## Mode B: deployed core (full route admission)
 
