@@ -170,7 +170,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
     dropDelegation(delegationId) {
       for (const capture of captures.get(delegationId) ?? []) {
         capture.dropped = true;
-        host.unspoken(capture.ids);
+        if (capture.ids.length) host.unspoken(capture.ids);
       }
     },
 
@@ -237,6 +237,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         const own = new Set(pending.map((m) => m.id));
         const park: Parked = { approvals: [...own], at: Date.now(), replaced: new Set() };
         parks.push(park);
+        // The ask carries this reply to the voice model: if the server later
+        // drops the delegation, only the follow-up's answer goes unspoken.
+        captures.delete(delegationId);
         // Parked on approvals: answer now, so the voice model asks for the
         // decision, then read the outcome back once the visitor decides.
         text = `${text}\n\n${buildApprovalScript(pending.map((m) => m.approval!))}`.trim();

@@ -939,6 +939,16 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(speak).toHaveBeenCalledWith([expect.stringMatching(/./)]);
   });
 
+  it('keeps an already-spoken approval ask away from browser TTS when its delegation is dropped', async () => {
+    parkOnApproval();
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
+    void result.followUp!({ signal: new AbortController().signal });
+    const speak = vi.spyOn(session as unknown as { speakLatestAssistantMessage(): void }, 'speakLatestAssistantMessage');
+    h.state.bridge!.dropDelegation!('d1');
+    expect(spoken('r-ap1')).toBe(true); // the ask's reply went out with delegation_update
+    expect(speak).not.toHaveBeenCalled();
+  });
+
   it('asks again for a second gated tool the resumed turn stops on, and waits for it', async () => {
     parkOnApproval({}, 'ap1');
     const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'croissants, then a cake' }));
