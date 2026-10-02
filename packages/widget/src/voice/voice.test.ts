@@ -841,6 +841,39 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(sentJson(ws).map((f) => f.type)).toEqual(['context', 'delegation_result']);
       });
 
+      it('holds a delegation_result until a slow callContext has gone out', async () => {
+        let resolveContext!: (text: string) => void;
+        const { ws, pending } = await startDelegatedCall({
+          callContext: () => new Promise<string>((resolve) => (resolveContext = resolve)),
+        });
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+        await flush();
+        pending[0]({ ok: true, text: 'Answer.' });
+        await flush();
+        expect(sentJson(ws)).toEqual([]); // the result waits for the context
+        resolveContext('On /docs.');
+        await flush();
+        expect(sentJson(ws).map((f) => f.type)).toEqual(['context', 'delegation_result']);
+      });
+
+      it('sends the result after 2 s and drops a context whose callContext hangs', async () => {
+        let resolveContext!: (text: string) => void;
+        const { ws, pending } = await startDelegatedCall({
+          callContext: () => new Promise<string>((resolve) => (resolveContext = resolve)),
+        });
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+        await flush();
+        pending[0]({ ok: true, text: 'Answer.' });
+        await flush();
+        await vi.advanceTimersByTimeAsync(1999);
+        expect(sentJson(ws)).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
+        resolveContext('too late');
+        await flush();
+        expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
+      });
+
       it('sends context on contextFrames alone, with delegation off', async () => {
         const { ws, calls } = await startDelegatedCall(
           { clientDelegation: false, callContext: 'On /docs.' },

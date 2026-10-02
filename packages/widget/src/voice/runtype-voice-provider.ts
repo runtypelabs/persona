@@ -110,6 +110,12 @@ const CONTINUOUS_DRAIN_GRACE_MS = 300;
  * is accepted again, so a lost acknowledgement can't mute the call for good.
  */
 const CANCEL_ACK_TIMEOUT_MS = 2000;
+/**
+ * How long a `delegation_result` waits for the call context still being built
+ * (a slow host `callContext`), so context always precedes the result. Past it,
+ * the result goes out and that context is dropped.
+ */
+const CONTEXT_BEFORE_RESULT_TIMEOUT_MS = 2000;
 const CLIENT_DELEGATION_CAPABILITY = "client-delegation";
 /** Call-start context frame: total cap, host share, history window, per-message cap. */
 const CONTEXT_MAX_CHARS = 8000;
@@ -233,6 +239,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // first speaks (sent earlier, the voice model tends to answer it unprompted).
   private contextSent = false;
   private pendingContext: Promise<string> | null = null;
+  // The released context's send; settles once it went out (or never will).
+  private contextSend: { done: Promise<void>; drop: () => void } | null = null;
   private delegations: Promise<void> = Promise.resolve();
   // Delegations answered ok: their spoken read-back is folded.
   private answered = new Set<string>();
@@ -787,11 +795,28 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     const pending = this.pendingContext;
     if (!pending) return;
     this.pendingContext = null;
-    void pending.then((text) => {
+    let dropped = false;
+    const done = pending.then((text) => {
       const ws = this.ws;
-      if (!text || generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
+      if (dropped || !text || generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify({ type: "context", text }));
     });
+    this.contextSend = { done, drop: () => (dropped = true) };
+  }
+
+  /** Let a released context go out first; a hung host callback is dropped. */
+  private async awaitContextSend(): Promise<void> {
+    const send = this.contextSend;
+    if (!send) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = await Promise.race([
+      send.done.then(() => false),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(true), CONTEXT_BEFORE_RESULT_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (timedOut) send.drop();
   }
 
   /** Run a delegated turn through the session bridge (one at a time) and answer it. */
@@ -807,6 +832,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       const result = await bridge
         .runDelegatedTurn({ turnId, userText, ...(userTurnId && { userTurnId }) })
         .catch(() => ({ ok: false, text: "" }));
+      await this.awaitContextSend();
       const ws = this.ws;
       if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
       if (result.ok) this.answered.add(turnId);
@@ -896,6 +922,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.clientDelegation = false;
     this.contextSent = false;
     this.pendingContext = null;
+    this.contextSend = null;
     this.delegations = Promise.resolve();
     this.answered.clear();
     this.foldReadback = false;

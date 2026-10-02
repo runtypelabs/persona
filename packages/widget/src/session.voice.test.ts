@@ -338,6 +338,17 @@ describe('AgentWidgetSession - turn-keyed (full-duplex) voice transcripts', () =
     expect(spoken(byContent('The answer you asked for.').id)).toBe(true);
   });
 
+  it('keeps late bubbles placed ahead of the same reply in startMs order', () => {
+    h.state.transcriptCb!('assistant', 'reply', true, { turnId: 'a1', startMs: 2000 });
+    h.state.transcriptCb!('user', 'at one second', true, { turnId: 'u1', startMs: 1000 });
+    h.state.transcriptCb!('user', 'at 1.5 seconds', true, { turnId: 'u2', startMs: 1500 });
+    expect(view().map((v) => v[1])).toEqual(['at one second', 'at 1.5 seconds', 'reply']);
+    const seq = (content: string) => byContent(content).sequence!;
+    expect(seq('at one second')).toBeLessThan(seq('at 1.5 seconds'));
+    expect(seq('at 1.5 seconds')).toBeLessThan(seq('reply'));
+    expect(byContent('at one second').createdAt).toBe(byContent('reply').createdAt);
+  });
+
   it('re-positions a bubble when its startMs arrives on a later update', () => {
     drive('user', 'first', true, 'u1');
     h.state.transcriptCb!('assistant', 'reply', true, { turnId: 'a1', startMs: 2000 });
@@ -493,6 +504,9 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
   it('hands the provider a bridge whose history is the visible settled messages', () => {
     drive('user', 'still talk', false, 'u1'); // interim: not part of the context
+    // An earlier call's captions (filler, small talk) aren't conversation either.
+    h.state.transcriptCb!('assistant', 'Let me check.', true, { turnId: 'f0', caption: true });
+    h.state.transcriptCb!('user', 'hi there', true, { turnId: 'u0', caption: true });
     expect(h.state.bridge!.getHistory()).toEqual([
       { role: 'assistant', content: 'Welcome! How can I help?' },
     ]);

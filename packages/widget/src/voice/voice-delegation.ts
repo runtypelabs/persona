@@ -43,7 +43,11 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   return {
     getHistory: () =>
       host.messages().flatMap((m) =>
-        (m.role === "user" || m.role === "assistant") && !m.variant && !m.voiceProcessing && m.content
+        (m.role === "user" || m.role === "assistant") &&
+        !m.variant &&
+        !m.voiceProcessing &&
+        !m.voiceCaption &&
+        m.content
           ? [{ role: m.role, content: m.content }]
           : [],
       ),

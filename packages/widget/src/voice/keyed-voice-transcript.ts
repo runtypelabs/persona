@@ -238,9 +238,28 @@ export class KeyedVoiceTranscript {
     return best && this.host.find(best.id);
   }
 
-  /** Sort a new bubble just ahead of `next` (messages order by time, then sequence). */
+  /**
+   * Sort a bubble just ahead of `next` (messages order by time, then
+   * sequence): halfway between `next` and the keyed bubbles already placed
+   * ahead of it. Those all started earlier (else one of them would be
+   * `next`), so bubbles placed ahead of the same reply stay in `startMs`
+   * order. Sequences are timestamp-sized, so halving, not a tiny fixed
+   * offset, keeps them distinct.
+   */
   private placeBefore(next: AgentWidgetMessage | undefined) {
-    return next && { createdAt: next.createdAt, sequence: (next.sequence ?? 0) - 0.001 };
+    if (!next) return undefined;
+    const top = next.sequence ?? 0;
+    let low = top - 1;
+    for (const turn of this.turns.values()) {
+      for (const id of [turn.userId, turn.assistantId]) {
+        const placed = id ? this.host.find(id) : undefined;
+        const seq = placed?.sequence;
+        if (placed?.createdAt === next.createdAt && seq !== undefined && seq > low && seq < top) {
+          low = seq;
+        }
+      }
+    }
+    return { createdAt: next.createdAt, sequence: (low + top) / 2 };
   }
 
   private closeReplies(turnIds: string[]): void {
