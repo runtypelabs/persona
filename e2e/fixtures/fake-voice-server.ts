@@ -28,6 +28,8 @@ export interface FakeVoiceServerOptions {
   clientDelegation?: boolean;
   /** Advertise `contextFrames: true` (accept `context`). @default true */
   contextFrames?: boolean;
+  /** Advertise `followUpFrames: true` (accept `delegation_followup`, Amendment 3). @default false */
+  followUpFrames?: boolean;
 }
 
 export type ClientJsonFrame = { type: string; [key: string]: unknown };
@@ -112,6 +114,7 @@ export async function startFakeVoiceServer(
   let options: Required<FakeVoiceServerOptions> = {
     clientDelegation: true,
     contextFrames: true,
+    followUpFrames: false,
     ...initial,
   };
   const prewarms: string[] = [];
@@ -200,6 +203,8 @@ function createCall(
   const accepted = new Set(BASE_CLIENT_TYPES);
   if (options.contextFrames) accepted.add("context");
   if (delegationGranted) accepted.add("delegation_result");
+  const followUps = delegationGranted && options.followUpFrames;
+  if (followUps) accepted.add("delegation_followup");
 
   const frames: ClientJsonFrame[] = [];
   const rejected: ClientJsonFrame[] = [];
@@ -223,6 +228,7 @@ function createCall(
       speechMode: "speech_to_speech",
       ...(delegationGranted ? { clientDelegation: true } : {}),
       ...(options.contextFrames ? { contextFrames: true } : {}),
+      ...(followUps ? { followUpFrames: true } : {}),
     });
     resolveReady();
   };

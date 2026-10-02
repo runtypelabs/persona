@@ -1129,6 +1129,82 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         await flush();
         expect(sentJson(ws)).toEqual([]);
       });
+
+      describe('approval follow-up', () => {
+        /** A parked result whose follow-up the test settles, recording the signal it got. */
+        const parked = () => {
+          let settle!: (text: string) => void;
+          let signal: AbortSignal | undefined;
+          const result: VoiceDelegationResult = {
+            ok: true,
+            text: 'Approve it in the chat.',
+            followUp: (s) => {
+              signal = s;
+              return new Promise((resolve) => (settle = resolve));
+            },
+          };
+          return { result, settle: (text: string) => settle(text), signal: () => signal };
+        };
+        const request = (ws: MockWebSocket) =>
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_requested', turnId: 'd1', userText: 'q', messages: [] }));
+
+        it('sends delegation_followup for the parked turn once the visitor decides, and folds its read-back', async () => {
+          const { ws, transcripts, pending } = await startDelegatedCall({}, { clientDelegation: true, followUpFrames: true });
+          const park = parked();
+          request(ws);
+          await flush();
+          pending[0](park.result);
+          await flush();
+          expect(sentJson(ws)).toEqual([{ type: 'delegation_result', turnId: 'd1', text: 'Approve it in the chat.', ok: true }]);
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1', speak: true }));
+          ws.triggerMessage(update('assistant', 'Please approve it in the chat.', 'r1')); // folded
+
+          park.settle('Your order is in.');
+          await flush();
+          expect(sentJson(ws).at(-1)).toEqual({ type: 'delegation_followup', turnId: 'd1', text: 'Your order is in.' });
+          ws.triggerMessage(update('user', 'yes', 'u2'));
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1', speak: true }));
+          ws.triggerMessage(update('assistant', 'Your order is in.', 'r2')); // folded too
+          expect(transcripts.map((t) => t[1])).toEqual(['yes']);
+        });
+
+        it('never asks for a follow-up from a server without followUpFrames', async () => {
+          const { ws, pending } = await startDelegatedCall();
+          const park = parked();
+          request(ws);
+          await flush();
+          pending[0](park.result);
+          await flush();
+          expect(park.signal()).toBeUndefined();
+          expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
+        });
+
+        it('aborts the follow-up and sends nothing once the call ends', async () => {
+          const { ws, provider, pending } = await startDelegatedCall({}, { clientDelegation: true, followUpFrames: true });
+          const park = parked();
+          request(ws);
+          await flush();
+          pending[0](park.result);
+          await flush();
+          await provider.stopListening();
+          expect(park.signal()!.aborted).toBe(true);
+          park.settle('too late');
+          await flush();
+          expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
+        });
+
+        it('sends nothing for an empty follow-up', async () => {
+          const { ws, pending } = await startDelegatedCall({}, { clientDelegation: true, followUpFrames: true });
+          const park = parked();
+          request(ws);
+          await flush();
+          pending[0](park.result);
+          await flush();
+          park.settle('');
+          await flush();
+          expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
+        });
+      });
     });
   });
 });

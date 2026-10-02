@@ -5244,6 +5244,12 @@ export type VoiceDelegationResult = {
   ok: boolean;
   /** The final assistant text (Markdown allowed). */
   text: string;
+  /**
+   * Set when the turn parked on approvals (`text` then asks for the decision).
+   * Resolves with the answer once the visitor decides and the resumed turn
+   * finishes, or "" when there is nothing to say or `signal` aborts first.
+   */
+  followUp?: (signal: AbortSignal) => Promise<string>;
 };
 
 /**

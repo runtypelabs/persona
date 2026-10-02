@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { installFakeHistoryApi, textTurnStream, type FakeHistoryApi } from "../fixtures/fake-history-api";
+import {
+  installFakeHistoryApi,
+  sseEvent,
+  textTurnStream,
+  type FakeHistoryApi,
+} from "../fixtures/fake-history-api";
 import {
   startFakeVoiceServer,
   type FakeVoiceCall,
@@ -457,4 +462,110 @@ test("clientDelegation: false opts out of the capability", async ({ page, contex
   const call = await startCall(page);
   expect(call.clientCapabilities).not.toContain("client-delegation");
   expect(call.delegationGranted).toBe(false);
+});
+
+/** A turn that says a line, then parks on a `place_pickup_order` approval. */
+function approvalParkStream(executionId: string): string {
+  let seq = 0;
+  const ev = (type: string, data: Record<string, unknown>) => sseEvent(type, { executionId, seq: ++seq, ...data });
+  return (
+    ev("execution_start", {
+      kind: "agent",
+      agentId: "agent_e2e_voice",
+      agentName: "E2E",
+      maxTurns: 2,
+      startedAt: new Date().toISOString(),
+    }) +
+    ev("turn_start", { id: "turn_1", iteration: 1, role: "assistant" }) +
+    ev("text_start", { id: "text_1", role: "assistant" }) +
+    ev("text_delta", { id: "text_1", delta: "I can place that order for you." }) +
+    ev("text_complete", { id: "text_1" }) +
+    ev("approval_start", {
+      approvalId: "apr_order",
+      toolName: "place_pickup_order",
+      toolType: "custom",
+      description: "Place a pickup order at the bakery",
+      reason: "The visitor asked to order for pickup",
+      parameters: {
+        items: [
+          { name: "almond croissants", quantity: 2 },
+          { name: "sourdough loaf", quantity: 1 },
+        ],
+        pickupTime: "today 4pm",
+        customerName: "Nathan",
+      },
+    })
+  );
+}
+
+test("approval during a call: natural ask, approve in chat, the outcome is read back (Amendment 3)", async ({
+  page,
+  context,
+}) => {
+  const ORDER_DONE = "Your order is placed: pickup today at 4pm.";
+  const api = await installFakeHistoryApi(context);
+  const approvals: Array<Record<string, unknown>> = [];
+  await context.route("**/e2e-api/v1/agents/*/approve", async (route) => {
+    approvals.push(route.request().postDataJSON());
+    await route.fulfill({
+      status: 200,
+      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+      body: textTurnStream(ORDER_DONE, "exec_order"),
+    });
+  });
+  voice.setOptions({ followUpFrames: true });
+  await openVoicePage(page, { voiceHost: voice.host });
+  api.setChatStream(approvalParkStream("exec_order"));
+  const call = await startCall(page);
+
+  await call.utterance({ role: "user", turnId: "in_1", text: "Order two almond croissants and a sourdough loaf", startMs: 1000 });
+  call.send({ type: "delegation_started", turnId: "dlg_order" });
+  call.send({
+    type: "delegation_requested",
+    turnId: "dlg_order",
+    userTurnId: "in_1",
+    userText: "Order two almond croissants and a sourdough loaf",
+    messages: [],
+  });
+
+  // The parked turn answers at once, with what is about to happen and how to
+  // ask for it, not a canned line.
+  const result = await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_order");
+  expect(result.ok).toBe(true);
+  const script = String(result.text);
+  expect(script).toContain("I can place that order for you.");
+  expect(script).toContain("- place pickup order (Place a pickup order at the bakery)");
+  expect(script).toContain("items: 2 almond croissants, 1 sourdough loaf; pickup time: today 4pm; customer name: Nathan");
+  expect(script).toContain("because: The visitor asked to order for pickup");
+  expect(script).toContain("ask them to approve or decline it in the chat. Don't claim it's done.");
+  expect(script.length).toBeLessThanOrEqual(1_000);
+
+  // GPT-Live asks; that read-back is folded (the approval bubble is the ask).
+  call.send({ type: "delegation_completed", turnId: "dlg_order", speak: true, text: script });
+  await call.utterance({ role: "assistant", turnId: "out_ask", text: "Shall I place it? Please approve it in the chat.", startMs: 5000 });
+  const approve = page.getByRole("button", { name: "Allow", exact: true });
+  await expect(approve).toBeVisible();
+  await page.waitForTimeout(500);
+  expect(call.framesOf("delegation_followup")).toEqual([]);
+  await expect(page.locator(voiceSel.bubble).filter({ hasText: "Shall I place it?" })).toHaveCount(0);
+
+  // The visitor approves in the chat: the resumed turn's answer renders and
+  // goes back to GPT-Live as a follow-up for the parked turn.
+  await approve.click();
+  const followUp = await call.waitForFrame("delegation_followup");
+  expect(followUp).toEqual({ type: "delegation_followup", turnId: "dlg_order", text: ORDER_DONE });
+  expect(approvals).toEqual([expect.objectContaining({ approvalId: "apr_order", decision: "approved" })]);
+  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: ORDER_DONE })).toHaveCount(1);
+
+  // Core reads it back under a fresh assistant id: folded like any read-back.
+  call.send({ type: "delegation_completed", turnId: "dlg_order", speak: true, text: ORDER_DONE });
+  await call.utterance({ role: "assistant", turnId: "out_done", text: "All set, your order is placed for 4pm.", startMs: 12000 });
+  await page.waitForTimeout(750);
+  await expect(page.locator(voiceSel.bubble).filter({ hasText: "All set, your order" })).toHaveCount(0);
+
+  expect(call.framesOf("delegation_followup")).toHaveLength(1);
+  expect(call.framesOf("delegation_result")).toHaveLength(1);
+  expect(call.rejected).toEqual([]);
+  await clickLiveMic(page);
+  expect(await call.closed).toBe(1000);
 });

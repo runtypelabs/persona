@@ -59,6 +59,7 @@ import type {
   VoiceResult,
   VoiceStatus,
   VoiceConfig,
+  VoiceDelegationResult,
   VoiceMetrics,
   VoicePlaybackEngine,
   VoiceSessionBridge,
@@ -245,6 +246,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Client delegation (see header); per-call state reset on every cleanup.
   private bridge: VoiceSessionBridge | null = null;
   private clientDelegation = false;
+  // The server accepts `delegation_followup` (session_config.followUpFrames).
+  private followUpFrames = false;
+  // Aborts pending approval follow-ups when the call ends.
+  private followUps: AbortController | null = null;
   // Call-start context, built at session_config and held until the visitor's
   // first final transcript (sent earlier, the voice model tends to answer it).
   private contextSent = false;
@@ -691,6 +696,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           this.clientDelegation =
             this.speechToSpeech && msg.clientDelegation === true && !!this.bridge;
         }
+        if (msg.followUpFrames === true) this.followUpFrames = true;
         // Only a server that announces contextFrames accepts `context`.
         if (msg.contextFrames === true && !this.contextSent) {
           this.contextSent = true;
@@ -860,7 +866,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     const bridge = this.bridge!;
     this.delegations = this.delegations.then(async () => {
       if (generation !== this.callGeneration) return;
-      const result = await bridge
+      const result: VoiceDelegationResult = await bridge
         .runDelegatedTurn({
           turnId,
           userText,
@@ -873,6 +879,13 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
       if (result.ok) this.answered.add(turnId);
       ws.send(JSON.stringify({ type: "delegation_result", turnId, text: result.text, ok: result.ok }));
+      // Parked on an approval: read the outcome back once the visitor decides.
+      if (!result.followUp || !this.followUpFrames) return;
+      void result.followUp((this.followUps ??= new AbortController()).signal).then((text) => {
+        const live = this.ws;
+        if (!text || generation !== this.callGeneration || live?.readyState !== WebSocket.OPEN) return;
+        live.send(JSON.stringify({ type: "delegation_followup", turnId, text }));
+      });
     });
   }
 
@@ -956,6 +969,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.speechToSpeech = false;
     this.delegating = false;
     this.clientDelegation = false;
+    this.followUpFrames = false;
+    this.followUps?.abort();
+    this.followUps = null;
     this.contextSent = false;
     this.pendingContext = null;
     this.contextSend = null;
