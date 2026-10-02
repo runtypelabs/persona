@@ -125,8 +125,17 @@ function chatAnswer(userText: string): string {
 
 type LoggedFrame = { at: number; dir: "in" | "out"; json?: unknown; bytes?: number };
 type AudioCount = { frames: number; bytes: number };
+type UpstreamEvent = {
+  at: number;
+  type: string;
+  /** Consecutive events of the same type (audio deltas) collapse into one entry. */
+  count?: number;
+  delegation?: { id?: unknown; target?: unknown };
+};
 type LoggedCall = {
   url: string;
+  /** Every GPT-Live upstream event: type + time only (delegation id/target kept; no content). */
+  upstream: UpstreamEvent[];
   protocols: string[];
   frames: LoggedFrame[];
   audio: { in: AudioCount; out: AudioCount };
@@ -228,7 +237,7 @@ server.on("upgrade", (request, socket, head) => {
     (url.searchParams.get("clientCapabilities") ?? "").split(",").map((c) => c.trim()).filter(Boolean),
   );
   wss.handleUpgrade(request, socket, head, (browser) => {
-    const logged: LoggedCall = { url: url.pathname + url.search, protocols: protocols.filter((p) => p.startsWith("runtype.")), frames: [], audio: { in: { frames: 0, bytes: 0 }, out: { frames: 0, bytes: 0 } } };
+    const logged: LoggedCall = { url: url.pathname + url.search, protocols: protocols.filter((p) => p.startsWith("runtype.")), frames: [], upstream: [], audio: { in: { frames: 0, bytes: 0 }, out: { frames: 0, bytes: 0 } } };
     calls.push(logged);
     const log = (dir: "in" | "out", data: unknown) => {
       if (typeof data === "string") {
@@ -254,6 +263,26 @@ server.on("upgrade", (request, socket, head) => {
             const upstream = new WebSocket("wss://ai-gateway.vercel.sh/v1/live/sessions", {
               headers: { Authorization: `Bearer ${key}`, "User-Agent": "Persona-Live-E2E/1.0" },
               handshakeTimeout: 15_000,
+            });
+            upstream.on("message", (data, binary) => {
+              if (binary) return;
+              try {
+                const event = JSON.parse(data.toString()) as { type?: unknown; delegation?: { id?: unknown; target?: unknown } };
+                const last = logged.upstream.at(-1);
+                if (last && last.type === event.type && event.type !== "session.delegation.created") {
+                  last.count = (last.count ?? 1) + 1;
+                  return;
+                }
+                logged.upstream.push({
+                  at: Date.now(),
+                  type: String(event.type),
+                  ...(event.type === "session.delegation.created"
+                    ? { delegation: { id: event.delegation?.id, target: event.delegation?.target } }
+                    : {}),
+                });
+              } catch {
+                logged.upstream.push({ at: Date.now(), type: "unparseable" });
+              }
             });
             upstream.once("open", () => resolve(upstream as never));
             upstream.once("error", reject);

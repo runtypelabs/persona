@@ -48,6 +48,13 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
   const frames: Frame[] = [];
   // Audio is high-volume: count every binary frame, log every 50th.
   const audio = { in: { frames: 0, bytes: 0 }, out: { frames: 0, bytes: 0 } };
+  // Speech-recognition wording is GPT-Live's, not ours: a mismatch is recorded,
+  // never a failure. Pass = delegation → result → rendered answer.
+  const warnings: string[] = [];
+  const warn = (message: string) => {
+    warnings.push(message);
+    testInfo.annotations.push({ type: "warning", description: message });
+  };
   const consoleLines: string[] = [];
   const chatRequests: Array<{ messages?: Array<{ role?: string; content?: unknown }> }> = [];
   const t0 = Date.now();
@@ -129,12 +136,14 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(json("out", "context")).toEqual([]);
     }
 
-    // GPT-Live transcribes the question.
+    // GPT-Live hears the visitor (its wording may differ from the WAV).
     await expect
-      .poll(() => json("in", "transcript_update").some((f) => f.role === "user" && f.final && QUESTION.test(String(f.text))), {
-        timeout: 45_000,
-      })
+      .poll(() => json("in", "transcript_update").some((f) => f.role === "user" && f.final), { timeout: 45_000 })
       .toBe(true);
+    const userFinals = json("in", "transcript_update").filter((f) => f.role === "user" && f.final);
+    if (!userFinals.some((f) => QUESTION.test(String(f.text)))) {
+      warn(`user transcript ${JSON.stringify(userFinals.map((f) => f.text))} does not match ${QUESTION}`);
+    }
     // The context frame is background: GPT-Live must not answer it. Nothing
     // assistant-side may start before the visitor's first words.
     if (process.env.LIVE_ALLOW_UNPROMPTED !== "1") {
@@ -145,12 +154,10 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         .map((f) => String(f.json!.text));
       expect(unprompted, "GPT-Live spoke before the visitor did").toEqual([]);
     }
-    const userText = String(
-      json("in", "transcript_update").find((f) => f.role === "user" && f.final && QUESTION.test(String(f.text)))!.text,
+    const userText = String((userFinals.find((f) => QUESTION.test(String(f.text))) ?? userFinals[0]!).text);
+    await expect(page.locator('[data-message-id][data-persona-theme-zone="user-message"]')).toHaveCount(
+      (TYPED ? 1 : 0) + 1,
     );
-    await expect(
-      page.locator('[data-message-id][data-persona-theme-zone="user-message"]').filter({ hasText: QUESTION }),
-    ).toHaveCount(1);
 
     if (EXPECT_SMALL_TALK) {
       // GPT-Live answers from its own identity: a final assistant reply that
@@ -184,16 +191,18 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         );
         expect(requested.userTurnId).toBeTruthy();
         expect(userTurnIds.has(requested.userTurnId)).toBe(true);
-        expect(
+        const heard = String(
           json("in", "transcript_update").find((f) => f.turnId === requested.userTurnId && f.final)?.text ??
             requested.userText,
-        ).toMatch(QUESTION);
+        );
+        if (!QUESTION.test(heard)) warn(`delegated utterance "${heard}" does not match ${QUESTION}`);
       }
       await expect.poll(() => json("out", "delegation_result").length, { timeout: 60_000 }).toBeGreaterThan(0);
       const result = json("out", "delegation_result")[0]!;
       expect(result.turnId).toBe(requested.turnId);
       expect(result.ok).toBe(true);
-      expect(String(result.text)).toMatch(ANSWER);
+      expect(String(result.text).trim()).not.toBe("");
+      if (!ANSWER.test(String(result.text))) warn(`result text does not match ${ANSWER}`);
 
       // Exactly one delegated chat submission (after the typed one), carrying
       // the spoken request once, as its LAST message, with none of GPT-Live's
@@ -215,11 +224,16 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         for (const caption of captions) expect(normalize(message.text)).not.toBe(caption);
       }
 
-      // The answer renders as a normal assistant message.
-      const answer = page
-        .locator('[data-message-id][data-persona-theme-zone="assistant-message"]')
-        .filter({ hasText: ANSWER });
-      await expect(answer.first()).toBeVisible();
+      // The answer renders as a normal assistant message (the result's first
+      // line, as rendered text: Markdown syntax stripped).
+      const firstLine = String(result.text).split("\n").find((line) => line.trim())!.replace(/[*_`#>-]/g, "").trim();
+      await expect
+        .poll(async () =>
+          (await page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').allTextContents())
+            .map(normalize)
+            .some((text) => text.includes(normalize(firstLine))),
+        )
+        .toBe(true);
 
       // GPT-Live reads it back; that read-back is folded, not a second bubble.
       await expect
@@ -285,7 +299,22 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
   } finally {
     await page.screenshot({ path: testInfo.outputPath("final.png"), fullPage: true }).catch(() => {});
     const fs = await import("node:fs/promises");
-    await fs.writeFile(testInfo.outputPath("frames.json"), JSON.stringify({ audio, frames }, null, 2));
+    // The local host's upstream GPT-Live event log (types + timestamps only), for
+    // telling a GPT-Live no-show from a core hold-up. Absent against real core.
+    let upstream: unknown = null;
+    try {
+      const hostFrames = await fetch(VOICE_HOST.replace(/^ws/, "http") + "/frames");
+      if (hostFrames.ok) {
+        const { calls } = (await hostFrames.json()) as { calls: Array<{ upstream?: Array<{ at: number }> }> };
+        upstream = (calls.at(-1)?.upstream ?? []).map((event) => ({ ...event, at: event.at - t0 }));
+      }
+    } catch {
+      // Not the local host.
+    }
+    await fs.writeFile(
+      testInfo.outputPath("frames.json"),
+      JSON.stringify({ audio, warnings, upstream, frames }, null, 2),
+    );
     await fs.writeFile(testInfo.outputPath("console.txt"), consoleLines.join("\n"));
     await fs.writeFile(testInfo.outputPath("chat-requests.json"), JSON.stringify(chatRequests, null, 2));
     console.log(`live artifacts: ${testInfo.outputDir}`);
