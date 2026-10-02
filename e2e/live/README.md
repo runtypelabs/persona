@@ -33,3 +33,12 @@ Point the harness at a real core API with `LIVE_VOICE_HOST` and `LIVE_API_URL`, 
 - **Client token:** bound to that agent, with no `targetAlias` or `targetVersionId` (otherwise you get 422 `selector_unsupported_surface`). Its allowed origins must include `http://127.0.0.1:4391`. The widget must not send `sessionId` or a visitor token on the voice socket (otherwise you get 422 `VOICE_SHARED_SESSION_UNSUPPORTED`).
 - **Credential:** an admitted Vercel AI Gateway credential, either the org's Vercel connection or the platform key fallback.
 - **Answer pattern:** set `LIVE_ANSWER` to a regex that the agent's real answer matches.
+- **Widget build:** the preview must serve a widget built from this checkout (`./node_modules/.bin/vite build` in `apps/web`, after building `packages/widget`). A preview left running from an older build gives misleading results.
+
+```sh
+LIVE_VOICE_HOST=wss://api.runtype-staging.com LIVE_API_URL=https://api.runtype-staging.com \
+  LIVE_CLIENT_TOKEN=… LIVE_AGENT_ID=… LIVE_ANSWER='8 ?am|Monday|9 ?am' \
+  E2E_PORT=4391 ./node_modules/.bin/playwright test --config e2e/live/playwright.live.config.ts
+```
+
+The socket upgrade to deployed core is slow, about 3.4 s on staging compared with about 0.2 s against the local host. The widget starts capturing as soon as the microphone opens. It holds the audio captured during the upgrade (up to 8 s) and flushes it on open, and core queues those startup frames. That keeps the default WAV's 1.5 s lead-in sufficient. The spec times the socket in the page and fails early if the first mic frame trails the open by more than one capture buffer plus `LIVE_FIRST_AUDIO_SLACK_MS` (default 200 ms). That is the signature of audio lost during the upgrade, and the visitor's first words go with it. Each run's `frames.json` records the upgrade time and first-frame lag under `sockets`, and the test annotations show them too.

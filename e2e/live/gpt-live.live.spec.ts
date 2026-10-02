@@ -19,9 +19,10 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *                             answers itself, nothing is delegated, the reply renders
  *   LIVE_EXPECT_USER_TURN_ID=0  core predates Amendment 2 (no userTurnId)
  *   LIVE_ALLOW_UNPROMPTED=1     tolerate GPT-Live speaking before the visitor
+ *   LIVE_FIRST_AUDIO_SLACK_MS   slack on the first mic frame after the socket opens (200)
  *
  * Artifacts land in e2e/live/.out/results: frames.json (every voice frame both
- * ways, audio as byte counts), console.txt, chat-requests.json, final.png, and
+ * ways, audio as byte counts, and the voice socket's open/first-audio timings), console.txt, chat-requests.json, final.png, and
  * a Playwright trace.
  */
 
@@ -37,8 +38,13 @@ const TYPED = process.env.LIVE_TYPED ?? "Do you sell gift cards?";
 const CALL_CONTEXT = process.env.LIVE_CALL_CONTEXT ?? "Live e2e: the visitor is testing voice.";
 const EXPECT_DELEGATION = process.env.LIVE_EXPECT_DELEGATION !== "0";
 const EXPECT_SMALL_TALK = process.env.LIVE_EXPECT_SMALL_TALK === "1";
+// One capture buffer (4096 samples at 16 kHz) plus scheduling slack.
+const CAPTURE_BUFFER_MS = 256;
+const FIRST_AUDIO_SLACK_MS = Number(env("LIVE_FIRST_AUDIO_SLACK_MS", "200"));
 
 type Frame = { at: number; dir: "in" | "out"; json?: Record<string, unknown>; bytes?: number };
+/** In-page voice socket timings (performance.now() ms), from the init script below. */
+type SocketTiming = { attach: boolean; createdAt: number; openAt: number | null; firstAudioAt: number | null };
 
 const normalize = (text: string) => text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
@@ -88,6 +94,34 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
   const json = (dir: "in" | "out", type: string) =>
     frames.filter((f) => f.dir === dir && f.json?.type === type).map((f) => f.json!);
 
+  // Time the voice socket in the page: Playwright reports no open event, and
+  // the first-audio check needs the open-to-first-frame gap to the millisecond.
+  await page.addInitScript(() => {
+    const timings: SocketTiming[] = [];
+    (window as unknown as { __voiceSockets: SocketTiming[] }).__voiceSockets = timings;
+    const Native = window.WebSocket;
+    window.WebSocket = class extends Native {
+      constructor(url: string | URL, protocols?: string | string[]) {
+        super(url, protocols);
+        if (!/\/voice\?/.test(String(url))) return;
+        const timing: SocketTiming = {
+          attach: ([] as string[]).concat(protocols ?? []).includes("runtype.attach"),
+          createdAt: performance.now(),
+          openAt: null,
+          firstAudioAt: null,
+        };
+        timings.push(timing);
+        this.addEventListener("open", () => (timing.openAt = performance.now()));
+        this.send = (data) => {
+          if (typeof data !== "string" && timing.firstAudioAt === null) timing.firstAudioAt = performance.now();
+          Native.prototype.send.call(this, data);
+        };
+      }
+    };
+  });
+  const socketTimings = () =>
+    page.evaluate(() => (window as unknown as { __voiceSockets?: SocketTiming[] }).__voiceSockets ?? []);
+
   try {
     const params = new URLSearchParams({
       voiceHost: VOICE_HOST,
@@ -115,6 +149,26 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     const config = json("in", "session_config")[0]!;
     expect(config.speechMode).toBe("speech_to_speech");
     expect(Boolean(config.clientDelegation)).toBe(EXPECT_DELEGATION);
+
+    // The mic must not wait on the socket upgrade (about 3 s on staging): audio
+    // captured meanwhile is buffered and flushed on open. Without that, the
+    // first frame trails the open by a capture buffer and the question is lost.
+    await expect
+      .poll(async () => (await socketTimings()).some((s) => s.firstAudioAt !== null), {
+        timeout: 10_000,
+        message: "no mic audio went out on the voice socket",
+      })
+      .toBe(true);
+    const call = (await socketTimings()).find((s) => s.firstAudioAt !== null)!;
+    if (!call.attach && call.openAt !== null) {
+      const upgradeMs = Math.round(call.openAt - call.createdAt);
+      const lagMs = Math.round(call.firstAudioAt! - call.openAt);
+      testInfo.annotations.push({ type: "socket", description: `upgrade ${upgradeMs} ms, first mic frame +${lagMs} ms` });
+      expect(
+        call.firstAudioAt,
+        `first mic frame ${lagMs} ms after the socket opened (upgrade ${upgradeMs} ms): pre-open audio was not buffered`,
+      ).toBeLessThanOrEqual(Math.max(call.openAt, call.createdAt + CAPTURE_BUFFER_MS) + FIRST_AUDIO_SLACK_MS);
+    }
     if (config.contextFrames === true && (TYPED || CALL_CONTEXT)) {
       // Held until the visitor first speaks (or the first delegation request).
       await expect.poll(() => json("out", "context").length, { timeout: 45_000 }).toBe(1);
@@ -335,9 +389,10 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     } catch {
       // Not the local host, or it timed out.
     }
+    const sockets = await socketTimings().catch(() => []);
     await fs.writeFile(
       testInfo.outputPath("frames.json"),
-      JSON.stringify({ audio, warnings, upstream, frames }, null, 2),
+      JSON.stringify({ audio, warnings, upstream, sockets, frames }, null, 2),
     );
     await fs.writeFile(testInfo.outputPath("console.txt"), consoleLines.join("\n"));
     await fs.writeFile(testInfo.outputPath("chat-requests.json"), JSON.stringify(chatRequests, null, 2));

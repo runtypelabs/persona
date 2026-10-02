@@ -438,6 +438,66 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     expect(ws.sent.length).toBe(before + 1);
   });
 
+  describe('audio captured before the socket opens', () => {
+    /** The first PCM16 sample of a sent binary frame. */
+    const firstSample = (frame: ArrayBuffer | string) => new Int16Array(frame as ArrayBuffer)[0];
+    const binary = (ws: MockWebSocket) => ws.sent.filter((f) => typeof f !== 'string');
+
+    it('captures as soon as the mic resolves and flushes in order on open, before live frames', async () => {
+      const levels: number[] = [];
+      const provider = new RuntypeVoiceProvider(baseConfig());
+      provider.onLevel((level) => levels.push(level));
+      await provider.startListening();
+      const ws = lastWs();
+
+      pumpCapture([0.1]);
+      pumpCapture([0.2]);
+      expect(ws.sent).toEqual([]);
+      expect(levels).toHaveLength(2); // the mic is live: the level animates already
+
+      ws.triggerOpen();
+      pumpCapture([0.3]);
+      expect(binary(ws).map(firstSample)).toEqual([0.1, 0.2, 0.3].map((v) => Math.trunc(v * 0x7fff)));
+    });
+
+    it('keeps at most 8 s (256 KB), dropping the oldest frames', async () => {
+      const provider = new RuntypeVoiceProvider(baseConfig());
+      await provider.startListening();
+      const ws = lastWs();
+
+      // 40 frames of 4096 samples (8 KB each); 31 fit under 256,000 bytes.
+      for (let i = 0; i < 40; i++) pumpCapture(Array.from({ length: 4096 }, () => (i + 1) / 100));
+      ws.triggerOpen();
+
+      const sent = binary(ws);
+      expect(sent).toHaveLength(31);
+      expect(sent.reduce((n, f) => n + (f as ArrayBuffer).byteLength, 0)).toBeLessThanOrEqual(256_000);
+      expect(firstSample(sent[0])).toBe(Math.trunc(0.1 * 0x7fff)); // frame 10 of 40
+      expect(firstSample(sent[30])).toBe(Math.trunc(0.4 * 0x7fff)); // frame 40
+    });
+
+    it.each([
+      ['hang-up', async (provider: RuntypeVoiceProvider) => provider.stopListening()],
+      ['socket error', async (_provider: RuntypeVoiceProvider, ws: MockWebSocket) => ws.triggerError()],
+      ['close before open', async (_provider: RuntypeVoiceProvider, ws: MockWebSocket) => ws.triggerClose(1006)],
+    ])('drops the buffer on %s, so the next call starts clean', async (_name, end) => {
+      const provider = new RuntypeVoiceProvider(baseConfig());
+      provider.onError(() => {});
+      await provider.startListening();
+      const first = lastWs();
+      pumpCapture([0.5]);
+      await end(provider, first);
+
+      await provider.startListening();
+      const second = lastWs();
+      expect(second).not.toBe(first);
+      second.triggerOpen();
+      pumpCapture([0.25]);
+      expect(binary(second).map(firstSample)).toEqual([Math.trunc(0.25 * 0x7fff)]);
+      expect(binary(first)).toEqual([]);
+    });
+  });
+
   it('drives status + onTranscript from control frames', async () => {
     const statuses: string[] = [];
     const transcripts: Array<[string, string, boolean]> = [];
@@ -1292,6 +1352,22 @@ describe('RuntypeVoiceProvider prewarm', () => {
 
       expect(MockWebSocket.instances).toHaveLength(1);
       expect(ws.sent).toContain('{"type":"start"}');
+    });
+
+    it('keeps the audio captured while waiting on the attach, sent after start', async () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.prewarm();
+      const ws = lastWs();
+
+      const started = provider.startListening();
+      await vi.advanceTimersByTimeAsync(500);
+      pumpCapture(constantBuffer(0.1));
+      openAs(ws, 'runtype.attach');
+      await started;
+
+      expect(ws.sent.slice(0, 2)).toEqual(['{"type":"ping"}', '{"type":"start"}']);
+      expect(ws.sent).toHaveLength(3);
+      expect(ws.sent[2]).toBeInstanceOf(ArrayBuffer);
     });
 
     it('closes an unused attached socket at the idle window', () => {

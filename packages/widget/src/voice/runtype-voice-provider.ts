@@ -70,6 +70,12 @@ const CAPTURE_SAMPLE_RATE = 16000;
 const PLAYBACK_SAMPLE_RATE = 24000;
 const CAPTURE_BUFFER_SIZE = 4096;
 /**
+ * Mic audio held while the call socket handshakes (a slow upgrade can take
+ * seconds, and the visitor is already talking): 8 s of 16-bit PCM, 256 KB,
+ * well under the server's startup queue. Past it the oldest frames go.
+ */
+const PRE_OPEN_AUDIO_MAX_BYTES = CAPTURE_SAMPLE_RATE * 2 * 8;
+/**
  * RMS-to-0..1 gain for the published capture level. Conversational speech sits
  * around 0.05 to 0.3 RMS, so the raw value would never leave the bottom of the
  * range; this maps a normal voice to roughly the middle.
@@ -205,6 +211,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private mediaStream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private processor: ScriptProcessorNode | null = null;
+  // Captured before the call socket opened; flushed in order on open.
+  private preOpenAudio: ArrayBuffer[] = [];
+  private preOpenBytes = 0;
   private playback: VoicePlaybackEngine | null = null;
 
   // True while a call (WS session) is live: drives the idempotent start guard
@@ -479,6 +488,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       }
       this.playback = engine;
       this.armPlaybackFinished();
+      // Capture from now: frames buffer until the call socket is open.
+      this.startCapture(captureContext, stream, generation);
 
       const adopted = await this.takeAttachedSocket();
       if (generation !== this.callGeneration) {
@@ -490,8 +501,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         this.ws = ws;
         this.bindCallSocket(ws, generation);
         if (!adopted.live) ws.send('{"type":"start"}');
+        this.flushPreOpenAudio(ws);
         this.emitStatus("listening");
-        this.startCapture(captureContext, stream, ws, generation);
         return;
       }
 
@@ -504,8 +515,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
       ws.onopen = () => {
         if (generation !== this.callGeneration) return;
+        this.flushPreOpenAudio(ws);
         this.emitStatus("listening");
-        this.startCapture(captureContext, stream, ws, generation);
       };
       this.bindCallSocket(ws, generation);
     } catch (error) {
@@ -602,12 +613,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   // --- Capture ---------------------------------------------------------------
 
-  private startCapture(
-    context: AudioContext,
-    stream: MediaStream,
-    ws: WebSocket,
-    generation: number,
-  ): void {
+  private startCapture(context: AudioContext, stream: MediaStream, generation: number): void {
     const source = context.createMediaStreamSource(stream);
     this.sourceNode = source;
     const processor = context.createScriptProcessor(CAPTURE_BUFFER_SIZE, 1, 1);
@@ -615,7 +621,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
     processor.onaudioprocess = (e) => {
       if (generation !== this.callGeneration) return;
-      if (ws.readyState !== WebSocket.OPEN) return;
+      // No socket yet (adopting a prewarm) or still handshaking: buffer.
+      const ws = this.ws;
+      const open = ws?.readyState === WebSocket.OPEN;
+      if (ws && !open && ws.readyState !== WebSocket.CONNECTING) return;
       const input = e.inputBuffer.getChannelData(0);
       const pcm16 = new Int16Array(input.length);
       let sumSquares = 0;
@@ -624,7 +633,16 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         sumSquares += s * s;
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
-      ws.send(pcm16.buffer);
+      if (ws && open) {
+        this.flushPreOpenAudio(ws);
+        ws.send(pcm16.buffer);
+      } else {
+        this.preOpenAudio.push(pcm16.buffer);
+        this.preOpenBytes += pcm16.byteLength;
+        while (this.preOpenBytes > PRE_OPEN_AUDIO_MAX_BYTES) {
+          this.preOpenBytes -= this.preOpenAudio.shift()!.byteLength;
+        }
+      }
       // Amplitude comes free from the buffer we already walked: no analyser
       // node, no second capture. RMS is scaled because speech rarely exceeds
       // ~0.3 RMS, so raw values would sit near the bottom of the 0..1 range.
@@ -639,6 +657,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     // The processor must be connected to the graph to run; it writes no output,
     // so the destination receives silence (no mic echo).
     processor.connect(context.destination);
+  }
+
+  private flushPreOpenAudio(ws: WebSocket): void {
+    for (const frame of this.preOpenAudio) ws.send(frame);
+    this.preOpenAudio = [];
+    this.preOpenBytes = 0;
   }
 
   // --- Downstream ------------------------------------------------------------
@@ -944,6 +968,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.cancelledUntil = 0;
     this.playbackEndsAt = 0;
     clearTimeout(this.drainTimer);
+    this.preOpenAudio = [];
+    this.preOpenBytes = 0;
 
     if (this.processor) {
       this.processor.onaudioprocess = null;
