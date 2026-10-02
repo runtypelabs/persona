@@ -89,6 +89,12 @@ type SSEHandler = (event: AgentWidgetEvent) => void;
 const DEFAULT_ENDPOINT = "https://api.runtype.com/v1/dispatch";
 const DEFAULT_CLIENT_API_BASE = "https://api.runtype.com";
 
+/**
+ * Features this widget handles on `/v1/client/chat` turns. `endUserApproval`:
+ * the visitor can answer a tool-approval pause via `/v1/client/approve`.
+ */
+const CLIENT_CHAT_CAPABILITIES = { endUserApproval: true } as const;
+
 /** Branch on `code`, never on message text. */
 export type HistoryClientErrorCode =
   | "visitor_required"
@@ -1976,6 +1982,7 @@ export class AgentWidgetClient {
         // superseded run and this client can drop its stale events below.
         turnId,
         ...(options.interrupt && { submitMode: 'interrupt' as const }),
+        capabilities: CLIENT_CHAT_CAPABILITIES,
       };
 
       // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already
@@ -2278,11 +2285,23 @@ export class AgentWidgetClient {
   /**
    * Send an approval decision to the API and return the response
    * for streaming continuation.
+   *
+   * Routes by mode:
+   *  - **client-token mode**: POST `${apiBase}/v1/client/approve`, authenticated
+   *    by the active session (no Bearer key). The visitor can only answer
+   *    once: `remember` is never sent. `assistantMessageId` names the bubble
+   *    the continued turn streams into.
+   *  - **API-key / proxy mode**: POST `${apiBase}/v1/agents/{agentId}/approve`.
    */
   public async resolveApproval(
     approval: { agentId: string; executionId: string; approvalId: string },
-    decision: 'approved' | 'denied'
+    decision: 'approved' | 'denied',
+    options?: { assistantMessageId?: string; signal?: AbortSignal }
   ): Promise<Response> {
+    if (this.isClientTokenMode()) {
+      return this.resolveClientApproval(approval, decision, options);
+    }
+
     const url = `${this.clientApiBase()}/v1/agents/${approval.agentId}/approve`;
 
     let headers: Record<string, string> = {
@@ -2302,6 +2321,46 @@ export class AgentWidgetClient {
         decision,
         streamResponse: true,
       }),
+    });
+  }
+
+  private async resolveClientApproval(
+    approval: { executionId: string; approvalId: string },
+    decision: 'approved' | 'denied',
+    options?: { assistantMessageId?: string; signal?: AbortSignal }
+  ): Promise<Response> {
+    // A visitor can sit on an approval card for a while: re-validate the
+    // session (re-initializing if it expired) like resumeFlow does.
+    const session = await this.initSession();
+    const visitorToken =
+      session.durableRecovery?.enabled === true ? await this.readVisitorToken() : null;
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(visitorToken ? { 'X-Visitor-Token': visitorToken } : {}),
+      ...this.headers
+    };
+    if (this.getHeaders) {
+      Object.assign(headers, await this.getHeaders());
+    }
+
+    const body: Record<string, unknown> = {
+      sessionId: session.sessionId,
+      executionId: approval.executionId,
+      approvalId: approval.approvalId,
+      decision,
+      streamResponse: true,
+      ...(options?.assistantMessageId ? { assistantMessageId: options.assistantMessageId } : {}),
+    };
+    if (this.debug) {
+      // eslint-disable-next-line no-console
+      console.debug("[AgentWidgetClient] client token approve", body);
+    }
+    return fetch(`${this.clientApiBase()}/v1/client/approve`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: options?.signal,
     });
   }
 

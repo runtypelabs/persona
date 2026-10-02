@@ -122,6 +122,36 @@ describe("built-in approval — flag off (default)", () => {
   });
 });
 
+describe("built-in approval — client-token visitor", () => {
+  const cfg: AgentWidgetConfig = {
+    clientToken: "ct_live_demo",
+    approval: { enableAlwaysAllow: true, detailsDisplay: "hidden" },
+  };
+  const message = makeMessage({
+    toolName: "place_pickup_order",
+    parameters: { item: "croissant", qty: 12 },
+    reason: "The user asked for this.",
+  });
+
+  it("offers allow-once only, with no Always allow or Enter shortcut", () => {
+    const { el, approve } = render(cfg, message);
+    expect(el?.querySelector('[data-action="always"]')).toBeNull();
+    expect(el?.querySelector('[data-action="allow"]')).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(approve).not.toHaveBeenCalled();
+  });
+
+  it("shows the raw tool name and parameters above the agent's reason", () => {
+    const { el } = render(cfg, message);
+    const call = el?.querySelector('[data-role="raw-call"]') as HTMLElement | null;
+    expect(call?.querySelector(".persona-approval-tool-name")?.textContent).toBe("place_pickup_order");
+    expect(call?.querySelector(".persona-approval-params")?.textContent).toContain("croissant");
+    const reason = el?.querySelector(".persona-approval-reason");
+    expect(reason?.textContent).toContain("Agent's stated reason:");
+    expect(call!.compareDocumentPosition(reason!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe("built-in approval — flag on (enableAlwaysAllow)", () => {
   const cfg: AgentWidgetConfig = { approval: { enableAlwaysAllow: true } };
 

@@ -5243,6 +5243,8 @@ export type AgentWidgetApprovalConfig = {
    * policy: "Always allow" only resolves the *current* approval — honoring it
    * for *future* calls is up to your `onDecision` handler (which receives
    * `options.remember`). Showing it without that wiring would mislead users.
+   *
+   * Ignored with a `clientToken`: chat visitors can only allow once.
    */
   enableAlwaysAllow?: boolean;
   /**
@@ -6079,6 +6081,8 @@ export type ClientChatRequest = {
   turnId?: RuntypeClientChatRequest['turnId'];
   /** Whether this turn should interrupt a prior in-flight response (from Core public OpenAPI). */
   submitMode?: RuntypeClientChatRequest['submitMode'];
+  /** Features this widget supports, so the server only sends what it can handle. */
+  capabilities?: { endUserApproval?: boolean };
 };
 
 /**

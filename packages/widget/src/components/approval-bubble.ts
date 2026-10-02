@@ -31,12 +31,19 @@ export const humanizeToolName = (toolName: string): string => {
 const resolveApprovalConfig = (config?: AgentWidgetConfig) =>
   config?.approval !== false ? config?.approval : undefined;
 
+// Client-token visitors answer the gate themselves, so the raw call (tool
+// description + parameters) opens by default and can't be hidden.
+const resolveDetailsMode = (config?: AgentWidgetConfig) =>
+  config?.clientToken
+    ? "expanded"
+    : (resolveApprovalConfig(config)?.detailsDisplay ?? "collapsed");
+
 const isDetailsExpanded = (
   messageId: string,
   expansionState: Map<string, boolean>,
   config?: AgentWidgetConfig
 ): boolean => {
-  const detailsMode = resolveApprovalConfig(config)?.detailsDisplay ?? "collapsed";
+  const detailsMode = resolveDetailsMode(config);
   return expansionState.get(messageId) ?? detailsMode === "expanded";
 };
 
@@ -294,7 +301,7 @@ export const createApprovalBubble = (
 
   // Technical details: agent-facing description + raw parameters JSON,
   // collapsed behind a toggle by default (`approval.detailsDisplay`).
-  const detailsMode = approvalConfig?.detailsDisplay ?? "collapsed";
+  const detailsMode = resolveDetailsMode(config);
   const showDescriptionInDetails = Boolean(approval.description) && !summaryFallsBackToDescription;
   const hasDetails = showDescriptionInDetails || Boolean(approval.parameters);
   if (detailsMode !== "hidden" && hasDetails) {

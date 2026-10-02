@@ -4682,6 +4682,18 @@
   max-height: 9rem;
 }
 
+.persona-approval-call {
+  margin: 0 0 0.6rem;
+}
+.persona-approval-tool-name {
+  display: inline-block;
+  margin: 0 0 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--persona-text, #1f2937);
+}
+
 .persona-approval-reason {
   margin: 0 0 0.6rem;
   font-size: 0.8125rem;

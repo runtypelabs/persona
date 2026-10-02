@@ -82,6 +82,10 @@ import { isVoiceSupportedProbe, usesSessionVoice, voiceConnectionChanged } from 
 import { VoiceTurnTracker } from "./voice/voice-turn-tracker";
 import { loadVoiceRuntime } from "./voice-runtime-loader";
 import { resolveSpeakableText } from "./utils/speech-text";
+import {
+  ClientApprovalError,
+  clientApprovalErrorFromResponse,
+} from "./utils/client-approval-errors";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
 // Type-only (erased at build): the runtime reconnect machinery ships in the
 // lazy session-reconnect chunk, reached via `session-reconnect-loader.ts` in
@@ -3194,6 +3198,11 @@ export class AgentWidgetSession {
     // 2. Call onDecision callback if provided, otherwise use client.resolveApproval()
     const approvalConfig = this.config.approval;
     const onDecision = approvalConfig && typeof approvalConfig === 'object' ? approvalConfig.onDecision : undefined;
+    // The visitor answers a client-token approval directly (no integrator
+    // onDecision): failures get visitor copy in the transcript below.
+    const clientApproval = !onDecision && this.client.isClientTokenMode();
+    const continuationId = generateAssistantMessageId();
+    const signal = this.abortController.signal;
 
     try {
       let response: Response | ReadableStream<Uint8Array> | void;
@@ -3216,7 +3225,8 @@ export class AgentWidgetSession {
             executionId: approval.executionId,
             approvalId: approval.id,
           },
-          decision
+          decision,
+          clientApproval ? { assistantMessageId: continuationId, signal } : undefined
         );
       }
 
@@ -3224,6 +3234,9 @@ export class AgentWidgetSession {
       if (response) {
         let stream: ReadableStream<Uint8Array> | null = null;
         if (response instanceof Response) {
+          if (!response.ok && clientApproval) {
+            throw await clientApprovalErrorFromResponse(response);
+          }
           if (!response.ok) {
             const errorData = await response.json().catch(() => null);
             throw new Error(
@@ -3236,7 +3249,10 @@ export class AgentWidgetSession {
         }
 
         if (stream) {
-          await this.connectStream(stream, { allowReentry: true });
+          await this.connectStream(stream, {
+            allowReentry: true,
+            ...(clientApproval ? { assistantMessageId: continuationId } : {}),
+          });
         } else {
           if (decision === 'denied') {
             // No stream body for denied: inject a denial message
@@ -3269,12 +3285,45 @@ export class AgentWidgetSession {
       this.setStreaming(false);
       this.abortController = null;
 
+      if (!isAbortError && clientApproval) {
+        this.reportClientApprovalFailure(approvalMessageId, error);
+      }
+
       if (!isAbortError) {
         this.callbacks.onError?.(
           error instanceof Error ? error : new Error(String(error))
         );
       }
     }
+  }
+
+  /**
+   * Show a failed client-token approval decision in the transcript and move
+   * the card to the state the failure implies: expired → timeout, transient
+   * → pending again so the visitor can retry. Other failures keep the
+   * visitor's recorded choice.
+   */
+  private reportClientApprovalFailure(approvalMessageId: string, error: unknown): void {
+    const failure =
+      error instanceof ClientApprovalError ? error : new ClientApprovalError("failed");
+    const card = this.messages.find((m) => m.id === approvalMessageId);
+    const nextStatus =
+      failure.reason === "expired"
+        ? "timeout"
+        : failure.reason === "failed" || failure.reason === "unavailable"
+          ? "pending"
+          : null;
+    if (card?.approval && nextStatus) {
+      this.upsertMessage({ ...card, approval: { ...card.approval, status: nextStatus } });
+    }
+    this.appendMessage({
+      id: `${approvalMessageId}-error-${this.nextSequence()}`,
+      role: "assistant",
+      content: failure.visitorMessage,
+      createdAt: new Date().toISOString(),
+      streaming: false,
+      sequence: this.nextSequence(),
+    });
   }
 
   /**

@@ -841,7 +841,7 @@ describe('AgentWidgetClient - Agent Payload Building', () => {
     });
     expect(requests[1]).toMatchObject({
       url: 'https://api.runtype.com/v1/client/chat',
-      body: { sessionId: 'sess_agent' },
+      body: { sessionId: 'sess_agent', capabilities: { endUserApproval: true } },
     });
   });
 

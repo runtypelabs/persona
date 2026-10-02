@@ -754,7 +754,7 @@ tracks your theme), not the old warning/success/error palette:
 
 | Property | Description |
 |----------|-------------|
-| `enableAlwaysAllow` | `false` by default. `true` adds the split "Always allow / Allow once" control + keyboard shortcuts; forwards `{ remember: true }` to `onDecision` (needs a backend to persist the policy) |
+| `enableAlwaysAllow` | `false` by default. `true` adds the split "Always allow / Allow once" control + keyboard shortcuts; forwards `{ remember: true }` to `onDecision` (needs a backend to persist the policy). Ignored with a `clientToken`, where visitors can only allow once |
 | `detailsDisplay` | `"collapsed"` (default) / `"expanded"` / `"hidden"` — initial state of the tool-arguments disclosure |
 | `showDetailsLabel` / `hideDetailsLabel` | Disclosure toggle labels |
 | `backgroundColor` / `borderColor` | Card container styling |
