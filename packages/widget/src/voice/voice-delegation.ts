@@ -7,8 +7,11 @@ import type {
   VoiceSessionBridge,
 } from "../types";
 
-/** What a delegated turn streamed: its assistant messages, and whether it failed. */
-export type VoiceDelegationCapture = { ids: string[]; failed: boolean };
+/**
+ * What a delegated turn streamed: its assistant messages, whether it failed,
+ * and whether the server dropped its result (then browser TTS may read it).
+ */
+export type VoiceDelegationCapture = { ids: string[]; failed: boolean; dropped?: boolean };
 
 /** The session internals the delegation bridge drives. */
 export interface VoiceDelegationHost {
@@ -25,6 +28,8 @@ export interface VoiceDelegationHost {
   track(capture: VoiceDelegationCapture | null): void;
   /** Deny a pending approval (server gate or WebMCP) by its message id. */
   decide(approvalMessageId: string): void;
+  /** Let browser TTS read these messages after all (their spoken result was dropped). */
+  unspoken(messageIds: string[]): void;
 }
 
 const SETTLE_POLL_MS = 50;
@@ -120,6 +125,13 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   // `replaced`: approvals this bridge declined because a newer request for the same tool came in.
   type Parked = { approvals: string[]; at: number; replaced: Set<string>; outcome?: VoiceDelegationFollowUp };
   const parks: Parked[] = [];
+  // Per delegation: the captures of its turn and follow-up, so a result the
+  // server dropped can be handed back to browser TTS. Bounded: recent calls only.
+  const captures = new Map<string, VoiceDelegationCapture[]>();
+  const remember = (delegationId: string, capture: VoiceDelegationCapture) => {
+    captures.set(delegationId, [...(captures.get(delegationId) ?? []), capture]);
+    if (captures.size > 32) captures.delete(captures.keys().next().value!);
+  };
   const message = (id: string) => host.messages().find((m) => m.id === id);
   const pendingOf = (park: Parked) => park.approvals.filter((id) => message(id)?.approval?.status === "pending");
   const toolOf = (id: string) => humanize(message(id)?.approval?.toolName ?? "");
@@ -155,7 +167,15 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
           : [],
       ),
 
+    dropDelegation(delegationId) {
+      for (const capture of captures.get(delegationId) ?? []) {
+        capture.dropped = true;
+        host.unspoken(capture.ids);
+      }
+    },
+
     async runDelegatedTurn({
+      delegationId,
       userText,
       userUtteranceIds,
     }: VoiceDelegationRequest): Promise<VoiceDelegationResult> {
@@ -178,6 +198,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       const before = new Set(host.messages().map((m) => m.id));
       const raised = () => host.messages().filter((m) => !before.has(m.id) && m.variant === "approval");
       const capture: VoiceDelegationCapture = { ids: [], failed: false };
+      remember(delegationId, capture);
       active = capture;
       retrack();
       try {
@@ -222,11 +243,23 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         return {
           status: "pending_approval",
           text,
-          followUp: async ({ signal, approvalTimeoutMs = APPROVAL_TTL_MS, readBack = true }) => {
+          followUp: async ({ signal, approvalTimeoutMs = APPROVAL_TTL_MS, readBack = true, onUpdate }) => {
             const follow: VoiceDelegationCapture = { ids: [], failed: false };
+            remember(delegationId, follow);
             // This turn's approvals, and any its resumed stream chains into
             // (not another turn's).
             const mine = () => raised().filter((m) => own.has(m.id) || follow.ids.includes(m.id));
+            // A gated tool the resumed turn chains into: a new approval of this
+            // park (server gate: captured; WebMCP: the one pending while this
+            // follow-up owns the stream), asked for with another update.
+            const chained = () =>
+              raised().filter(
+                (m) =>
+                  isPendingApproval(m) &&
+                  !own.has(m.id) &&
+                  !parks.some((other) => other.approvals.includes(m.id)) &&
+                  (follow.ids.includes(m.id) || (m.approval?.toolType === "webmcp" && following === follow)),
+              );
             const claim = () => {
               following = follow;
               retrack();
@@ -239,6 +272,15 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
                 // With several turns parked, the one whose approvals were just
                 // decided takes the capture slot back: its resumed stream is next.
                 if (readBack && following !== follow && !pendingOf(park).length) claim();
+                const next = chained();
+                if (next.length) {
+                  for (const m of next) {
+                    own.add(m.id);
+                    park.approvals.push(m.id);
+                  }
+                  park.at = Date.now();
+                  onUpdate?.(buildApprovalScript(next.map((m) => m.approval!)));
+                }
                 // Unanswered too long: decline it, but never by aborting a
                 // turn in flight (a parked WebMCP turn is the one waiting).
                 if (Date.now() - park.at >= approvalTimeoutMs && pendingOf(park).length && (!host.busy() || host.parked())) {

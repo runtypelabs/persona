@@ -42,8 +42,8 @@
 // `session_config.capabilities` (the negotiated intersection), the only gate
 // for the client frames `context`, `delegation_update` and client delegation:
 // a server without `capabilities` gets none of them. Receivers ignore unknown
-// frames, fields and enum values; an `error` with `fatal: false` doesn't end
-// the call.
+// frames, fields and enum values. Non-fatal problems arrive as `warning`
+// frames; an `error` always ends the call.
 //
 // Client delegation (full duplex, when the session supplied a bridge and
 // `clientDelegation` isn't false, and `client_delegation` was negotiated): a
@@ -53,8 +53,10 @@
 // parks on a tool approval first sends the non-terminal
 // `delegation_update{delegationId, status:'pending_approval', text}`, then the
 // terminal result once the visitor decides (or the approval lapses or is
-// replaced). `delegation_cancelled{delegationId}` stops all frames for that id;
-// the chat turn still renders. The voice model's spoken read-back after each
+// replaced). A second gated tool in the same turn sends another update.
+// `delegation_cancelled{delegationId}` (or a `warning` refusing a frame for
+// it) stops all frames for that id; the chat turn still renders, and since
+// nobody speaks it now, browser TTS may read it. The voice model's spoken read-back after each
 // `delegation_completed` of an answered delegation (the first new assistant
 // utterance, unless the visitor speaks first) is folded: the chat already shows
 // it. Transcripts in such a call are display-only captions, never sent to the
@@ -262,8 +264,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private capabilities = new Set<string>();
   // Per delegation: aborts its pending approval follow-up (cancelled, or call end).
   private followUps = new Map<string, AbortController>();
-  // Delegations the server cancelled: no more frames for them.
+  // Delegations the server cancelled (or refused a frame for): no more frames for them.
   private cancelledDelegations = new Set<string>();
+  // Delegations this call saw start (a completion for any other is a server-side refusal).
+  private startedDelegations = new Set<string>();
+  // session_config.callId: the server's id for this call, for logs.
+  private callId: string | undefined;
   // Call-start context, built at session_config and held until the visitor's
   // first final transcript (sent earlier, the voice model tends to answer it).
   private contextSent = false;
@@ -718,6 +724,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         // The negotiated client frame types. A server without `capabilities`
         // predates them: no client delegation, context or updates.
         if (Array.isArray(msg.capabilities)) this.capabilities = new Set(msg.capabilities);
+        if (typeof msg.callId === "string") this.callId = msg.callId;
         this.clientDelegation = this.speechToSpeech && this.capabilities.has("client_delegation") && !!this.bridge;
         // Speech-to-speech is known only now: let the UI show its disclosure.
         if (this.speechToSpeech && !this.isSpeaking) this.emitStatus("listening");
@@ -762,6 +769,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       case "delegation_completed": {
         const delegationId = String(msg.delegationId ?? msg.turnId);
         if (msg.type === "delegation_started") {
+          this.startedDelegations.add(delegationId);
           this.flushCallContext(generation);
           // `input`: run this turn through the chat pipeline (client delegation).
           const input = msg.input;
@@ -779,8 +787,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
               generation,
             );
           }
-        } else if (msg.speak !== false && this.answered.has(delegationId)) {
-          // Every spoken phase (the approval ask, the late result) is read back.
+        } else if (msg.speak !== false && (this.answered.has(delegationId) || !this.startedDelegations.has(delegationId))) {
+          // Every spoken phase (the approval ask, the late result) is read back,
+          // and so is the refusal of one that never started here. `final` may
+          // never come (hang-up, session end), so nothing waits on it.
           this.foldReadback = true;
         }
         this.delegating = msg.type === "delegation_started";
@@ -790,14 +800,21 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         break;
       }
 
-      case "delegation_cancelled": {
-        // The server gave up on it (its timeout, or the call ending): no more
-        // frames for it, and its approval timers stop. The chat turn still renders.
-        const delegationId = String(msg.delegationId);
-        this.cancelledDelegations.add(delegationId);
-        this.followUps.get(delegationId)?.abort();
+      case "delegation_cancelled":
+        // The server gave up on it (deadline, session ending, provider
+        // cancelled; any reason alike): no more frames for it, and its approval
+        // timers stop. The chat turn still renders.
+        this.dropDelegation(String(msg.delegationId));
         break;
-      }
+
+      case "warning":
+        // Non-fatal (an unknown or refused frame): the call goes on. A refused
+        // delegation frame means the server is done with that delegation.
+        console.warn(`[Persona voice] ${msg.code}: ${msg.message ?? ""}`, this.callId ?? "");
+        if (msg.delegationId && (msg.code === "UNKNOWN_DELEGATION" || msg.code === "LATE_RESULT_LIMIT")) {
+          this.dropDelegation(String(msg.delegationId));
+        }
+        break;
 
       case "audio_clear":
         // Barge-in (or our own cancel acknowledged): stop playback now.
@@ -838,8 +855,6 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         break;
 
       case "error":
-        // `fatal: false` (an unknown or malformed client frame): the call goes on.
-        if (msg.fatal === false) break;
         this.emitError(new Error(msg.error || "Voice error"));
         this.emitStatus("error");
         break;
@@ -892,6 +907,13 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     if (timedOut) send.drop();
   }
 
+  /** No more frames for this delegation; its chat answer goes back to browser TTS. */
+  private dropDelegation(delegationId: string): void {
+    this.cancelledDelegations.add(delegationId);
+    this.followUps.get(delegationId)?.abort();
+    this.bridge?.dropDelegation?.(delegationId);
+  }
+
   /** Run a delegated turn through the session bridge (one at a time) and answer it. */
   private runDelegation(delegationId: string, request: VoiceDelegationRequest, generation: number): void {
     const bridge = this.bridge!;
@@ -926,7 +948,13 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       const abort = new AbortController();
       this.followUps.set(delegationId, abort);
       void result
-        .followUp({ signal: abort.signal, approvalTimeoutMs: this.config?.approvalTimeoutMs, readBack: update })
+        .followUp({
+          signal: abort.signal,
+          approvalTimeoutMs: this.config?.approvalTimeoutMs,
+          readBack: update,
+          // Another gated tool in the same turn: another (non-terminal) update.
+          onUpdate: (text) => send("delegation_update", "pending_approval", text),
+        })
         .then((followUp) => {
           this.followUps.delete(delegationId);
           // Hang-up and cancellation send nothing.
@@ -1019,6 +1047,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     for (const abort of this.followUps.values()) abort.abort();
     this.followUps.clear();
     this.cancelledDelegations.clear();
+    this.startedDelegations.clear();
+    this.callId = undefined;
     this.contextSent = false;
     this.pendingContext = null;
     this.contextSend = null;

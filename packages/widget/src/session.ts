@@ -780,6 +780,9 @@ export class AgentWidgetSession {
             track: (capture) => {
               this.voiceDelegation = capture;
             },
+            unspoken: (ids) => {
+              for (const id of ids) this.ttsSpokenMessageIds.delete(id);
+            },
             decide: (id) => {
               if (this.webMcpApprovalResolvers.has(id)) return this.resolveWebMcpApproval(id, 'denied');
               const approval = this.messages.find((m) => m.id === id)?.approval;
@@ -4527,8 +4530,9 @@ export class AgentWidgetSession {
       if (event.type === "error" || (event.type === "status" && event.status === "error")) {
         delegation.failed = true;
       } else if (event.type === "message" && event.message.role === "assistant") {
-        // The voice model reads this answer aloud: browser TTS must skip it.
-        this.ttsSpokenMessageIds.add(event.message.id);
+        // The voice model reads this answer aloud: browser TTS must skip it,
+        // unless the server dropped the result (then nobody speaks it).
+        if (!delegation.dropped) this.ttsSpokenMessageIds.add(event.message.id);
         if (!delegation.ids.includes(event.message.id)) delegation.ids.push(event.message.id);
       }
     }

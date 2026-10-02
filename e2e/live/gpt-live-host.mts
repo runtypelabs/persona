@@ -297,8 +297,8 @@ server.on("upgrade", (request, socket, head) => {
       },
       (error: unknown) => console.error("[voice] engine error:", error instanceof Error ? error.message : error),
       {
-        // v1 token, plus the legacy alias core still accepts.
-        clientDelegation: capabilities.has("client_delegation") || capabilities.has("client-delegation"),
+        // v1 token only: the kebab-case form selects the server-side runner (Amendment 5.1).
+        clientDelegation: capabilities.has("client_delegation"),
         logWarning: (message: string, fields: Record<string, unknown>) => console.warn("[voice]", message, fields),
       },
     );

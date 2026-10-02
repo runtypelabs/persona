@@ -15,8 +15,8 @@ import { WebSocketServer, type WebSocket } from "ws";
  *     declared and what this server is configured for (`client_delegation`,
  *     `context`, `delegation_update`); `legacy: true` omits it (an old server);
  *   - an unknown or ungranted client frame type gets a non-fatal
- *     `error{code:'UNKNOWN_FRAME', fatal:false}` and the call goes on; the
- *     frame is recorded in `rejected`, so specs still catch it.
+ *     `warning{code:'UNKNOWN_FRAME'}` and the call goes on (Amendment 5.1);
+ *     the frame is recorded in `rejected`, so specs still catch it.
  *
  * Everything after `session_config` is scripted by the spec through the
  * returned {@link FakeVoiceCall}: transcript/delegation frames, PCM audio, and
@@ -239,7 +239,7 @@ function createCall(
       speechMode: "speech_to_speech",
       ...(options.legacy
         ? {}
-        : { protocolVersion: "runtype-browser-v1", sessionId: "vs_fake", capabilities }),
+        : { protocolVersion: "runtype-browser-v1", callId: "vc_fake", capabilities }),
     });
     resolveReady();
   };
@@ -260,7 +260,7 @@ function createCall(
     if (!accepted.has(frame.type)) {
       // v1: an unknown client frame is logged and refused, never fatal.
       rejected.push(frame);
-      send({ type: "error", error: `Unsupported voice message: ${frame.type}`, code: "UNKNOWN_FRAME", fatal: false });
+      send({ type: "warning", code: "UNKNOWN_FRAME", message: `Unsupported voice message: ${frame.type}` });
     }
     for (const wake of frameWaiters.splice(0)) wake();
   });

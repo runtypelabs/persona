@@ -5305,6 +5305,8 @@ export type VoiceDelegationResult = {
     approvalTimeoutMs?: number;
     /** `false`: run only the approval bookkeeping (expiry, supersede); nothing will be read back. @default true */
     readBack?: boolean;
+    /** The resumed turn stopped on another approval: ask for it too (`text` is its approval script). */
+    onUpdate?: (text: string) => void;
   }) => Promise<VoiceDelegationFollowUp | null>;
 };
 
@@ -5322,6 +5324,11 @@ export interface VoiceSessionBridge {
    * Waits for any chat turn already in flight first. Never rejects.
    */
   runDelegatedTurn(request: VoiceDelegationRequest): Promise<VoiceDelegationResult>;
+  /**
+   * The server dropped this delegation's result (cancelled it, or refused a
+   * late result): its chat answer is no longer spoken, so browser TTS may read it.
+   */
+  dropDelegation?(delegationId: string): void;
 }
 
 /**

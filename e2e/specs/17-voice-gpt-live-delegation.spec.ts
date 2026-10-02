@@ -673,9 +673,9 @@ test("delegation_cancelled: no frames for that delegation; its approval card sta
   })();
   expect(update.status).toBe("pending_approval");
   call.send({ type: "delegation_cancelled", delegationId: "dlg_1", reason: "timeout" });
-  // Unknown frames and fields from a newer server are ignored, and a non-fatal error keeps the call.
+  // Unknown frames and fields from a newer server are ignored, and a warning keeps the call.
   call.send({ type: "agent_state", state: "listening" });
-  call.send({ type: "error", error: "Unknown frame", code: "UNKNOWN_FRAME", fatal: false });
+  call.send({ type: "warning", code: "UNKNOWN_FRAME", message: "Unknown frame: x" });
 
   await page.getByRole("button", { name: "Allow", exact: true }).click();
   await expect.poll(() => decisions).toEqual([expect.objectContaining({ decision: "approved" })]);

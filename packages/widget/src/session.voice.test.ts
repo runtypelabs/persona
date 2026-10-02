@@ -926,6 +926,47 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(approvalOf().status).toBe('denied');
   });
 
+  it('hands a dropped delegation\'s answer back to browser TTS, now and for the rest of its stream', async () => {
+    drive('user', 'what are your hours', true, 'u1');
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.', 'assistant-hours'));
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'what are your hours' }));
+    expect(spoken('assistant-hours')).toBe(true);
+    h.state.bridge!.dropDelegation!('d1');
+    expect(spoken('assistant-hours')).toBe(false);
+  });
+
+  it('asks again for a second gated tool the resumed turn stops on, and waits for it', async () => {
+    parkOnApproval({}, 'ap1');
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'croissants, then a cake' }));
+    const updates: string[] = [];
+    const followUp = result.followUp!({ signal: new AbortController().signal, onUpdate: (text) => updates.push(text) });
+
+    // Approving the first resumes the turn, which stops on a cake approval.
+    internals().client.resolveApproval = async () => new ReadableStream();
+    vi.spyOn(session, 'connectStream').mockImplementationOnce(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      internals().handleEvent({
+        type: 'message',
+        message: {
+          id: 'approval-ap2',
+          role: 'assistant',
+          content: '',
+          createdAt: new Date().toISOString(),
+          variant: 'approval',
+          approval: { id: 'ap2', status: 'pending', agentId: 'a1', executionId: 'e1', toolName: 'order_cake', description: '' },
+        },
+      });
+      internals().abortController = null;
+    });
+    await session.resolveApproval(approvalOf('ap1'), 'approved');
+    await vi.waitFor(() => expect(updates).toHaveLength(1), { timeout: 2_000 });
+    expect(updates[0]).toContain('- order cake');
+
+    resumeLater('Croissants and cake ordered.');
+    await session.resolveApproval(approvalOf('ap2'), 'approved');
+    expect(await followUp).toEqual({ status: 'completed', text: 'Croissants and cake ordered.' });
+  });
+
   it('reads each parked turn back with its own answer when both wait at once', async () => {
     parkOnApproval({}, 'ap1');
     const first = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
