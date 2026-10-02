@@ -22,7 +22,7 @@ e2e/live/make-question-wav.sh "What are your opening hours?"
 E2E_PORT=4391 ./node_modules/.bin/playwright test --config e2e/live/playwright.live.config.ts
 ```
 
-`LIVE_AGENT_IDENTITY=generic` drops the agent name/description/tools from the GPT-Live instructions (core's generic default), for measuring delegation on thin-identity agents. `LIVE_CHAT_DELAY_MS` mimics a real agent's latency. Without it, the answer comes back before GPT-Live speaks its filler line.
+For a small-talk check, `e2e/live/make-question-wav.sh "Who are you?" e2e/live/.out/who.wav` and run with `LIVE_WAV=…/who.wav LIVE_QUESTION="who are you" LIVE_ANSWER="juniper|bakery" LIVE_EXPECT_SMALL_TALK=1` (expects no delegation). `LIVE_AGENT_IDENTITY=generic` drops the agent name/description/tools from the GPT-Live instructions (core's generic default), for measuring delegation on thin-identity agents. `LIVE_CHAT_DELAY_MS` mimics a real agent's latency. Without it, the answer comes back before GPT-Live speaks its filler line.
 
 ## Mode B: deployed core (full route admission)
 

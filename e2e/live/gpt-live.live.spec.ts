@@ -15,6 +15,8 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *   LIVE_TYPED          a message typed before the call (must reach `context`); "" skips it
  *   LIVE_CALL_CONTEXT   host callContext string; "" sends none
  *   LIVE_EXPECT_DELEGATION=0  expect the server-side path (old server) instead
+ *   LIVE_EXPECT_SMALL_TALK=1  the question is small talk ("Who are you?"): GPT-Live
+ *                             answers itself, nothing is delegated, the reply renders
  *   LIVE_EXPECT_USER_TURN_ID=0  core predates Amendment 2 (no userTurnId)
  *   LIVE_ALLOW_UNPROMPTED=1     tolerate GPT-Live speaking before the visitor
  *
@@ -34,6 +36,7 @@ const ANSWER = new RegExp(env("LIVE_ANSWER", "Monday|hours|open"), "i");
 const TYPED = process.env.LIVE_TYPED ?? "Do you sell gift cards?";
 const CALL_CONTEXT = process.env.LIVE_CALL_CONTEXT ?? "Live e2e: the visitor is testing voice.";
 const EXPECT_DELEGATION = process.env.LIVE_EXPECT_DELEGATION !== "0";
+const EXPECT_SMALL_TALK = process.env.LIVE_EXPECT_SMALL_TALK === "1";
 
 type Frame = { at: number; dir: "in" | "out"; json?: Record<string, unknown>; bytes?: number };
 
@@ -149,7 +152,28 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       page.locator('[data-message-id][data-persona-theme-zone="user-message"]').filter({ hasText: QUESTION }),
     ).toHaveCount(1);
 
-    if (EXPECT_DELEGATION) {
+    if (EXPECT_SMALL_TALK) {
+      // GPT-Live answers from its own identity: a final assistant reply that
+      // renders as a bubble, and no delegation or chat submission at all.
+      const userFinalAt = frames.find(
+        (f) => f.json?.type === "transcript_update" && f.json.role === "user" && f.json.final,
+      )!.at;
+      const replyText = () =>
+        frames
+          .filter((f) => f.at > userFinalAt - 2_000 && f.json?.type === "transcript_update" && f.json.role === "assistant" && f.json.final)
+          .map((f) => String(f.json!.text))
+          .find((text) => ANSWER.test(text));
+      await expect.poll(replyText, { timeout: 30_000 }).toBeTruthy();
+      await page.waitForTimeout(3_000);
+      expect(json("in", "delegation_requested")).toEqual([]);
+      expect(json("in", "delegation_started")).toEqual([]);
+      expect(json("out", "delegation_result")).toEqual([]);
+      expect(chatRequests).toHaveLength(typedRequests);
+      await expect(
+        page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').filter({ hasText: ANSWER }).first(),
+      ).toBeVisible();
+      testInfo.annotations.push({ type: "reply", description: replyText() ?? "" });
+    } else if (EXPECT_DELEGATION) {
       await expect.poll(() => json("in", "delegation_requested").length, { timeout: 45_000 }).toBeGreaterThan(0);
       const requested = json("in", "delegation_requested")[0]!;
       // Amendment 2: the request names the user utterance it came from.
