@@ -290,8 +290,15 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         .toBe(true);
       const button = page.getByRole("button", { name: APPROVE === "allow" ? "Allow" : "Deny", exact: true });
       await expect(button).toBeVisible({ timeout: 30_000 });
-      // Let GPT-Live finish asking before deciding, as a visitor would.
-      await page.waitForTimeout(3_000);
+      // The visitor must hear the ask before deciding (GPT-Live paraphrases it).
+      const askedAt = frames.find((f) => f.json?.type === "delegation_completed" && f.json.turnId === requested.turnId)!.at;
+      const spokenSince = (from: number) =>
+        frames
+          .filter((f) => f.at > from && f.json?.type === "transcript_update" && f.json.role === "assistant" && f.json.final)
+          .map((f) => String(f.json!.text).trim());
+      await expect
+        .poll(() => spokenSince(askedAt).join(" "), { timeout: 30_000, message: "GPT-Live never asked for the approval" })
+        .toMatch(/approv|confirm|allow|go ahead/i);
       const decidedAt = Date.now() - t0;
       await button.click();
 
@@ -326,15 +333,16 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(bubbles, "the follow-up read-back rendered as a second bubble").not.toContain(readback);
       if (APPROVE === "allow") {
         expect(bubbles.some((text) => FOLLOWUP.test(text)), "the confirmation did not render").toBe(true);
-        if (!FOLLOWUP.test(readback) && !/croissant|order/i.test(readback)) warn(`read-back "${readback}" does not mention the order`);
       }
+      // ...and the visitor hears the outcome.
+      expect(readback, "GPT-Live did not speak the outcome").toMatch(
+        APPROVE === "allow" ? /order|croissant|placed|confirm|pickup|jb/i : /declin|cancel|not|won t|didn t|order/i,
+      );
 
-      const spoken = (from: number, to: number) =>
-        frames
-          .filter((f) => f.at > from && f.at <= to && f.json?.type === "transcript_update" && f.json.role === "assistant" && f.json.final)
-          .map((f) => String(f.json!.text).trim());
-      testInfo.annotations.push({ type: "spoken-before-decision", description: JSON.stringify(spoken(0, decidedAt)) });
-      testInfo.annotations.push({ type: "spoken-after-decision", description: JSON.stringify(spoken(decidedAt, Infinity)) });
+      const after = spokenSince(decidedAt);
+      const before = spokenSince(0).slice(0, -after.length || undefined);
+      testInfo.annotations.push({ type: "spoken-before-decision", description: JSON.stringify(before) });
+      testInfo.annotations.push({ type: "spoken-after-decision", description: JSON.stringify(after) });
     } else if (EXPECT_DELEGATION) {
       await expect.poll(() => json("in", "delegation_requested").length, { timeout: 45_000 }).toBeGreaterThan(0);
       const requested = json("in", "delegation_requested")[0]!;
