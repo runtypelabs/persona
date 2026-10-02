@@ -949,6 +949,14 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(speak).not.toHaveBeenCalled();
   });
 
+  it('hands a parked turn\'s reply to browser TTS when the delegation is dropped before its ask went out', async () => {
+    parkOnApproval();
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
+    // No followUp call: the provider never sent the ask (cancelled first).
+    h.state.bridge!.dropDelegation!('d1');
+    expect(spoken('r-ap1')).toBe(false);
+  });
+
   it('asks again for a second gated tool the resumed turn stops on, and waits for it', async () => {
     parkOnApproval({}, 'ap1');
     const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'croissants, then a cake' }));

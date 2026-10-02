@@ -237,9 +237,6 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         const own = new Set(pending.map((m) => m.id));
         const park: Parked = { approvals: [...own], at: Date.now(), replaced: new Set() };
         parks.push(park);
-        // The ask carries this reply to the voice model: if the server later
-        // drops the delegation, only the follow-up's answer goes unspoken.
-        captures.delete(delegationId);
         // Parked on approvals: answer now, so the voice model asks for the
         // decision, then read the outcome back once the visitor decides.
         text = `${text}\n\n${buildApprovalScript(pending.map((m) => m.approval!))}`.trim();
@@ -248,6 +245,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
           text,
           followUp: async ({ signal, approvalTimeoutMs = APPROVAL_TTL_MS, readBack = true, onUpdate }) => {
             const follow: VoiceDelegationCapture = { ids: [], failed: false };
+            // Called once the ask went out: it carried this turn's reply to the
+            // voice model, so a later drop releases only the follow-up's answer.
+            captures.delete(delegationId);
             remember(delegationId, follow);
             // This turn's approvals, and any its resumed stream chains into
             // (not another turn's).
