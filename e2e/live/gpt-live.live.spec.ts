@@ -14,6 +14,8 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *   LIVE_ANSWER         regex the rendered answer must match (Monday|hours|open)
  *   LIVE_TYPED          a message typed before the call (must reach `context`)
  *   LIVE_EXPECT_DELEGATION=0  expect the server-side path (old server) instead
+ *   LIVE_EXPECT_USER_TURN_ID=0  core predates Amendment 2 (no userTurnId)
+ *   LIVE_ALLOW_UNPROMPTED=1     tolerate GPT-Live speaking before the visitor
  *
  * Artifacts land in e2e/live/.out/results: frames.json (every voice frame both
  * ways, audio as byte counts), console.txt, chat-requests.json, final.png, and
@@ -112,6 +114,16 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
         timeout: 45_000,
       })
       .toBe(true);
+    // The context frame is background: GPT-Live must not answer it. Nothing
+    // assistant-side may start before the visitor's first words.
+    if (process.env.LIVE_ALLOW_UNPROMPTED !== "1") {
+      const firstUser = frames.findIndex((f) => f.json?.type === "transcript_update" && f.json.role === "user");
+      const unprompted = frames
+        .slice(0, firstUser)
+        .filter((f) => f.json?.type === "transcript_update" && f.json.role === "assistant")
+        .map((f) => String(f.json!.text));
+      expect(unprompted, "GPT-Live spoke before the visitor did").toEqual([]);
+    }
     const userText = String(
       json("in", "transcript_update").find((f) => f.role === "user" && f.final && QUESTION.test(String(f.text)))!.text,
     );
@@ -122,6 +134,18 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
     if (EXPECT_DELEGATION) {
       await expect.poll(() => json("in", "delegation_requested").length, { timeout: 45_000 }).toBeGreaterThan(0);
       const requested = json("in", "delegation_requested")[0]!;
+      // Amendment 2: the request names the user utterance it came from.
+      if (process.env.LIVE_EXPECT_USER_TURN_ID !== "0") {
+        const userTurnIds = new Set(
+          json("in", "transcript_update").filter((f) => f.role === "user").map((f) => f.turnId),
+        );
+        expect(requested.userTurnId).toBeTruthy();
+        expect(userTurnIds.has(requested.userTurnId)).toBe(true);
+        expect(
+          json("in", "transcript_update").find((f) => f.turnId === requested.userTurnId && f.final)?.text ??
+            requested.userText,
+        ).toMatch(QUESTION);
+      }
       await expect.poll(() => json("out", "delegation_result").length, { timeout: 60_000 }).toBeGreaterThan(0);
       const result = json("out", "delegation_result")[0]!;
       expect(result.turnId).toBe(requested.turnId);

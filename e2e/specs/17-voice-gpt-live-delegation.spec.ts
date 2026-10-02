@@ -143,6 +143,7 @@ test("client delegation: spoken turn runs through the chat pipeline and is read 
   call.send({
     type: "delegation_requested",
     turnId: "dlg_1",
+    userTurnId: "in_1",
     userText: SPOKEN_QUESTION,
     messages: [{ role: "user", content: SPOKEN_QUESTION }],
   });
@@ -247,6 +248,7 @@ test("real GPT-Live ordering: delegation arrives before the user transcript is f
   call.send({
     type: "delegation_requested",
     turnId: "item_live",
+    userTurnId: "in_live",
     userText: " What are your opening hours",
     messages: [{ role: "user", content: " What are your opening hours" }],
   });
@@ -270,6 +272,7 @@ test("read-back fold covers only the first new assistant turn after completion (
   page,
   context,
 }) => {
+  // Also the text-match fallback: this request carries no userTurnId.
   // Core rotates the assistant transcript id at delegation_completed, so a
   // filler finalized after completion keeps its own id and bubble; the FIRST
   // new id after completion is the read-back; anything after that renders.
@@ -281,6 +284,7 @@ test("read-back fold covers only the first new assistant turn after completion (
   await call.utterance({ role: "user", turnId: "in_1", text: SPOKEN_QUESTION, startMs: 1000 });
   call.send({ type: "delegation_started", turnId: "dlg_1" });
   call.send({ type: "transcript_update", role: "assistant", text: "Sure, let me", turnId: "out_filler", final: false, startMs: 3000, endMs: 3500 });
+  // No userTurnId: an older core; the client falls back to text matching.
   call.send({ type: "delegation_requested", turnId: "dlg_1", userText: SPOKEN_QUESTION, messages: [] });
   await call.waitForFrame("delegation_result", (f) => f.turnId === "dlg_1");
   call.send({ type: "delegation_completed", turnId: "dlg_1", speak: true, text: RESULT_SPEECH });
@@ -295,9 +299,7 @@ test("read-back fold covers only the first new assistant turn after completion (
   await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Opening hours" })).toHaveCount(1);
 });
 
-// Amendment 2 `userTurnId`: neither core (merged 7cfe92a5) nor Persona
-// (d7e5dbac) implements it yet. Unskip when the client claims by id.
-test.fixme("delegation_requested.userTurnId claims that exact bubble, even when the text differs", async ({
+test("delegation_requested.userTurnId claims that exact bubble, even when the text differs", async ({
   page,
   context,
 }) => {
