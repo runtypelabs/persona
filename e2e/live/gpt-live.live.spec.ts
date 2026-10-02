@@ -24,6 +24,7 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *                               delegation_followup (Allow: matching LIVE_FOLLOWUP, default an
  *                               order id like JB-1234) and its folded read-back
  *   LIVE_APPROVAL_TOOL          humanized tool name the ask must mention (place pickup order)
+ *   LIVE_WEBMCP=1               register the page's gated place_pickup_order WebMCP tool
  *   LIVE_FIRST_AUDIO_SLACK_MS   slack on the first mic frame after the socket opens (200)
  *
  * Artifacts land in e2e/live/.out/results: frames.json (every voice frame both
@@ -150,6 +151,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       agentId: AGENT_ID,
     });
     if (CALL_CONTEXT) params.set("callContext", CALL_CONTEXT);
+    if (process.env.LIVE_WEBMCP === "1") params.set("webmcp", "1");
     await page.goto(`/voice-e2e.html?${params}`);
     await expect(page.locator(".persona-widget-container")).toBeVisible();
 
@@ -298,7 +300,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
           .map((f) => String(f.json!.text).trim());
       await expect
         .poll(() => spokenSince(askedAt).join(" "), { timeout: 30_000, message: "GPT-Live never asked for the approval" })
-        .toMatch(/approv|confirm|allow|go ahead/i);
+        .toMatch(/approv|confirm|allow|go ahead|in the chat|\bok(ay)? it\b|\btap\b/i);
       const decidedAt = Date.now() - t0;
       await button.click();
 
@@ -314,7 +316,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(followUp.turnId).toBe(requested.turnId);
       expect(String(followUp.text).trim()).not.toBe("");
       if (APPROVE === "allow") expect(String(followUp.text)).toMatch(FOLLOWUP);
-      else expect(String(followUp.text)).not.toMatch(FOLLOWUP);
+      else expect(String(followUp.text)).toMatch(/declined .* nothing was done/);
 
       // Core speaks it as a late result: a second delegation_completed, whose
       // read-back is folded (the answer already renders in the chat).
@@ -329,14 +331,15 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       await expect.poll(() => finalsAfter().length, { timeout: 30_000 }).toBeGreaterThan(0);
       await page.waitForTimeout(1_000);
       const readback = normalize(String(finalsAfter()[0]!.json!.text));
-      const bubbles = (await page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').allTextContents()).map(normalize);
-      expect(bubbles, "the follow-up read-back rendered as a second bubble").not.toContain(readback);
+      const rendered = await page.locator('[data-message-id][data-persona-theme-zone="assistant-message"]').allTextContents();
+      expect(rendered.map(normalize), "the follow-up read-back rendered as a second bubble").not.toContain(readback);
       if (APPROVE === "allow") {
-        expect(bubbles.some((text) => FOLLOWUP.test(text)), "the confirmation did not render").toBe(true);
+        // Raw text: normalize() would turn "JB-4282" into "jb 4282".
+        expect(rendered.some((text) => FOLLOWUP.test(text)), "the confirmation did not render").toBe(true);
       }
       // ...and the visitor hears the outcome.
       expect(readback, "GPT-Live did not speak the outcome").toMatch(
-        APPROVE === "allow" ? /order|croissant|placed|confirm|pickup|jb/i : /declin|cancel|not|won t|didn t|order/i,
+        APPROVE === "allow" ? /order|croissant|placed|confirm|pickup|jb/i : /declin|cancel|not|won t|didn t|nothing/i,
       );
 
       const after = spokenSince(decidedAt);

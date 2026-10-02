@@ -250,8 +250,13 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
             const declined = mine()
               .filter((m) => m.approval?.status === "denied")
               .map((m) => humanize(m.approval!.toolName));
-            const answer = answerOf(follow.ids) || (declined.length ? `The user declined: ${declined.join(", ")}.` : "");
-            return answer ? { status: declined.length ? "declined" : "completed", text: answer } : null;
+            // A decline is stated plainly: the agent's own reply to it often
+            // re-asks for confirmation, which the voice model would repeat.
+            if (declined.length) {
+              return { status: "declined", text: `The user declined the ${declined.join(", ")} request in the chat, so nothing was done.` };
+            }
+            const answer = answerOf(follow.ids);
+            return answer ? { status: "completed", text: answer } : null;
           },
         };
       }

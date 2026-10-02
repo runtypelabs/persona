@@ -867,6 +867,19 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     });
   });
 
+  it('states a decline plainly, even when the agent replies by re-asking', async () => {
+    drive('user', 'order two croissants', true, 'u1');
+    parkOnApproval();
+    const result = await h.state.bridge!.runDelegatedTurn({ turnId: 'd1', userText: 'order two croissants' });
+    const followUp = result.followUp!({ signal: new AbortController().signal });
+    resumeWith('Just to confirm: two almond croissants for 4pm, right?');
+    await session.resolveApproval(approvalOf(), 'denied');
+    expect(await followUp).toEqual({
+      status: 'declined',
+      text: 'The user declined the place pickup order request in the chat, so nothing was done.',
+    });
+  });
+
   it('follows up with the decline when a denied approval brings no reply', async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();
@@ -874,7 +887,10 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     const followUp = result.followUp!({ signal: new AbortController().signal });
     resumeWith(null);
     await session.resolveApproval(approvalOf(), 'denied');
-    expect(await followUp).toEqual({ status: 'declined', text: 'The user declined: place pickup order.' });
+    expect(await followUp).toEqual({
+      status: 'declined',
+      text: 'The user declined the place pickup order request in the chat, so nothing was done.',
+    });
   });
 
   it('drops the follow-up when the call ends before the visitor decides', async () => {
