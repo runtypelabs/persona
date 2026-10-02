@@ -782,6 +782,9 @@ export class AgentWidgetSession {
             },
             unspoken: (ids) => {
               for (const id of ids) this.ttsSpokenMessageIds.delete(id);
+              // Its stream already ended (browser TTS skipped it then): read it
+              // now. A stream still running reads it when it ends, once.
+              if (!this.streaming) this.speakLatestAssistantMessage(ids);
             },
             decide: (id) => {
               if (this.webMcpApprovalResolvers.has(id)) return this.resolveWebMcpApproval(id, 'denied');
@@ -4992,7 +4995,8 @@ export class AgentWidgetSession {
    * Speak the latest assistant message using the Web Speech API
    * if text-to-speech is enabled in the config.
    */
-  private speakLatestAssistantMessage() {
+  /** `only`: speak it only if the latest assistant message is one of these. */
+  private speakLatestAssistantMessage(only?: string[]) {
     const ttsConfig = this.config.textToSpeech;
     if (!ttsConfig?.enabled) return;
 
@@ -5010,7 +5014,7 @@ export class AgentWidgetSession {
       .reverse()
       .find(m => m.role === 'assistant' && m.content && !m.voiceProcessing);
 
-    if (!lastAssistant) return;
+    if (!lastAssistant || (only && !only.includes(lastAssistant.id))) return;
 
     // Skip if already spoken by Runtype provider's audio playback
     if (this.ttsSpokenMessageIds.has(lastAssistant.id)) {

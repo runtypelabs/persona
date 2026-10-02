@@ -931,8 +931,12 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.', 'assistant-hours'));
     await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'what are your hours' }));
     expect(spoken('assistant-hours')).toBe(true);
+    const speak = vi.spyOn(session as unknown as { speakLatestAssistantMessage(): void }, 'speakLatestAssistantMessage');
     h.state.bridge!.dropDelegation!('d1');
     expect(spoken('assistant-hours')).toBe(false);
+    // Its stream already ended, so browser TTS (if on) reads it now, once.
+    expect(speak).toHaveBeenCalledTimes(1);
+    expect(speak).toHaveBeenCalledWith([expect.stringMatching(/./)]);
   });
 
   it('asks again for a second gated tool the resumed turn stops on, and waits for it', async () => {
