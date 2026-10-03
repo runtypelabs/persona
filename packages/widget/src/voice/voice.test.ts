@@ -1386,7 +1386,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           },
         );
 
-        it('hands a cancelled delegation\'s answer back to TTS, expiring its card unless the call is ending', async () => {
+        it('hands a cancelled delegation\'s answer back to TTS, expiring its card only past the deadline (or for an unknown reason)', async () => {
           const dropped: Array<[string, boolean | undefined]> = [];
           const { ws, provider } = await startDelegatedCall();
           (provider as unknown as { bridge: VoiceSessionBridge }).bridge.dropDelegation = (id, expired) =>
@@ -1395,7 +1395,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           for (const [id, reason] of [['d1', 'deadline'], ['d2', 'provider_cancelled'], ['d3', 'some_future_reason'], ['d4', 'session_ending']]) {
             ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: id, reason }));
           }
-          expect(dropped).toEqual([['d1', true], ['d2', true], ['d3', true], ['d4', false]]);
+          expect(dropped).toEqual([['d1', true], ['d2', false], ['d3', true], ['d4', false]]);
         });
 
         it('renders the spoken refusal of a delegation it never saw start, resolving nothing', async () => {

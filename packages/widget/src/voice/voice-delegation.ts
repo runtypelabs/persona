@@ -134,6 +134,8 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   // Per delegation: the captures of its turn and follow-up, so a result the
   // server dropped can be handed back to browser TTS. Bounded: recent calls only.
   const captures = new Map<string, VoiceDelegationCapture[]>();
+  // Delegations the server cancelled, and whether that expired their approvals.
+  const cancelled = new Map<string, boolean>();
   const remember = (delegationId: string, capture: VoiceDelegationCapture) => {
     captures.set(delegationId, [...(captures.get(delegationId) ?? []), capture]);
     if (captures.size > 32) captures.delete(captures.keys().next().value!);
@@ -174,6 +176,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       ),
 
     dropDelegation(delegationId, expired) {
+      // Remembered for a turn still running: when it parks, the same rule applies.
+      cancelled.set(delegationId, !!expired);
+      if (cancelled.size > 32) cancelled.delete(cancelled.keys().next().value!);
       // Past the server's deadline: decline the card, as the approval TTL would.
       const park = expired && parks.find((p) => p.delegationId === delegationId);
       if (park && !park.outcome) settle(park, "timeout", "");
@@ -246,6 +251,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         const own = new Set(pending.map((m) => m.id));
         const park: Parked = { delegationId, approvals: [...own], at: Date.now(), replaced: new Set() };
         parks.push(park);
+        // Cancelled while it ran: no ask will go out and no TTL will run, so
+        // expire the card now (deadline), or leave it to the chat.
+        if (cancelled.get(delegationId)) settle(park, "timeout", "");
         // Parked on approvals: answer now, so the voice model asks for the
         // decision, then read the outcome back once the visitor decides.
         text = `${text}\n\n${buildApprovalScript(pending.map((m) => m.approval!))}`.trim();

@@ -801,10 +801,14 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
       case "delegation_cancelled":
         // The server gave up on it: no more frames for it, and its approval
-        // timers stop. The chat turn still renders. Past its deadline (or any
-        // reason but the call ending, which is like a hang-up), a parked
-        // approval card is also declined, as the approval TTL would.
-        this.dropDelegation(String(msg.delegationId), msg.reason !== "session_ending");
+        // timers stop. The chat turn still renders. Past its deadline (or for
+        // an unknown reason), a parked approval card is also declined, as the
+        // approval TTL would; the call ending or the voice model cancelling
+        // leaves the card usable in the chat.
+        this.dropDelegation(
+          String(msg.delegationId),
+          msg.reason !== "session_ending" && msg.reason !== "provider_cancelled",
+        );
         break;
 
       case "warning":

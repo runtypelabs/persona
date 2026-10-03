@@ -977,6 +977,35 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(await followUp).toBeNull();
   });
 
+  it.each([
+    [true, 'denied'],
+    [false, 'pending'],
+  ])('applies a cancel that came while the turn still ran once it parks (expired: %s)', async (expired, status) => {
+    dispatch.mockImplementationOnce(async (options, onEvent) => {
+      // The server cancels the delegation mid-turn, before the approval appears.
+      h.state.bridge!.dropDelegation!('d1', expired);
+      const createdAt = new Date().toISOString();
+      onEvent({ type: 'status', status: 'connecting' });
+      onEvent({
+        type: 'message',
+        message: {
+          id: 'approval-ap1',
+          role: 'assistant',
+          content: '',
+          createdAt,
+          variant: 'approval',
+          approval: { id: 'ap1', status: 'pending', agentId: 'a1', executionId: 'e1', toolName: 'place_pickup_order', description: '' },
+        },
+      });
+      onEvent({ type: 'status', status: 'idle' });
+      void options;
+    });
+    resumeWith(null);
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
+    expect(result.status).toBe('pending_approval'); // the provider sends nothing for a cancelled id
+    expect(approvalOf().status).toBe(status);
+  });
+
   it('leaves a parked approval usable when its delegation is dropped as the call ends', async () => {
     parkOnApproval();
     await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
