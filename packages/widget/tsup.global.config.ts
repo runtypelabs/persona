@@ -50,6 +50,11 @@ export default defineConfig({
     // soon as a dispatch begins (in parallel with the request itself).
     options.external.push("./client-stream");
 
+    // Keep the visitor-history REST calls (list/get/delete conversations,
+    // identity binding) out of the CDN payload: sibling-URL chunk
+    // `client-history.js`, fetched on the first history call.
+    options.external.push("./client-history");
+
     // Keep UI glue for opt-in / interaction-only features (ask-user sheet
     // handlers, ...) out of the CDN payload: sibling-URL chunk `ui-extras.js`,
     // warmed when such a feature first activates.

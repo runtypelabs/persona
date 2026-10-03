@@ -25,6 +25,7 @@ import "./icons-extra-eager";
 
 // Same for the SSE stream processor (lazy `client-stream.js` in the IIFE).
 import "./client-stream-eager";
+import "./client-history-eager";
 
 // And the opt-in UI glue (lazy `ui-extras.js` in the IIFE).
 import "./ui-extras-eager";

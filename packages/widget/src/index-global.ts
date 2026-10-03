@@ -97,6 +97,12 @@ import { setClientStreamLoader } from "./client-stream-loader";
 
 setClientStreamLoader(siblingChunk("client-stream.js"));
 
+// Deferred visitor-history REST (`client-history.ts`), built with
+// `./client-history` external; fetched on the first history call.
+import { setClientHistoryLoader } from "./client-history-loader";
+
+setClientHistoryLoader(siblingChunk("client-history.js"));
+
 // Deferred UI glue for opt-in / interaction-only features (`ui-extras-entry.ts`),
 // built with `./ui-extras-entry` external; warmed when such a feature activates.
 import { setUiExtrasLoader } from "./ui-extras-loader";

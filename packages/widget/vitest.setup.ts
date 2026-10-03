@@ -12,6 +12,7 @@ import { resetTooltipTiming } from "./src/utils/tooltip";
 import "./src/markdown-parsers-eager";
 // Likewise the SSE stream processor (`client-stream.js` chunk in the IIFE).
 import "./src/client-stream-eager";
+import "./src/client-history-eager";
 import "./src/ui-extras-eager";
 // And the session resolve paths (`session-actions.js` chunk in the IIFE).
 import "./src/session-actions-eager";
