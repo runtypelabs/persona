@@ -651,8 +651,7 @@ describe("AgentWidgetSession - suggest_replies fire-and-forget auto-resolve", ()
   });
 
   it("settles cleanly when the resume ends the turn with no further text", async () => {
-    // An `endsTurn` server completes the turn without another model call:
-    // the resume stream carries only the terminal events, no text.
+    // An `endsTurn` server completes the turn without another model call.
     const onError = vi.fn();
     const streamingChanges: boolean[] = [];
     const session = new AgentWidgetSession(
@@ -664,11 +663,30 @@ describe("AgentWidgetSession - suggest_replies fire-and-forget auto-resolve", ()
         onError,
       },
     );
+    // The leg the server streams: no turn, step, text, or tool events, and
+    // `finalOutput` repeats the pre-call text, which must not be rendered again.
     const sse = [
-      { type: "turn_complete", id: "turn-2", stopReason: "end_turn" },
-      { type: "execution_complete", kind: "agent", executionId: "exec-sr" },
+      {
+        type: "execution_start",
+        kind: "agent",
+        agentId: "agent-1",
+        agentName: "Agent",
+        resumed: true,
+        executionId: "exec-sr",
+      },
+      {
+        type: "execution_complete",
+        kind: "agent",
+        success: true,
+        stopReason: "complete",
+        finalOutput: "Here is the answer.",
+        executionId: "exec-sr",
+      },
     ]
-      .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+      .map(
+        (event) =>
+          `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+      )
       .join("");
     const resumeSpy = vi.fn(
       async () =>
