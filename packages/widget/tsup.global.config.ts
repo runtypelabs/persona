@@ -64,6 +64,12 @@ export default defineConfig({
     // `session-actions.js`, prefetched as soon as the agent pauses for an
     // approval or a local tool.
     options.external.push("./session-actions");
+    // Keep the visitor-history shell (placement, rail, open/close, conversation
+    // operations) out of the CDN payload. Same scheme: the loader's relative
+    // `./history-shell` import is left dead here; `index-global.ts` registers a
+    // sibling-URL loader for `history-shell.js`, fetched at mount only when
+    // `features.history.enabled`, or on the first history API call.
+    options.external.push("./history-shell");
 
     // Keep the context-mentions runtime (controller/manager/menu) out of the CDN
     // payload. The loader's fallback `import("@runtypelabs/persona/context-mentions")`

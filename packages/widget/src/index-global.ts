@@ -114,6 +114,12 @@ setUiExtrasLoader(siblingChunk("ui-extras.js"));
 import { setSessionActionsLoader } from "./session-actions-loader";
 
 setSessionActionsLoader(siblingChunk("session-actions.js"));
+// Deferred visitor-history shell (`history-shell.ts`), built with
+// `./history-shell` external. Fetched at mount only when
+// `features.history.enabled`, or on the first history API call.
+import { setHistoryShellLoader } from "./history-shell-loader";
+
+setHistoryShellLoader(siblingChunk("history-shell.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred Runtype TTS engine loading.
