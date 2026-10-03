@@ -54,6 +54,11 @@ export default defineConfig({
     // handlers, ...) out of the CDN payload: sibling-URL chunk `ui-extras.js`,
     // warmed when such a feature first activates.
     options.external.push("./ui-extras-entry");
+    // Keep the session's approval / ask-user-question / WebMCP resolve paths
+    // out of the CDN payload. Same scheme: sibling-URL chunk
+    // `session-actions.js`, prefetched as soon as the agent pauses for an
+    // approval or a local tool.
+    options.external.push("./session-actions");
 
     // Keep the context-mentions runtime (controller/manager/menu) out of the CDN
     // payload. The loader's fallback `import("@runtypelabs/persona/context-mentions")`

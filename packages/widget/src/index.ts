@@ -28,6 +28,9 @@ import "./client-stream-eager";
 
 // And the opt-in UI glue (lazy `ui-extras.js` in the IIFE).
 import "./ui-extras-eager";
+// Same for the session's approval / local-tool resolve paths
+// (lazy `session-actions.js` in the IIFE).
+import "./session-actions-eager";
 
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";

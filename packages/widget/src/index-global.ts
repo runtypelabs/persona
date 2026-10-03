@@ -102,6 +102,12 @@ setClientStreamLoader(siblingChunk("client-stream.js"));
 import { setUiExtrasLoader } from "./ui-extras-loader";
 
 setUiExtrasLoader(siblingChunk("ui-extras.js"));
+// Deferred session resolve paths (`session-actions.ts`: approvals,
+// ask_user_question answers, WebMCP / suggest_replies resumes), built with
+// `./session-actions` external. The session warms it when the agent pauses.
+import { setSessionActionsLoader } from "./session-actions-loader";
+
+setSessionActionsLoader(siblingChunk("session-actions.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred Runtype TTS engine loading.
