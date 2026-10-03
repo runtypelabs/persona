@@ -138,6 +138,8 @@ const CANCEL_ACK_TIMEOUT_MS = 2000;
  */
 const CONTEXT_BEFORE_RESULT_TIMEOUT_MS = 2000;
 const VOICE_PROTOCOL = "runtype-browser-v1";
+/** `approvalTimeoutMs` cap: below core's delegation deadline (600 s, restarted by each update). */
+const APPROVAL_TIMEOUT_MAX_MS = 540_000;
 const DISCLOSURE_TEXT = "You're talking to an AI assistant. Voice is processed by OpenAI.";
 /** Call-start context frame: total cap, host share, history window, per-message cap. */
 const CONTEXT_MAX_CHARS = 8000;
@@ -266,8 +268,6 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   private followUps = new Map<string, AbortController>();
   // Delegations the server cancelled (or refused a frame for): no more frames for them.
   private cancelledDelegations = new Set<string>();
-  // Delegations this call saw start (a completion for any other is a server-side refusal).
-  private startedDelegations = new Set<string>();
   // session_config.callId: the server's id for this call, for logs.
   private callId: string | undefined;
   // Call-start context, built at session_config and held until the visitor's
@@ -769,7 +769,6 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       case "delegation_completed": {
         const delegationId = String(msg.delegationId ?? msg.turnId);
         if (msg.type === "delegation_started") {
-          this.startedDelegations.add(delegationId);
           this.flushCallContext(generation);
           // `input`: run this turn through the chat pipeline (client delegation).
           const input = msg.input;
@@ -787,10 +786,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
               generation,
             );
           }
-        } else if (msg.speak !== false && (this.answered.has(delegationId) || !this.startedDelegations.has(delegationId))) {
-          // Every spoken phase (the approval ask, the late result) is read back,
-          // and so is the refusal of one that never started here. `final` may
-          // never come (hang-up, session end), so nothing waits on it.
+        } else if (msg.speak !== false && this.answered.has(delegationId)) {
+          // Every spoken phase (the approval ask, the late result) of an answer
+          // the chat shows is read back. A refusal of one that never started
+          // here has no chat answer: it renders. `final` may never come.
           this.foldReadback = true;
         }
         this.delegating = msg.type === "delegation_started";
@@ -801,10 +800,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       }
 
       case "delegation_cancelled":
-        // The server gave up on it (deadline, session ending, provider
-        // cancelled; any reason alike): no more frames for it, and its approval
-        // timers stop. The chat turn still renders.
-        this.dropDelegation(String(msg.delegationId));
+        // The server gave up on it: no more frames for it, and its approval
+        // timers stop. The chat turn still renders. Past its deadline (or any
+        // reason but the call ending, which is like a hang-up), a parked
+        // approval card is also declined, as the approval TTL would.
+        this.dropDelegation(String(msg.delegationId), msg.reason !== "session_ending");
         break;
 
       case "warning":
@@ -908,10 +908,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /** No more frames for this delegation; its chat answer goes back to browser TTS. */
-  private dropDelegation(delegationId: string): void {
+  private dropDelegation(delegationId: string, expired = false): void {
     this.cancelledDelegations.add(delegationId);
+    this.bridge?.dropDelegation?.(delegationId, expired);
     this.followUps.get(delegationId)?.abort();
-    this.bridge?.dropDelegation?.(delegationId);
   }
 
   /** Run a delegated turn through the session bridge (one at a time) and answer it. */
@@ -950,7 +950,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       void result
         .followUp({
           signal: abort.signal,
-          approvalTimeoutMs: this.config?.approvalTimeoutMs,
+          // Under the server's 600 s deadline, which restarts at each update.
+          approvalTimeoutMs: this.config?.approvalTimeoutMs && Math.min(this.config.approvalTimeoutMs, APPROVAL_TIMEOUT_MAX_MS),
           readBack: update,
           // Another gated tool in the same turn: another (non-terminal) update.
           onUpdate: (text) => send("delegation_update", "pending_approval", text),
@@ -1047,7 +1048,6 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     for (const abort of this.followUps.values()) abort.abort();
     this.followUps.clear();
     this.cancelledDelegations.clear();
-    this.startedDelegations.clear();
     this.callId = undefined;
     this.contextSent = false;
     this.pendingContext = null;

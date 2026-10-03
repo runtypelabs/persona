@@ -478,7 +478,7 @@ config: {
 | `attachIdleMs` | `number?` | `'attach'` mode: how long (ms) the early socket waits for the click. The server clamps it to 30000 to 600000. Default: `30000`. |
 | `clientDelegation` | `boolean?` | Full-duplex (speech-to-speech) calls: run the agent turns the voice model hands off through the widget's chat pipeline. Default: `true`. See [Full-duplex voice](#full-duplex-voice). |
 | `callContext` | `string \| (() => string \| Promise<string>)?` | Full-duplex calls: extra context for the voice model, after the chat history as of call start. Sent when the visitor finishes their first utterance. Capped at 4000 characters. |
-| `approvalTimeoutMs` | `number?` | Full-duplex calls: how long (ms) a tool approval raised by a spoken request may wait before it is declined as timed out. Hanging up never declines it. Default: `300000`. |
+| `approvalTimeoutMs` | `number?` | Full-duplex calls: how long (ms) a tool approval raised by a spoken request may wait before it is declined as timed out. Hanging up never declines it. Capped at `540000`, under the server's 10-minute delegation deadline. Default: `300000`. |
 | `disclosureText` | `string \| false?` | Speech-to-speech calls: the one-line notice shown when the call starts. `false` hides it. Default: `"You're talking to an AI assistant. Voice is processed by OpenAI."` |
 | `pauseDuration` | `number?` | Silence duration (ms) before auto-stop. Default: `2000`. |
 | `silenceThreshold` | `number?` | RMS volume threshold for silence detection. Default: `0.01`. |

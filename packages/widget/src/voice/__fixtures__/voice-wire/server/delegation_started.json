@@ -1,0 +1,15 @@
+{
+  "type": "delegation_started",
+  "delegationId": "del_1",
+  "turnId": "del_1",
+  "input": {
+    "text": "What's on the menu today?",
+    "userUtteranceIds": ["utt_1"],
+    "messages": [
+      {
+        "role": "user",
+        "content": "What's on the menu today?"
+      }
+    ]
+  }
+}

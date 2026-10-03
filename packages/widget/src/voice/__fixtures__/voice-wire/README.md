@@ -1,0 +1,1 @@
+Browser voice wire v1 fixtures (`runtype-browser-v1`, contract Amendment 5.1), copied from core #9522's schema fixtures. One JSON frame per file: `server/` is what core sends, `client/` is what a client sends. `voice.test.ts` feeds every server frame through the provider and checks the client frames Persona sends against `client/`. Refresh them from core when the wire changes.

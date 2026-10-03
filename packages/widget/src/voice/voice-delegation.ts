@@ -123,7 +123,13 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   const retrack = () => host.track(active ?? following);
   // Voice-originated approval parks still awaiting a decision or follow-up.
   // `replaced`: approvals this bridge declined because a newer request for the same tool came in.
-  type Parked = { approvals: string[]; at: number; replaced: Set<string>; outcome?: VoiceDelegationFollowUp };
+  type Parked = {
+    delegationId: string;
+    approvals: string[];
+    at: number;
+    replaced: Set<string>;
+    outcome?: VoiceDelegationFollowUp;
+  };
   const parks: Parked[] = [];
   // Per delegation: the captures of its turn and follow-up, so a result the
   // server dropped can be handed back to browser TTS. Bounded: recent calls only.
@@ -167,7 +173,10 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
           : [],
       ),
 
-    dropDelegation(delegationId) {
+    dropDelegation(delegationId, expired) {
+      // Past the server's deadline: decline the card, as the approval TTL would.
+      const park = expired && parks.find((p) => p.delegationId === delegationId);
+      if (park && !park.outcome) settle(park, "timeout", "");
       for (const capture of captures.get(delegationId) ?? []) {
         capture.dropped = true;
         if (capture.ids.length) host.unspoken(capture.ids);
@@ -235,7 +244,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
 
       if (pending.length) {
         const own = new Set(pending.map((m) => m.id));
-        const park: Parked = { approvals: [...own], at: Date.now(), replaced: new Set() };
+        const park: Parked = { delegationId, approvals: [...own], at: Date.now(), replaced: new Set() };
         parks.push(park);
         // Parked on approvals: answer now, so the voice model asks for the
         // decision, then read the outcome back once the visitor decides.

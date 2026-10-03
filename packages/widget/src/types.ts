@@ -4794,7 +4794,8 @@ export type AgentWidgetVoiceRecognitionConfig = {
        * that a spoken request raised may wait before it is declined as
        * expired (and the voice model says so). Server-side approval gates
        * keep their own timeout too. Hanging up never declines it: the
-       * approval card in the chat stays usable.
+       * approval card in the chat stays usable. Capped at 540000 (9 minutes),
+       * under the server's 10-minute delegation deadline.
        * @default 300000
        */
       approvalTimeoutMs?: number;
@@ -5126,7 +5127,7 @@ export type VoiceConfig = {
     clientDelegation?: boolean;
     /** See `voiceRecognition.provider.runtype.callContext`. */
     callContext?: string | (() => string | Promise<string>);
-    /** See `voiceRecognition.provider.runtype.approvalTimeoutMs`. @default 300000 */
+    /** See `voiceRecognition.provider.runtype.approvalTimeoutMs`. @default 300000 (capped at 540000) */
     approvalTimeoutMs?: number;
     /** See `voiceRecognition.provider.runtype.disclosureText`. */
     disclosureText?: string | false;
@@ -5327,8 +5328,10 @@ export interface VoiceSessionBridge {
   /**
    * The server dropped this delegation's result (cancelled it, or refused a
    * late result): its chat answer is no longer spoken, so browser TTS may read it.
+   * `expired`: the server's deadline passed, so its pending approvals are
+   * declined too, as the approval TTL would.
    */
-  dropDelegation?(delegationId: string): void;
+  dropDelegation?(delegationId: string, expired?: boolean): void;
 }
 
 /**

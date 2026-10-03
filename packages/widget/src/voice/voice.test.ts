@@ -8,6 +8,12 @@ import type {
   VoiceSessionBridge,
 } from '../types';
 
+import { RuntypeVoiceProvider, buildCallContext } from './runtype-voice-provider';
+import { VERSION } from '../version';
+import { BrowserVoiceProvider } from './browser-voice-provider';
+import { createVoiceProvider, createBestAvailableVoiceProvider, isVoiceSupported } from './voice-factory';
+import { readdirSync, readFileSync } from 'node:fs';
+
 const ALL_CAPS = ['client_delegation', 'context', 'delegation_update'];
 
 /** The voice socket URL v1 builds (Amendment 5): the protocol, client version and capability params. */
@@ -20,10 +26,14 @@ const voiceUrl = (base: string, agent: string, capabilities: string[], extra: Re
     ...extra,
   })}`;
 const BASE_CAPS = ['partial_transcript', 'context'];
-import { RuntypeVoiceProvider, buildCallContext } from './runtype-voice-provider';
-import { VERSION } from '../version';
-import { BrowserVoiceProvider } from './browser-voice-provider';
-import { createVoiceProvider, createBestAvailableVoiceProvider, isVoiceSupported } from './voice-factory';
+
+/** Wire v1 fixtures (core #9522): one frame per file, by direction. */
+const wireFixtures = (dir: 'client' | 'server') => {
+  const base = new URL(`./__fixtures__/voice-wire/${dir}/`, import.meta.url);
+  return readdirSync(base).flatMap((file) =>
+    file.endsWith('.json') ? [JSON.parse(readFileSync(new URL(file, base), 'utf8')) as Record<string, unknown>] : [],
+  );
+};
 
 // Mock window object for browser tests
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1216,6 +1226,12 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
             { type: 'delegation_update', delegationId: 'd1', status: 'pending_approval', text: 'Approve it in the chat.' },
           ]);
           expect(park.options()).toMatchObject({ approvalTimeoutMs: 1_500, readBack: true });
+          // Clamped under core's 600 s deadline; unset leaves the default to the bridge.
+          const long = await startDelegatedCall({ approvalTimeoutMs: 900_000 });
+          const longPark = await parkOn(long.ws, long.pending);
+          expect(longPark.options()!.approvalTimeoutMs).toBe(540_000);
+          const unset = await startDelegatedCall();
+          expect((await parkOn(unset.ws, unset.pending)).options()!.approvalTimeoutMs).toBeUndefined();
           completed(ws, 'd1', false);
           ws.triggerMessage(update('assistant', 'Please approve it in the chat.', 'r1')); // folded
 
@@ -1370,23 +1386,55 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           },
         );
 
-        it('hands a cancelled delegation\'s answer back to TTS', async () => {
-          const dropped: string[] = [];
+        it('hands a cancelled delegation\'s answer back to TTS, expiring its card unless the call is ending', async () => {
+          const dropped: Array<[string, boolean | undefined]> = [];
           const { ws, provider } = await startDelegatedCall();
-          (provider as unknown as { bridge: VoiceSessionBridge }).bridge.dropDelegation = (id) => dropped.push(id);
+          (provider as unknown as { bridge: VoiceSessionBridge }).bridge.dropDelegation = (id, expired) =>
+            dropped.push([id, expired]);
           delegate(ws, 'd1', 'q');
-          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd1', reason: 'provider_cancelled' }));
-          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd2', reason: 'some_future_reason' }));
-          expect(dropped).toEqual(['d1', 'd2']);
+          for (const [id, reason] of [['d1', 'deadline'], ['d2', 'provider_cancelled'], ['d3', 'some_future_reason'], ['d4', 'session_ending']]) {
+            ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: id, reason }));
+          }
+          expect(dropped).toEqual([['d1', true], ['d2', true], ['d3', true], ['d4', false]]);
         });
 
-        it('folds the read-back of a delegation it never saw start (a server-side refusal), resolving nothing', async () => {
+        it('renders the spoken refusal of a delegation it never saw start, resolving nothing', async () => {
           const { ws, transcripts, calls } = await startDelegatedCall();
           completed(ws, 'd_backlog', true);
           ws.triggerMessage(update('assistant', "Sorry, I can't take that right now.", 'r1'));
-          ws.triggerMessage(update('user', 'ok', 'u2'));
-          expect(transcripts.map((t) => t[1])).toEqual(['ok']);
+          // No chat answer to dedupe against: the refusal is the only text, so it shows.
+          expect(transcripts.map((t) => t[1])).toEqual(["Sorry, I can't take that right now."]);
           expect(calls).toEqual([]);
+          expect(sentJson(ws)).toEqual([]);
+        });
+
+        it('takes every v1 server fixture without failing; only `error` ends the call', async () => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const fixtures = wireFixtures('server');
+          expect(fixtures.length).toBeGreaterThan(10);
+          for (const frame of fixtures) {
+            const errors: Error[] = [];
+            const { ws, provider } = await startDelegatedCall();
+            provider.onError((e) => errors.push(e));
+            expect(() => ws.triggerMessage(JSON.stringify(frame))).not.toThrow();
+            await flush();
+            expect(errors.length, `${frame.type}`).toBe(frame.type === 'error' ? 1 : 0);
+          }
+          warn.mockRestore();
+        });
+
+        it('sends client frames shaped like the v1 client fixtures', async () => {
+          const shape = (frame: Record<string, unknown>) => [String(frame.type), Object.keys(frame).sort().join(',')];
+          const fixtures = Object.fromEntries(wireFixtures('client').map(shape));
+          const { ws, pending } = await startDelegatedCall({ callContext: 'On /docs.' });
+          ws.triggerMessage(update('user', 'hello', 'u1')); // releases context
+          delegate(ws, 'd1', 'q');
+          await flush();
+          pending[0]({ status: 'pending_approval', text: 'Approve it.', followUp: async () => ({ status: 'completed', text: 'Done.' }) });
+          await flush();
+          const sent = sentJson(ws).map(shape);
+          expect(sent.map(([type]) => type)).toEqual(['context', 'delegation_update', 'delegation_result']);
+          for (const [type, keys] of sent) expect(keys, type).toBe(fixtures[type]);
         });
 
         it('ignores unknown frames and fields', async () => {

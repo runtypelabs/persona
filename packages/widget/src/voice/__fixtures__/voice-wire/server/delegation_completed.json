@@ -1,0 +1,8 @@
+{
+  "type": "delegation_completed",
+  "delegationId": "del_1",
+  "turnId": "del_1",
+  "speak": true,
+  "text": "Today we have tomato soup and a grilled cheese.",
+  "final": true
+}

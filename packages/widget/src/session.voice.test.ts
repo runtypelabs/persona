@@ -953,8 +953,35 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     parkOnApproval();
     await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
     // No followUp call: the provider never sent the ask (cancelled first).
+    const internalsTts = session as unknown as {
+      config: { textToSpeech?: unknown };
+      readAloud: { play: (id: string, request: unknown) => Promise<void> };
+    };
+    internalsTts.config.textToSpeech = { enabled: true, provider: 'browser' };
+    const play = vi.spyOn(internalsTts.readAloud, 'play').mockResolvedValue(undefined);
     h.state.bridge!.dropDelegation!('d1');
     expect(spoken('r-ap1')).toBe(false);
+    // Browser TTS reads the reply now, since its stream already ended.
+    expect(play).toHaveBeenCalledWith('r-ap1', expect.objectContaining({ text: 'I can do that.' }));
+  });
+
+  it('declines a parked approval whose delegation passed the server deadline, as the TTL would', async () => {
+    parkOnApproval();
+    const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
+    const call = new AbortController();
+    const followUp = result.followUp!({ signal: call.signal });
+    resumeWith(null);
+    h.state.bridge!.dropDelegation!('d1', true);
+    call.abort(); // the provider stops the follow-up: nothing is sent for a cancelled id
+    expect(approvalOf().status).toBe('denied');
+    expect(await followUp).toBeNull();
+  });
+
+  it('leaves a parked approval usable when its delegation is dropped as the call ends', async () => {
+    parkOnApproval();
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'order croissants' }));
+    h.state.bridge!.dropDelegation!('d1', false);
+    expect(approvalOf().status).toBe('pending');
   });
 
   it('asks again for a second gated tool the resumed turn stops on, and waits for it', async () => {

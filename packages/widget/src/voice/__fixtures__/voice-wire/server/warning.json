@@ -1,0 +1,5 @@
+{
+  "type": "warning",
+  "code": "UNKNOWN_FRAME",
+  "message": "Unknown browser voice message type: teleport."
+}
