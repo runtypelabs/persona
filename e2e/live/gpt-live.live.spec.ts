@@ -364,7 +364,7 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       }
       // ...and the visitor hears the outcome.
       expect(readback, "GPT-Live did not speak the outcome").toMatch(
-        APPROVE === "allow" ? /order|croissant|placed|confirm|pickup|jb/i : /declin|cancel|not|won t|didn t|nothing/i,
+        APPROVE === "allow" ? /order|croissant|placed|confirm|pickup|jb/i : /declin|cancel|not|won t|didn t|wasn t|isn t|nothing/i,
       );
 
       const after = spokenSince(decidedAt);
