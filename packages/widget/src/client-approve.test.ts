@@ -153,6 +153,7 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
         session.resolveApproval(pending.approval!, decision),
       bubble: () => messages.find((m) => m.id === "approval-appr_1"),
       last: () => messages.at(-1),
+      all: () => messages,
     };
   };
 
@@ -212,5 +213,38 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
     expect(last()).toMatchObject({ id: "approval-error-appr_1", content: text });
     expect(session.isStreaming()).toBe(false);
     expect(errors.map((e) => e.message)).toEqual([text]);
+  });
+
+  it("clears the failure notice when a retry succeeds", async () => {
+    mockFetch(
+      Response.json({ error: "Failed to process approval" }, { status: 500 }),
+      sse([{ type: "approval_complete", executionId: "exec_abc", approvalId: "appr_1", decision: "approved" }])
+    );
+    const { approve, bubble, all } = setup();
+    await approve();
+    expect(bubble()?.approval?.status).toBe("pending");
+    await approve();
+
+    expect(bubble()?.approval?.status).toBe("approved");
+    expect(all().some((m) => m.id === "approval-error-appr_1")).toBe(false);
+  });
+
+  it("does not overwrite a card a newer resolution already settled", async () => {
+    let failFirst!: (r: Response) => void;
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Response>((res) => { failFirst = res; }))
+      .mockImplementationOnce(async () =>
+        sse([{ type: "approval_complete", executionId: "exec_abc", approvalId: "appr_1", decision: "approved" }])
+      );
+    const { approve, bubble } = setup();
+    const first = approve();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 2));
+    await approve();
+    failFirst(Response.json({ error: "Failed to process approval" }, { status: 500 }));
+    await first;
+
+    expect(bubble()?.approval?.status).toBe("approved");
   });
 });

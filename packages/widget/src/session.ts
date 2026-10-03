@@ -3160,6 +3160,9 @@ export class AgentWidgetSession {
   ): Promise<void> {
     // 1. Update approval message status immediately for responsive UI
     const approvalMessageId = `approval-${approval.id}`;
+    // A retry supersedes the previous attempt's failure notice.
+    const errorMessageId = `approval-error-${approval.id}`;
+    this.messages = this.messages.filter((m) => m.id !== errorMessageId);
     const updatedApproval: AgentWidgetApproval = {
       ...approval,
       status: decision,
@@ -3238,12 +3241,17 @@ export class AgentWidgetSession {
             const pauseGone =
               errorData?.code === "APPROVAL_ALREADY_RESOLVED" ||
               (response.status === 404 && /no paused execution/i.test(String(errorData?.error)));
+            // Only while the card still holds this request's decision: a
+            // newer request (or its approval_complete) may have settled it.
+            const current = this.messages.find((m) => m.id === approvalMessageId);
+            if (current?.approval?.resolvedAt === updatedApproval.resolvedAt) {
+              this.upsertMessage({
+                ...updatedMessage,
+                approval: pauseGone ? { ...updatedApproval, status: "timeout" } : approval,
+              });
+            }
             this.upsertMessage({
-              ...updatedMessage,
-              approval: pauseGone ? { ...updatedApproval, status: "timeout" } : approval,
-            });
-            this.upsertMessage({
-              id: `approval-error-${approval.id}`,
+              id: errorMessageId,
               role: "assistant",
               content: errorText,
               createdAt: new Date().toISOString(),
