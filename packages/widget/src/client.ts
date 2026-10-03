@@ -49,6 +49,7 @@ import { VERSION } from "./version";
 import { getClientStreamSync, loadClientStream } from "./client-stream-loader";
 import { loadClientHistory } from "./client-history-loader";
 import type { ClientHistoryHost } from "./client-history";
+import type { ClientResumeHost } from "./client-resume";
 
 /** History transcripts stay on the wire shape; `utils/history-messages.ts` maps them. */
 export type { HistoryWireMessage } from "./utils/history-messages";
@@ -78,7 +79,7 @@ type DispatchOptions = {
 export type SSEHandler = (event: AgentWidgetEvent) => void;
 
 const DEFAULT_ENDPOINT = "https://api.runtype.com/v1/dispatch";
-const DEFAULT_CLIENT_API_BASE = "https://api.runtype.com";
+import { DEFAULT_CLIENT_API_BASE } from "./utils/constants";
 
 /** Branch on `code`, never on message text. */
 export type HistoryClientErrorCode =
@@ -1281,6 +1282,30 @@ export class AgentWidgetClient {
     return { provider, token };
   }
 
+  // Live accessors for the approval / resume requests (`client-resume.ts`,
+  // shipped in the lazy client-stream chunk on the CDN).
+  #resumeHostCache: ClientResumeHost | null = null;
+  #resumeHost(): ClientResumeHost {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const client = this;
+    return (this.#resumeHostCache ??= {
+      get config() {
+        return client.config;
+      },
+      headers: this.#headers,
+      getHeaders: this.#getHeaders,
+      debug: this.debug,
+      clientApiBase: () => client.#clientApiBase(),
+      getClientApiUrl: (endpoint) => client.#getClientApiUrl(endpoint),
+      getWebMcpBridge: () => client.#getWebMcpBridge(),
+      sendWithClientToolsDiff: (sessionId, tools, doFetch, opts) =>
+        client.#sendWithClientToolsDiff(sessionId, tools, doFetch, opts),
+      initSession: () => client.initSession(),
+      readVisitorToken: () => client.readVisitorToken(),
+      isClientTokenMode: () => client.isClientTokenMode(),
+    });
+  }
+
   // Live accessors handed to the lazily loaded history REST functions
   // (`client-history.ts`); built once per client.
   #historyHostCache: ClientHistoryHost | null = null;
@@ -1800,39 +1825,7 @@ export class AgentWidgetClient {
     approval: { agentId: string; executionId: string; approvalId: string },
     decision: 'approved' | 'denied'
   ): Promise<Response> {
-    let headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...this.#headers
-    };
-    if (this.#getHeaders) {
-      Object.assign(headers, await this.#getHeaders());
-    }
-    const body = {
-      executionId: approval.executionId,
-      approvalId: approval.approvalId,
-      decision,
-      streamResponse: true,
-    };
-    const post = (path: string, extra?: Record<string, unknown>) =>
-      fetch(`${this.#clientApiBase()}${path}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ...extra, ...body }),
-      });
-    const ownerRoute = `/v1/agents/${approval.agentId}/approve`;
-
-    if (!this.isClientTokenMode()) return post(ownerRoute);
-
-    // Same re-validation as `resumeFlow`: an approval can sit for a long time.
-    const { sessionId } = await this.initSession();
-    const response = await post('/v1/client/approve', { sessionId });
-    // A core without the route answers with its generic `Not Found`; an unknown
-    // or expired pause 404s with its own error, which the caller surfaces.
-    if (response.status === 404) {
-      const data = (await response.clone().json().catch(() => null)) as { error?: string } | null;
-      if (!data || data.error === 'Not Found') return post(ownerRoute);
-    }
-    return response;
+    return (await loadClientStream()).resolveApproval(this.#resumeHost(), approval, decision);
   }
 
   /**
@@ -1974,95 +1967,7 @@ export class AgentWidgetClient {
     toolOutputs: Record<string, unknown>,
     options?: { streamResponse?: boolean; signal?: AbortSignal; after?: string }
   ): Promise<Response> {
-    const isClientToken = this.isClientTokenMode();
-    const url = isClientToken
-      ? this.#getClientApiUrl('resume')
-      : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`;
-
-    // The client-token resume route authenticates the session, not a Bearer
-    // key. A WebMCP approval can sit awaiting user input for a long time, so by
-    // the time we resume the original session may have expired. Re-validate (and
-    // silently re-init if needed) via initSession(): which returns the live
-    // session when `new Date() < expiresAt`, else mints a fresh one: instead of
-    // trusting the possibly-stale `this.clientSession`. (core#3889; BugBot
-    // PR #214 r3367875360.)
-    let resumeSessionId: string | undefined;
-    let resumeVisitorToken: string | null = null;
-    if (isClientToken) {
-      const session = await this.initSession();
-      resumeSessionId = session.sessionId;
-      if (session.durableRecovery?.enabled === true) {
-        resumeVisitorToken = await this.readVisitorToken();
-      }
-    }
-
-    let headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(resumeVisitorToken ? { 'X-Visitor-Token': resumeVisitorToken } : {}),
-      ...this.#headers
-    };
-    if (this.#getHeaders) {
-      Object.assign(headers, await this.#getHeaders());
-    }
-
-    const body: Record<string, unknown> = {
-      executionId,
-      toolOutputs,
-      streamResponse: options?.streamResponse ?? true,
-      ...(options?.after ? { after: options.after } : {}),
-    };
-    // Thread the (refreshed) sessionId through like `/v1/client/chat` does.
-    if (resumeSessionId) {
-      body.sessionId = resumeSessionId;
-    }
-
-    if (isClientToken && resumeSessionId) {
-      // Mid-run WebMCP tool refresh (runtypelabs/core#5361): the paused tool
-      // may have navigated the page, so the dispatch-time snapshot the server
-      // persisted can be stale. Re-snapshot the registry — the same built-in +
-      // bridge composition as the payload builders, so fingerprints computed
-      // here and on chat turns describe the same tool space — and ship it via
-      // the shared diff-only protocol. `emptyMeansReplace` sends an explicit
-      // `clientTools: []` when the registry vanished after a non-empty send,
-      // so the server replaces the persisted set instead of keeping it frozen.
-      const fullClientTools = [
-        ...builtInClientToolsForDispatch(this.config),
-        ...((await (await this.#getWebMcpBridge())?.snapshotForDispatch()) ?? []),
-      ];
-      const { response, commit } = await this.#sendWithClientToolsDiff(
-        resumeSessionId,
-        fullClientTools,
-        (toolFields) => {
-          const resumeRequest = { ...body, ...toolFields };
-          if (this.debug) {
-            // eslint-disable-next-line no-console
-            console.debug("[AgentWidgetClient] client token resume", resumeRequest);
-          }
-          return fetch(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(resumeRequest),
-            signal: options?.signal,
-          });
-        },
-        { emptyMeansReplace: true }
-      );
-      // The server stores the refreshed registry before running the
-      // continuation pipeline, so an OK response means it holds this set under
-      // this fingerprint. Mirror chat's commit-on-success discipline: a failed
-      // resume must not record a fingerprint the server never stored.
-      if (response.ok) {
-        commit();
-      }
-      return response;
-    }
-
-    return fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: options?.signal,
-    });
+    return (await loadClientStream()).resumeFlow(this.#resumeHost(), executionId, toolOutputs, options);
   }
 
   /**

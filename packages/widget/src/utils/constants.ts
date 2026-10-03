@@ -29,3 +29,6 @@ export const PORTALED_OVERLAY_Z_INDEX = DEFAULT_OVERLAY_Z_INDEX + 1;
 
 
 
+
+/** Runtype API origin used when no `apiUrl` / client API base is configured. */
+export const DEFAULT_CLIENT_API_BASE = "https://api.runtype.com";
