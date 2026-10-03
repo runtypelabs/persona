@@ -3226,9 +3226,29 @@ export class AgentWidgetSession {
         if (response instanceof Response) {
           if (!response.ok) {
             const errorData = await response.json().catch(() => null);
-            throw new Error(
-              errorData?.error ?? `Approval request failed: ${response.status}`
-            );
+            // `message` carries the visitor-facing text when present (e.g.
+            // 409 APPROVAL_ALREADY_RESOLVED); 403 APPROVAL_APPROVER_NOT_END_USER
+            // puts it in `error`.
+            const errorText: string =
+              errorData?.message ?? errorData?.error ?? `Approval request failed: ${response.status}`;
+            // The decision did not apply: say why next to the card instead of
+            // leaving it looking resolved with no reply. A 404 means the pause
+            // is gone (expired or unknown), so the card reads as timed out.
+            if (response.status === 404) {
+              this.upsertMessage({
+                ...updatedMessage,
+                approval: { ...updatedApproval, status: "timeout" },
+              });
+            }
+            this.appendMessage({
+              id: `approval-error-${approval.id}`,
+              role: "assistant",
+              content: errorText,
+              createdAt: new Date().toISOString(),
+              streaming: false,
+              sequence: this.nextSequence(),
+            });
+            throw new Error(errorText);
           }
           stream = response.body;
         } else if (response instanceof ReadableStream) {
