@@ -260,7 +260,7 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
       .mockImplementationOnce(async () =>
         sse([{ type: "approval_complete", executionId: "exec_abc", approvalId: "appr_1", decision: "denied" }])
       );
-    const { approve, bubble, all } = setup();
+    const { session, approve, bubble, all } = setup();
     const first = approve("approved");
     await new Promise((r) => setTimeout(r, 0));
     await approve("denied");
@@ -270,6 +270,8 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
 
     expect(bubble()?.approval?.status).toBe("denied");
     expect(all().some((m) => m.id === "approval-error-appr_1")).toBe(false);
+    // Both requests settled: no token outlives them.
+    expect((session as unknown as { approvalTokens: Map<string, object> }).approvalTokens.size).toBe(0);
     vi.restoreAllMocks();
   });
 
