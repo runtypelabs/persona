@@ -494,7 +494,12 @@ function approvalParkStream(executionId: string, approvalId = "apr_order"): stri
   );
 }
 
-/** A call with the approve endpoint recorded (server gate: Allow / Deny post here). */
+/**
+ * A call with the approval decision endpoint recorded. The page is a
+ * client-token widget, so Allow / Deny post to `/v1/client/approve` (with the
+ * live sessionId); the owner route `/v1/agents/:id/approve` is recorded too,
+ * so a decision sent anywhere else, or twice, shows up.
+ */
 async function approvalCall(
   page: import("@playwright/test").Page,
   context: import("@playwright/test").BrowserContext,
@@ -502,9 +507,9 @@ async function approvalCall(
 ) {
   const api = await installFakeHistoryApi(context);
   const decisions: Array<Record<string, unknown>> = [];
-  await context.route("**/e2e-api/v1/agents/*/approve", async (route) => {
+  await context.route(/\/e2e-api\/v1\/(client\/approve|agents\/[^/]+\/approve)$/, async (route) => {
     const body = route.request().postDataJSON() as Record<string, unknown>;
-    decisions.push(body);
+    decisions.push({ ...body, route: new URL(route.request().url()).pathname.replace("/e2e-api", "") });
     await route.fulfill({
       status: 200,
       headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
@@ -565,7 +570,15 @@ test("approval lifecycle: delegation_update asks naturally, Allow, one terminal 
     status: "completed",
     text: "Order placed: JB-1234.",
   });
-  expect(decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "approved" })]);
+  // One card, one decision: the client-token route, with the live session (#462).
+  expect(decisions).toEqual([
+    expect.objectContaining({
+      route: "/v1/client/approve",
+      approvalId: "apr_1",
+      decision: "approved",
+      sessionId: expect.any(String),
+    }),
+  ]);
   await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Order placed: JB-1234." })).toHaveCount(1);
 
   // The late result's read-back gets a fresh assistant id: folded like any other.
