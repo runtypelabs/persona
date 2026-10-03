@@ -22,7 +22,7 @@ import { parseCombo, formatCombo, ariaCombo } from "./utils/shortcuts";
 import { PORTALED_OVERLAY_Z_INDEX } from "./utils/constants";
 import { type HistoryConfirmOptions } from "./components/history-confirm-dialog";
 import type { getHistoryProviderFactory } from "./internal/history-provider-registry";
-import type { createRuntypeHistoryProvider } from "./internal/runtype-history-provider";
+import { createRuntypeHistoryProvider, type HistoryErrorClasses } from "./internal/runtype-history-provider";
 import type { isDockedMountMode } from "./utils/dock";
 import type { renderLucideIcon } from "./utils/icons";
 import type { loadHistoryView } from "./history-view-loader";
@@ -81,7 +81,8 @@ export type HistoryShellContext = {
   readonly syncScrollToBottomButton: () => void;
   readonly updateWelcome: (messages?: import("./types").AgentWidgetMessage[] | undefined) => void;
   readonly getHistoryProviderFactory: typeof getHistoryProviderFactory;
-  readonly createRuntypeHistoryProvider: typeof createRuntypeHistoryProvider;
+  /** Core's error classes, so the chunk's provider throws what core checks. */
+  readonly historyErrors: HistoryErrorClasses;
   readonly isDockedMountMode: typeof isDockedMountMode;
   readonly renderLucideIcon: typeof renderLucideIcon;
   readonly loadHistoryView: typeof loadHistoryView;
@@ -175,7 +176,8 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
       return configuredProviderInstance;
     }
     if (!ctx.session.isClientTokenMode()) return null;
-    return ctx.createRuntypeHistoryProvider({
+    return createRuntypeHistoryProvider({
+      errors: ctx.historyErrors,
       client: ctx.session.getClient(),
       getIdentityProofConfigured: () =>
         typeof ctx.config.getIdentityProof === "function",

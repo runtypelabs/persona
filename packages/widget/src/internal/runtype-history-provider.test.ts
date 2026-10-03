@@ -57,6 +57,7 @@ describe('createRuntypeHistoryProvider', () => {
       internals
     );
     const provider = createRuntypeHistoryProvider({
+      errors: { HistoryClientError, HistoryProviderError },
       client,
       getIdentityProofConfigured: () => Boolean(config.getIdentityProof),
       onActivationCommitted: (session) => {

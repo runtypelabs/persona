@@ -7,6 +7,8 @@ import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
 import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
 import { loadClientStream } from "./client-stream-loader";
+import { HistoryClientError } from "./client";
+import { HistoryProviderError } from "./internal/history-provider";
 import { getUiExtrasSync, loadUiExtras, type UiExtrasModule } from "./ui-extras-loader";
 import type { AskUserSheetContext, AskUserSheetHandlers } from "./ui-ask-user-sheet";
 import {
@@ -335,7 +337,6 @@ import { loadHistoryView } from "./history-view-loader";
 import { getHistoryShellSync, loadHistoryShell, type HistoryShellModule } from "./history-shell-loader";
 import type { HistoryShell, HistoryShellContext } from "./history-shell";
 import { getHistoryProviderFactory } from "./internal/history-provider-registry";
-import { createRuntypeHistoryProvider } from "./internal/runtype-history-provider";
 import { componentRegistry } from "./components/registry";
 import {
   renderComponentDirective,
@@ -9156,7 +9157,7 @@ export const createAgentExperience = (
     syncScrollToBottomButton,
     updateWelcome,
     getHistoryProviderFactory,
-    createRuntypeHistoryProvider,
+    historyErrors: { HistoryClientError, HistoryProviderError },
     isDockedMountMode,
     renderLucideIcon,
     loadHistoryView,
