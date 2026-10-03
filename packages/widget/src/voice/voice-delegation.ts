@@ -201,7 +201,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         const tool = toolOf(pendingIds[0]);
         // The parked delegation still gets its one terminal result, silently.
         settle(live[0], "denied", "");
-        return { status: "denied", text: `Okay, I cancelled the ${tool} request. Nothing was done.` };
+        return { status: "denied", text: `Okay, I cancelled the ${tool} request. Nothing was done.`, inChat: false };
       }
       // A voice-originated WebMCP approval holds the chat turn open: this turn
       // replaces it (a new send declines it), so don't wait on it. Anything

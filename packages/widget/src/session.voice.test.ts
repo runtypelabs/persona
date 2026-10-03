@@ -790,6 +790,7 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       expect(decline).toEqual({
         status: 'denied',
         text: 'Okay, I cancelled the place pickup order request. Nothing was done.',
+        inChat: false, // only spoken: its read-back stays as a caption
       });
       expect(dispatch).toHaveBeenCalledTimes(1); // no chat turn for the decline
       expect(approvalOf().status).toBe('denied');
