@@ -753,7 +753,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           // an older one rotates the assistant id at completion, so it is the
           // first new id after it (a guess a filler finishing late defeats).
           if (this.#capabilities.has("delegation_read_back")) {
-            if (typeof msg.delegationId === "string" && this.#answered.has(msg.delegationId)) {
+            // Fold only from the first frame: hiding an utterance already shown would strand a partial caption.
+            const tag = msg.delegationId;
+            if (typeof tag === "string" && this.#answered.has(tag) && !this.#assistantTurns.has(turnId)) {
               this.#foldedTurns.add(turnId);
             }
           } else if (this.#foldReadback && !this.#assistantTurns.has(turnId)) {
@@ -954,7 +956,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         result.text,
       );
       if (!sent) return;
-      if (result.status !== "failed") this.#answered.add(delegationId);
+      if (result.status !== "failed" && result.inChat !== false) this.#answered.add(delegationId);
       if (!result.followUp) return;
       // The approval bookkeeping (expiry, supersede) runs either way.
       const abort = new AbortController();

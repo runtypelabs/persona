@@ -5295,6 +5295,12 @@ export type VoiceDelegationResult = {
   /** The assistant text (Markdown allowed). */
   text: string;
   /**
+   * `false` when no chat message carries this answer (it is only spoken), so
+   * the voice model's read-back of it stays visible as a caption.
+   * @default true
+   */
+  inChat?: boolean;
+  /**
    * Set when the turn parked on approvals (`text` then asks for the decision).
    * Resolves with the terminal result once the visitor decides (or the
    * approval is replaced, declined by voice, or unanswered for

@@ -1179,6 +1179,38 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           expect(transcripts.map((t) => t[1])).toEqual(['Anything else?', 'I could not do that.']);
         });
 
+        it('keeps the tagged read-back of an answer that is not in the chat (a spoken decline)', async () => {
+          const { ws, transcripts, pending } = await startDelegatedCall({}, { capabilities: TAG_CAPS });
+          delegate(ws, 'd1', 'cancel that');
+          await flush();
+          pending[0]({ status: 'denied', text: 'Okay, I cancelled the request.', inChat: false });
+          await flush();
+          completed(ws, 'd1');
+          ws.triggerMessage(tagged('assistant', 'Okay, I cancelled the request.', 'r1', 'd1'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Okay, I cancelled the request.']);
+        });
+
+        it('folds every frame of a read-back tagged from its first partial', async () => {
+          const { ws, transcripts } = await answered();
+          const frame = (text: string, final: boolean, delegationId?: string) =>
+            JSON.stringify({ type: 'transcript_update', role: 'assistant', text, utteranceId: 'r1', final, delegationId });
+          ws.triggerMessage(frame('Three are', false, 'd1'));
+          ws.triggerMessage(frame('Three are overdue.', true, 'd1'));
+          expect(transcripts).toEqual([]);
+        });
+
+        it('keeps showing an utterance whose tag arrives after an untagged partial, so no caption is left half-done', async () => {
+          const { ws, transcripts } = await answered();
+          const frame = (text: string, final: boolean, delegationId?: string) =>
+            JSON.stringify({ type: 'transcript_update', role: 'assistant', text, utteranceId: 'r1', final, delegationId });
+          ws.triggerMessage(frame('Three are', false));
+          ws.triggerMessage(frame('Three are overdue.', true, 'd1'));
+          expect(transcripts.map((t) => [t[1], t[2]])).toEqual([
+            ['Three are', false],
+            ['Three are overdue.', true],
+          ]);
+        });
+
         it('does not fold the tagged read-back of a failed delegation', async () => {
           const { ws, transcripts, pending } = await startDelegatedCall({}, { capabilities: TAG_CAPS });
           delegate(ws, 'd1', 'q');
