@@ -290,25 +290,25 @@ export function preferFinalStructuredContent(
 }
 
 export class AgentWidgetClient {
-  private readonly apiUrl: string;
-  private readonly headers: Record<string, string>;
+  readonly #apiUrl: string;
+  readonly #headers: Record<string, string>;
   private readonly debug: boolean;
-  private readonly createStreamParser: () => AgentWidgetStreamParser;
-  private readonly contextProviders: AgentWidgetContextProvider[];
-  private readonly requestMiddleware?: AgentWidgetRequestMiddleware;
-  private readonly customFetch?: AgentWidgetCustomFetch;
-  private readonly parseSSEEvent?: AgentWidgetSSEEventParser;
-  private readonly getHeaders?: AgentWidgetHeadersFunction;
-  private onSSEEvent?: SSEEventCallback;
+  readonly #createStreamParser: () => AgentWidgetStreamParser;
+  readonly #contextProviders: AgentWidgetContextProvider[];
+  readonly #requestMiddleware?: AgentWidgetRequestMiddleware;
+  readonly #customFetch?: AgentWidgetCustomFetch;
+  readonly #parseSSEEvent?: AgentWidgetSSEEventParser;
+  readonly #getHeaders?: AgentWidgetHeadersFunction;
+  #onSSEEvent?: SSEEventCallback;
   
   // Client token mode properties
   /**
    * Turn id of the newest client-token dispatch. A dispatch whose id no longer
    * matches is superseded, and every SSE frame it still receives is dropped
    */
-  private currentClientTurnId: string | null = null;
+  #currentClientTurnId: string | null = null;
   private clientSession: ClientSession | null = null;
-  private sessionInitPromise: Promise<ClientSession> | null = null;
+  #sessionInitPromise: Promise<ClientSession> | null = null;
   /**
    * Early-init latch for `warmSession()`. `false` = armed. Otherwise it holds
    * the session value (`null` or an expired session) the one early attempt was
@@ -316,7 +316,7 @@ export class AgentWidgetClient {
    * re-armed when a session is installed or cleared, so each session lifetime
    * gets one early init.
    */
-  private sessionWarmLatch: ClientSession | null | false = false;
+  #sessionWarmLatch: ClientSession | null | false = false;
 
   // Diff-only / send-once WebMCP tool dispatch (client-token mode ONLY).
   // Fingerprint of the clientTools[] last *sent in full* and confirmed by a
@@ -332,32 +332,32 @@ export class AgentWidgetClient {
   // execution — so a later resume with an empty registry must still send the
   // explicit `clientTools: []` replace. Reset only by an explicit [] replace,
   // a session change, or a conversation reset.
-  private sentNonEmptyClientToolsSessionId: string | null = null;
+  #sentNonEmptyClientToolsSessionId: string | null = null;
 
   // Visitor history (client-token mode ONLY). `historyUnavailable` latches for
   // the client's lifetime on a 403 `visitor_history_disabled`; `claimInFlight`
   // bounds the immediate first-conversation claim to one extra init.
-  private historyUnavailable = false;
-  private historyUnavailableWarned = false;
-  private claimInFlight = false;
+  #historyUnavailable = false;
+  #historyUnavailableWarned = false;
+  #claimInFlight = false;
   // Evidence-based identity state. Null means "never moved off the resting
   // state", which is recomputed from config so `update()` stays honest.
-  private historyIdentityStatus: HistoryIdentityStatus | null = null;
+  #historyIdentityStatus: HistoryIdentityStatus | null = null;
   // Fan-out beside the single internals callback: the Runtype history provider
   // bridges these into the generic seam. Cleared with the client instance.
-  private historyIdentitySubscribers = new Set<
+  #historyIdentitySubscribers = new Set<
     (status: HistoryIdentityStatus) => void
   >();
-  private historyAvailabilitySubscribers = new Set<(available: boolean) => void>();
+  #historyAvailabilitySubscribers = new Set<(available: boolean) => void>();
 
   // WebMCP: page-discovered tool consumption. The bridge runtime ships in the
   // lazy webmcp-runtime chunk; `webMcpBridge` stays null until the chunk is
   // adopted (and forever when `config.webmcp?.enabled !== true`). Dispatch
   // paths await `getWebMcpBridge()`; sync callers read the cached instance.
   private webMcpBridge: WebMcpBridge | null = null;
-  private webMcpBridgePromise: Promise<WebMcpBridge | null> | null = null;
+  #webMcpBridgePromise: Promise<WebMcpBridge | null> | null = null;
   /** undefined = never set; null = explicitly cleared. Applied at adoption. */
-  private pendingWebMcpConfirmHandler: WebMcpConfirmHandler | null | undefined;
+  #pendingWebMcpConfirmHandler: WebMcpConfirmHandler | null | undefined;
 
   constructor(
     private config: AgentWidgetConfig = {},
@@ -368,29 +368,29 @@ export class AgentWidgetClient {
         "[Persona] `target` is mutually exclusive with `agentId`, `flowId`, and `agent`. Set only one routing field.",
       );
     }
-    this.apiUrl = config.apiUrl ?? DEFAULT_ENDPOINT;
-    this.headers = {
+    this.#apiUrl = config.apiUrl ?? DEFAULT_ENDPOINT;
+    this.#headers = {
       "Content-Type": "application/json",
       "X-Persona-Version": VERSION,
       ...config.headers
     };
     this.debug = Boolean(config.debug);
     // Use custom stream parser if provided, otherwise use parserType, or fall back to plain text parser
-    this.createStreamParser = config.streamParser ?? getParserFromType(config.parserType);
-    this.contextProviders = config.contextProviders ?? [];
-    this.requestMiddleware = config.requestMiddleware;
-    this.customFetch = config.customFetch;
-    this.parseSSEEvent = config.parseSSEEvent;
-    this.getHeaders = config.getHeaders;
+    this.#createStreamParser = config.streamParser ?? getParserFromType(config.parserType);
+    this.#contextProviders = config.contextProviders ?? [];
+    this.#requestMiddleware = config.requestMiddleware;
+    this.#customFetch = config.customFetch;
+    this.#parseSSEEvent = config.parseSSEEvent;
+    this.#getHeaders = config.getHeaders;
     if (config.webmcp?.enabled === true) {
       // Kick the runtime chunk fetch now so the bridge is warm before the
       // first dispatch snapshot (which awaits it either way).
-      this.webMcpBridgePromise = this.createWebMcpBridge(config.webmcp);
+      this.#webMcpBridgePromise = this.#createWebMcpBridge(config.webmcp);
     }
   }
 
   /** Load the lazy runtime chunk and construct the bridge with core-owned deps. */
-  private createWebMcpBridge(
+  #createWebMcpBridge(
     webmcpConfig: NonNullable<AgentWidgetConfig["webmcp"]>
   ): Promise<WebMcpBridge | null> {
     return loadWebMcpRuntime()
@@ -400,8 +400,8 @@ export class AgentWidgetClient {
           getToolDisplayTitle: getWebMcpToolDisplayTitle,
           loadPolyfill: loadWebMcpPolyfillModule,
         });
-        if (this.pendingWebMcpConfirmHandler !== undefined) {
-          bridge.setConfirmHandler(this.pendingWebMcpConfirmHandler);
+        if (this.#pendingWebMcpConfirmHandler !== undefined) {
+          bridge.setConfirmHandler(this.#pendingWebMcpConfirmHandler);
         }
         this.webMcpBridge = bridge;
         return bridge;
@@ -409,7 +409,7 @@ export class AgentWidgetClient {
       .catch((err) => {
         // Failed chunk fetch: clear the memoized promise so the next dispatch
         // retries (the chunk loader clears its own rejection too).
-        this.webMcpBridgePromise = null;
+        this.#webMcpBridgePromise = null;
         // Always surface this: a silently-absent bridge means empty tool
         // snapshots and failed webmcp resumes with no operator signal.
         console.warn("[Persona] Failed to load the WebMCP runtime chunk", err);
@@ -418,13 +418,13 @@ export class AgentWidgetClient {
   }
 
   /** Resolve the bridge, loading the runtime chunk on first use. */
-  private getWebMcpBridge(): Promise<WebMcpBridge | null> {
+  #getWebMcpBridge(): Promise<WebMcpBridge | null> {
     if (this.webMcpBridge) return Promise.resolve(this.webMcpBridge);
     if (this.config.webmcp?.enabled !== true) return Promise.resolve(null);
-    if (!this.webMcpBridgePromise) {
-      this.webMcpBridgePromise = this.createWebMcpBridge(this.config.webmcp);
+    if (!this.#webMcpBridgePromise) {
+      this.#webMcpBridgePromise = this.#createWebMcpBridge(this.config.webmcp);
     }
-    return this.webMcpBridgePromise;
+    return this.#webMcpBridgePromise;
   }
 
   /**
@@ -458,7 +458,7 @@ export class AgentWidgetClient {
    * Set callback for capturing raw SSE events
    */
   public setSSEEventCallback(callback: SSEEventCallback): void {
-    this.onSSEEvent = callback;
+    this.#onSSEEvent = callback;
   }
 
   /**
@@ -468,7 +468,7 @@ export class AgentWidgetClient {
    */
   public setWebMcpConfirmHandler(handler: WebMcpConfirmHandler | null): void {
     // Queue for a bridge still in flight; apply immediately once adopted.
-    this.pendingWebMcpConfirmHandler = handler;
+    this.#pendingWebMcpConfirmHandler = handler;
     this.webMcpBridge?.setConfirmHandler(handler);
   }
 
@@ -501,7 +501,7 @@ export class AgentWidgetClient {
     // have adopted yet, and returning null would misroute the call to the
     // legacy local-tool resume path.
     if (this.config.webmcp?.enabled !== true) return null;
-    return this.getWebMcpBridge().then((bridge) =>
+    return this.#getWebMcpBridge().then((bridge) =>
       bridge
         ? bridge.executeToolCall(wireToolName, args, signal)
         : {
@@ -517,7 +517,7 @@ export class AgentWidgetClient {
    * Get the current SSE event callback (used to preserve across client recreation)
    */
   public getSSEEventCallback(): SSEEventCallback | undefined {
-    return this.onSSEEvent;
+    return this.#onSSEEvent;
   }
 
   /**
@@ -534,7 +534,7 @@ export class AgentWidgetClient {
    * across `update()`; the `target`/explicit-field conflict is rejected in the
    * constructor, so at most one source is set here.
    */
-  private routing(): {
+  #routing(): {
     agentId?: string;
     flowId?: string;
     targetPayload?: Record<string, unknown>;
@@ -553,7 +553,7 @@ export class AgentWidgetClient {
    * Check if operating in agent execution mode
    */
   public isAgentMode(): boolean {
-    return !!(this.config.agent || this.routing().agentId);
+    return !!(this.config.agent || this.#routing().agentId);
   }
 
   /**
@@ -562,7 +562,7 @@ export class AgentWidgetClient {
    * pointed at the dispatch endpoint still resolves its sibling routes. Not
    * used for proxy-mode URLs, whose resume route is `${apiUrl}/resume`.
    */
-  private clientApiBase(): string {
+  #clientApiBase(): string {
     return (
       this.config.apiUrl?.replace(/\/+$/, '').replace(/\/v1\/dispatch$/, '') ||
       DEFAULT_CLIENT_API_BASE
@@ -572,8 +572,8 @@ export class AgentWidgetClient {
   /**
    * Get the appropriate API URL based on mode
    */
-  private getClientApiUrl(endpoint: 'init' | 'chat' | 'resume'): string {
-    return `${this.clientApiBase()}/v1/client/${endpoint}`;
+  #getClientApiUrl(endpoint: 'init' | 'chat' | 'resume'): string {
+    return `${this.#clientApiBase()}/v1/client/${endpoint}`;
   }
 
   /**
@@ -602,7 +602,7 @@ export class AgentWidgetClient {
         );
       }
       const path =
-        `${this.clientApiBase()}/v1/client/conversations/` +
+        `${this.#clientApiBase()}/v1/client/conversations/` +
         `${encodeURIComponent(conversationId)}/executions/` +
         `${encodeURIComponent(ctx.executionId)}/events`;
       const query = new URLSearchParams({
@@ -619,14 +619,14 @@ export class AgentWidgetClient {
       });
       if (response.status === 401 && !recovered) {
         recovered = true;
-        session = await this.recoverFromUnauthorized(
-          await this.readErrorCode(response),
+        session = await this.#recoverFromUnauthorized(
+          await this.#readErrorCode(response),
           null,
           true
         );
         continue;
       }
-      if (!response.ok) throw await this.historyErrorFor(response, true);
+      if (!response.ok) throw await this.#historyErrorFor(response, true);
       return response;
     }
   }
@@ -648,13 +648,13 @@ export class AgentWidgetClient {
     const current = this.clientSession;
     if (
       !this.isClientTokenMode() ||
-      this.sessionInitPromise ||
+      this.#sessionInitPromise ||
       (current && new Date() < current.expiresAt) ||
-      this.sessionWarmLatch === current
+      this.#sessionWarmLatch === current
     ) {
       return null;
     }
-    this.sessionWarmLatch = current;
+    this.#sessionWarmLatch = current;
     // Swallowed on purpose: the send's own initSession() reports failures.
     return this.initSession().catch(() => null);
   }
@@ -678,19 +678,19 @@ export class AgentWidgetClient {
     }
 
     // Deduplicate concurrent init calls
-    if (this.sessionInitPromise) {
-      return this.sessionInitPromise;
+    if (this.#sessionInitPromise) {
+      return this.#sessionInitPromise;
     }
 
     // Callers that dedupe share this promise, so the stale check below covers
     // them too (the send reusing an early init included).
-    const pending: Promise<ClientSession> = (this.sessionInitPromise = this._doInitSession()
+    const pending: Promise<ClientSession> = (this.#sessionInitPromise = this.#_doInitSession()
       .then((session) => {
         // A clear or replacement (credential change, start-new, proof re-init)
         // while this was in flight makes the result stale: never install it.
-        if (this.sessionInitPromise !== pending) return this.initSession();
+        if (this.#sessionInitPromise !== pending) return this.initSession();
         this.clientSession = session;
-        this.sessionWarmLatch = false;
+        this.#sessionWarmLatch = false;
         // A freshly-minted session must resend the full WebMCP tool list on its
         // next turn: drop any diff-only fingerprint cached under a prior session,
         // so we never claim "unchanged" against a session the server didn't store
@@ -701,17 +701,17 @@ export class AgentWidgetClient {
         return session;
       })
       .finally(() => {
-        if (this.sessionInitPromise === pending) this.sessionInitPromise = null;
+        if (this.#sessionInitPromise === pending) this.#sessionInitPromise = null;
       }));
     return pending;
   }
 
   /** Visitor history rides on client-token init only, and latches off after a 403 degrade. */
-  private isHistoryCapable(): boolean {
+  #isHistoryCapable(): boolean {
     return (
       this.config.features?.history?.enabled === true &&
       this.isClientTokenMode() &&
-      !this.historyUnavailable
+      !this.#historyUnavailable
     );
   }
 
@@ -723,36 +723,36 @@ export class AgentWidgetClient {
   }
 
   /** One-way, client-lifetime latch: chat keeps working without history. */
-  private markHistoryUnavailable(): void {
-    if (this.historyUnavailable) return;
+  #markHistoryUnavailable(): void {
+    if (this.#historyUnavailable) return;
     // Announce before the latch flips, or the resting state already matches.
-    this.setHistoryIdentityStatus({ state: 'unavailable', reason: 'history_disabled' });
-    this.historyUnavailable = true;
-    if (!this.historyUnavailableWarned && typeof console !== 'undefined') {
-      this.historyUnavailableWarned = true;
+    this.#setHistoryIdentityStatus({ state: 'unavailable', reason: 'history_disabled' });
+    this.#historyUnavailable = true;
+    if (!this.#historyUnavailableWarned && typeof console !== 'undefined') {
+      this.#historyUnavailableWarned = true;
       // eslint-disable-next-line no-console
       console.warn(
         '[Persona] Visitor history is disabled for this surface; continuing without it.'
       );
     }
     this.historyInternals.onHistoryAvailabilityChanged?.(false);
-    for (const subscriber of [...this.historyAvailabilitySubscribers]) {
+    for (const subscriber of [...this.#historyAvailabilitySubscribers]) {
       subscriber(false);
     }
   }
 
   /** Public, secret-free view of the current identity state. */
   public getHistoryIdentityStatus(): HistoryIdentityStatus {
-    return this.historyIdentityStatus ?? this.restingIdentityStatus();
+    return this.#historyIdentityStatus ?? this.#restingIdentityStatus();
   }
 
   /** Deduped status notifications; carries no token, proof, or identity value. */
   public subscribeHistoryIdentityStatus(
     callback: (status: HistoryIdentityStatus) => void
   ): () => void {
-    this.historyIdentitySubscribers.add(callback);
+    this.#historyIdentitySubscribers.add(callback);
     return () => {
-      this.historyIdentitySubscribers.delete(callback);
+      this.#historyIdentitySubscribers.delete(callback);
     };
   }
 
@@ -760,32 +760,32 @@ export class AgentWidgetClient {
   public subscribeHistoryAvailability(
     callback: (available: boolean) => void
   ): () => void {
-    this.historyAvailabilitySubscribers.add(callback);
-    if (this.historyUnavailable) callback(false);
+    this.#historyAvailabilitySubscribers.add(callback);
+    if (this.#historyUnavailable) callback(false);
     return () => {
-      this.historyAvailabilitySubscribers.delete(callback);
+      this.#historyAvailabilitySubscribers.delete(callback);
     };
   }
 
   /** Config-derived state before any per-operation evidence exists. */
-  private restingIdentityStatus(): HistoryIdentityStatus {
+  #restingIdentityStatus(): HistoryIdentityStatus {
     if (!this.isClientTokenMode()) {
       return { state: 'unavailable', reason: 'ineligible_mode' };
     }
-    if (this.config.features?.history?.enabled !== true || this.historyUnavailable) {
+    if (this.config.features?.history?.enabled !== true || this.#historyUnavailable) {
       return { state: 'unavailable', reason: 'history_disabled' };
     }
-    return this.browserOnlyStatus();
+    return this.#browserOnlyStatus();
   }
 
   /** Keeps an already-observed browser_only reason; otherwise derives one. */
-  private browserOnlyStatus(): HistoryIdentityStatus {
-    const current = this.historyIdentityStatus;
+  #browserOnlyStatus(): HistoryIdentityStatus {
+    const current = this.#historyIdentityStatus;
     if (current?.state === 'browser_only') return current;
-    return this.derivedBrowserOnly();
+    return this.#derivedBrowserOnly();
   }
 
-  private derivedBrowserOnly(): HistoryIdentityStatus {
+  #derivedBrowserOnly(): HistoryIdentityStatus {
     if (this.config.features?.history?.scope === 'browser') {
       return { state: 'browser_only', reason: 'configured_browser_scope' };
     }
@@ -796,14 +796,14 @@ export class AgentWidgetClient {
   }
 
   /** Identical consecutive states are not re-announced. */
-  private setHistoryIdentityStatus(next: HistoryIdentityStatus): void {
+  #setHistoryIdentityStatus(next: HistoryIdentityStatus): void {
     const current = this.getHistoryIdentityStatus();
     const unchanged =
       current.state === next.state && identityReason(current) === identityReason(next);
-    this.historyIdentityStatus = next;
+    this.#historyIdentityStatus = next;
     if (unchanged) return;
     this.historyInternals.onHistoryIdentityStatusChanged?.(next);
-    for (const subscriber of [...this.historyIdentitySubscribers]) subscriber(next);
+    for (const subscriber of [...this.#historyIdentitySubscribers]) subscriber(next);
   }
 
   /**
@@ -811,7 +811,7 @@ export class AgentWidgetClient {
    * `conversationId` and `sessionId` are mutually exclusive on the wire (strict
    * server union), so a resume never carries the stored session id.
    */
-  private async createClientSession(opts: {
+  async #createClientSession(opts: {
     conversationId?: string;
     durableResume?: boolean;
     identityProof?: string | null;
@@ -819,7 +819,7 @@ export class AgentWidgetClient {
     omitVisitorFields?: boolean;
     signal?: AbortSignal;
   }): Promise<ClientSession> {
-    const historyCapable = this.isHistoryCapable() && !opts.omitVisitorFields;
+    const historyCapable = this.#isHistoryCapable() && !opts.omitVisitorFields;
     // Recovery is negotiated independently from the history UI. New servers
     // return an explicit capability bit; old strict servers reject the
     // additive request field, which the fallback below handles once.
@@ -831,7 +831,7 @@ export class AgentWidgetClient {
       visitorToken = await this.readVisitorToken();
     }
 
-    const routed = this.routing();
+    const routed = this.#routing();
     const sessionTargetId = routed.agentId ?? routed.flowId;
     const resumeConversationId =
       historyCapable || opts.durableResume ? opts.conversationId : undefined;
@@ -856,7 +856,7 @@ export class AgentWidgetClient {
     };
 
     opts.signal?.throwIfAborted();
-    const response = await fetch(this.getClientApiUrl('init'), {
+    const response = await fetch(this.#getClientApiUrl('init'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -869,7 +869,7 @@ export class AgentWidgetClient {
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Session initialization failed' }));
       if (historyCapable && response.status === 403 && error.error === 'visitor_history_disabled') {
-        this.markHistoryUnavailable();
+        this.#markHistoryUnavailable();
         // A resume must not silently degrade into some other conversation.
         if (resumeConversationId) {
           throw new HistoryClientError(
@@ -877,7 +877,7 @@ export class AgentWidgetClient {
             'Visitor history is disabled for this surface'
           );
         }
-        return this.createClientSession({ ...opts, omitVisitorFields: true });
+        return this.#createClientSession({ ...opts, omitVisitorFields: true });
       }
       if (response.status === 403 && error.error === 'durable_recovery_disabled') {
         throw new HistoryClientError(
@@ -931,13 +931,13 @@ export class AgentWidgetClient {
     };
   }
 
-  private async _doInitSession(): Promise<ClientSession> {
+  async #_doInitSession(): Promise<ClientSession> {
     await this.historyInternals.historyBootstrapReady;
     const previousConversationId = this.config.getStoredConversationId?.() || null;
     const durableResume =
       this.historyInternals.shouldResumeDurableConversation?.() === true;
-    if (!this.isHistoryCapable() && !durableResume) {
-      return this.ordinaryInit(previousConversationId, false);
+    if (!this.#isHistoryCapable() && !durableResume) {
+      return this.#ordinaryInit(previousConversationId, false);
     }
     const storedToken = await this.readVisitorToken();
 
@@ -945,14 +945,14 @@ export class AgentWidgetClient {
     // session id, so benign expiry never forks or wipes the conversation.
     if (previousConversationId && storedToken) {
       try {
-        const resumed = await this.createClientSession({
+        const resumed = await this.#createClientSession({
           conversationId: previousConversationId,
           durableResume,
         });
         if (durableResume && resumed.durableRecovery?.enabled !== true) {
           this.historyInternals.setStoredResumableHandle?.(null);
         }
-        return this.finishInit(resumed, previousConversationId, false);
+        return this.#finishInit(resumed, previousConversationId, false);
       } catch (error) {
         if (
           !isHistoryClientError(error, 'not_found') &&
@@ -965,11 +965,11 @@ export class AgentWidgetClient {
           this.historyInternals.setStoredResumableHandle?.(null);
         }
         // Record gone or credential dead: exactly one ordinary fallback, never a loop.
-        return this.ordinaryInit(previousConversationId, true);
+        return this.#ordinaryInit(previousConversationId, true);
       }
     }
 
-    return this.ordinaryInit(previousConversationId, false);
+    return this.#ordinaryInit(previousConversationId, false);
   }
 
   /**
@@ -977,27 +977,27 @@ export class AgentWidgetClient {
    * cross-tab first-init lock: a waiter re-reads inside the lock and joins the
    * winner's visitor instead of minting a second one.
    */
-  private async ordinaryInit(
+  async #ordinaryInit(
     previousConversationId: string | null,
     continuityBroken: boolean
   ): Promise<ClientSession> {
     const store = this.historyInternals.visitorStore;
     if (store && !(await this.readVisitorToken())) {
       return store.withFirstInitLock(() =>
-        this.doOrdinaryInit(previousConversationId, continuityBroken)
+        this.#doOrdinaryInit(previousConversationId, continuityBroken)
       );
     }
-    return this.doOrdinaryInit(previousConversationId, continuityBroken);
+    return this.#doOrdinaryInit(previousConversationId, continuityBroken);
   }
 
-  private async doOrdinaryInit(
+  async #doOrdinaryInit(
     previousConversationId: string | null,
     continuityBroken: boolean
   ): Promise<ClientSession> {
     const storedSessionId = this.config.getStoredSessionId?.() || null;
-    const first = await this.createClientSession({ storedSessionId });
-    const session = await this.claimFirstConversation(first);
-    return this.finishInit(session, previousConversationId, continuityBroken);
+    const first = await this.#createClientSession({ storedSessionId });
+    const session = await this.#claimFirstConversation(first);
+    return this.#finishInit(session, previousConversationId, continuityBroken);
   }
 
   /**
@@ -1005,17 +1005,17 @@ export class AgentWidgetClient {
    * persists any replacement token (inside `createClientSession`), and installs
    * the result as the live session.
    */
-  private async reinitWithProof(proof: string): Promise<ClientSession> {
+  async #reinitWithProof(proof: string): Promise<ClientSession> {
     const storedSessionId = this.config.getStoredSessionId?.() || null;
     const previousConversationId = this.config.getStoredConversationId?.() || null;
-    const session = await this.createClientSession({
+    const session = await this.#createClientSession({
       storedSessionId,
       identityProof: proof,
     });
-    const installed = this.finishInit(session, previousConversationId, false);
+    const installed = this.#finishInit(session, previousConversationId, false);
     this.clientSession = installed;
-    this.sessionInitPromise = null;
-    this.sessionWarmLatch = false;
+    this.#sessionInitPromise = null;
+    this.#sessionWarmLatch = false;
     this.resetClientToolsFingerprint();
     return installed;
   }
@@ -1024,22 +1024,22 @@ export class AgentWidgetClient {
    * A minted visitor means the record this session just created is still
    * unowned; one immediate re-init with `{visitorToken, sessionId}` claims it.
    */
-  private async claimFirstConversation(first: ClientSession): Promise<ClientSession> {
+  async #claimFirstConversation(first: ClientSession): Promise<ClientSession> {
     if (
       !first.visitor?.token ||
-      this.claimInFlight ||
-      (!this.isHistoryCapable() && first.durableRecovery?.enabled !== true)
+      this.#claimInFlight ||
+      (!this.#isHistoryCapable() && first.durableRecovery?.enabled !== true)
     ) {
       return first;
     }
-    this.claimInFlight = true;
+    this.#claimInFlight = true;
     try {
-      return await this.createClientSession({ storedSessionId: first.sessionId });
+      return await this.#createClientSession({ storedSessionId: first.sessionId });
     } catch {
       // Non-fatal: the next page load claims through the normal backend path.
       return first;
     } finally {
-      this.claimInFlight = false;
+      this.#claimInFlight = false;
     }
   }
 
@@ -1047,7 +1047,7 @@ export class AgentWidgetClient {
    * Continuity guard + id persistence. A different record than the persisted
    * one is a privacy transition, announced before the new id is written.
    */
-  private finishInit(
+  #finishInit(
     session: ClientSession,
     previousConversationId: string | null,
     continuityBroken: boolean
@@ -1074,7 +1074,7 @@ export class AgentWidgetClient {
   }
 
   /** Wrap an uncached init so nothing installs until the winner commits. */
-  private prepared(session: ClientSession): PreparedClientSession {
+  #prepared(session: ClientSession): PreparedClientSession {
     let settled = false;
     return {
       session,
@@ -1082,7 +1082,7 @@ export class AgentWidgetClient {
         if (settled) return;
         settled = true;
         this.clientSession = session;
-        this.sessionWarmLatch = false;
+        this.#sessionWarmLatch = false;
         this.resetClientToolsFingerprint();
       },
       discard: () => {
@@ -1103,7 +1103,7 @@ export class AgentWidgetClient {
     if (!this.isClientTokenMode()) {
       throw new Error('prepareConversationSession() only available in client token mode');
     }
-    if (!this.isHistoryCapable()) {
+    if (!this.#isHistoryCapable()) {
       throw new HistoryClientError(
         'history_disabled',
         'Visitor history is disabled for this surface'
@@ -1118,11 +1118,11 @@ export class AgentWidgetClient {
         'Reopening a conversation requires a stored visitor token or an identity proof'
       );
     }
-    const session = await this.createClientSession({
+    const session = await this.#createClientSession({
       conversationId,
       identityProof: proof,
     });
-    return this.prepared(session);
+    return this.#prepared(session);
   }
 
   /** Transactional new conversation: no stored session id, no conversation id. */
@@ -1131,8 +1131,8 @@ export class AgentWidgetClient {
       throw new Error('prepareNewConversationSession() only available in client token mode');
     }
     await this.historyInternals.historyBootstrapReady;
-    const session = await this.createClientSession({});
-    return this.prepared(session);
+    const session = await this.#createClientSession({});
+    return this.#prepared(session);
   }
 
   /**
@@ -1142,8 +1142,8 @@ export class AgentWidgetClient {
    */
   public handleExternalCredentialChange(): void {
     this.clearClientSession();
-    if (this.isHistoryCapable()) {
-      this.setHistoryIdentityStatus(this.derivedBrowserOnly());
+    if (this.#isHistoryCapable()) {
+      this.#setHistoryIdentityStatus(this.#derivedBrowserOnly());
     }
   }
 
@@ -1152,8 +1152,8 @@ export class AgentWidgetClient {
    */
   public clearClientSession(): void {
     this.clientSession = null;
-    this.sessionInitPromise = null;
-    this.sessionWarmLatch = false;
+    this.#sessionInitPromise = null;
+    this.#sessionWarmLatch = false;
     this.resetClientToolsFingerprint();
   }
 
@@ -1165,14 +1165,14 @@ export class AgentWidgetClient {
   public resetClientToolsFingerprint(): void {
     this.lastSentClientToolsFingerprint = null;
     this.clientToolsFingerprintSessionId = null;
-    this.sentNonEmptyClientToolsSessionId = null;
+    this.#sentNonEmptyClientToolsSessionId = null;
   }
 
   /**
    * Get the feedback API URL
    */
-  private getFeedbackApiUrl(): string {
-    return `${this.clientApiBase()}/v1/client/feedback`;
+  #getFeedbackApiUrl(): string {
+    return `${this.#clientApiBase()}/v1/client/feedback`;
   }
 
   /**
@@ -1250,7 +1250,7 @@ export class AgentWidgetClient {
       ...(this.config.clientToken && { token: this.config.clientToken }),
     };
 
-    const response = await fetch(this.getFeedbackApiUrl(), {
+    const response = await fetch(this.#getFeedbackApiUrl(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1264,7 +1264,7 @@ export class AgentWidgetClient {
       
       if (response.status === 401) {
         this.clientSession = null;
-        this.sessionWarmLatch = false;
+        this.#sessionWarmLatch = false;
         this.config.onSessionExpired?.();
         throw new Error('Session expired. Please refresh to continue.');
       }
@@ -1336,7 +1336,7 @@ export class AgentWidgetClient {
   // ==========================================================================
 
   /** `/v1/client/<path>` with a query string; credentials ride in headers. */
-  private historyUrl(
+  #historyUrl(
     path: string,
     query: Record<string, string | number | undefined>
   ): string {
@@ -1346,18 +1346,18 @@ export class AgentWidgetClient {
       params.set(key, String(value));
     }
     const search = params.toString();
-    return `${this.clientApiBase()}/v1/client/${path}${search ? `?${search}` : ''}`;
+    return `${this.#clientApiBase()}/v1/client/${path}${search ? `?${search}` : ''}`;
   }
 
   /** Explicit per-operation scope wins; otherwise config, then evidence. */
-  private resolveHistoryScope(requested?: HistoryScope): HistoryScope {
+  #resolveHistoryScope(requested?: HistoryScope): HistoryScope {
     if (requested) return requested;
     const configured = this.config.features?.history?.scope;
     if (configured) return configured;
     return this.config.getIdentityProof ? 'verified-user' : 'browser';
   }
 
-  private async resolveChatIdentityProof(signal?: AbortSignal): Promise<ClientChatRequest['identityProof']> {
+  async #resolveChatIdentityProof(signal?: AbortSignal): Promise<ClientChatRequest['identityProof']> {
     signal?.throwIfAborted();
     const provider = this.config.identityProvider;
     if (provider === undefined) return undefined;
@@ -1395,21 +1395,21 @@ export class AgentWidgetClient {
    * Resolve the proof for one logical request. `null` is an intentional
    * browser-scope fallback only while the visitor has never been bound.
    */
-  private async resolveIdentityProof(
+  async #resolveIdentityProof(
     session: ClientSession,
     track: boolean
   ): Promise<string | null> {
     const provider = this.config.getIdentityProof;
     if (!provider) {
-      if (track) this.setHistoryIdentityStatus(this.browserOnlyStatus());
+      if (track) this.#setHistoryIdentityStatus(this.#browserOnlyStatus());
       return null;
     }
-    if (track) this.setHistoryIdentityStatus({ state: 'verifying' });
+    if (track) this.#setHistoryIdentityStatus({ state: 'verifying' });
     let proof: string | null;
     try {
       proof = (await provider()) ?? null;
     } catch {
-      if (track) this.setHistoryIdentityStatus({ state: 'identity_provider_failed' });
+      if (track) this.#setHistoryIdentityStatus({ state: 'identity_provider_failed' });
       throw new HistoryClientError(
         'identity_provider_failed',
         'The identity proof provider failed'
@@ -1419,7 +1419,7 @@ export class AgentWidgetClient {
     if (session.visitor?.endUserId != null) {
       // Never downgrade a bound visitor into its own browser scope.
       if (track) {
-        this.setHistoryIdentityStatus({
+        this.#setHistoryIdentityStatus({
           state: 'authentication_required',
           reason: 'proof_unavailable_after_binding',
         });
@@ -1430,7 +1430,7 @@ export class AgentWidgetClient {
       );
     }
     if (track) {
-      this.setHistoryIdentityStatus({
+      this.#setHistoryIdentityStatus({
         state: 'browser_only',
         reason: 'proof_unavailable_before_binding',
       });
@@ -1439,19 +1439,19 @@ export class AgentWidgetClient {
   }
 
   /** Bind the visitor before the first verified request; admitted proofs only. */
-  private async bindIdentity(
+  async #bindIdentity(
     session: ClientSession,
     proof: string,
     track: boolean
   ): Promise<ClientSession> {
     if (session.visitor?.endUserId != null) return session;
-    const bound = await this.reinitWithProof(proof);
+    const bound = await this.#reinitWithProof(proof);
     const admitted =
       bound.visitor?.identityStatus === 'admitted' && bound.visitor?.endUserId != null;
     if (!admitted) {
       // "ignored", or a pre-acknowledgement server that left endUserId null.
       if (track) {
-        this.setHistoryIdentityStatus({
+        this.#setHistoryIdentityStatus({
           state: 'configuration_error',
           reason: 'proof_not_admitted',
         });
@@ -1464,7 +1464,7 @@ export class AgentWidgetClient {
     return bound;
   }
 
-  private async readErrorCode(response: Response): Promise<string> {
+  async #readErrorCode(response: Response): Promise<string> {
     const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
     if (typeof body.error === 'string') return body.error;
     if (typeof body.message === 'string') return body.message;
@@ -1475,7 +1475,7 @@ export class AgentWidgetClient {
    * Selective one-shot 401 recovery. Returns the session to retry under;
    * anything unrecoverable throws typed and is never retried.
    */
-  private async recoverFromUnauthorized(
+  async #recoverFromUnauthorized(
     reason: string,
     proof: string | null,
     track: boolean
@@ -1483,7 +1483,7 @@ export class AgentWidgetClient {
     const text = reason.toLowerCase();
     if (text.includes('invalid_identity_proof')) {
       if (track) {
-        this.setHistoryIdentityStatus({
+        this.#setHistoryIdentityStatus({
           state: 'authentication_required',
           reason: 'invalid_identity_proof',
         });
@@ -1496,7 +1496,7 @@ export class AgentWidgetClient {
     if (text.includes('visitor_identity_mismatch')) {
       if (!proof) {
         if (track) {
-          this.setHistoryIdentityStatus({
+          this.#setHistoryIdentityStatus({
             state: 'authentication_required',
             reason: 'proof_unavailable_after_binding',
           });
@@ -1504,7 +1504,7 @@ export class AgentWidgetClient {
         throw new HistoryClientError('visitor_identity_mismatch', IDENTITY_MISMATCH_MESSAGE);
       }
       // Same proof: binds this visitor, or gives a different person a clean one.
-      return this.reinitWithProof(proof);
+      return this.#reinitWithProof(proof);
     }
     if (text.includes('expired') || text.includes('not found')) {
       this.clearClientSession();
@@ -1513,11 +1513,11 @@ export class AgentWidgetClient {
     throw new HistoryClientError('unauthorized', reason || 'History request was not authorized');
   }
 
-  private async historyErrorFor(
+  async #historyErrorFor(
     response: Response,
     track: boolean
   ): Promise<HistoryClientError> {
-    const code = await this.readErrorCode(response);
+    const code = await this.#readErrorCode(response);
     if (response.status === 404) {
       return new HistoryClientError('not_found', 'Conversation not found');
     }
@@ -1529,7 +1529,7 @@ export class AgentWidgetClient {
     }
     if (response.status === 503 && code.includes('identity_proof_not_admitted')) {
       if (track) {
-        this.setHistoryIdentityStatus({
+        this.#setHistoryIdentityStatus({
           state: 'configuration_error',
           reason: 'proof_not_admitted',
         });
@@ -1543,7 +1543,7 @@ export class AgentWidgetClient {
       const text = code.toLowerCase();
       if (text.includes('invalid_identity_proof')) {
         if (track) {
-          this.setHistoryIdentityStatus({
+          this.#setHistoryIdentityStatus({
             state: 'authentication_required',
             reason: 'invalid_identity_proof',
           });
@@ -1568,7 +1568,7 @@ export class AgentWidgetClient {
    * Validate `X-History-Identity-Status` before any body is committed: the
    * per-operation acknowledgement, not a prior init, is what proves scope.
    */
-  private commitIdentityAcknowledgement(
+  #commitIdentityAcknowledgement(
     header: string | null,
     proofSent: boolean,
     track: boolean
@@ -1576,11 +1576,11 @@ export class AgentWidgetClient {
     const value = header?.toLowerCase() ?? null;
     if (proofSent) {
       if (value === 'admitted') {
-        if (track) this.setHistoryIdentityStatus({ state: 'verified' });
+        if (track) this.#setHistoryIdentityStatus({ state: 'verified' });
         return;
       }
       if (track) {
-        this.setHistoryIdentityStatus({
+        this.#setHistoryIdentityStatus({
           state: 'configuration_error',
           reason: 'proof_not_admitted',
         });
@@ -1605,7 +1605,7 @@ export class AgentWidgetClient {
     }
     // "not_provided", a missing header (rolling deploy), or an unknown value:
     // no verified claim was made either way.
-    if (track) this.setHistoryIdentityStatus(this.browserOnlyStatus());
+    if (track) this.#setHistoryIdentityStatus(this.#browserOnlyStatus());
   }
 
   /**
@@ -1613,7 +1613,7 @@ export class AgentWidgetClient {
    * `X-Visitor-Token` header, one resolved proof, one-shot 401 recovery, and a
    * credential-revision guard that discards a response the store outran.
    */
-  private async historyFetch<T>(
+  async #historyFetch<T>(
     path: string,
     opts: {
       method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
@@ -1627,16 +1627,16 @@ export class AgentWidgetClient {
       trackIdentity?: boolean;
     }
   ): Promise<T> {
-    this.assertHistoryUsable();
+    this.#assertHistoryUsable();
     const track = opts.trackIdentity !== false;
     let session = await this.initSession();
 
     // Resolved once per logical request: a recovery retry reuses the same proof
     // so one action cannot switch identities midway.
     let proof: string | null = null;
-    if (this.resolveHistoryScope(opts.scope) === 'verified-user') {
-      proof = await this.resolveIdentityProof(session, track);
-      if (proof) session = await this.bindIdentity(session, proof, track);
+    if (this.#resolveHistoryScope(opts.scope) === 'verified-user') {
+      proof = await this.#resolveIdentityProof(session, track);
+      if (proof) session = await this.#bindIdentity(session, proof, track);
     }
 
     const store = this.historyInternals.visitorStore;
@@ -1651,7 +1651,7 @@ export class AgentWidgetClient {
         );
       }
       const response = await fetch(
-        this.historyUrl(path, { ...opts.query, sessionId: session.sessionId }),
+        this.#historyUrl(path, { ...opts.query, sessionId: session.sessionId }),
         {
           method: opts.method,
           headers: {
@@ -1667,15 +1667,15 @@ export class AgentWidgetClient {
 
       if (response.status === 401 && !recovered) {
         recovered = true;
-        session = await this.recoverFromUnauthorized(
-          await this.readErrorCode(response),
+        session = await this.#recoverFromUnauthorized(
+          await this.#readErrorCode(response),
           proof,
           track
         );
         continue;
       }
       if (!response.ok) {
-        throw await this.historyErrorFor(response, track);
+        throw await this.#historyErrorFor(response, track);
       }
 
       const acknowledgement = response.headers.get('X-History-Identity-Status');
@@ -1687,16 +1687,16 @@ export class AgentWidgetClient {
           'The visitor credential changed while the request was in flight'
         );
       }
-      this.commitIdentityAcknowledgement(acknowledgement, proof !== null, track);
+      this.#commitIdentityAcknowledgement(acknowledgement, proof !== null, track);
       return data;
     }
   }
 
-  private assertHistoryUsable(): void {
+  #assertHistoryUsable(): void {
     if (!this.isClientTokenMode()) {
       throw new Error('Conversation history is only available in client token mode');
     }
-    if (!this.isHistoryCapable()) {
+    if (!this.#isHistoryCapable()) {
       throw new HistoryClientError(
         'history_disabled',
         'Visitor history is disabled for this surface'
@@ -1711,7 +1711,7 @@ export class AgentWidgetClient {
     targetId?: string;
     scope?: HistoryScope;
   }): Promise<HistoryConversationPage> {
-    const page = await this.historyFetch<{
+    const page = await this.#historyFetch<{
       data?: unknown[];
       nextCursor?: string | null;
     }>('conversations', {
@@ -1737,7 +1737,7 @@ export class AgentWidgetClient {
     conversationId: string,
     opts?: { messageCursor?: string; scope?: HistoryScope }
   ): Promise<HistoryConversationDetail> {
-    const detail = await this.historyFetch<Record<string, unknown>>(
+    const detail = await this.#historyFetch<Record<string, unknown>>(
       `conversations/${encodeURIComponent(conversationId)}`,
       {
         method: 'GET',
@@ -1768,7 +1768,7 @@ export class AgentWidgetClient {
     conversationId: string,
     messages: HistoryDisplayProjection[]
   ): Promise<{ conversationRevision: string | null }> {
-    this.assertHistoryUsable();
+    this.#assertHistoryUsable();
     let total = 0;
     for (const message of messages) {
       const size = message.displayContent.length;
@@ -1790,7 +1790,7 @@ export class AgentWidgetClient {
     await this.initSession();
     const store = this.historyInternals.visitorStore;
     const capturedRevision = store?.revision() ?? 0;
-    const result = await this.historyFetch<{ conversationRevision?: string }>(
+    const result = await this.#historyFetch<{ conversationRevision?: string }>(
       `conversations/${encodeURIComponent(conversationId)}/display-projections`,
       {
         method: 'PATCH',
@@ -1817,7 +1817,7 @@ export class AgentWidgetClient {
     conversationId: string,
     opts?: { scope?: HistoryScope }
   ): Promise<{ deleted: number }> {
-    const result = await this.historyFetch<{ deleted?: number }>(
+    const result = await this.#historyFetch<{ deleted?: number }>(
       `conversations/${encodeURIComponent(conversationId)}`,
       {
         method: 'DELETE',
@@ -1836,7 +1836,7 @@ export class AgentWidgetClient {
     targetId?: string;
     scope?: HistoryScope;
   }): Promise<{ deleted: number }> {
-    const result = await this.historyFetch<{ deleted?: number }>('conversations', {
+    const result = await this.#historyFetch<{ deleted?: number }>('conversations', {
       method: 'DELETE',
       query: {
         ...(opts?.targetId !== undefined ? { targetId: opts.targetId } : {}),
@@ -1852,10 +1852,10 @@ export class AgentWidgetClient {
    * revocation still detaches this device.
    */
   public async resetVisitor(): Promise<{ reset: true }> {
-    this.assertHistoryUsable();
-    this.setHistoryIdentityStatus({ state: 'resetting' });
+    this.#assertHistoryUsable();
+    this.#setHistoryIdentityStatus({ state: 'resetting' });
     try {
-      await this.historyFetch<{ reset?: boolean }>('visitor/reset', {
+      await this.#historyFetch<{ reset?: boolean }>('visitor/reset', {
         method: 'POST',
         scope: 'browser',
         visitorTokenOptional: true,
@@ -1863,7 +1863,7 @@ export class AgentWidgetClient {
     } finally {
       await this.historyInternals.visitorStore?.clear();
       // Post-reset resting state: this browser is a never-bound visitor again.
-      this.setHistoryIdentityStatus(this.derivedBrowserOnly());
+      this.#setHistoryIdentityStatus(this.#derivedBrowserOnly());
     }
     return { reset: true };
   }
@@ -1874,23 +1874,23 @@ export class AgentWidgetClient {
   public async dispatch(options: DispatchOptions, onEvent: SSEHandler) {
     options.signal?.throwIfAborted();
     if (this.isClientTokenMode()) {
-      return this.dispatchClientToken(options, onEvent);
+      return this.#dispatchClientToken(options, onEvent);
     }
     if (this.isAgentMode()) {
-      return this.dispatchAgent(options, onEvent);
+      return this.#dispatchAgent(options, onEvent);
     }
-    return this.dispatchProxy(options, onEvent);
+    return this.#dispatchProxy(options, onEvent);
   }
 
   /**
    * Client token mode dispatch
    */
-  private async dispatchClientToken(options: DispatchOptions, onEvent: SSEHandler) {
+  async #dispatchClientToken(options: DispatchOptions, onEvent: SSEHandler) {
     // Claim the turn before any await: a later dispatch that interrupts this one
     // takes the claim, and every event this call still receives is then stale.
     const turnId = generateTurnId();
-    this.currentClientTurnId = turnId;
-    const isCurrentTurn = () => this.currentClientTurnId === turnId;
+    this.#currentClientTurnId = turnId;
+    const isCurrentTurn = () => this.#currentClientTurnId === turnId;
     // Terminal frames of a superseded run must not reopen the composer or paint
     // into the new turn's bubble; status frames are equally misleading.
     const forward: SSEHandler = (event) => {
@@ -1915,8 +1915,8 @@ export class AgentWidgetClient {
           throw new Error('Renewing this conversation requires its visitor credential.');
         }
         assertCurrentTurn();
-        const renewed = await this.createClientSession({
-          ...(durable || this.isHistoryCapable()
+        const renewed = await this.#createClientSession({
+          ...(durable || this.#isHistoryCapable()
             ? { conversationId: previous.conversationId, durableResume: durable }
             : { storedSessionId: previous.sessionId }),
           signal: options.signal,
@@ -1928,9 +1928,9 @@ export class AgentWidgetClient {
         ) {
           throw new Error('Session renewal did not preserve this conversation.');
         }
-        session = this.finishInit(renewed, previous.conversationId ?? null, false);
+        session = this.#finishInit(renewed, previous.conversationId ?? null, false);
         this.clientSession = session;
-        this.sessionWarmLatch = false;
+        this.#sessionWarmLatch = false;
         this.resetClientToolsFingerprint();
         this.config.onSessionInit?.(session);
       };
@@ -1939,7 +1939,7 @@ export class AgentWidgetClient {
       }
 
       // Build the standard payload to get context/metadata from middleware
-      const basePayload = await this.buildPayload(options.messages);
+      const basePayload = await this.#buildPayload(options.messages);
 
       // Build the chat request payload with message IDs for feedback tracking
       // Filter out sessionId from metadata if present (it's only for local storage)
@@ -1950,7 +1950,7 @@ export class AgentWidgetClient {
         : undefined;
       
       // Common (tools-independent) fields for the chat request.
-      const historyCapable = this.isHistoryCapable();
+      const historyCapable = this.#isHistoryCapable();
       const baseChatRequest: Omit<ClientChatRequest, 'clientTools' | 'clientToolsFingerprint'> = {
         sessionId: session.sessionId,
         // Filter out messages with empty content to prevent validation errors
@@ -1990,9 +1990,9 @@ export class AgentWidgetClient {
         const recoveryVisitorToken =
           session.durableRecovery?.enabled === true ? await this.readVisitorToken() : null;
         assertCurrentTurn();
-        return this.sendWithClientToolsDiff(session.sessionId, basePayload.clientTools, async (toolFields) => {
+        return this.#sendWithClientToolsDiff(session.sessionId, basePayload.clientTools, async (toolFields) => {
           assertCurrentTurn();
-          const identityProof = await this.resolveChatIdentityProof(options.signal);
+          const identityProof = await this.#resolveChatIdentityProof(options.signal);
           assertCurrentTurn();
           const chatRequest: ClientChatRequest = {
             ...baseChatRequest,
@@ -2009,7 +2009,7 @@ export class AgentWidgetClient {
             });
           }
 
-          return fetch(this.getClientApiUrl('chat'), {
+          return fetch(this.#getClientApiUrl('chat'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -2092,7 +2092,7 @@ export class AgentWidgetClient {
 
       // Stream the response (same SSE handling as proxy mode)
       try {
-        await this.streamResponse(response.body, forward, options.assistantMessageId);
+        await this.#streamResponse(response.body, forward, options.assistantMessageId);
       } finally {
         forward({ type: "status", status: "idle" });
       }
@@ -2113,10 +2113,10 @@ export class AgentWidgetClient {
   /**
    * Proxy mode dispatch (original implementation)
    */
-  private async dispatchProxy(options: DispatchOptions, onEvent: SSEHandler) {
+  async #dispatchProxy(options: DispatchOptions, onEvent: SSEHandler) {
     onEvent({ type: "status", status: "connecting" });
 
-    const payload = await this.buildPayload(
+    const payload = await this.#buildPayload(
       options.messages,
       options.composerOptions
     );
@@ -2127,10 +2127,10 @@ export class AgentWidgetClient {
     }
 
     // Build headers - merge static headers with dynamic headers if provided
-    let headers = { ...this.headers };
-    if (this.getHeaders) {
+    let headers = { ...this.#headers };
+    if (this.#getHeaders) {
       try {
-        const dynamicHeaders = await this.getHeaders();
+        const dynamicHeaders = await this.#getHeaders();
         headers = { ...headers, ...dynamicHeaders };
       } catch (error) {
         if (typeof console !== "undefined") {
@@ -2142,10 +2142,10 @@ export class AgentWidgetClient {
 
     // Use customFetch if provided, otherwise use default fetch
     let response: Response;
-    if (this.customFetch) {
+    if (this.#customFetch) {
       try {
-        response = await this.customFetch(
-          this.apiUrl,
+        response = await this.#customFetch(
+          this.#apiUrl,
           {
             method: "POST",
             headers,
@@ -2160,7 +2160,7 @@ export class AgentWidgetClient {
         throw err;
       }
     } else {
-      response = await fetch(this.apiUrl, {
+      response = await fetch(this.#apiUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -2178,7 +2178,7 @@ export class AgentWidgetClient {
 
     onEvent({ type: "status", status: "connected" });
     try {
-      await this.streamResponse(response.body, onEvent);
+      await this.#streamResponse(response.body, onEvent);
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
@@ -2187,10 +2187,10 @@ export class AgentWidgetClient {
   /**
    * Agent mode dispatch
    */
-  private async dispatchAgent(options: DispatchOptions, onEvent: SSEHandler) {
+  async #dispatchAgent(options: DispatchOptions, onEvent: SSEHandler) {
     onEvent({ type: "status", status: "connecting" });
 
-    const payload = await this.buildAgentPayload(
+    const payload = await this.#buildAgentPayload(
       options.messages,
       options.composerOptions
     );
@@ -2201,10 +2201,10 @@ export class AgentWidgetClient {
     }
 
     // Build headers - merge static headers with dynamic headers if provided
-    let headers = { ...this.headers };
-    if (this.getHeaders) {
+    let headers = { ...this.#headers };
+    if (this.#getHeaders) {
       try {
-        const dynamicHeaders = await this.getHeaders();
+        const dynamicHeaders = await this.#getHeaders();
         headers = { ...headers, ...dynamicHeaders };
       } catch (error) {
         if (typeof console !== "undefined") {
@@ -2216,10 +2216,10 @@ export class AgentWidgetClient {
 
     // Use customFetch if provided, otherwise use default fetch
     let response: Response;
-    if (this.customFetch) {
+    if (this.#customFetch) {
       try {
-        response = await this.customFetch(
-          this.apiUrl,
+        response = await this.#customFetch(
+          this.#apiUrl,
           {
             method: "POST",
             headers,
@@ -2234,7 +2234,7 @@ export class AgentWidgetClient {
         throw err;
       }
     } else {
-      response = await fetch(this.apiUrl, {
+      response = await fetch(this.#apiUrl, {
         method: "POST",
         headers,
         body: JSON.stringify(payload),
@@ -2252,7 +2252,7 @@ export class AgentWidgetClient {
 
     onEvent({ type: "status", status: "connected" });
     try {
-      await this.streamResponse(response.body, onEvent, options.assistantMessageId);
+      await this.#streamResponse(response.body, onEvent, options.assistantMessageId);
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
@@ -2271,7 +2271,7 @@ export class AgentWidgetClient {
   ): Promise<void> {
     onEvent({ type: "status", status: "connected" });
     try {
-      await this.streamResponse(body, onEvent, assistantMessageId, seedContent);
+      await this.#streamResponse(body, onEvent, assistantMessageId, seedContent);
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
@@ -2295,10 +2295,10 @@ export class AgentWidgetClient {
   ): Promise<Response> {
     let headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      ...this.headers
+      ...this.#headers
     };
-    if (this.getHeaders) {
-      Object.assign(headers, await this.getHeaders());
+    if (this.#getHeaders) {
+      Object.assign(headers, await this.#getHeaders());
     }
     const body = {
       executionId: approval.executionId,
@@ -2307,7 +2307,7 @@ export class AgentWidgetClient {
       streamResponse: true,
     };
     const post = (path: string, extra?: Record<string, unknown>) =>
-      fetch(`${this.clientApiBase()}${path}`, {
+      fetch(`${this.#clientApiBase()}${path}`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ ...extra, ...body }),
@@ -2387,7 +2387,7 @@ export class AgentWidgetClient {
    * tools this turn", whereas on `/resume` absence means "keep the frozen
    * dispatch-time set".
    */
-  private async sendWithClientToolsDiff(
+  async #sendWithClientToolsDiff(
     sessionId: string,
     fullClientTools: ClientToolDefinition[] | undefined,
     doFetch: (
@@ -2411,7 +2411,7 @@ export class AgentWidgetClient {
     const sendEmptyReplace =
       !hasClientTools &&
       opts?.emptyMeansReplace === true &&
-      this.sentNonEmptyClientToolsSessionId === sessionId;
+      this.#sentNonEmptyClientToolsSessionId === sessionId;
 
     // `forceFull` flips to true after a 409 cache-miss so the single retry
     // resends the full list.
@@ -2450,11 +2450,11 @@ export class AgentWidgetClient {
         this.lastSentClientToolsFingerprint = clientToolsFingerprint ?? null;
         this.clientToolsFingerprintSessionId = sessionId;
         if (hasClientTools) {
-          this.sentNonEmptyClientToolsSessionId = sessionId;
+          this.#sentNonEmptyClientToolsSessionId = sessionId;
         } else if (sendEmptyReplace) {
           // The explicit [] replaced the persisted set server-side; the
           // pending clear is done.
-          this.sentNonEmptyClientToolsSessionId = null;
+          this.#sentNonEmptyClientToolsSessionId = null;
         }
         // Omitted-empty commits (chat with zero tools) leave the flag set:
         // they don't touch tools persisted for a paused execution.
@@ -2469,7 +2469,7 @@ export class AgentWidgetClient {
   ): Promise<Response> {
     const isClientToken = this.isClientTokenMode();
     const url = isClientToken
-      ? this.getClientApiUrl('resume')
+      ? this.#getClientApiUrl('resume')
       : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`;
 
     // The client-token resume route authenticates the session, not a Bearer
@@ -2492,10 +2492,10 @@ export class AgentWidgetClient {
     let headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...(resumeVisitorToken ? { 'X-Visitor-Token': resumeVisitorToken } : {}),
-      ...this.headers
+      ...this.#headers
     };
-    if (this.getHeaders) {
-      Object.assign(headers, await this.getHeaders());
+    if (this.#getHeaders) {
+      Object.assign(headers, await this.#getHeaders());
     }
 
     const body: Record<string, unknown> = {
@@ -2520,9 +2520,9 @@ export class AgentWidgetClient {
       // so the server replaces the persisted set instead of keeping it frozen.
       const fullClientTools = [
         ...builtInClientToolsForDispatch(this.config),
-        ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
+        ...((await (await this.#getWebMcpBridge())?.snapshotForDispatch()) ?? []),
       ];
-      const { response, commit } = await this.sendWithClientToolsDiff(
+      const { response, commit } = await this.#sendWithClientToolsDiff(
         resumeSessionId,
         fullClientTools,
         (toolFields) => {
@@ -2567,7 +2567,7 @@ export class AgentWidgetClient {
    * The default model-visible path (`llmAppend`) already rode into the message's
    * `llmContent`/`contentParts`, so it needs nothing here.
    */
-  private latestMentionContext(
+  #latestMentionContext(
     messages: AgentWidgetMessage[]
   ): Record<string, unknown> | null {
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -2589,13 +2589,13 @@ export class AgentWidgetClient {
    * contributed, so callers can skip setting `payload.context`. Shared by the
    * agent and flow payload builders.
    */
-  private async buildContextAggregate(
+  async #buildContextAggregate(
     messages: AgentWidgetMessage[]
   ): Promise<Record<string, unknown> | null> {
     const contextAggregate: Record<string, unknown> = {};
-    if (this.contextProviders.length) {
+    if (this.#contextProviders.length) {
       await Promise.all(
-        this.contextProviders.map(async (provider) => {
+        this.#contextProviders.map(async (provider) => {
           try {
             const result = await provider({
               messages,
@@ -2613,7 +2613,7 @@ export class AgentWidgetClient {
         })
       );
     }
-    const mentionContext = this.latestMentionContext(messages);
+    const mentionContext = this.#latestMentionContext(messages);
     if (mentionContext) Object.assign(contextAggregate, mentionContext);
     return Object.keys(contextAggregate).length ? contextAggregate : null;
   }
@@ -2623,7 +2623,7 @@ export class AgentWidgetClient {
    * the wire entirely, so a widget with no picker and no modes sends exactly
    * what it sent before.
    */
-  private normalizeComposerOptions(
+  #normalizeComposerOptions(
     options: ComposerOptionsPayload | undefined
   ): ComposerOptionsPayload | undefined {
     if (!options) return undefined;
@@ -2640,7 +2640,7 @@ export class AgentWidgetClient {
    * composer, but only for an id the host actually declared in
    * `composer.models`. Config is untouched; the mapping is per request.
    */
-  private applyInlineAgentModel(
+  #applyInlineAgentModel(
     agent: AgentWidgetAgentRequestPayload["agent"],
     composerOptions: ComposerOptionsPayload | undefined
   ): AgentWidgetAgentRequestPayload["agent"] {
@@ -2652,11 +2652,11 @@ export class AgentWidgetClient {
     return declared ? { ...agent, model: selected } : agent;
   }
 
-  private async buildAgentPayload(
+  async #buildAgentPayload(
     messages: AgentWidgetMessage[],
     composerOptions?: ComposerOptionsPayload
   ): Promise<AgentWidgetAgentRequestPayload> {
-    const routedAgentId = this.routing().agentId;
+    const routedAgentId = this.#routing().agentId;
     if (!this.config.agent && !routedAgentId) {
       throw new Error('Agent configuration required for agent mode');
     }
@@ -2673,9 +2673,9 @@ export class AgentWidgetClient {
           : null
     );
 
-    const composer = this.normalizeComposerOptions(composerOptions);
+    const composer = this.#normalizeComposerOptions(composerOptions);
     const payload: AgentWidgetAgentRequestPayload = {
-      agent: this.applyInlineAgentModel(
+      agent: this.#applyInlineAgentModel(
         this.config.agent ?? { agentId: routedAgentId! },
         composer
       ),
@@ -2696,20 +2696,20 @@ export class AgentWidgetClient {
     // so dispatch microtask timing is unchanged.
     const clientTools = [
       ...builtInClientToolsForDispatch(this.config),
-      ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
+      ...((await (await this.#getWebMcpBridge())?.snapshotForDispatch()) ?? []),
     ];
     if (clientTools.length > 0) {
       payload.clientTools = clientTools;
     }
 
     // Add context from providers + opt-in mention context.
-    const contextAggregate = await this.buildContextAggregate(messages);
+    const contextAggregate = await this.#buildContextAggregate(messages);
     if (contextAggregate) payload.context = contextAggregate;
 
     return payload;
   }
 
-  private async buildPayload(
+  async #buildPayload(
     messages: AgentWidgetMessage[],
     composerOptions?: ComposerOptionsPayload
   ): Promise<AgentWidgetRequestPayload> {
@@ -2722,7 +2722,7 @@ export class AgentWidgetClient {
       (message) => (hasValidContent(message) ? toPayloadMessage(message) : null)
     );
 
-    const routed = this.routing();
+    const routed = this.#routing();
     const payload: AgentWidgetRequestPayload = {
       messages: normalizedMessages,
       ...(routed.agentId
@@ -2747,24 +2747,24 @@ export class AgentWidgetClient {
     // (flow-dispatch path).
     const clientTools = [
       ...builtInClientToolsForDispatch(this.config),
-      ...((await (await this.getWebMcpBridge())?.snapshotForDispatch()) ?? []),
+      ...((await (await this.#getWebMcpBridge())?.snapshotForDispatch()) ?? []),
     ];
     if (clientTools.length > 0) {
       payload.clientTools = clientTools;
     }
 
-    const contextAggregate = await this.buildContextAggregate(messages);
+    const contextAggregate = await this.#buildContextAggregate(messages);
     if (contextAggregate) payload.context = contextAggregate;
 
     // Its own field, never folded into `context`: a value in generic context
     // does not change inference, and each transport must decide explicitly.
     // Set before the middleware runs so hosts can read, rewrite, or drop it.
-    const composer = this.normalizeComposerOptions(composerOptions);
+    const composer = this.#normalizeComposerOptions(composerOptions);
     if (composer) payload.composerOptions = composer;
 
-    if (this.requestMiddleware) {
+    if (this.#requestMiddleware) {
       try {
-        const result = await this.requestMiddleware({
+        const result = await this.#requestMiddleware({
           payload: { ...payload },
           config: this.config
         });
@@ -2801,7 +2801,7 @@ export class AgentWidgetClient {
    * Handle custom SSE event parsing via parseSSEEvent callback
    * Returns true if event was handled, false otherwise
    */
-  private async handleCustomSSEEvent(
+  async #handleCustomSSEEvent(
     payload: unknown,
     onEvent: SSEHandler,
     assistantMessageRef: { current: AgentWidgetMessage | null },
@@ -2809,10 +2809,10 @@ export class AgentWidgetClient {
     nextSequence: () => number,
     partIdState: { current: string | null }
   ): Promise<boolean> {
-    if (!this.parseSSEEvent) return false;
+    if (!this.#parseSSEEvent) return false;
 
     try {
-      const result = await this.parseSSEEvent(payload);
+      const result = await this.#parseSSEEvent(payload);
       if (result === null) return false; // Event should be ignored
 
       const createNewAssistant = (partId?: string): AgentWidgetMessage => {
@@ -2890,7 +2890,7 @@ export class AgentWidgetClient {
     }
   }
 
-  private async streamResponse(
+  async #streamResponse(
     body: ReadableStream<Uint8Array>,
     onEvent: SSEHandler,
     assistantMessageId?: string,
@@ -3245,7 +3245,7 @@ export class AgentWidgetClient {
     ) => {
       assistant.rawContent = accumulatedRaw;
       if (!streamParsers.has(assistant.id)) {
-        streamParsers.set(assistant.id, this.createStreamParser());
+        streamParsers.set(assistant.id, this.#createStreamParser());
       }
       const parser = streamParsers.get(assistant.id)!;
       const looksLikeJson =
@@ -4529,13 +4529,13 @@ export class AgentWidgetClient {
           : typeof record?.type === "string" ? record.type : "message";
 
         // Tap: capture raw SSE event for event stream inspector
-        this.onSSEEvent?.(payloadType, payload);
+        this.#onSSEEvent?.(payloadType, payload);
 
         // If custom SSE event parser is provided, try it first
-        if (this.parseSSEEvent) {
+        if (this.#parseSSEEvent) {
           // Keep assistant message ref in sync
           assistantMessageRef.current = assistantMessage;
-          const handled = await this.handleCustomSSEEvent(
+          const handled = await this.#handleCustomSSEEvent(
             payload,
             onEvent,
             assistantMessageRef,

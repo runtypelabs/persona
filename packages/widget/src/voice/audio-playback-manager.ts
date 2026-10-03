@@ -27,63 +27,63 @@ import type { PcmStreamPlayer } from "../types";
  * approximation of the worklet's audio-thread silence, not parity.
  */
 export class AudioPlaybackManager implements PcmStreamPlayer {
-  private ctx: AudioContext | null = null;
-  private nextStartTime = 0;
-  private activeSources: AudioBufferSourceNode[] = [];
-  private finishedCallbacks: (() => void)[] = [];
-  private startedCallbacks: (() => void)[] = [];
-  private playing = false;
-  private streamEnded = false;
-  private pendingCount = 0;
+  #ctx: AudioContext | null = null;
+  #nextStartTime = 0;
+  #activeSources: AudioBufferSourceNode[] = [];
+  #finishedCallbacks: (() => void)[] = [];
+  #startedCallbacks: (() => void)[] = [];
+  #playing = false;
+  #streamEnded = false;
+  #pendingCount = 0;
   // Fires once per playback session when the first sample is actually scheduled
   // (loading→playing). Cleared by flush(); a mid-reply underrun does not re-fire.
-  private started = false;
+  #started = false;
   // Explicit user pause via pause(); kept separate from the AudioContext's
   // autoplay-policy suspension so ensureContext() doesn't auto-resume over it.
-  private userPaused = false;
+  #userPaused = false;
 
   // Prebuffer gate: while `buffering`, incoming samples accumulate in
   // `pendingBuffers` until they reach `waterlineSamples`, then release into the
   // scheduler. With `waterlineSamples === 0` the gate is off (realtime default).
-  private buffering: boolean;
-  private pendingBuffers: Float32Array[] = [];
-  private pendingSamples = 0;
+  #buffering: boolean;
+  #pendingBuffers: Float32Array[] = [];
+  #pendingSamples = 0;
   // Continuous streams never call markStreamEnd: a held tail is released after one
   // prebuffer's worth of quiet instead.
-  private continuous = false;
-  private tailTimer: ReturnType<typeof setTimeout> | undefined;
+  #continuous = false;
+  #tailTimer: ReturnType<typeof setTimeout> | undefined;
 
   // PCM format constants
-  private readonly sampleRate: number;
-  private readonly waterlineSamples: number;
+  readonly #sampleRate: number;
+  readonly #waterlineSamples: number;
 
   // Remainder byte from a previous chunk when the chunk had an odd byte count.
   // Network chunks don't respect 2-byte sample boundaries, so we carry over
   // the orphaned byte and prepend it to the next chunk.
-  private remainder: Uint8Array | null = null;
+  #remainder: Uint8Array | null = null;
 
   constructor(sampleRate = 24000, options: { prebufferMs?: number } = {}) {
-    this.sampleRate = sampleRate;
+    this.#sampleRate = sampleRate;
     const prebufferMs = Math.max(0, options.prebufferMs ?? 0);
-    this.waterlineSamples = Math.round((sampleRate * prebufferMs) / 1000);
-    this.buffering = this.waterlineSamples > 0;
+    this.#waterlineSamples = Math.round((sampleRate * prebufferMs) / 1000);
+    this.#buffering = this.#waterlineSamples > 0;
   }
 
   /**
    * Ensure AudioContext is created and running.
    * Must be called after a user gesture on iOS Safari.
    */
-  private ensureContext(): AudioContext {
-    if (!this.ctx) {
+  #ensureContext(): AudioContext {
+    if (!this.#ctx) {
       const w = typeof window !== "undefined" ? (window as any) : undefined;
       if (!w) throw new Error("AudioPlaybackManager requires a browser environment");
       const AudioCtx = w.AudioContext || w.webkitAudioContext;
-      this.ctx = new AudioCtx({ sampleRate: this.sampleRate }) as AudioContext;
+      this.#ctx = new AudioCtx({ sampleRate: this.#sampleRate }) as AudioContext;
     }
-    const ctx = this.ctx!;
+    const ctx = this.#ctx!;
     // Resume if suspended (autoplay policy) — but never override an explicit
     // user pause(): more audio may still stream in while paused.
-    if (ctx.state === "suspended" && !this.userPaused) {
+    if (ctx.state === "suspended" && !this.#userPaused) {
       ctx.resume();
     }
     return ctx;
@@ -98,39 +98,39 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
     // Prepend any remainder byte from the previous chunk
     let data = pcmData;
-    if (this.remainder) {
-      const merged = new Uint8Array(this.remainder.length + pcmData.length);
-      merged.set(this.remainder);
-      merged.set(pcmData, this.remainder.length);
+    if (this.#remainder) {
+      const merged = new Uint8Array(this.#remainder.length + pcmData.length);
+      merged.set(this.#remainder);
+      merged.set(pcmData, this.#remainder.length);
       data = merged;
-      this.remainder = null;
+      this.#remainder = null;
     }
 
     // If odd byte count, save the trailing byte for next chunk
     if (data.length % 2 !== 0) {
-      this.remainder = new Uint8Array([data[data.length - 1]]);
+      this.#remainder = new Uint8Array([data[data.length - 1]]);
       data = data.subarray(0, data.length - 1);
     }
 
     if (data.length === 0) return;
 
-    const float32 = this.pcmToFloat32(data);
+    const float32 = this.#pcmToFloat32(data);
     if (float32.length === 0) return;
 
-    if (this.buffering) {
+    if (this.#buffering) {
       // Hold until the prebuffer waterline fills, then release as a batch.
-      this.pendingBuffers.push(float32);
-      this.pendingSamples += float32.length;
-      clearTimeout(this.tailTimer);
-      if (this.pendingSamples >= this.waterlineSamples) this.releaseBuffer();
-      else if (this.continuous) {
-        this.tailTimer = setTimeout(
-          () => this.releaseBuffer(),
-          (this.waterlineSamples / this.sampleRate) * 1000,
+      this.#pendingBuffers.push(float32);
+      this.#pendingSamples += float32.length;
+      clearTimeout(this.#tailTimer);
+      if (this.#pendingSamples >= this.#waterlineSamples) this.#releaseBuffer();
+      else if (this.#continuous) {
+        this.#tailTimer = setTimeout(
+          () => this.#releaseBuffer(),
+          (this.#waterlineSamples / this.#sampleRate) * 1000,
         );
       }
     } else {
-      this.scheduleSamples(float32);
+      this.#scheduleSamples(float32);
     }
   }
 
@@ -141,16 +141,16 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
   markStreamEnd(): void {
     // A reply shorter than the prebuffer never reaches the waterline; release
     // whatever we held so it still plays.
-    if (this.pendingBuffers.length > 0) this.releaseBuffer();
-    this.streamEnded = true;
-    this.checkFinished();
+    if (this.#pendingBuffers.length > 0) this.#releaseBuffer();
+    this.#streamEnded = true;
+    this.#checkFinished();
   }
 
   /**
    * Immediately stop all playback and discard queued audio.
    */
   flush(): void {
-    for (const source of this.activeSources) {
+    for (const source of this.#activeSources) {
       // A stopped source still fires `onended` later; detach it so a flushed
       // batch can't decrement the next reply's pendingCount and drain it early.
       source.onended = null;
@@ -161,39 +161,39 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
         // Ignore errors from already-stopped sources
       }
     }
-    this.activeSources = [];
-    this.pendingCount = 0;
-    this.nextStartTime = 0;
-    this.playing = false;
-    this.streamEnded = false;
-    this.finishedCallbacks = [];
-    this.startedCallbacks = [];
-    this.remainder = null;
+    this.#activeSources = [];
+    this.#pendingCount = 0;
+    this.#nextStartTime = 0;
+    this.#playing = false;
+    this.#streamEnded = false;
+    this.#finishedCallbacks = [];
+    this.#startedCallbacks = [];
+    this.#remainder = null;
     // Reset the prebuffer gate and the started latch for the next reply.
-    this.pendingBuffers = [];
-    this.pendingSamples = 0;
-    this.buffering = this.waterlineSamples > 0;
-    this.started = false;
-    clearTimeout(this.tailTimer);
+    this.#pendingBuffers = [];
+    this.#pendingSamples = 0;
+    this.#buffering = this.#waterlineSamples > 0;
+    this.#started = false;
+    clearTimeout(this.#tailTimer);
   }
 
   /** See {@link VoicePlaybackEngine.setContinuousMode}. */
   setContinuousMode(enabled: boolean): void {
-    this.continuous = enabled;
+    this.#continuous = enabled;
   }
 
   /**
    * Whether audio is currently playing or queued.
    */
   isPlaying(): boolean {
-    return this.playing;
+    return this.#playing;
   }
 
   /**
    * Register a callback for when all queued audio finishes playing.
    */
   onFinished(callback: () => void): void {
-    this.finishedCallbacks.push(callback);
+    this.#finishedCallbacks.push(callback);
   }
 
   /**
@@ -202,7 +202,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    * mid-reply underrun re-buffer does not re-fire it.
    */
   onStarted(callback: () => void): void {
-    this.startedCallbacks.push(callback);
+    this.#startedCallbacks.push(callback);
   }
 
   /**
@@ -210,14 +210,14 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    * freezes in place and {@link resume} continues exactly where it left off.
    */
   pause(): void {
-    this.userPaused = true;
-    if (this.ctx && this.ctx.state === "running") void this.ctx.suspend();
+    this.#userPaused = true;
+    if (this.#ctx && this.#ctx.state === "running") void this.#ctx.suspend();
   }
 
   /** Resume playback after {@link pause}. */
   resume(): void {
-    this.userPaused = false;
-    if (this.ctx && this.ctx.state === "suspended") void this.ctx.resume();
+    this.#userPaused = false;
+    if (this.#ctx && this.#ctx.state === "suspended") void this.#ctx.resume();
   }
 
   /**
@@ -225,27 +225,27 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    */
   async destroy(): Promise<void> {
     this.flush();
-    if (this.ctx) {
-      await this.ctx.close();
-      this.ctx = null;
+    if (this.#ctx) {
+      await this.#ctx.close();
+      this.#ctx = null;
     }
   }
 
   /** Release held prebuffer samples into the scheduler in arrival order. */
-  private releaseBuffer(): void {
-    this.buffering = false;
-    const held = this.pendingBuffers;
-    this.pendingBuffers = [];
-    this.pendingSamples = 0;
-    for (const samples of held) this.scheduleSamples(samples);
+  #releaseBuffer(): void {
+    this.#buffering = false;
+    const held = this.#pendingBuffers;
+    this.#pendingBuffers = [];
+    this.#pendingSamples = 0;
+    for (const samples of held) this.#scheduleSamples(samples);
   }
 
   /** Schedule one Float32 sample block for gap-free playback. */
-  private scheduleSamples(float32: Float32Array): void {
+  #scheduleSamples(float32: Float32Array): void {
     if (float32.length === 0) return;
-    const ctx = this.ensureContext();
+    const ctx = this.#ensureContext();
 
-    const buffer = ctx.createBuffer(1, float32.length, this.sampleRate);
+    const buffer = ctx.createBuffer(1, float32.length, this.#sampleRate);
     buffer.getChannelData(0).set(float32);
 
     const source = ctx.createBufferSource();
@@ -253,54 +253,54 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     source.connect(ctx.destination);
 
     const now = ctx.currentTime;
-    if (this.nextStartTime === 0) {
+    if (this.#nextStartTime === 0) {
       // Fresh start (first audio of this session, or after flush).
-      this.nextStartTime = now;
-    } else if (this.nextStartTime < now) {
+      this.#nextStartTime = now;
+    } else if (this.#nextStartTime < now) {
       // Underrun: the playhead caught up to the queue. Snap to now (a small,
       // unavoidable gap) and, when a prebuffer is configured, re-enter buffering
       // so subsequent chunks re-accumulate before scheduling — collapsing a
       // train of clicks into a single rebuffer.
-      this.nextStartTime = now;
-      if (this.waterlineSamples > 0) this.buffering = true;
+      this.#nextStartTime = now;
+      if (this.#waterlineSamples > 0) this.#buffering = true;
     }
-    source.start(this.nextStartTime);
-    this.nextStartTime += buffer.duration;
+    source.start(this.#nextStartTime);
+    this.#nextStartTime += buffer.duration;
 
-    this.activeSources.push(source);
-    this.pendingCount++;
-    this.playing = true;
+    this.#activeSources.push(source);
+    this.#pendingCount++;
+    this.#playing = true;
 
-    if (!this.started) {
-      this.started = true;
-      const cbs = this.startedCallbacks.slice();
-      this.startedCallbacks = [];
+    if (!this.#started) {
+      this.#started = true;
+      const cbs = this.#startedCallbacks.slice();
+      this.#startedCallbacks = [];
       for (const cb of cbs) cb();
     }
 
     source.onended = () => {
-      const idx = this.activeSources.indexOf(source);
+      const idx = this.#activeSources.indexOf(source);
       // Not active: removed by flush(), so it no longer counts toward a drain.
       if (idx === -1) return;
-      this.activeSources.splice(idx, 1);
-      this.pendingCount--;
-      this.checkFinished();
+      this.#activeSources.splice(idx, 1);
+      this.#pendingCount--;
+      this.#checkFinished();
     };
   }
 
-  private checkFinished(): void {
+  #checkFinished(): void {
     // Fire once the stream has ended and nothing is scheduled or held. No
     // `playing` precondition: an empty reply (markStreamEnd with no audio) must
     // still resolve to idle, matching the worklet's immediate 'drained'.
     if (
-      this.streamEnded &&
-      this.pendingCount <= 0 &&
-      this.pendingBuffers.length === 0
+      this.#streamEnded &&
+      this.#pendingCount <= 0 &&
+      this.#pendingBuffers.length === 0
     ) {
-      this.playing = false;
-      this.streamEnded = false;
-      const cbs = this.finishedCallbacks.slice();
-      this.finishedCallbacks = [];
+      this.#playing = false;
+      this.#streamEnded = false;
+      const cbs = this.#finishedCallbacks.slice();
+      this.#finishedCallbacks = [];
       for (const cb of cbs) cb();
     }
   }
@@ -308,7 +308,7 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
   /**
    * Convert 16-bit signed LE PCM to Float32 samples in [-1, 1].
    */
-  private pcmToFloat32(pcmData: Uint8Array): Float32Array {
+  #pcmToFloat32(pcmData: Uint8Array): Float32Array {
     // 2 bytes per sample (16-bit)
     const numSamples = Math.floor(pcmData.length / 2);
     const float32 = new Float32Array(numSamples);

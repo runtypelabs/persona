@@ -37,7 +37,7 @@ export interface ComponentRegistrationOptions {
  */
 class ComponentRegistry {
   private components: Map<string, ComponentRenderer> = new Map();
-  private options: Map<string, ComponentRegistrationOptions> = new Map();
+  #options: Map<string, ComponentRegistrationOptions> = new Map();
 
   /**
    * Register a custom component
@@ -52,9 +52,9 @@ class ComponentRegistry {
     }
     this.components.set(name, renderer);
     if (options) {
-      this.options.set(name, options);
+      this.#options.set(name, options);
     } else {
-      this.options.delete(name);
+      this.#options.delete(name);
     }
   }
 
@@ -63,7 +63,7 @@ class ComponentRegistry {
    */
   unregister(name: string): void {
     this.components.delete(name);
-    this.options.delete(name);
+    this.#options.delete(name);
   }
 
   /**
@@ -84,7 +84,7 @@ class ComponentRegistry {
    * Get the registration options for a component, if any were supplied
    */
   getOptions(name: string): ComponentRegistrationOptions | undefined {
-    return this.options.get(name);
+    return this.#options.get(name);
   }
 
   /**
@@ -99,7 +99,7 @@ class ComponentRegistry {
    */
   clear(): void {
     this.components.clear();
-    this.options.clear();
+    this.#options.clear();
   }
 
   /**
