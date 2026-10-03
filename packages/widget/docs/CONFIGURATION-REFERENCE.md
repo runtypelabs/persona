@@ -621,7 +621,7 @@ config: {
 | `title` | `string?` | Title text above the description. |
 | `approveLabel` | `string?` | Label for the approve button. |
 | `denyLabel` | `string?` | Label for the deny button. |
-| `detailsDisplay` | `'collapsed' \| 'expanded' \| 'hidden'?` | How the technical details (agent-facing tool description + raw parameters JSON) are presented. Default: `'collapsed'` (behind a "Show details" toggle). `'expanded'` shows them open; `'hidden'` never renders them. |
+| `detailsDisplay` | `'collapsed' \| 'expanded' \| 'hidden'?` | How the technical details (agent-facing tool description + raw parameters JSON) are presented. Default: `'collapsed'` (behind a "Show details" toggle). `'expanded'` shows them open; `'hidden'` never renders them. Exception: in client-token mode the card always shows the raw tool name and arguments above the agent's stated reason, whatever this is set to, so the visitor sees exactly what will run. |
 | `showDetailsLabel`, `hideDetailsLabel` | `string?` | Labels for the details toggle. Defaults: `"Show details"` / `"Hide details"`. |
 | `formatDescription` | `(approval) => string \| undefined` | Build the user-facing summary line. Receives `{ toolName, toolType, description, parameters, displayTitle, reason }`. Return a falsy value to fall back to the default copy for that approval. If you include `reason`, keep it attributed to the agent. |
 | `backgroundColor`, `borderColor`, `shadow`, `titleColor`, `descriptionColor` | `string?` | Bubble styling; pass `shadow: "none"` to remove the default shadow. |
