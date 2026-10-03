@@ -9,8 +9,8 @@
 The preview ships both defaults tables, theme tokens, activity rendering, and
 Request/Response styles. The flag controls behavior, not which code is downloaded.
 The gzip limits below account for that additional functionality. Unaffected
-entry points keep their existing limits. The Brotli limits are 147 KiB for the
-browser bundle, strictly below 20 KiB for the launcher, and 20 KiB for CSS.
+entry points keep their existing limits. The Brotli limits are strictly below 130 KiB
+for the browser bundle, strictly below 20 KiB for the launcher, and 20 KiB for CSS.
 
 Measured after the preview compatibility fixes (gzip, decimal kB):
 
@@ -39,3 +39,26 @@ the session, client, and voice classes are native `#private` fields, so their
 names are mangled too. Together these cut `index.global.js` from 156.32 KiB to
 145.69 KiB Brotli (195.57 kB → 184.84 kB gzip) with no behavior change; the
 history confirm dialog moved into the lazy `history-view.js` chunk.
+
+## Lazy core chunks
+
+Code that only runs after something happens is split out of
+`index.global.js` into sibling chunks. Each one uses the same loader pattern as
+`markdown-parsers.js`: a relative fallback import (inlined in the ESM/CJS
+builds, which also register the module eagerly), an IIFE external, and a
+sibling-URL loader in `index-global.ts`.
+
+| Chunk | Contents | Fetched |
+| --- | --- | --- |
+| `client-stream.js` | SSE stream processor, approval / resume requests | at each dispatch (in parallel with the request) and on first panel render |
+| `client-history.js` | visitor-history REST and identity binding | on the first history call |
+| `history-shell.js` | history shell (rail, panel host, conversation actions) and the Runtype history provider | at mount when history is enabled, else on first history API use |
+| `session-actions.js` | approval, ask-user-question, and WebMCP resolve paths | when an execution pauses for one |
+| `ui-extras.js` | ask-user sheet handlers, context-mention orchestrator | when a sheet mounts / at mount with `contextMentions.enabled` |
+
+Chunks that need stateful core modules (chunk loaders, icon registry, tooltip
+timing, error classes checked with `instanceof`) receive core's instances
+through a context object instead of bundling their own copies. Together with
+the voice glue moving into `voice-runtime.js`, this takes `index.global.js`
+from 145.69 KiB to 129.44 KiB Brotli (184.84 kB → 163.60 kB gzip). The npm
+ESM/CJS bundles grow by about 1.7 kB gzip from the loader indirection.

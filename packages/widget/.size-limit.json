@@ -1,32 +1,32 @@
 [
   {
-    "name": "\u26d4 CRITICAL \u00b7 CDN browser payload (index.global.js)",
+    "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "186.5 kB",
+    "limit": "166 kB",
     "gzip": true
   },
   {
-    "name": "\u26d4 CRITICAL \u00b7 launcher critical bundle (launcher.global.js)",
+    "name": "⛔ CRITICAL · launcher critical bundle (launcher.global.js)",
     "path": "dist/launcher.global.js",
     "limit": "19.75 kB",
     "gzip": true
   },
   {
-    "name": "\u26d4 CRITICAL \u00b7 browser stylesheet (widget.css)",
+    "name": "⛔ CRITICAL · browser stylesheet (widget.css)",
     "path": "dist/widget.css",
     "limit": "24 kB",
     "gzip": true
   },
   {
-    "name": "\u26d4 CRITICAL \u00b7 ESM bundle shipped by consumers (index.js)",
+    "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "212.5 kB",
+    "limit": "215 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "213.25 kB",
+    "limit": "215.75 kB",
     "gzip": true
   },
   {
@@ -36,55 +36,55 @@
     "gzip": true
   },
   {
-    "name": "Opt-in \u00b7 theme-editor headless subpath (theme-editor.js)",
+    "name": "Opt-in · theme-editor headless subpath (theme-editor.js)",
     "path": "dist/theme-editor.js",
     "limit": "40.5 kB",
     "gzip": true
   },
   {
-    "name": "Opt-in \u00b7 theme-editor preview subpath (theme-editor-preview.js)",
+    "name": "Opt-in · theme-editor preview subpath (theme-editor-preview.js)",
     "path": "dist/theme-editor-preview.js",
     "limit": "176 kB",
     "gzip": true
   },
   {
-    "name": "Opt-in \u00b7 smart-dom-reader subpath (smart-dom-reader.js)",
+    "name": "Opt-in · smart-dom-reader subpath (smart-dom-reader.js)",
     "path": "dist/smart-dom-reader.js",
     "limit": "13 kB",
     "gzip": true
   },
   {
-    "name": "Server-safe \u00b7 codegen subpath (codegen.js)",
+    "name": "Server-safe · codegen subpath (codegen.js)",
     "path": "dist/codegen.js",
     "limit": "12 kB",
     "gzip": true
   },
   {
-    "name": "Opt-in \u00b7 plugin-kit subpath (plugin-kit.js)",
+    "name": "Opt-in · plugin-kit subpath (plugin-kit.js)",
     "path": "dist/plugin-kit.js",
     "limit": "2 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 WebMCP polyfill chunk (webmcp-polyfill.js)",
+    "name": "Lazy · WebMCP polyfill chunk (webmcp-polyfill.js)",
     "path": "dist/webmcp-polyfill.js",
     "limit": "11 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 Runtype TTS engine chunk (runtype-tts.js)",
+    "name": "Lazy · Runtype TTS engine chunk (runtype-tts.js)",
     "path": "dist/runtype-tts.js",
     "limit": "4 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 context-mentions + slash-commands chunk (context-mentions.js)",
+    "name": "Lazy · context-mentions + slash-commands chunk (context-mentions.js)",
     "path": "dist/context-mentions.js",
     "limit": "12.25 kB",
     "gzip": true
   },
   {
-    "name": "Lazy \u00b7 inline-mention contenteditable chunk (context-mentions-inline.js)",
+    "name": "Lazy · inline-mention contenteditable chunk (context-mentions-inline.js)",
     "path": "dist/context-mentions-inline.js",
     "limit": "6 kB",
     "gzip": true
@@ -140,13 +140,43 @@
   {
     "name": "Lazy · voice provider runtime chunk (voice-runtime.js)",
     "path": "dist/voice-runtime.js",
-    "limit": "10.75 kB",
+    "limit": "12.25 kB",
     "gzip": true
   },
   {
     "name": "Lazy · demo-forms enhancement chunk (forms-ui.js)",
     "path": "dist/forms-ui.js",
     "limit": "1.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · SSE stream processor + resume requests chunk (client-stream.js)",
+    "path": "dist/client-stream.js",
+    "limit": "10.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · visitor-history REST chunk (client-history.js)",
+    "path": "dist/client-history.js",
+    "limit": "3 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · history shell chunk (history-shell.js)",
+    "path": "dist/history-shell.js",
+    "limit": "13.75 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · approval / local-tool resolve chunk (session-actions.js)",
+    "path": "dist/session-actions.js",
+    "limit": "3.25 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · ask-user sheet + context-mention orchestrator chunk (ui-extras.js)",
+    "path": "dist/ui-extras.js",
+    "limit": "16.5 kB",
     "gzip": true
   }
 ]
