@@ -285,6 +285,8 @@ export class AgentWidgetSession {
   private messages: AgentWidgetMessage[];
   private status: AgentWidgetSessionStatus = "idle";
   private streaming = false;
+  /** Approval messages decided on the current stream, settled when it ends. */
+  #approvalSettlesAtStreamEnd = new Set<string>();
   private abortController: AbortController | null = null;
   #sequenceCounter = Date.now();
   
@@ -2995,7 +2997,9 @@ export class AgentWidgetSession {
         options?.assistantMessageId,
         options?.seedContent
       );
+      this.#flushApprovalSettles();
     } catch (error) {
+      this.#flushApprovalSettles();
       // During a durable reconnect a thrown resume stream is just another drop:
       // the reconnect loop owns the retry/backoff. Don't paint an error or tear
       // down, stay in `resuming`.
@@ -3670,13 +3674,14 @@ export class AgentWidgetSession {
 
       // A resolved approval reaches this handler only from the server's
       // `approval_complete` (resolveApproval's optimistic update upserts
-      // directly), so it is safe to settle the paused tool bubble here.
+      // directly). The server may now finish the paused call itself on this
+      // stream, so the bubble settles at stream end only if it is still open.
       if (
         event.message.variant === "approval" &&
         event.message.approval &&
         event.message.approval.status !== "pending"
       ) {
-        this.#settleApprovalPausedToolCall(event.message.id);
+        this.#approvalSettlesAtStreamEnd.add(event.message.id);
       }
 
       // Track the open assistant text bubble's REAL streamed id so a durable
@@ -4134,6 +4139,7 @@ export class AgentWidgetSession {
 
     // Speak the latest assistant message when streaming completes
     if (wasStreaming && !streaming) {
+      this.#flushApprovalSettles();
       this.speakLatestAssistantMessage();
     }
   }
@@ -4234,12 +4240,19 @@ export class AgentWidgetSession {
   }
 
   /**
-   * Settle the tool bubble an approval paused. The server resumes an approval
-   * by re-running the agent, which re-issues the call under a new id, so no
-   * terminal tool frame ever arrives for the paused one. Denied and timed-out
-   * calls settle as failed; an approved call settles as superseded, since the
-   * re-issued call carries its result. A call already complete is left alone.
+   * Settle the tool bubble an approval paused when no terminal tool frame
+   * arrived for it. Current servers run the paused call itself under its
+   * original id; older ones re-issue it under a new id. Denied and timed-out
+   * calls settle as failed; an approved call settles as superseded. A call
+   * already complete is left alone.
    */
+  /** Settle every approval-paused bubble the finished stream decided but did not complete. */
+  #flushApprovalSettles() {
+    const ids = [...this.#approvalSettlesAtStreamEnd];
+    this.#approvalSettlesAtStreamEnd.clear();
+    for (const id of ids) this.#settleApprovalPausedToolCall(id);
+  }
+
   #settleApprovalPausedToolCall(approvalMessageId: string) {
     const approval = this.messages.find((m) => m.id === approvalMessageId)?.approval;
     const id = approval?.toolCallId;
