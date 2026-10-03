@@ -713,3 +713,46 @@ test("delegation_cancelled as the call ends: the approval card stays usable", as
   await page.waitForTimeout(500);
   expect(call.framesOf("delegation_result")).toEqual([]);
 });
+
+test.describe("session_end (Amendment 6)", () => {
+  const status = (page: import("@playwright/test").Page) => page.locator("[data-persona-composer-status]");
+
+  test("a time-limit end shows its status line, not an error", async ({ page, context }) => {
+    await installFakeHistoryApi(context);
+    await openVoicePage(page, { voiceHost: voice.host, disclosureText: false });
+    const call = await startCall(page);
+    call.send({ type: "audio_end" });
+    call.send({ type: "session_end", reason: "max_duration", retryable: true });
+    call.close(1000);
+    await expect(status(page)).toHaveText("This voice call reached its time limit.");
+    await page.waitForTimeout(2_500);
+    expect(voice.calls).toHaveLength(1); // no reconnect
+  });
+
+  test("a provider error reconnects exactly once, saying so", async ({ page, context }) => {
+    await installFakeHistoryApi(context);
+    await openVoicePage(page, { voiceHost: voice.host, disclosureText: false });
+    const first = await startCall(page);
+    first.send({ type: "session_end", reason: "provider_error", message: "The voice provider disconnected.", retryable: true });
+    first.close(1011);
+    await expect(status(page)).toHaveText("Voice connection lost. Reconnecting…");
+    const second = await voice.nextCall(5_000);
+    await second.ready;
+
+    second.send({ type: "session_end", reason: "provider_error", retryable: true });
+    second.close(1011);
+    await expect(status(page)).toHaveText("Voice connection lost.");
+    await page.waitForTimeout(2_500);
+    expect(voice.calls).toHaveLength(2); // never twice
+  });
+
+  test("an attach-style idle close (4408) is a quiet end, not an error", async ({ page, context }) => {
+    await installFakeHistoryApi(context);
+    await openVoicePage(page, { voiceHost: voice.host, disclosureText: false });
+    const call = await startCall(page);
+    call.send({ type: "session_end", reason: "idle_timeout", retryable: true });
+    call.close(4408);
+    await expect(status(page)).toHaveText("Voice call ended after a quiet period.");
+    await expect(page.locator("[data-persona-composer-mic]")).not.toHaveAttribute("aria-label", "End voice session");
+  });
+});

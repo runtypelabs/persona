@@ -1,0 +1,5 @@
+{
+  "type": "session_end",
+  "reason": "max_duration",
+  "retryable": true
+}

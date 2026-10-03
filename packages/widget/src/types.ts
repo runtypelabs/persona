@@ -5230,6 +5230,13 @@ export interface VoiceProvider {
   setSessionBridge?(bridge: VoiceSessionBridge): void;
   /** The AI-disclosure notice for the live call, if one should show (speech-to-speech). */
   getDisclosure?(): string | null;
+  /**
+   * Status-line text for the call, returned once: why the server ended it
+   * (`session_end`) or that it is reconnecting. `null` when there is none.
+   */
+  takeNotice?(): string | null;
+  /** The widget's way to re-mint its credential before reconnecting after `auth_expired`. */
+  setAuthRefresh?(refresh: () => Promise<void>): void;
 }
 
 /** Metadata on a {@link VoiceProvider.onTranscript} update. */

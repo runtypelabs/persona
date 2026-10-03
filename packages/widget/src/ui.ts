@@ -8803,6 +8803,9 @@ export const createAgentExperience = (
       // provider; the mic-button styling below is runtype-specific.
       eventBus.emit("voice:status", { status, timestamp: Date.now() });
       if (status !== 'disconnected' && !usesSessionVoice(config.voiceRecognition?.provider)) return;
+      // Why the server ended the call, or that it is reconnecting.
+      const voiceNotice = session.getVoiceNotice();
+      if (voiceNotice) showComposerNotice(voiceNotice, 10_000);
 
       switch (status) {
         case 'listening':

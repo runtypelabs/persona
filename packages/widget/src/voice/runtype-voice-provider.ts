@@ -142,6 +142,16 @@ const VOICE_PROTOCOL = "runtype-browser-v1";
 /** `approvalTimeoutMs` cap: below core's delegation deadline (600 s, restarted by each update). */
 const APPROVAL_TIMEOUT_MAX_MS = 540_000;
 const DISCLOSURE_TEXT = "You're talking to an AI assistant. Voice is processed by OpenAI.";
+/** Status-line text per `session_end.reason` (Amendment 6); unlisted reasons show nothing. */
+const SESSION_END_TEXT = new Map([
+  ["idle_timeout", "Voice call ended after a quiet period."],
+  ["max_duration", "This voice call reached its time limit."],
+  ["provider_ended", "The voice session ended."],
+  ["quota", "Voice is unavailable right now."],
+]);
+/** Reasons that get one automatic reconnect. */
+const RECONNECT_REASONS = ["provider_error", "server_restart", "auth_expired"];
+const CONNECTION_LOST = "Voice connection lost.";
 /** Call-start context frame: total cap, host share, history window, per-message cap. */
 const CONTEXT_MAX_CHARS = 8000;
 const CONTEXT_HOST_MAX_CHARS = 4000;
@@ -271,6 +281,16 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   #cancelledDelegations = new Set<string>();
   // session_config.callId: the server's id for this call, for logs.
   #callId: string | undefined;
+  // Amendment 6: why the server ended this call (its last frame), if it said.
+  #sessionEnd: { reason: string; message?: string } | null = null;
+  // Status-line text for the UI, read once (`takeNotice`).
+  #notice: string | null = null;
+  // One automatic reconnect per call the visitor started: pending, and spent.
+  #reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  #reconnected = false;
+  #autoReconnect = false;
+  // Set by the session: re-mints its client session before an auth_expired reconnect.
+  #refreshAuth: (() => Promise<void>) | undefined;
   // Call-start context, built at session_config and held until the visitor's
   // first final transcript (sent earlier, the voice model tends to answer it).
   #contextSent = false;
@@ -467,6 +487,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   /** Start the call: acquire mic, open the WS, stream PCM until hang-up. */
   async startListening(): Promise<void> {
     if (this.#callLive) return; // idempotent: a call is already live
+    // A call the visitor starts gets a fresh reconnect; the automatic one doesn't.
+    if (!this.#autoReconnect) {
+      this.#reconnected = false;
+      this.#notice = null;
+    }
+    this.#autoReconnect = false;
 
     const agentId = this.config?.agentId;
     const token = this.config?.clientToken;
@@ -572,15 +598,73 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         return;
       }
       if (generation !== this.#callGeneration) return;
-      if (evt.code !== 1000) {
-        const codeMsg = evt.code ? ` (code ${evt.code})` : "";
-        this.#emitError(new Error(`Voice connection closed${codeMsg}`));
-        this.#emitStatus("error");
-      } else {
-        this.#emitStatus("idle");
+      // Why the server ended it: its `session_end`, or the attach idle close.
+      const end = this.#sessionEnd ?? (evt.code === 4408 ? { reason: "idle_timeout" } : null);
+      if (!end) {
+        // No reason given (a deploy, a dropped connection): as before.
+        if (evt.code !== 1000) {
+          const codeMsg = evt.code ? ` (code ${evt.code})` : "";
+          this.#emitError(new Error(`Voice connection closed${codeMsg}`));
+          this.#emitStatus("error");
+        } else {
+          this.#emitStatus("idle");
+        }
+        this.#cleanup();
+        return;
       }
-      this.#cleanup();
+      this.#endCall(end.reason, end.message);
     };
+  }
+
+  /**
+   * The server ended the call with a reason (`session_end`, Amendment 6): show
+   * its text, and reconnect once after a provider error, a restart or an
+   * expired credential. Unknown reasons are an ordinary end (`ended_by_server`).
+   */
+  #endCall(reason: string, message?: string): void {
+    const retry = RECONNECT_REASONS.includes(reason) && !this.#reconnected;
+    this.#cleanup();
+    if (retry) {
+      // Keep the call "live" while it waits, so the mic button hangs up (and cancels).
+      this.#reconnected = true;
+      this.#callLive = true;
+      this.#notice =
+        reason === "provider_error" ? `${CONNECTION_LOST} Reconnecting…` : reason === "server_restart" ? "Reconnecting…" : null;
+      this.#reconnectTimer = setTimeout(
+        async () => {
+          if (reason === "auth_expired") await this.#refreshAuth?.().catch(() => {});
+          this.#callLive = false;
+          this.#autoReconnect = true;
+          void this.startListening().catch(() => {});
+        },
+        1000 + Math.random() * 1000,
+      );
+      this.#emitStatus("idle");
+      return;
+    }
+    if (RECONNECT_REASONS.includes(reason)) {
+      // The reconnect already ran: this end is the second failure.
+      this.#notice = CONNECTION_LOST;
+      this.#emitError(new Error(CONNECTION_LOST));
+      this.#emitStatus("error");
+      return;
+    }
+    // `error`: the preceding `error` frame already reported it.
+    if (reason === "error") return this.#emitStatus("error");
+    this.#notice = (reason === "quota" && message) || SESSION_END_TEXT.get(reason) || null;
+    this.#emitStatus("idle");
+  }
+
+  /** Status-line text for the call (why it ended, or that it is reconnecting), once. */
+  takeNotice(): string | null {
+    const notice = this.#notice;
+    this.#notice = null;
+    return notice;
+  }
+
+  /** How to re-mint the widget's credential before an `auth_expired` reconnect. */
+  setAuthRefresh(refresh: () => Promise<void>): void {
+    this.#refreshAuth = refresh;
   }
 
   /** The AI-disclosure notice for a live speech-to-speech call (`disclosureText`; `false` hides it). */
@@ -872,6 +956,14 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         this.#emitError(new Error(msg.error || "Voice error"));
         this.#emitStatus("error");
         break;
+
+      case "session_end":
+        // The server's last frame before it closes: the close acts on it.
+        this.#sessionEnd = {
+          reason: String(msg.reason),
+          ...(typeof msg.message === "string" && { message: msg.message }),
+        };
+        break;
     }
   }
 
@@ -1063,6 +1155,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.#followUps.clear();
     this.#cancelledDelegations.clear();
     this.#callId = undefined;
+    this.#sessionEnd = null;
+    clearTimeout(this.#reconnectTimer);
     this.#contextSent = false;
     this.#pendingContext = null;
     this.#contextSend = null;
