@@ -174,6 +174,21 @@ describe("AgentWidgetSession settles the approval-paused tool bubble", () => {
     expect(tool()?.toolCall?.approvalStatus).toBeUndefined();
   });
 
+  it("settles the call as timed out when the server reports the pause gone", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      Response.json({ code: "APPROVAL_ALREADY_RESOLVED", message: "Already resolved" }, { status: 409 })
+    );
+    const { resolve, tool } = setup([pausedTool(), pendingApproval("toolu_paused")]);
+    await resolve("approved").catch(() => {});
+
+    expect(tool()?.toolCall).toMatchObject({
+      status: "complete",
+      approvalStatus: "timeout",
+      success: false,
+      error: "Approval timed out",
+    });
+  });
+
   it("does not touch a tool call that already completed", async () => {
     global.fetch = vi.fn().mockResolvedValue(resumeStream("denied", false));
     const { resolve, tool } = setup([pausedTool("complete"), pendingApproval("toolu_paused")]);

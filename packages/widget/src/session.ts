@@ -3389,6 +3389,8 @@ export class AgentWidgetSession {
                 ...updatedMessage,
                 approval: pauseGone ? { ...updatedApproval, status: "timeout" } : approval,
               });
+              // A gone pause never resumes, so its tool bubble must not spin.
+              if (pauseGone) this.settleApprovalPausedToolCall(approvalMessageId);
               this.upsertMessage({
                 id: errorMessageId,
                 role: "assistant",
