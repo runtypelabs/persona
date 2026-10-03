@@ -249,6 +249,16 @@ function serveWidgetDist(): Plugin {
       });
     },
     writeBundle(options) {
+      // The showcase itself resolves `@runtypelabs/persona` from source, so a
+      // build without the widget built (the e2e workflow's
+      // `build:web-preview`) is legitimate: it just has no /widget-dist to
+      // ship. Only the standalone examples need these files.
+      if (!fs.existsSync(distDir)) {
+        this.warn(
+          `serve-widget-dist: ${distDir} does not exist; skipping /widget-dist (standalone examples need \`pnpm build:widget\` first)`,
+        );
+        return;
+      }
       const outDir = options.dir ?? path.resolve(__dirname, "dist");
       const targetDir = path.join(outDir, "widget-dist");
       if (!fs.existsSync(targetDir)) {
@@ -257,10 +267,11 @@ function serveWidgetDist(): Plugin {
       for (const file of filesToCopy) {
         const src = path.join(distDir, file);
         if (!fs.existsSync(src)) {
-          // Silently skipping is how a missing chunk reached production once
-          // (`client-stream.js`): fail the build instead.
+          // A built dist missing a registered chunk is a broken deploy
+          // (silently skipping is how `client-stream.js` went missing once):
+          // fail the build instead.
           throw new Error(
-            `serve-widget-dist: ${file} is missing from ${distDir}; build @runtypelabs/persona first`,
+            `serve-widget-dist: ${file} is missing from ${distDir}; rebuild @runtypelabs/persona`,
           );
         }
         fs.copyFileSync(src, path.join(targetDir, file));
