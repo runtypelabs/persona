@@ -194,7 +194,12 @@ export async function resolveApproval(
       }
 
       // Accepted: a retry that succeeds supersedes the earlier failure notice.
-      if (h.s.messages.some((m) => m.id === errorMessageId)) {
+      // Only while this is still the latest request: an older request that
+      // succeeds late must not erase a newer request's failure notice.
+      if (
+        h.s.approvalTokens.get(approvalMessageId) === requestToken &&
+        h.s.messages.some((m) => m.id === errorMessageId)
+      ) {
         h.s.messages = h.s.messages.filter((m) => m.id !== errorMessageId);
         h.s.callbacks.onMessagesChanged([...h.s.messages]);
       }

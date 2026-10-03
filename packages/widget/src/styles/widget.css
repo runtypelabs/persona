@@ -4731,6 +4731,8 @@
 }
 .persona-approval-tool-name {
   display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   margin: 0 0 0.35rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.75rem;

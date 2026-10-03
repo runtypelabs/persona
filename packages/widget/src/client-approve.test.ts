@@ -213,6 +213,8 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
     expect(last()).toMatchObject({ id: "approval-error-appr_1", content: text });
     expect(session.isStreaming()).toBe(false);
     expect(errors.map((e) => e.message)).toEqual([text]);
+    // A refused request settles too: its token must not outlive it.
+    expect((session as unknown as { approvalTokens: Map<string, object> }).approvalTokens.size).toBe(0);
   });
 
   it("clears the failure notice when a retry succeeds", async () => {
@@ -273,6 +275,26 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
     // Both requests settled: no token outlives them.
     expect((session as unknown as { approvalTokens: Map<string, object> }).approvalTokens.size).toBe(0);
     vi.restoreAllMocks();
+  });
+
+  it("does not let an older success clear a newer request's failure notice", async () => {
+    let succeedFirst!: (r: Response) => void;
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Response>((res) => { succeedFirst = res; }))
+      .mockResolvedValueOnce(Response.json({ error: "Failed to process approval" }, { status: 500 }));
+    const { approve, all } = setup();
+    const first = approve();
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 2));
+    await approve();
+    expect(all().some((m) => m.id === "approval-error-appr_1")).toBe(true);
+    succeedFirst(
+      sse([{ type: "approval_complete", executionId: "exec_abc", approvalId: "appr_1", decision: "approved" }])
+    );
+    await first;
+
+    expect(all().some((m) => m.id === "approval-error-appr_1")).toBe(true);
   });
 
   it("keeps the failure notice when a retry rejects without a response", async () => {

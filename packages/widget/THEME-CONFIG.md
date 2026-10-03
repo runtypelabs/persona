@@ -755,7 +755,7 @@ tracks your theme), not the old warning/success/error palette:
 | Property | Description |
 |----------|-------------|
 | `enableAlwaysAllow` | `false` by default. `true` adds the split "Always allow / Allow once" control + keyboard shortcuts; forwards `{ remember: true }` to `onDecision` (needs a backend to persist the policy) |
-| `detailsDisplay` | `"collapsed"` (default) / `"expanded"` / `"hidden"` — initial state of the tool-arguments disclosure |
+| `detailsDisplay` | `"collapsed"` (default) / `"expanded"` / `"hidden"` — initial state of the tool-arguments disclosure. In client-token mode the raw tool name and arguments are always shown, even with `"hidden"` |
 | `showDetailsLabel` / `hideDetailsLabel` | Disclosure toggle labels |
 | `backgroundColor` / `borderColor` | Card container styling |
 | `shadow` | Box-shadow for the card; pass `"none"` to remove it. Overrides the `requested.shadow` token / `--persona-approval-shadow` |
