@@ -12,7 +12,9 @@
 //
 // esbuild's legal-comment block lists every bundled lucide icon file above the
 // one shared ISC notice; the per-file paths are collapsed to the package name
-// (the license text itself is kept verbatim).
+// (the license text itself is kept verbatim). The block sits at EOF, after all
+// mapped code (esbuild's default for bundles), so collapsing it shifts no
+// mapped line and the source map stays valid.
 //
 // Runs on esbuild's minified output rather than replacing it via tsup's
 // `minify: "terser"`: terser on esbuild's unminified output measured ~1 KiB
@@ -51,7 +53,12 @@ for (const file of files) {
   const code = result.code.replace(
     /(?:^[\w@.-]+\/[\w./-]+\.m?js:\n)+/gm,
     (run) => {
-      const pkg = (line) => line.split("/").slice(0, line.startsWith("@") ? 2 : 1).join("/");
+      // esbuild already strips `node_modules/`; drop it defensively (incl.
+      // nested installs) so the name is always the package's.
+      const pkg = (line) => {
+        const path = line.replace(/^(?:.*\/)?node_modules\//, "");
+        return path.split("/").slice(0, path.startsWith("@") ? 2 : 1).join("/");
+      };
       return [...new Set(run.trim().split("\n").map((line) => `${pkg(line)}:`))].join("\n") + "\n";
     },
   );

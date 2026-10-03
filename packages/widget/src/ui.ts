@@ -11350,11 +11350,18 @@ export const createAgentExperience = (
     artifactSplitRoot ? panel : container;
 
   // The dialog ships in the lazy history-view chunk (usually already warm:
-  // these actions start from history UI).
+  // these actions start from history UI). A failed load, or a stale CDN chunk
+  // that predates the export, degrades to the native confirm so the action
+  // still works.
   const showHistoryConfirm = async (
     options: HistoryConfirmOptions
-  ): Promise<boolean> =>
-    (await loadHistoryView()).showHistoryConfirm(options);
+  ): Promise<boolean> => {
+    const module = await loadHistoryView().catch(() => null);
+    if (typeof module?.showHistoryConfirm === "function") {
+      return module.showHistoryConfirm(options);
+    }
+    return window.confirm(`${options.title}\n\n${options.description}`);
+  };
 
   const requestDeleteConversation = async (
     conversationId: string
