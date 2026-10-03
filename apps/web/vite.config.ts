@@ -176,8 +176,31 @@ function registerPreviewEmbedCheckMiddleware(
 // can load the local IIFE build instead of the CDN version during development.
 // During production builds, copies the files into the output directory.
 function serveWidgetDist(): Plugin {
-  const distDir = path.resolve(__dirname, "../../packages/widget/dist");
-  const filesToCopy = ["widget.css", "index.global.js", "index.global.js.map"];
+  const widgetDir = path.resolve(__dirname, "../../packages/widget");
+  const distDir = path.join(widgetDir, "dist");
+  // `index.global.js` lazy-loads its sibling chunks (`client-stream.js`,
+  // `history-view.js`, ...) from URLs derived from its own `src`, so every
+  // chunk `index-global.ts` registers must sit next to it in the production
+  // output too. Read the list from that source so a new `siblingChunk(...)`
+  // registration can't be forgotten here.
+  const indexGlobalSource = fs.readFileSync(
+    path.join(widgetDir, "src/index-global.ts"),
+    "utf8",
+  );
+  const siblingChunks = [
+    ...indexGlobalSource.matchAll(/siblingChunk\(\s*"([^"]+\.js)"/g),
+  ].map((match) => match[1]);
+  if (siblingChunks.length === 0) {
+    throw new Error(
+      "serve-widget-dist: no siblingChunk(...) registrations found in index-global.ts",
+    );
+  }
+  const filesToCopy = [
+    "widget.css",
+    "index.global.js",
+    "index.global.js.map",
+    ...siblingChunks,
+  ];
 
   return {
     name: "serve-widget-dist",
@@ -233,9 +256,14 @@ function serveWidgetDist(): Plugin {
       }
       for (const file of filesToCopy) {
         const src = path.join(distDir, file);
-        if (fs.existsSync(src)) {
-          fs.copyFileSync(src, path.join(targetDir, file));
+        if (!fs.existsSync(src)) {
+          // Silently skipping is how a missing chunk reached production once
+          // (`client-stream.js`): fail the build instead.
+          throw new Error(
+            `serve-widget-dist: ${file} is missing from ${distDir}; build @runtypelabs/persona first`,
+          );
         }
+        fs.copyFileSync(src, path.join(targetDir, file));
       }
     },
   };

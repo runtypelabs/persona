@@ -422,4 +422,54 @@ describe("visitor store", () => {
     expect(b).toBe("b");
     expect(window.localStorage.getItem(leaseKey)).toBeNull();
   }, 20_000);
+
+  it("rejects a lease waiter destroyed before another tab releases the lock", async () => {
+    const { leaseKey } = await visitorStoreKeys(CLIENT_TOKEN, PREFIX);
+    // A live foreign lease: the waiter would normally poll until it expires.
+    window.localStorage.setItem(
+      leaseKey,
+      JSON.stringify({ ownerNonce: "other-tab", expiresAt: Date.now() + 8_000 })
+    );
+    const store = makeStore();
+    await store.ready;
+    const fn = vi.fn(async () => "minted");
+
+    const pending = store.withFirstInitLock(fn);
+    await flush();
+    expect(fn).not.toHaveBeenCalled();
+
+    const started = Date.now();
+    store.destroy();
+
+    await expect(pending).rejects.toThrow(/destroyed/);
+    // destroy() wakes the waiter; it must not sit out the 500ms poll floor.
+    expect(Date.now() - started).toBeLessThan(400);
+    expect(fn).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem(leaseKey)).toContain("other-tab");
+  });
+
+  it("rejects a Web Locks waiter destroyed before its turn", async () => {
+    installFakeLocks();
+    const store = makeStore();
+    await store.ready;
+
+    let releaseFirst: () => void = () => {};
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const first = store.withFirstInitLock(async () => {
+      await firstGate;
+      return "a";
+    });
+    const second = vi.fn(async () => "b");
+    const pending = store.withFirstInitLock(second);
+    await flush();
+
+    store.destroy();
+    releaseFirst();
+
+    expect(await first).toBe("a");
+    await expect(pending).rejects.toThrow(/destroyed/);
+    expect(second).not.toHaveBeenCalled();
+  });
 });
