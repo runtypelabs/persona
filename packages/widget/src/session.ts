@@ -87,8 +87,9 @@ import {
 import { isVoiceSupportedProbe, usesSessionVoice, voiceConnectionChanged } from "./utils/voice-support";
 import { VoiceTurnTracker } from "./voice/voice-turn-tracker";
 import type { KeyedVoiceTranscript } from "./voice/keyed-voice-transcript";
-import type { VoiceDelegationCapture, createVoiceSessionBridge } from "./voice/voice-delegation";
-import { loadVoiceRuntime } from "./voice-runtime-loader";
+import type { VoiceDelegationCapture } from "./voice/voice-delegation";
+import { loadVoiceRuntime, type VoiceRuntimeModule } from "./voice-runtime-loader";
+import type { VoiceWiringSession } from "./voice/session-voice-wiring";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
 // Type-only (erased at build): the runtime reconnect machinery ships in the
@@ -717,11 +718,7 @@ export class AgentWidgetSession {
         .then(async (mod) => {
           await disconnected;
           if (generation !== this.#voiceSetupGeneration) return;
-          this.#wireVoiceProvider(
-            mod.createVoiceProvider(voiceConfig),
-            mod.KeyedVoiceTranscript,
-            mod.createVoiceSessionBridge
-          );
+          this.#wireVoiceProvider(mod, mod.createVoiceProvider(voiceConfig));
         })
         .catch((error) => {
           console.error('Failed to setup voice:', error);
@@ -736,224 +733,56 @@ export class AgentWidgetSession {
     }
   }
 
-  /** Wire callbacks onto a freshly constructed provider and connect it. */
-  #wireVoiceProvider(
-    provider: VoiceProvider,
-    Keyed?: typeof KeyedVoiceTranscript,
-    createBridge?: typeof createVoiceSessionBridge
-  ): void {
-    try {
-      this.#voiceProvider = provider;
-      this.#keyedVoice = Keyed
-        ? new Keyed({
-            find: (id) => this.messages.find((m) => m.id === id),
-            inject: (options) => this.injectMessage(options),
-            upsert: (message) => this.upsertMessage(message),
-            settle: (ids) => {
-              this.messages = this.messages.map((m) =>
-                ids.has(m.id) ? { ...m, streaming: false, voiceProcessing: false } : m
-              );
-              this.callbacks.onMessagesChanged([...this.messages]);
-            },
-            // A chat turn (e.g. a delegated one) owns the flag while it runs.
-            setStreaming: (streaming) => {
-              if (streaming || !this.#chatTurnBusy()) this.#setStreaming(streaming);
-            },
-            markSpoken: (id) => {
-              this.ttsSpokenMessageIds.add(id);
-            }
-          })
-        : null;
-      if (createBridge && provider.setSessionBridge) {
-        provider.setSessionBridge(
-          createBridge({
-            messages: () => this.messages,
-            busy: () => this.#chatTurnBusy(),
-            parked: () => this.webMcpApprovalResolvers.size > 0,
-            claim: (text, userUtteranceIds) => this.#keyedVoice?.claimUserTurn(text, userUtteranceIds) ?? null,
-            send: (text, userMessageId) =>
-              this.sendMessage(text, { viaVoice: true, voiceTurn: { userMessageId } }),
-            track: (capture) => {
-              this.#voiceDelegation = capture;
-            },
-            unspoken: (ids) => {
-              for (const id of ids) this.ttsSpokenMessageIds.delete(id);
-              // Its stream already ended (browser TTS skipped it then): read it
-              // now. A stream still running reads it when it ends, once.
-              if (!this.streaming) this.speakLatestAssistantMessage(ids);
-            },
-            decide: (id) => {
-              if (this.webMcpApprovalResolvers.has(id)) return this.resolveWebMcpApproval(id, 'denied');
-              const approval = this.messages.find((m) => m.id === id)?.approval;
-              if (approval?.status === 'pending') void this.resolveApproval(approval, 'denied');
-            }
-          })
-        );
-      }
-      const generation = this.#voiceSetupGeneration;
-      const isCurrent = () => this.#voiceProvider === provider && generation === this.#voiceSetupGeneration;
-
-      // Read configurable text from widget config
-      const voiceRecognitionConfig = this.config.voiceRecognition ?? {};
-      const processingErrorText = voiceRecognitionConfig.processingErrorText ?? 'Voice processing failed. Please try again.';
-
-      // STT-style providers (browser + bring-your-own `custom`) deliver a final
-      // transcript that we send as a normal user message: the agent then runs
-      // via the standard SSE chat path. Only the realtime `runtype` provider is
-      // excluded here: it owns the whole turn and drives onTranscript below.
-      this.#voiceProvider.onResult((result) => {
-        if (!isCurrent()) return;
-        if (result.provider !== 'runtype') {
-          if (result.text && result.text.trim()) {
-            this.sendMessage(result.text, { viaVoice: true });
-          }
-        }
-      });
-
-      // Realtime (runtype) voice: drive the chat thread from streaming
-      // transcript frames. Live interim user text grows in place; the user
-      // message finalizes immediately on transcript_final{user}; the assistant
-      // reply lands (a single block, synced with audio) on its final frame.
-      // In-flight bubbles carry voiceProcessing=true so consumers can style
-      // them via messageTransform; it clears once the text is final.
-      if (this.#voiceProvider.onTranscript) {
-        this.#voiceProvider.onTranscript((role, text, isFinal, metadata) => {
-          if (!isCurrent()) return;
-          if (metadata?.turnId) {
-            this.#keyedVoice?.apply(role, text, isFinal, metadata.turnId, metadata.startMs, metadata.caption);
-            return;
-          }
-          if (role === 'user') {
-            if (!this.#pendingVoiceUserMessageId) {
-              const msg = this.injectMessage({
-                role: 'user',
-                content: text,
-                streaming: false,
-                voiceProcessing: !isFinal
-              });
-              this.#pendingVoiceUserMessageId = msg.id;
-            } else {
-              this.upsertMessage({
-                id: this.#pendingVoiceUserMessageId,
-                role: 'user',
-                content: text,
-                createdAt: new Date().toISOString(),
-                streaming: false,
-                voiceProcessing: !isFinal
-              });
-            }
-
-            if (isFinal) {
-              this.#voiceTurns.start(metadata?.turnId);
-              // User finished: the agent is now thinking. Release the user
-              // bubble (a new interim starts a fresh turn) and show a typing
-              // indicator in a fresh assistant placeholder.
-              this.#pendingVoiceUserMessageId = null;
-              const assistantMsg = this.injectMessage({
-                role: 'assistant',
-                content: '',
-                streaming: true,
-                voiceProcessing: true
-              });
-              this.#pendingVoiceAssistantMessageId = assistantMsg.id;
-              this.#setStreaming(true);
-            }
-          } else {
-            if (!this.#voiceTurns.accepts(metadata?.turnId)) return;
-            // assistant: runtype sends a single final; the isFinal=false path
-            // is reserved for delta-streaming providers (future BYO).
-            if (this.#pendingVoiceAssistantMessageId) {
-              this.upsertMessage({
-                id: this.#pendingVoiceAssistantMessageId,
-                role: 'assistant',
-                content: text,
-                createdAt: new Date().toISOString(),
-                streaming: !isFinal,
-                voiceProcessing: !isFinal
-              });
-            } else {
-              const msg = this.injectMessage({
-                role: 'assistant',
-                content: text,
-                streaming: !isFinal,
-                voiceProcessing: !isFinal
-              });
-              this.#pendingVoiceAssistantMessageId = msg.id;
-            }
-
-            if (isFinal) {
-              // The provider plays this reply's audio: mark it spoken so
-              // browser TTS doesn't double-speak when streaming ends. Must run
-              // BEFORE setStreaming(false), which triggers the TTS check.
-              if (this.#pendingVoiceAssistantMessageId) {
-                this.ttsSpokenMessageIds.add(this.#pendingVoiceAssistantMessageId);
-              }
-              this.#setStreaming(false);
-              this.#pendingVoiceAssistantMessageId = null;
-            }
-          }
-        });
-      }
-
-      // Live capture amplitude, when the provider owns an audio graph. Stored,
-      // not forwarded per callback: the UI samples it on its own frame loop.
-      if (this.#voiceProvider.onLevel) {
-        this.#voiceProvider.onLevel((level) => {
-          if (!isCurrent()) return;
-          this.#voiceLevel = Number.isFinite(level)
-            ? Math.max(0, Math.min(1, level))
-            : 0;
-        });
-      }
-
-      // Surface per-turn latency metrics to the optional config hook.
-      if (this.#voiceProvider.onMetrics) {
-        this.#voiceProvider.onMetrics((metrics) => {
-          if (!isCurrent()) return;
-          this.config.voiceRecognition?.onMetrics?.(metrics);
-        });
-      }
-
-      this.#voiceProvider.onError((error) => {
-        if (!isCurrent()) return;
-        console.error('Voice error:', error);
-
-        // If error occurs while placeholders are pending, update assistant with error text
-        if (this.#pendingVoiceAssistantMessageId) {
-          this.upsertMessage({
-            id: this.#pendingVoiceAssistantMessageId,
-            role: 'assistant',
-            content: processingErrorText,
-            createdAt: new Date().toISOString(),
-            streaming: false,
-            voiceProcessing: false
-          });
-          this.#setStreaming(false);
-          this.#pendingVoiceUserMessageId = null;
-          this.#pendingVoiceAssistantMessageId = null;
-        }
-        this.#keyedVoice?.fail(processingErrorText);
-      });
-
-      this.#voiceProvider.onStatusChange((status) => {
-        if (!isCurrent()) return;
-        this.#voiceStatus = status;
-        this.#voiceActive = status === 'listening';
-        if (status === 'listening' || status === 'idle' || status === 'disconnected') {
-          this.#settlePendingVoiceTurn(status !== 'listening');
-        }
-        // Keyed turns overlap listening (full duplex), so only a call end settles them.
-        if (status === 'idle' || status === 'disconnected') {
-          this.#keyedVoice?.settle();
-        }
-        this.callbacks.onVoiceStatusChanged?.(status);
-      });
-
-      this.#voiceProvider.connect();
-
-    } catch (error) {
-      console.error('Failed to setup voice:', error);
-    }
+  /**
+   * Install a provider: the wiring itself ships in the lazy voice-runtime
+   * chunk (`voice/session-voice-wiring.ts`); this hands it the private state.
+   */
+  #wireVoiceProvider(mod: VoiceRuntimeModule, provider: VoiceProvider): void {
+    this.#voiceProvider = provider;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const session = this;
+    mod.wireSessionVoice(
+      {
+        session: this as unknown as VoiceWiringSession,
+        provider: () => session.#voiceProvider,
+        generation: () => session.#voiceSetupGeneration,
+        get keyed() {
+          return session.#keyedVoice;
+        },
+        set keyed(keyed) {
+          session.#keyedVoice = keyed;
+        },
+        get pendingUser() {
+          return session.#pendingVoiceUserMessageId;
+        },
+        set pendingUser(id) {
+          session.#pendingVoiceUserMessageId = id;
+        },
+        get pendingAssistant() {
+          return session.#pendingVoiceAssistantMessageId;
+        },
+        set pendingAssistant(id) {
+          session.#pendingVoiceAssistantMessageId = id;
+        },
+        turns: () => session.#voiceTurns,
+        busy: () => session.#chatTurnBusy(),
+        setStreaming: (streaming) => session.#setStreaming(streaming),
+        setDelegation: (capture) => {
+          session.#voiceDelegation = capture;
+        },
+        setLevel: (level) => {
+          session.#voiceLevel = level;
+        },
+        setStatus: (status) => {
+          session.#voiceStatus = status;
+          session.#voiceActive = status === 'listening';
+        },
+        settlePending: (final) => session.#settlePendingVoiceTurn(final),
+      },
+      provider,
+      mod.KeyedVoiceTranscript,
+      mod.createVoiceSessionBridge
+    );
   }
 
   /**

@@ -81,11 +81,13 @@ vi.mock('./voice-runtime-loader', () => ({
       isVoiceSupported: () => true,
       KeyedVoiceTranscript,
       createVoiceSessionBridge,
+      wireSessionVoice,
     }),
 }));
 
 import { KeyedVoiceTranscript } from './voice/keyed-voice-transcript';
 import { createVoiceSessionBridge } from './voice/voice-delegation';
+import { wireSessionVoice } from './voice/session-voice-wiring';
 
 import { AgentWidgetSession } from './session';
 import { setRuntypeTtsLoader } from './voice/runtype-tts-loader';

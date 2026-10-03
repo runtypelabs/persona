@@ -184,6 +184,8 @@ import {
 // reached via getArtifactsUiSync() in the delegated click handlers (which can
 // only fire on DOM the adopted chunk rendered).
 import { morphMessages } from "./utils/morph";
+import { getVoiceRuntimeSync, loadVoiceRuntime, type VoiceRuntimeModule } from "./voice-runtime-loader";
+import type { MicStateStyles, OriginalMicStyles } from "./voice/mic-state-styles";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
   navigateComposerHistory,
@@ -12194,13 +12196,7 @@ export const createAgentExperience = (
   let speechRecognition: any = null;
   let isRecording = false;
   let pauseTimer: number | null = null;
-  let originalMicStyles: {
-    backgroundColor: string;
-    color: string;
-    borderColor: string;
-    iconName: string;
-    iconSize: number;
-  } | null = null;
+  let originalMicStyles: OriginalMicStyles | null = null;
 
   /**
    * `voiceRecognition.completionBehavior` (roadmap section 14). Default stays
@@ -12497,142 +12493,39 @@ export const createAgentExperience = (
   };
 
 
-  // --- Helpers to store/restore original mic button state ---
-
-  const storeOriginalMicStyles = () => {
-    if (!micButton || originalMicStyles) return; // Already stored
-    const voiceConfig = config.voiceRecognition ?? {};
-    originalMicStyles = {
-      backgroundColor: micButton.style.backgroundColor,
-      color: micButton.style.color,
-      borderColor: micButton.style.borderColor,
-      iconName: voiceConfig.iconName ?? "mic",
-      iconSize: parseFloat(voiceConfig.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX,
+  // --- Session-voice (Runtype / custom) mic state styling ---
+  // The per-state styling ships in the lazy voice-runtime chunk
+  // (`voice/mic-state-styles.ts`). These states only arise from a provider,
+  // which setupVoice builds from that same chunk, so it is already loaded here;
+  // the async fallback only covers a call that races the first load.
+  let micStateStyles: MicStateStyles | null = null;
+  const withMicStateStyles = (run: (styles: MicStateStyles) => void): void => {
+    const apply = (mod: VoiceRuntimeModule) => {
+      micStateStyles ??= mod.createMicStateStyles({
+        mic: () => micButton,
+        config: () => config,
+        session: () => session,
+        get original() {
+          return originalMicStyles;
+        },
+        set original(next) {
+          originalMicStyles = next;
+        },
+        setMicState,
+        renderIcon: renderLucideIcon,
+        iconFallbackPx: COMPOSER_CONTROL_ICON_FALLBACK_PX,
+      });
+      run(micStateStyles);
     };
+    const mod = getVoiceRuntimeSync();
+    if (mod) apply(mod);
+    else loadVoiceRuntime().then(apply, () => {});
   };
-
-  /** Swap the mic button's SVG icon */
-  const swapMicIcon = (iconName: string, color: string) => {
-    if (!micButton) return;
-    const existingSvg = micButton.querySelector("svg");
-    if (existingSvg) existingSvg.remove();
-    const size = originalMicStyles?.iconSize ?? (parseFloat(config.voiceRecognition?.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX);
-    const newSvg = renderLucideIcon(iconName, size, color, 1.5);
-    if (newSvg) micButton.appendChild(newSvg);
-  };
-
-  /** Remove all voice state CSS classes */
-  const removeAllVoiceStateClasses = () => {
-    if (!micButton) return;
-    micButton.classList.remove("persona-voice-recording", "persona-voice-processing", "persona-voice-speaking");
-  };
-
-  // --- Per-state style application ---
-
-  const applyRuntypeMicRecordingStyles = () => {
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const recordingBackgroundColor = voiceConfig.recordingBackgroundColor;
-    const recordingIconColor = voiceConfig.recordingIconColor;
-    const recordingBorderColor = voiceConfig.recordingBorderColor;
-    removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-recording");
-    setMicState("recording");
-    micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
-    micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
-    if (recordingIconColor) {
-      const svg = micButton.querySelector("svg");
-      if (svg) svg.setAttribute("stroke", recordingIconColor);
-    }
-    if (recordingBorderColor) micButton.style.borderColor = recordingBorderColor;
-    micButton.setAttribute("aria-label", "Stop voice recognition");
-  };
-
-  const applyRuntypeMicProcessingStyles = () => {
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const interruptionMode = session.getVoiceInterruptionMode();
-    const iconName = voiceConfig.processingIconName ?? "loader";
-    const iconColor = voiceConfig.processingIconColor ?? originalMicStyles?.color ?? "";
-    const bgColor = voiceConfig.processingBackgroundColor ?? originalMicStyles?.backgroundColor ?? "";
-    const borderColor = voiceConfig.processingBorderColor ?? originalMicStyles?.borderColor ?? "";
-
-    removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-processing");
-    setMicState("processing");
-    micButton.style.backgroundColor = bgColor;
-    micButton.style.borderColor = borderColor;
-    const resolvedColor = iconColor || "currentColor";
-    micButton.style.color = resolvedColor;
-    swapMicIcon(iconName, resolvedColor);
-    micButton.setAttribute("aria-label", "Processing voice input");
-    // In "none" mode the button is not actionable during processing
-    if (interruptionMode === "none") {
-      micButton.style.cursor = "default";
-    }
-  };
-
-  const applyRuntypeMicSpeakingStyles = () => {
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const interruptionMode = session.getVoiceInterruptionMode();
-    // Default icon depends on interruption mode:
-    // "square" for cancel, "mic" for barge-in (hot mic), "volume-2" otherwise
-    const defaultSpeakingIcon = interruptionMode === "cancel" ? "square"
-      : interruptionMode === "barge-in" ? "mic"
-      : "volume-2";
-    const iconName = voiceConfig.speakingIconName ?? defaultSpeakingIcon;
-    const iconColor = voiceConfig.speakingIconColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingIconColor ?? originalMicStyles?.color ?? "") : (originalMicStyles?.color ?? ""));
-    const bgColor = voiceConfig.speakingBackgroundColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)") : (originalMicStyles?.backgroundColor ?? ""));
-    const borderColor = voiceConfig.speakingBorderColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBorderColor ?? "") : (originalMicStyles?.borderColor ?? ""));
-
-    removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-speaking");
-    setMicState("speaking");
-    micButton.style.backgroundColor = bgColor;
-    micButton.style.borderColor = borderColor;
-    const resolvedColor = iconColor || "currentColor";
-    micButton.style.color = resolvedColor;
-    swapMicIcon(iconName, resolvedColor);
-
-    // aria-label varies by interruption mode
-    const ariaLabel = interruptionMode === "cancel"
-      ? "Stop playback and re-record"
-      : interruptionMode === "barge-in"
-      ? "Speak to interrupt"
-      : "Agent is speaking";
-    micButton.setAttribute("aria-label", ariaLabel);
-    // In "none" mode the button is not actionable during speaking
-    if (interruptionMode === "none") {
-      micButton.style.cursor = "default";
-    }
-    // In "barge-in" mode, add recording class to show mic is hot
-    if (interruptionMode === "barge-in") {
-      micButton.classList.add("persona-voice-recording");
-    }
-  };
-
+  const applyRuntypeMicRecordingStyles = () => withMicStateStyles((s) => s.recording());
+  const applyRuntypeMicProcessingStyles = () => withMicStateStyles((s) => s.processing());
+  const applyRuntypeMicSpeakingStyles = () => withMicStateStyles((s) => s.speaking());
   /** Restore mic button to idle state (icon, colors, aria-label, cursor) */
-  const removeRuntypeMicStateStyles = () => {
-    if (!micButton) return;
-    removeAllVoiceStateClasses();
-    setMicState("idle");
-    if (originalMicStyles) {
-      micButton.style.backgroundColor = originalMicStyles.backgroundColor ?? "";
-      micButton.style.color = originalMicStyles.color ?? "";
-      micButton.style.borderColor = originalMicStyles.borderColor ?? "";
-      swapMicIcon(originalMicStyles.iconName, originalMicStyles.color || "currentColor");
-      originalMicStyles = null;
-    }
-    micButton.style.cursor = "";
-    micButton.setAttribute("aria-label", "Start voice recognition");
-  };
+  const removeRuntypeMicStateStyles = () => withMicStateStyles((s) => s.reset());
 
   // Wire up mic button click handler
   const handleMicButtonClick = () => {
