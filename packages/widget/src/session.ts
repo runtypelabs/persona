@@ -5151,27 +5151,18 @@ export class AgentWidgetSession {
    */
   private settleApprovalPausedToolCall(approvalMessageId: string) {
     const approval = this.messages.find((m) => m.id === approvalMessageId)?.approval;
-    if (!approval?.toolCallId || approval.status === "pending") return;
-    const toolMessage = this.messages.find(
-      (m) => m.variant === "tool" && m.toolCall?.id === approval.toolCallId
-    );
-    const tool = toolMessage?.toolCall;
-    if (!toolMessage || !tool || tool.status === "complete") return;
-    const completedAt = Date.now();
+    const id = approval?.toolCallId;
+    const toolMessage = id && this.messages.find((m) => m.toolCall?.id === id);
+    const tool = toolMessage && toolMessage.toolCall;
+    if (!tool || tool.status === "complete" || approval.status === "pending") return;
     const settled: AgentWidgetToolCall = {
       ...tool,
       status: "complete",
       approvalStatus: approval.status,
-      completedAt,
-      ...(tool.startedAt !== undefined
-        ? { durationMs: Math.max(0, completedAt - tool.startedAt) }
-        : {}),
+      completedAt: Date.now(),
       ...(approval.status === "approved"
         ? { superseded: true }
-        : {
-            success: false,
-            error: approval.status === "denied" ? "Denied" : "Approval timed out",
-          }),
+        : { success: false, error: approval.status === "denied" ? "Denied" : "Approval timed out" }),
     };
     this.upsertMessage({ ...toolMessage, streaming: false, toolCall: settled });
   }
