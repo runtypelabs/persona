@@ -46,7 +46,7 @@ jobs:
       - name: Build the showcase preview
         run: pnpm build:web-preview
 
-      - name: Run history browser suite
+      - name: Run browser suites (history, full-duplex voice)
         run: pnpm exec playwright test --config e2e/playwright.config.ts
 
       - name: Upload traces on failure

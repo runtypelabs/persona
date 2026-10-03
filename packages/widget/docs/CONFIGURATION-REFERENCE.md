@@ -476,6 +476,10 @@ config: {
 | `voiceId` | `string?` | Voice ID for TTS. |
 | `prewarmMode` | `'request' \| 'attach'?` | How the prewarm warms the call. Default `'request'`. See [Voice prewarm](#voice-prewarm). |
 | `attachIdleMs` | `number?` | `'attach'` mode: how long (ms) the early socket waits for the click. The server clamps it to 30000 to 600000. Default: `30000`. |
+| `clientDelegation` | `boolean?` | Full-duplex (speech-to-speech) calls: run the agent turns the voice model hands off through the widget's chat pipeline. Default: `true`. See [Full-duplex voice](#full-duplex-voice). |
+| `callContext` | `string \| (() => string \| Promise<string>)?` | Full-duplex calls: extra context for the voice model, after the chat history as of call start. Sent when the visitor finishes their first utterance. Capped at 4000 characters. |
+| `approvalTimeoutMs` | `number?` | Full-duplex calls: how long (ms) a tool approval raised by a spoken request may wait before it is declined as timed out. Hanging up never declines it. Capped at `540000`, under the server's 10-minute delegation deadline. Default: `300000`. |
+| `disclosureText` | `string \| false?` | Speech-to-speech calls: the one-line notice shown when the call starts. `false` hides it. Default: `"You're talking to an AI assistant. Voice is processed by OpenAI."` |
 | `pauseDuration` | `number?` | Silence duration (ms) before auto-stop. Default: `2000`. |
 | `silenceThreshold` | `number?` | RMS volume threshold for silence detection. Default: `0.01`. |
 
@@ -535,6 +539,42 @@ voiceRecognition: {
 ```
 
 **Attach mode.** With `provider.runtype.prewarmMode: 'attach'`, the warm-up opens the voice WebSocket early instead of sending the HTTP request. The socket is attached but no call starts until the click, which reuses it. If the visitor does not click within `attachIdleMs` (default 30 seconds), the socket closes. If the click comes while the socket is still connecting, the widget waits up to 5 seconds for it and then opens a fresh connection. Attach mode can create server work before the visitor clicks, so it is opt-in.
+
+#### Full-duplex voice
+
+Some Runtype voice agents use a speech-to-speech model such as GPT-Live. The model talks with the visitor directly and hands the real work to the agent. The widget shows each utterance as its own chat bubble. When the visitor speaks while a reply is still playing, both bubbles stay separate.
+
+With `provider.runtype.clientDelegation` on (the default), the widget runs each agent turn the model hands off through its normal chat pipeline:
+
+- The visitor's transcript bubble becomes the user message. The request is sent once, in the same conversation as typed messages.
+- The answer streams in as a regular assistant message. Tool and approval UI, WebMCP page tools, and conversation history work as they do for typed messages.
+- The voice model then reads the answer aloud. Its spoken read-back is not added as a second bubble, and browser text-to-speech skips the answer. Short phrases it says while the agent works, such as "let me check", still show.
+- The voice model's own speech, and anything the visitor said that wasn't handed off, shows as captions. Captioned messages carry `voiceCaption: true` and are never sent to the agent as conversation.
+- If a turn stops for a tool approval, the voice model says what is about to happen (the tool, the key details, the agent's reason) and asks the visitor to approve or decline it in the chat. Nothing is ever approved by voice. Once the visitor decides, the voice model reads the outcome aloud.
+- While exactly one such approval waits, an unambiguous spoken decline ("cancel that", "never mind") declines it. A newer request for the same tool replaces the earlier approval, and an approval left unanswered for `approvalTimeoutMs` is declined as timed out. Hanging up declines nothing: the approval card in the chat stays usable.
+- If a turn stops for a question, the voice model tells the visitor to answer it in the chat.
+- A hand-off that arrives while another chat turn is still streaming waits for that turn to finish.
+
+When the visitor finishes their first utterance, the widget sends the voice model the last 12 chat messages from before the call (at most 8000 characters) and the `callContext` text, so it can refer to what was already said. If the voice model hands off a turn first, the context goes out then. It waits because the voice model tends to answer context that arrives earlier: before anyone speaks, or partway through the visitor's sentence. This works whether `clientDelegation` is on or off.
+
+Known gap: the voice model usually hands off the first turn about half a second before the visitor's final transcript. So it decides whether to answer the first turn itself without the earlier chat history. Later turns and the read-back have the history, and the agent turn itself always runs with the full chat history.
+
+A speech-to-speech call shows a one-line AI-disclosure notice in the composer status area when it starts (`disclosureText`).
+
+These features need a server that supports them: the widget declares what it supports when the call opens (Runtype browser voice protocol v1), and uses only what the server confirms. Older servers run the agent turn on the server and transcribe its spoken reply instead. Set `clientDelegation: false` to always run the agent turn on the server.
+
+```typescript
+voiceRecognition: {
+  enabled: true,
+  provider: {
+    type: 'runtype',
+    runtype: {
+      agentId: 'agent_01abc',
+      callContext: () => `The visitor is on ${location.pathname}.`
+    }
+  }
+}
+```
 
 ### Text-to-Speech
 

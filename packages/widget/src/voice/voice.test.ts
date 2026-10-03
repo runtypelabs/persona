@@ -1,9 +1,39 @@
 // Voice SDK Tests
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
-import type { VoiceConfig } from '../types';
-import { RuntypeVoiceProvider } from './runtype-voice-provider';
+import type {
+  VoiceConfig,
+  VoiceDelegationFollowUp,
+  VoiceDelegationRequest,
+  VoiceDelegationResult,
+  VoiceSessionBridge,
+} from '../types';
+
+import { RuntypeVoiceProvider, buildCallContext } from './runtype-voice-provider';
+import { VERSION } from '../version';
 import { BrowserVoiceProvider } from './browser-voice-provider';
 import { createVoiceProvider, createBestAvailableVoiceProvider, isVoiceSupported } from './voice-factory';
+import { readdirSync, readFileSync } from 'node:fs';
+
+const ALL_CAPS = ['client_delegation', 'context', 'delegation_update'];
+
+/** The voice socket URL v1 builds (Amendment 5): the protocol, client version and capability params. */
+const voiceUrl = (base: string, agent: string, capabilities: string[], extra: Record<string, string> = {}) =>
+  `${base}/ws/agents/${agent}/voice?${new URLSearchParams({
+    voiceProtocol: 'runtype-browser-v1',
+    clientVersion: `persona/${VERSION}`,
+    voiceCapabilities: 'full-duplex-v1',
+    clientCapabilities: capabilities.join(','),
+    ...extra,
+  })}`;
+const BASE_CAPS = ['partial_transcript', 'context'];
+
+/** Wire v1 fixtures (core #9522): one frame per file, by direction. */
+const wireFixtures = (dir: 'client' | 'server') => {
+  const base = new URL(`./__fixtures__/voice-wire/${dir}/`, import.meta.url);
+  return readdirSync(base).flatMap((file) =>
+    file.endsWith('.json') ? [JSON.parse(readFileSync(new URL(file, base), 'utf8')) as Record<string, unknown>] : [],
+  );
+};
 
 // Mock window object for browser tests
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -317,6 +347,8 @@ function makeFakeEngine() {
     flushed: false,
     destroyed: false,
     finishedCb: null as null | (() => void),
+    continuous: undefined as boolean | undefined,
+    setContinuousMode(enabled: boolean) { engine.continuous = enabled; },
     enqueue(p: Uint8Array) { engine.enqueued.push(p); },
     markStreamEnd() { engine.streamEnded = true; },
     flush() { engine.flushed = true; },
@@ -371,7 +403,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     await provider.startListening();
 
     const ws = lastWs();
-    expect(ws.url).toBe('wss://api.example.com/ws/agents/a1/voice');
+    expect(ws.url).toBe(voiceUrl('wss://api.example.com', 'a1', BASE_CAPS));
     expect(ws.protocols).toEqual(['runtype.bearer', 'ct_secret']);
     expect(ws.binaryType).toBe('arraybuffer');
     expect(ws.url).not.toContain('token=');
@@ -386,7 +418,20 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
   ])('derives ws base %s -> %s', async (host, expected) => {
     const provider = new RuntypeVoiceProvider({ ...baseConfig(), host });
     await provider.startListening();
-    expect(lastWs().url).toBe(`${expected}/ws/agents/a1/voice`);
+    expect(lastWs().url).toBe(voiceUrl(expected, 'a1', BASE_CAPS));
+  });
+
+  it('always sends the v1 protocol, its version, full duplex, and snake_case capabilities', async () => {
+    // core #9165 removed the 503 that once made Persona omit voiceProtocol.
+    const provider = new RuntypeVoiceProvider(baseConfig());
+    await provider.startListening();
+    const url = new URL(lastWs().url);
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      voiceProtocol: 'runtype-browser-v1',
+      clientVersion: `persona/${VERSION}`,
+      voiceCapabilities: 'full-duplex-v1',
+      clientCapabilities: 'partial_transcript,context',
+    });
   });
 
   it('publishes a 0..1 capture level from the buffer it already sends', async () => {
@@ -425,6 +470,66 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     const before = ws.sent.length;
     pumpCapture(constantBuffer(0.2));
     expect(ws.sent.length).toBe(before + 1);
+  });
+
+  describe('audio captured before the socket opens', () => {
+    /** The first PCM16 sample of a sent binary frame. */
+    const firstSample = (frame: ArrayBuffer | string) => new Int16Array(frame as ArrayBuffer)[0];
+    const binary = (ws: MockWebSocket) => ws.sent.filter((f) => typeof f !== 'string');
+
+    it('captures as soon as the mic resolves and flushes in order on open, before live frames', async () => {
+      const levels: number[] = [];
+      const provider = new RuntypeVoiceProvider(baseConfig());
+      provider.onLevel((level) => levels.push(level));
+      await provider.startListening();
+      const ws = lastWs();
+
+      pumpCapture([0.1]);
+      pumpCapture([0.2]);
+      expect(ws.sent).toEqual([]);
+      expect(levels).toHaveLength(2); // the mic is live: the level animates already
+
+      ws.triggerOpen();
+      pumpCapture([0.3]);
+      expect(binary(ws).map(firstSample)).toEqual([0.1, 0.2, 0.3].map((v) => Math.trunc(v * 0x7fff)));
+    });
+
+    it('keeps at most 8 s (256 KB), dropping the oldest frames', async () => {
+      const provider = new RuntypeVoiceProvider(baseConfig());
+      await provider.startListening();
+      const ws = lastWs();
+
+      // 40 frames of 4096 samples (8 KB each); 31 fit under 256,000 bytes.
+      for (let i = 0; i < 40; i++) pumpCapture(Array.from({ length: 4096 }, () => (i + 1) / 100));
+      ws.triggerOpen();
+
+      const sent = binary(ws);
+      expect(sent).toHaveLength(31);
+      expect(sent.reduce((n, f) => n + (f as ArrayBuffer).byteLength, 0)).toBeLessThanOrEqual(256_000);
+      expect(firstSample(sent[0])).toBe(Math.trunc(0.1 * 0x7fff)); // frame 10 of 40
+      expect(firstSample(sent[30])).toBe(Math.trunc(0.4 * 0x7fff)); // frame 40
+    });
+
+    it.each([
+      ['hang-up', async (provider: RuntypeVoiceProvider) => provider.stopListening()],
+      ['socket error', async (_provider: RuntypeVoiceProvider, ws: MockWebSocket) => ws.triggerError()],
+      ['close before open', async (_provider: RuntypeVoiceProvider, ws: MockWebSocket) => ws.triggerClose(1006)],
+    ])('drops the buffer on %s, so the next call starts clean', async (_name, end) => {
+      const provider = new RuntypeVoiceProvider(baseConfig());
+      provider.onError(() => {});
+      await provider.startListening();
+      const first = lastWs();
+      pumpCapture([0.5]);
+      await end(provider, first);
+
+      await provider.startListening();
+      const second = lastWs();
+      expect(second).not.toBe(first);
+      second.triggerOpen();
+      pumpCapture([0.25]);
+      expect(binary(second).map(firstSample)).toEqual([Math.trunc(0.25 * 0x7fff)]);
+      expect(binary(first)).toEqual([]);
+    });
   });
 
   it('drives status + onTranscript from control frames', async () => {
@@ -538,6 +643,822 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
     engine.finishedCb?.(); // playback drained
     expect(statuses).toEqual(['listening']);
   });
+
+  it('re-arms the one-shot drain callback so later replies also return to listening', async () => {
+    const engine = makeFakeEngine();
+    const statuses: string[] = [];
+    const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => engine });
+    provider.onStatusChange((s) => statuses.push(s));
+    await provider.startListening();
+    lastWs().triggerOpen();
+
+    lastWs().triggerMessage(makeWavFrame([1, 2]));
+    const firstDrain = engine.finishedCb;
+    engine.finishedCb = null;
+    firstDrain?.(); // engines clear their callbacks once they fire
+    lastWs().triggerMessage(makeWavFrame([3, 4]));
+    const rearmed = engine.finishedCb as (() => void) | null;
+    expect(rearmed).toBeTypeOf('function');
+    statuses.length = 0;
+    rearmed?.();
+    expect(statuses).toEqual(['listening']);
+  });
+
+  it('passes no turn metadata on the legacy transcript frames', async () => {
+    const calls: unknown[][] = [];
+    const provider = new RuntypeVoiceProvider(baseConfig());
+    provider.onTranscript((...args) => calls.push(args));
+    await provider.startListening();
+    lastWs().triggerOpen();
+    lastWs().triggerMessage(JSON.stringify({ type: 'transcript_final', role: 'user', text: 'hi' }));
+    expect(calls).toHaveLength(1);
+    expect(calls[0].slice(0, 3)).toEqual(['user', 'hi', true]);
+    expect(calls[0][3]).toBeUndefined();
+  });
+
+  describe('full duplex (speech-to-speech)', () => {
+    const PCM_100MS = 4800; // 2400 samples @ 24 kHz, 16-bit
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    async function startFullDuplexCall() {
+      const engine = makeFakeEngine();
+      const statuses: string[] = [];
+      const transcripts: unknown[][] = [];
+      const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => engine });
+      provider.onStatusChange((s) => statuses.push(s));
+      provider.onTranscript((...args) => transcripts.push(args));
+      await provider.startListening();
+      const ws = lastWs();
+      ws.triggerOpen();
+      ws.triggerMessage(
+        JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in', speechMode: 'speech_to_speech' }),
+      );
+      statuses.length = 0;
+      return { engine, statuses, transcripts, provider, ws };
+    }
+
+    const pcm = (bytes: number) => new Uint8Array(bytes).buffer;
+    const sentJson = (ws: MockWebSocket) =>
+      (ws.sent as unknown[]).filter((d): d is string => typeof d === 'string').map((d) => JSON.parse(d));
+
+    it('puts the engine in continuous mode and keeps it across the follow-up session_config', async () => {
+      const { engine, provider, ws } = await startFullDuplexCall();
+      expect(engine.continuous).toBe(true);
+      ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in' }));
+      expect(engine.continuous).toBe(true);
+      provider.stopPlayback(); // still speech-to-speech: the stop is sent to the server
+      expect(sentJson(ws)).toEqual([{ type: 'cancel' }]);
+    });
+
+    it('forwards transcript_update with its turnId and ignores frames without one', async () => {
+      const { transcripts, ws } = await startFullDuplexCall();
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'hel', turnId: 'u1', final: false }));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'assistant', text: 'Hi', turnId: 'a1', final: true }));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'x' }));
+      expect(transcripts).toEqual([
+        ['user', 'hel', false, { turnId: 'u1' }],
+        ['assistant', 'Hi', true, { turnId: 'a1' }],
+      ]);
+    });
+
+    it('plays continuously: releases speaking after the queued audio, never ends the stream', async () => {
+      const { engine, statuses, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS));
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(statuses).toEqual(['speaking']);
+      expect(engine.enqueued).toHaveLength(2);
+
+      vi.advanceTimersByTime(450); // 200ms of audio + 300ms grace not yet elapsed
+      expect(statuses).toEqual(['speaking']);
+      vi.advanceTimersByTime(100);
+      expect(statuses).toEqual(['speaking', 'listening']);
+      expect(engine.streamEnded).toBe(false);
+
+      // The next reply's audio plays through the same, never-ended stream.
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(engine.enqueued).toHaveLength(3);
+      expect(statuses).toEqual(['speaking', 'listening', 'speaking']);
+    });
+
+    it('shows processing during a delegation and returns to listening after it', async () => {
+      const { statuses, ws } = await startFullDuplexCall();
+      ws.triggerMessage(JSON.stringify({ type: 'delegation_started', turnId: 'd1' }));
+      expect(statuses).toEqual(['processing']);
+      ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1' }));
+      expect(statuses).toEqual(['processing', 'listening']);
+    });
+
+    it('keeps speaking through a delegation that starts mid-reply, then shows processing', async () => {
+      const { statuses, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS));
+      ws.triggerMessage(JSON.stringify({ type: 'delegation_started', turnId: 'd1' }));
+      expect(statuses).toEqual(['speaking']);
+      vi.advanceTimersByTime(1000);
+      expect(statuses).toEqual(['speaking', 'processing']);
+      ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1' }));
+      expect(statuses).toEqual(['speaking', 'processing', 'listening']);
+    });
+
+    it('flushes playback immediately on audio_clear and returns to listening', async () => {
+      const { engine, statuses, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS * 10));
+      ws.triggerMessage(JSON.stringify({ type: 'audio_clear' }));
+      expect(engine.flushed).toBe(true);
+      expect(statuses).toEqual(['speaking', 'listening']);
+      vi.advanceTimersByTime(5000); // the cleared reply's drain timer is gone
+      expect(statuses).toEqual(['speaking', 'listening']);
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(statuses).toEqual(['speaking', 'listening', 'speaking']);
+    });
+
+    it('stopPlayback cancels server-side and drops the reply until audio_clear', async () => {
+      const { engine, statuses, transcripts, provider, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS));
+      provider.stopPlayback();
+      expect(sentJson(ws)).toEqual([{ type: 'cancel' }]);
+      expect(engine.flushed).toBe(true);
+      expect(statuses).toEqual(['speaking', 'listening']);
+
+      const enqueued = engine.enqueued.length;
+      ws.triggerMessage(pcm(PCM_100MS));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'assistant', text: 'late', turnId: 'a1', final: true }));
+      ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'next', turnId: 'u2', final: false }));
+      expect(engine.enqueued).toHaveLength(enqueued);
+      expect(transcripts).toEqual([['user', 'next', false, { turnId: 'u2' }]]);
+
+      ws.triggerMessage(JSON.stringify({ type: 'audio_clear' }));
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(engine.enqueued).toHaveLength(enqueued + 1);
+    });
+
+    it('accepts audio again if the cancel acknowledgement never arrives', async () => {
+      const { engine, provider, ws } = await startFullDuplexCall();
+      provider.stopPlayback();
+      vi.advanceTimersByTime(2000);
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(engine.enqueued).toHaveLength(1);
+    });
+
+    it('leaves the legacy path without a drain timer or a server cancel', async () => {
+      const engine = makeFakeEngine();
+      const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => engine });
+      await provider.startListening();
+      const ws = lastWs();
+      ws.triggerOpen();
+      ws.triggerMessage(pcm(PCM_100MS));
+      expect(vi.getTimerCount()).toBe(0);
+      provider.stopPlayback();
+      expect(sentJson(ws)).toEqual([]);
+      expect(engine.continuous).toBeUndefined();
+    });
+
+    it('forgets full-duplex state on hang-up', async () => {
+      const { provider, ws } = await startFullDuplexCall();
+      ws.triggerMessage(pcm(PCM_100MS));
+      await provider.stopListening();
+      expect(vi.getTimerCount()).toBe(0);
+
+      await provider.startListening(); // next call starts in the classic mode
+      const next = lastWs();
+      next.triggerOpen();
+      provider.stopPlayback();
+      expect(sentJson(next)).toEqual([]);
+    });
+
+    it('passes transcript startMs/endMs through as metadata', async () => {
+      const { transcripts, ws } = await startFullDuplexCall();
+      ws.triggerMessage(
+        JSON.stringify({ type: 'transcript_update', role: 'user', text: 'hi', turnId: 'u1', final: true, startMs: 1200, endMs: 1800 }),
+      );
+      expect(transcripts).toEqual([['user', 'hi', true, { turnId: 'u1', startMs: 1200, endMs: 1800 }]]);
+    });
+
+    describe('client delegation', () => {
+      const flush = async () => {
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+      };
+
+      function makeBridge(history: Array<{ role: 'user' | 'assistant'; content: string }> = []) {
+        const calls: VoiceDelegationRequest[] = [];
+        const pending: Array<(r: VoiceDelegationResult) => void> = [];
+        const bridge: VoiceSessionBridge = {
+          getHistory: () => history,
+          runDelegatedTurn: (request) => {
+            calls.push(request);
+            return new Promise((resolve) => pending.push(resolve));
+          },
+        };
+        return { bridge, calls, pending };
+      }
+
+      async function startDelegatedCall(
+        extra: Partial<NonNullable<VoiceConfig['runtype']>> = {},
+        sessionConfig: Record<string, unknown> = { capabilities: ALL_CAPS },
+        history: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+      ) {
+        const engine = makeFakeEngine();
+        const transcripts: unknown[][] = [];
+        const { bridge, calls, pending } = makeBridge(history);
+        const provider = new RuntypeVoiceProvider({ ...baseConfig(), ...extra, createPlaybackEngine: () => engine });
+        provider.setSessionBridge(bridge);
+        provider.onTranscript((...args) => transcripts.push(args));
+        await provider.startListening();
+        const ws = lastWs();
+        ws.triggerOpen();
+        ws.triggerMessage(
+          JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in', speechMode: 'speech_to_speech', ...sessionConfig }),
+        );
+        await flush();
+        return { provider, ws, transcripts, calls, pending };
+      }
+
+      const update = (role: string, text: string, turnId: string) =>
+        JSON.stringify({ type: 'transcript_update', role, text, utteranceId: turnId, final: true });
+      /** `delegation_started` asking this client to run the turn (client delegation). */
+      const delegate = (ws: MockWebSocket, delegationId: string, text: string, input: Record<string, unknown> = {}) =>
+        ws.triggerMessage(
+          JSON.stringify({
+            type: 'delegation_started',
+            delegationId,
+            turnId: delegationId,
+            input: { text, userUtteranceIds: [], messages: [], ...input },
+          }),
+        );
+      const completed = (ws: MockWebSocket, delegationId: string, final = true) =>
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', delegationId, speak: true, text: 'x', final }));
+
+      it('declares client_delegation (never the kebab form) only with a bridge and the switch on', async () => {
+        const { ws } = await startDelegatedCall();
+        expect(ws.url).toBe(voiceUrl('wss://api.example.com', 'a1', [...BASE_CAPS, 'client_delegation', 'delegation_update']));
+        expect(ws.url).not.toContain('client-delegation');
+        await startDelegatedCall({ clientDelegation: false });
+        expect(lastWs().url).toBe(voiceUrl('wss://api.example.com', 'a1', BASE_CAPS));
+        const plain = new RuntypeVoiceProvider(baseConfig()); // no session bridge
+        await plain.startListening();
+        expect(lastWs().url).toBe(voiceUrl('wss://api.example.com', 'a1', BASE_CAPS));
+      });
+
+      it('holds the context frame until the visitor\'s first final transcript, then sends it once', async () => {
+        const history: Array<{ role: 'user' | 'assistant'; content: string }> = [
+          { role: 'user', content: 'Hi there' },
+          { role: 'assistant', content: 'Hello!\n\nHow can I help?' },
+        ];
+        const { ws } = await startDelegatedCall(
+          { callContext: async () => 'Visitor is on /pricing.' },
+          { capabilities: ALL_CAPS },
+          history,
+        );
+        expect(sentJson(ws)).toEqual([]); // nothing at call start
+        ws.triggerMessage(update('assistant', 'Hi! What can I do?', 'g1')); // a greeting doesn't release it
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+
+        // A partial doesn't release it: a mid-utterance append makes the model answer early.
+        history.push({ role: 'user', content: 'what are' });
+        ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'what are', turnId: 'u1', final: false }));
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+
+        // The final does; the frame still holds only the history from before the call.
+        ws.triggerMessage(update('user', 'what are your hours', 'u1'));
+        await flush();
+        expect(sentJson(ws)).toEqual([
+          {
+            type: 'context',
+            text: 'Conversation so far:\nUser: Hi there\nAssistant: Hello! How can I help?\n\nVisitor is on /pricing.',
+          },
+        ]);
+        ws.triggerMessage(JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in', contextFrames: true }));
+        ws.triggerMessage(update('user', 'and sundays', 'u2'));
+        await flush();
+        expect(sentJson(ws)).toHaveLength(1);
+      });
+
+      it('sends the held context on a delegation that comes first, ahead of its result', async () => {
+        const { ws, pending } = await startDelegatedCall({ callContext: 'On /docs.' });
+        delegate(ws, 'd1', 'q');
+        await flush();
+        pending[0]({ status: 'completed', text: 'Answer.' });
+        await flush();
+        expect(sentJson(ws).map((f) => f.type)).toEqual(['context', 'delegation_result']);
+      });
+
+      it('holds a delegation_result until a slow callContext has gone out', async () => {
+        let resolveContext!: (text: string) => void;
+        const { ws, pending } = await startDelegatedCall({
+          callContext: () => new Promise<string>((resolve) => (resolveContext = resolve)),
+        });
+        delegate(ws, 'd1', 'q');
+        await flush();
+        pending[0]({ status: 'completed', text: 'Answer.' });
+        await flush();
+        expect(sentJson(ws)).toEqual([]); // the result waits for the context
+        resolveContext('On /docs.');
+        await flush();
+        expect(sentJson(ws).map((f) => f.type)).toEqual(['context', 'delegation_result']);
+      });
+
+      it('sends the result after 2 s and drops a context whose callContext hangs', async () => {
+        let resolveContext!: (text: string) => void;
+        const { ws, pending } = await startDelegatedCall({
+          callContext: () => new Promise<string>((resolve) => (resolveContext = resolve)),
+        });
+        delegate(ws, 'd1', 'q');
+        await flush();
+        pending[0]({ status: 'completed', text: 'Answer.' });
+        await flush();
+        await vi.advanceTimersByTimeAsync(1999);
+        expect(sentJson(ws)).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
+        resolveContext('too late');
+        await flush();
+        expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_result']);
+      });
+
+      it('sends context on contextFrames alone, with delegation off', async () => {
+        const { ws, calls } = await startDelegatedCall(
+          { clientDelegation: false, callContext: 'On /docs.' },
+          { capabilities: ['context'] },
+          [{ role: 'user', content: 'Hi' }],
+        );
+        expect(new URL(lastWs().url).searchParams.get('clientCapabilities')).toBe('partial_transcript,context');
+        ws.triggerMessage(update('user', 'hello', 'u1'));
+        await flush();
+        expect(sentJson(ws)).toEqual([{ type: 'context', text: 'Conversation so far:\nUser: Hi\n\nOn /docs.' }]);
+        delegate(ws, 'd1', 'x');
+        await flush();
+        expect(calls).toEqual([]);
+        expect(sentJson(ws)).toHaveLength(1);
+      });
+
+      it('sends no context when the server does not announce contextFrames', async () => {
+        const { ws } = await startDelegatedCall({ callContext: 'On /docs.' }, { capabilities: ['client_delegation', 'delegation_update'] }, [
+          { role: 'user', content: 'Hi' },
+        ]);
+        ws.triggerMessage(update('user', 'hello', 'u1'));
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+      });
+
+      it('drops a held context when the call ends before the visitor speaks', async () => {
+        const { ws, provider } = await startDelegatedCall({ callContext: 'On /docs.' });
+        await provider.stopListening();
+        ws.triggerMessage(update('user', 'hello', 'u1'));
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+      });
+
+      it('skips the context frame when there is nothing to say', async () => {
+        const { ws } = await startDelegatedCall();
+        ws.triggerMessage(update('user', 'hello', 'u1'));
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+      });
+
+      it('keeps today\'s behavior when the server does not confirm delegation', async () => {
+        const { ws, calls, transcripts } = await startDelegatedCall(
+          { callContext: 'page context' },
+          {},
+          [{ role: 'user', content: 'Hi' }],
+        );
+        delegate(ws, 'd1', 'x');
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', turnId: 'd1', speak: true, text: 'Result' }));
+        ws.triggerMessage(update('assistant', 'Result', 'a9'));
+        await flush();
+        expect(calls).toEqual([]);
+        expect(sentJson(ws)).toEqual([]); // no context, no delegation_result
+        expect(transcripts).toEqual([['assistant', 'Result', true, { turnId: 'a9' }]]); // no caption flag
+      });
+
+      it('runs a delegation through the bridge and answers delegation_result', async () => {
+        const { ws, calls, pending } = await startDelegatedCall();
+        delegate(ws, 'd1', 'Weather?', { userUtteranceIds: ['u1'], messages: [{ role: 'user', content: 'Weather?' }] });
+        await flush();
+        expect(calls).toEqual([
+          { delegationId: 'd1', userText: 'Weather?', userUtteranceIds: ['u1'], messages: [{ role: 'user', content: 'Weather?' }] },
+        ]);
+        pending[0]({ status: 'completed', text: 'It is **sunny**.' });
+        await flush();
+        expect(sentJson(ws)).toEqual([{ type: 'delegation_result', delegationId: 'd1', status: 'completed', text: 'It is **sunny**.' }]);
+      });
+
+      it('answers ok:false when the bridge fails', async () => {
+        const { ws, provider } = await startDelegatedCall();
+        provider.setSessionBridge({
+          getHistory: () => [],
+          runDelegatedTurn: () => Promise.reject(new Error('nope')),
+        });
+        delegate(ws, 'd1', 'x');
+        await flush();
+        expect(sentJson(ws)).toEqual([{ type: 'delegation_result', delegationId: 'd1', status: 'failed', text: '' }]);
+      });
+
+      it('runs delegations one at a time', async () => {
+        const { ws, calls, pending } = await startDelegatedCall();
+        delegate(ws, 'd1', 'one');
+        delegate(ws, 'd2', 'two');
+        await flush();
+        expect(calls.map((c) => c.delegationId)).toEqual(['d1']);
+        pending[0]({ status: 'completed', text: 'first' });
+        await flush();
+        expect(calls.map((c) => c.delegationId)).toEqual(['d1', 'd2']);
+      });
+
+      it('marks transcripts as captions only when delegation is negotiated', async () => {
+        const { ws, transcripts } = await startDelegatedCall();
+        ws.triggerMessage(update('assistant', 'One moment.', 'f1'));
+        expect(transcripts).toEqual([['assistant', 'One moment.', true, { turnId: 'f1', caption: true }]]);
+        const legacy = await startDelegatedCall({}, {});
+        legacy.ws.triggerMessage(update('assistant', 'One moment.', 'f1'));
+        expect(legacy.transcripts).toEqual([['assistant', 'One moment.', true, { turnId: 'f1' }]]);
+      });
+
+      it('folds the spoken read-back of a rendered result until the next user utterance', async () => {
+        const { ws, transcripts, pending } = await startDelegatedCall();
+        ws.triggerMessage(update('assistant', 'Let me check.', 'f1'));
+        delegate(ws, 'd1', 'q');
+        await flush();
+        pending[0]({ status: 'completed', text: 'It is sunny.' });
+        await flush();
+        completed(ws, 'd1');
+        ws.triggerMessage(update('assistant', 'Let me check. Okay.', 'f1')); // filler already showing: keeps updating
+        ws.triggerMessage(update('assistant', 'It is sunny.', 'r1')); // read-back: folded
+        ws.triggerMessage(update('user', 'thanks', 'u2'));
+        ws.triggerMessage(update('assistant', 'You are welcome.', 'a2'));
+        expect(transcripts.map((t) => t[1])).toEqual(['Let me check.', 'Let me check. Okay.', 'thanks', 'You are welcome.']);
+      });
+
+      it('keeps a late final for the pre-completion filler id and folds the rotated read-back', async () => {
+        const { ws, transcripts, pending } = await startDelegatedCall();
+        const partial = (role: string, text: string, turnId: string, final: boolean) =>
+          JSON.stringify({ type: 'transcript_update', role, text, turnId, final });
+        ws.triggerMessage(partial('assistant', " Yeah, I'll", 'f1', false));
+        delegate(ws, 'd1', 'q');
+        await flush();
+        pending[0]({ status: 'completed', text: 'We open at nine.' });
+        await flush();
+        completed(ws, 'd1');
+        ws.triggerMessage(partial('assistant', " Yeah, I'll check.", 'f1', true)); // late final, old id
+        ws.triggerMessage(partial('assistant', ' We open', 'r1', false)); // rotated id: read-back
+        ws.triggerMessage(partial('assistant', ' We open at nine.', 'r1', true));
+        expect(transcripts.map((t) => [t[1], t[2]])).toEqual([
+          [" Yeah, I'll", false],
+          [" Yeah, I'll check.", true],
+        ]);
+      });
+
+      it('folds only the first new utterance after completion, so later speech still renders', async () => {
+        const { ws, transcripts, pending } = await startDelegatedCall();
+        delegate(ws, 'd1', 'q');
+        await flush();
+        pending[0]({ status: 'completed', text: 'It is sunny.' });
+        await flush();
+        completed(ws, 'd1');
+        ws.triggerMessage(update('assistant', 'It is sunny.', 'r1')); // read-back
+        ws.triggerMessage(update('assistant', 'Anything else?', 'a2')); // a separate utterance
+        ws.triggerMessage(update('assistant', 'Anything else I can do?', 'a2'));
+        expect(transcripts.map((t) => t[1])).toEqual(['Anything else?', 'Anything else I can do?']);
+      });
+
+      it('forwards userUtteranceIds (strings only) to the bridge, reading the deprecated turnId as a fallback id', async () => {
+        const { ws, calls } = await startDelegatedCall();
+        ws.triggerMessage(
+          JSON.stringify({ type: 'delegation_started', turnId: 'd1', input: { text: 'a b', userUtteranceIds: ['u1', 7, 'u2'] } }),
+        );
+        await flush();
+        expect(calls).toEqual([{ delegationId: 'd1', userText: 'a b', userUtteranceIds: ['u1', 'u2'], messages: [] }]);
+      });
+
+      it('runs nothing for a delegation_started without input (server-side delegation)', async () => {
+        const { ws, calls } = await startDelegatedCall();
+        ws.triggerMessage(JSON.stringify({ type: 'delegation_started', delegationId: 'd1' }));
+        await flush();
+        expect(calls).toEqual([]);
+      });
+
+      it('does not fold after a failed delegation', async () => {
+        const { ws, transcripts, pending } = await startDelegatedCall();
+        delegate(ws, 'd1', 'q');
+        await flush();
+        pending[0]({ status: 'failed', text: '' });
+        await flush();
+        completed(ws, 'd1');
+        ws.triggerMessage(update('assistant', "Sorry, I couldn't complete that.", 'r1'));
+        expect(transcripts).toHaveLength(1);
+      });
+
+      it('offers the AI disclosure once a speech-to-speech call is live, unless disabled', async () => {
+        const statuses: string[] = [];
+        const { provider, ws } = await startDelegatedCall();
+        expect(provider.getDisclosure()).toBe("You're talking to an AI assistant. Voice is processed by OpenAI.");
+        await provider.stopListening();
+        expect(provider.getDisclosure()).toBeNull();
+        void ws;
+
+        const custom = await startDelegatedCall({ disclosureText: 'AI voice by OpenAI.' });
+        expect(custom.provider.getDisclosure()).toBe('AI voice by OpenAI.');
+        const hidden = await startDelegatedCall({ disclosureText: false });
+        expect(hidden.provider.getDisclosure()).toBeNull();
+
+        // session_config re-announces "listening" so the UI can read the disclosure.
+        const late = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => makeFakeEngine() });
+        late.onStatusChange((s) => statuses.push(s));
+        await late.startListening();
+        lastWs().triggerOpen();
+        expect(late.getDisclosure()).toBeNull(); // not known to be speech-to-speech yet
+        lastWs().triggerMessage(JSON.stringify({ type: 'session_config', speechMode: 'speech_to_speech' }));
+        expect(statuses.filter((s) => s === 'listening')).toHaveLength(2);
+        expect(late.getDisclosure()).not.toBeNull();
+      });
+
+      it('drops a result that finishes after hang-up', async () => {
+        const { ws, provider, pending } = await startDelegatedCall();
+        delegate(ws, 'd1', 'q');
+        await flush();
+        await provider.stopListening();
+        pending[0]({ status: 'completed', text: 'late' });
+        await flush();
+        expect(sentJson(ws)).toEqual([]);
+      });
+
+      describe('approval lifecycle (delegation_update, then one terminal delegation_result)', () => {
+        /** A parked result whose follow-up the test settles, recording the options it got. */
+        const parked = () => {
+          let settle!: (followUp: VoiceDelegationFollowUp | null) => void;
+          let options:
+            | { signal: AbortSignal; approvalTimeoutMs?: number; readBack?: boolean; onUpdate?: (text: string) => void }
+            | undefined;
+          const result: VoiceDelegationResult = {
+            status: 'pending_approval',
+            text: 'Approve it in the chat.',
+            followUp: (o) => {
+              options = o;
+              return new Promise((resolve) => (settle = resolve));
+            },
+          };
+          return {
+            result,
+            settle: (followUp: VoiceDelegationFollowUp | null) => settle(followUp),
+            options: () => options,
+          };
+        };
+        const parkOn = async (ws: MockWebSocket, pending: Array<(r: VoiceDelegationResult) => void>) => {
+          const park = parked();
+          delegate(ws, 'd1', 'order croissants');
+          await flush();
+          pending[0](park.result);
+          await flush();
+          return park;
+        };
+
+        it('sends the full wire sequence: update, then the terminal result, folding both read-backs', async () => {
+          const { ws, transcripts, pending } = await startDelegatedCall({ approvalTimeoutMs: 1_500 });
+          const park = await parkOn(ws, pending);
+          expect(sentJson(ws)).toEqual([
+            { type: 'delegation_update', delegationId: 'd1', status: 'pending_approval', text: 'Approve it in the chat.' },
+          ]);
+          expect(park.options()).toMatchObject({ approvalTimeoutMs: 1_500, readBack: true });
+          // Clamped under core's 600 s deadline; unset leaves the default to the bridge.
+          const long = await startDelegatedCall({ approvalTimeoutMs: 900_000 });
+          const longPark = await parkOn(long.ws, long.pending);
+          expect(longPark.options()!.approvalTimeoutMs).toBe(540_000);
+          const unset = await startDelegatedCall();
+          expect((await parkOn(unset.ws, unset.pending)).options()!.approvalTimeoutMs).toBeUndefined();
+          completed(ws, 'd1', false);
+          ws.triggerMessage(update('assistant', 'Please approve it in the chat.', 'r1')); // folded
+
+          park.settle({ status: 'completed', text: 'Your order is in: JB-1234.' });
+          await flush();
+          expect(sentJson(ws)).toEqual([
+            { type: 'delegation_update', delegationId: 'd1', status: 'pending_approval', text: 'Approve it in the chat.' },
+            { type: 'delegation_result', delegationId: 'd1', status: 'completed', text: 'Your order is in: JB-1234.' },
+          ]);
+          ws.triggerMessage(update('user', 'thanks', 'u2'));
+          completed(ws, 'd1', true);
+          ws.triggerMessage(update('assistant', 'Your order is in.', 'r2')); // folded too
+          expect(transcripts.map((t) => t[1])).toEqual(['thanks']);
+        });
+
+        it('sends another update when the resumed turn stops on a second gated tool', async () => {
+          const { ws, pending } = await startDelegatedCall();
+          const park = await parkOn(ws, pending);
+          park.options()!.onUpdate!('Approve the cake order too.');
+          await flush();
+          park.settle({ status: 'completed', text: 'Both done.' });
+          await flush();
+          expect(sentJson(ws).map((f) => `${f.type}:${f.status}:${f.text}`)).toEqual([
+            'delegation_update:pending_approval:Approve it in the chat.',
+            'delegation_update:pending_approval:Approve the cake order too.',
+            'delegation_result:completed:Both done.',
+          ]);
+        });
+
+        it.each(['denied', 'timeout', 'cancelled', 'failed'])('sends a %s terminal result as it comes', async (status) => {
+          const { ws, pending } = await startDelegatedCall();
+          const park = await parkOn(ws, pending);
+          park.settle({ status, text: `It was ${status}.` });
+          await flush();
+          expect(sentJson(ws).at(-1)).toEqual({ type: 'delegation_result', delegationId: 'd1', status, text: `It was ${status}.` });
+        });
+
+        it('answers with the ask as the result to a server without delegation_update, keeping the expiry bookkeeping', async () => {
+          const { ws, pending } = await startDelegatedCall({}, { capabilities: ['client_delegation', 'context'] });
+          const park = await parkOn(ws, pending);
+          expect(sentJson(ws)).toEqual([
+            { type: 'delegation_result', delegationId: 'd1', status: 'completed', text: 'Approve it in the chat.' },
+          ]);
+          expect(park.options()).toMatchObject({ readBack: false });
+          park.settle({ status: 'timeout', text: 'That request expired, so nothing was done.' });
+          await flush();
+          expect(sentJson(ws)).toHaveLength(1);
+        });
+
+        it('aborts the follow-up and sends nothing once the call ends', async () => {
+          const { ws, provider, pending } = await startDelegatedCall();
+          const park = await parkOn(ws, pending);
+          await provider.stopListening();
+          expect(park.options()!.signal.aborted).toBe(true);
+          park.settle({ status: 'completed', text: 'too late' });
+          await flush();
+          expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_update']);
+        });
+
+        it('stops all frames for a delegation the server cancelled, and its approval timers', async () => {
+          const { ws, pending } = await startDelegatedCall();
+          const park = await parkOn(ws, pending);
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd1', reason: 'timeout' }));
+          expect(park.options()!.signal.aborted).toBe(true);
+          park.settle({ status: 'completed', text: 'Done.' });
+          await flush();
+          expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_update']);
+        });
+
+        it('never starts a delegation cancelled while it waited behind another', async () => {
+          const { ws, calls, pending } = await startDelegatedCall();
+          delegate(ws, 'd1', 'first');
+          delegate(ws, 'd2', 'second');
+          await flush();
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd2', reason: 'timeout' }));
+          pending[0]({ status: 'completed', text: 'one' });
+          await flush();
+          expect(calls.map((c) => c.delegationId)).toEqual(['d1']);
+          expect(sentJson(ws).map((f) => f.delegationId)).toEqual(['d1']);
+        });
+
+        it('sends no result for a delegation cancelled while its turn still runs', async () => {
+          const { ws, pending } = await startDelegatedCall();
+          delegate(ws, 'd1', 'q');
+          await flush();
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd1', reason: 'timeout' }));
+          pending[0]({ status: 'completed', text: 'late' });
+          await flush();
+          expect(sentJson(ws)).toEqual([]);
+        });
+      });
+
+      describe('capabilities and tolerance', () => {
+        it('uses no client delegation, context or updates when session_config has no capabilities (old server)', async () => {
+          const { ws, calls, transcripts } = await startDelegatedCall(
+            { callContext: 'On /docs.' },
+            { clientDelegation: true, contextFrames: true, followUpFrames: true },
+            [{ role: 'user', content: 'Hi' }],
+          );
+          ws.triggerMessage(update('user', 'hello', 'u1'));
+          delegate(ws, 'd1', 'x');
+          await flush();
+          expect(calls).toEqual([]);
+          expect(sentJson(ws)).toEqual([]);
+          expect(transcripts).toEqual([['user', 'hello', true, { turnId: 'u1' }]]); // not a caption
+        });
+
+        it('gates each frame type on its own capability', async () => {
+          const contextOnly = await startDelegatedCall({ callContext: 'On /docs.' }, { capabilities: ['context'] });
+          contextOnly.ws.triggerMessage(update('user', 'hello', 'u1'));
+          delegate(contextOnly.ws, 'd1', 'x');
+          await flush();
+          expect(sentJson(contextOnly.ws).map((f) => f.type)).toEqual(['context']);
+          expect(contextOnly.calls).toEqual([]);
+        });
+
+        it('logs a warning and keeps the call; an error always ends it', async () => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const errors: Error[] = [];
+          const statuses: string[] = [];
+          const { ws, provider } = await startDelegatedCall({}, { capabilities: ALL_CAPS, callId: 'vc_1' });
+          provider.onError((e) => errors.push(e));
+          provider.onStatusChange((s) => statuses.push(s));
+          ws.triggerMessage(JSON.stringify({ type: 'warning', code: 'UNKNOWN_FRAME', message: 'Unknown frame: x' }));
+          expect(warn).toHaveBeenCalledWith('[Persona voice] UNKNOWN_FRAME: Unknown frame: x', 'vc_1');
+          expect(errors).toEqual([]);
+          expect(statuses).not.toContain('error');
+          expect(provider.isBargeInActive()).toBe(true);
+          // `fatal: false` on an error no longer means anything: errors end the call.
+          ws.triggerMessage(JSON.stringify({ type: 'error', error: 'Boom', fatal: false }));
+          expect(errors.map((e) => e.message)).toEqual(['Boom']);
+          expect(statuses).toContain('error');
+          warn.mockRestore();
+        });
+
+        it.each(['UNKNOWN_DELEGATION', 'LATE_RESULT_LIMIT'])(
+          'stops all frames for a delegation a %s warning names, and hands its answer back to TTS',
+          async (code) => {
+            const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const dropped: string[] = [];
+            const { ws, provider, pending } = await startDelegatedCall();
+            const bridge = (provider as unknown as { bridge: VoiceSessionBridge }).bridge;
+            bridge.dropDelegation = (id) => dropped.push(id);
+            delegate(ws, 'd1', 'q');
+            await flush();
+            ws.triggerMessage(JSON.stringify({ type: 'warning', code, message: 'refused', delegationId: 'd1' }));
+            pending[0]({ status: 'completed', text: 'late' });
+            await flush();
+            expect(sentJson(ws)).toEqual([]);
+            expect(dropped).toEqual(['d1']);
+            warn.mockRestore();
+          },
+        );
+
+        it('hands a cancelled delegation\'s answer back to TTS, expiring its card only past the deadline (or for an unknown reason)', async () => {
+          const dropped: Array<[string, boolean | undefined]> = [];
+          const { ws, provider } = await startDelegatedCall();
+          (provider as unknown as { bridge: VoiceSessionBridge }).bridge.dropDelegation = (id, expired) =>
+            dropped.push([id, expired]);
+          delegate(ws, 'd1', 'q');
+          for (const [id, reason] of [['d1', 'deadline'], ['d2', 'provider_cancelled'], ['d3', 'some_future_reason'], ['d4', 'session_ending']]) {
+            ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: id, reason }));
+          }
+          expect(dropped).toEqual([['d1', true], ['d2', false], ['d3', true], ['d4', false]]);
+        });
+
+        it('renders the spoken refusal of a delegation it never saw start, resolving nothing', async () => {
+          const { ws, transcripts, calls } = await startDelegatedCall();
+          completed(ws, 'd_backlog', true);
+          ws.triggerMessage(update('assistant', "Sorry, I can't take that right now.", 'r1'));
+          // No chat answer to dedupe against: the refusal is the only text, so it shows.
+          expect(transcripts.map((t) => t[1])).toEqual(["Sorry, I can't take that right now."]);
+          expect(calls).toEqual([]);
+          expect(sentJson(ws)).toEqual([]);
+        });
+
+        it('takes every v1 server fixture without failing; only `error` ends the call', async () => {
+          const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+          const fixtures = wireFixtures('server');
+          expect(fixtures.length).toBeGreaterThan(10);
+          for (const frame of fixtures) {
+            const errors: Error[] = [];
+            const { ws, provider } = await startDelegatedCall();
+            provider.onError((e) => errors.push(e));
+            expect(() => ws.triggerMessage(JSON.stringify(frame))).not.toThrow();
+            await flush();
+            expect(errors.length, `${frame.type}`).toBe(frame.type === 'error' ? 1 : 0);
+          }
+          warn.mockRestore();
+        });
+
+        it('sends client frames shaped like the v1 client fixtures', async () => {
+          const shape = (frame: Record<string, unknown>) => [String(frame.type), Object.keys(frame).sort().join(',')];
+          const fixtures = Object.fromEntries(wireFixtures('client').map(shape));
+          const { ws, pending } = await startDelegatedCall({ callContext: 'On /docs.' });
+          ws.triggerMessage(update('user', 'hello', 'u1')); // releases context
+          delegate(ws, 'd1', 'q');
+          await flush();
+          pending[0]({ status: 'pending_approval', text: 'Approve it.', followUp: async () => ({ status: 'completed', text: 'Done.' }) });
+          await flush();
+          const sent = sentJson(ws).map(shape);
+          expect(sent.map(([type]) => type)).toEqual(['context', 'delegation_update', 'delegation_result']);
+          for (const [type, keys] of sent) expect(keys, type).toBe(fixtures[type]);
+        });
+
+        it('ignores unknown frames and fields', async () => {
+          const { ws, transcripts, calls } = await startDelegatedCall();
+          ws.triggerMessage(JSON.stringify({ type: 'agent_state', state: 'thinking' }));
+          ws.triggerMessage(JSON.stringify({ type: 'audio_clear', reason: 'barge_in', extra: 1 }));
+          ws.triggerMessage(
+            JSON.stringify({ type: 'transcript_update', role: 'assistant', text: 'Hi', utteranceId: 'a1', final: true, interrupted: true, future: 'x' }),
+          );
+          delegate(ws, 'd1', 'q', { future: true });
+          await flush();
+          expect(transcripts.map((t) => t[1])).toEqual(['Hi']);
+          expect(calls).toHaveLength(1);
+        });
+
+        it('reads utteranceId, falling back to the deprecated turnId', async () => {
+          const { ws, transcripts } = await startDelegatedCall();
+          ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'a', utteranceId: 'u1', turnId: 'ignored', final: true }));
+          ws.triggerMessage(JSON.stringify({ type: 'transcript_update', role: 'user', text: 'b', turnId: 'u2', final: true }));
+          expect(transcripts.map((t) => (t[3] as { turnId: string }).turnId)).toEqual(['u1', 'u2']);
+        });
+      });
+    });
+  });
 });
 
 describe('RuntypeVoiceProvider prewarm', () => {
@@ -650,16 +1571,25 @@ describe('RuntypeVoiceProvider prewarm', () => {
       new RuntypeVoiceProvider(attachConfig()).prewarm();
 
       const ws = lastWs();
-      expect(ws.url).toBe('wss://api.example.com/ws/agents/agent%2F1/voice?clientCapabilities=attach');
+      expect(ws.url).toBe(voiceUrl('wss://api.example.com', 'agent%2F1', ['attach', ...BASE_CAPS]));
       expect(ws.protocols).toEqual(['runtype.bearer', 'runtype.attach', 'ct_secret']);
       expect(fetchMock).not.toHaveBeenCalled();
       openAs(ws, 'runtype.attach');
       expect(ws.sent).toEqual(['{"type":"ping"}']);
     });
 
+    it('combines attach with client_delegation when a session bridge is set', () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.setSessionBridge({ getHistory: () => [], runDelegatedTurn: async () => ({ status: 'completed', text: '' }) });
+      provider.prewarm();
+      expect(lastWs().url).toBe(
+        voiceUrl('wss://api.example.com', 'agent%2F1', ['attach', ...BASE_CAPS, 'client_delegation', 'delegation_update']),
+      );
+    });
+
     it('sends a clamped attachIdleMs when configured', () => {
       new RuntypeVoiceProvider(attachConfig({ attachIdleMs: 5_000 })).prewarm();
-      expect(lastWs().url).toContain('clientCapabilities=attach&attachIdleMs=30000');
+      expect(lastWs().url).toBe(voiceUrl('wss://api.example.com', 'agent%2F1', ['attach', ...BASE_CAPS], { attachIdleMs: '30000' }));
     });
 
     it('never attaches twice concurrently', () => {
@@ -718,7 +1648,7 @@ describe('RuntypeVoiceProvider prewarm', () => {
       await provider.startListening();
 
       expect(MockWebSocket.instances).toHaveLength(2);
-      expect(lastWs().url).toBe('wss://api.example.com/ws/agents/agent%2F1/voice');
+      expect(lastWs().url).toBe(voiceUrl('wss://api.example.com', 'agent%2F1', BASE_CAPS));
       expect(lastWs().protocols).toEqual(['runtype.bearer', 'ct_secret']);
     });
 
@@ -750,6 +1680,22 @@ describe('RuntypeVoiceProvider prewarm', () => {
 
       expect(MockWebSocket.instances).toHaveLength(1);
       expect(ws.sent).toContain('{"type":"start"}');
+    });
+
+    it('keeps the audio captured while waiting on the attach, sent after start', async () => {
+      const provider = new RuntypeVoiceProvider(attachConfig());
+      provider.prewarm();
+      const ws = lastWs();
+
+      const started = provider.startListening();
+      await vi.advanceTimersByTimeAsync(500);
+      pumpCapture(constantBuffer(0.1));
+      openAs(ws, 'runtype.attach');
+      await started;
+
+      expect(ws.sent.slice(0, 2)).toEqual(['{"type":"ping"}', '{"type":"start"}']);
+      expect(ws.sent).toHaveLength(3);
+      expect(ws.sent[2]).toBeInstanceOf(ArrayBuffer);
     });
 
     it('closes an unused attached socket at the idle window', () => {
@@ -804,5 +1750,32 @@ describe('RuntypeVoiceProvider prewarm', () => {
       await provider.disconnect();
       expect(ws.closeCalls).toEqual([{ code: 1000, reason: 'prewarm released' }]);
     });
+  });
+});
+describe('buildCallContext', () => {
+  it('keeps the last 12 messages, newest first when over budget, and caps at 8000 chars', () => {
+    const history = Array.from({ length: 20 }, (_, i) => ({
+      role: (i % 2 === 0 ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: `message ${i} ${'x'.repeat(1000)}`,
+    }));
+    const text = buildCallContext(history, '');
+    expect(text.length).toBeLessThanOrEqual(8000);
+    expect(text.startsWith('Conversation so far:\n')).toBe(true);
+    expect(text).toContain('message 19');
+    expect(text).not.toContain('message 7 '); // outside the 12-message window
+    expect(text).not.toContain('message 8 '); // dropped: oldest over budget
+  });
+
+  it('truncates a single huge message and always fits the host context', () => {
+    const text = buildCallContext([{ role: 'assistant', content: 'y'.repeat(50_000) }], 'host '.repeat(3000));
+    expect(text.length).toBeLessThanOrEqual(8000);
+    expect(text).toContain('Assistant: yyy');
+    expect(text).toContain('…');
+    expect(text.endsWith('host')).toBe(true); // host share capped, still present
+  });
+
+  it('returns only the host context without history, and "" when both are empty', () => {
+    expect(buildCallContext([], ' On /docs ')).toBe('On /docs');
+    expect(buildCallContext([{ role: 'user', content: '   ' }], '')).toBe('');
   });
 });

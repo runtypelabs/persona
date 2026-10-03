@@ -1,0 +1,16 @@
+{
+  "type": "session_config",
+  "interruptionMode": "barge-in",
+  "speechMode": "speech_to_speech",
+  "protocolVersion": "runtype-browser-v1",
+  "capabilities": ["client_delegation", "context", "delegation_update"],
+  "audio": {
+    "inputSampleRate": 16000,
+    "outputSampleRate": 24000,
+    "encoding": "pcm16"
+  },
+  "clientDelegation": true,
+  "contextFrames": true,
+  "followUpFrames": true,
+  "callId": "call_01JABCDEF"
+}

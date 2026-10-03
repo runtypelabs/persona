@@ -333,6 +333,25 @@ describe("createStandardBubble", () => {
   });
 });
 
+describe("createStandardBubble: message actions", () => {
+  const actions = { enabled: true, showCopy: true, visibility: "hover", align: "right", layout: "pill-inside" } as const;
+
+  it("gives a voice caption no message actions", () => {
+    const bubble = createStandardBubble(
+      makeMessage({ id: "caption", content: "Okay, placing that now.", voiceCaption: true }),
+      ({ text }) => text,
+      undefined,
+      actions
+    );
+    expect(bubble.querySelector(".persona-message-actions")).toBeNull();
+  });
+
+  it("keeps the copy action on an ordinary short reply", () => {
+    const bubble = createStandardBubble(makeMessage({ content: "Sure." }), ({ text }) => text, undefined, actions);
+    expect(bubble.querySelector('[data-action="copy"]')).not.toBeNull();
+  });
+});
+
 describe("createStandardBubble: components.message geometry tokens", () => {
   const geometry = (bubble: HTMLElement) => ({
     padding: bubble.style.padding,

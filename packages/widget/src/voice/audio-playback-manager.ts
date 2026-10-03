@@ -48,6 +48,10 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
   private buffering: boolean;
   private pendingBuffers: Float32Array[] = [];
   private pendingSamples = 0;
+  // Continuous streams never call markStreamEnd: a held tail is released after one
+  // prebuffer's worth of quiet instead.
+  private continuous = false;
+  private tailTimer: ReturnType<typeof setTimeout> | undefined;
 
   // PCM format constants
   private readonly sampleRate: number;
@@ -117,7 +121,14 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
       // Hold until the prebuffer waterline fills, then release as a batch.
       this.pendingBuffers.push(float32);
       this.pendingSamples += float32.length;
+      clearTimeout(this.tailTimer);
       if (this.pendingSamples >= this.waterlineSamples) this.releaseBuffer();
+      else if (this.continuous) {
+        this.tailTimer = setTimeout(
+          () => this.releaseBuffer(),
+          (this.waterlineSamples / this.sampleRate) * 1000,
+        );
+      }
     } else {
       this.scheduleSamples(float32);
     }
@@ -140,6 +151,9 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
    */
   flush(): void {
     for (const source of this.activeSources) {
+      // A stopped source still fires `onended` later; detach it so a flushed
+      // batch can't decrement the next reply's pendingCount and drain it early.
+      source.onended = null;
       try {
         source.stop();
         source.disconnect();
@@ -160,6 +174,12 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
     this.pendingSamples = 0;
     this.buffering = this.waterlineSamples > 0;
     this.started = false;
+    clearTimeout(this.tailTimer);
+  }
+
+  /** See {@link VoicePlaybackEngine.setContinuousMode}. */
+  setContinuousMode(enabled: boolean): void {
+    this.continuous = enabled;
   }
 
   /**
@@ -260,7 +280,9 @@ export class AudioPlaybackManager implements PcmStreamPlayer {
 
     source.onended = () => {
       const idx = this.activeSources.indexOf(source);
-      if (idx !== -1) this.activeSources.splice(idx, 1);
+      // Not active: removed by flush(), so it no longer counts toward a drain.
+      if (idx === -1) return;
+      this.activeSources.splice(idx, 1);
       this.pendingCount--;
       this.checkFinished();
     };

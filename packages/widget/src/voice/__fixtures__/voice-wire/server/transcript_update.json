@@ -1,0 +1,10 @@
+{
+  "type": "transcript_update",
+  "role": "user",
+  "text": "What's on the menu today?",
+  "utteranceId": "utt_1",
+  "turnId": "utt_1",
+  "final": true,
+  "startMs": 1200,
+  "endMs": 2650
+}

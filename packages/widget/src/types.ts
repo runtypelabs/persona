@@ -4766,6 +4766,45 @@ export type AgentWidgetVoiceRecognitionConfig = {
        * @default 30000
        */
       attachIdleMs?: number;
+      /**
+       * Full-duplex (speech-to-speech, e.g. GPT-Live) calls: run the turns the
+       * voice model hands off to the agent through this widget's normal chat
+       * pipeline. The spoken request becomes the user message, and the answer
+       * renders as a regular assistant message (streaming, tool and approval
+       * UI, WebMCP page tools, persistence) that the voice model then reads
+       * aloud. Only takes effect when the server supports it (it confirms in
+       * `session_config`); otherwise the agent turn runs on the server and its
+       * spoken reply is transcribed, as before. Set `false` to always keep the
+       * agent turn on the server.
+       * @default true
+       */
+      clientDelegation?: boolean;
+      /**
+       * Full-duplex calls: extra context for the voice model (for example the
+       * page the visitor is on), sent after the chat history as of call start.
+       * The frame goes out once, when the visitor finishes their first
+       * utterance (or at the first agent hand-off). A function is
+       * called at call start and may be async. This text is capped at 4000 characters and the whole frame
+       * (history included) at 8000. Sent only to servers that accept call
+       * context (they announce it in `session_config`).
+       */
+      callContext?: string | (() => string | Promise<string>);
+      /**
+       * Full-duplex calls with client delegation: how long a tool approval
+       * that a spoken request raised may wait before it is declined as
+       * expired (and the voice model says so). Server-side approval gates
+       * keep their own timeout too. Hanging up never declines it: the
+       * approval card in the chat stays usable. Capped at 540000 (9 minutes),
+       * under the server's 10-minute delegation deadline.
+       * @default 300000
+       */
+      approvalTimeoutMs?: number;
+      /**
+       * Speech-to-speech calls: the one-line notice shown in the composer
+       * status area when the call starts. `false` hides it.
+       * @default "You're talking to an AI assistant. Voice is processed by OpenAI."
+       */
+      disclosureText?: string | false;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
       pauseDuration?: number;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5024,6 +5063,13 @@ export interface VoicePlaybackEngine {
   onFinished(callback: () => void): void;
   /** Release all audio resources. */
   destroy(): Promise<void> | void;
+  /**
+   * Optional. Speech-to-speech calls stream reply audio with no end-of-stream
+   * marker, so an engine that holds audio below a prebuffer waterline must, while
+   * continuous, release that held tail on its own (e.g. after a short input gap)
+   * instead of waiting for {@link markStreamEnd}. Engines without a prebuffer can omit it.
+   */
+  setContinuousMode?(enabled: boolean): void;
 }
 
 /**
@@ -5077,6 +5123,14 @@ export type VoiceConfig = {
     prewarmMode?: 'request' | 'attach';
     /** See `voiceRecognition.provider.runtype.attachIdleMs`. @default 30000 */
     attachIdleMs?: number;
+    /** See `voiceRecognition.provider.runtype.clientDelegation`. @default true */
+    clientDelegation?: boolean;
+    /** See `voiceRecognition.provider.runtype.callContext`. */
+    callContext?: string | (() => string | Promise<string>);
+    /** See `voiceRecognition.provider.runtype.approvalTimeoutMs`. @default 300000 (capped at 540000) */
+    approvalTimeoutMs?: number;
+    /** See `voiceRecognition.provider.runtype.disclosureText`. */
+    disclosureText?: string | false;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
     pauseDuration?: number;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5114,13 +5168,24 @@ export interface VoiceProvider {
    * Register a callback for incremental transcript updates during a voice turn.
    * `isFinal=false` is a live interim update (user partials, or assistant deltas
    * on providers that stream them); `isFinal=true` finalizes that role's text.
-   * On the realtime `runtype` path, interim updates fire for the `user` only and
-   * the `assistant` arrives as a single final. Providers with overlapping turns
-   * must include the same turnId on user and assistant finals; without IDs,
-   * providers must discard cancelled output before emitting the next user final.
+   * On the classic realtime `runtype` path, interim updates fire for the `user`
+   * only and the `assistant` arrives as a single final; without a turnId the
+   * session assumes strictly alternating turns, and providers must discard
+   * cancelled output before emitting the next user final.
+   *
+   * When `metadata.turnId` is present (full-duplex / speech-to-speech, e.g.
+   * GPT-Live), the session reconciles by `(turnId, role)`: each pair owns one
+   * bubble that later updates replace in place, turns may overlap or arrive in
+   * any order, and no empty assistant placeholder is injected. User and
+   * assistant may share a turnId (a late user bubble then renders above its
+   * reply) or use distinct ones. `metadata.startMs` (call-relative ms when the
+   * utterance began) orders a new bubble among the call's other keyed bubbles;
+   * without it bubbles order by first arrival. After a stop, keyed providers
+   * must drop the cancelled reply's output until the server acknowledges the
+   * cancel: the session renders every reply it receives.
    */
   onTranscript?(
-    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean, metadata?: { turnId?: string }) => void,
+    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean, metadata?: VoiceTranscriptMetadata) => void,
   ): void;
 
   /** Register a callback for per-turn latency metrics (realtime path). */
@@ -5156,6 +5221,117 @@ export interface VoiceProvider {
    * repeatedly; throttle as needed.
    */
   prewarm?(): void;
+
+  /**
+   * Called by the session once after construction with the chat-side surface
+   * a full-duplex provider uses to hand agent turns to the chat pipeline
+   * ({@link VoiceSessionBridge}). Providers without client delegation omit it.
+   */
+  setSessionBridge?(bridge: VoiceSessionBridge): void;
+  /** The AI-disclosure notice for the live call, if one should show (speech-to-speech). */
+  getDisclosure?(): string | null;
+}
+
+/** Metadata on a {@link VoiceProvider.onTranscript} update. */
+export type VoiceTranscriptMetadata = {
+  /** Groups updates that belong to one utterance bubble (full duplex). */
+  turnId?: string;
+  /** Call-relative ms when the utterance began; orders late bubbles. */
+  startMs?: number;
+  /** Call-relative ms of the latest audio this update covers. */
+  endMs?: number;
+  /**
+   * The bubble only captions speech (see `AgentWidgetMessage.voiceCaption`).
+   * The chat pipeline owns the conversation, as with client delegation.
+   */
+  caption?: boolean;
+};
+
+/** An agent turn a full-duplex voice model handed to the widget. */
+export type VoiceDelegationRequest = {
+  /** The voice model's delegation id (`delegation_started.delegationId`). */
+  delegationId: string;
+  /** What the visitor asked, as the voice model heard it. */
+  userText: string;
+  /**
+   * The user transcript utterances `userText` joins, oldest first (the last
+   * is the one it came from). May be empty.
+   */
+  userUtteranceIds: string[];
+  /** The voice model's view of the conversation it delegated from. */
+  messages: Array<{ role: string; content: unknown }>;
+};
+
+/**
+ * How a delegated turn ended, or that it waits on an approval (contract
+ * Amendment 5). `pending_approval` is the only non-terminal status. Open:
+ * a receiver treats an unknown terminal status as `failed`.
+ * - `completed`: the work ran.
+ * - `denied`: the visitor said no (Deny tap, or a spoken decline).
+ * - `timeout`: the approval lapsed (`approvalTimeoutMs`, or the server's own timeout).
+ * - `cancelled`: replaced by a newer request, or abandoned by the system.
+ * - `failed`: an error.
+ */
+export type VoiceDelegationStatus =
+  | 'completed'
+  | 'pending_approval'
+  | 'denied'
+  | 'timeout'
+  | 'cancelled'
+  | 'failed'
+  | (string & {});
+
+/** The terminal result of a turn that parked on approvals. */
+export type VoiceDelegationFollowUp = {
+  status: VoiceDelegationStatus;
+  /** What to read aloud (Markdown allowed). May be empty: nothing more to say. */
+  text: string;
+};
+
+/** The delegated turn's answer, sent back for the voice model to read aloud. */
+export type VoiceDelegationResult = {
+  /** `pending_approval` when `followUp` is set; otherwise terminal. */
+  status: VoiceDelegationStatus;
+  /** The assistant text (Markdown allowed). */
+  text: string;
+  /**
+   * Set when the turn parked on approvals (`text` then asks for the decision).
+   * Resolves with the terminal result once the visitor decides (or the
+   * approval is replaced, declined by voice, or unanswered for
+   * `approvalTimeoutMs`) and the resumed turn finishes; `null` only when
+   * `signal` aborts first (hang-up, or the server cancelled the delegation).
+   */
+  followUp?: (options: {
+    signal: AbortSignal;
+    approvalTimeoutMs?: number;
+    /** `false`: run only the approval bookkeeping (expiry, supersede); nothing will be read back. @default true */
+    readBack?: boolean;
+    /** The resumed turn stopped on another approval: ask for it too (`text` is its approval script). */
+    onUpdate?: (text: string) => void;
+  }) => Promise<VoiceDelegationFollowUp | null>;
+};
+
+/**
+ * Chat-side surface the session hands a full-duplex provider: the visible
+ * history (for the call-start context) and a way to run a delegated turn
+ * through the normal chat pipeline.
+ */
+export interface VoiceSessionBridge {
+  /** Visible user/assistant messages, oldest first. */
+  getHistory(): Array<{ role: 'user' | 'assistant'; content: string }>;
+  /**
+   * Submit the turn as the visitor's message (reusing its transcript bubble)
+   * and resolve with the assistant's final answer once the turn settles.
+   * Waits for any chat turn already in flight first. Never rejects.
+   */
+  runDelegatedTurn(request: VoiceDelegationRequest): Promise<VoiceDelegationResult>;
+  /**
+   * The server dropped this delegation's result (cancelled it, or refused a
+   * late result): its chat answer is no longer spoken, so browser TTS may read it.
+   * `expired`: the server's deadline passed, so its pending approvals are
+   * declined too, as the approval TTL would.
+   */
+  dropDelegation?(delegationId: string, expired?: boolean): void;
 }
 
 /**
@@ -8163,6 +8339,13 @@ export type AgentWidgetMessage = {
    */
   voiceProcessing?: boolean;
   /**
+   * Display-only caption of full-duplex voice speech, such as the voice
+   * model's own words, or something the visitor said that wasn't submitted
+   * as a chat turn. It renders in the transcript but is never sent to the
+   * model as conversation.
+   */
+  voiceCaption?: boolean;
+  /**
    * Raw structured payload for this message (e.g., JSON action response).
    * Populated automatically when structured parsers run.
    */
@@ -8290,6 +8473,9 @@ export type InjectMessageOptions = {
    * Consumers can detect this in `messageTransform` to render custom UI.
    */
   voiceProcessing?: boolean;
+
+  /** See {@link AgentWidgetMessage.voiceCaption}. */
+  voiceCaption?: boolean;
 
   /**
    * Raw structured payload (typically a JSON string) representing the

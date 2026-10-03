@@ -80,6 +80,8 @@ import {
 } from "./voice/read-aloud-controller";
 import { isVoiceSupportedProbe, usesSessionVoice, voiceConnectionChanged } from "./utils/voice-support";
 import { VoiceTurnTracker } from "./voice/voice-turn-tracker";
+import type { KeyedVoiceTranscript } from "./voice/keyed-voice-transcript";
+import type { VoiceDelegationCapture, createVoiceSessionBridge } from "./voice/voice-delegation";
 import { loadVoiceRuntime } from "./voice-runtime-loader";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
@@ -557,6 +559,11 @@ export class AgentWidgetSession {
     return this.voiceStatus;
   }
 
+  /** The live call's AI-disclosure notice, if it shows one. */
+  public getVoiceDisclosure(): string | null {
+    return this.voiceProvider?.getDisclosure?.() ?? null;
+  }
+
   /**
    * Get the voice interruption mode from the provider (none/cancel/barge-in)
    */
@@ -583,6 +590,7 @@ export class AgentWidgetSession {
   public stopVoicePlayback(): void {
     if (this.voiceProvider?.stopPlayback) {
       this.voiceTurns.cancel();
+      this.keyedVoice?.cancel();
       this.voiceProvider.stopPlayback();
     }
   }
@@ -604,6 +612,12 @@ export class AgentWidgetSession {
   private pendingVoiceAssistantMessageId: string | null = null;
   private voiceTurns = new VoiceTurnTracker();
   private voiceDisconnectPromise: Promise<void> = Promise.resolve();
+  // Turn-keyed (full-duplex) transcript reconciler, from the lazy voice runtime.
+  private keyedVoice: KeyedVoiceTranscript | null = null;
+  // The delegated voice turn running through sendMessage: the assistant
+  // messages it streams, and whether it failed or was aborted.
+  private voiceDelegation: VoiceDelegationCapture | null = null;
+
 
   // Track message IDs where the Runtype provider already played TTS audio
   // so browser TTS doesn't double-speak them
@@ -711,7 +725,11 @@ export class AgentWidgetSession {
         .then(async (mod) => {
           await disconnected;
           if (generation !== this.voiceSetupGeneration) return;
-          this.wireVoiceProvider(mod.createVoiceProvider(voiceConfig));
+          this.wireVoiceProvider(
+            mod.createVoiceProvider(voiceConfig),
+            mod.KeyedVoiceTranscript,
+            mod.createVoiceSessionBridge
+          );
         })
         .catch((error) => {
           console.error('Failed to setup voice:', error);
@@ -727,9 +745,59 @@ export class AgentWidgetSession {
   }
 
   /** Wire callbacks onto a freshly constructed provider and connect it. */
-  private wireVoiceProvider(provider: VoiceProvider): void {
+  private wireVoiceProvider(
+    provider: VoiceProvider,
+    Keyed?: typeof KeyedVoiceTranscript,
+    createBridge?: typeof createVoiceSessionBridge
+  ): void {
     try {
       this.voiceProvider = provider;
+      this.keyedVoice = Keyed
+        ? new Keyed({
+            find: (id) => this.messages.find((m) => m.id === id),
+            inject: (options) => this.injectMessage(options),
+            upsert: (message) => this.upsertMessage(message),
+            settle: (ids) => {
+              this.messages = this.messages.map((m) =>
+                ids.has(m.id) ? { ...m, streaming: false, voiceProcessing: false } : m
+              );
+              this.callbacks.onMessagesChanged([...this.messages]);
+            },
+            // A chat turn (e.g. a delegated one) owns the flag while it runs.
+            setStreaming: (streaming) => {
+              if (streaming || !this.chatTurnBusy()) this.setStreaming(streaming);
+            },
+            markSpoken: (id) => {
+              this.ttsSpokenMessageIds.add(id);
+            }
+          })
+        : null;
+      if (createBridge && provider.setSessionBridge) {
+        provider.setSessionBridge(
+          createBridge({
+            messages: () => this.messages,
+            busy: () => this.chatTurnBusy(),
+            parked: () => this.webMcpApprovalResolvers.size > 0,
+            claim: (text, userUtteranceIds) => this.keyedVoice?.claimUserTurn(text, userUtteranceIds) ?? null,
+            send: (text, userMessageId) =>
+              this.sendMessage(text, { viaVoice: true, voiceTurn: { userMessageId } }),
+            track: (capture) => {
+              this.voiceDelegation = capture;
+            },
+            unspoken: (ids) => {
+              for (const id of ids) this.ttsSpokenMessageIds.delete(id);
+              // Its stream already ended (browser TTS skipped it then): read it
+              // now. A stream still running reads it when it ends, once.
+              if (!this.streaming) this.speakLatestAssistantMessage(ids);
+            },
+            decide: (id) => {
+              if (this.webMcpApprovalResolvers.has(id)) return this.resolveWebMcpApproval(id, 'denied');
+              const approval = this.messages.find((m) => m.id === id)?.approval;
+              if (approval?.status === 'pending') void this.resolveApproval(approval, 'denied');
+            }
+          })
+        );
+      }
       const generation = this.voiceSetupGeneration;
       const isCurrent = () => this.voiceProvider === provider && generation === this.voiceSetupGeneration;
 
@@ -759,6 +827,10 @@ export class AgentWidgetSession {
       if (this.voiceProvider.onTranscript) {
         this.voiceProvider.onTranscript((role, text, isFinal, metadata) => {
           if (!isCurrent()) return;
+          if (metadata?.turnId) {
+            this.keyedVoice?.apply(role, text, isFinal, metadata.turnId, metadata.startMs, metadata.caption);
+            return;
+          }
           if (role === 'user') {
             if (!this.pendingVoiceUserMessageId) {
               const msg = this.injectMessage({
@@ -868,6 +940,7 @@ export class AgentWidgetSession {
           this.pendingVoiceUserMessageId = null;
           this.pendingVoiceAssistantMessageId = null;
         }
+        this.keyedVoice?.fail(processingErrorText);
       });
 
       this.voiceProvider.onStatusChange((status) => {
@@ -876,6 +949,10 @@ export class AgentWidgetSession {
         this.voiceActive = status === 'listening';
         if (status === 'listening' || status === 'idle' || status === 'disconnected') {
           this.settlePendingVoiceTurn(status !== 'listening');
+        }
+        // Keyed turns overlap listening (full duplex), so only a call end settles them.
+        if (status === 'idle' || status === 'disconnected') {
+          this.keyedVoice?.settle();
         }
         this.callbacks.onVoiceStatusChanged?.(status);
       });
@@ -941,6 +1018,17 @@ export class AgentWidgetSession {
     run();
   }
 
+  /** A chat turn is streaming, resuming, or running local (WebMCP) tools. */
+  private chatTurnBusy(): boolean {
+    return (
+      !!this.abortController ||
+      this.webMcpResolveControllers.size > 0 ||
+      this.webMcpAwaitBatches.size > 0 ||
+      this.reconnecting ||
+      this.status === 'resuming'
+    );
+  }
+
   /**
    * Cleanup voice resources
    */
@@ -956,6 +1044,8 @@ export class AgentWidgetSession {
     this.voiceActive = false;
     this.voiceStatus = 'disconnected';
     this.settlePendingVoiceTurn(true);
+    this.keyedVoice?.settle();
+    this.keyedVoice = null;
     this.voiceTurns = new VoiceTurnTracker();
     if (notifyDisconnected) this.callbacks.onVoiceStatusChanged?.('disconnected');
   }
@@ -1008,7 +1098,11 @@ export class AgentWidgetSession {
             voiceId: providerConfig.runtype?.voiceId,
             createPlaybackEngine: providerConfig.runtype?.createPlaybackEngine,
             prewarmMode: providerConfig.runtype?.prewarmMode,
-            attachIdleMs: providerConfig.runtype?.attachIdleMs
+            attachIdleMs: providerConfig.runtype?.attachIdleMs,
+            clientDelegation: providerConfig.runtype?.clientDelegation,
+            callContext: providerConfig.runtype?.callContext,
+            approvalTimeoutMs: providerConfig.runtype?.approvalTimeoutMs,
+            disclosureText: providerConfig.runtype?.disclosureText
           }
         };
       
@@ -2311,6 +2405,7 @@ export class AgentWidgetSession {
       sequence,
       streaming = false,
       voiceProcessing,
+      voiceCaption,
       rawContent
     } = options;
 
@@ -2334,6 +2429,7 @@ export class AgentWidgetSession {
       ...(llmContent !== undefined && { llmContent }),
       ...(contentParts !== undefined && { contentParts }),
       ...(voiceProcessing !== undefined && { voiceProcessing }),
+      ...(voiceCaption && { voiceCaption }),
       ...(rawContent !== undefined && { rawContent })
     };
 
@@ -2602,6 +2698,13 @@ export class AgentWidgetSession {
        * (`composer.streamingSubmitBehavior: "interrupt"`).
        */
       interrupt?: boolean;
+      /**
+       * Internal (voice client delegation): this is the delegated voice turn.
+       * `userMessageId` names an existing transcript bubble to submit as the
+       * turn's user message instead of appending a new one, so the spoken
+       * request appears (and is sent) exactly once.
+       */
+      voiceTurn?: { userMessageId?: string };
     }
   ) {
     const input = rawInput.trim();
@@ -2620,6 +2723,13 @@ export class AgentWidgetSession {
       !hasReplayContent
     )
       return;
+
+    // Any other send replaces a delegated voice turn still in flight: that
+    // turn fails, and this one's reply is neither its answer nor voice-spoken.
+    if (this.voiceDelegation && !options?.voiceTurn) {
+      this.voiceDelegation.failed = true;
+      this.voiceDelegation = null;
+    }
 
     // History transitions (continuity wipe, boot reconciliation, projection
     // finalization, replacement init, external credential change) own the
@@ -2644,8 +2754,12 @@ export class AgentWidgetSession {
     // turn (cancels backoff/listeners, clears the old resume handle).
     this.teardownReconnect();
 
+    const voiceBubbleId = options?.voiceTurn?.userMessageId;
+    const voiceBubble = voiceBubbleId
+      ? this.messages.find((m) => m.id === voiceBubbleId && m.role === "user")
+      : undefined;
     // Generate IDs for both user message and expected assistant response
-    const userMessageId = generateUserMessageId();
+    const userMessageId = voiceBubble?.id ?? generateUserMessageId();
     const assistantMessageId = generateAssistantMessageId();
     // The active assistant bubble for a durable reconnect is captured from the
     // real streamed message events (see handleEvent), not pre-assigned here:
@@ -2685,7 +2799,16 @@ export class AgentWidgetSession {
       ...(options?.replayFields ?? {})
     };
 
-    this.appendMessage(userMessage);
+    if (voiceBubble) {
+      // The transcript bubble is the user message: the model gets the request
+      // text the voice model delegated, the bubble keeps what was heard.
+      voiceBubble.viaVoice = true;
+      delete voiceBubble.voiceCaption;
+      if (voiceBubble.content.trim() !== input) voiceBubble.llmContent = input;
+      this.callbacks.onMessagesChanged([...this.messages]);
+    } else {
+      this.appendMessage(userMessage);
+    }
     this.setStreaming(true);
 
     // Assign the fresh controller BEFORE the mention await so cancel() (or a
@@ -2733,7 +2856,14 @@ export class AgentWidgetSession {
       }
     }
 
-    const snapshot = [...this.messages];
+    // A submitted voice bubble may sit above captions or a turn that finished
+    // while it waited: the request still ends on it.
+    const snapshot = voiceBubble
+      ? [
+          ...this.messages.filter((m) => m !== voiceBubble),
+          { ...voiceBubble, createdAt: new Date().toISOString() }
+        ]
+      : [...this.messages];
 
     try {
       await this.dispatchWithDeletedRecovery(
@@ -2752,6 +2882,7 @@ export class AgentWidgetSession {
       // The subsequent dispatch rejection must NOT paint a dispatch-error
       // bubble: the turn is being resumed, not failed.
       if (this.status === "resuming" || this.reconnecting) return;
+      if (this.voiceDelegation) this.voiceDelegation.failed = true;
       // Check if this is an abort error (user canceled, navigated away, etc.)
       // In these cases, don't show fallback - the request was intentionally interrupted
       const isAbortError =
@@ -4441,6 +4572,17 @@ export class AgentWidgetSession {
   }
 
   private handleEvent = (event: AgentWidgetEvent) => {
+    const delegation = this.voiceDelegation;
+    if (delegation) {
+      if (event.type === "error" || (event.type === "status" && event.status === "error")) {
+        delegation.failed = true;
+      } else if (event.type === "message" && event.message.role === "assistant") {
+        // The voice model reads this answer aloud: browser TTS must skip it,
+        // unless the server dropped the result (then nobody speaks it).
+        if (!delegation.dropped) this.ttsSpokenMessageIds.add(event.message.id);
+        if (!delegation.ids.includes(event.message.id)) delegation.ids.push(event.message.id);
+      }
+    }
     if (event.type === "message") {
       this.upsertMessage(event.message);
 
@@ -4897,7 +5039,8 @@ export class AgentWidgetSession {
    * Speak the latest assistant message using the Web Speech API
    * if text-to-speech is enabled in the config.
    */
-  private speakLatestAssistantMessage() {
+  /** `only`: speak it only if the latest assistant message is one of these. */
+  private speakLatestAssistantMessage(only?: string[]) {
     const ttsConfig = this.config.textToSpeech;
     if (!ttsConfig?.enabled) return;
 
@@ -4915,7 +5058,7 @@ export class AgentWidgetSession {
       .reverse()
       .find(m => m.role === 'assistant' && m.content && !m.voiceProcessing);
 
-    if (!lastAssistant) return;
+    if (!lastAssistant || (only && !only.includes(lastAssistant.id))) return;
 
     // Skip if already spoken by Runtype provider's audio playback
     if (this.ttsSpokenMessageIds.has(lastAssistant.id)) {

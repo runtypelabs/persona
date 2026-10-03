@@ -28,7 +28,9 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@playwright/test": "^1.62.1",
-    "concurrently": "^8.2.2"
+    "@types/ws": "^8.18.2",
+    "concurrently": "^8.2.2",
+    "ws": "^8.20.1"
   },
   "packageManager": "pnpm@12.3.4+sha512.961aa41fb077da3a04a441d9f8e15ebc0c96da8ef710b2eb67bf9ee7cb0610eabd48f1fd85f51cffe73846785fa0f87c56a3a872a1d893f8446741b5cce45457"
 }

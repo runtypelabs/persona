@@ -17,3 +17,5 @@ export {
 } from "./voice/voice-factory";
 export { RuntypeVoiceProvider } from "./voice/runtype-voice-provider";
 export { BrowserVoiceProvider } from "./voice/browser-voice-provider";
+export { KeyedVoiceTranscript } from "./voice/keyed-voice-transcript";
+export { createVoiceSessionBridge } from "./voice/voice-delegation";

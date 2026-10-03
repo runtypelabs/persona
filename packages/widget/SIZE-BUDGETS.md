@@ -9,7 +9,7 @@
 The preview ships both defaults tables, theme tokens, activity rendering, and
 Request/Response styles. The flag controls behavior, not which code is downloaded.
 The gzip limits below account for that additional functionality. Unaffected
-entry points keep their existing limits. The Brotli limits remain 156 KiB for the
+entry points keep their existing limits. The Brotli limits are 157 KiB for the
 browser bundle, strictly below 20 KiB for the launcher, and 20 KiB for CSS.
 
 Measured after the preview compatibility fixes (gzip, decimal kB):
