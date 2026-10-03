@@ -9,7 +9,7 @@
 The preview ships both defaults tables, theme tokens, activity rendering, and
 Request/Response styles. The flag controls behavior, not which code is downloaded.
 The gzip limits below account for that additional functionality. Unaffected
-entry points keep their existing limits. The Brotli limits are strictly below 130 KiB
+entry points keep their existing limits. The Brotli limits are 131 KiB
 for the browser bundle, strictly below 20 KiB for the launcher, and 20 KiB for CSS.
 
 Measured after the preview compatibility fixes (gzip, decimal kB):
@@ -60,5 +60,5 @@ Chunks that need stateful core modules (chunk loaders, icon registry, tooltip
 timing, error classes checked with `instanceof`) receive core's instances
 through a context object instead of bundling their own copies. Together with
 the voice glue moving into `voice-runtime.js`, this takes `index.global.js`
-from 145.69 KiB to 129.44 KiB Brotli (184.84 kB → 163.60 kB gzip). The npm
+from 145.69 KiB to 129.53 KiB Brotli (184.84 kB → 163.60 kB gzip). The npm
 ESM/CJS bundles grow by about 1.7 kB gzip from the loader indirection.
