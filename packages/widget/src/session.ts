@@ -3415,7 +3415,9 @@ export class AgentWidgetSession {
           await this.connectStream(stream, { allowReentry: true });
         } else {
           if (decision === 'denied') {
-            // No stream body for denied: inject a denial message
+            // No stream body for denied: inject a denial message, and settle
+            // the paused tool bubble since no approval_complete will arrive.
+            this.settleApprovalPausedToolCall(approvalMessageId);
             this.appendMessage({
               id: `denial-${approval.id}`,
               role: "assistant",

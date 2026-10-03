@@ -190,4 +190,17 @@ describe("AgentWidgetSession settles the approval-paused tool bubble", () => {
 
     expect(tool()?.toolCall?.status).toBe("running");
   });
+
+  it("settles a denied call when the accepted denial has no stream body", async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    const { resolve, tool } = setup([pausedTool(), pendingApproval("toolu_paused")]);
+    await resolve("denied");
+
+    expect(tool()?.toolCall).toMatchObject({
+      status: "complete",
+      approvalStatus: "denied",
+      success: false,
+      error: "Denied",
+    });
+  });
 });
