@@ -631,6 +631,23 @@ config: {
 | `parameterBackgroundColor`, `parameterTextColor` | `string?` | Parameters block styling. |
 | `onDecision` | `(data, decision, options?) => Promise<Response \| ReadableStream \| void>?` | Custom approval handler. Return `void` for SDK auto-resolve. `options.remember` is forwarded from custom "always allow" affordances. |
 
+**Where the decision goes.** Without `onDecision`, the widget posts the decision
+itself and streams the continued run into the same conversation:
+
+- **Client-token mode** (`clientToken`): `POST /v1/client/approve` with the
+  current `sessionId`, no API key. Runtype answers only gates the agent marks
+  `tools.approval.approver: 'end-user'`. A gate that needs the owner returns
+  `403 APPROVAL_APPROVER_NOT_END_USER`; a second decision returns
+  `409 APPROVAL_ALREADY_RESOLVED`. A Runtype API without this route (404
+  `Not Found`) gets the owner route below instead.
+- **Proxy / API-key mode**: `POST /v1/agents/{agentId}/approve` with your
+  configured `headers`.
+
+When the request fails, the widget adds an assistant message with the
+server's reason and calls `onError`. If the pause is gone (`409
+APPROVAL_ALREADY_RESOLVED`, or a 404 for an expired or unknown pause), the card
+shows `timeout`. Otherwise it returns to `pending` so the user can try again.
+
 **How the summary line is chosen.** A tool's wire `description` is written for the
 agent (usage rules, prompt prose), not for end users, so the bubble doesn't lead
 with it. The user-facing summary resolves in priority order:

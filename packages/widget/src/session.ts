@@ -3291,6 +3291,7 @@ export class AgentWidgetSession {
   ): Promise<void> {
     // 1. Update approval message status immediately for responsive UI
     const approvalMessageId = `approval-${approval.id}`;
+    const errorMessageId = `approval-error-${approval.id}`;
     const updatedApproval: AgentWidgetApproval = {
       ...approval,
       status: decision,
@@ -3357,13 +3358,46 @@ export class AgentWidgetSession {
         if (response instanceof Response) {
           if (!response.ok) {
             const errorData = await response.json().catch(() => null);
-            throw new Error(
-              errorData?.error ?? `Approval request failed: ${response.status}`
-            );
+            // `message` carries the visitor-facing text when present (e.g.
+            // 409 APPROVAL_ALREADY_RESOLVED); 403 APPROVAL_APPROVER_NOT_END_USER
+            // puts it in `error`.
+            const errorText: string =
+              errorData?.message ?? errorData?.error ?? `Approval request failed: ${response.status}`;
+            // The decision did not apply, so the card must not claim it did.
+            // A pause the server reports as gone (already resolved, or expired
+            // / unknown) settles as timed out; anything else returns to
+            // pending so the visitor can retry. The notice says why.
+            const pauseGone =
+              errorData?.code === "APPROVAL_ALREADY_RESOLVED" ||
+              (response.status === 404 && /no paused execution/i.test(String(errorData?.error)));
+            // Only while the card still holds this request's decision: a
+            // newer request (or its approval_complete) may have settled it.
+            const current = this.messages.find((m) => m.id === approvalMessageId);
+            if (current?.approval?.resolvedAt === updatedApproval.resolvedAt) {
+              this.upsertMessage({
+                ...updatedMessage,
+                approval: pauseGone ? { ...updatedApproval, status: "timeout" } : approval,
+              });
+              this.upsertMessage({
+                id: errorMessageId,
+                role: "assistant",
+                content: errorText,
+                createdAt: new Date().toISOString(),
+                streaming: false,
+                sequence: this.nextSequence(),
+              });
+            }
+            throw new Error(errorText);
           }
           stream = response.body;
         } else if (response instanceof ReadableStream) {
           stream = response;
+        }
+
+        // Accepted: a retry that succeeds supersedes the earlier failure notice.
+        if (this.messages.some((m) => m.id === errorMessageId)) {
+          this.messages = this.messages.filter((m) => m.id !== errorMessageId);
+          this.callbacks.onMessagesChanged([...this.messages]);
         }
 
         if (stream) {

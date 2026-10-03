@@ -2280,13 +2280,19 @@ export class AgentWidgetClient {
   /**
    * Send an approval decision to the API and return the response
    * for streaming continuation.
+   *
+   * Routes by mode:
+   *  - **client-token mode**: POST `${apiBase}/v1/client/approve` with the
+   *    active `sessionId` and no Bearer key (runtypelabs/core#9518). Answers a
+   *    gate authored `tools.approval.approver: 'end-user'`; the SSE body has
+   *    the same shape as `/v1/client/resume`.
+   *  - **dispatch / proxy mode**: POST `${apiBase}/v1/agents/{agentId}/approve`
+   *    with the host's headers.
    */
   public async resolveApproval(
     approval: { agentId: string; executionId: string; approvalId: string },
     decision: 'approved' | 'denied'
   ): Promise<Response> {
-    const url = `${this.clientApiBase()}/v1/agents/${approval.agentId}/approve`;
-
     let headers: Record<string, string> = {
       'Content-Type': 'application/json',
       ...this.headers
@@ -2294,17 +2300,32 @@ export class AgentWidgetClient {
     if (this.getHeaders) {
       Object.assign(headers, await this.getHeaders());
     }
+    const body = {
+      executionId: approval.executionId,
+      approvalId: approval.approvalId,
+      decision,
+      streamResponse: true,
+    };
+    const post = (path: string, extra?: Record<string, unknown>) =>
+      fetch(`${this.clientApiBase()}${path}`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ...extra, ...body }),
+      });
+    const ownerRoute = `/v1/agents/${approval.agentId}/approve`;
 
-    return fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        executionId: approval.executionId,
-        approvalId: approval.approvalId,
-        decision,
-        streamResponse: true,
-      }),
-    });
+    if (!this.isClientTokenMode()) return post(ownerRoute);
+
+    // Same re-validation as `resumeFlow`: an approval can sit for a long time.
+    const { sessionId } = await this.initSession();
+    const response = await post('/v1/client/approve', { sessionId });
+    // A core without the route answers with its generic `Not Found`; an unknown
+    // or expired pause 404s with its own error, which the caller surfaces.
+    if (response.status === 404) {
+      const data = (await response.clone().json().catch(() => null)) as { error?: string } | null;
+      if (!data || data.error === 'Not Found') return post(ownerRoute);
+    }
+    return response;
   }
 
   /**

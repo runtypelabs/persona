@@ -180,7 +180,8 @@ const buildPending = (
   approvalConfig: AgentWidgetApprovalConfig | undefined,
   approve: Decide,
   deny: Decide,
-  enableAlways: boolean
+  enableAlways: boolean,
+  showRawCall = false
 ): HTMLElement => {
   const card = createElement("div", "persona-approval-card persona-shadow-sm");
   card.id = `bubble-${message.id}`;
@@ -199,7 +200,8 @@ const buildPending = (
   // name), so the description is only ever visible here. Mirrors the legacy
   // bubble, which also opened a disclosure when only a description was present.
   const hasDescription = Boolean(approval.description) && detailsMode !== "hidden";
-  const hasParams = approval.parameters != null && detailsMode !== "hidden";
+  // `showRawCall` lifts the parameters out of the disclosure (see below).
+  const hasParams = approval.parameters != null && detailsMode !== "hidden" && !showRawCall;
   const hasDetails = hasDescription || hasParams;
   const expanded = hasDetails && isDetailsExpanded(message.id, expansionState, approvalConfig);
 
@@ -261,6 +263,24 @@ const buildPending = (
     }
 
     body.appendChild(details);
+  }
+
+  // The raw tool name and arguments, always visible and above the reason, so
+  // what will actually run is never less prominent than the agent's claim.
+  if (showRawCall) {
+    const call = createElement("div", "persona-approval-call");
+    call.setAttribute("data-role", "raw-call");
+    const name = createElement("code", "persona-approval-tool-name");
+    name.textContent = approval.toolName;
+    call.appendChild(name);
+    if (approval.parameters != null) {
+      const pre = createElement("pre", "persona-approval-params");
+      if (approvalConfig?.parameterBackgroundColor) pre.style.background = approvalConfig.parameterBackgroundColor;
+      if (approvalConfig?.parameterTextColor) pre.style.color = approvalConfig.parameterTextColor;
+      pre.textContent = formatUnknownValue(approval.parameters);
+      call.appendChild(pre);
+    }
+    body.appendChild(call);
   }
 
   // Agent-authored justification: attacker-writable, so plain text + attributed.
@@ -422,6 +442,9 @@ export const createBuiltInApprovalPlugin = (
       // closures, but KEEP this approval's place in the pending order so a
       // re-render of an older card doesn't reorder it ahead of a newer one.
       detachMessage(state, message.id);
+      // Client-token visitors answer the gate themselves, so they see the
+      // exact call rather than just the agent's framing.
+      const visitorGate = Boolean(config?.clientToken);
       const enableAlways = approvalConfig?.enableAlwaysAllow === true;
       const card = buildPending(
         state,
@@ -431,7 +454,8 @@ export const createBuiltInApprovalPlugin = (
         approvalConfig,
         approve,
         deny,
-        enableAlways
+        enableAlways,
+        visitorGate
       );
 
       if (enableAlways) {
