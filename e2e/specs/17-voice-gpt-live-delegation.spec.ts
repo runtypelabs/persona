@@ -662,27 +662,41 @@ test("an unanswered voice approval times out after approvalTimeoutMs", async ({ 
   await expect(page.getByRole("button", { name: "Allow", exact: true })).toHaveCount(0);
 });
 
-test("delegation_cancelled: no frames for that delegation; its approval card stays usable", async ({ page, context }) => {
+test("delegation_cancelled past the deadline: no frames for that delegation, and its approval card is declined", async ({
+  page,
+  context,
+}) => {
   const { api, call, decisions } = await approvalCall(page, context);
   api.setChatStream(approvalParkStream("exec_order", "apr_1"));
   await call.utterance({ role: "user", turnId: "in_1", text: "Order two almond croissants", startMs: 1_000 });
   call.send({ type: "delegation_cancelled", delegationId: "dlg_unknown", reason: "session_ending" }); // unknown id: ignored
-  const update = await (async () => {
-    call.delegate({ delegationId: "dlg_1", text: "Order two almond croissants", userUtteranceIds: ["in_1"] });
-    return call.waitForFrame("delegation_update", (f) => f.delegationId === "dlg_1");
-  })();
+  call.delegate({ delegationId: "dlg_1", text: "Order two almond croissants", userUtteranceIds: ["in_1"] });
+  const update = await call.waitForFrame("delegation_update", (f) => f.delegationId === "dlg_1");
   expect(update.status).toBe("pending_approval");
-  call.send({ type: "delegation_cancelled", delegationId: "dlg_1", reason: "timeout" });
   // Unknown frames and fields from a newer server are ignored, and a warning keeps the call.
   call.send({ type: "agent_state", state: "listening" });
   call.send({ type: "warning", code: "UNKNOWN_FRAME", message: "Unknown frame: x" });
 
-  await page.getByRole("button", { name: "Allow", exact: true }).click();
-  await expect.poll(() => decisions).toEqual([expect.objectContaining({ decision: "approved" })]);
-  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Order placed: JB-1234." })).toHaveCount(1);
+  call.send({ type: "delegation_cancelled", delegationId: "dlg_1", reason: "deadline" });
+  // Like the approval TTL: the card is declined, and nothing more goes out for the id.
+  await expect.poll(() => decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "denied" })]);
+  await expect(page.getByRole("button", { name: "Allow", exact: true })).toHaveCount(0);
   await page.waitForTimeout(500);
   expect(call.framesOf("delegation_result")).toEqual([]);
   // The call is still up: hanging up closes it cleanly.
   await clickLiveMic(page);
   expect(await call.closed).toBe(1000);
+});
+
+test("delegation_cancelled as the call ends: the approval card stays usable", async ({ page, context }) => {
+  const { call, decisions, order } = await approvalCall(page, context);
+  await order("apr_1");
+  call.send({ type: "delegation_cancelled", delegationId: "dlg_1", reason: "session_ending" });
+  await page.waitForTimeout(300);
+  expect(decisions).toEqual([]);
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  await expect.poll(() => decisions).toEqual([expect.objectContaining({ approvalId: "apr_1", decision: "approved" })]);
+  await expect(page.locator(voiceSel.assistantBubble).filter({ hasText: "Order placed: JB-1234." })).toHaveCount(1);
+  await page.waitForTimeout(500);
+  expect(call.framesOf("delegation_result")).toEqual([]);
 });
