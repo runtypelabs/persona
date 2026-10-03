@@ -3,9 +3,10 @@ import { AgentWidgetClient } from "./client";
 import { AgentWidgetSession } from "./session";
 import type { AgentWidgetMessage } from "./types";
 
-// An approval resume re-runs the agent, which re-issues the gated call under a
-// NEW toolCallId, so no terminal tool frame ever arrives for the paused one.
-// The session settles the paused bubble from the server's approval_complete.
+// Older servers resume an approval by re-running the agent, which re-issues the
+// gated call under a NEW toolCallId, so no terminal frame arrives for the paused
+// one; the session settles it when the stream ends. Current servers run the
+// paused call itself under its original id, and that real result wins.
 
 const originalFetch = global.fetch;
 afterEach(() => {
@@ -60,10 +61,14 @@ const pendingApproval = (toolCallId?: string): AgentWidgetMessage => ({
 
 const setup = (initialMessages: AgentWidgetMessage[]) => {
   let messages: AgentWidgetMessage[] = [];
+  const toolStates: Array<AgentWidgetMessage["toolCall"]> = [];
   const session = new AgentWidgetSession(
     { clientToken: "ct_live_demo", apiUrl: "https://api.runtype.com", initialMessages },
     {
-      onMessagesChanged: (m) => { messages = m; },
+      onMessagesChanged: (m) => {
+        messages = m;
+        toolStates.push(m.find((x) => x.toolCall?.id === "toolu_paused")?.toolCall);
+      },
       onStatusChanged: () => {},
       onStreamingChanged: () => {},
       onError: () => {},
@@ -74,6 +79,7 @@ const setup = (initialMessages: AgentWidgetMessage[]) => {
   return {
     resolve: (decision: "approved" | "denied") => session.resolveApproval(approval, decision),
     tool: (id = "toolu_paused") => messages.find((m) => m.toolCall?.id === id),
+    toolStates,
   };
 };
 
@@ -189,6 +195,50 @@ describe("AgentWidgetSession settles the approval-paused tool bubble", () => {
     });
   });
 
+  it("lets the server's own result for the paused id complete an approved call", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      sse([
+        { type: "approval_complete", executionId: "exec_abc", approvalId: "appr_1", decision: "approved" },
+        { type: "tool_start", toolCallId: "toolu_paused", toolName: "place_pickup_order", toolType: "custom" },
+        {
+          type: "tool_complete",
+          toolCallId: "toolu_paused",
+          toolName: "place_pickup_order",
+          success: true,
+          result: { orderId: "ord_1" },
+        },
+        { type: "execution_complete", kind: "agent", success: true },
+      ])
+    );
+    const { resolve, tool, toolStates } = setup([pausedTool(), pendingApproval("toolu_paused")]);
+    await resolve("approved");
+
+    expect(tool()?.toolCall).toMatchObject({ status: "complete", result: { orderId: "ord_1" } });
+    expect(toolStates.some((state) => state?.superseded)).toBe(false);
+  });
+
+  it("lets the server's own failed result for the paused id complete a denied call", async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      sse([
+        { type: "approval_complete", executionId: "exec_abc", approvalId: "appr_1", decision: "denied" },
+        { type: "tool_start", toolCallId: "toolu_paused", toolName: "place_pickup_order", toolType: "custom" },
+        {
+          type: "tool_complete",
+          toolCallId: "toolu_paused",
+          toolName: "place_pickup_order",
+          success: false,
+          error: 'Tool "place_pickup_order" was denied by the user.',
+        },
+        { type: "execution_complete", kind: "agent", success: true },
+      ])
+    );
+    const { resolve, tool } = setup([pausedTool(), pendingApproval("toolu_paused")]);
+    await resolve("denied");
+
+    expect(tool()?.toolCall).toMatchObject({ status: "complete", success: false });
+    expect(tool()?.toolCall?.error).toContain("denied by the user");
+  });
+
   it("does not touch a tool call that already completed", async () => {
     global.fetch = vi.fn().mockResolvedValue(resumeStream("denied", false));
     const { resolve, tool } = setup([pausedTool("complete"), pendingApproval("toolu_paused")]);
@@ -217,5 +267,59 @@ describe("AgentWidgetSession settles the approval-paused tool bubble", () => {
       success: false,
       error: "Denied",
     });
+  });
+});
+
+describe("approval settles stay with the stream that decided them", () => {
+  const tool = (id: string): AgentWidgetMessage => ({
+    ...pausedTool(),
+    id: `tool-${id}`,
+    toolCall: { ...pausedTool().toolCall!, id },
+  });
+  const approval = (approvalId: string, toolCallId: string): AgentWidgetMessage => ({
+    ...pendingApproval(toolCallId),
+    id: `approval-${approvalId}`,
+    approval: { ...pendingApproval(toolCallId).approval!, id: approvalId, toolCallId },
+  });
+  const frame = (event: Record<string, unknown>) =>
+    new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
+
+  it("does not settle another stream's paused call when one stream ends", async () => {
+    let messages: AgentWidgetMessage[] = [];
+    const session = new AgentWidgetSession(
+      {
+        clientToken: "ct_live_demo",
+        apiUrl: "https://api.runtype.com",
+        initialMessages: [tool("toolu_a"), approval("appr_a", "toolu_a"), tool("toolu_b"), approval("appr_b", "toolu_b")],
+      },
+      {
+        onMessagesChanged: (m) => { messages = m; },
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: () => {},
+      }
+    );
+    let controlB!: ReadableStreamDefaultController<Uint8Array>;
+    const streamB = new ReadableStream<Uint8Array>({ start: (c) => { controlB = c; } });
+    const connectedB = session.connectStream(streamB, { allowReentry: true });
+    controlB.enqueue(frame({ type: "approval_complete", executionId: "exec_b", approvalId: "appr_b", decision: "approved" }));
+    await new Promise((r) => setTimeout(r, 0));
+
+    await session.connectStream(
+      sse([
+        { type: "approval_complete", executionId: "exec_a", approvalId: "appr_a", decision: "approved" },
+        { type: "execution_complete", kind: "agent", success: true },
+      ]).body!,
+      { allowReentry: true }
+    );
+    const b = () => messages.find((m) => m.toolCall?.id === "toolu_b")?.toolCall;
+    expect(b()?.superseded).toBeUndefined();
+
+    controlB.enqueue(frame({ type: "tool_start", toolCallId: "toolu_b", toolName: "place_pickup_order", toolType: "custom" }));
+    controlB.enqueue(frame({ type: "tool_complete", toolCallId: "toolu_b", toolName: "place_pickup_order", success: true, result: { orderId: "ord_b" } }));
+    controlB.close();
+    await connectedB;
+    expect(b()).toMatchObject({ status: "complete", result: { orderId: "ord_b" } });
+    expect(b()?.superseded).toBeUndefined();
   });
 });
