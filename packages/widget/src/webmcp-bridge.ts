@@ -182,6 +182,8 @@ export function computeClientToolsFingerprint(
         t.parametersSchema ? JSON.stringify(t.parametersSchema) : "",
         t.origin ?? "",
         t.annotations ? JSON.stringify(t.annotations) : "",
+        // Appended only when set, so tools without it keep their fingerprint.
+        ...(t.endsTurn ? ["endsTurn"] : []),
       ].join("\x1f"),
     )
     .sort();

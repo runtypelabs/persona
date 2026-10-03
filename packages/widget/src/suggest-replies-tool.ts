@@ -82,6 +82,9 @@ export const SUGGEST_REPLIES_CLIENT_TOOL: ClientToolDefinition = {
   parametersSchema: SUGGEST_REPLIES_PARAMETERS_SCHEMA,
   origin: "sdk",
   annotations: { readOnlyHint: true },
+  // The canned resume result carries nothing for the model to act on; a
+  // follow-up model call only invites it to repeat the answer it already gave.
+  endsTurn: true,
 };
 
 /**

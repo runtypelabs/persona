@@ -453,6 +453,9 @@ describe("AgentWidgetClient - built-in suggest_replies exposure", () => {
     await client.dispatch({ messages: [userMessage()] }, () => undefined);
     const parsed = JSON.parse(captured.body!);
     expect(parsed.clientTools).toEqual([SUGGEST_REPLIES_CLIENT_TOOL]);
+    // `endsTurn` survives serialization: the server skips the follow-up model
+    // call after the canned resume, so the answer is not written twice.
+    expect(parsed.clientTools[0].endsTurn).toBe(true);
   });
 
   it("omits clientTools entirely when expose is off and no WebMCP tools exist", async () => {
@@ -463,6 +466,16 @@ describe("AgentWidgetClient - built-in suggest_replies exposure", () => {
     await client.dispatch({ messages: [userMessage()] }, () => undefined);
     const parsed = JSON.parse(captured.body!);
     expect(parsed.clientTools).toBeUndefined();
+  });
+
+  it("folds endsTurn into the fingerprint without changing tools that lack it", () => {
+    const tool = { name: "search", description: "s" };
+    expect(computeClientToolsFingerprint([{ ...tool, endsTurn: true }])).not.toBe(
+      computeClientToolsFingerprint([tool]),
+    );
+    expect(computeClientToolsFingerprint([{ ...tool, endsTurn: false }])).toBe(
+      computeClientToolsFingerprint([tool]),
+    );
   });
 
   it("changes the clientTools fingerprint when toggled (diff-only resend)", () => {
@@ -512,6 +525,7 @@ describe("AgentWidgetSession - suggest_replies fire-and-forget auto-resolve", ()
     role: "assistant",
     content: "",
     createdAt: new Date().toISOString(),
+    variant: "tool",
     agentMetadata: {
       executionId,
       awaitingLocalTool: true,
@@ -634,6 +648,70 @@ describe("AgentWidgetSession - suggest_replies fire-and-forget auto-resolve", ()
       Record<string, unknown>,
     ];
     expect(Object.keys(toolOutputs).sort()).toEqual(["toolu_S", "toolu_W"]);
+  });
+
+  it("settles cleanly when the resume ends the turn with no further text", async () => {
+    // An `endsTurn` server completes the turn without another model call:
+    // the resume stream carries only the terminal events, no text.
+    const onError = vi.fn();
+    const streamingChanges: boolean[] = [];
+    const session = new AgentWidgetSession(
+      { apiUrl: "http://test" },
+      {
+        onMessagesChanged: () => undefined,
+        onStatusChanged: () => undefined,
+        onStreamingChanged: (streaming) => streamingChanges.push(streaming),
+        onError,
+      },
+    );
+    const sse = [
+      { type: "turn_complete", id: "turn-2", stopReason: "end_turn" },
+      { type: "execution_complete", kind: "agent", executionId: "exec-sr" },
+    ]
+      .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+      .join("");
+    const resumeSpy = vi.fn(
+      async () =>
+        new Response(new Blob([sse]), {
+          status: 200,
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+    );
+    (
+      session as unknown as { client: Record<string, unknown> }
+    ).client.resumeFlow = resumeSpy;
+
+    feed(session, {
+      id: "assistant-1",
+      role: "assistant",
+      content: "Here is the answer.",
+      createdAt: new Date().toISOString(),
+      streaming: false,
+    });
+    feed(session, suggestAwait("toolu_S"));
+    endStream(session);
+    await vi.waitFor(() => expect(streamingChanges.at(-1)).toBe(false));
+
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    const internals = session as unknown as {
+      messages: AgentWidgetMessage[];
+      streaming: boolean;
+    };
+    expect(internals.streaming).toBe(false);
+    expect(session.getStatus()).toBe("idle");
+    const messages = internals.messages;
+    // The pre-call answer stays the only assistant text: no empty bubble and
+    // no second copy.
+    expect(
+      messages.filter((m) => m.role === "assistant" && !m.toolCall),
+    ).toEqual([expect.objectContaining({ content: "Here is the answer." })]);
+    expect(messages.every((m) => !m.streaming)).toBe(true);
+    // The chips stay visible after the turn ends.
+    expect(latestAgentSuggestions(messages)).toEqual([
+      "Tell me more",
+      "Show pricing",
+    ]);
   });
 
   it("does NOT auto-resume when the feature is disabled", async () => {

@@ -858,6 +858,14 @@ export type ClientToolDefinition = {
    * instructions. `annotations` itself is trace/dashboard metadata only.
    */
   untrustedContentHint?: boolean;
+  /**
+   * The turn ends after this tool's result, with no further model call, on
+   * servers that support it: when every call in a resumed batch is an
+   * `endsTurn` tool, the turn's output is the text the model wrote before the
+   * call. Older servers strip the unknown key and run the follow-up model call
+   * as before.
+   */
+  endsTurn?: boolean;
 };
 
 /**
