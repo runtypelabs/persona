@@ -50,6 +50,11 @@ export default defineConfig({
     // soon as a dispatch begins (in parallel with the request itself).
     options.external.push("./client-stream");
 
+    // Keep UI glue for opt-in / interaction-only features (ask-user sheet
+    // handlers, ...) out of the CDN payload: sibling-URL chunk `ui-extras.js`,
+    // warmed when such a feature first activates.
+    options.external.push("./ui-extras-entry");
+
     // Keep the context-mentions runtime (controller/manager/menu) out of the CDN
     // payload. The loader's fallback `import("@runtypelabs/persona/context-mentions")`
     // is left as a dead external import; it is never invoked here because

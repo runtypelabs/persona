@@ -26,6 +26,9 @@ import "./icons-extra-eager";
 // Same for the SSE stream processor (lazy `client-stream.js` in the IIFE).
 import "./client-stream-eager";
 
+// And the opt-in UI glue (lazy `ui-extras.js` in the IIFE).
+import "./ui-extras-eager";
+
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";
 export { default } from "./index-core";

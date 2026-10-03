@@ -97,6 +97,12 @@ import { setClientStreamLoader } from "./client-stream-loader";
 
 setClientStreamLoader(siblingChunk("client-stream.js"));
 
+// Deferred UI glue for opt-in / interaction-only features (`ui-extras-entry.ts`),
+// built with `./ui-extras-entry` external; warmed when such a feature activates.
+import { setUiExtrasLoader } from "./ui-extras-loader";
+
+setUiExtrasLoader(siblingChunk("ui-extras.js"));
+
 // ---------------------------------------------------------------------------
 // Deferred Runtype TTS engine loading.
 //
