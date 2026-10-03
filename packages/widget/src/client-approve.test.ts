@@ -183,7 +183,7 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
         code: "APPROVAL_APPROVER_NOT_END_USER",
       },
       "This approval needs the business owner, not the chat visitor",
-      "approved",
+      "pending",
     ],
     [
       409,
@@ -193,7 +193,7 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
         code: "APPROVAL_ALREADY_RESOLVED",
       },
       "This approval was already denied; that decision is the one in force.",
-      "approved",
+      "timeout",
     ],
     [
       404,
@@ -201,7 +201,9 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
       "No paused execution found for this executionId",
       "timeout",
     ],
-  ])("surfaces a %i refusal next to a settled card", async (status, body, text, badge) => {
+    [404, { error: "Agent not found" }, "Agent not found", "pending"],
+    [500, { error: "Failed to process approval" }, "Failed to process approval", "pending"],
+  ])("surfaces a %i refusal without claiming the decision applied", async (status, body, text, badge) => {
     mockFetch(Response.json(body, { status }));
     const { session, errors, approve, bubble, last } = setup();
     await approve();

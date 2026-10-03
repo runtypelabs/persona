@@ -603,9 +603,10 @@ itself and streams the continued run into the same conversation:
 - **Proxy / API-key mode**: `POST /v1/agents/{agentId}/approve` with your
   configured `headers`.
 
-When the request fails, the card stays resolved and the widget adds an
-assistant message with the server's reason and calls `onError`. A 404 for an
-expired or unknown pause shows the card as `timeout`.
+When the request fails, the widget adds an assistant message with the
+server's reason and calls `onError`. If the pause is gone (`409
+APPROVAL_ALREADY_RESOLVED`, or a 404 for an expired or unknown pause), the card
+shows `timeout`. Otherwise it returns to `pending` so the user can try again.
 
 **How the summary line is chosen.** A tool's wire `description` is written for the
 agent (usage rules, prompt prose), not for end users, so the bubble doesn't lead

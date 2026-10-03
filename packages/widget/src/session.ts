@@ -3231,16 +3231,18 @@ export class AgentWidgetSession {
             // puts it in `error`.
             const errorText: string =
               errorData?.message ?? errorData?.error ?? `Approval request failed: ${response.status}`;
-            // The decision did not apply: say why next to the card instead of
-            // leaving it looking resolved with no reply. A 404 means the pause
-            // is gone (expired or unknown), so the card reads as timed out.
-            if (response.status === 404) {
-              this.upsertMessage({
-                ...updatedMessage,
-                approval: { ...updatedApproval, status: "timeout" },
-              });
-            }
-            this.appendMessage({
+            // The decision did not apply, so the card must not claim it did.
+            // A pause the server reports as gone (already resolved, or expired
+            // / unknown) settles as timed out; anything else returns to
+            // pending so the visitor can retry. The notice says why.
+            const pauseGone =
+              errorData?.code === "APPROVAL_ALREADY_RESOLVED" ||
+              (response.status === 404 && /no paused execution/i.test(String(errorData?.error)));
+            this.upsertMessage({
+              ...updatedMessage,
+              approval: pauseGone ? { ...updatedApproval, status: "timeout" } : approval,
+            });
+            this.upsertMessage({
               id: `approval-error-${approval.id}`,
               role: "assistant",
               content: errorText,
