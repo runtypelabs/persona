@@ -13,7 +13,19 @@ import { createHistoryView } from "./components/history-view";
 import { setHistoryViewLoader } from "./history-view-loader";
 import type { HistoryViewOptions } from "./history-view-entry";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
-import { createDemoHistoryProvider } from "./internal/demo-history-provider";
+import {
+  createDemoHistoryProvider,
+  type DemoHistoryConversationSeed,
+} from "./internal/demo-history-provider";
+
+const SEEDS: DemoHistoryConversationSeed[] = [
+  {
+    id: "conv-a",
+    title: "Order status",
+    targetId: null,
+    messages: [{ id: "a1", role: "user", content: "where is my order" }],
+  },
+];
 
 const flush = async (times = 12) => {
   for (let i = 0; i < times; i += 1) {
@@ -32,7 +44,9 @@ describe("history confirm with a stale chunk", () => {
 
   beforeEach(() => {
     window.scrollTo = vi.fn();
-    setHistoryProviderFactory(() => createDemoHistoryProvider());
+    setHistoryProviderFactory(() =>
+      createDemoHistoryProvider({ conversations: SEEDS })
+    );
   });
 
   afterEach(() => {
@@ -43,6 +57,52 @@ describe("history confirm with a stale chunk", () => {
     mount = null;
     document.body.innerHTML = "";
     vi.restoreAllMocks();
+  });
+
+  // Runs first: a resolved chunk is memoized for the rest of the module graph,
+  // so the rejecting loader only takes effect before any successful load.
+  it("falls back to the native confirm when the chunk fails to load", async () => {
+    setHistoryViewLoader(async () => {
+      throw new Error("chunk fetch failed");
+    });
+    mount = document.createElement("div");
+    document.body.appendChild(mount);
+    controller = createAgentExperience(mount, {
+      apiUrl: "https://api.example.com/chat",
+      launcher: { enabled: false },
+      persistState: false,
+      features: { history: { enabled: true } },
+    } as unknown as Parameters<typeof createAgentExperience>[1]);
+    await controller.openConversation("conv-a");
+    await flush();
+
+    // The title-menu delete needs no history view: it goes straight to the
+    // confirm, whose chunk load rejects.
+    const deleteFromTitleMenu = () =>
+      mount!
+        .querySelector('[data-persona-theme-zone="header"]')!
+        .dispatchEvent(
+          new CustomEvent("persona:title-menu-builtin", {
+            bubbles: true,
+            detail: { actionId: "delete" },
+          })
+        );
+    const listIds = async () =>
+      (await controller!.listConversations({ limit: 10 })).items.map(
+        (item) => item.id
+      );
+
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    deleteFromTitleMenu();
+    await flush();
+    expect(confirmSpy).toHaveBeenCalledTimes(1);
+    expect(await listIds()).toContain("conv-a");
+
+    confirmSpy.mockReturnValue(true);
+    deleteFromTitleMenu();
+    await flush();
+    expect(confirmSpy).toHaveBeenCalledTimes(2);
+    expect(await listIds()).not.toContain("conv-a");
   });
 
   it("falls back to the native confirm when the chunk lacks showHistoryConfirm", async () => {
