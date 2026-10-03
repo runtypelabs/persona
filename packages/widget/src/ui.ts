@@ -6,6 +6,7 @@ import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
 import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
+import { loadClientStream } from "./client-stream-loader";
 import {
   AgentWidgetSession,
   AgentWidgetSessionStatus,
@@ -363,7 +364,7 @@ import {
   resolveHistoryShellCopy,
   type ResolvedHistoryShellCopy,
 } from "./components/history-shell-copy";
-import { showHistoryConfirm } from "./components/history-confirm-dialog";
+import type { HistoryConfirmOptions } from "./components/history-confirm-dialog";
 import { componentRegistry } from "./components/registry";
 import {
   renderComponentDirective,
@@ -7483,6 +7484,8 @@ export const createAgentExperience = (
   const warmMarkdownParsers = () => {
     if (markdownParsersWarmed) return;
     markdownParsersWarmed = true;
+    // The stream processor is needed for the first reply; warm it too.
+    loadClientStream().catch(() => {});
     loadMarkdownParsers().catch(() => {
       // Failed fetch (ad blocker, offline): allow the next visibility change
       // or render to retry; the chunk loader resets its cached promise on
@@ -11345,6 +11348,13 @@ export const createAgentExperience = (
   // passes' cssText resets, so plain layouts keep the container host.
   const historyConfirmHost = (): HTMLElement =>
     artifactSplitRoot ? panel : container;
+
+  // The dialog ships in the lazy history-view chunk (usually already warm:
+  // these actions start from history UI).
+  const showHistoryConfirm = async (
+    options: HistoryConfirmOptions
+  ): Promise<boolean> =>
+    (await loadHistoryView()).showHistoryConfirm(options);
 
   const requestDeleteConversation = async (
     conversationId: string

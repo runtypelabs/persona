@@ -43,6 +43,13 @@ export default defineConfig({
     // `markdown-parsers.js` chunk from a sibling URL instead.
     options.external.push("./markdown-parsers-entry");
 
+    // Keep the SSE stream processor out of the CDN payload. Same scheme as the
+    // markdown parsers: the loader's relative `./client-stream` import is left
+    // dead here; `index-global.ts` registers a sibling-URL loader for the
+    // standalone `client-stream.js` chunk, which the client starts fetching as
+    // soon as a dispatch begins (in parallel with the request itself).
+    options.external.push("./client-stream");
+
     // Keep the context-mentions runtime (controller/manager/menu) out of the CDN
     // payload. The loader's fallback `import("@runtypelabs/persona/context-mentions")`
     // is left as a dead external import; it is never invoked here because

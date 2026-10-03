@@ -23,6 +23,9 @@ import "./markdown-parsers-eager";
 // `renderLucideIcon` contract; the IIFE/CDN build lazy-loads `icons-extra.js`.
 import "./icons-extra-eager";
 
+// Same for the SSE stream processor (lazy `client-stream.js` in the IIFE).
+import "./client-stream-eager";
+
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";
 export { default } from "./index-core";

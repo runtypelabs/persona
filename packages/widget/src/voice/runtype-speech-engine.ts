@@ -85,42 +85,44 @@ export class RuntypeSpeechEngine implements SpeechEngine {
   // speechSynthesis.pause().
   readonly supportsPause = true;
 
-  private player: PcmStreamPlayer | null = null;
-  private playerPromise: Promise<PcmStreamPlayer> | null = null;
+  #player: PcmStreamPlayer | null = null;
+  #playerPromise: Promise<PcmStreamPlayer> | null = null;
   // Bumped on every speak()/stop() so a superseded request's async callbacks and
   // its in-flight stream read loop become no-ops.
-  private generation = 0;
+  #generation = 0;
 
-  constructor(private readonly opts: RuntypeSpeechEngineOptions) {}
+  readonly #opts: RuntypeSpeechEngineOptions;
+  constructor(opts: RuntypeSpeechEngineOptions) {
+    this.#opts = opts;}
 
   // Create one player lazily (a worklet engine's addModule is async), then reuse
   // it across speaks; flush() between replies clears the queue without tearing
   // down the AudioContext. Defaults to the in-bundle AudioPlaybackManager.
-  private ensurePlayer(): Promise<PcmStreamPlayer> {
-    return (this.playerPromise ??= Promise.resolve(
-      this.opts.createPlaybackEngine
-        ? this.opts.createPlaybackEngine()
+  #ensurePlayer(): Promise<PcmStreamPlayer> {
+    return (this.#playerPromise ??= Promise.resolve(
+      this.#opts.createPlaybackEngine
+        ? this.#opts.createPlaybackEngine()
         : new AudioPlaybackManager(24000, {
-            prebufferMs: this.opts.prebufferMs ?? 200,
+            prebufferMs: this.#opts.prebufferMs ?? 200,
           }),
-    ).then((player) => (this.player = player)));
+    ).then((player) => (this.#player = player)));
   }
 
   speak(request: SpeechRequest, callbacks: SpeechCallbacks): void {
-    const gen = ++this.generation;
+    const gen = ++this.#generation;
     // Run the async fetch/stream without making speak() itself async — the
     // widget surfaces the time until audio starts as the "loading" state.
-    void this.run(gen, request, callbacks);
+    void this.#run(gen, request, callbacks);
   }
 
-  private async run(
+  async #run(
     gen: number,
     request: SpeechRequest,
     callbacks: SpeechCallbacks,
   ): Promise<void> {
     try {
-      const player = await this.ensurePlayer();
-      if (gen !== this.generation) return; // superseded while the worklet booted
+      const player = await this.#ensurePlayer();
+      if (gen !== this.#generation) return; // superseded while the worklet booted
       player.flush(); // drop any prior playback (and its callbacks)
       player.resume(); // clear a prior pause so this reply isn't stuck suspended
 
@@ -130,14 +132,14 @@ export class RuntypeSpeechEngine implements SpeechEngine {
       // no onStarted and an immediate onFinished, so the UI skips straight back
       // to idle without a phantom "playing".
       player.onStarted(() => {
-        if (gen === this.generation) callbacks.onStart?.();
+        if (gen === this.#generation) callbacks.onStart?.();
       });
       player.onFinished(() => {
-        if (gen === this.generation) callbacks.onEnd?.();
+        if (gen === this.#generation) callbacks.onEnd?.();
       });
 
-      const url = `${normalizeHost(this.opts.host)}/v1/agents/${encodeURIComponent(
-        this.opts.agentId,
+      const url = `${normalizeHost(this.#opts.host)}/v1/agents/${encodeURIComponent(
+        this.#opts.agentId,
       )}/speak`;
       const res = await fetch(url, {
         method: "POST",
@@ -145,21 +147,21 @@ export class RuntypeSpeechEngine implements SpeechEngine {
           "Content-Type": "application/json",
           // Match Runtype's client-token auth convention. Never placed in the
           // URL/query string.
-          Authorization: `Bearer ${this.opts.clientToken}`,
+          Authorization: `Bearer ${this.#opts.clientToken}`,
         },
         body: JSON.stringify({
           text: request.text,
-          voice: request.voice ?? this.opts.voice,
+          voice: request.voice ?? this.#opts.voice,
           format: "pcm",
         }),
       });
-      if (gen !== this.generation) return; // superseded while awaiting headers
+      if (gen !== this.#generation) return; // superseded while awaiting headers
       if (!res.ok || !res.body) throw new Error(await describeError(res));
 
       const reader = res.body.getReader();
       for (;;) {
         const { done, value } = await reader.read();
-        if (gen !== this.generation) {
+        if (gen !== this.#generation) {
           // A newer speak()/stop() won — stop pulling and release the stream.
           await reader.cancel().catch(() => {});
           return;
@@ -170,31 +172,31 @@ export class RuntypeSpeechEngine implements SpeechEngine {
 
       player.markStreamEnd();
     } catch (err) {
-      if (gen !== this.generation) return; // error from a superseded request
+      if (gen !== this.#generation) return; // error from a superseded request
       const error = err instanceof Error ? err : new Error(String(err));
-      this.opts.onError?.(error); // surface the reason (log, telemetry, …)
+      this.#opts.onError?.(error); // surface the reason (log, telemetry, …)
       callbacks.onError?.(error); // and let the widget (or fallback) react
     }
   }
 
   pause(): void {
-    this.player?.pause();
+    this.#player?.pause();
   }
 
   resume(): void {
-    this.player?.resume();
+    this.#player?.resume();
   }
 
   stop(): void {
-    this.generation++; // invalidate any in-flight stream + pending onFinished
-    this.player?.flush();
+    this.#generation++; // invalidate any in-flight stream + pending onFinished
+    this.#player?.flush();
   }
 
   destroy(): void {
-    this.generation++;
-    void this.player?.destroy();
-    this.player = null;
-    this.playerPromise = null;
+    this.#generation++;
+    void this.#player?.destroy();
+    this.#player = null;
+    this.#playerPromise = null;
   }
 }
 

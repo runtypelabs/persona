@@ -196,18 +196,35 @@ export const createVisitorStore = (
     }
   };
 
+  /**
+   * A first init still queued behind another tab's lock when this store is
+   * destroyed must not run: it would mint a visitor and write the token and
+   * session after teardown, racing the replacement store for the same keys.
+   * The in-flight `withFirstInitLock` rejects instead; `destroy()` wakes any
+   * lease waiter so the rejection is immediate rather than up to a poll late.
+   */
+  const leaseWaiters = new Set<() => void>();
+  const runGuarded = <T>(fn: () => Promise<T>): Promise<T> =>
+    destroyed
+      ? Promise.reject(
+          new Error("Visitor store destroyed before its first init could start")
+        )
+      : fn();
+
   /** Storage-change wakeup with a timeout floor; same-tab writers fire no event. */
   const waitForLeaseChange = (timeoutMs: number) =>
     new Promise<void>((resolve) => {
       const timer = setTimeout(done, timeoutMs);
       function done() {
         clearTimeout(timer);
+        leaseWaiters.delete(done);
         window.removeEventListener("storage", wake);
         resolve();
       }
       function wake(event: StorageEvent) {
         if (event.key === null || event.key === leaseKey) done();
       }
+      leaseWaiters.add(done);
       window.addEventListener("storage", wake);
     });
 
@@ -216,7 +233,7 @@ export const createVisitorStore = (
       .toString(36)
       .slice(2)}`;
     const deadline = Date.now() + LEASE_WAIT_CAP_MS;
-    while (Date.now() < deadline) {
+    while (!destroyed && Date.now() < deadline) {
       const store = localStore();
       if (!store) break;
       const now = Date.now();
@@ -246,14 +263,14 @@ export const createVisitorStore = (
       }
       heldLeaseNonce = nonce;
       try {
-        return await fn();
+        return await runGuarded(fn);
       } finally {
         heldLeaseNonce = null;
         removeOwnLease(nonce);
       }
     }
     // Cap or storage loss: proceed unlocked, the documented rare-race mode.
-    return fn();
+    return runGuarded(fn);
   };
 
   return {
@@ -310,10 +327,10 @@ export const createVisitorStore = (
         globalThis.navigator as Navigator & { locks?: LockManagerLike }
       )?.locks;
       if (locks?.request) {
-        return locks.request(lockName, () => fn());
+        return locks.request(lockName, () => runGuarded(fn));
       }
       // No-persistence and degraded-memory modes cannot coordinate tabs.
-      if (!localStore()) return fn();
+      if (!localStore()) return runGuarded(fn);
       return leaseLock(fn);
     },
 
@@ -332,6 +349,7 @@ export const createVisitorStore = (
         window.removeEventListener("storage", onStorage);
       }
       if (heldLeaseNonce) removeOwnLease(heldLeaseNonce);
+      for (const wake of [...leaseWaiters]) wake();
     },
   };
 };

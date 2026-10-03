@@ -634,6 +634,9 @@ importers:
       size-limit:
         specifier: ^12.1.0
         version: 12.1.0
+      terser:
+        specifier: ^5.49.0
+        version: 5.49.0
       tsup:
         specifier: ^8.0.1
         version: 8.5.1(jiti@1.21.7)(postcss@8.5.15)(supports-color@10.2.2)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)
@@ -5671,7 +5674,6 @@ snapshots:
     dependencies:
       '@jridgewell/gen-mapping': 0.3.13
       '@jridgewell/trace-mapping': 0.3.31
-    optional: true
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
@@ -6712,8 +6714,7 @@ snapshots:
     dependencies:
       fill-range: 7.1.1
 
-  buffer-from@1.1.2:
-    optional: true
+  buffer-from@1.1.2: {}
 
   bundle-require@5.1.0(esbuild@0.27.3):
     dependencies:
@@ -6775,8 +6776,7 @@ snapshots:
 
   color-name@1.1.4: {}
 
-  commander@2.20.3:
-    optional: true
+  commander@2.20.3: {}
 
   commander@4.1.1: {}
 
@@ -8377,7 +8377,6 @@ snapshots:
     dependencies:
       buffer-from: 1.1.2
       source-map: 0.6.1
-    optional: true
 
   source-map@0.6.1: {}
 
@@ -8497,7 +8496,6 @@ snapshots:
       acorn: 8.16.0
       commander: 2.20.3
       source-map-support: 0.5.21
-    optional: true
 
   text-table@0.2.0: {}
 

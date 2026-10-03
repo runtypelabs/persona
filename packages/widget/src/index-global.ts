@@ -45,25 +45,36 @@ const widgetScriptSrc: string | null =
     ? ((document.currentScript as HTMLScriptElement | null)?.src ?? null)
     : null;
 
-setWebMcpPolyfillLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "webmcp-polyfill.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the webmcp-polyfill.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should install @mcp-b/webmcp-polyfill on the " +
-          "page themselves before enabling config.webmcp.",
-      ),
-    );
-  }
-  // Runtime-only dynamic import; the specifier is a computed URL, so esbuild
-  // leaves it untouched (and must not try to bundle it).
-  return import(/* @vite-ignore */ chunkUrl);
-});
+/**
+ * Loader for a lazy chunk published next to `index.global.js` (every
+ * `set*Loader` below uses it). Derives the chunk URL from this script's URL;
+ * self-hosted deployments that rename the bundle get an error naming the
+ * `remedy`.
+ */
+const siblingChunk =
+  <T>(file: string, remedy = `host ${file} alongside it`) =>
+  (): Promise<T> => {
+    const chunkUrl = widgetScriptSrc?.replace(/index\.global\.js($|\?)/, `${file}$1`);
+    if (!chunkUrl || chunkUrl === widgetScriptSrc) {
+      return Promise.reject(
+        new Error(
+          `Could not derive the ${file} URL from the widget script URL ` +
+            `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
+            `rename index.global.js should ${remedy}.`,
+        ),
+      );
+    }
+    // Runtime-only dynamic import; the specifier is a computed URL, so esbuild
+    // leaves it untouched (and must not try to bundle it).
+    return import(/* @vite-ignore */ chunkUrl);
+  };
+
+setWebMcpPolyfillLoader(
+  siblingChunk(
+    "webmcp-polyfill.js",
+    "install @mcp-b/webmcp-polyfill on the page themselves before enabling config.webmcp",
+  ),
+);
 
 // ---------------------------------------------------------------------------
 // Deferred Markdown Parsers (marked + dompurify) loading.
@@ -77,22 +88,14 @@ setWebMcpPolyfillLoader(() => {
 
 import { setMarkdownParsersLoader } from "./markdown-parsers-loader";
 
-setMarkdownParsersLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "markdown-parsers.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the markdown-parsers.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host markdown-parsers.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setMarkdownParsersLoader(siblingChunk("markdown-parsers.js"));
+
+// Deferred SSE stream processor (`client-stream.ts`), built with
+// `./client-stream` external. The client starts the fetch when a dispatch
+// begins and the UI warms it alongside the markdown parsers.
+import { setClientStreamLoader } from "./client-stream-loader";
+
+setClientStreamLoader(siblingChunk("client-stream.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred Runtype TTS engine loading.
@@ -108,23 +111,12 @@ setMarkdownParsersLoader(() => {
 
 import { setRuntypeTtsLoader } from "./voice/runtype-tts-loader";
 
-setRuntypeTtsLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "runtype-tts.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the runtype-tts.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host runtype-tts.js alongside it, or set " +
-          "textToSpeech.createEngine to supply a speech engine directly.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setRuntypeTtsLoader(
+  siblingChunk(
+    "runtype-tts.js",
+    "host runtype-tts.js alongside it, or set textToSpeech.createEngine to supply a speech engine directly",
+  ),
+);
 
 // ---------------------------------------------------------------------------
 // Deferred Context Mentions loading.
@@ -140,42 +132,11 @@ setRuntypeTtsLoader(() => {
 import { setContextMentionsLoader } from "./context-mentions-loader";
 import { setContextMentionsInlineLoader } from "./context-mentions-inline-loader";
 
-setContextMentionsLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "context-mentions.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the context-mentions.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host context-mentions.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setContextMentionsLoader(siblingChunk("context-mentions.js"));
 
 // Sibling loader for the inline-mention contenteditable chunk, loaded on composer
 // mount when `contextMentions.display === "inline"`. Same sibling-URL scheme.
-setContextMentionsInlineLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "context-mentions-inline.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the context-mentions-inline.js URL from the widget " +
-          `script URL (${widgetScriptSrc ?? "unavailable"}). Self-hosted ` +
-          "deployments that rename index.global.js should host " +
-          "context-mentions-inline.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setContextMentionsInlineLoader(siblingChunk("context-mentions-inline.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred history-view loading.
@@ -188,22 +149,7 @@ setContextMentionsInlineLoader(() => {
 
 import { setHistoryViewLoader } from "./history-view-loader";
 
-setHistoryViewLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "history-view.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the history-view.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host history-view.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setHistoryViewLoader(siblingChunk("history-view.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred stream-animations loading (wipe + glyph-cycle).
@@ -217,24 +163,12 @@ setHistoryViewLoader(() => {
 
 import { setAnimationsExtraLoader } from "./animations-extra-loader";
 
-setAnimationsExtraLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "animations-extra.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the animations-extra.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host animations-extra.js alongside it, " +
-          "or register the animation plugins themselves via " +
-          "registerStreamAnimationPlugin.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setAnimationsExtraLoader(
+  siblingChunk(
+    "animations-extra.js",
+    "host animations-extra.js alongside it, or register the animation plugins themselves via registerStreamAnimationPlugin",
+  ),
+);
 
 // ---------------------------------------------------------------------------
 // Deferred approval-ui loading.
@@ -247,22 +181,7 @@ setAnimationsExtraLoader(() => {
 
 import { setApprovalUiLoader } from "./approval-ui-loader";
 
-setApprovalUiLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "approval-ui.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the approval-ui.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host approval-ui.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setApprovalUiLoader(siblingChunk("approval-ui.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred voice-runtime loading.
@@ -276,22 +195,7 @@ setApprovalUiLoader(() => {
 
 import { setVoiceRuntimeLoader } from "./voice-runtime-loader";
 
-setVoiceRuntimeLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "voice-runtime.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the voice-runtime.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host voice-runtime.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setVoiceRuntimeLoader(siblingChunk("voice-runtime.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred artifacts-ui loading.
@@ -305,22 +209,7 @@ setVoiceRuntimeLoader(() => {
 
 import { setArtifactsUiLoader } from "./artifacts-ui-loader";
 
-setArtifactsUiLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "artifacts-ui.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the artifacts-ui.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host artifacts-ui.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setArtifactsUiLoader(siblingChunk("artifacts-ui.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred forms-ui loading.
@@ -333,22 +222,7 @@ setArtifactsUiLoader(() => {
 
 import { setFormsUiLoader } from "./forms-ui-loader";
 
-setFormsUiLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "forms-ui.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the forms-ui.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host forms-ui.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setFormsUiLoader(siblingChunk("forms-ui.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred extra-icons loading.
@@ -361,23 +235,12 @@ setFormsUiLoader(() => {
 
 import { setIconsExtraLoader } from "./icons-extra-loader";
 
-setIconsExtraLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "icons-extra.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the icons-extra.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host icons-extra.js alongside it, or " +
-          "register the icons they use via registerIcons().",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setIconsExtraLoader(
+  siblingChunk(
+    "icons-extra.js",
+    "host icons-extra.js alongside it, or register the icons they use via registerIcons()",
+  ),
+);
 
 // ---------------------------------------------------------------------------
 // Deferred WebMCP bridge runtime loading.
@@ -391,22 +254,7 @@ setIconsExtraLoader(() => {
 
 import { setWebMcpRuntimeLoader } from "./webmcp-runtime-loader";
 
-setWebMcpRuntimeLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "webmcp-runtime.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the webmcp-runtime.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host webmcp-runtime.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setWebMcpRuntimeLoader(siblingChunk("webmcp-runtime.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred session-reconnect loading.
@@ -420,22 +268,7 @@ setWebMcpRuntimeLoader(() => {
 
 import { setSessionReconnectLoader } from "./session-reconnect-loader";
 
-setSessionReconnectLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "session-reconnect.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the session-reconnect.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host session-reconnect.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setSessionReconnectLoader(siblingChunk("session-reconnect.js"));
 
 // ---------------------------------------------------------------------------
 // Deferred event-stream-view loading.
@@ -447,19 +280,4 @@ setSessionReconnectLoader(() => {
 
 import { setEventStreamViewLoader } from "./event-stream-view-loader";
 
-setEventStreamViewLoader(() => {
-  const chunkUrl = widgetScriptSrc?.replace(
-    /index\.global\.js($|\?)/,
-    "event-stream-view.js$1",
-  );
-  if (!chunkUrl || chunkUrl === widgetScriptSrc) {
-    return Promise.reject(
-      new Error(
-        "Could not derive the event-stream-view.js URL from the widget script URL " +
-          `(${widgetScriptSrc ?? "unavailable"}). Self-hosted deployments that ` +
-          "rename index.global.js should host event-stream-view.js alongside it.",
-      ),
-    );
-  }
-  return import(/* @vite-ignore */ chunkUrl);
-});
+setEventStreamViewLoader(siblingChunk("event-stream-view.js"));

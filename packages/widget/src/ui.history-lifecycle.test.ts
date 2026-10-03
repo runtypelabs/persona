@@ -52,6 +52,7 @@ vi.mock("./utils/visitor-store", async (importOriginal) => {
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { setHistoryViewLoader } from "./history-view-loader";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
 import { createDemoHistoryProvider } from "./internal/demo-history-provider";
@@ -109,7 +110,7 @@ const mount = (config: Record<string, unknown>) => {
 describe("history controller lifecycle", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
-    setHistoryViewLoader(async () => ({ createHistoryView }));
+    setHistoryViewLoader(async () => ({ createHistoryView, showHistoryConfirm }));
     installFetch();
   });
 

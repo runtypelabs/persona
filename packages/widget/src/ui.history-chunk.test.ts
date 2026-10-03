@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { setHistoryViewLoader } from "./history-view-loader";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
 import { createDemoHistoryProvider } from "./internal/demo-history-provider";
@@ -63,7 +64,7 @@ describe("history lazy chunk", () => {
     expect(body.hasAttribute("inert")).toBe(false);
 
     // A dropped fetch must not disable the feature for the session.
-    setHistoryViewLoader(async () => ({ createHistoryView }));
+    setHistoryViewLoader(async () => ({ createHistoryView, showHistoryConfirm }));
     mount.querySelector<HTMLButtonElement>("[data-persona-history-toggle]")!.click();
     await flush();
     expect(mount.querySelector(".persona-history-view")).not.toBeNull();

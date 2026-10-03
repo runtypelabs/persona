@@ -56,26 +56,28 @@ const log = {
 };
 
 export class WebMcpBridge {
-  private confirmHandler: WebMcpConfirmHandler | null;
-  private readonly timeoutMs: number;
+  #confirmHandler: WebMcpConfirmHandler | null;
+  readonly #timeoutMs: number;
 
   /** `true` once the polyfill has been (idempotently) installed. */
-  private installed = false;
+  #installed = false;
   /** Memoizes the one-shot async install so concurrent callers share it. */
-  private readyPromise: Promise<void> | null = null;
+  #readyPromise: Promise<void> | null = null;
   /**
    * Warn-once latch for a present-but-incompatible `document.modelContext`
    * (some other / older WebMCP polyfill squatting the global). `getModelContext`
    * is hit on every snapshot + execute, so we log the diagnostic only once.
    */
-  private incompatibleContextWarned = false;
+  #incompatibleContextWarned = false;
 
+  readonly #deps: WebMcpBridgeDeps;
   constructor(
     private readonly config: AgentWidgetWebMcpConfig,
-    private readonly deps: WebMcpBridgeDeps,
+    deps: WebMcpBridgeDeps,
   ) {
-    this.confirmHandler = config.onConfirm ?? null;
-    this.timeoutMs = DEFAULT_TOOL_TIMEOUT_MS;
+    this.#deps = deps;
+    this.#confirmHandler = config.onConfirm ?? null;
+    this.#timeoutMs = DEFAULT_TOOL_TIMEOUT_MS;
   }
 
   /**
@@ -84,7 +86,7 @@ export class WebMcpBridge {
    * lifecycle constructs the client before the panel renders).
    */
   public setConfirmHandler(handler: WebMcpConfirmHandler | null): void {
-    this.confirmHandler = handler;
+    this.#confirmHandler = handler;
   }
 
   /**
@@ -99,8 +101,8 @@ export class WebMcpBridge {
    */
   public isOperational(): boolean {
     if (this.config.enabled !== true) return false;
-    if (!this.installed) return false;
-    return this.getModelContext() !== null;
+    if (!this.#installed) return false;
+    return this.#getModelContext() !== null;
   }
 
   /**
@@ -111,10 +113,10 @@ export class WebMcpBridge {
    * builders in `client.ts` already `await`, so this adds no new ceremony.
    */
   public async snapshotForDispatch(): Promise<ClientToolDefinition[]> {
-    await this.ensureReady();
+    await this.#ensureReady();
     if (this.config.enabled !== true) return [];
 
-    const mc = this.getModelContext();
+    const mc = this.#getModelContext();
     if (!mc) return [];
 
     let infos: ModelContextToolInfo[];
@@ -124,12 +126,12 @@ export class WebMcpBridge {
       log.warn("getTools() threw: shipping an empty WebMCP snapshot.", err);
       return [];
     }
-    this.deps.recordToolDisplayTitles(infos);
+    this.#deps.recordToolDisplayTitles(infos);
 
     const pageOrigin = typeof location !== "undefined" ? location.origin : "";
 
     return infos
-      .filter((info) => this.passesClientAllowlist(info.name))
+      .filter((info) => this.#passesClientAllowlist(info.name))
       .map<ClientToolDefinition>((info) => {
         const annotations = pickAnnotations(info.annotations);
         const def: ClientToolDefinition = {
@@ -175,14 +177,14 @@ export class WebMcpBridge {
     args: unknown,
     signal?: AbortSignal,
   ): Promise<WebMcpToolResult> {
-    await this.ensureReady();
+    await this.#ensureReady();
     if (this.config.enabled !== true) {
       return errorResult(
         "WebMCP is not enabled on this widget.",
       );
     }
 
-    const mc = this.getModelContext();
+    const mc = this.#getModelContext();
     if (!mc) {
       // Distinguish "no modelContext at all" from "present but incompatible"
       // (a foreign/older polyfill squatting document.modelContext) so the
@@ -207,7 +209,7 @@ export class WebMcpBridge {
       const message = err instanceof Error ? err.message : String(err);
       return errorResult(`Failed to read WebMCP registry: ${message}`);
     }
-    this.deps.recordToolDisplayTitles(infos);
+    this.#deps.recordToolDisplayTitles(infos);
     const info = infos.find((candidate) => candidate.name === bareName);
 
     if (!info) {
@@ -222,7 +224,7 @@ export class WebMcpBridge {
     // history, a server bug, or a page that re-registered a previously-hidden
     // tool. The server is the trust boundary; this is a defense-in-depth
     // convenience check to keep us symmetric with the snapshot.
-    if (!this.passesClientAllowlist(bareName)) {
+    if (!this.#passesClientAllowlist(bareName)) {
       return errorResult(
         `WebMCP tool not allowed by client allowlist: ${bareName}`,
       );
@@ -236,7 +238,7 @@ export class WebMcpBridge {
 
     // Confirm-by-default gate. Every `webmcp:*` call routes through here,
     // regardless of `annotations.readOnlyHint`.
-    const displayTitle = this.deps.getToolDisplayTitle(bareName);
+    const displayTitle = this.#deps.getToolDisplayTitle(bareName);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
       args,
@@ -244,7 +246,7 @@ export class WebMcpBridge {
       ...(displayTitle ? { title: displayTitle } : {}),
       reason: "gate",
     };
-    if (!(await this.requestConfirm(gateInfo))) {
+    if (!(await this.#requestConfirm(gateInfo))) {
       return errorResult("User declined the tool call.");
     }
 
@@ -265,7 +267,7 @@ export class WebMcpBridge {
     const timer = setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, this.timeoutMs);
+    }, this.#timeoutMs);
     const onAbort = () => controller.abort();
     if (signal) {
       if (signal.aborted) controller.abort();
@@ -280,7 +282,7 @@ export class WebMcpBridge {
     } catch (err) {
       if (timedOut) {
         return errorResult(
-          `WebMCP tool '${bareName}' timed out after ${this.timeoutMs}ms`,
+          `WebMCP tool '${bareName}' timed out after ${this.#timeoutMs}ms`,
         );
       }
       if (signal?.aborted) {
@@ -305,36 +307,36 @@ export class WebMcpBridge {
    * registers tools at load before Persona's first dispatch needs the global to
    * already exist.
    */
-  private ensureReady(): Promise<void> {
+  #ensureReady(): Promise<void> {
     if (this.config.enabled !== true) return Promise.resolve();
-    if (!this.readyPromise) {
-      this.readyPromise = this.install();
+    if (!this.#readyPromise) {
+      this.#readyPromise = this.#install();
     }
-    return this.readyPromise;
+    return this.#readyPromise;
   }
 
-  private async install(): Promise<void> {
+  async #install(): Promise<void> {
     try {
       // A compatible registry is already on the page (the host installed the
       // polyfill, or a native impl): initialize would no-op against it, so
       // skip loading the module entirely. Pages that register tools before
       // Persona's first dispatch always land here, because registering
       // requires `document.modelContext` to exist.
-      if (this.getModelContext()) {
-        this.installed = true;
+      if (this.#getModelContext()) {
+        this.#installed = true;
         return;
       }
-      const mod = await this.deps.loadPolyfill();
+      const mod = await this.#deps.loadPolyfill();
       // Idempotent: no-ops if `document.modelContext` already exists (native or
       // a prior install by the host page).
       mod.initializeWebMCPPolyfill();
-      this.installed = true;
+      this.#installed = true;
     } catch (err) {
       log.warn(
         "Failed to load @mcp-b/webmcp-polyfill: WebMCP consumption disabled.",
         err,
       );
-      this.installed = false;
+      this.#installed = false;
     }
   }
 
@@ -342,7 +344,7 @@ export class WebMcpBridge {
    * Read the consumer surface off `document.modelContext`, returning `null`
    * when it is absent or doesn't expose the producer-preview API we rely on.
    */
-  private getModelContext(): ModelContextCoreLike | null {
+  #getModelContext(): ModelContextCoreLike | null {
     if (typeof document === "undefined") return null;
     const mc = (document as Document & { modelContext?: unknown }).modelContext;
     if (!mc || typeof mc !== "object") {
@@ -362,8 +364,8 @@ export class WebMcpBridge {
       // draft) installed the global first: which `@mcp-b/webmcp-polyfill`
       // correctly declines to overwrite. Warn once so integrators understand
       // why WebMCP is inert instead of seeing a silent no-op.
-      if (!this.incompatibleContextWarned) {
-        this.incompatibleContextWarned = true;
+      if (!this.#incompatibleContextWarned) {
+        this.#incompatibleContextWarned = true;
         log.warn(
           "document.modelContext is present but does not expose getTools()/executeTool(): " +
             "WebMCP consumption is disabled. Another (incompatible or older) WebMCP polyfill " +
@@ -376,8 +378,8 @@ export class WebMcpBridge {
     return mc as ModelContextCoreLike;
   }
 
-  private async requestConfirm(info: WebMcpConfirmInfo): Promise<boolean> {
-    const handler = this.confirmHandler ?? defaultBrowserConfirmHandler;
+  async #requestConfirm(info: WebMcpConfirmInfo): Promise<boolean> {
+    const handler = this.#confirmHandler ?? defaultBrowserConfirmHandler;
     try {
       return await handler(info);
     } catch (err) {
@@ -389,7 +391,7 @@ export class WebMcpBridge {
     }
   }
 
-  private passesClientAllowlist(toolName: string): boolean {
+  #passesClientAllowlist(toolName: string): boolean {
     const list = this.config.allowlist;
     if (!list || list.length === 0) return true;
     return list.some((pattern) => matchesGlob(toolName, pattern));

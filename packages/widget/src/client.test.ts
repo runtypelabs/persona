@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { AgentWidgetClient, preferFinalStructuredContent } from './client';
+import { AgentWidgetClient } from './client';
+import { preferFinalStructuredContent } from './client-stream';
 import { AgentWidgetEvent, AgentWidgetMessage, AgentWidgetArtifactsFeature } from './types';
 import { createJsonStreamParser } from './utils/formatting';
 import { VERSION } from './version';

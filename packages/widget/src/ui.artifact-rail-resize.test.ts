@@ -11,6 +11,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { setHistoryViewLoader } from "./history-view-loader";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
 import {
@@ -162,7 +163,7 @@ const dragArtifact = (mount: HTMLElement, dx: number) => {
 describe("history rail beside a resizable artifact split", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
-    setHistoryViewLoader(async () => ({ createHistoryView }));
+    setHistoryViewLoader(async () => ({ createHistoryView, showHistoryConfirm }));
   });
 
   afterEach(() => {

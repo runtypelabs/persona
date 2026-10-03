@@ -222,72 +222,72 @@ function clampAttachIdleMs(ms: number | undefined): number {
 export class RuntypeVoiceProvider implements VoiceProvider {
   type: "runtype" = "runtype";
 
-  private ws: WebSocket | null = null;
-  private captureContext: AudioContext | null = null;
-  private levelCallbacks: ((level: number) => void)[] = [];
-  private mediaStream: MediaStream | null = null;
-  private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private processor: ScriptProcessorNode | null = null;
+  #ws: WebSocket | null = null;
+  #captureContext: AudioContext | null = null;
+  #levelCallbacks: ((level: number) => void)[] = [];
+  #mediaStream: MediaStream | null = null;
+  #sourceNode: MediaStreamAudioSourceNode | null = null;
+  #processor: ScriptProcessorNode | null = null;
   // Captured before the call socket opened; flushed in order on open.
-  private preOpenAudio: ArrayBuffer[] = [];
-  private preOpenBytes = 0;
-  private playback: VoicePlaybackEngine | null = null;
+  #preOpenAudio: ArrayBuffer[] = [];
+  #preOpenBytes = 0;
+  #playback: VoicePlaybackEngine | null = null;
 
   // True while a call (WS session) is live: drives the idempotent start guard
   // and `isBargeInActive()`.
-  private callLive = false;
-  private isSpeaking = false;
+  #callLive = false;
+  #isSpeaking = false;
 
   // Invalidates in-flight async work (playback-engine creation, late frames,
   // status transitions) after a teardown/restart so a stale callback can't act
   // on a newer call's resources. Bumped on every start and every cleanup.
-  private callGeneration = 0;
+  #callGeneration = 0;
 
   // Distinguishes a user-initiated close (code 1000) from a dropped connection.
-  private intentionalClose = false;
+  #intentionalClose = false;
 
   // Prewarm latch and the (at most one) socket an `'attach'` prewarm opened.
-  private lastPrewarmAt = Number.NEGATIVE_INFINITY;
-  private attached: AttachedSocket | null = null;
+  #lastPrewarmAt = Number.NEGATIVE_INFINITY;
+  #attached: AttachedSocket | null = null;
   // Full-duplex (speech-to-speech) session state; reset on every cleanup.
-  private speechToSpeech = false;
-  private delegating = false;
+  #speechToSpeech = false;
+  #delegating = false;
   // Until this time, audio and assistant text belong to a reply the client cancelled.
-  private cancelledUntil = 0;
-  private playbackEndsAt = 0;
-  private drainTimer: ReturnType<typeof setTimeout> | undefined;
+  #cancelledUntil = 0;
+  #playbackEndsAt = 0;
+  #drainTimer: ReturnType<typeof setTimeout> | undefined;
   // Engine `onFinished` callbacks are one-shot (cleared on fire and on flush),
   // so the provider re-registers before each reply that may need it.
-  private finishedArmed = false;
+  #finishedArmed = false;
   // Client delegation (see header); per-call state reset on every cleanup.
   private bridge: VoiceSessionBridge | null = null;
-  private clientDelegation = false;
+  #clientDelegation = false;
   // session_config.capabilities: the negotiated client frame types.
-  private capabilities = new Set<string>();
+  #capabilities = new Set<string>();
   // Per delegation: aborts its pending approval follow-up (cancelled, or call end).
-  private followUps = new Map<string, AbortController>();
+  #followUps = new Map<string, AbortController>();
   // Delegations the server cancelled (or refused a frame for): no more frames for them.
-  private cancelledDelegations = new Set<string>();
+  #cancelledDelegations = new Set<string>();
   // session_config.callId: the server's id for this call, for logs.
-  private callId: string | undefined;
+  #callId: string | undefined;
   // Call-start context, built at session_config and held until the visitor's
   // first final transcript (sent earlier, the voice model tends to answer it).
-  private contextSent = false;
-  private pendingContext: Promise<string> | null = null;
+  #contextSent = false;
+  #pendingContext: Promise<string> | null = null;
   // The released context's send; settles once it went out (or never will).
-  private contextSend: { done: Promise<void>; drop: () => void } | null = null;
-  private delegations: Promise<void> = Promise.resolve();
+  #contextSend: { done: Promise<void>; drop: () => void } | null = null;
+  #delegations: Promise<void> = Promise.resolve();
   // Delegations answered ok: their spoken read-back is folded.
-  private answered = new Set<string>();
-  private foldReadback = false;
-  private assistantTurns = new Set<string>();
-  private foldedTurns = new Set<string>();
+  #answered = new Set<string>();
+  #foldReadback = false;
+  #assistantTurns = new Set<string>();
+  #foldedTurns = new Set<string>();
 
-  private resultCallbacks: ((result: VoiceResult) => void)[] = [];
-  private errorCallbacks: ((error: Error) => void)[] = [];
-  private statusCallbacks: ((status: VoiceStatus) => void)[] = [];
-  private transcriptCallbacks: TranscriptCallback[] = [];
-  private metricsCallbacks: ((metrics: VoiceMetrics) => void)[] = [];
+  #resultCallbacks: ((result: VoiceResult) => void)[] = [];
+  #errorCallbacks: ((error: Error) => void)[] = [];
+  #statusCallbacks: ((status: VoiceStatus) => void)[] = [];
+  #transcriptCallbacks: TranscriptCallback[] = [];
+  #metricsCallbacks: ((metrics: VoiceMetrics) => void)[] = [];
 
   constructor(private config: VoiceConfig["runtype"]) {}
 
@@ -305,26 +305,26 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * once per {@link PREWARM_THROTTLE_MS}; never emits an error or a status.
    */
   prewarm(): void {
-    if (this.callLive || this.attached) return;
+    if (this.#callLive || this.#attached) return;
     const agentId = this.config?.agentId;
     const token = this.config?.clientToken;
     const host = this.config?.host;
     if (!agentId || !token || !host) return;
     const now = Date.now();
-    if (now - this.lastPrewarmAt < PREWARM_THROTTLE_MS) return;
-    this.lastPrewarmAt = now;
+    if (now - this.#lastPrewarmAt < PREWARM_THROTTLE_MS) return;
+    this.#lastPrewarmAt = now;
     try {
       if (this.config?.prewarmMode === "attach") {
-        this.attach(host, agentId, token);
+        this.#attach(host, agentId, token);
       } else {
-        this.requestPrewarm(host, agentId, token);
+        this.#requestPrewarm(host, agentId, token);
       }
     } catch {
       // A prewarm must never surface an error; the click connects normally.
     }
   }
 
-  private requestPrewarm(host: string, agentId: string, token: string): void {
+  #requestPrewarm(host: string, agentId: string, token: string): void {
     if (typeof fetch !== "function") return;
     const url = `${toHttpBase(host)}/v1/client/agents/${encodeURIComponent(agentId)}/voice/prewarm`;
     void fetch(url, {
@@ -334,12 +334,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     }).catch(() => {});
   }
 
-  private attach(host: string, agentId: string, token: string): void {
+  #attach(host: string, agentId: string, token: string): void {
     const params = new URLSearchParams();
     const configuredIdleMs = this.config?.attachIdleMs;
     const idleMs = clampAttachIdleMs(configuredIdleMs);
     if (configuredIdleMs !== undefined) params.set("attachIdleMs", String(idleMs));
-    const ws = new WebSocket(this.voiceSocketUrl(host, agentId, params), [
+    const ws = new WebSocket(this.#voiceSocketUrl(host, agentId, params), [
       "runtype.bearer",
       "runtype.attach",
       token,
@@ -357,18 +357,18 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       openedAt: 0,
       idleTimer: undefined,
     };
-    this.attached = entry;
+    this.#attached = entry;
 
     ws.onopen = () => {
-      if (this.attached !== entry) return;
+      if (this.#attached !== entry) return;
       entry.state = ws.protocol === "runtype.attach" ? "attached" : "live";
       entry.openedAt = Date.now();
-      this.armAttachIdle(entry, idleMs);
+      this.#armAttachIdle(entry, idleMs);
       if (entry.state === "attached") ws.send('{"type":"ping"}');
       entry.settle();
     };
     ws.onmessage = (event) => {
-      if (this.attached !== entry || typeof event.data !== "string") return;
+      if (this.#attached !== entry || typeof event.data !== "string") return;
       let msg: { type?: unknown; idleMs?: unknown };
       try {
         msg = JSON.parse(event.data);
@@ -377,27 +377,27 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       }
       // The server's idle window is authoritative; close no later than it does.
       if (msg.type === "attached" && typeof msg.idleMs === "number") {
-        this.armAttachIdle(entry, msg.idleMs - (Date.now() - entry.openedAt));
+        this.#armAttachIdle(entry, msg.idleMs - (Date.now() - entry.openedAt));
       }
     };
     ws.onerror = () => {};
     ws.onclose = () => {
-      if (this.attached === entry) this.releaseAttached();
+      if (this.#attached === entry) this.#releaseAttached();
     };
   }
 
-  private armAttachIdle(entry: AttachedSocket, ms: number): void {
+  #armAttachIdle(entry: AttachedSocket, ms: number): void {
     clearTimeout(entry.idleTimer);
     entry.idleTimer = setTimeout(() => {
-      if (this.attached === entry) this.releaseAttached();
+      if (this.#attached === entry) this.#releaseAttached();
     }, Math.max(0, ms));
   }
 
   /** Close and forget the prewarmed socket, if any. Silent by design. */
-  private releaseAttached(): void {
-    const entry = this.attached;
+  #releaseAttached(): void {
+    const entry = this.#attached;
     if (!entry) return;
-    this.attached = null;
+    this.#attached = null;
     clearTimeout(entry.idleTimer);
     const { ws } = entry;
     ws.onopen = null;
@@ -420,8 +420,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * Resolves `null` when there is none, it stalled, or it dropped, so the
    * caller opens a fresh socket.
    */
-  private async takeAttachedSocket(): Promise<{ ws: WebSocket; live: boolean } | null> {
-    const entry = this.attached;
+  async #takeAttachedSocket(): Promise<{ ws: WebSocket; live: boolean } | null> {
+    const entry = this.#attached;
     if (!entry) return null;
     if (entry.state === "connecting") {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -433,12 +433,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       ]);
       clearTimeout(timer);
     }
-    if (this.attached !== entry) return null;
+    if (this.#attached !== entry) return null;
     if (entry.state === "connecting" || entry.ws.readyState !== WebSocket.OPEN) {
-      this.releaseAttached();
+      this.#releaseAttached();
       return null;
     }
-    this.attached = null;
+    this.#attached = null;
     clearTimeout(entry.idleTimer);
     return { ws: entry.ws, live: entry.state === "live" };
   }
@@ -448,7 +448,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * `extra` adds params (e.g. an attach prewarm's). The token never goes in
    * the URL, and these params are not secrets.
    */
-  private voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
+  #voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
     const capabilities = ["partial_transcript", "context"];
     if (this.bridge && this.config?.clientDelegation !== false) capabilities.push("client_delegation", "delegation_update");
     if (attach) capabilities.unshift("attach");
@@ -464,7 +464,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   /** Start the call: acquire mic, open the WS, stream PCM until hang-up. */
   async startListening(): Promise<void> {
-    if (this.callLive) return; // idempotent: a call is already live
+    if (this.#callLive) return; // idempotent: a call is already live
 
     const agentId = this.config?.agentId;
     const token = this.config?.clientToken;
@@ -473,9 +473,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     if (!token) throw new Error("Runtype voice requires a clientToken");
     if (!host) throw new Error("Runtype voice requires a host (or widget apiUrl)");
 
-    const generation = ++this.callGeneration;
-    this.intentionalClose = false;
-    this.callLive = true;
+    const generation = ++this.#callGeneration;
+    this.#intentionalClose = false;
+    this.#callLive = true;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -485,11 +485,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           echoCancellation: true,
         },
       });
-      if (generation !== this.callGeneration) {
+      if (generation !== this.#callGeneration) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
-      this.mediaStream = stream;
+      this.#mediaStream = stream;
 
       // Create + resume both contexts inside the click gesture (iOS autoplay).
       const AudioCtx =
@@ -500,108 +500,108 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       if (captureContext.state === "suspended") {
         await captureContext.resume().catch(() => {});
       }
-      this.captureContext = captureContext;
+      this.#captureContext = captureContext;
 
       const engine = this.config?.createPlaybackEngine
         ? await this.config.createPlaybackEngine()
         : new AudioPlaybackManager(PLAYBACK_SAMPLE_RATE);
-      if (generation !== this.callGeneration) {
+      if (generation !== this.#callGeneration) {
         // Torn down while async work was in flight: free what we acquired.
         void engine.destroy();
         stream.getTracks().forEach((t) => t.stop());
         captureContext.close().catch(() => {});
         return;
       }
-      this.playback = engine;
-      this.armPlaybackFinished();
+      this.#playback = engine;
+      this.#armPlaybackFinished();
       // Capture from now: frames buffer until the call socket is open.
-      this.startCapture(captureContext, stream, generation);
+      this.#startCapture(captureContext, stream, generation);
 
-      const adopted = await this.takeAttachedSocket();
-      if (generation !== this.callGeneration) {
+      const adopted = await this.#takeAttachedSocket();
+      if (generation !== this.#callGeneration) {
         adopted?.ws.close(1000, "client ended call");
         return;
       }
       if (adopted) {
         const { ws } = adopted;
-        this.ws = ws;
-        this.bindCallSocket(ws, generation);
+        this.#ws = ws;
+        this.#bindCallSocket(ws, generation);
         if (!adopted.live) ws.send('{"type":"start"}');
-        this.flushPreOpenAudio(ws);
-        this.emitStatus("listening");
+        this.#flushPreOpenAudio(ws);
+        this.#emitStatus("listening");
         return;
       }
 
       // Token rides the subprotocol; `runtype.bearer` is the marker the server
       // echoes as the negotiated subprotocol (browsers fail the handshake if an
       // offered subprotocol goes unanswered).
-      const ws = new WebSocket(this.voiceSocketUrl(host, agentId), ["runtype.bearer", token]);
+      const ws = new WebSocket(this.#voiceSocketUrl(host, agentId), ["runtype.bearer", token]);
       ws.binaryType = "arraybuffer";
-      this.ws = ws;
+      this.#ws = ws;
 
       ws.onopen = () => {
-        if (generation !== this.callGeneration) return;
-        this.flushPreOpenAudio(ws);
-        this.emitStatus("listening");
+        if (generation !== this.#callGeneration) return;
+        this.#flushPreOpenAudio(ws);
+        this.#emitStatus("listening");
       };
-      this.bindCallSocket(ws, generation);
+      this.#bindCallSocket(ws, generation);
     } catch (error) {
-      this.cleanup();
-      this.emitError(error as Error);
-      this.emitStatus("error");
+      this.#cleanup();
+      this.#emitError(error as Error);
+      this.#emitStatus("error");
       throw error;
     }
   }
 
   /** Route a call socket's frames, errors, and close into this call. */
-  private bindCallSocket(ws: WebSocket, generation: number): void {
-    ws.onmessage = (event) => this.handleMessage(event, generation);
+  #bindCallSocket(ws: WebSocket, generation: number): void {
+    ws.onmessage = (event) => this.#handleMessage(event, generation);
 
     ws.onerror = () => {
-      if (generation !== this.callGeneration) return;
-      this.emitError(new Error("Voice connection failed"));
-      this.emitStatus("error");
-      this.cleanup();
+      if (generation !== this.#callGeneration) return;
+      this.#emitError(new Error("Voice connection failed"));
+      this.#emitStatus("error");
+      this.#cleanup();
     };
 
     ws.onclose = (evt) => {
-      if (this.intentionalClose) {
-        this.intentionalClose = false;
+      if (this.#intentionalClose) {
+        this.#intentionalClose = false;
         return;
       }
-      if (generation !== this.callGeneration) return;
+      if (generation !== this.#callGeneration) return;
       if (evt.code !== 1000) {
         const codeMsg = evt.code ? ` (code ${evt.code})` : "";
-        this.emitError(new Error(`Voice connection closed${codeMsg}`));
-        this.emitStatus("error");
+        this.#emitError(new Error(`Voice connection closed${codeMsg}`));
+        this.#emitStatus("error");
       } else {
-        this.emitStatus("idle");
+        this.#emitStatus("idle");
       }
-      this.cleanup();
+      this.#cleanup();
     };
   }
 
   /** The AI-disclosure notice for a live speech-to-speech call (`disclosureText`; `false` hides it). */
   getDisclosure(): string | null {
     const text = this.config?.disclosureText;
-    return this.callLive && this.speechToSpeech && text !== false ? text || DISCLOSURE_TEXT : null;
+    return this.#callLive && this.#speechToSpeech && text !== false ? text || DISCLOSURE_TEXT : null;
   }
 
   /** End the call (hang up). */
   async stopListening(): Promise<void> {
-    this.cleanup();
-    this.emitStatus("idle");
+    this.#cleanup();
+    this.#emitStatus("idle");
   }
 
   /** Tear down the call and drop all callbacks (used by `cleanupVoice`). */
   async disconnect(): Promise<void> {
-    this.cleanup();
-    this.emitStatus("disconnected");
-    this.resultCallbacks = [];
-    this.errorCallbacks = [];
-    this.statusCallbacks = [];
-    this.transcriptCallbacks = [];
-    this.metricsCallbacks = [];
+    this.#cleanup();
+    this.#emitStatus("disconnected");
+    this.#resultCallbacks = [];
+    this.#errorCallbacks = [];
+    this.#statusCallbacks = [];
+    this.#transcriptCallbacks = [];
+    this.#metricsCallbacks = [];
   }
 
   /**
@@ -610,14 +610,14 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * until its `audio_clear` acknowledgement arrives.
    */
   stopPlayback(): void {
-    this.clearLocalPlayback();
-    const ws = this.ws;
+    this.#clearLocalPlayback();
+    const ws = this.#ws;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      if (this.speechToSpeech) {
-        this.cancelledUntil = Date.now() + CANCEL_ACK_TIMEOUT_MS;
+      if (this.#speechToSpeech) {
+        this.#cancelledUntil = Date.now() + CANCEL_ACK_TIMEOUT_MS;
         ws.send('{"type":"cancel"}');
       }
-      this.emitStatus("listening");
+      this.#emitStatus("listening");
     }
   }
 
@@ -630,31 +630,31 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   /** True while the call (hot mic) is live. */
   isBargeInActive(): boolean {
-    return this.callLive;
+    return this.#callLive;
   }
 
   /** "Hang up" the always-on mic. */
   onLevel(callback: (level: number) => void): void {
-    this.levelCallbacks.push(callback);
+    this.#levelCallbacks.push(callback);
   }
 
   async deactivateBargeIn(): Promise<void> {
-    this.cleanup();
-    this.emitStatus("idle");
+    this.#cleanup();
+    this.#emitStatus("idle");
   }
 
   // --- Capture ---------------------------------------------------------------
 
-  private startCapture(context: AudioContext, stream: MediaStream, generation: number): void {
+  #startCapture(context: AudioContext, stream: MediaStream, generation: number): void {
     const source = context.createMediaStreamSource(stream);
-    this.sourceNode = source;
+    this.#sourceNode = source;
     const processor = context.createScriptProcessor(CAPTURE_BUFFER_SIZE, 1, 1);
-    this.processor = processor;
+    this.#processor = processor;
 
     processor.onaudioprocess = (e) => {
-      if (generation !== this.callGeneration) return;
+      if (generation !== this.#callGeneration) return;
       // No socket yet (adopting a prewarm) or still handshaking: buffer.
-      const ws = this.ws;
+      const ws = this.#ws;
       const open = ws?.readyState === WebSocket.OPEN;
       if (ws && !open && ws.readyState !== WebSocket.CONNECTING) return;
       const input = e.inputBuffer.getChannelData(0);
@@ -666,22 +666,22 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
       if (ws && open) {
-        this.flushPreOpenAudio(ws);
+        this.#flushPreOpenAudio(ws);
         ws.send(pcm16.buffer);
       } else {
-        this.preOpenAudio.push(pcm16.buffer);
-        this.preOpenBytes += pcm16.byteLength;
-        while (this.preOpenBytes > PRE_OPEN_AUDIO_MAX_BYTES) {
-          this.preOpenBytes -= this.preOpenAudio.shift()!.byteLength;
+        this.#preOpenAudio.push(pcm16.buffer);
+        this.#preOpenBytes += pcm16.byteLength;
+        while (this.#preOpenBytes > PRE_OPEN_AUDIO_MAX_BYTES) {
+          this.#preOpenBytes -= this.#preOpenAudio.shift()!.byteLength;
         }
       }
       // Amplitude comes free from the buffer we already walked: no analyser
       // node, no second capture. RMS is scaled because speech rarely exceeds
       // ~0.3 RMS, so raw values would sit near the bottom of the 0..1 range.
-      if (this.levelCallbacks.length > 0) {
+      if (this.#levelCallbacks.length > 0) {
         const rms = Math.sqrt(sumSquares / input.length);
         const level = Math.max(0, Math.min(1, rms * LEVEL_RMS_SCALE));
-        for (const cb of this.levelCallbacks) cb(level);
+        for (const cb of this.#levelCallbacks) cb(level);
       }
     };
 
@@ -691,19 +691,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     processor.connect(context.destination);
   }
 
-  private flushPreOpenAudio(ws: WebSocket): void {
-    for (const frame of this.preOpenAudio) ws.send(frame);
-    this.preOpenAudio = [];
-    this.preOpenBytes = 0;
+  #flushPreOpenAudio(ws: WebSocket): void {
+    for (const frame of this.#preOpenAudio) ws.send(frame);
+    this.#preOpenAudio = [];
+    this.#preOpenBytes = 0;
   }
 
   // --- Downstream ------------------------------------------------------------
 
-  private handleMessage(event: MessageEvent, generation: number): void {
-    if (generation !== this.callGeneration) return;
+  #handleMessage(event: MessageEvent, generation: number): void {
+    if (generation !== this.#callGeneration) return;
 
     if (event.data instanceof ArrayBuffer) {
-      this.handleAudioFrame(event.data, generation);
+      this.#handleAudioFrame(event.data, generation);
       return;
     }
 
@@ -718,19 +718,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       case "session_config":
         // The follow-up session_config carries only interruptionMode: keep the mode.
         if (msg.speechMode) {
-          this.speechToSpeech = msg.speechMode === "speech_to_speech";
-          this.playback?.setContinuousMode?.(this.speechToSpeech);
+          this.#speechToSpeech = msg.speechMode === "speech_to_speech";
+          this.#playback?.setContinuousMode?.(this.#speechToSpeech);
         }
         // The negotiated client frame types. A server without `capabilities`
         // predates them: no client delegation, context or updates.
-        if (Array.isArray(msg.capabilities)) this.capabilities = new Set(msg.capabilities);
-        if (typeof msg.callId === "string") this.callId = msg.callId;
-        this.clientDelegation = this.speechToSpeech && this.capabilities.has("client_delegation") && !!this.bridge;
+        if (Array.isArray(msg.capabilities)) this.#capabilities = new Set(msg.capabilities);
+        if (typeof msg.callId === "string") this.#callId = msg.callId;
+        this.#clientDelegation = this.#speechToSpeech && this.#capabilities.has("client_delegation") && !!this.bridge;
         // Speech-to-speech is known only now: let the UI show its disclosure.
-        if (this.speechToSpeech && !this.isSpeaking) this.emitStatus("listening");
-        if (this.capabilities.has("context") && !this.contextSent) {
-          this.contextSent = true;
-          this.pendingContext = this.buildContextText();
+        if (this.#speechToSpeech && !this.#isSpeaking) this.#emitStatus("listening");
+        if (this.#capabilities.has("context") && !this.#contextSent) {
+          this.#contextSent = true;
+          this.#pendingContext = this.#buildContextText();
         }
         break;
 
@@ -738,29 +738,29 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         const role = msg.role === "assistant" ? "assistant" : "user";
         // A reply the client cancelled keeps streaming until the server clears it.
         const utteranceId = msg.utteranceId ?? msg.turnId;
-        if (!utteranceId || (role === "assistant" && this.isCancelling())) break;
+        if (!utteranceId || (role === "assistant" && this.#isCancelling())) break;
         const turnId = String(utteranceId);
         if (role === "user") {
           // Release on a final user transcript, not a partial: a mid-utterance
           // context append makes the voice model answer early (or not delegate).
-          if (msg.final === true) this.flushCallContext(generation);
-          this.foldReadback = false;
+          if (msg.final === true) this.#flushCallContext(generation);
+          this.#foldReadback = false;
         } else {
           // Read-back of a delegated result: core rotates the assistant id at
           // completion, so it is the first new id after it. The chat renders it.
-          if (this.foldReadback && !this.assistantTurns.has(turnId)) {
-            this.foldedTurns.add(turnId);
-            this.foldReadback = false;
+          if (this.#foldReadback && !this.#assistantTurns.has(turnId)) {
+            this.#foldedTurns.add(turnId);
+            this.#foldReadback = false;
           }
-          this.assistantTurns.add(turnId);
-          if (this.foldedTurns.has(turnId)) break;
+          this.#assistantTurns.add(turnId);
+          if (this.#foldedTurns.has(turnId)) break;
         }
-        this.emitTranscript(role, msg.text ?? "", msg.final === true, {
+        this.#emitTranscript(role, msg.text ?? "", msg.final === true, {
           turnId,
           ...(typeof msg.startMs === "number" && { startMs: msg.startMs }),
           ...(typeof msg.endMs === "number" && { endMs: msg.endMs }),
           // The chat pipeline owns the conversation: speech is only captioned.
-          ...(this.clientDelegation && { caption: true }),
+          ...(this.#clientDelegation && { caption: true }),
         });
         break;
       }
@@ -769,11 +769,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       case "delegation_completed": {
         const delegationId = String(msg.delegationId ?? msg.turnId);
         if (msg.type === "delegation_started") {
-          this.flushCallContext(generation);
+          this.#flushCallContext(generation);
           // `input`: run this turn through the chat pipeline (client delegation).
           const input = msg.input;
-          if (this.clientDelegation && input) {
-            this.runDelegation(
+          if (this.#clientDelegation && input) {
+            this.#runDelegation(
               delegationId,
               {
                 delegationId,
@@ -786,15 +786,15 @@ export class RuntypeVoiceProvider implements VoiceProvider {
               generation,
             );
           }
-        } else if (msg.speak !== false && this.answered.has(delegationId)) {
+        } else if (msg.speak !== false && this.#answered.has(delegationId)) {
           // Every spoken phase (the approval ask, the late result) of an answer
           // the chat shows is read back. A refusal of one that never started
           // here has no chat answer: it renders. `final` may never come.
-          this.foldReadback = true;
+          this.#foldReadback = true;
         }
-        this.delegating = msg.type === "delegation_started";
-        if (!this.isSpeaking && !this.isCancelling()) {
-          this.emitStatus(this.delegating ? "processing" : "listening");
+        this.#delegating = msg.type === "delegation_started";
+        if (!this.#isSpeaking && !this.#isCancelling()) {
+          this.#emitStatus(this.#delegating ? "processing" : "listening");
         }
         break;
       }
@@ -805,7 +805,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         // an unknown reason), a parked approval card is also declined, as the
         // approval TTL would; the call ending or the voice model cancelling
         // leaves the card usable in the chat.
-        this.dropDelegation(
+        this.#dropDelegation(
           String(msg.delegationId),
           msg.reason !== "session_ending" && msg.reason !== "provider_cancelled",
         );
@@ -814,43 +814,43 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       case "warning":
         // Non-fatal (an unknown or refused frame): the call goes on. A refused
         // delegation frame means the server is done with that delegation.
-        console.warn(`[Persona voice] ${msg.code}: ${msg.message ?? ""}`, this.callId ?? "");
+        console.warn(`[Persona voice] ${msg.code}: ${msg.message ?? ""}`, this.#callId ?? "");
         if (msg.delegationId && (msg.code === "UNKNOWN_DELEGATION" || msg.code === "LATE_RESULT_LIMIT")) {
-          this.dropDelegation(String(msg.delegationId));
+          this.#dropDelegation(String(msg.delegationId));
         }
         break;
 
       case "audio_clear":
         // Barge-in (or our own cancel acknowledged): stop playback now.
-        this.clearLocalPlayback();
-        this.cancelledUntil = 0;
-        this.emitStatus("listening");
+        this.#clearLocalPlayback();
+        this.#cancelledUntil = 0;
+        this.#emitStatus("listening");
         break;
 
       case "transcript_interim":
-        this.emitStatus("listening");
-        this.emitTranscript("user", msg.text ?? "", false);
+        this.#emitStatus("listening");
+        this.#emitTranscript("user", msg.text ?? "", false);
         break;
 
       case "transcript_final": {
         const role = msg.role === "assistant" ? "assistant" : "user";
         // user final → agent is now thinking; assistant final → reply incoming.
-        this.emitStatus(role === "user" ? "processing" : "speaking");
-        this.emitTranscript(role, msg.text ?? "", true);
+        this.#emitStatus(role === "user" ? "processing" : "speaking");
+        this.#emitTranscript(role, msg.text ?? "", true);
         break;
       }
 
       case "audio_end":
-        if (this.playback) {
-          this.playback.markStreamEnd();
+        if (this.#playback) {
+          this.#playback.markStreamEnd();
         } else {
-          this.isSpeaking = false;
-          this.emitStatus("listening");
+          this.#isSpeaking = false;
+          this.#emitStatus("listening");
         }
         break;
 
       case "metrics":
-        this.emitMetrics({
+        this.#emitMetrics({
           llmMs: msg.llm_ms,
           ttsMs: msg.tts_ms,
           firstAudioMs: msg.first_audio_ms,
@@ -859,8 +859,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         break;
 
       case "error":
-        this.emitError(new Error(msg.error || "Voice error"));
-        this.emitStatus("error");
+        this.#emitError(new Error(msg.error || "Voice error"));
+        this.#emitStatus("error");
         break;
     }
   }
@@ -870,7 +870,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * The call-start `context` text. History is read now, before any of this
    * call's voice bubbles exist, so it never includes the utterance in progress.
    */
-  private async buildContextText(): Promise<string> {
+  async #buildContextText(): Promise<string> {
     const history = this.bridge?.getHistory() ?? [];
     let extra = "";
     try {
@@ -883,22 +883,22 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /** Send the held call-start context, once: at the first final user transcript or delegation. */
-  private flushCallContext(generation: number): void {
-    const pending = this.pendingContext;
+  #flushCallContext(generation: number): void {
+    const pending = this.#pendingContext;
     if (!pending) return;
-    this.pendingContext = null;
+    this.#pendingContext = null;
     let dropped = false;
     const done = pending.then((text) => {
-      const ws = this.ws;
-      if (dropped || !text || generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return;
+      const ws = this.#ws;
+      if (dropped || !text || generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify({ type: "context", text }));
     });
-    this.contextSend = { done, drop: () => (dropped = true) };
+    this.#contextSend = { done, drop: () => (dropped = true) };
   }
 
   /** Let a released context go out first; a hung host callback is dropped. */
-  private async awaitContextSend(): Promise<void> {
-    const send = this.contextSend;
+  async #awaitContextSend(): Promise<void> {
+    const send = this.#contextSend;
     if (!send) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timedOut = await Promise.race([
@@ -912,45 +912,45 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   }
 
   /** No more frames for this delegation; its chat answer goes back to browser TTS. */
-  private dropDelegation(delegationId: string, expired = false): void {
-    this.cancelledDelegations.add(delegationId);
+  #dropDelegation(delegationId: string, expired = false): void {
+    this.#cancelledDelegations.add(delegationId);
     this.bridge?.dropDelegation?.(delegationId, expired);
-    this.followUps.get(delegationId)?.abort();
+    this.#followUps.get(delegationId)?.abort();
   }
 
   /** Run a delegated turn through the session bridge (one at a time) and answer it. */
-  private runDelegation(delegationId: string, request: VoiceDelegationRequest, generation: number): void {
+  #runDelegation(delegationId: string, request: VoiceDelegationRequest, generation: number): void {
     const bridge = this.bridge!;
     /** Send a frame for this delegation, unless the call or the delegation ended. */
     const send = (type: "delegation_update" | "delegation_result", status: string, text: string) => {
-      const ws = this.ws;
-      if (generation !== this.callGeneration || ws?.readyState !== WebSocket.OPEN) return false;
-      if (this.cancelledDelegations.has(delegationId)) return false;
+      const ws = this.#ws;
+      if (generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return false;
+      if (this.#cancelledDelegations.has(delegationId)) return false;
       ws.send(JSON.stringify({ type, delegationId, status, text }));
       return true;
     };
-    this.delegations = this.delegations.then(async () => {
+    this.#delegations = this.#delegations.then(async () => {
       // Cancelled while queued behind another turn: never start it.
-      if (generation !== this.callGeneration || this.cancelledDelegations.has(delegationId)) return;
+      if (generation !== this.#callGeneration || this.#cancelledDelegations.has(delegationId)) return;
       const result: VoiceDelegationResult = await bridge
         .runDelegatedTurn(request)
         .catch(() => ({ status: "failed", text: "" }));
-      await this.awaitContextSend();
+      await this.#awaitContextSend();
       // Parked on an approval: ask now (non-terminal), answer once the visitor
       // decides. A server that can't take an update gets the ask as the result.
       const parked = !!result.followUp;
-      const update = parked && this.capabilities.has("delegation_update");
+      const update = parked && this.#capabilities.has("delegation_update");
       const sent = send(
         update ? "delegation_update" : "delegation_result",
         parked && !update ? "completed" : result.status,
         result.text,
       );
       if (!sent) return;
-      if (result.status !== "failed") this.answered.add(delegationId);
+      if (result.status !== "failed") this.#answered.add(delegationId);
       if (!result.followUp) return;
       // The approval bookkeeping (expiry, supersede) runs either way.
       const abort = new AbortController();
-      this.followUps.set(delegationId, abort);
+      this.#followUps.set(delegationId, abort);
       void result
         .followUp({
           signal: abort.signal,
@@ -961,41 +961,41 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           onUpdate: (text) => send("delegation_update", "pending_approval", text),
         })
         .then((followUp) => {
-          this.followUps.delete(delegationId);
+          this.#followUps.delete(delegationId);
           // Hang-up and cancellation send nothing.
           if (update && followUp && !abort.signal.aborted) send("delegation_result", followUp.status, followUp.text);
         });
     });
   }
 
-  private handleAudioFrame(buf: ArrayBuffer, generation: number): void {
-    if (generation !== this.callGeneration) return;
-    if (!this.playback) return;
-    if (this.isCancelling()) return;
+  #handleAudioFrame(buf: ArrayBuffer, generation: number): void {
+    if (generation !== this.#callGeneration) return;
+    if (!this.#playback) return;
+    if (this.#isCancelling()) return;
     const pcm = stripWavHeader(buf);
     if (pcm.length === 0) return;
-    if (!this.isSpeaking) {
-      this.isSpeaking = true;
-      this.emitStatus("speaking");
+    if (!this.#isSpeaking) {
+      this.#isSpeaking = true;
+      this.#emitStatus("speaking");
     }
-    this.armPlaybackFinished();
-    this.playback.enqueue(pcm);
-    if (this.speechToSpeech) this.scheduleContinuousDrain(pcm.length);
+    this.#armPlaybackFinished();
+    this.#playback.enqueue(pcm);
+    if (this.#speechToSpeech) this.#scheduleContinuousDrain(pcm.length);
   }
 
-  private isCancelling(): boolean {
-    return Date.now() < this.cancelledUntil;
+  #isCancelling(): boolean {
+    return Date.now() < this.#cancelledUntil;
   }
 
   /** Register the (one-shot) engine drain callback if none is pending. */
-  private armPlaybackFinished(): void {
-    if (this.finishedArmed || !this.playback) return;
-    this.finishedArmed = true;
-    const generation = this.callGeneration;
-    this.playback.onFinished(() => {
-      if (generation !== this.callGeneration) return;
-      this.finishedArmed = false;
-      this.handlePlaybackDrained();
+  #armPlaybackFinished(): void {
+    if (this.#finishedArmed || !this.#playback) return;
+    this.#finishedArmed = true;
+    const generation = this.#callGeneration;
+    this.#playback.onFinished(() => {
+      if (generation !== this.#callGeneration) return;
+      this.#finishedArmed = false;
+      this.#handlePlaybackDrained();
     });
   }
 
@@ -1005,141 +1005,141 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * engine is never marked ended, so the next reply's audio plays through the
    * same stream untouched and an underrun is never mistaken for a reply end.
    */
-  private scheduleContinuousDrain(byteLength: number): void {
+  #scheduleContinuousDrain(byteLength: number): void {
     const now = Date.now();
     // PCM16 @ 24 kHz: 48 bytes per millisecond.
-    this.playbackEndsAt = Math.max(now, this.playbackEndsAt) + byteLength / 48;
-    clearTimeout(this.drainTimer);
-    this.drainTimer = setTimeout(
-      () => this.handlePlaybackDrained(),
-      this.playbackEndsAt - now + CONTINUOUS_DRAIN_GRACE_MS,
+    this.#playbackEndsAt = Math.max(now, this.#playbackEndsAt) + byteLength / 48;
+    clearTimeout(this.#drainTimer);
+    this.#drainTimer = setTimeout(
+      () => this.#handlePlaybackDrained(),
+      this.#playbackEndsAt - now + CONTINUOUS_DRAIN_GRACE_MS,
     );
   }
 
-  private handlePlaybackDrained(): void {
-    this.isSpeaking = false;
-    this.playbackEndsAt = 0;
+  #handlePlaybackDrained(): void {
+    this.#isSpeaking = false;
+    this.#playbackEndsAt = 0;
     // Reply drained: the call stays open, so return to listening (or to
     // processing while an agent delegation is still running).
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.emitStatus(this.delegating ? "processing" : "listening");
+    if (this.#ws && this.#ws.readyState === WebSocket.OPEN) {
+      this.#emitStatus(this.#delegating ? "processing" : "listening");
     }
   }
 
   /** Drop queued audio locally and reset the speaking/drain bookkeeping. */
-  private clearLocalPlayback(): void {
-    this.playback?.flush();
+  #clearLocalPlayback(): void {
+    this.#playback?.flush();
     // flush() discards registered callbacks: re-arm for the next reply.
-    this.finishedArmed = false;
-    this.armPlaybackFinished();
-    this.isSpeaking = false;
-    this.playbackEndsAt = 0;
-    clearTimeout(this.drainTimer);
+    this.#finishedArmed = false;
+    this.#armPlaybackFinished();
+    this.#isSpeaking = false;
+    this.#playbackEndsAt = 0;
+    clearTimeout(this.#drainTimer);
   }
 
   // --- Teardown --------------------------------------------------------------
 
-  private cleanup(): void {
+  #cleanup(): void {
     // Invalidate any in-flight async continuation / late frames first.
-    this.callGeneration += 1;
-    this.callLive = false;
-    this.isSpeaking = false;
-    this.releaseAttached();
-    this.speechToSpeech = false;
-    this.delegating = false;
-    this.clientDelegation = false;
-    this.capabilities = new Set();
-    for (const abort of this.followUps.values()) abort.abort();
-    this.followUps.clear();
-    this.cancelledDelegations.clear();
-    this.callId = undefined;
-    this.contextSent = false;
-    this.pendingContext = null;
-    this.contextSend = null;
-    this.delegations = Promise.resolve();
-    this.answered.clear();
-    this.foldReadback = false;
-    this.assistantTurns.clear();
-    this.foldedTurns.clear();
-    this.finishedArmed = false;
-    this.cancelledUntil = 0;
-    this.playbackEndsAt = 0;
-    clearTimeout(this.drainTimer);
-    this.preOpenAudio = [];
-    this.preOpenBytes = 0;
+    this.#callGeneration += 1;
+    this.#callLive = false;
+    this.#isSpeaking = false;
+    this.#releaseAttached();
+    this.#speechToSpeech = false;
+    this.#delegating = false;
+    this.#clientDelegation = false;
+    this.#capabilities = new Set();
+    for (const abort of this.#followUps.values()) abort.abort();
+    this.#followUps.clear();
+    this.#cancelledDelegations.clear();
+    this.#callId = undefined;
+    this.#contextSent = false;
+    this.#pendingContext = null;
+    this.#contextSend = null;
+    this.#delegations = Promise.resolve();
+    this.#answered.clear();
+    this.#foldReadback = false;
+    this.#assistantTurns.clear();
+    this.#foldedTurns.clear();
+    this.#finishedArmed = false;
+    this.#cancelledUntil = 0;
+    this.#playbackEndsAt = 0;
+    clearTimeout(this.#drainTimer);
+    this.#preOpenAudio = [];
+    this.#preOpenBytes = 0;
 
-    if (this.processor) {
-      this.processor.onaudioprocess = null;
-      this.processor.disconnect();
-      this.processor = null;
+    if (this.#processor) {
+      this.#processor.onaudioprocess = null;
+      this.#processor.disconnect();
+      this.#processor = null;
     }
-    if (this.sourceNode) {
-      this.sourceNode.disconnect();
-      this.sourceNode = null;
+    if (this.#sourceNode) {
+      this.#sourceNode.disconnect();
+      this.#sourceNode = null;
     }
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((t) => t.stop());
-      this.mediaStream = null;
+    if (this.#mediaStream) {
+      this.#mediaStream.getTracks().forEach((t) => t.stop());
+      this.#mediaStream = null;
     }
-    if (this.captureContext) {
-      this.captureContext.close().catch(() => {});
-      this.captureContext = null;
+    if (this.#captureContext) {
+      this.#captureContext.close().catch(() => {});
+      this.#captureContext = null;
     }
-    if (this.playback) {
-      void this.playback.destroy();
-      this.playback = null;
+    if (this.#playback) {
+      void this.#playback.destroy();
+      this.#playback = null;
     }
-    if (this.ws) {
-      this.intentionalClose = true;
+    if (this.#ws) {
+      this.#intentionalClose = true;
       try {
-        this.ws.close(1000, "client ended call");
+        this.#ws.close(1000, "client ended call");
       } catch {
         // ignore
       }
-      this.ws = null;
+      this.#ws = null;
     }
   }
 
   // --- Callback registration + emit -----------------------------------------
 
   onResult(callback: (result: VoiceResult) => void): void {
-    this.resultCallbacks.push(callback);
+    this.#resultCallbacks.push(callback);
   }
 
   onError(callback: (error: Error) => void): void {
-    this.errorCallbacks.push(callback);
+    this.#errorCallbacks.push(callback);
   }
 
   onStatusChange(callback: (status: VoiceStatus) => void): void {
-    this.statusCallbacks.push(callback);
+    this.#statusCallbacks.push(callback);
   }
 
   onTranscript(callback: TranscriptCallback): void {
-    this.transcriptCallbacks.push(callback);
+    this.#transcriptCallbacks.push(callback);
   }
 
   onMetrics(callback: (metrics: VoiceMetrics) => void): void {
-    this.metricsCallbacks.push(callback);
+    this.#metricsCallbacks.push(callback);
   }
 
-  private emitStatus(status: VoiceStatus): void {
-    this.statusCallbacks.forEach((cb) => cb(status));
+  #emitStatus(status: VoiceStatus): void {
+    this.#statusCallbacks.forEach((cb) => cb(status));
   }
 
-  private emitError(error: Error): void {
-    this.errorCallbacks.forEach((cb) => cb(error));
+  #emitError(error: Error): void {
+    this.#errorCallbacks.forEach((cb) => cb(error));
   }
 
-  private emitTranscript(
+  #emitTranscript(
     role: "user" | "assistant",
     text: string,
     isFinal: boolean,
     metadata?: VoiceTranscriptMetadata,
   ): void {
-    this.transcriptCallbacks.forEach((cb) => cb(role, text, isFinal, metadata));
+    this.#transcriptCallbacks.forEach((cb) => cb(role, text, isFinal, metadata));
   }
 
-  private emitMetrics(metrics: VoiceMetrics): void {
-    this.metricsCallbacks.forEach((cb) => cb(metrics));
+  #emitMetrics(metrics: VoiceMetrics): void {
+    this.#metricsCallbacks.forEach((cb) => cb(metrics));
   }
 }

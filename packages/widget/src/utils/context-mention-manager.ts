@@ -95,16 +95,16 @@ const mentionKey = (sourceId: string, itemId: string) => `${sourceId}\u0000${ite
  * that's the controller's job.
  */
 export class ContextMentionManager {
-  private readonly opts: ContextMentionManagerOptions;
+  readonly #opts: ContextMentionManagerOptions;
   private readonly mentions: PendingMention[] = [];
 
   constructor(opts: ContextMentionManagerOptions) {
-    this.opts = opts;
-    this.updateRowVisibility();
+    this.#opts = opts;
+    this.#updateRowVisibility();
   }
 
-  private get maxMentions(): number {
-    return this.opts.mentionConfig.maxMentions ?? 8;
+  get #maxMentions(): number {
+    return this.#opts.mentionConfig.maxMentions ?? 8;
   }
 
   hasMentions(): boolean {
@@ -123,9 +123,9 @@ export class ContextMentionManager {
   ): boolean {
     const key = mentionKey(source.id, item.id);
     if (this.mentions.some((m) => m.key === key)) {
-      return this.reject(source, item, "duplicate");
+      return this.#reject(source, item, "duplicate");
     }
-    if (this.atLimit()) return this.reject(source, item, "limit");
+    if (this.atLimit()) return this.#reject(source, item, "limit");
 
     const ref = refFromItem(source, item);
     const pending: PendingMention = {
@@ -138,7 +138,7 @@ export class ContextMentionManager {
     };
     pending.chip = createMentionChip({
       ref,
-      config: this.opts.mentionConfig,
+      config: this.#opts.mentionConfig,
       onRemove: () => this.remove(key),
     });
     // Mention chips are always new when appended (a rebuild clears them with
@@ -149,17 +149,17 @@ export class ContextMentionManager {
       () => pending.chip?.el.removeAttribute("data-persona-chip-enter"),
       { once: true }
     );
-    this.opts.contextRow.appendChild(pending.chip.el);
+    this.#opts.contextRow.appendChild(pending.chip.el);
     // startPending pushes into this.mentions, which updateRowVisibility reads —
     // reversed order left the row hidden until the second chip.
-    this.startPending(pending);
-    this.updateRowVisibility();
+    this.#startPending(pending);
+    this.#updateRowVisibility();
     return true;
   }
 
   /** True when the mention limit is already reached (inline pre-insert gate). */
   atLimit(): boolean {
-    return this.mentions.length >= this.maxMentions;
+    return this.mentions.length >= this.#maxMentions;
   }
 
   /**
@@ -177,7 +177,7 @@ export class ContextMentionManager {
     source: AgentWidgetContextMentionSource,
     item: AgentWidgetContextMentionItem
   ): boolean {
-    if (this.atLimit()) return this.reject(source, item, "limit");
+    if (this.atLimit()) return this.#reject(source, item, "limit");
     return true;
   }
 
@@ -204,17 +204,17 @@ export class ContextMentionManager {
       args,
       reportStatus,
     };
-    this.startPending(pending);
+    this.#startPending(pending);
   }
 
   /** Fire the rejection hooks for a blocked mention and return false (add's sentinel). */
-  private reject(
+  #reject(
     source: AgentWidgetContextMentionSource,
     item: AgentWidgetContextMentionItem,
     reason: "duplicate" | "limit"
   ): false {
-    this.opts.mentionConfig.onMentionRejected?.(item, reason);
-    this.opts.emit?.("rejected", { sourceId: source.id, itemId: item.id, reason });
+    this.#opts.mentionConfig.onMentionRejected?.(item, reason);
+    this.#opts.emit?.("rejected", { sourceId: source.id, itemId: item.id, reason });
     return false;
   }
 
@@ -224,39 +224,39 @@ export class ContextMentionManager {
    * else starts the select-time resolve, keeping the promise so `finalize()`
    * awaits this exact resolve rather than firing a second one.
    */
-  private startPending(pending: PendingMention): void {
+  #startPending(pending: PendingMention): void {
     this.mentions.push(pending);
     if (pending.source.resolveOn === "submit") {
       pending.status = "ready";
       pending.chip?.setStatus("ready");
       pending.reportStatus?.("resolved");
     } else {
-      pending.resolvePromise = this.resolvePending(pending);
+      pending.resolvePromise = this.#resolvePending(pending);
     }
-    this.opts.announce(`Added ${pending.ref.label} to context`);
+    this.#opts.announce(`Added ${pending.ref.label} to context`);
   }
 
-  private buildResolveContext(
+  #buildResolveContext(
     signal: AbortSignal,
     args: string,
-    composerText = this.opts.getComposerText()
+    composerText = this.#opts.getComposerText()
   ) {
     return {
-      messages: this.opts.getMessages(),
-      config: this.opts.getConfig(),
+      messages: this.#opts.getMessages(),
+      config: this.#opts.getConfig(),
       composerText,
       args,
       signal,
     };
   }
 
-  private async resolvePending(pending: PendingMention): Promise<void> {
+  async #resolvePending(pending: PendingMention): Promise<void> {
     const abort = new AbortController();
     pending.abort = abort;
     try {
       const payload = await pending.source.resolve(
         pending.item,
-        this.buildResolveContext(abort.signal, pending.args)
+        this.#buildResolveContext(abort.signal, pending.args)
       );
       if (abort.signal.aborted) return;
       pending.payload = payload;
@@ -272,11 +272,11 @@ export class ContextMentionManager {
       pending.reportStatus?.("error");
       // Speak the failure through the ASSERTIVE region — the visual error state
       // (chip/token color) is otherwise silent for screen-reader users.
-      (this.opts.announceError ?? this.opts.announce)(
+      (this.#opts.announceError ?? this.#opts.announce)(
         `Couldn't attach ${pending.ref.label} to context`
       );
-      this.opts.mentionConfig.onMentionResolveError?.(pending.item, error);
-      this.opts.emit?.("resolve-error", {
+      this.#opts.mentionConfig.onMentionResolveError?.(pending.item, error);
+      this.#opts.emit?.("resolve-error", {
         sourceId: pending.source.id,
         itemId: pending.item.id,
       });
@@ -289,8 +289,8 @@ export class ContextMentionManager {
     const [pending] = this.mentions.splice(index, 1);
     pending.abort?.abort();
     pending.chip?.el.remove();
-    this.updateRowVisibility();
-    this.opts.announce(`Removed ${pending.ref.label} from context`);
+    this.#updateRowVisibility();
+    this.#opts.announce(`Removed ${pending.ref.label} from context`);
   }
 
   /** Currently tracked refs, in order. Read-only: does not detach anything. */
@@ -312,7 +312,7 @@ export class ContextMentionManager {
       m.chip?.el.remove();
     }
     this.mentions.length = 0;
-    this.updateRowVisibility();
+    this.#updateRowVisibility();
   }
 
   /**
@@ -330,12 +330,12 @@ export class ContextMentionManager {
   collectForSubmit(): { refs: AgentWidgetContextMentionRef[]; finalize: () => Promise<MentionSubmitBundle> } {
     const snapshot = [...this.mentions];
     const refs = snapshot.map((m) => m.ref);
-    const composerText = this.opts.getComposerText();
+    const composerText = this.#opts.getComposerText();
 
     // Detach: empty the composer chip row without aborting resolves.
     for (const m of snapshot) m.chip?.el.remove();
     this.mentions.length = 0;
-    this.updateRowVisibility();
+    this.#updateRowVisibility();
 
     const finalize = async (): Promise<MentionSubmitBundle> => {
       // Resolve every mention concurrently: submit-deferred sources resolve now;
@@ -346,7 +346,7 @@ export class ContextMentionManager {
             if (m.source.resolveOn === "submit") {
               return await m.source.resolve(
                 m.item,
-                this.buildResolveContext(new AbortController().signal, m.args, composerText)
+                this.#buildResolveContext(new AbortController().signal, m.args, composerText)
               );
             }
             if (m.resolvePromise) await m.resolvePromise;
@@ -355,13 +355,13 @@ export class ContextMentionManager {
             // A throwing host `onMentionResolveError` must not reject the whole
             // bundle — guard the callback so one bad item just drops.
             try {
-              this.opts.mentionConfig.onMentionResolveError?.(m.item, error);
+              this.#opts.mentionConfig.onMentionResolveError?.(m.item, error);
             } catch (cbError) {
               if (typeof console !== "undefined") {
                 console.warn("[Persona] onMentionResolveError callback threw", cbError);
               }
             }
-            this.opts.emit?.("resolve-error", {
+            this.#opts.emit?.("resolve-error", {
               sourceId: m.source.id,
               itemId: m.item.id,
             });
@@ -398,7 +398,7 @@ export class ContextMentionManager {
               formatMentionBlock(
                 { label: m.ref.label, text: payload.llmAppend, ref: m.ref, item: m.item },
                 blocks.length,
-                this.opts.mentionConfig.llmFormat
+                this.#opts.mentionConfig.llmFormat
               )
             );
           } catch (error) {
@@ -425,7 +425,7 @@ export class ContextMentionManager {
    * The row is shared with the composer's mode chips, so visibility follows the
    * row's children, never this manager's mention count.
    */
-  private updateRowVisibility(): void {
-    syncComposerChipRow(this.opts.contextRow);
+  #updateRowVisibility(): void {
+    syncComposerChipRow(this.#opts.contextRow);
   }
 }

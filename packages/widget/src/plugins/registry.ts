@@ -1,17 +1,17 @@
 import { AgentWidgetPlugin } from "./types";
 
 class PluginRegistry {
-  private plugins: Map<string, AgentWidgetPlugin> = new Map();
+  #plugins: Map<string, AgentWidgetPlugin> = new Map();
 
   /**
    * Register a plugin
    */
   register(plugin: AgentWidgetPlugin): void {
-    if (this.plugins.has(plugin.id)) {
+    if (this.#plugins.has(plugin.id)) {
       console.warn(`Plugin "${plugin.id}" is already registered. Overwriting.`);
     }
 
-    this.plugins.set(plugin.id, plugin);
+    this.#plugins.set(plugin.id, plugin);
     plugin.onRegister?.();
   }
 
@@ -19,10 +19,10 @@ class PluginRegistry {
    * Unregister a plugin
    */
   unregister(pluginId: string): void {
-    const plugin = this.plugins.get(pluginId);
+    const plugin = this.#plugins.get(pluginId);
     if (plugin) {
       plugin.onUnregister?.();
-      this.plugins.delete(pluginId);
+      this.#plugins.delete(pluginId);
     }
   }
 
@@ -30,7 +30,7 @@ class PluginRegistry {
    * Get all plugins sorted by priority
    */
   getAll(): AgentWidgetPlugin[] {
-    return Array.from(this.plugins.values()).sort(
+    return Array.from(this.#plugins.values()).sort(
       (a, b) => (b.priority ?? 0) - (a.priority ?? 0)
     );
   }
@@ -61,8 +61,8 @@ class PluginRegistry {
    * Clear all plugins
    */
   clear(): void {
-    this.plugins.forEach(plugin => plugin.onUnregister?.());
-    this.plugins.clear();
+    this.#plugins.forEach(plugin => plugin.onUnregister?.());
+    this.#plugins.clear();
   }
 }
 

@@ -2,13 +2,13 @@
   {
     "name": "\u26d4 CRITICAL \u00b7 CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "196.75 kB",
+    "limit": "186.5 kB",
     "gzip": true
   },
   {
     "name": "\u26d4 CRITICAL \u00b7 launcher critical bundle (launcher.global.js)",
     "path": "dist/launcher.global.js",
-    "limit": "21.25 kB",
+    "limit": "19.75 kB",
     "gzip": true
   },
   {
@@ -92,7 +92,7 @@
   {
     "name": "Lazy · history (Messages) view chunk (history-view.js)",
     "path": "dist/history-view.js",
-    "limit": "15.5 kB",
+    "limit": "16.5 kB",
     "gzip": true
   },
   {

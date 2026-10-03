@@ -15,9 +15,11 @@ import type {
   HistoryViewOptions,
   HistoryViewHandle,
 } from "./history-view-entry";
+import type { showHistoryConfirm } from "./components/history-confirm-dialog";
 
 export type HistoryViewModule = {
   createHistoryView: (options: HistoryViewOptions) => HistoryViewHandle;
+  showHistoryConfirm: typeof showHistoryConfirm;
 };
 
 // IIFE/CDN: sibling-URL chunk via the registered loader.
