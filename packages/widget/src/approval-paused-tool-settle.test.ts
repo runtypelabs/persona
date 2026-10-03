@@ -269,3 +269,57 @@ describe("AgentWidgetSession settles the approval-paused tool bubble", () => {
     });
   });
 });
+
+describe("approval settles stay with the stream that decided them", () => {
+  const tool = (id: string): AgentWidgetMessage => ({
+    ...pausedTool(),
+    id: `tool-${id}`,
+    toolCall: { ...pausedTool().toolCall!, id },
+  });
+  const approval = (approvalId: string, toolCallId: string): AgentWidgetMessage => ({
+    ...pendingApproval(toolCallId),
+    id: `approval-${approvalId}`,
+    approval: { ...pendingApproval(toolCallId).approval!, id: approvalId, toolCallId },
+  });
+  const frame = (event: Record<string, unknown>) =>
+    new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`);
+
+  it("does not settle another stream's paused call when one stream ends", async () => {
+    let messages: AgentWidgetMessage[] = [];
+    const session = new AgentWidgetSession(
+      {
+        clientToken: "ct_live_demo",
+        apiUrl: "https://api.runtype.com",
+        initialMessages: [tool("toolu_a"), approval("appr_a", "toolu_a"), tool("toolu_b"), approval("appr_b", "toolu_b")],
+      },
+      {
+        onMessagesChanged: (m) => { messages = m; },
+        onStatusChanged: () => {},
+        onStreamingChanged: () => {},
+        onError: () => {},
+      }
+    );
+    let controlB!: ReadableStreamDefaultController<Uint8Array>;
+    const streamB = new ReadableStream<Uint8Array>({ start: (c) => { controlB = c; } });
+    const connectedB = session.connectStream(streamB, { allowReentry: true });
+    controlB.enqueue(frame({ type: "approval_complete", executionId: "exec_b", approvalId: "appr_b", decision: "approved" }));
+    await new Promise((r) => setTimeout(r, 0));
+
+    await session.connectStream(
+      sse([
+        { type: "approval_complete", executionId: "exec_a", approvalId: "appr_a", decision: "approved" },
+        { type: "execution_complete", kind: "agent", success: true },
+      ]).body!,
+      { allowReentry: true }
+    );
+    const b = () => messages.find((m) => m.toolCall?.id === "toolu_b")?.toolCall;
+    expect(b()?.superseded).toBeUndefined();
+
+    controlB.enqueue(frame({ type: "tool_start", toolCallId: "toolu_b", toolName: "place_pickup_order", toolType: "custom" }));
+    controlB.enqueue(frame({ type: "tool_complete", toolCallId: "toolu_b", toolName: "place_pickup_order", success: true, result: { orderId: "ord_b" } }));
+    controlB.close();
+    await connectedB;
+    expect(b()).toMatchObject({ status: "complete", result: { orderId: "ord_b" } });
+    expect(b()?.superseded).toBeUndefined();
+  });
+});

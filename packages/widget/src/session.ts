@@ -285,8 +285,10 @@ export class AgentWidgetSession {
   private messages: AgentWidgetMessage[];
   private status: AgentWidgetSessionStatus = "idle";
   private streaming = false;
-  /** Approval messages decided on the current stream, settled when it ends. */
-  #approvalSettlesAtStreamEnd = new Set<string>();
+  /** Approval messages decided on a stream, keyed to that stream so it settles only its own. */
+  #approvalSettlesAtStreamEnd = new Map<string, object | undefined>();
+  /** The `connectStream` call whose event is being handled, if any. */
+  #activeStreamToken: object | undefined;
   private abortController: AbortController | null = null;
   #sequenceCounter = Date.now();
   
@@ -2990,20 +2992,33 @@ export class AgentWidgetSession {
 
     this.#setStreaming(true);
 
+    const streamToken = {};
     try {
       await this.client.processStream(
         stream,
-        this.handleEvent,
+        (event) => {
+          const previous = this.#activeStreamToken;
+          this.#activeStreamToken = streamToken;
+          try {
+            this.handleEvent(event);
+          } finally {
+            this.#activeStreamToken = previous;
+          }
+        },
         options?.assistantMessageId,
         options?.seedContent
       );
-      this.#flushApprovalSettles();
+      this.#flushApprovalSettles(streamToken);
     } catch (error) {
-      this.#flushApprovalSettles();
       // During a durable reconnect a thrown resume stream is just another drop:
       // the reconnect loop owns the retry/backoff. Don't paint an error or tear
-      // down, stay in `resuming`.
-      if (this.status === "resuming" || this.#reconnecting) return;
+      // down, stay in `resuming`. The reconnect may still deliver the paused
+      // call's result, so its approval settles wait for streaming to end.
+      if (this.status === "resuming" || this.#reconnecting) {
+        this.#releaseApprovalSettles(streamToken);
+        return;
+      }
+      this.#flushApprovalSettles(streamToken);
       this.#setStatus("error");
       // Mirror the idle/error handlers: a failed resume stream must not tear
       // down streaming/abortController while another WebMCP resolve is still
@@ -3681,7 +3696,7 @@ export class AgentWidgetSession {
         event.message.approval &&
         event.message.approval.status !== "pending"
       ) {
-        this.#approvalSettlesAtStreamEnd.add(event.message.id);
+        this.#approvalSettlesAtStreamEnd.set(event.message.id, this.#activeStreamToken);
       }
 
       // Track the open assistant text bubble's REAL streamed id so a durable
@@ -4139,7 +4154,7 @@ export class AgentWidgetSession {
 
     // Speak the latest assistant message when streaming completes
     if (wasStreaming && !streaming) {
-      this.#flushApprovalSettles();
+      this.#flushApprovalSettles(undefined);
       this.speakLatestAssistantMessage();
     }
   }
@@ -4240,18 +4255,31 @@ export class AgentWidgetSession {
   }
 
   /**
+   * Settle the approval-paused bubbles one stream decided but did not
+   * complete. `undefined` settles those no live `connectStream` owns.
+   */
+  #flushApprovalSettles(streamToken: object | undefined) {
+    for (const [id, token] of [...this.#approvalSettlesAtStreamEnd]) {
+      if (token !== streamToken) continue;
+      this.#approvalSettlesAtStreamEnd.delete(id);
+      this.#settleApprovalPausedToolCall(id);
+    }
+  }
+
+  /** Hand a dropped stream's pending settles to the end of all streaming. */
+  #releaseApprovalSettles(streamToken: object) {
+    for (const [id, token] of this.#approvalSettlesAtStreamEnd) {
+      if (token === streamToken) this.#approvalSettlesAtStreamEnd.set(id, undefined);
+    }
+  }
+
+  /**
    * Settle the tool bubble an approval paused when no terminal tool frame
    * arrived for it. Current servers run the paused call itself under its
    * original id; older ones re-issue it under a new id. Denied and timed-out
    * calls settle as failed; an approved call settles as superseded. A call
    * already complete is left alone.
    */
-  /** Settle every approval-paused bubble the finished stream decided but did not complete. */
-  #flushApprovalSettles() {
-    const ids = [...this.#approvalSettlesAtStreamEnd];
-    this.#approvalSettlesAtStreamEnd.clear();
-    for (const id of ids) this.#settleApprovalPausedToolCall(id);
-  }
 
   #settleApprovalPausedToolCall(approvalMessageId: string) {
     const approval = this.messages.find((m) => m.id === approvalMessageId)?.approval;
