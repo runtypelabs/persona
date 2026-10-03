@@ -3339,17 +3339,35 @@ export const createAgentExperience = (
     sessionRef,
     config: () => config,
   };
+  // At most one interaction waits on the chunk: later ones (a double click)
+  // are dropped, and the queued one is dropped too if its sheet was removed
+  // meanwhile, so an answer can never be submitted twice.
+  let askUserEventPending = false;
   const routeAskUserEvent =
     (kind: keyof AskUserSheetHandlers) =>
     (event: Event): void => {
-      if (!(event.target as HTMLElement | null)?.closest?.("[data-persona-ask-sheet-for]")) return;
+      const sheet = (event.target as HTMLElement | null)?.closest?.("[data-persona-ask-sheet-for]");
+      if (!sheet) return;
       const run = (m: UiExtrasModule) => {
         askUserHandlers ??= m.createAskUserSheetHandlers(askUserCtx);
         (askUserHandlers[kind] as (e: Event) => void)(event);
       };
       const loaded = getUiExtrasSync();
-      if (loaded) run(loaded);
-      else loadUiExtras().then(run, () => {});
+      if (loaded) {
+        run(loaded);
+        return;
+      }
+      if (askUserEventPending) return;
+      askUserEventPending = true;
+      loadUiExtras().then(
+        (m) => {
+          askUserEventPending = false;
+          if (sheet.isConnected) run(m);
+        },
+        () => {
+          askUserEventPending = false;
+        }
+      );
     };
   askUserOverlay.addEventListener("click", routeAskUserEvent("click"));
   askUserOverlay.addEventListener("keydown", routeAskUserEvent("keydown"));

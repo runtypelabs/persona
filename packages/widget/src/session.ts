@@ -1596,6 +1596,7 @@ export class AgentWidgetSession {
     this.abortController = null;
     this.#teardownReconnect();
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     this.messages = [];
     this.#resetConversationScopedState();
     this.#olderPageRequests.clear();
@@ -2571,6 +2572,7 @@ export class AgentWidgetSession {
     // one) so a lingering resolve can't race the new dispatch or post a stale
     // /resume against a superseded execution.
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     // A new turn also supersedes any pending durable reconnect from the prior
     // turn (cancels backoff/listeners, clears the old resume handle).
     this.#teardownReconnect();
@@ -3105,13 +3107,18 @@ export class AgentWidgetSession {
   }
 
   #actionsHost: SessionActionsHost | null = null;
+  // Advanced when the turn is stopped or replaced (cancel, clear, new send,
+  // hydrate, conversation switch). A resolve waiting on the lazy chunk checks
+  // it after the load so a stopped turn never resumes late.
+  #actionsEpoch = 0;
 
   /**
    * Run a resolve path from `session-actions.ts` (the lazy
    * `session-actions.js` chunk in the IIFE build). Synchronous when the module
    * is already loaded or provided, so the call's timing matches an inline
    * method; otherwise it waits for the chunk and reports a failed load via
-   * `onError` (the resolve never started, so no state needs unwinding).
+   * `onError` (the resolve never started, so no state needs unwinding). A turn
+   * stopped or replaced while the chunk loads drops the resolve.
    */
   #withActions(
     run: (actions: SessionActionsModule, host: SessionActionsHost) => Promise<void>
@@ -3129,8 +3136,9 @@ export class AgentWidgetSession {
     });
     const actions = getSessionActionsSync();
     if (actions) return run(actions, host);
+    const epoch = this.#actionsEpoch;
     return loadSessionActions().then(
-      (loaded) => run(loaded, host),
+      (loaded) => (epoch === this.#actionsEpoch ? run(loaded, host) : undefined),
       (error) => {
         this.callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
       }
@@ -3369,6 +3377,7 @@ export class AgentWidgetSession {
     // independent of the shared one above). Clear the inflight set so retries
     // are possible if the user re-issues the same await context.
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     this.webMcpInflightKeys.clear();
     // Stop any in-progress audio too: when the user hits "stop", they want
     // the assistant to actually stop talking, not just stop generating tokens.
@@ -3387,6 +3396,7 @@ export class AgentWidgetSession {
     // Tear down every in-flight WebMCP resolve too: their messages are about
     // to be wiped, and a microtask-deferred resolve must not survive the clear.
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     this.messages = [];
     this.agentExecution = null;
     this.#clearArtifactState();
@@ -3614,6 +3624,7 @@ export class AgentWidgetSession {
     // Hydration replaces the conversation: abort and forget every in-flight
     // WebMCP resolve; their messages are about to be replaced.
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     // Wipe the WebMCP dedupe state alongside the message restore: the
     // incoming snapshot is treated as a fresh conversation context.
     this.webMcpInflightKeys.clear();
