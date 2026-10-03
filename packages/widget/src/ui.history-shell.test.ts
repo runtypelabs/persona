@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { setHistoryViewLoader } from "./history-view-loader";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
 import {
@@ -169,7 +170,7 @@ describe("history shell", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
     // The loader's production path is a sibling-URL / external-subpath import.
-    setHistoryViewLoader(async () => ({ createHistoryView }));
+    setHistoryViewLoader(async () => ({ createHistoryView, showHistoryConfirm }));
   });
 
   afterEach(() => {

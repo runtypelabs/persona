@@ -363,7 +363,7 @@ import {
   resolveHistoryShellCopy,
   type ResolvedHistoryShellCopy,
 } from "./components/history-shell-copy";
-import { showHistoryConfirm } from "./components/history-confirm-dialog";
+import type { HistoryConfirmOptions } from "./components/history-confirm-dialog";
 import { componentRegistry } from "./components/registry";
 import {
   renderComponentDirective,
@@ -11345,6 +11345,13 @@ export const createAgentExperience = (
   // passes' cssText resets, so plain layouts keep the container host.
   const historyConfirmHost = (): HTMLElement =>
     artifactSplitRoot ? panel : container;
+
+  // The dialog ships in the lazy history-view chunk (usually already warm:
+  // these actions start from history UI).
+  const showHistoryConfirm = async (
+    options: HistoryConfirmOptions
+  ): Promise<boolean> =>
+    (await loadHistoryView()).showHistoryConfirm(options);
 
   const requestDeleteConversation = async (
     conversationId: string

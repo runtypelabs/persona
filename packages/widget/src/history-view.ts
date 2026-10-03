@@ -12,6 +12,9 @@
  */
 
 export { createHistoryView } from "./history-view-entry";
+// The destructive-action confirm rides this chunk: every caller is already an
+// async history action, so it costs the core bundle nothing.
+export { showHistoryConfirm } from "./components/history-confirm-dialog";
 export {
   HISTORY_VIEW_COPY_DEFAULTS,
   resolveHistoryViewCopy,

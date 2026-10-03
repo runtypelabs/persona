@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { setHistoryViewLoader } from "./history-view-loader";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
 import {
@@ -103,7 +104,7 @@ const drag = (handle: HTMLElement, dx: number, opts?: { hold?: boolean }) => {
 describe("rail resize handle", () => {
   beforeEach(() => {
     window.scrollTo = vi.fn();
-    setHistoryViewLoader(async () => ({ createHistoryView }));
+    setHistoryViewLoader(async () => ({ createHistoryView, showHistoryConfirm }));
   });
 
   afterEach(() => {
