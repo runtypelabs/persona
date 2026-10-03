@@ -97,6 +97,30 @@ import { setClientStreamLoader } from "./client-stream-loader";
 
 setClientStreamLoader(siblingChunk("client-stream.js"));
 
+// Deferred visitor-history REST (`client-history.ts`), built with
+// `./client-history` external; fetched on the first history call.
+import { setClientHistoryLoader } from "./client-history-loader";
+
+setClientHistoryLoader(siblingChunk("client-history.js"));
+
+// Deferred UI glue for opt-in / interaction-only features (`ui-extras-entry.ts`),
+// built with `./ui-extras-entry` external; warmed when such a feature activates.
+import { setUiExtrasLoader } from "./ui-extras-loader";
+
+setUiExtrasLoader(siblingChunk("ui-extras.js"));
+// Deferred session resolve paths (`session-actions.ts`: approvals,
+// ask_user_question answers, WebMCP / suggest_replies resumes), built with
+// `./session-actions` external. The session warms it when the agent pauses.
+import { setSessionActionsLoader } from "./session-actions-loader";
+
+setSessionActionsLoader(siblingChunk("session-actions.js"));
+// Deferred visitor-history shell (`history-shell.ts`), built with
+// `./history-shell` external. Fetched at mount only when
+// `features.history.enabled`, or on the first history API call.
+import { setHistoryShellLoader } from "./history-shell-loader";
+
+setHistoryShellLoader(siblingChunk("history-shell.js"));
+
 // ---------------------------------------------------------------------------
 // Deferred Runtype TTS engine loading.
 //

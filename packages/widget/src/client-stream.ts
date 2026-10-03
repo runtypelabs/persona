@@ -91,6 +91,10 @@ export function preferFinalStructuredContent(
   return rawBuffer;
 }
 
+// Approval decisions and LOCAL-tool resumes ride the same lazy chunk: they
+// only run after a stream paused, by which time this chunk is loaded.
+export { resolveApproval, resumeFlow } from "./client-resume";
+
 export type StreamContext = {
   /** Read live: `updateConfig()` may swap the config mid-stream. */
   config: () => AgentWidgetConfig;

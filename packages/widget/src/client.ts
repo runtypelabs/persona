@@ -21,7 +21,6 @@ import {
   WidgetHistoryInternals,
   HistoryScope,
   HistoryIdentityStatus,
-  HistoryConversationSummary,
   HistoryConversationPage,
   HistoryConversationDetail,
   HistoryDisplayProjection,
@@ -48,6 +47,9 @@ import {
 } from "./utils/formatting";
 import { VERSION } from "./version";
 import { getClientStreamSync, loadClientStream } from "./client-stream-loader";
+import { loadClientHistory } from "./client-history-loader";
+import type { ClientHistoryHost } from "./client-history";
+import type { ClientResumeHost } from "./client-resume";
 
 /** History transcripts stay on the wire shape; `utils/history-messages.ts` maps them. */
 export type { HistoryWireMessage } from "./utils/history-messages";
@@ -77,7 +79,7 @@ type DispatchOptions = {
 export type SSEHandler = (event: AgentWidgetEvent) => void;
 
 const DEFAULT_ENDPOINT = "https://api.runtype.com/v1/dispatch";
-const DEFAULT_CLIENT_API_BASE = "https://api.runtype.com";
+import { DEFAULT_CLIENT_API_BASE } from "./utils/constants";
 
 /** Branch on `code`, never on message text. */
 export type HistoryClientErrorCode =
@@ -124,33 +126,11 @@ export class HistoryClientError extends Error {
   }
 }
 
-/** Per-message / per-batch display-projection caps (contract facts #5, #15). */
-const DISPLAY_PROJECTION_MESSAGE_CAP = 32768;
-const DISPLAY_PROJECTION_BATCH_CAP = 49152;
-
-/** Normalize current history metadata without leaking wire-only aliases. */
-const normalizeHistorySummary = (raw: unknown): HistoryConversationSummary => {
-  const row = (raw ?? {}) as Record<string, unknown>;
-  const targetId = typeof row.targetId === "string" ? row.targetId : null;
-  return {
-    id: typeof row.id === "string" ? row.id : "",
-    title: typeof row.title === "string" ? row.title : "",
-    targetId,
-    preview: typeof row.preview === "string" ? row.preview : null,
-    messageCount: typeof row.messageCount === "number" ? row.messageCount : 0,
-    createdAt: typeof row.createdAt === "string" ? row.createdAt : "",
-    updatedAt: typeof row.updatedAt === "string" ? row.updatedAt : "",
-  };
-};
-
 const identityReason = (status: HistoryIdentityStatus): string | undefined =>
   "reason" in status ? status.reason : undefined;
 
-const PROOF_NOT_ADMITTED_MESSAGE =
-  "The identity proof was not admitted; account history is unavailable";
+
 const PROOF_REJECTED_MESSAGE = "The identity proof was rejected";
-const NO_VISITOR_CREDENTIAL_MESSAGE = "The request carried no visitor credential";
-const IDENTITY_MISMATCH_MESSAGE = "The stored visitor belongs to a different signed-in user";
 
 const isHistoryClientError = (
   error: unknown,
@@ -547,14 +527,18 @@ export class AgentWidgetClient {
       });
       if (response.status === 401 && !recovered) {
         recovered = true;
-        session = await this.#recoverFromUnauthorized(
-          await this.#readErrorCode(response),
+        const history = await loadClientHistory();
+        session = await history.recoverFromUnauthorized(
+          this.#historyHost(),
+          await history.readErrorCode(this.#historyHost(), response),
           null,
           true
         );
         continue;
       }
-      if (!response.ok) throw await this.#historyErrorFor(response, true);
+      if (!response.ok) {
+        throw await (await loadClientHistory()).historyErrorFor(this.#historyHost(), response, true);
+      }
       return response;
     }
   }
@@ -1260,30 +1244,9 @@ export class AgentWidgetClient {
   }
 
   // ==========================================================================
-  // Visitor conversation history REST (client token mode only)
+  // Visitor conversation history REST (client token mode only). The bodies
+  // live in `client-history.ts` (lazy `client-history.js` chunk on the CDN).
   // ==========================================================================
-
-  /** `/v1/client/<path>` with a query string; credentials ride in headers. */
-  #historyUrl(
-    path: string,
-    query: Record<string, string | number | undefined>
-  ): string {
-    const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
-      if (value === undefined || value === '') continue;
-      params.set(key, String(value));
-    }
-    const search = params.toString();
-    return `${this.#clientApiBase()}/v1/client/${path}${search ? `?${search}` : ''}`;
-  }
-
-  /** Explicit per-operation scope wins; otherwise config, then evidence. */
-  #resolveHistoryScope(requested?: HistoryScope): HistoryScope {
-    if (requested) return requested;
-    const configured = this.config.features?.history?.scope;
-    if (configured) return configured;
-    return this.config.getIdentityProof ? 'verified-user' : 'browser';
-  }
 
   async #resolveChatIdentityProof(signal?: AbortSignal): Promise<ClientChatRequest['identityProof']> {
     signal?.throwIfAborted();
@@ -1319,317 +1282,58 @@ export class AgentWidgetClient {
     return { provider, token };
   }
 
-  /**
-   * Resolve the proof for one logical request. `null` is an intentional
-   * browser-scope fallback only while the visitor has never been bound.
-   */
-  async #resolveIdentityProof(
-    session: ClientSession,
-    track: boolean
-  ): Promise<string | null> {
-    const provider = this.config.getIdentityProof;
-    if (!provider) {
-      if (track) this.#setHistoryIdentityStatus(this.#browserOnlyStatus());
-      return null;
-    }
-    if (track) this.#setHistoryIdentityStatus({ state: 'verifying' });
-    let proof: string | null;
-    try {
-      proof = (await provider()) ?? null;
-    } catch {
-      if (track) this.#setHistoryIdentityStatus({ state: 'identity_provider_failed' });
-      throw new HistoryClientError(
-        'identity_provider_failed',
-        'The identity proof provider failed'
-      );
-    }
-    if (proof) return proof;
-    if (session.visitor?.endUserId != null) {
-      // Never downgrade a bound visitor into its own browser scope.
-      if (track) {
-        this.#setHistoryIdentityStatus({
-          state: 'authentication_required',
-          reason: 'proof_unavailable_after_binding',
-        });
-      }
-      throw new HistoryClientError(
-        'authentication_required',
-        'This browser is bound to a signed-in user and needs a fresh identity proof'
-      );
-    }
-    if (track) {
-      this.#setHistoryIdentityStatus({
-        state: 'browser_only',
-        reason: 'proof_unavailable_before_binding',
-      });
-    }
-    return null;
+  // Live accessors for the approval / resume requests (`client-resume.ts`,
+  // shipped in the lazy client-stream chunk on the CDN).
+  #resumeHostCache: ClientResumeHost | null = null;
+  #resumeHost(): ClientResumeHost {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const client = this;
+    return (this.#resumeHostCache ??= {
+      get config() {
+        return client.config;
+      },
+      headers: this.#headers,
+      getHeaders: this.#getHeaders,
+      debug: this.debug,
+      clientApiBase: () => client.#clientApiBase(),
+      getClientApiUrl: (endpoint) => client.#getClientApiUrl(endpoint),
+      getWebMcpBridge: () => client.#getWebMcpBridge(),
+      sendWithClientToolsDiff: (sessionId, tools, doFetch, opts) =>
+        client.#sendWithClientToolsDiff(sessionId, tools, doFetch, opts),
+      initSession: () => client.initSession(),
+      readVisitorToken: () => client.readVisitorToken(),
+      isClientTokenMode: () => client.isClientTokenMode(),
+    });
   }
 
-  /** Bind the visitor before the first verified request; admitted proofs only. */
-  async #bindIdentity(
-    session: ClientSession,
-    proof: string,
-    track: boolean
-  ): Promise<ClientSession> {
-    if (session.visitor?.endUserId != null) return session;
-    const bound = await this.#reinitWithProof(proof);
-    const admitted =
-      bound.visitor?.identityStatus === 'admitted' && bound.visitor?.endUserId != null;
-    if (!admitted) {
-      // "ignored", or a pre-acknowledgement server that left endUserId null.
-      if (track) {
-        this.#setHistoryIdentityStatus({
-          state: 'configuration_error',
-          reason: 'proof_not_admitted',
-        });
-      }
-      throw new HistoryClientError(
-        'proof_not_admitted',
-        PROOF_NOT_ADMITTED_MESSAGE
-      );
-    }
-    return bound;
-  }
-
-  async #readErrorCode(response: Response): Promise<string> {
-    const body = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-    if (typeof body.error === 'string') return body.error;
-    if (typeof body.message === 'string') return body.message;
-    return '';
-  }
-
-  /**
-   * Selective one-shot 401 recovery. Returns the session to retry under;
-   * anything unrecoverable throws typed and is never retried.
-   */
-  async #recoverFromUnauthorized(
-    reason: string,
-    proof: string | null,
-    track: boolean
-  ): Promise<ClientSession> {
-    const text = reason.toLowerCase();
-    if (text.includes('invalid_identity_proof')) {
-      if (track) {
-        this.#setHistoryIdentityStatus({
-          state: 'authentication_required',
-          reason: 'invalid_identity_proof',
-        });
-      }
-      throw new HistoryClientError('invalid_identity_proof', PROOF_REJECTED_MESSAGE);
-    }
-    if (text.includes('visitor token required')) {
-      throw new HistoryClientError('visitor_token_missing', NO_VISITOR_CREDENTIAL_MESSAGE);
-    }
-    if (text.includes('visitor_identity_mismatch')) {
-      if (!proof) {
-        if (track) {
-          this.#setHistoryIdentityStatus({
-            state: 'authentication_required',
-            reason: 'proof_unavailable_after_binding',
-          });
-        }
-        throw new HistoryClientError('visitor_identity_mismatch', IDENTITY_MISMATCH_MESSAGE);
-      }
-      // Same proof: binds this visitor, or gives a different person a clean one.
-      return this.#reinitWithProof(proof);
-    }
-    if (text.includes('expired') || text.includes('not found')) {
-      this.clearClientSession();
-      return this.initSession();
-    }
-    throw new HistoryClientError('unauthorized', reason || 'History request was not authorized');
-  }
-
-  async #historyErrorFor(
-    response: Response,
-    track: boolean
-  ): Promise<HistoryClientError> {
-    const code = await this.#readErrorCode(response);
-    if (response.status === 404) {
-      return new HistoryClientError('not_found', 'Conversation not found');
-    }
-    if (response.status === 429) {
-      const header = Number.parseInt(response.headers.get('Retry-After') ?? '', 10);
-      return new HistoryClientError('rate_limited', 'Too many history requests', {
-        ...(Number.isFinite(header) ? { retryAfterSeconds: header } : {}),
-      });
-    }
-    if (response.status === 503 && code.includes('identity_proof_not_admitted')) {
-      if (track) {
-        this.#setHistoryIdentityStatus({
-          state: 'configuration_error',
-          reason: 'proof_not_admitted',
-        });
-      }
-      return new HistoryClientError(
-        'proof_not_admitted',
-        PROOF_NOT_ADMITTED_MESSAGE
-      );
-    }
-    if (response.status === 401) {
-      const text = code.toLowerCase();
-      if (text.includes('invalid_identity_proof')) {
-        if (track) {
-          this.#setHistoryIdentityStatus({
-            state: 'authentication_required',
-            reason: 'invalid_identity_proof',
-          });
-        }
-        return new HistoryClientError('invalid_identity_proof', PROOF_REJECTED_MESSAGE);
-      }
-      if (text.includes('visitor token required')) {
-        return new HistoryClientError('visitor_token_missing', NO_VISITOR_CREDENTIAL_MESSAGE);
-      }
-      if (text.includes('visitor_identity_mismatch')) {
-        return new HistoryClientError('visitor_identity_mismatch', IDENTITY_MISMATCH_MESSAGE);
-      }
-      return new HistoryClientError('unauthorized', code || 'History request was not authorized');
-    }
-    return new HistoryClientError(
-      'request_failed',
-      code || `History request failed (${response.status})`
-    );
-  }
-
-  /**
-   * Validate `X-History-Identity-Status` before any body is committed: the
-   * per-operation acknowledgement, not a prior init, is what proves scope.
-   */
-  #commitIdentityAcknowledgement(
-    header: string | null,
-    proofSent: boolean,
-    track: boolean
-  ): void {
-    const value = header?.toLowerCase() ?? null;
-    if (proofSent) {
-      if (value === 'admitted') {
-        if (track) this.#setHistoryIdentityStatus({ state: 'verified' });
-        return;
-      }
-      if (track) {
-        this.#setHistoryIdentityStatus({
-          state: 'configuration_error',
-          reason: 'proof_not_admitted',
-        });
-      }
-      if (value === 'ignored') {
-        // The gate-off path must fail before I/O; a 2xx here is a broken server.
-        throw new HistoryClientError(
-          'identity_contract_violation',
-          'Server reported an ignored identity proof on a success response'
-        );
-      }
-      throw new HistoryClientError(
-        'proof_not_admitted',
-        'The response did not acknowledge the identity proof this request sent'
-      );
-    }
-    if (value === 'admitted') {
-      throw new HistoryClientError(
-        'identity_contract_violation',
-        'Server admitted an identity proof that was never sent'
-      );
-    }
-    // "not_provided", a missing header (rolling deploy), or an unknown value:
-    // no verified claim was made either way.
-    if (track) this.#setHistoryIdentityStatus(this.#browserOnlyStatus());
-  }
-
-  /**
-   * Shared history transport: live session, `sessionId` query param,
-   * `X-Visitor-Token` header, one resolved proof, one-shot 401 recovery, and a
-   * credential-revision guard that discards a response the store outran.
-   */
-  async #historyFetch<T>(
-    path: string,
-    opts: {
-      method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-      query?: Record<string, string | number | undefined>;
-      scope?: HistoryScope;
-      body?: unknown;
-      /** Reset tolerates a missing credential; every other route requires one. */
-      visitorTokenOptional?: boolean;
-      keepalive?: boolean;
-      /** Transport ops validate the acknowledgement but publish no status. */
-      trackIdentity?: boolean;
-    }
-  ): Promise<T> {
-    this.#assertHistoryUsable();
-    const track = opts.trackIdentity !== false;
-    let session = await this.initSession();
-
-    // Resolved once per logical request: a recovery retry reuses the same proof
-    // so one action cannot switch identities midway.
-    let proof: string | null = null;
-    if (this.#resolveHistoryScope(opts.scope) === 'verified-user') {
-      proof = await this.#resolveIdentityProof(session, track);
-      if (proof) session = await this.#bindIdentity(session, proof, track);
-    }
-
-    const store = this.historyInternals.visitorStore;
-    let recovered = false;
-    for (;;) {
-      const capturedRevision = store?.revision() ?? 0;
-      const visitorToken = await this.readVisitorToken();
-      if (!visitorToken && !opts.visitorTokenOptional) {
-        throw new HistoryClientError(
-          'visitor_token_missing',
-          'No visitor credential is stored for this browser'
-        );
-      }
-      const response = await fetch(
-        this.#historyUrl(path, { ...opts.query, sessionId: session.sessionId }),
-        {
-          method: opts.method,
-          headers: {
-            'X-Persona-Version': VERSION,
-            ...(visitorToken ? { 'X-Visitor-Token': visitorToken } : {}),
-            ...(proof ? { 'X-Identity-Proof': proof } : {}),
-            ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-          },
-          ...(opts.body !== undefined ? { body: JSON.stringify(opts.body) } : {}),
-          ...(opts.keepalive ? { keepalive: true } : {}),
-        }
-      );
-
-      if (response.status === 401 && !recovered) {
-        recovered = true;
-        session = await this.#recoverFromUnauthorized(
-          await this.#readErrorCode(response),
-          proof,
-          track
-        );
-        continue;
-      }
-      if (!response.ok) {
-        throw await this.#historyErrorFor(response, track);
-      }
-
-      const acknowledgement = response.headers.get('X-History-Identity-Status');
-      const data = (await response.json().catch(() => undefined)) as T;
-      if (store && store.revision() !== capturedRevision) {
-        // Another tab reset or replaced the credential: this body is stale.
-        throw new HistoryClientError(
-          'credential_changed',
-          'The visitor credential changed while the request was in flight'
-        );
-      }
-      this.#commitIdentityAcknowledgement(acknowledgement, proof !== null, track);
-      return data;
-    }
-  }
-
-  #assertHistoryUsable(): void {
-    if (!this.isClientTokenMode()) {
-      throw new Error('Conversation history is only available in client token mode');
-    }
-    if (!this.#isHistoryCapable()) {
-      throw new HistoryClientError(
-        'history_disabled',
-        'Visitor history is disabled for this surface'
-      );
-    }
+  // Live accessors handed to the lazily loaded history REST functions
+  // (`client-history.ts`); built once per client.
+  #historyHostCache: ClientHistoryHost | null = null;
+  #historyHost(): ClientHistoryHost {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const client = this;
+    return (this.#historyHostCache ??= {
+      HistoryClientError,
+      get config() {
+        return client.config;
+      },
+      get historyInternals() {
+        return client.historyInternals;
+      },
+      get clientSession() {
+        return client.clientSession;
+      },
+      clientApiBase: () => client.#clientApiBase(),
+      setHistoryIdentityStatus: (next) => client.#setHistoryIdentityStatus(next),
+      browserOnlyStatus: () => client.#browserOnlyStatus(),
+      derivedBrowserOnly: () => client.#derivedBrowserOnly(),
+      reinitWithProof: (proof) => client.#reinitWithProof(proof),
+      isHistoryCapable: () => client.#isHistoryCapable(),
+      clearClientSession: () => client.clearClientSession(),
+      initSession: () => client.initSession(),
+      readVisitorToken: () => client.readVisitorToken(),
+      isClientTokenMode: () => client.isClientTokenMode(),
+    });
   }
 
   /** One page of the visitor's conversations, newest first. */
@@ -1639,22 +1343,7 @@ export class AgentWidgetClient {
     targetId?: string;
     scope?: HistoryScope;
   }): Promise<HistoryConversationPage> {
-    const page = await this.#historyFetch<{
-      data?: unknown[];
-      nextCursor?: string | null;
-    }>('conversations', {
-      method: 'GET',
-      query: {
-        ...(opts?.cursor ? { cursor: opts.cursor } : {}),
-        ...(opts?.limit !== undefined ? { limit: opts.limit } : {}),
-        ...(opts?.targetId ? { targetId: opts.targetId } : {}),
-      },
-      ...(opts?.scope ? { scope: opts.scope } : {}),
-    });
-    return {
-      data: (Array.isArray(page?.data) ? page.data : []).map(normalizeHistorySummary),
-      nextCursor: typeof page?.nextCursor === 'string' ? page.nextCursor : null,
-    };
+    return (await loadClientHistory()).listConversations(this.#historyHost(), opts);
   }
 
   /**
@@ -1665,26 +1354,7 @@ export class AgentWidgetClient {
     conversationId: string,
     opts?: { messageCursor?: string; scope?: HistoryScope }
   ): Promise<HistoryConversationDetail> {
-    const detail = await this.#historyFetch<Record<string, unknown>>(
-      `conversations/${encodeURIComponent(conversationId)}`,
-      {
-        method: 'GET',
-        query: {
-          ...(opts?.messageCursor ? { messageCursor: opts.messageCursor } : {}),
-        },
-        ...(opts?.scope ? { scope: opts.scope } : {}),
-      }
-    );
-    return {
-      summary: normalizeHistorySummary(detail),
-      messages: Array.isArray(detail?.messages)
-        ? (detail.messages as HistoryConversationDetail['messages'])
-        : [],
-      nextMessageCursor:
-        typeof detail?.nextMessageCursor === 'string' ? detail.nextMessageCursor : null,
-      conversationRevision:
-        typeof detail?.conversationRevision === 'string' ? detail.conversationRevision : null,
-    };
+    return (await loadClientHistory()).getConversation(this.#historyHost(), conversationId, opts);
   }
 
   /**
@@ -1696,63 +1366,14 @@ export class AgentWidgetClient {
     conversationId: string,
     messages: HistoryDisplayProjection[]
   ): Promise<{ conversationRevision: string | null }> {
-    this.#assertHistoryUsable();
-    let total = 0;
-    for (const message of messages) {
-      const size = message.displayContent.length;
-      if (size > DISPLAY_PROJECTION_MESSAGE_CAP) {
-        throw new HistoryClientError(
-          'payload_too_large',
-          `displayContent exceeds the ${DISPLAY_PROJECTION_MESSAGE_CAP} character limit`
-        );
-      }
-      total += size;
-    }
-    if (total > DISPLAY_PROJECTION_BATCH_CAP) {
-      throw new HistoryClientError(
-        'payload_too_large',
-        `Display projection batch exceeds the ${DISPLAY_PROJECTION_BATCH_CAP} character limit`
-      );
-    }
-
-    await this.initSession();
-    const store = this.historyInternals.visitorStore;
-    const capturedRevision = store?.revision() ?? 0;
-    const result = await this.#historyFetch<{ conversationRevision?: string }>(
-      `conversations/${encodeURIComponent(conversationId)}/display-projections`,
-      {
-        method: 'PATCH',
-        body: { messages },
-        scope: 'browser',
-        keepalive: total <= DISPLAY_PROJECTION_BATCH_CAP,
-        trackIdentity: false,
-      }
-    );
-    const conversationRevision =
-      typeof result?.conversationRevision === 'string' ? result.conversationRevision : null;
-    // Install only while the same record and the same credential are still live.
-    if (
-      conversationRevision &&
-      this.clientSession?.conversationId === conversationId &&
-      (store?.revision() ?? 0) === capturedRevision
-    ) {
-      this.historyInternals.setStoredConversationRevision?.(conversationRevision);
-    }
-    return { conversationRevision };
+    return (await loadClientHistory()).finalizeDisplayProjections(this.#historyHost(), conversationId, messages);
   }
 
   public async deleteConversation(
     conversationId: string,
     opts?: { scope?: HistoryScope }
   ): Promise<{ deleted: number }> {
-    const result = await this.#historyFetch<{ deleted?: number }>(
-      `conversations/${encodeURIComponent(conversationId)}`,
-      {
-        method: 'DELETE',
-        ...(opts?.scope ? { scope: opts.scope } : {}),
-      }
-    );
-    return { deleted: typeof result?.deleted === 'number' ? result.deleted : 0 };
+    return (await loadClientHistory()).deleteConversation(this.#historyHost(), conversationId, opts);
   }
 
   /**
@@ -1764,14 +1385,7 @@ export class AgentWidgetClient {
     targetId?: string;
     scope?: HistoryScope;
   }): Promise<{ deleted: number }> {
-    const result = await this.#historyFetch<{ deleted?: number }>('conversations', {
-      method: 'DELETE',
-      query: {
-        ...(opts?.targetId !== undefined ? { targetId: opts.targetId } : {}),
-      },
-      ...(opts?.scope ? { scope: opts.scope } : {}),
-    });
-    return { deleted: typeof result?.deleted === 'number' ? result.deleted : 0 };
+    return (await loadClientHistory()).deleteAllConversations(this.#historyHost(), opts);
   }
 
   /**
@@ -1780,20 +1394,7 @@ export class AgentWidgetClient {
    * revocation still detaches this device.
    */
   public async resetVisitor(): Promise<{ reset: true }> {
-    this.#assertHistoryUsable();
-    this.#setHistoryIdentityStatus({ state: 'resetting' });
-    try {
-      await this.#historyFetch<{ reset?: boolean }>('visitor/reset', {
-        method: 'POST',
-        scope: 'browser',
-        visitorTokenOptional: true,
-      });
-    } finally {
-      await this.historyInternals.visitorStore?.clear();
-      // Post-reset resting state: this browser is a never-bound visitor again.
-      this.#setHistoryIdentityStatus(this.#derivedBrowserOnly());
-    }
-    return { reset: true };
+    return (await loadClientHistory()).resetVisitor(this.#historyHost());
   }
 
   /**
@@ -2224,39 +1825,7 @@ export class AgentWidgetClient {
     approval: { agentId: string; executionId: string; approvalId: string },
     decision: 'approved' | 'denied'
   ): Promise<Response> {
-    let headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...this.#headers
-    };
-    if (this.#getHeaders) {
-      Object.assign(headers, await this.#getHeaders());
-    }
-    const body = {
-      executionId: approval.executionId,
-      approvalId: approval.approvalId,
-      decision,
-      streamResponse: true,
-    };
-    const post = (path: string, extra?: Record<string, unknown>) =>
-      fetch(`${this.#clientApiBase()}${path}`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ...extra, ...body }),
-      });
-    const ownerRoute = `/v1/agents/${approval.agentId}/approve`;
-
-    if (!this.isClientTokenMode()) return post(ownerRoute);
-
-    // Same re-validation as `resumeFlow`: an approval can sit for a long time.
-    const { sessionId } = await this.initSession();
-    const response = await post('/v1/client/approve', { sessionId });
-    // A core without the route answers with its generic `Not Found`; an unknown
-    // or expired pause 404s with its own error, which the caller surfaces.
-    if (response.status === 404) {
-      const data = (await response.clone().json().catch(() => null)) as { error?: string } | null;
-      if (!data || data.error === 'Not Found') return post(ownerRoute);
-    }
-    return response;
+    return (await loadClientStream()).resolveApproval(this.#resumeHost(), approval, decision);
   }
 
   /**
@@ -2398,95 +1967,7 @@ export class AgentWidgetClient {
     toolOutputs: Record<string, unknown>,
     options?: { streamResponse?: boolean; signal?: AbortSignal; after?: string }
   ): Promise<Response> {
-    const isClientToken = this.isClientTokenMode();
-    const url = isClientToken
-      ? this.#getClientApiUrl('resume')
-      : `${this.config.apiUrl?.replace(/\/+$/, '') || DEFAULT_CLIENT_API_BASE}/resume`;
-
-    // The client-token resume route authenticates the session, not a Bearer
-    // key. A WebMCP approval can sit awaiting user input for a long time, so by
-    // the time we resume the original session may have expired. Re-validate (and
-    // silently re-init if needed) via initSession(): which returns the live
-    // session when `new Date() < expiresAt`, else mints a fresh one: instead of
-    // trusting the possibly-stale `this.clientSession`. (core#3889; BugBot
-    // PR #214 r3367875360.)
-    let resumeSessionId: string | undefined;
-    let resumeVisitorToken: string | null = null;
-    if (isClientToken) {
-      const session = await this.initSession();
-      resumeSessionId = session.sessionId;
-      if (session.durableRecovery?.enabled === true) {
-        resumeVisitorToken = await this.readVisitorToken();
-      }
-    }
-
-    let headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(resumeVisitorToken ? { 'X-Visitor-Token': resumeVisitorToken } : {}),
-      ...this.#headers
-    };
-    if (this.#getHeaders) {
-      Object.assign(headers, await this.#getHeaders());
-    }
-
-    const body: Record<string, unknown> = {
-      executionId,
-      toolOutputs,
-      streamResponse: options?.streamResponse ?? true,
-      ...(options?.after ? { after: options.after } : {}),
-    };
-    // Thread the (refreshed) sessionId through like `/v1/client/chat` does.
-    if (resumeSessionId) {
-      body.sessionId = resumeSessionId;
-    }
-
-    if (isClientToken && resumeSessionId) {
-      // Mid-run WebMCP tool refresh (runtypelabs/core#5361): the paused tool
-      // may have navigated the page, so the dispatch-time snapshot the server
-      // persisted can be stale. Re-snapshot the registry — the same built-in +
-      // bridge composition as the payload builders, so fingerprints computed
-      // here and on chat turns describe the same tool space — and ship it via
-      // the shared diff-only protocol. `emptyMeansReplace` sends an explicit
-      // `clientTools: []` when the registry vanished after a non-empty send,
-      // so the server replaces the persisted set instead of keeping it frozen.
-      const fullClientTools = [
-        ...builtInClientToolsForDispatch(this.config),
-        ...((await (await this.#getWebMcpBridge())?.snapshotForDispatch()) ?? []),
-      ];
-      const { response, commit } = await this.#sendWithClientToolsDiff(
-        resumeSessionId,
-        fullClientTools,
-        (toolFields) => {
-          const resumeRequest = { ...body, ...toolFields };
-          if (this.debug) {
-            // eslint-disable-next-line no-console
-            console.debug("[AgentWidgetClient] client token resume", resumeRequest);
-          }
-          return fetch(url, {
-            method: 'POST',
-            headers,
-            body: JSON.stringify(resumeRequest),
-            signal: options?.signal,
-          });
-        },
-        { emptyMeansReplace: true }
-      );
-      // The server stores the refreshed registry before running the
-      // continuation pipeline, so an OK response means it holds this set under
-      // this fingerprint. Mirror chat's commit-on-success discipline: a failed
-      // resume must not record a fingerprint the server never stored.
-      if (response.ok) {
-        commit();
-      }
-      return response;
-    }
-
-    return fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: options?.signal,
-    });
+    return (await loadClientStream()).resumeFlow(this.#resumeHost(), executionId, toolOutputs, options);
   }
 
   /**

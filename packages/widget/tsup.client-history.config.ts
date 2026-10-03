@@ -1,15 +1,13 @@
 import { defineConfig } from "tsup";
 
 /**
- * Dedicated config for the standalone SSE stream-processor chunk
- * (`dist/client-stream.js`), the lazy half of `AgentWidgetClient` in the
- * IIFE/CDN bundle. `tsup.global.config.ts` marks `./client-stream` external and
- * `index-global.ts` registers a sibling-URL loader for this file; the client
- * starts fetching it when a dispatch begins. ESM/CJS builds inline
- * `./client-stream` instead, so only CDN consumers load this file.
+ * Dedicated config for the standalone visitor-history REST chunk
+ * (`dist/client-history.js`). `tsup.global.config.ts` marks `./client-history`
+ * external and `index-global.ts` registers a sibling-URL loader for this file.
+ * ESM/CJS builds inline the module instead, so only CDN consumers load it.
  */
 export default defineConfig({
-  entry: { "client-stream": "src/client-stream.ts" },
+  entry: { "client-history": "src/client-history.ts" },
   format: ["esm"],
   minify: true,
   splitting: false,

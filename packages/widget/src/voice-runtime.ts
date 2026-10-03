@@ -19,3 +19,8 @@ export { RuntypeVoiceProvider } from "./voice/runtype-voice-provider";
 export { BrowserVoiceProvider } from "./voice/browser-voice-provider";
 export { KeyedVoiceTranscript } from "./voice/keyed-voice-transcript";
 export { createVoiceSessionBridge } from "./voice/voice-delegation";
+// Internal: the session's provider wiring (`setupVoice` calls it once this
+// chunk resolves), kept here so voice-free pages never download it.
+export { wireSessionVoice } from "./voice/session-voice-wiring";
+// Internal: mic-button styling for session-voice states (recording/processing/speaking).
+export { createMicStateStyles } from "./voice/mic-state-styles";

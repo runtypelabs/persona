@@ -11,23 +11,23 @@
  * Not public and not in any tsup entry or package export.
  */
 
-import { HistoryClientError, type AgentWidgetClient } from "../client";
+import type { HistoryClientError, AgentWidgetClient } from "../client";
 import type { ClientSession, HistoryScope } from "../types";
 import {
   mapWireMessages,
   mergeWireMessagesById,
 } from "../utils/history-messages";
-import {
+import type {
   HistoryProviderError,
-  type HistoryConversationSummary,
-  type HistoryDeleteAllOptions,
-  type HistoryListOptions,
-  type HistoryListResult,
-  type HistoryPageOptions,
-  type HistoryPageResult,
-  type HistoryProvider,
-  type HistoryProviderErrorCode,
-  type PreparedHistoryActivation,
+  HistoryConversationSummary,
+  HistoryDeleteAllOptions,
+  HistoryListOptions,
+  HistoryListResult,
+  HistoryPageOptions,
+  HistoryPageResult,
+  HistoryProvider,
+  HistoryProviderErrorCode,
+  PreparedHistoryActivation,
 } from "./history-provider";
 
 export interface RuntypeHistoryProviderOptions {
@@ -41,7 +41,18 @@ export interface RuntypeHistoryProviderOptions {
   onActivationCommitted: (session: ClientSession) => void | Promise<void>;
   /** Live client rebuilds hand the provider its replacement. */
   getClient?: () => AgentWidgetClient;
+  /**
+   * The core bundle's error classes. Passed in (not imported) so a lazily
+   * loaded copy of this module still throws, and recognizes, the classes the
+   * rest of the widget checks with `instanceof`.
+   */
+  errors: HistoryErrorClasses;
 }
+
+export type HistoryErrorClasses = {
+  HistoryClientError: typeof HistoryClientError;
+  HistoryProviderError: typeof HistoryProviderError;
+};
 
 /** Client error code -> domain code. Anything unmapped is `unavailable`. */
 const ERROR_CODE_MAP = new Map<string, HistoryProviderErrorCode>([
@@ -78,7 +89,10 @@ const DOMAIN_MESSAGE = new Map<HistoryProviderErrorCode, string>([
 const domainMessage = (code: HistoryProviderErrorCode): string =>
   DOMAIN_MESSAGE.get(code) ?? "Conversation history is unavailable right now.";
 
-export function toHistoryProviderError(error: unknown): HistoryProviderError {
+export function toHistoryProviderError(
+  error: unknown,
+  { HistoryClientError, HistoryProviderError }: HistoryErrorClasses
+): HistoryProviderError {
   if (error instanceof HistoryProviderError) return error;
   if (error instanceof HistoryClientError) {
     const code = ERROR_CODE_MAP.get(error.code) ?? "unavailable";
@@ -94,6 +108,7 @@ export function toHistoryProviderError(error: unknown): HistoryProviderError {
 export function createRuntypeHistoryProvider(
   options: RuntypeHistoryProviderOptions
 ): HistoryProvider {
+  const { HistoryProviderError } = options.errors;
   const client = (): AgentWidgetClient =>
     options.getClient?.() ?? options.client;
 
@@ -116,7 +131,7 @@ export function createRuntypeHistoryProvider(
     try {
       return await fn();
     } catch (error) {
-      throw toHistoryProviderError(error);
+      throw toHistoryProviderError(error, options.errors);
     }
   };
 

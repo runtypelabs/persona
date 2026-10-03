@@ -7,6 +7,10 @@ import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
 import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
 import { loadClientStream } from "./client-stream-loader";
+import { HistoryClientError } from "./client";
+import { HistoryProviderError } from "./internal/history-provider";
+import { getUiExtrasSync, loadUiExtras, type UiExtrasModule } from "./ui-extras-loader";
+import type { AskUserSheetContext, AskUserSheetHandlers } from "./ui-ask-user-sheet";
 import {
   AgentWidgetSession,
   AgentWidgetSessionStatus,
@@ -38,7 +42,6 @@ import {
   InjectSystemMessageOptions,
   InjectComponentDirectiveOptions,
   LoadingIndicatorRenderContext,
-  AgentWidgetRenderHistoryOpenErrorContext,
   IdleIndicatorRenderContext,
   VoiceStatus,
   ReadAloudState,
@@ -52,7 +55,6 @@ import {
   AgentWidgetSuggestion,
   AgentWidgetSuggestionSource,
   AgentWidgetWelcomeIcon,
-  HistoryConversationPatch,
   HistoryConversationSummary,
   HistoryIdentityStatus,
   HistoryReturnSurface,
@@ -146,10 +148,10 @@ import {
   type BeforeSendOutcome,
   type InternalSubmissionSnapshot,
 } from "./utils/composer-submission";
-import {
-  createContextMentionOrchestrator,
-  type ContextMentionOrchestrator,
-} from "./utils/context-mention-orchestrator";
+import type { ContextMentionOrchestrator } from "./utils/context-mention-orchestrator";
+import { loadContextMentions } from "./context-mentions-loader";
+import { loadContextMentionsInline } from "./context-mentions-inline-loader";
+import { createMentionButton } from "./components/context-mention-button";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme, getColorScheme } from "./utils/theme";
@@ -158,7 +160,7 @@ import { deepMerge } from "./utils/deep-merge";
 import { Activity, Check, Copy } from "lucide";
 import { renderLucideIcon, onExtraIconsReady } from "./utils/icons";
 import { renderIconNode } from "./utils/icon-node";
-import { createElement, createNode, cx } from "./utils/dom";
+import { createElement } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
 import {
   computeComposerLift,
@@ -172,16 +174,13 @@ import {
   DEFAULT_TOOLTIP_DELAY_MS,
   DEFAULT_TOOLTIP_SKIP_DELAY_MS,
 } from "./utils/tooltip-timing";
-import {
-  ariaCombo,
-  createShortcutRegistry,
-  formatCombo,
-  parseCombo,
-} from "./utils/shortcuts";
+import { createShortcutRegistry } from "./utils/shortcuts";
 // The artifact download/copy helpers live in the lazy artifacts-ui chunk;
 // reached via getArtifactsUiSync() in the delegated click handlers (which can
 // only fire on DOM the adopted chunk rendered).
 import { morphMessages } from "./utils/morph";
+import { getVoiceRuntimeSync, loadVoiceRuntime, type VoiceRuntimeModule } from "./voice-runtime-loader";
+import type { MicStateStyles, OriginalMicStyles } from "./voice/mic-state-styles";
 import { normalizeCopiedSelectionText } from "./utils/copy-selection";
 import {
   navigateComposerHistory,
@@ -203,7 +202,6 @@ import {
 import {
   statusCopy,
   DEFAULT_OVERLAY_Z_INDEX,
-  PORTALED_OVERLAY_Z_INDEX,
 } from "./utils/constants";
 import {
   applyStreamBuffer,
@@ -274,18 +272,10 @@ import { createReasoningBubble, updateReasoningBubbleUI } from "./components/rea
 import { copyToolDetail } from "./components/tool-details";
 import { createToolBubble, updateToolBubbleUI } from "./components/tool-bubble";
 import {
-  buildStructuredAnswers,
   ensureAskUserQuestionSheet,
-  getCurrentIndex,
-  getQuestionCount,
-  getSelectedLabels,
   isAskUserQuestionMessage,
-  isGroupedSheet,
-  navigateToPage,
   parseAskUserQuestionPayload,
-  readAnswersFromSheet,
   removeAskUserQuestionSheet,
-  setCurrentAnswer,
 } from "./components/ask-user-question-bubble";
 import {
   isSuggestRepliesMessage,
@@ -344,27 +334,9 @@ import {
 import { createLocalStorageAdapter } from "./utils/storage";
 import { createVisitorStore, type VisitorStore } from "./utils/visitor-store";
 import { loadHistoryView } from "./history-view-loader";
-import type {
-  HistoryHeaderPlacement,
-  HistoryRailSection,
-  HistoryViewHandle,
-  HistoryViewOptions,
-} from "./history-view-entry";
-import {
-  createHistoryRenderSurface,
-  type HistoryRenderSurface,
-} from "./history-render";
+import { getHistoryShellSync, loadHistoryShell, type HistoryShellModule } from "./history-shell-loader";
+import type { HistoryShell, HistoryShellContext } from "./history-shell";
 import { getHistoryProviderFactory } from "./internal/history-provider-registry";
-import type {
-  HistoryOperationContext,
-  HistoryProvider,
-} from "./internal/history-provider";
-import { createRuntypeHistoryProvider } from "./internal/runtype-history-provider";
-import {
-  resolveHistoryShellCopy,
-  type ResolvedHistoryShellCopy,
-} from "./components/history-shell-copy";
-import type { HistoryConfirmOptions } from "./components/history-confirm-dialog";
 import { componentRegistry } from "./components/registry";
 import {
   renderComponentDirective,
@@ -1100,6 +1072,13 @@ export const createAgentExperience = (
   let resolveHistoryBootstrap!: () => void;
   const historyBootstrapReady = new Promise<void>((resolve) => {
     resolveHistoryBootstrap = resolve;
+  });
+  // With history enabled at mount, history-capable init also waits for the
+  // shell, which installs the provider. Only the IIFE build loads it async
+  // (always resolves, even when the chunk fails).
+  let resolveHistoryShellGate: () => void = () => {};
+  const historyShellGate = new Promise<void>((resolve) => {
+    resolveHistoryShellGate = resolve;
   });
   /** Synchronously loaded draft, replayed into the composer after it mounts. */
   let loadedStoredDraft: AgentWidgetStoredDraft | undefined;
@@ -2336,6 +2315,20 @@ export const createAgentExperience = (
    */
   const setupMentionOrchestrator = () => {
     if (!config.contextMentions?.enabled || !textarea) return;
+    // The orchestrator rides the lazy ui-extras chunk on the CDN: mount it (and
+    // re-collect the composer actions for its affordance buttons) once the
+    // chunk lands, unless a composer rebuild replaced this textarea meanwhile
+    // (the rebuild re-runs this function) or the widget was destroyed.
+    const extras = getUiExtrasSync();
+    if (!extras) {
+      const forTextarea = textarea;
+      loadUiExtras().then(() => {
+        if (mentionOrchestrator || textarea !== forTextarea || !forTextarea.isConnected) return;
+        setupMentionOrchestrator();
+        composerActionRenderer?.resolve();
+      }, () => {});
+      return;
+    }
     // Slash-command dispatch (prompt macros write text / submit; client actions
     // read/replace the value) and submission are owned by the composer input
     // surface itself — the mention runtime builds a textarea (chip) or
@@ -2347,7 +2340,9 @@ export const createAgentExperience = (
     const header = composerBindings?.header ?? null;
     const chipRow = header ? ensureComposerChipRow(header) : undefined;
 
-    mentionOrchestrator = createContextMentionOrchestrator({
+    mentionOrchestrator = extras.createContextMentionOrchestrator({
+      // Core's stateful collaborators, not the chunk's copies.
+      deps: { loadContextMentions, loadContextMentionsInline, renderLucideIcon, createMentionButton },
       config,
       textarea,
       anchor: composerForm ?? textarea,
@@ -3329,345 +3324,63 @@ export const createAgentExperience = (
   // user message via session.sendMessage so the agent resumes on the next turn.
   const askUserOverlay = panelElements.composerOverlay;
 
-  const submitAskUserAnswer = (
-    sheet: HTMLElement,
-    text: string,
-    meta: {
-      source: "pick" | "multi" | "free-text" | "submit-all";
-      values?: string[];
-      structured?: Record<string, string | string[]>;
-    }
-  ): void => {
-    const trimmed = text.trim();
-    if (!trimmed || !sessionRef.current) return;
-    const toolCallId = sheet.getAttribute("data-tool-call-id") ?? "";
-    const isFreeText = meta.source === "free-text";
+  // Warm the handler chunk as the sheet mounts so it is ready before any pick.
+  const mountAskUserSheet = (message: AgentWidgetMessage): void => {
+    loadUiExtras().catch(() => {});
+    ensureAskUserQuestionSheet(message, config, askUserOverlay);
+  };
 
-    // Dispatch before removing the sheet so listeners can still query DOM state.
-    mount.dispatchEvent(
-      new CustomEvent("persona:askUserQuestion:answered", {
-        detail: {
-          toolUseId: toolCallId,
-          answer: trimmed,
-          answers: meta.structured,
-          values: meta.values ?? (meta.source === "multi" ? trimmed.split(", ") : [trimmed]),
-          isFreeText,
-          source: meta.source,
+  // Handlers live in the lazy ui-extras chunk (warmed when a sheet mounts).
+  // Only events from inside a mounted sheet need them.
+  let askUserHandlers: AskUserSheetHandlers | null = null;
+  const askUserCtx: AskUserSheetContext = {
+    mount,
+    overlay: askUserOverlay,
+    sessionRef,
+    config: () => config,
+  };
+  // At most one interaction waits on the chunk: later ones (a double click)
+  // are dropped, and the queued one is dropped too if its sheet was removed
+  // meanwhile, so an answer can never be submitted twice.
+  let askUserEventPending = false;
+  const routeAskUserEvent =
+    (kind: keyof AskUserSheetHandlers) =>
+    (event: Event): void => {
+      const target = event.target as HTMLElement | null;
+      const sheet = target?.closest?.("[data-persona-ask-sheet-for]");
+      if (!sheet) return;
+      // Only events the handlers act on (an action control click, Enter in the
+      // free-text input) may claim the pending slot; ordinary typing must not
+      // block the answer that follows it.
+      const actionable =
+        kind === "click"
+          ? !!target?.closest("[data-ask-user-action]")
+          : (event as KeyboardEvent).key === "Enter" &&
+            !!target?.matches?.('[data-ask-free-text-input="true"]');
+      if (!actionable) return;
+      const run = (m: UiExtrasModule) => {
+        askUserHandlers ??= m.createAskUserSheetHandlers(askUserCtx);
+        (askUserHandlers[kind] as (e: Event) => void)(event);
+      };
+      const loaded = getUiExtrasSync();
+      if (loaded) {
+        run(loaded);
+        return;
+      }
+      if (askUserEventPending) return;
+      askUserEventPending = true;
+      loadUiExtras().then(
+        (m) => {
+          askUserEventPending = false;
+          if (sheet.isConnected) run(m);
         },
-        bubbles: true,
-        composed: true,
-      })
-    );
-
-    removeAskUserQuestionSheet(askUserOverlay, toolCallId);
-
-    // Branch: LOCAL-tool pause (await) resumes via /resume with structured
-    // toolOutputs; legacy path sends as a plain user message.
-    const sourceMessage = sessionRef.current
-      .getMessages()
-      .find((m) => m.toolCall?.id === toolCallId);
-    if (sourceMessage?.agentMetadata?.awaitingLocalTool) {
-      sessionRef.current.resolveAskUserQuestion(sourceMessage, meta.structured ?? trimmed);
-    } else {
-      sessionRef.current.sendMessage(trimmed);
-    }
-  };
-
-  /**
-   * Persist in-progress grouped-question answers + page index back to the
-   * source message so a refresh restores the user's spot.
-   */
-  const persistGroupedProgress = (sheet: HTMLElement): void => {
-    const session = sessionRef.current;
-    if (!session) return;
-    const toolCallId = sheet.getAttribute("data-tool-call-id") ?? "";
-    const sourceMessage = session.getMessages().find((m) => m.toolCall?.id === toolCallId);
-    if (!sourceMessage) return;
-    session.persistAskUserQuestionProgress(sourceMessage, {
-      answers: buildStructuredAnswers(sheet, sourceMessage),
-      currentIndex: getCurrentIndex(sheet),
-    });
-  };
-
-  /**
-   * Build a one-line summary string for the legacy `answer` field on the
-   * answered event when submit-all fires from a grouped sheet.
-   */
-  const stringifyStructured = (answers: Record<string, string | string[]>): string => {
-    return Object.entries(answers)
-      .map(([q, v]) => `${q}: ${Array.isArray(v) ? v.join(", ") : v}`)
-      .join(" | ");
-  };
-
-  /**
-   * If `groupedAutoAdvance` is enabled (default) and we're not on the final
-   * page, advance one step. The final page never auto-submits: users always
-   * confirm with an explicit Submit-all click so they can review.
-   */
-  const maybeAutoAdvance = (sheet: HTMLElement): void => {
-    if (config.features?.askUserQuestion?.groupedAutoAdvance === false) return;
-    const idx = getCurrentIndex(sheet);
-    const count = getQuestionCount(sheet);
-    if (idx >= count - 1) return;
-    const sourceMessage = sessionRef.current
-      ?.getMessages()
-      .find((m) => m.toolCall?.id === sheet.getAttribute("data-tool-call-id"));
-    if (!sourceMessage) return;
-    navigateToPage(sheet, sourceMessage, config, idx + 1);
-    persistGroupedProgress(sheet);
-  };
-
-  askUserOverlay.addEventListener("click", (event) => {
-    const target = event.target as HTMLElement;
-    const trigger = target.closest<HTMLElement>("[data-ask-user-action]");
-    if (!trigger) return;
-    const sheet = trigger.closest<HTMLElement>("[data-persona-ask-sheet-for]");
-    if (!sheet) return;
-
-    const action = trigger.getAttribute("data-ask-user-action");
-    event.preventDefault();
-    event.stopPropagation();
-
-    if (action === "dismiss") {
-      const toolCallId = sheet.getAttribute("data-tool-call-id") ?? "";
-      mount.dispatchEvent(
-        new CustomEvent("persona:askUserQuestion:dismissed", {
-          detail: { toolUseId: toolCallId },
-          bubbles: true,
-          composed: true,
-        })
+        () => {
+          askUserEventPending = false;
+        }
       );
-      removeAskUserQuestionSheet(askUserOverlay, toolCallId);
-
-      // Best-effort: if this sheet corresponds to a LOCAL-awaiting tool,
-      // unblock the paused execution with a sentinel answer so the server
-      // doesn't sit in waiting_for_local forever. Fire-and-forget: errors
-      // are surfaced to the onError callback. Flip the answered flag first
-      // so a racing render pass doesn't re-mount the sheet mid-dismissal.
-      const sourceMessage = sessionRef.current
-        ?.getMessages()
-        .find((m) => m.toolCall?.id === toolCallId);
-      if (sourceMessage?.agentMetadata?.awaitingLocalTool) {
-        sessionRef.current?.markAskUserQuestionResolved(sourceMessage);
-        sessionRef.current?.resolveAskUserQuestion(sourceMessage, "(dismissed)");
-      }
-      return;
-    }
-
-    if (action === "pick") {
-      const label = trigger.getAttribute("data-option-label");
-      if (!label) return;
-      const multiSelect = sheet.getAttribute("data-multi-select") === "true";
-      const grouped = isGroupedSheet(sheet);
-
-      if (grouped && multiSelect) {
-        const stored = readAnswersFromSheet(sheet)[getCurrentIndex(sheet)];
-        const set = new Set<string>(Array.isArray(stored) ? stored : []);
-        if (set.has(label)) set.delete(label);
-        else set.add(label);
-        setCurrentAnswer(sheet, Array.from(set));
-        persistGroupedProgress(sheet);
-        return;
-      }
-
-      if (grouped) {
-        setCurrentAnswer(sheet, label);
-        persistGroupedProgress(sheet);
-        maybeAutoAdvance(sheet);
-        return;
-      }
-
-      // 1-question modes: preserve original UX.
-      if (multiSelect) {
-        const pressed = trigger.getAttribute("aria-pressed") === "true";
-        trigger.setAttribute("aria-pressed", pressed ? "false" : "true");
-        trigger.classList.toggle("persona-ask-pill-selected", !pressed);
-        const submitBtn = sheet.querySelector<HTMLButtonElement>(
-          '[data-ask-user-action="submit-multi"]'
-        );
-        if (submitBtn) {
-          submitBtn.disabled = getSelectedLabels(sheet).length === 0;
-        }
-        return;
-      }
-      submitAskUserAnswer(sheet, label, { source: "pick", values: [label] });
-      return;
-    }
-
-    if (action === "submit-multi") {
-      const labels = getSelectedLabels(sheet);
-      if (labels.length === 0) return;
-      submitAskUserAnswer(sheet, labels.join(", "), {
-        source: "multi",
-        values: labels,
-      });
-      return;
-    }
-
-    if (action === "open-free-text") {
-      const row = sheet.querySelector<HTMLElement>('[data-ask-free-text-row="true"]');
-      if (row) {
-        row.classList.remove("persona-hidden");
-        const input = row.querySelector<HTMLInputElement>('[data-ask-free-text-input="true"]');
-        input?.focus();
-      }
-      return;
-    }
-
-    if (action === "focus-free-text") {
-      // Rows-layout Other row: input lives inside the row container itself.
-      // Native click on the input already focuses it; this branch handles
-      // clicks on the badge or row chrome AND digit-shortcut activations.
-      const input = sheet.querySelector<HTMLInputElement>('[data-ask-free-text-input="true"]');
-      input?.focus();
-      return;
-    }
-
-    if (action === "submit-free-text") {
-      const input = sheet.querySelector<HTMLInputElement>('[data-ask-free-text-input="true"]');
-      const text = input?.value ?? "";
-      if (!text.trim()) return;
-      if (isGroupedSheet(sheet)) {
-        setCurrentAnswer(sheet, text.trim());
-        persistGroupedProgress(sheet);
-        maybeAutoAdvance(sheet);
-        return;
-      }
-      submitAskUserAnswer(sheet, text, { source: "free-text" });
-      return;
-    }
-
-    if (action === "next" || action === "back") {
-      if (!sessionRef.current) return;
-      const toolCallId = sheet.getAttribute("data-tool-call-id") ?? "";
-      const sourceMessage = sessionRef.current
-        .getMessages()
-        .find((m) => m.toolCall?.id === toolCallId);
-      if (!sourceMessage) return;
-      // Flush any unsubmitted free-text input as the current answer.
-      const freeInput = sheet.querySelector<HTMLInputElement>('[data-ask-free-text-input="true"]');
-      const pending = freeInput?.value?.trim() ?? "";
-      if (pending) {
-        const stored = readAnswersFromSheet(sheet)[getCurrentIndex(sheet)];
-        if (typeof stored !== "string" || stored !== pending) {
-          setCurrentAnswer(sheet, pending);
-        }
-      }
-      const direction = action === "next" ? 1 : -1;
-      const nextIdx = getCurrentIndex(sheet) + direction;
-      navigateToPage(sheet, sourceMessage, config, nextIdx);
-      persistGroupedProgress(sheet);
-      return;
-    }
-
-    if (action === "submit-all") {
-      if (!sessionRef.current) return;
-      const toolCallId = sheet.getAttribute("data-tool-call-id") ?? "";
-      const sourceMessage = sessionRef.current
-        .getMessages()
-        .find((m) => m.toolCall?.id === toolCallId);
-      if (!sourceMessage) return;
-      // Flush any pending free-text on the final page first.
-      const freeInput = sheet.querySelector<HTMLInputElement>('[data-ask-free-text-input="true"]');
-      const pending = freeInput?.value?.trim() ?? "";
-      if (pending) setCurrentAnswer(sheet, pending);
-
-      const structured = buildStructuredAnswers(sheet, sourceMessage);
-      // Persist final answers to message metadata BEFORE resolving so the
-      // answered-state review card (which reads `agentMetadata
-      // .askUserQuestionAnswers`) shows the user's actual picks instead of
-      // "(skipped)" placeholders. Without this, any answer set only via the
-      // pending-flush above (or via paths that bypassed the per-pick persist
-      // hook) would be missing from the transcript review even though it
-      // landed in the structured payload sent to the agent.
-      sessionRef.current.persistAskUserQuestionProgress(sourceMessage, {
-        answers: structured,
-        currentIndex: getCurrentIndex(sheet),
-      });
-      const summary = stringifyStructured(structured);
-      submitAskUserAnswer(sheet, summary || "(submitted)", {
-        source: "submit-all",
-        structured,
-      });
-      return;
-    }
-
-    if (action === "skip") {
-      if (!sessionRef.current) return;
-      const toolCallId = sheet.getAttribute("data-tool-call-id") ?? "";
-      const sourceMessage = sessionRef.current
-        .getMessages()
-        .find((m) => m.toolCall?.id === toolCallId);
-      if (!sourceMessage) return;
-
-      const grouped = isGroupedSheet(sheet);
-      const idx = getCurrentIndex(sheet);
-      const count = getQuestionCount(sheet);
-      const isFinal = idx >= count - 1;
-
-      // Single-question payloads behave like dismiss.
-      if (!grouped) {
-        mount.dispatchEvent(
-          new CustomEvent("persona:askUserQuestion:dismissed", {
-            detail: { toolUseId: toolCallId },
-            bubbles: true,
-            composed: true,
-          })
-        );
-        removeAskUserQuestionSheet(askUserOverlay, toolCallId);
-        if (sourceMessage.agentMetadata?.awaitingLocalTool) {
-          sessionRef.current.markAskUserQuestionResolved(sourceMessage);
-          sessionRef.current.resolveAskUserQuestion(sourceMessage, "(dismissed)");
-        }
-        return;
-      }
-
-      // Drop the current question's answer (if any) so it's absent from the
-      // resolved Record. setCurrentAnswer with an empty string deletes the
-      // index from the in-memory map.
-      setCurrentAnswer(sheet, "");
-      // Also clear any unsubmitted free-text on this page.
-      const freeInput = sheet.querySelector<HTMLInputElement>('[data-ask-free-text-input="true"]');
-      if (freeInput) freeInput.value = "";
-
-      if (isFinal) {
-        // Submit with whatever has been recorded so far.
-        const structured = buildStructuredAnswers(sheet, sourceMessage);
-        const summary = stringifyStructured(structured);
-        submitAskUserAnswer(sheet, summary || "(skipped)", {
-          source: "submit-all",
-          structured,
-        });
-        return;
-      }
-
-      // Intermediate page: advance one step without recording.
-      navigateToPage(sheet, sourceMessage, config, idx + 1);
-      persistGroupedProgress(sheet);
-      return;
-    }
-  });
-
-  // Enter on the free-text input → submit. Stays on the overlay because the
-  // event target IS the input, which lives inside the overlay subtree.
-  askUserOverlay.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter") return;
-    const target = event.target as HTMLElement;
-    const input = target as HTMLInputElement;
-    if (!input.matches?.('[data-ask-free-text-input="true"]')) return;
-    const sheet = input.closest<HTMLElement>("[data-persona-ask-sheet-for]");
-    if (!sheet) return;
-    event.preventDefault();
-    const text = input.value;
-    if (!text.trim()) return;
-    if (isGroupedSheet(sheet)) {
-      setCurrentAnswer(sheet, text.trim());
-      persistGroupedProgress(sheet);
-      maybeAutoAdvance(sheet);
-      return;
-    }
-    submitAskUserAnswer(sheet, text, { source: "free-text" });
-  });
+    };
+  askUserOverlay.addEventListener("click", routeAskUserEvent("click"));
+  askUserOverlay.addEventListener("keydown", routeAskUserEvent("keydown"));
 
   // Digit 1–9 → pick option N on the current rows-layout single-select page.
   // Listens on `document` so the shortcut fires regardless of where focus
@@ -3727,7 +3440,8 @@ export const createAgentExperience = (
    * to cover expanded, collapsed, and dragged widths alike.
    */
   const railedChatMinPx = (): number => {
-    const host = railShell && railHost?.isConnected ? railHost : null;
+    const railHost = historyShell?.railShell ? historyShell.railHost : null;
+    const host = railHost?.isConnected ? railHost : null;
     const railPx = host ? host.getBoundingClientRect().width : 0;
     if (railPx <= 0) return ARTIFACT_RESIZE_CHAT_MIN_PX;
     return railPx + ARTIFACT_RESIZE_RAILED_TRANSCRIPT_MIN_PX;
@@ -6586,7 +6300,7 @@ export const createAgentExperience = (
           !message.agentMetadata?.askUserQuestionAnswered
         ) {
           liveAskToolIds.add(message.toolCall.id);
-          ensureAskUserQuestionSheet(message, config, panelElements.composerOverlay);
+          mountAskUserSheet(message);
         }
         return;
       }
@@ -6699,7 +6413,7 @@ export const createAgentExperience = (
               !message.agentMetadata?.askUserQuestionAnswered
             ) {
               liveAskToolIds.add(message.toolCall!.id);
-              ensureAskUserQuestionSheet(message, config, panelElements.composerOverlay);
+              mountAskUserSheet(message);
             }
             return;
           }
@@ -6722,7 +6436,7 @@ export const createAgentExperience = (
             !message.agentMetadata?.askUserQuestionAnswered
           ) {
             liveAskToolIds.add(message.toolCall!.id);
-            ensureAskUserQuestionSheet(message, config, panelElements.composerOverlay);
+            mountAskUserSheet(message);
           }
           return;
         }
@@ -8706,7 +8420,10 @@ export const createAgentExperience = (
   };
   let historyInternals: WidgetHistoryInternals = {
     ...(visitorStore ? { visitorStore } : {}),
-    historyBootstrapReady,
+    historyBootstrapReady:
+      config.features?.history?.enabled === true && !getHistoryShellSync()
+        ? Promise.all([historyBootstrapReady, historyShellGate]).then(() => {})
+        : historyBootstrapReady,
     getStoredMessageCursor: () => readMetadataString('historyMessageCursor'),
     setStoredMessageCursor: (cursor: string | null) => {
       if (cursor === null) {
@@ -9248,600 +8965,19 @@ export const createAgentExperience = (
   // mutation. The lazily loaded Messages view owns the list itself.
   // ==========================================================================
 
-  /** Rail needs this much HOST width; below it, rail collapses to panel. */
-  const RAIL_MIN_CONTAINER_WIDTH = 720;
-  /** Ceiling on the view's ~160ms exit before the close proceeds regardless. */
-  const HISTORY_EXIT_TIMEOUT_MS = 250;
-
-  let historyShellCopy: ResolvedHistoryShellCopy = resolveHistoryShellCopy(
-    config.features?.history?.copy
-  );
-  let historyProvider: HistoryProvider | null = null;
-  let historyUnavailable = false;
-  /** Default view + plugin render-hook arbitration. Null while closed. */
-  let historySurface: HistoryRenderSurface | null = null;
-  let historyOperationContext: HistoryOperationContext | null = null;
-  let historyReturnSurface: HistoryReturnSurface = "conversation";
-  let historyInvoker: HTMLElement | null = null;
-  let historyButton: HTMLButtonElement | null = null;
-  /** The inserted node: removing the button alone would orphan its wrapper. */
-  let historyButtonWrapper: HTMLElement | null = null;
+  let historyShell: HistoryShell | null = null;
+  let historyShellLoad: Promise<HistoryShell | null> | null = null;
+  let historyShellTornDown = false;
   let historySessionState: SessionHistoryState = session.getHistoryState();
-  let historyIdentityKey: string | null = null;
-  let historyOpenToken = 0;
-  let clearChatDefaultLabel: string | null = null;
-  let unsubscribeHistoryAvailability: (() => void) | null = null;
-  let unsubscribeHistoryIdentity: (() => void) | null = null;
-  const historyRegionId = `persona-history-${Math.random().toString(36).slice(2, 8)}`;
 
   const historyFeatureEnabled = (): boolean =>
     config.features?.history?.enabled === true;
-  const historyAvailable = (): boolean =>
-    historyFeatureEnabled() && !!historyProvider && !historyUnavailable;
-  /** Switching conversations mid-turn would abandon a live answer. */
-  const historyTurnBusy = (): boolean => {
-    const status = session.getStatus();
-    return isStreaming || status === "paused" || status === "resuming";
-  };
-  const historyScope = (): HistoryScope => {
-    const configured = config.features?.history?.scope;
-    if (configured) return configured;
-    // Derived, not requested: narrow to what the provider advertises rather
-    // than asking it for a scope it will reject.
-    const derived: HistoryScope = config.getIdentityProof
-      ? "verified-user"
-      : "browser";
-    const scopes = historyProvider?.capabilities.scopes;
-    if (!scopes || scopes.includes(derived)) return derived;
-    return scopes[0] ?? derived;
-  };
-  const historyOperationScope = (): HistoryScope =>
-    historyOperationContext?.scope ?? historyScope();
-  const activeHistoryTargetId = (): string | null =>
-    session.getClientSession()?.targetId ?? null;
-
-  const identityStatusKey = (status: HistoryIdentityStatus): string =>
-    `${status.state}:${"reason" in status ? status.reason : ""}`;
-
-  /** Instance-scoped only: authentication state is never broadcast page-wide. */
-  const emitHistoryIdentityStatus = (status: HistoryIdentityStatus): void => {
-    const key = identityStatusKey(status);
-    if (key === historyIdentityKey) return;
-    historyIdentityKey = key;
-    eventBus.emit("history:identityStatusChanged", {
-      status,
-      timestamp: Date.now(),
-    });
-  };
 
   /** Unconditional: `announce()` is gated on an unrelated scroll opt-in. */
   const announceHistory = (message: string): void => {
     if (!message) return;
     liveRegion.textContent = "";
     liveRegion.textContent = message;
-  };
-
-  // --- provider ------------------------------------------------------------
-
-  /** One provider build per widget instance; a new factory identity rebuilds. */
-  let configuredProviderFactory: (() => HistoryProvider) | null = null;
-  let configuredProviderInstance: HistoryProvider | null = null;
-
-  const buildHistoryProvider = (): HistoryProvider | null => {
-    if (!historyFeatureEnabled()) return null;
-    // Demo/test override first, then the host's own provider; production
-    // without one builds the Runtype provider from client-token config.
-    const override = getHistoryProviderFactory();
-    if (override) return override();
-    const configured = config.features?.history?.provider;
-    if (configured) {
-      if (typeof configured !== "function") return configured;
-      if (configuredProviderFactory !== configured) {
-        configuredProviderFactory = configured;
-        configuredProviderInstance = configured();
-      }
-      return configuredProviderInstance;
-    }
-    if (!session.isClientTokenMode()) return null;
-    return createRuntypeHistoryProvider({
-      client: session.getClient(),
-      getIdentityProofConfigured: () =>
-        typeof config.getIdentityProof === "function",
-      onActivationCommitted: (clientSession) =>
-        session.bindActivatedSession(clientSession),
-      // Connection-config rebuilds replace the client under the provider.
-      getClient: () => session.getClient(),
-    });
-  };
-
-  const installHistoryProvider = (): void => {
-    unsubscribeHistoryAvailability?.();
-    unsubscribeHistoryAvailability = null;
-    unsubscribeHistoryIdentity?.();
-    unsubscribeHistoryIdentity = null;
-    historyUnavailable = false;
-    historyProvider = buildHistoryProvider();
-    const next: WidgetHistoryInternals = { ...historyInternals };
-    if (historyProvider) next.historyProvider = historyProvider;
-    else delete next.historyProvider;
-    historyInternals = next;
-    session.setHistoryInternals(historyInternals);
-    if (!historyProvider) return;
-    unsubscribeHistoryAvailability =
-      historyProvider.subscribeAvailability?.((available) => {
-        historyUnavailable = !available;
-        // A degrade must remove an ALREADY-rendered surface, not just a flag.
-        if (!available) closeHistory({ restoreFocus: false });
-        syncHistoryChromeImpl();
-      }) ?? null;
-    unsubscribeHistoryIdentity = historyProvider.subscribeIdentityStatus(
-      (status) => emitHistoryIdentityStatus(status)
-    );
-    historyIdentityKey = identityStatusKey(historyProvider.getIdentityStatus());
-  };
-
-  // --- presentation hosts --------------------------------------------------
-
-  /**
-   * Resolved against the history HOST width, never the viewport. With the
-   * artifact split mounted the split root is that host, not the container:
-   * width the artifact pane borrows from the chat column is still the widget's,
-   * so a drag on the split must never read as a narrow host and re-mode the
-   * rail. A real window/host narrowing shrinks the split root too, and still
-   * flips.
-   */
-  const resolveHistoryPresentation = (): ResolvedHistoryPresentation => {
-    const configured = config.features?.history?.presentation ?? "panel";
-    if (configured === "panel") return "panel";
-    if (configured === "auto") {
-      // Floating launchers stay panel-based at every width.
-      const inlineOrDocked = !launcherEnabled || isDockedMountMode(config);
-      if (!inlineOrDocked) return "panel";
-    }
-    const host = artifactSplitRoot ?? container;
-    const width = host.getBoundingClientRect().width || host.clientWidth;
-    return width >= RAIL_MIN_CONTAINER_WIDTH ? "rail" : "panel";
-  };
-
-  const setHistoryHostInert = (element: HTMLElement, inert: boolean): void => {
-    if (inert) {
-      element.setAttribute("aria-hidden", "true");
-      element.setAttribute("inert", "");
-    } else {
-      element.removeAttribute("aria-hidden");
-      element.removeAttribute("inert");
-    }
-  };
-
-  /** Suppression of the shell header's own children while Messages owns the bar. */
-  const HISTORY_SUPPRESSED_ATTR = "data-persona-history-suppressed";
-  /** Shell-owned wrapper for the view's bar contents. Null while not hosting. */
-  let historyHeaderHost: HTMLElement | null = null;
-  /** Header carrying the swap-time min-height pin. Null while not hosting. */
-  let historyPinnedHeader: HTMLElement | null = null;
-  /** Handle + arbitrated element, tracked from before `historySurface` is assigned. */
-  let historyViewHandle: HistoryViewHandle | null = null;
-  let historyMountedElement: HTMLElement | null = null;
-  let capturedPanelHeader: HTMLElement | null = null;
-  let capturedPanelHeaderDisplay = "";
-
-  /** The display the shell header returns to; "none" means there is no bar. */
-  const shownHeaderDisplay = (): string =>
-    header === capturedPanelHeader
-      ? capturedPanelHeaderDisplay
-      : config.layout?.showHeader === false
-        ? "none"
-        : "";
-
-  /**
-   * One persistent bar: the shell header hosts the view's bar contents whenever
-   * the default view owns a panel and there is a visible header to host them in.
-   * A plugin's full custom surface owns everything, so it falls back to hiding.
-   */
-  const historyHeaderExternal = (): boolean =>
-    historyPresentation === "panel" &&
-    !!historyViewHandle &&
-    historyMountedElement === historyViewHandle.element &&
-    config.layout?.showHeader !== false &&
-    shownHeaderDisplay() !== "none";
-
-  const suppressHeaderChildren = (): void => {
-    for (const child of Array.from(header.children)) {
-      if (child === historyHeaderHost) continue;
-      child.setAttribute(HISTORY_SUPPRESSED_ATTR, "");
-    }
-  };
-
-  /** By attribute, not by captured list: the header may have been rebuilt. */
-  const unsuppressHeaderChildren = (): void => {
-    for (const node of Array.from(
-      container.querySelectorAll(`[${HISTORY_SUPPRESSED_ATTR}]`)
-    )) {
-      node.removeAttribute(HISTORY_SUPPRESSED_ATTR);
-    }
-  };
-
-  const hostHistoryHeaderContent = (): void => {
-    const view = historyViewHandle;
-    if (!view) return;
-    // Pin the pre-swap height so the contents swap never moves the chrome: the
-    // hosted bar is usually shorter than the title cluster it replaces, and
-    // constant-height chrome is what keeps the switch from reading as layout
-    // shift. Measurable only while the original contents are still visible; a
-    // re-entry on an already-hosted header keeps the standing pin, and a
-    // rebuilt header re-measures before its own suppression below.
-    const originalsVisible = Array.from(header.children).some(
-      (child) =>
-        child !== historyHeaderHost &&
-        !child.hasAttribute(HISTORY_SUPPRESSED_ATTR)
-    );
-    if (originalsVisible) {
-      if (historyPinnedHeader && historyPinnedHeader !== header) {
-        historyPinnedHeader.style.removeProperty("min-height");
-        historyPinnedHeader = null;
-      }
-      const measured = header.offsetHeight;
-      if (measured > 0) {
-        header.style.minHeight = `${measured}px`;
-        historyPinnedHeader = header;
-      }
-    }
-    if (!historyHeaderHost) {
-      historyHeaderHost = createElement("div", "persona-history-header-host");
-    }
-    view.setHeaderPlacement("external");
-    const content = view.getHeaderElement();
-    if (content.parentNode !== historyHeaderHost) {
-      historyHeaderHost.replaceChildren(content);
-    }
-    // The wrapper follows a rebuilt header binding; focus inside it survives.
-    if (historyHeaderHost.parentNode !== header) {
-      header.appendChild(historyHeaderHost);
-    }
-    suppressHeaderChildren();
-  };
-
-  const releaseHistoryHeaderContent = (): void => {
-    if (historyPinnedHeader) {
-      historyPinnedHeader.style.removeProperty("min-height");
-      historyPinnedHeader = null;
-    }
-    if (!historyHeaderHost) return;
-    // The view re-adopts its bar; the wrapper never owns the content's lifetime.
-    historyViewHandle?.setHeaderPlacement("inline");
-    historyHeaderHost.remove();
-    historyHeaderHost = null;
-    unsuppressHeaderChildren();
-  };
-
-  /**
-   * Panel presentation obscures the conversation, so the transcript AND the
-   * composer must be unreachable: a visitor must never send into a conversation
-   * they cannot see. The header bar itself stays: only its contents swap, which
-   * is also why it is never inert here (rail changes nothing at all: the
-   * conversation stays primary).
-   *
-   * The widget's close (×) usually lives inside that header, but no trap
-   * results: the view's back control is the initial focus target, Escape exits,
-   * and both restore the header contents before focus lands. `top-right` close
-   * placement parents the × to the container, so it stays reachable either way.
-   *
-   * Restores exactly what it captured.
-   */
-  let restorePanelHost: (() => void) | null = null;
-  const enforcePanelHost = (): void => {
-    if (!restorePanelHost) return;
-    body.style.display = "none";
-    setHistoryHostInert(body, true);
-    // Live `footer` / `header` bindings: a composer-plugin rebuild or a
-    // header-layout rebuild swaps them and re-enters here for the replacement.
-    footer.hidden = true;
-    setHistoryHostInert(footer, true);
-    if (historyHeaderExternal()) {
-      hostHistoryHeaderContent();
-      header.style.display = shownHeaderDisplay();
-      setHistoryHostInert(header, false);
-      return;
-    }
-    // No bar to host in: hide the header the way the surface used to.
-    releaseHistoryHeaderContent();
-    header.style.display = "none";
-    setHistoryHostInert(header, true);
-  };
-  reapplyHistoryHostChrome = enforcePanelHost;
-
-  const mountPanelHost = (element: HTMLElement): void => {
-    const previousDisplay = body.style.display;
-    const previousFooterHidden = footer.hidden;
-    const capturedFooter = footer;
-    const capturedHeader = header;
-    const previousHeaderDisplay = header.style.display;
-    capturedPanelHeader = capturedHeader;
-    capturedPanelHeaderDisplay = previousHeaderDisplay;
-    restorePanelHost = () => {
-      restorePanelHost = null;
-      releaseHistoryHeaderContent();
-      capturedPanelHeader = null;
-      body.style.display = previousDisplay;
-      setHistoryHostInert(body, false);
-      capturedFooter.hidden = previousFooterHidden;
-      setHistoryHostInert(capturedFooter, false);
-      if (footer !== capturedFooter) {
-        footer.hidden = false;
-        setHistoryHostInert(footer, false);
-      }
-      capturedHeader.style.display = previousHeaderDisplay;
-      setHistoryHostInert(capturedHeader, false);
-      if (header !== capturedHeader) {
-        // A replacement carries no captured state; only config decides it.
-        header.style.display = config.layout?.showHeader === false ? "none" : "";
-        setHistoryHostInert(header, false);
-      }
-    };
-    footer.parentNode?.insertBefore(element, footer);
-    enforcePanelHost();
-  };
-
-  let railShell: HTMLElement | null = null;
-  let railHost: HTMLElement | null = null;
-  let railColumn: HTMLElement | null = null;
-  /** Stand-in element holding the docked column while the chunk loads. */
-  let railPlaceholder: HTMLElement | null = null;
-  /** Container order the rail borrows from and hands back, header first. */
-  const railBorrowed = (): Array<HTMLElement | null> => [
-    header,
-    panelElements.closeButtonWrapper,
-    panelElements.clearChatButtonWrapper,
-    body,
-    // Composer-bar mode keeps the footer outside the container; the parent
-    // checks below then never adopt it.
-    footer,
-  ];
-
-  /** Collapsed icon rail, measured from the reference sidebar. */
-  const RAIL_COLLAPSED_WIDTH = 52;
-  const railCollapsible = (): boolean =>
-    config.features?.history?.rail?.collapsible !== false;
-  const railSide = (): "left" | "right" =>
-    config.features?.history?.rail?.side === "right" ? "right" : "left";
-  /** The band a rail width may take, by config or by drag. */
-  const RAIL_MIN_WIDTH = 200;
-  const RAIL_MAX_WIDTH = 400;
-  const clampRailWidth = (value: number): number =>
-    Math.min(RAIL_MAX_WIDTH, Math.max(RAIL_MIN_WIDTH, Math.round(value)));
-
-  const railResizable = (): boolean =>
-    config.features?.history?.rail?.resizable === true;
-  /** Resolved once per widget: storage, else nothing. */
-  let railWidthChoice: number | null | undefined;
-
-  // Same teaser pattern as the collapsed state: blocked storage throws rather
-  // than fails, so the resolved value is also the in-memory fallback.
-  const storedRailWidth = (): number | null => {
-    if (railWidthChoice === undefined) {
-      railWidthChoice = null;
-      if (config.persistState !== false) {
-        try {
-          const stored = Number(
-            window.localStorage.getItem(`${currentKeyPrefix()}rail-width`)
-          );
-          if (stored) railWidthChoice = stored;
-        } catch {
-          /* blocked storage: the config width stands */
-        }
-      }
-    }
-    return railWidthChoice;
-  };
-
-  /**
-   * Expanded rail width, shared by the column and the floating overlay. A
-   * dragged width outranks config, the way the collapsed state does: a live
-   * `update()` must not undo what the visitor chose.
-   */
-  const railWidth = (): number =>
-    clampRailWidth(
-      storedRailWidth() ?? config.features?.history?.rail?.width ?? 260
-    );
-
-  const setStoredRailWidth = (next: number): void => {
-    railWidthChoice = next;
-    if (config.persistState === false) return;
-    try {
-      window.localStorage.setItem(`${currentKeyPrefix()}rail-width`, String(next));
-    } catch {
-      /* blocked storage: the in-memory value above is the fallback */
-    }
-  };
-  /**
-   * Overlay mode: the collapsed rail is a trigger in the conversation header
-   * plus a floating host, so there is no icon column and no mounted view at
-   * rest. `collapsed` then means "not pinned".
-   */
-  const railOverlayMode = (): boolean =>
-    railCollapsible() &&
-    config.features?.history?.rail?.collapsedBehavior === "overlay";
-  /** True while the view is mounted in the floating host, not a rail column. */
-  let railOverlayOpen = false;
-
-  /** Decorative image for a config-supplied rail icon or brand URL. */
-  const railIconImage = (src: string): HTMLImageElement => {
-    const image = createElement("img");
-    image.src = src;
-    image.alt = "";
-    image.setAttribute("aria-hidden", "true");
-    return image;
-  };
-
-  /**
-   * One brand declaration, resolved here where the lucide registry lives, into
-   * the callback both rail placements call: the expanded heading and the
-   * collapsed toggle's rest face. Precedence render > iconUrl > icon; the
-   * icon cases resolve once (so an unknown name warns once) and each caller
-   * gets its own copy, since both faces can be in the DOM at once.
-   */
-  const railBrandNode = ():
-    | ((collapsed: boolean) => Element | null)
-    | undefined => {
-    const brand = config.features?.history?.rail?.brand;
-    if (!brand) return undefined;
-    let warned = false;
-    let mark: Element | null | undefined;
-    return (collapsed) => {
-      if (brand.render) {
-        try {
-          return brand.render({ collapsed }) ?? null;
-        } catch (error) {
-          if (!warned) {
-            warned = true;
-            console.warn("[persona] history rail brand threw", error);
-          }
-          return null;
-        }
-      }
-      if (mark === undefined) {
-        if (brand.iconUrl) mark = railIconImage(brand.iconUrl);
-        else mark = brand.icon ? renderLucideIcon(brand.icon, 20) : null;
-      }
-      return mark ? (mark.cloneNode(true) as Element) : null;
-    };
-  };
-
-  /**
-   * Config nav sections, normalized for the size-capped chunk: icon precedence
-   * (renderIcon > iconUrl > icon) collapses to one memoized thunk resolved
-   * here, where the lucide registry already lives, and every host callback gets
-   * a warn-once-per-section guard.
-   */
-  const configNavSections = (): HistoryRailSection[] =>
-    config.features?.history?.rail?.sections?.map((section) => {
-      let warned = false;
-      const warn = (error: unknown): void => {
-        if (warned) return;
-        warned = true;
-        console.warn("[persona] history rail section threw", section.id, error);
-      };
-      return {
-        id: section.id,
-        title: section.title,
-        placement: section.placement ?? "above-conversations",
-        items: section.items.map((item) => {
-          // Built on first paint and cached: an unknown lucide name warns once,
-          // and a presentation flip reuses the node it made.
-          let node: Element | null | undefined;
-          return {
-            id: item.id,
-            label: item.label,
-            badge: item.badge,
-            iconNode: (): Element | null => {
-              if (node !== undefined) return node;
-              try {
-                if (item.renderIcon) node = item.renderIcon() ?? null;
-                else if (item.iconUrl) node = railIconImage(item.iconUrl);
-                else node = item.icon ? renderLucideIcon(item.icon, 20) : null;
-              } catch (error) {
-                warn(error);
-                node = null;
-              }
-              return node;
-            },
-            onSelect: () => {
-              try {
-                item.onSelect();
-              } catch (error) {
-                warn(error);
-              }
-            },
-          };
-        }),
-      };
-    }) ?? [];
-
-  /** One array for the chunk: config sections first in each placement bucket. */
-  const railNavSections = (
-    pluginSections: HistoryRailSection[]
-  ): HistoryRailSection[] | undefined => {
-    const sections = configNavSections();
-    for (const section of pluginSections) {
-      // Config owns the id space; a colliding plugin section is dropped.
-      if (sections.some((existing) => existing.id === section.id)) {
-        console.warn("[persona] duplicate history rail section id", section.id);
-      } else sections.push(section);
-    }
-    return sections.length ? sections : undefined;
-  };
-
-  /** Resolved once per widget: storage, else the configured default. */
-  let railCollapsed: boolean | null = null;
-
-  const railCollapseKey = (): string => `${currentKeyPrefix()}rail-collapsed`;
-
-  // localStorage access throws (not just fails) in Safari private mode and
-  // partitioned iframes, so the resolved value is also the in-memory fallback.
-  const isRailCollapsed = (): boolean => {
-    if (railCollapsed === null) {
-      railCollapsed = config.features?.history?.rail?.defaultCollapsed === true;
-      if (config.persistState !== false) {
-        try {
-          const stored = window.localStorage.getItem(railCollapseKey());
-          if (stored) railCollapsed = stored === "1";
-        } catch {
-          /* blocked storage: the resolved default stands */
-        }
-      }
-    }
-    return railCollapsed;
-  };
-
-  const setRailCollapsed = (next: boolean): void => {
-    railCollapsed = next;
-    if (config.persistState === false) return;
-    try {
-      window.localStorage.setItem(railCollapseKey(), next ? "1" : "0");
-    } catch {
-      /* blocked storage: the in-memory value above is the fallback */
-    }
-  };
-
-  /**
-   * Collapsed only ever applies to a collapsible rail presentation, and never
-   * in overlay mode, where a mounted rail is always the expanded one.
-   */
-  const railShowsCollapsed = (): boolean =>
-    historyPresentation === "rail" &&
-    railCollapsible() &&
-    !railOverlayMode() &&
-    isRailCollapsed();
-
-  /** Overlay-mode counterpart, assigned with the overlay controller below. */
-  let toggleRailPinned: () => void = () => {};
-
-  const toggleRailCollapsed = (): void => {
-    // The rail's own toggle sits where the trigger does, so in overlay mode it
-    // is that control: it pins a floating rail and unpins a docked one.
-    if (railOverlayMode()) {
-      toggleRailPinned();
-      return;
-    }
-    setRailCollapsed(!isRailCollapsed());
-    historySurface?.view.setCollapsed(railShowsCollapsed());
-    applyRailChrome();
-    // The transcript column resizes beside the anchor; a clamp would bounce it.
-    repinAnchoredMessage();
-  };
-
-  /**
-   * One declaration, three artifacts: the binding below, the toggle's tooltip
-   * hint chip, and its `aria-keyshortcuts`. Null when unset or unparseable.
-   */
-  const railCollapseShortcut = (): {
-    combo: string;
-    hint: string;
-    aria: string;
-  } | null => {
-    const combo = config.features?.history?.rail?.collapseShortcut;
-    if (!combo || !parseCombo(combo)) return null;
-    return { combo, hint: formatCombo(combo), aria: ariaCombo(combo) };
   };
 
   /**
@@ -9852,8 +8988,10 @@ export const createAgentExperience = (
   const syncShortcuts = (): void => {
     releaseShortcuts.forEach((release) => release());
     releaseShortcuts = [];
-    const shortcut = railCollapseShortcut();
-    if (shortcut) {
+    // The rail collapse combo belongs to the (lazy) history shell.
+    const shell = historyShell;
+    const shortcut = shell?.railCollapseShortcut();
+    if (shell && shortcut) {
       releaseShortcuts.push(
         shortcuts.register({
           id: "history-rail-collapse",
@@ -9867,10 +9005,12 @@ export const createAgentExperience = (
           when: () =>
             (historyVisible &&
               historyPresentation === "rail" &&
-              railCollapsible()) ||
-            railTriggerApplies(),
+              shell.railCollapsible()) ||
+            shell.railTriggerApplies(),
           run: () =>
-            railOverlayMode() ? toggleRailPinned() : toggleRailCollapsed(),
+            shell.railOverlayMode()
+              ? shell.toggleRailPinned()
+              : shell.toggleRailCollapsed(),
         })
       );
     }
@@ -9901,946 +9041,6 @@ export const createAgentExperience = (
     }
   };
   syncShortcuts();
-
-  // --- collapsed rail as a floating overlay --------------------------------
-  //
-  // Rest state is a trigger at the leading edge of the conversation header and
-  // nothing else: no column, no mounted view, and the history chunk unloaded
-  // until a hover warms it. The pointer entering floats the expanded rail over
-  // the conversation; clicking pins it back into the full-height column.
-
-  /** Grace before a pointer that left both surfaces dismisses the rail. */
-  const RAIL_OVERLAY_GRACE_MS = 300;
-  /**
-   * Gap from the trigger, the docked edge and the bottom. A var reference, not
-   * a number, so a live theme update reaches an open overlay unaided.
-   */
-  const RAIL_OVERLAY_MARGIN = "var(--persona-history-overlay-margin,8px)";
-
-  let railTriggerButton: HTMLButtonElement | null = null;
-  let railTriggerWrapper: HTMLElement | null = null;
-  /** Docking opens awaiting the history chunk; the trigger hides for them. */
-  let railPinPendingOpens = 0;
-  let railOverlayHost: HTMLElement | null = null;
-  let railGraceTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Pointer is over the trigger or over the floating rail. */
-  let railPointerInside = false;
-  /**
-   * Uncovering the trigger re-enters it with no pointer movement at all, which
-   * would undo the dismissal that just uncovered it. That synthetic enter
-   * arrives within a frame or two of the unmount.
-   */
-  let railUncoveredUntil = 0;
-
-  /** Touch has no hover to open with, so it taps the overlay open instead. */
-  const coarsePointer = (): boolean =>
-    window.matchMedia?.("(pointer: coarse)").matches === true;
-
-  /** The trigger stands in for the collapsed rail, so it needs a rail width. */
-  const railTriggerApplies = (): boolean =>
-    historyAvailable() &&
-    railOverlayMode() &&
-    (historyPresentation ?? resolveHistoryPresentation()) === "rail";
-
-  /** Docked in its own column rather than floating over the conversation. */
-  const railPinned = (): boolean => historyVisible && !railOverlayOpen;
-
-  const cancelRailGrace = (): void => {
-    if (railGraceTimer !== null) clearTimeout(railGraceTimer);
-    railGraceTimer = null;
-  };
-
-  /** Keyboard focus warms without opening; Enter and Space commit. */
-  const warmHistoryChunk = (): void => {
-    // A failed load just leaves the overlay closed; the loader retries later.
-    void loadHistoryView().catch(() => {});
-  };
-
-  /** Leaving both surfaces dismisses, but only after a grace to come back in. */
-  const scheduleRailOverlayClose = (): void => {
-    cancelRailGrace();
-    if (!railOverlayOpen) return;
-    railGraceTimer = setTimeout(() => {
-      railGraceTimer = null;
-      if (railPointerInside || !railOverlayOpen) return;
-      // A keyboard visitor inside the floating rail never loses it to a stray
-      // pointer leaving the widget.
-      if (railOverlayHost?.contains(document.activeElement)) return;
-      // A pointer dismissal moves focus no more than a pointer open does.
-      closeHistory({ restoreFocus: false });
-    }, RAIL_OVERLAY_GRACE_MS);
-  };
-
-  /**
-   * Hover keep-alive is geometric, not element-based: a pointer travelling
-   * from the trigger to the rail crosses the conversation header, which is
-   * neither. The safe zone is the trigger, the rail, and the bridge between
-   * them: the rail's own horizontal extent, from the trigger's row down to the
-   * rail's top edge. Derived from the live rects, so a right-docked rail needs
-   * no separate case.
-   */
-  const inRailSafeZone = (x: number, y: number): boolean => {
-    const rail = railOverlayHost?.getBoundingClientRect();
-    if (!rail) return false;
-    const row = railTriggerButton?.getBoundingClientRect();
-    // The rail and the bridge are one band: the rail's own width, from the
-    // trigger's row down to the rail's bottom. The trigger is its own rect.
-    const top = row ? Math.min(row.top, rail.top) : rail.top;
-    return (
-      (x >= rail.left && x <= rail.right && y >= top && y <= rail.bottom) ||
-      (!!row && x >= row.left && x <= row.right && y >= row.top && y <= row.bottom)
-    );
-  };
-
-  const handleRailPointerMove = (event: PointerEvent): void => {
-    if (!railOverlayOpen) return;
-    railPointerInside = inRailSafeZone(event.clientX, event.clientY);
-    if (railPointerInside) cancelRailGrace();
-    // Re-arming on every outside move would restart the countdown forever.
-    else if (railGraceTimer === null) scheduleRailOverlayClose();
-  };
-
-  /**
-   * No dwell: the rail answers the pointer the moment it arrives, as fast as
-   * the chunk allows (already loaded, that is the same frame). The 300ms leave
-   * grace is what an accidental pass over the trigger costs.
-   */
-  const openRailOverlay = (opts?: { keyboard?: boolean }): void => {
-    if (historyVisible || !railTriggerApplies()) return;
-    railOverlayOpen = true;
-    void openHistory({
-      invoker: railTriggerButton,
-      keyboard: opts?.keyboard === true,
-    }).then(() => {
-      // The chunk can resolve after the pointer left, or not resolve at all.
-      if (!historyVisible) railOverlayOpen = false;
-      else if (!railPointerInside && document.activeElement !== railTriggerButton) {
-        closeHistory();
-      }
-    });
-  };
-
-  /**
-   * Floating, the rail's own toggle pins instead of collapsing, so it wears
-   * the expand label; docked, it says collapse again.
-   */
-  const syncRailToggleLabel = (): void => {
-    // The mounted element, not the surface: the first mount happens inside the
-    // surface constructor, before `historySurface` is assigned.
-    const toggle = historyMountedElement?.querySelector(
-      '[data-persona-history-focus="collapse"]'
-    );
-    if (!toggle) return;
-    toggle.setAttribute(
-      "aria-label",
-      railOverlayOpen
-        ? historyShellCopy.expandLabel
-        : historyShellCopy.collapseLabel
-    );
-    toggle.setAttribute("aria-expanded", railOverlayOpen ? "false" : "true");
-  };
-
-  /**
-   * Pin: the floating rail gives way to the full-height column, moving the
-   * SAME view element when one is already open.
-   */
-  const pinRail = (): void => {
-    setRailCollapsed(false);
-    const surface = historySurface;
-    if (!railOverlayOpen || !surface) {
-      void openHistory({ invoker: railTriggerButton });
-      return;
-    }
-    const refocus = document.activeElement === railTriggerButton;
-    railOverlayOpen = false;
-    unmountHistoryHosts();
-    // Detach before re-hosting, exactly as the panel/rail move does.
-    surface.element.remove();
-    mountHistoryElement(surface.element);
-    syncRailToggleLabel();
-    // The trigger stands down beside the rail's own toggle, so keyboard focus
-    // has to follow the control there.
-    if (refocus) focusHistoryEntry();
-    repinAnchoredMessage();
-    syncHistoryChromeImpl();
-  };
-
-  /** Unpin: the column closes and the trigger takes the control back. */
-  const unpinRail = (): void => {
-    setRailCollapsed(true);
-    closeHistory();
-  };
-
-  toggleRailPinned = (): void => {
-    if (!historyVisible || railOverlayOpen) pinRail();
-    else unpinRail();
-  };
-
-  /**
-   * The sidebar glyph, plainly. `rail.brand` belongs to the icon column, which
-   * has no other identity, and to the rail's own header; this control sits in
-   * a conversation header that already carries the agent's.
-   */
-  const buildRailTrigger = (): void => {
-    const shortcut = railCollapseShortcut();
-    const parts = createHeaderIconButton({
-      ariaLabel: historyShellCopy.expandLabel,
-      iconName: "panel-left",
-      wrapperClassName:
-        "persona-relative persona-inline-flex persona-items-center persona-justify-center",
-      extraClassName: "persona-rail-trigger",
-      // Hovering answers with the rail itself; a bubble would race the flyover.
-      // The combo stays discoverable on the floating rail's own toggle.
-      tooltip: false,
-      attrs: {
-        "data-persona-rail-trigger": "",
-        "aria-controls": historyRegionId,
-        ...(shortcut ? { "aria-keyshortcuts": shortcut.aria } : {}),
-      },
-    });
-    const button = parts.button;
-    button.addEventListener("mouseenter", () => {
-      railPointerInside = true;
-      cancelRailGrace();
-      if (coarsePointer() || Date.now() < railUncoveredUntil) return;
-      openRailOverlay();
-    });
-    button.addEventListener("mouseleave", () => {
-      railPointerInside = false;
-      // A real departure ends the hold-off: the next enter is intent.
-      railUncoveredUntil = 0;
-      scheduleRailOverlayClose();
-    });
-    // Focus only warms: Enter and Space are how a keyboard visitor commits.
-    button.addEventListener("focus", () => {
-      if (!historyVisible) warmHistoryChunk();
-    });
-    button.addEventListener("click", (event) => {
-      if (!historyAvailable()) return;
-      // Touch taps the overlay open first and pins on a second tap. A pointer
-      // that can hover is already looking at the rail, and Enter/Space (a click
-      // with detail 0) is a commitment either way, so both pin outright.
-      if (event.detail !== 0 && coarsePointer() && !historyVisible) {
-        openRailOverlay();
-      } else pinRail();
-    });
-    railTriggerButton = button;
-    railTriggerWrapper = parts.wrapper;
-  };
-
-  /**
-   * The trigger is chrome, not surface state: it exists whenever a collapsed
-   * overlay rail could be opened, and stands down only while the rail is
-   * docked, where the rail's own header toggle is the same control.
-   */
-  const syncRailOverlayTrigger = (): void => {
-    // A header rebuild detaches it; a stale ref must not block recreation.
-    if (railTriggerWrapper && !railTriggerWrapper.isConnected) {
-      railTriggerWrapper = null;
-      railTriggerButton = null;
-    }
-    if (!railTriggerApplies()) {
-      railTriggerWrapper?.remove();
-      railTriggerWrapper = null;
-      railTriggerButton = null;
-      return;
-    }
-    if (!railTriggerButton) buildRailTrigger();
-    const wrapper = railTriggerWrapper;
-    const button = railTriggerButton;
-    if (!wrapper || !button) return;
-    // Leading edge of the conversation header, mirrored for a right rail.
-    const lead = railSide() !== "right" ? header.firstChild : null;
-    if ((lead ?? header.lastChild) !== wrapper) header.insertBefore(wrapper, lead);
-    wrapper.style.display =
-      railPinned() || railPinPendingOpens > 0 ? "none" : "";
-    button.setAttribute("aria-label", historyShellCopy.expandLabel);
-    button.setAttribute("aria-expanded", historyVisible ? "true" : "false");
-    // The floating rail hangs from this control, so a rebuild or a resize that
-    // moved it re-anchors what is already open.
-    if (railOverlayHost) applyRailChrome();
-  };
-
-  /**
-   * Click outside dismisses the floating rail. Portaled surfaces it opened
-   * itself (row menus, confirmations) are not "outside" it.
-   */
-  const handleRailOverlayPointerDown = (event: Event): void => {
-    if (!railOverlayOpen) return;
-    const target = event.target;
-    if (!(target instanceof Node)) return;
-    if (railOverlayHost?.contains(target) || railTriggerWrapper?.contains(target)) {
-      return;
-    }
-    if (
-      target instanceof Element &&
-      target.closest('.persona-dropdown-menu,[role="alertdialog"]')
-    ) {
-      return;
-    }
-    closeHistory({ restoreFocus: false });
-  };
-  document.addEventListener("pointerdown", handleRailOverlayPointerDown, true);
-  destroyCallbacks.push(() => {
-    document.removeEventListener("pointerdown", handleRailOverlayPointerDown, true);
-    // Attached only while the rail floats; removing an unattached one is free.
-    document.removeEventListener("pointermove", handleRailPointerMove);
-    railResizeRelease?.();
-    cancelRailGrace();
-  });
-
-  // --- drag-resize of the docked rail --------------------------------------
-
-  let railResizeHandle: HTMLElement | null = null;
-  /** Ends an in-flight drag: its listeners are on the document, not the handle. */
-  let railResizeRelease: (() => void) | null = null;
-  /** Arrow-key step, matching the reference sidebar's coarse nudge. */
-  const RAIL_RESIZE_STEP = 16;
-
-  const commitRailWidth = (next: number): void => {
-    setStoredRailWidth(clampRailWidth(next));
-    applyRailChrome();
-    // The transcript resized beside the anchor; a clamp would bounce it.
-    repinAnchoredMessage();
-  };
-
-  /** Mirrors the artifact split handle: pointer capture, document-level drag. */
-  const buildRailResizeHandle = (): HTMLElement => {
-    const handle = createElement("div", "persona-rail-resizer");
-    handle.tabIndex = 0;
-    handle.setAttribute("role", "separator");
-    handle.setAttribute("aria-orientation", "vertical");
-    handle.setAttribute("aria-valuemin", String(RAIL_MIN_WIDTH));
-    handle.setAttribute("aria-valuemax", String(RAIL_MAX_WIDTH));
-
-    handle.addEventListener("pointerdown", (event) => {
-      const host = railHost;
-      if (!host || event.button !== 0) return;
-      event.preventDefault();
-      railResizeRelease?.();
-      const startX = event.clientX;
-      const startWidth = host.getBoundingClientRect().width || railWidth();
-      // A leading rail widens as the pointer travels right; a trailing one
-      // mirrors that.
-      const direction = railSide() === "right" ? -1 : 1;
-      let width = startWidth;
-      const doc = mount.ownerDocument;
-      // The collapse animation is a transition on this very basis; left on, it
-      // would trail the pointer for the whole drag.
-      host.style.transition = "none";
-      const onMove = (move: PointerEvent): void => {
-        width = clampRailWidth(startWidth + direction * (move.clientX - startX));
-        // Straight onto the basis: a chrome pass per pointer move is waste.
-        host.style.flex = `0 0 ${width}px`;
-        handle.setAttribute("aria-valuenow", String(width));
-      };
-      const onUp = (): void => {
-        railResizeRelease = null;
-        doc.removeEventListener("pointermove", onMove);
-        doc.removeEventListener("pointerup", onUp);
-        doc.removeEventListener("pointercancel", onUp);
-        host.style.removeProperty("transition");
-        try {
-          handle.releasePointerCapture(event.pointerId);
-        } catch {
-          /* the capture may already be gone */
-        }
-        commitRailWidth(width);
-      };
-      railResizeRelease = onUp;
-      doc.addEventListener("pointermove", onMove);
-      doc.addEventListener("pointerup", onUp);
-      doc.addEventListener("pointercancel", onUp);
-      try {
-        handle.setPointerCapture(event.pointerId);
-      } catch {
-        /* pointer capture is an enhancement, not the mechanism */
-      }
-    });
-
-    handle.addEventListener("keydown", (event) => {
-      // Arrows track the visual direction, so a trailing rail inverts them.
-      const step = railSide() === "right" ? -RAIL_RESIZE_STEP : RAIL_RESIZE_STEP;
-      const width = railWidth();
-      const next =
-        event.key === "ArrowRight"
-          ? width + step
-          : event.key === "ArrowLeft"
-            ? width - step
-            : event.key === "Home"
-              ? RAIL_MIN_WIDTH
-              : event.key === "End"
-                ? RAIL_MAX_WIDTH
-                : null;
-      if (next === null) return;
-      event.preventDefault();
-      commitRailWidth(next);
-    });
-    return handle;
-  };
-
-  /** Docked and expanded only: the floating rail and the icon column never resize. */
-  const syncRailResizeHandle = (
-    shell: HTMLElement,
-    before: HTMLElement
-  ): void => {
-    if (!railResizable() || railShowsCollapsed()) {
-      railResizeRelease?.();
-      railResizeHandle?.remove();
-      return;
-    }
-    const handle = railResizeHandle ?? buildRailResizeHandle();
-    railResizeHandle = handle;
-    handle.setAttribute("aria-label", historyShellCopy.resizeLabel);
-    handle.setAttribute("aria-valuenow", String(railWidth()));
-    // Between the two, on the edge the divider already faces.
-    if (handle.nextElementSibling !== before) shell.insertBefore(handle, before);
-  };
-
-  /**
-   * Rail geometry is config-derived, so it must be re-derivable: a live
-   * `update()` of `rail.width` / `rail.side` lands here, not only at mount.
-   */
-  applyRailChrome = (): void => {
-    // The bar mirrors the docked edge, so the view hears about a side flip even
-    // while it is presenting as a panel.
-    historySurface?.view.setRailSide(railSide());
-    const trailing = railSide() === "right";
-    const overlay = railOverlayHost;
-    if (overlay) {
-      // Hangs from the trigger's row rather than the widget's top edge, so the
-      // trigger stays visible and clickable above it. Measured, since a header
-      // rebuild or a resize can move the trigger.
-      const below = railTriggerButton
-        ? railTriggerButton.getBoundingClientRect().bottom -
-          container.getBoundingClientRect().top
-        : 0;
-      overlay.style.top = `calc(${Math.max(0, Math.round(below))}px + ${RAIL_OVERLAY_MARGIN})`;
-      overlay.style.width = `${railWidth()}px`;
-      overlay.style.left = trailing ? "" : RAIL_OVERLAY_MARGIN;
-      overlay.style.right = trailing ? RAIL_OVERLAY_MARGIN : "";
-    }
-    const host = railHost;
-    const shell = railShell;
-    const column = railColumn;
-    if (!host || !shell || !column) return;
-    host.style.flex = `0 0 ${
-      railShowsCollapsed() ? RAIL_COLLAPSED_WIDTH : railWidth()
-    }px`;
-    // The divider always faces the conversation, whichever edge the rail took.
-    const divider = "1px solid var(--persona-divider,#e5e7eb)";
-    host.style.borderRight = trailing ? "" : divider;
-    host.style.borderLeft = trailing ? divider : "";
-    const leading = trailing ? column : host;
-    // Reorder only on an actual side flip: re-parenting blurs what it moves.
-    if (shell.firstElementChild !== leading) {
-      shell.append(leading, trailing ? host : column);
-    }
-    syncRailResizeHandle(shell, trailing ? host : column);
-  };
-
-  /**
-   * Rail is a shell-owned navigation column running the FULL widget height
-   * beside a still-operable conversation: the shell header, `body`, the
-   * in-container composer and any top-right action wrappers move into a column
-   * next to the host, and the shell takes the header's old container slot.
-   */
-  const mountRailHost = (element: HTMLElement): void => {
-    // A pending docking open already built the shell around a placeholder;
-    // the arriving view takes its slot with no reflow around it.
-    if (railPlaceholder && railHost) {
-      railPlaceholder.replaceWith(element);
-      railPlaceholder = null;
-      applyRailChrome();
-      return;
-    }
-    const shell = createElement("div", "persona-history-rail-shell");
-    shell.style.cssText = "display:flex;flex-direction:row;flex:1 1 auto;min-height:0";
-    const column = createElement("div", "persona-history-rail-conversation");
-    // position: top-right close/clear wrappers anchor here instead of the
-    // container, or they would float over the rail.
-    column.style.cssText =
-      "display:flex;flex-direction:column;flex:1 1 auto;min-width:0;min-height:0;position:relative";
-    // The collapse transition is a rule in the history chunk's stylesheet: an
-    // inline one could not carry the reduced-motion query.
-    const host = createElement("div", "persona-history-rail-host");
-    host.style.cssText = "display:flex;min-height:0;overflow:hidden";
-
-    container.insertBefore(shell, header.parentNode === container ? header : body);
-    for (const node of railBorrowed()) {
-      if (node?.parentNode === container) column.appendChild(node);
-    }
-    shell.append(host, column);
-    host.appendChild(element);
-    railShell = shell;
-    railHost = host;
-    railColumn = column;
-    applyRailChrome();
-  };
-
-  /**
-   * Space reservation for a docking open that still awaits the chunk: the full
-   * rail shell mounts around an empty stand-in at the final width, so the
-   * conversation and its header paint at their docked geometry from the first
-   * frame instead of being pushed over when the view lands.
-   */
-  const mountRailPlaceholder = (): void => {
-    if (railShell) return;
-    const placeholder = createElement(
-      "div",
-      "persona-history-rail-placeholder"
-    );
-    placeholder.style.cssText = "flex:1 1 auto;min-height:0";
-    railPlaceholder = placeholder;
-    mountRailHost(placeholder);
-    repinAnchoredMessage();
-  };
-
-  /** Hands the reserved column back (failed or re-presented open). */
-  const clearRailPlaceholder = (): void => {
-    if (!railPlaceholder) return;
-    unmountHistoryHosts();
-    repinAnchoredMessage();
-  };
-
-  /**
-   * Floating host for the collapsed overlay rail: the expanded view elevated
-   * over a conversation that keeps its own layout, so nothing is borrowed and
-   * nothing reflows around it.
-   */
-  const mountRailOverlayHost = (element: HTMLElement): void => {
-    const host = createElement("div", "persona-history-rail-overlay");
-    // Every themeable value is a var() reference with its default in the
-    // fallback, so an unset token costs nothing and a live one lands at once.
-    host.style.cssText =
-      `position:absolute;bottom:${RAIL_OVERLAY_MARGIN};` +
-      `display:flex;overflow:hidden;z-index:${PORTALED_OVERLAY_Z_INDEX - 1};` +
-      "border-radius:var(--persona-history-overlay-radius,16px);" +
-      "background:var(--persona-history-overlay-bg,var(--persona-container,#f7f7f8));" +
-      "box-shadow:var(--persona-history-overlay-shadow,0 12px 40px rgba(0,0,0,0.25))";
-    // The conversation column already relies on a positioned container.
-    container.style.position = "relative";
-    container.appendChild(host);
-    host.appendChild(element);
-    // The safe zone spans nodes the rail does not own, so hover is tracked by
-    // position for as long as it is open.
-    document.addEventListener("pointermove", handleRailPointerMove);
-    railOverlayHost = host;
-    applyRailChrome();
-    syncRailToggleLabel();
-  };
-
-  const unmountHistoryHosts = (): void => {
-    restorePanelHost?.();
-    if (railOverlayHost) {
-      // Dismissed under the pointer: hold the hover off until the synthetic
-      // enter from uncovering the trigger has passed.
-      if (railPointerInside) railUncoveredUntil = Date.now() + 150;
-      document.removeEventListener("pointermove", handleRailPointerMove);
-      railOverlayHost.remove();
-      railOverlayHost = null;
-    }
-    const shell = railShell;
-    if (shell) {
-      // A drag in flight owns document listeners the host is about to lose.
-      railResizeRelease?.();
-      // Live bindings, in panel order, before the slot the shell took. A header
-      // restored first also takes its inline action wrappers back with it, so
-      // the `contains` check skips them.
-      for (const node of railBorrowed()) {
-        if (node && shell.contains(node)) container.insertBefore(node, shell);
-      }
-      shell.remove();
-      railShell = null;
-      railHost = null;
-      railColumn = null;
-      railPlaceholder = null;
-    }
-  };
-
-  /** Shell-owned chrome applied to whatever element arbitration produced. */
-  const prepareHistoryElement = (element: HTMLElement): void => {
-    historyMountedElement = element;
-    element.id = historyRegionId;
-    // Host-side flex sizing: the chunk sizes itself to 100%, the shell decides
-    // how it participates in the column/row it was just dropped into.
-    element.style.flex = "1 1 auto";
-    element.style.minHeight = "0";
-  };
-
-  /** The chunk owns its own classes/labels; the shell only picks the host. */
-  const mountHistoryElement = (element: HTMLElement): void => {
-    prepareHistoryElement(element);
-    // The open that reserved the column can resolve to another host (a width
-    // change mid-load re-presents as panel); the stand-in must not outlive it.
-    if (historyPresentation !== "rail" || railOverlayOpen) {
-      clearRailPlaceholder();
-    }
-    if (historyPresentation !== "rail") mountPanelHost(element);
-    else if (railOverlayOpen) mountRailOverlayHost(element);
-    else mountRailHost(element);
-  };
-
-  /**
-   * Live rail <-> panel transition. ONE view instance survives the move, so the
-   * list, its fixed operation context, and any pending work are preserved. A
-   * custom full view is re-invoked with the new presentation value.
-   */
-  const syncHistoryPresentation = (): void => {
-    // The trigger belongs to a rail-capable width, so it resolves here too, and
-    // the header toggle stands down beside whatever it resolved to.
-    syncRailOverlayTrigger();
-    syncHistoryButton();
-    if (!historyVisible || !historySurface) return;
-    const next = resolveHistoryPresentation();
-    if (next === historyPresentation) return;
-    const focusKey = document.activeElement;
-    // The bar's contents may be focused inside the shell header, not the view.
-    const refocus =
-      focusKey instanceof HTMLElement &&
-      (historySurface.element.contains(focusKey) ||
-        historyHeaderHost?.contains(focusKey) === true)
-        ? focusKey
-        : null;
-    unmountHistoryHosts();
-    // Detach before re-hosting so a mid-move re-arbitration cannot re-insert
-    // the surface into the host it is being moved out of.
-    historySurface.element.remove();
-    // Rail is always inline; the panel host re-externalizes on mount.
-    historySurface.view.setHeaderPlacement("inline");
-    historyPresentation = next;
-    historySurface.view.setPresentation(next);
-    // Panel always shows the whole list; returning to rail restores the state.
-    historySurface.view.setCollapsed(railShowsCollapsed());
-    historySurface.requestRender();
-    if (!historySurface.element.isConnected) {
-      mountHistoryElement(historySurface.element);
-    }
-    if (refocus?.isConnected) refocus.focus();
-    else focusHistoryEntry();
-    syncScrollToBottomButton();
-    // A one-frame layout removal above the anchored message clamps scrollTop.
-    repinAnchoredMessage();
-    syncHistoryChromeImpl();
-  };
-
-  // --- open / close --------------------------------------------------------
-
-  /** The bar lives in the shell header while it is hosted there. */
-  const queryHistoryOwned = <T extends HTMLElement>(
-    element: HTMLElement,
-    selector: string
-  ): T | null =>
-    historyHeaderHost?.querySelector<T>(selector) ??
-    element.querySelector<T>(selector);
-
-  const focusHistoryEntry = (): void => {
-    const element = historySurface?.element ?? historyMountedElement;
-    if (!element) return;
-    const close = queryHistoryOwned(
-      element,
-      // The rail's leading control is a collapse toggle, not a close.
-      '[data-persona-history-focus="close"],[data-persona-history-focus="collapse"]'
-    );
-    if (close) {
-      close.focus();
-      return;
-    }
-    const heading =
-      queryHistoryOwned<HTMLElement>(element, ".persona-history-title") ??
-      // Custom contents may expose neither: the region itself is the fallback.
-      element;
-    heading.tabIndex = -1;
-    heading.focus();
-  };
-
-  const openHistory = async (opts?: {
-    returnSurface?: HistoryReturnSurface;
-    invoker?: HTMLElement | null;
-    /** Rail only: an open with no keyboard behind it must not move focus. */
-    keyboard?: boolean;
-    /** `false` skips the entry focus entirely (programmatic/preview opens). */
-    focus?: boolean;
-  }): Promise<void> => {
-    if (!historyAvailable() || historyVisible) return;
-    const provider = historyProvider;
-    if (!provider) return;
-    // An unpinned overlay rail IS its trigger, so restoring that state must
-    // render chrome only: no surface, and no chunk fetched for it.
-    if (!railOverlayOpen && railTriggerApplies() && isRailCollapsed()) {
-      syncRailOverlayTrigger();
-      return;
-    }
-    // A reopen mid-exit finishes the outgoing teardown first: never two
-    // surfaces, never a restore that lands after this one mounts.
-    settleHistoryExit();
-    const token = ++historyOpenToken;
-    historyReturnSurface = opts?.returnSurface ?? "conversation";
-    historyInvoker = opts?.invoker ?? historyButton;
-
-    // An open that will dock the rail takes its final geometry for the chunk
-    // load: the trigger hides (painted, the glyph flashes at the header's
-    // leading edge and then jumps to the mounted rail's own toggle) and the
-    // column is reserved (unreserved, the conversation header paints at the
-    // widget edge and is pushed over when the rail lands).
-    const pinPending = railTriggerApplies() && !railOverlayOpen;
-    if (pinPending) {
-      railPinPendingOpens += 1;
-      syncRailOverlayTrigger();
-      mountRailPlaceholder();
-    }
-    let module: Awaited<ReturnType<typeof loadHistoryView>>;
-    try {
-      module = await loadHistoryView();
-    } catch {
-      // Lazy-chunk failure keeps the invoking surface interactive and retryable.
-      announceHistory(historyShellCopy.openHistoryLabel);
-      if (pinPending) {
-        railPinPendingOpens -= 1;
-        // A superseded open leaves the shared chrome to its successor.
-        if (token === historyOpenToken) {
-          clearRailPlaceholder();
-          syncRailOverlayTrigger();
-        }
-      }
-      return;
-    }
-    if (pinPending) railPinPendingOpens -= 1;
-    if (token !== historyOpenToken || historyVisible) return;
-
-    // One scope for the whole opened view; every operation reuses it.
-    historyOperationContext = { scope: historyScope() };
-    historyPresentation = resolveHistoryPresentation();
-    historyVisible = true;
-
-    // Built externally when there is a shell header to host it in; the panel
-    // host re-decides on mount, so this only avoids a needless first insert.
-    const initialHeaderPlacement: HistoryHeaderPlacement =
-      historyPresentation === "panel" &&
-      config.layout?.showHeader !== false &&
-      header.style.display !== "none"
-        ? "external"
-        : "inline";
-
-    const rowAvatar = config.features?.history?.rowAvatar;
-    const shortcut = railCollapseShortcut();
-    const collapseShortcutStrings = shortcut
-      ? { hint: shortcut.hint, aria: shortcut.aria }
-      : null;
-
-    const baseViewOptions: HistoryViewOptions = {
-      provider,
-      context: historyOperationContext,
-      targetId: activeHistoryTargetId(),
-      presentation: historyPresentation,
-      collapsible: railCollapsible(),
-      collapsed: railShowsCollapsed(),
-      railSide: railSide(),
-      renderRailHeader: config.features?.history?.rail?.renderHeader,
-      railBrand: railBrandNode(),
-      onToggleCollapse: toggleRailCollapsed,
-      // Formatted strings only: the size-capped chunk never imports shortcuts.
-      ...(collapseShortcutStrings
-        ? { collapseShortcut: collapseShortcutStrings }
-        : {}),
-      headerPlacement: initialHeaderPlacement,
-      showScopeStatus: config.features?.history?.showScopeStatus !== false,
-      showDelete: config.features?.history?.showDelete !== false,
-      showDeleteAll: config.features?.history?.showDeleteAll !== false,
-      ...(config.features?.history?.listActions?.length
-        ? { listActions: config.features.history.listActions }
-        : {}),
-      // Rows borrow the launcher's IMAGE mark only: agentIconText carries the
-      // merged 💬 default, which would put a placeholder glyph on every row.
-      // No mark at all means text-only rows, the assistant-list default.
-      rowAvatar:
-        rowAvatar === false
-          ? false
-          : typeof rowAvatar === "string"
-            ? rowAvatar
-            : config.launcher?.iconUrl,
-      activeConversationId: session.getActiveConversationId(),
-      ...(config.features?.history?.grouping
-        ? { grouping: config.features.history.grouping }
-        : {}),
-      ...(config.features?.history?.copy
-        ? { copy: config.features.history.copy }
-        : {}),
-      ...(config.features?.history?.pageSize !== undefined
-        ? { pageSize: config.features.history.pageSize }
-        : {}),
-      // The pending/error surface owns failures (optimistic open), so the
-      // row must not double-report them.
-      onSelect: (conversationId) =>
-        openHistoryConversation(conversationId, { focusComposer: true }).catch(
-          () => {}
-        ),
-      onActiveConversationChange: (summary) =>
-        setActiveConversationSummary(summary),
-      // The chunk is size-capped, so it borrows the shell's tooltip module.
-      attachTooltip,
-      onStartNew: () => startNewConversation({ focusComposer: true }),
-      onClose: () => closeHistory(),
-      onRequestDeleteConversation: (conversationId) =>
-        requestDeleteConversation(conversationId),
-      onRequestClearHistory: () => requestClearConversationHistory(),
-      ...(provider.resetDevice
-        ? { onRequestResetIdentity: () => requestResetHistoryIdentity() }
-        : {}),
-    };
-
-    // Plugin hooks arbitrate around the default view; the shell keeps placement,
-    // open/close, Escape, confirmations, announcements, and focus.
-    historySurface = createHistoryRenderSurface({
-      plugins,
-      config,
-      getPresentation: () => historyPresentation ?? "panel",
-      getReturnSurface: () => historyReturnSurface,
-      close: () => closeHistory(),
-      createView: ({ slots, renderDom, onModelChange, railSections }) => {
-        // Tracked before `historySurface` is assigned: the first mount happens
-        // inside this constructor and already needs the handle.
-        historyViewHandle = module.createHistoryView({
-          ...baseViewOptions,
-          railSections: railNavSections(railSections),
-          slots,
-          renderDom,
-          onModelChange,
-          onAnnounce: announceHistory,
-        });
-        return historyViewHandle;
-      },
-      onElementChanged: (next, previous) => {
-        if (!previous?.isConnected) return mountHistoryElement(next);
-        prepareHistoryElement(next);
-        previous.replaceWith(next);
-        // Default <-> custom re-arbitration changes who owns the bar.
-        enforcePanelHost();
-      },
-    });
-    historySurface.view.setNewConversationRequired(
-      historySessionState.recovery === "new_conversation_required"
-    );
-    // The panel makes the conversation inert behind it, so it always takes
-    // focus. The rail leaves it operable: a pointer or programmatic open would
-    // only leave a keyboard ring on the toggle, so it keeps focus where it is.
-    // `focus: false` opts out entirely: the caller owns focus (preview replay).
-    if (
-      opts?.focus !== false &&
-      (historyPresentation !== "rail" || opts?.keyboard === true)
-    ) {
-      focusHistoryEntry();
-    }
-    syncScrollToBottomButton();
-    repinAnchoredMessage();
-    syncHistoryChromeImpl();
-    eventBus.emit("history:opened", {
-      presentation: historyPresentation,
-      returnSurface: historyReturnSurface,
-      timestamp: Date.now(),
-    });
-  };
-
-  /**
-   * Close is: exit animation -> unmount and restore the hidden chrome ->
-   * restore focus. The teardown half is deferred behind the view's `playExit()`
-   * promise, so it is exposed here for whoever preempts it (a reopen, a widget
-   * teardown). Idempotent, and a no-op while nothing is leaving.
-   */
-  let settleHistoryExit: () => void = () => {};
-
-  const closeHistory = (opts?: { restoreFocus?: boolean }): void => {
-    if (!historyVisible) return;
-    historyOpenToken += 1;
-    const returnSurface = historyReturnSurface;
-    const invoker = historyInvoker;
-    const surface = historySurface;
-    const restoreInvokerFocus = opts?.restoreFocus !== false;
-    // Flipped before the animation: a second close is a no-op and a reopen
-    // mounts fresh rather than re-entering the surface that is leaving.
-    historyVisible = false;
-
-    let done = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const finish = (): void => {
-      if (done) return;
-      done = true;
-      settleHistoryExit = () => {};
-      if (timer !== null) clearTimeout(timer);
-      // The floating rail is torn down with the surface it hosted.
-      railOverlayOpen = false;
-      cancelRailGrace();
-      // Before focus restoration below: the invoker lives in the shell header,
-      // which is inert until this restores it.
-      unmountHistoryHosts();
-      // Dispose before destroy: cleanups belong to the render being torn down.
-      surface?.dispose();
-      surface?.view.destroy();
-      surface?.element.remove();
-      // A reopen that preempted this exit already owns the shell state.
-      if (historySurface === surface) {
-        historySurface = null;
-        historyViewHandle = null;
-        historyMountedElement = null;
-        historyPresentation = null;
-        historyOperationContext = null;
-        historyInvoker = null;
-      }
-      syncScrollToBottomButton();
-      // Removing a full-height host above the anchored message clamps scrollTop.
-      repinAnchoredMessage();
-      syncHistoryChromeImpl();
-      if (restoreInvokerFocus) {
-        const target = invoker ?? historyButton;
-        if (target?.isConnected) target.focus();
-        else maybeFocusInput();
-      }
-      eventBus.emit("history:closed", { returnSurface, timestamp: Date.now() });
-    };
-
-    // Only the arbitrated default view animates: a plugin full view owns its
-    // own element and never got an entrance either.
-    const exit =
-      surface && surface.element === surface.view.element
-        ? surface.view.playExit()
-        : null;
-    if (!exit) {
-      finish();
-      return;
-    }
-    settleHistoryExit = finish;
-    // A cancelled or never-settling animation must never wedge the close.
-    timer = setTimeout(finish, HISTORY_EXIT_TIMEOUT_MS);
-    void exit.then(finish);
-  };
-
-  /** Escape returns to the recorded invoking surface, like the back control. */
-  const handleHistoryKeydown = (event: KeyboardEvent): void => {
-    if (event.key !== "Escape" || !historyVisible || !historySurface) return;
-    // Rail leaves the conversation operable: only its own focus closes it, and
-    // the floating rail's scope includes the trigger it hangs from.
-    if (historyPresentation === "rail") {
-      const target = event.target;
-      if (
-        !(target instanceof Node) ||
-        !(
-          historySurface.element.contains(target) ||
-          (railOverlayOpen && railTriggerWrapper?.contains(target) === true)
-        )
-      ) {
-        return;
-      }
-    }
-    event.preventDefault();
-    event.stopPropagation();
-    closeHistory();
-  };
-  container.addEventListener("keydown", handleHistoryKeydown);
-  destroyCallbacks.push(() =>
-    container.removeEventListener("keydown", handleHistoryKeydown)
-  );
-
-  // --- session operations --------------------------------------------------
 
   // ---- header title binding (layout.header.titleSource: "conversation") ----
   // The history view reports the active conversation's list summary through
@@ -10900,710 +9100,26 @@ export const createAgentExperience = (
     const activeId = session.getActiveConversationId();
     if (!activeId) return;
     if (actionId === "delete") {
-      void requestDeleteConversation(activeId);
+      void withHistoryShell((shell) => shell.requestDeleteConversation(activeId));
     } else if (actionId === "star" && session.canUpdateConversations()) {
-      void updateHistoryConversation(activeId, {
-        starred: !activeConversationStarred,
-      }).catch(() => {});
+      void withHistoryShell((shell) =>
+        shell.updateHistoryConversation(activeId, {
+          starred: !activeConversationStarred,
+        })
+      ).catch(() => {});
     }
   });
-
-  // --- optimistic conversation open ---------------------------------------
-  // Selection acknowledges within a frame: the composer gates immediately, the
-  // stand-in takes the surface only if the fetch outlasts the show delay, and
-  // the transcript hydrates when the fetch lands. The token invalidates a stale
-  // resolution after a newer open, a new conversation, or a failure the visitor
-  // navigated away from.
-  let conversationOpenToken = 0;
-  // Show delay: opens that land inside it swap straight from the welcome or the
-  // previous conversation to the loaded transcript, so no skeleton ever flashes.
-  const CONVERSATION_OPEN_TAKEOVER_DELAY_MS = 250;
-  let conversationOpenTakeoverTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const cancelConversationOpenTakeover = (): void => {
-    if (conversationOpenTakeoverTimer) clearTimeout(conversationOpenTakeoverTimer);
-    conversationOpenTakeoverTimer = null;
-  };
-  destroyCallbacks.push(cancelConversationOpenTakeover);
-
-  /** Hands the surface to the mounted stand-in. Idempotent by re-application. */
-  const engageConversationOpenTakeover = (): void => {
-    cancelConversationOpenTakeover();
-    const element = conversationOpenPendingEl;
-    if (!element) return;
-    conversationOpenTakeover = true;
-    element.hidden = false;
-    messagesWrapper.style.display = "none";
-    // The welcome is a sibling of the transcript, so hiding the wrapper alone
-    // would leave it painted above the stand-in.
-    updateWelcome();
-  };
-
-  const clearConversationOpenPending = (): void => {
-    conversationOpenToken += 1;
-    cancelConversationOpenTakeover();
-    if (!conversationOpenPendingEl) return;
-    conversationOpenPendingEl.remove();
-    conversationOpenPendingEl = null;
-    conversationOpenTakeover = false;
-    messagesWrapper.style.removeProperty("display");
-    setHistoryHostInert(footer, false);
-    // Restores the welcome when navigation lands back on an empty transcript.
-    updateWelcome();
-  };
-
-  /**
-   * Commit fade for the reopened transcript. WAAPI, not a CSS transition: the
-   * wrapper is the morph target, and post-render inline state is stripped by
-   * every render inside the completion window.
-   */
-  const fadeInTranscript = (): void => {
-    try {
-      if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
-        return;
-      }
-      messagesWrapper.animate([{ opacity: 0 }, { opacity: 1 }], {
-        duration: 150,
-        easing: "ease-out",
-      });
-    } catch {
-      /* environments without WAAPI land the transcript without motion */
-    }
-  };
-
-  // The stand-in surfaces get the transcript's centered column from their
-  // container classes, so the hydrated messages land exactly where they stood.
-  const skeletonBubble = (width: string, trailing: boolean): HTMLElement =>
-    createNode("div", {
-      className: cx(
-        "persona-conversation-loading-bubble",
-        trailing && "persona-conversation-loading-bubble--trailing"
-      ),
-      attrs: { "aria-hidden": "true" },
-      style: { width },
-    });
-
-  const buildConversationOpenSkeleton = (): HTMLElement =>
-    createNode(
-      "div",
-      { className: "persona-conversation-loading-body" },
-      skeletonBubble("58%", false),
-      skeletonBubble("72%", true),
-      skeletonBubble("44%", false)
-    );
-
-  const mountConversationOpenState = (element: HTMLElement): void => {
-    conversationOpenPendingEl?.remove();
-    conversationOpenPendingEl = element;
-    // The takeover is deferred, so the stand-in mounts hidden; one that replaces
-    // an already-engaged stand-in keeps the surface instead of blanking it.
-    element.hidden = !conversationOpenTakeover;
-    body.insertBefore(element, messagesWrapper);
-    cancelConversationOpenTakeover();
-    if (!conversationOpenTakeover) {
-      conversationOpenTakeoverTimer = setTimeout(
-        engageConversationOpenTakeover,
-        CONVERSATION_OPEN_TAKEOVER_DELAY_MS
-      );
-    }
-    // The composer must not send into the conversation being replaced. The
-    // panel exit restores the footer after its animation, so the close path
-    // re-asserts this gate (see the history:closed re-assert below).
-    setHistoryHostInert(footer, true);
-  };
-
-  const showConversationOpenPending = (): void => {
-    // Same plugin -> config -> default chain as the streaming indicator. The
-    // hook replaces the skeleton only; the container keeps the centered
-    // column, the status role, and the composer gate.
-    const context: LoadingIndicatorRenderContext = {
-      config,
-      streaming: false,
-      location: "conversation-open",
-      defaultRenderer: buildConversationOpenSkeleton,
-    };
-    let content: HTMLElement | null = null;
-    const loadingPlugin = plugins.find((p) => p.renderLoadingIndicator);
-    if (loadingPlugin?.renderLoadingIndicator) {
-      content = loadingPlugin.renderLoadingIndicator(context);
-    }
-    if (content === null && config.loadingIndicator?.render) {
-      content = config.loadingIndicator.render(context);
-    }
-    mountConversationOpenState(
-      createNode(
-        "div",
-        {
-          className: "persona-conversation-loading",
-          attrs: {
-            role: "status",
-            "aria-label": historyShellCopy.openConversationLoadingLabel,
-          },
-        },
-        content ?? buildConversationOpenSkeleton()
-      )
-    );
-  };
-
-  const showConversationOpenError = (conversationId: string): void => {
-    const retry = (): void => {
-      void openHistoryConversation(conversationId, {
-        focusComposer: true,
-      }).catch(() => {});
-    };
-    const back = historyAvailable()
-      ? (): void => {
-          clearConversationOpenPending();
-          void openHistory();
-        }
-      : undefined;
-    const actionButton = (label: string, onClick: () => void): HTMLElement => {
-      const button = createNode("button", {
-        className: "persona-conversation-loading-error-action",
-        attrs: { type: "button" },
-        text: label,
-      });
-      button.addEventListener("click", onClick);
-      return button;
-    };
-    const buildDefaultBlock = (): HTMLElement =>
-      createNode(
-        "div",
-        { className: "persona-conversation-loading-error-body" },
-        createNode("p", {
-          className: "persona-conversation-loading-error-title",
-          text: historyShellCopy.openConversationErrorTitle,
-        }),
-        createNode(
-          "div",
-          { className: "persona-conversation-loading-error-actions" },
-          actionButton(historyShellCopy.openConversationRetryLabel, retry),
-          back
-            ? actionButton(historyShellCopy.openConversationBackLabel, back)
-            : null
-        )
-      );
-    // First non-null plugin hook wins (plugins are priority-sorted); a throw
-    // is reported and skipped. The container keeps the centered column, the
-    // alert role, and the composer gate around whatever the hook returns.
-    const context: AgentWidgetRenderHistoryOpenErrorContext = Object.freeze({
-      conversationId,
-      config,
-      copy: Object.freeze({
-        title: historyShellCopy.openConversationErrorTitle,
-        retryLabel: historyShellCopy.openConversationRetryLabel,
-        backLabel: historyShellCopy.openConversationBackLabel,
-      }),
-      retry,
-      ...(back ? { back } : {}),
-      defaultRenderer: buildDefaultBlock,
-    });
-    let content: HTMLElement | null = null;
-    for (const plugin of plugins) {
-      if (!plugin.renderHistoryOpenError) continue;
-      try {
-        content = plugin.renderHistoryOpenError(context);
-      } catch (error) {
-        console.warn("[persona] renderHistoryOpenError threw", error);
-        content = null;
-      }
-      if (content) break;
-    }
-    mountConversationOpenState(
-      createNode(
-        "div",
-        {
-          className: "persona-conversation-loading-error",
-          attrs: { role: "alert" },
-        },
-        content ?? buildDefaultBlock()
-      )
-    );
-    // A failure must never sit hidden behind the surface it replaces, so the
-    // error skips the stand-in's show delay.
-    engageConversationOpenTakeover();
-  };
-
-  // The panel exit's deferred teardown restores the footer it captured, which
-  // would lift the composer gate mid-fetch; re-assert it while an open is
-  // still pending.
-  eventBus.on("history:closed", () => {
-    if (conversationOpenPendingEl) setHistoryHostInert(footer, true);
-  });
-
-  /**
-   * Optimistic reopen: navigate on the click, hydrate on the fetch. The
-   * returned promise keeps the transactional contract (resolves once the
-   * transcript is live, rejects on failure) for `controller.openConversation`.
-   * `suppressScrollSend` covers the hydration: otherwise the last restored
-   * user message triggers the anchor-top send scroll.
-   */
-  const openHistoryConversation = async (
-    conversationId: string,
-    { focusComposer = false }: { focusComposer?: boolean } = {}
-  ): Promise<void> => {
-    const scope = historyOperationScope();
-    // Seeds the header title binding from the list row before the list leaves.
-    // The surface is usually gone by hydration time (the exit outruns the
-    // fetch), so this is the only moment the title can be read from the list.
-    const seededFromList = !!historySurface;
-    historySurface?.view.setActiveConversationId(conversationId);
-    clearConversationOpenPending();
-    const token = conversationOpenToken;
-    showConversationOpenPending();
-    if (historyVisible && (historyPresentation === "panel" || railOverlayOpen)) {
-      closeHistory({ restoreFocus: false });
-    }
-    suppressScrollSend = true;
-    try {
-      await session.openConversation(conversationId, { scope });
-    } catch (error) {
-      if (token === conversationOpenToken) {
-        showConversationOpenError(conversationId);
-      }
-      throw error;
-    } finally {
-      suppressScrollSend = false;
-    }
-    if (token !== conversationOpenToken) return;
-    clearConversationOpenPending();
-    messageCache.clear();
-    resetAnchorState();
-    resumeAutoScroll();
-    if (!restoreScrollPosition()) jumpToBottomInstant();
-    // Fades only after the scroll settles, so the motion covers the final frame.
-    fadeInTranscript();
-    syncEarlierMessagesPill();
-    // Without a list at selection time there was no title to seed.
-    if (!seededFromList) setActiveConversationSummary(null);
-    eventBus.emit("history:conversationOpened", {
-      conversationId,
-      title: activeConversationTitle,
-      scope,
-      timestamp: Date.now(),
-    });
-    // Only interaction paths focus: focusing a programmatic open scrolls the
-    // host page to the widget (same-origin iframes included).
-    if (focusComposer) maybeFocusInput();
-  };
-
-  /**
-   * The single commit path behind the header action, the view's `onStartNew`,
-   * and `controller.startNewConversation()`, so one emit covers all three.
-   */
-  const startNewConversation = async ({
-    focusComposer = false,
-  }: { focusComposer?: boolean } = {}): Promise<void> => {
-    // A new conversation supersedes any transcript fetch still in flight.
-    clearConversationOpenPending();
-    await session.startNewConversation({ scope: historyOperationScope() });
-    setActiveConversationSummary(null);
-    messageCache.clear();
-    resetAnchorState();
-    resumeAutoScroll();
-    jumpToBottomInstant();
-    syncEarlierMessagesPill();
-    const conversationId = session.getActiveConversationId();
-    historySurface?.view.setActiveConversationId(conversationId);
-    // Emitted before the close so a host can tell a commit from a plain close.
-    eventBus.emit("history:conversationStarted", {
-      conversationId,
-      timestamp: Date.now(),
-    });
-    if (historyVisible && (historyPresentation === "panel" || railOverlayOpen)) {
-      closeHistory({ restoreFocus: false });
-    }
-    if (focusComposer) maybeFocusInput();
-  };
-
-  /** Shared rename/star path: provider update, then view + header binding. */
-  const updateHistoryConversation = async (
-    conversationId: string,
-    patch: HistoryConversationPatch
-  ): Promise<HistoryConversationSummary> => {
-    const summary = await session.updateConversation(conversationId, {
-      ...patch,
-      ...(patch.title !== undefined ? { title: patch.title.trim() } : {}),
-    });
-    // The view re-renders and reports the active title through the reporter;
-    // without a mounted view, keep the header binding fresh directly.
-    historySurface?.view.applyConversationSummary(summary);
-    if (!historySurface && conversationId === session.getActiveConversationId()) {
-      setActiveConversationSummary(summary);
-    }
-    return summary;
-  };
-
-  const deleteHistoryConversation = async (
-    conversationId: string
-  ): Promise<void> => {
-    const scope = historyOperationScope();
-    const wasActive = session.getActiveConversationId() === conversationId;
-    await session.deleteConversation(conversationId, { scope });
-    // Prune the open list too: the view's own delete flow removes its row
-    // after this resolves, but built-in/headless deletes have no view caller.
-    historySurface?.view.removeConversationSummary(conversationId);
-    if (wasActive) {
-      setActiveConversationSummary(null);
-      messageCache.clear();
-      resetAnchorState();
-      resumeAutoScroll();
-      syncEarlierMessagesPill();
-    }
-    eventBus.emit("history:conversationDeleted", {
-      conversationId,
-      scope,
-      wasActive,
-      timestamp: Date.now(),
-    });
-  };
-
-  const clearConversationHistory = async (opts?: {
-    targetId?: string;
-    /** Deliberate headless opt-in to the whole authorized client-token scope. */
-    allTargets?: boolean;
-    scope?: HistoryScope;
-  }): Promise<{ deleted: number }> => {
-    const scope = opts?.scope ?? historyOperationScope();
-    // Default to the same filter the visible list uses; only an explicit
-    // headless opt-in deletes conversations the visitor was never shown.
-    const targetId = opts?.allTargets
-      ? null
-      : (opts?.targetId ?? activeHistoryTargetId());
-    const result = await session.clearConversationHistory({
-      ...(targetId ? { targetId } : {}),
-      scope,
-    });
-    setActiveConversationSummary(null);
-    messageCache.clear();
-    resetAnchorState();
-    resumeAutoScroll();
-    syncEarlierMessagesPill();
-    eventBus.emit("history:cleared", {
-      deleted: result.deleted,
-      scope,
-      targetId,
-      timestamp: Date.now(),
-    });
-    return result;
-  };
-
-  /**
-   * D6: the local wipe is UNCONDITIONAL. Records survive on the server; this
-   * browser is detached from them whether or not revocation was confirmed.
-   */
-  const resetHistoryIdentity = async (): Promise<{
-    remoteRevocationConfirmed: boolean;
-  }> => {
-    // Rejection is reserved for misuse; remote failure resolves false.
-    if (!historyProvider?.resetDevice) {
-      throw new Error(
-        "[Persona] resetHistoryIdentity() requires a history provider that can reset this device"
-      );
-    }
-    let remoteRevocationConfirmed = false;
-    try {
-      const result = await session.resetHistoryDevice();
-      remoteRevocationConfirmed = result.remoteRevocationConfirmed;
-    } finally {
-      setActiveConversationSummary(null);
-      session.clearArtifacts();
-      messageCache.clear();
-      lastAppliedMessages = null;
-      config.clearStoredSessionId?.();
-      config.clearStoredConversationId?.();
-      persistentMetadata = {};
-      actionManager.syncFromMetadata();
-      if (storageAdapter?.clear) {
-        runStorageMutation(
-          () => storageAdapter.clear!(),
-          "[AgentWidget] Failed to clear storage adapter:"
-        );
-      }
-      resetAnchorState();
-      resumeAutoScroll();
-      syncEarlierMessagesPill();
-      closeHistory({ restoreFocus: false });
-      maybeFocusInput();
-      if (!open) launcherSurfaceInstance?.launcher.element.focus();
-    }
-    announceHistory(
-      remoteRevocationConfirmed
-        ? historyShellCopy.identityResetNotice
-        : historyShellCopy.identityResetUnconfirmedNotice
-    );
-    eventBus.emit("history:identityReset", {
-      remoteRevocationConfirmed,
-      timestamp: Date.now(),
-    });
-    return { remoteRevocationConfirmed };
-  };
-
-  // --- confirmations (shell-owned alert dialogs) ---------------------------
-
-  // With the artifact split, `container` is only the chat column, so an
-  // inset:0 overlay there would leave the artifact pane undimmed. The panel
-  // wraps the whole split and is already position:relative on that path;
-  // forcing `relative` onto it elsewhere would not survive the chrome
-  // passes' cssText resets, so plain layouts keep the container host.
-  const historyConfirmHost = (): HTMLElement =>
-    artifactSplitRoot ? panel : container;
-
-  // The dialog ships in the lazy history-view chunk (usually already warm:
-  // these actions start from history UI). A failed load, or a stale CDN chunk
-  // that predates the export, degrades to the native confirm so the action
-  // still works.
-  const showHistoryConfirm = async (
-    options: HistoryConfirmOptions
-  ): Promise<boolean> => {
-    const module = await loadHistoryView().catch(() => null);
-    if (typeof module?.showHistoryConfirm === "function") {
-      return module.showHistoryConfirm(options);
-    }
-    return window.confirm(`${options.title}\n\n${options.description}`);
-  };
-
-  const requestDeleteConversation = async (
-    conversationId: string
-  ): Promise<"deleted" | "cancelled"> => {
-    const confirmed = await showHistoryConfirm({
-      host: historyConfirmHost(),
-      title: historyShellCopy.deleteConversationConfirmTitle,
-      description: historyShellCopy.deleteConversationConfirm,
-      confirmLabel: historyShellCopy.deleteConversationConfirmLabel,
-      cancelLabel: historyShellCopy.confirmCancelLabel,
-    });
-    if (!confirmed) return "cancelled";
-    await deleteHistoryConversation(conversationId);
-    return "deleted";
-  };
-
-  const requestClearConversationHistory = async (): Promise<
-    "cleared" | "cancelled"
-  > => {
-    // Scope-aware copy: never imply the delete is limited to the rendered page.
-    const verified = historyOperationScope() === "verified-user";
-    const confirmed = await showHistoryConfirm({
-      host: historyConfirmHost(),
-      title: historyShellCopy.clearHistoryConfirmTitle,
-      description: verified
-        ? historyShellCopy.clearHistoryVerifiedConfirm
-        : historyShellCopy.clearHistoryConfirm,
-      confirmLabel: historyShellCopy.clearHistoryConfirmLabel,
-      cancelLabel: historyShellCopy.confirmCancelLabel,
-    });
-    if (!confirmed) return "cancelled";
-    await clearConversationHistory();
-    return "cleared";
-  };
-
-  const requestResetHistoryIdentity = async (): Promise<
-    { outcome: "cancelled" } | { outcome: "reset"; remoteRevocationConfirmed: boolean }
-  > => {
-    const confirmed = await showHistoryConfirm({
-      host: historyConfirmHost(),
-      title: historyShellCopy.resetIdentityConfirmTitle,
-      description: historyShellCopy.resetIdentityConfirm,
-      confirmLabel: historyShellCopy.resetIdentityConfirmLabel,
-      cancelLabel: historyShellCopy.confirmCancelLabel,
-    });
-    if (!confirmed) return { outcome: "cancelled" };
-    const { remoteRevocationConfirmed } = await resetHistoryIdentity();
-    return { outcome: "reset", remoteRevocationConfirmed };
-  };
-
-  // --- "show earlier messages" prepend -------------------------------------
-
-  const earlierMessagesButton = createElement(
-    "button",
-    "persona-history-earlier"
-  ) as HTMLButtonElement;
-  earlierMessagesButton.type = "button";
-  earlierMessagesButton.textContent = historyShellCopy.showEarlierMessagesLabel;
-  earlierMessagesButton.setAttribute("data-persona-history-earlier", "");
-  Object.assign(earlierMessagesButton.style, {
-    alignSelf: "center",
-    minHeight: "44px",
-    padding: "0 16px",
-    borderRadius: "999px",
-    border: "1px solid var(--persona-border, rgba(0,0,0,0.12))",
-    background: "transparent",
-    color: "inherit",
-    font: "inherit",
-    cursor: "pointer",
-    flexShrink: "0",
-  } satisfies Partial<CSSStyleDeclaration>);
-
-  const syncEarlierMessagesPill = (): void => {
-    const show =
-      historyAvailable() &&
-      !!historySessionState.nextMessageCursor &&
-      !!session.getActiveConversationId();
-    if (!show) {
-      earlierMessagesButton.remove();
-      return;
-    }
-    earlierMessagesButton.textContent = historyShellCopy.showEarlierMessagesLabel;
-    if (earlierMessagesButton.parentNode !== body) {
-      body.insertBefore(earlierMessagesButton, body.firstChild);
-    }
-  };
-
-  earlierMessagesButton.addEventListener("click", () => {
-    const conversationId = session.getActiveConversationId();
-    const cursor = historySessionState.nextMessageCursor;
-    if (!conversationId || !cursor || earlierMessagesButton.disabled) return;
-    earlierMessagesButton.disabled = true;
-    // Capture before the prepend so the reader's viewport stays put.
-    const previousHeight = body.scrollHeight;
-    const previousTop = body.scrollTop;
-    void session
-      .loadOlderMessages(conversationId, cursor, { scope: historyOperationScope() })
-      .then(() => {
-        body.scrollTop = previousTop + (body.scrollHeight - previousHeight);
-        // Prepending shifts everything below the anchor.
-        repinAnchoredMessage();
-      })
-      .catch(() => {})
-      .finally(() => {
-        earlierMessagesButton.disabled = false;
-        syncEarlierMessagesPill();
-      });
-  });
-
-  // --- header chrome -------------------------------------------------------
-
-  // Shares the header control chrome (box + glyph from the header tokens) with
-  // the close and clear-chat buttons beside it.
-  const buildHistoryButton = (): {
-    button: HTMLButtonElement;
-    wrapper: HTMLElement;
-  } => {
-    const parts = createHeaderIconButton({
-      ariaLabel: historyShellCopy.openHistoryLabel,
-      iconName: "history",
-      wrapperClassName:
-        "persona-relative persona-inline-flex persona-items-center persona-justify-center",
-      extraClassName: "persona-history-toggle",
-      attrs: { "data-persona-history-toggle": "" },
-    });
-    parts.button.addEventListener("click", (event) => {
-      if (!historyAvailable() || historyTurnBusy()) return;
-      if (historyVisible) {
-        closeHistory();
-        return;
-      }
-      // Enter/Space synthesize a click with detail 0; a pointer press reports > 0.
-      void openHistory({ invoker: parts.button, keyboard: event.detail === 0 });
-    });
-    return parts;
-  };
-
-  const syncHistoryButton = (): void => {
-    if (!historyAvailable()) {
-      historyButtonWrapper?.remove();
-      historyButton = null;
-      historyButtonWrapper = null;
-      return;
-    }
-    // A header rebuild detaches the old button; a stale ref must not block
-    // recreation into the replacement header.
-    if (historyButtonWrapper && !historyButtonWrapper.isConnected) {
-      historyButton = null;
-      historyButtonWrapper = null;
-    }
-    if (!historyButton && header) {
-      const parts = buildHistoryButton();
-      historyButton = parts.button;
-      historyButtonWrapper = parts.wrapper;
-      const insertBefore =
-        panelElements.clearChatButtonWrapper || panelElements.closeButtonWrapper;
-      // Layouts may parent these wrappers in a trailing cluster rather than
-      // the header itself; insert wherever they live so close stays outermost.
-      if (insertBefore?.parentNode && header.contains(insertBefore)) {
-        insertBefore.parentNode.insertBefore(historyButtonWrapper, insertBefore);
-      } else {
-        header.appendChild(historyButtonWrapper);
-      }
-    }
-    if (!historyButton || !historyButtonWrapper) return;
-    // Every rail surface carries its own toggle, and so does the trigger that
-    // summons one: the header keeps a control only when neither is on screen.
-    const railed =
-      railTriggerApplies() || (historyVisible && historyPresentation === "rail");
-    historyButtonWrapper.style.display = railed ? "none" : "";
-    if (railed) {
-      // Hiding the control under focus would drop it to the body; the rail's
-      // own toggle is the same control, so focus follows it there.
-      if (document.activeElement === historyButton) focusHistoryEntry();
-      return;
-    }
-    const busy = historyTurnBusy();
-    historyButton.disabled = busy;
-    historyButton.setAttribute("aria-disabled", busy ? "true" : "false");
-    const label = busy
-      ? historyShellCopy.openHistoryBusyLabel
-      : historyShellCopy.openHistoryLabel;
-    // The factory tooltip reads the live aria-label; a title would double it.
-    historyButton.setAttribute("aria-label", label);
-    // Rail/auto toggles a navigation region; panel navigates to a surface.
-    if ((config.features?.history?.presentation ?? "panel") === "panel") {
-      historyButton.removeAttribute("aria-expanded");
-      historyButton.removeAttribute("aria-controls");
-    } else {
-      historyButton.setAttribute("aria-expanded", historyVisible ? "true" : "false");
-      historyButton.setAttribute("aria-controls", historyRegionId);
-    }
-  };
-
-  /**
-   * With history available the visible start-over affordance becomes
-   * "New conversation" (`clearChat()` stays programmatic-only).
-   */
-  let clearChatRelabelled = false;
-  const syncClearChatAffordance = (): void => {
-    const button = panelElements.clearChatButton;
-    if (!button) return;
-    if (historyAvailable()) {
-      if (!clearChatRelabelled) {
-        clearChatDefaultLabel = button.getAttribute("aria-label") ?? "";
-        clearChatRelabelled = true;
-      }
-      // aria-label only: the styled tooltip reads it live, and a title would
-      // render a second native tooltip on top.
-      button.setAttribute("aria-label", historyShellCopy.newConversationLabel);
-      button.removeAttribute("title");
-      // No touch-target pin: the shared header control class owns the box, and
-      // a 44px floor here would desync this control from its neighbours.
-      return;
-    }
-    // Only undo a relabel we performed; never clobber host-configured copy.
-    if (!clearChatRelabelled) return;
-    clearChatRelabelled = false;
-    if (clearChatDefaultLabel) {
-      button.setAttribute("aria-label", clearChatDefaultLabel);
-    }
-  };
-
-  const syncHistoryChromeImpl = (): void => {
-    historyShellCopy = resolveHistoryShellCopy(config.features?.history?.copy);
-    syncHistoryButton();
-    syncRailOverlayTrigger();
-    syncClearChatAffordance();
-    syncEarlierMessagesPill();
-  };
-  historyChromeSync = syncHistoryChromeImpl;
 
   // --- session-driven state ------------------------------------------------
 
   historyStateHandler = (state) => {
     historySessionState = state;
-    historySurface?.view.setNewConversationRequired(
+    historyShell?.historySurface?.view.setNewConversationRequired(
       state.recovery === "new_conversation_required"
     );
     // Sending stays blocked through a destructive/continuity transition.
     setComposerDisabled(state.sendBlocked || isStreaming);
-    syncEarlierMessagesPill();
+    historyShell?.syncEarlierMessagesPill();
   };
 
   historyNoticeHandler = (notice) => {
@@ -11616,22 +9132,124 @@ export const createAgentExperience = (
       resumeAutoScroll();
     }
     announceHistory(notice.message);
-    historySurface?.view.refresh();
+    historyShell?.historySurface?.view.refresh();
   };
 
-  installHistoryProvider();
-  syncHistoryChromeImpl();
+  // --- lazy shell ----------------------------------------------------------
+  // Placement, the rail, open/close and the conversation operations live in
+  // `history-shell.ts`: inlined for npm builds, the lazy `history-shell.js`
+  // chunk in the IIFE/CDN bundle. The shell is created when
+  // `features.history` is enabled (at mount or by a later `update()`), or on
+  // the first history API call. Until then history is simply unavailable.
+  const historyShellContext: HistoryShellContext = {
+    get actionManager() { return actionManager; },
+    get activeConversationTitle() { return activeConversationTitle; },
+    announceHistory,
+    get applyRailChrome() { return applyRailChrome; },
+    set applyRailChrome(value) { applyRailChrome = value; },
+    get artifactSplitRoot() { return artifactSplitRoot; },
+    get body() { return body; },
+    get config() { return config; },
+    get container() { return container; },
+    get conversationOpenPendingEl() { return conversationOpenPendingEl; },
+    set conversationOpenPendingEl(value) { conversationOpenPendingEl = value; },
+    get conversationOpenTakeover() { return conversationOpenTakeover; },
+    set conversationOpenTakeover(value) { conversationOpenTakeover = value; },
+    currentKeyPrefix,
+    destroyCallbacks,
+    eventBus,
+    get footer() { return footer; },
+    get header() { return header; },
+    get historyChromeSync() { return historyChromeSync; },
+    set historyChromeSync(value) { historyChromeSync = value; },
+    historyFeatureEnabled,
+    get historyInternals() { return historyInternals; },
+    set historyInternals(value) { historyInternals = value; },
+    get historyPresentation() { return historyPresentation; },
+    set historyPresentation(value) { historyPresentation = value; },
+    get historySessionState() { return historySessionState; },
+    get historyVisible() { return historyVisible; },
+    set historyVisible(value) { historyVisible = value; },
+    get isStreaming() { return isStreaming; },
+    jumpToBottomInstant,
+    get lastAppliedMessages() { return lastAppliedMessages; },
+    set lastAppliedMessages(value) { lastAppliedMessages = value; },
+    get launcherEnabled() { return launcherEnabled; },
+    get launcherSurfaceInstance() { return launcherSurfaceInstance; },
+    maybeFocusInput,
+    messageCache,
+    get messagesWrapper() { return messagesWrapper; },
+    mount,
+    get open() { return open; },
+    panel,
+    panelElements,
+    get persistentMetadata() { return persistentMetadata; },
+    set persistentMetadata(value) { persistentMetadata = value; },
+    plugins,
+    get reapplyHistoryHostChrome() { return reapplyHistoryHostChrome; },
+    set reapplyHistoryHostChrome(value) { reapplyHistoryHostChrome = value; },
+    repinAnchoredMessage,
+    resetAnchorState,
+    restoreScrollPosition,
+    resumeAutoScroll,
+    runStorageMutation,
+    get session() { return session; },
+    setActiveConversationSummary,
+    storageAdapter,
+    get suppressScrollSend() { return suppressScrollSend; },
+    set suppressScrollSend(value) { suppressScrollSend = value; },
+    syncScrollToBottomButton,
+    updateWelcome,
+    getHistoryProviderFactory,
+    historyErrors: { HistoryClientError, HistoryProviderError },
+    isDockedMountMode,
+    renderLucideIcon,
+    loadHistoryView,
+    createHeaderIconButton,
+    attachTooltip,
+  };
+
+  const startHistoryShell = (module: HistoryShellModule): HistoryShell | null => {
+    if (!historyShell && !historyShellTornDown) {
+      historyShell = module.createHistoryShell(historyShellContext);
+      // The rail collapse combo registers through the shell that owns the rail.
+      if (historyShell.railCollapseShortcut()) syncShortcuts();
+    }
+    return historyShell;
+  };
+  const ensureHistoryShell = (): Promise<HistoryShell | null> => {
+    if (historyShell) return Promise.resolve(historyShell);
+    const ready = getHistoryShellSync();
+    if (ready) return Promise.resolve(startHistoryShell(ready));
+    historyShellLoad ??= loadHistoryShell().then(startHistoryShell, (error) => {
+      historyShellLoad = null;
+      throw error;
+    });
+    return historyShellLoad;
+  };
+  /** Runs a history API call, synchronously once the shell is available. */
+  const withHistoryShell = <T>(
+    run: (shell: HistoryShell) => Promise<T>
+  ): Promise<T> => {
+    const ready = getHistoryShellSync();
+    const shell = historyShell ?? (ready ? startHistoryShell(ready) : null);
+    if (shell) return run(shell);
+    return ensureHistoryShell().then((loaded) => {
+      if (!loaded) throw new Error("[AgentWidget] The widget was destroyed");
+      return run(loaded);
+    });
+  };
+  const syncHistoryPresentation = (): void => {
+    historyShell?.syncHistoryPresentation();
+  };
   destroyCallbacks.push(() => {
-    unsubscribeHistoryAvailability?.();
-    unsubscribeHistoryIdentity?.();
-    // An open in flight (a hover this teardown raced) must not mount after it.
-    historyOpenToken += 1;
-    // A pending exit still owns a mounted surface and a live timer.
-    settleHistoryExit();
-    historySurface?.dispose();
-    historySurface?.view.destroy();
-    historySurface = null;
+    historyShellTornDown = true;
   });
+  if (historyFeatureEnabled()) {
+    void ensureHistoryShell()
+      .catch(() => {})
+      .finally(resolveHistoryShellGate);
+  }
 
   // Client-token init on mount is reserved for widgets that need a session at
   // boot: visitor history (boot reconciliation) and `sessionInit: 'mount'`.
@@ -11647,11 +9265,12 @@ export const createAgentExperience = (
       .then(() => {
         // Boot resume is authoritative only after reconciliation; the client
         // already gated its init on `historyBootstrapReady`.
-        if (!historyAvailable()) return undefined;
-        return session.reconcileBootConversation({ scope: historyScope() });
+        const shell = historyShell;
+        if (!shell?.historyAvailable()) return undefined;
+        return session.reconcileBootConversation({ scope: shell.historyScope() });
       })
       .then(() => {
-        syncEarlierMessagesPill();
+        historyShell?.syncEarlierMessagesPill();
       })
       .catch((err) => {
         if (config.debug) {
@@ -12510,13 +10129,7 @@ export const createAgentExperience = (
   let speechRecognition: any = null;
   let isRecording = false;
   let pauseTimer: number | null = null;
-  let originalMicStyles: {
-    backgroundColor: string;
-    color: string;
-    borderColor: string;
-    iconName: string;
-    iconSize: number;
-  } | null = null;
+  let originalMicStyles: OriginalMicStyles | null = null;
 
   /**
    * `voiceRecognition.completionBehavior` (roadmap section 14). Default stays
@@ -12813,142 +10426,39 @@ export const createAgentExperience = (
   };
 
 
-  // --- Helpers to store/restore original mic button state ---
-
-  const storeOriginalMicStyles = () => {
-    if (!micButton || originalMicStyles) return; // Already stored
-    const voiceConfig = config.voiceRecognition ?? {};
-    originalMicStyles = {
-      backgroundColor: micButton.style.backgroundColor,
-      color: micButton.style.color,
-      borderColor: micButton.style.borderColor,
-      iconName: voiceConfig.iconName ?? "mic",
-      iconSize: parseFloat(voiceConfig.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX,
+  // --- Session-voice (Runtype / custom) mic state styling ---
+  // The per-state styling ships in the lazy voice-runtime chunk
+  // (`voice/mic-state-styles.ts`). These states only arise from a provider,
+  // which setupVoice builds from that same chunk, so it is already loaded here;
+  // the async fallback only covers a call that races the first load.
+  let micStateStyles: MicStateStyles | null = null;
+  const withMicStateStyles = (run: (styles: MicStateStyles) => void): void => {
+    const apply = (mod: VoiceRuntimeModule) => {
+      micStateStyles ??= mod.createMicStateStyles({
+        mic: () => micButton,
+        config: () => config,
+        session: () => session,
+        get original() {
+          return originalMicStyles;
+        },
+        set original(next) {
+          originalMicStyles = next;
+        },
+        setMicState,
+        renderIcon: renderLucideIcon,
+        iconFallbackPx: COMPOSER_CONTROL_ICON_FALLBACK_PX,
+      });
+      run(micStateStyles);
     };
+    const mod = getVoiceRuntimeSync();
+    if (mod) apply(mod);
+    else loadVoiceRuntime().then(apply, () => {});
   };
-
-  /** Swap the mic button's SVG icon */
-  const swapMicIcon = (iconName: string, color: string) => {
-    if (!micButton) return;
-    const existingSvg = micButton.querySelector("svg");
-    if (existingSvg) existingSvg.remove();
-    const size = originalMicStyles?.iconSize ?? (parseFloat(config.voiceRecognition?.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX);
-    const newSvg = renderLucideIcon(iconName, size, color, 1.5);
-    if (newSvg) micButton.appendChild(newSvg);
-  };
-
-  /** Remove all voice state CSS classes */
-  const removeAllVoiceStateClasses = () => {
-    if (!micButton) return;
-    micButton.classList.remove("persona-voice-recording", "persona-voice-processing", "persona-voice-speaking");
-  };
-
-  // --- Per-state style application ---
-
-  const applyRuntypeMicRecordingStyles = () => {
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const recordingBackgroundColor = voiceConfig.recordingBackgroundColor;
-    const recordingIconColor = voiceConfig.recordingIconColor;
-    const recordingBorderColor = voiceConfig.recordingBorderColor;
-    removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-recording");
-    setMicState("recording");
-    micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
-    micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
-    if (recordingIconColor) {
-      const svg = micButton.querySelector("svg");
-      if (svg) svg.setAttribute("stroke", recordingIconColor);
-    }
-    if (recordingBorderColor) micButton.style.borderColor = recordingBorderColor;
-    micButton.setAttribute("aria-label", "Stop voice recognition");
-  };
-
-  const applyRuntypeMicProcessingStyles = () => {
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const interruptionMode = session.getVoiceInterruptionMode();
-    const iconName = voiceConfig.processingIconName ?? "loader";
-    const iconColor = voiceConfig.processingIconColor ?? originalMicStyles?.color ?? "";
-    const bgColor = voiceConfig.processingBackgroundColor ?? originalMicStyles?.backgroundColor ?? "";
-    const borderColor = voiceConfig.processingBorderColor ?? originalMicStyles?.borderColor ?? "";
-
-    removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-processing");
-    setMicState("processing");
-    micButton.style.backgroundColor = bgColor;
-    micButton.style.borderColor = borderColor;
-    const resolvedColor = iconColor || "currentColor";
-    micButton.style.color = resolvedColor;
-    swapMicIcon(iconName, resolvedColor);
-    micButton.setAttribute("aria-label", "Processing voice input");
-    // In "none" mode the button is not actionable during processing
-    if (interruptionMode === "none") {
-      micButton.style.cursor = "default";
-    }
-  };
-
-  const applyRuntypeMicSpeakingStyles = () => {
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const interruptionMode = session.getVoiceInterruptionMode();
-    // Default icon depends on interruption mode:
-    // "square" for cancel, "mic" for barge-in (hot mic), "volume-2" otherwise
-    const defaultSpeakingIcon = interruptionMode === "cancel" ? "square"
-      : interruptionMode === "barge-in" ? "mic"
-      : "volume-2";
-    const iconName = voiceConfig.speakingIconName ?? defaultSpeakingIcon;
-    const iconColor = voiceConfig.speakingIconColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingIconColor ?? originalMicStyles?.color ?? "") : (originalMicStyles?.color ?? ""));
-    const bgColor = voiceConfig.speakingBackgroundColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)") : (originalMicStyles?.backgroundColor ?? ""));
-    const borderColor = voiceConfig.speakingBorderColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBorderColor ?? "") : (originalMicStyles?.borderColor ?? ""));
-
-    removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-speaking");
-    setMicState("speaking");
-    micButton.style.backgroundColor = bgColor;
-    micButton.style.borderColor = borderColor;
-    const resolvedColor = iconColor || "currentColor";
-    micButton.style.color = resolvedColor;
-    swapMicIcon(iconName, resolvedColor);
-
-    // aria-label varies by interruption mode
-    const ariaLabel = interruptionMode === "cancel"
-      ? "Stop playback and re-record"
-      : interruptionMode === "barge-in"
-      ? "Speak to interrupt"
-      : "Agent is speaking";
-    micButton.setAttribute("aria-label", ariaLabel);
-    // In "none" mode the button is not actionable during speaking
-    if (interruptionMode === "none") {
-      micButton.style.cursor = "default";
-    }
-    // In "barge-in" mode, add recording class to show mic is hot
-    if (interruptionMode === "barge-in") {
-      micButton.classList.add("persona-voice-recording");
-    }
-  };
-
+  const applyRuntypeMicRecordingStyles = () => withMicStateStyles((s) => s.recording());
+  const applyRuntypeMicProcessingStyles = () => withMicStateStyles((s) => s.processing());
+  const applyRuntypeMicSpeakingStyles = () => withMicStateStyles((s) => s.speaking());
   /** Restore mic button to idle state (icon, colors, aria-label, cursor) */
-  const removeRuntypeMicStateStyles = () => {
-    if (!micButton) return;
-    removeAllVoiceStateClasses();
-    setMicState("idle");
-    if (originalMicStyles) {
-      micButton.style.backgroundColor = originalMicStyles.backgroundColor ?? "";
-      micButton.style.color = originalMicStyles.color ?? "";
-      micButton.style.borderColor = originalMicStyles.borderColor ?? "";
-      swapMicIcon(originalMicStyles.iconName, originalMicStyles.color || "currentColor");
-      originalMicStyles = null;
-    }
-    micButton.style.cursor = "";
-    micButton.setAttribute("aria-label", "Start voice recognition");
-  };
+  const removeRuntypeMicStateStyles = () => withMicStateStyles((s) => s.reset());
 
   // Wire up mic button click handler
   const handleMicButtonClick = () => {
@@ -13550,8 +11060,9 @@ export const createAgentExperience = (
     clearChatButton.addEventListener("click", () => {
       // With history available this affordance is "New conversation": a local
       // view clear would leave the server record open and unreachable.
-      if (historyAvailable()) {
-        void startNewConversation({ focusComposer: true }).catch((error) => {
+      const shell = historyShell;
+      if (shell?.historyAvailable()) {
+        void shell.startNewConversation({ focusComposer: true }).catch((error) => {
           if (config.debug) {
             // eslint-disable-next-line no-console
             console.warn("[AgentWidget] New conversation failed:", error);
@@ -14393,7 +11904,7 @@ export const createAgentExperience = (
             closeButtonWrapper.className = "persona-absolute persona-top-4 persona-right-4 persona-z-50";
             // A mounted rail owns the conversation column; anchoring to the
             // container would float the button over the rail.
-            const anchor = railColumn ?? container;
+            const anchor = historyShell?.railColumn ?? container;
             anchor.style.position = "relative";
             anchor.appendChild(closeButtonWrapper);
           } else {
@@ -14532,7 +12043,7 @@ export const createAgentExperience = (
               // Position to the left of the close button (which is at right: 1rem/16px)
               // Close button is ~32px wide, plus small gap = 48px from right
               clearChatButtonWrapper.style.right = "48px";
-              const anchor = railColumn ?? container;
+              const anchor = historyShell?.railColumn ?? container;
               anchor.style.position = "relative";
               anchor.appendChild(clearChatButtonWrapper);
             } else {
@@ -14682,13 +12193,17 @@ export const createAgentExperience = (
         config.getIdentityProof !== previousIdentityProof ||
         config.clientToken !== previousClientToken
       ) {
-        closeHistory({ restoreFocus: false });
-        installHistoryProvider();
+        historyShell?.closeHistory({ restoreFocus: false });
+        historyShell?.installHistoryProvider();
       }
-      syncHistoryChromeImpl();
+      historyShell?.syncHistoryChromeImpl();
       // Presentation may have flipped between panel and rail; the open view
       // instance moves hosts rather than being recreated.
       syncHistoryPresentation();
+      // Turning history on loads the shell, which installs and syncs itself.
+      if (historyFeatureEnabled() && !historyShell) {
+        void ensureHistoryShell().catch(() => {});
+      }
       renderMessagesWithPlugins(
         messagesWrapper,
         session.getMessages(),
@@ -15581,30 +13096,40 @@ export const createAgentExperience = (
       conversationId: string,
       opts?: { focus?: boolean }
     ): Promise<void> {
-      return openHistoryConversation(conversationId, {
-        focusComposer: opts?.focus === true,
-      });
+      return withHistoryShell((shell) =>
+        shell.openHistoryConversation(conversationId, {
+          focusComposer: opts?.focus === true,
+        })
+      );
     },
     startNewConversation(opts?: { focus?: boolean }): Promise<void> {
-      return startNewConversation({ focusComposer: opts?.focus === true });
+      return withHistoryShell((shell) =>
+        shell.startNewConversation({ focusComposer: opts?.focus === true })
+      );
     },
     warmSession(): void {
       warmSession();
     },
     deleteConversation(conversationId: string): Promise<void> {
-      return deleteHistoryConversation(conversationId);
+      return withHistoryShell((shell) =>
+        shell.deleteHistoryConversation(conversationId)
+      );
     },
     renameConversation(conversationId, title) {
-      return updateHistoryConversation(conversationId, { title });
+      return withHistoryShell((shell) =>
+        shell.updateHistoryConversation(conversationId, { title })
+      );
     },
     setConversationStarred(conversationId, starred) {
-      return updateHistoryConversation(conversationId, { starred });
+      return withHistoryShell((shell) =>
+        shell.updateHistoryConversation(conversationId, { starred })
+      );
     },
     clearConversationHistory(opts) {
-      return clearConversationHistory(opts);
+      return withHistoryShell((shell) => shell.clearConversationHistory(opts));
     },
     resetHistoryIdentity(): Promise<{ remoteRevocationConfirmed: boolean }> {
-      return resetHistoryIdentity();
+      return withHistoryShell((shell) => shell.resetHistoryIdentity());
     },
     async getVisitorToken(): Promise<string | null> {
       const store = visitorStore;
@@ -15613,6 +13138,7 @@ export const createAgentExperience = (
       return store === visitorStore ? token : null;
     },
     getHistoryIdentityStatus(): HistoryIdentityStatus {
+      const historyProvider = historyShell?.historyProvider;
       if (!historyProvider) {
         return historyFeatureEnabled()
           ? { state: "unavailable", reason: "ineligible_mode" }
@@ -15621,13 +13147,17 @@ export const createAgentExperience = (
       return historyProvider.getIdentityStatus();
     },
     showHistory(opts): Promise<void> {
-      return openHistory({
-        ...(opts?.returnSurface ? { returnSurface: opts.returnSurface } : {}),
-        ...(opts?.focus !== undefined ? { focus: opts.focus } : {}),
-      });
+      // Disabled history never loads the shell just to report unavailable.
+      if (!historyFeatureEnabled()) return Promise.resolve();
+      return withHistoryShell((shell) =>
+        shell.openHistory({
+          ...(opts?.returnSurface ? { returnSurface: opts.returnSurface } : {}),
+          ...(opts?.focus !== undefined ? { focus: opts.focus } : {}),
+        })
+      );
     },
     hideHistory(opts): void {
-      closeHistory(
+      historyShell?.closeHistory(
         opts?.restoreFocus !== undefined
           ? { restoreFocus: opts.restoreFocus }
           : undefined

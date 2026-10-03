@@ -1,5 +1,4 @@
 import { createChunkLoader } from "./utils/chunk-loader";
-import type { streamResponse } from "./client-stream";
 
 /**
  * Loader indirection for the SSE stream processor (`client-stream.ts`). The
@@ -7,7 +6,7 @@ import type { streamResponse } from "./client-stream";
  * `--splitting false`); the IIFE/CDN build marks it external and registers a
  * loader for the sibling `client-stream.js` chunk (see `index-global.ts`).
  */
-export type ClientStreamModule = { streamResponse: typeof streamResponse };
+export type ClientStreamModule = typeof import("./client-stream");
 
 const { setLoader, load, provide, getSync } = createChunkLoader<ClientStreamModule>({
   fallbackImport: () => import("./client-stream"),

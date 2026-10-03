@@ -50,6 +50,27 @@ export default defineConfig({
     // soon as a dispatch begins (in parallel with the request itself).
     options.external.push("./client-stream");
 
+    // Keep the visitor-history REST calls (list/get/delete conversations,
+    // identity binding) out of the CDN payload: sibling-URL chunk
+    // `client-history.js`, fetched on the first history call.
+    options.external.push("./client-history");
+
+    // Keep UI glue for opt-in / interaction-only features (ask-user sheet
+    // handlers, ...) out of the CDN payload: sibling-URL chunk `ui-extras.js`,
+    // warmed when such a feature first activates.
+    options.external.push("./ui-extras-entry");
+    // Keep the session's approval / ask-user-question / WebMCP resolve paths
+    // out of the CDN payload. Same scheme: sibling-URL chunk
+    // `session-actions.js`, prefetched as soon as the agent pauses for an
+    // approval or a local tool.
+    options.external.push("./session-actions");
+    // Keep the visitor-history shell (placement, rail, open/close, conversation
+    // operations) out of the CDN payload. Same scheme: the loader's relative
+    // `./history-shell` import is left dead here; `index-global.ts` registers a
+    // sibling-URL loader for `history-shell.js`, fetched at mount only when
+    // `features.history.enabled`, or on the first history API call.
+    options.external.push("./history-shell");
+
     // Keep the context-mentions runtime (controller/manager/menu) out of the CDN
     // payload. The loader's fallback `import("@runtypelabs/persona/context-mentions")`
     // is left as a dead external import; it is never invoked here because

@@ -4,10 +4,15 @@ import {
   type SSEEventCallback,
 } from "./client";
 import { isWebMcpToolName } from "./webmcp-bridge";
+import type { SessionActionsHost, SessionActionsInternals } from "./session-actions";
+import {
+  getSessionActionsSync,
+  loadSessionActions,
+  type SessionActionsModule,
+} from "./session-actions-loader";
 import {
   SUGGEST_REPLIES_TOOL_NAME,
   resolveFollowUpsFeature,
-  suggestRepliesToolResult,
 } from "./suggest-replies-tool";
 import {
   AgentWidgetConfig,
@@ -82,8 +87,9 @@ import {
 import { isVoiceSupportedProbe, usesSessionVoice, voiceConnectionChanged } from "./utils/voice-support";
 import { VoiceTurnTracker } from "./voice/voice-turn-tracker";
 import type { KeyedVoiceTranscript } from "./voice/keyed-voice-transcript";
-import type { VoiceDelegationCapture, createVoiceSessionBridge } from "./voice/voice-delegation";
-import { loadVoiceRuntime } from "./voice-runtime-loader";
+import type { VoiceDelegationCapture } from "./voice/voice-delegation";
+import { loadVoiceRuntime, type VoiceRuntimeModule } from "./voice-runtime-loader";
+import type { VoiceWiringSession } from "./voice/session-voice-wiring";
 import { resolveSpeakableText } from "./utils/speech-text";
 import { loadRuntypeTts } from "./voice/runtype-tts-loader";
 // Type-only (erased at build): the runtime reconnect machinery ships in the
@@ -161,7 +167,7 @@ function connectionConfigChanged(
   return CONNECTION_CONFIG_KEYS.some((key) => prev[key] !== next[key]);
 }
 
-type SessionCallbacks = {
+export type SessionCallbacks = {
   onMessagesChanged: (messages: AgentWidgetMessage[]) => void;
   onStatusChanged: (status: AgentWidgetSessionStatus) => void;
   onStreamingChanged: (streaming: boolean) => void;
@@ -264,20 +270,6 @@ function buildDispatchErrorContent(
     "Sorry: I couldn't reach the assistant. The chat service didn't respond. Please check that your proxy or backend is running and reachable, then try again.";
   return err.message ? `${base}\n\n_Details: ${err.message}_` : base;
 }
-
-const buildWebMcpErrorResult = (message: string) => ({
-  isError: true,
-  content: [{ type: "text" as const, text: message }],
-});
-
-const getWebMcpErrorMessage = (
-  error: unknown,
-  fallback = "WebMCP tool execution failed.",
-): string => {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string" && error) return error;
-  return fallback;
-};
 
 /**
  * Tool names whose `await` the widget resolves automatically (no user
@@ -726,11 +718,7 @@ export class AgentWidgetSession {
         .then(async (mod) => {
           await disconnected;
           if (generation !== this.#voiceSetupGeneration) return;
-          this.#wireVoiceProvider(
-            mod.createVoiceProvider(voiceConfig),
-            mod.KeyedVoiceTranscript,
-            mod.createVoiceSessionBridge
-          );
+          this.#wireVoiceProvider(mod, mod.createVoiceProvider(voiceConfig));
         })
         .catch((error) => {
           console.error('Failed to setup voice:', error);
@@ -745,224 +733,56 @@ export class AgentWidgetSession {
     }
   }
 
-  /** Wire callbacks onto a freshly constructed provider and connect it. */
-  #wireVoiceProvider(
-    provider: VoiceProvider,
-    Keyed?: typeof KeyedVoiceTranscript,
-    createBridge?: typeof createVoiceSessionBridge
-  ): void {
-    try {
-      this.#voiceProvider = provider;
-      this.#keyedVoice = Keyed
-        ? new Keyed({
-            find: (id) => this.messages.find((m) => m.id === id),
-            inject: (options) => this.injectMessage(options),
-            upsert: (message) => this.upsertMessage(message),
-            settle: (ids) => {
-              this.messages = this.messages.map((m) =>
-                ids.has(m.id) ? { ...m, streaming: false, voiceProcessing: false } : m
-              );
-              this.callbacks.onMessagesChanged([...this.messages]);
-            },
-            // A chat turn (e.g. a delegated one) owns the flag while it runs.
-            setStreaming: (streaming) => {
-              if (streaming || !this.#chatTurnBusy()) this.#setStreaming(streaming);
-            },
-            markSpoken: (id) => {
-              this.ttsSpokenMessageIds.add(id);
-            }
-          })
-        : null;
-      if (createBridge && provider.setSessionBridge) {
-        provider.setSessionBridge(
-          createBridge({
-            messages: () => this.messages,
-            busy: () => this.#chatTurnBusy(),
-            parked: () => this.webMcpApprovalResolvers.size > 0,
-            claim: (text, userUtteranceIds) => this.#keyedVoice?.claimUserTurn(text, userUtteranceIds) ?? null,
-            send: (text, userMessageId) =>
-              this.sendMessage(text, { viaVoice: true, voiceTurn: { userMessageId } }),
-            track: (capture) => {
-              this.#voiceDelegation = capture;
-            },
-            unspoken: (ids) => {
-              for (const id of ids) this.ttsSpokenMessageIds.delete(id);
-              // Its stream already ended (browser TTS skipped it then): read it
-              // now. A stream still running reads it when it ends, once.
-              if (!this.streaming) this.speakLatestAssistantMessage(ids);
-            },
-            decide: (id) => {
-              if (this.webMcpApprovalResolvers.has(id)) return this.resolveWebMcpApproval(id, 'denied');
-              const approval = this.messages.find((m) => m.id === id)?.approval;
-              if (approval?.status === 'pending') void this.resolveApproval(approval, 'denied');
-            }
-          })
-        );
-      }
-      const generation = this.#voiceSetupGeneration;
-      const isCurrent = () => this.#voiceProvider === provider && generation === this.#voiceSetupGeneration;
-
-      // Read configurable text from widget config
-      const voiceRecognitionConfig = this.config.voiceRecognition ?? {};
-      const processingErrorText = voiceRecognitionConfig.processingErrorText ?? 'Voice processing failed. Please try again.';
-
-      // STT-style providers (browser + bring-your-own `custom`) deliver a final
-      // transcript that we send as a normal user message: the agent then runs
-      // via the standard SSE chat path. Only the realtime `runtype` provider is
-      // excluded here: it owns the whole turn and drives onTranscript below.
-      this.#voiceProvider.onResult((result) => {
-        if (!isCurrent()) return;
-        if (result.provider !== 'runtype') {
-          if (result.text && result.text.trim()) {
-            this.sendMessage(result.text, { viaVoice: true });
-          }
-        }
-      });
-
-      // Realtime (runtype) voice: drive the chat thread from streaming
-      // transcript frames. Live interim user text grows in place; the user
-      // message finalizes immediately on transcript_final{user}; the assistant
-      // reply lands (a single block, synced with audio) on its final frame.
-      // In-flight bubbles carry voiceProcessing=true so consumers can style
-      // them via messageTransform; it clears once the text is final.
-      if (this.#voiceProvider.onTranscript) {
-        this.#voiceProvider.onTranscript((role, text, isFinal, metadata) => {
-          if (!isCurrent()) return;
-          if (metadata?.turnId) {
-            this.#keyedVoice?.apply(role, text, isFinal, metadata.turnId, metadata.startMs, metadata.caption);
-            return;
-          }
-          if (role === 'user') {
-            if (!this.#pendingVoiceUserMessageId) {
-              const msg = this.injectMessage({
-                role: 'user',
-                content: text,
-                streaming: false,
-                voiceProcessing: !isFinal
-              });
-              this.#pendingVoiceUserMessageId = msg.id;
-            } else {
-              this.upsertMessage({
-                id: this.#pendingVoiceUserMessageId,
-                role: 'user',
-                content: text,
-                createdAt: new Date().toISOString(),
-                streaming: false,
-                voiceProcessing: !isFinal
-              });
-            }
-
-            if (isFinal) {
-              this.#voiceTurns.start(metadata?.turnId);
-              // User finished: the agent is now thinking. Release the user
-              // bubble (a new interim starts a fresh turn) and show a typing
-              // indicator in a fresh assistant placeholder.
-              this.#pendingVoiceUserMessageId = null;
-              const assistantMsg = this.injectMessage({
-                role: 'assistant',
-                content: '',
-                streaming: true,
-                voiceProcessing: true
-              });
-              this.#pendingVoiceAssistantMessageId = assistantMsg.id;
-              this.#setStreaming(true);
-            }
-          } else {
-            if (!this.#voiceTurns.accepts(metadata?.turnId)) return;
-            // assistant: runtype sends a single final; the isFinal=false path
-            // is reserved for delta-streaming providers (future BYO).
-            if (this.#pendingVoiceAssistantMessageId) {
-              this.upsertMessage({
-                id: this.#pendingVoiceAssistantMessageId,
-                role: 'assistant',
-                content: text,
-                createdAt: new Date().toISOString(),
-                streaming: !isFinal,
-                voiceProcessing: !isFinal
-              });
-            } else {
-              const msg = this.injectMessage({
-                role: 'assistant',
-                content: text,
-                streaming: !isFinal,
-                voiceProcessing: !isFinal
-              });
-              this.#pendingVoiceAssistantMessageId = msg.id;
-            }
-
-            if (isFinal) {
-              // The provider plays this reply's audio: mark it spoken so
-              // browser TTS doesn't double-speak when streaming ends. Must run
-              // BEFORE setStreaming(false), which triggers the TTS check.
-              if (this.#pendingVoiceAssistantMessageId) {
-                this.ttsSpokenMessageIds.add(this.#pendingVoiceAssistantMessageId);
-              }
-              this.#setStreaming(false);
-              this.#pendingVoiceAssistantMessageId = null;
-            }
-          }
-        });
-      }
-
-      // Live capture amplitude, when the provider owns an audio graph. Stored,
-      // not forwarded per callback: the UI samples it on its own frame loop.
-      if (this.#voiceProvider.onLevel) {
-        this.#voiceProvider.onLevel((level) => {
-          if (!isCurrent()) return;
-          this.#voiceLevel = Number.isFinite(level)
-            ? Math.max(0, Math.min(1, level))
-            : 0;
-        });
-      }
-
-      // Surface per-turn latency metrics to the optional config hook.
-      if (this.#voiceProvider.onMetrics) {
-        this.#voiceProvider.onMetrics((metrics) => {
-          if (!isCurrent()) return;
-          this.config.voiceRecognition?.onMetrics?.(metrics);
-        });
-      }
-
-      this.#voiceProvider.onError((error) => {
-        if (!isCurrent()) return;
-        console.error('Voice error:', error);
-
-        // If error occurs while placeholders are pending, update assistant with error text
-        if (this.#pendingVoiceAssistantMessageId) {
-          this.upsertMessage({
-            id: this.#pendingVoiceAssistantMessageId,
-            role: 'assistant',
-            content: processingErrorText,
-            createdAt: new Date().toISOString(),
-            streaming: false,
-            voiceProcessing: false
-          });
-          this.#setStreaming(false);
-          this.#pendingVoiceUserMessageId = null;
-          this.#pendingVoiceAssistantMessageId = null;
-        }
-        this.#keyedVoice?.fail(processingErrorText);
-      });
-
-      this.#voiceProvider.onStatusChange((status) => {
-        if (!isCurrent()) return;
-        this.#voiceStatus = status;
-        this.#voiceActive = status === 'listening';
-        if (status === 'listening' || status === 'idle' || status === 'disconnected') {
-          this.#settlePendingVoiceTurn(status !== 'listening');
-        }
-        // Keyed turns overlap listening (full duplex), so only a call end settles them.
-        if (status === 'idle' || status === 'disconnected') {
-          this.#keyedVoice?.settle();
-        }
-        this.callbacks.onVoiceStatusChanged?.(status);
-      });
-
-      this.#voiceProvider.connect();
-
-    } catch (error) {
-      console.error('Failed to setup voice:', error);
-    }
+  /**
+   * Install a provider: the wiring itself ships in the lazy voice-runtime
+   * chunk (`voice/session-voice-wiring.ts`); this hands it the private state.
+   */
+  #wireVoiceProvider(mod: VoiceRuntimeModule, provider: VoiceProvider): void {
+    this.#voiceProvider = provider;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const session = this;
+    mod.wireSessionVoice(
+      {
+        session: this as unknown as VoiceWiringSession,
+        provider: () => session.#voiceProvider,
+        generation: () => session.#voiceSetupGeneration,
+        get keyed() {
+          return session.#keyedVoice;
+        },
+        set keyed(keyed) {
+          session.#keyedVoice = keyed;
+        },
+        get pendingUser() {
+          return session.#pendingVoiceUserMessageId;
+        },
+        set pendingUser(id) {
+          session.#pendingVoiceUserMessageId = id;
+        },
+        get pendingAssistant() {
+          return session.#pendingVoiceAssistantMessageId;
+        },
+        set pendingAssistant(id) {
+          session.#pendingVoiceAssistantMessageId = id;
+        },
+        turns: () => session.#voiceTurns,
+        busy: () => session.#chatTurnBusy(),
+        setStreaming: (streaming) => session.#setStreaming(streaming),
+        setDelegation: (capture) => {
+          session.#voiceDelegation = capture;
+        },
+        setLevel: (level) => {
+          session.#voiceLevel = level;
+        },
+        setStatus: (status) => {
+          session.#voiceStatus = status;
+          session.#voiceActive = status === 'listening';
+        },
+        settlePending: (final) => session.#settlePendingVoiceTurn(final),
+      },
+      provider,
+      mod.KeyedVoiceTranscript,
+      mod.createVoiceSessionBridge
+    );
   }
 
   /**
@@ -1776,6 +1596,7 @@ export class AgentWidgetSession {
     this.abortController = null;
     this.#teardownReconnect();
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     this.messages = [];
     this.#resetConversationScopedState();
     this.#olderPageRequests.clear();
@@ -2751,6 +2572,7 @@ export class AgentWidgetSession {
     // one) so a lingering resolve can't race the new dispatch or post a stale
     // /resume against a superseded execution.
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     // A new turn also supersedes any pending durable reconnect from the prior
     // turn (cancels backoff/listeners, clears the old resume handle).
     this.#teardownReconnect();
@@ -3284,182 +3106,58 @@ export class AgentWidgetSession {
     resolve(decision === "approved");
   }
 
+  #actionsHost: SessionActionsHost | null = null;
+  // Advanced when the turn is stopped or replaced (cancel, clear, new send,
+  // hydrate, conversation switch). A resolve waiting on the lazy chunk checks
+  // it after the load so a stopped turn never resumes late.
+  #actionsEpoch = 0;
+
+  /**
+   * Run a resolve path from `session-actions.ts` (the lazy
+   * `session-actions.js` chunk in the IIFE build). Synchronous when the module
+   * is already loaded or provided, so the call's timing matches an inline
+   * method; otherwise it waits for the chunk and reports a failed load via
+   * `onError` (the resolve never started, so no state needs unwinding). A turn
+   * stopped or replaced while the chunk loads drops the resolve.
+   */
+  #withActions(
+    run: (actions: SessionActionsModule, host: SessionActionsHost) => Promise<void>
+  ): Promise<void> {
+    const host = (this.#actionsHost ??= {
+      s: this as unknown as SessionActionsInternals,
+      setStreaming: (streaming) => this.#setStreaming(streaming),
+      appendMessage: (message) => this.#appendMessage(message),
+      nextSequence: () => this.#nextSequence(),
+      settleApprovalPausedToolCall: (id) => this.#settleApprovalPausedToolCall(id),
+      resumeAfter: (executionId) =>
+        this.#resumable?.executionId === executionId
+          ? this.#resumable.lastEventId
+          : undefined,
+    });
+    const actions = getSessionActionsSync();
+    if (actions) return run(actions, host);
+    const epoch = this.#actionsEpoch;
+    return loadSessionActions().then(
+      (loaded) => (epoch === this.#actionsEpoch ? run(loaded, host) : undefined),
+      (error) => {
+        this.callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
+      }
+    );
+  }
+
   /**
    * Resolve a tool approval request (approve or deny).
    * Updates the approval message status, calls the API (or custom onDecision),
    * and pipes the response stream through connectStream().
    */
-  public async resolveApproval(
+  public resolveApproval(
     approval: AgentWidgetApproval,
     decision: 'approved' | 'denied',
     options?: AgentWidgetApprovalDecisionOptions
   ): Promise<void> {
-    // 1. Update approval message status immediately for responsive UI
-    const approvalMessageId = `approval-${approval.id}`;
-    const errorMessageId = `approval-error-${approval.id}`;
-    const requestToken = {};
-    this.approvalTokens.set(approvalMessageId, requestToken);
-    const updatedApproval: AgentWidgetApproval = {
-      ...approval,
-      status: decision,
-      resolvedAt: Date.now(),
-    };
-    // Anchor the bubble where the agent paused for permission. An approval is a
-    // timeline checkpoint, not a "now" event, so resolving it must preserve the
-    // original message's createdAt/sequence: otherwise sortMessages (which
-    // orders by createdAt first) would re-stamp it to now and float it past any
-    // message created later (e.g. a long-pending approval resolved after more
-    // conversation, or restored/replayed transcripts).
-    const existing = this.messages.find((m) => m.id === approvalMessageId);
-    const updatedMessage: AgentWidgetMessage = {
-      id: approvalMessageId,
-      role: "assistant",
-      content: "",
-      createdAt: existing?.createdAt ?? new Date().toISOString(),
-      ...(existing?.sequence !== undefined ? { sequence: existing.sequence } : {}),
-      streaming: false,
-      variant: "approval",
-      approval: updatedApproval,
-    };
-    this.upsertMessage(updatedMessage);
-
-    // Show the standalone typing indicator immediately while we wait for the
-    // approval round-trip. Install an abortController so cancel() works during
-    // the silent gap. See `resolveAskUserQuestion` for the same pattern.
-    this.abortController?.abort();
-    this.abortController = new AbortController();
-    this.#setStreaming(true);
-
-    // 2. Call onDecision callback if provided, otherwise use client.resolveApproval()
-    const approvalConfig = this.config.approval;
-    const onDecision = approvalConfig && typeof approvalConfig === 'object' ? approvalConfig.onDecision : undefined;
-
-    try {
-      let response: Response | ReadableStream<Uint8Array> | void;
-
-      if (onDecision) {
-        response = await onDecision(
-          {
-            approvalId: approval.id,
-            executionId: approval.executionId,
-            agentId: approval.agentId,
-            toolName: approval.toolName,
-          },
-          decision,
-          options
-        );
-      } else {
-        response = await this.client.resolveApproval(
-          {
-            agentId: approval.agentId,
-            executionId: approval.executionId,
-            approvalId: approval.id,
-          },
-          decision
-        );
-      }
-
-      // 3. Pipe through connectStream if we got a response with a body
-      if (response) {
-        let stream: ReadableStream<Uint8Array> | null = null;
-        if (response instanceof Response) {
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => null);
-            // `message` carries the visitor-facing text when present (e.g.
-            // 409 APPROVAL_ALREADY_RESOLVED); 403 APPROVAL_APPROVER_NOT_END_USER
-            // puts it in `error`.
-            const errorText: string =
-              errorData?.message ?? errorData?.error ?? `Approval request failed: ${response.status}`;
-            // The decision did not apply, so the card must not claim it did.
-            // A pause the server reports as gone (already resolved, or expired
-            // / unknown) settles as timed out; anything else returns to
-            // pending so the visitor can retry. The notice says why.
-            const pauseGone =
-              errorData?.code === "APPROVAL_ALREADY_RESOLVED" ||
-              (response.status === 404 && /no paused execution/i.test(String(errorData?.error)));
-            // Only while the card still holds this request's decision: a
-            // newer request (or its approval_complete) may have settled it.
-            // The token tells requests apart even within one millisecond.
-            const current = this.messages.find((m) => m.id === approvalMessageId);
-            if (
-              this.approvalTokens.get(approvalMessageId) === requestToken &&
-              current?.approval?.resolvedAt === updatedApproval.resolvedAt
-            ) {
-              this.upsertMessage({
-                ...updatedMessage,
-                approval: pauseGone ? { ...updatedApproval, status: "timeout" } : approval,
-              });
-              // A gone pause never resumes, so its tool bubble must not spin.
-              if (pauseGone) this.#settleApprovalPausedToolCall(approvalMessageId);
-              this.upsertMessage({
-                id: errorMessageId,
-                role: "assistant",
-                content: errorText,
-                createdAt: new Date().toISOString(),
-                streaming: false,
-                sequence: this.#nextSequence(),
-              });
-            }
-            throw new Error(errorText);
-          }
-          stream = response.body;
-        } else if (response instanceof ReadableStream) {
-          stream = response;
-        }
-
-        // Accepted: a retry that succeeds supersedes the earlier failure notice.
-        if (this.messages.some((m) => m.id === errorMessageId)) {
-          this.messages = this.messages.filter((m) => m.id !== errorMessageId);
-          this.callbacks.onMessagesChanged([...this.messages]);
-        }
-
-        if (stream) {
-          await this.connectStream(stream, { allowReentry: true });
-        } else {
-          if (decision === 'denied') {
-            // No stream body for denied: inject a denial message, and settle
-            // the paused tool bubble since no approval_complete will arrive.
-            this.#settleApprovalPausedToolCall(approvalMessageId);
-            this.#appendMessage({
-              id: `denial-${approval.id}`,
-              role: "assistant",
-              content: "Tool execution was denied by user.",
-              createdAt: new Date().toISOString(),
-              streaming: false,
-              sequence: this.#nextSequence(),
-            });
-          }
-          // No body to pipe: drop the pre-set streaming flag so the indicator
-          // doesn't linger forever.
-          this.#setStreaming(false);
-          this.abortController = null;
-        }
-      } else {
-        // onDecision returned void / no response: drop the pre-set flag.
-        this.#setStreaming(false);
-        this.abortController = null;
-      }
-    } catch (error) {
-      const isAbortError =
-        error instanceof Error &&
-        (error.name === 'AbortError' ||
-         error.message.includes('aborted') ||
-         error.message.includes('abort'));
-
-      this.#setStreaming(false);
-      this.abortController = null;
-
-      if (!isAbortError) {
-        this.callbacks.onError?.(
-          error instanceof Error ? error : new Error(String(error))
-        );
-      }
-    } finally {
-      // Settled: only in-flight requests keep a token.
-      if (this.approvalTokens.get(approvalMessageId) === requestToken) {
-        this.approvalTokens.delete(approvalMessageId);
-      }
-    }
+    return this.#withActions((actions, host) =>
+      actions.resolveApproval(host, approval, decision, options)
+    );
   }
 
   /**
@@ -3474,6 +3172,27 @@ export class AgentWidgetSession {
    *   3. Append a user-visible bubble with the answer text so the
    *      transcript reads naturally.
    */
+  public resolveAskUserQuestion(
+    toolMessage: AgentWidgetMessage,
+    answer: string | Record<string, string | string[]>
+  ): Promise<void> {
+    return this.#withActions((actions, host) =>
+      actions.resolveAskUserQuestion(host, toolMessage, answer)
+    );
+  }
+
+  /**
+   * Resolve a paused auto-resolving LOCAL tool call (`webmcp:*` page tools
+   * and the built-in `suggest_replies`) and post the result to `/resume`.
+   * Triggered automatically from `handleEvent`; idempotent on the message's
+   * `toolCall.id`. See `resolveWebMcpToolCall` in `session-actions.ts`.
+   */
+  public resolveWebMcpToolCall(toolMessage: AgentWidgetMessage): Promise<void> {
+    return this.#withActions((actions, host) =>
+      actions.resolveWebMcpToolCall(host, toolMessage)
+    );
+  }
+
   /**
    * Persist in-progress answers and the current page index for a multi-question
    * `ask_user_question` payload, so a refresh resumes on the same page with
@@ -3521,167 +3240,6 @@ export class AgentWidgetSession {
         ...(answers ? { askUserQuestionAnswers: answers } : {}),
       },
     });
-  }
-
-  public async resolveAskUserQuestion(
-    toolMessage: AgentWidgetMessage,
-    answer: string | Record<string, string | string[]>
-  ): Promise<void> {
-    // Idempotent: guards against rapid double-clicks on answer pills before
-    // the re-render swaps the card to its collapsed/answered state.
-    const live = this.messages.find((m) => m.id === toolMessage.id);
-    if (live?.agentMetadata?.askUserQuestionAnswered === true) return;
-
-    const executionId = toolMessage.agentMetadata?.executionId;
-    const toolName = toolMessage.toolCall?.name;
-    if (!executionId || !toolName) {
-      this.callbacks.onError?.(
-        new Error(
-          "resolveAskUserQuestion: message is missing executionId or toolCall.name"
-        )
-      );
-      return;
-    }
-
-    // Flip answered flag first so the next render skips the sheet re-mount,
-    // avoiding the race between removeAskUserQuestionSheet's 180ms slide-out
-    // timer and the renders that fire as the resume stream lands. Pass the
-    // structured answer Record (when present) so it's atomically persisted
-    // alongside the flag: the answered-state review card depends on
-    // `agentMetadata.askUserQuestionAnswers` being populated at render time.
-    //
-    // For single-question payloads, callers (built-in pick handler, plugins)
-    // resolve with a plain string. Derive a `{ [questionText]: answer }` Record
-    // from the toolCall args so the answered-card render path is consistent
-    // with grouped flows.
-    let structuredAnswers: Record<string, string | string[]> | undefined =
-      typeof answer === "string" ? undefined : answer;
-    if (structuredAnswers === undefined && typeof answer === "string") {
-      const args = toolMessage.toolCall?.args as
-        | { questions?: Array<{ question?: unknown }> }
-        | undefined;
-      const questions = Array.isArray(args?.questions) ? args!.questions : [];
-      if (questions.length === 1) {
-        const qText = typeof questions[0]?.question === "string"
-          ? (questions[0].question as string)
-          : "";
-        if (qText) structuredAnswers = { [qText]: answer };
-      }
-    }
-    this.markAskUserQuestionResolved(toolMessage, structuredAnswers);
-
-    // Show the standalone typing indicator immediately: the network round-trip
-    // to /resume is otherwise silent, which reads as broken. The render
-    // condition in ui.ts already shows the indicator once streaming flips true
-    // and the last message is a user bubble (the answer we inject below).
-    // Install an abortController so cancel() works during this silent gap.
-    this.abortController?.abort();
-    this.abortController = new AbortController();
-    this.#setStreaming(true);
-
-    // Inject Q→A pair messages: one assistant bubble per question, one user
-    // bubble per answer, so the transcript reads like a normal conversation.
-    // The original ask_user_question tool message is suppressed by the
-    // renderer once `askUserQuestionAnswered` is true. Skipped questions get
-    // a muted italic `*Skipped*` user bubble (rendered through the standard
-    // markdown pipeline).
-    const toolCallId = toolMessage.toolCall!.id;
-    const args = toolMessage.toolCall?.args as
-      | { questions?: Array<{ question?: unknown; header?: unknown }> }
-      | undefined;
-    const questions = Array.isArray(args?.questions) ? args!.questions : [];
-    if (questions.length === 0) {
-      const fallback =
-        typeof answer === "string"
-          ? answer
-          : Object.entries(answer)
-              .map(
-                ([q, v]) => `${q}: ${Array.isArray(v) ? v.join(", ") : v}`
-              )
-              .join(" | ");
-      this.#appendMessage({
-        id: `ask-user-answer-${toolCallId}`,
-        role: "user",
-        content: fallback,
-        createdAt: new Date().toISOString(),
-        streaming: false,
-        sequence: this.#nextSequence(),
-      });
-    } else {
-      const stored = structuredAnswers ?? {};
-      questions.forEach((p, i) => {
-        const qText = typeof p?.question === "string" ? p.question : "";
-        if (!qText) return;
-        const ans = stored[qText];
-        const answerStr = Array.isArray(ans)
-          ? ans.join(", ")
-          : typeof ans === "string"
-            ? ans
-            : "";
-        this.#appendMessage({
-          id: `ask-user-q-${toolCallId}-${i}`,
-          role: "assistant",
-          content: qText,
-          createdAt: new Date().toISOString(),
-          streaming: false,
-          sequence: this.#nextSequence(),
-        });
-        this.#appendMessage({
-          id: `ask-user-a-${toolCallId}-${i}`,
-          role: "user",
-          content: answerStr || "*Skipped*",
-          createdAt: new Date().toISOString(),
-          streaming: false,
-          sequence: this.#nextSequence(),
-        });
-      });
-    }
-
-    try {
-      const response = await this.client.resumeFlow(
-        executionId,
-        { [toolName]: answer },
-        {
-          after:
-            this.#resumable?.executionId === executionId
-              ? this.#resumable.lastEventId
-              : undefined,
-        },
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(
-          errorData?.error ?? `Resume failed: ${response.status}`
-        );
-      }
-
-      if (response.body) {
-        await this.connectStream(response.body, { allowReentry: true });
-      } else {
-        // No body to pipe: drop the pre-set streaming flag so the indicator
-        // doesn't linger forever.
-        this.#setStreaming(false);
-        this.abortController = null;
-      }
-    } catch (error) {
-      // Mirror sendMessage: a cancel() during the await aborts the controller
-      // and surfaces an AbortError: don't treat that as a real failure.
-      const isAbortError =
-        error instanceof Error &&
-        (error.name === 'AbortError' ||
-         error.message.includes('aborted') ||
-         error.message.includes('abort'));
-
-      this.#setStreaming(false);
-      this.abortController = null;
-
-      if (!isAbortError) {
-        this.callbacks.onError?.(
-          error instanceof Error ? error : new Error(String(error))
-        );
-      }
-    }
   }
 
   /**
@@ -3767,498 +3325,9 @@ export class AgentWidgetSession {
     if (snapshots.length === 1) {
       void this.resolveWebMcpToolCall(snapshots[0]);
     } else if (snapshots.length > 1) {
-      void this.#resolveWebMcpToolCallBatch(executionId, snapshots);
-    }
-  }
-
-  #resolveWebMcpToolStartedAt(
-    toolMessage: AgentWidgetMessage,
-  ): number {
-    const stored = this.messages.find((m) => m.id === toolMessage.id);
-    const candidates = [
-      stored?.toolCall?.startedAt,
-      toolMessage.toolCall?.startedAt,
-    ];
-    for (const candidate of candidates) {
-      if (typeof candidate === "number" && Number.isFinite(candidate)) {
-        return candidate;
-      }
-    }
-    return Date.now();
-  }
-
-  /**
-   * Persisted-resolution guard for `suggest_replies`. The in-memory dedupe
-   * sets (`webMcpInflightKeys` / `webMcpResolvedKeys`) are cleared by
-   * hydrateMessages/clearMessages/cancel, but `suggestRepliesResolved`
-   * survives on the stored message, so a stale `await` re-emit after a
-   * hydration must not re-POST `/resume` for an already-resolved call (the
-   * historical double-resume failure mode the batching work exists to avoid).
-   * Checks the LIVE message first; the handleEvent snapshot is a fresh wire
-   * skeleton whose metadata never carries the flag.
-   */
-  #isSuggestRepliesAlreadyResolved(
-    toolMessage: AgentWidgetMessage,
-  ): boolean {
-    if (toolMessage.toolCall?.name !== SUGGEST_REPLIES_TOOL_NAME) return false;
-    const stored = this.messages.find((m) => m.id === toolMessage.id);
-    return (
-      (stored ?? toolMessage).agentMetadata?.suggestRepliesResolved === true
-    );
-  }
-
-  #markWebMcpToolRunning(
-    toolMessage: AgentWidgetMessage,
-  ): number {
-    const startedAt = this.#resolveWebMcpToolStartedAt(toolMessage);
-    this.upsertMessage({
-      ...toolMessage,
-      streaming: true,
-      agentMetadata: {
-        ...toolMessage.agentMetadata,
-        awaitingLocalTool: false,
-      },
-      toolCall: toolMessage.toolCall
-        ? {
-            ...toolMessage.toolCall,
-            status: "running",
-            startedAt,
-            completedAt: undefined,
-            duration: undefined,
-            durationMs: undefined,
-          }
-        : toolMessage.toolCall,
-    });
-    return startedAt;
-  }
-
-  #markWebMcpToolComplete(
-    toolMessage: AgentWidgetMessage,
-    result: unknown,
-    startedAt: number,
-    completedAt = Date.now(),
-    extraMetadata?: Partial<
-      NonNullable<AgentWidgetMessage["agentMetadata"]>
-    >,
-  ): void {
-    // A teardown such as clearMessages()/hydrateMessages()/new send can remove
-    // the bubble while an aborted WebMCP promise is settling. Never resurrect a
-    // cleared message just to mark the old resolve complete.
-    if (!this.messages.some((message) => message.id === toolMessage.id)) return;
-    this.upsertMessage({
-      ...toolMessage,
-      streaming: false,
-      agentMetadata: {
-        ...toolMessage.agentMetadata,
-        awaitingLocalTool: false,
-        ...extraMetadata,
-      },
-      toolCall: toolMessage.toolCall
-        ? {
-            ...toolMessage.toolCall,
-            status: "complete",
-            result,
-            startedAt,
-            completedAt,
-            duration: undefined,
-            durationMs: Math.max(0, completedAt - startedAt),
-          }
-        : toolMessage.toolCall,
-    });
-  }
-
-  /**
-   * Resolve one or more parallel local-tool awaits sharing one paused
-   * executionId with a SINGLE `/resume` (core#3878); `resolveWebMcpToolCall`
-   * delegates size-1 resolves here after its guards. By default each call is
-   * executed against the page registry concurrently: every gated call renders
-   * its own native approval bubble, and a sibling's confirm Promise never
-   * blocks another's execution. With `webmcp.execution: "sequential"` the
-   * calls run one at a time in emission order instead (see the config docs
-   * for when that matters). Outputs are keyed by per-call `webMcpToolCallId`
-   * (server prefers it over tool name; name-keying remains the fallback for
-   * legacy single/distinct-tool turns), so two calls to the SAME tool no longer
-   * collide. The server is tolerant: any call we omit (declined-after-abort,
-   * dedupe, exec failure) simply re-pauses and is retried on its re-emit.
-   *
-   * Owns the dedupe / abort / streaming machinery for both routes; resolved
-   * keys are marked on the shared resume POST's HTTP OK.
-   */
-  async #resolveWebMcpToolCallBatch(
-    executionId: string,
-    snapshots: AgentWidgetMessage[],
-  ): Promise<void> {
-    type ExecutedWebMcpTool = {
-      dedupeKey: string;
-      resumeKey: string;
-      output: unknown;
-      toolMessage: AgentWidgetMessage;
-      startedAt: number;
-      completedAt: number;
-    };
-    const claimedKeys: string[] = [];
-    // One controller per batch, shared by every execute and the resume fetch.
-    // Teardown (`abortWebMcpResolves`) only ever aborts the whole set, so
-    // finer granularity buys nothing; one registration per resolve op also
-    // keeps `webMcpResolveControllers.size` === in-flight resolve count.
-    const batchController = new AbortController();
-    this.webMcpResolveControllers.add(batchController);
-    this.#setStreaming(true);
-
-    // Phase 1: execute every pending call. A null result means the call was
-    // deduped, aborted, or threw; it's omitted from the resume and (per the
-    // tolerant server) re-pauses for retry.
-    const executeOne = async (
-      toolMessage: AgentWidgetMessage,
-    ): Promise<ExecutedWebMcpTool | null> => {
-      const wireToolName = toolMessage.toolCall?.name;
-      const callId = toolMessage.toolCall?.id;
-      if (!wireToolName || !callId) return null;
-
-      const dedupeKey = `${executionId}:${callId}`;
-      if (
-        this.webMcpInflightKeys.has(dedupeKey) ||
-        this.webMcpResolvedKeys.has(dedupeKey) ||
-        this.#isSuggestRepliesAlreadyResolved(toolMessage)
-      ) {
-        return null;
-      }
-      this.webMcpInflightKeys.add(dedupeKey);
-      claimedKeys.push(dedupeKey);
-
-      // Clear the awaiting flag and keep the tool bubble running while the
-      // browser-side WebMCP promise is in flight. The initial `await`
-      // only means the server paused for a local tool; it is not completion.
-      const startedAt = this.#markWebMcpToolRunning(toolMessage);
-
-      // Per-call id wins for resume keying; fall back to the wire tool name
-      // for legacy servers that don't emit `webMcpToolCallId`.
-      const resumeKey =
-        toolMessage.agentMetadata?.webMcpToolCallId ?? wireToolName;
-
-      // Built-in fire-and-forget tool: no bridge, no confirm gate, no
-      // browser-side execution: the chips render from the message list and
-      // the canned output joins the batch's single /resume.
-      if (wireToolName === SUGGEST_REPLIES_TOOL_NAME) {
-        return {
-          dedupeKey,
-          resumeKey,
-          output: suggestRepliesToolResult(),
-          toolMessage,
-          startedAt,
-          completedAt: Date.now(),
-        };
-      }
-
-      const execPromise = this.client.executeWebMcpToolCall(
-        wireToolName,
-        toolMessage.toolCall?.args,
-        batchController.signal,
+      void this.#withActions((actions, host) =>
+        actions.resolveWebMcpToolCallBatch(host, executionId, snapshots)
       );
-
-      let output: unknown;
-      if (!execPromise) {
-        output = {
-          isError: true,
-          content: [
-            { type: "text", text: "WebMCP not enabled on this widget." },
-          ],
-        };
-      } else {
-        try {
-          output = await execPromise;
-        } catch (error) {
-          const isAbortError =
-            error instanceof Error &&
-            (error.name === "AbortError" ||
-              error.message.includes("aborted") ||
-              error.message.includes("abort"));
-          if (!isAbortError) {
-            this.callbacks.onError?.(
-              error instanceof Error ? error : new Error(String(error)),
-            );
-          }
-          this.#markWebMcpToolComplete(
-            toolMessage,
-            buildWebMcpErrorResult(
-              isAbortError
-                ? "Aborted by cancel()"
-                : getWebMcpErrorMessage(error),
-            ),
-            startedAt,
-          );
-          // Release the dedupe claim so a re-emit can retry this call.
-          this.webMcpInflightKeys.delete(dedupeKey);
-          return null;
-        }
-      }
-      if (batchController.signal.aborted) {
-        this.#markWebMcpToolComplete(
-          toolMessage,
-          buildWebMcpErrorResult("Aborted by cancel()"),
-          startedAt,
-        );
-        this.webMcpInflightKeys.delete(dedupeKey);
-        return null;
-      }
-      return {
-        dedupeKey,
-        resumeKey,
-        output,
-        toolMessage,
-        startedAt,
-        completedAt: Date.now(),
-      };
-    };
-
-    // Parallel (default): a gated sibling's approval never blocks another's
-    // execution. Sequential: one at a time in emission order, so tools that
-    // share page state (a canvas, a form) don't interleave; the next call
-    // starts only once the previous one has settled, approval included.
-    let executed: Array<ExecutedWebMcpTool | null>;
-    if (this.config.webmcp?.execution === "sequential") {
-      executed = [];
-      for (const toolMessage of snapshots) {
-        executed.push(await executeOne(toolMessage));
-      }
-    } else {
-      executed = await Promise.all(snapshots.map(executeOne));
-    }
-
-    let ready: ExecutedWebMcpTool[] = [];
-    try {
-      ready = executed.filter((r): r is ExecutedWebMcpTool => r !== null);
-      // Everything deduped/aborted/failed: nothing to post.
-      if (ready.length === 0) return;
-
-      const toolOutputs: Record<string, unknown> = {};
-      for (const r of ready) {
-        // Two omitted-on-collision safety: if two calls somehow resolve to the
-        // same key (only possible on a legacy name fallback), last write wins:        // the server re-pauses the unrepresented call for retry.
-        toolOutputs[r.resumeKey] = r.output;
-      }
-
-      const response = await this.client.resumeFlow(executionId, toolOutputs, {
-        signal: batchController.signal,
-        after:
-          this.#resumable?.executionId === executionId
-            ? this.#resumable.lastEventId
-            : undefined,
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error ?? `Resume failed: ${response.status}`);
-      }
-      // Server accepted the batch: mark every included call resolved so stale
-      // re-emits don't re-execute the page tool, then complete each bubble.
-      // Do this only after /resume HTTP success; if /resume fails, the server
-      // may still be paused and the retry path must not show a final result.
-      const batch = ready[0]!.dedupeKey;
-      for (const r of ready) {
-        this.webMcpResolvedKeys.add(r.dedupeKey);
-        const toolName = r.toolMessage.toolCall?.name;
-        const toolCallId = r.toolMessage.agentMetadata?.webMcpToolCallId;
-        this.#markWebMcpToolComplete(
-          r.toolMessage,
-          r.output,
-          r.startedAt,
-          r.completedAt,
-          {
-            ...(toolName === SUGGEST_REPLIES_TOOL_NAME
-              ? { suggestRepliesResolved: true }
-              : {}),
-            // Only a provider call id can be replayed: a legacy name-keyed
-            // resume has nothing the model's transcript can reference.
-            ...(toolName && toolCallId
-              ? {
-                  clientToolAnswer: {
-                    toolCallId,
-                    toolName,
-                    args: r.toolMessage.toolCall?.args,
-                    result: r.output,
-                    batch,
-                  },
-                }
-              : {}),
-          },
-        );
-      }
-      if (response.body) {
-        await this.connectStream(response.body, { allowReentry: true });
-      }
-    } catch (error) {
-      const isAbortError =
-        error instanceof Error &&
-        (error.name === "AbortError" ||
-          error.message.includes("aborted") ||
-          error.message.includes("abort"));
-      if (!isAbortError) {
-        this.callbacks.onError?.(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      } else {
-        for (const r of ready) {
-          this.#markWebMcpToolComplete(
-            r.toolMessage,
-            buildWebMcpErrorResult("Aborted by cancel()"),
-            r.startedAt,
-          );
-        }
-      }
-    } finally {
-      for (const key of claimedKeys) {
-        this.webMcpInflightKeys.delete(key);
-      }
-      this.webMcpResolveControllers.delete(batchController);
-      if (this.webMcpResolveControllers.size === 0 && !this.abortController) {
-        this.#setStreaming(false);
-      }
-    }
-  }
-
-  /**
-   * Resolve a paused auto-resolving LOCAL tool call and post the result to
-   * `/resume`: `webmcp:*` calls execute against the host page's tool
-   * registry; the built-in `suggest_replies` skips execution entirely and
-   * resumes with a canned "shown" result (the chips render from the message
-   * list, not from this resolve).
-   *
-   * Triggered automatically from `handleEvent` when an `await`-derived
-   * message arrives for such a tool: the user does not click a pill; the
-   * bridge's confirm-bubble gate (WebMCP only) is the only interactive
-   * surface.
-   *
-   * Idempotent on the message's `toolCall.id`: re-emits of the same await
-   * (e.g. from message coalescing) won't double-fire `tool.execute`. Failure
-   * modes, declined, timed out, throw, unknown tool, all resolve into a
-   * `{ isError: true, content: [...] }` payload that resumes the dispatch
-   * cleanly so the agent can recover.
-   *
-   * After the malformed-wire guards this is a thin gate over
-   * `resolveWebMcpToolCallBatch` with a size-1 batch: the dedupe check runs
-   * synchronously here so a stale re-emit never toggles streaming.
-   */
-  public async resolveWebMcpToolCall(
-    toolMessage: AgentWidgetMessage,
-  ): Promise<void> {
-    const executionId = toolMessage.agentMetadata?.executionId;
-    const wireToolName = toolMessage.toolCall?.name;
-    const toolCallId = toolMessage.toolCall?.id;
-
-    // Malformed await wire shapes shouldn't silently strand the
-    // server-side dispatch. Three failure modes:
-    //   - no executionId: no /resume target exists; surface to the host
-    //     via onError so an operator can react. This is a server-side
-    //     wire-shape bug: Persona can't recover it from the client.
-    //   - no wireToolName: defensive guard: handleEvent only calls us
-    //     for an auto-resolving local tool name (`webmcp:*` or
-    //     `suggest_replies`), so this path indicates a direct caller
-    //     misuse. Silent return.
-    //   - no toolCallId: dedupe key falls apart, but the server can still
-    //     advance if we post an isError for the wireToolName. Do that
-    //     and bail before the dedupe path.
-    if (!executionId) {
-      this.callbacks.onError?.(
-        new Error(
-          "WebMCP await missing executionId: dispatch left paused.",
-        ),
-      );
-      return;
-    }
-    if (!wireToolName) return;
-    if (!toolCallId) {
-      // No toolCall.id → no per-call dedupe key. Fall back to a synthetic
-      // `(executionId):(wireToolName)` so identical malformed re-emits don't
-      // re-POST /resume. Idempotent on duplicate bad payloads.
-      const malformedKey = `${executionId}:__no_tool_id__:${wireToolName}`;
-      if (
-        this.webMcpInflightKeys.has(malformedKey) ||
-        this.webMcpResolvedKeys.has(malformedKey)
-      ) {
-        return;
-      }
-      this.webMcpInflightKeys.add(malformedKey);
-      try {
-        await this.#resumeWithToolOutput(executionId, wireToolName, {
-          isError: true,
-          content: [
-            {
-              type: "text",
-              text: "WebMCP await missing toolCall.id: cannot execute the page tool.",
-            },
-          ],
-        });
-        this.webMcpResolvedKeys.add(malformedKey);
-      } catch (error) {
-        this.callbacks.onError?.(
-          error instanceof Error ? error : new Error(String(error)),
-        );
-      } finally {
-        this.webMcpInflightKeys.delete(malformedKey);
-      }
-      return;
-    }
-
-    // Dedupe key scoped by executionId: see `webMcpInflightKeys` doc comment
-    // for the failure-recovery + cross-dispatch rationale. The persisted
-    // `suggestRepliesResolved` guard backs the in-memory sets across
-    // hydrations. Checked synchronously HERE so a stale re-emit stays a pure
-    // no-op (no streaming toggle, no controller registration); the batch path
-    // re-checks under its own inflight claim.
-    const dedupeKey = `${executionId}:${toolCallId}`;
-    if (
-      this.webMcpInflightKeys.has(dedupeKey) ||
-      this.webMcpResolvedKeys.has(dedupeKey) ||
-      this.#isSuggestRepliesAlreadyResolved(toolMessage)
-    ) {
-      return;
-    }
-    return this.#resolveWebMcpToolCallBatch(executionId, [toolMessage]);
-  }
-
-  /**
-   * POST `/resume` with a SINGLE tool's output and pipe the resulting SSE
-   * stream back through `connectStream`. Shared by every single-call local-tool
-   * resolve path (ask_user_question and single WebMCP calls). Parallel WebMCP
-   * calls use `resolveWebMcpToolCallBatch`, which posts one resume for many.
-   *
-   * `resumeKey` is the `toolOutputs` map key: the per-call `webMcpToolCallId`
-   * for WebMCP (core#3878), or the tool name for ask_user_question / legacy
-   * servers. `onHttpOk` runs synchronously between the HTTP-status check and the
-   * stream pipe; it lets the WebMCP resolve path commit the dedupe flag at
-   * "server accepted the answer" rather than "stream finished cleanly".
-   */
-  async #resumeWithToolOutput(
-    executionId: string,
-    resumeKey: string,
-    output: unknown,
-    options?: { onHttpOk?: () => void; signal?: AbortSignal },
-  ): Promise<void> {
-    const response = await this.client.resumeFlow(
-      executionId,
-      { [resumeKey]: output },
-      {
-        signal: options?.signal,
-        after:
-          this.#resumable?.executionId === executionId
-            ? this.#resumable.lastEventId
-            : undefined,
-      },
-    );
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      throw new Error(errorData?.error ?? `Resume failed: ${response.status}`);
-    }
-    options?.onHttpOk?.();
-    if (response.body) {
-      await this.connectStream(response.body, { allowReentry: true });
-    } else if (this.webMcpResolveControllers.size === 0) {
-      // No stream to pipe. Clear streaming only when no WebMCP resolve is in
-      // flight: for a WebMCP caller the current resolve's controller is still
-      // in the set, so its own `finally` (gated on the set draining) owns the
-      // teardown. Non-WebMCP callers (ask_user_question) keep the old behavior.
-      this.#setStreaming(false);
-      this.abortController = null;
     }
   }
 
@@ -4308,6 +3377,7 @@ export class AgentWidgetSession {
     // independent of the shared one above). Clear the inflight set so retries
     // are possible if the user re-issues the same await context.
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     this.webMcpInflightKeys.clear();
     // Stop any in-progress audio too: when the user hits "stop", they want
     // the assistant to actually stop talking, not just stop generating tokens.
@@ -4326,6 +3396,7 @@ export class AgentWidgetSession {
     // Tear down every in-flight WebMCP resolve too: their messages are about
     // to be wiped, and a microtask-deferred resolve must not survive the clear.
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     this.messages = [];
     this.agentExecution = null;
     this.#clearArtifactState();
@@ -4553,6 +3624,7 @@ export class AgentWidgetSession {
     // Hydration replaces the conversation: abort and forget every in-flight
     // WebMCP resolve; their messages are about to be replaced.
     this.#abortWebMcpResolves();
+    this.#actionsEpoch++;
     // Wipe the WebMCP dedupe state alongside the message restore: the
     // incoming snapshot is treated as a fresh conversation context.
     this.webMcpInflightKeys.clear();
@@ -4643,6 +3715,16 @@ export class AgentWidgetSession {
       // the resolved `enabled` is false the widget neither renders chips nor
       // resumes: the same parked-execution posture as a server-declared
       // ask_user_question with its sheet disabled.
+      // The agent paused for an approval or a local tool: warm the resolve
+      // paths (the lazy `session-actions.js` chunk in the IIFE build) so the
+      // resume doesn't wait on a fetch.
+      if (
+        event.message.variant === "approval" ||
+        event.message.agentMetadata?.awaitingLocalTool === true
+      ) {
+        loadSessionActions().catch(() => {});
+      }
+
       const tc = event.message.toolCall;
       const autoResolvable =
         !!tc?.name &&
