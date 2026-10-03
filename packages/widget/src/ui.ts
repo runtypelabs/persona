@@ -6,6 +6,7 @@ import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
 import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
+import { loadClientStream } from "./client-stream-loader";
 import {
   AgentWidgetSession,
   AgentWidgetSessionStatus,
@@ -7483,6 +7484,8 @@ export const createAgentExperience = (
   const warmMarkdownParsers = () => {
     if (markdownParsersWarmed) return;
     markdownParsersWarmed = true;
+    // The stream processor is needed for the first reply; warm it too.
+    loadClientStream().catch(() => {});
     loadMarkdownParsers().catch(() => {
       // Failed fetch (ad blocker, offline): allow the next visibility change
       // or render to retry; the chunk loader resets its cached promise on

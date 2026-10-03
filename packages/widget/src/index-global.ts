@@ -90,6 +90,13 @@ import { setMarkdownParsersLoader } from "./markdown-parsers-loader";
 
 setMarkdownParsersLoader(siblingChunk("markdown-parsers.js"));
 
+// Deferred SSE stream processor (`client-stream.ts`), built with
+// `./client-stream` external. The client starts the fetch when a dispatch
+// begins and the UI warms it alongside the markdown parsers.
+import { setClientStreamLoader } from "./client-stream-loader";
+
+setClientStreamLoader(siblingChunk("client-stream.js"));
+
 // ---------------------------------------------------------------------------
 // Deferred Runtype TTS engine loading.
 //

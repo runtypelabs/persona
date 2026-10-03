@@ -10,6 +10,8 @@
 import { afterEach } from "vitest";
 import { resetTooltipTiming } from "./src/utils/tooltip";
 import "./src/markdown-parsers-eager";
+// Likewise the SSE stream processor (`client-stream.js` chunk in the IIFE).
+import "./src/client-stream-eager";
 
 // Isolated attachTooltip tests should not wait on the product 200ms default.
 // Widget mounts re-apply `config.tooltip` (200 / 300) on create/update.

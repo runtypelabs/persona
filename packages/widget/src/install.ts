@@ -422,13 +422,15 @@ declare global {
         document.head.appendChild(link);
       }
 
-      // Also prefetch the markdown parsers chunk
-      const markdownUrl = jsUrl.replace(/index\.global\.js($|\?)/, "markdown-parsers.js$1");
-      if (markdownUrl !== jsUrl) {
+      // Also prefetch the chunks every conversation needs: the markdown
+      // parsers and the SSE stream processor.
+      for (const chunk of ["markdown-parsers.js", "client-stream.js"]) {
+        const chunkUrl = jsUrl.replace(/index\.global\.js($|\?)/, `${chunk}$1`);
+        if (chunkUrl === jsUrl) continue;
         const link2 = document.createElement("link");
         link2.rel = "prefetch";
         link2.as = "script";
-        link2.href = markdownUrl;
+        link2.href = chunkUrl;
         document.head.appendChild(link2);
       }
     };
