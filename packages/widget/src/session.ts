@@ -370,10 +370,10 @@ export class AgentWidgetSession {
   private webMcpApprovalResolvers: Map<string, (approved: boolean) => void> =
     new Map();
   private webMcpApprovalSeq = 0;
-  // Per approval card: the token of its latest decision request. Only that
-  // request's failure may reopen the card (two decisions can share a Date.now()).
-  private approvalRequests = new Map<string, number>();
-  private approvalRequestSeq = 0;
+  // Per approval card: the token of its latest in-flight decision request.
+  // Only that request's failure may reopen the card (two decisions can share
+  // a Date.now()). Each entry is dropped once its request settles.
+  private approvalTokens = new Map<string, object>();
   // Parallel local-tool batching (core#3878). A single model turn can emit
   // multiple `await(local_tool_required)` events for ONE paused
   // executionId: including two PARALLEL calls to the SAME tool ("add SHOE-001
@@ -3165,8 +3165,8 @@ export class AgentWidgetSession {
     // 1. Update approval message status immediately for responsive UI
     const approvalMessageId = `approval-${approval.id}`;
     const errorMessageId = `approval-error-${approval.id}`;
-    const requestToken = ++this.approvalRequestSeq;
-    this.approvalRequests.set(approvalMessageId, requestToken);
+    const requestToken = {};
+    this.approvalTokens.set(approvalMessageId, requestToken);
     const updatedApproval: AgentWidgetApproval = {
       ...approval,
       status: decision,
@@ -3250,7 +3250,7 @@ export class AgentWidgetSession {
             // The token tells requests apart even within one millisecond.
             const current = this.messages.find((m) => m.id === approvalMessageId);
             if (
-              this.approvalRequests.get(approvalMessageId) === requestToken &&
+              this.approvalTokens.get(approvalMessageId) === requestToken &&
               current?.approval?.resolvedAt === updatedApproval.resolvedAt
             ) {
               this.upsertMessage({
@@ -3317,6 +3317,11 @@ export class AgentWidgetSession {
         this.callbacks.onError?.(
           error instanceof Error ? error : new Error(String(error))
         );
+      }
+    } finally {
+      // Settled: only in-flight requests keep a token.
+      if (this.approvalTokens.get(approvalMessageId) === requestToken) {
+        this.approvalTokens.delete(approvalMessageId);
       }
     }
   }
