@@ -148,10 +148,10 @@ import {
   type BeforeSendOutcome,
   type InternalSubmissionSnapshot,
 } from "./utils/composer-submission";
-import {
-  createContextMentionOrchestrator,
-  type ContextMentionOrchestrator,
-} from "./utils/context-mention-orchestrator";
+import type { ContextMentionOrchestrator } from "./utils/context-mention-orchestrator";
+import { loadContextMentions } from "./context-mentions-loader";
+import { loadContextMentionsInline } from "./context-mentions-inline-loader";
+import { createMentionButton } from "./components/context-mention-button";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme, getColorScheme } from "./utils/theme";
@@ -2315,6 +2315,20 @@ export const createAgentExperience = (
    */
   const setupMentionOrchestrator = () => {
     if (!config.contextMentions?.enabled || !textarea) return;
+    // The orchestrator rides the lazy ui-extras chunk on the CDN: mount it (and
+    // re-collect the composer actions for its affordance buttons) once the
+    // chunk lands, unless a composer rebuild replaced this textarea meanwhile
+    // (the rebuild re-runs this function) or the widget was destroyed.
+    const extras = getUiExtrasSync();
+    if (!extras) {
+      const forTextarea = textarea;
+      loadUiExtras().then(() => {
+        if (mentionOrchestrator || textarea !== forTextarea || !forTextarea.isConnected) return;
+        setupMentionOrchestrator();
+        composerActionRenderer?.resolve();
+      }, () => {});
+      return;
+    }
     // Slash-command dispatch (prompt macros write text / submit; client actions
     // read/replace the value) and submission are owned by the composer input
     // surface itself — the mention runtime builds a textarea (chip) or
@@ -2326,7 +2340,9 @@ export const createAgentExperience = (
     const header = composerBindings?.header ?? null;
     const chipRow = header ? ensureComposerChipRow(header) : undefined;
 
-    mentionOrchestrator = createContextMentionOrchestrator({
+    mentionOrchestrator = extras.createContextMentionOrchestrator({
+      // Core's stateful collaborators, not the chunk's copies.
+      deps: { loadContextMentions, loadContextMentionsInline, renderLucideIcon, createMentionButton },
       config,
       textarea,
       anchor: composerForm ?? textarea,

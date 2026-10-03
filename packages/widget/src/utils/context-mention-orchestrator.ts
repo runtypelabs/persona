@@ -76,6 +76,22 @@ export interface ContextMentionOrchestrator {
   destroy: () => void;
 }
 
+export type ContextMentionOrchestratorDeps = {
+  loadContextMentions: typeof loadContextMentions;
+  loadContextMentionsInline: typeof loadContextMentionsInline;
+  renderLucideIcon: typeof renderLucideIcon;
+  createMentionButton: typeof createMentionButton;
+};
+
+// Call through the live module bindings (not captured references) so spies
+// and late re-registration keep working.
+const defaultDeps: ContextMentionOrchestratorDeps = {
+  loadContextMentions: () => loadContextMentions(),
+  loadContextMentionsInline: () => loadContextMentionsInline(),
+  renderLucideIcon: (...args) => renderLucideIcon(...args),
+  createMentionButton: (...args) => createMentionButton(...args),
+};
+
 export function createContextMentionOrchestrator(opts: {
   config: AgentWidgetConfig;
   textarea: HTMLTextAreaElement;
@@ -94,7 +110,19 @@ export function createContextMentionOrchestrator(opts: {
    * Omit and the orchestrator creates a standalone row the caller must place.
    */
   chipRow?: HTMLElement;
+  /**
+   * Stateful collaborators (chunk loaders, icon registry, tooltip-backed
+   * button). The IIFE/CDN build loads this module in the lazy `ui-extras`
+   * chunk and passes core's instances so the chunk never uses its own copies.
+   */
+  deps?: ContextMentionOrchestratorDeps;
 }): ContextMentionOrchestrator | null {
+  const {
+    loadContextMentions,
+    loadContextMentionsInline,
+    renderLucideIcon,
+    createMentionButton,
+  } = opts.deps ?? defaultDeps;
   const mentionConfig = opts.config.contextMentions;
   if (!mentionConfig?.enabled) return null;
 
