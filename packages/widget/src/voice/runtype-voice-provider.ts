@@ -56,10 +56,11 @@
 // replaced). A second gated tool in the same turn sends another update.
 // `delegation_cancelled{delegationId}` (or a `warning` refusing a frame for
 // it) stops all frames for that id; the chat turn still renders, and since
-// nobody speaks it now, browser TTS may read it. The voice model's spoken read-back after each
-// `delegation_completed` of an answered delegation (the first new assistant
-// utterance, unless the visitor speaks first) is folded: the chat already shows
-// it. Transcripts in such a call are display-only captions, never sent to the
+// nobody speaks it now, browser TTS may read it. The voice model's spoken read-back of
+// an answered delegation is folded: the chat already shows it. With
+// `delegation_read_back` negotiated it is the utterance the server tags with that
+// `delegationId`; otherwise it is the first new assistant utterance after
+// `delegation_completed`, unless the visitor speaks first. Transcripts in such a call are display-only captions, never sent to the
 // agent as conversation; a user bubble becomes conversation only when it is
 // submitted. With `context` negotiated, one `context{text}` frame (chat history
 // as of call start plus the host's `callContext`) is held until the visitor's
@@ -450,7 +451,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    */
   #voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
     const capabilities = ["partial_transcript", "context"];
-    if (this.bridge && this.config?.clientDelegation !== false) capabilities.push("client_delegation", "delegation_update");
+    if (this.bridge && this.config?.clientDelegation !== false)
+      capabilities.push("client_delegation", "delegation_update", "delegation_read_back");
     if (attach) capabilities.unshift("attach");
     const params = new URLSearchParams({
       voiceProtocol: VOICE_PROTOCOL,
@@ -746,9 +748,15 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           if (msg.final === true) this.#flushCallContext(generation);
           this.#foldReadback = false;
         } else {
-          // Read-back of a delegated result: core rotates the assistant id at
-          // completion, so it is the first new id after it. The chat renders it.
-          if (this.#foldReadback && !this.#assistantTurns.has(turnId)) {
+          // Read-back of a delegated result the chat already renders. A server
+          // that negotiated `delegation_read_back` tags it with its delegation;
+          // an older one rotates the assistant id at completion, so it is the
+          // first new id after it (a guess a filler finishing late defeats).
+          if (this.#capabilities.has("delegation_read_back")) {
+            if (typeof msg.delegationId === "string" && this.#answered.has(msg.delegationId)) {
+              this.#foldedTurns.add(turnId);
+            }
+          } else if (this.#foldReadback && !this.#assistantTurns.has(turnId)) {
             this.#foldedTurns.add(turnId);
             this.#foldReadback = false;
           }

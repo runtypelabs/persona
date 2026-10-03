@@ -896,7 +896,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
 
       it('declares client_delegation (never the kebab form) only with a bridge and the switch on', async () => {
         const { ws } = await startDelegatedCall();
-        expect(ws.url).toBe(voiceUrl('wss://api.example.com', 'a1', [...BASE_CAPS, 'client_delegation', 'delegation_update']));
+        expect(ws.url).toBe(voiceUrl('wss://api.example.com', 'a1', [...BASE_CAPS, 'client_delegation', 'delegation_update', 'delegation_read_back']));
         expect(ws.url).not.toContain('client-delegation');
         await startDelegatedCall({ clientDelegation: false });
         expect(lastWs().url).toBe(voiceUrl('wss://api.example.com', 'a1', BASE_CAPS));
@@ -1142,6 +1142,53 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         ws.triggerMessage(JSON.stringify({ type: 'delegation_started', delegationId: 'd1' }));
         await flush();
         expect(calls).toEqual([]);
+      });
+
+      describe('with delegation_read_back negotiated', () => {
+        const TAG_CAPS = [...ALL_CAPS, 'delegation_read_back'];
+        const tagged = (role: string, text: string, turnId: string, delegationId?: string) =>
+          JSON.stringify({ type: 'transcript_update', role, text, utteranceId: turnId, final: true, delegationId });
+        async function answered(text = 'Three are overdue.') {
+          const call = await startDelegatedCall({}, { capabilities: TAG_CAPS });
+          delegate(call.ws, 'd1', 'q');
+          await flush();
+          call.pending[0]({ status: 'completed', text });
+          await flush();
+          completed(call.ws, 'd1');
+          return call;
+        }
+
+        it('folds the tagged read-back, not a cut filler resuming first (production trace)', async () => {
+          const { ws, transcripts } = await answered();
+          ws.triggerMessage(tagged('assistant', "I'm pulling up the support queue.", 'f2'));
+          ws.triggerMessage(tagged('assistant', 'Three are overdue.', 'r1', 'd1'));
+          expect(transcripts.map((t) => t[1])).toEqual(["I'm pulling up the support queue."]);
+        });
+
+        it('keeps folding the tagged read-back after a late user transcript', async () => {
+          const { ws, transcripts } = await answered();
+          ws.triggerMessage(tagged('user', 'Who is overdue?', 'u1'));
+          ws.triggerMessage(tagged('assistant', 'Three are overdue.', 'r1', 'd1'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Who is overdue?']);
+        });
+
+        it('renders untagged speech and a read-back tagged for a delegation the chat does not show', async () => {
+          const { ws, transcripts } = await answered();
+          ws.triggerMessage(tagged('assistant', 'Anything else?', 'a2'));
+          ws.triggerMessage(tagged('assistant', 'I could not do that.', 'r9', 'd9'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Anything else?', 'I could not do that.']);
+        });
+
+        it('does not fold the tagged read-back of a failed delegation', async () => {
+          const { ws, transcripts, pending } = await startDelegatedCall({}, { capabilities: TAG_CAPS });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          pending[0]({ status: 'failed', text: '' });
+          await flush();
+          completed(ws, 'd1');
+          ws.triggerMessage(tagged('assistant', "Sorry, I couldn't complete that.", 'r1', 'd1'));
+          expect(transcripts).toHaveLength(1);
+        });
       });
 
       it('does not fold after a failed delegation', async () => {
@@ -1583,7 +1630,7 @@ describe('RuntypeVoiceProvider prewarm', () => {
       provider.setSessionBridge({ getHistory: () => [], runDelegatedTurn: async () => ({ status: 'completed', text: '' }) });
       provider.prewarm();
       expect(lastWs().url).toBe(
-        voiceUrl('wss://api.example.com', 'agent%2F1', ['attach', ...BASE_CAPS, 'client_delegation', 'delegation_update']),
+        voiceUrl('wss://api.example.com', 'agent%2F1', ['attach', ...BASE_CAPS, 'client_delegation', 'delegation_update', 'delegation_read_back']),
       );
     });
 
