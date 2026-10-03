@@ -5,19 +5,21 @@ import { describe, it, expect, vi } from "vitest";
 // each test controls when its load resolves.
 const chunk = vi.hoisted(() => {
   const click = vi.fn();
+  const keydown = vi.fn();
   let release: () => void = () => {};
   let promise: Promise<unknown> = Promise.resolve();
   const reset = () => {
     click.mockClear();
+    keydown.mockClear();
     promise = new Promise((resolve) => {
       release = () =>
         resolve({
-          createAskUserSheetHandlers: () => ({ click, keydown: vi.fn() }),
+          createAskUserSheetHandlers: () => ({ click, keydown }),
           createContextMentionOrchestrator: () => null,
         });
     });
   };
-  return { click, reset, release: () => release(), load: () => promise };
+  return { click, keydown, reset, release: () => release(), load: () => promise };
 });
 
 vi.mock("./ui-extras-loader", () => ({
@@ -57,6 +59,24 @@ describe("ask-user sheet events waiting on the lazy chunk", () => {
     chunk.release();
     await flush();
     expect(chunk.click).toHaveBeenCalledTimes(1);
+    controller.destroy();
+  });
+
+  it("typing in the free-text input does not block the Enter that submits", async () => {
+    chunk.reset();
+    const { controller, sheet } = mountWithSheet();
+    const input = document.createElement("input");
+    input.setAttribute("data-ask-free-text-input", "true");
+    sheet.appendChild(input);
+    const key = (k: string) =>
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+    key("h");
+    key("i");
+    key("Enter");
+    chunk.release();
+    await flush();
+    expect(chunk.keydown).toHaveBeenCalledTimes(1);
+    expect((chunk.keydown.mock.calls[0][0] as KeyboardEvent).key).toBe("Enter");
     controller.destroy();
   });
 

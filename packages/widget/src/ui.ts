@@ -3346,8 +3346,18 @@ export const createAgentExperience = (
   const routeAskUserEvent =
     (kind: keyof AskUserSheetHandlers) =>
     (event: Event): void => {
-      const sheet = (event.target as HTMLElement | null)?.closest?.("[data-persona-ask-sheet-for]");
+      const target = event.target as HTMLElement | null;
+      const sheet = target?.closest?.("[data-persona-ask-sheet-for]");
       if (!sheet) return;
+      // Only events the handlers act on (an action control click, Enter in the
+      // free-text input) may claim the pending slot; ordinary typing must not
+      // block the answer that follows it.
+      const actionable =
+        kind === "click"
+          ? !!target?.closest("[data-ask-user-action]")
+          : (event as KeyboardEvent).key === "Enter" &&
+            !!target?.matches?.('[data-ask-free-text-input="true"]');
+      if (!actionable) return;
       const run = (m: UiExtrasModule) => {
         askUserHandlers ??= m.createAskUserSheetHandlers(askUserCtx);
         (askUserHandlers[kind] as (e: Event) => void)(event);
