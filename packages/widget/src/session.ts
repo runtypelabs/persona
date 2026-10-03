@@ -3160,9 +3160,7 @@ export class AgentWidgetSession {
   ): Promise<void> {
     // 1. Update approval message status immediately for responsive UI
     const approvalMessageId = `approval-${approval.id}`;
-    // A retry supersedes the previous attempt's failure notice.
     const errorMessageId = `approval-error-${approval.id}`;
-    this.messages = this.messages.filter((m) => m.id !== errorMessageId);
     const updatedApproval: AgentWidgetApproval = {
       ...approval,
       status: decision,
@@ -3249,20 +3247,26 @@ export class AgentWidgetSession {
                 ...updatedMessage,
                 approval: pauseGone ? { ...updatedApproval, status: "timeout" } : approval,
               });
+              this.upsertMessage({
+                id: errorMessageId,
+                role: "assistant",
+                content: errorText,
+                createdAt: new Date().toISOString(),
+                streaming: false,
+                sequence: this.nextSequence(),
+              });
             }
-            this.upsertMessage({
-              id: errorMessageId,
-              role: "assistant",
-              content: errorText,
-              createdAt: new Date().toISOString(),
-              streaming: false,
-              sequence: this.nextSequence(),
-            });
             throw new Error(errorText);
           }
           stream = response.body;
         } else if (response instanceof ReadableStream) {
           stream = response;
+        }
+
+        // Accepted: a retry that succeeds supersedes the earlier failure notice.
+        if (this.messages.some((m) => m.id === errorMessageId)) {
+          this.messages = this.messages.filter((m) => m.id !== errorMessageId);
+          this.callbacks.onMessagesChanged([...this.messages]);
         }
 
         if (stream) {

@@ -237,7 +237,7 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
       .mockImplementationOnce(async () =>
         sse([{ type: "approval_complete", executionId: "exec_abc", approvalId: "appr_1", decision: "approved" }])
       );
-    const { approve, bubble } = setup();
+    const { approve, bubble, all } = setup();
     const first = approve();
     await new Promise((r) => setTimeout(r, 0));
     await new Promise((r) => setTimeout(r, 2));
@@ -246,5 +246,18 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
     await first;
 
     expect(bubble()?.approval?.status).toBe("approved");
+    expect(all().some((m) => m.id === "approval-error-appr_1")).toBe(false);
+  });
+
+  it("keeps the failure notice when a retry rejects without a response", async () => {
+    global.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(Response.json({ error: "Failed to process approval" }, { status: 500 }))
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    const { approve, all } = setup();
+    await approve();
+    await approve();
+
+    expect(all().find((m) => m.id === "approval-error-appr_1")?.content).toBe("Failed to process approval");
   });
 });
