@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <title>Voice Across Pages</title>
+  <style>
+    :root {
+      --bg: #faf7f2;
+      --ink: #1f1a14;
+      --muted: #6f655a;
+      --line: #e6ddd0;
+      --accent: #a8622a;
+      --card: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.6 ui-serif, Georgia, "Times New Roman", serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: blur(6px);
+      border-bottom: 1px solid var(--line);
+    }
+    .bar {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+    }
+    .brand { font-weight: 700; letter-spacing: 0.06em; text-decoration: none; color: inherit; }
+    nav { display: flex; gap: 18px; flex-wrap: wrap; }
+    nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font: 14px/1.4 system-ui, sans-serif;
+      padding-bottom: 2px;
+      border-bottom: 2px solid transparent;
+    }
+    nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+    main { max-width: 960px; margin: 0 auto; padding: 40px 16px 160px; }
+    h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; margin: 0 0 12px; }
+    .lede { color: var(--muted); font-size: 1.15rem; max-width: 40em; margin: 0 0 32px; }
+    .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 18px; }
+    .card h2 { font-size: 1.1rem; margin: 0 0 6px; }
+    .card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
+    .note {
+      margin-top: 40px;
+      padding: 16px 18px;
+      border-left: 3px solid var(--accent);
+      background: var(--card);
+      font: 14px/1.6 system-ui, sans-serif;
+      color: var(--muted);
+      max-width: 44em;
+    }
+    .note code { font-size: 0.9em; }
+    .note strong { color: var(--ink); }
+    #resume-hud {
+      position: fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 5;
+      font: 12px/1.4 ui-monospace, monospace;
+      background: var(--ink);
+      color: var(--bg);
+      padding: 8px 10px;
+      border-radius: 8px;
+      max-width: calc(100vw - 32px);
+    }
+    #resume-hud:empty { display: none; }
+    .creds { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .creds input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; min-width: 0; flex: 1 1 180px; }
+    .creds button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="bar">
+      <a class="brand" href="/voice-navigation-demo.html">CRUMB &amp; CO.</a>
+      <nav id="site-nav"></nav>
+    </div>
+  </header>
+  <main id="page"></main>
+  <div id="resume-hud" role="status" aria-live="polite"></div>
+  <script type="module" src="/src/voice-navigation-demo.ts"></script>
+</body>
+</html>

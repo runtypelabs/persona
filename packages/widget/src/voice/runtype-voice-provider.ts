@@ -99,6 +99,8 @@ const LEVEL_RMS_SCALE = 4;
 const RIFF_MAGIC = 0x52494646; // "RIFF"
 /** `prewarm()` warms at most once per this window per provider instance. */
 const PREWARM_THROTTLE_MS = 30_000;
+/** How long a call start waits for a suspended capture context to run. */
+const AUDIO_RESUME_TIMEOUT_MS = 1_000;
 /** How long `startListening()` waits on an attach still handshaking. */
 const ATTACH_HANDSHAKE_TIMEOUT_MS = 5_000;
 /** Attached-socket idle window: server default and clamp range. */
@@ -527,14 +529,20 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       });
       this.#captureContext = captureContext;
       if (captureContext.state === "suspended") {
-        // The automatic reconnect runs outside a click, where iOS can leave
-        // audio suspended (and resume() pending): end it rather than open a dead call.
-        await (auto
-          ? Promise.race([captureContext.resume(), new Promise((r) => setTimeout(r, 500))])
-          : captureContext.resume()
-        ).catch(() => {});
-        if (auto && captureContext.state === "suspended" && generation === this.#callGeneration) {
-          throw new Error((this.#notice = `${CONNECTION_LOST} Tap the mic to reconnect.`));
+        // Outside a click (the automatic reconnect, or a call restored after a
+        // page navigation) the autoplay policy can leave audio suspended and
+        // `resume()` pending forever: fail fast rather than hang or open a dead call.
+        await Promise.race([
+          captureContext.resume().catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, auto ? 500 : AUDIO_RESUME_TIMEOUT_MS)),
+        ]);
+        if (generation !== this.#callGeneration) return; // hung up meanwhile
+        if ((captureContext.state as string) !== "running") {
+          if (auto) throw new Error((this.#notice = `${CONNECTION_LOST} Tap the mic to reconnect.`));
+          // A restored call: the widget asks for a tap to resume.
+          const blocked = new Error("Voice needs a tap to start (audio is blocked until the visitor interacts with the page)");
+          blocked.name = "NotAllowedError";
+          throw blocked;
         }
       }
 
