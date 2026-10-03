@@ -249,6 +249,30 @@ describe("AgentWidgetSession.resolveApproval in client-token mode", () => {
     expect(all().some((m) => m.id === "approval-error-appr_1")).toBe(false);
   });
 
+  it("does not let an older failure reopen a card a newer decision settled in the same millisecond", async () => {
+    // Both decisions (and the newer one's approval_complete) stamp the same
+    // Date.now(), so only a per-request token tells the older failure apart.
+    vi.spyOn(Date, "now").mockReturnValue(Date.now());
+    let failFirst!: (r: Response) => void;
+    global.fetch = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<Response>((res) => { failFirst = res; }))
+      .mockImplementationOnce(async () =>
+        sse([{ type: "approval_complete", executionId: "exec_abc", approvalId: "appr_1", decision: "denied" }])
+      );
+    const { approve, bubble, all } = setup();
+    const first = approve("approved");
+    await new Promise((r) => setTimeout(r, 0));
+    await approve("denied");
+    expect(bubble()?.approval?.status).toBe("denied");
+    failFirst(Response.json({ error: "Failed to process approval" }, { status: 500 }));
+    await first;
+
+    expect(bubble()?.approval?.status).toBe("denied");
+    expect(all().some((m) => m.id === "approval-error-appr_1")).toBe(false);
+    vi.restoreAllMocks();
+  });
+
   it("keeps the failure notice when a retry rejects without a response", async () => {
     global.fetch = vi
       .fn()
