@@ -8214,6 +8214,11 @@ export type AgentWidgetToolCall = {
   startedAt?: number;
   completedAt?: number;
   durationMs?: number;
+  /**
+   * The call paused for an approval that was granted, and the agent re-ran it
+   * as a new tool call: that later call carries the result, this one has none.
+   */
+  superseded?: boolean;
 };
 
 /**
@@ -8236,6 +8241,8 @@ export type AgentWidgetApproval = {
    */
   reason?: string;
   parameters?: unknown;
+  /** The paused tool call this approval gates (`approval_start.toolCallId`). */
+  toolCallId?: string;
   resolvedAt?: number;
 };
 

@@ -101,6 +101,7 @@ const getToolSummaryText = (
   }
 
   if (tool.success === false) summary += " · Failed";
+  else if (tool.superseded) summary += " · Approved, ran again below";
   return { summary, previewText, isActive };
 };
 

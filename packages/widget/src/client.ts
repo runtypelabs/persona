@@ -4256,6 +4256,9 @@ export class AgentWidgetClient {
                 ? { reason: payload.reason }
                 : {}),
               parameters: payload.parameters,
+              ...(typeof payload.toolCallId === "string" && payload.toolCallId
+                ? { toolCallId: payload.toolCallId }
+                : {}),
             },
           };
           emitMessage(approvalMessage);
