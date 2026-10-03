@@ -14,6 +14,7 @@ import {
   AgentWidgetEvent,
   AgentWidgetMessage,
   AgentWidgetApproval,
+  AgentWidgetToolCall,
   AgentWidgetApprovalDecisionOptions,
   WebMcpConfirmInfo,
   AgentExecutionState,
@@ -4586,6 +4587,17 @@ export class AgentWidgetSession {
     if (event.type === "message") {
       this.upsertMessage(event.message);
 
+      // A resolved approval reaches this handler only from the server's
+      // `approval_complete` (resolveApproval's optimistic update upserts
+      // directly), so it is safe to settle the paused tool bubble here.
+      if (
+        event.message.variant === "approval" &&
+        event.message.approval &&
+        event.message.approval.status !== "pending"
+      ) {
+        this.settleApprovalPausedToolCall(event.message.id);
+      }
+
       // Track the open assistant text bubble's REAL streamed id so a durable
       // reconnect keeps filling the same message. The proxy path auto-generates
       // this id (it isn't the session's pre-generated one), so we must read it
@@ -5130,6 +5142,40 @@ export class AgentWidgetSession {
     }
   }
 
+  /**
+   * Settle the tool bubble an approval paused. The server resumes an approval
+   * by re-running the agent, which re-issues the call under a new id, so no
+   * terminal tool frame ever arrives for the paused one. Denied and timed-out
+   * calls settle as failed; an approved call settles as superseded, since the
+   * re-issued call carries its result. A call already complete is left alone.
+   */
+  private settleApprovalPausedToolCall(approvalMessageId: string) {
+    const approval = this.messages.find((m) => m.id === approvalMessageId)?.approval;
+    if (!approval?.toolCallId || approval.status === "pending") return;
+    const toolMessage = this.messages.find(
+      (m) => m.variant === "tool" && m.toolCall?.id === approval.toolCallId
+    );
+    const tool = toolMessage?.toolCall;
+    if (!toolMessage || !tool || tool.status === "complete") return;
+    const completedAt = Date.now();
+    const settled: AgentWidgetToolCall = {
+      ...tool,
+      status: "complete",
+      approvalStatus: approval.status,
+      completedAt,
+      ...(tool.startedAt !== undefined
+        ? { durationMs: Math.max(0, completedAt - tool.startedAt) }
+        : {}),
+      ...(approval.status === "approved"
+        ? { superseded: true }
+        : {
+            success: false,
+            error: approval.status === "denied" ? "Denied" : "Approval timed out",
+          }),
+    };
+    this.upsertMessage({ ...toolMessage, streaming: false, toolCall: settled });
+  }
+
   private appendMessage(message: AgentWidgetMessage) {
     const withSequence = this.ensureSequence(message);
     this.messages = this.sortMessages([...this.messages, withSequence]);
@@ -5221,6 +5267,7 @@ export class AgentWidgetSession {
           toolType: incoming.toolType ?? prior.toolType,
           reason: incoming.reason ?? prior.reason,
           parameters: incoming.parameters ?? prior.parameters,
+          toolCallId: incoming.toolCallId ?? prior.toolCallId,
         };
       }
       // Auto-resolved local-tool equivalent (`webmcp:*` and the built-in
