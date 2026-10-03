@@ -1,5 +1,14 @@
 # @runtypelabs/persona
 
+## 4.26.1
+
+### Patch Changes
+
+- 997d1f8: An approved tool call no longer flashes "Approved, ran again below" before its real result appears. The server now runs the paused call itself under its original id, so the widget waits until the resumed stream ends and settles the paused bubble only if no result arrived for it (older servers that re-issue the call under a new id still get the superseded settle).
+- 4bca64b: Full-duplex (GPT-Live) calls no longer show a delegated answer twice. The Runtype voice provider now declares the `delegation_read_back` capability. When the server confirms it, the provider hides exactly the spoken read-back the server tags with an answered delegation's `delegationId`, instead of guessing "the first new assistant utterance after `delegation_completed`". That guess hid a filler that was still finishing, and showed the real read-back as a second reply. A read-back is hidden only from its first frame, so a caption is never left half-shown. Servers that don't confirm the capability keep the previous behavior.
+
+  `VoiceDelegationResult` gains an optional `inChat` (default `true`). Set it to `false` for an answer no chat message carries, so its spoken read-back stays visible as a caption. A spoken "cancel that" for a pending voice approval now does this, so its acknowledgement no longer vanishes from the chat.
+
 ## 4.26.0
 
 ### Minor Changes
