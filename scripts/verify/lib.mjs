@@ -135,7 +135,7 @@ export function renderReport({ title, identity, entries, verdicts = [], assetBas
   }
   if (verdicts.length) {
     lines.push("| Feature | Result | Note |", "| --- | --- | --- |");
-    for (const v of verdicts) lines.push(`| ${v.feature} | ${v.pass ? "✅ verified" : v.skipped ? "⏭️ not driven" : "❌ failed"} | ${(v.note ?? "").replace(/\|/g, "\\|")} |`);
+    for (const v of verdicts) lines.push(`| ${v.feature} | ${v.pass ? "✅ verified" : v.unproven ? "⚠️ proof not published" : v.skipped ? "⏭️ not driven" : "❌ failed"} | ${(v.note ?? "").replace(/\|/g, "\\|")} |`);
     lines.push("");
   }
   const byFeature = new Map();
@@ -160,6 +160,16 @@ export function renderReport({ title, identity, entries, verdicts = [], assetBas
 }
 
 export const REPORT_MARKER = "<!-- persona-verify-evidence -->";
+
+/** A passing verdict whose feature has no published proof left is shown as unproven, not verified. */
+export function demoteUnproven(verdicts, entries) {
+  const proven = new Set(entries.filter((e) => e.files.length).map((e) => e.feature));
+  return verdicts.map((v) =>
+    v.pass && !proven.has(v.feature)
+      ? { ...v, pass: false, unproven: true, note: `${v.note ? `${v.note}; ` : ""}proof files were too large to publish` }
+      : v,
+  );
+}
 
 /** Drop files that were not published from manifest entries, noting each omission on its entry. */
 export function withoutFiles(entries, omitted, reason) {

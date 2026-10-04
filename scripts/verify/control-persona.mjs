@@ -13,6 +13,7 @@ import {
   REPORT_MARKER,
   buildPageUrl,
   chromiumArgs,
+  demoteUnproven,
   parseArgs,
   renderReport,
   slug,
@@ -648,6 +649,7 @@ const commands = {
     const files = all.filter((f) => !tooBig.includes(f));
     // The report must only link files that were actually pushed.
     const entries = withoutFiles(manifest.entries, tooBig, "over 20 MB; kept locally in .verify/");
+    manifest.verdicts = demoteUnproven(manifest.verdicts, entries);
     const title = args.title ?? "Persona verification";
     if (args["dry-run"]) {
       const md = renderReport({ title, identity: identityFor(state), entries, verdicts: manifest.verdicts, assetBase: `https://raw.githubusercontent.com/${repo}/<commit>/${prefix}` });

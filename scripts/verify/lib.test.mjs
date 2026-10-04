@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   buildPageUrl,
   chromiumArgs,
+  demoteUnproven,
   parseArgs,
   renderReport,
   slug,
@@ -105,6 +106,26 @@ test("withoutFiles drops unpublished files and says so on the entry", () => {
   assert.deepEqual(kept.files, ["01-a.png"]);
   assert.deepEqual(trimmed.files, ["02-b.gif"]);
   assert.equal(trimmed.note, "ok; `02-b.webm` not published (over 20 MB)");
+});
+
+test("demoteUnproven stops a pass with no published proof from reading as verified", () => {
+  const [unproven, proven, skipped] = demoteUnproven(
+    [
+      { feature: "voice", pass: true, note: "ok" },
+      { feature: "approvals", pass: true },
+      { feature: "streaming", pass: false, skipped: true },
+    ],
+    [
+      { feature: "voice", files: [] },
+      { feature: "approvals", files: ["01-a.png"] },
+    ],
+  );
+  assert.equal(unproven.pass, false);
+  assert.equal(unproven.unproven, true);
+  assert.match(unproven.note, /^ok; proof files were too large/);
+  assert.match(renderReport({ title: "t", entries: [], verdicts: [unproven] }), /⚠️ proof not published/);
+  assert.equal(proven.pass, true);
+  assert.equal(skipped.skipped, true);
 });
 
 test("renderReport lists a feature's entries in capture order", () => {
