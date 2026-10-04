@@ -161,14 +161,20 @@ export function renderReport({ title, identity, entries, verdicts = [], assetBas
 
 export const REPORT_MARKER = "<!-- persona-verify-evidence -->";
 
-/** A passing verdict whose feature has no published proof left is shown as unproven, not verified. */
-export function demoteUnproven(verdicts, entries) {
-  const proven = new Set(entries.filter((e) => e.files.length).map((e) => e.feature));
-  return verdicts.map((v) =>
-    v.pass && !proven.has(v.feature)
-      ? { ...v, pass: false, unproven: true, note: `${v.note ? `${v.note}; ` : ""}proof files were too large to publish` }
-      : v,
-  );
+/**
+ * A passing verdict whose feature has no published proof is shown as unproven, not verified.
+ * `captured` is the manifest before unpublished files were dropped, so the note can tell
+ * "everything was too large" apart from "nothing was ever captured".
+ */
+export function demoteUnproven(verdicts, published, captured = published) {
+  const has = (entries) => new Set(entries.filter((e) => e.files.length).map((e) => e.feature));
+  const proven = has(published);
+  const hadFiles = has(captured);
+  return verdicts.map((v) => {
+    if (!v.pass || proven.has(v.feature)) return v;
+    const why = hadFiles.has(v.feature) ? "proof files were too large to publish" : "no evidence was captured for this feature";
+    return { ...v, pass: false, unproven: true, note: `${v.note ? `${v.note}; ` : ""}${why}` };
+  });
 }
 
 /** Drop files that were not published from manifest entries, noting each omission on its entry. */

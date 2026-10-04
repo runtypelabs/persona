@@ -124,6 +124,14 @@ test("demoteUnproven stops a pass with no published proof from reading as verifi
   assert.equal(unproven.unproven, true);
   assert.match(unproven.note, /^ok; proof files were too large/);
   assert.match(renderReport({ title: "t", entries: [], verdicts: [unproven] }), /⚠️ proof not published/);
+  // Too large vs never captured get different reasons.
+  const [tooBig, none] = demoteUnproven(
+    [{ feature: "voice", pass: true }, { feature: "theme", pass: true }],
+    [{ feature: "voice", files: [] }],
+    [{ feature: "voice", files: ["01-v.webm"] }],
+  );
+  assert.match(tooBig.note, /too large/);
+  assert.match(none.note, /no evidence was captured/);
   assert.equal(proven.pass, true);
   assert.equal(skipped.skipped, true);
 });
