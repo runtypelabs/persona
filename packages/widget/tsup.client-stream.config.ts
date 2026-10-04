@@ -3,14 +3,18 @@ import { defineConfig } from "tsup";
 /**
  * Dedicated config for the standalone SSE stream-processor chunk
  * (`dist/client-stream.js`), the lazy half of `AgentWidgetClient` in the
- * IIFE/CDN bundle. `tsup.global.config.ts` marks `./client-stream` external and
+ * IIFE/CDN bundle. `tsup.global.config.ts` marks the subpath external and
  * `index-global.ts` registers a sibling-URL loader for this file; the client
- * starts fetching it when a dispatch begins. ESM/CJS builds inline
- * `./client-stream` instead, so only CDN consumers load this file.
+ * starts fetching it when a dispatch begins. The ESM/CJS main entry loads the same chunk through
+ * the `@runtypelabs/persona/client-stream` subpath.
  */
 export default defineConfig({
   entry: { "client-stream": "src/client-stream.ts" },
-  format: ["esm"],
+  // ESM for the IIFE sibling-URL loader and bundler consumers; CJS because
+  // esbuild lowers the npm loader's self-referencing `import()` to `require()`
+  // inside `dist/index.cjs`, which resolves this chunk via the `require` condition.
+  format: ["esm", "cjs"],
+  dts: true,
   minify: true,
   splitting: false,
   outDir: "dist",

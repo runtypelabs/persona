@@ -1,6 +1,7 @@
-import { applyActivityRow, activityDisplay, activityVariant, activityDuration } from "./activity-row";
+import { activityDisplay, activityVariant, activityDuration } from "./activity-row";
+import { applyActivityRow } from "./activity-row-render";
 import { createElement } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import { renderActivityIcon } from "./activity-icon";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { DEFAULT_REASONING_DISPLAY } from "../defaults";
 import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/formatting";
@@ -218,7 +219,7 @@ export const createReasoningBubble = (
   // before the header content, which `appendHeaderToggle` adds next.
   if (reasoningDisplayConfig.iconName && !skipCustomElement) {
     const iconHost = createElement("span", "persona-reasoning-header-icon");
-    const glyph = renderLucideIcon(
+    const glyph = renderActivityIcon(
       reasoningDisplayConfig.iconName,
       16,
       "currentColor",

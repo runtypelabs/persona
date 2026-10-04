@@ -18,6 +18,14 @@ import "./src/ui-extras-eager";
 import "./src/session-actions-eager";
 // And the visitor-history shell (`history-shell.js` chunk in the IIFE).
 import "./src/history-shell-eager";
+// Tool / reasoning bubbles (`activity-ui` chunk): provide them eagerly so
+// renders are synchronous, and route direct component mounts' icons through
+// the core registry the way ui.ts does on adoption.
+import * as activityUi from "./src/activity-ui";
+import { provideActivityUi } from "./src/activity-ui-loader";
+import { renderLucideIcon } from "./src/utils/icons";
+provideActivityUi(activityUi);
+activityUi.initActivityUi({ renderIcon: renderLucideIcon });
 
 // Isolated attachTooltip tests should not wait on the product 200ms default.
 // Widget mounts re-apply `config.tooltip` (200 / 300) on create/update.

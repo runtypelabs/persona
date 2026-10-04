@@ -1,5 +1,6 @@
 import { appendToolDetails } from "./tool-details";
-import { applyActivityRow, activityDisplay, activityVariant } from "./activity-row";
+import { activityDisplay, activityVariant } from "./activity-row";
+import { applyActivityRow } from "./activity-row-render";
 import { createElement, createNode } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { DEFAULT_TOOL_CALL_DISPLAY } from "../defaults";

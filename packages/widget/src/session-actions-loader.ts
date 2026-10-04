@@ -8,10 +8,12 @@ import type {
 
 /**
  * Loader indirection for the session's approval / ask-user-question / WebMCP
- * resolve paths (`session-actions.ts`). The ESM/CJS fallback imports
- * `./session-actions` directly (inlined by `--splitting false`); the IIFE/CDN
- * build marks it external and registers a loader for the sibling
- * `session-actions.js` chunk (see `index-global.ts`).
+ * resolve paths (`session-actions.ts`). The
+ * ESM/CJS fallback imports the package's own
+ * `@runtypelabs/persona/session-actions` subpath, which `build:client` marks external so
+ * bundlers code-split it out of `dist/index.{js,cjs}`; the IIFE/CDN build marks
+ * it external and registers a loader for the sibling `session-actions.js`
+ * chunk (see `index-global.ts`).
  */
 export type SessionActionsModule = {
   resolveApproval: typeof resolveApproval;
@@ -21,7 +23,7 @@ export type SessionActionsModule = {
 };
 
 const { setLoader, load, provide, getSync } = createChunkLoader<SessionActionsModule>({
-  fallbackImport: () => import("./session-actions"),
+  fallbackImport: () => import("@runtypelabs/persona/session-actions"),
 });
 
 /** Override how the chunk is fetched (the IIFE build registers a sibling-URL loader). */
@@ -30,7 +32,7 @@ export const setSessionActionsLoader = setLoader;
 /** Load the resolve paths. Memoized; retries after rejection. */
 export const loadSessionActions = load;
 
-/** Eagerly supply the module (`session-actions-eager.ts`: npm builds and tests). */
+/** Eagerly supply the module (`session-actions-eager.ts`: tests). */
 export const provideSessionActions = provide;
 
 /** Synchronous access once loaded/provided; null before that. */

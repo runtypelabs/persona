@@ -3,14 +3,18 @@ import { defineConfig } from "tsup";
 /**
  * Dedicated config for the standalone session resolve-paths chunk
  * (`dist/session-actions.js`: approvals, ask_user_question answers, WebMCP /
- * suggest_replies resumes). `tsup.global.config.ts` marks `./session-actions`
+ * suggest_replies resumes). `tsup.global.config.ts` marks the subpath
  * external and `index-global.ts` registers a sibling-URL loader for this file;
- * the session prefetches it when the agent pauses. ESM/CJS builds inline
- * `./session-actions` instead, so only CDN consumers load this file.
+ * the session prefetches it when the agent pauses. The ESM/CJS main entry loads the same chunk through
+ * the `@runtypelabs/persona/session-actions` subpath.
  */
 export default defineConfig({
   entry: { "session-actions": "src/session-actions.ts" },
-  format: ["esm"],
+  // ESM for the IIFE sibling-URL loader and bundler consumers; CJS because
+  // esbuild lowers the npm loader's self-referencing `import()` to `require()`
+  // inside `dist/index.cjs`, which resolves this chunk via the `require` condition.
+  format: ["esm", "cjs"],
+  dts: true,
   minify: true,
   splitting: false,
   outDir: "dist",

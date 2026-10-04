@@ -1,7 +1,7 @@
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { createNode } from "../utils/dom";
 import { formatUnknownValue } from "../utils/formatting";
-import { renderLucideIcon } from "../utils/icons";
+import { renderActivityIcon } from "./activity-icon";
 
 const isEmptyRequest = (value: unknown): boolean => {
   if (value == null) return true;
@@ -53,7 +53,7 @@ export function appendToolDetails(content: HTMLElement, message: AgentWidgetMess
       className: "persona-tool-detail-copy",
       attrs: { type: "button", "data-persona-copy-tool-detail": "", "aria-label": `Copy ${label.toLowerCase()}`, title: `Copy ${label.toLowerCase()}` },
     });
-    const icon = renderLucideIcon("copy", 14, "currentColor", 1.7);
+    const icon = renderActivityIcon("copy", 14, "currentColor", 1.7);
     if (icon) copy.appendChild(icon);
     block.append(title, pre, copy);
     content.appendChild(block);
@@ -85,7 +85,7 @@ export async function copyToolDetail(button: HTMLButtonElement): Promise<void> {
     button.dataset.copied = "true";
     button.setAttribute("aria-label", "Copied");
     button.title = "Copied";
-    const icon = renderLucideIcon("check", 14, "currentColor", 2);
+    const icon = renderActivityIcon("check", 14, "currentColor", 2);
     if (icon) button.replaceChildren(icon);
   } catch {
     button.setAttribute("aria-label", "Copy failed — try again");
@@ -95,7 +95,7 @@ export async function copyToolDetail(button: HTMLButtonElement): Promise<void> {
     delete button.dataset.copied;
     button.setAttribute("aria-label", label);
     button.title = label;
-    const icon = renderLucideIcon("copy", 14, "currentColor", 1.7);
+    const icon = renderActivityIcon("copy", 14, "currentColor", 1.7);
     if (icon) button.replaceChildren(icon);
     copyResets.delete(button);
   }, 1800));

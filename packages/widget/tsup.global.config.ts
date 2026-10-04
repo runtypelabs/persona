@@ -30,12 +30,12 @@ export default defineConfig({
     options.external = [...(options.external ?? []), "@mcp-b/webmcp-polyfill"];
     // Keep the hosted Runtype TTS read-aloud engine + browser-fallback wrapper
     // (and the AudioPlaybackManager they bundle) out of the CDN payload. esbuild
-    // leaves the loader's default `import("./runtype-tts-entry")` in place as a
-    // dead relative import; it is never invoked here because `index-global.ts`
+    // leaves the loader's default `import("@runtypelabs/persona/runtype-tts")` in
+    // place as a dead external import; it is never invoked here because `index-global.ts`
     // registers a loader that imports the standalone `runtype-tts.js` chunk from
     // a sibling URL instead.
     // `provider: 'runtype'` is opt-in, so most pages never fetch it.
-    options.external.push("./runtype-tts-entry");
+    options.external.push("@runtypelabs/persona/runtype-tts");
 
     // Keep the markdown parsers (marked and dompurify) out of the CDN payload. esbuild
     // leaves the loader's default import in place; it is never invoked here because
@@ -44,32 +44,33 @@ export default defineConfig({
     options.external.push("./markdown-parsers-entry");
 
     // Keep the SSE stream processor out of the CDN payload. Same scheme as the
-    // markdown parsers: the loader's relative `./client-stream` import is left
-    // dead here; `index-global.ts` registers a sibling-URL loader for the
+    // markdown parsers: the loader's `@runtypelabs/persona/client-stream`
+    // import is left dead here; `index-global.ts` registers a sibling-URL loader for the
     // standalone `client-stream.js` chunk, which the client starts fetching as
     // soon as a dispatch begins (in parallel with the request itself).
-    options.external.push("./client-stream");
+    options.external.push("@runtypelabs/persona/client-stream");
 
     // Keep the visitor-history REST calls (list/get/delete conversations,
     // identity binding) out of the CDN payload: sibling-URL chunk
     // `client-history.js`, fetched on the first history call.
-    options.external.push("./client-history");
+    options.external.push("@runtypelabs/persona/client-history");
 
     // Keep UI glue for opt-in / interaction-only features (ask-user sheet
     // handlers, ...) out of the CDN payload: sibling-URL chunk `ui-extras.js`,
     // warmed when such a feature first activates.
-    options.external.push("./ui-extras-entry");
+    options.external.push("@runtypelabs/persona/ui-extras");
     // Keep the session's approval / ask-user-question / WebMCP resolve paths
     // out of the CDN payload. Same scheme: sibling-URL chunk
     // `session-actions.js`, prefetched as soon as the agent pauses for an
     // approval or a local tool.
-    options.external.push("./session-actions");
+    options.external.push("@runtypelabs/persona/session-actions");
     // Keep the visitor-history shell (placement, rail, open/close, conversation
-    // operations) out of the CDN payload. Same scheme: the loader's relative
-    // `./history-shell` import is left dead here; `index-global.ts` registers a
-    // sibling-URL loader for `history-shell.js`, fetched at mount only when
+    // operations) out of the CDN payload. Same scheme: the loader's
+    // `@runtypelabs/persona/history-shell` import is left dead here;
+    // `index-global.ts` registers a sibling-URL loader for `history-shell.js`,
+    // fetched at mount only when
     // `features.history.enabled`, or on the first history API call.
-    options.external.push("./history-shell");
+    options.external.push("@runtypelabs/persona/history-shell");
 
     // Keep the context-mentions runtime (controller/manager/menu) out of the CDN
     // payload. The loader's fallback `import("@runtypelabs/persona/context-mentions")`
@@ -110,6 +111,12 @@ export default defineConfig({
     // CDN payload. Same scheme: sibling-URL chunk `approval-ui.js`, fetched
     // when the first approval message arrives.
     options.external.push("@runtypelabs/persona/approval-ui");
+
+    // Keep the tool / reasoning bubbles, activity rows, and collapsible tool
+    // groups out of the CDN payload. Same scheme: sibling-URL chunk
+    // `activity-ui.js`, warmed on first panel render (when tool calls or
+    // reasoning can show) or when the first such message renders.
+    options.external.push("@runtypelabs/persona/activity-ui");
 
     // Keep the durable-session reconnect loop out of the CDN payload. Same
     // scheme: sibling-URL chunk `session-reconnect.js`, fetched only when a

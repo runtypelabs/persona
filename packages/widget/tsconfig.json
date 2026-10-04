@@ -21,12 +21,19 @@
       "@runtypelabs/persona/event-stream-view": ["src/event-stream-view.ts"],
       "@runtypelabs/persona/animations-extra": ["src/animations-extra.ts"],
       "@runtypelabs/persona/approval-ui": ["src/approval-ui.ts"],
+      "@runtypelabs/persona/activity-ui": ["src/activity-ui.ts"],
       "@runtypelabs/persona/session-reconnect": ["src/session-reconnect.ts"],
       "@runtypelabs/persona/webmcp-runtime": ["src/webmcp-runtime.ts"],
       "@runtypelabs/persona/icons-extra": ["src/icons-extra.ts"],
       "@runtypelabs/persona/artifacts-ui": ["src/artifacts-ui.ts"],
       "@runtypelabs/persona/voice-runtime": ["src/voice-runtime.ts"],
-      "@runtypelabs/persona/forms-ui": ["src/forms-ui.ts"]
+      "@runtypelabs/persona/forms-ui": ["src/forms-ui.ts"],
+      "@runtypelabs/persona/client-stream": ["src/client-stream.ts"],
+      "@runtypelabs/persona/client-history": ["src/client-history.ts"],
+      "@runtypelabs/persona/ui-extras": ["src/ui-extras-entry.ts"],
+      "@runtypelabs/persona/session-actions": ["src/session-actions.ts"],
+      "@runtypelabs/persona/history-shell": ["src/history-shell.ts"],
+      "@runtypelabs/persona/runtype-tts": ["src/voice/runtype-tts-entry.ts"]
     },
     "declaration": true,
     "outDir": "dist"

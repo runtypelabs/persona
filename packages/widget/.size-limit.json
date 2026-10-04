@@ -2,7 +2,7 @@
   {
     "name": "⛔ CRITICAL · CDN browser payload (index.global.js)",
     "path": "dist/index.global.js",
-    "limit": "166 kB",
+    "limit": "159 kB",
     "gzip": true
   },
   {
@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "215.25 kB",
+    "limit": "180.5 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "216 kB",
+    "limit": "181.25 kB",
     "gzip": true
   },
   {
@@ -111,6 +111,12 @@
     "name": "Lazy · approval UI chunk (approval-ui.js)",
     "path": "dist/approval-ui.js",
     "limit": "7.5 kB",
+    "gzip": true
+  },
+  {
+    "name": "Lazy · tool / reasoning activity UI chunk (activity-ui.js)",
+    "path": "dist/activity-ui.js",
+    "limit": "10.5 kB",
     "gzip": true
   },
   {

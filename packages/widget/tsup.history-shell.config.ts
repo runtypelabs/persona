@@ -3,9 +3,9 @@ import { defineConfig } from "tsup";
 /**
  * Dedicated config for the standalone visitor-history shell chunk
  * (`dist/history-shell.js`), the lazy half of `ui.ts`'s history support in the
- * IIFE/CDN bundle. `tsup.global.config.ts` marks `./history-shell` external and
- * `index-global.ts` registers a sibling-URL loader for this file. ESM/CJS
- * builds inline `./history-shell` instead, so only CDN consumers load it.
+ * IIFE/CDN bundle. `tsup.global.config.ts` marks the subpath external and
+ * `index-global.ts` registers a sibling-URL loader for this file. The ESM/CJS main entry loads the same chunk through
+ * the `@runtypelabs/persona/history-shell` subpath.
  *
  * Everything stateful the shell touches (icon registry, tooltips, chunk
  * loaders, provider registry) arrives through its `ctx`, so the copies of
@@ -13,7 +13,11 @@ import { defineConfig } from "tsup";
  */
 export default defineConfig({
   entry: { "history-shell": "src/history-shell.ts" },
-  format: ["esm"],
+  // ESM for the IIFE sibling-URL loader and bundler consumers; CJS because
+  // esbuild lowers the npm loader's self-referencing `import()` to `require()`
+  // inside `dist/index.cjs`, which resolves this chunk via the `require` condition.
+  format: ["esm", "cjs"],
+  dts: true,
   minify: true,
   splitting: false,
   outDir: "dist",

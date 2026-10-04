@@ -1,4 +1,4 @@
-import { activityVariant, activityDuration, createActivityLifecycle, createActivityGroup } from "./components/activity-row";
+import { activityVariant, activityDuration, createActivityLifecycle } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
 import { usesSessionVoice } from "./utils/voice-support";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
@@ -268,9 +268,6 @@ import {
   getBubbleClasses,
   CUSTOM_MESSAGE_ACTION_PREFIX,
 } from "./components/message-bubble";
-import { createReasoningBubble, updateReasoningBubbleUI } from "./components/reasoning-bubble";
-import { copyToolDetail } from "./components/tool-details";
-import { createToolBubble, updateToolBubbleUI } from "./components/tool-bubble";
 import {
   ensureAskUserQuestionSheet,
   isAskUserQuestionMessage,
@@ -284,6 +281,7 @@ import {
 } from "./suggest-replies-tool";
 import { formatElapsedMs, isShortReasoning } from "./utils/formatting";
 import { loadApprovalUi, getApprovalUiSync, type ApprovalUiModule } from "./approval-ui-loader";
+import { loadActivityUi, getActivityUiSync, type ActivityUiModule } from "./activity-ui-loader";
 import { getWebMcpToolDisplayTitle } from "./webmcp-bridge";
 import type { AgentWidgetPlugin } from "./plugins/types";
 import {
@@ -928,9 +926,45 @@ export const createAgentExperience = (
     messageCache.delete(id);
     const bubble = Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]")).find(node => node.dataset.messageId === id);
     if (!bubble) return;
-    if (kind === "tool") updateToolBubbleUI(id, bubble, toolExpansionState, config);
-    else updateReasoningBubbleUI(id, bubble, reasoningExpansionState);
+    if (kind === "tool") activityUi?.updateToolBubbleUI(id, bubble, toolExpansionState, config);
+    else activityUi?.updateReasoningBubbleUI(id, bubble, reasoningExpansionState);
   });
+  // Tool and reasoning bubbles (plus activity rows and collapsible tool
+  // groups) live in the lazy activity-ui chunk. Until it lands, those messages
+  // render as empty preserved rows; `onActivityUiReady` (assigned at the end
+  // of the factory) clears the cache and re-renders the real bubbles. The UI
+  // warms the chunk on first panel render, so it is normally ready before the
+  // first tool call streams in.
+  let activityUi: ActivityUiModule | null = null;
+  let activityUiDisposed = false;
+  let onActivityUiReady: (() => void) | null = null;
+  const adoptActivityUi = (mod: ActivityUiModule): void => {
+    activityUi = mod;
+    // The chunk is bundled noExternal: route its string-name icons through
+    // core's registry so host-registered icons resolve.
+    mod.initActivityUi({ renderIcon: renderLucideIcon });
+  };
+  const ensureActivityUi = (): ActivityUiModule | null => {
+    if (activityUi) return activityUi;
+    // Synchronous when provided eagerly (tests) or already loaded by another
+    // widget instance on the page.
+    const sync = getActivityUiSync();
+    if (sync) {
+      adoptActivityUi(sync);
+      return sync;
+    }
+    void loadActivityUi()
+      .then((mod) => {
+        if (activityUiDisposed || activityUi) return;
+        adoptActivityUi(mod);
+        onActivityUiReady?.();
+      })
+      .catch(() => {
+        // Failed fetch: rows stay empty; the next render retries via the
+        // loader's rejection-retry semantics.
+      });
+    return null;
+  };
   const approvalDetailsExpansionState = new Map<string, boolean>();
   const applyTooltipTiming = (): void => {
     configureTooltipTiming({
@@ -2729,7 +2763,7 @@ export const createAgentExperience = (
     if (!button) return;
     event.preventDefault();
     event.stopPropagation();
-    void copyToolDetail(button);
+    void activityUi?.copyToolDetail(button);
   });
 
   // Add event delegation for reasoning and tool bubble expansion
@@ -2768,14 +2802,14 @@ export const createAgentExperience = (
       } else {
         reasoningExpansionState.add(messageId);
       }
-      updateReasoningBubbleUI(messageId, bubble, reasoningExpansionState);
+      activityUi?.updateReasoningBubbleUI(messageId, bubble, reasoningExpansionState);
     } else if (bubbleType === 'tool') {
       if (toolExpansionState.has(messageId)) {
         toolExpansionState.delete(messageId);
       } else {
         toolExpansionState.add(messageId);
       }
-      updateToolBubbleUI(messageId, bubble, toolExpansionState, config);
+      activityUi?.updateToolBubbleUI(messageId, bubble, toolExpansionState, config);
     } else if (bubbleType === 'approval' && approvalUi) {
       // approvalUi is always set here: approval bubbles only exist after the
       // chunk was adopted. The guard keeps a stray click on a stub harmless.
@@ -4620,6 +4654,9 @@ export const createAgentExperience = (
   destroyCallbacks.push(() => {
     approvalUiDisposed = true;
     teardownBuiltInApprovals?.();
+  });
+  destroyCallbacks.push(() => {
+    activityUiDisposed = true;
   });
 
   // Guard the forms-ui heal the same way: a chunk resolution after destroy
@@ -6519,16 +6556,28 @@ export const createAgentExperience = (
       } else if (matchingPlugin) {
         if (message.variant === "reasoning" && message.reasoning && matchingPlugin.renderReasoning) {
           if (!showReasoning) return;
+          // The plugin may call `defaultRenderer`, so hold the slot until the
+          // activity-ui chunk can supply it (`onActivityUiReady` re-renders).
+          const activityMod = ensureActivityUi();
+          if (!activityMod) {
+            tempContainer.appendChild(createMessageRow(message.id, message.role));
+            return;
+          }
           bubble = matchingPlugin.renderReasoning({
             message,
-            defaultRenderer: () => createReasoningBubble(message, config, reasoningExpansionState),
+            defaultRenderer: () => activityMod.createReasoningBubble(message, config, reasoningExpansionState),
             config
           });
         } else if (message.variant === "tool" && message.toolCall && matchingPlugin.renderToolCall) {
           if (!showToolCalls) return;
+          const activityMod = ensureActivityUi();
+          if (!activityMod) {
+            tempContainer.appendChild(createMessageRow(message.id, message.role));
+            return;
+          }
           bubble = matchingPlugin.renderToolCall({
             message,
-            defaultRenderer: () => createToolBubble(message, config, toolExpansionState),
+            defaultRenderer: () => activityMod.createToolBubble(message, config, toolExpansionState),
             config
           });
         } else if (matchingPlugin.renderMessage) {
@@ -6696,10 +6745,22 @@ export const createAgentExperience = (
       if (!bubble) {
         if (message.variant === "reasoning" && message.reasoning) {
           if (!showReasoning) return;
-          bubble = createReasoningBubble(message, config, reasoningExpansionState);
+          const activityMod = ensureActivityUi();
+          if (!activityMod) {
+            // Chunk still in flight: hold the slot with an empty row;
+            // `onActivityUiReady` clears the cache and re-renders the bubble.
+            tempContainer.appendChild(createMessageRow(message.id, message.role));
+            return;
+          }
+          bubble = activityMod.createReasoningBubble(message, config, reasoningExpansionState);
         } else if (message.variant === "tool" && message.toolCall) {
           if (!showToolCalls) return;
-          bubble = createToolBubble(message, config, toolExpansionState);
+          const activityMod = ensureActivityUi();
+          if (!activityMod) {
+            tempContainer.appendChild(createMessageRow(message.id, message.role));
+            return;
+          }
+          bubble = activityMod.createToolBubble(message, config, toolExpansionState);
         } else if (message.variant === "approval" && message.approval) {
           if (config.approval === false) return;
           const approvalMod = ensureApprovalUi();
@@ -6823,6 +6884,11 @@ export const createAgentExperience = (
         groupWrapper.setAttribute("data-persona-tool-group-row", "true");
 
         if (config.features?.toolCallDisplay?.groupedMode === "collapsible") {
+          // The group row comes from the activity-ui chunk; its members are
+          // empty placeholder rows until it lands, so leave them ungrouped and
+          // let `onActivityUiReady` re-render the finished group.
+          const activityMod = ensureActivityUi();
+          if (!activityMod) return;
           const id = `tool-group-${group[0].id}`;
           const active = group.some(item => item.toolCall?.status !== "complete");
           const synthetic: AgentWidgetMessage = { ...group[0], id, toolCall: {
@@ -6834,7 +6900,7 @@ export const createAgentExperience = (
           activityLifecycle.observe(synthetic, "tool", toolExpansionState, config.features.toolCallDisplay);
           const label = `${active ? "Using" : "Used"} ${group.length} tools`;
           const custom = config.toolCall?.renderGroupedSummary?.({ messages: group, toolCalls: group.map(item => item.toolCall!), defaultSummary: label, config });
-          const row = createActivityGroup(synthetic, config, toolExpansionState.has(id), custom ?? label);
+          const row = activityMod.createActivityGroup(synthetic, config, toolExpansionState.has(id), custom ?? label);
           row.bubble.classList.add("persona-tool-group");
           row.body.dataset.personaToolGroupStack = "true";
           wrappers[0].before(groupWrapper);
@@ -7201,8 +7267,10 @@ export const createAgentExperience = (
   const warmMarkdownParsers = () => {
     if (markdownParsersWarmed) return;
     markdownParsersWarmed = true;
-    // The stream processor is needed for the first reply; warm it too.
+    // The stream processor is needed for the first reply; warm it too, and the
+    // tool/reasoning bubbles when either can show.
     loadClientStream().catch(() => {});
+    if (showToolCalls || showReasoning) ensureActivityUi();
     loadMarkdownParsers().catch(() => {
       // Failed fetch (ad blocker, offline): allow the next visibility change
       // or render to retry; the chunk loader resets its cached promise on
@@ -13670,6 +13738,7 @@ export const createAgentExperience = (
     messageCache.clear();
     renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
   };
+  onActivityUiReady = onApprovalUiReady;
 
   // Synchronously restored/seeded transcripts (sync storage adapter,
   // initialMessages, onStateLoaded) exist before any render or open — a

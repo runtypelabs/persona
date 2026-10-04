@@ -23,18 +23,13 @@ import "./markdown-parsers-eager";
 // `renderLucideIcon` contract; the IIFE/CDN build lazy-loads `icons-extra.js`.
 import "./icons-extra-eager";
 
-// Same for the SSE stream processor (lazy `client-stream.js` in the IIFE).
-import "./client-stream-eager";
-import "./client-history-eager";
-
-// And the opt-in UI glue (lazy `ui-extras.js` in the IIFE).
-import "./ui-extras-eager";
-// Same for the session's approval / local-tool resolve paths
-// (lazy `session-actions.js` in the IIFE).
-import "./session-actions-eager";
-
-// And the visitor-history shell (lazy `history-shell.js` in the IIFE).
-import "./history-shell-eager";
+// The other lazy core chunks (client-stream, client-history, ui-extras,
+// session-actions, history-shell, runtype-tts) are NOT registered eagerly here:
+// their loaders fall back to the package's own `@runtypelabs/persona/<chunk>`
+// subpaths, which `build:client` marks external, so bundlers code-split them
+// out of `dist/index.{js,cjs}` exactly as the CDN build fetches sibling chunks.
+// Every caller already handles the async path; the widget warms each chunk
+// before it is needed (first panel render, dispatch start, execution pause).
 
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";

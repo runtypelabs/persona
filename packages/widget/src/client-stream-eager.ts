@@ -1,8 +1,6 @@
 /**
- * Eager stream-processor registration for the bundled (ESM / CJS) builds.
- *
- * npm consumers bundle `client-stream.ts` anyway, so providing it up front
- * keeps streaming free of the async chunk hop. Like
+ * Eager stream-processor registration for tests. Test-only since the npm entry stopped registering it: `vitest.setup.ts`
+ * imports it so renders stay synchronous. Like
  * `markdown-parsers-eager.ts`, this module must NOT be reachable from
  * `index-global.ts`: the IIFE/CDN build fetches the `client-stream.js` chunk.
  */

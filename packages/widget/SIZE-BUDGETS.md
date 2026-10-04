@@ -44,9 +44,10 @@ history confirm dialog moved into the lazy `history-view.js` chunk.
 
 Code that only runs after something happens is split out of
 `index.global.js` into sibling chunks. Each one uses the same loader pattern as
-`markdown-parsers.js`: a relative fallback import (inlined in the ESM/CJS
-builds, which also register the module eagerly), an IIFE external, and a
-sibling-URL loader in `index-global.ts`.
+`markdown-parsers.js`: a fallback import of the package's own
+`@runtypelabs/persona/<chunk>` subpath (external in the ESM/CJS builds, see
+"npm entry code-splitting" below), an IIFE external, and a sibling-URL loader
+in `index-global.ts`.
 
 | Chunk | Contents | Fetched |
 | --- | --- | --- |
@@ -80,3 +81,38 @@ lazy chunk. `index.global.js` doesn't inline the provider and grows only by the
 status-line hook (163.94 kB gzip, 129.84 KiB Brotli), within its existing budgets.
 The after column includes the review fixes (hang-up and failure guards on the
 reconnect, and notices that hold the status line for their full time).
+
+## npm entry code-splitting
+
+The ESM/CJS entries used to inline the lazy core chunks: their loaders fell back
+to relative imports, which `--splitting false` bundled, and `index.ts`
+registered them eagerly. The loaders now fall back to the package's own
+subpaths (`./client-stream`, `./client-history`, `./ui-extras`,
+`./session-actions`, `./history-shell`, `./runtype-tts`), which
+`build:client` marks external, so consumer bundlers code-split them the way the
+CDN fetches sibling chunks. Each chunk now also builds as CJS with declarations.
+`markdown-parsers` and `icons-extra` stay eager because `markdownPostprocessor`,
+`createDefaultSanitizer` and `renderLucideIcon` are synchronous APIs.
+
+The tool and reasoning bubbles, activity rows and collapsible tool groups moved
+into a new `activity-ui.js` chunk (both builds). It is warmed on first panel
+render when tool calls or reasoning can show, and a message that renders before
+it lands holds an empty row until the chunk re-renders it, as with approvals.
+
+Measured gzip, decimal kB, against main 44901604:
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.js` | 215.17 kB | 180.10 kB | 215.25 → 180.5 kB |
+| `dist/index.cjs` | 215.95 kB | 180.96 kB | 216 → 181.25 kB |
+| `dist/index.global.js` | 163.94 kB | 158.63 kB | 166 → 159 kB |
+| `dist/activity-ui.js` | — | 10.25 kB | 10.5 kB |
+
+`index.global.js` is 125.52 KiB Brotli (was 129.84 KiB).
+
+What remains in the npm entries is core (about 157 kB, the same code the CDN
+bundle ships) plus about 23 kB of npm-only barrel exports: `generateCodeSnippet`
+(8.4 kB, also at `./codegen`), the voice provider factory (6.8 kB),
+`createDemoCarousel` (3.3 kB), `WebMcpBridge` (1.7 kB) and the theme-plugin
+factories. These are synchronous exports, so moving them to subpaths would be a
+breaking change.

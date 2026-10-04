@@ -3,13 +3,17 @@ import { defineConfig } from "tsup";
 /**
  * Dedicated config for the standalone `ui-extras` chunk (`dist/ui-extras.js`):
  * UI glue for opt-in / interaction-only features. `tsup.global.config.ts`
- * marks `./ui-extras-entry` external and `index-global.ts` registers a
- * sibling-URL loader for this file. ESM/CJS builds inline the entry instead,
- * so only CDN consumers load it.
+ * marks the subpath external and `index-global.ts` registers a
+ * sibling-URL loader for this file. The ESM/CJS main entry loads the same chunk through
+ * the `@runtypelabs/persona/ui-extras` subpath.
  */
 export default defineConfig({
   entry: { "ui-extras": "src/ui-extras-entry.ts" },
-  format: ["esm"],
+  // ESM for the IIFE sibling-URL loader and bundler consumers; CJS because
+  // esbuild lowers the npm loader's self-referencing `import()` to `require()`
+  // inside `dist/index.cjs`, which resolves this chunk via the `require` condition.
+  format: ["esm", "cjs"],
+  dts: true,
   minify: true,
   splitting: false,
   outDir: "dist",

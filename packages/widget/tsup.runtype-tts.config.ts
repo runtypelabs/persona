@@ -17,7 +17,11 @@ import { defineConfig } from "tsup";
  */
 export default defineConfig({
   entry: { "runtype-tts": "src/voice/runtype-tts-entry.ts" },
-  format: ["esm"],
+  // ESM for the IIFE sibling-URL loader and bundler consumers; CJS because
+  // esbuild lowers the npm loader's self-referencing `import()` to `require()`
+  // inside `dist/index.cjs`, which resolves this chunk via the `require` condition.
+  format: ["esm", "cjs"],
+  dts: true,
   minify: true,
   splitting: false,
   outDir: "dist",

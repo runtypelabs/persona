@@ -207,6 +207,12 @@ import { setApprovalUiLoader } from "./approval-ui-loader";
 
 setApprovalUiLoader(siblingChunk("approval-ui.js"));
 
+// Deferred activity-ui loading (tool / reasoning bubbles, activity rows): built
+// with `@runtypelabs/persona/activity-ui` external, warmed on first panel render.
+import { setActivityUiLoader } from "./activity-ui-loader";
+
+setActivityUiLoader(siblingChunk("activity-ui.js"));
+
 // ---------------------------------------------------------------------------
 // Deferred voice-runtime loading.
 //

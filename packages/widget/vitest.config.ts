@@ -28,6 +28,10 @@ export default defineConfig({
       '@runtypelabs/persona/approval-ui': fileURLToPath(
         new URL('./src/approval-ui.ts', import.meta.url)
       ),
+      // Same for the lazy activity-ui (tool / reasoning bubbles) chunk subpath.
+      '@runtypelabs/persona/activity-ui': fileURLToPath(
+        new URL('./src/activity-ui.ts', import.meta.url)
+      ),
       // Same for the lazy event-stream-view chunk subpath.
       '@runtypelabs/persona/event-stream-view': fileURLToPath(
         new URL('./src/event-stream-view.ts', import.meta.url)
@@ -55,6 +59,26 @@ export default defineConfig({
       // Keep UI-mount tests on source when the dist package has not been built.
       '@runtypelabs/persona/forms-ui': fileURLToPath(
         new URL('./src/forms-ui.ts', import.meta.url)
+      ),
+      // Lazy core chunks the loaders self-reference (vitest.setup.ts provides
+      // them eagerly; tests that simulate the lazy path still resolve source).
+      '@runtypelabs/persona/client-stream': fileURLToPath(
+        new URL('./src/client-stream.ts', import.meta.url)
+      ),
+      '@runtypelabs/persona/client-history': fileURLToPath(
+        new URL('./src/client-history.ts', import.meta.url)
+      ),
+      '@runtypelabs/persona/ui-extras': fileURLToPath(
+        new URL('./src/ui-extras-entry.ts', import.meta.url)
+      ),
+      '@runtypelabs/persona/session-actions': fileURLToPath(
+        new URL('./src/session-actions.ts', import.meta.url)
+      ),
+      '@runtypelabs/persona/history-shell': fileURLToPath(
+        new URL('./src/history-shell.ts', import.meta.url)
+      ),
+      '@runtypelabs/persona/runtype-tts': fileURLToPath(
+        new URL('./src/voice/runtype-tts-entry.ts', import.meta.url)
       ),
     },
   },
