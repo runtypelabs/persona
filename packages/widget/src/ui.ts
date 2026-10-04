@@ -5146,21 +5146,15 @@ export const createAgentExperience = (
     }
   };
   // Re-stamp a live call as the page unloads: the restore window counts from
-  // the navigation, not from when the (possibly long) call was started.
-  const handleVoicePageHide = () => {
-    pageHiding = true;
+  // the navigation, not from when the (possibly long) call was started. A
+  // back/forward-cache hide (`persisted`) isn't an unload: the page lives on.
+  const handleVoicePageHide = (event: PageTransitionEvent) => {
+    pageHiding = !event.persisted;
     if (voiceState.active) persistVoiceMetadata();
-  };
-  const handleVoicePageShow = () => {
-    pageHiding = false;
   };
   if (typeof window !== "undefined") {
     window.addEventListener("pagehide", handleVoicePageHide);
-    window.addEventListener("pageshow", handleVoicePageShow);
-    destroyCallbacks.push(() => {
-      window.removeEventListener("pagehide", handleVoicePageHide);
-      window.removeEventListener("pageshow", handleVoicePageShow);
-    });
+    destroyCallbacks.push(() => window.removeEventListener("pagehide", handleVoicePageHide));
   }
 
   const getMessagesForPersistence = () =>

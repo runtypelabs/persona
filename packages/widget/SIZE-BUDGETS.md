@@ -81,3 +81,19 @@ status-line hook (163.94 kB gzip, 129.84 KiB Brotli), within its existing budget
 The after column includes the review fixes (#479 and its follow-up: the
 suspended-audio guard on the reconnect, notices that hold the status line for
 their full time, and `auth_expired` as a plain end instead of a re-mint).
+
+## Voice across page navigation
+
+Resuming a live call on the next page of a multi-page site adds the live-call
+check, the `pagehide` re-stamp and the tap-to-resume fallback to `ui.ts`, the
+fail-fast audio start for a restored call to `RuntypeVoiceProvider`, and earlier
+calls' captions (minus delegated filler) to the call-start context. Approved
+raises (gzip; After measured on the PR rebased onto main 743db1bc, Before is
+the session_end After above):
+
+| Output | Before | After | Budget |
+| --- | ---: | ---: | ---: |
+| `dist/index.js` | 215.12 kB | 215.28 kB | 215.25 → 215.5 kB |
+| `dist/index.cjs` | 215.92 kB | 216.06 kB | 216 → 216.25 kB |
+
+`index.global.js` stays within its existing budgets (164.05 kB gzip).

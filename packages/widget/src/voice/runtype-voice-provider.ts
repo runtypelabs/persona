@@ -540,9 +540,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         if ((captureContext.state as string) !== "running") {
           if (auto) throw new Error((this.#notice = `${CONNECTION_LOST} Tap the mic to reconnect.`));
           // A restored call: the widget asks for a tap to resume.
-          const blocked = new Error("Voice needs a tap to start (audio is blocked until the visitor interacts with the page)");
-          blocked.name = "NotAllowedError";
-          throw blocked;
+          throw new Error("Audio blocked until a tap");
         }
       }
 
