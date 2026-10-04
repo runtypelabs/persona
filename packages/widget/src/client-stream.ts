@@ -1248,13 +1248,20 @@ export async function streamResponse(
           } else {
             // Buffered / dispatch-mode step: no streamed text block, but the step
             // carries the final response (and/or a stopReason) — render it as the
-            // assistant message. An empty response + stopReason still surfaces a
-            // sealed bubble so the UI can show an affordance.
+            // assistant message. An empty response + a stopReason that warrants a
+            // notice still surfaces a sealed bubble so the UI can show it. A
+            // natural stop (`end_turn` / `unknown`) has no notice, so an empty
+            // step adds nothing: a resumed leg that ends the turn after
+            // `suggest_replies` must not leave an empty bubble behind the answer.
             const hasResponse =
               finalResponse !== undefined &&
               finalResponse !== null &&
               finalResponse !== "";
-            if (hasResponse || flowStopReason) {
+            const hasNotice =
+              !!flowStopReason &&
+              flowStopReason !== "end_turn" &&
+              flowStopReason !== "unknown";
+            if (hasResponse || hasNotice) {
               const assistant = ensureAssistantMessage();
               if (flowStopReason) assistant.stopReason = flowStopReason;
               if (hasResponse) {
