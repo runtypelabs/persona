@@ -129,7 +129,7 @@ export function renderReport({ title, identity, entries, verdicts = [], assetBas
   const lines = [`## ${title}`, ""];
   if (identity) {
     lines.push(
-      `<sub>branch \`${identity.branch}\` · \`${identity.head?.slice(0, 10)}\`${identity.dirty ? " + uncommitted changes" : ""} · run \`${identity.runId}\` · ${identity.server}</sub>`,
+      `<sub>branch \`${identity.branch}\` · captured at ${(identity.captured?.length ? identity.captured : [`${identity.head?.slice(0, 10)}${identity.dirty ? " + uncommitted changes" : ""}`]).map((c) => `\`${c}\``).join(", ")} · run \`${identity.runId}\` · ${identity.server}</sub>`,
       "",
     );
   }

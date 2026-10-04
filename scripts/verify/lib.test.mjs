@@ -85,7 +85,7 @@ test("renderReport groups by feature, inlines images and links the rest", () => 
     assetBase: "https://h/x/",
   });
   assert.match(md, /## Proof/);
-  assert.match(md, /`0123456789` \+ uncommitted changes/);
+  assert.match(md, /captured at `0123456789 \+ uncommitted changes`/);
   assert.match(md, /\| approvals \| ✅ verified \| a\\\|b \|/);
   assert.match(md, /<img src="https:\/\/h\/x\/01-a\.png"/);
   assert.match(md, /\[`02-v\.webm`\]\(https:\/\/h\/x\/02-v\.webm\)/);

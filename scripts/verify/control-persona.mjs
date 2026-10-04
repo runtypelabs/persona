@@ -685,9 +685,16 @@ const commands = {
   },
 };
 
+// sha256("") truncated: the diff hash of a clean tree.
+const CLEAN_DIFF = "e3b0c44298fc";
+
+/** The revisions the evidence was actually captured at, not the checkout's state now. */
 function identityFor(state) {
   const id = sourceIdentity();
-  return { ...id, runId: state.runId, server: "apps/web vite dev (widget from source), keyless fixture" };
+  const captured = [
+    ...new Set(loadManifest(state).entries.map((e) => `${e.head.slice(0, 10)}${e.diffHash !== CLEAN_DIFF ? ` + uncommitted changes (${e.diffHash})` : ""}`)),
+  ];
+  return { ...id, captured, runId: state.runId, server: "apps/web vite dev (widget from source), keyless fixture" };
 }
 
 if (!command || args.help || command === "help") {
