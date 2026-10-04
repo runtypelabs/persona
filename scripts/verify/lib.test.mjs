@@ -122,7 +122,7 @@ test("demoteUnproven stops a pass with no published proof from reading as verifi
   );
   assert.equal(unproven.pass, false);
   assert.equal(unproven.unproven, true);
-  assert.match(unproven.note, /^ok; proof files were too large/);
+  assert.match(unproven.note, /^ok; no evidence was captured/);
   assert.match(renderReport({ title: "t", entries: [], verdicts: [unproven] }), /⚠️ proof not published/);
   // Too large vs never captured get different reasons.
   const [tooBig, none] = demoteUnproven(
