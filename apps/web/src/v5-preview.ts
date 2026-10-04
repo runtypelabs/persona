@@ -9,6 +9,22 @@ import { renderToolActivitySummary } from "../../../examples/ai-sdk-next/app/lib
 renderExamplesShell();
 const host = document.querySelector<HTMLElement>("#v5-host")!;
 const select = (name: string) => document.querySelector<HTMLSelectElement>(`#v5-${name}`)!;
+// Each preset uses the same six public fields. The theme selector remains an
+// explicit override so every brand can be compared in both light and dark.
+const brandPresets: Record<string, NonNullable<AgentWidgetConfig["brand"]>> = {
+  editorial: {
+    accent: "#b9a68a", neutral: "#171715", font: 'Georgia, "Times New Roman", serif',
+    radius: "md", density: "comfortable", elevation: "flat",
+  },
+  studio: {
+    accent: "#7c3aed", neutral: "#f5f3ff", font: 'Inter, system-ui, sans-serif',
+    radius: "lg", density: "spacious", elevation: "raised",
+  },
+  terminal: {
+    accent: "#22c55e", neutral: "#101916", font: '"SFMono-Regular", Consolas, monospace',
+    radius: "none", density: "compact", elevation: "subtle",
+  },
+};
 const status = document.querySelector<HTMLElement>("#v5-status")!;
 const streamButton = document.querySelector<HTMLButtonElement>("#v5-stream")!;
 let widget: ReturnType<typeof initAgentWidget>;
@@ -98,6 +114,15 @@ function cancelStream() {
 function configuration(): AgentWidgetConfig {
   const v5 = select("version").value === "v5";
   const embedded = select("scene").value === "embedded";
+  const headerIcon = select("header-icon").value;
+  const iconBackground = select("icon-background").value;
+  const iconPadding = select("icon-padding").value;
+  const headerTheme = {
+    ...(iconBackground === "default" ? {} : iconBackground === "transparent"
+      ? { iconBackground: "transparent", iconForeground: "semantic.colors.text" }
+      : { iconBackground: "semantic.colors.primary", iconForeground: "components.button.primary.foreground" }),
+    ...(iconPadding === "default" ? {} : { iconPadding }),
+  };
   const detail = select("details").value;
   const variant = select("variant").value as "default" | "row" | "card";
   const activityStyle = variant === "default" ? {} : { variant };
@@ -116,6 +141,7 @@ function configuration(): AgentWidgetConfig {
     apiUrl: "/v5-local-demo",
     customFetch: createDemoEchoFetch({ reply: () => "This is a local preview reply. Try opening tool details, switching themes, or comparing V4 and V5. No message is sent to a model." }),
     future: { v5Defaults: v5 },
+    ...(brandPresets[select("brand").value] ? { brand: brandPresets[select("brand").value] } : {}),
     ...(select("error-display").value === "default" ? {} : { errorDisplay: select("error-display").value as "bubble" | "block" }),
     ...(select("scene").value.startsWith("approval") ? {
       approval: {
@@ -138,18 +164,28 @@ function configuration(): AgentWidgetConfig {
     } : {}),
     colorScheme: select("theme").value as "light" | "dark",
     persistState: false,
-    launcher: { enabled: false, ...(embedded ? {} : { fullHeight: true }) },
+    launcher: {
+      enabled: false, ...(embedded ? {} : { fullHeight: true }),
+      ...(headerIcon === "default" ? {} : headerIcon === "hidden" ? { headerIconHidden: true }
+        : headerIcon === "image" ? { headerIconName: "", iconUrl: "/images/v5-sample-logo.svg" }
+        : { headerIconName: headerIcon }),
+    },
     layout: {
       ...(embedded ? { embedded: true } : {}),
       ...(select("fade").value === "default" ? {} : { topFade: select("fade").value === "on" }),
     },
     ...(embedded ? {
       composer: { placement: "block" },
+    } : {}),
+    ...(embedded || Object.keys(headerTheme).length ? {
       theme: { components: {
+        header: headerTheme,
+        ...(embedded ? {
         input: { background: "var(--demo-composer-surface)" },
         composer: { footerPadding: "12px 20px" },
         markdown: { codeBlock: { background: "var(--demo-code-surface)", textColor: "var(--demo-code-text)" } },
         activity: { bodySurface: "transparent" },
+        } : {}),
       } },
     } : {}),
     ...(select("scene").value === "welcome" ? {
@@ -178,12 +214,15 @@ function reset() {
   frame.dataset.scheme = select("theme").value;
   const config = configuration();
   widget = initAgentWidget({ target: host, config });
+  const brandSummary = document.querySelector<HTMLElement>("#v5-brand-summary")!;
+  brandSummary.hidden = !config.brand;
+  document.querySelector("#v5-brand-config")!.textContent = JSON.stringify({ brand: config.brand }, null, 2);
   const { customFetch: _fetch, ...shown } = config;
   document.querySelector("#v5-config")!.textContent = JSON.stringify(shown, (_key, value) => typeof value === "function" ? `${_key} (local example hook)` : value, 2);
   document.querySelector<HTMLElement>("#v5-hook-note")!.hidden = select("group").value !== "descriptive";
   document.querySelector<HTMLElement>("#v5-approval-hook-note")!.hidden = select("scene").value !== "approval-custom";
   streamButton.textContent = select("scene").value.startsWith("approval") ? "Replay approvals" : "Run stream";
-  document.querySelector("#v5-caption")!.textContent = `${select("version").value.toUpperCase()} ${select("theme").value} · ${select("scene").selectedOptions[0].textContent}`;
+  document.querySelector("#v5-caption")!.textContent = `${select("version").value.toUpperCase()} ${select("theme").value} · ${select("scene").selectedOptions[0].textContent} · ${select("brand").selectedOptions[0].textContent}`;
 }
 function inject(message: Partial<AgentWidgetMessage> & Pick<AgentWidgetMessage, "id">) {
   if (!order.has(message.id)) order.set(message.id, serial++);

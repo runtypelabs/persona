@@ -535,6 +535,7 @@ export type { ThemeZone } from "./utils/tokens";
 // them, so exporting here would ship all of utils/plugins.ts in the CDN IIFE.
 export type {
   DeepPartial,
+  BrandConfig,
   PersonaTheme,
   PersonaThemePlugin,
   CreateThemeOptions,

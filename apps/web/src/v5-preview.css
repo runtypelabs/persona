@@ -52,3 +52,5 @@
   --demo-code-text: #e4edf1;
 }
 .v5-embedded-frame > #v5-host { flex: 1; min-height: 0; }
+
+.v5-controls [hidden] { display: none; }

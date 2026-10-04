@@ -1,5 +1,5 @@
 import type { AgentWidgetPlugin } from "./plugins/types";
-import type { DeepPartial, PersonaTheme } from "./types/theme";
+import type { BrandConfig, DeepPartial, PersonaTheme } from "./types/theme";
 import type {
   RuntypeClientChatRequest,
   RuntypeClientFeedbackRequest,
@@ -3852,6 +3852,7 @@ export type AgentWidgetLauncherConfig = {
   callToActionIconPadding?: string;
   agentIconSize?: string;
   callToActionIconSize?: string;
+  /** Identity icon/image box size, excluding theme.components.header.iconPadding. */
   headerIconSize?: string;
   headerIconName?: string;
   headerIconHidden?: boolean;
@@ -7284,6 +7285,8 @@ export type AgentWidgetConfig = {
    * Semantic design tokens (`palette`, `semantic`, `components`).
    * Omit for library defaults.
    */
+  /** Derive theme tokens from a small brand palette. Explicit theme tokens win. */
+  brand?: BrandConfig;
   theme?: DeepPartial<PersonaTheme>;
   /**
    * Dark-mode token overrides. Merged over `theme` when the active scheme is dark.
@@ -8390,3 +8393,5 @@ export type AgentWidgetInitOptions = {
   windowKey?: string; // If provided, stores the controller on window[windowKey] for global access
   debugTools?: boolean;
 };
+
+export type { BrandConfig } from "./types/theme";

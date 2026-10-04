@@ -18,6 +18,25 @@ function choose(id: string, value: string) {
 }
 afterEach(() => { window.dispatchEvent(new Event("pagehide")); vi.useRealTimers(); vi.clearAllMocks(); document.body.innerHTML = ""; });
 describe("V5 preview", () => {
+  it("compares header glyphs and custom images with public background/padding controls", async () => {
+    await start();
+    choose("header-icon", "image");
+    expect(mocks.init.mock.lastCall?.[0].config.launcher).toMatchObject({ headerIconName: "", iconUrl: "/images/v5-sample-logo.svg" });
+    choose("icon-background", "filled");
+    choose("icon-padding", "0");
+    expect(mocks.init.mock.lastCall?.[0].config.theme.components.header).toMatchObject({ iconBackground: "semantic.colors.primary", iconPadding: "0" });
+    choose("header-icon", "sparkles");
+    expect(mocks.init.mock.lastCall?.[0].config.launcher.headerIconName).toBe("sparkles");
+    expect(mocks.init.mock.lastCall?.[0].config.launcher.iconUrl).toBeUndefined();
+    choose("scene", "embedded");
+    expect(mocks.init.mock.lastCall?.[0].config.theme.components.input).toBeDefined();
+    expect(mocks.init.mock.lastCall?.[0].config.theme.components.header.iconPadding).toBe("0");
+    choose("icon-background", "default");
+    choose("icon-padding", "default");
+    choose("header-icon", "default");
+    expect(mocks.init.mock.lastCall?.[0].config.launcher.headerIconName).toBeUndefined();
+    expect(mocks.init.mock.lastCall?.[0].config.theme.components.header).toEqual({});
+  });
   it("preserves partial output before the sample error and exposes display overrides", async () => {
     await start();
     mocks.inject.mockClear();
@@ -43,6 +62,29 @@ describe("V5 preview", () => {
     expect(config.customFetch).toBeTypeOf("function");
     expect(config.features.toolCallDisplay).toEqual({});
     expect(mocks.inject.mock.calls.map(([event]) => event.message.id)).toEqual(["user", "reason", "search", "read", "final"]);
+  });
+  it("compares six-field brands in V4 and V5 while preserving explicit scene overrides", async () => {
+    await start();
+    expect(mocks.init.mock.lastCall?.[0].config.brand).toBeUndefined();
+    expect(document.querySelector<HTMLElement>("#v5-brand-summary")!.hidden).toBe(true);
+    choose("brand", "editorial");
+    const editorial = mocks.init.mock.lastCall?.[0].config.brand;
+    expect(Object.keys(editorial)).toEqual(["accent", "neutral", "font", "radius", "density", "elevation"]);
+    expect(editorial.neutral).toBe("#171715");
+    expect(JSON.parse(document.querySelector("#v5-brand-config")!.textContent!)).toEqual({ brand: editorial });
+    choose("version", "v4");
+    expect(mocks.init.mock.lastCall?.[0].config).toMatchObject({ brand: editorial, future: { v5Defaults: false } });
+    choose("theme", "light");
+    expect(mocks.init.mock.lastCall?.[0].config.colorScheme).toBe("light");
+    choose("scene", "embedded");
+    expect(mocks.init.mock.lastCall?.[0].config.theme.components.input.background).toBe("var(--demo-composer-surface)");
+    for (const preset of ["studio", "terminal"]) {
+      choose("brand", preset);
+      expect(Object.keys(mocks.init.mock.lastCall?.[0].config.brand)).toHaveLength(6);
+    }
+    choose("brand", "default");
+    expect(mocks.init.mock.lastCall?.[0].config.brand).toBeUndefined();
+    expect(document.querySelector<HTMLElement>("#v5-brand-summary")!.hidden).toBe(true);
   });
   it("switches suggestion edges without dropping starter settings", async () => {
     await start();

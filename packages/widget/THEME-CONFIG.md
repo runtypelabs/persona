@@ -1,6 +1,6 @@
 # Widget Theme & Configuration Reference
 
-This document provides definitions of all themable configuration options for Persona Widget v2.0.
+This document provides definitions of all themable configuration options for Persona Widget.
 
 ## Theme Architecture
 
@@ -30,6 +30,79 @@ semantic.colors.primary → palette.colors.primary.500 → #171717
 ```
 
 ## Quick Start
+
+### Brand configuration
+
+Use `config.brand` to derive a coordinated theme from a few design choices. Each
+field is optional; omitted fields retain Persona's defaults. It works with both
+current defaults and `future: { v5Defaults: true }`.
+
+```typescript
+initAgentWidget({
+  target: '#chat',
+  config: {
+    apiUrl: '/api/chat',
+    future: { v5Defaults: true },
+    brand: {
+      accent: '#b9a68a',
+      neutral: '#171715',
+      font: 'Georgia, "Times New Roman", serif',
+      radius: 'md',
+      density: 'comfortable',
+      elevation: 'flat'
+    }
+  }
+});
+```
+
+| Field | Accepted values | Effect |
+| --- | --- | --- |
+| `accent` | Opaque `#rgb`, `#rrggbb`, `rgb()`, or `rgba()` with alpha 1 | Accent colors, buttons, links, and focus treatment |
+| `neutral` | Same color formats as `accent` | Coordinated background, surface, text, and border colors |
+| `font` | CSS font-family string | Widget typography; load custom fonts in the host application |
+| `radius` | `'none'`, `'sm'`, `'md'`, `'lg'` | Component corners: 0, 4, 8, or 16px; circular controls remain circular |
+| `density` | `'compact'`, `'comfortable'`, `'spacious'` | Coordinated type and spacing; base type 13, 14, or 15px and header height 44, 48, or 52px |
+| `elevation` | `'flat'`, `'subtle'`, `'raised'` | Coordinated shadows and borders |
+
+In V5, the accent supplies the send button's strong fill, while user bubbles
+blend 12% accent into the neutral container color and use the normal text color.
+The header identity icon stays transparent by default. Set
+`theme.components.header.iconBackground` to opt into a filled badge; its automatic
+padding still applies. V4 retains matching accent fills for these elements.
+
+When `colorScheme` is omitted, a valid `neutral` with relative luminance below
+0.18 selects dark mode; a lighter neutral selects light mode. Explicit
+`colorScheme: 'light'`, `'dark'`, or `'auto'` takes precedence. With `'auto'`, the
+system preference chooses the mode. Colors are generated for both modes, so a
+brand can be used with either preference.
+
+Brand values are applied above built-in defaults and below explicit `theme` and
+`darkTheme` overrides. Continue using component tokens for exact layout,
+individual controls, or intentional exceptions:
+
+```typescript
+config: {
+  brand: { accent: '#7c3aed', radius: 'lg', elevation: 'subtle' },
+  theme: {
+    components: {
+      panel: { borderRadius: '12px' }
+    }
+  },
+  darkTheme: {
+    components: {
+      panel: { borderRadius: '20px' }
+    }
+  }
+}
+```
+
+The explicit panel radius wins over the brand's corners. In dark mode,
+`darkTheme` wins over the inherited light `theme` overrides. A brand is a compact
+starting point for coordinated styling; detailed component tokens remain useful
+for a bespoke fullscreen layout, artifact toolbar, or prose-only font.
+
+Try the Editorial, Studio, and Terminal brands in the [V5 preview](https://persona-chat.dev/v5-preview.html),
+including the V4 comparison and existing scene-specific theme overrides.
 
 ### Simple Color Override
 
@@ -1618,7 +1691,27 @@ Floating widths still shrink to fit narrow viewports. Dock/sidebar defaults are
 controls. `components.message.fullscreenGap` sets full-height/fullscreen spacing;
 an explicit `components.message.gap` supplies both gaps unless `fullscreenGap`
 is also provided. `components.header.iconScale` controls glyph size relative to
-the header icon box (v4: 0.6, v5: 1), and
+the header icon box (v4: 0.6, v5: 1). `components.header.iconPadding` adds
+CSS padding outside `launcher.headerIconSize`, for both glyphs and custom images.
+V5 uses `"auto"`: transparent icon backgrounds get 0px; filled backgrounds get
+6px. A 20px V5 icon therefore occupies 32px with a filled background. V4 keeps
+0px extra padding. Explicit values such as `"0"`, `"4px"`, or `"2px 8px"` win
+in both versions. For backgrounds using runtime CSS variables, set padding
+explicitly when their transparency can change. For example:
+
+```js
+theme: {
+  components: {
+    header: { iconBackground: "#b9a68a", iconForeground: "#171715", iconPadding: "6px" }
+  }
+}
+```
+
+For a custom image, set `launcher.iconUrl` and `launcher.headerIconName: ""`
+to replace the default glyph. `iconScale` applies to Lucide glyphs; images fill
+the content box, with `iconPadding` surrounding it.
+
+Also,
 `components.message.assistant.borderWidth` can remove the assistant border
 (v5: `"0px"`). These tokens work in either state.
 

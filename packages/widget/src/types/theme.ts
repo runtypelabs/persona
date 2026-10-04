@@ -1,3 +1,17 @@
+/** Optional brand inputs, derived beneath explicit theme tokens. */
+export interface BrandConfig {
+  /** Opaque hex or rgb() color for primary actions and the accent ramp. */
+  accent?: string;
+  /** Opaque hex or rgb() base surface; dark values infer a dark scheme. */
+  neutral?: string;
+  /** CSS font-family stack. */
+  font?: string;
+  /** Shared corner scale; circular controls keep their circular shape. */
+  radius?: 'none' | 'sm' | 'md' | 'lg';
+  density?: 'compact' | 'comfortable' | 'spacious';
+  elevation?: 'flat' | 'subtle' | 'raised';
+}
+
 export type TokenType = 'color' | 'spacing' | 'typography' | 'shadow' | 'border' | 'radius';
 
 export type TokenReference<_T extends TokenType = TokenType> = string;
@@ -286,6 +300,11 @@ export interface HeaderTokens extends ComponentTokenSet {
   iconForeground: TokenReference<'color'>;
   /** Header identity glyph size as a fraction of its icon box. @default "0.6" */
   iconScale?: string;
+  /** Space around the identity icon/image, added outside headerIconSize.
+   * V5 defaults to "auto": 6px for a filled background, 0px for transparent.
+   * V4 defaults to 0px. Explicit CSS padding (including "0") overrides auto.
+   */
+  iconPadding?: string;
   /**
    * Legacy alias of `title.color`; `title.color` wins when both are set.
    * Unset, the title takes `foreground`, then the primary color.

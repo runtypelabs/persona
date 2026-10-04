@@ -1,14 +1,16 @@
 import { CIRCLE_LAUNCHER_TOKENS, resolveLauncherVariant } from "./launcher-variant";
-import type { CreateThemeOptions, DeepPartial, PersonaTheme } from '../types/theme';
+import type { BrandConfig, CreateThemeOptions, DeepPartial, PersonaTheme } from '../types/theme';
 import type { AgentWidgetConfig } from '../types';
 import { resolveDefaultsVersion } from '../defaults';
-import { createTheme, resolveTokens, themeToCssVariables, DEFAULT_COMPONENTS_V4 } from './tokens';
+import { createTheme, resolveTokens, themeToCssVariables, resolveThemeDefaults, DEFAULT_COMPONENTS_V4 } from './tokens';
 import { isEmbeddedLayout } from "./panel-config";
+import { deriveBrandTheme, inferBrandColorScheme } from './brand';
 import { deepMerge } from './deep-merge';
 
 export type ColorScheme = 'light' | 'dark' | 'auto';
 
 export interface PersonaWidgetConfig {
+  brand?: BrandConfig;
   theme?: DeepPartial<PersonaTheme>;
   darkTheme?: DeepPartial<PersonaTheme>;
   colorScheme?: ColorScheme;
@@ -280,7 +282,7 @@ export const detectColorScheme = (): 'light' | 'dark' => {
 };
 
 const getColorSchemeFromConfig = (config?: WidgetConfig): 'light' | 'dark' => {
-  const colorScheme = config?.colorScheme ?? 'light';
+  const colorScheme = config?.colorScheme ?? inferBrandColorScheme(config?.brand) ?? 'light';
 
   if (colorScheme === 'light') return 'light';
   if (colorScheme === 'dark') return 'dark';
@@ -336,7 +338,7 @@ export const createDarkTheme = (
 
 export const getActiveTheme = (config?: WidgetConfig): PersonaTheme => {
   const scheme = getColorScheme(config);
-  const explicitTheme = normalizeThemeConfig(config?.theme);
+  const explicitTheme = deepMerge(deriveBrandTheme(config?.brand, scheme, resolveThemeDefaults(config?.future).components, config?.future?.v5Defaults), normalizeThemeConfig(config?.theme)) as DeepPartial<PersonaTheme>;
   // Variant defaults sit under explicit theme tokens in either defaults state.
   const launcherDefaults = resolveLauncherVariant(config) === 'circle'
     ? CIRCLE_LAUNCHER_TOKENS
@@ -373,6 +375,8 @@ export const getCssVariables = (theme: PersonaTheme): Record<string, string> => 
   return themeToCssVariables(theme);
 };
 
+const appliedVariables = new WeakMap<HTMLElement, string[]>();
+
 export const applyThemeVariables = (
   element: HTMLElement,
   config?: WidgetConfig
@@ -380,6 +384,10 @@ export const applyThemeVariables = (
   const theme = getActiveTheme(config);
   const cssVars = getCssVariables(theme);
 
+  for (const name of appliedVariables.get(element) ?? []) {
+    if (!(name in cssVars)) element.style.removeProperty(name);
+  }
+  appliedVariables.set(element, Object.keys(cssVars));
   for (const [name, value] of Object.entries(cssVars)) {
     element.style.setProperty(name, value);
   }

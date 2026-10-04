@@ -588,10 +588,15 @@ function appendSerializableObjectBlock(
   lines.push(`${indent}},`);
 }
 
-/** Preserve an explicitly authored defaults-version opt-in in every snippet. */
-function appendFutureDefaultsConfig(lines: string[], config: any, indent: string): void {
+/** Preserve the defaults version and brand inputs rather than flattening derived tokens. */
+function appendThemeDefaultsConfig(lines: string[], config: any, indent: string): void {
   if (config.future?.v5Defaults !== undefined) {
     lines.push(`${indent}future: { v5Defaults: ${config.future.v5Defaults === true} },`);
+  }
+  appendSerializableObjectBlock(lines, "brand", config.brand, indent);
+  appendSerializableObjectBlock(lines, "darkTheme", config.darkTheme, indent);
+  if (config.colorScheme !== undefined) {
+    lines.push(`${indent}colorScheme: ${JSON.stringify(config.colorScheme)},`);
   }
 }
 
@@ -654,7 +659,7 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
   if (config.target) lines.push(`    target: "${config.target}",`);
   if (config.flowId) lines.push(`    flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`    parserType: "${parserType}",`);
-  appendFutureDefaultsConfig(lines, config, "    ");
+  appendThemeDefaultsConfig(lines, config, "    ");
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "    ");
@@ -805,7 +810,7 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
   if (config.target) lines.push(`        target: "${config.target}",`);
   if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`        parserType: "${parserType}",`);
-  appendFutureDefaultsConfig(lines, config, "        ");
+  appendThemeDefaultsConfig(lines, config, "        ");
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "        ");
@@ -1073,7 +1078,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
   if (config.agentId) lines.push(`        agentId: "${config.agentId}",`);
   if (config.target) lines.push(`        target: "${config.target}",`);
   if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
-  appendFutureDefaultsConfig(lines, config, "        ");
+  appendThemeDefaultsConfig(lines, config, "        ");
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "        ");
@@ -1338,6 +1343,9 @@ function buildSerializableConfig(config: any): Record<string, any> {
     serializableConfig.future = { v5Defaults: config.future.v5Defaults === true };
   }
   if (config.theme) serializableConfig.theme = config.theme;
+  if (config.brand) serializableConfig.brand = config.brand;
+  if (config.darkTheme) serializableConfig.darkTheme = config.darkTheme;
+  if (config.colorScheme !== undefined) serializableConfig.colorScheme = config.colorScheme;
   if (config.launcher) serializableConfig.launcher = config.launcher;
   if (config.copy) serializableConfig.copy = config.copy;
   if (config.sendButton) serializableConfig.sendButton = config.sendButton;
@@ -1490,7 +1498,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   if (config.target) lines.push(`      target: "${config.target}",`);
   if (config.flowId) lines.push(`      flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`      parserType: "${parserType}",`);
-  appendFutureDefaultsConfig(lines, config, "      ");
+  appendThemeDefaultsConfig(lines, config, "      ");
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "      ");

@@ -11,6 +11,27 @@ import {
 } from './theme';
 
 describe('theme utils', () => {
+  it.each(['transparent', '#fff0', '#ffffff00', 'rgba(1, 2, 3, 0)', 'rgb(1 2 3 / 0%)'])('leaves transparent V5 header icons unpadded: %s', (iconBackground) => {
+    const variables = themeToCssVariables(getActiveTheme({ future: { v5Defaults: true }, theme: { components: { header: { iconBackground } } } }));
+    expect(variables['--persona-components-header-iconPadding']).toBe('0px');
+  });
+  it.each(['#b9a68a', 'rgb(255, 0, 0)', 'palette.colors.primary.500'])('pads filled V5 header icons: %s', (iconBackground) => {
+    const variables = themeToCssVariables(getActiveTheme({ future: { v5Defaults: true }, theme: { components: { header: { iconBackground } } } }));
+    expect(variables['--persona-components-header-iconPadding']).toBe('6px');
+  });
+  it('resolves header padding from brands and the active dark override', () => {
+    const config = { future: { v5Defaults: true }, brand: { accent: '#b9a68a' }, colorScheme: 'dark' as const };
+    expect(themeToCssVariables(getActiveTheme(config))['--persona-components-header-iconPadding']).toBe('0px');
+    expect(themeToCssVariables(getActiveTheme({ ...config, darkTheme: { components: { header: { iconBackground: 'semantic.colors.primary' } } } }))['--persona-components-header-iconPadding']).toBe('6px');
+  });
+  it.each([false, true])('honors explicit icon padding and preserves legacy defaults (v5=%s)', (v5Defaults) => {
+    const future = { v5Defaults };
+    expect(themeToCssVariables(getActiveTheme({ future }))['--persona-components-header-iconPadding']).toBe(v5Defaults ? '0px' : undefined);
+    for (const iconPadding of ['0', '4px', '2px 8px']) {
+      const variables = themeToCssVariables(getActiveTheme({ future, theme: { components: { header: { iconBackground: '#b9a68a', iconPadding } } } }));
+      expect(variables['--persona-components-header-iconPadding']).toBe(iconPadding);
+    }
+  });
   afterEach(() => {
     document.documentElement.classList.remove('dark');
   });

@@ -191,6 +191,7 @@
     "fake-indexeddb": "^6.2.5",
     "rimraf": "^5.0.5",
     "size-limit": "^12.1.0",
+    "terser": "^5.49.0",
     "tsup": "^8.0.1",
     "typescript": "^5.4.5",
     "vitest": "^4.0.9"

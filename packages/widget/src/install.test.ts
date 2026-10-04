@@ -213,6 +213,20 @@ describe("install.ts: deferred launcher path", () => {
     events.stop();
   });
 
+  it.each([false, true])("preserves brand through the deferred handoff (nested override: %s)", async (override) => {
+    markCssLoaded();
+    provideFullBundle();
+    provideLauncherBundle();
+    const brand = { accent: "#4361ee", neutral: "#18181b" };
+    const nested = { accent: "#b45309", density: "compact" };
+    await install({ brand, config: { apiUrl: "/api", ...(override ? { brand: nested } : {}) } });
+    await flush();
+    expect(launcherMount.mock.calls[0][0].config.brand).toEqual(override ? nested : brand);
+    capturedOnOpen!();
+    await flush();
+    expect(initAgentWidget.mock.calls[0][0].config.brand).toEqual(override ? nested : brand);
+  });
+
   it("a second click while loading does not initialize the widget twice", async () => {
     markCssLoaded();
     provideFullBundle();

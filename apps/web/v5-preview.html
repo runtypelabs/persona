@@ -35,6 +35,13 @@
           <label>Defaults<select id="v5-version"><option value="v5">V5 preview</option><option value="v4">V4 current</option></select></label>
           <label>Theme<select id="v5-theme"><option value="dark">Dark</option><option value="light">Light</option></select></label>
         </div>
+        <label>Brand<select id="v5-brand"><option value="default">Persona default</option><option value="editorial">Editorial · warm neutral</option><option value="studio">Studio · violet</option><option value="terminal">Terminal · green</option></select></label>
+        <label>Header icon<select id="v5-header-icon"><option value="default">Default</option><option value="bot">Bot</option><option value="sparkles">Sparkles</option><option value="image">Custom image · sample logo</option><option value="hidden">Hidden</option></select></label>
+        <div class="v5-control-pair">
+          <label>Icon background<select id="v5-icon-background"><option value="default">Default</option><option value="transparent">Transparent</option><option value="filled">Filled</option></select></label>
+          <label>Icon padding<select id="v5-icon-padding"><option value="default">Default</option><option value="0">None</option><option value="4px">4px</option><option value="6px">6px</option><option value="10px">10px</option></select></label>
+        </div>
+        <div id="v5-brand-summary" class="v5-config" hidden><p>Six fields set the brand. Theme above explicitly chooses light or dark; omit <code>colorScheme</code> to infer it from the neutral color.</p><pre id="v5-brand-config"></pre></div>
         <label>Activity style<select id="v5-variant"><option value="default">Default</option><option value="row">Compact rows</option><option value="card">Cards</option></select></label>
         <label>Resolved approvals<select id="v5-approval-display"><option value="default">Default</option><option value="row">Compact activity</option><option value="status-line">Retained card</option><option value="trace">Legacy trace</option></select></label>
         <label>Tool grouping<select id="v5-group"><option value="default">Default</option><option value="separate">Separate calls</option><option value="descriptive">Descriptive labels · custom hook</option></select></label>

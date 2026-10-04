@@ -2,7 +2,7 @@ import type { AgentWidgetConfig, AgentWidgetLauncherConfig } from "./types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
 import { deepMerge } from "./utils/deep-merge";
 import { DEFAULT_APPROVAL_V5 } from "./utils/approval-config";
-import { inheritDefaultProvenance } from "./utils/defaults-provenance";
+import { defaultProvenance, inheritDefaultProvenance } from "./utils/defaults-provenance";
 import { inheritPanelAliasProvenance } from "./utils/panel-config";
 import {
   DEFAULT_TOOLTIP_DELAY_MS,
@@ -265,6 +265,8 @@ export const DEFAULT_LAUNCHER_V5: Partial<AgentWidgetLauncherConfig> = {
   headerIconSize: "20px",
 };
 export const DEFAULTS_V5: Partial<AgentWidgetConfig> = {
+  // Shared default tracked here so later brand updates retain host scheme intent.
+  colorScheme: "light",
   errorDisplay: "block",
   messageActions: { visibility: undefined },
   // Let the suggestion theme token control weight; explicit legacy overrides still win.
@@ -333,6 +335,10 @@ export function mergeWithDefaults(
   return inheritDefaultProvenance(inheritPanelAliasProvenance({
     ...defaults,
     ...config,
+    // Leave the scheme unresolved for a brand unless the host chose one.
+    // Provenance also distinguishes the inherited light default on live updates.
+    colorScheme: defaultProvenance(config, ["colorScheme"]).includes("colorScheme")
+      ? config.colorScheme : config.brand ? undefined : defaults.colorScheme,
     ...((defaults.approval || config.approval !== undefined) ? { approval: config.approval === false ? false : {
       ...(defaults.approval || {}),
       ...config.approval,

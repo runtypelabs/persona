@@ -616,7 +616,7 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
     background: 'semantic.colors.container', foreground: 'semantic.colors.text',
     padding: '8px 8px 8px 16px', minimalPadding: '8px 8px 8px 16px',
     minHeight: '48px', borderBottom: 'none',
-    iconBackground: 'transparent', iconForeground: 'semantic.colors.text', iconScale: '1',
+    iconBackground: 'transparent', iconForeground: 'semantic.colors.text', iconScale: '1', iconPadding: 'auto',
     controlSize: '28px', controlIconSize: '18px', controlStrokeWidth: '1.5',
     actionIconForeground: 'semantic.colors.textMuted',
     controlBorderRadius: '8px',
@@ -1119,6 +1119,18 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['header-icon-bg', 'components-header-iconBackground', 'primary'],
     ['header-icon-fg', 'components-header-iconForeground', 'text-inverse'],
   ]);
+
+  // Resolve after aliases so palette references and dark/brand overrides count.
+  // CSS variables with runtime-dependent colors can use explicit iconPadding.
+  const iconPadding = cssVars['--persona-components-header-iconPadding'];
+  if (iconPadding === 'auto') {
+    const background = cssVars['--persona-header-icon-bg'].trim().toLowerCase();
+    const channels = background.match(/^(?:rgba?|hsla?)\(([^)]+)\)$/)?.[1].split(/[,\s/]+/).filter(Boolean);
+    const transparent = background === 'transparent' ||
+      /^#(?:[\da-f]{3}0|[\da-f]{6}00)$/.test(background) ||
+      (channels?.length === 4 && parseFloat(channels[3]) === 0);
+    cssVars['--persona-components-header-iconPadding'] = transparent ? '0px' : '6px';
+  }
 
   // `title.color` / `subtitle.color` supersede the legacy *Foreground tokens.
   cssVars['--persona-header-title-fg'] =

@@ -604,6 +604,18 @@ describe("Suggestions Serialization", () => {
 });
 
 describe("Backward Compatibility", () => {
+  it.each<CodeFormat>(["esm", "react-component", "react-advanced", "script-installer", "script-manual", "script-advanced"])("preserves brand and explicit dark overrides in %s", (format) => {
+    const code = generateCodeSnippet({
+      ...minimalConfig,
+      brand: { accent: "#4361ee", neutral: "#18181b", font: "Georgia, serif", radius: "md", density: "compact", elevation: "flat" },
+      colorScheme: "auto",
+      darkTheme: { semantic: { colors: { text: "#eeeeee" } } },
+    }, format);
+    for (const value of ["brand", "#4361ee", "#18181b", "Georgia, serif", "compact", "flat", "colorScheme", "auto", "darkTheme", "#eeeeee"]) {
+      expect(code).toContain(value);
+    }
+  });
+
   it("should work without options parameter", () => {
     const code = generateCodeSnippet(minimalConfig, "esm");
 

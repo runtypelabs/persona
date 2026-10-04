@@ -15,7 +15,10 @@ export default defineConfig({
   entry: ["src/index-global.ts"],
   format: ["iife"],
   globalName: "AgentWidget",
-  minify: true,
+  // A second compression pass keeps shared brand derivation within the
+  // existing CDN budget. This is build-only; no minifier ships to consumers.
+  minify: "terser",
+  terserOptions: { compress: { passes: 2 } },
   sourcemap: true,
   splitting: false,
   outDir: "dist",

@@ -6,6 +6,8 @@
 
 export {};
 
+import type { BrandConfig } from "./types/theme";
+
 interface SiteAgentInstallConfig {
   // Setting `cdn` explicitly opts into npm-CDN asset URLs (jsDelivr/unpkg),
   // and `version` pins the asset version. When neither is set, assets load
@@ -21,6 +23,7 @@ interface SiteAgentInstallConfig {
   config?: any;
   /** Opt in to the staged v5 defaults when using top-level installer options. */
   future?: { v5Defaults?: boolean };
+  brand?: BrandConfig;
   autoInit?: boolean;
   // Client token mode options (can also be set via data attributes)
   clientToken?: string;
@@ -450,6 +453,7 @@ declare global {
     if (config.flowId && !widgetConfig.flowId) widgetConfig.flowId = config.flowId;
     if (config.agentId && !widgetConfig.agentId) widgetConfig.agentId = config.agentId;
     if (config.future && !widgetConfig.future) widgetConfig.future = config.future;
+    if (config.brand && !widgetConfig.brand) widgetConfig.brand = config.brand;
 
     const hasApiConfig = !!(widgetConfig.apiUrl || widgetConfig.clientToken);
     return { target, widgetConfig, hasApiConfig };
