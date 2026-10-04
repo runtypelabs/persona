@@ -148,9 +148,10 @@ const SESSION_END_TEXT = new Map([
   ["max_duration", "This voice call reached its time limit."],
   ["provider_ended", "The voice session ended."],
   ["quota", "Voice is unavailable right now."],
+  ["auth_expired", "Voice session expired. Tap the mic to reconnect."],
 ]);
 /** Reasons that get one automatic reconnect. */
-const RECONNECT_REASONS = ["provider_error", "server_restart", "auth_expired"];
+const RECONNECT_REASONS = ["provider_error", "server_restart"];
 const CONNECTION_LOST = "Voice connection lost.";
 /** Call-start context frame: total cap, host share, history window, per-message cap. */
 const CONTEXT_MAX_CHARS = 8000;
@@ -289,8 +290,6 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   #reconnectTimer: ReturnType<typeof setTimeout> | undefined;
   #reconnected = false;
   #autoReconnect = false;
-  // Set by the session: re-mints its client session before an auth_expired reconnect.
-  #refreshAuth: (() => Promise<void>) | undefined;
   // Call-start context, built at session_config and held until the visitor's
   // first final transcript (sent earlier, the voice model tends to answer it).
   #contextSent = false;
@@ -535,8 +534,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           : captureContext.resume()
         ).catch(() => {});
         if (auto && captureContext.state === "suspended" && generation === this.#callGeneration) {
-          this.#notice = CONNECTION_LOST;
-          throw new Error(CONNECTION_LOST);
+          throw new Error((this.#notice = `${CONNECTION_LOST} Tap the mic to reconnect.`));
         }
       }
 
@@ -629,8 +627,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   /**
    * The server ended the call with a reason (`session_end`, Amendment 6): show
-   * its text, and reconnect once after a provider error, a restart or an
-   * expired credential. Unknown reasons are an ordinary end (`ended_by_server`).
+   * its text, and reconnect once after a provider error or a restart. Unknown
+   * reasons are an ordinary end (`ended_by_server`).
    */
   #endCall(reason: string, message?: string): void {
     const retry = RECONNECT_REASONS.includes(reason) && !this.#reconnected;
@@ -639,21 +637,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       // Keep the call "live" while it waits, so the mic button hangs up (and cancels).
       this.#reconnected = true;
       this.#callLive = true;
-      this.#notice =
-        reason === "provider_error" ? `${CONNECTION_LOST} Reconnecting…` : reason === "server_restart" ? "Reconnecting…" : null;
-      const generation = this.#callGeneration;
+      this.#notice = reason === "provider_error" ? `${CONNECTION_LOST} Reconnecting…` : "Reconnecting…";
+      // A hang-up meanwhile runs #cleanup, which clears this timer.
       this.#reconnectTimer = setTimeout(
-        async () => {
-          if (reason === "auth_expired") {
-            try {
-              await this.#refreshAuth?.();
-            } catch (error) {
-              if (generation === this.#callGeneration) this.#lost(error as Error);
-              return;
-            }
-          }
-          // Hung up (or torn down) while the credential was refreshing.
-          if (generation !== this.#callGeneration) return;
+        () => {
           this.#callLive = false;
           this.#autoReconnect = true;
           void this.startListening().catch(() => {});
@@ -665,7 +652,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     }
     if (RECONNECT_REASONS.includes(reason)) {
       // The reconnect already ran: this end is the second failure.
-      return this.#lost(new Error(CONNECTION_LOST));
+      this.#notice = CONNECTION_LOST;
+      this.#emitError(new Error(CONNECTION_LOST));
+      return this.#emitStatus("error");
     }
     // `error`: the preceding `error` frame already reported it.
     if (reason === "error") return this.#emitStatus("error");
@@ -673,24 +662,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.#emitStatus("idle");
   }
 
-  /** The reconnect failed: say the connection is lost and end the call. */
-  #lost(error: Error): void {
-    this.#cleanup();
-    this.#notice = CONNECTION_LOST;
-    this.#emitError(error);
-    this.#emitStatus("error");
-  }
-
   /** Status-line text for the call (why it ended, or that it is reconnecting), once. */
   takeNotice(): string | null {
     const notice = this.#notice;
     this.#notice = null;
     return notice;
-  }
-
-  /** How to re-mint the widget's credential before an `auth_expired` reconnect. */
-  setAuthRefresh(refresh: () => Promise<void>): void {
-    this.#refreshAuth = refresh;
   }
 
   /** The AI-disclosure notice for a live speech-to-speech call (`disclosureText`; `false` hides it). */

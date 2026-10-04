@@ -5235,8 +5235,6 @@ export interface VoiceProvider {
    * (`session_end`) or that it is reconnecting. `null` when there is none.
    */
   takeNotice?(): string | null;
-  /** The widget's way to re-mint its credential before reconnecting after `auth_expired`. */
-  setAuthRefresh?(refresh: () => Promise<void>): void;
 }
 
 /** Metadata on a {@link VoiceProvider.onTranscript} update. */

@@ -1558,6 +1558,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         ['max_duration', 1000, 'This voice call reached its time limit.'],
         ['provider_ended', 1000, 'The voice session ended.'],
         ['quota', 1008, 'Voice is unavailable right now.'],
+        ['auth_expired', 1008, 'Voice session expired. Tap the mic to reconnect.'], // reserved: no auto-reconnect
         ['ended_by_server', 1000, null],
         ['maintenance_window', 1000, null], // unknown: an ordinary server end
       ])('ends on %s with its status text, without an error', async (reason, code, text) => {
@@ -1629,18 +1630,6 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(lastWs()).not.toBe(ws);
       });
 
-      it('re-mints the credential before reconnecting after auth_expired, showing nothing yet', async () => {
-        const { ws, provider } = await endableCall();
-        const refresh = vi.fn(async () => {});
-        provider.setAuthRefresh(refresh);
-        end(ws, { reason: 'auth_expired' }, 1008);
-        expect(provider.takeNotice()).toBeNull();
-        expect(refresh).not.toHaveBeenCalled();
-        await vi.advanceTimersByTimeAsync(2_000);
-        expect(refresh).toHaveBeenCalledOnce();
-        expect(lastWs()).not.toBe(ws);
-      });
-
       it('never reconnects once the visitor hangs up, during the wait or before the close', async () => {
         const waiting = await endableCall();
         end(waiting.ws, { reason: 'provider_error' }, 1011);
@@ -1656,31 +1645,17 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(hungUp.errors).toEqual([]);
       });
 
-      it('never reconnects after a hang-up while the credential refreshes', async () => {
-        const { ws, provider } = await endableCall();
-        let finish!: () => void;
-        provider.setAuthRefresh(() => new Promise<void>((r) => (finish = r)));
-        end(ws, { reason: 'auth_expired' }, 1008);
-        await vi.advanceTimersByTimeAsync(2_000); // timer fired, refresh in flight
-        await provider.stopListening();
-        finish();
-        await vi.advanceTimersByTimeAsync(5_000);
-        expect(lastWs()).toBe(ws);
-        expect(provider.isBargeInActive()).toBe(false);
-      });
-
-      it('ends the call with the refresh error when re-minting fails', async () => {
+      it('reconnects on the real failure order: error, audio_end, session_end, close 1011', async () => {
         const { ws, provider, statuses, errors } = await endableCall();
-        provider.setAuthRefresh(async () => {
-          throw new Error('Token mint failed');
-        });
-        end(ws, { reason: 'auth_expired' }, 1008);
+        ws.triggerMessage(JSON.stringify({ type: 'error', error: 'Voice engine failed', fatal: true }));
+        ws.triggerMessage(JSON.stringify({ type: 'audio_end' }));
+        end(ws, { reason: 'provider_error', retryable: true }, 1011);
+        expect(errors).toEqual(['Voice engine failed']); // reported once, by the error frame
+        expect(statuses.at(-1)).toBe('idle');
+        expect(provider.takeNotice()).toBe('Voice connection lost. Reconnecting…');
+        expect(provider.isBargeInActive()).toBe(true);
         await vi.advanceTimersByTimeAsync(2_000);
-        expect(lastWs()).toBe(ws);
-        expect(errors).toEqual(['Token mint failed']);
-        expect(statuses.at(-1)).toBe('error');
-        expect(provider.takeNotice()).toBe('Voice connection lost.');
-        expect(provider.isBargeInActive()).toBe(false);
+        expect(lastWs()).not.toBe(ws);
       });
 
       it('still reconnects when a socket error comes between session_end and the close', async () => {
@@ -1711,9 +1686,9 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           (globalThis as any).window.AudioContext = MockAudioContext;
         }
         expect(lastWs()).toBe(ws); // no dead call opened
-        expect(errors).toEqual(['Voice connection lost.']);
+        expect(errors).toEqual(['Voice connection lost. Tap the mic to reconnect.']);
         expect(statuses.at(-1)).toBe('error');
-        expect(provider.takeNotice()).toBe('Voice connection lost.');
+        expect(provider.takeNotice()).toBe('Voice connection lost. Tap the mic to reconnect.');
         expect(provider.isBargeInActive()).toBe(false);
       });
 
