@@ -164,12 +164,15 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   };
 
   return {
+    // Read once at call start, before this call has any captions, so the
+    // captions here are earlier calls' (e.g. on the previous page of a
+    // multi-page site): spoken conversation the new voice session never heard.
     getHistory: () =>
       host.messages().flatMap((m) =>
         (m.role === "user" || m.role === "assistant") &&
         !m.variant &&
         !m.voiceProcessing &&
-        !m.voiceCaption &&
+        !m.streaming &&
         m.content
           ? [{ role: m.role, content: m.content }]
           : [],

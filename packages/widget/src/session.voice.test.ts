@@ -527,12 +527,15 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   });
 
   it('hands the provider a bridge whose history is the visible settled messages', () => {
-    drive('user', 'still talk', false, 'u1'); // interim: not part of the context
-    // An earlier call's captions (filler, small talk) aren't conversation either.
+    // An earlier call's captions (e.g. on the previous page) are conversation
+    // the new voice session never heard, so they carry over.
     h.state.transcriptCb!('assistant', 'Let me check.', true, { turnId: 'f0', caption: true });
     h.state.transcriptCb!('user', 'hi there', true, { turnId: 'u0', caption: true });
+    drive('user', 'still talk', false, 'u1'); // interim: not part of the context
     expect(h.state.bridge!.getHistory()).toEqual([
       { role: 'assistant', content: 'Welcome! How can I help?' },
+      { role: 'assistant', content: 'Let me check.' },
+      { role: 'user', content: 'hi there' },
     ]);
   });
 

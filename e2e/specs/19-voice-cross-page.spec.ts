@@ -8,8 +8,8 @@ import { openVoicePage, transcript, typeMessage, voiceFixtureUrl, voiceSel } fro
  * audio graph cannot outlive the document, so the contract is a fast resume:
  * the next page restores the transcript and redials the call on its own, with
  * no click, and the new call's `context` frame carries the conversation so far.
- * (Spoken captions are display-only and stay out of `context`, so the carried
- * conversation is the submitted chat.)
+ * That includes what was said aloud on the previous page: the new voice session
+ * never heard the first call.
  */
 
 test.use({
@@ -79,6 +79,10 @@ test("a live call resumes on the next page without a click", async ({ page, cont
   const contextFrame = await second.waitForFrame("context");
   expect(String(contextFrame.text)).toContain(`User: ${TYPED_QUESTION}`);
   expect(String(contextFrame.text)).toContain(`Assistant: ${TYPED_ANSWER}`);
+  expect(String(contextFrame.text)).toContain(`User: ${USER_LINE}`);
+  expect(String(contextFrame.text)).toContain(`Assistant: ${AGENT_LINE}`);
+  // Read at call start: the resumed call's own utterance is not in it.
+  expect(String(contextFrame.text)).not.toContain("Which one is the sourest?");
 
   await expect(page.locator(voiceSel.mic)).toHaveAttribute("aria-label", /stop voice|end voice/i);
 });
