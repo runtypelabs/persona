@@ -161,6 +161,17 @@ export function renderReport({ title, identity, entries, verdicts = [], assetBas
 
 export const REPORT_MARKER = "<!-- persona-verify-evidence -->";
 
+/** Drop files that were not published from manifest entries, noting each omission on its entry. */
+export function withoutFiles(entries, omitted, reason) {
+  const gone = new Set(omitted);
+  return entries.map((entry) => {
+    const dropped = entry.files.filter((f) => gone.has(f));
+    if (!dropped.length) return entry;
+    const note = `${dropped.map((f) => `\`${f}\``).join(", ")} not published (${reason})`;
+    return { ...entry, files: entry.files.filter((f) => !gone.has(f)), note: entry.note ? `${entry.note}; ${note}` : note };
+  });
+}
+
 /** Word error rate of `hypothesis` against `reference` (case- and punctuation-insensitive). */
 export function wordErrorRate(reference, hypothesis) {
   const words = (s) => String(s).toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter(Boolean);

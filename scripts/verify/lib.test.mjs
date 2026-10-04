@@ -9,6 +9,7 @@ import {
   slug,
   voiceLatencies,
   wavFromPcm16,
+  withoutFiles,
   wordErrorRate,
 } from "./lib.mjs";
 
@@ -90,6 +91,20 @@ test("renderReport groups by feature, inlines images and links the rest", () => 
   assert.match(md, /<img src="https:\/\/h\/x\/01-a\.png"/);
   assert.match(md, /\[`02-v\.webm`\]\(https:\/\/h\/x\/02-v\.webm\)/);
   assert.ok(md.indexOf("### approvals") < md.indexOf("### voice"));
+});
+
+test("withoutFiles drops unpublished files and says so on the entry", () => {
+  const [kept, trimmed] = withoutFiles(
+    [
+      { feature: "a", label: "x", files: ["01-a.png"] },
+      { feature: "b", label: "y", note: "ok", files: ["02-b.gif", "02-b.webm"] },
+    ],
+    ["02-b.webm"],
+    "over 20 MB",
+  );
+  assert.deepEqual(kept.files, ["01-a.png"]);
+  assert.deepEqual(trimmed.files, ["02-b.gif"]);
+  assert.equal(trimmed.note, "ok; `02-b.webm` not published (over 20 MB)");
 });
 
 test("renderReport lists a feature's entries in capture order", () => {

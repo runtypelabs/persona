@@ -4,7 +4,7 @@
 // agent-browser session, captures evidence into .verify/runs/<id>/evidence/, and
 // publishes that evidence to a PR. Run with --help for commands.
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs";
 import net from "node:net";
 import path from "node:path";
@@ -17,6 +17,7 @@ import {
   renderReport,
   slug,
   voiceLatencies,
+  withoutFiles,
   wordErrorRate,
 } from "./lib.mjs";
 
@@ -215,6 +216,24 @@ function pageScript(state, js) {
   return data.result ?? data.value ?? data;
 }
 
+/** Stop the running recording and register it (gif, webm, contact sheet) in the manifest. */
+function stopRecording(state) {
+  const rec = state.recording;
+  abJson(state, ["record", "stop"]);
+  state.recording = null;
+  saveState(state);
+  const files = [`${rec.prefix}.webm`];
+  const sheet = `${rec.prefix}.contact-sheet.png`;
+  const gif = `${rec.prefix}.gif`;
+  if (has("ffmpeg")) {
+    must("ffmpeg", ["-loglevel", "error", "-y", "-i", rec.webm, "-vf", "fps=8,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer", path.join(evidenceDir(state), gif)]);
+    files.unshift(gif);
+  }
+  if (fs.existsSync(path.join(evidenceDir(state), sheet))) files.push(sheet);
+  addEntry(state, { feature: rec.feature, label: rec.label, note: rec.note, files, url: state.browser?.url });
+  return files;
+}
+
 // ---------------------------------------------------------------- audio
 
 function synthesizeMicWav(text, out) {
@@ -286,6 +305,24 @@ async function startVoiceServer(state, { user, reply, modern } = {}) {
 
 const commands = {
   async launch() {
+    // Exclusive lock: two concurrent launches must not both pass the live-run check.
+    fs.mkdirSync(VERIFY_DIR, { recursive: true });
+    const lock = path.join(VERIFY_DIR, "launch.lock");
+    try {
+      fs.writeFileSync(lock, String(process.pid), { flag: "wx" });
+    } catch {
+      const holder = Number(fs.readFileSync(lock, "utf8"));
+      if (holder && alive(holder)) throw new Fail(`another launch (pid ${holder}) is in progress`, "wait for it, then control-persona status");
+      fs.writeFileSync(lock, String(process.pid));
+    }
+    try {
+      await commands._launch();
+    } finally {
+      fs.rmSync(lock, { force: true });
+    }
+  },
+
+  async _launch() {
     const prev = loadState({ required: false });
     if (prev && !prev.stoppedAt && alive(prev.server?.pid)) {
       throw new Fail(`run ${prev.runId} is still live at ${prev.server.url}`, "control-persona cleanup (or keep using it)");
@@ -299,9 +336,13 @@ const commands = {
     if (!fs.existsSync(path.join(ROOT, "apps/web/node_modules"))) {
       throw new Fail("apps/web dependencies are missing", "pnpm install --frozen-lockfile (add --ignore-scripts if a native postinstall such as sharp fails)");
     }
-    const runId = new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "").replace("T", "-");
+    // Timestamp + random suffix, reserved by a non-recursive mkdir that fails if the dir exists.
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..*/, "").replace("T", "-");
+    const runId = `${stamp}-${randomBytes(3).toString("hex")}`;
     const runDir = path.join(VERIFY_DIR, "runs", runId);
-    fs.mkdirSync(path.join(runDir, "evidence"), { recursive: true });
+    fs.mkdirSync(path.dirname(runDir), { recursive: true });
+    fs.mkdirSync(runDir);
+    fs.mkdirSync(path.join(runDir, "evidence"));
     const url = `http://127.0.0.1:${port}`;
     const server = spawnGroup("pnpm", ["--filter", "web", "exec", "vite", "--port", String(port), "--strictPort", "--host", "127.0.0.1"], path.join(runDir, "vite.log"));
     const state = { runId, runDir, root: ROOT, createdAt: new Date().toISOString(), identity: sourceIdentity(), server: { ...server, port, url }, browser: null, voiceServer: null, recording: null };
@@ -470,20 +511,8 @@ const commands = {
       return emit(`recording ${webm}`, { ok: true, file: webm });
     }
     if (sub === "stop") {
-      const rec = state.recording;
-      if (!rec) throw new Fail("no recording is running", "control-persona record start <feature> <label>");
-      abJson(state, ["record", "stop"]);
-      state.recording = null;
-      saveState(state);
-      const files = [`${rec.prefix}.webm`];
-      const sheet = `${rec.prefix}.contact-sheet.png`;
-      const gif = `${rec.prefix}.gif`;
-      if (has("ffmpeg")) {
-        must("ffmpeg", ["-loglevel", "error", "-y", "-i", rec.webm, "-vf", "fps=8,scale=720:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=bayer", path.join(evidenceDir(state), gif)]);
-        files.unshift(gif);
-      }
-      if (fs.existsSync(path.join(evidenceDir(state), sheet))) files.push(sheet);
-      addEntry(state, { feature: rec.feature, label: rec.label, note: rec.note, files, url: state.browser?.url });
+      if (!state.recording) throw new Fail("no recording is running", "control-persona record start <feature> <label>");
+      const files = stopRecording(state);
       return emit(files.map((f) => path.join(evidenceDir(state), f)).join("\n"), { ok: true, files });
     }
     throw new Fail("usage: record start <feature> <label> | record stop");
@@ -614,11 +643,15 @@ const commands = {
     const prefix = `pr-${pr}/${state.runId}`;
     const dir = evidenceDir(state);
     const MAX = 20 * 1024 * 1024;
-    const files = fs.readdirSync(dir).filter((f) => fs.statSync(path.join(dir, f)).size <= MAX);
+    const all = fs.readdirSync(dir);
+    const tooBig = all.filter((f) => fs.statSync(path.join(dir, f)).size > MAX);
+    const files = all.filter((f) => !tooBig.includes(f));
+    // The report must only link files that were actually pushed.
+    const entries = withoutFiles(manifest.entries, tooBig, "over 20 MB; kept locally in .verify/");
     const title = args.title ?? "Persona verification";
     if (args["dry-run"]) {
-      const md = renderReport({ title, identity: identityFor(state), entries: manifest.entries, verdicts: manifest.verdicts, assetBase: `https://raw.githubusercontent.com/${repo}/<commit>/${prefix}` });
-      const warn = info.state === "OPEN" ? "" : `(PR #${pr} is ${info.state}: a real publish refuses it without --allow-merged)\n`;
+      const md = renderReport({ title, identity: identityFor(state), entries, verdicts: manifest.verdicts, assetBase: `https://raw.githubusercontent.com/${repo}/<commit>/${prefix}` });
+      const warn = `${info.state === "OPEN" ? "" : `(PR #${pr} is ${info.state}: a real publish refuses it without --allow-merged)\n`}${tooBig.length ? `(not published, over 20 MB: ${tooBig.join(", ")})\n` : ""}`;
       return emit(`${warn}[dry-run] would push ${files.length} file(s) to ${repo}@${EVIDENCE_BRANCH}:${prefix} and upsert this comment on ${info.url}:\n\n${md}`, { ok: true, dryRun: true, files, body: md });
     }
     if (info.state !== "OPEN" && !args["allow-merged"]) throw new Fail(`PR #${pr} is ${info.state}`, "publish to an open PR, or pass --allow-merged to annotate this one anyway");
@@ -630,7 +663,7 @@ const commands = {
       fs.rmSync(index, { force: true });
       const env = { ...process.env, GIT_INDEX_FILE: index };
       must("git", parent ? ["read-tree", parent] : ["read-tree", "--empty"], { env });
-      const readme = renderReport({ title, identity: identityFor(state), entries: manifest.entries, verdicts: manifest.verdicts });
+      const readme = renderReport({ title, identity: identityFor(state), entries, verdicts: manifest.verdicts });
       const readmeFile = path.join(state.runDir, "publish-README.md");
       fs.writeFileSync(readmeFile, `${readme}\n`);
       for (const [name, source] of [...files.filter((f) => f !== "README.md").map((f) => [f, path.join(dir, f)]), ["README.md", readmeFile]]) {
@@ -645,11 +678,14 @@ const commands = {
     if (!commit) throw new Fail(`could not push to ${EVIDENCE_BRANCH} after 3 attempts`, "check push access: git push --dry-run origin HEAD");
     const assetBase = `https://raw.githubusercontent.com/${repo}/${commit}/${prefix}`;
     const browse = `https://github.com/${repo}/tree/${commit}/${prefix}`;
-    const body = `${REPORT_MARKER}\n${renderReport({ title, identity: identityFor(state), entries: manifest.entries, verdicts: manifest.verdicts, assetBase })}\n\n<sub>All artifacts (video, audio, JSON): ${browse} · generated by \`.claude/skills/verify\`</sub>\n`;
+    const body = `${REPORT_MARKER}\n${renderReport({ title, identity: identityFor(state), entries, verdicts: manifest.verdicts, assetBase })}\n\n<sub>All artifacts (video, audio, JSON): ${browse} · generated by \`.claude/skills/verify\`</sub>\n`;
     const bodyFile = path.join(state.runDir, "publish-comment.md");
     fs.writeFileSync(bodyFile, body);
     const comments = JSON.parse(must("gh", ["api", "--paginate", "--slurp", `repos/${repo}/issues/${pr}/comments`])).flat();
-    const existing = comments.find((c) => c.body?.includes(REPORT_MARKER));
+    // Only edit our own evidence comment: another author's can't be edited by this account,
+    // and silently failing there would leave the PR pointing at stale evidence.
+    const me = must("gh", ["api", "user", "-q", ".login"]).trim();
+    const existing = comments.find((c) => c.body?.includes(REPORT_MARKER) && c.user?.login === me);
     const res = existing
       ? JSON.parse(must("gh", ["api", "-X", "PATCH", `repos/${repo}/issues/comments/${existing.id}`, "-F", `body=@${bodyFile}`]))
       : JSON.parse(must("gh", ["api", "-X", "POST", `repos/${repo}/issues/${pr}/comments`, "-F", `body=@${bodyFile}`]));
@@ -661,8 +697,12 @@ const commands = {
     if (!state) return emit("no current run; nothing to clean up");
     const lines = [];
     if (state.recording) {
-      ab(state, ["record", "stop"]);
-      lines.push("recording: stopped (kept in evidence)");
+      try {
+        const files = stopRecording(state);
+        lines.push(`recording: stopped and added to the manifest (${files.join(", ")})`);
+      } catch (error) {
+        lines.push(`recording: could not be finalized (${error.message}); the raw .webm, if any, is in evidence`);
+      }
     }
     if (state.browser) {
       const res = run("agent-browser", ["--session", state.browser.session, "close"]);
@@ -699,7 +739,7 @@ function identityFor(state) {
 
 if (!command || args.help || command === "help") {
   console.log(HELP);
-} else if (!commands[command]) {
+} else if (!commands[command] || command.startsWith("_")) {
   console.error(`unknown command "${command}"\n\n${HELP}`);
   process.exitCode = 2;
 } else {
