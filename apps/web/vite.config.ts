@@ -775,6 +775,8 @@ export default defineConfig({
         'history-e2e': path.resolve(__dirname, 'history-e2e.html'),
         // Internal fixture for the Playwright full-duplex voice suite (e2e/); not in examples-nav.
         'voice-e2e': path.resolve(__dirname, 'voice-e2e.html'),
+        // Internal keyless fixture for the agent verification skill (.claude/skills/verify); not in examples-nav.
+        verify: path.resolve(__dirname, 'verify.html'),
         'composer-actions-demo': path.resolve(__dirname, 'composer-actions-demo.html'),
         'composer-suite': path.resolve(__dirname, 'composer-suite.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),

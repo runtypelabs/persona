@@ -42,6 +42,9 @@ examples/standalone-widget/
 .debug/
 # Local generated API contract cache
 packages/widget/openapi/runtype-public-openapi.local.json
-.claude/
+.claude/*
+!.claude/skills/
+# Verification runs and evidence (.claude/skills/verify, scripts/verify)
+.verify/
 
 .vercel

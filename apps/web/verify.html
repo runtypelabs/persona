@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <title>Persona verify fixture</title>
+  <style>
+    /* Internal fixture: deliberately plain so nothing competes with the widget. */
+    html, body { margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+    body { padding: 16px; background: #f6f6f6; color: #1a1a1a; }
+    body[data-color-scheme="dark"] { background: #111; color: #eee; }
+    #verify-status { font: 12px/1.6 ui-monospace, monospace; margin-bottom: 8px; }
+    #verify-host {
+      width: 720px;
+      height: 760px;
+      max-width: 100%;
+      display: flex;
+      background: #fff;
+      border: 1px solid #ddd;
+      box-sizing: border-box;
+    }
+    body[data-color-scheme="dark"] #verify-host { background: #1b1b1b; border-color: #333; }
+    body[data-mode="launcher"] #verify-host { display: none; }
+  </style>
+</head>
+<body>
+  <!--
+    Internal, keyless fixture for the agent verification skill
+    (.claude/skills/verify, scripts/verify/control-persona.mjs). Every chat turn
+    is answered in-page by a scripted `customFetch`, so a PR's widget changes can
+    be driven and screenshotted with no proxy, API key, or network.
+    Deliberately absent from examples-nav: it is a test surface, not a demo.
+
+    Query parameters (all optional):
+      scenario=echo|markdown|tool|reasoning|approval|error   scripted reply (default echo)
+      mode=inline|launcher                                   inline panel (default) or floating launcher
+      theme=light|dark                                       widget + page color scheme
+      voice=browser                                          browser dictation + browser read-aloud
+      config=<JSON>                                          deep-merged over the fixture config
+      delayMs=<ms>                                           delay between SSE frames (default 60)
+  -->
+  <div id="verify-status">booting</div>
+  <div id="verify-host"></div>
+  <script type="module" src="/src/verify-fixture.ts"></script>
+</body>
+</html>

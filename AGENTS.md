@@ -189,6 +189,10 @@ Key test files:
 
 When adding new functionality, add tests alongside the implementation in the same directory.
 
+### Visual verification (agents)
+
+To prove a widget change in a real browser and attach evidence to a PR, follow `.claude/skills/verify/SKILL.md`. Its lever is `node scripts/verify/control-persona.mjs` (agent-browser, against the keyless `apps/web/verify.html` fixture). Voice changes have their own layer: mocked Web Speech for the browser provider, and a real audio round trip through a scripted voice socket for the Runtype provider. Evidence goes to `.verify/` (gitignored), and `publish --pr N` posts one comment per PR.
+
 ## Build Outputs
 
 The widget builds to multiple formats via tsup:

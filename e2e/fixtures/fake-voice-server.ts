@@ -54,6 +54,8 @@ export interface FakeVoiceCall {
   readonly frames: ClientJsonFrame[];
   /** Binary (mic PCM) frames received. */
   readonly binaryFrames: number;
+  /** The received mic PCM (16 kHz PCM16 LE mono), concatenated in arrival order. */
+  micPcm(): Buffer;
   /** Unknown client frame types this server rejected. */
   readonly rejected: ClientJsonFrame[];
   /** Resolves once `session_config` went out. */
@@ -88,6 +90,8 @@ export interface FakeVoiceCall {
   }): Promise<void>;
   /** Raw PCM16 LE mono 24 kHz (a quiet tone), `ms` long, in 20 ms frames. */
   sendAudio(ms: number): Promise<void>;
+  /** Stream caller-supplied PCM16 LE mono 24 kHz (e.g. synthesized speech) in real-time 20 ms frames. */
+  sendPcm(pcm: Buffer): Promise<void>;
   close(code?: number): void;
 }
 
@@ -221,6 +225,7 @@ function createCall(
   const rejected: ClientJsonFrame[] = [];
   const frameWaiters: Array<() => void> = [];
   let binaryFrames = 0;
+  const micChunks: Buffer[] = [];
   let configured = false;
   let resolveReady!: () => void;
   const ready = new Promise<void>((resolve) => (resolveReady = resolve));
@@ -248,6 +253,7 @@ function createCall(
     configure();
     if (isBinary) {
       binaryFrames += 1;
+      micChunks.push(Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data));
       return;
     }
     let frame: ClientJsonFrame;
@@ -276,6 +282,7 @@ function createCall(
     get binaryFrames() {
       return binaryFrames;
     },
+    micPcm: () => Buffer.concat(micChunks),
     rejected,
     ready,
     closed,
@@ -345,6 +352,14 @@ function createCall(
         ws.send(pcmTone(Math.min(20, ms - sent)));
       }
       await sleep(5);
+    },
+    async sendPcm(pcm) {
+      const frameBytes = (24_000 / 1000) * 20 * 2;
+      for (let at = 0; at < pcm.length; at += frameBytes) {
+        if (ws.readyState !== ws.OPEN) return;
+        ws.send(pcm.subarray(at, at + frameBytes));
+        await sleep(20);
+      }
     },
     close(code = 1000) {
       ws.close(code, "Voice call ended");
