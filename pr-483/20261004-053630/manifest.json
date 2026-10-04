@@ -1,0 +1,166 @@
+{
+  "runId": "20261004-053630",
+  "entries": [
+    {
+      "feature": "approvals",
+      "label": "card pending",
+      "note": null,
+      "files": [
+        "02-approvals-card-pending.png",
+        "02-approvals-card-pending.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-10-04T05:36:32.636Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "approvals",
+      "label": "after allow",
+      "note": null,
+      "files": [
+        "03-approvals-after-allow.png",
+        "03-approvals-after-allow.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-10-04T05:36:33.896Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "approvals",
+      "label": "allow flow",
+      "note": null,
+      "files": [
+        "01-approvals-allow-flow.gif",
+        "01-approvals-allow-flow.webm",
+        "01-approvals-allow-flow.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-10-04T05:36:34.182Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "approvals",
+      "label": "allow side effects",
+      "note": "2 request(s) crossed the network boundary, 14 controller event(s)",
+      "files": [
+        "04-approvals-allow-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-10-04T05:36:34.298Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "after call",
+      "note": null,
+      "files": [
+        "06-voice-runtype-after-call.png",
+        "06-voice-runtype-after-call.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A52380&clientDelegation=0",
+      "at": "2026-10-04T05:36:50.673Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "call",
+      "note": null,
+      "files": [
+        "05-voice-runtype-call.gif",
+        "05-voice-runtype-call.webm",
+        "05-voice-runtype-call.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A52380&clientDelegation=0",
+      "at": "2026-10-04T05:36:50.980Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "audio round trip",
+      "note": "`output.png` is the audio the widget played, tapped in-page (waveform over spectrogram): 2760 ms (mean -15.9 dB, peak -2.6 dB); `server-heard.png` is the mic PCM the voice socket received: 7680 ms in 30 frames; micOnToSocketOpen 0 ms, socketOpenToFirstMicFrame 285 ms, micOnToFirstAudioReceived 3776 ms",
+      "files": [
+        "07-voice-runtype-audio-round-trip.output.png",
+        "07-voice-runtype-audio-round-trip.output.wav",
+        "07-voice-runtype-audio-round-trip.server-heard.png",
+        "07-voice-runtype-audio-round-trip.server-heard.wav",
+        "07-voice-runtype-audio-round-trip.voice.json"
+      ],
+      "url": "http://127.0.0.1:4390/voice-e2e.html?voiceHost=ws%3A%2F%2F127.0.0.1%3A52380&clientDelegation=0",
+      "at": "2026-10-04T05:36:51.295Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "dictation",
+      "note": null,
+      "files": [
+        "08-voice-browser-dictation.gif",
+        "08-voice-browser-dictation.webm",
+        "08-voice-browser-dictation.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?voice=browser",
+      "at": "2026-10-04T05:37:05.976Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "dictated turn answered",
+      "note": null,
+      "files": [
+        "09-voice-browser-dictated-turn-answered.png",
+        "09-voice-browser-dictated-turn-answered.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?voice=browser",
+      "at": "2026-10-04T05:37:06.082Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    },
+    {
+      "feature": "voice-browser",
+      "label": "timeline",
+      "note": "1 request(s) crossed the network boundary, 7 controller event(s); recognitionFinalToTtsStart 2157 ms; speechSynthesis spoke: \"You said: What are your opening hours?. This reply is scripted by the verify fixture.\"",
+      "files": [
+        "10-voice-browser-timeline.page.json",
+        "10-voice-browser-timeline.voice.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?voice=browser",
+      "at": "2026-10-04T05:37:06.163Z",
+      "head": "743db1bc6b68148643d2d2852bd985b535429870",
+      "diffHash": "d2469835ce66"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "approvals",
+      "pass": true,
+      "skipped": false,
+      "note": "Allow: card → tool → reply; 1 chat request + 1 approved decision; approval:resolved fired 8x (known finding)"
+    },
+    {
+      "feature": "voice-runtype",
+      "pass": true,
+      "skipped": false,
+      "note": "server heard the spoken question; widget played 2760 ms of reply speech (script 2661 ms, peak -2.6 dB); first mic frame 285 ms after socket open; clean hang-up (cancel, close 1000)"
+    },
+    {
+      "feature": "voice-browser",
+      "pass": true,
+      "skipped": false,
+      "note": "scripted recognizer → composer → auto-submit after 800 ms pause → reply; speechSynthesis given Markdown-free text"
+    },
+    {
+      "feature": "streaming",
+      "pass": false,
+      "skipped": true,
+      "note": "not driven in this run (fixture scenarios proven during development)"
+    }
+  ]
+}

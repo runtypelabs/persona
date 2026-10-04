@@ -1,0 +1,13 @@
+- generic
+  - StaticText "Chat Assistant"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e3]
+  - generic
+    - paragraph
+    - generic
+      - button "Copy message" [ref=e7]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e4]
+      - button "Start voice recognition" [ref=e5]
+      - button "Send message" [ref=e6]

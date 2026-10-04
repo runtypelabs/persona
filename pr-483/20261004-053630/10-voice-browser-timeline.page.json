@@ -1,0 +1,128 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": "browser",
+  "requests": [
+    {
+      "at": 1807,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "What are your opening hours?",
+            "createdAt": "2026-10-04T05:37:02.850Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 176,
+      "type": "voice:state",
+      "detail": {
+        "active": true,
+        "source": "user",
+        "timestamp": 1791092221226
+      }
+    },
+    {
+      "at": 1798,
+      "type": "voice:state",
+      "detail": {
+        "active": false,
+        "source": "user",
+        "timestamp": 1791092222849
+      }
+    },
+    {
+      "at": 1799,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1791092222850
+      }
+    },
+    {
+      "at": 1806,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mute2c1u_2rosc5ne",
+        "role": "user",
+        "content": "What are your opening hours?",
+        "createdAt": "2026-10-04T05:37:02.850Z",
+        "sequence": 1791092221065,
+        "viaVoice": true,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 2976,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1791092223103-3913577c0ff708",
+        "role": "assistant",
+        "content": "You said: **What are your opening hours?**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-04T05:37:03.103Z",
+        "streaming": false,
+        "sequence": 1791092222859,
+        "agentMetadata": {
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 3102,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": "assistant-1791092223103-3913577c0ff708",
+        "message": {
+          "id": "assistant-1791092223103-3913577c0ff708",
+          "role": "assistant",
+          "content": "You said: **What are your opening hours?**. This reply is scripted by the verify fixture.",
+          "createdAt": "2026-10-04T05:37:03.103Z",
+          "streaming": false,
+          "sequence": 1791092222859,
+          "agentMetadata": {
+            "executionId": "exec_verify_1",
+            "iteration": 0,
+            "turnId": "turn-1",
+            "agentName": "Verify Agent"
+          }
+        },
+        "state": "loading",
+        "timestamp": 1791092224153
+      }
+    },
+    {
+      "at": 3154,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": "assistant-1791092223103-3913577c0ff708",
+        "message": {
+          "id": "assistant-1791092223103-3913577c0ff708",
+          "role": "assistant",
+          "content": "You said: **What are your opening hours?**. This reply is scripted by the verify fixture.",
+          "createdAt": "2026-10-04T05:37:03.103Z",
+          "streaming": false,
+          "sequence": 1791092222859,
+          "agentMetadata": {
+            "executionId": "exec_verify_1",
+            "iteration": 0,
+            "turnId": "turn-1",
+            "agentName": "Verify Agent"
+          }
+        },
+        "state": "playing",
+        "timestamp": 1791092224205
+      }
+    }
+  ]
+}

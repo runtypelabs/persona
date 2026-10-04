@@ -1,0 +1,114 @@
+{
+  "marks": {
+    "micOn": 260,
+    "recognitionFinal": 1082,
+    "ttsStart": 3239
+  },
+  "latenciesMs": {
+    "recognitionFinalToTtsStart": 2157
+  },
+  "utterances": [
+    {
+      "text": "You said: What are your opening hours?. This reply is scripted by the verify fixture.",
+      "voice": null,
+      "rate": 1,
+      "pitch": 1,
+      "queuedAt": 3239,
+      "startedAt": 3239
+    }
+  ],
+  "sockets": [],
+  "outputTracks": [],
+  "timeline": [
+    {
+      "at": 100,
+      "type": "mic",
+      "detail": {
+        "state": "idle | Start voice recognition"
+      }
+    },
+    {
+      "at": 260,
+      "type": "recognition:start",
+      "detail": {
+        "lang": "en-US",
+        "continuous": true
+      }
+    },
+    {
+      "at": 260,
+      "type": "mic",
+      "detail": {
+        "state": "recording | Stop voice recognition"
+      }
+    },
+    {
+      "at": 520,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What"
+      }
+    },
+    {
+      "at": 662,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are"
+      }
+    },
+    {
+      "at": 802,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are your"
+      }
+    },
+    {
+      "at": 942,
+      "type": "recognition:interim",
+      "detail": {
+        "text": "What are your opening"
+      }
+    },
+    {
+      "at": 1082,
+      "type": "recognition:final",
+      "detail": {
+        "text": "What are your opening hours?"
+      }
+    },
+    {
+      "at": 1883,
+      "type": "recognition:end"
+    },
+    {
+      "at": 1883,
+      "type": "mic",
+      "detail": {
+        "state": "idle | Start voice recognition"
+      }
+    },
+    {
+      "at": 1884,
+      "type": "tts:cancel"
+    },
+    {
+      "at": 3187,
+      "type": "tts:cancel"
+    },
+    {
+      "at": 3239,
+      "type": "tts:queued",
+      "detail": {
+        "text": "You said: What are your opening hours?. This reply is scripted by the verify fixture."
+      }
+    },
+    {
+      "at": 3239,
+      "type": "tts:start",
+      "detail": {
+        "text": "You said: What are your opening hours?. This reply is scripted by the verify fixture."
+      }
+    }
+  ]
+}
