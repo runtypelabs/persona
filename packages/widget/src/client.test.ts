@@ -2271,6 +2271,26 @@ describe('AgentWidgetClient - stopReason propagation', () => {
     expect(final!.stopReason).toBe('max_tool_calls');
   });
 
+  it.each(['end_turn', 'unknown'] as const)(
+    'adds no assistant message for an empty response with a natural stopReason=%s',
+    async (stopReason) => {
+      // A resumed leg that ends the turn after suggest_replies streams no text:
+      // a natural stop has no notice, so an empty bubble would only sit behind the answer.
+      const events = await runDispatch([
+        `data: ${JSON.stringify({
+          type: 'step_complete',
+          id: 'agent-response',
+          stepType: 'prompt',
+          success: true,
+          result: { response: '' },
+          stopReason,
+        })}\n\n`,
+        `data: ${JSON.stringify({ type: 'execution_complete', success: true })}\n\n`,
+      ]);
+      expect(events.some((e) => e.type === 'message' && e.message.role === 'assistant')).toBe(false);
+    }
+  );
+
   it('turn_complete.stopReason overrides any earlier step_complete value (agent-loop path)', async () => {
     // Build an agent-mode stream that emits both events. turn_complete
     // arrives last; its stopReason should win.
