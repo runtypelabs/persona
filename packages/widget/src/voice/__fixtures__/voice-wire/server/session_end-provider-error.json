@@ -1,0 +1,6 @@
+{
+  "type": "session_end",
+  "reason": "provider_error",
+  "message": "The voice provider disconnected.",
+  "retryable": true
+}

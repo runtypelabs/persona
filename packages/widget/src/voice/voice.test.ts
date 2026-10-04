@@ -1537,6 +1537,207 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         });
       });
     });
+
+    describe('session_end (Amendment 6)', () => {
+      const fixture = (name: string) =>
+        JSON.stringify(wireFixtures('server').find((f) => JSON.stringify(f).includes(name)) ?? {});
+      /** A live full-duplex call that collects errors and statuses from here on. */
+      const endableCall = async () => {
+        const call = await startFullDuplexCall();
+        const errors: string[] = [];
+        call.provider.onError((e) => errors.push(e.message));
+        return { ...call, errors };
+      };
+      const end = (ws: MockWebSocket, frame: Record<string, unknown> | string, code: number) => {
+        ws.triggerMessage(typeof frame === 'string' ? frame : JSON.stringify({ type: 'session_end', ...frame }));
+        ws.triggerClose(code);
+      };
+
+      it.each([
+        ['idle_timeout', 1000, 'Voice call ended after a quiet period.'],
+        ['max_duration', 1000, 'This voice call reached its time limit.'],
+        ['provider_ended', 1000, 'The voice session ended.'],
+        ['quota', 1008, 'Voice is unavailable right now.'],
+        ['ended_by_server', 1000, null],
+        ['maintenance_window', 1000, null], // unknown: an ordinary server end
+      ])('ends on %s with its status text, without an error', async (reason, code, text) => {
+        const { ws, provider, statuses, errors } = await endableCall();
+        end(ws, { reason }, code);
+        expect(provider.takeNotice()).toBe(text);
+        expect(provider.takeNotice()).toBeNull(); // read once
+        expect(errors).toEqual([]);
+        expect(statuses.at(-1)).toBe('idle');
+        expect(provider.isBargeInActive()).toBe(false);
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(MockWebSocket.instances.at(-1)).toBe(ws); // no reconnect
+      });
+
+      it('shows the quota message the server sent', async () => {
+        const { ws, provider } = await endableCall();
+        end(ws, { reason: 'quota', message: 'Your voice minutes are used up.' }, 1008);
+        expect(provider.takeNotice()).toBe('Your voice minutes are used up.');
+      });
+
+      it('takes the doc fixtures: max_duration, and an unknown reason as ended_by_server', async () => {
+        const first = await endableCall();
+        end(first.ws, fixture('max_duration'), 1000);
+        expect(first.provider.takeNotice()).toBe('This voice call reached its time limit.');
+        const second = await endableCall();
+        end(second.ws, fixture('maintenance_window'), 1000);
+        expect(second.provider.takeNotice()).toBeNull();
+        expect(second.errors).toEqual([]);
+      });
+
+      it('reports a fatal error once: the error frame, not the session_end after it', async () => {
+        const { ws, provider, statuses, errors } = await endableCall();
+        ws.triggerMessage(JSON.stringify({ type: 'error', error: 'Voice engine failed', fatal: true }));
+        end(ws, { reason: 'error' }, 1011);
+        expect(errors).toEqual(['Voice engine failed']);
+        expect(statuses.at(-1)).toBe('error');
+        expect(provider.takeNotice()).toBeNull();
+      });
+
+      it('reconnects once after a provider error, 1-2 s later, and says so', async () => {
+        const { ws, provider, statuses, errors } = await endableCall();
+        end(ws, fixture('provider_error'), 1011);
+        expect(provider.takeNotice()).toBe('Voice connection lost. Reconnecting…');
+        expect(errors).toEqual([]);
+        expect(statuses.at(-1)).toBe('idle');
+        expect(provider.isBargeInActive()).toBe(true); // the mic button hangs up meanwhile
+        await vi.advanceTimersByTimeAsync(999);
+        expect(MockWebSocket.instances.at(-1)).toBe(ws);
+        await vi.advanceTimersByTimeAsync(1_001);
+        const second = lastWs();
+        expect(second).not.toBe(ws);
+        expect(second.protocols).toEqual(['runtype.bearer', 'ct_secret']);
+
+        // A second failure doesn't reconnect again.
+        second.triggerOpen();
+        end(second, { reason: 'provider_error' }, 1011);
+        expect(provider.takeNotice()).toBe('Voice connection lost.');
+        expect(errors).toEqual(['Voice connection lost.']);
+        expect(statuses.at(-1)).toBe('error');
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(lastWs()).toBe(second);
+      });
+
+      it('reconnects once on server_restart, saying "Reconnecting…"', async () => {
+        const { ws, provider } = await endableCall();
+        end(ws, { reason: 'server_restart' }, 1012);
+        expect(provider.takeNotice()).toBe('Reconnecting…');
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(lastWs()).not.toBe(ws);
+      });
+
+      it('re-mints the credential before reconnecting after auth_expired, showing nothing yet', async () => {
+        const { ws, provider } = await endableCall();
+        const refresh = vi.fn(async () => {});
+        provider.setAuthRefresh(refresh);
+        end(ws, { reason: 'auth_expired' }, 1008);
+        expect(provider.takeNotice()).toBeNull();
+        expect(refresh).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(refresh).toHaveBeenCalledOnce();
+        expect(lastWs()).not.toBe(ws);
+      });
+
+      it('never reconnects once the visitor hangs up, during the wait or before the close', async () => {
+        const waiting = await endableCall();
+        end(waiting.ws, { reason: 'provider_error' }, 1011);
+        await waiting.provider.stopListening();
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(lastWs()).toBe(waiting.ws);
+
+        const hungUp = await endableCall();
+        hungUp.ws.triggerMessage(JSON.stringify({ type: 'session_end', reason: 'provider_error' }));
+        await hungUp.provider.stopListening(); // closes the socket itself
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(lastWs()).toBe(hungUp.ws);
+        expect(hungUp.errors).toEqual([]);
+      });
+
+      it('never reconnects after a hang-up while the credential refreshes', async () => {
+        const { ws, provider } = await endableCall();
+        let finish!: () => void;
+        provider.setAuthRefresh(() => new Promise<void>((r) => (finish = r)));
+        end(ws, { reason: 'auth_expired' }, 1008);
+        await vi.advanceTimersByTimeAsync(2_000); // timer fired, refresh in flight
+        await provider.stopListening();
+        finish();
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(lastWs()).toBe(ws);
+        expect(provider.isBargeInActive()).toBe(false);
+      });
+
+      it('ends the call with the refresh error when re-minting fails', async () => {
+        const { ws, provider, statuses, errors } = await endableCall();
+        provider.setAuthRefresh(async () => {
+          throw new Error('Token mint failed');
+        });
+        end(ws, { reason: 'auth_expired' }, 1008);
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(lastWs()).toBe(ws);
+        expect(errors).toEqual(['Token mint failed']);
+        expect(statuses.at(-1)).toBe('error');
+        expect(provider.takeNotice()).toBe('Voice connection lost.');
+        expect(provider.isBargeInActive()).toBe(false);
+      });
+
+      it('still reconnects when a socket error comes between session_end and the close', async () => {
+        const { ws, provider, errors } = await endableCall();
+        ws.triggerMessage(JSON.stringify({ type: 'session_end', reason: 'provider_error' }));
+        ws.triggerError();
+        ws.triggerClose(1011);
+        expect(errors).toEqual([]);
+        expect(provider.takeNotice()).toBe('Voice connection lost. Reconnecting…');
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(lastWs()).not.toBe(ws);
+      });
+
+      it('ends the automatic reconnect when audio stays suspended outside a click (iOS)', async () => {
+        const { ws, provider, statuses, errors } = await endableCall();
+        end(ws, { reason: 'server_restart' }, 1012);
+        provider.takeNotice();
+        class SuspendedAudioContext extends MockAudioContext {
+          state = 'suspended';
+          resume() {
+            return new Promise<void>(() => {}); // iOS: pending until a gesture
+          }
+        }
+        (globalThis as any).window.AudioContext = SuspendedAudioContext;
+        try {
+          await vi.advanceTimersByTimeAsync(2_500);
+        } finally {
+          (globalThis as any).window.AudioContext = MockAudioContext;
+        }
+        expect(lastWs()).toBe(ws); // no dead call opened
+        expect(errors).toEqual(['Voice connection lost.']);
+        expect(statuses.at(-1)).toBe('error');
+        expect(provider.takeNotice()).toBe('Voice connection lost.');
+        expect(provider.isBargeInActive()).toBe(false);
+      });
+
+      it('treats the attach idle close (4408) as a quiet end, not an error', async () => {
+        for (const withFrame of [false, true]) {
+          const { ws, provider, statuses, errors } = await endableCall();
+          if (withFrame) ws.triggerMessage(JSON.stringify({ type: 'session_end', reason: 'idle_timeout' }));
+          ws.triggerClose(4408);
+          expect(errors).toEqual([]);
+          expect(statuses.at(-1)).toBe('idle');
+          expect(provider.takeNotice()).toBe('Voice call ended after a quiet period.');
+        }
+      });
+
+      it('keeps an abnormal close without session_end exactly as before', async () => {
+        const { ws, provider, statuses, errors } = await endableCall();
+        ws.triggerClose(1006);
+        expect(errors).toEqual(['Voice connection closed (code 1006)']);
+        expect(statuses.at(-1)).toBe('error');
+        expect(provider.takeNotice()).toBeNull();
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(lastWs()).toBe(ws);
+      });
+    });
   });
 });
 

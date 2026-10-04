@@ -36,7 +36,18 @@ const h = vi.hoisted(() => {
     errorCb: ((e: Error) => void) | null;
     bridge: VoiceSessionBridge | null;
     prewarms: number;
-  } = { transcriptCb: null, metricsCb: null, statusCb: null, errorCb: null, bridge: null, prewarms: 0 };
+    notice: string | null;
+    authRefresh: (() => Promise<void>) | null;
+  } = {
+    transcriptCb: null,
+    metricsCb: null,
+    statusCb: null,
+    errorCb: null,
+    bridge: null,
+    prewarms: 0,
+    notice: null,
+    authRefresh: null,
+  };
 
   const fakeProvider = {
     type: 'runtype' as const,
@@ -63,6 +74,14 @@ const h = vi.hoisted(() => {
     },
     setSessionBridge: (bridge: VoiceSessionBridge) => {
       state.bridge = bridge;
+    },
+    takeNotice: () => {
+      const notice = state.notice;
+      state.notice = null;
+      return notice;
+    },
+    setAuthRefresh: (refresh: () => Promise<void>) => {
+      state.authRefresh = refresh;
     },
   };
 
@@ -1447,5 +1466,42 @@ describe('AgentWidgetSession - prewarmVoice', () => {
     session.prewarmVoice();
     expect(warm).toHaveBeenCalledOnce();
     expect(h.state.prewarms).toBe(0);
+  });
+});
+
+describe('AgentWidgetSession - voice session end (Amendment 6)', () => {
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+  const tokenSession = () =>
+    new AgentWidgetSession(
+      {
+        clientToken: 'ct_live_demo',
+        apiUrl: 'https://api.runtype.com',
+        voiceRecognition: { enabled: true, provider: { type: 'runtype', runtype: { agentId: 'a1' } } },
+      },
+      { onMessagesChanged: () => {}, onStatusChanged: () => {}, onStreamingChanged: () => {}, onError: () => {} },
+    );
+
+  it("hands the UI the provider's status-line notice once", async () => {
+    const session = tokenSession();
+    session.setupVoice();
+    await flush();
+    h.state.notice = 'This voice call reached its time limit.';
+    expect(session.getVoiceNotice()).toBe('This voice call reached its time limit.');
+    expect(session.getVoiceNotice()).toBeNull();
+  });
+
+  it('re-mints the client session when the provider refreshes auth (auth_expired)', async () => {
+    const session = tokenSession();
+    session.setupVoice();
+    await flush();
+    const client = (session as unknown as {
+      client: { clearClientSession: () => void; initSession: () => Promise<unknown> };
+    }).client;
+    const cleared = vi.spyOn(client, 'clearClientSession');
+    const init = vi.spyOn(client, 'initSession').mockResolvedValue({});
+    await h.state.authRefresh!();
+    expect(cleared).toHaveBeenCalledOnce();
+    expect(init).toHaveBeenCalledOnce();
+    expect(cleared.mock.invocationCallOrder[0]).toBeLessThan(init.mock.invocationCallOrder[0]);
   });
 });

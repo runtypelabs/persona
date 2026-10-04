@@ -7,6 +7,7 @@
  * `setupVoice`, so pages without voice never download it. The session hands
  * over its private voice state through a `VoiceWiringHost`.
  */
+import type { AgentWidgetClient } from "../client";
 import type { AgentWidgetSession } from "../session";
 import type { AgentWidgetMessage, VoiceProvider, VoiceStatus } from "../types";
 import type { KeyedVoiceTranscript } from "./keyed-voice-transcript";
@@ -26,6 +27,7 @@ export type VoiceWiringSession = Pick<
   webMcpApprovalResolvers: Map<string, unknown>;
   upsertMessage: (message: AgentWidgetMessage) => void;
   speakLatestAssistantMessage: (only?: string[]) => void;
+  client: Pick<AgentWidgetClient, "isClientTokenMode" | "clearClientSession" | "initSession">;
 };
 
 /** Accessors for the session's `#private` voice state. */
@@ -100,6 +102,12 @@ export const wireSessionVoice = (
         })
       );
     }
+    // auth_expired: re-mint the client session (it reopens the same conversation).
+    provider.setAuthRefresh?.(async () => {
+      if (!s.client.isClientTokenMode()) return;
+      s.client.clearClientSession();
+      await s.client.initSession();
+    });
     const generation = p.generation();
     const isCurrent = () => p.provider() === provider && generation === p.generation();
 

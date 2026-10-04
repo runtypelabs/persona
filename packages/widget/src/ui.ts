@@ -358,6 +358,8 @@ const ARTIFACT_SPLIT_DESKTOP_MIN = 641;
 
 /** Marks the status region while a composer lock reason owns it. */
 const COMPOSER_REASON_ATTR = "data-persona-composer-reason";
+/** Marks the status region while a transient composer notice owns it. */
+const COMPOSER_NOTICE_ATTR = "data-persona-composer-notice";
 
 const IMAGE_FILE_EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   "image/png": "png",
@@ -1384,8 +1386,9 @@ export const createAgentExperience = (
       placeStatusIndicator(el, composerForm, statusCfg);
       applyStatusIndicatorState(el, statusCfg, status);
     }
-    // A composer lock reason owns the status region until the lock clears.
-    if (el.hasAttribute(COMPOSER_REASON_ATTR)) return;
+    // A composer lock reason owns the status region until the lock clears, and
+    // a notice until its timer ends (which re-applies the status).
+    if (el.hasAttribute(COMPOSER_REASON_ATTR) || el.hasAttribute(COMPOSER_NOTICE_ATTR)) return;
     if (status === "idle" && statusCfg.idleLink) {
       el.textContent = "";
       const link = document.createElement("a");
@@ -7916,6 +7919,7 @@ export const createAgentExperience = (
       statusText.setAttribute("role", "status");
       statusText.setAttribute("aria-live", "polite");
       statusText.setAttribute(COMPOSER_REASON_ATTR, "");
+      statusText.removeAttribute(COMPOSER_NOTICE_ATTR); // the reason outranks a notice
       statusText.textContent = reason;
       applyStatusIndicatorState(statusText, config.statusIndicator ?? {}, "idle");
       return;
@@ -8803,6 +8807,9 @@ export const createAgentExperience = (
       // provider; the mic-button styling below is runtype-specific.
       eventBus.emit("voice:status", { status, timestamp: Date.now() });
       if (status !== 'disconnected' && !usesSessionVoice(config.voiceRecognition?.provider)) return;
+      // Why the server ended the call, or that it is reconnecting.
+      const voiceNotice = session.getVoiceNotice();
+      if (voiceNotice) showComposerNotice(voiceNotice, 10_000);
 
       switch (status) {
         case 'listening':
@@ -9507,7 +9514,6 @@ export const createAgentExperience = (
     resetHistoryNavigation();
   };
 
-  const COMPOSER_NOTICE_ATTR = "data-persona-composer-notice";
   let composerNoticeTimer: ReturnType<typeof setTimeout> | null = null;
 
   /** Transient message in the status region; a lock reason always outranks it. */
