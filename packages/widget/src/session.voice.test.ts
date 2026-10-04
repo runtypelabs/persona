@@ -539,6 +539,22 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     ]);
   });
 
+  it("leaves a delegated turn's spoken filler out of the history, keeping the answer", async () => {
+    // Full duplex: the voice model's words arrive as captions.
+    h.state.transcriptCb!('user', 'whats the weather in paris', true, { turnId: 'u1', caption: true });
+    h.state.transcriptCb!('assistant', 'Let me check that.', true, { turnId: 'f1', caption: true });
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'It is sunny in Paris.'));
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'whats the weather in paris' }));
+    h.state.transcriptCb!('assistant', 'Anything else?', true, { turnId: 'a2', caption: true });
+
+    expect(h.state.bridge!.getHistory()).toEqual([
+      { role: 'assistant', content: 'Welcome! How can I help?' },
+      { role: 'user', content: 'whats the weather in paris' },
+      { role: 'assistant', content: 'It is sunny in Paris.' },
+      { role: 'assistant', content: 'Anything else?' },
+    ]);
+  });
+
   it('submits the transcript bubble as the user message once and answers with the reply', async () => {
     drive('user', 'whats the weather in paris', true, 'u1');
     drive('assistant', 'Let me check that.', true, 'f1'); // filler stays visible

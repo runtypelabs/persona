@@ -167,16 +167,29 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
     // Read once at call start, before this call has any captions, so the
     // captions here are earlier calls' (e.g. on the previous page of a
     // multi-page site): spoken conversation the new voice session never heard.
-    getHistory: () =>
-      host.messages().flatMap((m) =>
-        (m.role === "user" || m.role === "assistant") &&
-        !m.variant &&
-        !m.voiceProcessing &&
-        !m.streaming &&
-        m.content
-          ? [{ role: m.role, content: m.content }]
-          : [],
-      ),
+    // An assistant caption followed by a chat answer before the next user turn
+    // is a delegated turn's spoken filler ("Let me check."): it would only use
+    // up a slot of the context's recent-message window.
+    getHistory: () => {
+      const settled = host.messages().filter(
+        (m) =>
+          (m.role === "user" || m.role === "assistant") &&
+          !m.variant &&
+          !m.voiceProcessing &&
+          !m.streaming &&
+          m.content,
+      );
+      let answered = false;
+      const kept: Array<{ role: "user" | "assistant"; content: string }> = [];
+      for (let i = settled.length - 1; i >= 0; i -= 1) {
+        const m = settled[i];
+        if (m.role === "user") answered = false;
+        else if (!m.voiceCaption) answered = true;
+        else if (answered) continue;
+        kept.unshift({ role: m.role as "user" | "assistant", content: m.content });
+      }
+      return kept;
+    },
 
     dropDelegation(delegationId, expired) {
       // Remembered for a turn still running: when it parks, the same rule applies.
