@@ -27,6 +27,9 @@ const clientDelegation = params.get("clientDelegation") === "0" ? false : undefi
 const approvalTimeoutMs = params.has("approvalTimeoutMs") ? Number(params.get("approvalTimeoutMs")) : undefined;
 const disclosure = params.get("disclosureText");
 const disclosureText = disclosure === "0" ? false : (disclosure ?? undefined);
+// `?persist=1`: persist the transcript and voice state, so a
+// navigation between two fixture URLs exercises the cross-page voice resume.
+const persist = params.get("persist") === "1";
 
 // Live harness only (`?webmcp=1`, LIVE_WEBMCP=1): a gated `place_pickup_order`
 // page tool, so a spoken order parks on a WebMCP approval in the chat.
@@ -85,7 +88,7 @@ const config: AgentWidgetConfig = {
   apiUrl,
   clientToken,
   agentId,
-  persistState: false,
+  persistState: persist,
   suggestionChips: [],
   launcher: { ...DEFAULT_WIDGET_CONFIG.launcher, enabled: false, width: "100%" },
   // A welcome hero would sit between the tests and the transcript.

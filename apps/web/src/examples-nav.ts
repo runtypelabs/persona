@@ -272,6 +272,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "voice-navigation-demo",
+    href: "/voice-navigation-demo.html",
+    title: "Voice Across Pages",
+    blurb: "Keep a voice call going while the visitor (or agent) navigates a multi-page site.",
+    tier: "start",
+    tags: ["voice", "audio", "navigation"],
+    modes: ["launcher"],
+  },
+  {
     slug: "server-tts-demo",
     href: "/server-tts-demo.html",
     title: "Server TTS (streaming)",

@@ -22,6 +22,10 @@ export interface VoicePageOptions {
   approvalTimeoutMs?: number;
   /** `false` hides the AI-disclosure notice. */
   disclosureText?: string | false;
+  /** Persist transcript + voice state, for cross-page navigation specs. */
+  persist?: boolean;
+  /** Extra query param distinguishing "pages" of the same fixture. */
+  page?: string;
 }
 
 export function voiceFixtureUrl(options: VoicePageOptions): string {
@@ -30,6 +34,8 @@ export function voiceFixtureUrl(options: VoicePageOptions): string {
   if (options.callContext) params.set("callContext", options.callContext);
   if (options.approvalTimeoutMs) params.set("approvalTimeoutMs", String(options.approvalTimeoutMs));
   if (options.disclosureText !== undefined) params.set("disclosureText", options.disclosureText || "0");
+  if (options.persist) params.set("persist", "1");
+  if (options.page) params.set("page", options.page);
   return `/voice-e2e.html?${params.toString()}`;
 }
 

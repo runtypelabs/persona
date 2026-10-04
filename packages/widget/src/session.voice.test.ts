@@ -527,12 +527,31 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
   });
 
   it('hands the provider a bridge whose history is the visible settled messages', () => {
-    drive('user', 'still talk', false, 'u1'); // interim: not part of the context
-    // An earlier call's captions (filler, small talk) aren't conversation either.
+    // An earlier call's captions (e.g. on the previous page) are conversation
+    // the new voice session never heard, so they carry over.
     h.state.transcriptCb!('assistant', 'Let me check.', true, { turnId: 'f0', caption: true });
     h.state.transcriptCb!('user', 'hi there', true, { turnId: 'u0', caption: true });
+    drive('user', 'still talk', false, 'u1'); // interim: not part of the context
     expect(h.state.bridge!.getHistory()).toEqual([
       { role: 'assistant', content: 'Welcome! How can I help?' },
+      { role: 'assistant', content: 'Let me check.' },
+      { role: 'user', content: 'hi there' },
+    ]);
+  });
+
+  it("leaves a delegated turn's spoken filler out of the history, keeping the answer", async () => {
+    // Full duplex: the voice model's words arrive as captions.
+    h.state.transcriptCb!('user', 'whats the weather in paris', true, { turnId: 'u1', caption: true });
+    h.state.transcriptCb!('assistant', 'Let me check that.', true, { turnId: 'f1', caption: true });
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'It is sunny in Paris.'));
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'whats the weather in paris' }));
+    h.state.transcriptCb!('assistant', 'Anything else?', true, { turnId: 'a2', caption: true });
+
+    expect(h.state.bridge!.getHistory()).toEqual([
+      { role: 'assistant', content: 'Welcome! How can I help?' },
+      { role: 'user', content: 'whats the weather in paris' },
+      { role: 'assistant', content: 'It is sunny in Paris.' },
+      { role: 'assistant', content: 'Anything else?' },
     ]);
   });
 

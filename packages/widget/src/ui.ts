@@ -353,6 +353,7 @@ import {
 // Default localStorage key for chat history (automatically cleared on clear chat)
 const DEFAULT_CHAT_HISTORY_STORAGE_KEY = "persona-chat-history";
 const VOICE_STATE_RESTORE_WINDOW = 30 * 1000;
+const VOICE_RESUME_NOTICE = "Tap the mic to resume your voice call";
 // Split desktop boundary; must match widget.css artifact media queries (min-width:641px).
 const ARTIFACT_SPLIT_DESKTOP_MIN = 641;
 
@@ -5086,6 +5087,15 @@ export const createAgentExperience = (
   // would otherwise not appear until the first keystroke.
   syncComposerCompact();
   const voiceAutoResumeMode = config.voiceRecognition?.autoResume ?? false;
+  // A session-voice call is live while listening OR while its continuous
+  // (barge-in) mic is hot: a full-duplex call cycles listening → processing →
+  // speaking, and `isVoiceActive()` alone (status === listening) would record a
+  // live call as hung up and never restore it on the next page.
+  const isSessionVoiceLive = () => session.isVoiceActive() || session.isBargeInActive();
+  // Set on `pagehide`: the unload tears the call down without the visitor
+  // hanging up, so its trailing status changes must not overwrite the
+  // persisted "call was live" record the next page restores from.
+  let pageHiding = false;
   const emitVoiceState = (source: AgentWidgetVoiceStateEvent["source"]) => {
     eventBus.emit("voice:state", {
       active: voiceState.active,
@@ -5115,17 +5125,37 @@ export const createAgentExperience = (
           voiceState.manuallyDeactivated = false;
           if (usesSessionVoice(config.voiceRecognition?.provider)) {
             session.toggleVoice().then(() => {
-              voiceState.active = session.isVoiceActive();
+              voiceState.active = isSessionVoiceLive();
               emitVoiceState("restore");
-              if (session.isVoiceActive()) applyRuntypeMicRecordingStyles();
+              if (voiceState.active) {
+                applyRuntypeMicRecordingStyles();
+              } else {
+                // Typically the autoplay policy: this page has no user gesture
+                // yet, so the audio graph can't start. A mic tap resumes it.
+                persistVoiceMetadata();
+                showComposerNotice(VOICE_RESUME_NOTICE, 10_000);
+              }
             });
           } else {
             startVoiceRecognition("restore");
           }
         }
-      }, 1000);
+        // Session voice redials at once (a navigation mid-call should feel
+        // seamless); toggleVoice() already waits on the provider setup.
+      }, usesSessionVoice(config.voiceRecognition?.provider) ? 0 : 1000);
     }
   };
+  // Re-stamp a live call as the page unloads: the restore window counts from
+  // the navigation, not from when the (possibly long) call was started. A
+  // back/forward-cache hide (`persisted`) isn't an unload: the page lives on.
+  const handleVoicePageHide = (event: PageTransitionEvent) => {
+    pageHiding = !event.persisted;
+    if (voiceState.active) persistVoiceMetadata();
+  };
+  if (typeof window !== "undefined") {
+    window.addEventListener("pagehide", handleVoicePageHide);
+    destroyCallbacks.push(() => window.removeEventListener("pagehide", handleVoicePageHide));
+  }
 
   const getMessagesForPersistence = () =>
     session
@@ -8859,7 +8889,7 @@ export const createAgentExperience = (
             }
             removeRuntypeMicStateStyles();
             emitVoiceState("system");
-            persistVoiceMetadata();
+            if (!pageHiding) persistVoiceMetadata();
           }
           break;
       }
@@ -10503,11 +10533,11 @@ export const createAgentExperience = (
       }
 
       session.toggleVoice().then(() => {
-        voiceState.active = session.isVoiceActive();
-        voiceState.manuallyDeactivated = !session.isVoiceActive();
+        voiceState.active = isSessionVoiceLive();
+        voiceState.manuallyDeactivated = !voiceState.active;
         persistVoiceMetadata();
         emitVoiceState("user");
-        if (session.isVoiceActive()) {
+        if (voiceState.active) {
           applyRuntypeMicRecordingStyles();
         } else {
           removeRuntypeMicStateStyles();
@@ -12962,9 +12992,10 @@ export const createAgentExperience = (
         voiceState.manuallyDeactivated = false;
         persistVoiceMetadata();
         session.toggleVoice().then(() => {
-          voiceState.active = session.isVoiceActive();
+          voiceState.active = isSessionVoiceLive();
+          persistVoiceMetadata();
           emitVoiceState("user");
-          if (session.isVoiceActive()) applyRuntypeMicRecordingStyles();
+          if (voiceState.active) applyRuntypeMicRecordingStyles();
         });
         return true;
       }
