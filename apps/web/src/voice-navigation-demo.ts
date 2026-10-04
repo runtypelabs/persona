@@ -3,6 +3,7 @@ import "@runtypelabs/persona/widget.css";
 import {
   initAgentWidget,
   DEFAULT_WIDGET_CONFIG,
+  createLocalStorageAdapter,
   markdownPostprocessor,
   type AgentWidgetConfig,
   type VoiceProvider,
@@ -126,6 +127,7 @@ const readSaved = (key: string) => {
 const clientToken = readSaved(TOKEN_KEY);
 const agentId = readSaved(AGENT_KEY);
 const realtime = Boolean(clientToken && agentId);
+const voiceMode = realtime ? "realtime" : "keyless";
 
 const note = document.createElement("div");
 note.className = "note";
@@ -221,7 +223,16 @@ function createWebSpeechCall(): VoiceProvider {
     void inner.startListening();
   };
 
+  // A failed start (mic denied, no speech service) ends the call: re-arming
+  // would retry forever and keep reporting a dead call as live.
+  const endCall = () => {
+    live = false;
+    clearTimeout(rearmTimer);
+  };
+  inner.onError(endCall);
+
   inner.onStatusChange((status) => {
+    if (status === "error") endCall();
     statusCallbacks.forEach((cb) => cb(status));
     if (status === "idle" && live) rearmTimer = setTimeout(rearm, 400);
   });
@@ -236,7 +247,12 @@ function createWebSpeechCall(): VoiceProvider {
     },
     async startListening() {
       live = true;
-      await inner.startListening();
+      try {
+        await inner.startListening();
+      } catch (error) {
+        endCall();
+        throw error;
+      }
     },
     async stopListening() {
       live = false;
@@ -305,7 +321,11 @@ const runtypeHost = window.location.hostname === "localhost" ? "localhost:8787" 
 const config: AgentWidgetConfig = {
   ...DEFAULT_WIDGET_CONFIG,
   // The transcript, open panel and live-call record survive the navigation.
-  persistState: true,
+  // Its own keys, shared by the three pages and separate per mode: the default
+  // `persona-state` is shared with every other demo on this origin, and a
+  // keyless live-call record must not redial in realtime mode (or vice versa).
+  persistState: { keyPrefix: `voice-nav-${voiceMode}-` },
+  storageAdapter: createLocalStorageAdapter(`voice-nav-${voiceMode}-state`),
   ...(realtime
     ? {
         clientToken,
