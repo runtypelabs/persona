@@ -1,5 +1,23 @@
 # @runtypelabs/persona
 
+## 4.27.0
+
+### Minor Changes
+
+- 4490160: The Runtype voice provider now handles the server's `session_end { reason, message?, retryable? }` frame (voice protocol Amendment 6) and says why a call ended in the composer status line:
+
+  - **Status text:** "Voice call ended after a quiet period." (`idle_timeout`), "This voice call reached its time limit." (`max_duration`), "The voice session ended." (`provider_ended`), "Voice session expired. Tap the mic to reconnect." (`auth_expired`), or the server's message for `quota` (default "Voice is unavailable right now."). An unknown reason is treated as an ordinary server end and shows nothing.
+  - **Reconnect:** after `provider_error` or `server_restart`, the call reconnects once after 1–2 seconds ("Voice connection lost. Reconnecting…" / "Reconnecting…"). A second failure shows "Voice connection lost." It never reconnects after the visitor hangs up, and never twice. If the browser keeps audio suspended outside a click (iOS), the reconnect stops with "Voice connection lost. Tap the mic to reconnect."
+  - **Attach idle:** the close (code 4408) is now a quiet end instead of an error.
+  - **No `session_end`:** an abnormal close without the frame behaves as before.
+
+  `VoiceProvider` gains optional `takeNotice()`, and the session gains `getVoiceNotice()`.
+
+### Patch Changes
+
+- 409eabc: Don't add an empty assistant bubble for a buffered `step_complete` that carries no response and a natural stop reason (`end_turn` / `unknown`). A resumed leg that ends the turn after `suggest_replies` streams no text, and since a natural stop has no notice, the empty bubble just sat behind the answer. Empty responses with a notice-worthy stop reason (`max_tool_calls`, `length`, `content_filter`, `error`) still surface their bubble.
+- 8077ac7: A live voice call now resumes on the next page of a multi-page site: the widget records a full-duplex call as live (not only while its status is `listening`), re-stamps it on `pagehide` so long calls stay within the restore window, and redials immediately on load. When the browser blocks audio until the visitor interacts with the new page, the call no longer hangs: the widget asks for a mic tap to resume. A new call's `context` now also carries what was said aloud in earlier calls (previously only typed chat), so the agent on the next page knows the spoken conversation.
+
 ## 4.26.1
 
 ### Patch Changes
