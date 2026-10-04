@@ -71,10 +71,12 @@ raises (gzip, measured against main 837794ea):
 
 | Output | Before | After | Budget |
 | --- | ---: | ---: | ---: |
-| `dist/voice-runtime.js` | 11.91 kB | 12.42 kB | 12.25 → 12.75 kB |
-| `dist/index.js` | 214.52 kB | 215.06 kB | 215 → 215.25 kB |
-| `dist/index.cjs` | 215.35 kB | 215.87 kB | 215.75 → 216 kB |
+| `dist/voice-runtime.js` | 11.91 kB | 12.51 kB | 12.25 → 12.75 kB |
+| `dist/index.js` | 214.52 kB | 215.15 kB | 215 → 215.25 kB |
+| `dist/index.cjs` | 215.35 kB | 215.95 kB | 215.75 → 216 kB |
 
 The npm entries re-export the provider, so they carry the same code as the
 lazy chunk. `index.global.js` doesn't inline the provider and grows only by the
-status-line hook (+32 B gzip, 129.73 KiB Brotli), within its existing budgets.
+status-line hook (163.94 kB gzip, 129.84 KiB Brotli), within its existing budgets.
+The after column includes the review fixes (hang-up and failure guards on the
+reconnect, and notices that hold the status line for their full time).

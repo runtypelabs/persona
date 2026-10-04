@@ -488,7 +488,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   async startListening(): Promise<void> {
     if (this.#callLive) return; // idempotent: a call is already live
     // A call the visitor starts gets a fresh reconnect; the automatic one doesn't.
-    if (!this.#autoReconnect) {
+    const auto = this.#autoReconnect;
+    if (!auto) {
       this.#reconnected = false;
       this.#notice = null;
     }
@@ -525,10 +526,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       const captureContext: AudioContext = new AudioCtx({
         sampleRate: CAPTURE_SAMPLE_RATE,
       });
-      if (captureContext.state === "suspended") {
-        await captureContext.resume().catch(() => {});
-      }
       this.#captureContext = captureContext;
+      if (captureContext.state === "suspended") {
+        // The automatic reconnect runs outside a click, where iOS can leave
+        // audio suspended (and resume() pending): end it rather than open a dead call.
+        await (auto
+          ? Promise.race([captureContext.resume(), new Promise((r) => setTimeout(r, 500))])
+          : captureContext.resume()
+        ).catch(() => {});
+        if (auto && captureContext.state === "suspended" && generation === this.#callGeneration) {
+          this.#notice = CONNECTION_LOST;
+          throw new Error(CONNECTION_LOST);
+        }
+      }
 
       const engine = this.config?.createPlaybackEngine
         ? await this.config.createPlaybackEngine()
@@ -586,7 +596,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     ws.onmessage = (event) => this.#handleMessage(event, generation);
 
     ws.onerror = () => {
-      if (generation !== this.#callGeneration) return;
+      // After `session_end`, the close that follows reports the server's reason.
+      if (generation !== this.#callGeneration || this.#sessionEnd) return;
       this.#emitError(new Error("Voice connection failed"));
       this.#emitStatus("error");
       this.#cleanup();
@@ -630,9 +641,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       this.#callLive = true;
       this.#notice =
         reason === "provider_error" ? `${CONNECTION_LOST} Reconnecting…` : reason === "server_restart" ? "Reconnecting…" : null;
+      const generation = this.#callGeneration;
       this.#reconnectTimer = setTimeout(
         async () => {
-          if (reason === "auth_expired") await this.#refreshAuth?.().catch(() => {});
+          if (reason === "auth_expired") {
+            try {
+              await this.#refreshAuth?.();
+            } catch (error) {
+              if (generation === this.#callGeneration) this.#lost(error as Error);
+              return;
+            }
+          }
+          // Hung up (or torn down) while the credential was refreshing.
+          if (generation !== this.#callGeneration) return;
           this.#callLive = false;
           this.#autoReconnect = true;
           void this.startListening().catch(() => {});
@@ -644,15 +665,20 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     }
     if (RECONNECT_REASONS.includes(reason)) {
       // The reconnect already ran: this end is the second failure.
-      this.#notice = CONNECTION_LOST;
-      this.#emitError(new Error(CONNECTION_LOST));
-      this.#emitStatus("error");
-      return;
+      return this.#lost(new Error(CONNECTION_LOST));
     }
     // `error`: the preceding `error` frame already reported it.
     if (reason === "error") return this.#emitStatus("error");
     this.#notice = (reason === "quota" && message) || SESSION_END_TEXT.get(reason) || null;
     this.#emitStatus("idle");
+  }
+
+  /** The reconnect failed: say the connection is lost and end the call. */
+  #lost(error: Error): void {
+    this.#cleanup();
+    this.#notice = CONNECTION_LOST;
+    this.#emitError(error);
+    this.#emitStatus("error");
   }
 
   /** Status-line text for the call (why it ended, or that it is reconnecting), once. */

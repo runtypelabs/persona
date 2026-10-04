@@ -1656,6 +1656,67 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         expect(hungUp.errors).toEqual([]);
       });
 
+      it('never reconnects after a hang-up while the credential refreshes', async () => {
+        const { ws, provider } = await endableCall();
+        let finish!: () => void;
+        provider.setAuthRefresh(() => new Promise<void>((r) => (finish = r)));
+        end(ws, { reason: 'auth_expired' }, 1008);
+        await vi.advanceTimersByTimeAsync(2_000); // timer fired, refresh in flight
+        await provider.stopListening();
+        finish();
+        await vi.advanceTimersByTimeAsync(5_000);
+        expect(lastWs()).toBe(ws);
+        expect(provider.isBargeInActive()).toBe(false);
+      });
+
+      it('ends the call with the refresh error when re-minting fails', async () => {
+        const { ws, provider, statuses, errors } = await endableCall();
+        provider.setAuthRefresh(async () => {
+          throw new Error('Token mint failed');
+        });
+        end(ws, { reason: 'auth_expired' }, 1008);
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(lastWs()).toBe(ws);
+        expect(errors).toEqual(['Token mint failed']);
+        expect(statuses.at(-1)).toBe('error');
+        expect(provider.takeNotice()).toBe('Voice connection lost.');
+        expect(provider.isBargeInActive()).toBe(false);
+      });
+
+      it('still reconnects when a socket error comes between session_end and the close', async () => {
+        const { ws, provider, errors } = await endableCall();
+        ws.triggerMessage(JSON.stringify({ type: 'session_end', reason: 'provider_error' }));
+        ws.triggerError();
+        ws.triggerClose(1011);
+        expect(errors).toEqual([]);
+        expect(provider.takeNotice()).toBe('Voice connection lost. Reconnecting…');
+        await vi.advanceTimersByTimeAsync(2_000);
+        expect(lastWs()).not.toBe(ws);
+      });
+
+      it('ends the automatic reconnect when audio stays suspended outside a click (iOS)', async () => {
+        const { ws, provider, statuses, errors } = await endableCall();
+        end(ws, { reason: 'server_restart' }, 1012);
+        provider.takeNotice();
+        class SuspendedAudioContext extends MockAudioContext {
+          state = 'suspended';
+          resume() {
+            return new Promise<void>(() => {}); // iOS: pending until a gesture
+          }
+        }
+        (globalThis as any).window.AudioContext = SuspendedAudioContext;
+        try {
+          await vi.advanceTimersByTimeAsync(2_500);
+        } finally {
+          (globalThis as any).window.AudioContext = MockAudioContext;
+        }
+        expect(lastWs()).toBe(ws); // no dead call opened
+        expect(errors).toEqual(['Voice connection lost.']);
+        expect(statuses.at(-1)).toBe('error');
+        expect(provider.takeNotice()).toBe('Voice connection lost.');
+        expect(provider.isBargeInActive()).toBe(false);
+      });
+
       it('treats the attach idle close (4408) as a quiet end, not an error', async () => {
         for (const withFrame of [false, true]) {
           const { ws, provider, statuses, errors } = await endableCall();
