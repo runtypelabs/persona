@@ -65,18 +65,19 @@ ESM/CJS bundles grow by about 1.7 kB gzip from the loader indirection.
 
 ## Voice `session_end` (Amendment 6)
 
-Handling the server's `session_end` frame adds the end-reason texts, the
-one-shot reconnect and the auth refresh to `RuntypeVoiceProvider`. Approved
+Handling the server's `session_end` frame adds the end-reason texts and the
+one-shot reconnect to `RuntypeVoiceProvider`. Approved
 raises (gzip, measured against main 837794ea):
 
 | Output | Before | After | Budget |
 | --- | ---: | ---: | ---: |
-| `dist/voice-runtime.js` | 11.91 kB | 12.51 kB | 12.25 → 12.75 kB |
-| `dist/index.js` | 214.52 kB | 215.15 kB | 215 → 215.25 kB |
-| `dist/index.cjs` | 215.35 kB | 215.95 kB | 215.75 → 216 kB |
+| `dist/voice-runtime.js` | 11.91 kB | 12.41 kB | 12.25 → 12.75 kB |
+| `dist/index.js` | 214.52 kB | 215.12 kB | 215 → 215.25 kB |
+| `dist/index.cjs` | 215.35 kB | 215.92 kB | 215.75 → 216 kB |
 
 The npm entries re-export the provider, so they carry the same code as the
 lazy chunk. `index.global.js` doesn't inline the provider and grows only by the
 status-line hook (163.94 kB gzip, 129.84 KiB Brotli), within its existing budgets.
-The after column includes the review fixes (hang-up and failure guards on the
-reconnect, and notices that hold the status line for their full time).
+The after column includes the review fixes (#479 and its follow-up: the
+suspended-audio guard on the reconnect, notices that hold the status line for
+their full time, and `auth_expired` as a plain end instead of a re-mint).

@@ -37,7 +37,6 @@ const h = vi.hoisted(() => {
     bridge: VoiceSessionBridge | null;
     prewarms: number;
     notice: string | null;
-    authRefresh: (() => Promise<void>) | null;
   } = {
     transcriptCb: null,
     metricsCb: null,
@@ -46,7 +45,6 @@ const h = vi.hoisted(() => {
     bridge: null,
     prewarms: 0,
     notice: null,
-    authRefresh: null,
   };
 
   const fakeProvider = {
@@ -79,9 +77,6 @@ const h = vi.hoisted(() => {
       const notice = state.notice;
       state.notice = null;
       return notice;
-    },
-    setAuthRefresh: (refresh: () => Promise<void>) => {
-      state.authRefresh = refresh;
     },
   };
 
@@ -1490,18 +1485,4 @@ describe('AgentWidgetSession - voice session end (Amendment 6)', () => {
     expect(session.getVoiceNotice()).toBeNull();
   });
 
-  it('re-mints the client session when the provider refreshes auth (auth_expired)', async () => {
-    const session = tokenSession();
-    session.setupVoice();
-    await flush();
-    const client = (session as unknown as {
-      client: { clearClientSession: () => void; initSession: () => Promise<unknown> };
-    }).client;
-    const cleared = vi.spyOn(client, 'clearClientSession');
-    const init = vi.spyOn(client, 'initSession').mockResolvedValue({});
-    await h.state.authRefresh!();
-    expect(cleared).toHaveBeenCalledOnce();
-    expect(init).toHaveBeenCalledOnce();
-    expect(cleared.mock.invocationCallOrder[0]).toBeLessThan(init.mock.invocationCallOrder[0]);
-  });
 });

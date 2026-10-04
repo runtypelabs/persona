@@ -556,12 +556,12 @@ export class AgentWidgetSession {
     return this.#voiceStatus;
   }
 
-  /** The live call's AI-disclosure notice, if it shows one. */
   /** The voice call's pending status-line notice (why it ended, or reconnecting), once. */
   public getVoiceNotice(): string | null {
     return this.#voiceProvider?.takeNotice?.() ?? null;
   }
 
+  /** The live call's AI-disclosure notice, if it shows one. */
   public getVoiceDisclosure(): string | null {
     return this.#voiceProvider?.getDisclosure?.() ?? null;
   }
