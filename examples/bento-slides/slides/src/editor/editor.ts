@@ -8,7 +8,7 @@ import {
   FORMAT_VERSION,
   MEDIA_EMBED_BUDGET,
   applyChartPalette, applyLayout, builtinLayouts, defaultChart, defaultCode, defaultImage, defaultMedia, defaultShape, defaultTable, defaultText,
-  instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
+  emptySlide, instantiateLayout, isLightBg, layoutElementIds, newDocId, parseDoc, readableInk, syncLinkedChart, uid,
   paginates, inLinearFlow,
   type ChartElement, type ShapeKind, type Slide, type SlideElement, type TableElement } from '../model'
 import { THEME_CHOICES, setTheme, themeChoice } from '../../../kernel/src/theme.ts'
@@ -157,8 +157,26 @@ export class Editor {
   private session: import('../sync/session').SyncSession | null = null
   private updateFound: string | null = null
   private lastAutoCheck: import('../update').UpdateCheck | null = null
-  /** side panel widths (px) — user-resizable, persisted per browser */
-  private panelW = { left: 188, right: 236 }
+  /** side panel widths (px) — user-resizable, persisted per browser. The
+   *  right rail remembers TWO widths: Design (props) and the roomier Copilot
+   *  tab; switching tabs swaps them (chat needs space to breathe). */
+  private panelW = { left: 188, right: 236, copilot: 400 }
+  /** right-rail tabs: Design (props) | Copilot (AI pane, src/ai) */
+  private rightTabs!: HTMLElement
+  private propsBody!: HTMLElement
+  private copilotEl!: HTMLElement
+  private designTabB!: HTMLElement
+  private copilotTabB!: HTMLElement
+  private copilotOn = false
+  /** set by src/ai: fires after every build() (a locale switch re-authors the
+   *  whole DOM, so the Copilot re-adopts the fresh right-rail containers) */
+  onRebuild?: () => void
+  /** set by src/ai when the copilot tab becomes active/inactive */
+  onCopilotTabChange?: (on: boolean) => void
+  /** set by src/ai: fires on presentation start/end (presenter tool swap) */
+  onPresentChange?: (on: boolean) => void
+  /** live presentation session while presenting (nav handle for AI tools) */
+  presentSession: import('../present').PresentSession | null = null
 
   constructor(
     private root: HTMLElement,
@@ -514,7 +532,31 @@ export class Editor {
       const zb = canvasWrap.querySelector('.ed-zoombar')
       if (zb) corner.appendChild(zb)
     })
+    // Right rail: one resizable/collapsible region, two tabs. "Design" hosts
+    // the props panel; "Copilot" hosts the AI pane (src/ai mounts into it via
+    // copilotMount()). The tab bar stays hidden until enableCopilotTab() —
+    // offline mode never shows it and the rail looks exactly like before.
     this.props = div('ed-props')
+    this.rightTabs = div('ed-rtabs')
+    this.rightTabs.style.display = 'none'
+    const tabBtn = (label: string, on: () => void) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = 'ed-rtab'
+      b.textContent = label
+      b.addEventListener('click', on)
+      return b
+    }
+    this.designTabB = tabBtn(t('Design'), () => this.setCopilotTab(false))
+    this.copilotTabB = tabBtn('✨ ' + t('Copilot'), () => this.setCopilotTab(true))
+    this.designTabB.classList.toggle('on', !this.copilotOn)
+    this.copilotTabB.classList.toggle('on', this.copilotOn)
+    this.rightTabs.append(this.designTabB, this.copilotTabB)
+    this.propsBody = div('ed-props-body')
+    this.copilotEl = div('ed-copilot')
+    this.propsBody.style.display = this.copilotOn ? 'none' : ''
+    this.copilotEl.classList.toggle('on', this.copilotOn)
+    this.props.append(this.rightTabs, this.propsBody, this.copilotEl)
     main.append(this.sidebar, this.makeResizer('left'), canvasWrap, this.makeResizer('right'), this.props)
 
     this.root.append(bar, main)
@@ -588,9 +630,89 @@ export class Editor {
     this.canvas = new SlideCanvas(canvasWrap, this.store)
     this.canvas.onCommentModeChange = (on) => commentB.classList.toggle('ed-btn-armed', on)
     this.canvas.onSlideNav = (dir) => this.store.goToLinear(dir)
-    this.panel = new PropsPanel(this.props, this.store)
+    this.panel = new PropsPanel(this.propsBody, this.store)
 
     if (!canWriteDeck(this.store.doc.collab)) this.enterReaderMode()
+    this.onRebuild?.()
+  }
+
+  // --- Copilot rail (src/ai) -------------------------------------------------
+
+  /** Show the Design|Copilot tab bar (the AI module calls this when active). */
+  enableCopilotTab() {
+    this.rightTabs.style.display = ''
+  }
+
+  /** The container the AI pane mounts into (persistent across tab switches,
+   *  replaced on every build()). */
+  copilotMount(): HTMLElement {
+    return this.copilotEl
+  }
+
+  get copilotOpen(): boolean {
+    return this.copilotOn && !this.props.classList.contains('ed-collapsed')
+  }
+
+  /** Switch the right rail between Design and Copilot; expands a collapsed rail. */
+  setCopilotTab(on: boolean, opts: { reveal?: boolean } = {}) {
+    this.copilotOn = on
+    this.designTabB.classList.toggle('on', !on)
+    this.copilotTabB.classList.toggle('on', on)
+    this.propsBody.style.display = on ? 'none' : ''
+    this.copilotEl.classList.toggle('on', on)
+    this.applyPanelWidths() // the Copilot tab breathes at its own (wider) width
+    if (on && (opts.reveal ?? true) && this.props.classList.contains('ed-collapsed')) {
+      this.togglePanel('right')
+    }
+    this.onCopilotTabChange?.(on)
+  }
+
+  toggleCopilot() {
+    const collapsed = this.props.classList.contains('ed-collapsed')
+    if (this.copilotOn && !collapsed) {
+      // visible → put the rail back on Design (don't collapse the rail)
+      this.setCopilotTab(false)
+    } else {
+      this.setCopilotTab(true)
+    }
+  }
+
+  get isPresenting(): boolean {
+    return this.presenting
+  }
+
+  /**
+   * Native commands for the ⌘K palette (src/ai/palette.ts renders it; free
+   * text that matches nothing here falls through to the Copilot). Built per
+   * open so labels follow the locale and actions close over live state.
+   */
+  paletteCommands(): Array<{ id: string; label: string; hint?: string; run: () => void }> {
+    return [
+      { id: 'slide-new', label: t('New slide'), hint: t('Insert a blank slide after this one'), run: () => {
+        const at = this.store.currentIndex + 1
+        this.store.commit(() => { this.store.doc.slides.splice(at, 0, emptySlide()) }, 'slides')
+        this.store.goTo(at)
+      } },
+      { id: 'slide-dup', label: t('Duplicate slide'), run: () => this.duplicateSlide(this.store.currentIndex) },
+      { id: 'slide-del', label: t('Delete slide'), run: () => this.deleteSlide(this.store.currentIndex) },
+      { id: 'ins-text', label: t('Insert text'), run: () => this.canvas.insert(defaultText({ color: readableInk(this.store.slide.background), y: 200 }), true) },
+      { id: 'ins-shape', label: t('Insert shape'), run: () => this.canvas.insert(defaultShape('rect')) },
+      { id: 'ins-image', label: t('Insert image'), run: () => this.pickImage() },
+      { id: 'ins-table', label: t('Insert table'), run: () => this.canvas.insert(this.newTable()) },
+      { id: 'ins-chart', label: t('Insert chart'), run: () => this.canvas.insert(defaultChart(applyChartPalette(CHART_PRESETS.bar(), this.store.doc.theme))) },
+      { id: 'present', label: t('Slideshow'), hint: t('Present fullscreen from this slide'), run: () => this.present(false, true) },
+      { id: 'present-start', label: t('Present from start'), run: () => this.present(true, true) },
+      { id: 'present-tab', label: t('Present in this tab'), run: () => this.present(false, false) },
+      { id: 'speaker', label: t('Open speaker view'), run: () => this.openSpeakerView() },
+      { id: 'pdf', label: t('Export PDF (print)'), run: () => this.exportPdf() },
+      { id: 'save', label: t('Save'), run: () => void this.save(false) },
+      { id: 'undo', label: t('Undo (⌘Z)'), run: () => this.store.undo() },
+      { id: 'redo', label: t('Redo (⇧⌘Z)'), run: () => this.store.redo() },
+      { id: 'toggle-left', label: t('Toggle slide list'), run: () => this.togglePanel('left') },
+      { id: 'toggle-right', label: t('Toggle properties panel'), run: () => this.togglePanel('right') },
+      { id: 'help', label: t('Shortcuts & tips (?)'), run: () => this.openHelp() },
+      { id: 'about', label: t('About bento/slides'), run: () => this.openAbout() },
+    ]
   }
 
   /** Live viewer: block user edits (store.readOnly), hide editing chrome, and
@@ -605,13 +727,18 @@ export class Editor {
 
   // --- resizable side panels ------------------------------------------------
 
-  private static PANEL_BOUNDS = { left: [110, 400], right: [190, 520] } as const
-  private static PANEL_DEFAULTS = { left: 188, right: 236 } as const
+  private static PANEL_BOUNDS = { left: [110, 400], right: [190, 520], copilot: [300, 680] } as const
+  private static PANEL_DEFAULTS = { left: 188, right: 236, copilot: 400 } as const
+
+  /** which width the right rail is currently using */
+  private rightKey(): 'right' | 'copilot' {
+    return this.copilotOn ? 'copilot' : 'right'
+  }
 
   private restorePanelWidths() {
     try {
       const saved = lsJson<Record<string, number>>('bento-ed-panels', {})
-      for (const side of ['left', 'right'] as const) {
+      for (const side of ['left', 'right', 'copilot'] as const) {
         const [min, max] = Editor.PANEL_BOUNDS[side]
         if (typeof saved[side] === 'number') this.panelW[side] = Math.min(max, Math.max(min, saved[side]))
       }
@@ -621,7 +748,9 @@ export class Editor {
 
   private applyPanelWidths() {
     this.sidebar.style.setProperty('--panew', `${this.panelW.left}px`)
-    this.props.style.setProperty('--panew', `${this.panelW.right}px`)
+    // don't let the copilot width swallow a small window
+    const rightW = Math.min(this.panelW[this.rightKey()], Math.max(280, window.innerWidth - 420))
+    this.props.style.setProperty('--panew', `${rightW}px`)
   }
 
   private panelToggles: { left?: HTMLElement; right?: HTMLElement } = {}
@@ -669,9 +798,11 @@ export class Editor {
       const panel = side === 'left' ? this.sidebar : this.props
       if (panel.classList.contains('ed-collapsed')) return
       down.preventDefault()
+      // the right rail resizes whichever width its active tab uses
+      const key = side === 'right' ? this.rightKey() : side
       const startX = down.clientX
-      const startW = this.panelW[side]
-      const [min, max] = Editor.PANEL_BOUNDS[side]
+      const startW = this.panelW[key]
+      const [min, max] = Editor.PANEL_BOUNDS[key]
       panel.classList.add('ed-noanim')
       document.body.classList.add('ed-col-resizing')
       const move = (ev: MouseEvent) => {
@@ -679,7 +810,7 @@ export class Editor {
         // clientX is physical; which way widens the panel depends on which
         // screen edge it is docked to, and RTL swaps the two panels over.
         const widens = (side === 'left') !== isRtl() ? dx : -dx
-        this.panelW[side] = Math.min(max, Math.max(min, startW + widens))
+        this.panelW[key] = Math.min(max, Math.max(min, startW + widens))
         this.applyPanelWidths()
       }
       const up = () => {
@@ -693,7 +824,8 @@ export class Editor {
       window.addEventListener('mouseup', up)
     })
     handle.addEventListener('dblclick', () => {
-      this.panelW[side] = Editor.PANEL_DEFAULTS[side]
+      const key = side === 'right' ? this.rightKey() : side
+      this.panelW[key] = Editor.PANEL_DEFAULTS[key]
       this.applyPanelWidths()
       commit()
     })
@@ -2385,11 +2517,14 @@ export class Editor {
     document.querySelector('.ed-hint-pulse')?.classList.remove('ed-hint-pulse')
     this.canvas.commitTextEdit()
     this.presenting = true
-    startPresentation(this.store.doc, fromStart ? 0 : this.store.currentIndex, (last) => {
+    this.presentSession = startPresentation(this.store.doc, fromStart ? 0 : this.store.currentIndex, (last) => {
       this.presenting = false
+      this.presentSession = null
+      this.onPresentChange?.(false)
       this.store.goTo(last)
       this.canvas.render()
     }, { fullscreen, broadcast: this.presenterBroadcast() })
+    this.onPresentChange?.(true)
   }
 
   /**

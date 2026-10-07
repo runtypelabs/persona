@@ -38,6 +38,7 @@ import { Editor } from './editor/editor'
 import { startPresentation } from './present'
 import { SyncSession } from './sync/session'
 import { onlineTransport, startSharing, stopSharing, disconnectOnline, joinFromDoc } from './sync/online'
+import { initAI } from './ai'
 
 // Tell the kernel who this app is — must precede any kernel module use
 // (window title suffix, save-picker label, update manifest + its `app` check).
@@ -270,6 +271,10 @@ maybeShowReturnGate({ docIsFresh, fsAccess: canWriteInPlace(), canWrite: hostCan
 const session = new SyncSession(store)
 editor.connectSync(session)
 
+// Bento Copilot: WebMCP page tools + the embedded Persona widget (hosted
+// Runtype agent, spoken or typed). See src/ai/index.ts.
+const ai = initAI({ store, editor })
+
 // Opening a link ending in #present starts the show immediately (player mode).
 if (location.hash === '#present') {
   editor.present(true)
@@ -308,6 +313,8 @@ dismissSplash()
   get selection() {
     return store.selection.slice()
   },
+  /** Bento Copilot: widget controller + doors (src/ai) */
+  ai,
   /** animation engine, exposed for scripting/diagnostics */
   anim,
   /** i18n: t/locale/setLocale/choices — setLocale('x-pseudo') audits the sweep */

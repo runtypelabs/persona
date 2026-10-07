@@ -590,9 +590,18 @@ a.ed-btn { text-decoration: none; }  /* the update block's "What's new" link is 
 .ed-props {
   width: var(--panew, 236px);
   flex: none;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   background: var(--surface);
   border-inline-start: 1px solid var(--line);
+  padding: 0;
+}
+/* the Design tab's scrolling body (the props panel renders into it) */
+.ed-props-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 14px;
 }
 
@@ -2497,7 +2506,7 @@ body.ed-col-resizing { cursor: col-resize; user-select: none; }
 
 
 /* right panel: no horizontal scrollbar, ever */
-.ed-props {
+.ed-props-body {
   overflow-x: hidden;
   scrollbar-gutter: stable;
 }
@@ -2926,3 +2935,146 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
 }
 .ed-swatch:hover { transform: scale(1.15); }
 .ed-swatch.is-on { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* Topbar menus must beat any Persona overlay layer. */
+.ed-topbar .ed-menu { z-index: 100001; }
+
+/* ===== Bento Copilot (src/ai) ============================================= */
+
+/* right rail: Design | Copilot tabs share the one resizable region */
+.ed-rtabs { display: flex; flex: none; border-bottom: 1px solid var(--line); background: var(--chrome); }
+.ed-rtab {
+  flex: 1; border: 0; background: none; cursor: pointer; padding: 8px 4px;
+  font: inherit; font-size: 11.5px; font-weight: 600; color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+.ed-rtab.on { color: var(--ink); border-bottom-color: #FF9E8A; background: #fff; }
+.ed-copilot { display: none; flex: 1; min-height: 0; position: relative; }
+.ed-copilot.on { display: flex; flex-direction: column; }
+.ed-copilot > * { flex: 1; min-height: 0; }
+.ed-collapsed .ed-rtabs { display: none !important; }
+/* Bento's rail tab IS the header/panel chrome — hide Persona's */
+.ed-copilot .persona-widget-header { display: none !important; }
+.ed-copilot .persona-widget-container { border: none !important; box-shadow: none !important; border-radius: 0 !important; }
+/* Responses read as prose, not chat bubbles. The transparent fill/border come
+   from the theme (pane.ts message.assistant) and the full-width track from
+   messageLayout.assistant; these strip the bubble GEOMETRY the default layout
+   still carries — shadow, radius and the side padding — so the text sits
+   flush against the rail. User turns keep their bubble untouched. */
+.ed-copilot [data-persona-theme-zone="assistant-message"] {
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* working pill (turn in flight) */
+.ed-ai-pill {
+  position: fixed; bottom: 18px; left: 50%; transform: translate(-50%, 6px);
+  display: flex; gap: 10px; align-items: center;
+  background: #16273E; color: #F5F7FA; border-radius: 999px;
+  padding: 7px 8px 7px 16px; font-size: 12.5px; z-index: 60;
+  box-shadow: 0 6px 20px rgba(13, 27, 46, 0.35);
+  opacity: 0; pointer-events: none; transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.ed-ai-pill.on { opacity: 1; pointer-events: auto; transform: translate(-50%, 0); }
+.ed-ai-pill span::before { content: '✨ '; }
+.ed-ai-pill button {
+  border: 0; border-radius: 999px; background: #FF9E8A; color: #16273E;
+  font: inherit; font-size: 11.5px; font-weight: 700; padding: 3px 12px; cursor: pointer;
+}
+
+/* live-call pill: above the presentation overlay (z 1000) so a show can be
+   driven by voice; mirrors Persona's voice:status while the rail is hidden */
+.ed-ai-call {
+  position: fixed; top: 14px; right: 16px; z-index: 1200;
+  display: none; align-items: center; gap: 9px;
+  background: rgba(22, 39, 62, 0.92); color: #F5F7FA; border-radius: 999px;
+  padding: 6px 8px 6px 12px; font-size: 12.5px;
+  box-shadow: 0 6px 20px rgba(13, 27, 46, 0.35);
+  backdrop-filter: blur(6px);
+}
+.ed-ai-call.on { display: flex; }
+.ed-ai-call-dot {
+  width: 9px; height: 9px; border-radius: 50%; background: #9aa8bd; flex: none;
+}
+.ed-ai-call[data-status="listening"] .ed-ai-call-dot { background: #4ade80; animation: ed-ai-call-breathe 1.6s ease-in-out infinite; }
+.ed-ai-call[data-status="processing"] .ed-ai-call-dot { background: #FF9E8A; animation: ed-ai-call-breathe 0.9s ease-in-out infinite; }
+.ed-ai-call[data-status="speaking"] .ed-ai-call-dot { background: #FF9E8A; }
+.ed-ai-call[data-status="error"] .ed-ai-call-dot { background: #f87171; }
+.ed-ai-call button {
+  border: 0; border-radius: 999px; background: #FF9E8A; color: #16273E;
+  font: inherit; font-size: 11.5px; font-weight: 700; padding: 3px 12px; cursor: pointer;
+}
+.ed-ai-call.active button { background: #ffffff; }
+@keyframes ed-ai-call-breathe { 50% { transform: scale(1.5); opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) { .ed-ai-call-dot { animation: none !important; } }
+
+/* provenance shimmer on elements the last turn touched */
+@keyframes ed-ai-touch {
+  0% { outline-color: rgba(255, 158, 138, 0.95); outline-offset: 2px; }
+  100% { outline-color: rgba(255, 158, 138, 0); outline-offset: 7px; }
+}
+.ed-stage-scale .ed-ai-touched { outline: 2px solid rgba(255, 158, 138, 0.9); animation: ed-ai-touch 1.8s ease-out forwards; }
+
+/* selection bar (the fast door) */
+.ed-ai-selbar {
+  position: fixed; z-index: 55; display: none; align-items: center; gap: 2px;
+  background: #fff; border: 1.5px solid #FF9E8A; border-radius: 10px;
+  padding: 4px 6px; box-shadow: 0 6px 22px rgba(13, 27, 46, 0.18); font-size: 12px;
+}
+.ed-ai-selbar.on { display: flex; }
+.ed-ai-selbar-spark { padding: 0 3px; }
+.ed-ai-selbar button {
+  border: 0; background: none; font: inherit; font-size: 12px; color: var(--ink-2);
+  padding: 4px 8px; border-radius: 6px; cursor: pointer; white-space: nowrap;
+}
+.ed-ai-selbar button:hover { background: #FFF0EC; color: #B4523C; }
+.ed-ai-selbar .ed-ai-selbar-ask { color: #B4523C; font-weight: 600; }
+.ed-ai-selbar-input { border: 0; outline: none; font: inherit; font-size: 12px; width: 240px; padding: 4px 6px; }
+
+/* ⌘K palette */
+.ed-ai-palette-scrim {
+  position: fixed; inset: 0; z-index: 200; display: none;
+  background: rgba(22, 39, 62, 0.28); backdrop-filter: blur(1.5px);
+}
+.ed-ai-palette-scrim.on { display: block; }
+.ed-ai-palette {
+  position: absolute; left: 50%; top: 14%; transform: translateX(-50%);
+  width: min(560px, calc(100vw - 48px)); background: #fff; border-radius: 12px;
+  box-shadow: 0 18px 60px rgba(13, 27, 46, 0.35); overflow: hidden;
+}
+.ed-ai-palette-input {
+  width: 100%; box-sizing: border-box; border: 0; outline: none;
+  border-bottom: 1px solid var(--line); font: inherit; font-size: 15px; padding: 14px 16px;
+}
+.ed-ai-palette-list { max-height: 46vh; overflow-y: auto; padding: 6px; }
+.ed-ai-palette-row {
+  display: flex; align-items: baseline; gap: 8px; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; font-size: 13.5px; color: var(--ink);
+}
+.ed-ai-palette-row i { font-style: normal; font-size: 11.5px; color: var(--muted); }
+.ed-ai-palette-row kbd { margin-left: auto; font-size: 10.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.ed-ai-palette-row.on, .ed-ai-palette-row:hover { background: #F5F0E8; }
+.ed-ai-palette-ai b { color: #B4523C; font-weight: 700; }
+.ed-ai-palette-ai span { color: var(--muted); font-size: 12px; }
+.ed-ai-palette-ai.on, .ed-ai-palette-ai:hover { background: #FFF0EC; }
+
+/* ghost prompt on an empty slide */
+.ed-ai-ghost {
+  position: fixed; z-index: 12; transform: translate(-50%, -50%);
+  display: none; cursor: pointer; user-select: none;
+}
+.ed-ai-ghost.on { display: block; }
+.ed-ai-ghost span { font-size: 15px; color: var(--muted); opacity: 0.75; }
+.ed-ai-ghost:hover span { color: #B4523C; opacity: 1; }
+
+/* transcript chips + approval previews */
+.ed-ai-thumb { overflow: hidden; border-radius: 6px; border: 1px solid var(--line); background: #fff; flex: none; }
+.ed-ai-toolchip { display: flex; align-items: center; gap: 10px; padding: 6px 4px; cursor: pointer; }
+.ed-ai-toolchip:hover .ed-ai-thumb { border-color: #FF9E8A; }
+.ed-ai-toolchip-label { font-size: 12px; color: var(--ink-2); }
+.ed-ai-preview { display: flex; gap: 10px; padding: 8px 2px 4px; }
+.ed-ai-beforeafter { align-items: flex-start; }
+.ed-ai-preview-cap { font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-top: 4px; text-align: center; }
+.ed-ai-doomed { outline: 2px solid #B91C1C; outline-offset: 2px; opacity: 0.85; }

@@ -1265,7 +1265,8 @@ export class SlideCanvas {
     this.selecto.on('dragStart', (e) => {
       const target = e.inputEvent.target as HTMLElement
       // floating controls over the canvas are not marquee territory
-      if (target.closest('.ed-present-fabs, .ed-zoombar, .ed-panel-toggle, .ed-resizer')) {
+      // (the Copilot's floating surfaces too — src/ai — or Selecto eats their clicks)
+      if (target.closest('.ed-present-fabs, .ed-zoombar, .ed-panel-toggle, .ed-resizer, .ed-ai-selbar, .ed-ai-pill, .ed-ai-ghost, .ed-ai-palette-scrim, .ed-ai-call')) {
         e.stop()
         return
       }
