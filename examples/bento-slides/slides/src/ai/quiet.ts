@@ -159,6 +159,9 @@ export function createTurnManager(
         onDone = pending?.onDone
         pending = null
         setBusy(true)
+        // a request that fails before streaming never fires
+        // assistant:complete; the stream-flag poll still ends the turn
+        scheduleEnd()
       }),
       controller.on('assistant:complete', (payload) => {
         const text =

@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 
 const proxyPort = Number(process.env.PROXY_PORT ?? 43111);
 const PREVIEW_EMBED_CHECK_TIMEOUT_MS = 5000;
@@ -326,6 +327,50 @@ function resolveJsPaint(): { dir: string; base: string } {
 }
 
 const JSPAINT = resolveJsPaint();
+
+// /bento/ is Bento Slides (examples/bento-slides), a separate app the site
+// build writes into dist/bento as one self-contained file. In dev, build that
+// file on the first visit (once per server start) and serve it, so the gallery
+// link works without a second dev server. For HMR on Bento itself, run
+// `pnpm --filter bento-slides dev`.
+function serveBento(): Plugin {
+  const file = path.resolve(__dirname, "dist/bento/index.html");
+  let build: Promise<boolean> | null = null;
+  const ensureBuilt = () =>
+    (build ??= new Promise<boolean>((resolve) => {
+      const child = spawn("pnpm", ["--filter", "bento-slides", "build:web"], {
+        cwd: path.resolve(__dirname, "../.."),
+        stdio: "inherit",
+      });
+      child.on("error", () => resolve(false));
+      child.on("exit", (code) => resolve(code === 0));
+    }));
+  return {
+    name: "serve-bento",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+        if (pathname === "/bento") {
+          res.statusCode = 302;
+          res.setHeader("Location", "/bento/");
+          res.end();
+          return;
+        }
+        if (pathname !== "/bento/" && pathname !== "/bento/index.html") return next();
+        void ensureBuilt().then((ok) => {
+          if (!ok || !fs.existsSync(file)) {
+            build = null; // retry on the next visit
+            res.statusCode = 500;
+            res.end("Bento Slides failed to build: run `pnpm --filter bento-slides build:web`.");
+            return;
+          }
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          res.end(fs.readFileSync(file));
+        });
+      });
+    },
+  };
+}
 
 function serveJsPaint(): Plugin {
   const { dir: jspaintDir, base } = JSPAINT;
@@ -670,6 +715,7 @@ export default defineConfig({
     crossOriginIsolateLiteRt(),
     serveWidgetDist(),
     serveJsPaint(),
+    serveBento(),
     llmsTxt(),
     previewEmbedCheck(),
     demoSlowResource(),

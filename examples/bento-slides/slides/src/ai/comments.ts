@@ -68,20 +68,27 @@ export function createCommentsCopilot(
     )
   }
 
-  const reply = (slideId: string, threadId: string, text: string) => {
+  /** Post the Copilot reply right after the replies the turn saw (`seen`), so a
+   *  newer @copilot request added while it worked stays after it — pending. */
+  const reply = (slideId: string, threadId: string, seen: number, text: string) => {
     const slide = ctx.store.doc.slides.find((s) => s.id === slideId)
     const thread = slide?.comments?.find((c) => c.id === threadId)
     if (!slide || !thread) return
     ctx.store.commit(() => {
       if (!thread.replies) thread.replies = []
-      thread.replies.push({ id: uid('cmt'), author: COPILOT_AUTHOR, text, at: new Date().toISOString() })
+      const at = Math.min(seen, thread.replies.length)
+      thread.replies.splice(at, 0, { id: uid('cmt'), author: COPILOT_AUTHOR, text, at: new Date().toISOString() })
     }, 'slides')
   }
+
+  const findThread = (slideId: string, threadId: string) =>
+    ctx.store.doc.slides.find((x) => x.id === slideId)?.comments?.find((c) => c.id === threadId)
 
   const run = (p: Pending) => {
     inflight.add(p.thread.id)
     const slideId = p.slide.id
     const threadId = p.thread.id
+    const seen = p.thread.replies?.length ?? 0
     turns.ask(
       `${threadContext(p.slide, p.thread)}\n\n` +
         `Do what the comment asks, using the tools, working on that slide/anchor. ` +
@@ -94,11 +101,13 @@ export function createCommentsCopilot(
           inflight.delete(threadId)
           if (!s.ok) {
             // stopped or empty: leave the mention unanswered, but don't loop on it
-            parked.add(parkKey(p.thread))
+            const thread = findThread(slideId, threadId)
+            if (thread && (thread.replies?.length ?? 0) === seen) parked.add(parkKey(thread))
             ctx.editor.toast(t('Copilot didn’t finish that comment — reply to the thread to try again.'))
+            schedule() // other mentions may be waiting
             return
           }
-          reply(slideId, threadId, s.text.trim() || t('Done — see the changes on this slide (⌘Z undoes them).'))
+          reply(slideId, threadId, seen, s.text.trim() || t('Done — see the changes on this slide (⌘Z undoes them).'))
           ctx.editor.toast(t('✨ Copilot replied to a comment — ready to resolve.'))
           schedule() // more mentions may be waiting
         },
@@ -140,12 +149,12 @@ export function createCommentsCopilot(
       const flagged: string[] = []
       // @copilot threads in this batch: held in-flight so the one-by-one scan
       // doesn't re-run them after the combined turn, then answered together
-      const mentioned: Array<{ slideId: string; threadId: string }> = []
+      const mentioned: Array<{ slideId: string; threadId: string; seen: number }> = []
       for (const slide of ctx.store.doc.slides) {
         for (const thread of slide.comments ?? []) {
           if (thread.resolved) continue
           flagged.push(threadContext(slide, thread))
-          if (pendingAsk(thread)) mentioned.push({ slideId: slide.id, threadId: thread.id })
+          if (pendingAsk(thread)) mentioned.push({ slideId: slide.id, threadId: thread.id, seen: thread.replies?.length ?? 0 })
         }
       }
       if (!flagged.length) {
@@ -164,10 +173,10 @@ export function createCommentsCopilot(
             for (const m of mentioned) {
               inflight.delete(m.threadId)
               if (s.ok) {
-                reply(m.slideId, m.threadId, t('Handled in a batch fix of all flagged comments — see the changes (⌘Z undoes them).'))
+                reply(m.slideId, m.threadId, m.seen, t('Handled in a batch fix of all flagged comments — see the changes (⌘Z undoes them).'))
               } else {
-                const thread = ctx.store.doc.slides.find((x) => x.id === m.slideId)?.comments?.find((c) => c.id === m.threadId)
-                if (thread) parked.add(parkKey(thread))
+                const thread = findThread(m.slideId, m.threadId)
+                if (thread && (thread.replies?.length ?? 0) === m.seen) parked.add(parkKey(thread))
               }
             }
             schedule()
