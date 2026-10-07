@@ -5265,6 +5265,13 @@ export type VoiceDelegationRequest = {
   userUtteranceIds: string[];
   /** The voice model's view of the conversation it delegated from. */
   messages: Array<{ role: string; content: unknown }>;
+  /**
+   * Set when the server streams delegated answers (`delegation_stream`): called
+   * with each speakable piece of the turn's answer, in order, while it renders.
+   * The pieces, concatenated, are a prefix of the result's `text`; the result
+   * says how much of it with `streamedChars`.
+   */
+  stream?: (text: string) => void;
 };
 
 /**
@@ -5305,6 +5312,12 @@ export type VoiceDelegationResult = {
    * @default true
    */
   inChat?: boolean;
+  /**
+   * How many leading characters of `text` already went out through
+   * `request.stream` (the rest, such as an approval script, is unstreamed).
+   * Omitted or 0: nothing was streamed.
+   */
+  streamedChars?: number;
   /**
    * Set when the turn parked on approvals (`text` then asks for the decision).
    * Resolves with the terminal result once the visitor decides (or the
@@ -6266,6 +6279,12 @@ export type ClientChatRequest = {
   turnId?: RuntypeClientChatRequest['turnId'];
   /** Whether this turn should interrupt a prior in-flight response (from Core public OpenAPI). */
   submitMode?: RuntypeClientChatRequest['submitMode'];
+  /**
+   * Spoken-reply hint, set on a delegated voice turn whose reply a voice model
+   * reads aloud: the server asks the agent for a speakable answer (the direct
+   * answer first, in plain sentences). Not persisted into history.
+   */
+  voice?: { spoken: true };
 };
 
 /**

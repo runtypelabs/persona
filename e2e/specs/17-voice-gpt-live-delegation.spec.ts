@@ -588,10 +588,13 @@ test("approval lifecycle: delegation_update asks naturally, Allow, one terminal 
   await expect(page.locator(voiceSel.bubble).filter({ hasText: "All set, your order" })).toHaveCount(0);
 
   // The whole wire for the delegation, in order.
-  expect(call.frames.filter((f) => f.delegationId === "dlg_1").map((f) => `${f.type}:${f.status}`)).toEqual([
+  // The answer streamed first (delegation_stream), then the ask, then the outcome.
+  expect(call.frames.filter((f) => f.delegationId === "dlg_1").map((f) => `${f.type}:${f.status ?? f.text}`)).toEqual([
+    "delegation_delta:I can place that order for you.",
     "delegation_update:pending_approval",
     "delegation_result:completed",
   ]);
+  expect(call.protocolErrors).toEqual([]);
   expect(call.rejected).toEqual([]);
   await clickLiveMic(page);
   expect(await call.closed).toBe(1000);

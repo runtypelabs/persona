@@ -13,7 +13,13 @@ import { WebSocketServer, type WebSocket } from "ws";
  *     (core initializes the engine lazily on the first message);
  *   - `session_config.capabilities` is the intersection of what the client
  *     declared and what this server is configured for (`client_delegation`,
- *     `context`, `delegation_update`); `legacy: true` omits it (an old server);
+ *     `context`, `delegation_update`, `delegation_stream`, and opt-in
+ *     `delegation_read_back`; the last two only with client delegation);
+ *     `legacy: true` omits it (an old server);
+ *   - streaming delegation: `delegation_delta` frames are accepted and checked
+ *     against the contract (only before the delegation's first update/result;
+ *     `streamedChars` must equal the streamed length and prefix the text);
+ *     breaches land in `protocolErrors`;
  *   - an unknown or ungranted client frame type gets a non-fatal
  *     `warning{code:'UNKNOWN_FRAME'}` and the call goes on (Amendment 5.1);
  *     the frame is recorded in `rejected`, so specs still catch it.
@@ -30,6 +36,13 @@ export interface FakeVoiceServerOptions {
   contextFrames?: boolean;
   /** Grant `delegation_update` when the client declares it. @default true */
   delegationUpdate?: boolean;
+  /** Grant `delegation_stream` when the client declares it (with client delegation). @default true */
+  delegationStream?: boolean;
+  /**
+   * Grant `delegation_read_back` (with client delegation), as current core
+   * does; the spec then tags read-backs itself. @default false
+   */
+  delegationReadBack?: boolean;
   /** An old server: `session_config` carries no `capabilities`. @default false */
   legacy?: boolean;
 }
@@ -50,6 +63,8 @@ export interface FakeVoiceCall {
   readonly clientCapabilities: string[];
   /** Whether `session_config` granted client delegation on this call. */
   readonly delegationGranted: boolean;
+  /** The capabilities `session_config` granted (empty for a legacy server). */
+  readonly capabilities: string[];
   /** Every JSON frame the client sent, in arrival order. */
   readonly frames: ClientJsonFrame[];
   /** Binary (mic PCM) frames received. */
@@ -58,6 +73,10 @@ export interface FakeVoiceCall {
   micPcm(): Buffer;
   /** Unknown client frame types this server rejected. */
   readonly rejected: ClientJsonFrame[];
+  /** Streaming-contract breaches seen (late deltas, a wrong `streamedChars`). */
+  readonly protocolErrors: string[];
+  /** The `delegation_delta` texts for a delegation, in arrival order. */
+  deltasFor(delegationId: string): string[];
   /** Resolves once `session_config` went out. */
   readonly ready: Promise<void>;
   /** Resolves with the close code when the socket closes. */
@@ -74,6 +93,8 @@ export interface FakeVoiceCall {
   delegate(options: { delegationId: string; text: string; userUtteranceIds?: string[] }): void;
   /** `delegation_completed` for a spoken phase (`final: false` after an update's read-back). */
   completed(delegationId: string, options?: { final?: boolean; text?: string }): void;
+  /** `delegation_progress`: a spoken chunk of this delegation went to the voice model. */
+  progress(delegationId: string, text: string): void;
   /**
    * Stream one utterance the way core projects GPT-Live transcript deltas:
    * growing `final:false` frames for the same turnId, then a `final:true`.
@@ -125,6 +146,8 @@ export async function startFakeVoiceServer(
     clientDelegation: true,
     contextFrames: true,
     delegationUpdate: true,
+    delegationStream: true,
+    delegationReadBack: false,
     legacy: false,
     ...initial,
   };
@@ -213,6 +236,8 @@ function createCall(
     ...(options.clientDelegation ? ["client_delegation"] : []),
     ...(options.contextFrames ? ["context"] : []),
     ...(options.delegationUpdate ? ["delegation_update"] : []),
+    ...(options.delegationStream && options.clientDelegation ? ["delegation_stream"] : []),
+    ...(options.delegationReadBack && options.clientDelegation ? ["delegation_read_back"] : []),
   ];
   const capabilities = options.legacy ? [] : supported.filter((c) => clientCapabilities.includes(c));
   const delegationGranted = capabilities.includes("client_delegation");
@@ -220,9 +245,35 @@ function createCall(
   if (capabilities.includes("context")) accepted.add("context");
   if (delegationGranted) accepted.add("delegation_result");
   if (delegationGranted && capabilities.includes("delegation_update")) accepted.add("delegation_update");
+  if (delegationGranted && capabilities.includes("delegation_stream")) accepted.add("delegation_delta");
 
   const frames: ClientJsonFrame[] = [];
   const rejected: ClientJsonFrame[] = [];
+  const protocolErrors: string[] = [];
+  // Per delegation: its deltas, and whether its first update/result went out.
+  const deltas = new Map<string, string[]>();
+  const answered = new Set<string>();
+  /** Check a frame against the streaming contract (core's browser handler rules). */
+  const checkStreaming = (frame: ClientJsonFrame) => {
+    const id = String(frame.delegationId);
+    if (frame.type === "delegation_delta") {
+      if (answered.has(id)) protocolErrors.push(`delegation_delta for ${id} after its first update/result`);
+      if (typeof frame.text !== "string" || !frame.text) protocolErrors.push(`empty delegation_delta for ${id}`);
+      deltas.set(id, [...(deltas.get(id) ?? []), String(frame.text ?? "")]);
+      return;
+    }
+    if (frame.type !== "delegation_update" && frame.type !== "delegation_result") return;
+    const first = !answered.has(id);
+    answered.add(id);
+    if (frame.streamedChars === undefined) return;
+    const streamed = (deltas.get(id) ?? []).join("");
+    const text = String(frame.text ?? "");
+    if (!first) protocolErrors.push(`streamedChars on ${id}'s later ${frame.type}`);
+    if (!Number.isInteger(frame.streamedChars) || (frame.streamedChars as number) < 0)
+      protocolErrors.push(`bad streamedChars ${String(frame.streamedChars)} for ${id}`);
+    else if ((frame.streamedChars as number) > text.length || text.slice(0, frame.streamedChars as number) !== streamed.slice(0, frame.streamedChars as number))
+      protocolErrors.push(`streamedChars ${String(frame.streamedChars)} for ${id} is not a prefix of the text that was streamed`);
+  };
   const frameWaiters: Array<() => void> = [];
   let binaryFrames = 0;
   const micChunks: Buffer[] = [];
@@ -263,6 +314,7 @@ function createCall(
       return;
     }
     frames.push(frame);
+    checkStreaming(frame);
     if (!accepted.has(frame.type)) {
       // v1: an unknown client frame is logged and refused, never fatal.
       rejected.push(frame);
@@ -278,12 +330,15 @@ function createCall(
     token,
     clientCapabilities,
     delegationGranted,
+    capabilities,
     frames,
     get binaryFrames() {
       return binaryFrames;
     },
     micPcm: () => Buffer.concat(micChunks),
     rejected,
+    protocolErrors,
+    deltasFor: (delegationId) => [...(deltas.get(delegationId) ?? [])],
     ready,
     closed,
     framesOf: (type) => frames.filter((f) => f.type === type),
@@ -317,6 +372,9 @@ function createCall(
     },
     completed(delegationId, { final = true, text = "" } = {}) {
       send({ type: "delegation_completed", delegationId, turnId: delegationId, speak: true, text, final });
+    },
+    progress(delegationId, text) {
+      send({ type: "delegation_progress", delegationId, text });
     },
     async utterance({ role, turnId, text, startMs, wordsPerFrame = 2, gapMs = 40 }) {
       const words = text.split(" ");

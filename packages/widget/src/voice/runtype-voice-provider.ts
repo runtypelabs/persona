@@ -64,7 +64,23 @@
 // agent as conversation; a user bubble becomes conversation only when it is
 // submitted. With `context` negotiated, one `context{text}` frame (chat history
 // as of call start plus the host's `callContext`) is held until the visitor's
-// first final transcript or first delegation.
+// first final transcript or first delegation; a delegation's frames (deltas
+// and result) wait for it (up to 2 s, then it is dropped).
+//
+// Streaming (`delegation_stream` negotiated, with client delegation): while a
+// delegated turn renders, its assistant answer goes out as ordered
+// `delegation_delta{delegationId, text}` pieces (clause-sized, see
+// voice-clause-buffer.ts; approval cards, tool bubbles and captions never
+// stream), all before the delegation's first `delegation_update` or
+// `delegation_result`. That frame then carries `streamedChars`: how many
+// leading characters of its `text` the deltas already sent (an approval
+// script appended after the answer is the unstreamed rest). Absent or 0: none.
+// The server reports each spoken chunk with `delegation_progress{delegationId,
+// text}`; the first one of a spoken phase folds the read-back as
+// `delegation_completed{speak:true}` does (status stays "processing" until
+// completed), and that phase's completion doesn't fold another utterance.
+// Delegated sends carry `voice: { spoken: true }` on the chat request, so the
+// agent answers in speakable sentences.
 
 import type {
   VoiceProvider,
@@ -299,8 +315,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // The released context's send; settles once it went out (or never will).
   #contextSend: { done: Promise<void>; drop: () => void } | null = null;
   #delegations: Promise<void> = Promise.resolve();
-  // Delegations answered ok: their spoken read-back is folded.
+  // Delegations answered ok (or that streamed part of their answer): their
+  // spoken read-back is folded.
   #answered = new Set<string>();
+  // Delegations whose current spoken phase already folded on `delegation_progress`.
+  #progressed = new Set<string>();
   #foldReadback = false;
   #assistantTurns = new Set<string>();
   #foldedTurns = new Set<string>();
@@ -473,7 +492,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   #voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
     const capabilities = ["partial_transcript", "context"];
     if (this.bridge && this.config?.clientDelegation !== false)
-      capabilities.push("client_delegation", "delegation_update", "delegation_read_back");
+      capabilities.push("client_delegation", "delegation_update", "delegation_read_back", "delegation_stream");
     if (attach) capabilities.unshift("attach");
     const params = new URLSearchParams({
       voiceProtocol: VOICE_PROTOCOL,
@@ -849,6 +868,13 @@ export class RuntypeVoiceProvider implements VoiceProvider {
             const tag = msg.delegationId;
             if (typeof tag === "string" && this.#answered.has(tag) && !this.#assistantTurns.has(turnId)) {
               this.#foldedTurns.add(turnId);
+              this.#foldReadback = false;
+            } else if (this.#foldReadback && !this.#assistantTurns.has(turnId)) {
+              // Armed by `delegation_progress`: the server may leave the
+              // read-back untagged (it continued a filler it cut), so the
+              // first new utterance after it is the read-back.
+              this.#foldedTurns.add(turnId);
+              this.#foldReadback = false;
             }
           } else if (this.#foldReadback && !this.#assistantTurns.has(turnId)) {
             this.#foldedTurns.add(turnId);
@@ -891,12 +917,30 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         } else if (msg.speak !== false && this.#answered.has(delegationId)) {
           // Every spoken phase (the approval ask, the late result) of an answer
           // the chat shows is read back. A refusal of one that never started
-          // here has no chat answer: it renders. `final` may never come.
-          this.#foldReadback = true;
+          // here has no chat answer: it renders. `final` may never come. A
+          // phase whose first `delegation_progress` already armed the fold
+          // ends here without arming it again. With `delegation_read_back`
+          // the tag marks the read-back, so completion arms nothing (only
+          // progress does, for a read-back the server left untagged).
+          if (!this.#progressed.delete(delegationId) && !this.#capabilities.has("delegation_read_back"))
+            this.#foldReadback = true;
         }
         this.#delegating = msg.type === "delegation_started";
         if (!this.#isSpeaking && !this.#isCancelling()) {
           this.#emitStatus(this.#delegating ? "processing" : "listening");
+        }
+        break;
+      }
+
+      case "delegation_progress": {
+        // The server handed a spoken chunk of this delegation to the voice
+        // model: its read-back is starting. The first one of a phase folds it,
+        // as `delegation_completed{speak:true}` does; later ones (and that
+        // phase's completion) don't fold another utterance. Still delegating.
+        const delegationId = String(msg.delegationId);
+        if (this.#answered.has(delegationId) && !this.#progressed.has(delegationId)) {
+          this.#progressed.add(delegationId);
+          this.#foldReadback = true;
         }
         break;
       }
@@ -1032,28 +1076,44 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   #runDelegation(delegationId: string, request: VoiceDelegationRequest, generation: number): void {
     const bridge = this.bridge!;
     /** Send a frame for this delegation, unless the call or the delegation ended. */
-    const send = (type: "delegation_update" | "delegation_result", status: string, text: string) => {
+    const send = ({ type, ...fields }: Record<string, unknown> & { type: string }) => {
       const ws = this.#ws;
       if (generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return false;
       if (this.#cancelledDelegations.has(delegationId)) return false;
-      ws.send(JSON.stringify({ type, delegationId, status, text }));
+      ws.send(JSON.stringify({ type, delegationId, ...fields }));
       return true;
     };
+    const answer = (type: "delegation_update" | "delegation_result", status: string, text: string, streamedChars = 0) =>
+      send({ type, status, text, ...(streamedChars > 0 && { streamedChars }) });
     this.#delegations = this.#delegations.then(async () => {
       // Cancelled while queued behind another turn: never start it.
       if (generation !== this.#callGeneration || this.#cancelledDelegations.has(delegationId)) return;
+      // Streaming (`delegation_stream`): the answer goes out as
+      // `delegation_delta` pieces while the chat renders it, after the call
+      // context, and all of them before the result.
+      let deltas: Promise<void> | null = null;
+      const streaming = this.#capabilities.has("delegation_stream");
+      const stream = (text: string) => {
+        deltas = (deltas ?? this.#awaitContextSend()).then(() => {
+          // The chat shows what was streamed: its read-back is folded.
+          if (send({ type: "delegation_delta", text })) this.#answered.add(delegationId);
+        });
+      };
       const result: VoiceDelegationResult = await bridge
-        .runDelegatedTurn(request)
+        .runDelegatedTurn(streaming ? { ...request, stream } : request)
         .catch(() => ({ status: "failed", text: "" }));
       await this.#awaitContextSend();
+      await deltas;
+      const streamedChars = streaming ? (result.streamedChars ?? 0) : 0;
       // Parked on an approval: ask now (non-terminal), answer once the visitor
       // decides. A server that can't take an update gets the ask as the result.
       const parked = !!result.followUp;
       const update = parked && this.#capabilities.has("delegation_update");
-      const sent = send(
+      const sent = answer(
         update ? "delegation_update" : "delegation_result",
         parked && !update ? "completed" : result.status,
         result.text,
+        streamedChars,
       );
       if (!sent) return;
       if (result.status !== "failed" && result.inChat !== false) this.#answered.add(delegationId);
@@ -1068,12 +1128,12 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           approvalTimeoutMs: this.config?.approvalTimeoutMs && Math.min(this.config.approvalTimeoutMs, APPROVAL_TIMEOUT_MAX_MS),
           readBack: update,
           // Another gated tool in the same turn: another (non-terminal) update.
-          onUpdate: (text) => send("delegation_update", "pending_approval", text),
+          onUpdate: (text) => answer("delegation_update", "pending_approval", text),
         })
         .then((followUp) => {
           this.#followUps.delete(delegationId);
           // Hang-up and cancellation send nothing.
-          if (update && followUp && !abort.signal.aborted) send("delegation_result", followUp.status, followUp.text);
+          if (update && followUp && !abort.signal.aborted) answer("delegation_result", followUp.status, followUp.text);
         });
     });
   }
@@ -1170,6 +1230,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.#contextSend = null;
     this.#delegations = Promise.resolve();
     this.#answered.clear();
+    this.#progressed.clear();
     this.#foldReadback = false;
     this.#assistantTurns.clear();
     this.#foldedTurns.clear();

@@ -781,6 +781,146 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     expect(result.followUp).toBeTypeOf('function');
   });
 
+  describe('streaming the answer (delegation_stream)', () => {
+    /** Streams `chunks` into one assistant message, growing it like a text stream. */
+    const streamReply = (onEvent: (event: AgentWidgetEvent) => void, chunks: string[], id = 'assistant-s1') => {
+      const base = { id, role: 'assistant' as const, createdAt: new Date().toISOString() };
+      let content = '';
+      onEvent({ type: 'status', status: 'connecting' });
+      for (const chunk of chunks) {
+        content += chunk;
+        onEvent({ type: 'message', message: { ...base, content, streaming: true } });
+      }
+      onEvent({ type: 'message', message: { ...base, content, streaming: false } });
+    };
+
+    it('streams the answer in clause pieces while it renders, then reports streamedChars', async () => {
+      drive('user', 'what are your hours', true, 'u1');
+      const pieces: string[] = [];
+      const seenBeforeEnd: string[] = [];
+      dispatch.mockImplementation(async (_options, onEvent) => {
+        streamReply(onEvent, ['We open at ', 'eight, and close ', 'at six. On Sundays ', 'we are closed.']);
+        seenBeforeEnd.push(...pieces);
+        // A tool bubble between two answer messages never streams.
+        onEvent({
+          type: 'message',
+          message: { id: 'tool-1', role: 'assistant', content: '', createdAt: new Date().toISOString(), variant: 'tool' },
+        });
+        streamReply(onEvent, ['Anything else?'], 'assistant-s2');
+        onEvent({ type: 'status', status: 'idle' });
+      });
+      const result = await h.state.bridge!.runDelegatedTurn(
+        req({ delegationId: 'd1', userText: 'what are your hours', stream: (text) => pieces.push(text) }),
+      );
+      expect(result.text).toBe('We open at eight, and close at six. On Sundays we are closed.\n\nAnything else?');
+      // The first pieces went out while the stream was still running.
+      expect(seenBeforeEnd).toEqual(['We open at eight, ', 'and close at six. ']);
+      expect(pieces.join('')).toBe(result.text);
+      expect(result.streamedChars).toBe(result.text.length);
+    });
+
+    it('streams the answer of an approval-parked turn; the approval script is the unstreamed suffix', async () => {
+      drive('user', 'order two croissants', true, 'u1');
+      parkOnApproval();
+      const pieces: string[] = [];
+      const result = await h.state.bridge!.runDelegatedTurn(
+        req({ delegationId: 'd1', userText: 'order two croissants', stream: (text) => pieces.push(text) }),
+      );
+      expect(result.status).toBe('pending_approval');
+      expect(pieces).toEqual(['I can do that.']);
+      expect(result.streamedChars).toBe('I can do that.'.length);
+      expect(result.text.startsWith('I can do that.\n\n')).toBe(true);
+      expect(result.text.slice(result.streamedChars)).toContain("This action needs the user's approval");
+    });
+
+    it('stops streaming when the answer is rewritten, and counts only the shared prefix', async () => {
+      drive('user', 'hours', true, 'u1');
+      const pieces: string[] = [];
+      dispatch.mockImplementation(async (_options, onEvent) => {
+        const base = { id: 'assistant-rw', role: 'assistant' as const, createdAt: new Date().toISOString() };
+        onEvent({ type: 'message', message: { ...base, content: 'We open at eight. Sun', streaming: true } });
+        onEvent({ type: 'message', message: { ...base, content: 'We open at 8am. Closed Sundays.', streaming: false } });
+        onEvent({ type: 'status', status: 'idle' });
+      });
+      const result = await h.state.bridge!.runDelegatedTurn(
+        req({ delegationId: 'd1', userText: 'hours', stream: (text) => pieces.push(text) }),
+      );
+      expect(pieces).toEqual(['We open at eight. ']);
+      expect(result.text).toBe('We open at 8am. Closed Sundays.');
+      expect(result.streamedChars).toBe('We open at '.length);
+    });
+
+    it('streams a held sentence end after 200 ms of quiet, and stops on cancellation', async () => {
+      vi.useFakeTimers();
+      try {
+        drive('user', 'hours', true, 'u1');
+        const pieces: string[] = [];
+        let resume!: () => void;
+        const paused = new Promise<void>((resolve) => (resume = resolve));
+        const base = { id: 'assistant-idle', role: 'assistant' as const, createdAt: new Date().toISOString() };
+        dispatch.mockImplementation(async (_options, onEvent) => {
+          onEvent({ type: 'message', message: { ...base, content: 'We open at 8 a.m.', streaming: true } });
+          await paused;
+          onEvent({ type: 'message', message: { ...base, content: 'We open at 8 a.m. Closed Sundays.', streaming: false } });
+          onEvent({ type: 'status', status: 'idle' });
+        });
+        const turn = h.state.bridge!.runDelegatedTurn(
+          req({ delegationId: 'd1', userText: 'hours', stream: (text) => pieces.push(text) }),
+        );
+        await vi.advanceTimersByTimeAsync(199);
+        expect(pieces).toEqual([]);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(pieces).toEqual(['We open at 8 a.m.']);
+        resume();
+        await vi.advanceTimersByTimeAsync(500);
+        const result = await turn;
+        expect(pieces).toEqual(['We open at 8 a.m.', ' Closed Sundays.']);
+        expect(pieces.join('')).toBe(result.text);
+        expect(result.streamedChars).toBe(result.text.length);
+
+        // Cancelled while a sentence end is held: the idle flush never fires.
+        const later: string[] = [];
+        let resume2!: () => void;
+        const paused2 = new Promise<void>((resolve) => (resume2 = resolve));
+        const base2 = { ...base, id: 'assistant-idle-2' };
+        dispatch.mockImplementation(async (_options, onEvent) => {
+          onEvent({ type: 'message', message: { ...base2, content: 'Sure thing.', streaming: true } });
+          await paused2;
+          onEvent({ type: 'message', message: { ...base2, content: 'Sure thing. Done.', streaming: false } });
+          onEvent({ type: 'status', status: 'idle' });
+        });
+        const turn2 = h.state.bridge!.runDelegatedTurn(
+          req({ delegationId: 'd2', userText: 'more', stream: (text) => later.push(text) }),
+        );
+        await vi.advanceTimersByTimeAsync(100);
+        h.state.bridge!.dropDelegation!('d2');
+        await vi.advanceTimersByTimeAsync(300);
+        expect(later).toEqual([]);
+        resume2();
+        await vi.advanceTimersByTimeAsync(500);
+        await turn2;
+        expect(later).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('streams nothing and omits streamedChars without a stream callback', async () => {
+      drive('user', 'hours', true, 'u1');
+      dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'We open at nine. Sundays closed.'));
+      const result = await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'hours' }));
+      expect(result).not.toHaveProperty('streamedChars');
+    });
+  });
+
+  it('marks only the delegated voice turn as spoken (voice: { spoken: true })', async () => {
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));
+    await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'what are your hours' }));
+    await session.sendMessage('typed question');
+    const options = dispatch.mock.calls.map(([o]) => (o as { voiceSpoken?: boolean }).voiceSpoken);
+    expect(options).toEqual([true, false]);
+  });
+
   it('follows up with the answer once the visitor approves, kept off browser TTS', async () => {
     drive('user', 'order two croissants', true, 'u1');
     parkOnApproval();

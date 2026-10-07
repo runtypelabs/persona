@@ -74,6 +74,12 @@ type DispatchOptions = {
    * `submitMode: "interrupt"` so the server cancels the prior run.
    */
   interrupt?: boolean;
+  /**
+   * Client-token only: a voice model reads the reply aloud (a delegated voice
+   * turn). Sends `voice: { spoken: true }` so the server asks for a speakable
+   * answer.
+   */
+  voiceSpoken?: boolean;
 };
 
 export type SSEHandler = (event: AgentWidgetEvent) => void;
@@ -1510,6 +1516,7 @@ export class AgentWidgetClient {
         // superseded run and this client can drop its stale events below.
         turnId,
         ...(options.interrupt && { submitMode: 'interrupt' as const }),
+        ...(options.voiceSpoken && { voice: { spoken: true as const } }),
       };
 
       // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already

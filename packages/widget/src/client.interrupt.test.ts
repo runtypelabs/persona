@@ -90,6 +90,24 @@ describe("client-token turn identity", () => {
     expect(bodies[1].turnId).not.toBe(bodies[0].turnId);
   });
 
+  it("a voice-spoken send carries the spoken-reply hint; others don't", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    global.fetch = vi.fn(async (url: unknown, init: any) => {
+      if (String(url).endsWith("/v1/client/init")) return initResponse();
+      bodies.push(JSON.parse(init.body));
+      const stream = controlledStream();
+      stream.close();
+      return stream.response;
+    }) as unknown as typeof fetch;
+
+    const client = clientTokenClient();
+    await client.dispatch({ messages, voiceSpoken: true }, () => {});
+    await client.dispatch({ messages }, () => {});
+
+    expect(bodies[0].voice).toEqual({ spoken: true });
+    expect(bodies[1]).not.toHaveProperty("voice");
+  });
+
   it("drops SSE events belonging to a superseded turn", async () => {
     const first = controlledStream();
     const second = controlledStream();
