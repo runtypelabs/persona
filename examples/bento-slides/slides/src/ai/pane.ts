@@ -25,6 +25,7 @@ import {
   markdownPostprocessor,
   type AgentWidgetController,
 } from '@runtypelabs/persona'
+import { createPcmStreamPlayer } from '@runtypelabs/persona/voice-worklet-player'
 import { t } from '../i18n'
 import {
   APPROVAL_REQUIRED_TOOL_NAMES,
@@ -268,6 +269,11 @@ export function mountCopilotPane(ctx: AiContext, host: PaneHost): PaneController
           // the agent's own voice config already has GPT-Live say it is an AI
           // in its first reply; the rail is too narrow for a second notice
           disclosureText: false,
+          // the editor keeps the main thread busy (canvas, streaming chat),
+          // and the default player schedules audio there with no buffer — a
+          // long frame is an audible gap. The AudioWorklet player plays from
+          // the audio thread behind a small jitter buffer.
+          createPlaybackEngine: () => createPcmStreamPlayer({ prebufferMs: 250 }),
         },
       },
     },
