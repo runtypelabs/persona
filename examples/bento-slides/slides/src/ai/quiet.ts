@@ -151,6 +151,7 @@ export function createTurnManager(
     unsubs.push(
       controller.on('user:message', () => {
         clearTimeout(endTimer)
+        const asked = pending !== null
         journal = []
         lastText = ''
         stopped = false
@@ -159,9 +160,11 @@ export function createTurnManager(
         onDone = pending?.onDone
         pending = null
         setBusy(true)
-        // a request that fails before streaming never fires
-        // assistant:complete; the stream-flag poll still ends the turn
-        scheduleEnd()
+        // a submitted turn streams at once, and one that fails before
+        // streaming never fires assistant:complete, so poll the stream flag
+        // from the start. Not for voice: the first partial transcript is a
+        // user message long before its spoken request is sent.
+        if (asked) scheduleEnd()
       }),
       controller.on('assistant:complete', (payload) => {
         const text =
