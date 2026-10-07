@@ -153,13 +153,17 @@ export function setupPresenterTools(ctx: AiContext): void {
     {
       name: 'jump_to_slide',
       title: 'Jump to a slide',
-      description: 'Jump the running presentation to a 1-based slide position (among non-state slides). Use get_deck_overview positions.',
-      inputSchema: { type: 'object', required: ['position'], properties: { position: { type: 'number' } } },
+      description: 'Jump the running presentation to a slide, by slideId or by the 1-based position get_deck_overview lists.',
+      inputSchema: { type: 'object', properties: { ...SLIDE_TARGET_PROPS } },
       annotations: { readOnlyHint: true },
       execute(args) {
-        const p = Number(args.position)
-        if (!Number.isFinite(p) || p < 1) throw new Error('position must be a 1-based slide number')
-        need().goToPosition(p)
+        if (!(typeof args.slideId === 'string' && args.slideId) && typeof args.position !== 'number') {
+          throw new Error('pass slideId or position (see get_deck_overview)')
+        }
+        // the show's own linear order skips hidden slides; the overview's
+        // positions don't, so go by doc index rather than show position
+        const s = need()
+        s.goTo(resolveSlide(ctx.store, args).index)
         return toolResult(state(ctx))
       },
     },
@@ -346,6 +350,9 @@ export const slideName = (slide: Slide): string | null => {
 // ---------------------------------------------------------------------------
 // Element serialization for reads (get_slide, get_selection share this shape).
 
+// Text, chart data and table cells come back whole: the edit tools rewrite
+// them (a chart `option` patch replaces the option), so a read must carry
+// everything an edit has to preserve.
 export const elementDetail = (el: SlideElement): Record<string, unknown> => {
   const out: Record<string, unknown> = {
     id: el.id, type: el.type,
@@ -357,7 +364,7 @@ export const elementDetail = (el: SlideElement): Record<string, unknown> => {
   switch (el.type) {
     case 'text': {
       const t = el as TextElement
-      out.text = truncate(htmlToText(t.html), 400)
+      out.text = htmlToText(t.html)
       out.fontSize = t.fontSize
       out.color = t.color
       out.align = t.align
@@ -386,6 +393,7 @@ export const elementDetail = (el: SlideElement): Record<string, unknown> => {
       const xAxis = opt.xAxis as { data?: unknown } | Array<{ data?: unknown }> | undefined
       const axis0 = Array.isArray(xAxis) ? xAxis[0] : xAxis
       out.categories = Array.isArray(axis0?.data) ? axis0!.data : []
+      out.option = c.option
       break
     }
     case 'table': {
@@ -393,7 +401,7 @@ export const elementDetail = (el: SlideElement): Record<string, unknown> => {
       out.rows = tbl.rows.length
       out.cols = tbl.columns.length
       out.header = tbl.header
-      out.firstRow = (tbl.rows[0]?.cells ?? []).map((c) => truncate(htmlToText(c.html), 40))
+      out.cells = tbl.rows.map((r) => r.cells.map((c) => htmlToText(c.html)))
       break
     }
     case 'media': {
@@ -496,12 +504,18 @@ const VALID_PATCH_KEYS: readonly string[] = [
   'option', 'link', 'morphId',
 ]
 
-const applyPatch = (el: SlideElement, patch: Record<string, unknown>): void => {
-  const target = el as unknown as Record<string, unknown>
-  for (const [key, value] of Object.entries(patch)) {
+const checkPatch = (patch: Record<string, unknown>): void => {
+  for (const key of Object.keys(patch)) {
     if (!VALID_PATCH_KEYS.includes(key)) {
       throw new Error(`unknown patch key "${key}" — valid keys: ${VALID_PATCH_KEYS.join(', ')}`)
     }
+  }
+}
+
+/** Callers run checkPatch on every patch first: Store.commit doesn't roll back. */
+const applyPatch = (el: SlideElement, patch: Record<string, unknown>): void => {
+  const target = el as unknown as Record<string, unknown>
+  for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue
     if (key === 'text') {
       target.html = textToHtml(String(value))
@@ -1002,7 +1016,9 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
         const resolved = edits.map((e) => {
           const id = String(e.elementId ?? '')
           const found = resolveElement(store, id, e.slideId)
-          return { slide: found.slide, el: found.el, patch: (e.patch ?? {}) as Record<string, unknown> }
+          const patch = (e.patch ?? {}) as Record<string, unknown>
+          checkPatch(patch)
+          return { slide: found.slide, el: found.el, patch }
         })
         store.commit(() => {
           for (const { el, patch } of resolved) applyPatch(el, patch)

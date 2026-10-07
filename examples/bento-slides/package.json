@@ -10,7 +10,7 @@
     "build:single": "pnpm --filter @runtypelabs/persona build && cd slides && tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Slides.bento.html && node ../scripts/postbuild-compress.mjs dist-single/Bento_Slides.bento.html",
     "preview": "cd slides && vite preview",
     "typecheck": "cd slides && tsc -b",
-    "build:web": "cd slides && tsc -b && vite build --outDir ../../../apps/web/dist/bento --emptyOutDir"
+    "build:web": "cd slides && tsc -b && SINGLEFILE=1 vite build --outDir ../../../apps/web/dist/bento --emptyOutDir"
   },
   "dependencies": {
     "@mcp-b/webmcp-polyfill": "^5.1.0",

@@ -33,8 +33,6 @@ export interface PresentSession {
   /** Step-aware linear nav (skips interactive states) — the AI presenter tools. */
   next(): void
   prev(): void
-  /** Jump to a 1-based position among NON-state slides. */
-  goToPosition(position: number): void
   /** Current raw doc.slides index (the start index before init). */
   currentIndex(): number
   /** Show or hide the audience blackout (audience copy side). */
@@ -1552,10 +1550,6 @@ export function startPresentation(
     setRemoteLaser,
     next: () => { if (deckReady) goNext() },
     prev: () => { if (deckReady) goPrev() },
-    goToPosition: (position: number) => {
-      const idx = railIndices[position - 1]
-      if (typeof idx === 'number') goTo(idx)
-    },
     currentIndex: () => (deckReady ? deck.getIndices().h : startIndex),
   }
 }

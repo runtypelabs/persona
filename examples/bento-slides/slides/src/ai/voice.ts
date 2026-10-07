@@ -41,7 +41,14 @@ export function createVoiceSurface(
   const action = document.createElement('button')
   action.type = 'button'
   pill.append(dot, text, action)
-  document.body.appendChild(pill)
+  // the show goes fullscreen on its own overlay, which hides everything
+  // outside it — follow the fullscreen element so the call controls stay up
+  const place = () => {
+    const host = document.fullscreenElement ?? document.body
+    if (pill.parentElement !== host) host.appendChild(pill)
+  }
+  place()
+  document.addEventListener('fullscreenchange', place)
 
   const label = (): string => {
     if (!active) return t('Talk to Copilot')
@@ -132,6 +139,7 @@ export function createVoiceSurface(
     isActive: () => active,
     destroy() {
       unsubs.forEach((u) => u())
+      document.removeEventListener('fullscreenchange', place)
       pill.remove()
     },
   }
