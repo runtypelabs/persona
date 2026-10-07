@@ -17,6 +17,7 @@ import '@runtypelabs/persona/widget.css'
 import { initializeWebMCPPolyfill } from '@mcp-b/webmcp-polyfill'
 import { t } from '../i18n'
 import { offlineEnabled } from '../update'
+import { onOfflineEnforced } from '../../../kernel/src/net.ts'
 import {
   setupBentoTools,
   setupPresenterTools,
@@ -87,6 +88,7 @@ export function initAI(ctx: AiContext): BentoAiApi {
   const comments = createCommentsCopilot(ctx, turns)
 
   const mount = () => {
+    if (offlineEnabled()) return
     const controller = mountCopilotPane(ctx, {
       openRail,
       fixFlagged: () => comments.fixAllFlagged(),
@@ -97,6 +99,15 @@ export function initAI(ctx: AiContext): BentoAiApi {
 
   ctx.editor.enableCopilotTab()
   mount()
+
+  // Offline switched on mid-session (here or in another tab): the kernel cuts
+  // its own requests and sockets, but Persona's chat stream and voice socket
+  // are not the kernel's — hang up and unmount so nothing else leaves.
+  onOfflineEnforced(() => {
+    voice.endCall()
+    unmountCopilotPane()
+    ctx.editor.toast(t('Offline mode — the Copilot is disconnected. Reload after going back online.'))
+  })
   // A locale switch re-authors the editor DOM (build()), taking the rail
   // containers with it — re-adopt the fresh ones.
   ctx.editor.onRebuild = () => {

@@ -23,6 +23,9 @@ export interface TurnSummary {
   tools: string[]
   /** final assistant text (best effort; '' when unavailable) */
   text: string
+  /** the turn finished on its own and produced something (an answer or a
+   *  tool call) — false when it was stopped or came back empty */
+  ok: boolean
 }
 
 export interface TurnManager {
@@ -46,6 +49,12 @@ export function createTurnManager(
   let pending: { quiet: boolean; source: string; onDone?: (s: TurnSummary) => void } | null = null
   let onDone: ((s: TurnSummary) => void) | undefined
   let unsubs: Array<() => void> = []
+  let stopped = false
+
+  const stop = () => {
+    if (busy) stopped = true
+    stopStreaming()
+  }
 
   setToolActivityListener((e) => {
     journal.push(e)
@@ -59,7 +68,7 @@ export function createTurnManager(
   const stopB = document.createElement('button')
   stopB.textContent = t('Stop')
   stopB.title = 'Esc'
-  stopB.addEventListener('click', () => stopStreaming())
+  stopB.addEventListener('click', () => stop())
   pill.append(pillText, stopB)
   document.body.appendChild(pill)
 
@@ -71,7 +80,7 @@ export function createTurnManager(
   // canvas-wide Esc stops a running turn (Persona's own Esc-to-stop only
   // hears keys inside the pane)
   document.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Escape' && busy) stopStreaming()
+    if (ev.key === 'Escape' && busy) stop()
   })
 
   // --- shimmer + toast ----------------------------------------------------------
@@ -88,7 +97,9 @@ export function createTurnManager(
   const summarize = (text: string): TurnSummary => {
     const elementIds = elementIdsIn(journal.map((j) => j.data))
     const slideIds = slideIdsIn(journal.map((j) => j.data))
-    return { quiet: currentQuiet, source: currentSource, elementIds, slideIds, tools: journal.map((j) => j.tool), text }
+    const tools = journal.map((j) => j.tool)
+    const ok = !stopped && (text.trim().length > 0 || tools.length > 0)
+    return { quiet: currentQuiet, source: currentSource, elementIds, slideIds, tools, text, ok }
   }
 
   const edited = (s: TurnSummary) =>
@@ -142,6 +153,7 @@ export function createTurnManager(
         clearTimeout(endTimer)
         journal = []
         lastText = ''
+        stopped = false
         currentQuiet = pending?.quiet ?? false
         currentSource = pending?.source ?? 'chat'
         onDone = pending?.onDone

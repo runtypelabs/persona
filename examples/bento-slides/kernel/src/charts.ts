@@ -798,7 +798,7 @@ export function mountChart(el: ChartLike, host: HTMLElement, fromOption?: Record
     tipEl.innerHTML =
       (title ? `<b>${escapeHtml(title)}</b><br>` : '') +
       rows.map((r) =>
-        `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${r.color};margin-right:5px"></span>` +
+        `<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${safeCssColor(r.color)};margin-right:5px"></span>` +
         `${escapeHtml(r.name)}${r.value !== undefined ? `: <b>${escapeHtml(r.value)}</b>` : ''}`,
       ).join('<br>')
     tipEl.style.display = 'block'
@@ -883,3 +883,9 @@ export function mountChart(el: ChartLike, host: HTMLElement, fromOption?: Record
 
 const escapeHtml = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+/** A chart colour comes from the (untrusted) document and lands in an inline
+ *  style inside innerHTML: allow hex, rgb[a]/hsl[a] and bare colour names
+ *  only, so no quote, `;` or markup can break out of the attribute. */
+const safeCssColor = (c: string): string =>
+  /^(#[0-9a-f]{3,8}|(rgb|hsl)a?\([\d\s.,%/+-]+\)|[a-z]{3,20})$/i.test(String(c).trim()) ? String(c).trim() : '#999'

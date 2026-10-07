@@ -77,6 +77,10 @@ scripts/  postbuild-compress.mjs (+ lib/b86.mjs) for the single-file build
   in `canvas.ts`, `PresentSession.next/prev/goToPosition/currentIndex`, and the
   `src/ai/` import in `main.ts`.
 - The Copilot's CSS is appended to the end of `slides/src/styles.css`.
+- Two kernel touches: `net.ts` gains `onOfflineEnforced()` (so offline mode
+  also unmounts the Copilot and hangs up its call), and `charts.ts` guards the
+  tooltip swatch colour (`safeCssColor`) against markup in chart options. The
+  latter is an upstream fix worth sending back.
 
 To resync: `git -C <bento> archive origin/main kernel slides scripts/postbuild-compress.mjs scripts/lib/b86.mjs | tar -x -C examples/bento-slides`,
 drop `slides/package.json` and `slides/probe/`, then re-apply the hooks above.
