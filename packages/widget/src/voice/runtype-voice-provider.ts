@@ -67,7 +67,9 @@
 // first final transcript or first delegation; a delegation's frames (deltas
 // and result) wait for it (up to 2 s, then it is dropped).
 //
-// Streaming (`delegation_stream` negotiated, with client delegation): while a
+// Streaming (`delegation_stream` and `delegation_read_back` both negotiated,
+// with client delegation; the read-back tags are what keep a streamed answer
+// spoken as several utterances folded): while a
 // delegated turn renders, its assistant answer goes out as ordered
 // `delegation_delta{delegationId, text}` pieces (clause-sized, see
 // voice-clause-buffer.ts; approval cards, tool bubbles and captions never
@@ -320,6 +322,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   #answered = new Set<string>();
   // Delegations whose current spoken phase already folded on `delegation_progress`.
   #progressed = new Set<string>();
+  // The delegation whose read-back `#foldReadback` is waiting for.
+  #foldArmedBy: string | null = null;
   #foldReadback = false;
   #assistantTurns = new Set<string>();
   #foldedTurns = new Set<string>();
@@ -923,7 +927,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           // the tag marks the read-back, so completion arms nothing (only
           // progress does, for a read-back the server left untagged).
           if (!this.#progressed.delete(delegationId) && !this.#capabilities.has("delegation_read_back"))
-            this.#foldReadback = true;
+            this.#armFold(delegationId);
         }
         this.#delegating = msg.type === "delegation_started";
         if (!this.#isSpeaking && !this.#isCancelling()) {
@@ -938,9 +942,13 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         // as `delegation_completed{speak:true}` does; later ones (and that
         // phase's completion) don't fold another utterance. Still delegating.
         const delegationId = String(msg.delegationId);
-        if (this.#answered.has(delegationId) && !this.#progressed.has(delegationId)) {
+        if (
+          this.#answered.has(delegationId) &&
+          !this.#progressed.has(delegationId) &&
+          !this.#cancelledDelegations.has(delegationId)
+        ) {
           this.#progressed.add(delegationId);
-          this.#foldReadback = true;
+          this.#armFold(delegationId);
         }
         break;
       }
@@ -1065,9 +1073,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     if (timedOut) send.drop();
   }
 
+  /** The next new assistant utterance is this delegation's read-back: fold it. */
+  #armFold(delegationId: string): void {
+    this.#foldReadback = true;
+    this.#foldArmedBy = delegationId;
+  }
+
   /** No more frames for this delegation; its chat answer goes back to browser TTS. */
   #dropDelegation(delegationId: string, expired = false): void {
     this.#cancelledDelegations.add(delegationId);
+    // A fold it armed whose read-back never started would hide the next
+    // unrelated utterance: disarm it.
+    if (this.#foldArmedBy === delegationId) this.#foldReadback = false;
+    this.#progressed.delete(delegationId);
     this.bridge?.dropDelegation?.(delegationId, expired);
     this.#followUps.get(delegationId)?.abort();
   }
@@ -1092,7 +1110,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       // `delegation_delta` pieces while the chat renders it, after the call
       // context, and all of them before the result.
       let deltas: Promise<void> | null = null;
-      const streaming = this.#capabilities.has("delegation_stream");
+      // Only with read-back tags: a streamed answer can be spoken as several
+      // utterances, and the tags are what keep all of them folded.
+      const streaming = this.#capabilities.has("delegation_stream") && this.#capabilities.has("delegation_read_back");
       const stream = (text: string) => {
         deltas = (deltas ?? this.#awaitContextSend()).then(() => {
           // The chat shows what was streamed: its read-back is folded.
@@ -1231,6 +1251,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.#delegations = Promise.resolve();
     this.#answered.clear();
     this.#progressed.clear();
+    this.#foldArmedBy = null;
     this.#foldReadback = false;
     this.#assistantTurns.clear();
     this.#foldedTurns.clear();

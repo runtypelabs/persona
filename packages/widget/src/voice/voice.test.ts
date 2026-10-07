@@ -1269,7 +1269,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
       });
 
       describe('with delegation_stream negotiated', () => {
-        const STREAM_CAPS = [...ALL_CAPS, 'delegation_stream'];
+        const STREAM_CAPS = [...ALL_CAPS, 'delegation_stream', 'delegation_read_back'];
         const progress = (ws: MockWebSocket, delegationId: string, text = 'chunk') =>
           ws.triggerMessage(JSON.stringify({ type: 'delegation_progress', delegationId, text }));
 
@@ -1324,6 +1324,43 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
               streamedChars: 23,
             },
           ]);
+        });
+
+        it('does not stream when delegation_read_back is missing (a multi-utterance read-back could not stay folded)', async () => {
+          const { ws, calls, pending } = await startDelegatedCall({}, { capabilities: [...ALL_CAPS, 'delegation_stream'] });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          expect(calls[0]).not.toHaveProperty('stream');
+          pending[0]({ status: 'completed', text: 'Answer.', streamedChars: 7 });
+          await flush();
+          expect(sentJson(ws)).toEqual([{ type: 'delegation_result', delegationId: 'd1', status: 'completed', text: 'Answer.' }]);
+        });
+
+        it('a cancellation after progress disarms that delegation\'s fold, not another\'s', async () => {
+          const { ws, calls, transcripts } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          calls[0].stream!('It is sunny. ');
+          await flush();
+          progress(ws, 'd1');
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'dx', reason: 'deadline' }));
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd1', reason: 'provider_cancelled' }));
+          ws.triggerMessage(update('assistant', 'Something unrelated.', 'x1')); // read-back never started: renders
+          progress(ws, 'd1'); // cancelled: no frames, and no re-arm
+          ws.triggerMessage(update('assistant', 'Still here.', 'x2'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Something unrelated.', 'Still here.']);
+        });
+
+        it('a refusing warning after progress disarms the fold too', async () => {
+          const { ws, calls, transcripts } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          calls[0].stream!('It is sunny. ');
+          await flush();
+          progress(ws, 'd1');
+          ws.triggerMessage(JSON.stringify({ type: 'warning', code: 'UNKNOWN_DELEGATION', delegationId: 'd1' }));
+          ws.triggerMessage(update('assistant', 'Something unrelated.', 'x1'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Something unrelated.']);
         });
 
         it('streams nothing (and sends no streamedChars) when the server did not grant it', async () => {
@@ -1415,7 +1452,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         });
 
         it('folds an untagged read-back after delegation_progress on a tag-negotiated server (the cut-filler continuation)', async () => {
-          const { ws, calls, transcripts, pending } = await startDelegatedCall({}, { capabilities: [...STREAM_CAPS, 'delegation_read_back'] });
+          const { ws, calls, transcripts, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
           const frame = (turnId: string, text: string, final: boolean, delegationId?: string) =>
             ws.triggerMessage(
               JSON.stringify({ type: 'transcript_update', role: 'assistant', text, utteranceId: turnId, final, delegationId }),
@@ -1449,7 +1486,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         });
 
         it('a user transcript clears a progress-armed fold, and a tag fold consumes it (tag-negotiated server)', async () => {
-          const { ws, calls, transcripts, pending } = await startDelegatedCall({}, { capabilities: [...STREAM_CAPS, 'delegation_read_back'] });
+          const { ws, calls, transcripts, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
           const frame = (turnId: string, text: string, delegationId?: string) =>
             ws.triggerMessage(
               JSON.stringify({ type: 'transcript_update', role: 'assistant', text, utteranceId: turnId, final: true, delegationId }),
@@ -1474,7 +1511,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         });
 
         it('folds a tagged read-back that starts while the answer is still streaming (delegation_read_back)', async () => {
-          const { ws, calls, transcripts } = await startDelegatedCall({}, { capabilities: [...STREAM_CAPS, 'delegation_read_back'] });
+          const { ws, calls, transcripts } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
           delegate(ws, 'd1', 'q');
           await flush();
           calls[0].stream!('It is sunny. ');

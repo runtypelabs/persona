@@ -112,7 +112,17 @@ function sse(events: SseEvent[], executionId: string, firstSeq = 1): string {
 
 /** Sentence-sized pieces of `text` (line breaks end a piece too); they concatenate back to `text`. */
 function sentences(text: string): string[] {
-  return text.match(/[^.!?\n]*(?:[.!?]+(?:\s+|$)|\n+|$)/g)?.filter(Boolean) ?? [text];
+  // Cut after each boundary (punctuation then whitespace or the end, or a line
+  // break): "3.50" stays whole, and the pieces join back to `text` exactly.
+  const pieces: string[] = [];
+  let at = 0;
+  for (const m of text.matchAll(/[.!?]+(?:\s+|$)|\n+/g)) {
+    const end = m.index + m[0].length;
+    if (end > at) pieces.push(text.slice(at, end));
+    at = end;
+  }
+  if (at < text.length) pieces.push(text.slice(at));
+  return pieces.length ? pieces : [text];
 }
 
 /** The chat turn: the head (through text_start), the answer's deltas, and the tail. */

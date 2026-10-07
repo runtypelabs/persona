@@ -35,7 +35,8 @@ let voice: FakeVoiceServer;
 let consoleLines: string[] = [];
 
 test.beforeEach(async ({ page }) => {
-  voice = await startFakeVoiceServer();
+  // Like current core: read-back tags with client delegation (streaming needs them).
+  voice = await startFakeVoiceServer({ delegationReadBack: true });
   consoleLines = [];
   page.on("console", (message) => consoleLines.push(`[${message.type()}] ${message.text()}`));
 });
@@ -215,7 +216,6 @@ test("tag-negotiated server: an untagged read-back after delegation_progress is 
   // Live sequence against current core (delegation_read_back negotiated): core
   // cuts GPT-Live's in-flight filler, reports progress, and GPT-Live continues
   // the answer in a NEW utterance core leaves untagged.
-  voice.setOptions({ delegationReadBack: true });
   const api = await installFakeHistoryApi(context);
   api.setChatStream(textTurnStream("We're open Monday to Friday from 8 to 6. Saturday 9 to 4.", "exec_tag"));
   await openVoicePage(page, { voiceHost: voice.host });
@@ -275,14 +275,19 @@ test("an approval-parked turn streams its answer; the approval script is the uns
   expect(call.rejected).toEqual([]);
 });
 
-test("a server without delegation_stream gets no deltas and no streamedChars", async ({ page, context }) => {
-  voice.setOptions({ delegationStream: false });
+for (const [missing, options] of [
+  ["delegation_stream", { delegationStream: false }],
+  // Streaming needs the read-back tags: a streamed answer can be spoken as
+  // several utterances, and only tags keep them all folded.
+  ["delegation_read_back", { delegationReadBack: false }],
+] as const) test(`a server without ${missing} gets no deltas and no streamedChars`, async ({ page, context }) => {
+  voice.setOptions(options);
   const api = await installFakeHistoryApi(context);
   api.setChatStream(approvalParkStream("exec_old"));
   await openVoicePage(page, { voiceHost: voice.host });
   const call = await startCall(page);
-  expect(call.clientCapabilities).toContain("delegation_stream");
-  expect(call.capabilities).not.toContain("delegation_stream");
+  expect(call.clientCapabilities).toEqual(expect.arrayContaining(["delegation_stream", "delegation_read_back"]));
+  expect(call.capabilities).not.toContain(missing);
 
   await call.utterance({ role: "user", turnId: "in_1", text: "Order two almond croissants", startMs: 1000 });
   call.delegate({ delegationId: "dlg_1", text: "Order two almond croissants", userUtteranceIds: ["in_1"] });

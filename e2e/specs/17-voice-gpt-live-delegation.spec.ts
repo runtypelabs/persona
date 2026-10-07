@@ -588,9 +588,8 @@ test("approval lifecycle: delegation_update asks naturally, Allow, one terminal 
   await expect(page.locator(voiceSel.bubble).filter({ hasText: "All set, your order" })).toHaveCount(0);
 
   // The whole wire for the delegation, in order.
-  // The answer streamed first (delegation_stream), then the ask, then the outcome.
-  expect(call.frames.filter((f) => f.delegationId === "dlg_1").map((f) => `${f.type}:${f.status ?? f.text}`)).toEqual([
-    "delegation_delta:I can place that order for you.",
+  // No deltas: this server grants delegation_stream but not delegation_read_back.
+  expect(call.frames.filter((f) => f.delegationId === "dlg_1").map((f) => `${f.type}:${f.status}`)).toEqual([
     "delegation_update:pending_approval",
     "delegation_result:completed",
   ]);
