@@ -336,15 +336,19 @@ const JSPAINT = resolveJsPaint();
 function serveBento(): Plugin {
   const file = path.resolve(__dirname, "dist/bento/index.html");
   let build: Promise<boolean> | null = null;
-  const ensureBuilt = () =>
-    (build ??= new Promise<boolean>((resolve) => {
-      const child = spawn("pnpm", ["--filter", "bento-slides", "build:web"], {
-        cwd: path.resolve(__dirname, "../.."),
-        stdio: "inherit",
-      });
+  const root = path.resolve(__dirname, "../..");
+  const run = (filter: string, script: string) =>
+    new Promise<boolean>((resolve) => {
+      const child = spawn("pnpm", ["--filter", filter, script], { cwd: root, stdio: "inherit" });
       child.on("error", () => resolve(false));
       child.on("exit", (code) => resolve(code === 0));
-    }));
+    });
+  // Bento imports the widget's built dist, which `pnpm dev` doesn't produce
+  const widgetBuilt = () => fs.existsSync(path.join(root, "packages/widget/dist/index.js"));
+  const ensureBuilt = () =>
+    (build ??= (async () =>
+      (widgetBuilt() || (await run("@runtypelabs/persona", "build"))) &&
+      run("bento-slides", "build:web"))());
   return {
     name: "serve-bento",
     configureServer(server) {
