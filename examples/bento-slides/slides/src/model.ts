@@ -1,0 +1,1445 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+// The bento/slides document model. This JSON is what lives inside the
+// <script type="application/bento+json"> block of a .bento.html file.
+
+export const FORMAT = 'bento/slides'
+export const FORMAT_VERSION = 1
+
+export type TransitionKind = 'none' | 'fade' | 'slide' | 'zoom' | 'morph'
+
+export interface ElementBase {
+  /** Stable per-slide identity: `data-el-id`, selection, connector/comment
+   *  anchors, and the CRDT node key. Also the DEFAULT morph key — elements
+   *  sharing an id across adjacent slides morph into each other (the
+   *  duplicate-a-slide idiom). Never mutate it to re-pair a morph; set
+   *  `morphId` instead so identity stays stable. */
+  id: string
+  /** Optional morph-key override. When set, this element morphs with elements
+   *  whose effective morph key (`morphId ?? id`) matches — letting two
+   *  independently-created elements on different slides be paired without
+   *  touching either's `id`. Omitted = fall back to `id` (the common case).
+   *  Must not collide with another element's effective key on the SAME slide. */
+  morphId?: string
+  x: number
+  y: number
+  w: number
+  h: number
+  /** degrees, clockwise */
+  rotation: number
+  opacity: number
+  /**
+   * Drop shadow(s), rendered with CSS drop-shadow so they follow the
+   * element's alpha shape (rounded corners, ellipses, glyphs, image
+   * cutouts). An array stacks: e.g. a dark elevation shadow plus a soft
+   * white glow.
+   */
+  shadow?: ShadowSpec | ShadowSpec[]
+  /** Gaussian blur ON this element, in px. Composed into the SAME CSS `filter`
+   *  as `shadow` (both apply). Survives PDF/print, unlike backdrop blur. */
+  blur?: number
+  /** CSS mix-blend-mode for this element ('screen' for neon light glows,
+   *  'multiply'/'overlay' for editorial duotones). Omitted/'' = normal. */
+  blend?: string
+  /** Frosted-glass backdrop blur behind this element, in px (0/undefined = off).
+   *  Screen-only: browser print/PDF drops backdrop-filter (pair with a
+   *  translucent `fill` so PDFs show a graceful flat panel). */
+  backdropFilter?: number
+  /** presentation effects, run in present mode only */
+  fx?: {
+    /** entrance animation when the slide is shown. fade-* nudge ~16px; slide-*
+     *  sweep ~120px in from an edge (slide-left starts to the right, etc.) */
+    enter?: 'fade-up' | 'fade' | 'fade-down' | 'slide-left' | 'slide-right' | 'slide-up' | 'slide-down'
+    /** entrance duration in seconds; omitted = the per-kind default
+     *  (slide-* 0.75s, fade-* 0.55s). Lower = snappier, higher = more languid. */
+    enterDur?: number
+    /** stagger step within the entrance sequence; equal values enter together */
+    order?: number
+    /**
+     * Reveal step ("animate on click", discussion #282): 1 or more means the
+     * element is HIDDEN when the slide appears and revealed on the n-th → —
+     * running its `enter` then, or a plain fade when it has none; ← hides it
+     * again; → leaves the slide only once every step is shown. Arriving
+     * backward shows every step. Absent/0 = shown with the slide. Presentation
+     * state, not slides: one slide, one page number, one morph pairing. An
+     * older shell shows every element at once. Decisions in src/steps.ts.
+     */
+    step?: number
+    /** animate numeric parts of the text from 0 to their final value */
+    countUp?: boolean
+    /** continuous ambient motion (slow zoom, for full-bleed photos) */
+    ambient?: 'kenburns'
+    /**
+     * Ken-burns tuning. dir 'drift' (default) is the endless slow yoyo zoom;
+     * 'out' and 'in' play ONCE per slide entry — 'out' starts zoomed by
+     * `scale` and settles to rest (the classic title-photo effect).
+     * `scale` is the far end of the zoom (e.g. 1.06), `duration` in seconds.
+     */
+    ken?: { dir?: 'drift' | 'out' | 'in'; scale?: number; duration?: number }
+    /** continuous looping animation */
+    loop?:
+      | { type: 'dash-march'; distance?: number; duration?: number }
+      | {
+          type: 'motion-path'
+          path: string
+          duration: number
+          delay?: number
+          /** easing over each lap (default 'none' = constant tempo) */
+          ease?: string
+          /** per-anchor speed multipliers (1 = normal, <1 dwells, >1 rushes);
+           *  length matches the path's anchor count. Warps the arc-length map
+           *  so the element can linger at some points and rush between others. */
+          speeds?: number[]
+        }
+  }
+  /** while presenting, clicking this element jumps to the slide with this id */
+  /**
+   * Click target while presenting: a slide id (jump there — the state-slide
+   * idiom), or an http(s) URL (opens in a NEW tab, never navigating the deck
+   * away; `isWebUrl` is the whole scheme test, so `javascript:` and `data:`
+   * are not links). Discussion #373/#374. Editor clicks never follow it.
+   */
+  link?: string
+  /** semantic group tag — hover focus and multi-element behaviours target it */
+  group?: string
+  /**
+   * Editor grouping: elements sharing a groupId select and move as one
+   * (click any member → whole group; Alt-click digs to the individual).
+   * Distinct from `group`, which carries presentation semantics.
+   */
+  groupId?: string
+  /**
+   * In-slide hover reveal: this element is only visible while an element
+   * whose `group` equals this value is hovered (slide.hover type 'reveal').
+   * The slide's hover.default set is shown when nothing is hovered.
+   */
+  showOnHover?: string
+  /**
+   * Layout role — what this element IS on the slide ('title', 'subtitle',
+   * 'body', 'kicker'). Applying a different layout moves content between
+   * same-role elements, PowerPoint-placeholder style. Free-form string;
+   * those four are the conventions the built-in layouts use.
+   */
+  role?: string
+  /**
+   * Where this element's colours came from, keyed by property path within the
+   * element — `fill`, `shadow.color`, `fillGradient.stops.0.color`.
+   *
+   * The literal ALWAYS stays in place; this records the palette slot it was
+   * derived from, so editing the palette can rewrite it. A reader that knows
+   * nothing about this field sees an ordinary deck of ordinary colours, which
+   * is exactly the point: it is additive, and property absence gains no new
+   * meaning. See `palette.ts`.
+   */
+  themeRefs?: Record<string, string>
+}
+
+export interface ShadowSpec {
+  x?: number
+  y?: number
+  blur: number
+  color: string
+}
+
+export interface TextElement extends ElementBase {
+  type: 'text'
+  /** Rich text as sanitized inline HTML (b/i/u/br/span only). */
+  html: string
+  fontSize: number
+  fontFamily: string
+  fontWeight: number
+  color: string
+  /** When set (and stops non-empty), painted into the glyphs; wins over `color`. */
+  colorGradient?: GradientFill
+  align: 'left' | 'center' | 'right'
+  valign: 'top' | 'middle' | 'bottom'
+  lineHeight: number
+  /** px; optional tracking for letter-spaced caps labels */
+  letterSpacing?: number
+  /** Outline / hollow glyphs via -webkit-text-stroke. `fill:'none'` makes the
+   *  interior transparent (the classic hollow section-break word); default keeps
+   *  the solid `color` fill and just adds an outline. */
+  textStroke?: { width: number; color: string; fill?: string }
+  /**
+   * Layout placeholder prompt ("Click to add title"). While the element's
+   * html is empty: the editor shows this dimmed; present and print hide the
+   * element entirely. Cleared content brings the prompt back.
+   */
+  placeholder?: string
+}
+
+export interface CodeElement extends ElementBase {
+  type: 'code'
+  /** Subset of properties of TextElement. */
+  fontSize: number
+  fontFamily: string
+  align: 'left' | 'center' | 'right'
+  valign: 'top' | 'middle' | 'bottom'
+  lineHeight: number
+  /** Determines the color of the code snippet prior to a themeId getting picked. */
+  color: string
+  /** The raw code snippets. */
+  content: string
+  /** The asset id of the grammar to use. */
+  grammarAssetId?: string
+  /** The name of the grammar */
+  grammarName?: string
+  /** The asset id of the theme to use. */
+  themeAssetId?: string
+  /** The name of the theme. */
+  themeName?: string
+}
+
+export type ShapeKind = 'rect' | 'ellipse' | 'triangle' | 'arrow' | 'line' | 'path'
+
+/** Linear gradient fill. Colors are any CSS color, including rgba(). */
+export interface GradientFill {
+  /** degrees, CSS convention: 0 = bottom→top, 90 = left→right */
+  angle: number
+  /** ordered stops; `at` is 0..1 along the gradient line */
+  stops: Array<{ at: number; color: string }>
+}
+
+/** Decoration at a line's tip. Sized relative to the stroke width. The
+ *  catalogue — geometry, insets, panel labels — is slides/src/tips.ts; the
+ *  seven kinds after `bar` arrived in 1.1.1 (#303) and are additive: an older
+ *  shell that does not know one draws that end plain. */
+export type LineEnding = 'none' | 'arrow' | 'dot' | 'bar' | 'arrow-open' | 'triangle' | 'triangle-open' | 'diamond' | 'diamond-open' | 'square' | 'circle-open'
+
+export interface ShapeElement extends ElementBase {
+  type: 'shape'
+  shape: ShapeKind
+  fill: string
+  /** when set, wins over `fill` (which is kept as the solid fallback) */
+  fillGradient?: GradientFill
+  stroke: string
+  strokeWidth: number
+  /** corner radius, rect only */
+  radius: number
+  /** arrow only (v1.1.1, #304): 2 = a head at both ends. Absent = one head.
+   *  A property, not a shape kind, on purpose: a shipped shell's renderer
+   *  switches on `shape` with no default and would throw on a kind it does
+   *  not know — an unknown property it simply ignores, so 1.1.0 draws the
+   *  single arrow instead of failing the slide. */
+  heads?: 2
+  /** dash length in px; 0/undefined = solid stroke (legacy — see strokeStyle) */
+  strokeDash?: number
+  /** stroke pattern; wins over strokeDash when set */
+  strokeStyle?: 'solid' | 'dashed' | 'dotted'
+  /** line and (v1.1.1, #302) open path shapes: tip decorations. On a path
+   *  the tip points along the curve's end tangent. */
+  lineStart?: LineEnding
+  lineEnd?: LineEnding
+  /** path only: SVG path data in the coordinate space given by pathBox */
+  d?: string
+  /** path only: [x, y, w, h] viewBox the path was authored in */
+  pathBox?: [number, number, number, number]
+  /**
+   * Connector anchoring (line/path only): the start (`from`) and/or end (`to`)
+   * of the shape follow another element. The geometry is DERIVED — the editor's
+   * syncConnectors() recomputes the endpoint on that element's border toward the
+   * other end whenever anything moves. A dangling ref (element deleted) is
+   * dropped and the endpoint becomes free.
+   */
+  from?: ConnectorEnd
+  to?: ConnectorEnd
+}
+
+/** One anchored end of a connector. `side:'auto'` picks the nearest border. */
+export interface ConnectorEnd {
+  el: string
+  side?: 'auto' | 'top' | 'right' | 'bottom' | 'left'
+}
+
+/**
+ * Which part of a picture shows inside its frame (discussion #319). The frame
+ * is the element box; the picture is scaled to COVER it, then `scale` (≥ 1)
+ * enlarges it further and `x`/`y` (0..1) say which edge of the enlarged
+ * picture the frame is aligned to — 0 = left/top, 0.5 = centred, 1 =
+ * right/bottom. Absent = the element's `fit` alone, exactly as before, so a
+ * shell that predates this field shows the whole cover-fitted picture
+ * (centred) and never a blank frame. Rendered with plain CSS (crop.ts).
+ */
+export interface ImageCrop {
+  x: number
+  y: number
+  scale: number
+}
+
+export interface ImageElement extends ElementBase {
+  type: 'image'
+  /** data: URI, or "asset:<key>" referencing doc.assets */
+  src: string
+  fit: 'contain' | 'cover' | 'fill'
+  radius: number
+  /** Absent or true: a resize keeps the image's proportions (Shift frees it
+   *  for one drag). false: width and height move independently — the frame
+   *  can be stretched, and Shift holds the ratio for one drag instead.
+   *  Re-locking keeps whatever shape the image has at that moment. */
+  keepAspectRatio?: boolean
+  /** pan + zoom inside the frame; absent = `fit` alone (crop.ts) */
+  crop?: ImageCrop
+}
+
+export interface SvgElement extends ElementBase {
+  type: 'svg'
+  /** key into doc.assets holding raw SVG markup (preferred: dedupes) */
+  asset?: string
+  /** raw inline SVG markup, used when asset is unset */
+  markup?: string
+  /**
+   * CSS injected inside the svg — hover states, focus dims, and animations
+   * live here and stay self-contained (svg <style> scopes to its svg).
+   */
+  css?: string
+}
+
+/**
+ * Data chart rendered by ECharts. `option` is a PURE-JSON ECharts option
+ * (template-string formatters only — never functions): static SVG snapshots
+ * on the editor canvas/thumbnails/print, a live interactive instance
+ * (tooltips, dataZoom) while presenting.
+ */
+export interface ChartElement extends ElementBase {
+  type: 'chart'
+  /** preset key the panel offers to re-seed from (bar/line/pie/scatter) */
+  preset?: string
+  option: Record<string, unknown>
+  /** live data binding: xAxis labels + series values track this table element */
+  source?: { tableId: string }
+}
+
+/** One cell of a table. `html` is the same sanitized inline subset as text. */
+export interface TableCell {
+  html: string
+  align?: 'left' | 'center' | 'right'
+  /** per-cell overrides (default from the table's style) */
+  color?: string
+  bg?: string
+  bold?: boolean
+}
+
+export interface TableRow {
+  cells: TableCell[]
+}
+
+/** Table-wide look. Cohesion lives here; cells carry only overrides. */
+export interface TableStyle {
+  headerBg: string
+  headerColor: string
+  /** stripe colour for alternate body rows; absent = no zebra */
+  zebra?: string
+  borderColor: string
+  borderWidth: number
+  cellPadX: number
+  cellPadY: number
+  fontSize: number
+  fontFamily?: string
+  /** default body-cell text colour */
+  color: string
+  /** outer corner radius (px) */
+  radius: number
+}
+
+/**
+ * A data table rendered as a real HTML <table> (table-layout: fixed) by the
+ * shared renderer — identical on the editor canvas, thumbnails, present and
+ * print. Column widths are fractional weights, normalised at render. Morphs
+ * as a box (position/size + style colours); cell CONTENT does not morph.
+ */
+export interface TableElement extends ElementBase {
+  type: 'table'
+  /** fractional column weights; length = column count */
+  columns: Array<{ w: number }>
+  rows: TableRow[]
+  /** treat row 0 as a styled header row */
+  header: boolean
+  style: TableStyle
+}
+
+/**
+ * Audio or video. Hybrid storage: `src` is a data: URI (embedded — travels
+ * inside the .bento.html), an external URL / relative path (referenced — keeps
+ * the file small but needs the network / a sibling file), or "asset:<key>".
+ * The editor embeds small clips and warns above MEDIA_EMBED_BUDGET, offering a
+ * URL instead. Autoplay only fires in PRESENT mode (never on the canvas or in
+ * thumbnails).
+ */
+export interface MediaElement extends ElementBase {
+  type: 'media'
+  kind: 'video' | 'audio'
+  src: string
+  /** video only: a still shown before playback (data:/asset:/URL) */
+  poster?: string
+  /** video only: fit within the element box */
+  fit?: 'contain' | 'cover' | 'fill'
+  radius?: number
+  autoplay?: boolean
+  loop?: boolean
+  muted?: boolean
+  controls?: boolean
+}
+
+/**
+ * An embedded artifact, built to the `bento/embed` shape
+ * (docs/DECISIONS.md, 2026-08-19) so it round-trips through upstream shells.
+ * Three tiers, and the ORDER is the design: `view` is a static render that
+ * ALWAYS paints, with no extra code, in any app; `doc` is the source, so the
+ * embed is not a screenshot; a live sandboxed iframe is OPT-IN per element.
+ *
+ * `app: 'web'` with a `url` is a live web surface on a slide. The
+ * frame is created only while online AND with the offline switch off
+ * (render.ts:liveFrameAllowed); otherwise the view shows. Unknown `app`
+ * values are RENDERED (their view), never rejected.
+ */
+/**
+ * The one scheme test for anything that opens or loads a web page — an
+ * embed's `url` (the paste gate and the live-frame gate), an element `link`,
+ * a text `<a href>` — shared so no surface is looser than another. http and
+ * https only, bounded, no quote or angle bracket (attribute breakout); a URL
+ * that is merely well-formed but `javascript:`/`data:`/`file:` is not one.
+ */
+export const isWebUrl = (v: unknown): v is string =>
+  // (the quote characters are written as escapes: a bare quote inside a regex
+  // literal reads as an unterminated string to the source-shape rigs' masker)
+  typeof v === 'string' && v.length <= 2048 && /^https?:\/\/[^\s\x22\x27<>]+$/i.test(v)
+
+export interface EmbedElement extends ElementBase {
+  type: 'embed'
+  /** the app that made it: 'bento/dash', 'bento/type', … or 'web' for a page */
+  app: string
+  /** the static render: raw <svg> markup, or "asset:<key>" holding it */
+  view: string
+  /** the source, when there is one: pure JSON, or "asset:<key>" */
+  doc?: unknown
+  /** app 'web' only: the page the live frame loads (http(s) only) */
+  url?: string
+  /** opt in to a sandboxed live iframe over the view while online */
+  live?: boolean
+}
+
+export type SlideElement =
+  | TextElement | ShapeElement | ImageElement | SvgElement | ChartElement | TableElement | MediaElement | CodeElement
+  | EmbedElement
+
+/**
+ * A review comment thread. Editor-only metadata: never rendered while
+ * presenting or printing, but saved in the file so it travels with the
+ * document when people pass it around.
+ */
+export interface Comment {
+  id: string
+  /** element the thread is anchored to; absent (or dangling) = the slide */
+  elementId?: string
+  /** point anchor in slide coordinates — used when no elementId is set */
+  x?: number
+  y?: number
+  author: string
+  text: string
+  /** ISO datetime */
+  at: string
+  resolved?: boolean
+  replies?: Array<{ id: string; author: string; text: string; at: string }>
+}
+
+export interface Slide {
+  id: string
+  background: string
+  transition: TransitionKind
+  elements: SlideElement[]
+  notes: string
+  /** palette references for the slide's own colours — `background`. See palette.ts. */
+  themeRefs?: Record<string, string>
+
+  /** optional friendly name (link pickers, state badges) */
+  name?: string
+  /**
+   * Interactive state: this slide is a variant of the slide with the given
+   * id. It is hidden from linear navigation — reachable only via element
+   * links (and morphs smoothly when element ids are shared with its parent).
+   * While on a state: ArrowLeft returns to the parent, ArrowRight continues
+   * after the parent.
+   */
+  stateOf?: string
+  /**
+   * Hidden from the show: skipped by linear navigation, left out of PDF
+   * export, and never chosen as the file's thumbnail — but still an ordinary
+   * slide you can edit, and still reachable by an element `link`, which is
+   * what makes it useful for backup and appendix material you jump to only
+   * if asked.
+   *
+   * Distinct from `stateOf`: a state is a VARIANT OF another slide (← returns
+   * to its parent, and it morphs with it). Hidden carries no such
+   * relationship — it is simply out of the linear flow.
+   *
+   * By default a hidden slide does not consume a page number either, so the
+   * audience sees 1..N with no gaps; `doc.present.numberHidden` restores the
+   * office-suite behaviour of counting it.
+   */
+  hidden?: boolean
+  /**
+   * In the walk, but takes no page number. The arrow keys reach it like any
+   * slide; `{{page}}` on it shows the number of the slide before it, so it
+   * reads as a CONTINUATION of that page. For a build — three recommendations
+   * revealed one slide at a time with `morph` — the audience sees "18" three
+   * times instead of 18, 19, 20 (discussion #282); equally for an interstitial
+   * or a section card that should not count. Distinct from `hidden` (out of
+   * the walk) and from `stateOf` (a variant reached by link): this is the
+   * third answer to `paginates`, and the ONLY one that stays in `inLinearFlow`.
+   * Absent = counts, so every existing file is unchanged.
+   */
+  unnumbered?: boolean
+  /**
+   * present-mode hover behaviour:
+   * - focus-group: dim every element outside the hovered element's group
+   * - reveal: show the showOnHover set matching the hovered group
+   *   (`default` names the set visible when nothing is hovered)
+   */
+  hover?: { type: 'focus-group' | 'reveal'; dim?: number; default?: string }
+  /** review comment threads (editor-only; see Comment) */
+  comments?: Comment[]
+}
+
+export interface BentoDoc {
+  format: typeof FORMAT
+  version: number
+  /**
+   * Stable per-document identity (uuid), minted at creation and preserved
+   * for the document's whole life — the rendezvous key for future
+   * sync / share / merge features. Never derived from content.
+   */
+  docId: string
+  title: string
+  /**
+   * Optional document properties for template fields ({{author}}, {{company}},
+   * {{subject}}, {{event}}) and general provenance. All optional → old files
+   * simply lack it and every token resolves to empty. `title` stays top-level
+   * (load-bearing) and remains the source of {{title}}.
+   */
+  meta?: {
+    author?: string
+    company?: string
+    subject?: string
+    event?: string
+    keywords?: string
+  }
+  /** slide coordinate space, px */
+  size: { width: number; height: number }
+  theme: {
+    background: string
+    color: string
+    accent: string
+    fontFamily: string
+    /**
+     * Heading face. Body text stays on `fontFamily`; this is the display face,
+     * mirroring OOXML's major/minor pair. Absent = headings use `fontFamily`.
+     */
+    headingFamily?: string
+    /**
+     * The document's named brand slots, mirroring OOXML's colour scheme so an
+     * importer maps 1:1. Elements point at these through `themeRefs`, and
+     * editing a slot re-derives every literal that references it.
+     *
+     * `background`, `color` and `accent` above REMAIN the canonical values for
+     * `bg1`, `tx1` and `accent1` — they are not superseded, so every existing
+     * reader keeps working and a document with no palette still resolves those
+     * three. `paletteOf()` is the only thing that should assemble this.
+     */
+    palette?: {
+      bg2?: string; tx2?: string
+      accent2?: string; accent3?: string; accent4?: string
+      accent5?: string; accent6?: string
+      hlink?: string; folHlink?: string
+    }
+    /** ordered series colours for new charts; derived from accent when absent */
+    chartPalette?: string[]
+    /** defaults for newly inserted tables; omitted decks keep the standard look */
+    table?: Partial<TableStyle>
+    /** Code Palette (Tier-0). */
+    codePalette?: {
+      // comment
+      c?: string,
+      // string
+      s?: string,
+      // number
+      n?: string,
+      // keyword
+      k?: string,
+      // function calls
+      f?: string,
+      // punctutations
+      p?: string,
+      // diff: additions
+      a?: string,
+      // diff: deletions / removals
+      d?: string,
+    }
+  }
+  /** present-mode chrome; decks with built-in chrome can turn Reveal's off */
+  present?: {
+    /**
+     * Count hidden slides in {{page}}/{{pages}} and the presenter's counter.
+     *
+     * Default (absent/false): they are skipped, matching interactive states —
+     * one rule, "skipped means uncounted", and contiguous numbering falls out
+     * of it. True restores what PowerPoint and Keynote do, where a hidden
+     * slide keeps its number so the visible ones do not renumber as you toggle
+     * slides in and out during rehearsal.
+     */
+    numberHidden?: boolean
+    slideNumber?: boolean
+    controls?: boolean
+    progress?: boolean
+    /**
+     * Seconds a morph transition takes. Absent = 0.65, which is tuned for the
+     * usual case: a title sliding, a shape growing, distances of hundreds of
+     * pixels. Code token morphs move a single line-height — about 40px — and at
+     * the default that reads as a blink rather than as travel, so a deck built
+     * around them wants a slower beat. Clamped on read.
+     */
+    morphSeconds?: number
+  }
+  /** shared assets (raw SVG markup or data URIs), referenced by key */
+  assets?: Record<string, string>
+  /**
+   * Live-collab blob references for LARGE assets (docs/blob-offload.md).
+   *
+   * An asset over BLOB_INLINE_MAX cannot travel as a CRDT op — a Durable
+   * Object storage value caps near 2MB — so its bytes go to the relay's blob
+   * store and only this tiny reference is synced. Receiving peers fetch,
+   * decrypt and materialise the asset into `assets` themselves.
+   *
+   * NOT part of the document at rest in any meaningful sense: a saved file
+   * carries the real bytes in `assets`, and opening it standalone ignores this
+   * map entirely. It is additive and optional — older builds simply preserve
+   * it as an unknown field.
+   */
+  blobs?: Record<string, { key: string; mime: string; size: number }>
+  /**
+   * embedded fonts: each entry becomes an @font-face at boot, with the font
+   * data living in assets (data: URI). Elements then use `family` normally.
+   * `asset` may instead name a face the shell carries (`builtin:…`, see
+   * fonts.ts BUILTIN_FONTS) — no bytes in the file; a shell that does not
+   * know the key renders the family with its fallback stack.
+   */
+  fonts?: Array<{ family: string; asset: string; weight?: string; style?: string }>
+  /**
+   * Slide layouts: slide-shaped templates that live outside slides[].
+   * Instantiating one deep-copies its elements KEEPING their ids — slides
+   * born from the same layout share ids, so their common chrome morphs
+   * across transitions and stays traceable for a future re-apply merge.
+   * When absent, the editor offers its built-in starter layouts.
+   */
+  layouts?: Slide[]
+  /**
+   * Live-collaboration credentials (bento-sync), minted AT CREATION so any
+   * copy of the file can join once sharing is turned on ("send the file
+   * first, share later" just works). `room` is the relay WebSocket URL
+   * (random id — never derived from docId), `key` the base64url AES-GCM
+   * room key. `on` gates auto-join: absent = true (v0.8.0 files only carried
+   * collab while actively shared). Possession of a copy IS the capability;
+   * "Rotate keys" re-mints both to cut old copies off. `sync` is the saved
+   * CRDT state (registers/liveness/text) stamped at save-time on shared
+   * documents — it is what lets an offline-edited copy rejoin as a true
+   * fork and merge both ways. Never transmitted as sync ops.
+   */
+  collab?: {
+    room: string
+    key: string
+    on?: boolean
+    sync?: import('./sync/crdt').SyncStateJSON
+    /**
+     * Signed writes (v0.9.18+): the WRITE capability is an ECDSA P-256 keypair,
+     * distinct from the symmetric `key` (the READ capability). `writerPub`
+     * (raw, base64url) travels in EVERY copy so the relay can verify authorship;
+     * `writerPriv` (PKCS#8, base64url) travels ONLY in writer copies. A
+     * read-only copy is a writer copy with `writerPriv` stripped — the relay
+     * (for `w`-scheme rooms) then drops any op it tries to send. Absent on
+     * legacy `r`-scheme rooms, which stay permissive. See docs/collab-design.md.
+     */
+    writerPub?: string
+    writerPriv?: string
+    /** 'reader' = this copy is a live viewer: receives updates, never sends. */
+    role?: 'writer' | 'reader' | 'audience'
+    /**
+     * Fine-grained access (v1.0.3+, `v: 2`): per-person keys. The room id
+     * commits to the OWNER's pubkey. A member copy carries an INVITE — an
+     * owner-signed delegation keypair — and each device mints its own identity
+     * key (kept in localStorage, never in the file); the chain
+     * owner → invite → member is what the blind relay verifies. `ownerPriv`
+     * travels ONLY in the owner's own copy. See docs/collab-design.md roadmap.
+     */
+    v?: number
+    owner?: string
+    ownerPriv?: string
+    invite?: {
+      pub: string
+      priv: string
+      /** 'audience' (live broadcast) admits a receive-only socket for the
+       *  duration of a show; it travels only in audience copies, whose `key`
+       *  is the show key rather than the room key (see src/audience.ts). */
+      role: 'writer' | 'commenter' | 'audience'
+      /** unix ms expiry; 0/absent = no expiry */
+      exp?: number
+      /** owner's signature over `inv.${pub}.${role}.${exp||0}` */
+      sig: string
+    }
+    /**
+     * Live broadcast tickets (PRESENTER's copy only; additive, old shells
+     * preserve it). Minted once by "Save audience copy…" and reused for every
+     * show until "Issue new tickets" re-mints both halves, which kills every
+     * outstanding audience copy: `invite` is the owner-signed audience
+     * invite the relay admits on, `key` the per-show symmetric key the
+     * presenter double-encrypts under while live. Never in an audience copy
+     * (that copy carries the invite and has `key` AS its collab.key).
+     */
+    audience?: {
+      invite: { pub: string; priv: string; role: 'audience'; exp?: number; sig: string }
+      key: string
+    }
+  }
+  /**
+   * Template file (.dotx-style): every OPEN instantiates a fresh document —
+   * parseDoc strips this flag, mints a new docId and drops collab, so each
+   * person who opens the template gets an independent deck with its own
+   * identity and credentials. The template file itself never changes (there
+   * is no file handle until the user's first save-as).
+   */
+  template?: boolean
+  /**
+   * A read-only PLAYER file: boots straight into the presentation and never
+   * shows the editor. Honor-system (the JSON is right there), but it makes a
+   * hand-out copy present-only for everyone who doesn't go digging.
+   */
+  readonly?: boolean
+  slides: Slide[]
+  modified: string
+}
+
+let counter = 0
+export const uid = (prefix = 'el') =>
+  `${prefix}-${Date.now().toString(36)}-${(counter++).toString(36)}${Math.random().toString(36).slice(2, 6)}`
+
+export const FONT_STACK =
+  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+
+export const MONOSPACE_FONT_STACK =
+  "ui-monospace, 'SFMono-Regular', 'Berkeley Mono', 'Menlo', 'Consolas', monospace"
+
+/**
+ * An element's effective morph key: the `morphId` override when set, else its
+ * own `id`. THE single definition — render.ts stamps it into `data-flip-id`,
+ * present.ts pairs and looks up model frames by it, and the panel uses it for
+ * collision checks. Computing it inline in more than one place is exactly how
+ * issue #54 happened: present.ts's model map keyed by `id` while every lookup
+ * passed a flip id, so any element carrying a `morphId` silently missed and
+ * never morphed. Route every morph-key read through here.
+ */
+export function morphKey(el: Pick<ElementBase, 'id' | 'morphId'>): string {
+  return el.morphId || el.id
+}
+
+/** True when a background reads as light (so it wants dark text on top). Accepts
+ *  a #rrggbb hex; for a gradient/CSS string it samples the first hex it finds and
+ *  falls back to "light" (the safe assumption for the model's dark default ink). */
+export function isLightBg(bg: string): boolean {
+  const hex = /#([0-9a-fA-F]{6})/.exec(bg || '')
+  if (!hex) return true
+  const n = parseInt(hex[1], 16)
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.55 // sRGB relative luminance
+}
+
+/** A text colour that stays legible on the given background — new text/tables use
+ *  this so a fresh element is never invisible on a dark deck. */
+export function readableInk(bg: string): string {
+  return isLightBg(bg) ? '#1E2A3A' : '#F5F7FA'
+}
+
+export function defaultText(partial: Partial<TextElement> = {}): TextElement {
+  return {
+    id: uid('t'),
+    type: 'text',
+    x: 340, y: 300, w: 600, h: 120,
+    rotation: 0, opacity: 1,
+    html: 'Double-click to edit',
+    fontSize: 32,
+    fontFamily: FONT_STACK,
+    fontWeight: 400,
+    color: '#1E2A3A',
+    align: 'center',
+    valign: 'middle',
+    lineHeight: 1.25,
+    ...partial,
+  }
+}
+
+// --- chart palette -----------------------------------------------------------
+// New charts should wear the deck's colours, not a stock palette. A deck can
+// declare theme.chartPalette; otherwise we synthesise a harmonious set from the
+// single accent (accent + a cool structural counterpart, each with a light and
+// deep tint) so any deck gets on-brand charts out of the box.
+
+function hexToHsl(hex: string): [number, number, number] {
+  const m = hex.replace('#', '')
+  const r = parseInt(m.slice(0, 2), 16) / 255
+  const g = parseInt(m.slice(2, 4), 16) / 255
+  const b = parseInt(m.slice(4, 6), 16) / 255
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  let h = 0, s = 0; const l = (max + min) / 2
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0)
+    else if (max === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+    h *= 60
+  }
+  return [h, s * 100, l * 100]
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(100, s)) / 100; l = Math.max(0, Math.min(100, l)) / 100
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const mm = l - c / 2
+  let r = 0, g = 0, b = 0
+  if (h < 60) { r = c; g = x } else if (h < 120) { r = x; g = c }
+  else if (h < 180) { g = c; b = x } else if (h < 240) { g = x; b = c }
+  else if (h < 300) { r = x; b = c } else { r = c; b = x }
+  const to = (v: number) => Math.round((v + mm) * 255).toString(16).padStart(2, '0')
+  return `#${to(r)}${to(g)}${to(b)}`
+}
+
+export function deriveChartPalette(accent: string): string[] {
+  let h: number, s: number, l: number
+  try { [h, s, l] = hexToHsl(accent) } catch { return ['#5470c6', '#91cc75', '#fac858', '#ee6666'] }
+  const coolH = h + 190
+  return [
+    accent,
+    hslToHex(coolH, Math.max(20, s * 0.5), Math.min(56, Math.max(44, l))),        // cool counterpart
+    hslToHex(h, s * 0.92, Math.min(84, l + 14)),                                  // accent light
+    hslToHex(coolH, Math.max(16, s * 0.38), Math.min(74, l + 20)),               // cool light
+    hslToHex(h, s, Math.max(28, l - 16)),                                         // accent deep
+    hslToHex(coolH, Math.max(24, s * 0.55), Math.max(26, l - 6)),                // cool deep
+  ]
+}
+
+// --- table → chart data extraction (shared by creation + live binding) -------
+
+const stripCell = (html: string) =>
+  html.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/gi, '').replace(/,/g, '').trim()
+
+/** First column = x labels; each mostly-numeric column after = a data series. */
+export function tableChartColumns(table: TableElement): { labels: string[]; cols: Array<{ name: string; data: number[]; isPct: boolean }> } {
+  const bodyRows = table.header ? table.rows.slice(1) : table.rows
+  const headerRow = table.header ? table.rows[0] : null
+  const labels = bodyRows.map((r) => stripCell(r.cells[0]?.html ?? ''))
+  const cols: Array<{ name: string; data: number[]; isPct: boolean }> = []
+  for (let c = 1; c < table.columns.length; c++) {
+    const raw = bodyRows.map((r) => r.cells[c]?.html ?? '')
+    const parsed = raw.map((h) => parseFloat(stripCell(h)))
+    if (parsed.filter((n) => !Number.isNaN(n)).length < Math.ceil(bodyRows.length / 2)) continue
+    cols.push({
+      name: headerRow ? stripCell(headerRow.cells[c]?.html ?? '') : '',
+      data: parsed.map((n) => (Number.isNaN(n) ? 0 : n)),
+      isPct: /%/.test(headerRow ? stripCell(headerRow.cells[c]?.html ?? '') : '') ||
+        raw.filter((h) => /%/.test(h)).length >= Math.ceil(bodyRows.length / 2),
+    })
+  }
+  return { labels, cols }
+}
+
+/**
+ * Push a linked table's current values into a chart's option IN PLACE,
+ * preserving the chart's styling/axis config (only xAxis labels + each series'
+ * data change). Returns true if anything changed. Series map to numeric columns
+ * by position; extra series/columns are left untouched.
+ */
+export function syncLinkedChart(chart: ChartElement, table: TableElement): boolean {
+  const before = JSON.stringify(chart.option)
+  const { labels, cols } = tableChartColumns(table)
+  const opt = chart.option as { xAxis?: any; series?: any }
+  if (opt.xAxis && !Array.isArray(opt.xAxis) && typeof opt.xAxis === 'object') opt.xAxis.data = labels
+  const series: any[] = Array.isArray(opt.series) ? opt.series : opt.series ? [opt.series] : []
+  series.forEach((s, i) => {
+    if (!s || !cols[i]) return
+    if (s.type === 'pie') s.data = labels.map((name, j) => ({ name, value: cols[i].data[j] ?? 0 }))
+    else s.data = cols[i].data
+  })
+  return JSON.stringify(chart.option) !== before
+}
+
+export function chartColorsFor(theme: BentoDoc['theme']): string[] {
+  return theme.chartPalette?.length ? theme.chartPalette.slice() : deriveChartPalette(theme.accent)
+}
+
+/** Give a chart option the deck's palette unless it already sets explicit colours. */
+export function applyChartPalette<T extends Record<string, unknown>>(option: T, theme: BentoDoc['theme']): T {
+  const cur = (option as { color?: unknown }).color
+  if (!Array.isArray(cur) || cur.length === 0) (option as { color?: string[] }).color = chartColorsFor(theme)
+  return option
+}
+
+export function defaultChart(option: Record<string, unknown>, partial: Partial<ChartElement> = {}): ChartElement {
+  return {
+    id: uid('c'),
+    type: 'chart',
+    x: 400, y: 190, w: 800, h: 520,
+    rotation: 0, opacity: 1,
+    preset: 'bar',
+    option,
+    ...partial,
+  }
+}
+
+export function defaultCode(partial: Partial<CodeElement> = {}): CodeElement {
+  return {
+    id: uid('code'),
+    type: 'code',
+    x: 235, y: 95, w: 800, h: 520,
+    rotation: 0, opacity: 1,
+    fontSize: 32,
+    fontFamily: MONOSPACE_FONT_STACK,
+    color: '#1E2A3A',
+    align: 'left',
+    valign: 'middle',
+    lineHeight: 1.25,
+    content: 'Double-click to edit',
+    ...partial,
+  }
+}
+
+const DEFAULT_TABLE_STYLE: TableStyle = {
+  headerBg: '#1E2A3A',
+  headerColor: '#FFFFFF',
+  zebra: 'rgba(30,42,58,0.05)',
+  borderColor: 'rgba(30,42,58,0.14)',
+  borderWidth: 1,
+  cellPadX: 16,
+  cellPadY: 11,
+  fontSize: 18,
+  color: '#1E2A3A',
+  radius: 10,
+}
+
+/** Resolve a new table's style from built-in defaults and optional deck overrides. */
+export function tableStyleFor(theme?: BentoDoc['theme']): TableStyle {
+  return { ...DEFAULT_TABLE_STYLE, ...(theme?.table ?? {}) }
+}
+
+export function defaultTable(
+  partial: Partial<TableElement> = {},
+  theme?: BentoDoc['theme'],
+): TableElement {
+  const cell = (html: string): TableCell => ({ html })
+  return {
+    id: uid('tbl'),
+    type: 'table',
+    x: 240, y: 220, w: 800, h: 260,
+    rotation: 0, opacity: 1,
+    header: true,
+    columns: [{ w: 1 }, { w: 1 }, { w: 1 }],
+    rows: [
+      { cells: [cell('Column A'), cell('Column B'), cell('Column C')] },
+      { cells: [cell('Row 1'), cell('—'), cell('—')] },
+      { cells: [cell('Row 2'), cell('—'), cell('—')] },
+    ],
+    style: tableStyleFor(theme),
+    ...partial,
+  }
+}
+
+export function defaultShape(shape: ShapeKind, partial: Partial<ShapeElement> = {}): ShapeElement {
+  return {
+    id: uid('s'),
+    type: 'shape',
+    shape,
+    x: 490, y: 260, w: 300, h: 200,
+    rotation: 0, opacity: 1,
+    fill: '#F7A600',
+    stroke: 'transparent',
+    strokeWidth: 0,
+    radius: shape === 'rect' ? 12 : 0,
+    ...partial,
+  }
+}
+
+export function defaultImage(src: string, partial: Partial<ImageElement> = {}): ImageElement {
+  return {
+    id: uid('i'),
+    type: 'image',
+    x: 440, y: 210, w: 400, h: 300,
+    rotation: 0, opacity: 1,
+    src,
+    fit: 'contain',
+    radius: 0,
+    ...partial,
+  }
+}
+
+/** Park an embedded data URI in `doc.assets` and return an `asset:` ref.
+ *
+ *  Every embed goes through here so there is exactly ONE place binary content
+ *  lives. That matters beyond tidiness: live collab offloads large `assets`
+ *  entries to the relay's blob store, so an image written straight onto
+ *  `el.src` was invisible to the offload and rode inline in an op batch far
+ *  too big for a frame — it reached collaborators as nothing at all.
+ *
+ *  Identical bytes reuse the same key, so duplicating an image (or pasting the
+ *  same photo twice) costs one copy in the file and one upload on the wire.
+ *  A URL or an existing `asset:` ref passes straight through — only `data:`
+ *  is interned. Callers MUST run this inside a `store.commit` so the assets
+ *  write is part of the same undo step and the same sync batch. */
+export function internAsset(doc: BentoDoc, src: string): string {
+  if (!src.startsWith('data:')) return src
+  const assets = (doc.assets ??= {})
+  for (const k in assets) if (assets[k] === src) return `asset:${k}`
+  const key = uid('a')
+  assets[key] = src
+  return `asset:${key}`
+}
+
+/** Soft ceiling for embedding media as a data URI (bytes). Above this the
+ *  editor warns — a big embed makes the .bento.html slow to open and save. */
+export const MEDIA_EMBED_BUDGET = 8 * 1024 * 1024 // 8 MB
+
+/**
+ * Hard ceiling for the static first-page preview every save writes into the
+ * shell (src/preview.ts), in bytes of serialized markup.
+ *
+ * Unlike MEDIA_EMBED_BUDGET this is not a warning the author can wave through
+ * — there is no author in the loop, it is spent silently on every ⌘S, and it
+ * is spent on a THUMBNAIL. A text page costs 2–5 KB. The thing that can blow
+ * up is a full-bleed photo, whose data URI would be duplicated: once in the
+ * document, once in the preview.
+ *
+ * 64 KB is ~10% of the shipped shell (~640 KB compressed): invisible against a
+ * file that size, and enough for a real page plus a logo or an icon-sized
+ * image. Measured: the starter deck's page one costs 25 KB (2.6% of it). Over
+ * it, preview.ts degrades — first dropping raster payloads, then falling back
+ * to a title card — rather than growing the file.
+ */
+export const PREVIEW_BUDGET = 64 * 1024 // 64 KB
+
+export function defaultMedia(
+  kind: 'video' | 'audio',
+  src: string,
+  partial: Partial<MediaElement> = {},
+): MediaElement {
+  const audio = kind === 'audio'
+  return {
+    id: uid('m'),
+    type: 'media',
+    kind,
+    x: 440, y: 210,
+    w: audio ? 460 : 560, h: audio ? 56 : 315,
+    rotation: 0, opacity: 1,
+    src,
+    fit: 'contain',
+    radius: audio ? 12 : 8,
+    controls: true,
+    // video defaults muted so present-mode autoplay is permitted by browsers
+    muted: !audio,
+    loop: false,
+    autoplay: false,
+    ...partial,
+  }
+}
+
+export function emptySlide(partial: Partial<Slide> = {}): Slide {
+  return {
+    id: uid('slide'),
+    background: '#FFFFFF',
+    transition: 'fade',
+    elements: [],
+    notes: '',
+    ...partial,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Layouts. A layout is a Slide that lives in doc.layouts (or the built-in
+// set below). Element ids are deterministic per layout and are KEPT when a
+// layout is instantiated: slides born from the same layout share ids, so
+// their common chrome morphs across transitions.
+
+const ph = (
+  id: string,
+  placeholder: string,
+  frame: { x: number; y: number; w: number; h: number },
+  type: Partial<TextElement> = {},
+): TextElement => ({
+  id,
+  type: 'text',
+  ...frame,
+  rotation: 0, opacity: 1,
+  html: '',
+  placeholder,
+  fontSize: 32,
+  fontFamily: FONT_STACK,
+  fontWeight: 400,
+  color: '#1E2A3A',
+  align: 'left',
+  valign: 'top',
+  lineHeight: 1.25,
+  ...type,
+})
+
+const bar = (id: string, frame: { x: number; y: number; w: number; h: number }): ShapeElement => ({
+  id, type: 'shape', shape: 'rect', ...frame,
+  rotation: 0, opacity: 1, fill: '#F7A600', stroke: 'transparent', strokeWidth: 0, radius: 2,
+})
+
+/** A card backdrop: a soft panel grouped with the text that sits on it. */
+const card = (id: string, frame: { x: number; y: number; w: number; h: number }, role: string): ShapeElement => ({
+  id, type: 'shape', shape: 'rect', ...frame,
+  rotation: 0, opacity: 1, fill: '#F3F0EA', stroke: 'transparent', strokeWidth: 0, radius: 16,
+  groupId: `l3c-g${role.slice(-1)}`,
+})
+
+/**
+ * The canvas the built-in layout geometry below is authored against.
+ *
+ * It is NOT the model default (1280x720) — these layouts were drawn for a
+ * 1600x900 stage, so on a default deck every one of them used to hang off the
+ * right edge (`lt-title` ran to x=1440 on a 1280-wide slide) and the
+ * title+content body overflowed the bottom by 88px. `builtinLayouts(size)`
+ * scales them to the deck instead, which also makes them correct for the
+ * custom page sizes the slide panel offers.
+ */
+const LAYOUT_BASE = { width: 1600, height: 900 }
+
+/** Rescale a built-in layout from LAYOUT_BASE onto an arbitrary canvas. */
+function scaleLayout(ly: Slide, sx: number, sy: number): Slide {
+  // Type scales with the SMALLER axis: on a squarer canvas the limiting
+  // dimension is what decides whether a heading still fits its box.
+  const st = Math.min(sx, sy)
+  return {
+    ...ly,
+    elements: ly.elements.map((el) => {
+      const next = {
+        ...el,
+        x: Math.round(el.x * sx), y: Math.round(el.y * sy),
+        w: Math.round(el.w * sx), h: Math.round(el.h * sy),
+      } as SlideElement
+      if (next.type === 'text') {
+        const txt = next as TextElement
+        if (txt.fontSize) txt.fontSize = Math.max(8, Math.round(txt.fontSize * st))
+        if (txt.letterSpacing) txt.letterSpacing = Math.round(txt.letterSpacing * st * 10) / 10
+      }
+      return next
+    }),
+  }
+}
+
+/**
+ * The layouts every document offers out of the box (not persisted until edited).
+ * Pass the deck's page size to get geometry that fits it; omit it only when the
+ * caller just wants the element ids.
+ */
+export function builtinLayouts(size?: { width: number; height: number }): Slide[] {
+  const base: Slide[] = [
+    {
+      id: 'layout-title', name: 'Title', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        bar('lt-bar', { x: 160, y: 380, w: 72, h: 8 }),
+        ph('lt-title', 'Click to add title', { x: 160, y: 404, w: 1280, h: 140 },
+          { fontSize: 76, fontWeight: 700, valign: 'middle', role: 'title' }),
+        ph('lt-sub', 'Click to add subtitle', { x: 160, y: 556, w: 1100, h: 60 },
+          { fontSize: 28, color: '#45566B', valign: 'middle', role: 'subtitle' }),
+      ],
+    },
+    {
+      id: 'layout-title-content', name: 'Title + content', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('ltc-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        bar('ltc-rule', { x: 120, y: 168, w: 1360, h: 3 }),
+        ph('ltc-body', 'Click to add content', { x: 120, y: 208, w: 1360, h: 600 },
+          { fontSize: 26, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+      ],
+    },
+    {
+      id: 'layout-two-col', name: 'Two columns', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('l2c-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        bar('l2c-rule', { x: 120, y: 168, w: 1360, h: 3 }),
+        ph('l2c-left', 'Left column', { x: 120, y: 208, w: 660, h: 600 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'body' }),
+        ph('l2c-right', 'Right column', { x: 820, y: 208, w: 660, h: 600 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'body' }),
+      ],
+    },
+    {
+      id: 'layout-section', name: 'Section divider', background: '#1E2A3A', transition: 'fade', notes: '', elements: [
+        bar('lsec-bar', { x: 160, y: 396, w: 72, h: 8 }),
+        ph('lsec-title', 'Section title', { x: 160, y: 420, w: 1280, h: 120 },
+          { fontSize: 64, fontWeight: 700, color: '#FFFFFF', valign: 'middle', role: 'title' }),
+        ph('lsec-kicker', 'PART 1', { x: 160, y: 350, w: 800, h: 40 },
+          { fontSize: 18, fontWeight: 600, color: '#F7A600', letterSpacing: 3, valign: 'middle', role: 'kicker' }),
+      ],
+    },
+    // Four layouts an agent reaches for (compact input: `layout` + `role`,
+    // compact.ts). Roles are the slot names; the card backdrops share a
+    // groupId per card so a card moves as one in the editor.
+    {
+      id: 'layout-three-cards', name: 'Three cards', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('l3c-title', 'Click to add title', { x: 120, y: 72, w: 1360, h: 84 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        card('l3c-bg1', { x: 120, y: 220, w: 426, h: 560 }, 'card1'),
+        ph('l3c-card1', 'First card', { x: 152, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card1', groupId: 'l3c-g1' }),
+        card('l3c-bg2', { x: 587, y: 220, w: 426, h: 560 }, 'card2'),
+        ph('l3c-card2', 'Second card', { x: 619, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card2', groupId: 'l3c-g2' }),
+        card('l3c-bg3', { x: 1054, y: 220, w: 426, h: 560 }, 'card3'),
+        ph('l3c-card3', 'Third card', { x: 1086, y: 252, w: 362, h: 496 },
+          { fontSize: 24, valign: 'top', lineHeight: 1.5, role: 'card3', groupId: 'l3c-g3' }),
+      ],
+    },
+    {
+      id: 'layout-quote', name: 'Quote', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        bar('lq-bar', { x: 160, y: 300, w: 8, h: 300 }),
+        ph('lq-quote', 'Click to add a quote', { x: 208, y: 300, w: 1232, h: 300 },
+          { fontSize: 48, fontWeight: 500, valign: 'middle', lineHeight: 1.3, role: 'quote' }),
+        ph('lq-attr', 'Who said it', { x: 208, y: 620, w: 1232, h: 44 },
+          { fontSize: 24, color: '#586A80', valign: 'middle', role: 'attribution' }),
+      ],
+    },
+    {
+      id: 'layout-image-left', name: 'Image left', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('lil-image', 'Add an image', { x: 120, y: 120, w: 640, h: 660 },
+          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
+        ph('lil-title', 'Click to add title', { x: 820, y: 120, w: 660, h: 120 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        ph('lil-body', 'Click to add content', { x: 820, y: 264, w: 660, h: 516 },
+          { fontSize: 24, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+      ],
+    },
+    {
+      id: 'layout-image-right', name: 'Image right', background: '#FFFFFF', transition: 'fade', notes: '', elements: [
+        ph('lir-title', 'Click to add title', { x: 120, y: 120, w: 660, h: 120 },
+          { fontSize: 44, fontWeight: 700, valign: 'middle', role: 'title' }),
+        ph('lir-body', 'Click to add content', { x: 120, y: 264, w: 660, h: 516 },
+          { fontSize: 24, color: '#586A80', valign: 'top', lineHeight: 1.5, role: 'body' }),
+        ph('lir-image', 'Add an image', { x: 840, y: 120, w: 640, h: 660 },
+          { fontSize: 24, color: '#8A98AB', align: 'center', valign: 'middle', role: 'image' }),
+      ],
+    },
+    { id: 'layout-blank', name: 'Blank', background: '#FFFFFF', transition: 'fade', notes: '', elements: [] },
+  ]
+  if (!size || (size.width === LAYOUT_BASE.width && size.height === LAYOUT_BASE.height)) return base
+  const sx = size.width / LAYOUT_BASE.width
+  const sy = size.height / LAYOUT_BASE.height
+  return base.map((ly) => scaleLayout(ly, sx, sy))
+}
+
+/** A fresh slide from a layout — new slide id, element ids KEPT (lineage). */
+export function instantiateLayout(layout: Slide): Slide {
+  const copy: Slide = JSON.parse(JSON.stringify(layout))
+  return { ...copy, id: uid('slide'), name: undefined, stateOf: undefined, notes: '' }
+}
+
+const textHasContent = (e: SlideElement) =>
+  e.type !== 'text' || !!e.html.replace(/<br\s*\/?>/gi, '').replace(/\u200B/g, '').trim()
+
+/**
+ * Apply a layout to an existing slide's elements. The matching ladder:
+ *   1. by id     — re-applying the slide's own layout resets frames/typography
+ *                  while keeping content
+ *   2. by role   — cross-layout: the slide's 'title' moves into the new
+ *                  layout's 'title' frame (same element type required;
+ *                  donors consumed in document order)
+ * Content (text html, link) rides along; the layout provides frame and
+ * typography. Leftover slide elements that belong to some KNOWN layout
+ * (old chrome, unfilled placeholders) are dropped; everything else is user
+ * content and survives on top of the new layout's elements.
+ */
+export function applyLayout(
+  slide: Slide,
+  layout: Slide,
+  knownLayoutElementIds: Set<string>,
+): SlideElement[] {
+  const donors = slide.elements
+  const consumed = new Set<SlideElement>()
+  // An `image` slot is a text placeholder ("Add an image") that an IMAGE
+  // donor replaces outright — the picture takes the slot's frame and id, so
+  // slides from the same layout still morph their pictures.
+  const imageSlot = (lel: SlideElement) => lel.role === 'image' && lel.type === 'text'
+  const findDonor = (lel: SlideElement): SlideElement | undefined => {
+    const byId = donors.find((e) => !consumed.has(e) && e.id === lel.id)
+    if (byId) return byId
+    if (!lel.role) return undefined
+    return donors.find(
+      (e) => !consumed.has(e) && e.role === lel.role &&
+        ((e.type === lel.type && textHasContent(e)) || (imageSlot(lel) && e.type === 'image')),
+    )
+  }
+  const out: SlideElement[] = layout.elements.map((lel) => {
+    const copy = JSON.parse(JSON.stringify(lel)) as SlideElement
+    const d = findDonor(lel)
+    if (d) {
+      consumed.add(d)
+      if (imageSlot(lel) && d.type === 'image') {
+        const pic = JSON.parse(JSON.stringify(d)) as SlideElement
+        return { ...pic, id: lel.id, x: lel.x, y: lel.y, w: lel.w, h: lel.h, rotation: lel.rotation, role: 'image' }
+      }
+      if (copy.type === 'text' && d.type === 'text' && textHasContent(d)) copy.html = d.html
+      if (copy.type === 'image' && d.type === 'image') {
+        copy.src = d.src
+        if (d.fit) copy.fit = d.fit
+        if (d.crop) copy.crop = d.crop
+      }
+      if (d.link) copy.link = d.link
+    }
+    return copy
+  })
+  for (const e of donors) {
+    if (consumed.has(e)) continue
+    // layout-owned leftovers: drop chrome and EMPTY placeholders, but text
+    // someone actually wrote is never silently lost — it rides along as-is
+    if (knownLayoutElementIds.has(e.id) && !(e.type === 'text' && textHasContent(e))) continue
+    out.push(e) // survives, painted above the layout
+  }
+  return out
+}
+
+/** Every element id owned by any known layout (built-ins + the document's). */
+export function layoutElementIds(doc: BentoDoc): Set<string> {
+  const ids = new Set<string>()
+  for (const ly of [...builtinLayouts(), ...(doc.layouts ?? [])]) {
+    for (const e of ly.elements) ids.add(e.id)
+  }
+  return ids
+}
+
+/**
+ * Does this slide consume a page number?
+ *
+ * The single answer to that question — page fields, the presenter's counter,
+ * the sidebar — so they cannot disagree about which slide is "4". Interactive
+ * states never count; an `unnumbered` slide never counts (it continues the
+ * page before it); hidden slides count only when the deck opts into
+ * office-suite numbering.
+ */
+export const paginates = (s: Slide, doc: BentoDoc): boolean =>
+  !s.stateOf && !s.unnumbered && (!s.hidden || !!doc.present?.numberHidden)
+
+/**
+ * Is this slide part of the linear walk?
+ *
+ * Deliberately NOT the same question as `paginates`. Navigation, PDF export and
+ * the file thumbnail all skip states and hidden slides unconditionally; only
+ * NUMBERING is configurable. Collapsing the two would make `numberHidden` walk
+ * the audience into a slide that was hidden on purpose.
+ */
+export const inLinearFlow = (s: Slide): boolean => !s.stateOf && !s.hidden
+
+export const newDocId = (): string =>
+  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : uid('doc')
+
+export function newDoc(): BentoDoc {
+  return {
+    format: FORMAT,
+    version: FORMAT_VERSION,
+    docId: newDocId(),
+    title: 'Untitled',
+    size: { width: 1280, height: 720 },
+    theme: {
+      background: '#FFFFFF',
+      color: '#1E2A3A',
+      accent: '#F7A600',
+      fontFamily: FONT_STACK,
+    },
+    slides: [emptySlide()],
+    modified: new Date().toISOString(),
+  }
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v)
+
+/**
+ * The keys without which an element of a type cannot render — the renderer
+ * throws, rather than defaulting, when one is missing (see untrusted.ts for
+ * why the frame numbers, svg and embed are NOT here). Both gates use it:
+ * untrusted.ts drops a pasted element that lacks one, parseDoc drops a file's.
+ */
+export const REQUIRED_ELEMENT_KEYS: Readonly<Record<string, readonly string[]>> = {
+  text: ['html'],
+  shape: ['shape', 'fill'],
+  image: ['src'],
+  chart: ['option'],
+  table: ['columns', 'rows'],
+  media: ['kind', 'src'],
+}
+
+/** Can this element render? An object with a string `type` and every key its
+ *  type requires. An element of a type this version does not know passes — a
+ *  newer file's element is kept and saved back untouched. */
+const renderableElement = (e: unknown): boolean =>
+  isRecord(e) && typeof e.type === 'string' &&
+  (REQUIRED_ELEMENT_KEYS[e.type] ?? []).every((k) => e[k] !== undefined && e[k] !== null)
+
+/**
+ * Fill the fields the format REQUIRES but a hand- or agent-written document
+ * may omit: `title`, `version`, `size`, `theme` (and its four colour/face
+ * keys), and on each slide `id`, `background`, `transition`, `elements` and
+ * `notes`. A document that omitted `theme` passed parseDoc and then crashed
+ * the shell at boot — `undefined.palette` — leaving the reader on the splash
+ * for good; a missing `size` did the same on `width`. Each value comes from the
+ * editor's own defaults (newDoc, emptySlide), and ONLY where the field is
+ * absent or the wrong type: a value that is there is never touched, and keys
+ * this version does not know ride through untouched (format additivity — a
+ * newer file keeps everything). A slide that is not an object is dropped,
+ * since no version writes one, and so is an element that cannot render (not
+ * an object, no `type`, or missing a key its type requires — the same rule the
+ * paste gate applies); false when no slide is left. In place.
+ */
+function fillRequired(doc: Record<string, unknown>): boolean {
+  const base = newDoc()
+  if (typeof doc.title !== 'string') doc.title = base.title
+  if (typeof doc.version !== 'number') doc.version = base.version
+  const size = doc.size as Record<string, unknown> | undefined
+  if (!isRecord(size) || !(Number(size.width) > 0) || !(Number(size.height) > 0)) doc.size = { ...base.size }
+  if (!isRecord(doc.theme)) doc.theme = { ...base.theme }
+  else {
+    const theme = doc.theme
+    for (const k of ['background', 'color', 'accent', 'fontFamily'] as const) {
+      if (typeof theme[k] !== 'string') theme[k] = base.theme[k]
+    }
+  }
+  doc.slides = (doc.slides as unknown[]).filter(isRecord)
+  for (const s of doc.slides as Record<string, unknown>[]) {
+    const blank = emptySlide()
+    if (typeof s.id !== 'string' || !s.id) s.id = blank.id
+    if (typeof s.background !== 'string') s.background = blank.background
+    if (typeof s.transition !== 'string') s.transition = blank.transition
+    s.elements = Array.isArray(s.elements) ? s.elements.filter(renderableElement) : []
+    if (typeof s.notes !== 'string') s.notes = blank.notes
+  }
+  return (doc.slides as unknown[]).length > 0
+}
+
+export function parseDoc(json: string): BentoDoc | null {
+  try {
+    const doc = JSON.parse(json)
+    if (doc && doc.format === FORMAT && Array.isArray(doc.slides) && doc.slides.length > 0) {
+      // The saved file names its schema (save.ts writes `$schema` first);
+      // it is a pointer for readers, not document data, so it never enters
+      // the live document — validate() would otherwise report it unknown.
+      delete doc.$schema
+      // Documents from before docId existed get one minted here; it persists
+      // on the next save and stays stable from then on.
+      if (typeof doc.docId !== 'string' || !doc.docId) doc.docId = newDocId()
+      if (doc.template) {
+        // template instantiation: this open IS a new document
+        delete doc.template
+        doc.docId = newDocId()
+        delete doc.collab
+      }
+      return fillRequired(doc) ? (doc as BentoDoc) : null
+    }
+  } catch {
+    /* fall through */
+  }
+  return null
+}

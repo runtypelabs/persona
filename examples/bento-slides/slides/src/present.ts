@@ -1,0 +1,2490 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+// Present mode: a fullscreen Reveal.js overlay generated from the model.
+// Slides marked transition:'morph' use GSAP Flip to animate elements whose
+// ids match across the two slides (PowerPoint "Morph" behaviour).
+
+import Reveal from 'reveal.js'
+import 'reveal.js/dist/reveal.css'
+import { anim, resetXform } from './anim'
+import { chartSnapshotSvg, mountChart } from './charts'
+import type { BentoDoc, GradientFill, ShapeElement, Slide, SlideElement } from './model'
+import { morphKey, paginates, inLinearFlow, isWebUrl } from './model'
+import { applyElementFrame, gradientLineCoords, renderSlide } from './render'
+import { cropImgStyle, isIdentityCrop, lerpCrop } from './crop'
+import { paintSpeaker, setSpeakerWindow, speakerIdleBody, speakerWindow } from './screens'
+import { ICONS } from './icons'
+import { t } from './i18n'
+import { lsGet, lsSet } from '../../kernel/src/storage.ts'
+import type { ShowEvent, ShowVerbs } from '../../kernel/src/sync/session.ts'
+import { FollowState, laserDue } from './follow'
+import { StepState, stepOf, shownAt } from './steps'
+import { offlineEnabled } from './update'
+
+const MORPH_DURATION_DEFAULT = 0.65
+/** Set per-deck by doc.present.morphSeconds; clamped to something sane. */
+let MORPH_DURATION = MORPH_DURATION_DEFAULT
+const MORPH_EASE = 'power2.inOut'
+
+export interface PresentSession {
+  exit(): void
+  /** Absolute slide navigation: jump the show to a 0-based slide index. */
+  goTo(index: number): void
+  /** Show or hide the audience blackout (audience copy side). */
+  setBlack(on: boolean): void
+  /** Position the remote laser dot from the presenter (null = hide). */
+  setRemoteLaser(p: string | null): void
+}
+
+/**
+ * Live broadcast, as the show sees it. Broadcast is a special case of live
+ * collaboration (docs/DECISIONS.md): the presenter's session streams a
+ * PROJECTED copy of the deck plus three signed verbs to audience copies over
+ * the room they already share. present.ts owns only what is visible — the
+ * Live/Lock toggles, the audience count, follow mode, the cards — and hands
+ * every wire concern to the session through this surface. Payloads are
+ * slides' own objects, sealed by the transport:
+ *   nav   { id, i, lock }   slide ID first (an insert mid-talk costs nothing),
+ *                           visible index as the fallback, and the lock flag
+ *   black { on, lock }
+ *   laser 'fx,fy' | null    fractions of the slide box; ≤ 20 fps at the source
+ */
+export interface PresentBroadcast {
+  /** presenter side — absent on an audience copy */
+  presenter?: {
+    start(): Promise<void>
+    stop(): Promise<void>
+    verbs(): ShowVerbs | null
+  }
+  /** both sides: verbs (audience), count/checkpoint (presenter), closed */
+  onShow(fn: (e: ShowEvent) => void): () => void
+  /** true on an audience copy: follow the presenter, show the follow chip */
+  audience?: boolean
+}
+
+export function startPresentation(
+  doc: BentoDoc,
+  startIndex: number,
+  onExit: (lastIndex: number) => void,
+  opts: {
+    fullscreen?: boolean
+    /** hosted-client live sync: invoked once at init with the pieces needed to
+     *  re-render the deck on remote doc changes (slidesEl, deck, buildSection) */
+    onDocChange?: (ctx: {
+      slidesEl: HTMLElement
+      deck: Reveal.Api
+      buildSection: (s: BentoDoc['slides'][number], i: number) => HTMLElement
+    }) => void
+    broadcast?: PresentBroadcast
+  } = {},
+): PresentSession {
+  MORPH_DURATION = Math.min(6, Math.max(0.1, doc.present?.morphSeconds ?? MORPH_DURATION_DEFAULT))
+
+  const overlay = document.createElement('div')
+  overlay.className = 'bento-present-overlay'
+  overlay.style.setProperty('--bento-accent', doc.theme.accent)
+  // Reveal ignores key events originating from form fields. If focus is still
+  // on an editor input (title, notes…) when the show starts, arrows go dead.
+  ;(document.activeElement as HTMLElement | null)?.blur?.()
+
+  const revealEl = document.createElement('div')
+  revealEl.className = 'reveal'
+  const slidesEl = document.createElement('div')
+  slidesEl.className = 'slides'
+  revealEl.appendChild(slidesEl)
+  overlay.appendChild(revealEl)
+
+  // Extracted from the forEach so the broadcast viewer can rebuild one
+  // section when the presenter's document changes underneath it. The index
+  // is the loop's: `morphNext` looks one slide ahead.
+  const buildSection = (slide: BentoDoc['slides'][number], i: number) => {
+    const section = document.createElement('section')
+    // Morph slides swap instantly; the Flip animation supplies the motion.
+    //
+    // A slide that PRECEDES a morph must not fade OUT either. Reveal takes the
+    // OUTGOING slide's transition on exit, and the morph's moving elements live
+    // on the INCOMING slide — which is already at full opacity from the first
+    // frame. So the outgoing dissolve paints a ghost of the old slide straight
+    // over the animation: measured at 450ms, against a 600ms morph, which reads
+    // as "the change just appeared" rather than as motion.
+    // Reveal has no `none-out`: its stylesheet carries `~="slide-out"` style
+    // rules for slide/zoom/convex/concave (24 of them) but none for `none`, so
+    // a split value like `fade-in none-out` matches nothing and the deck-level
+    // default transition wins — measured, the ghost was still there. Only the
+    // exact value `none` cuts, so a slide handing off to a morph cuts in as
+    // well as out. That is the deliberate trade: an instant cut into the
+    // "before" frame costs less than a dissolve painted over the morph itself.
+    const morphNext = doc.slides[i + 1]?.transition === 'morph'
+    section.dataset.transition =
+      slide.transition === 'morph' || morphNext ? 'none' : slide.transition
+    if (!inLinearFlow(slide)) section.dataset.bentoState = '1' // dimmed in overview
+    const surface = renderSlide(slide, doc, { hidePlaceholders: true, liveMedia: true })
+    // Web links: rel set AT MOUNT, in the show only, never stored — a click
+    // goes through openWeb, but the browser's own routes to an anchor (the
+    // context menu's "open in new tab", a drag) do not, and on a hosted deck
+    // they would otherwise send this page's location as the referrer.
+    for (const a of Array.from(surface.querySelectorAll<HTMLAnchorElement>('a[href]'))) a.rel = 'noopener noreferrer'
+    // reveal slides start with only the default hover set visible
+    if (slide.hover?.type === 'reveal') applyRevealSet(surface, slide.hover.default ?? null, slide.hover.default)
+    section.appendChild(surface)
+    if (slide.notes) {
+      const aside = document.createElement('aside')
+      aside.className = 'notes'
+      aside.textContent = slide.notes
+      section.appendChild(aside)
+    }
+    return section
+  }
+  doc.slides.forEach((slide, i) => slidesEl.appendChild(buildSection(slide, i)))
+
+  document.body.appendChild(overlay)
+
+  // ——— state-aware linear navigation ———
+  // Slides with stateOf are interactive states: linked-to, never walked-to.
+  const isState = (i: number) => { const sl = doc.slides[i]; return !!sl && !inLinearFlow(sl) }
+  const anchorOf = (i: number) => {
+    const pid = doc.slides[i]?.stateOf
+    const p = doc.slides.findIndex((s) => s.id === pid)
+    return p >= 0 ? p : i
+  }
+  // ——— reveal steps (fx.step): → reveals the next step before it leaves the
+  // slide, ← hides the last one before it leaves. Decisions in steps.ts.
+  const steps = new StepState<SlideElement>()
+  /** Hide/show every stepped element of a section for the current step. */
+  const applyStep = (section: HTMLElement, slide: Slide, step: number) => {
+    for (const el of slide.elements ?? []) {
+      if (!stepOf(el)) continue
+      const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      node?.classList.toggle('bento-step-hidden', !shownAt(el, step))
+    }
+  }
+  const currentSection = () => deck.getCurrentSlide() as HTMLElement | null
+  const revealStep = (r: { step: number; reveal: SlideElement[] }) => {
+    const cur = deck.getIndices().h
+    const section = currentSection()
+    if (!section) return
+    applyStep(section, doc.slides[cur], r.step)
+    if (!reduceMotion) runEnterFx(doc.slides[cur], section, new Set(r.reveal.map((el) => el.id)), true)
+    sendNav(cur)
+    updateSpeakerControls()
+  }
+  const hideStep = (r: { step: number; hide: SlideElement[] }) => {
+    const cur = deck.getIndices().h
+    const section = currentSection()
+    if (!section) return
+    for (const el of r.hide) {
+      const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (!node) continue
+      anim.killTweensOf(node)
+      applyElementFrame(node, el)
+      resetXform(node)
+    }
+    applyStep(section, doc.slides[cur], r.step)
+    sendNav(cur)
+    updateSpeakerControls()
+  }
+  const goNext = () => {
+    const r = steps.next()
+    if (r.kind === 'step') return revealStep(r)
+    const cur = deck.getIndices().h
+    for (let i = (isState(cur) ? anchorOf(cur) : cur) + 1; i < doc.slides.length; i++) {
+      if (!isState(i)) return deck.slide(i, 0)
+    }
+  }
+  const goPrev = () => {
+    const r = steps.prev()
+    if (r.kind === 'step') return hideStep(r)
+    const cur = deck.getIndices().h
+    if (isState(cur)) return deck.slide(anchorOf(cur), 0)
+    for (let i = cur - 1; i >= 0; i--) {
+      if (!isState(i)) return deck.slide(i, 0)
+    }
+  }
+  const hasNext = () => {
+    if (steps.hasNext()) return true
+    const cur = deck.getIndices().h
+    for (let i = (isState(cur) ? anchorOf(cur) : cur) + 1; i < doc.slides.length; i++) {
+      if (!isState(i)) return true
+    }
+    return false
+  }
+  const hasPrev = () => {
+    if (steps.hasPrev()) return true
+    const cur = deck.getIndices().h
+    if (isState(cur)) return true // right-swipe returns to the parent slide
+    for (let i = cur - 1; i >= 0; i--) {
+      if (!isState(i)) return true
+    }
+    return false
+  }
+  const visibleIndex = (i: number) => doc.slides.slice(0, i + 1).filter((s) => paginates(s, doc)).length
+  const visibleTotal = doc.slides.filter((s) => paginates(s, doc)).length
+  // real slide indices that appear in linear navigation (states are excluded) —
+  // the presenter-view thumbnail rail and grid iterate this.
+  const railIndices = doc.slides.map((_, i) => i).filter((i) => !isState(i))
+  const goFirst = () => deck.slide(railIndices[0] ?? 0, 0)
+  const goLast = () => deck.slide(railIndices[railIndices.length - 1] ?? 0, 0)
+
+  // ——— black-screen (audience blackout; presenter keeps notes) ———
+  let blacked = false
+  const blackout = document.createElement('div')
+  blackout.className = 'bento-blackout'
+  blackout.hidden = true
+  overlay.appendChild(blackout)
+
+  // ——— laser pointer (local presenter state; never written to the deck) ———
+  // A passive viewport-level layer paints above Reveal while pointer movement
+  // is observed from the overlay's capture phase. Links, hover states, charts
+  // and media therefore keep receiving their normal pointer events. Blackout
+  // and toasts intentionally paint above the laser visuals.
+  const laserLayer = document.createElement('div')
+  laserLayer.className = 'bento-laser-layer'
+  laserLayer.setAttribute('aria-hidden', 'true')
+  // Until a real pointer event supplies screen coordinates, let the browser
+  // paint the laser at the OS cursor. The DOM dot and trail take over on the
+  // first move, when `laser-over-slide` hides this native cursor.
+  const laserCursorStyle = document.createElement('style')
+  laserCursorStyle.textContent =
+    `.bento-present-overlay.laser-enabled:not(.laser-over-slide) .bento-slide,` +
+    `.bento-present-overlay.laser-enabled:not(.laser-over-slide) .bento-slide *{` +
+    `cursor:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%23000' fill-opacity='.55'/%3E%3Ccircle cx='8' cy='8' r='6' fill='%23fff'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23ef252f'/%3E%3C/svg%3E") 8 8,crosshair!important}`
+  const laserTrail = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  laserTrail.classList.add('bento-laser-trail')
+  laserTrail.setAttribute('width', '100%')
+  laserTrail.setAttribute('height', '100%')
+  laserTrail.setAttribute('focusable', 'false')
+  const laserTrailHalo = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+  const laserTrailCore = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+  laserTrail.append(laserTrailHalo, laserTrailCore)
+  const laserDot = document.createElement('div')
+  laserDot.className = 'bento-laser-dot'
+  const remoteLaserDot = document.createElement('div')
+  remoteLaserDot.className = 'bento-laser-dot bento-remote'
+  laserLayer.append(laserTrail, laserDot, remoteLaserDot)
+
+  // ~0.8s fade, in the direction of Excalidraw's 1s laser decay — short enough
+  // to stay responsive, long enough that the tail reads as a sweep, not a smear.
+  const LASER_TRAIL_LIFETIME = 800
+  const LASER_TRAIL_SAMPLE_MS = 5
+  const LASER_TRAIL_SEGMENTS = Math.ceil(LASER_TRAIL_LIFETIME / LASER_TRAIL_SAMPLE_MS) + 1
+  const laserTrailHaloSegments: SVGPathElement[] = []
+  const laserTrailCoreSegments: SVGPathElement[] = []
+
+  // Built on FIRST ENABLE, not at startup. startPresentation() is not only the
+  // "user pressed Present" path — a doc.readonly player file boots straight
+  // into the show, so this runs at document-OPEN time for every player deck
+  // ever shared. Eagerly that cost 112 SVGPathElements, an injected <style>
+  // and the layer, for a feature reached only by pressing L — which a player
+  // deck's audience often cannot do at all.
+  let laserBuilt = false
+  const buildLaser = () => {
+    if (laserBuilt) return
+    laserBuilt = true
+    overlay.insertBefore(laserCursorStyle, blackout)
+    overlay.insertBefore(laserLayer, blackout)
+    for (let i = 0; i < LASER_TRAIL_SEGMENTS; i++) {
+      const halo = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      halo.classList.add('bento-laser-trail-segment', 'halo')
+      const core = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+      core.classList.add('bento-laser-trail-segment', 'core')
+      if (i === 0) {
+        halo.classList.add('tail-tip')
+        core.classList.add('tail-tip')
+      }
+      laserTrailHalo.appendChild(halo)
+      laserTrailCore.appendChild(core)
+      laserTrailHaloSegments.push(halo)
+      laserTrailCoreSegments.push(core)
+    }
+  }
+
+  type LaserTrailPoint = { x: number; y: number; time: number }
+  const laserTrailPoints: LaserTrailPoint[] = Array.from(
+    { length: LASER_TRAIL_SEGMENTS + 1 },
+    () => ({ x: 0, y: 0, time: 0 }),
+  )
+  let laserEnabled = false
+  let laserDrawing = false
+  let laserFrame = 0
+  let laserTrailFrame = 0
+  let laserTrailStart = 0
+  let laserTrailLength = 0
+  let laserTrailVisibleSegments = 0
+  let laserPoint: { x: number; y: number } | null = null
+  let laserSentThisStroke = false
+  let lastLaserSend = 0
+
+  const hideLaserDot = () => {
+    laserDot.classList.remove('visible')
+  }
+
+  const laserTrailPointAt = (index: number) =>
+    laserTrailPoints[(laserTrailStart + index) % laserTrailPoints.length]
+
+  const clearLaserTrail = () => {
+    if (laserTrailFrame) cancelAnimationFrame(laserTrailFrame)
+    laserTrailFrame = 0
+    laserTrailStart = 0
+    laserTrailLength = 0
+    for (let i = 0; i < laserTrailVisibleSegments; i++) {
+      laserTrailHaloSegments[i].setAttribute('opacity', '0')
+      laserTrailCoreSegments[i].setAttribute('opacity', '0')
+    }
+    laserTrailVisibleSegments = 0
+  }
+
+  const pruneLaserTrail = (now: number) => {
+    while (laserTrailLength && now - laserTrailPointAt(0).time >= LASER_TRAIL_LIFETIME) {
+      laserTrailStart = (laserTrailStart + 1) % laserTrailPoints.length
+      laserTrailLength--
+    }
+  }
+
+  const setTrailPath = (
+    path: SVGPathElement,
+    startX: number,
+    startY: number,
+    control: LaserTrailPoint,
+    endX: number,
+    endY: number,
+    width: number,
+    opacity: number,
+  ) => {
+    path.setAttribute(
+      'd',
+      `M ${startX.toFixed(1)} ${startY.toFixed(1)} Q ${control.x.toFixed(1)} ${control.y.toFixed(1)} ${endX.toFixed(1)} ${endY.toFixed(1)}`,
+    )
+    path.setAttribute('stroke-width', width.toFixed(2))
+    path.setAttribute('opacity', opacity.toFixed(3))
+  }
+
+  const setTrailTipPath = (
+    path: SVGPathElement,
+    startX: number,
+    startY: number,
+    control: LaserTrailPoint,
+    endX: number,
+    endY: number,
+    width: number,
+    opacity: number,
+  ) => {
+    const left: string[] = []
+    const right: string[] = []
+    const steps = 5
+    for (let step = 0; step <= steps; step++) {
+      const t = step / steps
+      const mt = 1 - t
+      const x = mt * mt * startX + 2 * mt * t * control.x + t * t * endX
+      const y = mt * mt * startY + 2 * mt * t * control.y + t * t * endY
+      const dx = 2 * mt * (control.x - startX) + 2 * t * (endX - control.x)
+      const dy = 2 * mt * (control.y - startY) + 2 * t * (endY - control.y)
+      const length = Math.hypot(dx, dy) || 1
+      const halfWidth = width * t / 2
+      const nx = -dy / length * halfWidth
+      const ny = dx / length * halfWidth
+      left.push(`${(x + nx).toFixed(1)} ${(y + ny).toFixed(1)}`)
+      right.unshift(`${(x - nx).toFixed(1)} ${(y - ny).toFixed(1)}`)
+    }
+    path.setAttribute('d', `M ${left.join(' L ')} L ${right.join(' L ')} Z`)
+    path.setAttribute('opacity', opacity.toFixed(3))
+  }
+
+  const renderLaserTrail = (now: number) => {
+    laserTrailFrame = 0
+    pruneLaserTrail(now)
+    const used = Math.max(0, laserTrailLength - 1)
+    for (let i = 0; i < used; i++) {
+      const from = laserTrailPointAt(i)
+      const to = laserTrailPointAt(i + 1)
+      const before = i ? laserTrailPointAt(i - 1) : from
+      const startX = i ? (before.x + from.x) / 2 : from.x
+      const startY = i ? (before.y + from.y) / 2 : from.y
+      const endX = i === used - 1 ? to.x : (from.x + to.x) / 2
+      const endY = i === used - 1 ? to.y : (from.y + to.y) / 2
+      const age = Math.max(0, now - (from.time + to.time) / 2)
+      const life = Math.max(0, 1 - age / LASER_TRAIL_LIFETIME)
+      const taper = Math.pow(life, 0.7)
+      const width = 0.75 + 7.25 * taper
+      const opacity = 0.72 * Math.pow(life, 1.45)
+      const haloWidth = width + 1.8 * taper
+      if (i === 0) {
+        setTrailTipPath(
+          laserTrailHaloSegments[i], startX, startY, from, endX, endY,
+          haloWidth, opacity * 0.48,
+        )
+        setTrailTipPath(
+          laserTrailCoreSegments[i], startX, startY, from, endX, endY,
+          width, opacity,
+        )
+      } else {
+        setTrailPath(
+          laserTrailHaloSegments[i], startX, startY, from, endX, endY,
+          haloWidth, opacity * 0.48,
+        )
+        setTrailPath(laserTrailCoreSegments[i], startX, startY, from, endX, endY, width, opacity)
+      }
+    }
+    for (let i = used; i < laserTrailVisibleSegments; i++) {
+      laserTrailHaloSegments[i].setAttribute('opacity', '0')
+      laserTrailCoreSegments[i].setAttribute('opacity', '0')
+    }
+    laserTrailVisibleSegments = used
+    if (used) laserTrailFrame = requestAnimationFrame(renderLaserTrail)
+  }
+
+  const addLaserTrailPoint = (x: number, y: number, now: number) => {
+    if (reduceMotion) return
+    pruneLaserTrail(now)
+    const previous = laserTrailLength ? laserTrailPointAt(laserTrailLength - 1) : null
+    if (previous) {
+      const dx = x - previous.x
+      const dy = y - previous.y
+      if (now - previous.time < LASER_TRAIL_SAMPLE_MS || dx * dx + dy * dy < 2.25) return
+    }
+    if (laserTrailLength === laserTrailPoints.length) {
+      laserTrailStart = (laserTrailStart + 1) % laserTrailPoints.length
+      laserTrailLength--
+    }
+    const point = laserTrailPointAt(laserTrailLength)
+    point.x = x
+    point.y = y
+    point.time = now
+    laserTrailLength++
+  }
+
+  const resetLaserPointer = () => {
+    if (laserDrawing && laserSentThisStroke) {
+      laserDrawing = false
+      sendLaserPoint(null)
+    }
+    laserDrawing = false
+    hideLaserDot()
+    clearLaserTrail()
+    if (laserFrame) cancelAnimationFrame(laserFrame)
+    laserFrame = 0
+    laserPoint = null
+    overlay.classList.remove('laser-over-slide')
+    laserSentThisStroke = false
+  }
+
+  const paintLaser = (now: number) => {
+    laserFrame = 0
+    const point = laserPoint
+    if (!laserEnabled || blacked || !deckReady || !point || !laserDrawing) {
+      resetLaserPointer()
+      return
+    }
+    const section = deck.getCurrentSlide() as HTMLElement | null
+    const surface = section?.querySelector<HTMLElement>('.bento-slide')
+    if (!surface) {
+      resetLaserPointer()
+      return
+    }
+    // Measure the transformed surface itself instead of duplicating Reveal's
+    // scale/letterbox maths. Pointer and dot both stay in viewport coordinates.
+    const rect = surface.getBoundingClientRect()
+    const inside = point.x >= rect.left && point.x <= rect.right &&
+      point.y >= rect.top && point.y <= rect.bottom
+    if (!inside) {
+      hideLaserDot()
+      clearLaserTrail()
+      overlay.classList.remove('laser-over-slide')
+      return
+    }
+    const sendAt = performance.now()
+    // ~30fps on the wire — Excalidraw's CURSOR_SYNC_TIMEOUT=33ms. The relay
+    // burst (400/10s) fits a continuous stroke with nav headroom; the copy
+    // still sub-frame-smooths with a short CSS tween.
+    if (sendAt - lastLaserSend >= 33) {
+      const fx = Math.max(0, Math.min(1, (point.x - rect.left) / rect.width))
+      const fy = Math.max(0, Math.min(1, (point.y - rect.top) / rect.height))
+      sendLaserPoint(`${fx.toFixed(4)},${fy.toFixed(4)}`)
+      lastLaserSend = sendAt
+      laserSentThisStroke = true
+    }
+    const host = overlay.getBoundingClientRect()
+    const x = point.x - host.left
+    const y = point.y - host.top
+    laserDot.style.left = `${x}px`
+    laserDot.style.top = `${y}px`
+    overlay.classList.add('laser-over-slide')
+    laserDot.classList.add('visible')
+    addLaserTrailPoint(x, y, now)
+    if (!reduceMotion && laserTrailLength > 1) {
+      if (laserTrailFrame) cancelAnimationFrame(laserTrailFrame)
+      renderLaserTrail(now)
+    }
+  }
+
+  const scheduleLaser = (ev: PointerEvent) => {
+    if (!laserEnabled || !laserDrawing || ev.pointerType === 'touch' || !ev.isPrimary) return
+    laserPoint = { x: ev.clientX, y: ev.clientY }
+    if (!laserFrame) laserFrame = requestAnimationFrame(paintLaser)
+  }
+
+  // ——— remote (broadcast) laser trail ———
+  // The channel carries dot points at ~30fps (33ms throttle); the LOCAL trail is sampled at
+  // 5ms/1.5px and is never sent. Excalidraw's collab laser is the model here:
+  // the trail head is glued to the pointer's CURRENT position and the whole
+  // stroke redraws every frame — never pre-baked ahead of it. Feeding the
+  // received points subdivided along the tween path injected the ENTIRE
+  // 100ms segment at arrival while the dot still crawled after it, so the
+  // trail visibly ran AHEAD of the pointer. Instead, sample the dot's
+  // RENDERED position every frame (the CSS tween glides it; offsetLeft/Top
+  // are already in trail coordinate space) and feed that — head glued to the
+  // dot at every instant, same fade, same taper, no wire change.
+  let remoteTrailFrame = 0
+  const sampleRemoteTrail = (now: number) => {
+    remoteTrailFrame = 0
+    if (laserDrawing || reduceMotion || blacked || !remoteLaserDot.classList.contains('visible')) return
+    addLaserTrailPoint(remoteLaserDot.offsetLeft, remoteLaserDot.offsetTop, now)
+    if (laserTrailLength > 1) {
+      if (laserTrailFrame) cancelAnimationFrame(laserTrailFrame)
+      renderLaserTrail(now)
+    }
+    remoteTrailFrame = requestAnimationFrame(sampleRemoteTrail)
+  }
+  const clearRemoteLaser = () => {
+    if (remoteTrailFrame) cancelAnimationFrame(remoteTrailFrame)
+    remoteTrailFrame = 0
+    remoteLaserDot.classList.remove('visible')
+    clearLaserTrail()
+  }
+
+  const setRemoteLaser = (p: string | null) => {
+    if (!p || blacked) {
+      clearRemoteLaser()
+      return
+    }
+    // The laser layer only enters the DOM when the laser was armed locally —
+    // on a broadcast copy nobody ever arms it, so mount it on first remote
+    // frame or the dot would be positioned on a detached element.
+    buildLaser()
+    const section = deck.getCurrentSlide() as HTMLElement | null
+    const surface = section?.querySelector<HTMLElement>('.bento-slide')
+    if (!surface) {
+      clearRemoteLaser()
+      return
+    }
+    const rect = surface.getBoundingClientRect()
+    const parts = p.split(',')
+    const fx = parseFloat(parts[0] ?? 'NaN')
+    const fy = parseFloat(parts[1] ?? 'NaN')
+    if (!Number.isFinite(fx) || !Number.isFinite(fy)) {
+      clearRemoteLaser()
+      return
+    }
+    const host = overlay.getBoundingClientRect()
+    const x = rect.left + Math.max(0, Math.min(1, fx)) * rect.width - host.left
+    const y = rect.top + Math.max(0, Math.min(1, fy)) * rect.height - host.top
+    if (remoteLaserDot.classList.contains('visible')) {
+      // Mid-stroke: let the short tween glide the dot to the new frame.
+      remoteLaserDot.style.left = `${x}px`
+      remoteLaserDot.style.top = `${y}px`
+    } else {
+      // A new stroke after a release: the dot is hidden at its OLD spot and the
+      // CSS left/top tween would fly it across the gap — the trail sampler
+      // traces that ghost glide into a line from the last position. Snap it to
+      // the new position first (tween off), then re-enable for the stream.
+      remoteLaserDot.style.transition = 'none'
+      remoteLaserDot.style.left = `${x}px`
+      remoteLaserDot.style.top = `${y}px`
+      void remoteLaserDot.offsetWidth // reflow so the snap lands before re-enabling
+      remoteLaserDot.style.transition = ''
+      remoteLaserDot.classList.add('visible')
+    }
+    if (!remoteTrailFrame) remoteTrailFrame = requestAnimationFrame(sampleRemoteTrail)
+  }
+
+  const setLaserEnabled = (on: boolean, feedback = true) => {
+    if (laserEnabled === on) return
+    if (on) buildLaser()
+    laserEnabled = on
+    overlay.classList.toggle('laser-enabled', on)
+    if (!on) resetLaserPointer()
+    if (feedback) flashPresentMsg(on ? t('Laser pointer: on') : t('Laser pointer: off'))
+    updateSpeakerControls()
+  }
+  const toggleLaser = () => setLaserEnabled(!laserEnabled)
+
+  overlay.addEventListener('pointermove', scheduleLaser, true)
+  overlay.addEventListener('pointerdown', (ev: PointerEvent) => {
+    if (!laserEnabled || ev.pointerType === 'touch' || !ev.isPrimary || !deckReady) return
+    const section = deck.getCurrentSlide() as HTMLElement | null
+    const surface = section?.querySelector<HTMLElement>('.bento-slide')
+    if (!surface) return
+    const rect = surface.getBoundingClientRect()
+    if (
+      ev.clientX < rect.left || ev.clientX > rect.right ||
+      ev.clientY < rect.top || ev.clientY > rect.bottom
+    ) return
+    laserDrawing = true
+    laserSentThisStroke = false
+    laserPoint = { x: ev.clientX, y: ev.clientY }
+    if (!laserFrame) laserFrame = requestAnimationFrame(paintLaser)
+    const fx = Math.max(0, Math.min(1, (ev.clientX - rect.left) / rect.width))
+    const fy = Math.max(0, Math.min(1, (ev.clientY - rect.top) / rect.height))
+    sendLaserPoint(`${fx.toFixed(4)},${fy.toFixed(4)}`)
+    lastLaserSend = performance.now()
+    laserSentThisStroke = true
+  }, true)
+  overlay.addEventListener('pointerup', () => {
+    if (!laserDrawing) return
+    laserDrawing = false
+    // resetLaserPointer's own off-send guard needs laserDrawing still true, so
+    // the off frame fires HERE — before the stroke is cleared.
+    if (laserSentThisStroke) sendLaserPoint(null)
+    resetLaserPointer()
+  })
+  overlay.addEventListener('pointerleave', resetLaserPointer)
+  const onWindowBlur = () => resetLaserPointer()
+  window.addEventListener('blur', onWindowBlur)
+
+  const setBlack = (on: boolean) => {
+    blacked = on
+    if (on) {
+      resetLaserPointer()
+      sendLaserPoint(null)
+      setRemoteLaser(null)
+    }
+    blackout.hidden = !on
+    sendBlackPoint(on)
+    updateSpeakerControls()
+  }
+  const toggleBlack = () => setBlack(!blacked)
+
+  // ——— reduced motion (a VIEWER/PRESENTER preference, never in the doc) ———
+  // Defaults to the OS 'prefers-reduced-motion'; an explicit toggle (M, or the
+  // speaker view) overrides it and persists per browser. When on, slide
+  // transitions cut instantly and every fx animation (morph, entrances,
+  // count-ups, loops, ken-burns) is skipped — elements just show their final
+  // state. The '.reduce-motion' class also neutralises CSS motion (svg
+  // animations, Reveal's section transitions). Mirrors how locale/auto-check
+  // are viewer prefs that never enter the document format.
+  const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  const readMotionPref = (): boolean | null => {
+    try {
+      const v = lsGet('bento-reduce-motion')
+      return v === 'on' ? true : v === 'off' ? false : null
+    } catch { return null }
+  }
+  let reduceMotion = readMotionPref() ?? reduceQuery.matches
+  overlay.classList.toggle('reduce-motion', reduceMotion)
+
+  let exited = false
+  const deck = new Reveal(revealEl, {
+    embedded: true,
+    width: doc.size.width,
+    height: doc.size.height,
+    margin: 0,
+    // Reveal's default maxScale is 2.0 — on a 1280-wide deck that caps the show
+    // at 2560px and letterboxes it in the middle of large displays (a 4K/5K/8K
+    // screen shows a small centred slide). Bento content is vector/text, so it
+    // upscales crisply: allow it to fill any display. minScale stays generous
+    // for tiny embeds.
+    minScale: 0.1,
+    maxScale: 100,
+    /**
+     * Never switch to Reveal's SCROLL VIEW, whatever the window size.
+     *
+     * Reveal 5 auto-swaps the classic one-slide-at-a-time renderer for a
+     * vertical scrolling page below `scrollActivationWidth`, default 435px.
+     * That default is meant for a deck embedded in an article, where reading
+     * beats presenting. Presenting is the only thing this overlay does, and
+     * EVERY phone is under the threshold — an iPhone is 390-430 CSS px — so
+     * the platform bento/tray exists to serve would silently get a different
+     * renderer from a laptop.
+     *
+     * The concrete cost is navigation, not layout: measured at 402px the
+     * section still scales and positions correctly. But scroll view replaces
+     * slide navigation with page scrolling, which bypasses our own swipe
+     * handling (Reveal's is off deliberately — it walks into hidden state
+     * slides), and turns those state slides into scrollable content when they
+     * are supposed to be reachable only through a link. It also renders every
+     * section at once rather than one at a time, which is the opposite of what
+     * a presentation overlay is for.
+     */
+    scrollActivationWidth: 0,
+    center: false,
+    hash: false,
+    history: false,
+    transition: 'fade',
+    transitionSpeed: 'default',
+    backgroundTransition: 'fade',
+    controls: doc.present?.controls ?? false, // links/keys navigate; corner arrows are clutter
+    progress: doc.present?.progress ?? true,
+    slideNumber: (doc.present?.slideNumber ?? true)
+      ? (((slideEl: HTMLElement) => {
+          const i = [...slidesEl.children].indexOf(slideEl)
+          return [`${visibleIndex(i)} / ${visibleTotal}`]
+        }) as any)
+      : false,
+    // touch is handled by our own swipe logic below (state-aware + ends exit)
+    touch: false,
+    // Reveal uses distance < viewDistance; 2 is the minimum that keeps adjacent
+    // sections mounted so fade/slide/zoom transitions can animate.
+    viewDistance: 2,
+    keyboardCondition: null,
+    plugins: [],
+  })
+
+  const onResize = () => { resetLaserPointer(); deck.layout() }
+
+  // ——— speaker view (S) ———
+  // Reveal's stock speaker window reloads the presentation URL in iframes —
+  // which in a Bento file boots the EDITOR. Instead: our own popup, rendered
+  // with the same renderer from this one app instance and synced directly.
+  let speaker: Window | null = null
+  let speakerTimer = 0
+  let speakerStart = 0
+  // opening the speaker popup drops the main window out of OS fullscreen on most
+  // browsers; this guards the fullscreenchange handler so that bounce doesn't
+  // end the show (see onFsChange).
+  let openingSpeaker = false
+  // Reveal reports valid indices only after initialize(). The speaker view can
+  // be opened (from the editor) before that, so gate any deck.getIndices() read
+  // and re-populate once the deck is ready.
+  let deckReady = false
+  // Broadcast follow-mode may receive a nav frame before Reveal finishes init;
+  // park it here and apply as soon as the deck is ready.
+  let pendingIndex: number | null = null
+  // true when we adopted a speaker window the EDITOR opened — we drive it but
+  // must not close it on exit (it lives beyond this present session).
+  let speakerAdopted = false
+  // ——— live broadcast ———
+  const bc = opts.broadcast
+  let showOn = false        // presenter: live
+  let showLock = false      // presenter: the audience is held on my slide
+  let showCount = 0         // presenter: audience sockets, coarse
+  const follow = new FollowState(!!bc?.audience) // audience: follow ⇄ browse, lock
+  let followChip: HTMLButtonElement | null = null
+
+  // Laser frames leave at ≤ 20 fps; the viewer's dot glides between samples
+  // (CSS tween, see setRemoteLaser) so the trail stays smooth. Nav and black
+  // are rare and never throttled. `null` (pen up) always goes (follow.ts).
+  let lastLaserSent = 0
+  const sendLaserPoint = (p: string | null) => {
+    if (!showOn) return
+    const now = performance.now()
+    if (!laserDue(p, now, lastLaserSent)) return
+    lastLaserSent = now
+    bc?.presenter?.verbs()?.laser(p)
+  }
+  const sendBlackPoint = (on: boolean) => {
+    if (!showOn) return
+    bc?.presenter?.verbs()?.black({ on, lock: showLock })
+  }
+  const sendNav = (idx: number) => {
+    if (!showOn) return
+    bc?.presenter?.verbs()?.nav({ id: doc.slides[idx]?.id, i: visibleIndex(idx), lock: showLock, step: steps.step })
+  }
+
+  // Second-screen placement is set up in the EDITOR (properties panel) before
+  // presenting — that's where the Window Management permission is granted via a
+  // dedicated gesture, and the layout is cached in ../screens. Here we just read
+  // the chosen display synchronously when the notes open.
+  const nextVisibleIndex = (from: number) => {
+    for (let i = (isState(from) ? anchorOf(from) : from) + 1; i < doc.slides.length; i++) {
+      if (!isState(i)) return i
+    }
+    return -1
+  }
+  const svSlide = (idx: number, w: number): HTMLElement => {
+    const frame = document.createElement('div')
+    frame.className = 'sv-frame'
+    const scale = w / doc.size.width
+    frame.style.width = `${w}px`
+    frame.style.height = `${doc.size.height * scale}px`
+    if (idx >= 0) {
+      const inner = document.createElement('div')
+      inner.style.cssText = `transform:scale(${scale});transform-origin:0 0`
+      inner.appendChild(renderSlide(doc.slides[idx], doc, { hidePlaceholders: true }))
+      frame.appendChild(inner)
+    } else {
+      frame.classList.add('end')
+      frame.textContent = t('End of deck')
+    }
+    return frame
+  }
+  // Cheap, one-shot update of just the controls (highlight, counter, button
+  // states) — called on every slidechange AND on black toggle without re-rendering
+  // the (expensive) current/next slides or the thumbnail rail.
+  const updateSpeakerControls = () => {
+    if (!speaker || speaker.closed || !deckReady) return
+    const d = speaker.document
+    const cur = deck.getIndices().h
+    const anchor = isState(cur) ? anchorOf(cur) : cur
+    const count = d.querySelector('.sv-count')
+    if (count) {
+      const max = doc.slides[cur] ? Math.max(0, ...doc.slides[cur].elements.map(stepOf)) : 0
+      count.textContent = `${visibleIndex(cur)} / ${visibleTotal}` + (max ? ` · ${steps.step}/${max}` : '')
+    }
+    d.querySelectorAll<HTMLElement>('.sv-thumb').forEach((th) => {
+      const on = Number(th.dataset.idx) === anchor
+      th.classList.toggle('current', on)
+      if (on && th.closest('.sv-rail')) th.scrollIntoView({ block: 'nearest', inline: 'center' })
+    })
+    const nav = (k: string) => d.querySelector<HTMLButtonElement>(`.sv-btn[data-nav="${k}"]`)
+    nav('prev')?.toggleAttribute('disabled', !hasPrev())
+    nav('first')?.toggleAttribute('disabled', !hasPrev())
+    nav('next')?.toggleAttribute('disabled', !hasNext())
+    nav('last')?.toggleAttribute('disabled', !hasNext())
+    nav('black')?.classList.toggle('active', blacked)
+    nav('laser')?.classList.toggle('active', laserEnabled)
+    nav('laser')?.setAttribute('aria-pressed', String(laserEnabled))
+    nav('reduce')?.classList.toggle('active', reduceMotion)
+    const liveBtn = nav('live')
+    if (liveBtn) {
+      liveBtn.classList.toggle('active', showOn)
+      liveBtn.setAttribute('aria-pressed', String(showOn))
+    }
+    const lockBtn = nav('lock')
+    if (lockBtn) {
+      lockBtn.classList.toggle('active', showLock)
+      lockBtn.setAttribute('aria-pressed', String(showLock))
+      lockBtn.toggleAttribute('disabled', !showOn)
+    }
+    const badge = d.querySelector<HTMLElement>('.sv-bcast')
+    if (badge) {
+      badge.hidden = !showOn
+      badge.textContent = showOn ? String(showCount) : ''
+      badge.title = t('N viewers').replace('N', String(showCount))
+    }
+  }
+
+  // A brief centred pill so a keypress (M) gives visible confirmation — the
+  // audience overlay otherwise changes silently.
+  let toastTimer = 0
+  const flashPresentMsg = (text: string) => {
+    let el = overlay.querySelector<HTMLElement>('.bento-present-toast')
+    if (!el) { el = document.createElement('div'); el.className = 'bento-present-toast'; overlay.appendChild(el) }
+    el.textContent = text
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show') // restart the fade
+    clearTimeout(toastTimer)
+    toastTimer = window.setTimeout(() => el!.classList.remove('show'), 1400)
+  }
+
+  const stopShow = async () => {
+    if (!showOn) return
+    sendLaserPoint(null)
+    sendBlackPoint(false)
+    showOn = false
+    showLock = false
+    showCount = 0
+    updateSpeakerControls()
+    try { await bc?.presenter?.stop() } catch (err) { console.error('[bento-broadcast] end failed', err) }
+  }
+
+  // OFF on every show. Presenting locally must never silently broadcast; the
+  // presenter goes live on purpose, from the speaker view, every time.
+  const toggleShow = async () => {
+    if (!bc?.presenter) return
+    if (showOn) {
+      await stopShow()
+      flashPresentMsg(t('Broadcast ended'))
+      return
+    }
+    if (offlineEnabled()) {
+      flashPresentMsg(t('Broadcast refused in offline mode'))
+      return
+    }
+    try {
+      await bc.presenter.start()
+      showOn = true
+      updateSpeakerControls()
+      sendNav(deck.getIndices().h)
+      if (blacked) sendBlackPoint(true)
+      flashPresentMsg(t('Live — audience copies now follow you'))
+    } catch (err) {
+      console.error('[bento-broadcast] go live failed', err)
+      flashPresentMsg(t('Broadcast failed'))
+    }
+  }
+
+  // Lock is a UX constraint, not a security one — the audience already holds
+  // the whole deck (their copy IS the deck). It disables their follow toggle;
+  // it hides nothing. The button's title says so, in those words.
+  const toggleLock = () => {
+    if (!showOn) return
+    showLock = !showLock
+    updateSpeakerControls()
+    sendNav(deck.getIndices().h) // the lock flag rides on nav
+    flashPresentMsg(showLock ? t('Audience locked to your slide') : t('Audience may browse the deck'))
+  }
+
+  const setReduceMotion = (on: boolean, persist = true) => {
+    reduceMotion = on
+    if (persist) lsSet('bento-reduce-motion', on ? 'on' : 'off')
+    overlay.classList.toggle('reduce-motion', on)
+    if (on) clearLaserTrail()
+    // Toast only on an explicit toggle (M / speaker button), not the silent
+    // OS-preference follow or the initial state.
+    if (persist) flashPresentMsg(on ? t('Reduced motion: on') : t('Reduced motion: off'))
+    // Re-settle the CURRENT slide: kill any running tweens and restore final
+    // frames (a killed entrance would otherwise strand an element at opacity 0);
+    // if motion is back on, replay this slide's entrance + ambient fx.
+    if (deckReady) {
+      const cur = deck.getIndices().h
+      const section = slidesEl.children[cur] as HTMLElement | undefined
+      const slide = doc.slides[cur]
+      if (section && slide) {
+        anim.killTweensOf(section.querySelectorAll('.bento-el'))
+        for (const el of slide.elements) {
+          const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+          if (node) { applyElementFrame(node, el); resetXform(node) }
+        }
+        if (!on) { runEnterFx(slide, section); runAmbientFx(slide, section); restartSvgAnimations(section) }
+      }
+    }
+    updateSpeakerControls()
+  }
+  const toggleReduceMotion = () => setReduceMotion(!reduceMotion)
+  // Follow later OS changes ONLY while the user hasn't set an explicit choice.
+  const onMotionQuery = (e: MediaQueryListEvent) => { if (readMotionPref() === null) setReduceMotion(e.matches, false) }
+  reduceQuery.addEventListener?.('change', onMotionQuery)
+
+  const updateSpeaker = () => {
+    if (!speaker || speaker.closed) return
+    if (!deckReady) return // opened pre-init — populated on ready
+    const d = speaker.document
+    const cur = deck.getIndices().h
+    const nxt = nextVisibleIndex(cur)
+    const curBox = d.querySelector('.sv-current')
+    const nxtBox = d.querySelector('.sv-nextbox')
+    if (!curBox || !nxtBox) return
+    curBox.innerHTML = ''
+    curBox.appendChild(d.importNode(svSlide(cur, 660), true))
+    nxtBox.innerHTML = ''
+    nxtBox.appendChild(d.importNode(svSlide(nxt, 300), true))
+    const notes = d.querySelector('.sv-notes')
+    if (notes) notes.textContent = doc.slides[cur]?.notes || t('— no notes for this slide —')
+    updateSpeakerControls()
+  }
+  const openSpeaker = () => {
+    if (speaker && !speaker.closed) {
+      speaker.focus()
+      return
+    }
+    // guard the whole open + fullscreen-restore dance: the popup makes the
+    // browser leave fullscreen, and without this that would end the show
+    const wasFullscreen = document.fullscreenElement === overlay
+    openingSpeaker = true
+    // ADOPT a window the editor already opened (the clean two-gesture path:
+    // opened in its own gesture, never fought fullscreen for this click's
+    // activation, never trapped in the fullscreen Space). Only open a fresh one —
+    // on THIS display — when none was pre-opened (e.g. S pressed mid-show).
+    const pre = speakerWindow()
+    if (pre) {
+      speaker = pre
+      speakerAdopted = true
+    } else {
+      speaker = window.open('', 'bento-speaker', 'width=1200,height=800')
+      speakerAdopted = false
+    }
+    if (!speaker) { openingSpeaker = false; console.warn('[bento-speaker] popup blocked — allow pop-ups for this site'); return }
+    setSpeakerWindow(speaker)
+    ;(window as unknown as Record<string, unknown>).__bentoSpeaker = speaker // diagnostics
+    const d = speaker.document
+    d.title = `${doc.title} — ${t('Speaker view')}`
+    if (!d.head.querySelector('style')) { // already styled when adopting an editor window
+      for (const st of document.querySelectorAll('style')) d.head.appendChild(d.importNode(st, true))
+    }
+    d.body.className = 'bento-speaker'
+    const navBtn = (k: string, glyph: string, label: string, pressed = false) =>
+      `<button class="sv-btn" data-nav="${k}" title="${label}" aria-label="${label}"${pressed ? ' aria-pressed="false"' : ''}>${glyph}</button>`
+    d.body.innerHTML =
+      `<div class="sv-top">` +
+        `<div class="sv-timer" title="${t('Click to reset')}">00:00</div>` +
+        `<div class="sv-clock"></div>` +
+        `<div class="sv-count"></div>` +
+        `<div class="sv-ctrls">` +
+          navBtn('first', '⇤', t('First slide')) +
+          navBtn('prev', '‹', t('Previous')) +
+          navBtn('next', '›', t('Next')) +
+          navBtn('last', '⇥', t('Last slide')) +
+          navBtn('black', '■', t('Black screen (B)')) +
+          navBtn('laser', ICONS.laser, t('Laser pointer (L)'), true) +
+          navBtn('grid', '▦', t('All slides (G)')) +
+          navBtn('reduce', '⏸', t('Reduce motion (M)')) +
+          navBtn('live', ICONS.broadcast, t('Go live — audience copies follow your slides')) +
+          navBtn('lock', '🔒', t('Lock keeps the audience on your slide. It does not hide the rest of the deck, which they already have.')) +
+        `</div>` +
+        `<span class="sv-bcast" hidden title="${t('N viewers')}"></span>` +
+      `</div>` +
+      `<div class="sv-main">` +
+        `<div class="sv-current"></div>` +
+        `<div class="sv-side">` +
+          `<div class="sv-next-wrap"><div class="sv-label">${t('Next')}</div><div class="sv-nextbox"></div></div>` +
+          `<div class="sv-notes-wrap"><div class="sv-label">${t('Notes')}</div><div class="sv-notes"></div></div>` +
+        `</div>` +
+      `</div>` +
+      `<div class="sv-rail"></div>` +
+      `<div class="sv-grid" hidden><div class="sv-grid-inner"></div></div>`
+
+    const bcastStyle = d.createElement('style')
+    bcastStyle.textContent =
+      // a display property on the rule would override the UA's [hidden]{display:none},
+      // so the [hidden] variant must restate it explicitly
+      `.sv-bcast { display:inline-block; min-width:1.6em; text-align:center; background:rgba(255,255,255,0.15); border-radius:999px; padding:0.15em 0.5em; margin-left:0.5em; font-size:0.85em; line-height:1; }` +
+      `.sv-bcast[hidden] { display:none; }`
+    // the popup head persists across openSpeaker calls — never append a second copy
+    if (!d.head.querySelector('style[data-bento-bcast]')) {
+      bcastStyle.dataset.bentoBcast = '1'
+      d.head.appendChild(bcastStyle)
+    }
+
+    speakerStart = performance.now()
+    d.querySelector('.sv-timer')?.addEventListener('click', () => { speakerStart = performance.now() })
+    clearInterval(speakerTimer)
+    speakerTimer = window.setInterval(() => {
+      if (!speaker || speaker.closed) { clearInterval(speakerTimer); return }
+      const el = speaker.document.querySelector('.sv-timer')
+      if (el) {
+        const s = Math.floor((performance.now() - speakerStart) / 1000)
+        el.textContent = `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+      }
+      const clock = speaker.document.querySelector('.sv-clock')
+      if (clock) clock.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }, 1000)
+
+    // a clickable thumbnail: an imported slide render inside a button, badged
+    // with its slide number; clicking jumps the live show there.
+    const thumb = (idx: number, w: number): HTMLElement => {
+      const b = d.createElement('button')
+      b.className = 'sv-thumb'
+      b.dataset.idx = String(idx)
+      b.appendChild(d.importNode(svSlide(idx, w), true))
+      const num = d.createElement('span')
+      num.className = 'sv-thumb-n'
+      num.textContent = String(visibleIndex(idx))
+      b.appendChild(num)
+      b.addEventListener('click', () => { deck.slide(idx, 0); toggleGrid(false) })
+      return b
+    }
+
+    const rail = d.querySelector('.sv-rail')!
+    for (const idx of railIndices) rail.appendChild(thumb(idx, 150))
+
+    // all-slides grid overlay — built lazily on first open (cheap for small decks,
+    // but a big deck shouldn't pay for it unless the presenter asks).
+    const grid = d.querySelector('.sv-grid') as HTMLElement
+    const gridInner = d.querySelector('.sv-grid-inner')!
+    let gridBuilt = false
+    const toggleGrid = (on?: boolean) => {
+      const show = on ?? grid.hasAttribute('hidden')
+      if (show && !gridBuilt) { for (const idx of railIndices) gridInner.appendChild(thumb(idx, 240)); gridBuilt = true }
+      grid.toggleAttribute('hidden', !show)
+      if (show) updateSpeakerControls()
+    }
+    grid.addEventListener('click', (ev) => { if (ev.target === grid) toggleGrid(false) })
+
+    const doNav = (k: string) => {
+      if (k === 'first') goFirst()
+      else if (k === 'prev') goPrev()
+      else if (k === 'next') goNext()
+      else if (k === 'last') goLast()
+      else if (k === 'black') toggleBlack()
+      else if (k === 'laser') toggleLaser()
+      else if (k === 'grid') toggleGrid()
+      else if (k === 'reduce') toggleReduceMotion()
+      else if (k === 'live') void toggleShow()
+      else if (k === 'lock') toggleLock()
+    }
+    d.querySelectorAll<HTMLButtonElement>('.sv-btn[data-nav]').forEach((b) => {
+      b.addEventListener('click', () => doNav(b.dataset.nav!))
+    })
+
+    // drive the show FROM the speaker window (its keys fire in its own document)
+    d.addEventListener('keydown', (ev: KeyboardEvent) => {
+      const k = ev.key
+      if (k === 'ArrowRight' || k === 'PageDown' || k === ' ' || k === 'n') { ev.preventDefault(); goNext() }
+      else if (k === 'ArrowLeft' || k === 'PageUp' || k === 'p') { ev.preventDefault(); goPrev() }
+      else if (k === 'Home') { ev.preventDefault(); goFirst() }
+      else if (k === 'End') { ev.preventDefault(); goLast() }
+      else if (k === 'b' || k === 'B') { ev.preventDefault(); toggleBlack() }
+      else if (k === 'g' || k === 'G') { ev.preventDefault(); toggleGrid() }
+      else if (k === 'l' || k === 'L') { ev.preventDefault(); if (!ev.repeat) toggleLaser() }
+      else if (k === 'm' || k === 'M') { ev.preventDefault(); toggleReduceMotion() }
+      else if (k === 'Escape' && !grid.hasAttribute('hidden')) { ev.preventDefault(); toggleGrid(false) }
+    })
+
+    updateSpeaker()
+    if (!speakerAdopted && wasFullscreen) {
+      // A fresh window on THIS display sits behind the fullscreen slides — drop
+      // fullscreen so the notes are visible. (Open notes from the Slide panel and
+      // drag them to a second screen to keep the slides fullscreen.)
+      document.exitFullscreen?.().catch(() => {})
+    }
+    window.setTimeout(() => { openingSpeaker = false }, 500)
+  }
+
+  // Real fullscreen (F toggles; Present enters it by default). The overlay
+  // element is what goes fullscreen, so the speaker popup stays independent.
+  // Requests can be denied (iframes, no user activation) — tab-fill mode is
+  // the graceful floor, and stays the mode for testing/sharing via F.
+  /**
+   * Keep the screen awake for the length of the show.
+   *
+   * This matters most on a PHONE, which is where a shared deck usually gets
+   * presented from: iOS dims and locks on its own idle timer, and a presenter
+   * advancing a slide every couple of minutes trips it mid-talk. Desktop
+   * benefits too — fullscreen alone does not defeat a screensaver.
+   *
+   * Best-effort by construction: the API is absent on older iOS (<16.4) and
+   * Firefox, and the request is REJECTED unless the page is visible, so this
+   * must never throw into the caller. The lock is also dropped by the browser
+   * whenever the tab is hidden — switching apps mid-show and coming back would
+   * otherwise leave the screen sleeping again — so re-acquire on visibility.
+   */
+  let wakeLock: { release(): Promise<void> } | null = null
+  const acquireWakeLock = async () => {
+    const wl = (navigator as any).wakeLock
+    if (!wl || wakeLock || document.visibilityState !== 'visible') return
+    try { wakeLock = await wl.request('screen') } catch { /* denied or unsupported */ }
+  }
+  const releaseWakeLock = () => {
+    const held = wakeLock
+    wakeLock = null
+    void held?.release?.().catch(() => {})
+  }
+  const onVisibility = () => {
+    if (document.visibilityState === 'visible') void acquireWakeLock()
+    else resetLaserPointer()
+  }
+  document.addEventListener('visibilitychange', onVisibility)
+  void acquireWakeLock()
+
+  const enterFullscreen = () => {
+    overlay.requestFullscreen?.({ navigationUI: 'hide' }).catch(() => {})
+  }
+  const toggleFullscreen = () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+    else enterFullscreen()
+  }
+  // leaving fullscreen — Esc, F, the browser's own UI, an OS gesture —
+  // ends the show outright; it never drops into tab-fill mode. (Tab mode
+  // is only ever entered deliberately, via the small present button.)
+  let wentFullscreen = false
+  const onFsChange = () => {
+    if (document.fullscreenElement === overlay) wentFullscreen = true
+    else if (wentFullscreen && !exited && !openingSpeaker) exit()
+  }
+  document.addEventListener('fullscreenchange', onFsChange)
+  if (opts.fullscreen !== false) enterFullscreen()
+  // If the editor already opened notes on the second screen, go live on that
+  // existing window now — no new window.open, so fullscreen above kept this
+  // click's activation and the notes were never trapped in the fullscreen Space.
+  if (speakerWindow()) openSpeaker()
+
+  const exit = () => {
+    if (exited) return
+    exited = true
+    void stopShow() // a broadcast never outlives its show
+    unShow?.()
+    // measurements are keyed by slide INDEX, so they'd be wrong for the next
+    // show if the deck was edited in between — never carry them across
+    symCache.clear()
+    pauseMediaIn(slidesEl) // stop any playing clip before teardown
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {})
+    const last = deck.getIndices().h
+    try {
+      deck.destroy()
+    } catch {
+      /* Reveal teardown is best-effort */
+    }
+    overlay.remove()
+    window.removeEventListener('resize', onResize)
+    document.removeEventListener('keydown', onKeydown, true)
+    document.removeEventListener('fullscreenchange', onFsChange)
+    document.removeEventListener('visibilitychange', onVisibility)
+    releaseWakeLock()
+    reduceQuery.removeEventListener?.('change', onMotionQuery)
+    clearInterval(speakerTimer)
+    if (speaker && !speaker.closed) {
+      if (speakerAdopted) {
+        // editor-owned window — leave it open, reset to the idle placeholder so
+        // it's ready for the next run instead of freezing on the last slide
+        paintSpeaker(speaker, `${doc.title} — ${t('Speaker view')}`,
+          speakerIdleBody(doc.title, t('Presentation ended. Start it again to bring these notes back to life.')))
+      } else {
+        speaker.close()
+        setSpeakerWindow(null)
+      }
+    }
+    setLaserEnabled(false, false)
+    window.removeEventListener('blur', onWindowBlur)
+    onExit(last)
+  }
+
+  // Capture-phase keys: Esc exits; arrows navigate unconditionally. Reveal
+  // drops key events when focus sits in odd places (a leftover form field, a
+  // host-embedded frame) — present mode has no fields, so arrows are always
+  // navigation. Handled here exclusively (stopPropagation avoids double-steps).
+  const onKeydown = (ev: KeyboardEvent) => {
+    if (ev.key === 'Escape') {
+      if (deck.isOverview()) return // let Reveal close its overview first
+      ev.preventDefault()
+      ev.stopPropagation()
+      exit()
+      return
+    }
+    if (ev.key === 's' || ev.key === 'S') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      openSpeaker()
+      return
+    }
+    if (ev.key === 'f' || ev.key === 'F') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      toggleFullscreen()
+      return
+    }
+    if (ev.key === 'm' || ev.key === 'M') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      toggleReduceMotion()
+      return
+    }
+    if (ev.key === 'l' || ev.key === 'L') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      if (!ev.repeat) toggleLaser()
+      return
+    }
+    if (ev.key === 'b' || ev.key === 'B') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      toggleBlack()
+      return
+    }
+    const key = ev.key || ({ 32: ' ', 37: 'ArrowLeft', 39: 'ArrowRight', 33: 'PageUp', 34: 'PageDown' } as Record<number, string>)[ev.keyCode]
+    if (key === 'ArrowRight' || key === 'PageDown' || key === ' ') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      goNext()
+    } else if (key === 'ArrowLeft' || key === 'PageUp') {
+      ev.preventDefault()
+      ev.stopPropagation()
+      goPrev()
+    }
+  }
+  document.addEventListener('keydown', onKeydown, true)
+
+  // ——— touch: swipe left/right to navigate; swiping past either end of
+  // the deck drops back into the editor (phones have no Esc) ———
+  let touchX = 0
+  let touchY = 0
+  overlay.addEventListener('touchstart', (ev) => {
+    touchX = ev.touches[0].clientX
+    touchY = ev.touches[0].clientY
+  }, { passive: true })
+  overlay.addEventListener('touchend', (ev) => {
+    const t0 = ev.changedTouches[0]
+    if (!t0) return
+    const dx = t0.clientX - touchX
+    const dy = t0.clientY - touchY
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.2) return // a tap or a scroll
+    if (dx < 0) {
+      if (hasNext()) goNext()
+      else exit()
+    } else {
+      if (hasPrev()) goPrev()
+      else exit()
+    }
+  }, { passive: true })
+
+  deck.on('slidechanged', ((event: any) => {
+    const from = event.previousSlide as HTMLElement | undefined
+    const to = event.currentSlide as HTMLElement
+    if (!to) return
+    const fromIdx = from ? [...slidesEl.children].indexOf(from) : -1
+    const toIdx = [...slidesEl.children].indexOf(to)
+    if (from) {
+      // Kill the outgoing slide's tweens, then restore model frames —
+      // a tween killed during its delay would otherwise leave the element
+      // stuck at its "from" state (invisible) for every future visit.
+      anim.killTweensOf(from.querySelectorAll('.bento-el'))
+      sweepSymbolSpans(from)
+      const fromSlide = doc.slides[fromIdx]
+      for (const el of fromSlide?.elements ?? []) {
+        const node = from.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+        if (node) {
+          applyElementFrame(node, el) // resets style.transform…
+          resetXform(node) // …so the engine must forget its composed state
+        }
+      }
+      if (fromSlide?.hover?.type === 'reveal') {
+        applyRevealSet(from, null, fromSlide.hover.default)
+      }
+    }
+    // The incoming section may still carry span state from a PREVIOUS visit
+    // (Reveal keeps sections mounted) — start clean before any fx runs.
+    sweepSymbolSpans(to)
+    const forward = toIdx > fromIdx
+    // Reveal steps: forward arrives with them hidden, backward fully shown —
+    // unless the audience is following a presenter who named the step.
+    steps.enter(doc.slides[toIdx]?.elements ?? [], forward)
+    if (pendingStep !== null) { steps.set(pendingStep); pendingStep = null }
+    applyStep(to, doc.slides[toIdx], steps.step)
+    // Morph forward into a morph slide, and un-morph when backing out of one.
+    const morphing =
+      from &&
+      ((forward && doc.slides[toIdx]?.transition === 'morph') ||
+        (!forward && doc.slides[fromIdx]?.transition === 'morph'))
+    if (morphing) {
+      if (!reduceMotion) {
+        runMorph(doc, from!, to, fromIdx, toIdx)
+        runMorphArrivalCountUps(doc.slides[fromIdx], doc.slides[toIdx], to)
+      }
+    }
+    else if (!reduceMotion) runEnterFx(doc.slides[toIdx], to, undefined, false, steps.step)
+    if (!reduceMotion) {
+      runAmbientFx(doc.slides[toIdx], to)
+      restartSvgAnimations(to)
+    }
+    wireHoverFocus(doc.slides[toIdx], to)
+    if (from) disposeLiveCharts(doc.slides[fromIdx], from)
+    mountLiveCharts(doc.slides[toIdx], to, morphing ? doc.slides[fromIdx] : undefined)
+    if (from) pauseMediaIn(from)
+    startMediaIn(to)
+    // Capture where this slide's formula symbols sit WHILE it is on screen —
+    // once it becomes the outgoing slide there is no layout left to measure.
+    // Synchronously, not in rAF: a backgrounded tab never runs animation
+    // frames, and a slide whose symbols were never captured simply doesn't
+    // symbol-morph on the way out. symbolOffsets normalises by the element's
+    // own box, so measuring mid-morph is safe.
+    cacheSlideSymbols(doc, to, toIdx)
+    sendNav(toIdx)
+    updateSpeaker()
+  }) as any)
+
+  // Open a web page from the show — always a NEW tab, never navigating the
+  // deck away (the file IS the presentation; a same-tab navigation would end
+  // it and, on a file:// deck, leave nothing to come back to). noopener so the
+  // page cannot reach this window; noreferrer so the deck's location is not
+  // sent. The offline switch is honoured: a viewer who asked for no network
+  // activity does not get a browser tab making a request on a click.
+  const openWeb = (url: string) => {
+    if (offlineEnabled()) { flashPresentMsg(t('Links are off in offline mode')); return }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  // Clicking an element with a link jumps to its target slide, or opens a web
+  // page; an <a href> inside text (the [caption](url) markdown) opens too.
+  slidesEl.addEventListener('click', (ev) => {
+    const anchor = (ev.target as HTMLElement).closest<HTMLAnchorElement>('a[href]')
+    if (anchor && slidesEl.contains(anchor)) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      const href = anchor.getAttribute('href') ?? ''
+      if (isWebUrl(href)) openWeb(href)
+      return
+    }
+    const target = (ev.target as HTMLElement).closest<HTMLElement>('[data-link]')
+    if (!target) return
+    const link = target.dataset.link ?? ''
+    if (isWebUrl(link)) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      openWeb(link)
+      return
+    }
+    const idx = doc.slides.findIndex((s) => s.id === link)
+    if (idx >= 0) {
+      ev.preventDefault()
+      ev.stopPropagation()
+      deck.slide(idx, 0)
+    }
+  })
+  // A middle-click fires `auxclick`, not `click`, and the browser's default
+  // for it on an anchor is "open in a new tab" — straight past the offline
+  // gate and the noreferrer flag. Route it through the same door.
+  slidesEl.addEventListener('auxclick', (ev) => {
+    const anchor = (ev.target as HTMLElement).closest<HTMLAnchorElement>('a[href]')
+    if (!anchor) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    if (ev.button === 1) {
+      const href = anchor.getAttribute('href') ?? ''
+      if (isWebUrl(href)) openWeb(href)
+    }
+  })
+
+  const goTo = (index: number) => {
+    if (deckReady) deck.slide(index, 0)
+    else pendingIndex = index
+  }
+  // A presenter's nav names the step too. Same slide: apply it here (reveal
+  // forward with the entrance, hide backward); another slide: park it for
+  // slidechanged, which enters the slide and then sets it.
+  let pendingStep: number | null = null
+  const followStep = (index: number, step: number | undefined) => {
+    if (typeof step !== 'number') return
+    if (index !== deck.getIndices().h) { pendingStep = step; return }
+    const was = steps.step
+    steps.set(step)
+    if (steps.step === was) return
+    const section = currentSection()
+    const slide = doc.slides[index]
+    if (!section || !slide) return
+    if (steps.step > was) {
+      applyStep(section, slide, steps.step)
+      const ids = new Set(slide.elements.filter((el) => stepOf(el) > was && stepOf(el) <= steps.step).map((el) => el.id))
+      if (!reduceMotion) runEnterFx(slide, section, ids, true)
+    } else {
+      for (const el of slide.elements) {
+        if (stepOf(el) <= steps.step || stepOf(el) > was) continue
+        const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+        if (node) { anim.killTweensOf(node); applyElementFrame(node, el); resetXform(node) }
+      }
+      applyStep(section, slide, steps.step)
+    }
+  }
+
+  // ——— the audience side: follow the presenter ———
+  // The decisions live in follow.ts (rig-driven); this is the DOM around them.
+  const updateFollowChip = () => {
+    if (!followChip) return
+    const state = follow.label()
+    followChip.classList.toggle('following', follow.following)
+    followChip.toggleAttribute('disabled', follow.locked)
+    followChip.textContent = state === 'locked'
+      ? t('Following the presenter (locked)')
+      : state === 'following' ? t('Following the presenter') : t('Browsing — click to follow')
+    followChip.title = state === 'locked'
+      ? t('The presenter has locked the audience to their slide')
+      : state === 'following' ? t('Click to browse the deck on your own') : t('Click to snap back to the presenter')
+  }
+  const showCard = (text: string, sticky = false) => {
+    let el = overlay.querySelector<HTMLElement>('.bento-show-card')
+    if (!el) { el = document.createElement('div'); el.className = 'bento-show-card'; overlay.appendChild(el) }
+    el.textContent = text
+    el.hidden = false
+    if (!sticky) window.setTimeout(() => { if (el) el.hidden = true }, 4000)
+  }
+  if (bc?.audience) {
+    followChip = document.createElement('button')
+    followChip.className = 'bento-follow-chip'
+    followChip.addEventListener('click', () => {
+      const jump = follow.toggle()
+      updateFollowChip()
+      if (jump !== null) goTo(jump)
+    })
+    overlay.appendChild(followChip)
+    updateFollowChip()
+    showCard(t('Waiting for the presenter…'), true)
+  }
+  let unShow: (() => void) | undefined
+  if (bc) {
+    unShow = bc.onShow((e) => {
+      if (e.t === 'count') { showCount = e.n; updateSpeakerControls(); return }
+      if (e.t === 'checkpoint') return // the session re-sends the audsnap itself
+      if (e.t === 'closed') {
+        if (!bc.audience) return
+        if (e.code === 4001) { follow.applyLock(false); updateFollowChip(); showCard(t('The show has ended — this copy stays a working deck')) }
+        else if (e.code === 4002) showCard(t('Waiting for the presenter…'), true)
+        else if (e.code === 1008) showCard(t('Your audience copy is no longer valid — ask the presenter for a new one'), true)
+        return
+      }
+      if (!bc.audience) return
+      const p = (e.payload ?? {}) as { id?: string; i?: number; on?: boolean; lock?: boolean }
+      if (e.kind === 'nav') {
+        overlay.querySelector<HTMLElement>('.bento-show-card')?.setAttribute('hidden', '')
+        const jump = follow.nav(doc.slides, p)
+        updateFollowChip()
+        if (jump !== null) { followStep(jump, (p as { step?: number }).step); goTo(jump) }
+      } else if (e.kind === 'black') {
+        follow.applyLock(p.lock)
+        updateFollowChip()
+        setBlack(!!p.on)
+      } else if (e.kind === 'laser') {
+        setRemoteLaser(typeof e.payload === 'string' ? e.payload : null)
+      }
+    })
+  }
+
+  deck.initialize().then(() => {
+    deckReady = true
+    if (startIndex > 0) deck.slide(startIndex, 0)
+    if (pendingIndex !== null) {
+      deck.slide(pendingIndex, 0)
+      pendingIndex = null
+    }
+    // if the speaker view was opened before init (macOS reorder), fill it now
+    updateSpeaker()
+    // late layout: fonts/images that finish loading after init can change
+    // the measured size, and the boot viewport may still be settling
+    window.addEventListener('resize', onResize)
+    setTimeout(onResize, 120)
+    setTimeout(onResize, 600)
+    const first = slidesEl.children[startIndex] as HTMLElement | undefined
+    if (first) {
+      steps.enter(doc.slides[startIndex]?.elements ?? [], true)
+      applyStep(first, doc.slides[startIndex], steps.step)
+      if (!reduceMotion) {
+        runEnterFx(doc.slides[startIndex], first, undefined, false, steps.step)
+        runAmbientFx(doc.slides[startIndex], first)
+        restartSvgAnimations(first)
+      }
+      wireHoverFocus(doc.slides[startIndex], first)
+      // the opening slide never gets a slidechanged, so capture its symbols
+      // here or the very first morph would have no from-side to travel from
+      cacheSlideSymbols(doc, first, startIndex)
+      mountLiveCharts(doc.slides[startIndex], first)
+      startMediaIn(first)
+    }
+    if (opts?.onDocChange) {
+      opts.onDocChange({ slidesEl, deck, buildSection })
+    }
+  })
+
+  return { exit, goTo, setBlack, setRemoteLaser }
+}
+
+// --- media playback -----------------------------------------------------------
+
+// Autoplay is intentionally NOT set at render time (it would fire on the editor
+// canvas and in every thumbnail). Present mode starts flagged media on entry
+// and pauses everything on exit so a paused clip doesn't keep playing off-slide.
+function startMediaIn(section: HTMLElement) {
+  section.querySelectorAll<HTMLMediaElement>('video[data-autoplay="1"], audio[data-autoplay="1"]').forEach((m) => {
+    try { m.currentTime = 0 } catch { /* not seekable yet */ }
+    void m.play().catch(() => { /* blocked (e.g. un-muted video) — leave paused */ })
+  })
+}
+
+function pauseMediaIn(section: HTMLElement) {
+  section.querySelectorAll<HTMLMediaElement>('video, audio').forEach((m) => { m.pause() })
+}
+
+// --- live charts --------------------------------------------------------------
+
+// Present mode swaps chart snapshots for live ECharts instances (tooltips,
+// dataZoom). Leaving the slide disposes the instance and restores the
+// snapshot so the section stays presentable in Reveal's viewDistance cache.
+const chartHandles = new WeakMap<HTMLElement, Array<() => void>>()
+
+function mountLiveCharts(slide: Slide, section: HTMLElement, fromSlide?: Slide) {
+  const handles: Array<() => void> = []
+  for (const el of slide?.elements ?? []) {
+    if (el.type !== 'chart') continue
+    const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+    if (!node) continue
+    // a matching chart on the other side of a morph: animate its data over
+    const fromEl = fromSlide?.elements.find((e) => e.id === el.id && e.type === 'chart')
+    const dispose = mountChart(el, node, fromEl && fromEl.type === 'chart' ? fromEl.option : undefined)
+    handles.push(() => {
+      dispose()
+      node.innerHTML = chartSnapshotSvg(el)
+      const csvg = node.querySelector('svg')
+      if (csvg) {
+        csvg.setAttribute('preserveAspectRatio', 'none')
+        ;(csvg as SVGElement).style.cssText = 'width:100%;height:100%;display:block'
+      }
+    })
+  }
+  if (handles.length) chartHandles.set(section, handles)
+}
+
+function disposeLiveCharts(_slide: Slide, section: HTMLElement) {
+  for (const h of chartHandles.get(section) ?? []) h()
+  chartHandles.delete(section)
+}
+
+// --- element fx -------------------------------------------------------------
+
+function fxNodes(slide: Slide, section: HTMLElement): Array<[SlideElement, HTMLElement]> {
+  const pairs: Array<[SlideElement, HTMLElement]> = []
+  for (const el of slide?.elements ?? []) {
+    if (!el.fx) continue
+    const node = section.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+    if (node) pairs.push([el, node])
+  }
+  return pairs
+}
+
+type EnterKind = NonNullable<NonNullable<SlideElement['fx']>['enter']>
+
+/**
+ * The starting frame, duration and ease an `fx.enter` kind implies.
+ *
+ * Shared by the two places an element can enter — the plain entrance runner and
+ * the morph path, which gives elements with no morph partner an entrance of
+ * their own. Keeping ONE table means a new direction cannot work on ordinary
+ * slides and quietly do nothing on morph arrivals.
+ *
+ * fade-* nudge 16px; slide-* sweep 120px in from an edge (slide-left starts to
+ * the RIGHT and travels leftward). x needs the x transform channel in anim.ts.
+ */
+function enterSpec(kind: EnterKind, enterDur?: number) {
+  const D = 120
+  const from = { opacity: 0, x: 0, y: 0 }
+  if (kind === 'fade-up') from.y = 16
+  else if (kind === 'fade-down') from.y = -16
+  else if (kind === 'slide-left') from.x = D
+  else if (kind === 'slide-right') from.x = -D
+  else if (kind === 'slide-up') from.y = D
+  else if (kind === 'slide-down') from.y = -D
+  const sliding = kind.startsWith('slide-')
+  return {
+    from,
+    duration: enterDur ?? (sliding ? 0.75 : 0.55),
+    ease: sliding ? 'power3.out' : 'power2.out',
+  }
+}
+
+/** Staggered entrance animations + count-ups for the incoming slide. */
+/**
+ * `only` restricts the run to those element ids (a reveal step); `revealing`
+ * gives an element with no `fx.enter` of its own a plain fade, because a
+ * stepped element that simply pops in reads as a glitch, not a reveal. `step`
+ * `atStep` (slide entry) leaves elements hidden by the step counter alone — they run
+ * their entrance when their step comes.
+ */
+function runEnterFx(slide: Slide, section: HTMLElement, only?: Set<string>, revealing = false, atStep = 0) {
+  const entering = fxNodes(slide, section)
+    // reveal-set members are shown/hidden by hover, never by entrance tweens
+    .filter(([el]) => (el.fx!.enter || el.fx!.countUp || (revealing && only?.has(el.id))) && !el.showOnHover)
+    .filter(([el]) => (only ? only.has(el.id) : shownAt(el, atStep)))
+    .sort((a, b) => (a[0].fx!.order ?? 0) - (b[0].fx!.order ?? 0))
+  // Delay derives from fx.order when set (equal order ⇒ elements enter
+  // together — how a diagram reveals band-by-band), else from list position.
+  entering.forEach(([el, node], i) => {
+    const fx = el.fx!
+    const step = fx.order ?? i
+    // motion-path loops own the transform — an entrance tween on the same
+    // node would fight it and freeze the dot off its path
+    if (fx.loop?.type === 'motion-path') return
+    const kind = fx.enter ?? (revealing ? 'fade' : undefined)
+    if (kind) {
+      const spec = enterSpec(kind, fx.enterDur)
+      anim.fromTo(
+        node,
+        spec.from,
+        {
+          opacity: el.opacity,
+          x: 0,
+          y: 0,
+          duration: spec.duration,
+          delay: (revealing ? 0 : 0.12) + Math.min(step, 24) * 0.05,
+          ease: spec.ease,
+        },
+      )
+    }
+    if (fx.countUp) runCountUp(node)
+  })
+  settleGuarantee(entering.map(([el, node]) => [node, el]))
+}
+
+/**
+ * Count-ups on a MORPH arrival, for elements the morph did not carry over.
+ *
+ * Morph and entrance are mutually exclusive branches — an entrance tween on a
+ * morphing element would fight the morph — and `runCountUp` lived only on the
+ * entrance side, so `fx.countUp` on a slide reached by `transition:'morph'`
+ * silently rendered a static number. That is a combination the authoring guide
+ * actively recommends (a headline statistic on a slide that morphs its
+ * furniture in), so it failed quietly and often.
+ *
+ * A count-up element WITH a morph partner is already on screen showing its
+ * number as it flies in; restarting it from zero would be wrong. One with no
+ * partner is new on this slide, has no transform to fight, and is exactly what
+ * the author asked to count.
+ */
+function runMorphArrivalCountUps(from: Slide | undefined, to: Slide, section: HTMLElement) {
+  const carried = new Set((from?.elements ?? []).map((el) => el.morphId || el.id))
+  for (const [el, node] of fxNodes(to, section)) {
+    if (!el.fx!.countUp || el.showOnHover) continue
+    if (!carried.has(el.morphId || el.id)) runCountUp(node)
+  }
+}
+
+/**
+ * Wall-clock safety net: on starved render loops (throttled tabs, weak
+ * machines) tween progress crawls — guarantee every animated element lands
+ * on its final model state instead of lingering half-invisible.
+ */
+function settleGuarantee(pairs: Array<[HTMLElement, SlideElement]>) {
+  // Ambient/looping elements run infinite tweens by design — their progress
+  // never reaches 1, and "settling" them would kill the loop and freeze the
+  // element (a real bug once: orbit dots died 2.8s after every morph entry).
+  pairs = pairs.filter(([, el]) => !el.fx?.loop && el.fx?.ambient !== 'kenburns')
+  if (!pairs.length) return
+  setTimeout(() => {
+    for (const [node, el] of pairs) {
+      if (!node.isConnected) continue
+      const tweens = anim.getTweensOf(node)
+      if (tweens.some((t) => t.progress() < 1)) {
+        anim.killTweensOf(node)
+        applyElementFrame(node, el)
+        resetXform(node)
+      }
+    }
+  }, 2800)
+}
+
+/** Animate every number in the element's text from 0 to its final value. */
+/**
+ * How a number was WRITTEN, so the count-up can put it back the same way.
+ *
+ * The number must settle exactly as the author typed it. Routing through
+ * `Intl.NumberFormat(navigator.language)` is the tempting fix and the wrong
+ * one: slide content is authored, so the same deck would read `1,234.5` for
+ * one viewer and `1.234,5` for another. Locale follows the viewer for CHROME
+ * only (`PLATFORM.md` §3).
+ */
+interface NumberShape {
+  value: number
+  decimals: number
+  group: string   // separator between thousands, '' if the author used none
+  point: string   // decimal separator, '' if the number is an integer
+}
+
+/**
+ * Read an authored number. Separators are genuinely ambiguous, so the rules
+ * are stated rather than guessed:
+ *
+ * - BOTH `.` and `,` present → the LAST one is the decimal point, the other
+ *   groups. `1,234.5` → 1234.5, `1.234,5` → 1234.5.
+ * - Only `,` → grouping if there are several (`1,234,567`), or if a single one
+ *   is followed by exactly three digits (`1,234`). Otherwise a decimal comma
+ *   (`1,23`, `1,2345`).
+ * - Only `.` → a decimal point, always. A deck writing `1.234` means
+ *   one-point-two-three-four; reading it as grouping would break every
+ *   three-decimal number to fix a rarer case.
+ */
+function readNumber(raw: string): NumberShape {
+  const dots = (raw.match(/\./g) ?? []).length
+  const commas = (raw.match(/,/g) ?? []).length
+  let point = ''
+  if (dots && commas) point = raw.lastIndexOf('.') > raw.lastIndexOf(',') ? '.' : ','
+  else if (commas) point = commas > 1 || /,\d{3}$/.test(raw) ? '' : ','
+  else if (dots) point = '.'
+  const group = point === '.' ? (commas ? ',' : '')
+    : point === ',' ? (dots ? '.' : '')
+      : (commas ? ',' : dots ? '.' : '')
+  const cut = point ? raw.lastIndexOf(point) : -1
+  const whole = (cut >= 0 ? raw.slice(0, cut) : raw).replace(/[.,]/g, '')
+  const frac = cut >= 0 ? raw.slice(cut + 1) : ''
+  return { value: Number(frac ? `${whole}.${frac}` : whole), decimals: frac.length, group, point }
+}
+
+/** Put a number back in the author's own convention. */
+function writeNumber(value: number, shape: NumberShape): string {
+  const fixed = value.toFixed(shape.decimals)
+  const dot = fixed.indexOf('.')
+  let whole = dot >= 0 ? fixed.slice(0, dot) : fixed
+  const frac = dot >= 0 ? fixed.slice(dot + 1) : ''
+  if (shape.group) whole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, shape.group)
+  return frac ? whole + shape.point + frac : whole
+}
+
+function runCountUp(node: HTMLElement) {
+  const inner = node.querySelector<HTMLElement>('.bento-text-inner') ?? node
+  const final = inner.textContent ?? ''
+  // Separators only count BETWEEN digits, so a sentence ending in a number
+  // ("grew 25.") keeps its full stop instead of having it swallowed and
+  // re-emitted as part of the value.
+  const tokens = [...final.matchAll(/\d+(?:[.,]\d+)*/g)]
+  if (!tokens.length) return
+  const shapes = tokens.map((m) => readNumber(m[0]))
+  const state = { p: 0 }
+  anim.to(state, {
+    p: 1,
+    duration: 1.15,
+    delay: 0.15,
+    ease: 'power2.out',
+    onUpdate() {
+      let out = ''
+      let last = 0
+      tokens.forEach((m, i) => {
+        out += final.slice(last, m.index)
+        out += writeNumber(shapes[i].value * state.p, shapes[i])
+        last = m.index! + m[0].length
+      })
+      inner.textContent = out + final.slice(last)
+    },
+  })
+}
+
+/** Re-parse inline svg elements so their CSS animations replay on entry. */
+function restartSvgAnimations(section: HTMLElement) {
+  for (const host of section.querySelectorAll<HTMLElement>('.bento-el-svg')) {
+    if (host.querySelector('animate, [style*="animation"], style')) {
+      // eslint-disable-next-line no-self-assign
+      host.innerHTML = host.innerHTML
+    }
+  }
+}
+
+/** Continuous motion: ken-burns zoom, marching dashes, dots along paths. */
+function runAmbientFx(slide: Slide, section: HTMLElement) {
+  for (const [el, node] of fxNodes(slide, section)) {
+    const fx = el.fx!
+    if (fx.ambient === 'kenburns') {
+      const ken = fx.ken ?? {}
+      const dir = ken.dir ?? 'drift'
+      if (dir === 'drift') {
+        anim.fromTo(
+          node,
+          { scale: 1.02 },
+          { scale: ken.scale ?? 1.1, duration: ken.duration ?? 26, ease: 'none', repeat: -1, yoyo: true, transformOrigin: '50% 40%' },
+        )
+      } else {
+        // one-shot settle, replayed on every slide entry
+        const far = ken.scale ?? 1.06
+        const dur = ken.duration ?? 2.5
+        anim.fromTo(
+          node,
+          { scale: dir === 'out' ? far : 1 },
+          { scale: dir === 'out' ? 1 : far, duration: dur, ease: 'power2.out', transformOrigin: '50% 50%' },
+        )
+      }
+    }
+    if (fx.loop?.type === 'dash-march') {
+      const target = node.querySelector('path, line, rect, ellipse, polygon') as SVGElement | null
+      if (target) {
+        // Seamless marching ants: the offset must travel a WHOLE number of
+        // dash+gap periods, or the pattern snaps back mid-cycle each loop and
+        // reads as an incomplete/janky loop. Snap the requested distance to
+        // the nearest whole multiple of the element's dasharray period.
+        const da = target.getAttribute('stroke-dasharray') || getComputedStyle(target).strokeDasharray || ''
+        const parts = da.split(/[\s,]+/).map(parseFloat).filter((n) => n > 0)
+        const period = parts.reduce((a, b) => a + b, 0)
+        let travel = fx.loop.distance ?? 18
+        if (period > 0) {
+          // SVG doubles an odd-count dasharray, so one visual period is 2× then.
+          const unit = parts.length % 2 ? period * 2 : period
+          travel = Math.max(1, Math.round(travel / unit)) * unit
+        }
+        anim.fromTo(
+          target,
+          { strokeDashoffset: travel },
+          { strokeDashoffset: 0, duration: fx.loop.duration ?? 1.4, ease: 'none', repeat: -1 },
+        )
+      }
+    }
+    if (fx.loop?.type === 'motion-path') {
+      anim.to(node, {
+        motionPath: { path: fx.loop.path, speeds: fx.loop.speeds },
+        duration: fx.loop.duration,
+        delay: fx.loop.delay ?? 0,
+        ease: fx.loop.ease ?? 'none',
+        repeat: -1,
+      })
+    }
+  }
+}
+
+/** Show only the showOnHover set for `group` (falling back to the default). */
+function applyRevealSet(root: HTMLElement, group: string | null, def?: string | null) {
+  const active = group ?? def ?? null
+  for (const node of root.querySelectorAll<HTMLElement>('[data-show-on-hover]')) {
+    const show = node.dataset.showOnHover === active
+    node.style.transition = 'opacity .18s ease'
+    node.style.opacity = show ? '' : '0'
+    node.style.pointerEvents = show ? '' : 'none'
+  }
+}
+
+/**
+ * Hover behaviours. focus-group: pointing at a grouped element dims every
+ * element outside its group. reveal: pointing at a grouped element shows the
+ * matching showOnHover set (in-slide content swap — no state slides needed).
+ */
+function wireHoverFocus(slide: Slide, section: HTMLElement) {
+  if (!slide?.hover || section.dataset.hoverWired) return
+  section.dataset.hoverWired = '1'
+  const mode = slide.hover.type
+  const dim = slide.hover.dim ?? 0.13
+  const def = slide.hover.default ?? null
+  let current: string | null = null
+  const apply = (group: string | null) => {
+    if (group === current) return
+    current = group
+    if (mode === 'reveal') {
+      applyRevealSet(section, group, def)
+      return
+    }
+    for (const node of section.querySelectorAll<HTMLElement>('[data-group]')) {
+      const other = group !== null && node.dataset.group !== group
+      node.style.transition = 'opacity .25s ease'
+      node.style.opacity = other ? String(dim) : ''
+    }
+  }
+  section.addEventListener('mouseover', (ev) => {
+    const hit = (ev.target as HTMLElement).closest<HTMLElement>('[data-group]')
+    apply(hit ? hit.dataset.group! : null)
+  })
+  section.addEventListener('mouseleave', () => apply(null))
+}
+
+// --- morph ------------------------------------------------------------------
+
+function elementsById(root: HTMLElement): Map<string, HTMLElement> {
+  const map = new Map<string, HTMLElement>()
+  root.querySelectorAll<HTMLElement>('[data-flip-id]').forEach((n) => {
+    map.set(n.dataset.flipId!, n)
+  })
+  return map
+}
+
+/**
+ * Model frames keyed by MORPH KEY, not by `id` — every caller looks these up
+ * with a `data-flip-id`, which is `morphId || id`. Keying by `id` meant any
+ * element carrying a `morphId` missed its own model entry, so `runMorph` hit
+ * `if (!a || !b) continue` and skipped the tween: the DOM paired correctly and
+ * then nothing animated (issue #54). Same-slide keys are unique — the panel
+ * rejects a `morphId` that collides on the slide — so this stays 1:1.
+ */
+function modelByMorphKey(doc: BentoDoc, index: number): Map<string, SlideElement> {
+  const map = new Map<string, SlideElement>()
+  for (const el of doc.slides[index]?.elements ?? []) map.set(morphKey(el), el)
+  return map
+}
+
+/**
+ * Where a symbol sits INSIDE its element, in model units.
+ *
+ * The engine's rule is "geometry from the model, never the DOM" — because the
+ * outgoing section carries Reveal's own transforms, so absolute measurement
+ * lies. A symbol inside a formula has no model entry to read: it is produced
+ * at render time from a raw `$…$` string, so there is nothing to look up.
+ *
+ * The way through is to measure only what is INVARIANT under those transforms:
+ * the symbol's offset from its own element's box, divided by that element's
+ * measured width over its MODEL width. Any uniform scale an ancestor applies
+ * hits numerator and denominator alike and cancels. Box geometry stays fully
+ * model-driven; only the rearrangement WITHIN a box is measured.
+ */
+/**
+ * Symbol offsets measured while a slide was ON SCREEN, keyed `slideIdx ␟ flipId`.
+ *
+ * Necessary because the outgoing section has NO LAYOUT by the time runMorph
+ * runs — its elements measure zero width, which is the same fact that made
+ * "geometry from the model, never the DOM" the rule in the first place. A
+ * formula's symbols have no model entry to fall back on, so the only honest
+ * source for where a symbol WAS is a measurement taken while it was visible.
+ * Captured on slide entry; read on slide exit.
+ */
+/**
+ * Clear runtime inline state from a section's morph symbols. Token and formula
+ * spans carry state no model frame can restore — the symbol morph's transform,
+ * the fresh-token fade's opacity — because applyElementFrame knows elements,
+ * not spans, and the settle guarantee filters to elements with model entries.
+ * An interrupted visit (fast advance, hidden tab, starved render loop) leaves
+ * opacity:0 written inline on spans of a section Reveal keeps MOUNTED, and the
+ * next visit shows code with holes: seen as "confetti() disappeared and came
+ * back after the animations", and reproduced exactly by driving a hidden tab.
+ * Swept on every exit and every entry; the entering morph recreates what it
+ * actually needs.
+ */
+function sweepSymbolSpans(section: HTMLElement) {
+  for (const sym of Array.from(section.querySelectorAll<HTMLElement>('[data-sym],[data-msx]'))) {
+    anim.killTweensOf(sym)
+    sym.style.opacity = ''
+    sym.style.transform = ''
+    sym.style.willChange = ''
+    // Colour is cleared ONLY where the scaffolding fade pinned it. Code tokens
+    // carry their syntax colour as an inline style straight from the renderer,
+    // so clearing colour unconditionally here stripped every highlight in the
+    // deck the first time a slide was swept.
+    if (sym.dataset.inkpin !== undefined) {
+      sym.style.color = ''
+      delete sym.dataset.inkpin
+    }
+  }
+}
+
+const symCache = new Map<string, Map<string, { x: number; y: number }>>()
+/** Scaffolding geometry (fraction bars, radicals) per slide, by host. */
+const structCache = new Map<string, Map<string, { x: number; y: number; w: number; h: number }>>()
+const symKey = (idx: number, flipId: string) => `${idx}${flipId}`
+
+/** Measure and cache every formula on a slide that is currently displayed. */
+function cacheSlideSymbols(doc: BentoDoc, section: HTMLElement, idx: number) {
+  const slide = doc.slides[idx]
+  if (!slide) return
+  const byKey = modelByMorphKey(doc, idx)
+  for (const host of Array.from(section.querySelectorAll<HTMLElement>('[data-flip-id]'))) {
+    if (!host.querySelector('[data-sym]')) continue
+    const model = byKey.get(host.dataset.flipId!)
+    if (!model) continue
+    const offsets = symbolOffsets(host, model.w, model.h)
+    if (offsets.size) symCache.set(symKey(idx, host.dataset.flipId!), offsets)
+    structCache.set(symKey(idx, host.dataset.flipId!), structGeometry(host, model.w, model.h))
+  }
+}
+
+/**
+ * Where a formula's scaffolding sits and how big it is, in model units. Size
+ * matters as much as position: a fraction bar is as wide as its widest side,
+ * so an equation that keeps its outer fraction across a step can still have
+ * that bar change length completely — 14px to 79px across the derivation's
+ * last beat, snapping in one frame while every symbol around it travelled.
+ */
+function structGeometry(host: HTMLElement, modelW: number, modelH: number) {
+  const out = new Map<string, { x: number; y: number; w: number; h: number }>()
+  const box = host.getBoundingClientRect()
+  if (!box.width || !box.height) return out
+  const sx = box.width / Math.max(modelW, 0.01)
+  const sy = box.height / Math.max(modelH, 0.01)
+  for (const node of Array.from(host.querySelectorAll<HTMLElement>('[data-msx]'))) {
+    const r = node.getBoundingClientRect()
+    out.set(node.dataset.msx!, {
+      x: (r.left - box.left) / sx, y: (r.top - box.top) / sy,
+      w: r.width / sx, h: r.height / sy,
+    })
+  }
+  return out
+}
+
+function symbolOffsets(host: HTMLElement, modelW: number, modelH: number): Map<string, { x: number; y: number }> {
+  const out = new Map<string, { x: number; y: number }>()
+  const box = host.getBoundingClientRect()
+  if (!box.width || !box.height) return out // no layout (hidden slide) — nothing to measure
+  // Normalise per axis: the box morph can scale x and y differently, and one
+  // shared factor would skew every vertical offset when it does.
+  const sx = box.width / Math.max(modelW, 0.01)
+  const sy = box.height / Math.max(modelH, 0.01)
+  for (const sym of Array.from(host.querySelectorAll<HTMLElement>('[data-sym]'))) {
+    const r = sym.getBoundingClientRect()
+    out.set(sym.dataset.sym!, { x: (r.left - box.left) / sx, y: (r.top - box.top) / sy })
+  }
+  return out
+}
+
+/**
+ * Morph a formula symbol by symbol: each token travels from where it sat on
+ * the previous slide to where it sits on this one, so a term moving across the
+ * equals sign is SEEN to move rather than crossfading.
+ *
+ * Composes with the element box morph rather than replacing it: that tween
+ * already carries the element's gross position and scale, so what is animated
+ * here is only each symbol's offset RELATIVE to its box. The delta is divided
+ * by the box's current scale because a transform on a child inside a scaled
+ * parent is scaled too — without it, symbols overshoot whenever the formula
+ * changes size between slides.
+ *
+ * Symbols on only one side are left alone: they simply appear with their
+ * element, which is what the box morph already does for them.
+ */
+function morphMathSymbols(
+  fromAt: Map<string, { x: number; y: number }> | undefined,
+  fromStruct: Map<string, { x: number; y: number; w: number; h: number }> | undefined,
+  to: HTMLElement,
+  a: SlideElement,
+  b: SlideElement,
+): boolean {
+  if (!fromAt?.size || !to.querySelector('[data-sym]')) return false
+  const toAt = symbolOffsets(to, b.w, b.h)
+  if (!toAt.size) return false
+
+  // A symbol with no partner on the previous slide has nowhere to travel FROM,
+  // so it simply appeared. For a formula that is right — a new term rides the
+  // element's own transition. For code it is not: a step can introduce a whole
+  // line, and a line that snaps in while its neighbours glide reads as a redraw
+  // rather than an edit. Fading them in, staggered and starting once the travel
+  // is under way, makes the two motions one beat.
+  const fresh = Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))
+    .filter((s) => !fromAt.has(s.dataset.sym!))
+  fresh.forEach((s, i) => {
+    anim.fromTo(s, { opacity: 0 }, {
+      opacity: 1,
+      duration: 0.3,
+      delay: MORPH_DURATION * 0.4 + Math.min(i, 30) * 0.015,
+      ease: 'power2.out',
+    })
+  })
+
+  // Scaffolding that is new this step arrives on the SAME beat as the fresh
+  // tokens — but via `color`, never `opacity`.
+  //
+  // A fraction bar and a radical are painted by their box in currentColor, and
+  // opacity groups a whole subtree: fading the box would take the terms
+  // travelling into it along too, hiding them for the first 40% of their
+  // journey and popping them into view mid-flight. Animating colour touches
+  // only what the box itself paints — verified by pinning the leaves and
+  // setting the box transparent, which leaves every symbol legible and in
+  // place with the bars gone. Pinning is what makes it work: leaves inherit
+  // colour, so they must carry their own before the box's is animated.
+  const toStruct = structGeometry(to, b.w, b.h)
+  // TWO passes, and the order is load-bearing. Scaffolding nests — a radical
+  // inside a fraction — and anim renders a fromTo's from-state at creation, so
+  // starting the outer box's fade first leaves the inner one inheriting a
+  // transparent colour at the moment its own ink is read. It then animates
+  // towards transparent and only becomes visible when the tween clears, which
+  // is the pop this is meant to remove, one level down. Read every ink first,
+  // against untouched colours, then start the tweens.
+  const fades: Array<{ box: HTMLElement; ink: string; leaves: HTMLElement[] }> = []
+  for (const box of Array.from(to.querySelectorAll<HTMLElement>('[data-msx]'))) {
+    // New scaffolding fades in — and so does scaffolding that SURVIVES but
+    // changes shape, because it cannot travel: transforming a container would
+    // drag its children off their own paths. A bar that merely resizes would
+    // otherwise snap in a single frame while everything inside it glided.
+    // Absent, or so different it is plainly not the same bar. The key is
+    // positional (tag#occurrence), not semantic, so it can claim an identity
+    // that does not exist: across the derivation's last beat mfrac#0 is
+    // `b OVER 2a` on one side and `-b±√(b²-4ac) OVER 2a` on the other. Those
+    // are two different bars, and stretching one into the other would animate
+    // a fiction. Judge by how much changed instead, generously enough that a
+    // bar which genuinely persists and merely shifts a pixel or two is left
+    // alone rather than blinking for no reason.
+    const was = fromStruct?.get(box.dataset.msx!)
+    const now = toStruct.get(box.dataset.msx!)
+    const resized = (x: number, y: number) => Math.abs(x - y) > Math.max(x, y, 1) * 0.15
+    const changed = !was || !now
+      || Math.abs(was.x - now.x) > 6 || Math.abs(was.y - now.y) > 6
+      || resized(was.w, now.w) || resized(was.h, now.h)
+    if (!changed) continue
+    // Read the ink from the BOX, not the flip host: the host is the element
+    // wrapper and computes to its own colour (black here), while the box
+    // inherits the formula's. Fading from the wrong one made the bar arrive
+    // as black and snap to white on completion — invisible for the whole fade
+    // on a dark slide, which looks exactly like the pop this replaces.
+    fades.push({
+      box,
+      ink: getComputedStyle(box).color,
+      leaves: Array.from(box.querySelectorAll<HTMLElement>('[data-sym]')),
+    })
+  }
+  for (const { box, ink, leaves } of fades) {
+    const inkClear = ink.startsWith('rgb(')
+      ? ink.replace('rgb(', 'rgba(').replace(')', ', 0)')
+      : 'rgba(0, 0, 0, 0)'
+    // Marked, so the slide sweep knows which colours are ours to undo.
+    for (const leaf of leaves) { leaf.style.color = ink; leaf.dataset.inkpin = '' }
+    anim.fromTo(box, { color: inkClear }, {
+      color: ink,
+      duration: 0.3,
+      delay: MORPH_DURATION * 0.4,
+      ease: 'power2.out',
+      onComplete() {
+        box.style.color = ''
+        for (const leaf of leaves) { leaf.style.color = ''; delete leaf.dataset.inkpin }
+      },
+    })
+  }
+
+  const pairs: Array<{ node: HTMLElement; dx: number; dy: number }> = []
+  for (const sym of Array.from(to.querySelectorAll<HTMLElement>('[data-sym]'))) {
+    const src = fromAt.get(sym.dataset.sym!)
+    const dst = toAt.get(sym.dataset.sym!)
+    if (!src || !dst) continue
+    const dx = src.x - dst.x
+    const dy = src.y - dst.y
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue // sits still — don't tween it
+    pairs.push({ node: sym, dx, dy })
+  }
+  if (!pairs.length) return false
+
+  const state = { p: 0 }
+  for (const { node } of pairs) node.style.willChange = 'transform'
+  anim.to(state, {
+    p: 1,
+    duration: MORPH_DURATION,
+    ease: MORPH_EASE,
+    onUpdate() {
+      const p = state.p
+      // undo the box tween's scale so the symbol delta stays in model units
+      const sx = (a.w + (b.w - a.w) * p) / Math.max(b.w, 0.01)
+      const sy = (a.h + (b.h - a.h) * p) / Math.max(b.h, 0.01)
+      for (const { node, dx, dy } of pairs) {
+        node.style.transform = `translate(${(dx * (1 - p)) / sx}px, ${(dy * (1 - p)) / sy}px)`
+      }
+    },
+    onComplete() {
+      for (const { node } of pairs) {
+        node.style.transform = ''
+        node.style.willChange = ''
+      }
+    },
+  })
+  return true
+}
+
+function runMorph(
+  doc: BentoDoc,
+  fromSection: HTMLElement,
+  toSection: HTMLElement,
+  fromIdx: number,
+  toIdx: number,
+) {
+  const fromEls = elementsById(fromSection)
+  const toEls = elementsById(toSection)
+  const fromModel = modelByMorphKey(doc, fromIdx)
+  const toModel = modelByMorphKey(doc, toIdx)
+
+  const matchedFrom: HTMLElement[] = []
+  const matchedTo: HTMLElement[] = []
+  for (const [id, el] of fromEls) {
+    const target = toEls.get(id)
+    if (target) {
+      matchedFrom.push(el)
+      matchedTo.push(target)
+    }
+  }
+
+  // Unmatched incoming elements fade/rise in — to their MODEL opacity
+  // (clearProps would wipe reveal-set hiding and dimmed-state opacities).
+  const toSlide = doc.slides[toIdx]
+  const activeSet = toSlide?.hover?.type === 'reveal' ? (toSlide.hover.default ?? null) : null
+  const entering: Array<[HTMLElement, number]> = []
+  for (const n of toEls.values()) {
+    const id = n.dataset.flipId!
+    if (fromEls.has(id)) continue
+    const m = toModel.get(id)
+    if (m?.showOnHover && m.showOnHover !== activeSet) continue // hover-revealed, stays hidden
+    entering.push([n, m?.opacity ?? 1])
+  }
+  if (entering.length) {
+    const spread = Math.min(0.45, entering.length * 0.03)
+    entering.forEach(([n, opacity], i) => {
+      // motion-path loops own the transform — entrance limited to opacity
+      const m = toModel.get(n.dataset.flipId!)
+      const owns = m?.fx?.loop?.type === 'motion-path'
+      // An explicit fx.enter WINS over the default rise. This element has no
+      // morph partner — it is new to this slide, so there is no morph tween for
+      // an entrance to fight, and the author named a direction. Elements with a
+      // partner are excluded above and keep morphing; elements with no fx.enter
+      // keep the default, so no existing deck changes unless it asked to.
+      const kind = owns ? undefined : m?.fx?.enter
+      const spec = kind ? enterSpec(kind, m?.fx?.enterDur) : null
+      const step = m?.fx?.order ?? i
+      anim.fromTo(n,
+        spec ? { ...spec.from } : owns ? { opacity: 0 } : { opacity: 0, y: 14 },
+        {
+          opacity,
+          ...(spec ? { x: 0, y: 0 } : owns ? {} : { y: 0 }),
+          duration: spec?.duration ?? 0.45,
+          // Both stagger from the same base — the morph is 40% done before
+          // anything new arrives, so the two motions read as one beat.
+          delay: MORPH_DURATION * 0.4 +
+            (spec ? Math.min(step, 24) * 0.05 : (spread * i) / entering.length),
+          ease: spec?.ease ?? 'power2.out',
+        })
+    })
+    settleGuarantee(entering.map(([n]) => {
+      const m = toModel.get(n.dataset.flipId!)
+      return [n, m!] as [HTMLElement, SlideElement]
+    }).filter(([, m]) => !!m))
+  }
+  if (!matchedFrom.length) return
+
+  // Geometry straight from the model — no DOM measuring needed (both sides'
+  // frames are in the doc), so the outgoing section's Reveal styling is
+  // irrelevant. Each matched node animates from the from-slide's frame to its
+  // own via translate+scale about the top-left corner (scale mode like
+  // PowerPoint: text scales instead of reflowing mid-morph), while rotation
+  // pivots about the element's centre so the finished frame is identical to
+  // the one applyElementFrame writes at rest.
+  for (const node of matchedTo) {
+    const id = node.dataset.flipId!
+    const a = fromModel.get(id)
+    const b = toModel.get(id)
+    if (!a || !b) continue
+    if (a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h && (a.rotation ?? 0) === (b.rotation ?? 0)) continue
+    const state = { p: 0 }
+    node.style.transformOrigin = '0 0'
+    anim.to(state, {
+      p: 1,
+      duration: MORPH_DURATION,
+      ease: MORPH_EASE,
+      onUpdate() {
+        const p = state.p
+        const x = a.x + (b.x - a.x) * p
+        const y = a.y + (b.y - a.y) * p
+        const w = a.w + (b.w - a.w) * p
+        const h = a.h + (b.h - a.h) * p
+        const r = (a.rotation ?? 0) + ((b.rotation ?? 0) - (a.rotation ?? 0)) * p
+        // Rotate about the element's own CENTRE, spelled out around an origin
+        // of 0 0 rather than by moving the origin. Position and scale want the
+        // top-left (PowerPoint scale mode), but the resting frame that
+        // applyElementFrame writes — a plain `rotate()` with the default centre
+        // origin — must be exactly what p=1 lands on, or a rotated element
+        // snaps the instant the tween completes and the origin flips back.
+        // Measured on the choreography scene: 7deg jumped 4.1px across and
+        // 5.1px up, -6deg the other way, on the frame the morph finished. The
+        // triplet below collapses to identity at p=1, so the two frames agree.
+        const cx = b.w / 2
+        const cy = b.h / 2
+        node.style.transform =
+          `translate(${x - b.x}px, ${y - b.y}px)` +
+          ` scale(${w / Math.max(b.w, 0.01)}, ${h / Math.max(b.h, 0.01)})` +
+          (r ? ` translate(${cx}px, ${cy}px) rotate(${r}deg) translate(${-cx}px, ${-cy}px)` : '')
+      },
+      onComplete() {
+        node.style.transformOrigin = ''
+        node.style.transform = b.rotation ? `rotate(${b.rotation}deg)` : ''
+        resetXform(node)
+      },
+    })
+  }
+
+  // Symbol-level math morph, layered on top of the box morph above. The
+  // from-side offsets come from the cache captured while that slide was
+  // visible — measuring it now would read zeros (it has no layout).
+  for (const to of matchedTo) {
+    const id = to.dataset.flipId!
+    const a = fromModel.get(id)
+    const b = toModel.get(id)
+    if (!a || !b) continue
+    morphMathSymbols(symCache.get(symKey(fromIdx, id)), structCache.get(symKey(fromIdx, id)), to, a, b)
+  }
+
+  // Styles morph straight from the model — exact values, no DOM sniffing.
+  for (const to of matchedTo) {
+    const id = to.dataset.flipId!
+    const a = fromModel.get(id)
+    const b = toModel.get(id)
+    if (!a || !b) continue
+    if (a.opacity !== b.opacity) {
+      anim.fromTo(to, { opacity: a.opacity }, { opacity: b.opacity, duration: MORPH_DURATION, ease: MORPH_EASE })
+    }
+    if (a.type === 'shape' && b.type === 'shape') {
+      const target = to.querySelector<SVGElement>('rect,ellipse,polygon,line,path')
+      if (target) morphShapeFill(target, a, b)
+    }
+    if (a.type === 'text' && b.type === 'text' && a.color !== b.color) {
+      const inner = to.querySelector<HTMLElement>('.bento-text-inner')
+      if (inner) {
+        anim.fromTo(inner, { color: a.color }, { color: b.color, duration: MORPH_DURATION, ease: MORPH_EASE })
+      }
+    }
+    // A picture's crop (pan + zoom inside its frame) tweens numerically when
+    // BOTH sides carry one — the house style, same as the box above. When only
+    // one side has a crop there is no honest midpoint between "the whole
+    // cover-fitted picture as `fit` says" and a window into it, so the crop
+    // snaps with the slide and only the box morphs (crop.ts lerpCrop).
+    if (a.type === 'image' && b.type === 'image' && a.crop && b.crop && !isIdentityCrop(a.crop) && !isIdentityCrop(b.crop)) {
+      const img = to.querySelector<HTMLImageElement>('img')
+      if (img) {
+        const state = { p: 0 }
+        anim.to(state, {
+          p: 1, duration: MORPH_DURATION, ease: MORPH_EASE,
+          onUpdate() { img.style.cssText = cropImgStyle(lerpCrop(a.crop!, b.crop!, state.p)) },
+          onComplete() { img.style.cssText = cropImgStyle(b.crop!) },
+        })
+      }
+    }
+  }
+}
+
+// --- fill morphing (solid ⇄ solid, solid ⇄ gradient, gradient ⇄ gradient) ----
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+let morphGradSeq = 0
+
+/** Any solid CSS color we author (#hex / rgb / rgba) → [r, g, b, a]. */
+function colorParts(v: string): [number, number, number, number] {
+  const m = v?.match(/rgba?\(([^)]+)\)/)
+  if (m) {
+    const p = m[1].split(/[\s,/]+/).map(Number)
+    return [p[0] || 0, p[1] || 0, p[2] || 0, Number.isFinite(p[3]) ? p[3] : 1]
+  }
+  let hex = (v ?? '').trim()
+  if (/^#[0-9a-fA-F]{3}$/.test(hex)) hex = '#' + [...hex.slice(1)].map((c) => c + c).join('')
+  if (/^#[0-9a-fA-F]{6,8}$/.test(hex)) {
+    return [
+      parseInt(hex.slice(1, 3), 16),
+      parseInt(hex.slice(3, 5), 16),
+      parseInt(hex.slice(5, 7), 16),
+      hex.length === 9 ? parseInt(hex.slice(7, 9), 16) / 255 : 1,
+    ]
+  }
+  return [0, 0, 0, v === 'transparent' || v === 'none' ? 0 : 1]
+}
+
+const rgbaStr = (c: [number, number, number, number]) =>
+  `rgba(${Math.round(c[0])}, ${Math.round(c[1])}, ${Math.round(c[2])}, ${Math.round(c[3] * 1000) / 1000})`
+
+/** Color of a gradient evaluated at position t (piecewise-linear between stops). */
+function sampleGradient(stops: GradientFill['stops'], t: number): string {
+  const s = [...stops].sort((x, y) => x.at - y.at)
+  if (t <= s[0].at) return rgbaStr(colorParts(s[0].color))
+  for (let i = 0; i < s.length - 1; i++) {
+    const a = s[i]
+    const b = s[i + 1]
+    if (t <= b.at) {
+      const f = b.at === a.at ? 0 : (t - a.at) / (b.at - a.at)
+      const ca = colorParts(a.color)
+      const cb = colorParts(b.color)
+      return rgbaStr([0, 1, 2, 3].map((k) => ca[k] + (cb[k] - ca[k]) * f) as [number, number, number, number])
+    }
+  }
+  return rgbaStr(colorParts(s[s.length - 1].color))
+}
+
+/**
+ * Tween a shape's fill from element a's to element b's. Solids tween the fill
+ * attribute; when a gradient is involved the tween runs on the <stop> nodes
+ * (colors sampled from the other side at matching positions) and on the
+ * gradient line, so angle changes sweep too. A solid destination gets a
+ * temporary gradient that collapses to the flat color and is then removed.
+ */
+function morphShapeFill(target: SVGElement, a: ShapeElement, b: ShapeElement) {
+  if (a.fill === b.fill && JSON.stringify(a.fillGradient) === JSON.stringify(b.fillGradient)) return
+  // line shapes paint with stroke (fill is the line color in the model)
+  if (b.shape === 'line' && target.tagName === 'line') {
+    anim.fromTo(target, { attr: { stroke: a.fill } }, { attr: { stroke: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
+    return
+  }
+  const ag = a.fillGradient?.stops.length ? a.fillGradient : undefined
+  const bg = b.fillGradient?.stops.length ? b.fillGradient : undefined
+  if (!ag && !bg) {
+    if (a.fill !== b.fill) {
+      anim.fromTo(target, { attr: { fill: a.fill } }, { attr: { fill: b.fill }, duration: MORPH_DURATION, ease: MORPH_EASE })
+    }
+    return
+  }
+  const svg = target.ownerSVGElement
+  if (!svg) return
+
+  let lin = svg.querySelector('linearGradient')
+  if (!lin) {
+    // destination is solid — fabricate a gradient shaped like the source so
+    // there is something to tween through, then collapse it to b.fill
+    lin = document.createElementNS(SVG_NS, 'linearGradient')
+    lin.id = `bento-morph-grad-${morphGradSeq++}`
+    for (const s of ag!.stops) {
+      const stop = document.createElementNS(SVG_NS, 'stop')
+      stop.setAttribute('offset', String(s.at))
+      lin.appendChild(stop)
+    }
+    const defs = document.createElementNS(SVG_NS, 'defs')
+    defs.appendChild(lin)
+    svg.appendChild(defs)
+    target.setAttribute('fill', `url(#${lin.id})`)
+  }
+
+  const stops = [...lin.querySelectorAll('stop')]
+  // per rendered stop: where it sits, what it starts as, what it ends as
+  const finals = bg ? bg.stops : ag!.stops.map((s) => ({ at: s.at, color: b.fill }))
+  stops.forEach((node, i) => {
+    const at = finals[i]?.at ?? 1
+    const fromColor = ag ? sampleGradient(ag.stops, at) : rgbaStr(colorParts(a.fill))
+    const toColor = finals[i]?.color ?? b.fill
+    anim.fromTo(
+      node,
+      { attr: { 'stop-color': fromColor } },
+      {
+        attr: { 'stop-color': toColor },
+        duration: MORPH_DURATION,
+        ease: MORPH_EASE,
+        ...(i === 0 && !bg
+          ? {
+              // solid destination: swap the temp gradient back to a flat fill
+              onComplete: () => {
+                target.setAttribute('fill', b.fill)
+                lin!.parentElement?.remove()
+              },
+            }
+          : {}),
+      },
+    )
+  })
+
+  const fromLine = gradientLineCoords((ag ?? bg)!.angle)
+  const toLine = gradientLineCoords((bg ?? ag)!.angle)
+  anim.fromTo(lin, { attr: fromLine }, { attr: toLine, duration: MORPH_DURATION, ease: MORPH_EASE })
+}
