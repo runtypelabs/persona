@@ -683,6 +683,9 @@ export type RuntypeClientChatRequest = {
   sessionId: string;
   submitMode?: "normal" | "interrupt" | "steer";
   turnId?: string;
+  voice?: {
+  spoken?: boolean;
+};
 };
 
 export type RuntypeClientChatStreamEvent = RuntypeExecutionStreamEvent;
