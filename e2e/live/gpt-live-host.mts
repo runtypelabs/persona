@@ -40,6 +40,14 @@ if (!CORE_DIR) throw new Error("Set CORE_DIR to a core checkout (feat/gpt-live-c
 const PORT = Number(process.env.LIVE_HOST_PORT ?? 4399);
 /** Delay before the local chat agent answers, to mimic a real agent turn. */
 const CHAT_DELAY_MS = Number(process.env.LIVE_CHAT_DELAY_MS ?? 0);
+/**
+ * Pause between the answer's sentence-sized `text_delta` chunks, so a spec can
+ * show speech starting before the agent finishes (streaming delegation). 0
+ * (default): the whole answer in one delta.
+ */
+const CHAT_STREAM_MS = Number(process.env.LIVE_CHAT_STREAM_MS ?? 0);
+/** Replaces the canned answer (the opening-hours Markdown, or the echo). */
+const CHAT_ANSWER = process.env.LIVE_CHAT_ANSWER;
 
 async function gatewayKey(): Promise<string> {
   let local: Record<string, string | undefined> = {};
@@ -93,32 +101,54 @@ const INSTRUCTIONS = GENERIC_IDENTITY ? undefined : buildOpenAILiveInstructions(
 const HOURS_MARKDOWN =
   "**Opening hours**\n\n- Monday to Friday: 8am to 6pm\n- Saturday: 9am to 4pm\n- Sunday: closed";
 
-function sse(events: Array<[string, Record<string, unknown>]>): string {
-  const executionId = `exec_${Date.now()}`;
+type SseEvent = [string, Record<string, unknown>];
+
+/** Serializes events as SSE frames, numbering them from `firstSeq`. */
+function sse(events: SseEvent[], executionId: string, firstSeq = 1): string {
   return events
-    .map(([type, data], i) => `event: ${type}\ndata: ${JSON.stringify({ type, executionId, seq: i + 1, ...data })}\n\n`)
+    .map(([type, data], i) => `event: ${type}\ndata: ${JSON.stringify({ type, executionId, seq: firstSeq + i, ...data })}\n\n`)
     .join("");
 }
 
-function chatAnswer(userText: string): string {
+/** Sentence-sized pieces of `text` (line breaks end a piece too); they concatenate back to `text`. */
+function sentences(text: string): string[] {
+  // Cut after each boundary (punctuation then whitespace or the end, or a line
+  // break): "3.50" stays whole, and the pieces join back to `text` exactly.
+  const pieces: string[] = [];
+  let at = 0;
+  for (const m of text.matchAll(/[.!?]+(?:\s+|$)|\n+/g)) {
+    const end = m.index + m[0].length;
+    if (end > at) pieces.push(text.slice(at, end));
+    at = end;
+  }
+  if (at < text.length) pieces.push(text.slice(at));
+  return pieces.length ? pieces : [text];
+}
+
+/** The chat turn: the head (through text_start), the answer's deltas, and the tail. */
+function chatAnswer(userText: string): { head: SseEvent[]; deltas: string[]; tail: SseEvent[] } {
   const now = new Date().toISOString();
   const hours = /hour|open|close/i.test(userText);
-  const text = hours ? HOURS_MARKDOWN : `You said: ${userText}`;
-  return sse([
-    ["execution_start", { kind: "agent", agentId: "agent_live", agentName: "Live", maxTurns: 2, startedAt: now }],
-    ["turn_start", { id: "turn_1", iteration: 1, role: "assistant" }],
-    ...(hours
-      ? ([
-          ["tool_start", { toolCallId: "call_hours", toolName: "get_opening_hours", toolType: "custom", parameters: {}, iteration: 1 }],
-          ["tool_complete", { toolCallId: "call_hours", success: true, result: { weekdays: "8-18", saturday: "9-16", sunday: null } }],
-        ] as Array<[string, Record<string, unknown>]>)
-      : []),
-    ["text_start", { id: "text_1", role: "assistant" }],
-    ["text_delta", { id: "text_1", delta: text }],
-    ["text_complete", { id: "text_1" }],
-    ["turn_complete", { id: "turn_1", iteration: 1, role: "assistant", stopReason: "end_turn", completedAt: now }],
-    ["execution_complete", { kind: "agent", success: true, completedAt: now }],
-  ]);
+  const text = CHAT_ANSWER ?? (hours ? HOURS_MARKDOWN : `You said: ${userText}`);
+  return {
+    head: [
+      ["execution_start", { kind: "agent", agentId: "agent_live", agentName: "Live", maxTurns: 2, startedAt: now }],
+      ["turn_start", { id: "turn_1", iteration: 1, role: "assistant" }],
+      ...(hours
+        ? ([
+            ["tool_start", { toolCallId: "call_hours", toolName: "get_opening_hours", toolType: "custom", parameters: {}, iteration: 1 }],
+            ["tool_complete", { toolCallId: "call_hours", success: true, result: { weekdays: "8-18", saturday: "9-16", sunday: null } }],
+          ] as SseEvent[])
+        : []),
+      ["text_start", { id: "text_1", role: "assistant" }],
+    ],
+    deltas: CHAT_STREAM_MS > 0 ? sentences(text) : [text],
+    tail: [
+      ["text_complete", { id: "text_1" }],
+      ["turn_complete", { id: "turn_1", iteration: 1, role: "assistant", stopReason: "end_turn", completedAt: now }],
+      ["execution_complete", { kind: "agent", success: true, completedAt: now }],
+    ],
+  };
 }
 
 // ---- Frame log ----------------------------------------------------------------
@@ -205,7 +235,22 @@ const server = createServer(async (req, res) => {
     const last = [...(parsed.messages ?? [])].reverse().find((m) => m.role === "user");
     if (CHAT_DELAY_MS > 0) await new Promise((resolve) => setTimeout(resolve, CHAT_DELAY_MS));
     res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" });
-    return void res.end(chatAnswer(typeof last?.content === "string" ? last.content : JSON.stringify(last?.content ?? "")));
+    const { head, deltas, tail } = chatAnswer(
+      typeof last?.content === "string" ? last.content : JSON.stringify(last?.content ?? ""),
+    );
+    const executionId = `exec_${Date.now()}`;
+    let seq = 1;
+    const write = (events: SseEvent[]) => {
+      res.write(sse(events, executionId, seq));
+      seq += events.length;
+    };
+    write(head);
+    for (const [i, delta] of deltas.entries()) {
+      if (i > 0 && CHAT_STREAM_MS > 0) await new Promise((resolve) => setTimeout(resolve, CHAT_STREAM_MS));
+      write([["text_delta", { id: "text_1", delta }]]);
+    }
+    write(tail);
+    return void res.end();
   }
   res.writeHead(404).end();
 });
@@ -299,6 +344,8 @@ server.on("upgrade", (request, socket, head) => {
       {
         // v1 token only: the kebab-case form selects the server-side runner (Amendment 5.1).
         clientDelegation: capabilities.has("client_delegation"),
+        // Core negotiates session_config.capabilities from the declared tokens.
+        declaredCapabilities: capabilities,
         logWarning: (message: string, fields: Record<string, unknown>) => console.warn("[voice]", message, fields),
       },
     );

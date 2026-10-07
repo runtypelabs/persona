@@ -7,11 +7,32 @@ import type {
   VoiceSessionBridge,
 } from "../types";
 
+import { ClauseBuffer } from "./voice-clause-buffer";
+
 /**
  * What a delegated turn streamed: its assistant messages, whether it failed,
  * and whether the server dropped its result (then browser TTS may read it).
+ * `onUpdate` runs after each of its assistant messages is stored (the answer
+ * grew), so a streaming bridge can read the new text.
  */
-export type VoiceDelegationCapture = { ids: string[]; failed: boolean; dropped?: boolean };
+export type VoiceDelegationCapture = {
+  ids: string[];
+  failed: boolean;
+  dropped?: boolean;
+  onUpdate?: () => void;
+  /** Stops a streaming answer (its pending idle flush included); set while it streams. */
+  stopStream?: () => void;
+};
+
+/** How long a held sentence end waits for more text before it streams anyway. */
+const STREAM_IDLE_MS = 200;
+
+/** Length of the common prefix of `a` and `b`. */
+const commonPrefix = (a: string, b: string) => {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i += 1;
+  return i;
+};
 
 /** The session internals the delegation bridge drives. */
 export interface VoiceDelegationHost {
@@ -199,6 +220,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       const park = expired && parks.find((p) => p.delegationId === delegationId);
       if (park && !park.outcome) settle(park, "timeout", "");
       for (const capture of captures.get(delegationId) ?? []) {
+        capture.stopStream?.();
         capture.dropped = true;
         if (capture.ids.length) host.unspoken(capture.ids);
       }
@@ -208,6 +230,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       delegationId,
       userText,
       userUtteranceIds,
+      stream,
     }: VoiceDelegationRequest): Promise<VoiceDelegationResult> {
       const live = parks.filter((park) => pendingOf(park).length);
       const pendingIds = live.flatMap(pendingOf);
@@ -228,6 +251,48 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       const before = new Set(host.messages().map((m) => m.id));
       const raised = () => host.messages().filter((m) => !before.has(m.id) && m.variant === "approval");
       const capture: VoiceDelegationCapture = { ids: [], failed: false };
+      // Streaming (`delegation_stream`): the answer goes out in speakable
+      // pieces while it renders. `fed` is the answer text the buffer has seen,
+      // `sent` what went out. An answer rewritten mid-stream (not an extension
+      // of what was fed) stops the stream; the result then says how much of
+      // its text was already sent.
+      const buffer = stream ? new ClauseBuffer() : null;
+      let fed = "";
+      let sent = "";
+      let rewritten = false;
+      const emit = (pieces: string[]) => {
+        for (const piece of pieces) {
+          sent += piece;
+          stream!(piece);
+        }
+      };
+      // A sentence end is confirmed only by the text after it; when the
+      // stream pauses on one, it goes out after STREAM_IDLE_MS anyway.
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      if (buffer) {
+        capture.onUpdate = () => {
+          if (rewritten) return;
+          const now = answerOf(capture.ids);
+          if (!now.startsWith(fed)) {
+            rewritten = true;
+            clearTimeout(idleTimer);
+            return;
+          }
+          if (now.length === fed.length) return;
+          const delta = now.slice(fed.length);
+          fed = now;
+          emit(buffer.push(delta));
+          clearTimeout(idleTimer);
+          idleTimer = setTimeout(() => {
+            if (!rewritten) emit(buffer.idle());
+          }, STREAM_IDLE_MS);
+        };
+        capture.stopStream = () => {
+          clearTimeout(idleTimer);
+          rewritten = true; // nothing more streams
+          capture.onUpdate = undefined;
+        };
+      }
       remember(delegationId, capture);
       active = capture;
       retrack();
@@ -241,6 +306,19 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         active = null;
         retrack();
       }
+      if (buffer) {
+        // The last of the answer goes out before the result.
+        capture.onUpdate?.();
+        clearTimeout(idleTimer);
+        if (!rewritten) emit(buffer.flush());
+        capture.onUpdate = undefined;
+        capture.stopStream = undefined;
+      }
+      /** `streamedChars` for a result whose `text` starts with the answer. */
+      const streamed = (text: string) => {
+        const chars = commonPrefix(sent, text);
+        return chars > 0 ? { streamedChars: chars } : {};
+      };
       const replies = capture.ids.flatMap((id) => host.messages().find((m) => m.id === id) ?? []);
       let text = answerOf(capture.ids);
       const pending = capture.failed ? [] : raised().filter(isPendingApproval);
@@ -272,10 +350,13 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
         if (cancelled.get(delegationId)) settle(park, "timeout", "");
         // Parked on approvals: answer now, so the voice model asks for the
         // decision, then read the outcome back once the visitor decides.
+        // The streamed answer stays the prefix; the approval script is the
+        // unstreamed suffix.
         text = `${text}\n\n${buildApprovalScript(pending.map((m) => m.approval!))}`.trim();
         return {
           status: "pending_approval",
           text,
+          ...streamed(text),
           followUp: async ({ signal, approvalTimeoutMs = APPROVAL_TTL_MS, readBack = true, onUpdate }) => {
             const follow: VoiceDelegationCapture = { ids: [], failed: false };
             // Called once the ask went out: it carried this turn's reply to the
@@ -372,9 +453,10 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
             !m.toolCall?.name?.startsWith("webmcp:"),
         )
       ) {
-        return { status: capture.failed ? "failed" : "completed", text: `${text}\n\n${WAITING_FOR_INPUT}`.trim() };
+        text = `${text}\n\n${WAITING_FOR_INPUT}`.trim();
+        return { status: capture.failed ? "failed" : "completed", text, ...streamed(text) };
       }
-      return { status: !capture.failed && text ? "completed" : "failed", text };
+      return { status: !capture.failed && text ? "completed" : "failed", text, ...streamed(text) };
     },
   };
 }

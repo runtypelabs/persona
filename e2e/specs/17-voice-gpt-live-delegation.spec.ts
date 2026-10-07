@@ -588,10 +588,12 @@ test("approval lifecycle: delegation_update asks naturally, Allow, one terminal 
   await expect(page.locator(voiceSel.bubble).filter({ hasText: "All set, your order" })).toHaveCount(0);
 
   // The whole wire for the delegation, in order.
+  // No deltas: this server grants delegation_stream but not delegation_read_back.
   expect(call.frames.filter((f) => f.delegationId === "dlg_1").map((f) => `${f.type}:${f.status}`)).toEqual([
     "delegation_update:pending_approval",
     "delegation_result:completed",
   ]);
+  expect(call.protocolErrors).toEqual([]);
   expect(call.rejected).toEqual([]);
   await clickLiveMic(page);
   expect(await call.closed).toBe(1000);

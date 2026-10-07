@@ -26,6 +26,7 @@ import { expect, test, type WebSocket as PwWebSocket } from "@playwright/test";
  *   LIVE_APPROVAL_TOOL          humanized tool name the ask must mention (place pickup order)
  *   LIVE_WEBMCP=1               register the page's gated place_pickup_order WebMCP tool
  *   LIVE_FIRST_AUDIO_SLACK_MS   slack on the first mic frame after the socket opens (200)
+ *   LIVE_MIN_DELTAS             delegation_delta frames a streamed answer must send (1)
  *
  * Artifacts land in e2e/live/.out/results: frames.json (every voice frame both
  * ways, audio as byte counts, and the voice socket's open/first-audio timings), console.txt, chat-requests.json, final.png, and
@@ -52,6 +53,7 @@ const CAPTURE_BUFFER_MS = 256;
 // The provider's pre-open audio cap (PRE_OPEN_AUDIO_MAX_BYTES at 16 kHz PCM16).
 const PRE_OPEN_BUFFER_MS = 8_000;
 const FIRST_AUDIO_SLACK_MS = Number(env("LIVE_FIRST_AUDIO_SLACK_MS", "200"));
+const MIN_DELTAS = Number(env("LIVE_MIN_DELTAS", "1"));
 
 type Frame = { at: number; dir: "in" | "out"; json?: Record<string, unknown>; bytes?: number };
 /** In-page voice socket timings (performance.now() ms), from the init script below. */
@@ -398,6 +400,42 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       expect(String(result.text).trim()).not.toBe("");
       expect(String(result.text), "the delegated turn did not answer the question").toMatch(ANSWER);
 
+      // Streaming (`delegation_stream`): the answer went out as ordered
+      // delegation_delta pieces before the result, the result says how much of
+      // its text they covered, and core reported each spoken piece.
+      const startedAt = frames.find((f) => f.dir === "in" && f.json?.type === "delegation_started" && Boolean(f.json.input))!.at;
+      const firstAt = (dir: "in" | "out", type: string) =>
+        frames.find((f) => f.at >= startedAt && f.dir === dir && f.json?.type === type)?.at;
+      const sinceStart = (at: number | undefined) => (at === undefined ? null : at - startedAt);
+      const deltas = json("out", "delegation_delta").filter((f) => did(f) === id);
+      if (capabilities.includes("delegation_stream")) {
+        expect(deltas.length, "no delegation_delta before the result").toBeGreaterThanOrEqual(MIN_DELTAS);
+        const resultAt = frames.findIndex((f) => f.dir === "out" && f.json?.type === "delegation_result");
+        const lastDeltaAt = frames
+          .map((f, i) => (f.dir === "out" && f.json?.type === "delegation_delta" ? i : -1))
+          .filter((i) => i >= 0)
+          .at(-1)!;
+        expect(lastDeltaAt).toBeLessThan(resultAt);
+        const streamed = deltas.map((f) => String(f.text)).join("");
+        expect(result.streamedChars, "streamedChars missing on a streamed result").toBe(streamed.length);
+        expect(String(result.text).slice(0, streamed.length)).toBe(streamed);
+        await expect
+          .poll(() => json("in", "delegation_progress").filter((f) => did(f) === id).length, { timeout: 30_000 })
+          .toBeGreaterThan(0);
+      } else {
+        expect(deltas).toEqual([]);
+        expect(result).not.toHaveProperty("streamedChars");
+      }
+      testInfo.annotations.push({
+        type: "timing-ms-after-delegation_started",
+        description: JSON.stringify({
+          firstDelta: sinceStart(firstAt("out", "delegation_delta")),
+          firstProgress: sinceStart(firstAt("in", "delegation_progress")),
+          result: sinceStart(firstAt("out", "delegation_result")),
+          completed: sinceStart(firstAt("in", "delegation_completed")),
+        }),
+      });
+
       // Exactly one delegated chat submission (after the typed one), carrying
       // the spoken request once, as its LAST message, with none of GPT-Live's
       // own captions (filler) in the history.
@@ -432,7 +470,12 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       await expect
         .poll(() => json("in", "delegation_completed").some((f) => did(f) === id), { timeout: 30_000 })
         .toBe(true);
-      const completedAt = frames.find((f) => f.json?.type === "delegation_completed")!.at;
+      // With streaming the read-back starts at the first delegation_progress,
+      // before the completion marker; anchor on whichever came first.
+      const completedAt = Math.min(
+        frames.find((f) => f.json?.type === "delegation_completed")!.at,
+        frames.find((f) => f.dir === "in" && f.json?.type === "delegation_progress" && did(f.json) === id)?.at ?? Infinity,
+      );
       await expect
         .poll(
           () => frames.some((f) => f.at > completedAt && f.json?.type === "transcript_update" && f.json.role === "assistant" && f.json.final),
@@ -449,8 +492,10 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
       for (const spokenReadback of readback) {
         expect(bubbles.map(normalize)).not.toContain(spokenReadback);
       }
-      // Only the FIRST new assistant utterance after completion is the
-      // read-back. Any later, separate utterance (a follow-up) renders.
+      // The read-back: with `delegation_read_back` every utterance core tags
+      // with the delegation (a streamed answer spans several, one per pause);
+      // on an older server the FIRST new assistant utterance after completion.
+      // Any later, separate utterance (a follow-up) renders.
       const seenBefore = new Set(
         frames.filter((f) => f.at <= completedAt && f.json?.type === "transcript_update").map((f) => uid(f.json)),
       );
@@ -462,7 +507,19 @@ test("live: spoken question → delegated chat turn → rendered answer → spok
             .filter((utterance) => !seenBefore.has(utterance)),
         ),
       ];
-      const followUps = newIds.slice(1).flatMap((utterance) => {
+      const tagged = new Set(
+        frames
+          .filter((f) => f.json?.type === "transcript_update" && f.json.role === "assistant" && did(f.json) === id)
+          .map((f) => uid(f.json)),
+      );
+      // The widget also folds the first new utterance after the first
+      // delegation_progress whatever its tag (a cut filler's resume can carry
+      // the read-back untagged), so that one is never a follow-up either.
+      const followUpIds = capabilities.includes("delegation_read_back")
+        ? newIds.filter((utterance, index) => !tagged.has(utterance) && index > 0)
+        : newIds.slice(1);
+      testInfo.annotations.push({ type: "read-back-utterances", description: String(tagged.size || 1) });
+      const followUps = followUpIds.flatMap((utterance) => {
         const last = frames.filter((f) => uid(f.json) === utterance && f.json?.role === "assistant").at(-1);
         return last && String(last.json!.text).trim() ? [normalize(String(last.json!.text))] : [];
       });

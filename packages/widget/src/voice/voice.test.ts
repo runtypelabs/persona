@@ -896,7 +896,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
 
       it('declares client_delegation (never the kebab form) only with a bridge and the switch on', async () => {
         const { ws } = await startDelegatedCall();
-        expect(ws.url).toBe(voiceUrl('wss://api.example.com', 'a1', [...BASE_CAPS, 'client_delegation', 'delegation_update', 'delegation_read_back']));
+        expect(ws.url).toBe(voiceUrl('wss://api.example.com', 'a1', [...BASE_CAPS, 'client_delegation', 'delegation_update', 'delegation_read_back', 'delegation_stream']));
         expect(ws.url).not.toContain('client-delegation');
         await startDelegatedCall({ clientDelegation: false });
         expect(lastWs().url).toBe(voiceUrl('wss://api.example.com', 'a1', BASE_CAPS));
@@ -1266,6 +1266,261 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         pending[0]({ status: 'completed', text: 'late' });
         await flush();
         expect(sentJson(ws)).toEqual([]);
+      });
+
+      describe('with delegation_stream negotiated', () => {
+        const STREAM_CAPS = [...ALL_CAPS, 'delegation_stream', 'delegation_read_back'];
+        const progress = (ws: MockWebSocket, delegationId: string, text = 'chunk') =>
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_progress', delegationId, text }));
+
+        it('sends delegation_delta pieces in order, then the result with streamedChars', async () => {
+          const { ws, calls, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          delegate(ws, 'd1', 'hours?');
+          await flush();
+          expect(typeof calls[0].stream).toBe('function');
+          calls[0].stream!('We open at eight. ');
+          calls[0].stream!('We close at six.');
+          await flush();
+          expect(sentJson(ws)).toEqual([
+            { type: 'delegation_delta', delegationId: 'd1', text: 'We open at eight. ' },
+            { type: 'delegation_delta', delegationId: 'd1', text: 'We close at six.' },
+          ]);
+          pending[0]({ status: 'completed', text: 'We open at eight. We close at six.', streamedChars: 34 });
+          await flush();
+          expect(sentJson(ws).at(-1)).toEqual({
+            type: 'delegation_result',
+            delegationId: 'd1',
+            status: 'completed',
+            text: 'We open at eight. We close at six.',
+            streamedChars: 34,
+          });
+        });
+
+        it('omits streamedChars when nothing streamed, and puts it on a parked turn\'s update', async () => {
+          const { ws, calls, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          pending[0]({ status: 'completed', text: 'Answer.', streamedChars: 0 });
+          await flush();
+          expect(sentJson(ws)).toEqual([{ type: 'delegation_result', delegationId: 'd1', status: 'completed', text: 'Answer.' }]);
+
+          delegate(ws, 'd2', 'order');
+          await flush();
+          calls[1].stream!('I can place that order. ');
+          pending[1]({
+            status: 'pending_approval',
+            text: 'I can place that order.\n\nThis action needs approval.',
+            streamedChars: 23,
+            followUp: () => new Promise(() => {}),
+          });
+          await flush();
+          expect(sentJson(ws).slice(1)).toEqual([
+            { type: 'delegation_delta', delegationId: 'd2', text: 'I can place that order. ' },
+            {
+              type: 'delegation_update',
+              delegationId: 'd2',
+              status: 'pending_approval',
+              text: 'I can place that order.\n\nThis action needs approval.',
+              streamedChars: 23,
+            },
+          ]);
+        });
+
+        it('does not stream when delegation_read_back is missing (a multi-utterance read-back could not stay folded)', async () => {
+          const { ws, calls, pending } = await startDelegatedCall({}, { capabilities: [...ALL_CAPS, 'delegation_stream'] });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          expect(calls[0]).not.toHaveProperty('stream');
+          pending[0]({ status: 'completed', text: 'Answer.', streamedChars: 7 });
+          await flush();
+          expect(sentJson(ws)).toEqual([{ type: 'delegation_result', delegationId: 'd1', status: 'completed', text: 'Answer.' }]);
+        });
+
+        it('a cancellation after progress disarms that delegation\'s fold, not another\'s', async () => {
+          const { ws, calls, transcripts } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          calls[0].stream!('It is sunny. ');
+          await flush();
+          progress(ws, 'd1');
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'dx', reason: 'deadline' }));
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd1', reason: 'provider_cancelled' }));
+          ws.triggerMessage(update('assistant', 'Something unrelated.', 'x1')); // read-back never started: renders
+          progress(ws, 'd1'); // cancelled: no frames, and no re-arm
+          ws.triggerMessage(update('assistant', 'Still here.', 'x2'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Something unrelated.', 'Still here.']);
+        });
+
+        it('a refusing warning after progress disarms the fold too', async () => {
+          const { ws, calls, transcripts } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          calls[0].stream!('It is sunny. ');
+          await flush();
+          progress(ws, 'd1');
+          ws.triggerMessage(JSON.stringify({ type: 'warning', code: 'UNKNOWN_DELEGATION', delegationId: 'd1' }));
+          ws.triggerMessage(update('assistant', 'Something unrelated.', 'x1'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Something unrelated.']);
+        });
+
+        it('streams nothing (and sends no streamedChars) when the server did not grant it', async () => {
+          const { ws, calls, pending } = await startDelegatedCall();
+          delegate(ws, 'd1', 'q');
+          await flush();
+          expect(calls[0]).not.toHaveProperty('stream');
+          pending[0]({ status: 'completed', text: 'Answer.', streamedChars: 7 });
+          await flush();
+          expect(sentJson(ws)).toEqual([{ type: 'delegation_result', delegationId: 'd1', status: 'completed', text: 'Answer.' }]);
+        });
+
+        it('sends deltas after a slow call context, and nothing once the delegation is cancelled', async () => {
+          let resolveContext!: (text: string) => void;
+          const { ws, calls, pending } = await startDelegatedCall(
+            { callContext: () => new Promise<string>((resolve) => (resolveContext = resolve)) },
+            { capabilities: STREAM_CAPS },
+          );
+          delegate(ws, 'd1', 'q');
+          await flush();
+          calls[0].stream!('First piece. ');
+          await flush();
+          expect(sentJson(ws)).toEqual([]);
+          resolveContext('On /docs.');
+          await flush();
+          expect(sentJson(ws).map((f) => f.type)).toEqual(['context', 'delegation_delta']);
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd1', reason: 'provider_cancelled' }));
+          calls[0].stream!('Second piece.');
+          pending[0]({ status: 'completed', text: 'First piece. Second piece.', streamedChars: 26 });
+          await flush();
+          expect(sentJson(ws).map((f) => f.type)).toEqual(['context', 'delegation_delta']);
+        });
+
+        it('folds the read-back on the first delegation_progress, once per spoken phase', async () => {
+          const { provider, ws, calls, transcripts, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          const statuses: string[] = [];
+          provider.onStatusChange((s) => statuses.push(s));
+          ws.triggerMessage(update('assistant', 'Let me check.', 'f1'));
+          delegate(ws, 'd1', 'q');
+          await flush();
+          calls[0].stream!('It is sunny. ');
+          await flush();
+          progress(ws, 'd1', 'It is sunny.');
+          ws.triggerMessage(update('assistant', 'Let me check. Okay.', 'f1')); // the filler keeps updating
+          ws.triggerMessage(update('assistant', 'It is sunny.', 'r1')); // read-back: folded
+          progress(ws, 'd1', 'And warm.'); // a later chunk of the same phase
+          ws.triggerMessage(update('assistant', 'It is sunny. And warm.', 'r1'));
+          pending[0]({ status: 'completed', text: 'It is sunny. And warm.', streamedChars: 13 });
+          await flush();
+          completed(ws, 'd1'); // the phase ends: no second fold
+          ws.triggerMessage(update('assistant', 'Anything else?', 'a2'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Let me check.', 'Let me check. Okay.', 'Anything else?']);
+          // Progress keeps the call "processing" until delegation_completed.
+          expect(statuses.filter((s) => s !== 'processing')).toEqual(['listening']);
+        });
+
+        it('folds a single-shot result\'s read-back on progress, and ignores progress for delegations it did not answer', async () => {
+          const { ws, transcripts, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          progress(ws, 'dx');
+          ws.triggerMessage(update('assistant', 'Hello there.', 'g1')); // unrelated: renders
+          delegate(ws, 'd1', 'q');
+          await flush();
+          pending[0]({ status: 'completed', text: 'It is sunny.' });
+          await flush();
+          progress(ws, 'd1');
+          ws.triggerMessage(update('assistant', 'It is sunny.', 'r1'));
+          ws.triggerMessage(update('user', 'thanks', 'u2'));
+          ws.triggerMessage(update('assistant', 'You are welcome.', 'a2'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Hello there.', 'thanks', 'You are welcome.']);
+        });
+
+        it('folds again for a later spoken phase (the approval outcome)', async () => {
+          const { ws, transcripts, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          let settle!: (f: VoiceDelegationFollowUp | null) => void;
+          delegate(ws, 'd1', 'order');
+          await flush();
+          pending[0]({ status: 'pending_approval', text: 'Approve it.', followUp: () => new Promise((r) => (settle = r)) });
+          await flush();
+          progress(ws, 'd1');
+          ws.triggerMessage(update('assistant', 'Please approve it.', 'r1'));
+          completed(ws, 'd1', false);
+          settle({ status: 'completed', text: 'Order placed.' });
+          await flush();
+          progress(ws, 'd1');
+          ws.triggerMessage(update('assistant', 'Your order is placed.', 'r2'));
+          completed(ws, 'd1');
+          ws.triggerMessage(update('assistant', 'Anything else?', 'a3'));
+          expect(transcripts.map((t) => t[1])).toEqual(['Anything else?']);
+        });
+
+        it('folds an untagged read-back after delegation_progress on a tag-negotiated server (the cut-filler continuation)', async () => {
+          const { ws, calls, transcripts, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          const frame = (turnId: string, text: string, final: boolean, delegationId?: string) =>
+            ws.triggerMessage(
+              JSON.stringify({ type: 'transcript_update', role: 'assistant', text, utteranceId: turnId, final, delegationId }),
+            );
+          // GPT-Live's filler A is streaming when the delegation starts.
+          frame('a1', 'Let me check', false);
+          delegate(ws, 'd1', 'hours?');
+          await flush();
+          calls[0].stream!("We're open Monday to Friday from 8 to 6. ");
+          await flush();
+          expect(sentJson(ws).map((f) => f.type)).toEqual(['delegation_delta']);
+          // Core cuts A (its final carries the start of the answer), reports progress...
+          frame('a1', "Let me check on that for you. We're open Monday", true);
+          progress(ws, 'd1');
+          // ...and GPT-Live continues in a NEW utterance B that nobody tagged: folded.
+          frame('b1', 'to Friday from 8 to 6.', false);
+          frame('b1', 'to Friday from 8 to 6. Saturday 9 to 4.', true);
+          pending[0]({ status: 'completed', text: "We're open Monday to Friday from 8 to 6.", streamedChars: 40 });
+          await flush();
+          completed(ws, 'd1'); // the tag server's completion arms nothing
+          frame('n1', 'Anything else?', true); // renders
+          // A later read-back tagged with the delegation folds by its tag.
+          ws.triggerMessage(update('user', 'and sundays', 'u2'));
+          frame('c1', 'Closed on Sundays.', true, 'd1');
+          expect(transcripts.map((t) => t[1])).toEqual([
+            'Let me check',
+            "Let me check on that for you. We're open Monday",
+            'Anything else?',
+            'and sundays',
+          ]);
+        });
+
+        it('a user transcript clears a progress-armed fold, and a tag fold consumes it (tag-negotiated server)', async () => {
+          const { ws, calls, transcripts, pending } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          const frame = (turnId: string, text: string, delegationId?: string) =>
+            ws.triggerMessage(
+              JSON.stringify({ type: 'transcript_update', role: 'assistant', text, utteranceId: turnId, final: true, delegationId }),
+            );
+          delegate(ws, 'd1', 'order');
+          await flush();
+          calls[0].stream!('I can do that. ');
+          await flush();
+          progress(ws, 'd1');
+          ws.triggerMessage(update('user', 'wait', 'u1')); // the visitor spoke first: disarmed
+          frame('x1', 'Sure, go ahead.'); // renders
+          progress(ws, 'd1'); // same phase: no re-arm
+          frame('x2', 'Still here.'); // renders
+          // The approval ask ends that phase; the outcome's phase arms again.
+          pending[0]({ status: 'pending_approval', text: 'I can do that.\n\nApprove it.', streamedChars: 14, followUp: () => new Promise(() => {}) });
+          await flush();
+          completed(ws, 'd1', false);
+          progress(ws, 'd1');
+          frame('r2', 'Your order is placed.', 'd1'); // folded by its tag, consuming the armed fold
+          frame('x3', 'Anything else?'); // renders
+          expect(transcripts.map((t) => t[1])).toEqual(['wait', 'Sure, go ahead.', 'Still here.', 'Anything else?']);
+        });
+
+        it('folds a tagged read-back that starts while the answer is still streaming (delegation_read_back)', async () => {
+          const { ws, calls, transcripts } = await startDelegatedCall({}, { capabilities: STREAM_CAPS });
+          delegate(ws, 'd1', 'q');
+          await flush();
+          calls[0].stream!('It is sunny. ');
+          await flush();
+          ws.triggerMessage(
+            JSON.stringify({ type: 'transcript_update', role: 'assistant', text: 'It is sunny.', utteranceId: 'r1', final: false, delegationId: 'd1' }),
+          );
+          expect(transcripts).toEqual([]);
+        });
       });
 
       describe('approval lifecycle (delegation_update, then one terminal delegation_result)', () => {
@@ -1838,7 +2093,7 @@ describe('RuntypeVoiceProvider prewarm', () => {
       provider.setSessionBridge({ getHistory: () => [], runDelegatedTurn: async () => ({ status: 'completed', text: '' }) });
       provider.prewarm();
       expect(lastWs().url).toBe(
-        voiceUrl('wss://api.example.com', 'agent%2F1', ['attach', ...BASE_CAPS, 'client_delegation', 'delegation_update', 'delegation_read_back']),
+        voiceUrl('wss://api.example.com', 'agent%2F1', ['attach', ...BASE_CAPS, 'client_delegation', 'delegation_update', 'delegation_read_back', 'delegation_stream']),
       );
     });
 

@@ -2042,7 +2042,7 @@ export class AgentWidgetSession {
     controller: AbortController,
     assistantMessageId: string,
     userMessageId: string,
-    turnOptions?: { composerOptions?: ComposerOptionsPayload; interrupt?: boolean }
+    turnOptions?: { composerOptions?: ComposerOptionsPayload; interrupt?: boolean; voiceSpoken?: boolean }
   ): Promise<void> {
     this.#recordDispatchedProjections(snapshot);
     try {
@@ -2052,7 +2052,8 @@ export class AgentWidgetSession {
           signal: controller.signal,
           assistantMessageId,
           composerOptions: turnOptions?.composerOptions,
-          interrupt: turnOptions?.interrupt
+          interrupt: turnOptions?.interrupt,
+          voiceSpoken: turnOptions?.voiceSpoken
         },
         this.handleEvent
       );
@@ -2070,6 +2071,7 @@ export class AgentWidgetSession {
           signal: controller.signal,
           assistantMessageId,
           composerOptions: turnOptions?.composerOptions,
+          voiceSpoken: turnOptions?.voiceSpoken,
         },
         this.handleEvent
       );
@@ -2705,7 +2707,9 @@ export class AgentWidgetSession {
         userMessageId,
         {
           composerOptions: options?.composerOptions,
-          interrupt: options?.interrupt
+          interrupt: options?.interrupt,
+          // The delegated voice turn's reply is read aloud (spoken-reply hint).
+          voiceSpoken: !!options?.voiceTurn
         }
       );
     } catch (error) {
@@ -3679,6 +3683,7 @@ export class AgentWidgetSession {
 
   private handleEvent = (event: AgentWidgetEvent) => {
     const delegation = this.#voiceDelegation;
+    let delegated = false;
     if (delegation) {
       if (event.type === "error" || (event.type === "status" && event.status === "error")) {
         delegation.failed = true;
@@ -3687,10 +3692,13 @@ export class AgentWidgetSession {
         // unless the server dropped the result (then nobody speaks it).
         if (!delegation.dropped) this.ttsSpokenMessageIds.add(event.message.id);
         if (!delegation.ids.includes(event.message.id)) delegation.ids.push(event.message.id);
+        delegated = true;
       }
     }
     if (event.type === "message") {
       this.upsertMessage(event.message);
+      // The delegated answer grew: a streaming voice bridge reads it now.
+      if (delegated) delegation!.onUpdate?.();
 
       // A resolved approval reaches this handler only from the server's
       // `approval_complete` (resolveApproval's optimistic update upserts

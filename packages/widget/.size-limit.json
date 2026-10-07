@@ -20,13 +20,13 @@
   {
     "name": "⛔ CRITICAL · ESM bundle shipped by consumers (index.js)",
     "path": "dist/index.js",
-    "limit": "215.5 kB",
+    "limit": "215.75 kB",
     "gzip": true
   },
   {
     "name": "CJS bundle (index.cjs)",
     "path": "dist/index.cjs",
-    "limit": "216.25 kB",
+    "limit": "216.5 kB",
     "gzip": true
   },
   {
@@ -140,7 +140,7 @@
   {
     "name": "Lazy · voice provider runtime chunk (voice-runtime.js)",
     "path": "dist/voice-runtime.js",
-    "limit": "12.75 kB",
+    "limit": "14 kB",
     "gzip": true
   },
   {
