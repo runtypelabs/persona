@@ -459,7 +459,14 @@ function approvalPreview(ctx: AiContext, name: string, parameters: unknown): HTM
     return beforeAfter(before, after)
   }
   if (name === 'delete_slide') {
-    const id = typeof params.slideId === 'string' ? params.slideId : ctx.store.slide.id
+    // resolve exactly like the delete_slide tool: slideId > position > current
+    const id =
+      typeof params.slideId === 'string' && params.slideId
+        ? params.slideId
+        : typeof params.position === 'number'
+          ? nonStateSlides(doc)[params.position - 1]?.slide.id
+          : ctx.store.slide.id
+    if (!id) return null
     const thumb = slideThumbById(doc, id, 132)
     if (!thumb) return null
     const wrap = document.createElement('div')

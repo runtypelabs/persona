@@ -163,6 +163,14 @@ export const setOffline = (on: boolean): boolean => {
 
 const inFlight = new Set<AbortController>()
 const sockets = new Set<WebSocket>()
+const offlineListeners = new Set<() => void>()
+
+/** Run `fn` whenever offline mode is enforced (this tab or another). Returns
+ *  an unsubscribe. For network owners the kernel can't see into. */
+export function onOfflineEnforced(fn: () => void): () => void {
+  offlineListeners.add(fn)
+  return () => offlineListeners.delete(fn)
+}
 
 /**
  * Cut everything already running. Called when the switch goes on — in THIS
@@ -172,6 +180,11 @@ const sockets = new Set<WebSocket>()
  * carrying edits both ways.
  */
 export function enforceOffline(): void {
+  // connections the kernel does not own (an embedded widget's own fetch and
+  // voice socket) are cut by whoever owns them
+  for (const fn of [...offlineListeners]) {
+    try { fn() } catch { /* a listener must never stop the cut */ }
+  }
   for (const ac of [...inFlight]) {
     try { ac.abort(new OfflineError()) } catch { /* already settled */ }
   }
