@@ -30,6 +30,13 @@ export interface PresentSession {
   exit(): void
   /** Absolute slide navigation: jump the show to a 0-based slide index. */
   goTo(index: number): void
+  /** Step-aware linear nav (skips interactive states) — the AI presenter tools. */
+  next(): void
+  prev(): void
+  /** Jump to a 1-based position among NON-state slides. */
+  goToPosition(position: number): void
+  /** Current raw doc.slides index (the start index before init). */
+  currentIndex(): number
   /** Show or hide the audience blackout (audience copy side). */
   setBlack(on: boolean): void
   /** Position the remote laser dot from the presenter (null = hide). */
@@ -1538,7 +1545,19 @@ export function startPresentation(
     }
   })
 
-  return { exit, goTo, setBlack, setRemoteLaser }
+  return {
+    exit,
+    goTo,
+    setBlack,
+    setRemoteLaser,
+    next: () => { if (deckReady) goNext() },
+    prev: () => { if (deckReady) goPrev() },
+    goToPosition: (position: number) => {
+      const idx = railIndices[position - 1]
+      if (typeof idx === 'number') goTo(idx)
+    },
+    currentIndex: () => (deckReady ? deck.getIndices().h : startIndex),
+  }
 }
 
 // --- media playback -----------------------------------------------------------

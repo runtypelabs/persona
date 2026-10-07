@@ -20,6 +20,7 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI l
 - **Host matrix** (`examples/echo-hono`, `examples/echo-script-tag`, `examples/echo-express`, `examples/echo-sveltekit`) - the same canonical echo adapter re-hosted four ways. `persona-wire.ts` + the adapter are exact copies across all four; only the host wrapper changes. Hono/SvelteKit return the Web `Response` directly; Express/bare-`node:http` bridge the `(req, res)` callback style. All run keyless (echo agent) with a documented one-line swap to a real model.
 - `examples/runtype-script-tag` - the no-backend path: a static `clientToken` embed talking directly to `api.runtype.com`. Mirrors `echo-script-tag` but swaps `apiUrl: "/dispatch"` for a `clientToken` (zero-dep static server; loads the published widget from jsDelivr, not the workspace build). The hosted counterpart to the BYO examples.
 - `examples/runtype-hono-proxy` - Runtype API proxy on Hono (Node/Vercel/Workers; powers `pnpm dev`)
+- `examples/bento-slides` - a vendored copy of [Bento Slides](https://github.com/nyblnet/bento) (`kernel/` + `slides/`, upstream 1.2.6) with Persona embedded as "Bento Copilot": `slides/src/ai/` registers 23 WebMCP page tools and mounts the widget headless in the editor's right rail, with a GPT-Live voice call (client delegation) that can edit the deck and drive a running slideshow. Hosted Runtype agent on `qwen3.8-27b`; see its README for the upstream-sync notes.
 
 ## Requirements
 
