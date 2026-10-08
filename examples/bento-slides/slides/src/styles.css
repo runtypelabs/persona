@@ -2949,6 +2949,12 @@ input.ed-toggle { width: 16px; height: 16px; accent-color: #5E7699; cursor: poin
   border-bottom: 2px solid transparent;
 }
 .ed-rtab.on { color: var(--ink); border-bottom-color: #FF9E8A; background: #fff; }
+.ed-rtab-reset {
+  flex: none; border: 0; background: none; cursor: pointer; padding: 0 10px;
+  font: inherit; font-size: 14px; color: var(--muted); border-bottom: 2px solid transparent;
+}
+.ed-rtab-reset:hover { color: var(--ink); }
+.ed-rtab-reset[hidden] { display: none; }
 .ed-copilot { display: none; flex: 1; min-height: 0; position: relative; }
 .ed-copilot.on { display: flex; flex-direction: column; }
 .ed-copilot > * { flex: 1; min-height: 0; }

@@ -290,10 +290,8 @@ export function mountCopilotPane(ctx: AiContext, host: PaneHost): PaneController
       inputPlaceholder: t('Ask the Copilot to build, restyle or align slides…'),
     },
     contextMentions: buildContextMentions(ctx, {
-      clearChat: () => {
-        controller?.clearChat()
-        ctx.editor.toast(t('Chat cleared.'))
-      },
+      // same as the rail's reset button (ai/index.ts)
+      clearChat: () => ctx.editor.onCopilotReset?.(),
       present: () => ctx.editor.present(false, true),
       fixFlagged: () => host.fixFlagged(),
     }),
