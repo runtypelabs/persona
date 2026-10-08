@@ -100,6 +100,17 @@ export function initAI(ctx: AiContext): BentoAiApi {
   ctx.editor.enableCopilotTab()
   mount()
 
+  // the rail's reset: a fresh conversation. A running turn is aborted by the
+  // clear, and a call hangs up so the voice model doesn't carry the old chat.
+  ctx.editor.onCopilotReset = () => {
+    const controller = paneController()
+    if (!controller) return
+    voice.endCall()
+    controller.clearChat()
+    turns.abandon()
+    ctx.editor.toast(t('New chat.'))
+  }
+
   // Offline switched on mid-session (here or in another tab): the kernel cuts
   // its own requests and sockets, but Persona's chat stream and voice socket
   // are not the kernel's — hang up and unmount so nothing else leaves.

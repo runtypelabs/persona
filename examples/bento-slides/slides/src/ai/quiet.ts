@@ -34,6 +34,8 @@ export interface TurnManager {
   /** re-wire events after the pane remounts (model switch) */
   attach(controller: PaneController): void
   isBusy(): boolean
+  /** the chat was cleared mid-turn: end it as stopped (no completion event comes) */
+  abandon(): void
 }
 
 const MUTATING_PREFIXES = ['add_', 'update_', 'delete_', 'move_', 'set_', 'duplicate_', 'align_']
@@ -190,5 +192,11 @@ export function createTurnManager(
     },
     attach,
     isBusy: () => busy,
+    abandon() {
+      if (!busy) return
+      clearTimeout(endTimer)
+      stopped = true
+      endTurn(lastText)
+    },
   }
 }

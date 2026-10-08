@@ -167,12 +167,15 @@ export class Editor {
   private copilotEl!: HTMLElement
   private designTabB!: HTMLElement
   private copilotTabB!: HTMLElement
+  private copilotResetB!: HTMLButtonElement
   private copilotOn = false
   /** set by src/ai: fires after every build() (a locale switch re-authors the
    *  whole DOM, so the Copilot re-adopts the fresh right-rail containers) */
   onRebuild?: () => void
   /** set by src/ai when the copilot tab becomes active/inactive */
   onCopilotTabChange?: (on: boolean) => void
+  /** set by src/ai: the rail's "new chat" button (shown on the Copilot tab) */
+  onCopilotReset?: () => void
   /** set by src/ai: fires on presentation start/end (presenter tool swap) */
   onPresentChange?: (on: boolean) => void
   /** live presentation session while presenting (nav handle for AI tools) */
@@ -551,7 +554,15 @@ export class Editor {
     this.copilotTabB = tabBtn('✨ ' + t('Copilot'), () => this.setCopilotTab(true))
     this.designTabB.classList.toggle('on', !this.copilotOn)
     this.copilotTabB.classList.toggle('on', this.copilotOn)
-    this.rightTabs.append(this.designTabB, this.copilotTabB)
+    this.copilotResetB = document.createElement('button')
+    this.copilotResetB.type = 'button'
+    this.copilotResetB.className = 'ed-rtab-reset'
+    this.copilotResetB.textContent = '↺'
+    this.copilotResetB.title = t('New chat — clear the Copilot conversation')
+    this.copilotResetB.setAttribute('aria-label', t('New chat'))
+    this.copilotResetB.hidden = !this.copilotOn
+    this.copilotResetB.addEventListener('click', () => this.onCopilotReset?.())
+    this.rightTabs.append(this.designTabB, this.copilotTabB, this.copilotResetB)
     this.propsBody = div('ed-props-body')
     this.copilotEl = div('ed-copilot')
     this.propsBody.style.display = this.copilotOn ? 'none' : ''
@@ -658,6 +669,7 @@ export class Editor {
     this.copilotOn = on
     this.designTabB.classList.toggle('on', !on)
     this.copilotTabB.classList.toggle('on', on)
+    this.copilotResetB.hidden = !on
     this.propsBody.style.display = on ? 'none' : ''
     this.copilotEl.classList.toggle('on', on)
     this.applyPanelWidths() // the Copilot tab breathes at its own (wider) width
