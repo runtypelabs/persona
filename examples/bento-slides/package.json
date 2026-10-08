@@ -1,0 +1,32 @@
+{
+  "name": "bento-slides",
+  "version": "1.2.6",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "cd slides && vite",
+    "build": "pnpm --filter @runtypelabs/persona build && cd slides && tsc -b && vite build",
+    "build:single": "pnpm --filter @runtypelabs/persona build && cd slides && tsc -b && SINGLEFILE=1 vite build --outDir dist-single && mv dist-single/index.html dist-single/Bento_Slides.bento.html && node ../scripts/postbuild-compress.mjs dist-single/Bento_Slides.bento.html",
+    "preview": "cd slides && vite preview",
+    "typecheck": "cd slides && tsc -b",
+    "build:web": "cd slides && tsc -b && SINGLEFILE=1 vite build --outDir ../../../apps/web/dist/bento --emptyOutDir"
+  },
+  "dependencies": {
+    "@mcp-b/webmcp-polyfill": "^5.1.0",
+    "@runtypelabs/persona": "workspace:^",
+    "moveable": "^0.53.0",
+    "reveal.js": "^5.2.1",
+    "selecto": "^1.26.3"
+  },
+  "devDependencies": {
+    "@gfx/zopfli": "^1.0.15",
+    "@types/node": "^24.13.2",
+    "@types/reveal.js": "^5.2.1",
+    "fake-indexeddb": "^6.2.5",
+    "qrcode": "^1.5.4",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.1",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}

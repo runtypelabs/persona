@@ -1,0 +1,1924 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2026 The Bento authors
+// The editing canvas: renders the current slide at fit-to-window scale and
+// wires Moveable (drag/resize/rotate/snap) + Selecto (click & rubber-band
+// selection) + contenteditable text editing on top of it.
+
+import Moveable from 'moveable'
+import Selecto from 'selecto'
+import type { Store } from '../store'
+import { t } from '../i18n'
+import { defaultShape, internAsset, readableInk, uid, type ShapeElement, type SlideElement, type TableElement } from '../model'
+import { renderSlide, sanitizeHtml } from '../render'
+import { autoformatAtCaret, clearAutoformat, markdownToHtml, stripMarkerEscapes, undoAutoformat } from './markdown'
+import { bulletsToLists } from './bullets'
+import { clipboardToHtml } from './paste'
+import { execFormat, hideFormatBar, syncFormatBar } from './richtext'
+import { PathEditor } from './patheditor'
+import { LineEditor, isLineLike, setLineEndpoints, setPathAnchors, boxAnchors, nearestAnchor, boxContains } from './lineedit'
+import { CropEditor } from './cropedit'
+import { BezierEditor, isCurve } from './beziereditor'
+import { simplifyPoints } from './patheditor'
+
+const SVG_NS = 'http://www.w3.org/2000/svg'
+type DrawKind = 'line' | 'path' | 'connector' | 'curve-connector' | 'free' | 'poly'
+import { CommentsUI } from './comments'
+import { StepBadges } from './stepbadges'
+import type { Peer } from '../sync/session'
+
+/** How far a finger may travel and still count as a tap rather than a drag.
+ *  10px matches what a thumb does on glass while trying to hold still. */
+const TAP_SLOP = 10
+/** …and how long it may rest. Past this it is a press, not a tap. */
+const TAP_HOLD_MS = 700
+
+/** The title on an unrendered formula (render.ts mathHint): what went wrong,
+ *  translated at call time — `\\foo` is shown as typed. */
+const mathHintTitle = (what: string) =>
+  t('Not rendered: {what}', { what: what === 'spaces' ? t('no space just inside the $ signs') : what })
+
+export class SlideCanvas {
+  private stage: HTMLElement
+  private scaleHost: HTMLElement
+  private scroller: HTMLElement
+  private surface: HTMLElement | null = null
+  private moveable: Moveable
+  private selecto: Selecto
+  private scale = 1
+  private fitScale = 1
+  /** user zoom, multiplier on the fitted scale (1 = fit to window) */
+  private zoom = 1
+  /** a two-finger pinch owns the scroller: the Moveable gesture lock below has
+   *  to stand down for it, or every scroll the zoom makes is snapped back. */
+  private pinching = false
+  private zoomLabel: HTMLElement | null = null
+  private editing: HTMLElement | null = null
+  /** The listeners of the CURRENT inline edit (text box or table cell), so
+   *  they die with it. Without this a node that was edited, committed with
+   *  no change (no re-render, same node) and edited again carried one more
+   *  keydown/input/paste listener each time — Tab through a table's cells,
+   *  then paste into one, and the paste landed N times over. */
+  private editListeners: AbortController | null = null
+  /** Slide identity captured when an inline edit begins. Element ids may be
+   *  shared across duplicated slides, so resolving through store.slide at
+   *  commit time can write into the wrong slide after navigation or a remote
+   *  deletion. */
+  private editingSlideId: string | null = null
+  /** startTextEdit swapped the rendered form for raw source (a field or a
+   *  formula), so commit must re-render even if the text is unchanged. */
+  private editingShowedRaw = false
+  /** when editing a table cell, which cell (else null → text element edit) */
+  private editingCell: { r: number; c: number } | null = null
+  /** tears down the selection watcher that drives the formatting bar */
+  private stopSelectionWatch: (() => void) | null = null
+  /** a repaint arrived (e.g. a remote collab op) while an inline edit was in
+   *  progress and was deferred so it wouldn't tear the edited node out from
+   *  under the caret; flushed when the edit commits. */
+  private pendingRender = false
+  /** space is down and the canvas is armed to pan (see the keydown handler) */
+  private spaceHeld = false
+  /** a pan drag is in flight — keeps the grabbing cursor through a space release */
+  private panning = false
+  private pathEditor!: PathEditor
+  private lineEditor!: LineEditor
+  private cropEditor!: CropEditor
+  private bezierEditor!: BezierEditor
+  private drawOverlay: HTMLElement | null = null
+  private comments!: CommentsUI
+  private stepBadges!: StepBadges
+
+  constructor(
+    private wrap: HTMLElement,
+    private store: Store,
+  ) {
+    this.scroller = document.createElement('div')
+    this.scroller.className = 'ed-scroll'
+    this.stage = document.createElement('div')
+    this.stage.className = 'ed-stage'
+    // A link in text (<a href>, from [caption](url)) is content here, not a
+    // control: a click selects and edits like any other text, and never
+    // navigates the editor away. Links open only from the show (present.ts).
+    this.stage.addEventListener('click', (ev) => {
+      if ((ev.target as HTMLElement).closest('a[href]')) ev.preventDefault()
+    }, true)
+    this.scaleHost = document.createElement('div')
+    this.scaleHost.className = 'ed-stage-scale'
+    this.stage.appendChild(this.scaleHost)
+    this.scroller.appendChild(this.stage)
+    wrap.appendChild(this.scroller)
+    this.buildZoomBar()
+    // pinch / ctrl+wheel zooms like every design tool
+    this.scroller.addEventListener('wheel', (ev) => {
+      if (ev.ctrlKey || ev.metaKey) {
+        ev.preventDefault()
+        this.setZoom(this.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12))
+        return
+      }
+      // plain wheel → walk slides, but only when the slide can't be panned (it
+      // fits, i.e. not zoomed to overflow) and nothing is being edited. A distance
+      // threshold + cooldown makes one trackpad swipe advance exactly one slide.
+      if (!this.onSlideNav || this.editing || this.editingCell || this.isPathEditing) return
+      const s = this.scroller
+      if (s.scrollHeight > s.clientHeight + 1 || s.scrollWidth > s.clientWidth + 1) return // pannable → let it scroll
+      if (Math.abs(ev.deltaY) < Math.abs(ev.deltaX)) return // horizontal intent
+      ev.preventDefault()
+      const now = Date.now()
+      if (now < this.wheelNavCooldown) return
+      this.wheelNavAccum += ev.deltaY
+      if (Math.abs(this.wheelNavAccum) < 40) return
+      const dir = this.wheelNavAccum > 0 ? 1 : -1
+      this.wheelNavAccum = 0
+      this.wheelNavCooldown = now + 400
+      this.onSlideNav(dir)
+    }, { passive: false })
+
+    // Middle-button drag pans. Until now the scrollbars were the only way to
+    // move a zoomed slide, which puts the control at the edge of the screen
+    // while the work is in the middle of it. Middle-drag is what design tools
+    // do, and unlike space-drag it cannot collide with typing a space.
+    //
+    // Capture phase, because Selecto is bound to this same scroller and would
+    // otherwise read the press as the start of a marquee.
+    this.scroller.addEventListener('mousedown', (ev) => {
+      // Middle button, or left button while space is held — the two gestures
+      // every canvas tool offers. Space is the one most hands already know;
+      // middle-drag is the one that works when a hand is on the mouse, and the
+      // one #166 asked for. Neither exists on an Apple trackpad, which is why
+      // a plain two-finger scroll still pans once the slide is zoomed past fit.
+      // canGrabSpace is re-checked HERE, not just when space armed the pan: a
+      // keyup can be missed (a native dialog, focus leaving mid-hold), and a
+      // canvas stuck in pan mode would swallow the click that starts a text
+      // edit. The press itself is the last honest moment to ask.
+      if (ev.button !== 1 && !(ev.button === 0 && this.spaceHeld && this.canGrabSpace())) return
+      ev.preventDefault() // suppress the OS autoscroll widget
+      ev.stopPropagation()
+      this.startPan(ev)
+    }, true)
+    // X11 pastes the selection on middle-click release; the drag consumed it
+    this.scroller.addEventListener('auxclick', (ev) => {
+      if (ev.button === 1) ev.preventDefault()
+    })
+
+    // Space arms the pan. It is unbound in the editor otherwise, but it DOES
+    // page a scroll container by default, so the keydown has to be swallowed
+    // while we own it. Never while text is being edited or a panel field has
+    // focus — there a space is a space.
+    window.addEventListener('keydown', (ev) => {
+      if (ev.key !== ' ' || ev.repeat || this.spaceHeld || !this.canGrabSpace()) return
+      ev.preventDefault()
+      this.spaceHeld = true
+      this.scroller.style.cursor = 'grab'
+    })
+    window.addEventListener('keyup', (ev) => {
+      if (ev.key !== ' ' || !this.spaceHeld) return
+      this.spaceHeld = false
+      if (!this.panning) this.scroller.style.cursor = ''
+    })
+    // Losing the window with space down would otherwise leave it stuck armed
+    window.addEventListener('blur', () => {
+      this.spaceHeld = false
+      if (!this.panning) this.scroller.style.cursor = ''
+    })
+
+    // Control box lives INSIDE the scaled host with rootContainer at body:
+    // Moveable then works in slide-local coordinates (e.left/e.top are model
+    // px), and `zoom` compensates the handles' visual size (set in relayout).
+    this.moveable = new Moveable(this.scaleHost, {
+      rootContainer: document.body,
+      draggable: true,
+      resizable: true,
+      rotatable: true,
+      origin: false,
+      snappable: true,
+      snapThreshold: 6,
+      snapDirections: { top: true, left: true, bottom: true, right: true, center: true, middle: true },
+      elementSnapDirections: { top: true, left: true, bottom: true, right: true, center: true, middle: true },
+      isDisplaySnapDigit: false,
+      throttleRotate: 1,
+      rotationPosition: 'top',
+      renderDirections: ['nw', 'n', 'ne', 'w', 'e', 'sw', 's', 'se'],
+    })
+
+    this.selecto = new Selecto({
+      container: this.scroller,
+      dragContainer: this.scroller,
+      selectableTargets: ['.bento-el'],
+      selectByClick: true,
+      selectFromInside: false,
+      toggleContinueSelect: 'shift',
+      // A two-finger pinch (mobile Safari) must not start a marquee — it throws
+      // off the selection box and has crashed the page. Only single-touch drags
+      // rubber-band; the browser keeps its own gesture.
+      dragCondition: (e) => {
+        const touches = (e?.inputEvent as TouchEvent | undefined)?.touches
+        return !touches || touches.length <= 1
+      },
+      // Marquee selects only elements it fully contains (clicking still
+      // selects whatever is under the cursor via selectByClick).
+      hitRate: 100,
+    })
+
+    this.wireMoveable()
+    this.wireSelecto()
+
+    // Mobile Safari: a two-finger pinch over the canvas zooms the PAGE, which
+    // (mid-marquee) throws Selecto's coordinates off and has crashed the page.
+    // So multi-touch is still swallowed here — page-pinch-zooming an editor
+    // surface is never what you want. Single touch (scroll / marquee) is
+    // untouched. Non-passive so preventDefault works.
+    //
+    // But swallowing it left the gesture meaning NOTHING. The editor has its own
+    // zoom and, on a phone, only the two 44px buttons in the corner reach it —
+    // while the deck opens at 19–27% on a handset, i.e. always needing zoom.
+    // A pinch drives that zoom instead, and the fingers also pan, which is the
+    // other half of the same gesture on every map and canvas ever shipped.
+    let pinch: { d: number; zoom: number; mx: number; my: number } | null = null
+    const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
+    const midX = (t: TouchList) => (t[0].clientX + t[1].clientX) / 2
+    const midY = (t: TouchList) => (t[0].clientY + t[1].clientY) / 2
+    const startPinch = (t: TouchList) => {
+      pinch = { d: Math.max(1, spread(t)), zoom: this.zoom, mx: midX(t), my: midY(t) }
+      // The first finger has already told Moveable a drag is starting, which
+      // both moves an element under the pinch and PINS the scroller to where
+      // that finger landed — so without this the zoom's own scrolling is
+      // snapped straight back and the slide zooms about the wrong point.
+      this.pinching = true
+      ;(this.moveable as unknown as { stopDrag?: () => void }).stopDrag?.()
+      // stopDrag() ABANDONS the gesture — it does not run dragEnd, so
+      // commitFrames() never fires, no store.commit happens, and the
+      // store 'doc' listener that re-renders from the model never runs.
+      // The node therefore keeps the inline left/top that mv.on('drag')
+      // wrote while the first finger was moving, and sits at a position the
+      // document has never held. The model is safe; the VIEW is the lie, and
+      // it does not self-correct — it survives deselection and persists until
+      // some unrelated commit forces a render. So put the node back where the
+      // model says it is. Exactly inverts the drag handler, which writes
+      // left/top and nothing else.
+      for (const node of this.selectedNodes()) {
+        const el = this.store.element(node.dataset.elId ?? '')
+        if (!el) continue
+        node.style.left = `${el.x}px`
+        node.style.top = `${el.y}px`
+      }
+    }
+    this.scroller.addEventListener('touchstart', (ev) => {
+      if (ev.touches.length < 2) { pinch = null; return }
+      ev.preventDefault()
+      startPinch(ev.touches)
+    }, { passive: false })
+    this.scroller.addEventListener('touchmove', (ev) => {
+      if (ev.touches.length < 2) return
+      ev.preventDefault()
+      // A finger can arrive mid-gesture (a second one lands after a drag has
+      // begun); treat that as the start rather than measuring against nothing.
+      if (!pinch) { startPinch(ev.touches); return }
+      const d = spread(ev.touches)
+      const mx = midX(ev.touches)
+      const my = midY(ev.touches)
+      if (d >= 1) this.zoomAround(pinch.zoom * (d / pinch.d), mx, my)
+      // …and the midpoint's own travel pans, so one gesture both scales and
+      // moves. Applied AFTER the zoom, which has already corrected the scroll
+      // to keep the pinched point under the fingers.
+      this.scroller.scrollLeft -= mx - pinch.mx
+      this.scroller.scrollTop -= my - pinch.my
+      pinch.mx = mx
+      pinch.my = my
+    }, { passive: false })
+    const endPinch = (ev: TouchEvent) => {
+      if (ev.touches.length >= 2) return
+      pinch = null
+      this.pinching = false
+    }
+    this.scroller.addEventListener('touchend', endPinch)
+    this.scroller.addEventListener('touchcancel', endPinch)
+
+    // Pin the scroller during Moveable gestures: snap guidelines can overflow
+    // the stage and grow the scroll area, which made the slide jump around
+    // mid-drag. Any scroll while a gesture is live is snapped straight back.
+    let gestureLock = false
+    let lockL = 0
+    let lockT = 0
+    this.scroller.addEventListener('scroll', () => {
+      if (gestureLock && !this.pinching) {
+        this.scroller.scrollLeft = lockL
+        this.scroller.scrollTop = lockT
+      }
+    })
+    const lockScroll = () => {
+      gestureLock = true
+      lockL = this.scroller.scrollLeft
+      lockT = this.scroller.scrollTop
+      // the REAL jump culprit: a scrollbar APPEARING mid-drag (guideline overflow)
+      // shrinks the client box and re-centres the stage. If no bar is showing at
+      // gesture start, forbid overflow for the drag so one can never appear.
+      // (scrollbar-gutter covers the vertical bar; this covers horizontal too.)
+      const s = this.scroller
+      if (s.scrollHeight <= s.clientHeight && s.scrollWidth <= s.clientWidth) s.style.overflow = 'hidden'
+    }
+    const unlockScroll = () => { gestureLock = false; this.scroller.style.overflow = '' }
+    for (const e of ['dragStart', 'resizeStart', 'rotateStart', 'dragGroupStart', 'resizeGroupStart', 'rotateGroupStart'])
+      (this.moveable as unknown as { on: (e: string, f: () => void) => void }).on(e, lockScroll)
+    for (const e of ['dragEnd', 'resizeEnd', 'rotateEnd', 'dragGroupEnd', 'resizeGroupEnd', 'rotateGroupEnd'])
+      (this.moveable as unknown as { on: (e: string, f: () => void) => void }).on(e, unlockScroll)
+
+    this.pathEditor = new PathEditor(this.scaleHost, store, () => this.syncTargets())
+    this.pathEditor.setScaleGetter(() => this.scale)
+    this.lineEditor = new LineEditor(this.scaleHost, store)
+    this.lineEditor.setScaleGetter(() => this.scale)
+    this.cropEditor = new CropEditor(this.scaleHost, store, () => this.scale, () => this.syncTargets())
+    this.bezierEditor = new BezierEditor(this.scaleHost, store)
+    this.bezierEditor.setScaleGetter(() => this.scale)
+    document.addEventListener('bento:edit-crop', ((ev: CustomEvent) => {
+      const id = String(ev.detail?.id ?? '')
+      if (id) this.startCropEdit(id)
+    }) as EventListener)
+    document.addEventListener('bento:edit-path', ((ev: CustomEvent) => {
+      this.startPathEdit(ev.detail.id)
+    }) as EventListener)
+
+    this.comments = new CommentsUI(store, this.stage, () => this.scale)
+    this.stepBadges = new StepBadges(store, this.stage, () => this.scale)
+
+    // Alt/Option-click digs through overlapping elements: first click grabs
+    // the topmost, each further alt-click steps one element deeper (wrapping).
+    // Capture phase so it wins over Selecto AND Moveable's control-box area,
+    // which otherwise swallows clicks over the current selection.
+    document.addEventListener('mousedown', (ev) => {
+      if (!ev.altKey || ev.button !== 0 || this.pathEditor.active || this.bezierEditor.active) return
+      // Alt on a resize/rotate handle means center-scale, not deep-select
+      if (ev.target instanceof Element && ev.target.closest('.moveable-control-box')) return
+      const r = this.scaleHost.getBoundingClientRect()
+      if (ev.clientX < r.left || ev.clientX > r.right || ev.clientY < r.top || ev.clientY > r.bottom) return
+      if (ev.target instanceof Element && ev.target.closest('.ed-sidebar, .ed-props, .ed-topbar')) return
+      ev.preventDefault()
+      ev.stopPropagation()
+      this.deepSelect((ev.clientX - r.left) / this.scale, (ev.clientY - r.top) / this.scale)
+    }, true)
+
+    this.stage.addEventListener('dblclick', (ev) => {
+      // Look for TextElement, and then CodeElement
+      const selectors = [
+        '.bento-el-text',
+        '.bento-el-code'
+      ]
+      var textEl: HTMLElement | null = null
+      for (const selector of selectors) {
+        textEl = (ev.target as HTMLElement).closest<HTMLElement>(selector)
+        if (textEl) break
+      }
+      if (textEl) { this.startTextEdit(textEl); return }
+      const td = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-table td[data-c]')
+      if (td) { this.editCellFromTd(td); return }
+      // a picture: double-click opens crop mode (pan + zoom inside the frame)
+      const pic = (ev.target as HTMLElement).closest<HTMLElement>('.bento-el-image')
+      if (pic?.dataset.elId) this.startCropEdit(pic.dataset.elId)
+    })
+
+    // Touch has no double-click. Selecto and Moveable preventDefault the touch
+    // stream they handle, so the synthesized mouse events never arrive on the
+    // canvas — not click, and not dblclick. The route above is therefore
+    // unreachable from a phone, and text simply could not be edited there.
+    //
+    // The gesture every touch editor uses for "open this" is a tap on the thing
+    // a previous tap already selected, so that is what enters editing. Checking
+    // the selection first is what keeps it safe: the tap that SELECTS an element
+    // can never be the one that opens it, so nothing is swallowed.
+    //
+    // TOUCH events, not pointer events, and deliberately so. A pointer handler
+    // runs for a mouse as well and has to filter itself back out by
+    // pointerType; the compatibility mouse burst it leaves behind then has to
+    // be filtered too — two separate chances to change desktop behaviour by
+    // accident. A touch handler cannot fire for a mouse at all, and cancelling
+    // the touchend stops the browser SYNTHESIZING that burst in the first
+    // place, so there is nothing left to filter. (Suggested by @7jameslondon,
+    // who tested the pointer version on a real iPhone.)
+    let tap: { x: number; y: number; t: number; id: string | null; wasSelected: boolean } | null = null
+    this.scroller.addEventListener('touchstart', (ev) => {
+      // a second finger means a pinch, never a tap
+      if (ev.touches.length !== 1) { tap = null; return }
+      const t = ev.touches[0]
+      const id = this.topElementAt(t.clientX, t.clientY)
+      const sel = this.store.selection
+      tap = {
+        x: t.clientX, y: t.clientY, t: ev.timeStamp, id,
+        // Asked HERE and not on release, because Selecto selects on the press:
+        // by the time the finger lifts, the tap that merely selected has
+        // already made this element the selection and would open the editor
+        // on the FIRST tap.
+        wasSelected: !!id && sel.length === 1 && sel[0] === id,
+      }
+    }, true)
+    this.scroller.addEventListener('touchmove', (ev) => {
+      const t = ev.touches[0]
+      if (!tap || !t) return
+      // a moved finger was a drag or a pan, not a tap
+      if (Math.hypot(t.clientX - tap.x, t.clientY - tap.y) > TAP_SLOP) tap = null
+    }, true)
+    // non-passive: this is the listener that has to be able to cancel
+    this.scroller.addEventListener('touchend', (ev) => {
+      const start = tap
+      tap = null
+      if (!start || ev.touches.length || this.store.readOnly) return
+      if (this.editing || this.editingCell || this.isPathEditing || this.isCropEditing) return
+      const t = ev.changedTouches[0]
+      if (!t) return
+      if (Math.hypot(t.clientX - start.x, t.clientY - start.y) > TAP_SLOP) return
+      if (ev.timeStamp - start.t > TAP_HOLD_MS) return // a held finger is a press
+      if (!start.wasSelected) return // this tap is the one that selects
+      const id = this.topElementAt(t.clientX, t.clientY)
+      if (!id || id !== start.id) return // started and ended on the same element
+      const sel = this.store.selection
+      if (sel.length !== 1 || sel[0] !== id) return // selection moved under us
+      const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
+      if (!node) return
+      let opened = false
+      if (node.classList.contains('bento-el-text')) {
+        this.startTextEdit(node)
+        opened = true
+      } else if (node.classList.contains('bento-el-table')) {
+        // a table opens the CELL under the thumb. Its <td>s are real DOM boxes,
+        // so they can be hit-tested directly — but the control box is above
+        // them, hence the whole stack rather than the topmost node.
+        opened = this.editCellUnder(node, t.clientX, t.clientY)
+      } else if (node.classList.contains('bento-el-image')) {
+        // a picture opens crop mode: a finger pans, two fingers zoom
+        this.startCropEdit(id)
+        opened = true
+      }
+      // Cancel the tap we consumed. Without this the browser replays it as
+      // mousedown → mouseup → click ~300ms later at the ORIGINAL screen point,
+      // which focus() has by then scrolled away from to reveal the caret — so
+      // Selecto read the ghost press as "outside the text being edited" and
+      // committed the edit a blink after it opened.
+      if (opened && ev.cancelable) ev.preventDefault()
+    }, { passive: false })
+
+    new ResizeObserver(() => this.relayout()).observe(wrap)
+
+    store.on('current', () => this.render())
+    store.on('doc', () => this.render())
+    store.on('selection', () => this.syncTargets())
+
+    this.render()
+  }
+
+  // --- panning ----------------------------------------------------------------
+
+  /**
+   * Is space free to mean "pan" right now? Not while any text is being edited
+   * on the canvas, and not while a panel field, the title or any other input
+   * has focus — in all of those a space is a character the user typed.
+   */
+  private canGrabSpace(): boolean {
+    if (this.editing || this.editingCell || this.isPathEditing) return false
+    const el = document.activeElement as HTMLElement | null
+    if (!el) return true
+    if (el.isContentEditable) return false
+    const tag = el.tagName
+    return tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT'
+  }
+
+  /**
+   * Drag the canvas from wherever it is now. Shared by both gestures so they
+   * cannot drift apart.
+   *
+   * The move/up listeners live on `window`: a pan that stops the moment the
+   * pointer crosses the panel edge would be useless precisely when panning
+   * matters, which is when the slide is bigger than the viewport.
+   */
+  private startPan(ev: MouseEvent) {
+    const fromX = ev.clientX
+    const fromY = ev.clientY
+    const atLeft = this.scroller.scrollLeft
+    const atTop = this.scroller.scrollTop
+    this.panning = true
+    this.scroller.style.cursor = 'grabbing'
+    const move = (m: MouseEvent) => {
+      this.scroller.scrollLeft = atLeft - (m.clientX - fromX)
+      this.scroller.scrollTop = atTop - (m.clientY - fromY)
+    }
+    const up = () => {
+      window.removeEventListener('mousemove', move, true)
+      window.removeEventListener('mouseup', up, true)
+      this.panning = false
+      // still armed if space is down, so keep the open hand rather than reset
+      this.scroller.style.cursor = this.spaceHeld ? 'grab' : ''
+    }
+    window.addEventListener('mousemove', move, true)
+    window.addEventListener('mouseup', up, true)
+  }
+
+  // --- layout & rendering ---------------------------------------------------
+
+  relayout() {
+    const { width, height } = this.store.doc.size
+    const availW = this.scroller.clientWidth - 64
+    const availH = this.scroller.clientHeight - 64
+    if (availW <= 0 || availH <= 0) return
+    this.fitScale = Math.min(availW / width, availH / height)
+    this.scale = this.fitScale * this.zoom
+    this.stage.style.width = `${width * this.scale}px`
+    this.stage.style.height = `${height * this.scale}px`
+    // Pan room. Scrolling used to stop dead at the slide's edges, so at high
+    // zoom a corner element could never be moved off the corner of the screen
+    // to be worked on. Half a viewport of padding once the stage outgrows the
+    // window is exactly enough for any point on the slide to reach the middle.
+    //
+    // None at all while the whole slide fits: padding there would put
+    // scrollbars on a view that needs none, and — because the plain-wheel
+    // slide-nav stands down whenever the canvas is pannable — would silently
+    // cost the wheel gesture that walks slides. clientWidth is the padding
+    // box, so writing padding here cannot disturb the fitScale computed above.
+    const padX = width * this.scale > availW ? Math.round(this.scroller.clientWidth / 2) : 0
+    const padY = height * this.scale > availH ? Math.round(this.scroller.clientHeight / 2) : 0
+    // Changing the pan room moves the stage within the scroll canvas by exactly
+    // that much, so changing it without compensating TELEPORTS the view. The
+    // first relayout that turns padding on leaves the scroll at 0 — which is now
+    // half a viewport of empty canvas, with the slide shoved off to the side and
+    // clipped. setZoom re-centres afterwards and hid this; every OTHER route in
+    // (opening a deck whose stage already overflows, a window resize, toggling a
+    // panel) does not. Reported on a 1600x900 deck, whose stage outgrows the
+    // canvas at ordinary zooms where the 1280x720 default still fits.
+    const wasX = parseFloat(this.scroller.style.paddingLeft) || 0
+    const wasY = parseFloat(this.scroller.style.paddingTop) || 0
+    this.scroller.style.padding = padX || padY ? `${padY}px ${padX}px` : ''
+    if (padX !== wasX) this.scroller.scrollLeft += padX - wasX
+    if (padY !== wasY) this.scroller.scrollTop += padY - wasY
+    this.scaleHost.style.transform = `scale(${this.scale})`
+    this.moveable.zoom = 1 / this.scale
+    this.moveable.updateRect()
+    if (this.zoomLabel) this.zoomLabel.textContent = `${Math.round(this.scale * 100)}%`
+    this.comments?.refresh()
+    this.stepBadges?.refresh()
+    this.drawRemote()
+  }
+
+  // --- zoom ------------------------------------------------------------------
+
+  setZoom(zoom: number) {
+    this.zoom = Math.min(Math.max(zoom, 0.5), 8)
+    this.relayout()
+    // keep the view centred on the slide as it grows/shrinks
+    this.scroller.scrollLeft = (this.scroller.scrollWidth - this.scroller.clientWidth) / 2
+    this.scroller.scrollTop = (this.scroller.scrollHeight - this.scroller.clientHeight) / 2
+  }
+
+  /**
+   * Zoom while keeping the slide point under (clientX, clientY) still — what a
+   * pinch means. setZoom re-centres on the slide instead, which is right for a
+   * button and wrong for a gesture: the thing being pinched would slide out
+   * from under the fingers doing the pinching.
+   */
+  private zoomAround(zoom: number, clientX: number, clientY: number) {
+    const before = this.slidePointAt(clientX, clientY)
+    const next = Math.min(Math.max(zoom, 0.5), 8)
+    if (next === this.zoom) return
+    this.zoom = next
+    this.relayout()
+    const after = this.slidePointAt(clientX, clientY)
+    // put the same slide point back under the fingers
+    this.scroller.scrollLeft += (before.x - after.x) * this.scale
+    this.scroller.scrollTop += (before.y - after.y) * this.scale
+  }
+
+  /** Slide-local coordinates for a viewport point (the inverse of the stage
+   *  transform). */
+  private slidePointAt(clientX: number, clientY: number): { x: number; y: number } {
+    const r = this.scaleHost.getBoundingClientRect()
+    return { x: (clientX - r.left) / this.scale, y: (clientY - r.top) / this.scale }
+  }
+
+  zoomIn() { this.setZoom(this.zoom * 1.25) }
+  zoomOut() { this.setZoom(this.zoom / 1.25) }
+  zoomReset() { this.setZoom(1) }
+
+  private buildZoomBar() {
+    const bar = document.createElement('div')
+    bar.className = 'ed-zoombar'
+    const mk = (label: string, title: string, onClick: () => void) => {
+      const b = document.createElement('button')
+      b.className = 'ed-zoombtn'
+      b.textContent = label
+      b.title = title
+      b.addEventListener('click', onClick)
+      return b
+    }
+    const label = mk('100%', t('Reset zoom to fit (⌘0)'), () => this.zoomReset())
+    label.classList.add('ed-zoomlabel')
+    this.zoomLabel = label
+    bar.append(
+      mk('−', t('Zoom out (⌘−)'), () => this.zoomOut()),
+      label,
+      mk('+', t('Zoom in (⌘+)'), () => this.zoomIn()),
+    )
+    this.wrap.appendChild(bar)
+  }
+
+  /** notified when the comment tool arms/disarms (topbar button state) */
+  onCommentModeChange: ((on: boolean) => void) | null = null
+  onSlideNav: ((dir: 1 | -1) => void) | null = null
+  private wheelNavAccum = 0
+  private wheelNavCooldown = 0
+  private commentCleanup: (() => void) | null = null
+
+  get isCommentMode() {
+    return !!this.commentCleanup
+  }
+
+  /**
+   * The unified comment tool. Armed: the next canvas click anchors a new
+   * thread — on the ELEMENT under the cursor when there is one, else at
+   * that POINT of the slide. Capture phase (Selecto/Moveable never see the
+   * click); Esc or toggling again disarms.
+   */
+  /** Where a comment click at these client coords would anchor.
+   *  Near-full-slide elements (photos, scrims) don't capture — a comment
+   *  "here" on scenery means the spot, not the backdrop object. */
+  private commentAnchorAt(clientX: number, clientY: number): { x: number; y: number; el?: SlideElement } | null {
+    const r = this.scaleHost.getBoundingClientRect()
+    const x = Math.round((clientX - r.left) / this.scale)
+    const y = Math.round((clientY - r.top) / this.scale)
+    const { width, height } = this.store.doc.size
+    if (x < 0 || y < 0 || x > width || y > height) return null
+    let hit: SlideElement | undefined
+    const slideArea = width * height
+    for (const el of this.store.slide.elements) {
+      if (x < el.x || x > el.x + el.w || y < el.y || y > el.y + el.h) continue
+      if (el.w * el.h >= slideArea * 0.8) continue
+      const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (node && node.style.display !== 'none') hit = el
+    }
+    return { x, y, el: hit }
+  }
+
+  toggleCommentMode() {
+    if (this.commentCleanup) {
+      this.commentCleanup()
+      return
+    }
+    this.wrap.style.cursor = 'crosshair' // the whole canvas area, grey included
+    // live feedback: an amber outline over the element the comment would
+    // anchor to, a pin-dot + coordinates where the point would land, or the
+    // whole-slide outline plus a cursor-following chip out on the grey
+    const hl = document.createElement('div')
+    hl.className = 'ed-comment-hl'
+    this.stage.appendChild(hl)
+    const chip = document.createElement('div')
+    chip.className = 'ed-comment-chip'
+    chip.textContent = t('💬 whole slide')
+    chip.style.display = 'none'
+    this.stage.appendChild(chip)
+    const cleanup = () => {
+      this.commentCleanup = null
+      this.wrap.style.cursor = ''
+      hl.remove()
+      chip.remove()
+      document.removeEventListener('mousedown', onDown, true)
+      document.removeEventListener('mousemove', onMove, true)
+      document.removeEventListener('keydown', onKey, true)
+      this.onCommentModeChange?.(false)
+    }
+    const onMove = (ev: MouseEvent) => {
+      const inWrap = ev.target instanceof Element && !!ev.target.closest('.ed-canvas-wrap')
+      const a = inWrap ? this.commentAnchorAt(ev.clientX, ev.clientY) : null
+      if (!inWrap) {
+        hl.style.display = 'none'
+        chip.style.display = 'none'
+        return
+      }
+      hl.style.display = ''
+      if (!a) {
+        // on the canvas but off the slide: the WHOLE SLIDE is the anchor.
+        // Outline the slide AND pin a chip to the cursor — that's where the
+        // user is looking.
+        const { width, height } = this.store.doc.size
+        hl.className = 'ed-comment-hl slide'
+        hl.style.left = '-3px'
+        hl.style.top = '-3px'
+        hl.style.width = `${width * this.scale + 6}px`
+        hl.style.height = `${height * this.scale + 6}px`
+        hl.textContent = ''
+        const stageR = this.stage.getBoundingClientRect()
+        chip.style.display = ''
+        chip.style.left = `${ev.clientX - stageR.left + 14}px`
+        chip.style.top = `${ev.clientY - stageR.top + 6}px`
+        return
+      }
+      chip.style.display = 'none'
+      if (a.el) {
+        hl.className = 'ed-comment-hl element'
+        hl.style.left = `${a.el.x * this.scale - 3}px`
+        hl.style.top = `${a.el.y * this.scale - 3}px`
+        hl.style.width = `${a.el.w * this.scale + 6}px`
+        hl.style.height = `${a.el.h * this.scale + 6}px`
+        hl.textContent = ''
+      } else {
+        hl.className = 'ed-comment-hl pin'
+        hl.style.left = `${a.x * this.scale}px`
+        hl.style.top = `${a.y * this.scale}px`
+        hl.style.width = ''
+        hl.style.height = ''
+        hl.textContent = `${a.x}, ${a.y}`
+      }
+    }
+    const onDown = (ev: MouseEvent) => {
+      const t = ev.target instanceof Element ? ev.target : null
+      if (t?.closest('.ed-topbar')) return // let the 💬 toggle (or other tools) handle it
+      if (!t?.closest('.ed-canvas-wrap')) {
+        cleanup() // clicked some other UI: disarm without placing
+        return
+      }
+      const a = this.commentAnchorAt(ev.clientX, ev.clientY)
+      cleanup()
+      ev.preventDefault()
+      ev.stopPropagation()
+      if (!a) this.comments.openNew() // off-slide canvas click = whole slide
+      else this.comments.openNew(a.el?.id, a.el ? undefined : { x: a.x, y: a.y })
+    }
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') cleanup()
+    }
+    this.commentCleanup = cleanup
+    document.addEventListener('mousedown', onDown, true)
+    document.addEventListener('mousemove', onMove, true)
+    document.addEventListener('keydown', onKey, true)
+    this.onCommentModeChange?.(true)
+  }
+
+  /** Grow a selection to whole groups: any member pulls in its groupId kin.
+   *  (Alt-click deep select bypasses this — that's how you reach a member.) */
+  private expandGroups(ids: string[]): string[] {
+    const els = this.store.slide.elements
+    const groups = new Set(
+      ids.map((id) => els.find((e) => e.id === id)?.groupId).filter((g): g is string => !!g),
+    )
+    if (!groups.size) return ids
+    const out = new Set(ids)
+    for (const el of els) if (el.groupId && groups.has(el.groupId)) out.add(el.id)
+    return [...out]
+  }
+
+  /** Open the table cell under a client point. Reports whether it found one. */
+  private editCellUnder(node: HTMLElement, x: number, y: number): boolean {
+    const td = document
+      .elementsFromPoint(x, y)
+      .map((n) => (n as HTMLElement).closest?.<HTMLElement>('td[data-c]'))
+      .find((n): n is HTMLElement => !!n && node.contains(n))
+    if (!td) return false
+    this.editCellFromTd(td)
+    return true
+  }
+
+  /** The element a client point lands on — the same answer Selecto's own click
+   *  selection gives, because it is the same question: what is painted here?
+   *  (A model-box hit test is NOT equivalent: decorative full-bleed elements
+   *  overlap smaller ones in model space while sitting behind or beside them
+   *  on screen.) Walking the whole stack rather than taking elementFromPoint is
+   *  what steps over Moveable's control box, which covers whatever is selected. */
+  private topElementAt(clientX: number, clientY: number): string | null {
+    for (const n of document.elementsFromPoint(clientX, clientY)) {
+      const el = n.closest<HTMLElement>('.bento-el')
+      if (el && this.scaleHost.contains(el) && el.dataset.elId) return el.dataset.elId
+    }
+    return null
+  }
+
+  /** Alt-click: select the element under (px, py), digging one step deeper
+   *  below the current selection on each repeat. Coordinates in slide px. */
+  private deepSelect(px: number, py: number) {
+    const stack: string[] = []
+    for (const el of this.store.slide.elements) {
+      if (px < el.x || px > el.x + el.w || py < el.y || py > el.y + el.h) continue
+      const node = this.scaleHost.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (!node || node.style.display === 'none') continue // hidden hover set
+      stack.push(el.id)
+    }
+    if (!stack.length) return
+    const topFirst = stack.reverse() // model order is z-order; topmost last
+    let pick = topFirst[0]
+    if (this.store.selection.length === 1) {
+      const i = topFirst.indexOf(this.store.selection[0])
+      if (i >= 0) pick = topFirst[(i + 1) % topFirst.length]
+    }
+    this.store.select([pick])
+  }
+
+  // --- crop editing (pan + zoom a picture inside its frame) --------------------
+
+  get isCropEditing() { return this.cropEditor.active }
+
+  startCropEdit(elId: string) {
+    this.commitTextEdit()
+    this.store.select([elId])
+    this.cropEditor.start(elId)
+    this.syncTargets()
+  }
+
+  /** finish crop editing; commit=false puts back what was there on entry */
+  stopCropEdit(commit = true) {
+    if (commit) this.cropEditor.commit()
+    else this.cropEditor.cancel()
+  }
+
+  // --- motion-path editing ----------------------------------------------------
+
+  get isPathEditing() {
+    return this.pathEditor.active
+  }
+
+  startPathEdit(elId: string) {
+    this.commitTextEdit()
+    this.pathEditor.start(elId)
+    this.syncTargets()
+  }
+
+  /** finish path editing; commit=false discards the changes */
+  stopPathEdit(commit = true) {
+    if (commit) this.pathEditor.commit()
+    else {
+      this.pathEditor.cancel()
+      this.syncTargets()
+    }
+  }
+
+  render() {
+    // A slide switch is a hard boundary for an inline edit. Commit against
+    // the slide where editing began (or discard if that slide was remotely
+    // deleted) before replacing the canvas DOM.
+    if (this.editing && this.editingSlideId !== this.store.slide?.id) this.commitTextEdit()
+    // Don't repaint out from under an in-progress inline edit. A remote collab
+    // op landing must NOT tear down the text/cell node you're typing in — that
+    // steals focus and resets the caret (the #1 rough edge reported at launch).
+    // Defer the repaint and catch up the instant the edit commits; a burst of
+    // remote ops coalesces into a single repaint then.
+    if (this.editing) { this.pendingRender = true; return }
+    this.pendingRender = false
+    if (this.pathEditor?.active) this.pathEditor.cancel() // doc changed under us
+    if (this.cropEditor?.active) this.cropEditor.cancel()
+    const slide = this.store.slide
+    // the canvas alone marks a formula that did not render (#540)
+    const next = renderSlide(slide, this.store.doc, { mathHint: mathHintTitle })
+    // hover-reveal slides: preview one set at a time; hidden sets are
+    // display:none so they don't block selection
+    const sets = [...new Set(slide.elements.map((e) => e.showOnHover).filter(Boolean))] as string[]
+    if (sets.length) {
+      const active = this.store.hoverPreview ?? slide.hover?.default ?? sets[0]
+      for (const node of next.querySelectorAll<HTMLElement>('[data-show-on-hover]')) {
+        if (node.dataset.showOnHover !== active) node.style.display = 'none'
+      }
+    }
+    this.renderSetBar(sets)
+    if (this.surface) this.surface.replaceWith(next)
+    else this.scaleHost.appendChild(next)
+    this.surface = next
+    this.relayout()
+    this.syncTargets()
+    this.drawRemote()
+  }
+
+  // --- collaborator presence (colored outlines + name tags) -----------------
+
+  private remotePeers: Peer[] = []
+  private remoteLayer: HTMLElement | null = null
+
+  setRemotePeers(peers: Peer[]) {
+    this.remotePeers = peers
+    this.drawRemote()
+  }
+
+  private drawRemote() {
+    const slide = this.store.slide
+    if (!slide) return
+    if (!this.remoteLayer) {
+      this.remoteLayer = document.createElement('div')
+      this.remoteLayer.className = 'ed-remote-layer'
+      this.scaleHost.appendChild(this.remoteLayer)
+    }
+    // layer stays last in the scaled host so outlines paint above the slide
+    if (this.remoteLayer.nextSibling) this.scaleHost.appendChild(this.remoteLayer)
+    this.remoteLayer.innerHTML = ''
+    for (const peer of this.remotePeers) {
+      if (peer.slide !== slide.id) continue
+      const ids = new Set(peer.sel)
+      if (peer.editing) ids.add(peer.editing)
+      // the layer lives inside the scaled host — counter-scale strokes and
+      // name tags so they stay readable at any zoom (same idea as
+      // moveable.zoom = 1/scale)
+      const inv = 1 / (this.scale || 1)
+      let tagged = false
+      for (const id of ids) {
+        const el = slide.elements.find((e) => e.id === id)
+        if (!el) continue
+        const box = document.createElement('div')
+        box.className = 'ed-remote-box'
+        box.style.left = `${el.x}px`
+        box.style.top = `${el.y}px`
+        box.style.width = `${el.w}px`
+        box.style.height = `${el.h}px`
+        box.style.borderColor = peer.color
+        box.style.borderWidth = `${2 * inv}px`
+        if (el.rotation) box.style.transform = `rotate(${el.rotation}deg)`
+        if (peer.editing === id) box.classList.add('ed-remote-editing')
+        if (!tagged) {
+          const tag = document.createElement('div')
+          tag.className = 'ed-remote-tag'
+          tag.style.background = peer.color
+          tag.textContent = peer.editing === id ? `✏️ ${peer.name}` : peer.name
+          tag.style.transform = `scale(${inv})`
+          tag.style.transformOrigin = 'bottom left'
+          tag.style.bottom = '100%'
+          tag.style.top = 'auto'
+          box.appendChild(tag)
+          tagged = true
+        }
+        this.remoteLayer.appendChild(box)
+      }
+    }
+  }
+
+  /**
+   * Canvas set-switcher: when a slide has hover-reveal sets, a chip bar sits
+   * above the stage so each set is one click away while editing. Selection
+   * survives the switch when the selected element is in the shown set.
+   */
+  private renderSetBar(sets: string[]) {
+    this.wrap.querySelector('.ed-setbar')?.remove()
+    if (!sets.length) return
+    const slide = this.store.slide
+    const active = this.store.hoverPreview ?? slide.hover?.default ?? sets[0]
+    const bar = document.createElement('div')
+    bar.className = 'ed-setbar'
+    const label = document.createElement('span')
+    label.className = 'ed-setbar-label'
+    label.textContent = t('Hover set:')
+    bar.appendChild(label)
+    for (const set of sets) {
+      const chip = document.createElement('button')
+      chip.className = 'ed-setchip'
+      chip.textContent = set + (slide.hover?.default === set ? ' ●' : '')
+      chip.title = slide.hover?.default === set
+        ? `"${set}" — shown when nothing is hovered (default set)`
+        : `Preview and edit the "${set}" hover set`
+      if (set === active) chip.classList.add('active')
+      chip.addEventListener('click', () => {
+        this.store.hoverPreview = set
+        this.render()
+      })
+      bar.appendChild(chip)
+    }
+    this.wrap.appendChild(bar)
+  }
+
+  private selectedNodes(): HTMLElement[] {
+    if (!this.surface) return []
+    return this.store.selection
+      .map((id) => this.surface!.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`))
+      .filter((n): n is HTMLElement => !!n)
+  }
+
+  private syncTargets() {
+    // A single selected line/curve/connector is edited with endpoint handles
+    // (LineEditor), not Moveable's box — grab an end and drag it.
+    const sel = this.store.selectedElements
+    const one = sel.length === 1 && !this.editing && !this.pathEditor.active && !this.cropEditor?.active ? sel[0] : null
+    // Curves get true bezier handles (BezierEditor); lines and straight polygons
+    // keep endpoint/anchor handles (LineEditor).
+    const curve = !!one && isCurve(one)
+    const lineLike = !!one && !curve && isLineLike(one)
+    if (curve) { this.bezierEditor.attach(one!.id); this.lineEditor.detach() }
+    else if (lineLike) { this.lineEditor.attach(one!.id); this.bezierEditor.detach() }
+    else { this.lineEditor.detach(); this.bezierEditor.detach() }
+    const handled = curve || lineLike
+    const targets = this.editing || this.pathEditor?.active || this.cropEditor?.active || handled ? [] : this.selectedNodes()
+    // snap against slide bounds/center and every non-selected element
+    const others = this.surface
+      ? [this.surface, ...Array.from(this.surface.querySelectorAll<HTMLElement>('.bento-el'))].filter(
+          (n) => !targets.includes(n),
+        )
+      : []
+    this.moveable.elementGuidelines = others
+    // Only reset targets when they actually changed — setting the same array
+    // re-attaches gesture listeners a frame later and can swallow a drag that
+    // starts immediately after.
+    const current = (this.moveable.target ?? []) as HTMLElement[]
+    const same = current.length === targets.length && targets.every((t, i) => current[i] === t)
+    if (!same) this.moveable.target = targets
+    this.moveable.updateRect()
+    // Keep Selecto's continue-select memory in lockstep with the store —
+    // otherwise shift-click resurrects targets from a previously shown slide.
+    this.selecto.setSelectedTargets(targets)
+    this.updateTableHandles()
+    this.stepBadges?.refresh()
+  }
+
+  // --- column resize handles (single selected table) --------------------------
+
+  /** Show draggable dividers on the boundaries of a lone selected table. */
+  private updateTableHandles() {
+    this.surface?.querySelectorAll('.bento-col-handle').forEach((h) => h.remove())
+    if (this.editing) return
+    const ids = this.store.selection
+    if (ids.length !== 1) return
+    const el = this.store.element(ids[0])
+    if (!el || el.type !== 'table' || el.columns.length < 2) return
+    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+    if (!node) return
+    const total = el.columns.reduce((s, c) => s + (c.w || 0), 0) || 1
+    let acc = 0
+    for (let i = 0; i < el.columns.length - 1; i++) {
+      acc += el.columns[i].w || 0
+      const handle = document.createElement('div')
+      handle.className = 'bento-col-handle'
+      handle.style.cssText =
+        `position:absolute;top:0;height:${el.h}px;width:11px;` +
+        `left:${(acc / total) * el.w - 5.5}px;cursor:col-resize;z-index:5;`
+      handle.addEventListener('pointerdown', (ev) => this.startColResize(ev, el.id, i))
+      node.appendChild(handle)
+    }
+  }
+
+  /** Drag a column divider: adjust the two adjacent weights, commit on release. */
+  private startColResize(ev: PointerEvent, id: string, i: number) {
+    ev.preventDefault()
+    ev.stopPropagation()
+    const el = this.store.element(id)
+    if (!el || el.type !== 'table') return
+    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
+    if (!node) return
+    const startX = ev.clientX
+    const w0 = el.columns[i].w || 0
+    const w1 = el.columns[i + 1].w || 0
+    const pair = w0 + w1
+    const min = pair * 0.12
+    const cols = node.querySelectorAll<HTMLElement>('col')
+    const handles = [...node.querySelectorAll<HTMLElement>('.bento-col-handle')]
+    const total = el.columns.reduce((s, c) => s + (c.w || 0), 0) || 1
+    let live0 = w0
+    let live1 = w1
+    const onMove = (e: PointerEvent) => {
+      const dFrac = ((e.clientX - startX) / this.scale / el.w) * total
+      live0 = Math.min(Math.max(w0 + dFrac, min), pair - min)
+      live1 = pair - live0
+      // live DOM update only — no store write until release
+      if (cols[i]) cols[i].style.width = `${(live0 / total) * 100}%`
+      if (cols[i + 1]) cols[i + 1].style.width = `${(live1 / total) * 100}%`
+      let a = 0
+      for (let k = 0; k < el.columns.length - 1; k++) {
+        a += k === i ? live0 : k === i + 1 ? live1 : el.columns[k].w || 0
+        if (handles[k]) handles[k].style.left = `${(a / total) * el.w - 5.5}px`
+      }
+    }
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      this.store.commit(() => {
+        const tb = this.store.element(id) as TableElement
+        if (tb?.columns[i] && tb.columns[i + 1]) {
+          tb.columns[i].w = live0
+          tb.columns[i + 1].w = live1
+        }
+      })
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  // --- moveable -------------------------------------------------------------
+
+  /** ⌘/Ctrl-drag duplicate: originals move, copies stay behind (committed at drag end) */
+  private pendingCopy: SlideElement[] | null = null
+
+  private wireMoveable() {
+    const mv = this.moveable
+    // start positions per target — Shift axis-locks against these
+    const dragStarts = new Map<HTMLElement, { left: number; top: number }>()
+
+    const noteDragStart = (target: HTMLElement, inputEvent: MouseEvent | undefined) => {
+      dragStarts.set(target, {
+        left: parseFloat(target.style.left) || 0,
+        top: parseFloat(target.style.top) || 0,
+      })
+      if (inputEvent && (inputEvent.metaKey || inputEvent.ctrlKey) && !this.pendingCopy) {
+        // duplicate-drag: snapshot the selection now; the stationary copies
+        // are committed in one undo step together with the moved frames
+        this.pendingCopy = this.store.selectedElements.map(
+          (el) => JSON.parse(JSON.stringify(el)) as SlideElement,
+        )
+      }
+    }
+    const axisLock = (target: HTMLElement, left: number, top: number, ev: { inputEvent?: MouseEvent; dist?: number[] }) => {
+      const start = dragStarts.get(target)
+      if (!start || !ev.inputEvent?.shiftKey || !ev.dist) return { left, top }
+      return Math.abs(ev.dist[0]) >= Math.abs(ev.dist[1])
+        ? { left, top: start.top }
+        : { left: start.left, top }
+    }
+
+    mv.on('dragStart', (e) => noteDragStart(e.target as HTMLElement, e.inputEvent as MouseEvent))
+    mv.on('dragGroupStart', (e) =>
+      e.events.forEach((ev) => noteDragStart(ev.target as HTMLElement, e.inputEvent as MouseEvent)),
+    )
+    mv.on('drag', (e) => {
+      const p = axisLock(e.target as HTMLElement, e.left, e.top, e)
+      e.target.style.left = `${p.left}px`
+      e.target.style.top = `${p.top}px`
+    })
+    mv.on('dragGroup', (e) => e.events.forEach((ev) => {
+      const p = axisLock(ev.target as HTMLElement, ev.left, ev.top, ev)
+      ev.target.style.left = `${p.left}px`
+      ev.target.style.top = `${p.top}px`
+    }))
+    // Shift while resizing keeps the aspect ratio; Alt/Option scales from
+    // the center (both live per move, combinable)
+    const resizeCenters = new Map<HTMLElement, { cx: number; cy: number }>()
+    const noteResizeStart = (target: HTMLElement) => {
+      resizeCenters.set(target, {
+        cx: (parseFloat(target.style.left) || 0) + (parseFloat(target.style.width) || 0) / 2,
+        cy: (parseFloat(target.style.top) || 0) + (parseFloat(target.style.height) || 0) / 2,
+      })
+    }
+    const applyResize = (
+      target: HTMLElement,
+      w: number,
+      h: number,
+      left: number,
+      top: number,
+      inputEvent: MouseEvent | undefined,
+    ) => {
+      target.style.width = `${w}px`
+      target.style.height = `${h}px`
+      const c = resizeCenters.get(target)
+      if (inputEvent?.altKey && c) {
+        target.style.left = `${c.cx - w / 2}px`
+        target.style.top = `${c.cy - h / 2}px`
+      } else {
+        target.style.left = `${left}px`
+        target.style.top = `${top}px`
+      }
+    }
+    // Shift keeps the ratio — except for an image, whose own setting is the
+    // default and Shift is the one-drag exception either way: a locked image
+    // (keepAspectRatio absent/true) is freed by Shift, an unlocked one held.
+    const syncKeepRatio = (inputEvent: MouseEvent | undefined, target: HTMLElement) => {
+      const el = target.dataset.elId ? this.store.element(target.dataset.elId) : undefined
+      const locked = el?.type === 'image' && el.keepAspectRatio !== false
+      const want = inputEvent?.shiftKey ? !locked : locked
+      if (mv.keepRatio !== want) mv.keepRatio = want
+    }
+    mv.on('resizeStart', (e) => {
+      syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
+      noteResizeStart(e.target as HTMLElement)
+    })
+    mv.on('resize', (e) => {
+      syncKeepRatio(e.inputEvent as MouseEvent, e.target as HTMLElement)
+      applyResize(e.target as HTMLElement, e.width, e.height, e.drag.left, e.drag.top, e.inputEvent as MouseEvent)
+    })
+    mv.on('resizeGroupStart', (e) => e.events.forEach((ev) => noteResizeStart(ev.target as HTMLElement)))
+    mv.on('resizeGroup', (e) => e.events.forEach((ev) => {
+      applyResize(ev.target as HTMLElement, ev.width, ev.height, ev.drag.left, ev.drag.top, e.inputEvent as MouseEvent)
+    }))
+    // Shift while rotating snaps to 15° steps
+    mv.on('rotateStart', (e) => { mv.throttleRotate = (e.inputEvent as MouseEvent | undefined)?.shiftKey ? 15 : 1 })
+    mv.on('rotate', (e) => {
+      mv.throttleRotate = (e.inputEvent as MouseEvent | undefined)?.shiftKey ? 15 : 1
+      e.target.style.transform = `rotate(${e.rotation}deg)`
+    })
+    mv.on('rotateGroup', (e) => e.events.forEach((ev) => {
+      ev.target.style.transform = ev.transform
+    }))
+
+    const commitFrames = () => {
+      const copies = this.pendingCopy
+      this.pendingCopy = null
+      if (copies?.length) {
+        // one undo step: stationary duplicates (fresh ids) + moved originals
+        const nodes = this.selectedNodes()
+        const frames = nodes.map((node) => ({
+          id: node.dataset.elId!,
+          x: parseFloat(node.style.left) || 0,
+          y: parseFloat(node.style.top) || 0,
+        }))
+        this.store.commit(() => {
+          const dupes = copies.map((el) => ({ ...el, id: uid(el.type[0]) }))
+          this.store.slide.elements.push(...dupes)
+          for (const f of frames) {
+            const el = this.store.element(f.id)
+            if (!el) continue
+            el.x = Math.round(f.x * 10) / 10
+            el.y = Math.round(f.y * 10) / 10
+          }
+        })
+        return
+      }
+      this.commitDomFrames(this.selectedNodes())
+    }
+    mv.on('dragEnd', ({ isDrag }) => {
+      if (isDrag) commitFrames()
+      else this.pendingCopy = null
+    })
+    mv.on('dragGroupEnd', ({ isDrag }) => {
+      if (isDrag) commitFrames()
+      else this.pendingCopy = null
+    })
+    mv.on('resizeEnd', ({ isDrag }) => {
+      mv.keepRatio = false
+      if (isDrag) commitFrames()
+    })
+    mv.on('resizeGroupEnd', ({ isDrag }) => isDrag && commitFrames())
+    mv.on('rotateEnd', ({ isDrag }) => {
+      mv.throttleRotate = 1
+      if (isDrag) commitFrames()
+    })
+    mv.on('rotateGroupEnd', ({ isDrag }) => isDrag && commitFrames())
+  }
+
+  /** Read live DOM styles back into the model in one undo step. */
+  private commitDomFrames(nodes: HTMLElement[]) {
+    if (!nodes.length) return
+    const frames = nodes.map((node) => {
+      const rotation = /rotate\((-?[\d.]+)deg\)/.exec(node.style.transform)
+      return {
+        id: node.dataset.elId!,
+        x: parseFloat(node.style.left) || 0,
+        y: parseFloat(node.style.top) || 0,
+        w: parseFloat(node.style.width) || 1,
+        h: parseFloat(node.style.height) || 1,
+        rotation: rotation ? Math.round(parseFloat(rotation[1]) * 10) / 10 : 0,
+      }
+    })
+    this.store.commit(() => {
+      for (const f of frames) {
+        const el = this.store.element(f.id)
+        if (!el) continue
+        el.x = Math.round(f.x * 10) / 10
+        el.y = Math.round(f.y * 10) / 10
+        el.w = Math.round(f.w * 10) / 10
+        el.h = Math.round(f.h * 10) / 10
+        el.rotation = f.rotation
+      }
+    })
+  }
+
+  // --- selecto ----------------------------------------------------------------
+
+  private wireSelecto() {
+    this.selecto.on('dragStart', (e) => {
+      const target = e.inputEvent.target as HTMLElement
+      // floating controls over the canvas are not marquee territory
+      // (the Copilot's floating surfaces too — src/ai — or Selecto eats their clicks)
+      if (target.closest('.ed-present-fabs, .ed-zoombar, .ed-panel-toggle, .ed-resizer, .ed-ai-selbar, .ed-ai-pill, .ed-ai-ghost, .ed-ai-palette-scrim, .ed-ai-call')) {
+        e.stop()
+        return
+      }
+      if (this.pathEditor?.active) {
+        e.stop() // the path overlay owns the pointer while editing
+        return
+      }
+      if (this.cropEditor?.active) {
+        // a press on the grey surround ends the crop, like a click outside
+        // the frame does on the slide; nothing starts a marquee under it
+        this.cropEditor.commit()
+        e.stop()
+        return
+      }
+      if (this.editing) {
+        // editing a table cell: clicking a DIFFERENT cell switches to it
+        if (this.editingCell) {
+          const td = (target as HTMLElement)?.closest?.<HTMLElement>('td[data-c]')
+          if (td && this.editing.contains(td)) {
+            const already = Number(td.dataset.r) === this.editingCell.r && Number(td.dataset.c) === this.editingCell.c
+            if (!already) { this.editCellFromTd(td); e.stop(); return }
+            return // same cell: let contentEditable place the caret
+          }
+        }
+        // clicking outside the text being edited commits it; inside, do nothing
+        if (!this.editing.contains(target)) this.commitTextEdit()
+        e.stop()
+        return
+      }
+      const selected = this.selectedNodes()
+      if (
+        this.moveable.isMoveableElement(target) ||
+        selected.some((n) => n === target || n.contains(target))
+      ) {
+        e.stop() // let Moveable take the drag
+      }
+    })
+
+    this.selecto.on('selectEnd', (e) => {
+      const ids = (e.selected as HTMLElement[])
+        .map((n) => n.dataset.elId)
+        .filter((id): id is string => !!id)
+      this.store.select(this.expandGroups(ids))
+      if (e.isDragStartEnd) {
+        e.inputEvent.preventDefault()
+        // Hand this same press to Moveable, so pressing an unselected element and
+        // dragging moves it without needing a second press. Moveable cannot accept
+        // the press until its target has actually changed, and waitToChangeTarget()
+        // resolves only from componentDidMount/componentDidUpdate — the wait is a
+        // render long and there is NO synchronous path to shorten it.
+        //
+        // A fast click releases inside that gap. dragStart then replays a press
+        // whose mouseup has already been and gone, so Moveable begins a drag that
+        // nothing will ever end: the element follows the cursor, and the click that
+        // finally stops it COMMITS the move to the document (#260). Silent, and the
+        // user was only trying to select something.
+        //
+        // So cancel the handoff when the release wins the race. `mouseup`, not
+        // `pointerup` — Gesto listens for mouse events. Capture phase, so a handler
+        // that stops propagation cannot hide it from us. The guarded window is
+        // complete: selectEnd runs inside the mousedown dispatch, so a release
+        // cannot land before the listener exists. Measured at 40x CPU throttle
+        // (the reporter's symptom is hardware-speed dependent): 22/24 clicks stuck
+        // without this, 0/24 with it, deliberate held drags unaffected.
+        //
+        // Do NOT "simplify" this by making the target swap synchronous — that means
+        // reaching into react-moveable's private _checkChangeTargets(). The real fix
+        // is to stop replaying a stale press and start the drag from a live move
+        // event instead; that is a rework of this gesture, not a tidy-up.
+        let released = false
+        const onMouseUp = () => { released = true }
+        window.addEventListener('mouseup', onMouseUp, { capture: true, once: true })
+        this.moveable.waitToChangeTarget().then(() => {
+          window.removeEventListener('mouseup', onMouseUp, true)
+          if (released) return
+          this.moveable.dragStart(e.inputEvent)
+        })
+      }
+    })
+  }
+
+  // --- text editing -----------------------------------------------------------
+
+  /**
+   * Follow the selection inside an open editable and raise the formatting bar
+   * over it. `selectionchange` fires on the DOCUMENT only — there is no
+   * per-element event — so the listener lives for the length of the edit and
+   * comes off when it commits.
+   *
+   * Deferred a frame because the selection reported DURING a command is the
+   * one from before the DOM moved; reading it afterwards is what makes the
+   * pressed states and the bar's position agree with what is on screen.
+   */
+  private watchSelection(inner: HTMLElement) {
+    this.stopSelectionWatch?.()
+    let queued = false
+    const onChange = () => {
+      if (queued) return
+      queued = true
+      requestAnimationFrame(() => {
+        queued = false
+        // the edit may have committed between the event and this frame
+        if (!this.editing || !inner.isConnected || inner.contentEditable !== 'true') {
+          hideFormatBar()
+          return
+        }
+        syncFormatBar(inner)
+      })
+    }
+    document.addEventListener('selectionchange', onChange)
+    // the canvas can move under a live selection (a zoom, a pan, a remote edit)
+    this.scroller.addEventListener('scroll', onChange, { passive: true })
+    this.stopSelectionWatch = () => {
+      document.removeEventListener('selectionchange', onChange)
+      this.scroller.removeEventListener('scroll', onChange)
+      this.stopSelectionWatch = null
+      hideFormatBar()
+    }
+    onChange()
+  }
+
+  /** Open the inline editor for an element by id — the entry point for callers
+   *  that have an id rather than a node (the context menu). A table opens its
+   *  first cell, since a menu has no point to aim at. */
+  editElement(id: string) {
+    const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(id)}"]`)
+    if (!node) return
+    if (node.classList.contains('bento-el-text')) { this.startTextEdit(node); return }
+    const td = node.querySelector<HTMLElement>('td[data-c]')
+    if (td) this.editCellFromTd(td)
+  }
+
+  startTextEdit(node: HTMLElement) {
+    if (this.store.readOnly) return // live viewer — no inline editing
+    if (this.editing === node) return
+    this.commitTextEdit()
+    const inner = node.querySelector<HTMLElement>('.bento-text-inner')
+    if (!inner) return
+    // fields ({{page}} etc.) and math ($…$) render RESOLVED; while editing,
+    // show the raw source so the author edits the token, not the computed value
+    const model = this.store.element(node.dataset.elId ?? '')
+    // Remember that we swapped: on commit the resolved view has to be put back
+    // even when the text did NOT change, and only a re-render can do that.
+    this.editingShowedRaw = false
+    // (`\(` and `\[` open formulas too, #540 — and an unrendered one wears the
+    // editor's hint span, which must never be what the author edits)
+    if (model?.type === 'text' && typeof model.html === 'string' && /\{\{|\$|\\[([]/.test(model.html)) {
+      // SANITIZED, even though the point of the swap is to show what the model
+      // holds. This is the only place raw model html reaches the live canvas —
+      // the render path has always cleaned it — so without this, double-
+      // clicking a text box in a deck someone sent you ran its script, and the
+      // `{{`-or-`$` gate is no barrier at all: one literal dollar sign opens it.
+      // Nothing is lost: the sanitizer unwraps tags and strips attributes, so a
+      // {{page:2}} token and `$E=mc^2$` TeX source are plain text to it and
+      // survive verbatim, which is the entire purpose of showing the raw html.
+      inner.innerHTML = sanitizeHtml(model.html)
+      this.editingShowedRaw = true
+    } else if (model?.type === 'code' && typeof model.content === 'string') {
+      // When editing code, we always treat the content as raw text to preserve formatting.
+      inner.innerText = model.content
+      this.editingShowedRaw = true
+    }
+    this.editing = node
+    this.editListeners?.abort()
+    this.editListeners = new AbortController()
+    const signal = this.editListeners.signal
+    this.editingSlideId = this.store.slide.id
+    node.classList.add('bento-editing')
+    inner.contentEditable = 'true'
+    inner.focus()
+    document.getSelection()?.selectAllChildren(inner)
+    this.syncTargets()
+    this.watchSelection(inner)
+    this.onTextEditChange?.(node.dataset.elId)
+
+    inner.addEventListener('keydown', (ev) => {
+      ev.stopPropagation() // keep global shortcuts (Delete, arrows…) away
+      if (ev.key === 'Escape') {
+        ev.preventDefault()
+        this.commitTextEdit()
+        return
+      }
+      // inline markup: ⌘/Ctrl+B/I/U toggle bold/italic/underline on the
+      // selection (sanitize keeps b/i/u/strong/em, so it round-trips)
+      if (ev.metaKey || ev.ctrlKey) {
+        // ⌘Z right after a markdown conversion restores the literal markers;
+        // otherwise the browser's native contentEditable undo runs
+        if (ev.key.toLowerCase() === 'z' && !ev.shiftKey) {
+          if (undoAutoformat()) ev.preventDefault()
+          return
+        }
+        const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
+        if (cmd) {
+          ev.preventDefault()
+          execFormat(cmd)
+        }
+      }
+    }, { signal })
+    // markdown affordances: **bold** / *italic* / `code` / ~~strike~~ / "- "
+    // collapse as you type (⌘Z reverts, backslash escapes); pasted plain
+    // text converts the same patterns
+    inner.addEventListener('input', () => {
+      if (!autoformatAtCaret()) clearAutoformat()
+    }, { signal })
+    inner.addEventListener('paste', (ev) => {
+      // formatting travels: the clipboard's html flavour, through the one
+      // sanitizer (editor/paste.ts); plain text keeps its markdown conversion
+      const rich = clipboardToHtml(ev.clipboardData)
+      if (rich) { ev.preventDefault(); document.execCommand('insertHTML', false, rich); return }
+      const text = ev.clipboardData?.getData('text/plain')
+      if (!text) return
+      ev.preventDefault()
+      document.execCommand('insertHTML', false, sanitizeHtml(markdownToHtml(text)))
+    }, { signal })
+    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true, signal })
+  }
+
+  /** collaborator presence: notified when text editing starts/stops */
+  onTextEditChange: ((elId: string | undefined) => void) | null = null
+
+  commitTextEdit() {
+    // Ahead of every early return below, and ahead of the delegation to
+    // commitCellEdit: a watcher left running would keep the formatting bar up
+    // over a box that is no longer being edited.
+    this.stopSelectionWatch?.()
+    const node = this.editing
+    if (!node) return
+    if (this.editingCell) { this.commitCellEdit(node); return }
+    const slideId = this.editingSlideId
+    this.editListeners?.abort()
+    this.editListeners = null
+    this.editing = null
+    this.editingSlideId = null
+    this.onTextEditChange?.(undefined)
+    const inner = node.querySelector<HTMLElement>('.bento-text-inner')
+    const id = node.dataset.elId
+    node.classList.remove('bento-editing')
+    if (!inner || !id) return
+    inner.contentEditable = 'false'
+    // For code, we care about the raw innerText
+    const text = inner.innerText
+    // drop the zero-width caret spacers autoformat leaves behind
+    // typed "- " bullets are glyphs while you type (markdown.ts says why);
+    // once the edit ends they become real list items, so a long bullet wraps
+    // under its text rather than under the glyph (#502, editor/bullets.ts)
+    const html = bulletsToLists(sanitizeHtml(stripMarkerEscapes(inner.innerHTML.replace(/\u200B/g, ''))))
+    const grownH = Math.max(parseFloat(node.style.height) || 0, inner.scrollHeight)
+    const el = this.store.doc.slides
+      .find((slide) => slide.id === slideId)
+      ?.elements.find((element) => element.id === id)
+    if (el && el.type === 'text' && (el.html !== html || grownH > el.h)) {
+      this.store.commit(() => {
+        el.html = html
+        if (grownH > el.h) el.h = Math.ceil(grownH)
+      })
+    } else if (el && el.type === 'code' && (el.content !== text || grownH > el.h)) {
+      this.store.commit(() => {
+        el.content = text
+        if (grownH > el.h) el.h = Math.ceil(grownH)
+      })
+    } else if (this.editingShowedRaw) {
+      // Nothing changed, so there is no commit to re-render off the back of —
+      // but startTextEdit replaced the rendered formula (or {{page}} field)
+      // with its raw source, and that raw source is still on screen. Editing a
+      // formula and changing nothing left `$$x = \\frac{…}$$` sitting on the
+      // slide until some unrelated event happened to repaint. Put the resolved
+      // view back.
+      this.editingShowedRaw = false
+      this.render()
+    } else {
+      this.syncTargets()
+    }
+    this.flushPendingRender()
+  }
+
+  /** Run a repaint that was deferred while an inline edit was in progress (a
+   *  remote op that arrived mid-edit). No-op when nothing is pending. Runs
+   *  after the commit above, so the repaint reflects the merged model. */
+  private flushPendingRender() {
+    if (this.pendingRender) { this.pendingRender = false; this.render() }
+  }
+
+  // --- table cell editing -----------------------------------------------------
+
+  /** Enter cell editing from a clicked/dbl-clicked <td> (re-queries fresh). */
+  private editCellFromTd(td: HTMLElement) {
+    const tableNode = td.closest<HTMLElement>('.bento-el-table')
+    const id = tableNode?.dataset.elId
+    if (!id) return
+    this.editCellAt(id, Number(td.dataset.r), Number(td.dataset.c))
+  }
+
+  /** Commit any current edit, then edit cell (r,c) of table `id`. */
+  private editCellAt(id: string, r: number, c: number) {
+    if (this.store.readOnly) return // live viewer — no inline editing
+    this.commitTextEdit()
+    const td = this.surface?.querySelector<HTMLElement>(
+      `[data-el-id="${CSS.escape(id)}"] td[data-r="${r}"][data-c="${c}"]`)
+    if (!td) return
+    const node = td.closest<HTMLElement>('.bento-el-table')
+    const inner = td.querySelector<HTMLElement>('.bento-cell-inner')
+    if (!node || !inner) return
+    this.editing = node
+    this.editListeners?.abort()
+    this.editListeners = new AbortController()
+    const signal = this.editListeners.signal
+    this.editingSlideId = this.store.slide.id
+    this.editingCell = { r, c }
+    node.classList.add('bento-editing')
+    inner.contentEditable = 'true'
+    inner.focus()
+    document.getSelection()?.selectAllChildren(inner)
+    this.syncTargets()
+    this.watchSelection(inner)
+    this.onTextEditChange?.(id)
+
+    inner.addEventListener('keydown', (ev) => {
+      ev.stopPropagation()
+      if (ev.key === 'Escape') { ev.preventDefault(); this.commitTextEdit(); return }
+      if (ev.key === 'Tab') { ev.preventDefault(); this.moveCell(ev.shiftKey ? -1 : 1, 'cell'); return }
+      if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); this.moveCell(1, 'row'); return }
+      if (ev.metaKey || ev.ctrlKey) {
+        if (ev.key.toLowerCase() === 'z' && !ev.shiftKey) { if (undoAutoformat()) ev.preventDefault(); return }
+        const cmd = { b: 'bold', i: 'italic', u: 'underline' }[ev.key.toLowerCase()]
+        if (cmd) { ev.preventDefault(); execFormat(cmd) }
+      }
+    }, { signal })
+    inner.addEventListener('input', () => { if (!autoformatAtCaret()) clearAutoformat() }, { signal })
+    inner.addEventListener('paste', (ev) => {
+      // formatting travels: the clipboard's html flavour, through the one
+      // sanitizer (editor/paste.ts); plain text keeps its markdown conversion
+      const rich = clipboardToHtml(ev.clipboardData)
+      if (rich) { ev.preventDefault(); document.execCommand('insertHTML', false, rich); return }
+      const text = ev.clipboardData?.getData('text/plain')
+      if (!text) return
+      ev.preventDefault()
+      document.execCommand('insertHTML', false, sanitizeHtml(markdownToHtml(text)))
+    }, { signal })
+    inner.addEventListener('blur', () => this.commitTextEdit(), { once: true, signal })
+  }
+
+  private commitCellEdit(node: HTMLElement) {
+    const cell = this.editingCell!
+    const id = node.dataset.elId
+    const slideId = this.editingSlideId
+    this.editListeners?.abort()
+    this.editListeners = null
+    this.editing = null
+    this.editingSlideId = null
+    this.editingCell = null
+    this.onTextEditChange?.(undefined)
+    node.classList.remove('bento-editing')
+    const inner = node.querySelector<HTMLElement>(
+      `td[data-r="${cell.r}"][data-c="${cell.c}"] .bento-cell-inner`)
+    if (!inner || !id) return
+    inner.contentEditable = 'false'
+    const html = sanitizeHtml(stripMarkerEscapes(inner.innerHTML.replace(/\u200B/g, '')))
+    const el = this.store.doc.slides
+      .find((slide) => slide.id === slideId)
+      ?.elements.find((element) => element.id === id)
+    if (el && el.type === 'table' && el.rows[cell.r]?.cells[cell.c] && el.rows[cell.r].cells[cell.c].html !== html) {
+      this.store.commit(() => {
+        const tb = el as TableElement
+        if (tb.rows[cell.r]?.cells[cell.c]) tb.rows[cell.r].cells[cell.c].html = html
+      })
+    } else {
+      this.syncTargets()
+    }
+    this.flushPendingRender()
+  }
+
+  /** Tab/Enter navigation between cells; Tab off the last cell appends a row. */
+  private moveCell(dir: 1 | -1, mode: 'cell' | 'row') {
+    const cur = this.editingCell
+    const id = this.editing?.dataset.elId
+    if (!cur || !id) return
+    const el = this.store.element(id)
+    if (!el || el.type !== 'table') return
+    const nCols = el.columns.length
+    const nRows = el.rows.length
+    let r = cur.r
+    let c = cur.c
+    if (mode === 'row') {
+      if (r + dir < 0 || r + dir >= nRows) { this.commitTextEdit(); return }
+      r += dir
+    } else {
+      const idx = r * nCols + c + dir
+      if (idx < 0) { this.commitTextEdit(); return }
+      if (idx >= nRows * nCols) {
+        this.commitTextEdit()
+        this.store.commit(() => {
+          const tb = this.store.element(id) as TableElement
+          tb.rows.push({ cells: tb.columns.map(() => ({ html: '' })) })
+        })
+        this.editCellAt(id, nRows, 0)
+        return
+      }
+      r = Math.floor(idx / nCols)
+      c = idx % nCols
+    }
+    this.editCellAt(id, r, c)
+  }
+
+  get isEditingText() {
+    return !!this.editing
+  }
+
+  /** The element node whose text is open for editing, if any. Callers that run
+   *  on a PRESS need this: the press itself blurs the caret and commits, so by
+   *  the event after it the answer has already changed. */
+  get editingNode(): HTMLElement | null {
+    return this.editing
+  }
+
+  get isDrawing() {
+    return !!this.drawOverlay
+  }
+
+  /** Arm a draw tool: line/curve/connector drag start→end (click = default);
+   *  'free' captures the pointer trail; 'poly' click-places vertices — click
+   *  near the first point (or double-click) to close the shape. Connector ends
+   *  SNAP to visible anchor points (side midpoints + centre) on the element
+   *  under the cursor and anchor there (auto-reroute afterwards). Esc cancels. */
+  armDraw(kind: DrawKind) {
+    this.cancelDraw()
+    const { width, height } = this.store.doc.size
+    const ov = document.createElement('div')
+    ov.style.cssText = `position:absolute;left:0;top:0;width:${width}px;height:${height}px;z-index:60;cursor:crosshair`
+    const svg = document.createElementNS(SVG_NS, 'svg')
+    svg.setAttribute('viewBox', `0 0 ${width} ${height}`)
+    svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none'
+    const preview = document.createElementNS(SVG_NS, 'path')
+    preview.setAttribute('fill', 'none')
+    preview.setAttribute('stroke', '#2f6df6')
+    const dots = document.createElementNS(SVG_NS, 'g')
+    svg.append(preview, dots)
+    ov.appendChild(svg)
+    this.scaleHost.appendChild(ov)
+    this.drawOverlay = ov
+    const k = () => 1 / this.scale
+    const toSlide = (ev: MouseEvent) => {
+      const r = this.scaleHost.getBoundingClientRect()
+      return { x: (ev.clientX - r.left) / this.scale, y: (ev.clientY - r.top) / this.scale }
+    }
+    const setPreview = (d: string) => {
+      preview.setAttribute('stroke-width', String(3 * k()))
+      preview.setAttribute('stroke-dasharray', `${6 * k()} ${4 * k()}`)
+      preview.setAttribute('d', d)
+    }
+    type Pt = { x: number; y: number }
+    type Snap = { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left'; pt: Pt } | null
+    const anchorsFor = (id: string) =>
+      boxAnchors(this.store.slide.elements.find((x) => x.id === id)!)
+    // visible anchor points on the element under the cursor (connector tool)
+    const showAnchors = (p: Pt | null) => {
+      dots.innerHTML = ''
+      if ((kind !== 'connector' && kind !== 'curve-connector') || !p) return
+      const id = this.elementAt(p, 12 * Math.max(k(), 1))
+      if (!id) return
+      for (const a of anchorsFor(id)) {
+        const c = document.createElementNS(SVG_NS, 'circle')
+        c.setAttribute('cx', String(a.pt.x))
+        c.setAttribute('cy', String(a.pt.y))
+        c.setAttribute('r', String(5 * k()))
+        c.setAttribute('fill', '#2f6df6')
+        c.setAttribute('stroke', '#fff')
+        c.setAttribute('stroke-width', String(1.5 * k()))
+        dots.appendChild(c)
+      }
+    }
+    const snap = (p: Pt): { a: Snap; pt: Pt } => {
+      if (kind !== 'connector' && kind !== 'curve-connector') return { a: null, pt: p }
+      const id = this.elementAt(p, 12 * Math.max(k(), 1))
+      if (!id) return { a: null, pt: p }
+      const near = nearestAnchor(anchorsFor(id), p, 30 * Math.max(k(), 1))
+      return near
+        ? { a: { el: id, side: near.side, pt: near.pt }, pt: near.pt }
+        : { a: { el: id, side: 'auto', pt: p }, pt: p }
+    }
+
+    if (kind === 'poly') {
+      const verts: Pt[] = []
+      const redraw = (cur?: Pt) => {
+        if (!verts.length) return setPreview('')
+        let d = `M ${verts[0].x} ${verts[0].y}` + verts.slice(1).map((v) => ` L ${v.x} ${v.y}`).join('')
+        if (cur) d += ` L ${cur.x} ${cur.y}`
+        setPreview(d)
+      }
+      const finish = () => {
+        if (verts.length >= 3) {
+          const el = defaultShape('path', { fill: this.store.doc.theme.accent, stroke: 'transparent', strokeWidth: 0 }) as ShapeElement
+          setPathAnchors(el, verts, { closed: true, straight: true })
+          this.insert(el)
+        }
+        this.cancelDraw()
+      }
+      ov.addEventListener('mousedown', (ev: MouseEvent) => {
+        ev.preventDefault()
+        ev.stopPropagation()
+        const p = toSlide(ev)
+        if (verts.length >= 3 && Math.hypot(p.x - verts[0].x, p.y - verts[0].y) < 16 * Math.max(k(), 1)) return finish()
+        verts.push(p)
+        redraw(p)
+      })
+      ov.addEventListener('mousemove', (ev: MouseEvent) => redraw(toSlide(ev)))
+      ov.addEventListener('dblclick', (ev: MouseEvent) => { ev.preventDefault(); finish() })
+      return
+    }
+
+    if (kind === 'free') {
+      ov.addEventListener('mousedown', (down: MouseEvent) => {
+        down.preventDefault()
+        down.stopPropagation()
+        const raw: Pt[] = [toSlide(down)]
+        const move = (e: MouseEvent) => {
+          raw.push(toSlide(e))
+          setPreview('M ' + raw.map((p) => `${p.x} ${p.y}`).join(' L '))
+        }
+        const up = () => {
+          window.removeEventListener('mousemove', move)
+          window.removeEventListener('mouseup', up)
+          const pts = simplifyPoints(raw, 3)
+          if (pts.length >= 2) {
+            const el = defaultShape('path', { fill: 'transparent', stroke: readableInk(this.store.slide.background), strokeWidth: 3 }) as ShapeElement
+            setPathAnchors(el, pts.length > 2 ? pts : [pts[0], { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 }, pts[1]])
+            this.insert(el)
+          }
+          this.cancelDraw()
+        }
+        window.addEventListener('mousemove', move)
+        window.addEventListener('mouseup', up)
+      })
+      return
+    }
+
+    // line / curve / connector: drag start → end
+    ov.addEventListener('mousemove', (ev: MouseEvent) => {
+      if (!(ev.buttons & 1)) showAnchors(toSlide(ev))
+    })
+    ov.addEventListener('mousedown', (down: MouseEvent) => {
+      down.preventDefault()
+      down.stopPropagation()
+      const s0 = snap(toSlide(down))
+      const start = s0.pt
+      const move = (e: MouseEvent) => {
+        const p = toSlide(e)
+        const sn = snap(p)
+        showAnchors(p)
+        setPreview(kind === 'path' || kind === 'curve-connector' ? this.curveBowD(start, sn.pt) : `M ${start.x} ${start.y} L ${sn.pt.x} ${sn.pt.y}`)
+      }
+      const up = (e: MouseEvent) => {
+        window.removeEventListener('mousemove', move)
+        window.removeEventListener('mouseup', up)
+        const sn = snap(toSlide(e))
+        const short = Math.hypot(sn.pt.x - start.x, sn.pt.y - start.y) < 8
+        const end = short ? { x: start.x + 320, y: start.y } : sn.pt
+        this.createDrawn(kind, start, end, s0.a ?? undefined, short ? undefined : sn.a ?? undefined)
+        this.cancelDraw()
+      }
+      window.addEventListener('mousemove', move)
+      window.addEventListener('mouseup', up)
+    })
+  }
+
+  cancelDraw() {
+    this.drawOverlay?.remove()
+    this.drawOverlay = null
+  }
+
+  /** SVG path 'd' for a gentle bow between two points (curve preview + default). */
+  private curveBowD(a: { x: number; y: number }, b: { x: number; y: number }): string {
+    const mx = (a.x + b.x) / 2
+    const my = (a.y + b.y) / 2
+    const dx = b.x - a.x
+    const dy = b.y - a.y
+    const len = Math.hypot(dx, dy) || 1
+    const off = len * 0.2
+    return `M ${a.x} ${a.y} Q ${mx - (dy / len) * off} ${my + (dx / len) * off} ${b.x} ${b.y}`
+  }
+
+  /** Topmost non-line element whose box contains pt (for connector anchoring).
+   *  `pad` forgives near-misses just outside the border. */
+  private elementAt(pt: { x: number; y: number }, pad = 0): string | null {
+    const els = this.store.slide.elements
+    for (let i = els.length - 1; i >= 0; i--) {
+      const e = els[i]
+      if (e.type === 'shape' && (e.shape === 'line' || e.shape === 'path')) continue
+      if (boxContains(e, pt, pad)) return e.id
+    }
+    return null
+  }
+
+  private createDrawn(
+    kind: DrawKind,
+    a: { x: number; y: number },
+    b: { x: number; y: number },
+    fromA?: { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left' },
+    toA?: { el: string; side: 'auto' | 'top' | 'right' | 'bottom' | 'left' },
+  ) {
+    const ink = readableInk(this.store.slide.background)
+    if (kind === 'path' || kind === 'curve-connector') {
+      const el = defaultShape('path', { fill: 'transparent', stroke: ink, strokeWidth: 3 }) as ShapeElement
+      const mx = (a.x + b.x) / 2
+      const my = (a.y + b.y) / 2
+      const dx = b.x - a.x
+      const dy = b.y - a.y
+      const len = Math.hypot(dx, dy) || 1
+      // a gentle default bow: the connector bends ~15%, a plain curve 20%
+      const off = len * (kind === 'curve-connector' ? 0.15 : 0.2)
+      setPathAnchors(el, [a, { x: mx - (dy / len) * off, y: my + (dx / len) * off }, b])
+      if (kind === 'curve-connector') {
+        // #302: a curve that sticks like a Connector and carries a tip
+        el.lineEnd = 'arrow'
+        if (fromA) el.from = { el: fromA.el, side: fromA.side }
+        if (toA) el.to = { el: toA.el, side: toA.side }
+      }
+      this.insert(el)
+      return
+    }
+    const el = defaultShape('line', { h: 4, strokeWidth: 3, fill: ink }) as ShapeElement
+    setLineEndpoints(el, a, b)
+    if (kind === 'connector') {
+      el.lineEnd = 'arrow'
+      if (fromA) el.from = { el: fromA.el, side: fromA.side }
+      if (toA) el.to = { el: toA.el, side: toA.side }
+    }
+    this.insert(el)
+  }
+
+  /** Insert an element, select it, and (for text) drop straight into editing. */
+  insert(el: SlideElement, startEditing = false) {
+    // inserting while previewing a non-default hover set joins that set —
+    // "I'm editing the italy panel" means new content belongs to it
+    const slide = this.store.slide
+    const preview = this.store.hoverPreview
+    if (preview && slide.hover?.type === 'reveal' && preview !== slide.hover.default) {
+      el.showOnHover = preview
+    }
+    this.store.commit(() => {
+      // Embedded binary belongs in doc.assets, never inline on the element —
+      // that is what makes it reachable by the live-collab blob offload. Done
+      // INSIDE the commit so the asset and the element land as one undo step
+      // and one sync batch.
+      if ((el.type === 'image' || el.type === 'media') && typeof el.src === 'string') {
+        el.src = internAsset(this.store.doc, el.src)
+      }
+      this.store.slide.elements.push(el)
+    })
+    this.store.select([el.id])
+    if (startEditing && el.type === 'text') {
+      const node = this.surface?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(el.id)}"]`)
+      if (node) this.startTextEdit(node)
+    }
+  }
+}

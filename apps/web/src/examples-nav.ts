@@ -37,6 +37,16 @@ const GITHUB_MARK_SVG = `<svg viewBox="0 0 16 16" width="16" height="16" fill="c
 
 export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
   {
+    slug: "bento",
+    href: "/bento/",
+    title: "Bento Slides Copilot",
+    blurb: "A real slide editor you can talk to: GPT-Live voice, 23 WebMCP tools, hands-free presenting.",
+    badge: "Voice",
+    tier: "start",
+    tags: ["agent", "voice", "webmcp", "presentation"],
+    modes: ["inline"],
+  },
+  {
     slug: "analytics-agent-demo",
     href: "/analytics-agent-demo.html",
     title: "Talk to Your Data",
