@@ -16,9 +16,14 @@
  * their bundlers resolve the bare `import("@mcp-b/webmcp-polyfill")` in
  * `webmcp-bridge.ts` directly.
  */
-import { installWebMCP } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP as installUpstreamWebMCP } from "@mcp-b/webmcp-polyfill";
 
-export { installWebMCP };
+// Keep the chunk's declarations local: v6's declaration file re-exports a
+// namespace that webmcp-types declares globally rather than as a module export.
+// Forwarding the function directly makes declaration bundlers follow that edge.
+export function installWebMCP(): void {
+  installUpstreamWebMCP();
+}
 
 /**
  * @deprecated v5's initializer name, kept so pages that import it from this
