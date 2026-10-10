@@ -7,7 +7,7 @@
  * function that aborts the registration signal (unregistering all tools).
  */
 
-import { createThemeEditorTools } from '@runtypelabs/persona/theme-editor';
+import { createThemeEditorTools, withToolErrorResult } from '@runtypelabs/persona/theme-editor';
 import type { ThemeEditorLike, WebMcpTool } from '@runtypelabs/persona/theme-editor';
 import { ensureModelContext } from './install';
 
@@ -38,7 +38,10 @@ export function mountThemeEditorMcp(
     const modelContext = await ensureModelContext();
     if (!modelContext || controller.signal.aborted) return;
 
-    const tools = [...createThemeEditorTools(state), ...(options?.extraTools ?? [])];
+    const tools = [
+      ...createThemeEditorTools(state),
+      ...(options?.extraTools ?? []).map(withToolErrorResult),
+    ];
     for (const tool of tools) {
       // `registerTool()` is async since `@mcp-b/webmcp-polyfill` v5 and
       // REJECTS with the abort reason when the registration signal fires

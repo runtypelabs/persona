@@ -7706,9 +7706,9 @@ export type AgentWidgetConfig = {
    * When `enabled`, the widget installs `@mcp-b/webmcp-polyfill`, snapshots the
    * current document's registry on every dispatch, ships it as `clientTools[]`,
    * and executes returned `webmcp:*` calls with confirm-by-default gating.
-   * Supports host-installed v5 JSON-string and v6 object-input contracts.
-   * The automatic fallback stays on v5 to preserve existing browser support
-   * and callback-result behavior.
+   * The automatic fallback is the upstream polyfill (v6): it needs a secure
+   * context and Chrome/Firefox 126+ or Safari 18+. Host-installed runtimes
+   * using either the JSON-string or object-input contract are supported.
    *
    * Server-side policy on the chat surface is the source of truth: these
    * fields layer on top.

@@ -144,7 +144,7 @@
     "check:runtype-types": "pnpm run fetch:runtype-openapi && node scripts/generate-runtype-openapi-types.mjs --check"
   },
   "dependencies": {
-    "@mcp-b/webmcp-polyfill": "^5.1.0",
+    "@mcp-b/webmcp-polyfill": "^6.0.0",
     "dompurify": "^3.4.13",
     "idiomorph": "^0.7.4",
     "lucide": "^1.18.0",
@@ -167,7 +167,7 @@
     "tsdown": "^0.23.0",
     "typescript": "^6.0.3",
     "vitest": "^5.0.3",
-    "webmcp-polyfill-v6": "npm:@mcp-b/webmcp-polyfill@6.0.0"
+    "webmcp-polyfill-v5": "npm:@mcp-b/webmcp-polyfill@5.1.0"
   },
   "engines": {
     "node": ">=20.0.0"

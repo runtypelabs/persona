@@ -9,7 +9,7 @@ import { sseEvent, textTurnStream } from "../fixtures/fake-history-api";
 const legacyPolyfill = readFileSync(
   createRequire(
     resolve(__dirname, "../../packages/widget/package.json")
-  ).resolve("@mcp-b/webmcp-polyfill/iife"),
+  ).resolve("webmcp-polyfill-v5/iife"),
   "utf8"
 );
 for (const version of ["v5", "v6"]) {
@@ -217,68 +217,87 @@ test("storefront rejects invalid quantities without mutating the cart", async ({
   expect(results.after).toBe(results.before);
 });
 
-test("CDN fallback preserves v5 results without v6 browser APIs", async ({
-  page,
-}) => {
-  await page.route("**/webmcp-compat-fixture", (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: "<!doctype html><body></body>",
-    })
-  );
-  await page.goto("/webmcp-compat-fixture");
-  const result = await page.evaluate(async () => {
-    for (const [target, property] of [
-      [Promise, "withResolvers"],
-      [AbortSignal, "any"],
-      [URL, "parse"],
-    ] as const) {
-      Object.defineProperty(target, property, {
-        value: undefined,
-        configurable: true,
-      });
-    }
-    const runtimeUrl = "/widget-dist/webmcp-runtime.js";
-    const polyfillUrl = "/widget-dist/webmcp-polyfill.js";
-    const { WebMcpBridge } = await import(runtimeUrl);
-    let loads = 0;
-    const bridge = new WebMcpBridge(
-      { enabled: true, onConfirm: async () => true },
-      {
-        recordToolDisplayTitles: () => {},
-        getToolDisplayTitle: () => undefined,
-        loadPolyfill: async () => {
-          loads++;
-          return import(polyfillUrl);
-        },
-      }
+for (const modern of [true, false]) {
+  test(`CDN fallback ${
+    modern ? "installs v6 with upstream result semantics" : "stays inert without the v6 browser baseline"
+  }`, async ({ page }) => {
+    await page.route("**/webmcp-compat-fixture", (route) =>
+      route.fulfill({
+        contentType: "text/html",
+        body: "<!doctype html><body></body>",
+      })
     );
-    await bridge.snapshotForDispatch();
-    const context = (
-      document as Document & {
-        modelContext: {
-          registerTool(tool: {
-            name: string;
-            description: string;
-            execute: () => undefined;
-          }): Promise<void>;
-        };
+    await page.goto("/webmcp-compat-fixture");
+    const result = await page.evaluate(async (modern) => {
+      if (!modern) {
+        Object.defineProperty(Promise, "withResolvers", {
+          value: undefined,
+          configurable: true,
+        });
       }
-    ).modelContext;
-    await context.registerTool({
-      name: "legacy",
-      description: "Legacy result",
-      execute: () => undefined,
-    });
-    return {
-      output: await bridge.executeToolCall("webmcp:legacy", {}),
-      operational: bridge.isOperational(),
-      loads,
-    };
+      const runtimeUrl = "/widget-dist/webmcp-runtime.js";
+      const polyfillUrl = "/widget-dist/webmcp-polyfill.js";
+      const { WebMcpBridge } = await import(runtimeUrl);
+      let loads = 0;
+      const bridge = new WebMcpBridge(
+        { enabled: true, onConfirm: async () => true },
+        {
+          recordToolDisplayTitles: () => {},
+          getToolDisplayTitle: () => undefined,
+          loadPolyfill: async () => {
+            loads++;
+            return import(polyfillUrl);
+          },
+        }
+      );
+      await bridge.snapshotForDispatch();
+      const context = (
+        document as Document & {
+          modelContext?: {
+            registerTool(tool: {
+              name: string;
+              description: string;
+              execute: (input: object) => unknown;
+            }): Promise<void>;
+          };
+        }
+      ).modelContext;
+      if (!context) {
+        return { installed: false, operational: bridge.isOperational(), loads };
+      }
+      await context.registerTool({
+        name: "echo",
+        description: "Echo input",
+        execute: (input) => ({ received: input }),
+      });
+      await context.registerTool({
+        name: "silent",
+        description: "Returns nothing",
+        execute: () => undefined,
+      });
+      return {
+        installed: true,
+        operational: bridge.isOperational(),
+        loads,
+        echo: await bridge.executeToolCall("webmcp:echo", { quantity: 2 }),
+        silentIsError: (await bridge.executeToolCall("webmcp:silent", {}))
+          .isError,
+        navigatorAlias: "modelContext" in navigator,
+      };
+    }, modern);
+    if (modern) {
+      expect(result).toEqual({
+        installed: true,
+        operational: true,
+        loads: 1,
+        echo: {
+          content: [{ type: "text", text: '{"received":{"quantity":2}}' }],
+        },
+        silentIsError: true,
+        navigatorAlias: false,
+      });
+    } else {
+      expect(result).toEqual({ installed: false, operational: false, loads: 1 });
+    }
   });
-  expect(result).toEqual({
-    output: { content: [{ type: "text", text: "undefined" }] },
-    operational: true,
-    loads: 1,
-  });
-});
+}

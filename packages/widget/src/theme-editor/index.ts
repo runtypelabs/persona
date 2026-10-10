@@ -141,6 +141,7 @@ export {
 // WebMCP tools (transport-agnostic factory for agent-driven theming)
 export {
   createThemeEditorTools,
+  withToolErrorResult,
   toolResult,
   buildSummary,
   runContrastChecks,

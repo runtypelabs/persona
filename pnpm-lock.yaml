@@ -634,8 +634,8 @@ importers:
   packages/widget:
     dependencies:
       '@mcp-b/webmcp-polyfill':
-        specifier: ^5.1.0
-        version: 5.1.0
+        specifier: ^6.0.0
+        version: 6.0.0
       dompurify:
         specifier: ^3.4.13
         version: 3.4.13
@@ -697,9 +697,9 @@ importers:
       vitest:
         specifier: ^5.0.3
         version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@20.19.35)(@vitest/ui@5.0.3)(jsdom@28.1.0(supports-color@10.2.2))(vite@8.3.4(@types/node@20.19.35)(esbuild@0.28.1)(jiti@1.21.7)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
-      webmcp-polyfill-v6:
-        specifier: npm:@mcp-b/webmcp-polyfill@6.0.0
-        version: '@mcp-b/webmcp-polyfill@6.0.0'
+      webmcp-polyfill-v5:
+        specifier: npm:@mcp-b/webmcp-polyfill@5.1.0
+        version: '@mcp-b/webmcp-polyfill@5.1.0'
 
 packages:
 
