@@ -663,7 +663,9 @@ export const DEFAULT_COMPONENTS_V5: ComponentTokens = {
   composer: {
     ...DEFAULT_COMPONENTS_BASE.composer,
     padding: '8px', fontSize: '15px', lineHeight: '1.5', controlSize: '32px', controlIconSize: '20px',
+    expandedPadding: '12px 16px', expandedBorderRadius: '24px',
     sendIconSize: '18px', sendButtonRadius: '9999px', footerBorder: 'none',
+    overflowMenu: { borderRadius: '12px' },
     overlayBand: 'linear-gradient(to bottom, transparent, var(--persona-container) 24px)',
     focusBorderColor: 'color-mix(in srgb, var(--persona-text) 28%, var(--persona-border))',
     focusRing: '1px solid color-mix(in srgb, var(--persona-text) 12%, transparent)',
@@ -909,6 +911,18 @@ export function createTheme(
   const suppliedHeader = userConfig?.components?.header;
   if (suppliedHeader?.padding !== undefined && suppliedHeader.minimalPadding === undefined) {
     theme.components.header.minimalPadding = theme.components.header.padding;
+  }
+
+  const suppliedComposer = userConfig?.components?.composer;
+  // An input-only override leaves the composer's defaults shared after merging.
+  // Derive expanded values on a fresh object so a brand cannot mutate defaults
+  // for a sibling instance or survive removal from the current configuration.
+  theme.components.composer = { ...theme.components.composer };
+  if (suppliedComposer?.padding !== undefined && suppliedComposer.expandedPadding === undefined) {
+    theme.components.composer.expandedPadding = suppliedComposer.padding;
+  }
+  if (userConfig?.components?.input?.borderRadius !== undefined && suppliedComposer?.expandedBorderRadius === undefined) {
+    theme.components.composer.expandedBorderRadius = userConfig.components.input.borderRadius;
   }
 
   const suppliedMessage = userConfig?.components?.message;

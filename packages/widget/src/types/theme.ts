@@ -568,6 +568,9 @@ export interface MessageTokens {
  * to replace it wholesale.
  */
 export interface IntroCardTokens extends ComponentTokenSet {
+  /** Inline welcome symbol dimensions and space before the title. */
+  inlineIconSize?: string;
+  inlineIconGap?: string;
   background?: TokenReference<'color'>;
   borderRadius?: TokenReference<'radius'>;
   padding?: TokenReference<'spacing'>;
@@ -769,6 +772,14 @@ export interface ScrollbarTokens {
  * surface-colored pill on the active segment).
  */
 export interface ComposerSegmentedTokens {
+  /** Space between segments, independent of composer row spacing. @default "2px" */
+  gap?: string;
+  /** Segment typography; unset size/line-height retain the composer input scale. */
+  fontSize?: string;
+  lineHeight?: string;
+  fontWeight?: string;
+  /** Minimum segment height, independent of icon controls. */
+  minHeight?: string;
   /** Track fill behind the segments. @default semantic.colors.container */
   trackBackground?: TokenReference<'color'>;
   /** Track corner radius; each segment follows it. @default "9999px" */
@@ -802,6 +813,14 @@ export interface ComposerSegmentedTokens {
  * button tokens.
  */
 export interface ComposerModelPickerTokens {
+  /** Closed label typography. Defaults: inherited family, 13px, normal weight. */
+  fontSize?: string;
+  fontWeight?: string;
+  /** Closed control height and minimum width, independent of icon controls. */
+  height?: string;
+  minWidth?: string;
+  /** Closed control logical padding (CSS shorthand), including chevron space. */
+  paddingInline?: string;
   /** Closed control fill. @default the ghost button fill (transparent) */
   background?: TokenReference<'color'>;
   /** Closed control fill under hover. @default the ghost hover wash */
@@ -850,6 +869,21 @@ export interface ComposerOverflowMenuTokens {
   shadow?: string;
 }
 
+/** Independent mode buttons; unset keys retain the existing action-button appearance. */
+export interface ComposerModeTokens {
+  fontSize?: string;
+  fontWeight?: string;
+  height?: string;
+  paddingInline?: string;
+  /** Gap between icon, label and optional trailing icon. */
+  gap?: string;
+  borderRadius?: TokenReference<'radius'>;
+  /** Inset outline colors; drawing an outline never changes the box size. */
+  borderColor?: TokenReference<'color'>;
+  activeBorderColor?: TokenReference<'color'>;
+  activeBackground?: TokenReference<'color'>;
+}
+
 /** Composer (message input) chrome. */
 export interface ComposerChromeTokens {
   /** Footer background in block placement. Embedded default: transparent. */
@@ -866,8 +900,22 @@ export interface ComposerChromeTokens {
   focusRing?: string;
   /** Inner padding of the composer form (raw CSS shorthand). @default "0.75rem 1rem" */
   padding?: string;
+  /** Expanded composer inset. V5: 12px 16px; an explicit padding also overrides this. */
+  expandedPadding?: string;
+  /** Expanded composer corners. V5: 24px; an explicit input.borderRadius also overrides this. */
+  expandedBorderRadius?: TokenReference<'radius'>;
   /** Gap between the textarea row and the actions row. @default "0.5rem" */
   gap?: string;
+  /** Horizontal space between controls. Independent of row gap. @default "0.5rem" */
+  controlGap?: string;
+  /** Minimum editor height; unset retains the 24px floor. */
+  editorMinHeight?: string;
+  /** Optional editor inset (CSS padding shorthand); unset preserves native padding. */
+  editorPadding?: string;
+  /** Space above starter suggestions placed below the composer. @default "0.5rem" */
+  suggestionsGap?: string;
+  /** Independent mode-button chrome (segmented groups use segmented tokens). */
+  mode?: ComposerModeTokens;
   /** Composer textarea font-size. @default "0.875rem" */
   fontSize?: string;
   /** Composer textarea line-height. @default "1.25rem" */

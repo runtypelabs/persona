@@ -1,3 +1,6 @@
+const getInstanceId = (element: HTMLElement): string | undefined =>
+  element.closest<HTMLElement>("[data-persona-instance]")?.dataset.personaInstance;
+
 import { createElement, createNode } from "../utils/dom";
 import { ArrowRight } from "lucide";
 import { renderLucideIcon } from "../utils/icons";
@@ -183,6 +186,7 @@ export const createSuggestionElement = (
   const select = () => {
     if (session.isStreaming()) return;
     const detail = {
+      instanceId: getInstanceId(eventTarget),
       suggestion: { ...item },
       surface,
       source,
@@ -199,7 +203,7 @@ export const createSuggestionElement = (
     if (isFollowUp) {
       eventTarget.dispatchEvent(
         new CustomEvent("persona:suggestReplies:selected", {
-          detail: { suggestion: item.prompt },
+          detail: { instanceId: getInstanceId(eventTarget), suggestion: item.prompt },
           bubbles: true,
           composed: true,
         })
@@ -559,6 +563,7 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
       container.dispatchEvent(
         new CustomEvent("persona:suggestion:shown", {
           detail: {
+            instanceId: getInstanceId(container),
             suggestions: normalized.map((item) => ({ ...item })),
             surface,
             source,
@@ -572,7 +577,8 @@ export const createSuggestions = (container: HTMLElement): SuggestionButtons => 
         container.dispatchEvent(
           new CustomEvent("persona:suggestReplies:shown", {
             detail: {
-              suggestions: normalized.map((item) => item.prompt),
+              instanceId: getInstanceId(container),
+            suggestions: normalized.map((item) => item.prompt),
             },
             bubbles: true,
             composed: true,

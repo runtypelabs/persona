@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width,initial-scale=1.0" /><link rel="stylesheet" href="/src/demo-shared.css" /><link rel="icon" href="/favicon.ico" /><title>Assistant Config Lab: Persona</title></head>
+<body><main class="shell-main assistant-lab">
+<header class="title-strip"><h1>Five assistants. One configurable composer.</h1><p>Working Persona approximations of ChatGPT, Claude, Gemini, Copilot, and Perplexity. Public config and theme tokens only. No custom renderers or widget CSS overrides.</p></header>
+<nav id="assistant-tabs" aria-label="Assistant references"></nav>
+<div class="lab-controls"><label>Preview width <select id="lab-width"><option value="wide">Reference width</option><option value="narrow">Narrow · 380px</option></select></label><button id="lab-conversation" type="button">Show sample conversation</button><button id="lab-reset" type="button">Reset preview</button><span>Local sample · no AI service connected</span></div>
+<section id="lab-stage" aria-label="Persona configuration preview"><div id="lab-mount"></div></section>
+<p id="lab-status" role="status">Type a message to try the local streaming reply. Voice controls are demonstrations.</p>
+<section class="lab-findings"><div><p class="lab-eyebrow">REFERENCE · OCTOBER 7, 2026</p><h2 id="lab-name"></h2><p id="lab-evidence"></p><a id="lab-source" target="_blank" rel="noopener noreferrer">View reference</a><p class="lab-disclaimer">Independent configuration study, not affiliated with these products. These are representative assistants, not a ranking. Account, viewport, and product experiments affect the reference UI.</p></div><div><h3>What config gets us</h3><ul id="lab-matches"></ul><h3>Where the match stops</h3><ul id="lab-gaps"></ul></div></section>
+<details class="lab-code"><summary>Inspect this Persona configuration</summary><p>This is the complete visual config. Functions are shown as source; callbacks report demo status. The preview separately supplies an in-browser echo transport. Replace that transport and the demo action callbacks for production.</p><button id="lab-copy" type="button">Copy config</button><pre><code id="lab-config"></code></pre></details>
+<p><a href="/embedded-host.html">Embedded host playground</a> · <a href="/v5-preview.html">V5 defaults preview</a></p>
+</main><script type="module" src="/src/assistant-composers.ts"></script></body></html>

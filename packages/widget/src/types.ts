@@ -1378,7 +1378,20 @@ export type AgentWidgetStateSnapshot = {
   streaming: boolean;
 };
 
+export type AgentWidgetEventContext = Readonly<{ instanceId: string }>;
+
+export type AgentWidgetRunStartedEvent = { runId: string; timestamp: number };
+export type AgentWidgetRunFinishedEvent = AgentWidgetRunStartedEvent & {
+  outcome: "success" | "error" | "cancel";
+};
+
 export type AgentWidgetControllerEventMap = {
+  /** Latest transcript after structural changes; streaming text is coalesced per animation frame. */
+  "messages:changed": AgentWidgetMessage[];
+  /** A local session run starts, including retries and restored durable runs. */
+  "run:started": AgentWidgetRunStartedEvent;
+  /** Exactly once per run; tool/approval pauses and reconnects retain the same runId. */
+  "run:finished": AgentWidgetRunFinishedEvent;
   "user:message": AgentWidgetMessage;
   "assistant:message": AgentWidgetMessage;
   "assistant:complete": AgentWidgetMessage;
@@ -4197,6 +4210,15 @@ export type ComposerButtonAction = ComposerActionBase & {
   /** Optional visible text. Without it the button renders icon-only. */
   shortLabel?: string;
   iconName?: string;
+  /**
+   * Opt-in motion for the built-in `voice-bars` icon in the action bar.
+   * `voice` animates only during this widget's live voice transcription,
+   * responding to available voice levels. Idle, reduced-motion, disabled, and
+   * menu icons stay static. Defaults to `none`; this does not start audio capture.
+   */
+  iconAnimation?: "none" | "voice";
+  /** Optional decorative icon after the visible label (for example a chevron). */
+  trailingIconName?: string;
   tooltipText?: string;
   /**
    * Glyph and label color of the bar button, any CSS color. Ignored on the
@@ -4256,6 +4278,15 @@ export type ComposerActionOverflowConfig = {
    */
   collapseAutoActionsBelow?: number | string;
   /**
+   * Fold only the `auto` actions needed to fit the measured composer width,
+   * later display order first. Accounts for pinned controls, custom slots and
+   * the menu trigger. A compact single-row composer reserves 120px for input;
+   * an expanded/stacked composer uses the full toolbar width. Unfolding has
+   * 16px of slack. Hidden/unmeasured surfaces retain their current placement.
+   * When set, takes precedence over collapseAutoActionsBelow. Opt-in only.
+   */
+  collapseAutoActions?: "fit";
+  /**
    * Built-in controls that fold into the menu. Folding is always explicit:
    * enabling the menu never moves the attachment or mention affordances by
    * itself.
@@ -4287,6 +4318,8 @@ export type ComposerMode = {
   /** Shorter visible text for the bar button and the chip. */
   shortLabel?: string;
   iconName?: string;
+  /** Decorative icon after the label; selecting the mode still follows group policy. */
+  trailingIconName?: string;
   /**
    * Replaces the composer placeholder while active. With several active modes
    * the first one in `composer.modes` order wins.
@@ -4318,10 +4351,11 @@ export type ComposerModeGroupPresentation = "buttons" | "segmented";
 /**
  * Whether a group's active modes also render as removable chips.
  *
- * - `"auto"` (default): one chip per active mode, except under `"segmented"`
+ * - `"auto"`: one chip per active mode, except under `"segmented"`
  *   presentation, where the track already shows the state.
  * - `"hidden"`: no chips for this group under any presentation. The pressed bar
- *   button carries the state, and deselection stays on the button.
+ *   button carries a visible selected label and stays in the bar while active;
+ *   deselection stays on the button.
  */
 export type ComposerModeChipVisibility = "auto" | "hidden";
 
@@ -4337,7 +4371,9 @@ export type ComposerModeGroup = {
   /**
    * Chip row policy for this group's active modes. The chip row itself is
    * derived from its children, so a group with no other chips leaves no gap.
-   * @default "auto"
+   * V4 defaults to chips; V5 defaults to selected button labels. Explicit
+   * `"auto"` keeps chips in both versions. Explicit overflow modes retain a
+   * chip unless the group requests `"hidden"`.
    */
   chipVisibility?: ComposerModeChipVisibility;
   /**
@@ -4541,8 +4577,7 @@ export type AgentWidgetComposerConfig = {
    *
    * - `"stacked"` (default): the card layout. Editor on its own row, the two
    *   action clusters on a row below it.
-   * - `"single-row"`: the one-row pill (the chatgpt.com / gemini.google.com
-   *   model). The start cluster leads the editor, the end cluster trails it,
+   * - `"single-row"`: a compact pill. The start cluster leads the editor, the end cluster trails it,
    *   and the editor absorbs the remaining width.
    *
    * `"single-row"` describes the IDLE composer only. It composes with the
@@ -5511,9 +5546,10 @@ export type AgentWidgetStarterSuggestionsConfig =
     /**
      * `auto` uses the welcome surface when the welcome card renders and the
      * composer otherwise. Explicit values are literal: `welcome` renders
-     * nothing when the welcome card is hidden. Defaults to `auto`.
+     * nothing when the welcome card is hidden. `below-composer` places starters
+     * after the input form, outside its border. Defaults to `auto`.
      */
-    placement?: "auto" | "welcome" | "composer";
+    placement?: "auto" | "welcome" | "composer" | "below-composer";
   };
 
 export type AgentWidgetFollowUpSuggestionsConfig =
@@ -5746,14 +5782,27 @@ export interface AgentWidgetStreamParser {
 /**
  * Component renderer function signature for custom components
  */
+export type AgentWidgetComponentRenderContext = {
+  message: AgentWidgetMessage;
+  config: AgentWidgetConfig;
+  /** Replaces the directive's props. Deferred until the current render finishes. */
+  updateProps: (newProps: Record<string, unknown>) => void;
+  /** Aborts on replacement, removal, clear or destroy, never temporary detach. */
+  signal?: AbortSignal;
+};
+
+export type AgentWidgetComponentRenderHandle = {
+  element: HTMLElement;
+  /** Updates a mounted component without replacing its element or lifetime. */
+  update?: (props: Record<string, unknown>, context: AgentWidgetComponentRenderContext) => void;
+  /** Called once when the component's lifetime ends, after its signal aborts. */
+  destroy?: () => void;
+};
+
 export type AgentWidgetComponentRenderer = (
   props: Record<string, unknown>,
-  context: {
-    message: AgentWidgetMessage;
-    config: AgentWidgetConfig;
-    updateProps: (newProps: Record<string, unknown>) => void;
-  }
-) => HTMLElement;
+  context: AgentWidgetComponentRenderContext
+) => HTMLElement | AgentWidgetComponentRenderHandle;
 
 /**
  * Result from custom SSE event parser
@@ -6110,7 +6159,19 @@ export type MessageRenderContext = {
 /**
  * Context provided to slot render functions
  */
+export type AgentWidgetLinkClickContext = {
+  /** Absolute URL resolved by the anchor. Only http(s), mailto and tel are routed. */
+  url: string;
+  anchor: HTMLAnchorElement;
+  originalEvent: MouseEvent;
+  preventDefault: () => void;
+};
+
 export type SlotRenderContext = {
+  /** Slot position for this renderer. */
+  slot: WidgetLayoutSlot;
+  /** Aborted on renderer replacement/removal or widget destruction, not temporary detach. */
+  signal: AbortSignal;
   config: AgentWidgetConfig;
   defaultContent: () => HTMLElement | null;
 };
@@ -6305,19 +6366,38 @@ export type WidgetLayoutSlot =
   | "header-center"
   | "header-right"
   | "body-top"
+  /** Above the messages in the scrolling transcript, constrained to contentMaxWidth. */
+  | "transcript-top"
   /** @deprecated Unsupported no-op. Use the message render hooks instead. */
   | "messages"
   | "body-bottom"
   | "footer-top"
   /** @deprecated Unsupported no-op. Use the `renderComposer` plugin hook instead. */
   | "composer"
-  | "footer-bottom";
+  | "footer-bottom"
+  /** In the composer action start/end clusters; absent in composers without those regions. */
+  | "composer-start"
+  | "composer-end"
+  /** Immediately before the send control in its action cluster. */
+  | "composer-before-send";
 
 /**
  * Slot renderer function signature
- * Returns HTMLElement to render in the slot, or null to use default content
+ * Returns an HTMLElement, a managed render result, or null to use default content.
+ * Legacy elements are retained until renderer removal/replacement; use a managed
+ * result for updates. Config updates refresh managed results once per update.
  */
-export type SlotRenderer = (context: SlotRenderContext) => HTMLElement | null;
+export type SlotRenderResult = {
+  /** Null leaves default content visible and adds no slot wrapper. */
+  element: HTMLElement | null;
+  /** Called on widget.update with the same renderer. Return void to keep the node,
+   * a node to replace it, or null to restore default content. */
+  update?: (context: SlotRenderContext) => HTMLElement | null | void;
+  /** Runs once after signal abortion when the renderer is removed/replaced or the widget is destroyed. */
+  destroy?: () => void;
+};
+
+export type SlotRenderer = (context: SlotRenderContext) => HTMLElement | SlotRenderResult | null;
 
 /**
  * Main layout configuration
@@ -7755,6 +7835,10 @@ export type AgentWidgetConfig = {
    * ```
    */
   markdown?: AgentWidgetMarkdownConfig;
+  /** Route ordinary primary clicks on safe widget links. Call preventDefault()
+   * to cancel browser navigation. Modified clicks, downloads and non-self targets
+   * retain browser behavior and do not invoke this hook. */
+  onLinkClick?: (context: AgentWidgetLinkClickContext) => void;
 
   /**
    * HTML sanitization for rendered message content.
@@ -8350,8 +8434,8 @@ export type AgentWidgetEvent =
       type: "status";
       status: "connecting" | "connected" | "error" | "idle";
       /**
-       * Set on the `idle` emitted from a graceful execution terminal
-       * (`execution_complete`). Distinguishes a real finish from the plain
+       * Set on the terminal status emitted from an execution completion
+       * (`execution_complete`; failed completions use `error`). Distinguishes a real finish from the plain
        * `idle` the dispatch wrappers emit in their `finally` on a dropped
        * connection. The durable-reconnect drop detection keys off this.
        */

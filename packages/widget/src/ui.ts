@@ -1,3 +1,4 @@
+import { createLayoutSlots } from "./utils/layout-slots";
 import { activityVariant, activityDuration, createActivityLifecycle, createActivityGroup } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
 import { usesSessionVoice } from "./utils/voice-support";
@@ -67,6 +68,7 @@ import {
   ComposerSubmissionSnapshot,
   AgentWidgetReasoning
 } from "./types";
+import type { AgentWidgetComponentRenderer, AgentWidgetComponentRenderContext, AgentWidgetComponentRenderHandle } from "./types";
 import { AttachmentManager, type PendingAttachment } from "./utils/attachment-manager";
 import { createComposerStore } from "./utils/composer-store";
 import {
@@ -75,6 +77,7 @@ import {
 } from "./components/composer-bindings";
 import {
   COMPOSER_ACTION_ORDER,
+  COMPOSER_ACTION_ATTR,
   createComposerActionRenderer,
   type ComposerActionRenderer,
   type ComposerBuiltInDescriptor,
@@ -118,12 +121,14 @@ import {
   pruneComposerModes,
   resolveComposerModePlaceholder,
   toggleComposerMode,
+  selectComposerModes,
 } from "./utils/composer-modes";
 import {
   createComposerCompactLatch,
   isComposerCompact,
   isEditorWrapped,
 } from "./utils/composer-compact";
+import { createComposerFitObserver } from "./utils/composer-fit";
 import { requestFormSubmit } from "./utils/composer-input";
 import {
   DEFAULT_COMPOSER_MAX_LINES,
@@ -363,7 +368,7 @@ import {
   type ResolvedHistoryShellCopy,
 } from "./components/history-shell-copy";
 import { showHistoryConfirm } from "./components/history-confirm-dialog";
-import { componentRegistry } from "./components/registry";
+import { resolveComponentRenderer, resolveComponentOptions } from "./components/registry";
 import {
   renderComponentDirective,
   extractComponentDirectiveFromMessage,
@@ -531,6 +536,7 @@ const stripStreamingFromMessages = (messages: AgentWidgetMessage[]) =>
   }));
 
 type Controller = {
+  readonly instanceId: string;
   update: (config: AgentWidgetConfigPatch) => void;
   destroy: () => void;
   open: () => void;
@@ -544,6 +550,8 @@ type Controller = {
    * The same payload rides the `persona:composer:state` DOM event.
    */
   getComposerState: () => Readonly<ComposerState>;
+  /** Set valid active modes; last requested mode wins each single-selection group. */
+  setComposerModes: (ids: readonly string[]) => void;
   /**
    * Set the composer quote/reply-to. Renders a dismissible banner above the
    * editor; the next send carries the quote as a delimited block ahead of the
@@ -589,6 +597,10 @@ type Controller = {
   injectComponentDirective: (
     options: InjectComponentDirectiveOptions
   ) => AgentWidgetMessage;
+  /** Replace the props of an existing component directive; false if not found. */
+  updateComponentProps: (messageId: string, props: Record<string, unknown>) => boolean;
+  /** Remove an existing component directive and retire its renderer lifetime. */
+  removeComponentMessage: (messageId: string) => boolean;
   /**
    * @deprecated Use injectMessage() instead.
    */
@@ -614,11 +626,11 @@ type Controller = {
   ) => void;
   on: <K extends keyof AgentWidgetControllerEventMap>(
     event: K,
-    handler: (payload: AgentWidgetControllerEventMap[K]) => void
+    handler: (payload: AgentWidgetControllerEventMap[K], context: Readonly<{ instanceId: string }>) => void
   ) => () => void;
   off: <K extends keyof AgentWidgetControllerEventMap>(
     event: K,
-    handler: (payload: AgentWidgetControllerEventMap[K]) => void
+    handler: (payload: AgentWidgetControllerEventMap[K], context: Readonly<{ instanceId: string }>) => void
   ) => void;
   // State query methods
   isOpen: () => boolean;
@@ -931,6 +943,9 @@ export const createAgentExperience = (
   if (mount.id && !mount.getAttribute("data-persona-instance")) {
     mount.setAttribute("data-persona-instance", mount.id);
   }
+  const instanceId = mount.getAttribute("data-persona-instance") ||
+    `persona-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  mount.setAttribute("data-persona-instance", instanceId);
   // Ensure root marker is present for Tailwind scoping and DOM traversal
   if (!mount.hasAttribute("data-persona-root")) {
     mount.setAttribute("data-persona-root", "true");
@@ -1067,11 +1082,8 @@ export const createAgentExperience = (
       });
   };
 
-  // Register components from config
-  if (config.components) {
-    componentRegistry.registerAll(config.components);
-  }
-  const eventBus = createEventBus<AgentWidgetControllerEventMap>();
+  // Config component registrations are resolved per instance, never copied globally.
+  const eventBus = createEventBus<AgentWidgetControllerEventMap>(Object.freeze({ instanceId }));
 
   // When persistState is explicitly false, message-history persistence is
   // disabled: including any user-supplied storageAdapter. This is the strict
@@ -1694,7 +1706,7 @@ export const createAgentExperience = (
     try {
       container.dispatchEvent(
         new CustomEvent("persona:composer:state", {
-          detail: state,
+          detail: { ...state, instanceId },
           bubbles: true,
           composed: true,
         })
@@ -1753,7 +1765,7 @@ export const createAgentExperience = (
    * state itself, so a chip beside it would be a second copy of it.
    */
   const composerChipModes = (): readonly ComposerMode[] =>
-    chipVisibleComposerModes(composerModes(), config.composer?.modeGroups);
+    chipVisibleComposerModes(composerModes(), config.composer?.modeGroups, Boolean(config.future?.v5Defaults));
 
   // Authored initial selection. Everything downstream reads the store, and a
   // restored draft overwrites this in `restoreComposerDraft`.
@@ -1788,6 +1800,14 @@ export const createAgentExperience = (
   }
 
   function toggleComposerModeById(modeId: string): void {
+    const root = mount.getRootNode();
+    const focused = root instanceof ShadowRoot ? root.activeElement : mount.ownerDocument.activeElement;
+    const actionId = composerModeActionId(modeId);
+    const menu = composerActionRenderer?.getOverflowMenu();
+    const ownsFocus = focused && (
+      focused.closest(`[${COMPOSER_ACTION_ATTR}]`)?.getAttribute(COMPOSER_ACTION_ATTR) === actionId ||
+      menu?.trigger.contains(focused)
+    );
     setActiveComposerModes(
       toggleComposerMode(
         composerStore.getState().activeModeIds,
@@ -1796,6 +1816,16 @@ export const createAgentExperience = (
         config.composer?.modeGroups
       )
     );
+    // Selecting the last folded mode removes the menu trigger; deselecting a
+    // pinned mode can fold its focused button into a detached menu. Keep focus
+    // on the equivalent visible control without moving unrelated editor/slot focus.
+    if (ownsFocus && !focused.isConnected) {
+      const visibleAction = Array.from(mount.querySelectorAll<HTMLElement>(`[${COMPOSER_ACTION_ATTR}]`))
+        .find((element) => element.getAttribute(COMPOSER_ACTION_ATTR) === actionId);
+      const replacement = visibleAction?.querySelector<HTMLButtonElement>("button") ??
+        composerActionRenderer?.getOverflowMenu()?.triggerButton;
+      if (replacement?.isConnected) replacement.focus();
+    }
   }
 
   /** Model picker + one toggle per configured mode, as ordinary actions. */
@@ -1873,6 +1903,7 @@ export const createAgentExperience = (
   const collectComposerCoreActions = (): ComposerAction[] => {
     const actions: ComposerAction[] = [];
     const active = composerStore.getState().activeModeIds;
+    const chipModeIds = new Set(composerChipModes().map((mode) => mode.id));
     const seenSegmentedGroups = new Set<string>();
     composerModes().forEach((mode, index) => {
       // A segmented group contributes one track at its first member's slot; the
@@ -1889,15 +1920,17 @@ export const createAgentExperience = (
         actions.push(control.action);
         return;
       }
+      const selectedLabel = active.includes(mode.id) && !chipModeIds.has(mode.id);
       actions.push({
         id: composerModeActionId(mode.id),
         kind: "button",
         placement: "start",
         order: composerModeOrder(index),
-        presentation: mode.presentation ?? "auto",
+        presentation: selectedLabel ? "bar" : (mode.presentation ?? "auto"),
         label: mode.label,
-        shortLabel: mode.shortLabel,
+        shortLabel: selectedLabel ? (mode.shortLabel ?? mode.label) : mode.shortLabel,
         iconName: mode.iconName,
+        trailingIconName: mode.trailingIconName,
         pressed: active.includes(mode.id),
         onSelect: () => toggleComposerModeById(mode.id),
       });
@@ -2540,9 +2573,22 @@ export const createAgentExperience = (
   };
   setupComposerHeaderCards();
 
-  // --- Compact state (roadmap section 14) ------------------------------------
-  // The attribute is the only contract; core CSS changes no layout with it.
+  // Draft expansion and action-width fit have separate lifetimes: the wrap
+  // latch survives edits, but a narrow host must recover when it widens.
   const composerCompactLatch = createComposerCompactLatch();
+  const composerFit = createComposerFitObserver({
+    getSurface: () => {
+      if (isComposerBar() || !composerBindings) return null;
+      return {
+        form: composerBindings.form,
+        input: composerBindings.input,
+        start: composerBindings.actionsStart,
+        end: composerBindings.actionsEnd,
+        resizeInput: config.composer?.layout === "single-row",
+      };
+    },
+    onMeasure: () => syncComposerCompact(),
+  });
   /**
    * Chips of either kind, read from the one shared header row. Falls back to
    * composer state on a surface that binds no header (no row to read).
@@ -2560,21 +2606,34 @@ export const createAgentExperience = (
   };
   function syncComposerCompact(): void {
     const state = composerStore.getState();
+    const measuredFit = composerFit.measure();
+    const fits = config.composer?.layout !== "single-row" || measuredFit;
+    const crowded = composerFit.toolbarCrowded();
+    if (footer.hasAttribute("data-persona-composer-crowded") !== crowded) {
+      footer.toggleAttribute("data-persona-composer-crowded", crowded);
+    }
+    if (footer.hasAttribute("data-persona-composer-fit") !== fits) {
+      footer.toggleAttribute("data-persona-composer-fit", fits);
+    }
     const wrapped = composerCompactLatch.observe(
-      isEditorWrapped(textarea as unknown as HTMLElement | null),
+      fits && isEditorWrapped(textarea as unknown as HTMLElement | null),
       state.text
     );
-    footer.toggleAttribute(
-      "data-persona-composer-compact",
-      isComposerCompact({
-        text: state.text,
-        wrapped,
-        hasAttachments: state.attachments.length > 0,
-        hasChips: hasComposerChips(),
-        hasQuote: state.quote !== undefined,
-        hasPendingSubmission: state.pendingSubmission !== undefined,
-      })
-    );
+    const compact = isComposerCompact({
+      text: state.text,
+      wrapped,
+      hasAttachments: state.attachments.length > 0,
+      hasChips: hasComposerChips(),
+      hasQuote: state.quote !== undefined,
+      hasPendingSubmission: state.pendingSubmission !== undefined,
+    });
+    if (footer.hasAttribute("data-persona-composer-compact") !== compact) {
+      footer.toggleAttribute("data-persona-composer-compact", compact);
+    }
+    const expanded = !compact || !fits || config.composer?.layout !== "single-row";
+    if (footer.hasAttribute("data-persona-composer-expanded") !== expanded) {
+      footer.toggleAttribute("data-persona-composer-expanded", expanded);
+    }
   }
 
   /**
@@ -2588,6 +2647,7 @@ export const createAgentExperience = (
     } else {
       footer.removeAttribute("data-persona-composer-layout");
     }
+    syncComposerCompact();
   }
   syncComposerLayout();
 
@@ -2612,108 +2672,117 @@ export const createAgentExperience = (
     if (!inert.length) return;
     warnedInertSlots = true;
     console.warn(
-      `[persona] layout.slots.${inert.join(" and layout.slots.")} ${inert.length > 1 ? "are" : "is"} deprecated and unsupported: the renderer never runs. Use the message render hooks for the transcript and the renderComposer plugin hook for the composer.`
+      `[persona] layout.slots.${inert.join(" and layout.slots.")} ${inert.length > 1 ? "are" : "is"} deprecated and unsupported: renderer output is ignored. Use the message render hooks for the transcript and the renderComposer plugin hook for the composer.`
     );
   };
 
-  // Slot system: allow custom content injection into specific regions
-  const renderSlots = () => {
-    const slots = config.layout?.slots ?? {};
-    warnInertSlots(slots);
-
-    // Helper to get default slot content
-    const getDefaultSlotContent = (slot: WidgetLayoutSlot): HTMLElement | null => {
-      switch (slot) {
-        case "body-top":
-          // Intro card is identified by its data attribute; its utility classes
-          // are themable and must never be used as a selector.
-          return body.querySelector("[data-persona-intro-card]") as HTMLElement | null;
-        case "messages":
-          return messagesWrapper;
-        case "footer-top":
-          return suggestions;
-        case "composer":
-          return composerForm;
-        case "footer-bottom":
-          return statusText;
-        default:
-          return null;
-      }
-    };
-
-    // Helper to insert content into slot region
-    const insertSlotContent = (slot: WidgetLayoutSlot, element: HTMLElement) => {
-      switch (slot) {
-        case "header-left":
-        case "header-center":
-        case "header-right":
-          // Header slots - prepend/append to header
-          if (slot === "header-left") {
-            header.insertBefore(element, header.firstChild);
-          } else if (slot === "header-right") {
-            header.appendChild(element);
-          } else {
-            // header-center: insert after icon/title
-            const titleSection = header.querySelector(".persona-flex-col");
-            if (titleSection) {
-              titleSection.parentNode?.insertBefore(element, titleSection.nextSibling);
-            } else {
-              header.appendChild(element);
-            }
-          }
-          break;
-        case "body-top": {
-          // Replace or prepend to body
-          const introCard = body.querySelector("[data-persona-intro-card]");
-          if (introCard) {
-            introCard.replaceWith(element);
-          } else {
-            body.insertBefore(element, body.firstChild);
-          }
-          break;
-        }
-        case "body-bottom":
-          // Append after messages wrapper
-          body.appendChild(element);
-          break;
-        case "footer-top":
-          // Replace suggestions area
-          suggestions.replaceWith(element);
-          break;
-        case "footer-bottom":
-          // Replace or append after status text
-          statusText.replaceWith(element);
-          break;
-        default:
-          // "messages" / "composer": deprecated and unsupported, never rendered
-          // (warnInertSlots reports them in debug mode).
-          break;
-      }
-    };
-
-    // Process each configured slot
-    for (const [slotName, renderer] of Object.entries(slots) as [WidgetLayoutSlot, SlotRenderer][]) {
-      if (renderer) {
-        try {
-          const slotElement = renderer({
-            config,
-            defaultContent: () => getDefaultSlotContent(slotName)
-          });
-          if (slotElement) {
-            insertSlotContent(slotName, slotElement);
-          }
-        } catch (error) {
-          if (typeof console !== "undefined") {
-            // eslint-disable-next-line no-console
-            console.error(`[AgentWidget] Error rendering slot "${slotName}":`, error);
-          }
-        }
-      }
+  // Preserve replacement-slot defaults so null/removal restores the same nodes.
+  const slotDefaults = new Map<WidgetLayoutSlot, { anchor: Comment; element: HTMLElement }>();
+  const slotWrappers = new Map<WidgetLayoutSlot, HTMLElement>();
+  const defaultSlotContent = (slot: WidgetLayoutSlot): HTMLElement | null => {
+    const saved = slotDefaults.get(slot);
+    if (saved) return saved.element;
+    let element: HTMLElement | null = null;
+    if (slot === "body-top") element = body.querySelector("[data-persona-intro-card]");
+    if (slot === "messages") return messagesWrapper;
+    if (slot === "composer") return composerForm;
+    if (slot === "footer-top") element = suggestions;
+    if (slot === "footer-bottom") element = statusText;
+    if (element?.parentNode) {
+      const anchor = document.createComment(`persona:${slot}`);
+      element.before(anchor);
+      slotDefaults.set(slot, { anchor, element });
     }
+    return element;
   };
+  const slots = createLayoutSlots({
+    config: () => config,
+    defaultContent: defaultSlotContent,
+    remove(slot, element) {
+      // Unsupported slots never own DOM, even if their renderer returns a core node.
+      if (slot === "messages" || slot === "composer") return;
+      element?.remove();
+      slotWrappers.get(slot)?.remove();
+      slotWrappers.delete(slot);
+      const saved = slotDefaults.get(slot);
+      if (saved) {
+        saved.anchor.replaceWith(saved.element);
+        slotDefaults.delete(slot);
+      }
+    },
+    mount(slot, element) {
+      // Retain the legacy inert-slot invocation but never attach its output.
+      if (slot === "messages" || slot === "composer") return;
+      if (element.parentNode && wrapper.contains(element)) return;
+      if (slot === "body-top" || slot === "footer-top" || slot === "footer-bottom") {
+        const original = defaultSlotContent(slot);
+        const saved = slotDefaults.get(slot);
+        if (original && saved?.anchor.parentNode) {
+          saved.anchor.after(element);
+          if (original !== element && !element.contains(original)) original.remove();
+          return;
+        }
+      }
+      switch (slot) {
+        case "header-left": header.prepend(element); break;
+        case "header-right": header.append(element); break;
+        case "header-center": {
+          const title = header.querySelector(".persona-flex-col");
+          if (title) title.after(element); else header.append(element);
+          break;
+        }
+        case "body-top": body.prepend(element); break;
+        case "body-bottom": body.append(element); break;
+        case "footer-top": footer.prepend(element); break;
+        case "footer-bottom": footer.append(element); break;
+        case "transcript-top": {
+          const host = document.createElement("div");
+          host.setAttribute("data-persona-layout-slot", slot);
+          host.style.cssText = "width:100%;min-width:0;max-width:var(--persona-content-max-width, 100%);margin-inline:auto;flex-shrink:0";
+          host.append(element);
+          messagesWrapper.before(host);
+          slotWrappers.set(slot, host);
+          break;
+        }
+        case "composer-start":
+        case "composer-end":
+        case "composer-before-send": {
+          const target = slot === "composer-start" ? leftActions :
+            slot === "composer-end" ? rightActions : sendButtonWrapper?.parentElement;
+          if (!target) break;
+          const host = document.createElement("div");
+          host.setAttribute("data-persona-layout-slot", slot);
+          host.style.cssText = "display:flex;align-items:center;min-width:0;max-width:100%";
+          host.append(element);
+          if (slot === "composer-start") target.prepend(host);
+          else if (slot === "composer-before-send") sendButtonWrapper?.before(host);
+          else target.append(host);
+          slotWrappers.set(slot, host);
+          break;
+        }
+      }
+    },
+  });
+  warnInertSlots(config.layout?.slots ?? {});
+  slots.update();
 
-  // Render custom slots
-  renderSlots();
+  const routeLinkClick = (event: MouseEvent) => {
+    if (!config.onLinkClick || event.defaultPrevented || event.button !== 0 ||
+        event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const anchor = target.closest<HTMLAnchorElement>("a[href]");
+    if (!anchor || !mount.contains(anchor) || anchor.hasAttribute("download")) return;
+    if (anchor.closest("[data-persona-root]") !== mount) return;
+    const linkTarget = anchor.getAttribute("target") ?? anchor.ownerDocument.querySelector("base[target]")?.getAttribute("target");
+    if (linkTarget && linkTarget.toLowerCase() !== "_self") return;
+    if (!/^(https?:|mailto:|tel:)/i.test(anchor.href)) return;
+    try {
+      config.onLinkClick({ url: anchor.href, anchor, originalEvent: event,
+        preventDefault: () => event.preventDefault() });
+    } catch (error) { console.error("[AgentWidget] onLinkClick failed:", error); }
+  };
+  mount.addEventListener("click", routeLinkClick);
 
   messagesWrapper.addEventListener("click", (event) => {
     const target = event.target;
@@ -3348,6 +3417,7 @@ export const createAgentExperience = (
     mount.dispatchEvent(
       new CustomEvent("persona:askUserQuestion:answered", {
         detail: {
+          instanceId,
           toolUseId: toolCallId,
           answer: trimmed,
           answers: meta.structured,
@@ -3433,7 +3503,7 @@ export const createAgentExperience = (
       const toolCallId = sheet.getAttribute("data-tool-call-id") ?? "";
       mount.dispatchEvent(
         new CustomEvent("persona:askUserQuestion:dismissed", {
-          detail: { toolUseId: toolCallId },
+          detail: { instanceId, toolUseId: toolCallId },
           bubbles: true,
           composed: true,
         })
@@ -3610,7 +3680,7 @@ export const createAgentExperience = (
       if (!grouped) {
         mount.dispatchEvent(
           new CustomEvent("persona:askUserQuestion:dismissed", {
-            detail: { toolUseId: toolCallId },
+            detail: { instanceId, toolUseId: toolCallId },
             bubbles: true,
             composed: true,
           })
@@ -4811,6 +4881,7 @@ export const createAgentExperience = (
   };
 
   const destroyCallbacks: Array<() => void> = [];
+  destroyCallbacks.push(() => composerFit.destroy());
   destroyCallbacks.push(() => {
     artifactsUiDisposed = true;
   });
@@ -5050,6 +5121,10 @@ export const createAgentExperience = (
   const renderSuggestions = (messages?: AgentWidgetMessage[]) => {
     if (!session) return;
     const current = messages ?? session.getMessages();
+    // Reset first so switching back to legacy starters or follow-ups restores
+    // the shared composer surface. The starter branch opts into below again.
+    suggestions.removeAttribute("data-persona-suggestions-below");
+    if (suggestions.parentElement === footer) footer.insertBefore(suggestions, footer.firstChild);
     if (dismissedFollowUpIds.size) {
       const currentIds = new Set(current.map((message) => message.id));
       for (const id of dismissedFollowUpIds) {
@@ -5158,6 +5233,9 @@ export const createAgentExperience = (
         suggestionManagers.forEach(clearManager);
         return;
       }
+      suggestions.toggleAttribute("data-persona-suggestions-below", placement === "below-composer");
+      if (placement === "below-composer") composerForm.after(suggestions);
+      else footer.insertBefore(suggestions, footer.firstChild);
       const manager =
         placement === "welcome"
           ? starterSuggestionsManager
@@ -5244,6 +5322,30 @@ export const createAgentExperience = (
   // expensive rebuild on fingerprint change so user state inside the rendered
   // component (e.g. partially-filled form inputs) is not wiped on every pass.
   const lastComponentDirectiveFingerprint = new Map<string, string>();
+  type ComponentLifetime = {
+    renderer: AgentWidgetComponentRenderer | undefined;
+    component: string;
+    controller: AbortController;
+    handle: AgentWidgetComponentRenderHandle;
+    context: AgentWidgetComponentRenderContext;
+  };
+  const componentLifetimes = new Map<string, ComponentLifetime>();
+  const disposeComponentRender = (id: string): void => {
+    const lifetime = componentLifetimes.get(id);
+    componentLifetimes.delete(id);
+    lastComponentDirectiveFingerprint.delete(id);
+    findMessageRow(messagesWrapper, id)?.removeAttribute("data-preserve-runtime");
+    if (!lifetime) return;
+    lifetime.controller.abort();
+    try {
+      lifetime.handle.destroy?.();
+    } catch (error) {
+      console.error("[AgentWidget] Component cleanup failed:", error);
+    }
+  };
+  destroyCallbacks.push(() => {
+    for (const id of componentLifetimes.keys()) disposeComponentRender(id);
+  });
   // Same idea for plugin-rendered approval bubbles (`renderApproval`). The
   // custom element is injected into the live DOM post-morph so its event
   // listeners (Approve/Deny, an expandable parameters accordion, etc.) survive;
@@ -6586,7 +6688,7 @@ export const createAgentExperience = (
       if (!hasDirectiveBubble && lastComponentDirectiveFingerprint.has(message.id)) {
         const existing = findMessageRow(container, message.id);
         existing?.removeAttribute("data-preserve-runtime");
-        lastComponentDirectiveFingerprint.delete(message.id);
+        disposeComponentRender(message.id);
       }
 
       // Fingerprint cache: skip re-rendering unchanged messages. Append the
@@ -6919,6 +7021,8 @@ export const createAgentExperience = (
         }
       }
 
+      if (bubble && componentLifetimes.has(message.id)) disposeComponentRender(message.id);
+
       // Check for component directive if no plugin handled it. We use the
       // same stub-and-hydrate trick as ask_user_question plugins (see comment
       // above `componentDirectiveHydrate`): build the live element with its
@@ -6928,21 +7032,68 @@ export const createAgentExperience = (
         const directive = extractComponentDirectiveFromMessage(message);
         if (directive) {
           const lastFp = lastComponentDirectiveFingerprint.get(message.id);
-          const needsRebuild = lastFp !== fingerprint;
+          const wrapChrome =
+            config.wrapComponentDirectiveInBubble !== false &&
+            resolveComponentOptions(config, directive.component)?.bubbleChrome !== false;
+          // Raw-length-only fingerprints miss same-length prop replacements.
+          const directiveFingerprint = `${computeMessageFingerprint(message, configVersion)}:${wrapChrome}:${directive.raw}`;
+          const previousLifetime = componentLifetimes.get(message.id);
+          const renderer = resolveComponentRenderer(config, directive.component);
+          const rendererChanged = previousLifetime?.renderer !== renderer ||
+            previousLifetime?.component !== directive.component;
+          const needsRebuild = lastFp !== directiveFingerprint || rendererChanged;
+          if (previousLifetime) {
+            previousLifetime.context.message = message;
+            previousLifetime.context.config = config;
+          }
           // Wrap only when the global default allows it AND the component has
           // not opted out of bubble chrome (e.g. the artifact card carries its
           // own border, so it renders bare).
-          const wrapChrome =
-            config.wrapComponentDirectiveInBubble !== false &&
-            componentRegistry.getOptions(directive.component)?.bubbleChrome !== false;
           let liveBubble: HTMLElement | null = null;
 
           if (needsRebuild) {
-            let componentBubble = renderComponentDirective(directive, {
-              config,
-              message,
-              transform
-            });
+            let componentBubble: HTMLElement | null = null;
+            if (previousLifetime && !rendererChanged && previousLifetime.handle.update) {
+              previousLifetime.context.message = message;
+              previousLifetime.context.config = config;
+              try {
+                previousLifetime.handle.update(directive.props, previousLifetime.context);
+                componentBubble = previousLifetime.handle.element;
+              } catch (error) {
+                console.error("[AgentWidget] Component update failed:", error);
+                disposeComponentRender(message.id);
+              }
+            } else {
+              disposeComponentRender(message.id);
+              const lifetime = new AbortController();
+              const context: AgentWidgetComponentRenderContext = {
+                config,
+                message,
+                signal: lifetime.signal,
+                updateProps: (props) => {
+                  // A renderer may write while it is being mounted or updated.
+                  // Queue until hydration has completed, and reject retired writes.
+                  queueMicrotask(() => {
+                    if (!lifetime.signal.aborted) sessionRef.current?.updateComponentProps(message.id, props);
+                  });
+                },
+              };
+              const result = renderComponentDirective(directive, {
+                config,
+                message,
+                transform,
+                signal: lifetime.signal,
+                onPropsUpdate: context.updateProps,
+                context,
+              });
+              if (result) {
+                const handle = "element" in result ? result : { element: result };
+                componentBubble = handle.element;
+                componentLifetimes.set(message.id, {
+                  renderer, component: directive.component, controller: lifetime, handle, context,
+                });
+              } else lifetime.abort();
+            }
             // Reuse a mounted inline artifact block instead of the fresh
             // render: replacing it would cut the collapse-to-card animation
             // short and reload live file-preview iframes.
@@ -7039,14 +7190,14 @@ export const createAgentExperience = (
           // mounted from a previous pass), use the stub-and-hydrate path.
           // Otherwise fall through to the standard render path so the message
           // text is at least visible.
-          if (liveBubble || lastFp != null) {
+          if (liveBubble || componentLifetimes.has(message.id)) {
             const stub = createMessageRow(message.id, message.role);
             stub.setAttribute("data-component-directive-stub", "true");
             stub.setAttribute("data-preserve-runtime", "true");
             tempContainer.appendChild(stub);
             componentDirectiveHydrate.push({
               messageId: message.id,
-              fingerprint,
+              fingerprint: directiveFingerprint,
               bubble: liveBubble
             });
             return;
@@ -7257,6 +7408,10 @@ export const createAgentExperience = (
     }
 
     activityLifecycle.prune(activityIds);
+
+    for (const id of componentLifetimes.keys()) {
+      if (!activeMessageIds.has(id)) disposeComponentRender(id);
+    }
 
     // Abort removed renderers before the morph detaches their live elements.
     for (const id of approvalRenderControllers.keys()) {
@@ -9047,6 +9202,7 @@ export const createAgentExperience = (
     voiceState.lastUserMessageWasVoice = Boolean(lastUserMessage?.viaVoice);
     persistMessages(messages);
     syncComposerBarPeek();
+    eventBus.emit("messages:changed", messages);
   };
 
   const flushPendingStreamingText = () => {
@@ -9099,6 +9255,11 @@ export const createAgentExperience = (
   };
 
   session = new AgentWidgetSession(config, {
+    onRunStarted: (event) => eventBus.emit("run:started", event),
+    onRunFinished(event) {
+      flushPendingStreamingText();
+      eventBus.emit("run:finished", event);
+    },
     onMessagesChanged(messages) {
       handleMessagesChanged(messages);
     },
@@ -12508,6 +12669,7 @@ export const createAgentExperience = (
     state: "idle" | "recording" | "processing" | "speaking"
   ): void {
     micButton?.setAttribute("data-state", state);
+    footer?.setAttribute("data-persona-voice-state", state);
     if (state === "recording") startVoiceLevelLoop();
     else stopVoiceLevelLoop();
   }
@@ -13512,7 +13674,7 @@ export const createAgentExperience = (
 
       // Dispatch custom event for external handlers (e.g., localStorage clearing in examples)
       const clearEvent = new CustomEvent("persona:clear-chat", {
-        detail: { timestamp: new Date().toISOString() }
+        detail: { instanceId, timestamp: new Date().toISOString() }
       });
       window.dispatchEvent(clearEvent);
 
@@ -13629,6 +13791,7 @@ export const createAgentExperience = (
     if (composerRebuilding) return;
     composerRebuilding = true;
     try {
+      slots.detach(["footer-top", "footer-bottom", "composer-start", "composer-end", "composer-before-send"]);
       // 1. Snapshot text/focus/state.
       const previousValue = textarea?.value ?? "";
       const activeDoc = footer.ownerDocument ?? document;
@@ -13689,6 +13852,8 @@ export const createAgentExperience = (
       composerSuggestionsManager.destroy();
       composerSuggestionsManager = createSuggestions(suggestions);
       if (managerIndex >= 0) suggestionManagers[managerIndex] = composerSuggestionsManager;
+
+      slots.remount();
 
       // 7. Restore focus and synchronize state.
       if (textarea) textarea.value = previousValue;
@@ -13871,6 +14036,7 @@ export const createAgentExperience = (
   }
 
   const controller: Controller = {
+    get instanceId() { return instanceId; },
     update(nextConfig: AgentWidgetConfigPatch) {
       const previousDefaultsVersion = config.future?.v5Defaults === true;
       const previousToolCallConfig = config.toolCall;
@@ -15228,6 +15394,8 @@ export const createAgentExperience = (
       // Last: this pass rebuilds the header and rewrites header/footer
       // visibility, any of which would expose an open panel host's chrome.
       reapplyHistoryHostChrome();
+      warnInertSlots(config.layout?.slots ?? {});
+      slots.update();
     },
     open() {
       if (!isPanelToggleable()) return;
@@ -15282,7 +15450,7 @@ export const createAgentExperience = (
 
       // Dispatch custom event for external handlers (e.g., localStorage clearing in examples)
       const clearEvent = new CustomEvent("persona:clear-chat", {
-        detail: { timestamp: new Date().toISOString() }
+        detail: { instanceId, timestamp: new Date().toISOString() }
       });
       window.dispatchEvent(clearEvent);
 
@@ -15346,6 +15514,9 @@ export const createAgentExperience = (
     },
     getComposerState(): Readonly<ComposerState> {
       return composerStore.getState();
+    },
+    setComposerModes(ids: readonly string[]): void {
+      setActiveComposerModes(selectComposerModes(ids, composerModes(), config.composer?.modeGroups));
     },
     setQuote(quote: ComposerQuote): void {
       const text = quote?.text?.trim();
@@ -15461,6 +15632,12 @@ export const createAgentExperience = (
         setOpenState(true, "system");
       }
       return session.injectComponentDirective(options);
+    },
+    updateComponentProps(messageId, props) {
+      return session.updateComponentProps(messageId, props);
+    },
+    removeComponentMessage(messageId) {
+      return session.removeComponentMessage(messageId);
     },
     /** @deprecated Use injectMessage() instead */
     injectTestMessage(event: AgentWidgetEvent) {
@@ -15770,6 +15947,8 @@ export const createAgentExperience = (
       return session.submitNPSFeedback(rating, comment);
     },
     destroy() {
+      slots.destroy();
+      mount.removeEventListener("click", routeLinkClick);
       // Commit the latest coalesced transcript while the live DOM and storage
       // pipeline still exist, then let the normal teardown cancel any work
       // scheduled by that final apply.
@@ -15783,6 +15962,7 @@ export const createAgentExperience = (
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
       destroyCallbacks.forEach((cb) => cb());
+      eventBus.dispose();
       wrapper.remove();
       pillRoot?.remove();
       launcherSurfaceInstance?.destroy();
@@ -15822,7 +16002,7 @@ export const createAgentExperience = (
   // INSTANCE-SCOPED WINDOW EVENTS FOR PROGRAMMATIC CONTROL
   // ============================================================================
   if (typeof window !== "undefined") {
-    const instanceId = mount.getAttribute("data-persona-instance") || mount.id || "persona-" + Math.random().toString(36).slice(2, 8);
+
 
     const handleFocusInput = (e: Event) => {
       const detail = (e as CustomEvent).detail;
@@ -15996,7 +16176,10 @@ export const createAgentExperience = (
         };
 
         // Listen for clear chat event
-        const handleClearChat = () => clearPersistState();
+        const handleClearChat = (event: Event) => {
+          const detail = (event as CustomEvent).detail;
+          if (detail?.instanceId === instanceId) clearPersistState();
+        };
         window.addEventListener('persona:clear-chat', handleClearChat);
 
         // Clean up listener on destroy

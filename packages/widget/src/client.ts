@@ -4104,7 +4104,7 @@ export class AgentWidgetClient {
           // session uses it to distinguish the real end-of-turn from the plain
           // `idle` the dispatch wrappers emit in their `finally` when a durable
           // connection drops mid-stream (durable-reconnect drop detection).
-          onEvent({ type: "status", status: "idle", terminal: true });
+          onEvent({ type: "status", status: payload.success === false ? "error" : "idle", terminal: true });
         } else if (payload.type === "execution_error") {
           // Terminal failure. The non-terminal `error` is handled
           // separately (recoverable → warn).

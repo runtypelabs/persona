@@ -461,6 +461,18 @@ describe("composer action renderer accessibility", () => {
     expect(el.classList.contains("persona-composer-action-button")).toBe(true);
   });
 
+  it("sizes iconless label controls from their text instead of an icon box", () => {
+    const harness = mountRenderer({
+      configActions: [button({ id: "text", label: "Detailed reply" })],
+      getButtonSize: () => "32px",
+    });
+    const el = actionButton(harness, "text");
+    expect(el.classList.contains("persona-composer-action-button--text")).toBe(true);
+    expect(el.style.width).toBe("");
+    expect(el.style.minWidth).toBe("");
+    expect(el.textContent).toBe("Detailed reply");
+  });
+
   it("renders shortLabel as visible text while label stays the accessible name", () => {
     const harness = mountRenderer({
       configActions: [
@@ -541,6 +553,33 @@ describe("composer action renderer control sizing", () => {
     expect(el.style.height).toBe("32px");
     expect(el.style.minWidth).toBe("32px");
     expect(el.style.minHeight).toBe("32px");
+  });
+});
+
+describe("composer voice icon motion", () => {
+  it.each([false, true])("supports opt-in motion and live removal (pill: %s)", (pill) => {
+    const action = { id: "voice", placement: "end" as const, label: "Start voice", onSelect: () => {}, iconName: "voice-bars", shortLabel: "Voice", trailingIconName: "chevron-down" };
+    const harness = mountRenderer({ pill, configActions: [action] });
+    expect(actionButton(harness, "voice").querySelectorAll("svg:first-child > path")).toHaveLength(5);
+    expect(actionButton(harness, "voice").querySelector(".persona-voice-bars--animated")).toBeNull();
+
+    harness.live.configActions = [{ ...action, iconAnimation: "voice" }];
+    harness.renderer.resolve();
+    const icons = actionButton(harness, "voice").querySelectorAll("svg");
+    expect(icons[0].classList.contains("persona-voice-bars--animated")).toBe(true);
+    expect(icons[0].getAttribute("aria-hidden")).toBe("true");
+    expect(icons[1].classList.contains("persona-voice-bars--animated")).toBe(false);
+
+    harness.live.configActions = [action];
+    harness.renderer.resolve();
+    expect(actionButton(harness, "voice").querySelector(".persona-voice-bars--animated")).toBeNull();
+    harness.renderer.destroy();
+  });
+
+  it("does not animate unrelated icon geometry", () => {
+    const harness = mountRenderer({ configActions: [button({ id: "mic", iconName: "mic", iconAnimation: "voice" })] });
+    expect(actionButton(harness, "mic").querySelector(".persona-voice-bars--animated")).toBeNull();
+    harness.renderer.destroy();
   });
 });
 

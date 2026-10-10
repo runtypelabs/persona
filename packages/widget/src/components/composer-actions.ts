@@ -53,8 +53,11 @@ import {
 } from "./composer-parts";
 import {
   createComposerOverflowMenu,
+  resolveMenuFocusTarget,
   type ComposerOverflowMenu,
 } from "./composer-overflow-menu";
+import { COMPOSER_MIN_EDITOR_WIDTH } from "../utils/composer-fit";
+import { measureComposerActionWidth, selectComposerFitOverflow } from "../utils/composer-overflow-fit";
 
 /** Public order anchors. See the module docblock. */
 export const COMPOSER_ACTION_ORDER = {
@@ -431,6 +434,7 @@ export function createComposerActionRenderer(
   const entries = new Map<string, Entry>();
   let order: ResolvedComposerAction[] = [];
   let destroyed = false;
+  let activatedMenuActionId: string | null = null;
 
   /** Explicit override, or undefined when the control-size token owns the box. */
   const buttonSize = (): string | undefined => options.getButtonSize?.();
@@ -499,7 +503,7 @@ export function createComposerActionRenderer(
     // Text buttons size from their padding; icon-only buttons are a fixed box,
     // matching the attachment/mic controls. The box itself comes from
     // `--persona-composer-control-size`; only an explicit override is inline.
-    const hasText = Boolean(action.shortLabel);
+    const hasText = Boolean(action.shortLabel) || !action.iconName;
     button.className = cx(
       "persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer persona-composer-action-button",
       COMPOSER_CONTROL_CLASS,
@@ -524,13 +528,23 @@ export function createComposerActionRenderer(
         "currentColor",
         1.5
       );
-      if (icon) button.appendChild(icon);
+      if (icon) {
+        if (action.iconName === "voice-bars" && action.iconAnimation === "voice") {
+          icon.classList.add("persona-voice-bars--animated");
+        }
+        button.appendChild(icon);
+      }
     }
     if (hasText) {
       const text = createElement("span", "persona-composer-action-button__label");
-      text.textContent = action.shortLabel as string;
+      text.textContent = action.shortLabel ?? action.label;
       button.appendChild(text);
-    } else if (!button.firstChild) {
+    }
+    if (action.trailingIconName && hasText) {
+      const trailing = renderLucideIcon(action.trailingIconName, COMPOSER_CONTROL_ICON_FALLBACK_PX, "currentColor", 1.5);
+      if (trailing) button.appendChild(trailing);
+    }
+    if (!button.firstChild) {
       // No icon and no visible text: fall back to the accessible name so the
       // control is never an empty box.
       button.textContent = action.label;
@@ -585,7 +599,10 @@ export function createComposerActionRenderer(
       if (entry.busy || button.disabled) return;
       const current = entry.resolved.action as ComposerButtonAction;
       // Menu semantics: activating a row closes the menu and returns focus.
-      if (entry.mode === "menu") overflowMenu?.close(true);
+      if (entry.mode === "menu") {
+        activatedMenuActionId = entry.resolved.id;
+        overflowMenu?.close(true);
+      }
       let result: void | Promise<void>;
       try {
         result = current.onSelect(options.actionContext, event);
@@ -690,21 +707,16 @@ export function createComposerActionRenderer(
 
   /**
    * Place managed elements around the built-in placeholders. Placeholders are
-   * never moved: each managed element goes before the nearest FOLLOWING
-   * placeholder still parented in the cluster, or at the end when there is
-   * none. Repeated inserts before the same anchor preserve list order.
+   * never moved. A reverse pass uses the following entry as an anchor and
+   * leaves already ordered nodes attached, preserving keyboard focus.
    */
   const place = (cluster: HTMLElement, visible: Entry[]): void => {
-    for (let i = 0; i < visible.length; i++) {
+    let anchor: HTMLElement | null = null;
+    for (let i = visible.length - 1; i >= 0; i--) {
       const entry = visible[i];
-      if (!entry.managed) continue;
-      let anchor: HTMLElement | null = null;
-      for (let j = i + 1; j < visible.length; j++) {
-        const next = visible[j];
-        if (!next.managed && next.element.parentElement === cluster) {
-          anchor = next.element;
-          break;
-        }
+      if (!entry.managed) {
+        if (entry.element.parentElement === cluster) anchor = entry.element;
+        continue;
       }
       // Re-inserting a node that is already in place still detaches it, which
       // blurs anything focused inside it (the model picker restores focus to
@@ -719,6 +731,7 @@ export function createComposerActionRenderer(
       } else if (cluster.lastChild !== entry.element) {
         cluster.appendChild(entry.element);
       }
+      anchor = entry.element;
     }
   };
 
@@ -755,6 +768,28 @@ export function createComposerActionRenderer(
   let resizeObserver: ResizeObserver | null = null;
   /** Latest footer content-box width; 0 while the box is not laid out. */
   let footerWidth = 0;
+  let fitObserver: MutationObserver | null = null;
+  let fitFrame: number | null = null;
+  let fitForm: HTMLElement | null = null;
+  let fontEpoch = 0;
+  let fitFolded = new Set<string>();
+  const barWidths = new Map<string, { key: string; width: number }>();
+  const fontChanged = () => { fontEpoch += 1; scheduleFit(); };
+  const scheduleFit = () => {
+    if (destroyed || fitFrame !== null || !observedFooter) return;
+    const view = observedFooter.ownerDocument.defaultView;
+    if (!view) return;
+    fitFrame = view.requestAnimationFrame(() => { fitFrame = null; sync(); });
+  };
+  const disconnectFit = () => {
+    if (fitFrame !== null) observedFooter?.ownerDocument.defaultView?.cancelAnimationFrame(fitFrame);
+    fitFrame = null;
+    fitObserver?.disconnect();
+    fitObserver = null;
+    observedFooter?.ownerDocument.defaultView?.removeEventListener("resize", scheduleFit);
+    observedFooter?.ownerDocument.fonts?.removeEventListener("loadingdone", fontChanged);
+    fitForm = null;
+  };
 
   const overflowConfig = (): ComposerActionOverflowConfig | undefined => {
     const value = options.getOverflow?.();
@@ -774,13 +809,35 @@ export function createComposerActionRenderer(
   };
 
   /** Observe the footer so `collapseAutoActionsBelow` tracks live resizes. */
-  const observeFooter = (footer: HTMLElement): void => {
-    if (observedFooter === footer) return;
+  const observeFooter = (bindings: ComposerSurfaceBindings, fit: boolean): void => {
+    const footer = bindings.footer;
+    if (observedFooter === footer && (fit ? fitForm === bindings.form : fitForm === null)) return;
+    disconnectFit();
     resizeObserver?.disconnect();
     observedFooter = footer;
     footerWidth = measureFooterContentWidth(footer);
+    if (fit) {
+      fitForm = bindings.form;
+      const view = footer.ownerDocument.defaultView;
+      view?.addEventListener("resize", scheduleFit);
+      footer.ownerDocument.fonts?.addEventListener("loadingdone", fontChanged);
+      if (view?.MutationObserver) {
+        fitObserver = new view.MutationObserver((records) => {
+          if (records.some((record) => {
+            if (overflowMenu?.trigger.contains(record.target)) return false;
+            if (record.target === bindings.input && record.type === "attributes") return false;
+            const changed = [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)];
+            if (changed.length && changed.every((node) => node instanceof view.HTMLElement && node.hasAttribute("data-persona-composer-measure"))) return false;
+            return true;
+          })) scheduleFit();
+        });
+        fitObserver.observe(footer, { subtree: true, childList: true, characterData: true,
+          attributes: true, attributeFilter: ["class", "style", "hidden", "data-persona-composer-layout", "data-persona-composer-compact"] });
+      }
+    }
     if (typeof ResizeObserver === "undefined") return;
     resizeObserver = new ResizeObserver((observed) => {
+      if (fit) { scheduleFit(); return; }
       const last = observed[observed.length - 1];
       const width =
         last?.contentRect?.width ?? measureFooterContentWidth(footer);
@@ -789,6 +846,11 @@ export function createComposerActionRenderer(
       sync();
     });
     resizeObserver.observe(footer);
+    if (fit) {
+      resizeObserver.observe(bindings.form);
+      resizeObserver.observe(bindings.actionsStart);
+      resizeObserver.observe(bindings.actionsEnd);
+    }
   };
 
   /** True while `auto` actions should fold. Unmeasured footers never fold. */
@@ -857,20 +919,27 @@ export function createComposerActionRenderer(
   };
 
   /**
-   * Move an entry between the bar and the menu. Registry buttons are rebuilt
-   * (the two surfaces are different elements); built-ins and custom controls
-   * keep their live element and are wrapped in a `role="none"` slot inside the
-   * menu, so their internal state survives the move.
+   * Move an entry between the bar and the menu. The live button/control stays
+   * alive; only its wrapper and appearance change, preserving async state.
    */
   const applyEntryMode = (entry: Entry, mode: EntryMode): Entry => {
     if (entry.mode === mode) return entry;
     const action = entry.resolved.action;
     if (action && !isCustom(action)) {
-      teardown(entry);
-      entries.delete(entry.resolved.id);
-      const next = createButtonEntry(entry.resolved, mode);
-      entries.set(entry.resolved.id, next);
-      return next;
+      // Keep the button and its async busy state alive across presentation
+      // changes. Only its bar wrapper changes; no onSelect lifecycle restarts.
+      const previous = entry.element;
+      if (mode === "menu") entry.element = entry.button!;
+      else {
+        entry.element = createElement("div", "persona-send-button-wrapper");
+        entry.element.appendChild(entry.button!);
+        entry.button!.removeAttribute(COMPOSER_ACTION_ATTR);
+      }
+      if (previous !== entry.element && previous !== entry.button) previous.remove();
+      entry.element.setAttribute(COMPOSER_ACTION_ATTR, entry.resolved.id);
+      entry.mode = mode;
+      applyButtonAppearance(entry, action);
+      return entry;
     }
     if (mode === "menu") {
       const slot = createNode("div", {
@@ -899,6 +968,7 @@ export function createComposerActionRenderer(
         if ((control as HTMLButtonElement).disabled) return;
         const direct =
           event.target === control || control.contains(event.target as Node);
+        activatedMenuActionId = entry.resolved.id;
         overflowMenu?.close(true);
         // A direct hit reaches the control on its own; a click on the label or
         // the row padding is forwarded. Removing the panel mid-dispatch does not
@@ -938,6 +1008,68 @@ export function createComposerActionRenderer(
     }
   };
 
+  const fitSelection = (bindings: ComposerSurfaceBindings, visible: Entry[], overflow: ComposerActionOverflowConfig): Set<string> => {
+    const available = measureFooterContentWidth(bindings.form);
+    if (!available) return fitFolded;
+    const view = bindings.form.ownerDocument.defaultView!;
+    const style = view.getComputedStyle(bindings.form);
+    const number = (value: string) => Number.parseFloat(value) || 0;
+    const gap = number(style.columnGap);
+    const compact = bindings.footer.getAttribute("data-persona-composer-layout") === "single-row" &&
+      bindings.footer.hasAttribute("data-persona-composer-compact");
+    const key = [style.fontFamily, style.fontSize,
+      style.getPropertyValue("--persona-composer-font-size"),
+      style.getPropertyValue("--persona-composer-control-size"),
+      style.getPropertyValue("--persona-composer-control-icon-size"), buttonSize(), fontEpoch].join("|");
+    const regions = { start: bindings.actionsStart, end: bindings.actionsEnd };
+    const slots = { start: { width: 0, count: 0 }, end: { width: 0, count: 0 } };
+    const gaps = { start: 0, end: 0 };
+    for (const placement of ["start", "end"] as const) {
+      gaps[placement] = number(view.getComputedStyle(regions[placement]).columnGap);
+      for (const child of Array.from(regions[placement].children)) {
+        if (!(child instanceof view.HTMLElement) || child === overflowMenu?.trigger ||
+            visible.some((entry) => entry.element === child)) continue;
+        const width = measureComposerActionWidth(child);
+        if (width) { slots[placement].width += width; slots[placement].count += 1; }
+      }
+    }
+    const items = [];
+    let hasMenu = false;
+    for (const entry of visible) {
+      if (presentationOf(entry, overflow, false) === "menu") { hasMenu = true; continue; }
+      const action = entry.resolved.action;
+      const cacheKey = `${key}|${action && !isCustom(action) ? [action.label, action.shortLabel, action.iconName, action.trailingIconName, action.pressed].join("|") : "custom"}`;
+      let width = entry.mode === "bar" ? measureComposerActionWidth(entry.element) : 0;
+      const cached = barWidths.get(entry.resolved.id);
+      if (!width && cached?.key === cacheKey) width = cached.width;
+      if (!width && action && !isCustom(action)) {
+        // Measure a registry-owned bar button, never a clone or re-render of a
+        // live custom control. Menu row widths are not bar widths.
+        const probe = createButtonEntry(entry.resolved, "bar");
+        probe.element.setAttribute("data-persona-composer-measure", "");
+        probe.element.style.cssText = "position:absolute;visibility:hidden;width:max-content;pointer-events:none";
+        regions[entry.resolved.placement].appendChild(probe.element);
+        width = measureComposerActionWidth(probe.button!);
+        teardown(probe);
+      }
+      // A custom control can have different menu chrome. Its last measured
+      // bar width remains authoritative until it returns to the bar.
+      if (!width && action && isCustom(action)) width = cached?.width ?? 0;
+      if (width) barWidths.set(entry.resolved.id, { key: cacheKey, width });
+      if (!width && view.getComputedStyle(entry.element).display !== "none") return fitFolded;
+      if (!width) continue;
+      items.push({ id: entry.resolved.id, placement: entry.resolved.placement, width,
+        order: entry.resolved.order, sequence: entry.resolved.sequence,
+        auto: entry.resolved.presentation === "auto" });
+    }
+    const controlSize = number(style.getPropertyValue("--persona-composer-control-size")) || 40;
+    const triggerWidth = overflowMenu ? measureComposerActionWidth(overflowMenu.trigger) : 0;
+    return selectComposerFitOverflow({ available: Math.max(1, available - (compact ? COMPOSER_MIN_EDITOR_WIDTH + gap * 2 : 0)),
+      actions: items, slots, gaps, clusterGap: compact ? 0 : gap,
+      triggerWidth: triggerWidth || number(buttonSize() ?? "") || controlSize,
+      hasMenu, previous: fitFolded });
+  };
+
   const sync = (): void => {
     if (destroyed) return;
     const bindings = options.getBindings();
@@ -945,10 +1077,28 @@ export function createComposerActionRenderer(
     const state = options.getState();
     const streaming = state.phase === "streaming";
     const overflow = overflowConfig();
-    if (overflow) observeFooter(bindings.footer);
-    const collapseAuto = overflow
+    const fit = overflow?.collapseAutoActions === "fit";
+    if (overflow) observeFooter(bindings, fit);
+    else { disconnectFit(); resizeObserver?.disconnect(); observedFooter = null; }
+    const collapseAuto = overflow && !fit
       ? shouldCollapseAuto(overflow, bindings.footer)
       : false;
+
+    const root = bindings.footer.getRootNode() as Document | ShadowRoot;
+    const active = root.activeElement;
+    const triggerFocused = active === overflowMenu?.triggerButton;
+    const focused = active ? Array.from(entries.values()).find((entry) => entry.element.contains(active)) : undefined;
+    const previousMode = focused?.mode;
+    if (fit) {
+      const visible = order.map((resolved) => entries.get(resolved.id)).filter((entry): entry is Entry => Boolean(entry))
+        .filter((entry) => !entry.resolved.action || (evaluate(entry.resolved.action.visible, state, true) && matchesComposerActionVisibility(entry.resolved.action.visibility, state)));
+      // New bar nodes must acquire their real inherited styles before measuring.
+      for (const placement of ["start", "end"] as const) {
+        place(placement === "start" ? bindings.actionsStart : bindings.actionsEnd,
+          visible.filter((entry) => entry.mode === "bar" && entry.resolved.placement === placement));
+      }
+      fitFolded = fitSelection(bindings, visible, overflow!);
+    } else fitFolded.clear();
 
     const clusters: Record<ComposerActionPlacement, Entry[]> = {
       start: [],
@@ -973,7 +1123,8 @@ export function createComposerActionRenderer(
         }
       }
       if (!visible) continue;
-      entry = applyEntryMode(entry, presentationOf(entry, overflow, collapseAuto));
+      const mode = presentationOf(entry, overflow, collapseAuto);
+      entry = applyEntryMode(entry, mode === "menu" || (fit && resolved.presentation === "auto" && fitFolded.has(resolved.id)) ? "menu" : "bar");
       if (action) {
         const disabled =
           evaluate(action.disabled, state, false) ||
@@ -1035,6 +1186,18 @@ export function createComposerActionRenderer(
 
     place(bindings.actionsStart, clusters.start);
     place(bindings.actionsEnd, clusters.end);
+    if (focused && active && focused.visible && (!active.isConnected || focused.mode !== previousMode || root.activeElement !== active)) {
+      if (focused.mode === "bar") {
+        overflowMenu?.close();
+        resolveMenuFocusTarget(focused.element).focus();
+      } else if (overflowMenu?.isOpen()) resolveMenuFocusTarget(focused.menuSlot ?? focused.element).focus();
+      else overflowMenu?.triggerButton.focus();
+    } else if (triggerFocused && !menuRows.length) {
+      const restored = activatedMenuActionId ? entries.get(activatedMenuActionId) : undefined;
+      if (restored?.visible && restored.mode === "bar") resolveMenuFocusTarget(restored.element).focus();
+      else bindings.input.focus();
+    }
+    activatedMenuActionId = null;
   };
 
   const resolve = (): void => {
@@ -1046,6 +1209,7 @@ export function createComposerActionRenderer(
       if (nextIds.has(id)) continue;
       teardown(entry);
       entries.delete(id);
+      barWidths.delete(id);
     }
 
     for (const resolved of next) {
@@ -1072,6 +1236,7 @@ export function createComposerActionRenderer(
       if (rebuild) {
         teardown(existing);
         entries.delete(resolved.id);
+        barWidths.delete(resolved.id);
         const entry = createEntry(resolved, existing.mode);
         if (entry) entries.set(resolved.id, entry);
         continue;
@@ -1106,6 +1271,7 @@ export function createComposerActionRenderer(
     destroy: () => {
       if (destroyed) return;
       destroyed = true;
+      disconnectFit();
       resizeObserver?.disconnect();
       resizeObserver = null;
       observedFooter = null;

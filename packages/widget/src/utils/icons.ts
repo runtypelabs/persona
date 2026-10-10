@@ -64,7 +64,7 @@ import {
  * Curated icon registry for `renderLucideIcon` (host-suppliable name strings).
  *
  * Two tiers keep the payload honest:
- *  - CORE (55 names, below): every name the widget itself can emit —
+ *  - CORE (below): every name the widget itself can emit —
  *    config DEFAULTS (bot, send, mic, x, …) plus the chrome names routed
  *    through `utils/buttons` / `utils/dropdown`. Always resolves synchronously.
  *  - EXTRA (63 names, `src/icons-extra.ts`): the config-only tail
@@ -119,6 +119,13 @@ const CORE_LUCIDE_ICONS = {
   "thumbs-up": ThumbsUp,
   "upload": Upload,
   "volume-2": Volume2,
+  "voice-bars": [
+    ["path", { d: "M4 10v4" }],
+    ["path", { d: "M8 6v12" }],
+    ["path", { d: "M12 3v18" }],
+    ["path", { d: "M16 7v10" }],
+    ["path", { d: "M20 10v4" }],
+  ],
   "x": X,
   "at-sign": AtSign,
   "arrow-left": ArrowLeft,

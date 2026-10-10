@@ -10,6 +10,8 @@ import {
   suggestRepliesToolResult,
 } from "./suggest-replies-tool";
 import {
+  AgentWidgetRunStartedEvent,
+  AgentWidgetRunFinishedEvent,
   AgentWidgetConfig,
   AgentWidgetEvent,
   AgentWidgetMessage,
@@ -55,6 +57,7 @@ import type {
 } from "./types";
 import { applyQuoteToContent } from "./utils/composer-quote";
 import { findUserTurnBoundary } from "./utils/resubmit-turn";
+import { extractComponentDirectiveFromMessage } from "./utils/component-middleware";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import type { VisitorStore, VisitorStoreChange } from "./utils/visitor-store";
 import { HistoryProviderError } from "./internal/history-provider";
@@ -158,6 +161,8 @@ function connectionConfigChanged(
 }
 
 type SessionCallbacks = {
+  onRunStarted?: (event: AgentWidgetRunStartedEvent) => void;
+  onRunFinished?: (event: AgentWidgetRunFinishedEvent) => void;
   onMessagesChanged: (messages: AgentWidgetMessage[]) => void;
   onStatusChanged: (status: AgentWidgetSessionStatus) => void;
   onStreamingChanged: (streaming: boolean) => void;
@@ -287,6 +292,43 @@ export class AgentWidgetSession {
   private client: AgentWidgetClient;
   private messages: AgentWidgetMessage[];
   private status: AgentWidgetSessionStatus = "idle";
+  private activeRun: AgentWidgetRunStartedEvent | null = null;
+  private runFailed = false;
+  private runFinishTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private beginRun(): void {
+    this.finishRun("cancel");
+    this.runFailed = false;
+    this.activeRun = { runId: `run-${generateAssistantMessageId()}`, timestamp: Date.now() };
+    this.callbacks.onRunStarted?.({ ...this.activeRun });
+  }
+
+  private finishRun(
+    outcome: AgentWidgetRunFinishedEvent["outcome"],
+    expectedRun = this.activeRun
+  ): void {
+    if (expectedRun !== this.activeRun) return;
+    if (this.runFinishTimer !== null) clearTimeout(this.runFinishTimer);
+    this.runFinishTimer = null;
+    const run = this.activeRun;
+    this.activeRun = null;
+    if (run) this.callbacks.onRunFinished?.({ ...run, timestamp: Date.now(), outcome });
+  }
+
+  private scheduleRunFinish(): void {
+    if (!this.activeRun || this.runFinishTimer !== null) return;
+    const run = this.activeRun;
+    // Let dispatch rejection and batched tool resumes settle before classifying
+    // an idle stream. An assistant message finishing is not a run terminal.
+    this.runFinishTimer = setTimeout(() => {
+      this.runFinishTimer = null;
+      if (this.activeRun !== run) return;
+      if (!this.runFailed && (this.streaming || this.reconnecting ||
+          this.isAwaitPending() || this.webMcpAwaitBatches.size ||
+          this.webMcpResolveControllers.size)) return;
+      this.finishRun(this.runFailed ? "error" : "success");
+    }, 0);
+  }
   private streaming = false;
   private abortController: AbortController | null = null;
   private sequenceCounter = Date.now();
@@ -1138,6 +1180,7 @@ export class AgentWidgetSession {
 
   /** Widget teardown: release the visitor-store subscription. */
   public destroy(): void {
+    this.cancel();
     this.cleanupVoice();
     this.visitorStoreUnsubscribe?.();
     this.visitorStoreUnsubscribe = null;
@@ -1400,9 +1443,10 @@ export class AgentWidgetSession {
    * Welcome injection is deliberately allowed once the transcript is empty.
    */
   private async installFreshConversation(
-    prepared: PreparedHistoryActivation
+    prepared: PreparedHistoryActivation,
+    preserveRun = false
   ): Promise<void> {
-    this.discardConversationState();
+    this.discardConversationState(preserveRun);
     await this.commitActivation(prepared);
     this.activeConversationId = prepared.conversationId || null;
     this.activeConversationRevision = prepared.conversationRevision || null;
@@ -1618,7 +1662,7 @@ export class AgentWidgetSession {
    * Irreversible local + persisted clear. Used by new-conversation, active
    * deletion, 410 recovery, reset, and the continuity wipe.
    */
-  private discardConversationState(): void {
+  private discardConversationState(preserveRun = false): void {
     this.stopSpeaking();
     this.abortController?.abort();
     this.abortController = null;
@@ -1631,9 +1675,10 @@ export class AgentWidgetSession {
     this.config.clearStoredConversationId?.();
     this.historyInternals.setStoredConversationRevision?.(null);
     this.historyInternals.setStoredMessageCursor?.(null);
-    this.setStreaming(false);
+    if (!preserveRun) this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
+    if (!preserveRun) this.finishRun("cancel");
   }
 
   /**
@@ -2062,6 +2107,10 @@ export class AgentWidgetSession {
     userMessageId: string,
     turnOptions?: { composerOptions?: ComposerOptionsPayload; interrupt?: boolean }
   ): Promise<void> {
+    const run = this.activeRun;
+    const emit = (event: AgentWidgetEvent) => {
+      if (this.activeRun === run) this.handleEvent(event);
+    };
     this.recordDispatchedProjections(snapshot);
     try {
       await this.client.dispatch(
@@ -2072,7 +2121,7 @@ export class AgentWidgetSession {
           composerOptions: turnOptions?.composerOptions,
           interrupt: turnOptions?.interrupt
         },
-        this.handleEvent
+        emit
       );
       return;
     } catch (error) {
@@ -2089,7 +2138,7 @@ export class AgentWidgetSession {
           assistantMessageId,
           composerOptions: turnOptions?.composerOptions,
         },
-        this.handleEvent
+        emit
       );
     }
   }
@@ -2109,7 +2158,7 @@ export class AgentWidgetSession {
 
     this.historyOpenEpoch += 1;
     this.projectionFinalizationPromise = null;
-    this.discardConversationState();
+    this.discardConversationState(true);
     this.activeConversationId = null;
     this.activeConversationRevision = null;
     this.historyNextMessageCursor = null;
@@ -2122,7 +2171,7 @@ export class AgentWidgetSession {
         const prepared = await provider.prepareStartNew({
           context: this.historyContext(),
         });
-        await this.installFreshConversation(prepared);
+        await this.installFreshConversation(prepared, true);
       } else {
         this.client.clearClientSession();
         const session = await this.client.initSession();
@@ -2406,6 +2455,27 @@ export class AgentWidgetSession {
     });
   }
 
+  /** Replace props without changing the component message's identity or ordering. */
+  public updateComponentProps(messageId: string, props: Record<string, unknown>): boolean {
+    const message = this.messages.find((candidate) => candidate.id === messageId);
+    const directive = message && extractComponentDirectiveFromMessage(message);
+    if (!message || message.role !== "assistant" || message.variant || !directive) return false;
+    this.upsertMessage({
+      ...message,
+      rawContent: JSON.stringify({ text: message.content, component: directive.component, props }),
+    });
+    return true;
+  }
+
+  /** Remove one component directive, leaving the surrounding conversation intact. */
+  public removeComponentMessage(messageId: string): boolean {
+    const message = this.messages.find((candidate) => candidate.id === messageId);
+    if (!message || message.role !== "assistant" || message.variant || !extractComponentDirectiveFromMessage(message)) return false;
+    this.messages = this.messages.filter((candidate) => candidate.id !== messageId);
+    this.callbacks.onMessagesChanged([...this.messages]);
+    return true;
+  }
+
   /**
    * Resolve the gathered mentions and merge them into the user message's
    * model-visible content. Default path is `llmAppend` → `llmContent` (or a text
@@ -2545,6 +2615,7 @@ export class AgentWidgetSession {
 
     this.stopSpeaking();
     this.abortController?.abort();
+    this.beginRun();
     // A new user turn supersedes any in-flight WebMCP resolve from the prior
     // turn. Tear them down here (they own controllers separate from the shared
     // one) so a lingering resolve can't race the new dispatch or post a stale
@@ -2603,6 +2674,7 @@ export class AgentWidgetSession {
     // prior controller.
     const controller = new AbortController();
     this.abortController = controller;
+    const run = this.activeRun;
 
     // Resolve + merge mentions AFTER the instant echo but BEFORE dispatch, so
     // the model sees the context while the user's bubble already rendered.
@@ -2657,6 +2729,7 @@ export class AgentWidgetSession {
         }
       );
     } catch (error) {
+      if (this.activeRun !== run) return;
       // A durable drop fired the dispatch wrapper's `finally` (plain `idle`)
       // first, which already flipped us into `resuming` and armed reconnect.
       // The subsequent dispatch rejection must NOT paint a dispatch-error
@@ -2673,10 +2746,10 @@ export class AgentWidgetSession {
       if (!isAbortError) {
         this.appendDispatchError(error);
       }
-
       this.setStatus("idle");
       this.setStreaming(false);
       this.abortController = null;
+      this.finishRun(isAbortError ? "cancel" : "error", run);
 
       if (!isAbortError) {
         if (error instanceof Error) {
@@ -2811,6 +2884,7 @@ export class AgentWidgetSession {
 
     this.abortController?.abort();
     this.teardownReconnect();
+    this.beginRun();
 
     const assistantMessageId = generateAssistantMessageId();
     this.activeAssistantMessageId = null;
@@ -2819,6 +2893,7 @@ export class AgentWidgetSession {
 
     const controller = new AbortController();
     this.abortController = controller;
+    const run = this.activeRun;
 
     const snapshot = [...this.messages];
 
@@ -2829,9 +2904,12 @@ export class AgentWidgetSession {
           signal: controller.signal,
           assistantMessageId
         },
-        this.handleEvent
+        (event) => {
+          if (this.activeRun === run) this.handleEvent(event);
+        }
       );
     } catch (error) {
+      if (this.activeRun !== run) return;
       if (this.status === "resuming" || this.reconnecting) return;
       // Check if this is an abort error (a prior in-flight stream was canceled,
       // the user navigated away, etc.). In these cases, don't show fallback or
@@ -2845,6 +2923,7 @@ export class AgentWidgetSession {
       if (!isAbortError) {
         this.appendDispatchError(error);
       }
+      this.finishRun(isAbortError ? "cancel" : "error", run);
       this.setStatus("idle");
       this.setStreaming(false);
       this.abortController = null;
@@ -2883,6 +2962,7 @@ export class AgentWidgetSession {
     }
   ): Promise<void> {
     if (this.streaming && !options?.allowReentry) return;
+    if (!this.activeRun) this.beginRun();
     if (!options?.allowReentry) {
       this.abortController?.abort();
     }
@@ -2911,15 +2991,17 @@ export class AgentWidgetSession {
     }
 
     this.setStreaming(true);
+    const run = this.activeRun;
 
     try {
       await this.client.processStream(
         stream,
-        this.handleEvent,
+        (event) => { if (this.activeRun === run) this.handleEvent(event); },
         options?.assistantMessageId,
         options?.seedContent
       );
     } catch (error) {
+      if (this.activeRun !== run) return;
       // During a durable reconnect a thrown resume stream is just another drop:
       // the reconnect loop owns the retry/backoff. Don't paint an error or tear
       // down, stay in `resuming`.
@@ -4015,6 +4097,7 @@ export class AgentWidgetSession {
     this.stopVoicePlayback();
     this.setStreaming(false);
     this.setStatus("idle");
+    this.finishRun("cancel");
   }
 
   public clearMessages() {
@@ -4040,6 +4123,7 @@ export class AgentWidgetSession {
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
+    this.finishRun("cancel");
   }
 
   public getArtifacts(): PersonaArtifactRecord[] {
@@ -4266,6 +4350,7 @@ export class AgentWidgetSession {
     this.setStreaming(false);
     this.setStatus("idle");
     this.callbacks.onMessagesChanged([...this.messages]);
+    this.finishRun("cancel");
   }
 
   public hydrateArtifacts(
@@ -4614,6 +4699,7 @@ export class AgentWidgetSession {
   public resumeFromHandle(resume: { executionId: string; after: string }): void {
     if (typeof this.config.reconnectStream !== "function") return;
     if (this.reconnecting) return;
+    this.beginRun();
 
     let assistantId = this.reopenTrailingAssistant();
     if (!assistantId) {
@@ -4716,12 +4802,17 @@ export class AgentWidgetSession {
   }
 
   private setStatus(status: AgentWidgetSessionStatus) {
+    if (status === "error") {
+      this.runFailed = true;
+      this.scheduleRunFinish();
+    }
     if (this.status === status) return;
     this.status = status;
     this.callbacks.onStatusChanged(status);
   }
 
   private setStreaming(streaming: boolean) {
+    if (!streaming) this.scheduleRunFinish();
     if (this.streaming === streaming) return;
     const wasStreaming = this.streaming;
     this.streaming = streaming;

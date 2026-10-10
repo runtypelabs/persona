@@ -5,7 +5,8 @@ import { brotliCompressSync, constants } from "node:zlib";
 const budgets = [
   { file: "index.global.js", bytes: 156 * 1024, exclusive: false },
   { file: "launcher.global.js", bytes: 20 * 1024, exclusive: true },
-  { file: "widget.css", bytes: 20 * 1024, exclusive: false },
+  // Responsive composer geometry, bounded mentions, and opt-in voice-bar motion.
+  { file: "widget.css", bytes: 20.65 * 1024, exclusive: false },
 ];
 
 for (const { file, bytes, exclusive } of budgets) {

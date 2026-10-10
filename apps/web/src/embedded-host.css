@@ -1,0 +1,37 @@
+.host-demo { max-width: 1400px; margin: auto; }
+.host-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block: 20px; }
+.host-controls button, .host-controls select { padding: 9px 12px; border: 1px solid #ccc7be; border-radius: 8px; background: white; color: #292721; font: inherit; }
+.host-controls label { display: flex; align-items: center; gap: 8px; }
+.host-controls button { cursor: pointer; }
+.host-controls button:hover { background: #eeeae2; }
+.host-controls button:focus-visible, .host-card button:focus-visible { outline: 2px solid #6444ac; outline-offset: 3px; }
+.host-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.host-pane { width: 100%; min-width: 0; border: 1px solid var(--host-border, #d6d1c7); border-radius: 16px; background: var(--host-surface, #fbf9f4); color: var(--host-text, #292721); overflow: hidden; }
+.host-pane h2 { color: inherit; margin: 0; padding: 16px 20px; border-bottom: 1px solid var(--host-border, #d6d1c7); font-size: 18px; }
+.host-mount { height: 540px; min-height: 0; display: flex; }
+.host-context { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: #ebe6f6; color: #453861; font-size: 13px; overflow-wrap: anywhere; }
+.host-card { padding: 16px; border: 1px solid #d2ccdf; border-radius: 12px; background: #f0ecf7; color: #342b45; }
+.host-card[data-owner="support"] { background: #e7f1ed; border-color: #c7dbd2; color: #234b3b; }
+.host-card p { color: inherit; margin-block: 8px; }
+.host-card button { border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; padding: 6px 10px; cursor: pointer; font: inherit; }
+.host-events { margin-top: 20px; }
+.host-events summary { cursor: pointer; }
+.host-events pre { height: 180px; overflow: auto; padding: 16px; border-radius: 10px; background: #25232b; color: #eae5f2; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 860px) { .host-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.host-composer-slot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 100%; min-width: 0; }
+.host-composer-slot input { box-sizing: border-box; width: 110px; max-width: 100%; min-width: 0; padding: 6px; border: 1px solid #c7bfd6; border-radius: 8px; font: inherit; }
+.host-composer-slot button { max-width: 100%; padding: 6px 10px; border: 1px solid #c7bfd6; border-radius: 8px; background: #eee8f7; color: #453861; font: inherit; cursor: pointer; white-space: normal; }
+.host-composer-slot :focus-visible { outline: 2px solid #6444ac; outline-offset: 2px; }
+
+.host-test-controls { margin-block: 12px; color: #56524b; }
+.host-test-controls summary { cursor: pointer; }
+.host-test-controls .host-controls { margin-block: 12px; }
+#host-status { max-width: 90ch; color: #615c54; font-size: 14px; line-height: 1.5; }
+
+.host-pane[data-scheme="dark"] { --host-surface: #17171a; --host-text: #f4f4f5; --host-border: #35353b; color-scheme: dark; }
+.host-pane[data-scheme="dark"] .host-context { background: #2e283d; color: #e0d4f3; }
+.host-pane[data-scheme="dark"] .host-card { background: #292535; color: #e8dff7; border-color: #4c425e; }
+.host-pane[data-scheme="dark"] .host-card[data-owner="support"] { background: #20322c; color: #d2e9df; border-color: #3b574b; }
+.host-pane[data-scheme="dark"] .host-composer-slot input { background: #242429; color: #f4f4f5; border-color: #45434d; }
+.host-pane[data-scheme="dark"] .host-composer-slot button { background: #332a46; color: #e8ddfa; border-color: #51465f; }

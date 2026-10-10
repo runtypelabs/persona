@@ -1119,7 +1119,8 @@ has no extra content: the draft is empty or a single line, and there are no atta
 mention chips, no active mode chips, no quote, and no pending submission. Audio capture does not change this state;
 dictated text expands the composer only when it becomes multiline or wraps.
 
-Core CSS attaches no layout to it. It is a hook for your own theme:
+The single-row layout uses this state together with available width. It is also
+available as a hook for your own theme:
 
 ```css
 [data-persona-composer-compact] .persona-widget-composer {
@@ -1135,8 +1136,11 @@ even if the text shrinks back.
 
 `composer.layout: "single-row"` lays the idle composer out as one pill: the
 start cluster leads the editor, the end cluster trails it, and the editor
-absorbs the remaining width. The default `"stacked"` keeps the card (editor on
-its own row, actions below).
+absorbs the remaining width. If the action controls leave too little room for
+the editor, the composer puts the editor above the toolbar. This responds to
+the widget's own width, including host resizes and changes to custom slot content.
+V4 defaults to `"stacked"` (editor on its own row, actions below); V5 defaults to
+`"single-row"`.
 
 ```js
 composer: { layout: "single-row" }
@@ -1144,23 +1148,72 @@ composer: { layout: "single-row" }
 
 Configuring it stamps `data-persona-composer-layout="single-row"` on the footer;
 leaving it unset stamps nothing, so host CSS keeps owning the form. The core
-rules are gated on `data-persona-composer-compact`, so a wrapped draft, chips,
+rules require compact content and enough horizontal space, so a wrapped draft, chips,
 attachment previews, a quote, or a pending card fall back to the
 stacked card. Ignored in `launcher.mountMode: "composer-bar"`, whose pill is
 already one row.
 
+V5 uses `components.composer.expandedBorderRadius: "24px"` and
+`expandedPadding: "12px 16px"` for the expanded form, including a narrow host
+that cannot fit a single row. V4 retains its existing geometry. Explicit
+`components.input.borderRadius` and `components.composer.padding` also apply
+when expanded unless the corresponding expanded token is supplied separately.
+The separate composer-bar pill keeps its own geometry.
+
 | Class / attribute | What it is |
 |-------------------|------------|
-| `[data-persona-composer-layout="single-row"]` | Footer marker; combine with `[data-persona-composer-compact]` to extend the row |
+| `[data-persona-composer-layout="single-row"]` | Footer marker for the requested layout |
+| `[data-persona-composer-fit]` | Controls leave enough room for the editor; combine with the compact and layout markers for the single-row state |
+| `[data-persona-composer-expanded]` | Expanded geometry, whether required by content, available width, or stacked layout |
 | `.persona-widget-composer__actions` | Action row; `display: contents` in the one-row state |
 | `.persona-widget-composer__left-actions` / `__right-actions` | The two clusters; `flex: 0 0 auto` so the model picker keeps its intrinsic width |
 
 #### Overflow menu (`composer.actionOverflow`)
 
 With `composer.actionOverflow.enabled`, composer controls whose `presentation`
-is `"overflow"` (always) or `"auto"` (below `collapseAutoActionsBelow`) render
-in a `+` menu instead of the action row. Built-in controls fold in only when
-`includeBuiltIns` names them.
+is `"overflow"` (always) or `"auto"` (according to the configured collapse policy)
+render in a `+` menu instead of the action row. Built-in controls fold in only
+when `includeBuiltIns` names them.
+
+Use `collapseAutoActions: "fit"` to move secondary `"auto"` actions into the menu
+as available space runs out. Later actions in display order fold first. Explicit
+`"bar"` controls stay visible, and the layout reserves room for the menu trigger
+and primary controls. Compact composers also reserve writing space; stacked
+composers can use the full toolbar width. Actions return when enough room is
+available, with a small buffer to avoid flickering at the boundary.
+
+Without this option, `collapseAutoActionsBelow` retains its existing fixed-width
+behavior. Neither policy hides arbitrary host slots or explicitly pinned controls.
+Keep large custom controls in a separate host surface when they cannot fit beside
+the primary actions.
+
+For a composer with several capabilities, a dedicated writing row and a small
+toolbar provide a stable starting point:
+
+```ts
+composer: {
+  layout: "stacked",
+  actionOverflow: {
+    enabled: true,
+    order: 0,
+    includeBuiltIns: ["attachments", "mentions"],
+    collapseAutoActions: "fit",
+  },
+  modes: [{
+    id: "concise", label: "Concise", shortLabel: "Concise",
+    iconName: "sparkles", presentation: "bar",
+  }],
+  actions: [{
+    id: "summarize", label: "Summarize this conversation", shortLabel: "Summarize",
+    iconName: "file-text", presentation: "auto",
+    onSelect: ({ setValue }) => setValue("Summarize the key points."),
+  }],
+}
+```
+
+Attachment and context entries appear only when their features are enabled. Use
+`layout: "single-row"` for the compact alternative. Both layouts share the same
+action registry, mode state, context chips, and keyboard behavior.
 
 | Class / attribute | What it is |
 |-------------------|------------|
@@ -1241,8 +1294,22 @@ restyle instead of hide:
 
 #### Mode chips (`composer.modes`)
 
-Active modes render as removable chips in the composer header, reusing the
-mention chip geometry with their own color tokens:
+V4 active modes render as removable chips in the composer header. V5 shows an
+active mode's `shortLabel` (or `label`) on its pressed toolbar control instead,
+without a duplicate header chip. Click the control again to deselect a toggle
+mode. Single-selection groups retain their existing selection rules.
+
+Set a mode group's `chipVisibility: "auto"` to keep header chips in V5, or
+`chipVisibility: "hidden"` to use the labeled active control in V4. Context
+mention chips are independent: they remain visible and removable regardless of
+the mode group's chip setting. Segmented groups already display their selection
+and do not add header chips.
+
+Modes deliberately placed in overflow keep a header chip under the default V5
+policy. If a group explicitly hides its chips, its active controls stay visible
+in the toolbar so the selected state is still discoverable.
+
+When shown, mode chips reuse mention chip geometry with their own color tokens:
 
 | CSS Variable | Falls back to |
 |--------------|---------------|
@@ -2738,16 +2805,20 @@ layout: {
 remaining after the avatar and gap.
 
 ### Slots (`layout.slots.*`)
-Available: `header-left`, `header-center`, `header-right`, `body-top`, `body-bottom`, `footer-top`, `footer-bottom`
+Available: `header-left`, `header-center`, `header-right`, `body-top`, `body-bottom`, `footer-top`, `footer-bottom`, `transcript-top`, `composer-start`, `composer-end`, `composer-before-send`.
+
+Managed renderers can return `{ element, update?, destroy? }` and receive an
+abort signal. See [Embedded host integration](./docs/EMBEDDED-HOST.md#own-a-layout-slot)
+for placement, width, update, and cleanup behavior.
 
 `messages` and `composer` are deprecated and unsupported. They are still
-accepted by the types but the renderer never runs (a warning is logged when
+accepted by the types but renderer output is ignored (a warning is logged when
 `debug: true`). Use `layout.messages.renderUserMessage` /
 `layout.messages.renderAssistantMessage` for the transcript and the
 `renderComposer` plugin hook for the composer. The names stay in the union
 until the next major release.
 
-Each renderer receives `{ config, defaultContent }`. Returning an element
+Each renderer receives `{ config, defaultContent, slot, signal }`. Returning an element
 replaces the slot's default content; returning `null` leaves it alone.
 `body-top` is the welcome surface: its `defaultContent()` is the intro card
 (title, subtitle, and any starters placed there), so a custom welcome can either
@@ -3106,7 +3177,8 @@ can override placement, variant, overflow, and `maxItems`. Legacy `suggestionChi
 also use these defaults in V5. V4 starter behavior is unchanged.
 
 V5 uses a 22px/500 welcome title, 14px/500 header title, regular (400)
-suggestion labels, and pill-shaped composer input corners. Override welcome and
+suggestion labels, pill-shaped compact composer corners, and 24px expanded
+composer corners. Override welcome and
 header typography through `components.introCard.title` and `components.header.title`.
 Each `components.suggestion.{chip,card,list}.fontWeight` controls that variant's
 label weight. `components.input.borderRadius` controls standard composer corners,
@@ -3348,3 +3420,36 @@ V5's default assistant actions stay visible on the latest answer. Earlier answer
 Artifacts are enabled by default in V5; V4 requires `features.artifacts.enabled: true`. Explicit `false` disables V5 transcript artifact cards, inline previews, and the pane. When enabled, the separate artifact UI module loads at widget initialization; the pane stays hidden until there is an artifact to show. Presentation still defaults to `"panel"`; choose `features.artifacts.display: "collapsed"` for click-to-open cards or `"inline"` for transcript previews. An enabled artifact can still use a custom renderer. Style its transcript card and inline body through `theme.components.artifact.card` and `.inline`; explicit theme values take precedence over the V5 defaults.
 
 The V5 preview includes **Errors & retry**, **Message actions**, and **Artifacts** scenes. Retry uses a local response, and the artifact scene can compare enabled and disabled behavior without a backend.
+
+
+### Independent composer control geometry
+
+`theme.components.composer.gap` controls the editor-to-toolbar row spacing.
+`controlGap` controls horizontal spacing within the action rails (default 8px).
+Compact single-row composers retain `gap` as their horizontal fallback; set
+`controlGap` to tune that distance independently. Segmented tracks use
+`segmented.gap` (default 2px), independently of both values.
+
+Optional control tokens retain the existing appearance when omitted:
+
+| Token path under `components.composer` | Purpose / fallback |
+| --- | --- |
+| `editorMinHeight` | Minimum textarea height; 24px |
+| `editorPadding` | Textarea inset; native 2px |
+| `suggestionsGap` | Space above below-composer starters; 8px |
+| `mode.fontSize`, `mode.fontWeight` | Button mode typography; existing action size / normal |
+| `mode.height`, `mode.paddingInline`, `mode.gap` | Mode height, horizontal padding and icon-label gap; controlSize / 10px / 4px |
+| `mode.borderRadius`, `mode.borderColor`, `mode.activeBorderColor`, `mode.activeBackground` | Mode corner/outline/selected fill; existing ghost appearance |
+| `segmented.fontSize`, `segmented.lineHeight`, `segmented.fontWeight`, `segmented.minHeight` | Segment typography and height floor; composer input scale / normal / 0px |
+| `modelPicker.fontSize`, `modelPicker.fontWeight` | Closed model label; 13px / normal |
+| `modelPicker.height`, `modelPicker.minWidth`, `modelPicker.paddingInline` | Closed model dimensions; controlSize / 0px / `10px 28px` (including chevron gutter) |
+
+`composer.modes[].trailingIconName` and `composer.actions[].trailingIconName`
+add a decorative icon after visible text. A trailing chevron does not change a
+mode's selection behavior or open a menu. Use actions or a custom control for
+specialized menu behavior. Coarse pointers retain minimum touch targets.
+
+Set `suggestions.starters.placement: "below-composer"` to render starters after
+the input form, outside its border. They hide after the first user message;
+follow-ups retain their own placement. `components.introCard.inlineIconSize`
+and `inlineIconGap` tune inline welcome symbols without changing title type.

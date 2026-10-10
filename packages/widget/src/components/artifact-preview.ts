@@ -3,6 +3,7 @@ import { createSpinner } from "../utils/spinner";
 import type {
   AgentWidgetConfig,
   AgentWidgetMessage,
+  AgentWidgetComponentRenderHandle,
   PersonaArtifactRecord,
 } from "../types";
 import { extractFileSource, fileKindOf } from "../utils/artifact-file";
@@ -832,7 +833,19 @@ export function renderArtifactPreviewBody(
     statusKey = key;
   };
 
+  let componentLifetime: { controller: AbortController; handle: AgentWidgetComponentRenderHandle } | undefined;
+  const resetComponent = () => {
+    const previous = componentLifetime;
+    componentLifetime = undefined;
+    previous?.controller.abort();
+    try {
+      previous?.handle.destroy?.();
+    } catch (error) {
+      console.error("[AgentWidget] Artifact component cleanup failed:", error);
+    }
+  };
   const render = (rec: PersonaArtifactRecord) => {
+    resetComponent();
     current = rec;
     const viewMode = ctx.resolveViewMode?.(rec) ?? layout?.viewMode ?? "rendered";
     const fileMeta = rec.artifactType === "markdown" ? rec.file : undefined;
@@ -973,7 +986,10 @@ export function renderArtifactPreviewBody(
     resetSource();
     resetStatus();
     el.replaceChildren();
-    const renderer = rec.component ? registry.get(rec.component) : undefined;
+    const renderer = rec.component
+      ? config.components && Object.prototype.hasOwnProperty.call(config.components, rec.component)
+        ? config.components[rec.component] : registry.get(rec.component)
+      : undefined;
     if (renderer) {
       const stubMessage: AgentWidgetMessage = {
         id: rec.id,
@@ -981,20 +997,25 @@ export function renderArtifactPreviewBody(
         content: "",
         createdAt: new Date().toISOString(),
       };
+      const controller = new AbortController();
       const componentCtx: ComponentContext = {
         message: stubMessage,
         config,
         updateProps: () => {},
+        signal: controller.signal,
       };
       try {
         const node = renderer(rec.props ?? {}, componentCtx);
         if (node) {
-          el.appendChild(node);
+          const handle = "element" in node ? node : { element: node };
+          componentLifetime = { controller, handle };
+          el.appendChild(handle.element);
           return;
         }
       } catch {
         /* fall through to the inspector card */
       }
+      controller.abort();
     }
     el.appendChild(fallbackComponentCard(rec));
   };
@@ -1007,6 +1028,7 @@ export function renderArtifactPreviewBody(
       render(rec);
     },
     destroy() {
+      resetComponent();
       resetFilePreview();
     },
   };

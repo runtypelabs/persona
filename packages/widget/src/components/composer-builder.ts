@@ -1,3 +1,4 @@
+import { focusComposerOnBackgroundClick } from "../utils/composer-focus";
 import { createNode } from "../utils/dom";
 import { AgentWidgetConfig, ContentPart } from "../types";
 import {
@@ -130,17 +131,8 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
 
   // Click anywhere on the composer (other than the action buttons) → focus
   // textarea so the click target feels like the whole input bar.
-  composerForm.addEventListener("click", (e) => {
-    if (
-      e.target !== send.button &&
-      e.target !== send.wrapper &&
-      e.target !== mic?.button &&
-      e.target !== mic?.wrapper &&
-      e.target !== attachment?.button &&
-      e.target !== attachment?.wrapper
-    ) {
-      textarea.focus();
-    }
+  composerForm.addEventListener("click", (event) => {
+    focusComposerOnBackgroundClick(composerForm, event);
   });
 
   if (config?.statusIndicator?.mode === "transient") {

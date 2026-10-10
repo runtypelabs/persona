@@ -1,5 +1,5 @@
-import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
-import { componentRegistry, ComponentContext } from "../components/registry";
+import { AgentWidgetMessage, AgentWidgetConfig, AgentWidgetComponentRenderHandle } from "../types";
+import { resolveComponentRenderer, ComponentContext } from "../components/registry";
 import { ComponentDirective, createComponentStreamParser } from "./component-parser";
 import { createStandardBubble as _createStandardBubble, MessageTransform } from "../components/message-bubble";
 import { loadArtifactsUi, LAZY_ARTIFACT_COMPONENTS } from "../artifacts-ui-loader";
@@ -13,6 +13,8 @@ export interface ComponentMiddlewareOptions {
   message: AgentWidgetMessage;
   transform: MessageTransform;
   onPropsUpdate?: (props: Record<string, unknown>) => void;
+  signal?: AbortSignal;
+  context?: ComponentContext;
 }
 
 /**
@@ -21,11 +23,11 @@ export interface ComponentMiddlewareOptions {
 export function renderComponentDirective(
   directive: ComponentDirective,
   options: ComponentMiddlewareOptions
-): HTMLElement | null {
+): HTMLElement | AgentWidgetComponentRenderHandle | null {
   const { config, message, onPropsUpdate } = options;
 
   // Get component renderer from registry
-  const renderer = componentRegistry.get(directive.component);
+  const renderer = resolveComponentRenderer(config, directive.component);
   if (!renderer) {
     if (
       (LAZY_ARTIFACT_COMPONENTS as readonly string[]).includes(
@@ -50,9 +52,10 @@ export function renderComponentDirective(
   }
 
   // Create component context
-  const context: ComponentContext = {
+  const context: ComponentContext = options.context ?? {
     message,
     config,
+    signal: options.signal ?? new AbortController().signal,
     updateProps: (newProps: Record<string, unknown>) => {
       if (onPropsUpdate) {
         onPropsUpdate(newProps);

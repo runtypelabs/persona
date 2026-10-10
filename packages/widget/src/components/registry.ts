@@ -1,24 +1,14 @@
-import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
+import type { AgentWidgetConfig, AgentWidgetComponentRenderContext, AgentWidgetComponentRenderer } from "../types";
 
 /**
  * Context provided to component renderers
  */
-export interface ComponentContext {
-  message: AgentWidgetMessage;
-  config: AgentWidgetConfig;
-  /**
-   * Update component props during streaming
-   */
-  updateProps: (newProps: Record<string, unknown>) => void;
-}
+export type ComponentContext = AgentWidgetComponentRenderContext;
 
 /**
  * Component renderer function signature
  */
-export type ComponentRenderer = (
-  props: Record<string, unknown>,
-  context: ComponentContext
-) => HTMLElement;
+export type ComponentRenderer = AgentWidgetComponentRenderer;
 
 /**
  * Per-component registration options
@@ -124,3 +114,14 @@ class ComponentRegistry {
  * instead.
  */
 export const componentRegistry = new ComponentRegistry();
+
+/** Widget configuration is instance-owned; explicit global registrations are fallback. */
+export function resolveComponentRenderer(config: AgentWidgetConfig, name: string): ComponentRenderer | undefined {
+  return config.components && Object.prototype.hasOwnProperty.call(config.components, name)
+    ? config.components[name] : componentRegistry.get(name);
+}
+
+export function resolveComponentOptions(config: AgentWidgetConfig, name: string): ComponentRegistrationOptions | undefined {
+  return config.components && Object.prototype.hasOwnProperty.call(config.components, name)
+    ? undefined : componentRegistry.getOptions(name);
+}

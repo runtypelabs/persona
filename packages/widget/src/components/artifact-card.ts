@@ -1,4 +1,4 @@
-import type { ComponentContext, ComponentRenderer } from "./registry";
+import type { ComponentContext } from "./registry";
 import type {
   PersonaArtifactFileMeta,
   PersonaArtifactPresentation,
@@ -158,7 +158,7 @@ function renderDefaultArtifactCard(
  * Supports a custom `renderCard` callback via `config.features.artifacts.renderCard`
  * that can override the default card rendering.
  */
-export const PersonaArtifactCard: ComponentRenderer = (props, context) => {
+export const PersonaArtifactCard = (props: Record<string, unknown>, context: ComponentContext): HTMLElement => {
   // V4 historically showed transcript references even when its pane was off.
   // V5 applies the feature gate before custom renderers or preview work runs.
   if (context?.config?.future?.v5Defaults === true && context.config.features?.artifacts?.enabled !== true) {

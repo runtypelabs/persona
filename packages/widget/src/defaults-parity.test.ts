@@ -95,10 +95,11 @@ const resolveComputedTokens = (value: DefaultsSnapshot): DefaultsSnapshot => ({
         let resolved = declaration;
         while (!seen.has(resolved)) {
           seen.add(resolved);
-          const reference = /^var\((--[\w-]+)(?:,[\s\S]*)?\)$/.exec(resolved);
+          const reference = /^var\((--[\w-]+)(?:,\s*([\s\S]*))?\)$/.exec(resolved);
           const token = reference && value.themeCssVariables[reference[1]];
-          if (typeof token !== "string") break;
-          resolved = token;
+          if (typeof token === "string") resolved = token;
+          else if (reference?.[2] !== undefined) resolved = reference[2];
+          else break;
         }
         return [property, resolved.replace(/([\d.]+)rem\b/g, (_, amount) => `${Number(amount) * 16}px`)];
       })),

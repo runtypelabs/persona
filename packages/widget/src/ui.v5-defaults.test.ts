@@ -102,6 +102,34 @@ describe.each([false, true])("core defaults lifecycle (v5=%s)", (v5Defaults) => 
     expect(mount.style.getPropertyValue("--persona-components-composer-focusRing")).toBe("none");
   });
 
+  it("uses card geometry when expanded and honors shared or expanded theme overrides", async () => {
+    window.scrollTo = vi.fn();
+    const mount = document.createElement("div");
+    document.body.append(mount);
+    const controller = createAgentExperience(mount, {
+      apiUrl: "/dispatch", persistState: false, future: { v5Defaults },
+      launcher: { enabled: false }, composer: { layout: "single-row" },
+    });
+    controllers.push(controller);
+    for (let turn = 0; turn < 6; turn += 1) await Promise.resolve();
+    const footer = mount.querySelector<HTMLElement>(".persona-widget-footer")!;
+    const input = mount.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]")!;
+    input.value = "First line\nSecond line";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    for (let turn = 0; turn < 6; turn += 1) await Promise.resolve();
+    expect(footer.hasAttribute("data-persona-composer-expanded")).toBe(true);
+    expect(mount.style.getPropertyValue("--persona-components-composer-expandedBorderRadius"))
+      .toBe(v5Defaults ? "24px" : "");
+    expect(mount.style.getPropertyValue("--persona-components-composer-expandedPadding"))
+      .toBe(v5Defaults ? "12px 16px" : "");
+    controller.update({ theme: { components: { input: { borderRadius: "6px" }, composer: { padding: "14px" } } } });
+    expect(mount.style.getPropertyValue("--persona-components-composer-expandedBorderRadius")).toBe("6px");
+    expect(mount.style.getPropertyValue("--persona-components-composer-expandedPadding")).toBe("14px");
+    controller.update({ theme: { components: { composer: { expandedBorderRadius: "18px", expandedPadding: "20px" } } } });
+    expect(mount.style.getPropertyValue("--persona-components-composer-expandedBorderRadius")).toBe("18px");
+    expect(mount.style.getPropertyValue("--persona-components-composer-expandedPadding")).toBe("20px");
+  });
+
   it("switches default placement and fade while retaining explicit choices", () => {
     window.scrollTo = vi.fn();
     const mount = document.createElement("div");

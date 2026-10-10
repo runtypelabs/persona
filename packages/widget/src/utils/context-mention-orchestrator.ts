@@ -137,7 +137,9 @@ export function createContextMentionOrchestrator(opts: {
     if (typeof window === "undefined") return;
     try {
       window.dispatchEvent(
-        new CustomEvent(`persona:mention:${event}`, { detail })
+        new CustomEvent(`persona:mention:${event}`, {
+          detail: { ...(detail as Record<string, unknown>), instanceId: opts.textarea.closest<HTMLElement>("[data-persona-instance]")?.dataset.personaInstance },
+        })
       );
     } catch {
       /* CustomEvent unavailable — ignore */

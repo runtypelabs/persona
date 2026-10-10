@@ -1,5 +1,5 @@
 import { createAgentExperience, AgentWidgetController } from "../ui";
-import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetConfigPatch, AgentWidgetInitOptions, AgentWidgetEvent as _AgentWidgetEvent } from "../types";
+import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetConfigPatch, AgentWidgetInitOptions, AgentWidgetControllerEventMap, AgentWidgetEventContext, AgentWidgetEvent as _AgentWidgetEvent } from "../types";
 import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
 import { mergeConfigUpdate } from "../utils/config-merge";
 import { createWidgetHostLayout } from "./host-layout";
@@ -65,10 +65,18 @@ export const initAgentWidget = (
   const target = ensureTarget(options.target);
   const useShadow = options.useShadowDom === true;
   const ownerDocument = target.ownerDocument;
+  const instanceId = target.id || `persona-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   let config = options.config;
   let hostLayout = createWidgetHostLayout(target, config);
   let controller: AgentWidgetController;
   let stateUnsubs: Array<() => void> = [];
+  let destroyed = false;
+  const hostListeners = new Set<{
+    event: keyof AgentWidgetControllerEventMap;
+    handler: unknown;
+    bind: () => void;
+    unsubscribe: () => void;
+  }>();
 
   const createMount = (host: HTMLElement, nextConfig?: _AgentWidgetConfig): HTMLElement => {
     const launcherEnabled = nextConfig?.launcher?.enabled ?? true;
@@ -97,9 +105,7 @@ export const initAgentWidget = (
       mountStyles(host, ownerDocument);
     }
 
-    if (target.id) {
-      mount.setAttribute("data-persona-instance", target.id);
-    }
+    mount.setAttribute("data-persona-instance", instanceId);
 
     return mount;
   };
@@ -122,6 +128,7 @@ export const initAgentWidget = (
     controller = createAgentExperience(mount, config, {
       debugTools: options.debugTools
     });
+    hostListeners.forEach((listener) => listener.bind());
     bindHostState();
   };
 
@@ -144,6 +151,31 @@ export const initAgentWidget = (
   };
 
   const handleBase = {
+    on<K extends keyof AgentWidgetControllerEventMap>(
+      event: K,
+      handler: (payload: AgentWidgetControllerEventMap[K], context: AgentWidgetEventContext) => void
+    ) {
+      if (destroyed) return () => {};
+      const existing = [...hostListeners].find((listener) => listener.event === event && listener.handler === handler);
+      if (existing) return existing.unsubscribe;
+      let unbind = () => {};
+      const listener = {
+        event, handler,
+        bind: () => { unbind = controller.on(event, handler); },
+        unsubscribe: () => { unbind(); hostListeners.delete(listener); },
+      };
+      hostListeners.add(listener);
+      listener.bind();
+      return listener.unsubscribe;
+    },
+    off<K extends keyof AgentWidgetControllerEventMap>(
+      event: K,
+      handler: (payload: AgentWidgetControllerEventMap[K], context: AgentWidgetEventContext) => void
+    ) {
+      for (const listener of hostListeners) {
+        if (listener.event === event && listener.handler === handler) listener.unsubscribe();
+      }
+    },
     update(nextConfig: AgentWidgetConfigPatch) {
       const mergedConfig = mergeConfigUpdate(config ?? ({} as _AgentWidgetConfig), nextConfig);
       const previousDocked = isDockedMountMode(config);
@@ -165,7 +197,10 @@ export const initAgentWidget = (
       syncHostState();
     },
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
       destroyCurrentController();
+      hostListeners.forEach((listener) => listener.unsubscribe());
       hostLayout.destroy();
       const index = activeHandles.indexOf(handle);
       if (index !== -1) activeHandles.splice(index, 1);

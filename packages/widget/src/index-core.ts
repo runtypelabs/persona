@@ -125,6 +125,8 @@ export type {
   AgentWidgetTimestampConfig,
   WidgetLayoutSlot,
   SlotRenderer,
+  SlotRenderResult,
+  AgentWidgetLinkClickContext,
   SlotRenderContext,
   HeaderRenderContext,
   MessageRenderContext,
@@ -183,6 +185,9 @@ export type {
   EventStreamPayloadRenderContext,
   // Controller event map
   AgentWidgetControllerEventMap,
+  AgentWidgetEventContext,
+  AgentWidgetRunStartedEvent,
+  AgentWidgetRunFinishedEvent,
   AgentWidgetReadAloudEvent,
   // Ask-user-question (built-in answer-pill sheet) types
   AskUserQuestionPayload,
@@ -474,6 +479,8 @@ export type {
   AgentWidgetScrollBehaviorFeature,
   AgentWidgetScrollToBottomFeature,
   AgentWidgetComponentRenderer,
+  AgentWidgetComponentRenderContext,
+  AgentWidgetComponentRenderHandle,
 } from "./types";
 
 // Action system types: needed to type the `actionHandlers` / `actionParsers`

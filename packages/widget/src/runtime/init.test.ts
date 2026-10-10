@@ -92,6 +92,36 @@ describe("initAgentWidget windowKey and ready notifications", () => {
     createAgentExperienceMock.mockImplementation((_mount, config) => createMockController(config));
   });
 
+  it("keeps its instance identity through a host layout rebuild", async () => {
+    const { initAgentWidget } = await import("./init");
+    const target = document.createElement("div");
+    document.body.append(target);
+    const handle = initAgentWidget({ target });
+    const before = createAgentExperienceMock.mock.calls[0][0].dataset.personaInstance;
+    handle.update({ launcher: { mountMode: "docked" } });
+    const after = createAgentExperienceMock.mock.calls.at(-1)![0].dataset.personaInstance;
+    expect(before).toBeTruthy();
+    expect(after).toBe(before);
+    handle.destroy();
+  });
+
+  it("retains host subscriptions through rebuild and honors their original unsubscribe", async () => {
+    const { initAgentWidget } = await import("./init");
+    const target = document.createElement("div");
+    document.body.append(target);
+    const handle = initAgentWidget({ target });
+    const listener = vi.fn();
+    const unsubscribe = handle.on("widget:opened", listener);
+    handle.update({ launcher: { mountMode: "docked" } });
+    handle.open();
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe();
+    handle.close();
+    handle.open();
+    expect(listener).toHaveBeenCalledTimes(1);
+    handle.destroy();
+  });
+
   it("makes the mount shrinkable when it fills the host (launcher disabled)", async () => {
     const { initAgentWidget } = await import("./init");
     document.body.innerHTML = `<div id="target"></div>`;
