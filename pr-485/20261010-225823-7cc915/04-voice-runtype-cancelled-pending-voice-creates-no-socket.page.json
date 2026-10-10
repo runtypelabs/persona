@@ -1,0 +1,19 @@
+{
+  "scenario": "Bento lifecycle and encrypted persistence",
+  "requests": [
+    {
+      "url": "https://api.runtype.com/v1/client/agents/agent_01m49zzv5neakr5k3ma3qdpqrd/voice/prewarm",
+      "body": null
+    }
+  ],
+  "events": [
+    {
+      "type": "pending-microphone-reset-result",
+      "detail": {
+        "micCalls": 1,
+        "tracksStopped": 1,
+        "socketOpens": 0
+      }
+    }
+  ]
+}

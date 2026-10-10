@@ -1,0 +1,180 @@
+{
+  "runId": "20261010-225823-7cc915",
+  "entries": [
+    {
+      "feature": "voice-runtype",
+      "label": "Microphone permission pending",
+      "note": null,
+      "files": [
+        "02-voice-runtype-microphone-permission-pending.png",
+        "02-voice-runtype-microphone-permission-pending.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T22:58:47.276Z",
+      "head": "f39e3966b1044804927d891e57f738eee87c24c3",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "New chat after permission resolves",
+      "note": null,
+      "files": [
+        "03-voice-runtype-new-chat-after-permission-resolves.png",
+        "03-voice-runtype-new-chat-after-permission-resolves.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T22:58:47.824Z",
+      "head": "f39e3966b1044804927d891e57f738eee87c24c3",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "Cancelled pending voice creates no socket",
+      "note": "1 request(s) crossed the network boundary, 1 controller event(s)",
+      "files": [
+        "04-voice-runtype-cancelled-pending-voice-creates-no-socket.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T22:58:47.900Z",
+      "head": "f39e3966b1044804927d891e57f738eee87c24c3",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "voice-runtype",
+      "label": "New chat cancels pending microphone permission",
+      "note": null,
+      "files": [
+        "01-voice-runtype-new-chat-cancels-pending-microphone-permission.gif",
+        "01-voice-runtype-new-chat-cancels-pending-microphone-permission.webm",
+        "01-voice-runtype-new-chat-cancels-pending-microphone-permission.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T22:58:48.207Z",
+      "head": "f39e3966b1044804927d891e57f738eee87c24c3",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "Encrypted deck retains no plaintext chat",
+      "note": null,
+      "files": [
+        "06-tool-calls-encrypted-deck-retains-no-plaintext-chat.png",
+        "06-tool-calls-encrypted-deck-retains-no-plaintext-chat.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T22:59:42.918Z",
+      "head": "f39e3966b1044804927d891e57f738eee87c24c3",
+      "diffHash": "7dd109e27ebd"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "Encrypted chat persistence remains empty",
+      "note": "4 request(s) crossed the network boundary, 3 controller event(s)",
+      "files": [
+        "07-tool-calls-encrypted-chat-persistence-remains-empty.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T22:59:43.638Z",
+      "head": "f39e3966b1044804927d891e57f738eee87c24c3",
+      "diffHash": "7dd109e27ebd"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "Encryption removes and blocks plaintext Copilot persistence",
+      "note": null,
+      "files": [
+        "05-tool-calls-encryption-removes-and-blocks-plaintext-copilot-.gif",
+        "05-tool-calls-encryption-removes-and-blocks-plaintext-copilot-.webm",
+        "05-tool-calls-encryption-removes-and-blocks-plaintext-copilot-.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T22:59:45.043Z",
+      "head": "f39e3966b1044804927d891e57f738eee87c24c3",
+      "diffHash": "7dd109e27ebd"
+    },
+    {
+      "feature": "streaming",
+      "label": "New turn works after language rebuild",
+      "note": null,
+      "files": [
+        "09-streaming-new-turn-works-after-language-rebuild.png",
+        "09-streaming-new-turn-works-after-language-rebuild.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T23:00:03.419Z",
+      "head": "a1d493147e9c51eb50447bf0925be96f635a82e3",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Locale rebuild cancels old stream and allows new send",
+      "note": "7 request(s) crossed the network boundary, 5 controller event(s)",
+      "files": [
+        "10-streaming-locale-rebuild-cancels-old-stream-and-allows-new.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T23:00:03.502Z",
+      "head": "a1d493147e9c51eb50447bf0925be96f635a82e3",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Locale rebuild releases an interrupted Copilot turn",
+      "note": null,
+      "files": [
+        "08-streaming-locale-rebuild-releases-an-interrupted-copilot-t.gif",
+        "08-streaming-locale-rebuild-releases-an-interrupted-copilot-t.webm",
+        "08-streaming-locale-rebuild-releases-an-interrupted-copilot-t.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T23:00:04.055Z",
+      "head": "a1d493147e9c51eb50447bf0925be96f635a82e3",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Locale rebuild final settled state",
+      "note": null,
+      "files": [
+        "11-streaming-locale-rebuild-final-settled-state.png",
+        "11-streaming-locale-rebuild-final-settled-state.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T23:00:12.169Z",
+      "head": "a1d493147e9c51eb50447bf0925be96f635a82e3",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Locale rebuild final state and requests",
+      "note": "7 request(s) crossed the network boundary, 6 controller event(s)",
+      "files": [
+        "12-streaming-locale-rebuild-final-state-and-requests.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/bento/",
+      "at": "2026-10-10T23:00:12.254Z",
+      "head": "a1d493147e9c51eb50447bf0925be96f635a82e3",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "voice-runtype",
+      "pass": true,
+      "skipped": false,
+      "note": "Real mic and New chat clicks: one pending getUserMedia request; granting it after reset stopped its track and opened zero sockets. Pending permission was mocked; this is cancellation proof, not an audio round-trip."
+    },
+    {
+      "feature": "tool-calls",
+      "pass": true,
+      "skipped": false,
+      "note": "A real typed chat persisted before encryption. Setting the password through Bento UI immediately removed it; a subsequent real send left the storage key absent. Only HTTP responses were scripted."
+    },
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Changed language during a real hanging chat: old stream aborted, busy pill cleared, and a new typed turn reached the HTTP boundary and rendered its response. Comment interruption and theme-ref preservation also pass automated regressions; not shown in this browser recording."
+    }
+  ]
+}

@@ -1,0 +1,497 @@
+- generic
+  - button "About bento/slides — version, updates, licenses" [ref=e1]
+    - generic
+      - StaticText "bento/slides"
+  - textbox "Deck title — shown in the tab, on {{title}} fields, and as the suggested file name" [ref=e2]: Bento Slides Showcase
+    - StaticText "Bento Slides Showcase"
+  - button "Undo (⌘Z)" [ref=e3]
+    - image
+  - button "Redo (⇧⌘Z)" [ref=e4]
+    - image
+  - button "Add a text box — double-click it to edit; **bold**, *italic*, `code` and “- ” bullets format as you type" [ref=e5]
+    - image
+  - button [ref=e17]
+    - image
+  - button "Add an image — or just paste one (⌘V) straight onto the slide" [ref=e6]
+    - image
+  - button "Add video or audio — from a file (embeds it) or a link (stays a URL)" [ref=e18]
+    - image
+  - button "Add a table — edit cells inline; turn it into a live chart from the panel" [ref=e7]
+    - image
+  - button "Add a chart — edit it visually or link it to a table so it updates live" [ref=e8]
+    - image
+  - button "Add a code snippet" [ref=e9]
+    - image
+  - button "Comment (C) — click an element or a spot on the slide" [ref=e10]
+    - image
+  - button "Export PDF (print)" [ref=e11]
+    - image
+  - button "Not sharing yet — click to start a live session" [ref=e19]
+    - image
+  - button "Save — rewrite this file in place (⌘S)" [ref=e12]
+    - image
+  - button "Save as… — copy, new deck, password" [ref=e20]
+  - button "Language" [ref=e21]
+    - image
+  - button "?" [ref=e13]
+    - StaticText "?"
+  - generic
+    - generic [ref=e22] clickable [cursor:pointer]
+      - button "＋" [ref=e69]
+    - group [ref=e23] clickable [cursor:pointer]
+      - StaticText "1"
+      - generic
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - StaticText "BENTO/SLIDES"
+        - image
+        - generic
+          - StaticText "The file"
+          - LineBreak "\n"
+          - StaticText "is the"
+          - LineBreak "\n"
+          - StaticText "software."
+        - generic
+          - StaticText "One HTML file — deck, viewer and editor together."
+          - LineBreak "\n"
+          - StaticText "Open it anywhere. It saves itself."
+        - image
+        - StaticText "→"
+        - StaticText "ADVANCE"
+        - image
+        - StaticText "ESC"
+        - StaticText "EDIT"
+        - image
+        - StaticText "S"
+        - StaticText "SPEAKER VIEW"
+    - generic [ref=e24] clickable [cursor:pointer]
+      - button "＋" [ref=e70]
+    - group [ref=e25] clickable [cursor:pointer]
+      - StaticText "2"
+      - generic
+        - image
+        - image
+        - StaticText "02"
+        - StaticText "ONE FILE"
+        - StaticText "02"
+        - image
+        - StaticText "Everything ships inside."
+        - image
+        - image
+        - image
+        - image
+        - image
+        - generic
+          - StaticText "your deck — JSON in a <script> block"
+        - generic
+          - StaticText "viewer + presenter — morphs, charts, speaker view"
+        - generic
+          - StaticText "the editor itself — press Esc, it’s right there"
+        - generic
+          - StaticText "Self-saving — ⌘S rewrites this very file in place"
+          - LineBreak "\n"
+          - StaticText "No install, no account — a browser is the whole runtime"
+          - LineBreak "\n"
+          - StaticText "Assets embedded — images and fonts ride along as data"
+          - LineBreak "\n"
+          - StaticText "View-source honest — your document is readable JSON"
+        - generic
+          - StaticText "Updates? The file checks a signed manifest at launch — you can turn that off — and rewrites itself."
+    - generic [ref=e26] clickable [cursor:pointer]
+      - button "＋" [ref=e71]
+    - group [ref=e27] clickable [cursor:pointer]
+      - StaticText "3"
+      - generic
+        - image
+        - image
+        - image
+        - image
+        - StaticText "03"
+        - image
+        - StaticText "NO MOVING PARTS"
+        - generic
+          - StaticText "Software with nothing"
+          - LineBreak "\n"
+          - StaticText "to install, break, or expire."
+        - StaticText "1"
+        - StaticText "0"
+        - StaticText "100%"
+        - image
+        - image
+        - image
+        - StaticText "FILE TO SEND"
+        - StaticText "SERVERS REQUIRED"
+        - StaticText "YOURS, FOREVER"
+    - generic [ref=e28] clickable [cursor:pointer]
+      - button "＋" [ref=e72]
+    - group [ref=e29] clickable [cursor:pointer]
+      - StaticText "4"
+      - generic
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - StaticText "THE NATIVE TRANSITION"
+        - StaticText "Morph."
+        - generic
+          - StaticText "Shared ids animate between slides — position, size, color, even gradients."
+          - LineBreak "\n"
+          - StaticText "Press ← then → to replay it."
+    - generic [ref=e30] clickable [cursor:pointer]
+      - button "＋" [ref=e73]
+    - group [ref=e31] clickable [cursor:pointer]
+      - StaticText "5"
+      - generic
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - StaticText "ONE MECHANISM, TWO LANGUAGES"
+        - generic
+          - StaticText "MATHS — plain $…$ in a text box"
+        - generic
+          - StaticText "CODE — 77 languages built in"
+        - MathMLMath
+          - MathMLRow
+        - generic
+          - StaticText "load"
+          - StaticText "("
+          - StaticText "deck"
+          - StaticText ","
+          - StaticText "("
+          - StaticText "slides"
+          - StaticText ")"
+          - StaticText "=>"
+          - StaticText "{"
+          - StaticText "render"
+          - StaticText "("
+          - StaticText "slides"
+          - StaticText ","
+          - StaticText "("
+          - StaticText "frame"
+          - StaticText ")"
+          - StaticText "=>"
+          - StaticText "{"
+          - StaticText "present"
+          - StaticText "("
+          - StaticText "frame"
+          - StaticText ")"
+          - StaticText "})"
+          - StaticText "})"
+          - StaticText "confetti"
+          - StaticText "()"
+        - generic
+          - StaticText "A derivation on the left, two revisions of JavaScript on the right. Press → twice."
+    - generic [ref=e32] clickable [cursor:pointer]
+      - button "＋" [ref=e74]
+    - group [ref=e33] clickable [cursor:pointer]
+      - StaticText "6"
+      - generic
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - StaticText "EVERY TERM KEEPS ITS PLACE"
+        - generic
+          - StaticText "MATHS — plain $…$ in a text box"
+        - generic
+          - StaticText "CODE — 77 languages built in"
+        - MathMLMath
+          - MathMLRow
+        - generic
+          - StaticText "load"
+          - StaticText "("
+          - StaticText "deck"
+          - StaticText ")"
+          - StaticText "."
+          - StaticText "then"
+          - StaticText "("
+          - StaticText "render"
+          - StaticText ")"
+          - StaticText "."
+          - StaticText "then"
+          - StaticText "("
+          - StaticText "present"
+          - StaticText ")"
+          - StaticText "confetti"
+          - StaticText "()"
+        - generic
+          - StaticText "Completing the square, and the pyramid flattening — both travelling at once."
+    - generic [ref=e34] clickable [cursor:pointer]
+      - button "＋" [ref=e75]
+    - group [ref=e35] clickable [cursor:pointer]
+      - StaticText "7"
+      - generic
+        - image
+        - image
+        - image
+        - image
+        - image
+        - image
+        - StaticText "NOTHING HERE REDREW"
+        - generic
+          - StaticText "MATHS — plain $…$ in a text box"
+        - generic
+          - StaticText "CODE — 77 languages built in"
+        - MathMLMath
+          - MathMLRow
+        - generic
+          - StaticText "const"
+          - StaticText "slides"
+          - StaticText "="
+          - StaticText "await"
+          - StaticText "load"
+          - StaticText "("
+          - StaticText "deck"
+          - StaticText ")"
+          - StaticText "const"
+          - StaticText "frame"
+          - StaticText "="
+          - StaticText "await"
+          - StaticText "render"
+          - StaticText "("
+          - StaticText "slides"
+          - StaticText ")"
+          - StaticText "present"
+          - StaticText "("
+          - StaticText "frame"
+          - StaticText ")"
+          - StaticText "confetti"
+          - StaticText "()"
+        - generic
+          - StaticText "Same a, b, c. Same load, render, present. The diff is the animation."
+    - generic [ref=e36] clickable [cursor:pointer]
+      - button "＋" [ref=e76]
+    - group [ref=e37] clickable [cursor:pointer]
+      - StaticText "8"
+      - generic
+        - image
+        - StaticText "LIVE DATA"
+        - StaticText "08"
+        - image
+        - StaticText "Charts with a pulse."
+        - image
+        - SvgRoot
+          - StaticText "0"
+          - StaticText "20"
+          - StaticText "40"
+          - StaticText "60"
+          - StaticText "80"
+          - StaticText "100"
+          - StaticText "Mon"
+          - StaticText "Tue"
+          - StaticText "Wed"
+          - StaticText "Thu"
+          - StaticText "Fri"
+          - StaticText "Views"
+          - StaticText "Edits"
+        - image
+        - image
+        - generic
+          - StaticText "Hover the bars — tooltips are live."
+          - LineBreak "\n"
+          - LineBreak "\n"
+          - StaticText "Scroll or pinch inside the chart to zoom the data."
+        - image
+        - StaticText "See the split →"
+        - image
+    - group [ref=e38] clickable [cursor:pointer]
+      - StaticText "pie split"
+      - generic
+        - image
+        - StaticText "LIVE DATA"
+        - StaticText "08"
+        - image
+        - StaticText "Same chart. New shape."
+        - image
+        - SvgRoot
+          - StaticText "Mon 13%"
+          - StaticText "Tue 21.1%"
+          - StaticText "Wed 16.7%"
+          - StaticText "Thu 26.6%"
+          - StaticText "Fri 22.6%"
+          - StaticText "Mon"
+          - StaticText "Tue"
+          - StaticText "Wed"
+          - StaticText "Thu"
+          - StaticText "Fri"
+        - image
+        - image
+        - generic
+          - StaticText "This is a hidden state — arrow keys skip it; only the click gets here."
+          - LineBreak "\n"
+          - LineBreak "\n"
+          - StaticText "The data morphed in place."
+        - image
+        - StaticText "See the spread →"
+        - image
+    - group [ref=e39] clickable [cursor:pointer]
+      - StaticText "scatter"
+      - generic
+        - image
+        - StaticText "LIVE DATA"
+        - StaticText "08"
+        - image
+        - StaticText "And a scatter, in place."
+        - image
+        - SvgRoot
+          - StaticText "0"
+          - StaticText "10"
+          - StaticText "20"
+          - StaticText "30"
+          - StaticText "40"
+          - StaticText "50"
+          - StaticText "60"
+          - StaticText "70"
+          - StaticText "80"
+          - StaticText "Engagement"
+          - StaticText "0"
+          - StaticText "20"
+          - StaticText "40"
+          - StaticText "60"
+          - StaticText "80"
+          - StaticText "100"
+          - StaticText "Owned"
+          - StaticText "Paid"
+        - image
+        - image
+        - generic
+          - StaticText "Same chart element — a third form. Each dot is a campaign: reach across, engagement up."
+        - image
+        - StaticText "↺ Back to bars"
+        - image
+    - generic [ref=e40] clickable [cursor:pointer]
+      - button "＋" [ref=e77]
+    - group [ref=e41] clickable [cursor:pointer]
+      - StaticText "9"
+      - generic
+        - image
+        - StaticText "STRUCTURED DATA"
+        - StaticText "09"
+        - image
+        - StaticText "Facts, lined up."
+        - image
+        - table
+          - row
+            - cell "Quarter" [ref=e109]
+            - cell "Signups" [ref=e110]
+            - cell "Growth" [ref=e111]
+          - row
+            - cell "Q1" [ref=e112]
+            - cell "1,204" [ref=e113]
+            - cell "—" [ref=e114]
+          - row
+            - cell "Q2" [ref=e115]
+            - cell "3,880" [ref=e116]
+            - cell "+222%" [ref=e117]
+          - row
+            - cell "Q3" [ref=e118]
+            - cell "9,140" [ref=e119]
+            - cell "+136%" [ref=e120]
+          - row
+            - cell "Q4" [ref=e121]
+            - cell "21,500" [ref=e122]
+            - cell "+135%" [ref=e123]
+    - generic [ref=e42] clickable [cursor:pointer]
+      - button "＋" [ref=e78]
+    - group [ref=e43] clickable [cursor:pointer]
+      - StaticText "10"
+      - generic
+    - generic [ref=e44] clickable [cursor:pointer]
+      - button "＋" [ref=e79]
+    - group [ref=e45] clickable [cursor:pointer]
+      - StaticText "11"
+      - generic
+    - generic [ref=e46] clickable [cursor:pointer]
+      - button "＋" [ref=e80]
+    - group [ref=e47] clickable [cursor:pointer]
+      - StaticText "12"
+      - generic
+    - group [ref=e48] clickable [cursor:pointer]
+      - StaticText "scene 02"
+      - generic
+    - group [ref=e49] clickable [cursor:pointer]
+      - StaticText "scene 03"
+      - generic
+    - generic [ref=e50] clickable [cursor:pointer]
+      - button "＋" [ref=e81]
+    - group [ref=e51] clickable [cursor:pointer]
+      - StaticText "13"
+      - generic
+    - generic [ref=e52] clickable [cursor:pointer]
+      - button "＋" [ref=e82]
+    - group [ref=e53] clickable [cursor:pointer]
+      - StaticText "14"
+      - generic
+    - generic [ref=e54] clickable [cursor:pointer]
+      - button "＋" [ref=e83]
+    - group [ref=e55] clickable [cursor:pointer]
+      - StaticText "15"
+      - generic
+    - generic [ref=e56] clickable [cursor:pointer]
+      - button "＋" [ref=e84]
+    - button "New slide" [ref=e57]
+      - image
+      - StaticText "New slide"
+  - button "‹" [ref=e58]
+  - generic
+    - generic
+      - generic
+        - button "Slideshow" [ref=e95]
+        - button "More ways to present" [ref=e96]
+      - button "−" [ref=e85]
+      - button "34%" [ref=e86]
+      - button "+" [ref=e87]
+    - generic
+      - generic
+  - button "›" [ref=e59]
+  - button "Design" [ref=e14]
+  - button "✨ Copilot" [ref=e15]
+  - button "New chat" [ref=e125]
+    - StaticText "↺"
+  - generic
+    - heading "Ask Bento Copilot" [level=2, ref=e126]
+    - paragraph
+      - StaticText "I edit this deck live — type, or tap the mic and just talk. @ references a slide, element or comment; / lists commands."
+    - generic
+      - button "What's in this deck?" [ref=e127]
+      - button "Add a closing slide that morphs from this one" [ref=e128]
+      - button "Tighten the copy on the current slide" [ref=e129]
+      - button "Add a chart slide comparing three options" [ref=e130]
+      - form
+        - textbox "Ask the Copilot to build, restyle or align slides…" [ref=e131]
+        - button "Add context — a slide, element or comment" [expanded=false, ref=e132]
+        - button "Start voice recognition" [ref=e133]
+        - button "Send message" [ref=e134]
+- generic
+  - button "Stop" [ref=e16]

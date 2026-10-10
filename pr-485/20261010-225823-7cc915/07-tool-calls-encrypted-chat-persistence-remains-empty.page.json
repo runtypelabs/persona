@@ -1,0 +1,790 @@
+{
+  "scenario": "Bento lifecycle and encrypted persistence",
+  "requests": [
+    {
+      "url": "https://api.runtype.com/v1/client/agents/agent_01m49zzv5neakr5k3ma3qdpqrd/voice/prewarm",
+      "body": null
+    },
+    {
+      "url": "https://api.runtype.com/v1/client/init",
+      "body": {
+        "token": "ct_live_01m49zzv_8cee0746b6f9e5acfceceb1ec0713d87",
+        "flowId": "agent_01m49zzv5neakr5k3ma3qdpqrd",
+        "durableRecovery": true
+      }
+    },
+    {
+      "url": "https://api.runtype.com/v1/client/chat",
+      "body": {
+        "sessionId": "bento-proof-session",
+        "messages": [
+          {
+            "id": "usr_mv2zxzys_hcqs7xba",
+            "role": "user",
+            "content": "Private deck verification phrase 485"
+          }
+        ],
+        "assistantMessageId": "ast_mv2zxzys_5lsmpot8",
+        "context": {
+          "slides_context": "{\"deckTitle\":\"Bento Slides Showcase\",\"slideCount\":15,\"currentSlide\":{\"id\":\"slide-mv2zwq4k-14hg9n\",\"position\":1,\"name\":\"BENTO/SLIDES\"},\"selection\":[],\"presenting\":false}"
+        },
+        "turnId": "turn_mv2zxzz0_q6cfng64",
+        "clientTools": [
+          {
+            "name": "ask_user_question",
+            "description": "Ask the user multiple-choice questions and wait for their answers. Use only when blocked on a decision that is the user's to make: a preference, a choice between valid approaches, or information you cannot infer. Each question offers 2-4 options plus an automatic free-text input. The result maps each question to its answer (an array when multiSelect); a question absent from the result was skipped.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "questions": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 8,
+                  "description": "Questions to ask the user. Prefer a single question.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "question": {
+                        "type": "string",
+                        "description": "The complete question, ending with a question mark."
+                      },
+                      "header": {
+                        "type": "string",
+                        "maxLength": 12,
+                        "description": "Short topic label, e.g. \"Auth method\"."
+                      },
+                      "options": {
+                        "type": "array",
+                        "minItems": 2,
+                        "maxItems": 4,
+                        "description": "2-4 distinct choices. Do NOT add an \"Other\" option: free text is automatic.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "label": {
+                              "type": "string",
+                              "description": "Concise choice text (1-5 words)."
+                            },
+                            "description": {
+                              "type": "string",
+                              "description": "What the option means or implies."
+                            }
+                          },
+                          "required": [
+                            "label"
+                          ],
+                          "additionalProperties": false
+                        }
+                      },
+                      "multiSelect": {
+                        "type": "boolean",
+                        "description": "Allow selecting multiple options. Default false."
+                      },
+                      "allowFreeText": {
+                        "type": "boolean",
+                        "description": "Show a free-text input. Default true."
+                      }
+                    },
+                    "required": [
+                      "question",
+                      "options"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "questions"
+              ],
+              "additionalProperties": false
+            },
+            "origin": "sdk",
+            "annotations": {
+              "readOnlyHint": true
+            }
+          },
+          {
+            "name": "add_comment",
+            "description": "Leave a review comment on a slide. Anchor priority: elementId (on that element) > x/y (a point in slide coordinates) > whole slide. Editor-only metadata (never shown while presenting). Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "required": [
+                "text"
+              ],
+              "properties": {
+                "slideId": {
+                  "type": "string",
+                  "description": "Slide id from get_deck_overview."
+                },
+                "position": {
+                  "type": "number",
+                  "description": "1-based slide position among non-state slides (alternative to slideId). Omit both to target the slide open in the editor."
+                },
+                "elementId": {
+                  "type": "string",
+                  "description": "Anchor the comment to this element."
+                },
+                "x": {
+                  "type": "number",
+                  "description": "Point anchor x (slide coords) when no elementId."
+                },
+                "y": {
+                  "type": "number",
+                  "description": "Point anchor y (slide coords) when no elementId."
+                },
+                "text": {
+                  "type": "string"
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "add_elements",
+            "description": "Add one or more elements to a slide in a single call (build a whole slide at once). Coordinates are in the deck coordinate space (doc.size, default 1280x720 px), origin top-left. Keep ~96px margins (x from 96, right edge ≤ width-96). Call get_deck_overview for the actual size. Each element: type (text|shape|image|chart|table) plus per-type fields — text:{text, fontSize?, color?, align?, bold?}; shape:{shape rect|ellipse|triangle|arrow|line, fill?, stroke?, strokeWidth?, radius?}; image:{src url-or-data-uri}; chart:{preset bar|line|pie|scatter, or option raw-ECharts-JSON, title?}; table:{rows string[][], header?}. Charts inherit the deck palette. Returns the created element ids in order. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "required": [
+                "elements"
+              ],
+              "properties": {
+                "slideId": {
+                  "type": "string",
+                  "description": "Slide id from get_deck_overview."
+                },
+                "position": {
+                  "type": "number",
+                  "description": "1-based slide position among non-state slides (alternative to slideId). Omit both to target the slide open in the editor."
+                },
+                "elements": {
+                  "type": "array",
+                  "minItems": 1,
+                  "description": "Elements to add, painted in order (later ones on top).",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "type"
+                    ],
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "text",
+                          "shape",
+                          "image",
+                          "chart",
+                          "table"
+                        ]
+                      },
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "w": {
+                        "type": "number"
+                      },
+                      "h": {
+                        "type": "number"
+                      },
+                      "text": {
+                        "type": "string"
+                      },
+                      "fontSize": {
+                        "type": "number"
+                      },
+                      "color": {
+                        "type": "string"
+                      },
+                      "align": {
+                        "type": "string",
+                        "enum": [
+                          "left",
+                          "center",
+                          "right"
+                        ]
+                      },
+                      "bold": {
+                        "type": "boolean"
+                      },
+                      "shape": {
+                        "type": "string",
+                        "enum": [
+                          "rect",
+                          "ellipse",
+                          "triangle",
+                          "arrow",
+                          "line"
+                        ]
+                      },
+                      "fill": {
+                        "type": "string"
+                      },
+                      "stroke": {
+                        "type": "string"
+                      },
+                      "strokeWidth": {
+                        "type": "number"
+                      },
+                      "radius": {
+                        "type": "number"
+                      },
+                      "src": {
+                        "type": "string"
+                      },
+                      "preset": {
+                        "type": "string",
+                        "enum": [
+                          "bar",
+                          "line",
+                          "pie",
+                          "scatter"
+                        ]
+                      },
+                      "option": {
+                        "type": "object",
+                        "description": "Raw ECharts-shape option (pure JSON); overrides preset."
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "rows": {
+                        "type": "array",
+                        "items": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      },
+                      "header": {
+                        "type": "boolean"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "add_slide",
+            "description": "Insert a new slide. With a layoutId (from list_layouts) the slide is built from that layout and title/body fill its title/body placeholders. Without one you get a blank slide (a title text box is added if you pass \"title\"). Inserts after the current slide by default, or at the given 1-based position. Returns the new slide id and position. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "position": {
+                  "type": "number",
+                  "description": "1-based position to insert at (among non-state slides); default is after the current slide."
+                },
+                "layoutId": {
+                  "type": "string",
+                  "description": "Layout id from list_layouts."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Title text (fills the title placeholder / becomes a heading text box)."
+                },
+                "body": {
+                  "type": "string",
+                  "description": "Body text (fills the body placeholder). Use \\n for line breaks."
+                },
+                "background": {
+                  "type": "string",
+                  "description": "CSS background color for the slide."
+                },
+                "notes": {
+                  "type": "string",
+                  "description": "Speaker notes."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "align_elements",
+            "description": "Align elements (by id) to an edge/center, and/or space them evenly along an axis. Pass slideId when the ids repeat across slides (the morph idiom) and you don't mean the current slide's copies. relativeTo \"slide\" (default) aligns to the slide bounds; \"selection\" aligns to the elements' shared bounding box (needs 2+). Distribute needs 3+ elements (first and last stay put). Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "required": [
+                "elementIds"
+              ],
+              "properties": {
+                "elementIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "slideId": {
+                  "type": "string",
+                  "description": "Which slide's copies of the ids to align."
+                },
+                "alignment": {
+                  "type": "string",
+                  "enum": [
+                    "left",
+                    "center-h",
+                    "right",
+                    "top",
+                    "center-v",
+                    "bottom"
+                  ]
+                },
+                "distribute": {
+                  "type": "string",
+                  "enum": [
+                    "horizontal",
+                    "vertical"
+                  ]
+                },
+                "relativeTo": {
+                  "type": "string",
+                  "enum": [
+                    "slide",
+                    "selection"
+                  ],
+                  "description": "Default \"slide\"."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "delete_elements",
+            "description": "Permanently remove elements by id. Element ids repeat across slides (the morph idiom): pass slideId to delete from that slide only; without it each id resolves to the current slide's copy, then to a deck-wide unique match, and errors when ambiguous. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "required": [
+                "elementIds"
+              ],
+              "properties": {
+                "elementIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "minItems": 1
+                },
+                "slideId": {
+                  "type": "string",
+                  "description": "Delete the ids from this slide only."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "delete_slide",
+            "description": "Permanently remove a slide, its interactive state variants, and any element links pointing at it. Cannot delete the last remaining slide. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "slideId": {
+                  "type": "string",
+                  "description": "Slide id from get_deck_overview."
+                },
+                "position": {
+                  "type": "number",
+                  "description": "1-based slide position among non-state slides (alternative to slideId). Omit both to target the slide open in the editor."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "duplicate_slide",
+            "description": "Deep-copy a slide right after the original, KEEPING its element ids (that shared identity is what lets the two slides morph into each other across a transition). Mints a fresh slide id and drops any state marker. Returns the new slide id. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "slideId": {
+                  "type": "string",
+                  "description": "Slide id from get_deck_overview."
+                },
+                "position": {
+                  "type": "number",
+                  "description": "1-based slide position among non-state slides (alternative to slideId). Omit both to target the slide open in the editor."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "get_deck_overview",
+            "description": "Read the deck at a glance: title, size, theme, and a per-slide summary (id, position, name, element count, transition, whether it is an interactive state, and a notes preview). Call this FIRST to orient. Token-efficient — no element details; use get_slide for those.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": true,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "get_selection",
+            "description": "Read the elements the user currently has selected on the canvas (same detail shape as get_slide), plus which slide they are on. Use whenever the user says \"this\", \"these\", or refers to something they clicked.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": true,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "get_slide",
+            "description": "Read one slide in full: background, transition, notes, and every element with geometry + per-type essentials. Call before editing a slide's elements. Defaults to the slide open in the editor.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "slideId": {
+                  "type": "string",
+                  "description": "Slide id from get_deck_overview."
+                },
+                "position": {
+                  "type": "number",
+                  "description": "1-based slide position among non-state slides (alternative to slideId). Omit both to target the slide open in the editor."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": true,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "goto_slide",
+            "description": "Open a slide in the editor (navigation only — changes no document data).",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "slideId": {
+                  "type": "string",
+                  "description": "Slide id from get_deck_overview."
+                },
+                "position": {
+                  "type": "number",
+                  "description": "1-based slide position among non-state slides (alternative to slideId). Omit both to target the slide open in the editor."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": true,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "list_comments",
+            "description": "List every review comment thread in the deck with its anchor (element id, a point, or the whole slide), author, text, replies and resolved state. The entry point for \"fix everything people flagged\".",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": true,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "list_layouts",
+            "description": "List the slide layouts add_slide can reference (built-in layouts plus any saved in the deck): id, name, and the element roles each provides (title/subtitle/body/kicker).",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {}
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": true,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "move_slide",
+            "description": "Move a slide to a new 1-based position among the non-state slides. Its interactive state variants travel with it. Returns the resulting slide order. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "required": [
+                "toPosition"
+              ],
+              "properties": {
+                "slideId": {
+                  "type": "string",
+                  "description": "Slide id from get_deck_overview."
+                },
+                "position": {
+                  "type": "number",
+                  "description": "1-based slide position among non-state slides (alternative to slideId). Omit both to target the slide open in the editor."
+                },
+                "toPosition": {
+                  "type": "number",
+                  "description": "1-based target position among non-state slides."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "set_deck_title",
+            "description": "Set the deck title. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "required": [
+                "title"
+              ],
+              "properties": {
+                "title": {
+                  "type": "string"
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "set_slide_props",
+            "description": "Patch provided fields of a slide: name, background color, transition, or speaker notes. transition:\"morph\" tweens elements that share an id/morphId with the PREVIOUS slide (position, size, fill, color). Omitted fields are unchanged. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "slideId": {
+                  "type": "string",
+                  "description": "Slide id from get_deck_overview."
+                },
+                "position": {
+                  "type": "number",
+                  "description": "1-based slide position among non-state slides (alternative to slideId). Omit both to target the slide open in the editor."
+                },
+                "name": {
+                  "type": "string"
+                },
+                "background": {
+                  "type": "string",
+                  "description": "CSS background color."
+                },
+                "transition": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "fade",
+                    "slide",
+                    "zoom",
+                    "morph"
+                  ]
+                },
+                "notes": {
+                  "type": "string"
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "set_theme",
+            "description": "Restyle the deck DEFAULTS (background, text color, accent, font family) used for new elements and theme-derived colors. This does NOT recolor existing elements — they keep their explicit values. Patches only the fields you pass. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "background": {
+                  "type": "string"
+                },
+                "color": {
+                  "type": "string"
+                },
+                "accent": {
+                  "type": "string"
+                },
+                "fontFamily": {
+                  "type": "string"
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "start_presentation",
+            "description": "Enter the slideshow. fromStart=true begins at slide 1, otherwise at the current slide. Fullscreen is requested but browsers may deny it without a direct user gesture — if so it opens filling the tab instead (still a valid show).",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "fromStart": {
+                  "type": "boolean",
+                  "description": "Start from the first slide (default false = current slide)."
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          },
+          {
+            "name": "update_elements",
+            "description": "Merge a partial patch into one or more elements. IMPORTANT: element ids repeat across slides (the morph idiom), so pass slideId per edit whenever you are not targeting the slide open in the editor — a bare elementId resolves to the current slide's copy, then to a deck-wide unique match, and errors when ambiguous. Patch keys: x, y, w, h, rotation, opacity, text (replaces text content), fontSize, fontFamily, fontWeight, color, align, valign, fill, stroke, strokeWidth, radius, shape, src, fit, option (chart), link (slide id or null to clear), morphId (string or null to clear). Omitted keys are unchanged; an unknown key errors. Undoable with ⌘Z.",
+            "parametersSchema": {
+              "type": "object",
+              "required": [
+                "edits"
+              ],
+              "properties": {
+                "edits": {
+                  "type": "array",
+                  "minItems": 1,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "elementId",
+                      "patch"
+                    ],
+                    "properties": {
+                      "elementId": {
+                        "type": "string"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "description": "Which slide's copy of the element to edit — required when the id exists on several slides and none of them is the current slide."
+                      },
+                      "patch": {
+                        "type": "object",
+                        "description": "Partial element properties to merge."
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390",
+            "annotations": {
+              "readOnlyHint": false,
+              "untrustedContentHint": false
+            }
+          }
+        ],
+        "clientToolsFingerprint": "20:1k06emzr3qj.1vegvrijd4w"
+      }
+    },
+    {
+      "url": "https://api.runtype.com/v1/client/chat",
+      "body": {
+        "sessionId": "bento-proof-session",
+        "messages": [
+          {
+            "id": "usr_mv2zxzys_hcqs7xba",
+            "role": "user",
+            "content": "Private deck verification phrase 485"
+          },
+          {
+            "id": "ast_mv2zxzys_5lsmpot8",
+            "role": "assistant",
+            "content": "Recorded private verification note."
+          },
+          {
+            "id": "usr_mv2zybrw_coi1juke",
+            "role": "user",
+            "content": "This message must remain memory only"
+          }
+        ],
+        "assistantMessageId": "ast_mv2zybrw_m7cykbpb",
+        "context": {
+          "slides_context": "{\"deckTitle\":\"Bento Slides Showcase\",\"slideCount\":15,\"currentSlide\":{\"id\":\"slide-mv2zwq4k-14hg9n\",\"position\":1,\"name\":\"BENTO/SLIDES\"},\"selection\":[],\"presenting\":false}"
+        },
+        "turnId": "turn_mv2zybry_57rjb1ze",
+        "clientToolsFingerprint": "20:1k06emzr3qj.1vegvrijd4w"
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "pending-microphone-reset-result",
+      "detail": {
+        "micCalls": 1,
+        "tracksStopped": 1,
+        "socketOpens": 0
+      }
+    },
+    {
+      "type": "encryption-cleared-chat",
+      "detail": {
+        "persistedChat": null
+      }
+    },
+    {
+      "type": "encrypted-chat-save-blocked",
+      "detail": {
+        "persistedChat": null
+      }
+    }
+  ]
+}
