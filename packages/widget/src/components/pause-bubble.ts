@@ -81,7 +81,8 @@ export const createPauseBubble = (
 
   // Once the stream resumes (or the execution completes) the pause has served
   // its purpose; collapse it so it leaves no trace in the transcript.
-  if (!pause || pause.resolved) {
+  // Restored messages have streaming=false and no live stream to settle them.
+  if (!pause || pause.resolved || !message.streaming) {
     bubble.style.display = "none";
     bubble.setAttribute("aria-hidden", "true");
     return bubble;

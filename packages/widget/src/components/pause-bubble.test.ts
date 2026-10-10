@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import { createPauseBubble, resolveDurablePauseLabel } from "./pause-bubble";
+import { createLocalStorageAdapter } from "../utils/storage";
 import type {
   AgentWidgetConfig,
   AgentWidgetDurablePause,
@@ -49,6 +50,19 @@ describe("createPauseBubble", () => {
     );
     expect(bubble.style.display).toBe("none");
     expect(bubble.getAttribute("aria-hidden")).toBe("true");
+  });
+
+  it("does not revive an unresolved pause restored from storage", async () => {
+    const storage = createLocalStorageAdapter("pause-restoration-test");
+    const message = makeMessage({ awaitReason: "crawl_pending" });
+    await storage.save?.({ messages: [message] });
+    const restored = (await storage.load?.())?.messages?.[0];
+    expect(restored?.streaming).toBe(false);
+    const bubble = createPauseBubble(restored!);
+    expect(bubble.style.display).toBe("none");
+    expect(bubble.getAttribute("aria-hidden")).toBe("true");
+    expect(bubble.querySelector(".persona-animate-typing")).toBeNull();
+    await storage.clear?.();
   });
 
   it("honors config.copy.durablePauseLabels overrides (per-reason and default)", () => {
