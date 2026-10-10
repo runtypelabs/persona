@@ -1,0 +1,64 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 12718,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Keep this exact submitted draft",
+            "createdAt": "2026-10-10T22:54:26.458Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 12698,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1791672866457
+      }
+    },
+    {
+      "at": 12714,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mv2zrjiy_4fd3rc81",
+        "role": "user",
+        "content": "Keep this exact submitted draft",
+        "createdAt": "2026-10-10T22:54:26.458Z",
+        "sequence": 1791672853793,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 13961,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1791672866725-42b9135f3eaee8",
+        "role": "assistant",
+        "content": "You said: **Keep this exact submitted draft**. This reply is scripted by the verify fixture.",
+        "createdAt": "2026-10-10T22:54:26.725Z",
+        "streaming": false,
+        "sequence": 1791672866480,
+        "agentMetadata": {
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    }
+  ]
+}

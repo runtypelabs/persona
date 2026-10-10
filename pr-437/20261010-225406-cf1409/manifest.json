@@ -1,0 +1,65 @@
+{
+  "runId": "20261010-225406-cf1409",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "Draft locked before admission",
+      "note": null,
+      "files": [
+        "02-streaming-draft-locked-before-admission.png",
+        "02-streaming-draft-locked-before-admission.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo",
+      "at": "2026-10-10T22:54:14.801Z",
+      "head": "4a2119764a995ffca8470d5be95d24375d642aeb",
+      "diffHash": "24017ebd2754"
+    },
+    {
+      "feature": "streaming",
+      "label": "Captured draft stays locked during admission",
+      "note": null,
+      "files": [
+        "01-streaming-captured-draft-stays-locked-during-admission.gif",
+        "01-streaming-captured-draft-stays-locked-during-admission.webm",
+        "01-streaming-captured-draft-stays-locked-during-admission.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo",
+      "at": "2026-10-10T22:54:28.666Z",
+      "head": "4a2119764a995ffca8470d5be95d24375d642aeb",
+      "diffHash": "24017ebd2754"
+    },
+    {
+      "feature": "streaming",
+      "label": "Admitted draft delivered exactly once",
+      "note": null,
+      "files": [
+        "03-streaming-admitted-draft-delivered-exactly-once.png",
+        "03-streaming-admitted-draft-delivered-exactly-once.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo",
+      "at": "2026-10-10T22:54:29.053Z",
+      "head": "4a2119764a995ffca8470d5be95d24375d642aeb",
+      "diffHash": "24017ebd2754"
+    },
+    {
+      "feature": "streaming",
+      "label": "Admission lock preserves submitted draft",
+      "note": "1 request(s) crossed the network boundary, 3 controller event(s)",
+      "files": [
+        "04-streaming-admission-lock-preserves-submitted-draft.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=echo",
+      "at": "2026-10-10T22:54:29.386Z",
+      "head": "4a2119764a995ffca8470d5be95d24375d642aeb",
+      "diffHash": "24017ebd2754"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Actual controls locked during async send hook; zero requests before admission, original text delivered once, controls unlocked afterwards. History/receipt/cancellation paths covered by regression tests, not this browser proof."
+    }
+  ]
+}
