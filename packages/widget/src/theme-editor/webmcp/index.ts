@@ -7,7 +7,7 @@
  * `registerTool` for each: this module has no polyfill dependency.
  */
 
-export { createThemeEditorTools } from './tools';
+export { createThemeEditorTools, withToolErrorResult } from './tools';
 export { toolResult } from './types';
 export type {
   WebMcpTool,

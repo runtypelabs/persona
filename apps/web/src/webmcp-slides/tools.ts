@@ -84,6 +84,27 @@ const toolResult = (data: unknown, summary?: string): unknown => ({
   structuredContent: data,
 });
 
+/**
+ * Tools signal bad input by throwing actionable messages ("Call
+ * get_deck_overview for valid ids"). The upstream WebMCP runtime reports a
+ * thrown callback only as "Tool execution failed", so hand the model an
+ * isError result carrying the message instead.
+ */
+const reportThrownErrors =
+  (execute: ToolDescriptor["execute"]): ToolDescriptor["execute"] =>
+  async (args) => {
+    try {
+      return await execute(args);
+    } catch (error) {
+      return {
+        isError: true,
+        content: [
+          { type: "text", text: error instanceof Error ? error.message : String(error) },
+        ],
+      };
+    }
+  };
+
 const registerTool = (
   modelContext: RegisterableModelContext,
   tool: ToolDescriptor,
@@ -93,10 +114,13 @@ const registerTool = (
     // The WebMCP spec carries the display title on the descriptor itself, but
     // the current @mcp-b SDK only surfaces annotations.title to consumers
     // (Persona approval bubbles, Chrome DevTools MCP): mirror it there.
-    const descriptor = tool.title
+    const titled = tool.title
       ? { ...tool, annotations: { title: tool.title, ...tool.annotations } }
       : tool;
-    modelContext.registerTool(descriptor, { signal });
+    modelContext.registerTool(
+      { ...titled, execute: reportThrownErrors(tool.execute) },
+      { signal },
+    );
   } catch (error) {
     console.warn(`[Slides] Failed to register ${tool.name}`, error);
   }
