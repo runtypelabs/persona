@@ -1,5 +1,11 @@
 # @runtypelabs/persona-proxy
 
+## 4.28.2
+
+### Patch Changes
+
+- fac63b3: Build with tsdown (Rolldown + Oxc) instead of tsup, and minify `widget.css` with Lightning CSS. Published filenames, exports and type declarations are unchanged; most bundles are a few percent smaller.
+
 ## 4.24.0
 
 ### Patch Changes
