@@ -162,6 +162,27 @@ describe("client-token live input admission", () => {
     expect(second).toMatchObject({ turnId: "proof-retry", submitMode: "steer" });
   });
 
+  it("releases definitely rejected payloads so later deliveries still post", async () => {
+    const fetcher = vi.fn().mockImplementation(async () =>
+      Response.json({ error: "incompatible" }, { status: 409 }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const instance = client();
+    for (let index = 0; index < 33; index++) {
+      const id = `rejected-${index}`;
+      await expect(instance.dispatch({
+        messages: [message(id)],
+        steer: { turnId: id, onAdmission: () => {} },
+      }, () => {})).rejects.toMatchObject({ message: "incompatible", rejected: true });
+    }
+    fetcher.mockResolvedValueOnce(receipt());
+    await instance.dispatch({
+      messages: [message("valid")],
+      steer: { turnId: "valid", onAdmission: () => {} },
+    }, () => {});
+    expect(fetcher).toHaveBeenCalledTimes(34);
+  });
+
   it("a rejected delivery emits no incumbent stream error or idle", async () => {
     vi.stubGlobal(
       "fetch",

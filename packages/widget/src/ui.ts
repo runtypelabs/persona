@@ -7898,14 +7898,18 @@ export const createAgentExperience = (
     sendDisabled: false,
   };
 
-  const isComposerInputDisabled = (): boolean => composerLock.inputDisabled;
+  // Once captured, freeze the draft through async hooks and history admission.
+  // Otherwise the delayed acceptance would consume newer text/files/chips.
+  let composerSubmissionLocked = false;
+  const isComposerInputDisabled = (): boolean =>
+    composerLock.inputDisabled || composerSubmissionLocked;
   const isActiveSessionVoice = (): boolean =>
     usesSessionVoice(config.voiceRecognition?.provider) &&
     !!session && (session.isBargeInActive() ||
       ["listening", "processing", "speaking"].includes(session.getVoiceStatus()));
   /** Any submission path is blocked; stop is not a submission. */
   const isComposerSendBlocked = (): boolean =>
-    composerLock.inputDisabled || composerLock.sendDisabled;
+    isComposerInputDisabled() || composerLock.sendDisabled;
 
   /** inputDisabled's reason wins; a bare `true` falls through to sendDisabled. */
   const composerLockReason = (): string | undefined =>
@@ -7990,11 +7994,13 @@ export const createAgentExperience = (
       sendDisabled: send.disabled,
       sendReason: send.reason,
     };
-    composerStore.setInputDisabled(input.disabled);
+    const locked = input.disabled || composerSubmissionLocked;
+    composerStore.setInputDisabled(locked);
     composerStore.setSendDisabled(send.disabled);
 
     const streaming = composerStore.getState().phase === "streaming";
-    const locked = input.disabled;
+    // Include chip removal, option pickers, and plugin controls in the freeze.
+    footer.inert = composerSubmissionLocked;
     // Ancillary controls also disable while streaming so the user can't race a
     // send against an in-flight stream.
     const blocked = streaming || locked;
@@ -9713,6 +9719,9 @@ export const createAgentExperience = (
       return;
     }
 
+    composerSubmissionLocked = true;
+    applyComposerLock();
+
     // The snapshot: built once, never re-read from the DOM below. Chips are
     // still attached here (they are only detached after acceptance), so their
     // refs are read non-destructively.
@@ -9974,6 +9983,8 @@ export const createAgentExperience = (
       await performSubmit({ resolveInlineCommand: true, ...submitOptions });
     } finally {
       submitInFlight = false;
+      composerSubmissionLocked = false;
+      applyComposerLock();
     }
   };
 
@@ -10001,6 +10012,8 @@ export const createAgentExperience = (
     submitInFlight = true;
     const finish = () => {
       submitInFlight = false;
+      composerSubmissionLocked = false;
+      applyComposerLock();
     };
     try {
       const result = performSubmit({ ...options, overrideText: text });

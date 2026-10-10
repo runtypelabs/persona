@@ -393,13 +393,13 @@ export class AgentWidgetSession {
                 void this.watchInputDelivery(userMessageId, admission, watcher);
                 return;
               }
-              this.steerExecutionId = admission.executionId;
               this.updateInputDelivery(userMessageId, {
                 deliveryId: admission.deliveryId,
                 executionId: admission.executionId,
                 status: admission.status,
               });
               if (admission.kind === "stream") {
+                this.steerExecutionId = admission.executionId;
                 this.#teardownReconnect();
                 this.#activeAssistantMessageId = assistantMessageId;
                 this.agentExecution = null;
@@ -417,6 +417,9 @@ export class AgentWidgetSession {
                   admission.status !== "not_applied"
                 ) {
                   this.agentExecution = null;
+                  // A receipt can acknowledge an older delivery. It owns the
+                  // active identity only when we actually reconnect to that run.
+                  this.steerExecutionId = admission.executionId;
                   this.resumeFromHandle({
                     executionId: admission.executionId,
                     after: "",

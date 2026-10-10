@@ -1700,6 +1700,8 @@ export class AgentWidgetClient {
           .catch(() => ({ error: "Chat request failed" }));
         if (options.steer) {
           const rejected = response.status < 500 && response.status !== 408;
+          // Only ambiguous outcomes need their frozen payload retained for retry.
+          if (rejected) this.steerPayloads.delete(turnId);
           throw new InputDeliveryError(
             data.error || "Failed to deliver message",
             rejected,

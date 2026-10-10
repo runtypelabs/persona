@@ -164,6 +164,28 @@ describe("session additive send", () => {
     await first;
   });
 
+  it("an old delivery receipt does not replace the execution targeted by Stop", async () => {
+    const fixture = create();
+    const dispatch = vi.spyOn(fixture.session.getClient(), "dispatch")
+      .mockRejectedValueOnce(new TypeError("lost acknowledgement"))
+      .mockImplementationOnce(async (options) => {
+        options.steer!.onAdmission({ kind: "stream", executionId: "new-run", deliveryId: "new-delivery", status: "settled" });
+        await new Promise<void>((resolve) => options.signal!.addEventListener("abort", () => resolve(), { once: true }));
+      })
+      .mockImplementationOnce(async (options) => {
+        options.steer!.onAdmission({ kind: "receipt", executionId: "old-run", deliveryId: "old-delivery", status: "settled" });
+      });
+    await fixture.session.sendMessage("lost acknowledgement");
+    const oldMessage = fixture.messages()[0].id;
+    const running = fixture.session.sendMessage("new run");
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(2));
+    await fixture.session.retrySteeredMessage(oldMessage);
+    fixture.session.cancel();
+    expect(fixture.session.getClient().cancelClientExecution).toHaveBeenCalledWith("new-run");
+    expect(fixture.session.getClient().cancelClientExecution).not.toHaveBeenCalledWith("old-run");
+    await running;
+  });
+
   it("a rejected input preserves the incumbent tool resolver and reconnect handle", async () => {
     const fixture = create();
     const internals = fixture.session as unknown as {

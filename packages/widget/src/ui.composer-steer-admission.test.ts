@@ -167,3 +167,38 @@ it.each(["hook", "history"] as const)(
     expect(controller.getComposerState().quote).toBeUndefined();
   },
 );
+
+it.each(["hook", "history"] as const)("locks the captured draft while awaiting %s admission", async (pause) => {
+  const init = vi.spyOn(AgentWidgetSession.prototype, "initClientSession").mockResolvedValue(null);
+  let release!: () => void;
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  let historyReady: Promise<void> | undefined;
+  let session: AgentWidgetSession;
+  const mount = document.createElement("div");
+  document.body.append(mount);
+  controller = createAgentExperience(mount, {
+    clientToken: "demo-token", sessionInit: "mount", launcher: { enabled: false },
+    persistState: false, attachments: { enabled: true },
+    composer: { streamingSubmitBehavior: "steer", onBeforeSend: () => {
+      if (pause === "hook") return waiting;
+      init.mockImplementationOnce(() => waiting.then(() => null));
+      historyReady = session.initializeBootConversation();
+    } },
+  });
+  await vi.waitFor(() => expect(init).toHaveBeenCalled());
+  session = init.mock.contexts[0] as AgentWidgetSession;
+  const dispatch = vi.spyOn(session.getClient(), "dispatch").mockImplementation(async (options, onEvent) => {
+    options.steer!.onAdmission({ kind: "stream", executionId: "run", deliveryId: "delivery", status: "settled" });
+    onEvent({ type: "status", status: "idle", terminal: true });
+  });
+  controller.setMessage("captured draft");
+  expect(controller.submitMessage()).toBe(true);
+  expect(mount.querySelector("textarea")!.disabled).toBe(true);
+  expect(mount.querySelector<HTMLInputElement>("[data-persona-composer-attachment-input]")!.disabled).toBe(true);
+  expect(controller.setMessage("newer unsent draft")).toBe(false);
+  release();
+  await historyReady;
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(mount.querySelector("textarea")!.disabled).toBe(false));
+  expect(dispatch.mock.calls[0][0].messages[0].content).toBe("captured draft");
+});
