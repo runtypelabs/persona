@@ -9,7 +9,7 @@ import {
   type AgentWidgetInitHandle,
   type WebMcpConfirmInfo,
 } from "@runtypelabs/persona";
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 import { registerOttoCharts } from "./docked-panel-charts";
 
 // Otto renders charts inline (right in the transcript) via
@@ -434,7 +434,7 @@ syncAppearanceUi();
 // in-panel approval bubble.
 // ---------------------------------------------------------------------------
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 const modelContext = (
   document as Document & { modelContext?: RegisterableModelContext }

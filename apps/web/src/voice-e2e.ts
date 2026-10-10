@@ -5,7 +5,7 @@ import {
   type AgentWidgetConfig,
   type AgentWidgetController,
 } from "@runtypelabs/persona";
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
 /**
  * Internal fixture page for the Playwright full-duplex voice suite (see
@@ -35,7 +35,7 @@ const persist = params.get("persist") === "1";
 // page tool, so a spoken order parks on a WebMCP approval in the chat.
 const webmcpDemo = params.get("webmcp") === "1";
 if (webmcpDemo) {
-  initializeWebMCPPolyfill();
+  installWebMCP();
   const orders = document.createElement("div");
   orders.id = "demo-orders";
   orders.textContent = "Bakery website: no orders yet";

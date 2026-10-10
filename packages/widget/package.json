@@ -185,6 +185,7 @@
   },
   "devDependencies": {
     "@size-limit/file": "^12.1.0",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^20.12.7",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
@@ -194,12 +195,14 @@
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "fake-indexeddb": "^6.2.5",
+    "jsdom": "^28.1.0",
     "rimraf": "^5.0.5",
     "size-limit": "^12.1.0",
     "terser": "^5.49.0",
     "tsup": "^8.0.1",
     "typescript": "^5.4.5",
-    "vitest": "^4.0.9"
+    "vitest": "^4.0.9",
+    "webmcp-polyfill-v6": "npm:@mcp-b/webmcp-polyfill@6.0.0"
   },
   "engines": {
     "node": ">=20.0.0"

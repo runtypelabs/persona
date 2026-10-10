@@ -14,26 +14,19 @@
  * enforcement live on the Runtype API; this bridge mirrors those checks
  * client-side as a usability convenience, not a security boundary.
  *
- * About `@mcp-b/webmcp-polyfill`: it polyfills the *strict standard surface*
- * only (`registerTool` / `getTools` / `executeTool` on `document.modelContext`),
- * with no MCP-B-only extensions. The spec standardizes the *producer* side;
- * Persona is an in-page *consumer*, so it reads the registry via the
- * producer-facing preview API:
- *   - `getTools()`: async; returns `{ name, description, inputSchema }` where
- *     `inputSchema` is a JSON *string*. Annotations are not exposed here.
- *   - `executeTool(toolInfo, inputArgsJson, { signal })`: async; validates args
- *     against the tool's schema, runs `execute()`, and returns the raw result as
- *     a JSON *string* (or `null` for `undefined`). Honors `signal` for abort.
+ * Supports v5's JSON-string input and v6's object input with a single call:
+ * the runtime passes a JSON object that also string-coerces to JSON text.
+ * Never infer the execution contract from metadata or retry a failed call.
+ * Only tools owned by this document are exposed: the wire addresses tools by
+ * name, not by frame. Callbacks must validate their own input.
  *
- * The polyfill auto-installs `document.modelContext` at module-evaluation time,
- * so it is imported *dynamically* and only when `config.webmcp.enabled === true`
- *: a static import would install the global for every widget consumer,
- * including those that never opted into WebMCP.
+ * The automatic fallback stays on v5 to preserve its browser requirements and
+ * result semantics. Host pages may install v5 or v6 themselves; Persona does
+ * not replace an existing context. v5's initializeWebMCPPolyfill() and v6's
+ * installWebMCP() are both accepted by custom loaders.
  *
- * Confirm model: every `webmcp:*` call goes through one confirm gate before
- * `execute()` runs, regardless of `annotations.readOnlyHint`. (The polyfill owns
- * the spec's `client.requestUserInteraction` callback internally; Persona cannot
- * inject a nested confirm there, so the single outer gate is the whole story.)
+ * Every call passes one confirm gate before execution, regardless of
+ * annotations.readOnlyHint. v6 callbacks also receive an invocation signal.
  */
 
 import type { ClientToolDefinition } from "./types";
@@ -59,18 +52,20 @@ export interface ModelContextToolInfo {
    * object. `@mcp-b/webmcp-polyfill` made the switch in v5, and Chrome ships it
    * from 154.0.8013 (cross-document tools first) -- but Chrome 149-153, most of
    * the Origin Trial population, and 154's same-document tools still emit the
-   * string. Both are live in the field, so we accept both.
+   * string. Both input execution contracts are supported independently of
+   * schema representation.
    *
    * Absent when the tool registered no schema: v5 omits the member, where v4
    * always emitted a `{"type":"object"}` string.
    */
   inputSchema?: object | string;
+  /** Owning frame and origin, when supplied by the registry. Never sent on the wire. */
+  window?: Window;
+  origin?: string;
   /**
    * Display title declared on the tool (`ToolDescriptor.title` in the WebMCP
    * spec). The polyfill returns `""` when the tool didn't declare one. Note:
-   * `annotations` (incl. the legacy `annotations.title`) are NOT exposed on
-   * this strict consumer surface: top-level `title` is the only display-name
-   * channel available to us.
+   * top-level `title` is the display-name channel, not `annotations.title`.
    */
   title?: string;
   /**
@@ -89,7 +84,7 @@ export interface ModelContextCoreLike {
   getTools(): Promise<ModelContextToolInfo[]>;
   executeTool(
     tool: ModelContextToolInfo,
-    inputArgsJson: string,
+    input: object | string,
     options?: { signal?: AbortSignal },
   ): Promise<string | null>;
 }
@@ -132,9 +127,9 @@ export const getWebMcpToolDisplayTitle = (
 ): string | undefined => webMcpToolDisplayTitles.get(stripWebMcpPrefix(toolName));
 
 /** The slice of `@mcp-b/webmcp-polyfill` the bridge consumes on install. */
-export type WebMcpPolyfillModule = {
-  initializeWebMCPPolyfill: () => void;
-};
+export type WebMcpPolyfillModule =
+  | { initializeWebMCPPolyfill: () => void }
+  | { installWebMCP: () => void };
 
 /**
  * Override how the polyfill module is obtained. By default the bridge does

@@ -121,7 +121,7 @@ export class WebMcpBridge {
 
     let infos: ModelContextToolInfo[];
     try {
-      infos = await mc.getTools();
+      infos = (await mc.getTools()).filter(isLocalTool);
     } catch (err) {
       log.warn("getTools() threw: shipping an empty WebMCP snapshot.", err);
       return [];
@@ -162,7 +162,7 @@ export class WebMcpBridge {
    *   - tool not in registry (e.g. unmounted between snapshot and call)
    *   - tool excluded by the client allowlist
    *   - user declined the confirm gate
-   *   - `execute()` threw or failed schema validation
+   *   - `execute()` threw or returned a non-serializable result
    *   - `execute()` exceeded the 30s timeout
    *   - `signal` fired (session-level `cancel()`)
    *
@@ -204,7 +204,7 @@ export class WebMcpBridge {
 
     let infos: ModelContextToolInfo[];
     try {
-      infos = await mc.getTools();
+      infos = (await mc.getTools()).filter(isLocalTool);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return errorResult(`Failed to read WebMCP registry: ${message}`);
@@ -275,7 +275,7 @@ export class WebMcpBridge {
     }
 
     try {
-      const raw = await mc.executeTool(info, safeStringifyArgs(args), {
+      const raw = await mc.executeTool(info, createCompatibleToolInput(args), {
         signal: controller.signal,
       });
       return normalizeSerializedResult(raw);
@@ -329,7 +329,8 @@ export class WebMcpBridge {
       const mod = await this.#deps.loadPolyfill();
       // Idempotent: no-ops if `document.modelContext` already exists (native or
       // a prior install by the host page).
-      mod.initializeWebMCPPolyfill();
+      if ("initializeWebMCPPolyfill" in mod) mod.initializeWebMCPPolyfill();
+      else mod.installWebMCP();
       this.#installed = true;
     } catch (err) {
       log.warn(
@@ -516,6 +517,28 @@ const normalizeSerializedResult = (raw: string | null): WebMcpToolResult => {
   return { content: [{ type: "text", text }] };
 };
 
+/**
+ * One invocation works with both contracts: v5/native previews coerce input to
+ * JSON text, whereas v6 serializes the object. Keep the coercion hook off the
+ * JSON payload and clone first so we never mutate caller-owned arguments.
+ * Do not probe by executing/retrying: page tools may have irreversible effects.
+ */
+const createCompatibleToolInput = (args: unknown): object => {
+  let json: string;
+  try {
+    json = JSON.stringify(args) ?? "{}";
+  } catch {
+    // Preserve the historical fallback for non-serializable arguments.
+    json = "{}";
+  }
+  const input: unknown = JSON.parse(json);
+  if (input === null || typeof input !== "object") {
+    throw new TypeError("WebMCP tool arguments must be an object or array.");
+  }
+  Object.defineProperty(input, Symbol.toPrimitive, { value: () => json });
+  return input;
+};
+
 const errorResult = (message: string): WebMcpToolResult => ({
   isError: true,
   content: [{ type: "text", text: message }],
@@ -549,20 +572,12 @@ const previewArgs = (args: unknown): string => {
   }
 };
 
-/**
- * Stringify tool args for `executeTool(toolInfo, inputArgsJson)`. Falls back to
- * `{}` for `undefined`/non-serializable args so the polyfill always receives a
- * valid JSON object string to validate against the tool schema.
- */
-const safeStringifyArgs = (args: unknown): string => {
-  if (args === undefined) return "{}";
-  try {
-    const json = JSON.stringify(args);
-    return json === undefined ? "{}" : json;
-  } catch {
-    return "{}";
-  }
-};
+/** Keep name-only dispatch scoped to this document, not related frames. */
+const isLocalTool = (info: ModelContextToolInfo): boolean =>
+  (info.window === undefined ||
+    (typeof window !== "undefined" && info.window === window)) &&
+  (info.origin === undefined ||
+    (typeof location !== "undefined" && info.origin === location.origin));
 
 /**
  * `JSON.stringify` that tolerates circular references and non-serializable

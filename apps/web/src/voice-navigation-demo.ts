@@ -10,7 +10,7 @@ import {
   type VoiceResult,
   type VoiceStatus,
 } from "@runtypelabs/persona";
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { createWebSpeechVoiceProvider } from "./custom-voice-provider";
 
@@ -291,7 +291,7 @@ const keylessFetch = createDemoEchoFetch({
 // --- Runtype realtime mode: a WebMCP navigation tool ---------------------------------
 
 if (realtime) {
-  initializeWebMCPPolyfill();
+  installWebMCP();
   (document as unknown as { modelContext: { registerTool: (tool: unknown) => void } }).modelContext.registerTool({
     name: "go_to_page",
     title: "Go to page",

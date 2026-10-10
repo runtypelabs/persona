@@ -276,7 +276,7 @@ const toolResult = (data, summary) => ({
   structuredContent: data,
 });
 
-const getModelContext = () => document.modelContext ?? navigator.modelContext;
+const getModelContext = () => document.modelContext;
 
 const createEvent = (input = {}) => {
   const title = String(input.title ?? '').trim();

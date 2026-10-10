@@ -15,13 +15,13 @@ import {
 } from "@runtypelabs/persona";
 // `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext`; it must be initialized before tools register.
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
 import { mountJsPaint, type PaintBridge } from "./jspaint-host";
 import { paintTheme } from "./theme";
 import { APPROVAL_REQUIRED_TOOL_NAMES, setupPaintTools } from "./tools";
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 const host = document.querySelector<HTMLElement>("#jspaint-host");
 const dockTarget = document.querySelector<HTMLElement>("#paint-dock-target");
