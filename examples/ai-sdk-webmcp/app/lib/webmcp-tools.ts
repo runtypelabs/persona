@@ -158,6 +158,12 @@ export function registerStorefrontTools(): void {
       annotations: { readOnlyHint: false },
       execute(input): unknown {
         const { sku, quantity = 1 } = input as { sku: string; quantity?: number };
+        if (!Number.isSafeInteger(quantity) || quantity < 1) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "quantity must be a positive integer." }],
+          };
+        }
         const product = findBySku(sku);
         if (!product) {
           logWire("exec", "add_to_cart", `<b>${esc(sku)}</b> → not found`);
@@ -197,9 +203,15 @@ export function registerStorefrontTools(): void {
       annotations: { readOnlyHint: false },
       execute(input): unknown {
         const { sku, quantity } = input as { sku: string; quantity?: number };
+        if (quantity !== undefined && (!Number.isSafeInteger(quantity) || quantity < 1)) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "quantity must be a positive integer." }],
+          };
+        }
         // Resolve the SKU canonically (the cart is keyed by product.sku), then
-        // only a positive partial quantity decrements; anything else removes the
-        // whole line, so a negative quantity can't subtract-a-negative.
+        // a partial quantity decrements; an omitted or larger quantity removes
+        // the whole line. Invalid quantities were rejected above.
         const product = findBySku(sku);
         if (!product) {
           logWire("exec", "remove_from_cart", `<b>${esc(sku)}</b> → not found`);

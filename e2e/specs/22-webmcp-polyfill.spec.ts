@@ -146,3 +146,42 @@ test("calendar MCP-B runtime exposes executable object-input tools", async ({
     eventCount: expect.any(Number),
   });
 });
+
+test("storefront rejects invalid quantities without mutating the cart", async ({
+  page,
+}) => {
+  await page.goto("/webmcp-demo.html");
+  const results = await page.evaluate(async () => {
+    const context = (
+      document as Document & {
+        modelContext: {
+          getTools(): Promise<Array<{ name: string }>>;
+          executeTool(tool: { name: string }, input: object): Promise<string>;
+        };
+      }
+    ).modelContext;
+    const tools = await context.getTools();
+    const add = tools.find((tool) => tool.name === "add_to_cart")!;
+    const remove = tools.find((tool) => tool.name === "remove_from_cart")!;
+    await context.executeTool(add, { sku: "SHOE-001", quantity: 3 });
+    const before = document.getElementById("shop-cart")!.textContent;
+    const results = [];
+    for (const quantity of [-1, 0, 1.5, "2", null, NaN, Infinity]) {
+      for (const tool of [add, remove]) {
+        results.push(
+          JSON.parse(
+            await context.executeTool(tool, { sku: "SHOE-001", quantity })
+          )
+        );
+      }
+    }
+    return {
+      results,
+      before,
+      after: document.getElementById("shop-cart")!.textContent,
+    };
+  });
+  expect(results.results).toHaveLength(14);
+  for (const result of results.results) expect(result.isError).toBe(true);
+  expect(results.after).toBe(results.before);
+});

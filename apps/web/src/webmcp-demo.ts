@@ -513,8 +513,14 @@ if (!modelContext) {
       },
       annotations: { readOnlyHint: false },
       async execute(input): Promise<unknown> {
-        const latency = await simulateToolLatency("add_to_cart");
         const { sku, quantity = 1 } = input as { sku: string; quantity?: number };
+        if (!Number.isSafeInteger(quantity) || quantity < 1) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "quantity must be a positive integer." }],
+          };
+        }
+        const latency = await simulateToolLatency("add_to_cart");
         const product = findBySku(sku);
         if (!product) {
           logWire(
@@ -562,8 +568,14 @@ if (!modelContext) {
       },
       annotations: { readOnlyHint: false },
       async execute(input): Promise<unknown> {
-        const latency = await simulateToolLatency("remove_from_cart");
         const { sku, quantity } = input as { sku: string; quantity?: number };
+        if (quantity !== undefined && (!Number.isSafeInteger(quantity) || quantity < 1)) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "quantity must be a positive integer." }],
+          };
+        }
+        const latency = await simulateToolLatency("remove_from_cart");
         // Resolve the SKU the same way add_to_cart/view_product do (trimmed,
         // case-insensitive): the cart is keyed by the canonical product.sku, so
         // a raw `cart.get(sku)` would miss on different casing/spacing.
@@ -593,9 +605,8 @@ if (!modelContext) {
             cart: cartSummary(),
           };
         }
-        // Only a positive partial quantity decrements; anything else (omitted,
-        // ≤0, or ≥ the line qty) removes the whole line, so a negative quantity
-        // can't subtract-a-negative and inflate the cart.
+        // A smaller quantity decrements; omitted or >= the line quantity
+        // removes the whole line. Invalid quantities were rejected above.
         const partial =
           typeof quantity === "number" && quantity >= 1 && quantity < line.quantity;
         if (partial) {
