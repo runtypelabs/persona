@@ -117,7 +117,7 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     // install would lay it out (symlinked, like pnpm/npm link).
     consumer = mkdtempSync(join(tmpdir(), "persona-consumer-"));
     mkdirSync(join(consumer, "node_modules", "@runtypelabs"), { recursive: true });
-    symlinkSync(PKG_DIR, join(consumer, "node_modules", "@runtypelabs", "persona"), "dir");
+    symlinkSync(PKG_DIR, join(consumer, "node_modules", "@runtypelabs", "persona"), "junction");
     writeFileSync(join(consumer, "esm-probe.mjs"), ESM_PROBE);
     writeFileSync(join(consumer, "cjs-probe.cjs"), CJS_PROBE);
   });
@@ -191,7 +191,8 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     expect(drift, "ESM/CJS export-name drift").toEqual([]);
   }, 90_000);
 
-  const tsc = join(PKG_DIR, "node_modules", ".bin", "tsc");
+  // The JS entry, run through Node: `.bin/tsc` is a shell shim on Windows.
+  const tsc = join(PKG_DIR, "node_modules", "typescript", "bin", "tsc");
   const typeImports = (ext: "ts" | "cts") =>
     typedSpecifiers
       .map((spec, i) =>
@@ -208,7 +209,7 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     mkdirSync(dir, { recursive: true });
     // Point the project-local node_modules at the consumer's.
     if (!existsSync(join(dir, "node_modules"))) {
-      symlinkSync(join(consumer, "node_modules"), join(dir, "node_modules"), "dir");
+      symlinkSync(join(consumer, "node_modules"), join(dir, "node_modules"), "junction");
     }
     writeFileSync(join(dir, "package.json"), JSON.stringify({ type: "module" }));
     writeFileSync(join(dir, file), source);
@@ -227,7 +228,7 @@ describe.runIf(built)("published package install methods (dist/)", () => {
       })
     );
     try {
-      execFileSync(tsc, ["-p", join(dir, "tsconfig.json")], { cwd: dir, encoding: "utf8", timeout: 120_000 });
+      execFileSync(process.execPath, [tsc, "-p", join(dir, "tsconfig.json")], { cwd: dir, encoding: "utf8", timeout: 120_000 });
       return "";
     } catch (e) {
       const err = e as { stdout?: string; stderr?: string; message: string };
@@ -285,7 +286,7 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     writeFileSync(join(consumer, "css-probe.cjs"), `process.stdout.write(require.resolve(${spec}));`);
     writeFileSync(join(consumer, "css-probe.mjs"), `process.stdout.write(import.meta.resolve(${spec}));`);
     const run = (file: string) =>
-      execFileSync(process.execPath, [join(consumer, file)], { cwd: consumer, encoding: "utf8" });
+      execFileSync(process.execPath, [join(consumer, file)], { cwd: consumer, encoding: "utf8" }).replace(/\\/g, "/");
     expect(run("css-probe.cjs").endsWith("/dist/widget.css")).toBe(true);
     expect(run("css-probe.mjs").endsWith("/dist/widget.css")).toBe(true);
     const css = readFileSync(dist("widget.css"), "utf8");
