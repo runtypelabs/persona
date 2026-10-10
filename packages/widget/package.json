@@ -176,7 +176,7 @@
     "build:event-stream-view": "tsup --config tsup.event-stream-view.config.ts"
   },
   "dependencies": {
-    "@mcp-b/webmcp-polyfill": "^5.1.0",
+    "@mcp-b/webmcp-polyfill": "^6.0.0",
     "dompurify": "^3.4.13",
     "idiomorph": "^0.7.4",
     "lucide": "^1.18.0",
@@ -185,6 +185,7 @@
   },
   "devDependencies": {
     "@size-limit/file": "^12.1.0",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^20.12.7",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
@@ -194,6 +195,7 @@
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "fake-indexeddb": "^6.2.5",
+    "jsdom": "^28.1.0",
     "rimraf": "^5.0.5",
     "size-limit": "^12.1.0",
     "terser": "^5.49.0",

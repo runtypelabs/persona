@@ -14,26 +14,21 @@
  * enforcement live on the Runtype API; this bridge mirrors those checks
  * client-side as a usability convenience, not a security boundary.
  *
- * About `@mcp-b/webmcp-polyfill`: it polyfills the *strict standard surface*
- * only (`registerTool` / `getTools` / `executeTool` on `document.modelContext`),
- * with no MCP-B-only extensions. The spec standardizes the *producer* side;
- * Persona is an in-page *consumer*, so it reads the registry via the
- * producer-facing preview API:
- *   - `getTools()`: async; returns `{ name, description, inputSchema }` where
- *     `inputSchema` is a JSON *string*. Annotations are not exposed here.
- *   - `executeTool(toolInfo, inputArgsJson, { signal })`: async; validates args
- *     against the tool's schema, runs `execute()`, and returns the raw result as
- *     a JSON *string* (or `null` for `undefined`). Honors `signal` for abort.
+ * The v6 polyfill follows the upstream WebMCP object-input contract:
+ * `getTools()` returns descriptors with a JSON Schema object and window/origin
+ * identity; `executeTool(descriptor, input, { signal })` returns JSON text.
+ * Only tools owned by this document are exposed: our wire protocol addresses
+ * tools by name, not by frame. Callbacks must validate their own input and
+ * return JSON-serializable results.
  *
- * The polyfill auto-installs `document.modelContext` at module-evaluation time,
- * so it is imported *dynamically* and only when `config.webmcp.enabled === true`
- *: a static import would install the global for every widget consumer,
- * including those that never opted into WebMCP.
+ * ESM imports do not install the global. We load and call `installWebMCP()`
+ * only when enabled. It preserves an existing native context and requires a
+ * secure context and the browser APIs listed in the polyfill's documentation.
+ * Existing contexts must support object-input execution; older preview
+ * contracts are not upgraded or retried after a failed invocation.
  *
- * Confirm model: every `webmcp:*` call goes through one confirm gate before
- * `execute()` runs, regardless of `annotations.readOnlyHint`. (The polyfill owns
- * the spec's `client.requestUserInteraction` callback internally; Persona cannot
- * inject a nested confirm there, so the single outer gate is the whole story.)
+ * Every call passes one confirm gate before execution, regardless of
+ * `annotations.readOnlyHint`. The callback receives an invocation AbortSignal.
  */
 
 import type { ClientToolDefinition } from "./types";
@@ -59,18 +54,20 @@ export interface ModelContextToolInfo {
    * object. `@mcp-b/webmcp-polyfill` made the switch in v5, and Chrome ships it
    * from 154.0.8013 (cross-document tools first) -- but Chrome 149-153, most of
    * the Origin Trial population, and 154's same-document tools still emit the
-   * string. Both are live in the field, so we accept both.
+   * string. Legacy metadata is still accepted here; execution requires the
+   * current object-input contract regardless of schema representation.
    *
    * Absent when the tool registered no schema: v5 omits the member, where v4
    * always emitted a `{"type":"object"}` string.
    */
   inputSchema?: object | string;
+  /** Owning frame and origin, when supplied by the registry. Never sent on the wire. */
+  window?: Window;
+  origin?: string;
   /**
    * Display title declared on the tool (`ToolDescriptor.title` in the WebMCP
    * spec). The polyfill returns `""` when the tool didn't declare one. Note:
-   * `annotations` (incl. the legacy `annotations.title`) are NOT exposed on
-   * this strict consumer surface: top-level `title` is the only display-name
-   * channel available to us.
+   * top-level `title` is the display-name channel, not `annotations.title`.
    */
   title?: string;
   /**
@@ -89,7 +86,7 @@ export interface ModelContextCoreLike {
   getTools(): Promise<ModelContextToolInfo[]>;
   executeTool(
     tool: ModelContextToolInfo,
-    inputArgsJson: string,
+    input: object,
     options?: { signal?: AbortSignal },
   ): Promise<string | null>;
 }
@@ -133,7 +130,7 @@ export const getWebMcpToolDisplayTitle = (
 
 /** The slice of `@mcp-b/webmcp-polyfill` the bridge consumes on install. */
 export type WebMcpPolyfillModule = {
-  initializeWebMCPPolyfill: () => void;
+  installWebMCP: () => void;
 };
 
 /**

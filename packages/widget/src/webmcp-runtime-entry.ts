@@ -121,7 +121,7 @@ export class WebMcpBridge {
 
     let infos: ModelContextToolInfo[];
     try {
-      infos = await mc.getTools();
+      infos = (await mc.getTools()).filter(isLocalTool);
     } catch (err) {
       log.warn("getTools() threw: shipping an empty WebMCP snapshot.", err);
       return [];
@@ -162,7 +162,7 @@ export class WebMcpBridge {
    *   - tool not in registry (e.g. unmounted between snapshot and call)
    *   - tool excluded by the client allowlist
    *   - user declined the confirm gate
-   *   - `execute()` threw or failed schema validation
+   *   - `execute()` threw or returned a non-serializable result
    *   - `execute()` exceeded the 30s timeout
    *   - `signal` fired (session-level `cancel()`)
    *
@@ -204,7 +204,7 @@ export class WebMcpBridge {
 
     let infos: ModelContextToolInfo[];
     try {
-      infos = await mc.getTools();
+      infos = (await mc.getTools()).filter(isLocalTool);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return errorResult(`Failed to read WebMCP registry: ${message}`);
@@ -275,7 +275,7 @@ export class WebMcpBridge {
     }
 
     try {
-      const raw = await mc.executeTool(info, safeStringifyArgs(args), {
+      const raw = await mc.executeTool(info, args === undefined ? {} : (args as object), {
         signal: controller.signal,
       });
       return normalizeSerializedResult(raw);
@@ -329,7 +329,7 @@ export class WebMcpBridge {
       const mod = await this.#deps.loadPolyfill();
       // Idempotent: no-ops if `document.modelContext` already exists (native or
       // a prior install by the host page).
-      mod.initializeWebMCPPolyfill();
+      mod.installWebMCP();
       this.#installed = true;
     } catch (err) {
       log.warn(
@@ -549,20 +549,12 @@ const previewArgs = (args: unknown): string => {
   }
 };
 
-/**
- * Stringify tool args for `executeTool(toolInfo, inputArgsJson)`. Falls back to
- * `{}` for `undefined`/non-serializable args so the polyfill always receives a
- * valid JSON object string to validate against the tool schema.
- */
-const safeStringifyArgs = (args: unknown): string => {
-  if (args === undefined) return "{}";
-  try {
-    const json = JSON.stringify(args);
-    return json === undefined ? "{}" : json;
-  } catch {
-    return "{}";
-  }
-};
+/** Keep name-only dispatch scoped to this document, not related frames. */
+const isLocalTool = (info: ModelContextToolInfo): boolean =>
+  (info.window === undefined ||
+    (typeof window !== "undefined" && info.window === window)) &&
+  (info.origin === undefined ||
+    (typeof location !== "undefined" && info.origin === location.origin));
 
 /**
  * `JSON.stringify` that tolerates circular references and non-serializable

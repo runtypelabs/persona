@@ -235,3 +235,22 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 - The proxy prefers port `43111` but automatically selects the next free port if needed.
 - `features.askUserQuestion.expose` and `suggestions.followUps.expose` advertise built-in LOCAL client tools through `clientTools[]`; leave `expose` off if the flow already declares those tools server-side.
 - `webmcp: { enabled: true }` snapshots page-registered tools on `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:*` calls in the browser, and resumes the paused execution.
+
+### WebMCP compatibility
+
+Persona uses `@mcp-b/webmcp-polyfill` v6. Producer pages should call
+`installWebMCP()` before registering tools. The fallback requires HTTPS or
+localhost and Chrome/Firefox 126+ or Safari 18+. Existing native contexts and
+host-installed polyfills must support `executeTool(descriptor, inputObject,
+{ signal })`; older JSON-string-input implementations are not upgraded.
+
+Only the current document's tools are exposed, even when the registry also
+discovers tools in related frames. The dispatch protocol addresses tools by
+name and does not support frame-qualified calls.
+
+Tool callbacks receive `(input, { signal })`. Validate input in the callback,
+forward the signal to cancellable work, and return a JSON-serializable value.
+Return an MCP result with `isError: true` for an actionable error message; v6
+replaces thrown callback errors with a generic error and rejects `undefined`
+and other non-serializable results. Registration cleanup uses an AbortSignal;
+the document-lifetime polyfill has no uninstall API.

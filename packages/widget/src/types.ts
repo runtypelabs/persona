@@ -881,9 +881,8 @@ export type WebMcpConfirmInfo = {
   };
   /**
    * Why the confirm was requested. Currently always `'gate'`: the default
-   * confirm-by-default gate that fires before every `webmcp:*` call. (The
-   * `@mcp-b/webmcp-polyfill` owns the spec's `requestUserInteraction` callback
-   * internally, so Persona no longer surfaces a nested in-tool confirm.)
+   * confirm-by-default gate that fires before every `webmcp:*` call. Tool
+   * callbacks receive an AbortSignal, not a nested confirmation API.
    */
   reason: 'gate';
 };
@@ -7705,8 +7704,10 @@ export type AgentWidgetConfig = {
   /**
    * WebMCP: consume page-registered tools (`document.modelContext.registerTool`).
    * When `enabled`, the widget installs `@mcp-b/webmcp-polyfill`, snapshots the
-   * registry on every dispatch, ships it as `clientTools[]`, and executes
-   * returned `webmcp:*` tool calls with confirm-by-default gating.
+   * current document's registry on every dispatch, ships it as `clientTools[]`,
+   * and executes returned `webmcp:*` calls with confirm-by-default gating.
+   * Requires the current object-input WebMCP execution contract. The fallback
+   * polyfill needs HTTPS/localhost and Chrome/Firefox 126+ or Safari 18+.
    *
    * Server-side policy on the chat surface is the source of truth: these
    * fields layer on top.

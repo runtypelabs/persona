@@ -12,7 +12,7 @@
 // change from the vanilla web app demo: the tool surface and behavior are
 // identical.
 
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 import { findBySku, searchCatalog } from "./catalog";
 import {
   addToCart,
@@ -37,7 +37,7 @@ interface RegisterableModelContext {
       annotations?: Record<string, unknown>;
       execute: (
         args: Record<string, unknown>,
-        client: { requestUserInteraction: (cb: () => unknown) => Promise<unknown> },
+        options: { signal: AbortSignal },
       ) => unknown;
     },
     options?: { signal?: AbortSignal },
@@ -51,7 +51,7 @@ export function registerStorefrontTools(): void {
   if (registered || typeof document === "undefined") return;
   registered = true;
 
-  initializeWebMCPPolyfill();
+  installWebMCP();
 
   const modelContext = (
     document as Document & { modelContext?: RegisterableModelContext }

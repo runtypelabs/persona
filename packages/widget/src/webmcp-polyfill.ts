@@ -13,4 +13,4 @@
  * their bundlers resolve the bare `import("@mcp-b/webmcp-polyfill")` in
  * `webmcp-bridge.ts` directly.
  */
-export { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+export { installWebMCP } from "@mcp-b/webmcp-polyfill";

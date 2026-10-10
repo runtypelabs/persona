@@ -21,7 +21,7 @@ import {
   markdownPostprocessor,
 } from "@runtypelabs/persona";
 // The WebMCP polyfill must be initialized before any tool registers.
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
 import { FIELD_CATALOG, IntakeForm, renderIntakeForm } from "./form";
 import { APPROVAL_REQUIRED_TOOL_NAMES, setupIntakeTools } from "./tools";
@@ -32,7 +32,7 @@ import {
 } from "../litert-shared/litert-engine";
 import { wireModelLoader } from "../litert-shared/model-loader";
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 // Fake dispatch URL: the engine patches window.fetch to answer this path (and
 // `${API_PATH}/resume`) from the in-browser model. Kept off `/api/...` so the

@@ -37,7 +37,7 @@ import {
 } from "@runtypelabs/persona";
 // `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext`; it must be initialized before tools register.
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
 import { mountJsPaint, type PaintBridge } from "../webmcp-paint/jspaint-host";
 import { paintTheme } from "../webmcp-paint/theme";
@@ -49,7 +49,7 @@ import {
 } from "../litert-shared/litert-engine";
 import { wireModelLoader } from "../litert-shared/model-loader";
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 // Fake dispatch URL: the engine patches window.fetch to answer this path (and
 // `${API_PATH}/resume`) from the in-browser model. Kept off `/api/...` so the
