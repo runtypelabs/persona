@@ -32,7 +32,7 @@ payload cost when it is statically included.
 ## Terser pass and ES2022 output
 
 The `*.global.js` bundles get a second minification pass
-(`scripts/terser-global.mjs`) after esbuild. Terser's frequency-ordered
+(`scripts/terser-global.mjs`) after the tsdown build. Terser's frequency-ordered
 identifier mangling compresses markedly better under Brotli, and the pass
 chains the source map. With the ES2022 target, TypeScript `private` members in
 the session, client, and voice classes are native `#private` fields, so their

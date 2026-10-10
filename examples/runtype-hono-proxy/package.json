@@ -7,13 +7,13 @@
     "dev:workers": "wrangler dev",
     "deploy:workers": "wrangler deploy",
     "start": "node dist/node.js",
-    "build": "tsup src/node.ts --format esm,cjs --dts --out-dir dist --clean",
+    "build": "tsdown src/node.ts --format esm,cjs --dts --no-fixed-extension --out-dir dist",
     "types-check": "tsc --noEmit",
     "test": "tsx --test src/request-guard.test.ts"
   },
   "dependencies": {
-    "@runtypelabs/persona-proxy": "workspace:^",
     "@hono/node-server": "^1.19.10",
+    "@runtypelabs/persona-proxy": "workspace:^",
     "dotenv": "^16.4.5",
     "get-port": "^7.2.0",
     "hono": "^4.12.25"
@@ -21,7 +21,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260612.1",
     "@types/node": "^20.12.7",
-    "tsup": "^8.0.1",
+    "tsdown": "^0.23.0",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "wrangler": "^4.100.0"

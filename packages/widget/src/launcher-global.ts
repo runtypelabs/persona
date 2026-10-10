@@ -15,7 +15,7 @@
  * `icons-extra.js` sibling chunk (loader registered below). See the
  * "Deferred Launcher Loading" pattern in AGENTS.md.
  *
- * Public global (via tsup `--global-name AgentWidgetLauncher`):
+ * Public global (via tsdown `globalName: "AgentWidgetLauncher"`):
  *
  *   window.AgentWidgetLauncher.mount({ target, config, onOpen })
  *     → { root, element, update, destroy }
@@ -154,8 +154,8 @@ export const mount = (
   };
 };
 
-// Note: the `window.AgentWidgetLauncher` global is created by tsup's
-// `--global-name AgentWidgetLauncher` at build time. The installer
+// Note: the `window.AgentWidgetLauncher` global is created by the IIFE build's
+// `globalName` (tsdown.config.ts) at build time. The installer
 // (`install.ts`) declares the `Window` augmentation it needs; this entry never
 // reads the global, so re-declaring it here would only create a cross-file type
 // conflict.

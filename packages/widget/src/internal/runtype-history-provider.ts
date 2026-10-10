@@ -8,7 +8,7 @@
  * adapts shapes and maps HTTP/client errors onto the one domain vocabulary.
  * No HTTP string or status code escapes into the view.
  *
- * Not public and not in any tsup entry or package export.
+ * Not public and not in any tsdown entry or package export.
  */
 
 import type { HistoryClientError, AgentWidgetClient } from "../client";

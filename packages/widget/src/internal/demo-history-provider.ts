@@ -2,7 +2,7 @@
  * In-memory `HistoryProvider` (D9's second consumer). Keeps the seam honest:
  * anything it cannot express without a Runtype special case is a seam defect.
  *
- * Not public and not in any tsup entry or package export. Demo pages reach it
+ * Not public and not in any tsdown entry or package export. Demo pages reach it
  * through the `apps/web` Vite alias
  * (`@runtypelabs/persona/internal/demo-history-provider` -> source) and mount it
  * with `setHistoryProviderFactory()`.
