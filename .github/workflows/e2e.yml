@@ -42,7 +42,12 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       # The showcase build aliases @runtypelabs/persona to the widget source, so
-      # it compiles the widget under test directly; no dist build is needed.
+      # it compiles the widget under test directly. The widget dist is still
+      # built because specs that exercise the CDN chunks (e.g. the WebMCP
+      # polyfill fallback) load them from /widget-dist.
+      - name: Build the widget dist
+        run: pnpm build:widget
+
       - name: Build the showcase preview
         run: pnpm build:web-preview
 
