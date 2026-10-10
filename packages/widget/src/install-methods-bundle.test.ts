@@ -292,6 +292,17 @@ describe.runIf(built)("published package install methods (dist/)", () => {
     expect(css).toContain(".persona-");
   });
 
+  it("widget.css keeps Safari's backdrop-filter prefix and the no-blur fallback", () => {
+    // Lightning CSS drops `-webkit-` prefixes its browser targets don't need,
+    // so a targets change could silently strip Safari's frosted surfaces.
+    const css = readFileSync(dist("widget.css"), "utf8");
+    const source = readFileSync(join(PKG_DIR, "src/styles/widget.css"), "utf8");
+    const count = (text: string) => text.match(/-webkit-backdrop-filter\s*:/g)?.length ?? 0;
+    expect(count(source)).toBeGreaterThan(0);
+    expect(count(css)).toBe(count(source));
+    expect(css).toMatch(/@supports not \(\([^)]*backdrop-filter:blur\(1px\)\) or \([^)]*backdrop-filter:blur\(1px\)\)\)/);
+  });
+
   /** Evaluate a dist file as a classic `<script>` in a fresh jsdom window. */
   const evalClassicScript = (file: string, setup?: (w: Window & Record<string, unknown>) => void) => {
     const dom = new JSDOM(`<!doctype html><html><head></head><body></body></html>`, {

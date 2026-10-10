@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join, posix, sep } from "node:path";
 import { defineConfig, type UserConfig } from "tsdown";
 
 /**
@@ -105,7 +105,8 @@ const declarations = (entries: Entries): UserConfig => ({
   onSuccess: () => {
     const files = new Map<string, string>();
     for (const file of readdirSync("dist", { recursive: true, encoding: "utf8" })) {
-      if (file.endsWith(".d.ts")) files.set(file, readFileSync(join("dist", file), "utf8"));
+      // Key by POSIX path: Windows lists nested files with `\\`, entry names use `/`.
+      if (file.endsWith(".d.ts")) files.set(file.split(sep).join("/"), readFileSync(join("dist", file), "utf8"));
     }
     // Drop declarations nothing reaches: the dts build also emits one per
     // dynamically imported module (`./client-stream`, ...), which no entry's
@@ -115,7 +116,7 @@ const declarations = (entries: Entries): UserConfig => ({
       if (reachable.has(file) || !files.has(file)) return;
       reachable.add(file);
       for (const [, , spec] of files.get(file)!.matchAll(RELATIVE_JS_SPECIFIER)) {
-        visit(join(dirname(file), `${spec}.d.ts`));
+        visit(posix.join(posix.dirname(file), `${spec}.d.ts`));
       }
     };
     for (const name of Object.keys(entries)) visit(`${name}.d.ts`);
