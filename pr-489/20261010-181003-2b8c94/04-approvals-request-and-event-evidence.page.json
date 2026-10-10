@@ -1,0 +1,334 @@
+{
+  "scenario": "approval",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 236,
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "find approval docs",
+            "createdAt": "2026-10-10T18:10:05.112Z"
+          }
+        ]
+      }
+    },
+    {
+      "at": 1168,
+      "url": "approval:onDecision",
+      "body": {
+        "approvalId": "approval-exec_verify_1",
+        "decision": "approved"
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 228,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1791655805112
+      }
+    },
+    {
+      "at": 234,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mv2pluwo_22fq6kra",
+        "role": "user",
+        "content": "find approval docs",
+        "createdAt": "2026-10-10T18:10:05.112Z",
+        "sequence": 1791655804899,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 793,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1791655805366-ed88a535d88ce",
+        "role": "assistant",
+        "content": "Let me search the documentation for that.",
+        "createdAt": "2026-10-10T18:10:05.366Z",
+        "streaming": false,
+        "sequence": 1791655805121,
+        "agentMetadata": {
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-1",
+          "agentName": "Verify Agent"
+        }
+      }
+    },
+    {
+      "at": 918,
+      "type": "approval:requested",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "pending",
+          "agentId": "agent_verify",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          }
+        },
+        "message": {
+          "id": "approval-approval-exec_verify_1",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-10T18:10:05.801Z",
+          "streaming": false,
+          "variant": "approval",
+          "sequence": 1791655805122,
+          "approval": {
+            "id": "approval-exec_verify_1",
+            "status": "pending",
+            "agentId": "agent_verify",
+            "executionId": "exec_verify_1",
+            "toolName": "search_docs",
+            "toolType": "Runtype",
+            "description": "Search the Runtype documentation for relevant pages",
+            "parameters": {
+              "query": "find approval docs",
+              "numResults": 5
+            }
+          }
+        }
+      }
+    },
+    {
+      "at": 1167,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "agent_verify",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          },
+          "resolvedAt": 1791655806052
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 1230,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          },
+          "resolvedAt": 1791655806114
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 1293,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          },
+          "resolvedAt": 1791655806114
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 1294,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          },
+          "resolvedAt": 1791655806114
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 1356,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          },
+          "resolvedAt": 1791655806114
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 1357,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "tool-call_search",
+        "role": "assistant",
+        "content": "",
+        "createdAt": "2026-10-10T18:10:06.177Z",
+        "streaming": false,
+        "variant": "tool",
+        "sequence": 1791655806054,
+        "toolCall": {
+          "id": "call_search",
+          "status": "complete",
+          "name": "search_docs",
+          "success": true,
+          "duration": 620,
+          "args": {
+            "query": "approval theming",
+            "numResults": 5
+          },
+          "startedAt": 1791655806178,
+          "completedAt": 1791655806240,
+          "durationMs": 620,
+          "result": {
+            "results": [
+              "Theming approvals",
+              "Approval events"
+            ]
+          }
+        },
+        "agentMetadata": {
+          "executionId": "exec_verify_1"
+        }
+      }
+    },
+    {
+      "at": 1542,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          },
+          "resolvedAt": 1791655806114
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 1605,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          },
+          "resolvedAt": 1791655806114
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 1667,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "approval-exec_verify_1",
+          "status": "approved",
+          "agentId": "virtual",
+          "executionId": "exec_verify_1",
+          "toolName": "search_docs",
+          "toolType": "Runtype",
+          "description": "Search the Runtype documentation for relevant pages",
+          "parameters": {
+            "query": "find approval docs",
+            "numResults": 5
+          },
+          "resolvedAt": 1791655806114
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 1667,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1791655806425-70684d77449a",
+        "role": "assistant",
+        "content": "Found **2** pages: *Theming approvals* and *Approval events*.",
+        "createdAt": "2026-10-10T18:10:06.425Z",
+        "streaming": false,
+        "sequence": 1791655806055,
+        "agentMetadata": {
+          "executionId": "exec_verify_1",
+          "iteration": 0,
+          "turnId": "turn-approved"
+        }
+      }
+    }
+  ]
+}

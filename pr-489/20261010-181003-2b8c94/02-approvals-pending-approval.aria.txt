@@ -1,0 +1,21 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e1]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e2]
+    - paragraph
+      - StaticText "Scenario: approval. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+      - generic
+        - button "Copy message" [ref=e9]
+      - generic
+        - button "Show details" [expanded=false, ref=e6]
+        - button "Allow" [ref=e7]
+        - button "Deny" [ref=e8]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e3]
+      - button "Start voice recognition" [ref=e4]
+      - button "Send message" [ref=e5]

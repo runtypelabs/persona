@@ -1,0 +1,65 @@
+{
+  "runId": "20261010-181003-2b8c94",
+  "entries": [
+    {
+      "feature": "approvals",
+      "label": "pending approval",
+      "note": null,
+      "files": [
+        "02-approvals-pending-approval.png",
+        "02-approvals-pending-approval.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-10-10T18:10:06.016Z",
+      "head": "9105551d4788b3639c1581044dc9079e5e6a31d4",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approvals",
+      "label": "settled result",
+      "note": null,
+      "files": [
+        "03-approvals-settled-result.png",
+        "03-approvals-settled-result.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-10-10T18:10:08.658Z",
+      "head": "9105551d4788b3639c1581044dc9079e5e6a31d4",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approvals",
+      "label": "approval flow at PR revision",
+      "note": null,
+      "files": [
+        "01-approvals-approval-flow-at-pr-revision.gif",
+        "01-approvals-approval-flow-at-pr-revision.webm",
+        "01-approvals-approval-flow-at-pr-revision.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-10-10T18:10:08.871Z",
+      "head": "9105551d4788b3639c1581044dc9079e5e6a31d4",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approvals",
+      "label": "request and event evidence",
+      "note": "2 request(s) crossed the network boundary, 14 controller event(s)",
+      "files": [
+        "04-approvals-request-and-event-evidence.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=approval",
+      "at": "2026-10-10T18:10:08.947Z",
+      "head": "9105551d4788b3639c1581044dc9079e5e6a31d4",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "approvals",
+      "pass": true,
+      "skipped": false,
+      "note": "Generic approval UI regression. Actual v6 storefront Allow/Deny, duplicate-frame filtering, and calendar execution are covered by 3 passing Chromium tests."
+    }
+  ]
+}
