@@ -1,0 +1,20 @@
+{
+  "scenario": "flights WebMCP initializer smoke",
+  "requests": [],
+  "events": [
+    {
+      "type": "registered-webmcp-tools",
+      "detail": [
+        "assign_seat",
+        "confirm_booking",
+        "get_booking_state",
+        "get_seat_map",
+        "reset_booking",
+        "search_flights",
+        "select_flight",
+        "set_passengers",
+        "update_passenger"
+      ]
+    }
+  ]
+}

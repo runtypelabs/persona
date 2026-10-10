@@ -1,0 +1,86 @@
+- main
+  - generic
+    - generic
+      - combobox "From" [ref=e1]: SFO
+        - StaticText "SFO"
+      - StaticText "→"
+      - combobox "To" [ref=e2]: JFK
+        - StaticText "JFK"
+      - Date: 2026-10-24
+        - generic
+          - spinbutton "Month" [ref=e15]: 10
+          - StaticText "/"
+          - spinbutton "Day" [ref=e16]: 24
+          - StaticText "/"
+          - spinbutton "Year" [ref=e17]: 2026
+        - button "Show date picker" [ref=e8]
+      - spinbutton [ref=e3]: 1
+        - StaticText "1"
+      - combobox [expanded=false, ref=e4]: Economy
+        - MenuListPopup
+          - option "Economy" [selected, ref=e12]
+          - option "Premium" [ref=e13]
+          - option "Business" [ref=e14]
+      - button "Search" [ref=e5]
+      - region "Flight results" [ref=e6]
+        - heading "SFO → JFK · 2026-10-24 · ECONOMY" [level=2, ref=e29]
+        - article
+          - StaticText "06:43 → 09:33"
+          - StaticText "Skylark Air SK754 · 50h 50m · 1 stop"
+          - StaticText "$331"
+          - button "Select outbound" [ref=e32]
+          - button "Select return" [ref=e33]
+        - article
+          - StaticText "10:03 → 11:40"
+          - StaticText "Skylark Air SK210 · 49h 37m · 1 stop"
+          - StaticText "$242"
+          - button "Select outbound" [ref=e34]
+          - button "Select return" [ref=e35]
+        - article
+          - StaticText "14:37 → 16:45"
+          - StaticText "Northwind NW336 · 50h 08m · nonstop"
+          - StaticText "$383"
+          - button "Select outbound" [ref=e36]
+          - button "Select return" [ref=e37]
+        - article
+          - StaticText "17:57 → 20:34"
+          - StaticText "Northwind NW691 · 50h 37m · 1 stop"
+          - StaticText "$214"
+          - button "Select outbound" [ref=e38]
+          - button "Select return" [ref=e39]
+        - article
+          - StaticText "19:59 → 22:45"
+          - StaticText "Meridian MR273 · 50h 46m · nonstop"
+          - StaticText "$322"
+          - button "Select outbound" [ref=e40]
+          - button "Select return" [ref=e41]
+      - region "Your trip" [ref=e7]
+        - heading "TRIP" [level=3, ref=e30]
+        - paragraph
+          - StaticText "No flights selected yet."
+        - heading "PASSENGERS (0)" [level=3, ref=e31]
+        - paragraph
+          - StaticText "Tell the Copilot who's flying."
+        - StaticText "Total"
+        - strong
+          - StaticText "$0"
+        - paragraph
+          - StaticText "Ask the Copilot to book when you're ready."
+    - complementary
+      - generic
+        - StaticText "Skylark Copilot"
+        - StaticText "Flight booking assistant"
+        - button "Clear chat" [ref=e18]
+        - button "Close chat" [ref=e19]
+        - heading "Ask the Skylark Copilot" [level=2, ref=e20]
+        - paragraph
+          - StaticText "I search flights, fill passenger details, and pick seats by what you want — all through the page's WebMCP tools. I only book once you say so."
+        - generic
+          - button "Find a flight from SFO to JFK in two weeks for 2 people" [ref=e21]
+          - button "Passengers are Jane Doe (1990-04-12) and John Doe (1988-09-30)" [ref=e22]
+          - button "Put us in two window seats together near the front" [ref=e23]
+          - button "What's left to do before we can book?" [ref=e24]
+          - form
+            - textbox "Find a flight, add passengers, pick seats…" [ref=e25]
+            - button "Start voice recognition" [ref=e26]
+            - button "Send message" [ref=e27]

@@ -1,0 +1,52 @@
+{
+  "runId": "20261010-225709-ceee6f",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "Flights loaded and search results rendered",
+      "note": null,
+      "files": [
+        "02-streaming-flights-loaded-and-search-results-rendered.png",
+        "02-streaming-flights-loaded-and-search-results-rendered.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/webmcp-flights.html",
+      "at": "2026-10-10T22:57:19.310Z",
+      "head": "1043df9963a91dd87664c4e462eacf344976d053",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Registered flight tools after initialization",
+      "note": "0 request(s) crossed the network boundary, 1 controller event(s)",
+      "files": [
+        "03-streaming-registered-flight-tools-after-initialization.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/webmcp-flights.html",
+      "at": "2026-10-10T22:57:19.394Z",
+      "head": "1043df9963a91dd87664c4e462eacf344976d053",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Flights initializer and local search smoke",
+      "note": null,
+      "files": [
+        "01-streaming-flights-initializer-and-local-search-smoke.gif",
+        "01-streaming-flights-initializer-and-local-search-smoke.webm",
+        "01-streaming-flights-initializer-and-local-search-smoke.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/webmcp-flights.html",
+      "at": "2026-10-10T22:57:19.565Z",
+      "head": "1043df9963a91dd87664c4e462eacf344976d053",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Corrected v6 initializer boots the real flights demo, registers WebMCP tools, and local Search renders flight choices. No live model booking was attempted."
+    }
+  ]
+}
