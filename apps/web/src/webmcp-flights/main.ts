@@ -13,7 +13,7 @@ import {
 } from "@runtypelabs/persona";
 // `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext`; it must be initialized before tools register.
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
 import { BookingStore } from "./store";
 import { createApp } from "./app";
@@ -23,7 +23,7 @@ import {
   setupFlightTools,
 } from "./tools";
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 const store = new BookingStore();
 
