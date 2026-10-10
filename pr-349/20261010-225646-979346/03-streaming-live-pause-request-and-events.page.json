@@ -1,0 +1,45 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Fetch the pages for this review",
+            "createdAt": "2026-10-10T22:56:53.350Z"
+          }
+        ]
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 5108,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1791673013350
+      }
+    },
+    {
+      "at": 5116,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mv2zuova_wvp15gy4",
+        "role": "user",
+        "content": "Fetch the pages for this review",
+        "createdAt": "2026-10-10T22:56:53.350Z",
+        "sequence": 1791673008265,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    }
+  ]
+}

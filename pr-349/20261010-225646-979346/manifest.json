@@ -1,0 +1,77 @@
+{
+  "runId": "20261010-225646-979346",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "Active live pause",
+      "note": null,
+      "files": [
+        "02-streaming-active-live-pause.png",
+        "02-streaming-active-live-pause.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22persistState%22%3Atrue%7D",
+      "at": "2026-10-10T22:56:53.570Z",
+      "head": "38155931f80f459f2a7bb551f94496c869d33e40",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Live pause request and events",
+      "note": "1 request(s) crossed the network boundary, 2 controller event(s)",
+      "files": [
+        "03-streaming-live-pause-request-and-events.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22persistState%22%3Atrue%7D",
+      "at": "2026-10-10T22:56:53.679Z",
+      "head": "38155931f80f459f2a7bb551f94496c869d33e40",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Reload preserves chat without stale pause spinner",
+      "note": null,
+      "files": [
+        "04-streaming-reload-preserves-chat-without-stale-pause-spinne.png",
+        "04-streaming-reload-preserves-chat-without-stale-pause-spinne.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22persistState%22%3Atrue%7D",
+      "at": "2026-10-10T22:56:57.616Z",
+      "head": "38155931f80f459f2a7bb551f94496c869d33e40",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Restored pause hidden",
+      "note": "0 request(s) crossed the network boundary, 0 controller event(s)",
+      "files": [
+        "05-streaming-restored-pause-hidden.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22persistState%22%3Atrue%7D",
+      "at": "2026-10-10T22:56:57.703Z",
+      "head": "38155931f80f459f2a7bb551f94496c869d33e40",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "streaming",
+      "label": "Durable pause survives reload without a stale spinner",
+      "note": null,
+      "files": [
+        "01-streaming-durable-pause-survives-reload-without-a-stale-sp.gif",
+        "01-streaming-durable-pause-survives-reload-without-a-stale-sp.webm",
+        "01-streaming-durable-pause-survives-reload-without-a-stale-sp.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22persistState%22%3Atrue%7D",
+      "at": "2026-10-10T22:56:57.945Z",
+      "head": "38155931f80f459f2a7bb551f94496c869d33e40",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Real await stream showed Fetching pages; reload restored the saved chat with unresolved pause metadata but zero visible pause spinners. Only HTTP was scripted."
+    }
+  ]
+}
