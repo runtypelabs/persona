@@ -22,7 +22,9 @@ it.each(["hook", "history"] as const)(
     const waiting = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const hook = vi.fn(() => (pause === "hook" ? waiting : undefined));
+    let beginHistory: (() => void) | undefined;
+    let historyReady: Promise<void> | undefined;
+    const hook = vi.fn(() => (pause === "hook" ? waiting : beginHistory?.()));
     const mount = document.createElement("div");
     document.body.append(mount);
     controller = createAgentExperience(mount, {
@@ -107,18 +109,22 @@ it.each(["hook", "history"] as const)(
     );
     controller.setMessage("Keep this draft");
     controller.setQuote({ text: "Keep this quote" });
-    const internal = session as unknown as {
-      historyGate: Promise<void> | null;
-    };
-    if (pause === "history") internal.historyGate = waiting;
+    if (pause === "history") {
+      // Start a real boot transition during preparation, after submission eligibility
+      // was checked. The session must wait without consuming the composer draft.
+      beginHistory = () => {
+        init.mockImplementationOnce(() => waiting.then(() => null));
+        historyReady = session.initializeBootConversation();
+      };
+    }
 
     expect(controller.submitMessage()).toBe(true);
     expect(controller.submitMessage("Do not replace it")).toBe(false);
     expect(mount.querySelector("textarea")?.value).toBe("Keep this draft");
     retries.push(session.retrySteeredMessage("retry-7"));
     expect(session.canAcceptSteeredInput()).toBe(false);
-    internal.historyGate = null;
     release();
+    await historyReady;
     // Wait until the actual reservation rejects, not merely the hook resolving.
     await vi.waitFor(() =>
       expect(mount.textContent).toContain("Message was not sent"),

@@ -132,6 +132,36 @@ describe("client-token live input admission", () => {
     ]);
   });
 
+  it("refreshes identity proof without changing delivery identity after a lost acknowledgement", async () => {
+    const requests: Record<string, unknown>[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      requests.push(JSON.parse(String(init.body)));
+      if (requests.length === 1) throw new TypeError("lost acknowledgement");
+      return receipt();
+    }));
+    const instance = client();
+    let proofNumber = 0;
+    instance.updateConfig({
+      clientToken: "ct_test",
+      identityProvider: "example",
+      getIdentityProof: () => `one-use-proof-${++proofNumber}`,
+    });
+
+    await instance.dispatch({
+      messages: [message("proof-retry")],
+      steer: { turnId: "proof-retry", onAdmission: () => {} },
+    }, () => {});
+
+    expect(requests).toHaveLength(2);
+    expect(requests.map(({ identityProof }) => identityProof)).toEqual([
+      { provider: "example", token: "one-use-proof-1" },
+      { provider: "example", token: "one-use-proof-2" },
+    ]);
+    const [{ identityProof: _firstProof, ...first }, { identityProof: _secondProof, ...second }] = requests;
+    expect(second).toEqual(first);
+    expect(second).toMatchObject({ turnId: "proof-retry", submitMode: "steer" });
+  });
+
   it("a rejected delivery emits no incumbent stream error or idle", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1642,40 +1642,43 @@ export class AgentWidgetClient {
         assertCurrentTurn();
         return this.#sendWithClientToolsDiff(session.sessionId, offeredTools, async (toolFields) => {
           assertCurrentTurn();
-          const identityProof = await this.#resolveChatIdentityProof(options.signal);
-          assertCurrentTurn();
-          const chatRequest: ClientChatRequest = {
-            ...baseChatRequest,
-            sessionId: session.sessionId,
-            ...toolFields,
-            ...(identityProof && { identityProof }),
-          };
+          const post = async (retryOnNetworkError: boolean): Promise<Response> => {
+            const identityProof = await this.#resolveChatIdentityProof(options.signal);
+            assertCurrentTurn();
+            const chatRequest: ClientChatRequest = {
+              ...baseChatRequest,
+              sessionId: session.sessionId,
+              ...toolFields,
+              ...(identityProof && { identityProof }),
+            };
 
-          if (this.debug) {
-            // eslint-disable-next-line no-console
-            console.debug("[AgentWidgetClient] client token dispatch", {
-              ...chatRequest,
-              ...(identityProof && { identityProof: { provider: identityProof.provider, token: '[REDACTED]' } }),
+            if (this.debug) {
+              // eslint-disable-next-line no-console
+              console.debug("[AgentWidgetClient] client token dispatch", {
+                ...chatRequest,
+                ...(identityProof && { identityProof: { provider: identityProof.provider, token: '[REDACTED]' } }),
+              });
+            }
+
+            return fetch(this.#getClientApiUrl('chat'), {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Persona-Version': VERSION,
+                ...(recoveryVisitorToken
+                  ? { 'X-Visitor-Token': recoveryVisitorToken }
+                  : {}),
+              },
+              body: JSON.stringify(chatRequest),
+              signal: options.signal,
+            }).catch((error) => {
+              if (!retryOnNetworkError || !options.steer || options.signal?.aborted) throw error;
+              // Retry the same delivery with a fresh proof. Only transport failure
+              // is ambiguous; a rejected proof provider must not be retried here.
+              return post(false);
             });
-          }
-
-          const post = () => fetch(this.#getClientApiUrl('chat'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Persona-Version': VERSION,
-              ...(recoveryVisitorToken
-                ? { 'X-Visitor-Token': recoveryVisitorToken }
-                : {}),
-            },
-            body: JSON.stringify(chatRequest),
-            signal: options.signal,
-          });
-          // Retry an ambiguous admission with the same body and delivery identity.
-          return post().catch((error) => {
-            if (!options.steer || options.signal?.aborted) throw error;
-            return post();
-          });
+          };
+          return post(true);
         });
       };
       let result = await send();

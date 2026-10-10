@@ -913,6 +913,26 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     });
   });
 
+  it('preserves delegated voice turns when live input steering is configured', async () => {
+    session.updateConfig({
+      clientToken: 'ct_voice_steering',
+      composer: { streamingSubmitBehavior: 'steer' },
+    });
+    vi.spyOn(session.getClient(), 'dispatch').mockImplementation(dispatch);
+    drive('user', 'what are your hours', true, 'voice-steering-user');
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));
+
+    const result = await h.state.bridge!.runDelegatedTurn(req({
+      delegationId: 'voice-steering-delegation',
+      userText: 'what are your hours',
+    }));
+
+    expect(result).toMatchObject({ status: 'completed', text: 'Nine to five.' });
+    expect(messages.filter((message) => message.role === 'user')).toHaveLength(1);
+    expect(dispatch.mock.calls[0][0]).toMatchObject({ voiceSpoken: true });
+    expect(dispatch.mock.calls[0][0]).not.toHaveProperty('steer');
+  });
+
   it('marks only the delegated voice turn as spoken (voice: { spoken: true })', async () => {
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));
     await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'what are your hours' }));
