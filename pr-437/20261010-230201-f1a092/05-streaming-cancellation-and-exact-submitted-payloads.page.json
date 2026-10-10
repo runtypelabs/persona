@@ -1,0 +1,161 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "url": "https://stop-proof.invalid/v1/client/init",
+      "body": {
+        "token": "ct_proof",
+        "durableRecovery": true
+      }
+    },
+    {
+      "url": "https://stop-proof.invalid/v1/client/init",
+      "body": {
+        "token": "ct_proof",
+        "durableRecovery": true,
+        "visitorToken": "proof-visitor-token",
+        "sessionId": "proof-session"
+      }
+    },
+    {
+      "url": "https://stop-proof.invalid/v1/client/chat",
+      "body": {
+        "sessionId": "proof-session",
+        "messages": [
+          {
+            "id": "usr_mv301cn4_wmo7yp5e",
+            "role": "user",
+            "content": "Start the first response"
+          }
+        ],
+        "assistantMessageId": "ast_mv301cn4_ioiprm3n",
+        "turnId": "usr_mv301cn4_wmo7yp5e",
+        "submitMode": "steer"
+      }
+    },
+    {
+      "url": "https://stop-proof.invalid/v1/client/conversations/proof-conversation/executions/active-run/cancel?sessionId=proof-session",
+      "body": null
+    },
+    {
+      "url": "https://stop-proof.invalid/v1/client/conversations/proof-conversation/executions/active-run/deliveries/first-delivery?sessionId=proof-session",
+      "body": null
+    },
+    {
+      "url": "https://stop-proof.invalid/v1/client/chat",
+      "body": {
+        "sessionId": "proof-session",
+        "messages": [
+          {
+            "id": "usr_mv301lan_1p98l2hx",
+            "role": "user",
+            "content": "Later request held in preparation"
+          }
+        ],
+        "assistantMessageId": "ast_mv301lan_nc0gz5va",
+        "turnId": "usr_mv301lan_1p98l2hx",
+        "submitMode": "steer"
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 519,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1791673324095
+      }
+    },
+    {
+      "at": 529,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mv301cn4_wmo7yp5e",
+        "delivery": {
+          "turnId": "usr_mv301cn4_wmo7yp5e",
+          "status": "sending"
+        },
+        "role": "user",
+        "content": "Start the first response",
+        "createdAt": "2026-10-10T23:02:04.096Z",
+        "sequence": 1791673323602,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "type": "active-stream-aborted"
+    },
+    {
+      "at": 964,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1791673324540
+      }
+    },
+    {
+      "type": "stop-result",
+      "detail": {
+        "cancellations": [
+          "https://stop-proof.invalid/v1/client/conversations/proof-conversation/executions/active-run/cancel?sessionId=proof-session"
+        ],
+        "aborted": 1,
+        "draft": "Later request held in preparation",
+        "locked": true
+      }
+    },
+    {
+      "at": 11735,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1791673335311
+      }
+    },
+    {
+      "at": 11736,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mv301lan_1p98l2hx",
+        "delivery": {
+          "turnId": "usr_mv301lan_1p98l2hx",
+          "status": "sending"
+        },
+        "role": "user",
+        "content": "Later request held in preparation",
+        "createdAt": "2026-10-10T23:02:15.311Z",
+        "sequence": 1791673323603,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 11741,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "ast_mv301lan_nc0gz5va",
+        "role": "assistant",
+        "content": "The later request was admitted.",
+        "createdAt": "2026-10-10T23:02:15.316Z",
+        "streaming": false,
+        "sequence": 1791673335315,
+        "agentMetadata": {
+          "executionId": "later-run",
+          "iteration": 0,
+          "agentName": ""
+        }
+      }
+    }
+  ]
+}

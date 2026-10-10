@@ -1,0 +1,78 @@
+{
+  "runId": "20261010-230201-f1a092",
+  "entries": [
+    {
+      "feature": "streaming",
+      "label": "Stop stays available beside frozen draft controls",
+      "note": null,
+      "files": [
+        "02-streaming-stop-stays-available-beside-frozen-draft-control.png",
+        "02-streaming-stop-stays-available-beside-frozen-draft-control.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html",
+      "at": "2026-10-10T23:02:04.478Z",
+      "head": "b6b2292852c73f29642d7f1fa559c58b200238b8",
+      "diffHash": "e548ca450ea3"
+    },
+    {
+      "feature": "streaming",
+      "label": "Active run cancelled; later draft remains intact",
+      "note": null,
+      "files": [
+        "03-streaming-active-run-cancelled-later-draft-remains-intact.png",
+        "03-streaming-active-run-cancelled-later-draft-remains-intact.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html",
+      "at": "2026-10-10T23:02:15.232Z",
+      "head": "b6b2292852c73f29642d7f1fa559c58b200238b8",
+      "diffHash": "e548ca450ea3"
+    },
+    {
+      "feature": "streaming",
+      "label": "Draft admitted after preparation resolves",
+      "note": null,
+      "files": [
+        "04-streaming-draft-admitted-after-preparation-resolves.png",
+        "04-streaming-draft-admitted-after-preparation-resolves.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html",
+      "at": "2026-10-10T23:02:15.677Z",
+      "head": "b6b2292852c73f29642d7f1fa559c58b200238b8",
+      "diffHash": "e548ca450ea3"
+    },
+    {
+      "feature": "streaming",
+      "label": "Cancellation and exact submitted payloads",
+      "note": "6 request(s) crossed the network boundary, 8 controller event(s)",
+      "files": [
+        "05-streaming-cancellation-and-exact-submitted-payloads.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html",
+      "at": "2026-10-10T23:02:15.891Z",
+      "head": "b6b2292852c73f29642d7f1fa559c58b200238b8",
+      "diffHash": "e548ca450ea3"
+    },
+    {
+      "feature": "streaming",
+      "label": "Stop works while the submitted draft is frozen",
+      "note": null,
+      "files": [
+        "01-streaming-stop-works-while-the-submitted-draft-is-frozen.gif",
+        "01-streaming-stop-works-while-the-submitted-draft-is-frozen.webm",
+        "01-streaming-stop-works-while-the-submitted-draft-is-frozen.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html",
+      "at": "2026-10-10T23:02:16.866Z",
+      "head": "b6b2292852c73f29642d7f1fa559c58b200238b8",
+      "diffHash": "e548ca450ea3"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "streaming",
+      "pass": true,
+      "skipped": false,
+      "note": "Actual Stop click during a held second send posted cancel for active-run and aborted its stream. The draft stayed unchanged and locked until preparation resolved, then was sent exactly once. Only HTTP was scripted."
+    }
+  ]
+}
