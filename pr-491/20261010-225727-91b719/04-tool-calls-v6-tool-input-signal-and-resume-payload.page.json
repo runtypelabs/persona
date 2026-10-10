@@ -1,0 +1,307 @@
+{
+  "scenario": "echo",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "url": "https://verify.invalid/chat",
+      "body": {
+        "messages": [
+          {
+            "role": "user",
+            "content": "Add the verification note to this page",
+            "createdAt": "2026-10-10T22:57:50.566Z"
+          }
+        ],
+        "clientTools": [
+          {
+            "name": "proof_add_note",
+            "description": "Show the requested verification note on this page",
+            "parametersSchema": {
+              "type": "object",
+              "properties": {
+                "note": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "note"
+              ]
+            },
+            "origin": "webmcp",
+            "pageOrigin": "http://127.0.0.1:4390"
+          }
+        ]
+      }
+    },
+    {
+      "url": "https://verify.invalid/chat/resume",
+      "body": {
+        "executionId": "v6-proof",
+        "toolOutputs": {
+          "v6-call": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"note\":\"The v6 fallback ran this approved local tool.\"}"
+              }
+            ]
+          }
+        },
+        "streamResponse": true
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 21887,
+      "type": "message:read-aloud",
+      "detail": {
+        "messageId": null,
+        "message": null,
+        "state": "idle",
+        "timestamp": 1791673070565
+      }
+    },
+    {
+      "at": 21893,
+      "type": "user:message",
+      "detail": {
+        "id": "usr_mv2zvx0m_w8rpa0fh",
+        "role": "user",
+        "content": "Add the verification note to this page",
+        "createdAt": "2026-10-10T22:57:50.566Z",
+        "sequence": 1791673048701,
+        "viaVoice": false,
+        "composerOptions": {}
+      }
+    },
+    {
+      "at": 21901,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "tool-v6-call",
+        "role": "assistant",
+        "content": "",
+        "createdAt": "2026-10-10T22:57:50.576Z",
+        "streaming": false,
+        "variant": "tool",
+        "sequence": 1791673070575,
+        "toolCall": {
+          "id": "v6-call",
+          "status": "running",
+          "name": "webmcp:proof_add_note",
+          "args": {
+            "note": "The v6 fallback ran this approved local tool."
+          },
+          "chunks": [],
+          "startedAt": 1791673070578
+        },
+        "agentMetadata": {
+          "executionId": "v6-proof",
+          "awaitingLocalTool": true,
+          "webMcpToolCallId": "v6-call"
+        }
+      }
+    },
+    {
+      "at": 21904,
+      "type": "approval:requested",
+      "detail": {
+        "approval": {
+          "id": "webmcp-1",
+          "status": "pending",
+          "agentId": "",
+          "executionId": "",
+          "toolName": "proof_add_note",
+          "toolType": "webmcp",
+          "description": "Show the requested verification note on this page",
+          "parameters": {
+            "note": "The v6 fallback ran this approved local tool."
+          }
+        },
+        "message": {
+          "id": "approval-webmcp-1",
+          "role": "assistant",
+          "content": "",
+          "createdAt": "2026-10-10T22:57:50.582Z",
+          "streaming": false,
+          "variant": "approval",
+          "approval": {
+            "id": "webmcp-1",
+            "status": "pending",
+            "agentId": "",
+            "executionId": "",
+            "toolName": "proof_add_note",
+            "toolType": "webmcp",
+            "description": "Show the requested verification note on this page",
+            "parameters": {
+              "note": "The v6 fallback ran this approved local tool."
+            }
+          },
+          "sequence": 1791673048702
+        }
+      }
+    },
+    {
+      "at": 25306,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "webmcp-1",
+          "status": "approved",
+          "agentId": "",
+          "executionId": "",
+          "toolName": "proof_add_note",
+          "toolType": "webmcp",
+          "description": "Show the requested verification note on this page",
+          "parameters": {
+            "note": "The v6 fallback ran this approved local tool."
+          },
+          "resolvedAt": 1791673073984
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "type": "actual-v6-tool-executed",
+      "detail": {
+        "input": {
+          "note": "The v6 fallback ran this approved local tool."
+        },
+        "hasAbortSignal": true
+      }
+    },
+    {
+      "at": 25308,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "tool-v6-call",
+        "role": "assistant",
+        "content": "",
+        "createdAt": "2026-10-10T22:57:50.576Z",
+        "streaming": false,
+        "variant": "tool",
+        "sequence": 1791673070575,
+        "toolCall": {
+          "id": "v6-call",
+          "status": "complete",
+          "name": "webmcp:proof_add_note",
+          "args": {
+            "note": "The v6 fallback ran this approved local tool."
+          },
+          "chunks": [],
+          "startedAt": 1791673070578,
+          "completedAt": 1791673073986,
+          "durationMs": 3408,
+          "result": {
+            "content": [
+              {
+                "type": "text",
+                "text": "{\"note\":\"The v6 fallback ran this approved local tool.\"}"
+              }
+            ]
+          }
+        },
+        "agentMetadata": {
+          "executionId": "v6-proof",
+          "awaitingLocalTool": false,
+          "webMcpToolCallId": "v6-call",
+          "clientToolAnswer": {
+            "toolCallId": "v6-call",
+            "toolName": "webmcp:proof_add_note",
+            "args": {
+              "note": "The v6 fallback ran this approved local tool."
+            },
+            "result": {
+              "content": [
+                {
+                  "type": "text",
+                  "text": "{\"note\":\"The v6 fallback ran this approved local tool.\"}"
+                }
+              ]
+            },
+            "batch": "v6-proof:v6-call"
+          }
+        }
+      }
+    },
+    {
+      "at": 25308,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "webmcp-1",
+          "status": "approved",
+          "agentId": "",
+          "executionId": "",
+          "toolName": "proof_add_note",
+          "toolType": "webmcp",
+          "description": "Show the requested verification note on this page",
+          "parameters": {
+            "note": "The v6 fallback ran this approved local tool."
+          },
+          "resolvedAt": 1791673073984
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 25315,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "webmcp-1",
+          "status": "approved",
+          "agentId": "",
+          "executionId": "",
+          "toolName": "proof_add_note",
+          "toolType": "webmcp",
+          "description": "Show the requested verification note on this page",
+          "parameters": {
+            "note": "The v6 fallback ran this approved local tool."
+          },
+          "resolvedAt": 1791673073984
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 25316,
+      "type": "approval:resolved",
+      "detail": {
+        "approval": {
+          "id": "webmcp-1",
+          "status": "approved",
+          "agentId": "",
+          "executionId": "",
+          "toolName": "proof_add_note",
+          "toolType": "webmcp",
+          "description": "Show the requested verification note on this page",
+          "parameters": {
+            "note": "The v6 fallback ran this approved local tool."
+          },
+          "resolvedAt": 1791673073984
+        },
+        "decision": "approved"
+      }
+    },
+    {
+      "at": 25316,
+      "type": "assistant:complete",
+      "detail": {
+        "id": "assistant-1791673073987-3ea3af9fe4cd2",
+        "role": "assistant",
+        "content": "The approved note was added through WebMCP v6.",
+        "createdAt": "2026-10-10T22:57:53.987Z",
+        "streaming": false,
+        "sequence": 1791673073987,
+        "agentMetadata": {
+          "executionId": "v6-proof",
+          "iteration": 0
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "runId": "20261010-225727-91b719",
+  "entries": [
+    {
+      "feature": "tool-calls",
+      "label": "Fallback v6 approval pending",
+      "note": null,
+      "files": [
+        "02-tool-calls-fallback-v6-approval-pending.png",
+        "02-tool-calls-fallback-v6-approval-pending.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22webmcp%22%3A%7B%22enabled%22%3Atrue%7D%7D",
+      "at": "2026-10-10T22:57:53.945Z",
+      "head": "660e178ac185fa1d21c576e1db43bec5dcfdc869",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "Fallback local tool result",
+      "note": null,
+      "files": [
+        "03-tool-calls-fallback-local-tool-result.png",
+        "03-tool-calls-fallback-local-tool-result.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22webmcp%22%3A%7B%22enabled%22%3Atrue%7D%7D",
+      "at": "2026-10-10T22:57:54.203Z",
+      "head": "660e178ac185fa1d21c576e1db43bec5dcfdc869",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "V6 tool input signal and resume payload",
+      "note": "2 request(s) crossed the network boundary, 11 controller event(s)",
+      "files": [
+        "04-tool-calls-v6-tool-input-signal-and-resume-payload.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22webmcp%22%3A%7B%22enabled%22%3Atrue%7D%7D",
+      "at": "2026-10-10T22:57:54.289Z",
+      "head": "660e178ac185fa1d21c576e1db43bec5dcfdc869",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "tool-calls",
+      "label": "Fallback v6 executes an approved local tool",
+      "note": null,
+      "files": [
+        "01-tool-calls-fallback-v6-executes-an-approved-local-tool.gif",
+        "01-tool-calls-fallback-v6-executes-an-approved-local-tool.webm",
+        "01-tool-calls-fallback-v6-executes-an-approved-local-tool.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?config=%7B%22webmcp%22%3A%7B%22enabled%22%3Atrue%7D%7D",
+      "at": "2026-10-10T22:57:54.523Z",
+      "head": "660e178ac185fa1d21c576e1db43bec5dcfdc869",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "tool-calls",
+      "pass": true,
+      "skipped": false,
+      "note": "Browser boot installed the v6 fallback without a host runtime. A typed request plus Allow executed the local tool once with object input and AbortSignal, updated the page, posted its result to resume, and rendered the response. HTTP only was scripted; declaration build also passed."
+    }
+  ]
+}
