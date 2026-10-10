@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "pnpm --filter @runtypelabs/persona build && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "test:run": "vitest run src",
     "runtype:ensure": "node runtype/ensure-docs-agent.ts"
   },
@@ -29,8 +29,8 @@
     "@runtypelabs/persona-proxy": "workspace:^",
     "@runtypelabs/sdk": "^10.3.1",
     "jsdom": "^28.1.0",
-    "typescript": "^5.4.5",
-    "vite": "^5.4.1",
-    "vitest": "4.0.18"
+    "typescript": "^6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
   }
 }
