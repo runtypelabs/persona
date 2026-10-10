@@ -882,7 +882,7 @@ export type WebMcpConfirmInfo = {
   /**
    * Why the confirm was requested. Currently always `'gate'`: the default
    * confirm-by-default gate that fires before every `webmcp:*` call. Tool
-   * callbacks receive an AbortSignal, not a nested confirmation API.
+   * callbacks on v6 receive an AbortSignal, not a nested confirmation API.
    */
   reason: 'gate';
 };
@@ -7706,8 +7706,9 @@ export type AgentWidgetConfig = {
    * When `enabled`, the widget installs `@mcp-b/webmcp-polyfill`, snapshots the
    * current document's registry on every dispatch, ships it as `clientTools[]`,
    * and executes returned `webmcp:*` calls with confirm-by-default gating.
-   * Requires the current object-input WebMCP execution contract. The fallback
-   * polyfill needs HTTPS/localhost and Chrome/Firefox 126+ or Safari 18+.
+   * Supports host-installed v5 JSON-string and v6 object-input contracts.
+   * The automatic fallback stays on v5 to preserve existing browser support
+   * and callback-result behavior.
    *
    * Server-side policy on the chat surface is the source of truth: these
    * fields layer on top.

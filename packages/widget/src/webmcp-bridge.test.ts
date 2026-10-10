@@ -8,7 +8,7 @@ import type {
 
 // ---------------------------------------------------------------------------
 // Mock the strict @mcp-b/webmcp-polyfill. The bridge dynamically imports it and
-// calls `installWebMCP()` (idempotent install of document.modelContext).
+// calls `initializeWebMCPPolyfill()` for the v5 automatic fallback.
 // We stub the install as a no-op and provide `document.modelContext` ourselves,
 // modeling the strict producer-preview surface the bridge consumes:
 //   - getTools(): async; inputSchema in either generation (see
@@ -20,7 +20,7 @@ import type {
 const polyfillMock = { initThrows: false };
 
 vi.mock("@mcp-b/webmcp-polyfill", () => ({
-  installWebMCP: vi.fn(() => {
+  initializeWebMCPPolyfill: vi.fn(() => {
     if (polyfillMock.initThrows) throw new Error("init boom");
   }),
 }));
@@ -186,7 +186,7 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
     expect(bridge.isOperational()).toBe(false);
   });
 
-  it("returns empty when installWebMCP() throws", async () => {
+  it("returns empty when the fallback initializer throws", async () => {
     // No pre-existing modelContext: otherwise install() short-circuits
     // before importing the polyfill and the throwing init never runs.
     vi.stubGlobal("document", {});
@@ -775,5 +775,39 @@ describe("v6 local-document boundary", () => {
     expect(getWebMcpToolDisplayTitle("shared")).toBe("Local title");
     expect(await consumer.executeToolCall("webmcp:shared", {})).toEqual({ content: [{ type: "text", text: "local" }] });
     expect((await consumer.executeToolCall("webmcp:remote_only", {})).isError).toBe(true);
+  });
+});
+
+describe("polyfill initializer compatibility", () => {
+  it("accepts the legacy initializer used by the automatic fallback", async () => {
+    vi.stubGlobal("document", {});
+    const initializeWebMCPPolyfill = vi.fn(() => {
+      vi.stubGlobal("document", { modelContext: makeModelContext() });
+    });
+    setWebMcpPolyfillLoader(async () => ({ initializeWebMCPPolyfill }));
+    const bridge = new WebMcpBridge({ enabled: true });
+    await bridge.snapshotForDispatch();
+    expect(initializeWebMCPPolyfill).toHaveBeenCalledTimes(1);
+    expect(bridge.isOperational()).toBe(true);
+  });
+});
+
+describe("native preview argument conversion", () => {
+  it("supports DOMString coercion without relying on polyfill metadata", async () => {
+    const nativeExecute = vi.fn(async (_tool: unknown, input: unknown) => {
+      // WebIDL converts an object to DOMString before the native JSON parser.
+      return JSON.stringify({ received: JSON.parse(String(input)) });
+    });
+    vi.stubGlobal("document", {
+      modelContext: {
+        getTools: async () => [{ name: "native", description: "Native preview tool" }],
+        executeTool: nativeExecute,
+      },
+    });
+    const consumer = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    expect(await consumer.executeToolCall("webmcp:native", { count: 2 })).toEqual({
+      content: [{ type: "text", text: '{"received":{"count":2}}' }],
+    });
+    expect(nativeExecute).toHaveBeenCalledTimes(1);
   });
 });

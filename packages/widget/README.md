@@ -238,19 +238,25 @@ Add `RUNTYPE_API_KEY` to your environment. The proxy constructs the Runtype payl
 
 ### WebMCP compatibility
 
-Persona uses `@mcp-b/webmcp-polyfill` v6. Producer pages should call
-`installWebMCP()` before registering tools. The fallback requires HTTPS or
-localhost and Chrome/Firefox 126+ or Safari 18+. Existing native contexts and
-host-installed polyfills must support `executeTool(descriptor, inputObject,
-{ signal })`; older JSON-string-input implementations are not upgraded.
+Persona supports host-installed `@mcp-b/webmcp-polyfill` v5 and v6 without
+replacing their registry. Producer pages using v5 call
+`initializeWebMCPPolyfill()`; pages using v6 call `installWebMCP()` before
+registering tools. Both initializer exports also work with custom Persona
+polyfill loaders. Tool execution supports both JSON-string and object-input
+contracts with one invocation, not a failed-call retry.
+
+When no registry exists, Persona lazily installs v5. This preserves the previous
+browser requirements and callback-result behavior. The demos use v6 explicitly;
+that runtime requires HTTPS/localhost and Chrome/Firefox 126+ or Safari 18+.
 
 Only the current document's tools are exposed, even when the registry also
 discovers tools in related frames. The dispatch protocol addresses tools by
 name and does not support frame-qualified calls.
 
-Tool callbacks receive `(input, { signal })`. Validate input in the callback,
-forward the signal to cancellable work, and return a JSON-serializable value.
-Return an MCP result with `isError: true` for an actionable error message; v6
-replaces thrown callback errors with a generic error and rejects `undefined`
-and other non-serializable results. Registration cleanup uses an AbortSignal;
-the document-lifetime polyfill has no uninstall API.
+Callback semantics belong to the installed runtime. In v6, callbacks receive
+`(input, { signal })`; validate input, forward the signal to cancellable work,
+and return a JSON-serializable value. Return an MCP result with `isError: true`
+for an actionable error message: v6 replaces thrown callback errors with a
+generic error and rejects `undefined` and other non-serializable results. v5's
+existing result conversion remains unchanged. Registration cleanup uses an
+AbortSignal in both versions.

@@ -580,8 +580,8 @@ importers:
   packages/widget:
     dependencies:
       '@mcp-b/webmcp-polyfill':
-        specifier: ^6.0.0
-        version: 6.0.0
+        specifier: ^5.1.0
+        version: 5.1.0
       dompurify:
         specifier: ^3.4.13
         version: 3.4.13
@@ -652,6 +652,9 @@ importers:
       vitest:
         specifier: ^4.0.9
         version: 4.1.9(@opentelemetry/api@1.9.1)(@types/node@20.19.35)(@vitest/ui@4.0.18)(jsdom@28.1.0(supports-color@10.2.2))(vite@8.0.16(@types/node@20.19.35)(esbuild@0.21.5)(terser@5.49.0)(tsx@4.22.4)(yaml@2.9.0))
+      webmcp-polyfill-v6:
+        specifier: npm:@mcp-b/webmcp-polyfill@6.0.0
+        version: '@mcp-b/webmcp-polyfill@6.0.0'
 
 packages:
 
@@ -1626,12 +1629,20 @@ packages:
     resolution: {integrity: sha512-bifpmIr9zf2b6CvgNlZEntMGANapfaMY1lbcY2Wxa/Fd6jWhui14AjEvKuZNykIzYp3+18JV2XBcrCE9xxCw7w==}
     engines: {node: '>=20'}
 
+  '@mcp-b/webmcp-polyfill@5.1.0':
+    resolution: {integrity: sha512-KL09hniFssPY8HBO3qzurWPqm+1JYRwV3wx6x2XSySgo+6BL1XHGsHGIoAO7U9zzigv7TA5keNBoZ+3P1jq18g==}
+    engines: {node: '>=20'}
+
   '@mcp-b/webmcp-polyfill@6.0.0':
     resolution: {integrity: sha512-Z1wYbaYjwEM1FjxHFyw1oRgDAuLCjcQYeAOHtNNlqZ3n1aVA44Ci0kQrnpi7gySZbeiva2zMEU8XO6EG5MS8FA==}
     engines: {node: '>=20'}
 
   '@mcp-b/webmcp-ts-sdk@6.0.0':
     resolution: {integrity: sha512-vpdxaIE2cdf4S6xCrTVENW/d9ixycASF/AhXRnOCMk+0GvKGHjkiMgrmYUPT8+qoXjMM9Mr9oKGnTh4kR2WoIA==}
+    engines: {node: '>=20'}
+
+  '@mcp-b/webmcp-types@5.1.0':
+    resolution: {integrity: sha512-twOKDUr7al60K890HvRcNvoHSfQ2rnGeKJiQs6eUr+Leg+LQ6K+yz3F4K70jykMK1a09ZIgYb3Oc7mAypuKPig==}
     engines: {node: '>=20'}
 
   '@modelcontextprotocol/core@2.0.0':
@@ -5774,6 +5785,11 @@ snapshots:
       '@modelcontextprotocol/core': 2.0.0
       '@modelcontextprotocol/server': 2.0.0
 
+  '@mcp-b/webmcp-polyfill@5.1.0':
+    dependencies:
+      '@mcp-b/webmcp-types': 5.1.0
+      '@standard-schema/spec': 1.1.0
+
   '@mcp-b/webmcp-polyfill@6.0.0':
     dependencies:
       webmcp-types: 0.1.9
@@ -5784,6 +5800,10 @@ snapshots:
       '@modelcontextprotocol/server': 2.0.0
       '@standard-schema/spec': 1.1.0
       webmcp-types: 0.1.9
+
+  '@mcp-b/webmcp-types@5.1.0':
+    dependencies:
+      '@modelcontextprotocol/server': 2.0.0
 
   '@modelcontextprotocol/core@2.0.0':
     dependencies:

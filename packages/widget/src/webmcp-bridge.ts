@@ -14,21 +14,19 @@
  * enforcement live on the Runtype API; this bridge mirrors those checks
  * client-side as a usability convenience, not a security boundary.
  *
- * The v6 polyfill follows the upstream WebMCP object-input contract:
- * `getTools()` returns descriptors with a JSON Schema object and window/origin
- * identity; `executeTool(descriptor, input, { signal })` returns JSON text.
- * Only tools owned by this document are exposed: our wire protocol addresses
- * tools by name, not by frame. Callbacks must validate their own input and
- * return JSON-serializable results.
+ * Supports v5's JSON-string input and v6's object input with a single call:
+ * the runtime passes a JSON object that also string-coerces to JSON text.
+ * Never infer the execution contract from metadata or retry a failed call.
+ * Only tools owned by this document are exposed: the wire addresses tools by
+ * name, not by frame. Callbacks must validate their own input.
  *
- * ESM imports do not install the global. We load and call `installWebMCP()`
- * only when enabled. It preserves an existing native context and requires a
- * secure context and the browser APIs listed in the polyfill's documentation.
- * Existing contexts must support object-input execution; older preview
- * contracts are not upgraded or retried after a failed invocation.
+ * The automatic fallback stays on v5 to preserve its browser requirements and
+ * result semantics. Host pages may install v5 or v6 themselves; Persona does
+ * not replace an existing context. v5's initializeWebMCPPolyfill() and v6's
+ * installWebMCP() are both accepted by custom loaders.
  *
  * Every call passes one confirm gate before execution, regardless of
- * `annotations.readOnlyHint`. The callback receives an invocation AbortSignal.
+ * annotations.readOnlyHint. v6 callbacks also receive an invocation signal.
  */
 
 import type { ClientToolDefinition } from "./types";
@@ -54,8 +52,8 @@ export interface ModelContextToolInfo {
    * object. `@mcp-b/webmcp-polyfill` made the switch in v5, and Chrome ships it
    * from 154.0.8013 (cross-document tools first) -- but Chrome 149-153, most of
    * the Origin Trial population, and 154's same-document tools still emit the
-   * string. Legacy metadata is still accepted here; execution requires the
-   * current object-input contract regardless of schema representation.
+   * string. Both input execution contracts are supported independently of
+   * schema representation.
    *
    * Absent when the tool registered no schema: v5 omits the member, where v4
    * always emitted a `{"type":"object"}` string.
@@ -86,7 +84,7 @@ export interface ModelContextCoreLike {
   getTools(): Promise<ModelContextToolInfo[]>;
   executeTool(
     tool: ModelContextToolInfo,
-    input: object,
+    input: object | string,
     options?: { signal?: AbortSignal },
   ): Promise<string | null>;
 }
@@ -129,9 +127,9 @@ export const getWebMcpToolDisplayTitle = (
 ): string | undefined => webMcpToolDisplayTitles.get(stripWebMcpPrefix(toolName));
 
 /** The slice of `@mcp-b/webmcp-polyfill` the bridge consumes on install. */
-export type WebMcpPolyfillModule = {
-  installWebMCP: () => void;
-};
+export type WebMcpPolyfillModule =
+  | { initializeWebMCPPolyfill: () => void }
+  | { installWebMCP: () => void };
 
 /**
  * Override how the polyfill module is obtained. By default the bridge does

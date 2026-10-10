@@ -275,7 +275,7 @@ export class WebMcpBridge {
     }
 
     try {
-      const raw = await mc.executeTool(info, args === undefined ? {} : (args as object), {
+      const raw = await mc.executeTool(info, createCompatibleToolInput(args), {
         signal: controller.signal,
       });
       return normalizeSerializedResult(raw);
@@ -329,7 +329,8 @@ export class WebMcpBridge {
       const mod = await this.#deps.loadPolyfill();
       // Idempotent: no-ops if `document.modelContext` already exists (native or
       // a prior install by the host page).
-      mod.installWebMCP();
+      if ("initializeWebMCPPolyfill" in mod) mod.initializeWebMCPPolyfill();
+      else mod.installWebMCP();
       this.#installed = true;
     } catch (err) {
       log.warn(
@@ -514,6 +515,28 @@ const normalizeSerializedResult = (raw: string | null): WebMcpToolResult => {
 
   const text = typeof parsed === "string" ? parsed : safeStringify(parsed);
   return { content: [{ type: "text", text }] };
+};
+
+/**
+ * One invocation works with both contracts: v5/native previews coerce input to
+ * JSON text, whereas v6 serializes the object. Keep the coercion hook off the
+ * JSON payload and clone first so we never mutate caller-owned arguments.
+ * Do not probe by executing/retrying: page tools may have irreversible effects.
+ */
+const createCompatibleToolInput = (args: unknown): object => {
+  let json: string;
+  try {
+    json = JSON.stringify(args) ?? "{}";
+  } catch {
+    // Preserve the historical fallback for non-serializable arguments.
+    json = "{}";
+  }
+  const input: unknown = JSON.parse(json);
+  if (input === null || typeof input !== "object") {
+    throw new TypeError("WebMCP tool arguments must be an object or array.");
+  }
+  Object.defineProperty(input, Symbol.toPrimitive, { value: () => json });
+  return input;
 };
 
 const errorResult = (message: string): WebMcpToolResult => ({

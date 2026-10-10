@@ -48,7 +48,7 @@ describe("webmcp-runtime bundle split", () => {
     }
     // No polyfill inlined: `registerTool` / `cfworker` only exist inside
     // @mcp-b/webmcp-polyfill (the class merely CALLS the injected module's
-    // installWebMCP, so that name legitimately appears here).
+    // initializer, so both initializer names legitimately appear here).
     expect(chunk.includes("registerTool")).toBe(false);
     expect(chunk.includes("cfworker")).toBe(false);
     // A CJS twin exists for require()-based consumers.
