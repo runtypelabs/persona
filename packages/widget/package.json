@@ -122,7 +122,12 @@
       "import": "./dist/forms-ui.js",
       "require": "./dist/forms-ui.cjs"
     },
-    "./widget.css": "./dist/widget.css"
+    "./widget.css": "./dist/widget.css",
+    "./live-input": {
+      "types": "./dist/live-input.d.ts",
+      "import": "./dist/live-input.js",
+      "require": "./dist/live-input.cjs"
+    }
   },
   "files": [
     "dist",

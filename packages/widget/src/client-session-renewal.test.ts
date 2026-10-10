@@ -88,6 +88,84 @@ afterEach(() => {
 });
 
 describe("client token session renewal", () => {
+  it.each([30_000, 600_000])(
+    "preserves steered delivery identity across renewal with %i ms left",
+    async (milliseconds) => {
+      const h = await setup(milliseconds);
+      (h.client as unknown as { clientSession: ClientSession }).clientSession =
+        {
+          ...session(milliseconds),
+          durableRecovery: { enabled: true, steer: true },
+        };
+      h.initialize.mockImplementation(() =>
+        Response.json({
+          ...session(),
+          sessionId: "session-new",
+          durableRecovery: { enabled: true, steer: true },
+        }),
+      );
+      h.chat.mockImplementation(() =>
+        Response.json(
+          {
+            executionId: "execution-active",
+            deliveryId: "delivery-1",
+            deliveryStatus: "pending",
+          },
+          { status: 202 },
+        ),
+      );
+      if (milliseconds > 60_000) h.chat.mockImplementationOnce(expired);
+      const onAdmission = vi.fn();
+      await h.client.dispatch(
+        {
+          ...options,
+          steer: { turnId: message.id, onAdmission },
+        },
+        (event) => h.events.push(event),
+      );
+      const bodies = h.requests
+        .filter((request) => request.url.endsWith("/chat"))
+        .map((request) => request.body);
+      expect(bodies.at(-1)).toMatchObject({
+        sessionId: "session-new",
+        turnId: message.id,
+        submitMode: "steer",
+        messages: [{ id: message.id }],
+      });
+      if (milliseconds > 60_000)
+        expect(bodies[1]).toEqual({ ...bodies[0], sessionId: "session-new" });
+      expect(onAdmission).toHaveBeenCalledExactlyOnceWith({
+        kind: "receipt",
+        executionId: "execution-active",
+        deliveryId: "delivery-1",
+        status: "pending",
+      });
+      expect(h.events).toEqual([]);
+      expect(h.onSessionInit).toHaveBeenCalledOnce();
+      expect(h.onSessionExpired).not.toHaveBeenCalled();
+    },
+  );
+
+  it("fails closed if renewal withdraws steer support", async () => {
+    const h = await setup();
+    (h.client as unknown as { clientSession: ClientSession }).clientSession = {
+      ...session(),
+      durableRecovery: { enabled: true, steer: true },
+    };
+    h.chat.mockImplementationOnce(expired);
+    await expect(
+      h.client.dispatch(
+        {
+          ...options,
+          steer: { turnId: message.id, onAdmission: vi.fn() },
+        },
+        (event) => h.events.push(event),
+      ),
+    ).rejects.toThrow("supported native");
+    expect(h.chat).toHaveBeenCalledOnce();
+    expect(h.events).toEqual([]);
+  });
+
   it("renews a legacy session through its session ID without enabling shared history", async () => {
     const h = await setup(30_000);
     (h.client as unknown as { clientSession: ClientSession }).clientSession = {

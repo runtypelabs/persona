@@ -97,3 +97,23 @@ the session_end After above):
 | `dist/index.cjs` | 215.92 kB | 216.06 kB | 216 → 216.25 kB |
 
 `index.global.js` stays within its existing budgets (164.05 kB gzip).
+
+## Live input steering
+
+The steering admission queue and composer controls stay in the core bundle.
+Receipt transport and polling load from the optional `live-input` chunk.
+The original PR used tsup-era baselines. After rebasing onto the Rust toolchain
+and lazy core modules in main (`afae13fc`), the measured outputs are:
+
+| Output | Measured | Budget |
+| --- | ---: | ---: |
+| `dist/index.global.js` | 166.81 kB gzip | 166 → 168 kB |
+| `dist/index.global.js` | 131.82 KiB Brotli | 131 → 133 KiB |
+| `dist/index.js` | 210.05 kB gzip | 215.75 kB, unchanged |
+| `dist/index.cjs` | 209.78 kB gzip | 216.75 kB, unchanged |
+| `dist/theme-editor-preview.js` | 134.78 kB gzip | 176 kB, unchanged |
+| `dist/live-input.js` | 1.29 kB gzip | 2 kB |
+
+Only the browser core budget needs an increase. Launcher, stylesheet, and the
+existing lazy-chunk budgets stay unchanged. `live-input` uses the same tsdown
+subpath build and declaration pipeline as the other optional chunks.
