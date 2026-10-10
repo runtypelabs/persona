@@ -36,6 +36,7 @@ import {
   emptySlide, instantiateLayout, builtinLayouts, applyChartPalette, readableInk, uid,
 } from '../model'
 import { CHART_PRESETS } from '../charts'
+import { setColor } from '../palette'
 
 // ---------------------------------------------------------------------------
 // Public contract
@@ -526,6 +527,8 @@ const applyPatch = (el: SlideElement, patch: Record<string, unknown>): void => {
       if (value && typeof value === 'object') target.option = value
     } else if (NUMERIC_KEYS.has(key) && typeof value === 'number') {
       target[key] = value
+    } else if (['color', 'fill', 'stroke'].includes(key) && typeof value === 'string') {
+      setColor(target, key, value, null)
     } else if (STRING_KEYS.has(key) && typeof value === 'string') {
       target[key] = value
     }
@@ -808,7 +811,7 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
           }
           slide = emptySlide({ elements: els })
         }
-        if (typeof args.background === 'string') slide.background = args.background
+        if (typeof args.background === 'string') setColor(slide as unknown as Record<string, unknown>, 'background', args.background, null)
         if (typeof args.notes === 'string') slide.notes = args.notes
 
         const at = typeof args.position === 'number'
@@ -922,7 +925,7 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
         const { slide } = resolveSlide(store, args)
         store.commit(() => {
           if (typeof args.name === 'string') slide.name = args.name
-          if (typeof args.background === 'string') slide.background = args.background
+          if (typeof args.background === 'string') setColor(slide as unknown as Record<string, unknown>, 'background', args.background, null)
           if (typeof args.transition === 'string') slide.transition = args.transition as Slide['transition']
           if (typeof args.notes === 'string') slide.notes = args.notes
         }, 'slides')

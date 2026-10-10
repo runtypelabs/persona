@@ -89,6 +89,9 @@ export function initAI(ctx: AiContext): BentoAiApi {
 
   const mount = () => {
     if (offlineEnabled()) return
+    // Destruction emits no turn completion: release busy state and pending
+    // comment callbacks before replacing the controller.
+    turns.abandon()
     const controller = mountCopilotPane(ctx, {
       openRail,
       fixFlagged: () => comments.fixAllFlagged(),
@@ -101,13 +104,14 @@ export function initAI(ctx: AiContext): BentoAiApi {
   mount()
 
   // the rail's reset: a fresh conversation. A running turn is aborted by the
-  // clear, and a call hangs up so the voice model doesn't carry the old chat.
+  // clear. Remount also cancels voice startup while permission is pending.
   ctx.editor.onCopilotReset = () => {
     const controller = paneController()
     if (!controller) return
     voice.endCall()
-    controller.clearChat()
     turns.abandon()
+    controller.clearChat()
+    mount()
     ctx.editor.toast(t('New chat.'))
   }
 
@@ -116,6 +120,7 @@ export function initAI(ctx: AiContext): BentoAiApi {
   // are not the kernel's — hang up and unmount so nothing else leaves.
   onOfflineEnforced(() => {
     voice.endCall()
+    turns.abandon()
     unmountCopilotPane()
     ctx.editor.toast(t('Offline mode — the Copilot is disconnected. Reload after going back online.'))
   })

@@ -21,7 +21,6 @@
 import {
   DEFAULT_WIDGET_CONFIG,
   createAgentExperience,
-  createLocalStorageAdapter,
   markdownPostprocessor,
   type AgentWidgetController,
 } from '@runtypelabs/persona'
@@ -35,6 +34,7 @@ import {
   type AiContext,
 } from './tools'
 import { buildContextMentions } from './mentions'
+import { createCopilotStorage } from './storage'
 import { COPILOT_AGENT_ID, COPILOT_CLIENT_TOKEN, RUNTYPE_API_URL } from './models'
 import { slideThumbById, slideIdsIn } from './thumbs'
 import { slideThumb } from './thumbs'
@@ -89,6 +89,7 @@ const bentoTheme = {
 
 let controller: PaneController | null = null
 let mountEl: HTMLElement | null = null
+let disposeStorage: (() => void) | undefined
 
 export function paneController(): PaneController | null {
   return controller
@@ -101,6 +102,8 @@ export function unmountCopilotPane() {
     /* already gone */
   }
   controller = null
+  disposeStorage?.()
+  disposeStorage = undefined
   mountEl?.parentElement?.replaceChildren()
   mountEl = null
 }
@@ -228,6 +231,8 @@ export function mountCopilotPane(ctx: AiContext, host: PaneHost): PaneController
     },
   ]
 
+  const storage = createCopilotStorage()
+  disposeStorage = storage.dispose
   controller = createAgentExperience(mountEl, {
     ...DEFAULT_WIDGET_CONFIG,
     apiUrl: RUNTYPE_API_URL,
@@ -277,7 +282,7 @@ export function mountCopilotPane(ctx: AiContext, host: PaneHost): PaneController
         },
       },
     },
-    storageAdapter: createLocalStorageAdapter('persona-state-bento-copilot'),
+    storageAdapter: storage.adapter,
     postprocessMessage: ({ text }: { text: string }) => markdownPostprocessor(text),
     colorScheme: 'light',
     theme: bentoTheme,

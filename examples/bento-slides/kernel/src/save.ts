@@ -415,10 +415,18 @@ const eb64 = {
 }
 
 let encPassword: string | null = null
+const encryptionListeners = new Set<(active: boolean) => void>()
+
+/** Observe at-rest encryption changes without exposing the password. */
+export function onEncryptionChange(listener: (active: boolean) => void): () => void {
+  encryptionListeners.add(listener)
+  return () => { encryptionListeners.delete(listener) }
+}
 
 /** Set (or clear with null) the password used for every subsequent save. */
 export function setEncryptionPassword(p: string | null) {
   encPassword = p
+  for (const listener of encryptionListeners) listener(p !== null)
 }
 
 export const isEncryptionActive = () => encPassword !== null
