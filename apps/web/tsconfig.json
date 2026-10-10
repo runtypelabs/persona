@@ -2,8 +2,8 @@
   "extends": "../../packages/widget/tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
+    "rootDir": "../..",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "baseUrl": ".",
     "paths": {
       "@runtypelabs/persona/theme-editor": ["../../packages/widget/src/theme-editor"],
       "@runtypelabs/persona/testing": ["../../packages/widget/src/testing"],
@@ -15,7 +15,7 @@
     }
   },
   "include": [
-    "src",
+    "./src",
     "../../packages/widget/src/@types"
   ]
 }

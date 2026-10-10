@@ -369,7 +369,7 @@ const buildPending = (
     if (action === "toggle-params") {
       const pre = card.querySelector<HTMLElement>('[data-role="params"]');
       if (pre) {
-        const willOpen = pre.hidden;
+        const willOpen = Boolean(pre.hidden);
         pre.hidden = !willOpen;
         head.setAttribute("aria-expanded", willOpen ? "true" : "false");
         head.setAttribute("aria-label", willOpen ? hideDetailsLabel : showDetailsLabel);

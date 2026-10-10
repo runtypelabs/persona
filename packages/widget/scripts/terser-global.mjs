@@ -1,24 +1,23 @@
 // Second minification pass over the CDN IIFE bundles (`dist/*.global.js`).
 //
-// esbuild produces the bundle; terser then re-minifies esbuild's already-
-// minified output. Byte count barely moves, but terser's mangler assigns
-// identifiers by character frequency, which Brotli compresses far better:
-// ~8 KiB off `index.global.js` (154.95 → 146.6 KiB). Mangling alone is
-// ~6.5 KiB of that; the remainder is from `compress`. Only safe compress
-// options are used, so behavior is unchanged.
+// tsdown (Rolldown + the Oxc minifier) produces the bundle; terser then
+// re-minifies the already-minified output. Byte count barely moves, but
+// terser's mangler assigns identifiers by character frequency, which Brotli
+// compresses better: ~8 KiB off `index.global.js` when the bundler was esbuild,
+// ~1 KiB after Oxc's mangler. Only safe compress options are used, so behavior
+// is unchanged.
 //
 // `keep_fargs: false` drops unused trailing parameters; nothing in the bundle
 // inspects `Function.length`.
 //
-// esbuild's legal-comment block lists every bundled lucide icon file above the
-// one shared ISC notice; the per-file paths are collapsed to the package name
-// (the license text itself is kept verbatim). The block sits at EOF, after all
-// mapped code (esbuild's default for bundles), so collapsing it shifts no
-// mapped line and the source map stays valid.
+// esbuild emitted a legal-comment block at EOF listing every bundled lucide
+// icon file above the one shared ISC notice; the per-file paths are collapsed
+// to the package name (the license text itself is kept verbatim). Rolldown keeps
+// the notice inline, so this is a no-op today, kept in case the block returns.
+// Collapsing EOF-only lines shifts no mapped line, so the source map stays valid.
 //
-// Runs on esbuild's minified output rather than replacing it via tsup's
-// `minify: "terser"`: terser on esbuild's unminified output measured ~1 KiB
-// larger. The existing source map is chained so stack traces still resolve to
+// Runs on the bundler's minified output: terser on esbuild's unminified output
+// measured ~1 KiB larger. The existing source map is chained so stack traces still resolve to
 // `src/`.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename } from "node:path";
@@ -53,7 +52,7 @@ for (const file of files) {
   const code = result.code.replace(
     /(?:^[\w@.-]+\/[\w./-]+\.m?js:\n)+/gm,
     (run) => {
-      // esbuild already strips `node_modules/`; drop it defensively (incl.
+      // The bundler already strips `node_modules/`; drop it defensively (incl.
       // nested installs) so the name is always the package's.
       const pkg = (line) => {
         const path = line.replace(/^(?:.*\/)?node_modules\//, "");

@@ -2,37 +2,36 @@
   "compilerOptions": {
     "target": "ES2022",
     "useDefineForClassFields": false,
-    "module": "ES2020",
-    "moduleResolution": "Node",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "lib": ["ES2020", "DOM"],
-    "baseUrl": ".",
     "paths": {
-      "@runtypelabs/persona": ["src"],
-      "@runtypelabs/persona/context-mentions": ["src/context-mentions.ts"],
+      "@runtypelabs/persona": ["./src"],
+      "@runtypelabs/persona/context-mentions": ["./src/context-mentions.ts"],
       "@runtypelabs/persona/context-mentions-inline": [
-        "src/context-mentions-inline.ts"
+        "./src/context-mentions-inline.ts"
       ],
-      "@runtypelabs/persona/history-view": ["src/history-view.ts"],
-      "@runtypelabs/persona/event-stream-view": ["src/event-stream-view.ts"],
-      "@runtypelabs/persona/animations-extra": ["src/animations-extra.ts"],
-      "@runtypelabs/persona/approval-ui": ["src/approval-ui.ts"],
-      "@runtypelabs/persona/session-reconnect": ["src/session-reconnect.ts"],
-      "@runtypelabs/persona/webmcp-runtime": ["src/webmcp-runtime.ts"],
-      "@runtypelabs/persona/icons-extra": ["src/icons-extra.ts"],
-      "@runtypelabs/persona/artifacts-ui": ["src/artifacts-ui.ts"],
-      "@runtypelabs/persona/voice-runtime": ["src/voice-runtime.ts"],
-      "@runtypelabs/persona/forms-ui": ["src/forms-ui.ts"]
+      "@runtypelabs/persona/history-view": ["./src/history-view.ts"],
+      "@runtypelabs/persona/event-stream-view": ["./src/event-stream-view.ts"],
+      "@runtypelabs/persona/animations-extra": ["./src/animations-extra.ts"],
+      "@runtypelabs/persona/approval-ui": ["./src/approval-ui.ts"],
+      "@runtypelabs/persona/session-reconnect": ["./src/session-reconnect.ts"],
+      "@runtypelabs/persona/webmcp-runtime": ["./src/webmcp-runtime.ts"],
+      "@runtypelabs/persona/icons-extra": ["./src/icons-extra.ts"],
+      "@runtypelabs/persona/artifacts-ui": ["./src/artifacts-ui.ts"],
+      "@runtypelabs/persona/voice-runtime": ["./src/voice-runtime.ts"],
+      "@runtypelabs/persona/forms-ui": ["./src/forms-ui.ts"]
     },
     "declaration": true,
     "outDir": "dist"
   },
   "include": [
-    "src/**/*"
+    "./src/**/*"
   ],
   "exclude": [
     "node_modules",

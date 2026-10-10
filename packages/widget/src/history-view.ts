@@ -3,7 +3,7 @@
  *
  * The IIFE/CDN widget bundle marks `@runtypelabs/persona/history-view` external
  * so the Messages surface is excluded from the core payload; this file is built
- * as a self-contained sibling chunk (`tsup.history-view.config.ts`) and loaded on
+ * as a self-contained sibling chunk (`tsdown.config.ts`) and loaded on
  * demand by the loader registered in `index-global.ts`. ESM/CJS consumers reach
  * it via this same (external) subpath.
  *

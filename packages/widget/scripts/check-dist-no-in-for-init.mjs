@@ -14,7 +14,7 @@
 //      routes on the Runtype dashboard's Vite 8 upgrade (runtypelabs/core
 //      PR #5309) and hits any customer bundling this package with Vite 8.
 //
-// esbuild's minifier mints the shape on its own: it merges a preceding
+// A minifier can mint the shape on its own: it merges a preceding
 // assignment like `const probe = (e) => "message" in e` into a following
 // loop's `for(init;;)` head. So fixing today's source occurrences is not
 // enough — any future source change can re-introduce it, and only this

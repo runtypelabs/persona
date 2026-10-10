@@ -3411,10 +3411,10 @@ export const createAgentExperience = (
     const pills = sheet.querySelectorAll<HTMLElement>(
       '[data-ask-pill-list="true"] [data-ask-user-action="pick"], [data-ask-pill-list="true"] [data-ask-user-action="focus-free-text"]'
     );
-    const target_pill = pills[n - 1];
-    if (!target_pill) return;
+    const targetPill = pills[n - 1];
+    if (!targetPill) return;
     event.preventDefault();
-    target_pill.click();
+    targetPill.click();
   };
   document.addEventListener("keydown", handleAskUserDigitKey);
 

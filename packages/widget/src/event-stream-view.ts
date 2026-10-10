@@ -4,7 +4,7 @@
  * The IIFE/CDN widget bundle marks `@runtypelabs/persona/event-stream-view`
  * external so the observability panel is excluded from the core payload; this
  * file is built as a self-contained sibling chunk
- * (`tsup.event-stream-view.config.ts`) and loaded on demand by the loader
+ * (`tsdown.config.ts`) and loaded on demand by the loader
  * registered in `index-global.ts`. ESM/CJS consumers reach it via this same
  * (external) subpath.
  *

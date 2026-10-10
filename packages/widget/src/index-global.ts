@@ -64,7 +64,7 @@ const siblingChunk =
         ),
       );
     }
-    // Runtime-only dynamic import; the specifier is a computed URL, so esbuild
+    // Runtime-only dynamic import; the specifier is a computed URL, so the bundler
     // leaves it untouched (and must not try to bundle it).
     return import(/* @vite-ignore */ chunkUrl);
   };
@@ -125,7 +125,7 @@ setHistoryShellLoader(siblingChunk("history-shell.js"));
 // Deferred Runtype TTS engine loading.
 //
 // This bundle is built with `./runtype-speech-engine` external (see
-// `tsup.global.config.ts`): the hosted read-aloud engine + the
+// `tsdown.config.ts`): the hosted read-aloud engine + the
 // AudioPlaybackManager it bundles are kept out of the CDN payload. Register a
 // loader that imports the self-contained `runtype-tts.js` chunk from a sibling
 // URL; the session prefetches it at init when `textToSpeech.provider:'runtype'`
@@ -146,7 +146,7 @@ setRuntypeTtsLoader(
 // Deferred Context Mentions loading.
 //
 // This bundle is built with `./context-mentions-entry` external (see
-// `tsup.global.config.ts`): the mention controller/manager/menu runtime is kept
+// `tsdown.config.ts`): the mention controller/manager/menu runtime is kept
 // out of the CDN payload. Register a loader that imports the self-contained
 // `context-mentions.js` chunk from a sibling URL; the orchestrator calls it on
 // the first `@`/affordance-button interaction (and can prefetch on composer
@@ -166,7 +166,7 @@ setContextMentionsInlineLoader(siblingChunk("context-mentions-inline.js"));
 // Deferred history-view loading.
 //
 // This bundle is built with `@runtypelabs/persona/history-view` external (see
-// `tsup.global.config.ts`): the Messages navigation surface is kept out of the
+// `tsdown.config.ts`): the Messages navigation surface is kept out of the
 // CDN payload and fetched only when the visitor first opens history. Same
 // sibling-URL scheme as the chunks above.
 // ---------------------------------------------------------------------------
@@ -179,7 +179,7 @@ setHistoryViewLoader(siblingChunk("history-view.js"));
 // Deferred stream-animations loading (wipe + glyph-cycle).
 //
 // This bundle is built with `@runtypelabs/persona/animations-extra` external
-// (see `tsup.global.config.ts`): the subpath animation plugins are kept out of
+// (see `tsdown.config.ts`): the subpath animation plugins are kept out of
 // the CDN payload and fetched only when `features.streamAnimation.type`
 // selects one (see the lazy resolver in ui.ts). Same sibling-URL scheme as the
 // chunks above.
@@ -198,7 +198,7 @@ setAnimationsExtraLoader(
 // Deferred approval-ui loading.
 //
 // This bundle is built with `@runtypelabs/persona/approval-ui` external (see
-// `tsup.global.config.ts`): the approval bubble, built-in approval plugin, and
+// `tsdown.config.ts`): the approval bubble, built-in approval plugin, and
 // plugin-kit are kept out of the CDN payload and fetched only when the first
 // approval message arrives. Same sibling-URL scheme as the chunks above.
 // ---------------------------------------------------------------------------
@@ -211,7 +211,7 @@ setApprovalUiLoader(siblingChunk("approval-ui.js"));
 // Deferred voice-runtime loading.
 //
 // This bundle is built with `@runtypelabs/persona/voice-runtime` external (see
-// `tsup.global.config.ts`): the voice provider factory + providers + audio
+// `tsdown.config.ts`): the voice provider factory + providers + audio
 // playback manager are kept out of the CDN payload, prefetched by the session
 // when a voice provider is configured. Same sibling-URL scheme as the chunks
 // above.
@@ -225,7 +225,7 @@ setVoiceRuntimeLoader(siblingChunk("voice-runtime.js"));
 // Deferred artifacts-ui loading.
 //
 // This bundle is built with `@runtypelabs/persona/artifacts-ui` external (see
-// `tsup.global.config.ts`): the artifact pane, inline/card components, and
+// `tsdown.config.ts`): the artifact pane, inline/card components, and
 // preview renderer are kept out of the CDN payload and fetched when the
 // artifacts sidebar is enabled or the first artifact directive arrives. Same
 // sibling-URL scheme as the chunks above.
@@ -239,7 +239,7 @@ setArtifactsUiLoader(siblingChunk("artifacts-ui.js"));
 // Deferred forms-ui loading.
 //
 // This bundle is built with `@runtypelabs/persona/forms-ui` external (see
-// `tsup.global.config.ts`): the `[data-tv-form]` demo-forms enhancement is
+// `tsdown.config.ts`): the `[data-tv-form]` demo-forms enhancement is
 // kept out of the CDN payload and fetched when a rendered bubble first
 // contains a form placeholder. Same sibling-URL scheme as the chunks above.
 // ---------------------------------------------------------------------------
@@ -252,7 +252,7 @@ setFormsUiLoader(siblingChunk("forms-ui.js"));
 // Deferred extra-icons loading.
 //
 // This bundle is built with `@runtypelabs/persona/icons-extra` external (see
-// `tsup.global.config.ts`): the config-only tail of the icon registry is kept
+// `tsdown.config.ts`): the config-only tail of the icon registry is kept
 // out of the CDN payload and fetched the first time `renderLucideIcon` is
 // asked for one of its names. Same sibling-URL scheme as the chunks above.
 // ---------------------------------------------------------------------------
@@ -270,7 +270,7 @@ setIconsExtraLoader(
 // Deferred WebMCP bridge runtime loading.
 //
 // This bundle is built with `@runtypelabs/persona/webmcp-runtime` external
-// (see `tsup.global.config.ts`): the WebMcpBridge class is kept out of the
+// (see `tsdown.config.ts`): the WebMcpBridge class is kept out of the
 // CDN payload and fetched by client.ts only when `config.webmcp.enabled` is
 // true. Same sibling-URL scheme as the chunks above. (The polyfill itself is
 // a separate, older chunk: `webmcp-polyfill.js`, registered further up.)
@@ -284,7 +284,7 @@ setWebMcpRuntimeLoader(siblingChunk("webmcp-runtime.js"));
 // Deferred session-reconnect loading.
 //
 // This bundle is built with `@runtypelabs/persona/session-reconnect` external
-// (see `tsup.global.config.ts`): the durable-session reconnect loop is kept
+// (see `tsdown.config.ts`): the durable-session reconnect loop is kept
 // out of the CDN payload and fetched only when a session with a
 // `reconnectStream` transport first needs to resume. Same sibling-URL scheme
 // as the chunks above.
@@ -298,7 +298,7 @@ setSessionReconnectLoader(siblingChunk("session-reconnect.js"));
 // Deferred event-stream-view loading.
 //
 // Same scheme as history-view: `@runtypelabs/persona/event-stream-view` is
-// external here (see `tsup.global.config.ts`), and the observability panel is
+// external here (see `tsdown.config.ts`), and the observability panel is
 // fetched from a sibling URL only when the visitor first opens it.
 // ---------------------------------------------------------------------------
 
