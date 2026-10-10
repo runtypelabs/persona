@@ -202,3 +202,39 @@ it.each(["hook", "history"] as const)("locks the captured draft while awaiting %
   await vi.waitFor(() => expect(mount.querySelector("textarea")!.disabled).toBe(false));
   expect(dispatch.mock.calls[0][0].messages[0].content).toBe("captured draft");
 });
+
+it("keeps Stop operable while a later send waits on preparation", async () => {
+  const init = vi.spyOn(AgentWidgetSession.prototype, "initClientSession").mockResolvedValue(null);
+  let release!: () => void;
+  const waiting = new Promise<void>(resolve => { release = resolve; });
+  let hold = false;
+  const mount = document.createElement("div");
+  document.body.append(mount);
+  controller = createAgentExperience(mount, {
+    clientToken: "demo-token", sessionInit: "mount", launcher: { enabled: false }, persistState: false,
+    composer: { streamingSubmitBehavior: "steer", onBeforeSend: () => hold ? waiting : undefined },
+  });
+  await vi.waitFor(() => expect(init).toHaveBeenCalled());
+  const session = init.mock.contexts[0] as AgentWidgetSession;
+  const dispatch = vi.spyOn(session.getClient(), "dispatch").mockImplementation(async (options) => {
+    options.steer!.onAdmission({ kind: "stream", executionId: "active-run", deliveryId: "delivery", status: "settled" });
+    await new Promise<void>(resolve => options.signal!.addEventListener("abort", () => resolve(), { once: true }));
+  });
+  const cancel = vi.spyOn(session.getClient(), "cancelClientExecution").mockResolvedValue();
+  controller.submitMessage("First request");
+  await vi.waitFor(() => expect(dispatch).toHaveBeenCalledOnce());
+  await vi.waitFor(() => expect(mount.querySelector<HTMLTextAreaElement>("textarea")!.disabled).toBe(false));
+  hold = true;
+  controller.setMessage("Later request");
+  expect(controller.submitMessage()).toBe(true);
+  const stop = mount.querySelector<HTMLButtonElement>("[data-persona-steer-stop]")!;
+  expect(stop).not.toBeNull();
+  expect(mount.querySelector<HTMLTextAreaElement>("textarea")!.disabled).toBe(true);
+  // jsdom does not implement inert hit testing: inspect every ancestor too.
+  for (let node: HTMLElement | null = stop; node; node = node.parentElement) {
+    expect(node.inert, node.tagName).not.toBe(true);
+  }
+  stop.click();
+  expect(cancel).toHaveBeenCalledWith("active-run");
+  release();
+});

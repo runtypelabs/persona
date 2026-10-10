@@ -7901,6 +7901,7 @@ export const createAgentExperience = (
   // Once captured, freeze the draft through async hooks and history admission.
   // Otherwise the delayed acceptance would consume newer text/files/chips.
   let composerSubmissionLocked = false;
+  const submissionFrozenRegions = new Map<HTMLElement, boolean>();
   const isComposerInputDisabled = (): boolean =>
     composerLock.inputDisabled || composerSubmissionLocked;
   const isActiveSessionVoice = (): boolean =>
@@ -7999,8 +8000,25 @@ export const createAgentExperience = (
     composerStore.setSendDisabled(send.disabled);
 
     const streaming = composerStore.getState().phase === "streaming";
-    // Include chip removal, option pickers, and plugin controls in the freeze.
-    footer.inert = composerSubmissionLocked;
+    // Freeze draft-editing regions, not the ancestor of Stop. Keep both the
+    // primary send/stop control and the separate steer Stop outside inert
+    // subtrees; their enabled state is managed independently below.
+    for (const [region, wasInert] of submissionFrozenRegions) region.inert = wasInert;
+    submissionFrozenRegions.clear();
+    if (composerSubmissionLocked) {
+      const freezeDraftRegions = (parent: HTMLElement): void => {
+        for (const child of parent.children) {
+          if (!(child instanceof HTMLElement) || child === sendButton || child === steerStopButton) continue;
+          if (child.contains(sendButton) || child.contains(steerStopButton)) {
+            freezeDraftRegions(child);
+          } else {
+            submissionFrozenRegions.set(child, child.inert);
+            child.inert = true;
+          }
+        }
+      };
+      freezeDraftRegions(footer);
+    }
     // Ancillary controls also disable while streaming so the user can't race a
     // send against an in-flight stream.
     const blocked = streaming || locked;
