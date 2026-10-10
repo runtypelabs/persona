@@ -339,6 +339,13 @@ through the widget's error path and the button returns to rest.
 accessible root with nothing wrapped around it. The returned `destroy()` runs on
 action removal, composer rebuild, plugin removal, and widget destroy.
 
+**Button tooltips.** Icon-only actions show their `label` in a styled tooltip on
+hover or keyboard focus. Use `tooltipText` to override the copy, or
+`showTooltip: false` to disable it while keeping the accessible name. Actions
+with visible text stay quiet unless `tooltipText` or `showTooltip: true` is set.
+The overflow `+` trigger uses the same styled tooltip; it hides while the menu
+is open. Menu rows do not inherit automatic bar tooltips.
+
 ```ts
 {
   id: "picker",

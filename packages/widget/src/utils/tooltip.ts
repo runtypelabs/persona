@@ -67,7 +67,7 @@ export interface TooltipOptions {
   viewportPadding?: number;
   /**
    * Hover wait before the first tooltip. Falls back to the widget
-   * `tooltip.delayMs` (default 200). Keyboard focus ignores this.
+   * `tooltip.delayMs` (default 400). Keyboard focus ignores this.
    */
   delayMs?: number;
   /**

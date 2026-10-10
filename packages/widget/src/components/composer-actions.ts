@@ -461,7 +461,7 @@ export function createComposerActionRenderer(
       button.style[property] = "";
     }
     button.style.lineHeight = "1";
-    if (action.tooltipText) button.setAttribute("title", action.tooltipText);
+    if (action.showTooltip !== false && action.tooltipText) button.setAttribute("title", action.tooltipText);
     else button.removeAttribute("title");
 
     button.replaceChildren();
@@ -555,7 +555,7 @@ export function createComposerActionRenderer(
       anchor: button,
       trigger: entry.element,
       text: () => action.tooltipText ?? action.label,
-      enabled: Boolean(action.tooltipText),
+      enabled: action.showTooltip ?? (!hasText || Boolean(action.tooltipText)),
     });
   };
 

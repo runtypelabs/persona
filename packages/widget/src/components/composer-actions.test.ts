@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   COMPOSER_ACTION_ORDER,
@@ -11,10 +11,12 @@ import {
 import { bindComposerSurface } from "./composer-bindings";
 import { buildComposer } from "./composer-builder";
 import { buildPillComposer } from "./pill-composer-builder";
+import { resetTooltipTiming } from "../utils/tooltip";
 import type { AgentWidgetPlugin } from "../plugins/types";
 import type {
   AgentWidgetConfig,
   ComposerAction,
+  ComposerButtonAction,
   ComposerActionContext,
   ComposerState,
 } from "../types";
@@ -508,6 +510,50 @@ describe("composer action renderer accessibility", () => {
         "data-persona-composer-disable-when-streaming"
       )
     ).toBe(true);
+  });
+});
+
+describe("composer action tooltips", () => {
+  beforeEach(() => resetTooltipTiming({ delayMs: 0, skipDelayMs: 0 }));
+  afterEach(() => {
+    resetTooltipTiming();
+    vi.restoreAllMocks();
+  });
+
+  const cases: Array<[string, Partial<ComposerButtonAction>, string | null]> = [
+    ["icon label", { iconName: "mic" }, "Start dictation"],
+    ["custom copy", { iconName: "mic", tooltipText: "Use your microphone" }, "Use your microphone"],
+    ["explicit opt-out", { iconName: "mic", tooltipText: "Hidden", showTooltip: false }, null],
+    ["visible text", { iconName: "mic", shortLabel: "Dictate" }, null],
+    ["iconless text", {}, null],
+    ["text with custom copy", { shortLabel: "Dictate", tooltipText: "Use your microphone" }, "Use your microphone"],
+    ["text with explicit opt-in", { shortLabel: "Dictate", showTooltip: true }, "Start dictation"],
+  ];
+  it.each(cases)("handles %s", (_name, patch, expected) => {
+    const harness = mountRenderer({ configActions: [button({ id: "dictate", label: "Start dictation", ...patch })] });
+    const el = actionButton(harness, "dictate");
+    el.parentElement!.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(document.querySelector('[role="tooltip"]')?.textContent ?? null).toBe(expected);
+    expect(el.getAttribute("aria-label")).toBe("Start dictation");
+    expect(el.hasAttribute("title")).toBe(false);
+    harness.renderer.destroy();
+    harness.elements.footer.remove();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+  });
+
+  it("supports keyboard focus and live opt-out without stale tooltips", () => {
+    const harness = mountRenderer({ configActions: [button({ id: "dictate", label: "Dictate", iconName: "mic" })] });
+    const el = actionButton(harness, "dictate");
+    vi.spyOn(el, "matches").mockImplementation(selector => selector === ":focus-visible");
+    el.focus();
+    expect(document.querySelector('[role="tooltip"]')?.textContent).toBe("Dictate");
+    harness.live.configActions = [button({ id: "dictate", label: "Dictate", iconName: "mic", showTooltip: false })];
+    harness.renderer.resolve();
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    actionButton(harness, "dictate").parentElement!.dispatchEvent(new MouseEvent("mouseenter"));
+    expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    harness.renderer.destroy();
+    harness.elements.footer.remove();
   });
 });
 

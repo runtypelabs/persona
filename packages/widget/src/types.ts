@@ -3965,7 +3965,7 @@ export type AgentWidgetTooltipConfig = {
   /**
    * Milliseconds to wait on hover before the first tooltip appears.
    * `0` restores the previous instant-open behavior.
-   * @default 200
+   * @default 400
    */
   delayMs?: number;
   /**
@@ -4219,7 +4219,13 @@ export type ComposerButtonAction = ComposerActionBase & {
   iconAnimation?: "none" | "voice";
   /** Optional decorative icon after the visible label (for example a chevron). */
   trailingIconName?: string;
+  /** Override the bar tooltip's text; defaults to `label` for icon-only actions. */
   tooltipText?: string;
+  /**
+   * Show a bar tooltip. Defaults to true for icon-only actions or when
+   * `tooltipText` is supplied. Set false to opt out without changing `label`.
+   */
+  showTooltip?: boolean;
   /**
    * Glyph and label color of the bar button, any CSS color. Ignored on the
    * overflow-menu row, which follows the menu's own palette.
@@ -7404,8 +7410,8 @@ export type AgentWidgetConfig = {
   autoFocusInput?: boolean;
   /**
    * Hover timing for the portaled control tooltip. Keyboard focus is
-   * always immediate. Unset keys keep the ChatGPT/Claude defaults
-   * (`delayMs: 200`, `skipDelayMs: 300`).
+   * always immediate. Unset keys keep the defaults
+   * (`delayMs: 400`, `skipDelayMs: 300`).
    */
   tooltip?: AgentWidgetTooltipConfig;
   launcher?: AgentWidgetLauncherConfig;

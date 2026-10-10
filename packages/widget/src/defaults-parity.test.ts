@@ -159,6 +159,14 @@ describe("4.22.0 defaults parity (flag off)", () => {
       expect(actual.themeCssVariables[key], key).toBe(value);
       delete resolvedActual.themeCssVariables[key];
     }
+    // Deliberately lengthen hover timing in both V4 and V5 without rewriting
+    // the historical fixture. Keyboard focus and the scan window are unchanged.
+    expect(baseline.mergedDefaultConfig.tooltip.delayMs).toBe(200);
+    expect(actual.mergedDefaultConfig.tooltip.delayMs).toBe(400);
+    resolvedActual.mergedDefaultConfig.tooltip = {
+      ...resolvedActual.mergedDefaultConfig.tooltip,
+      delayMs: baseline.mergedDefaultConfig.tooltip.delayMs,
+    };
     expect(resolvedActual).toEqual(resolvedBaseline);
   });
 });

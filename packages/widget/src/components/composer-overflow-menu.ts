@@ -15,6 +15,7 @@
 import { createPopover, type PopoverHandle } from "../plugin-kit";
 import { createElement, createNode } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
+import { attachTooltip } from "../utils/tooltip";
 import {
   COMPOSER_CONTROL_CLASS,
   COMPOSER_CONTROL_GLYPH_CLASS,
@@ -138,11 +139,15 @@ export function createComposerOverflowMenu(
 
   const applyLabel = (): void => {
     triggerButton.setAttribute("aria-label", label);
-    triggerButton.setAttribute("title", label);
     panel.setAttribute("aria-label", label);
   };
   applyLabel();
   applyButtonSize();
+  const tooltip = attachTooltip({
+    anchor: triggerButton,
+    trigger,
+    text: () => triggerButton.getAttribute("aria-expanded") === "true" ? "" : label,
+  });
 
   let items: HTMLElement[] = [];
   let activeIndex = -1;
@@ -261,6 +266,7 @@ export function createComposerOverflowMenu(
 
   const open = (focusIndex = 0, viaKeyboard = false): void => {
     if (destroyed || isOpen()) return;
+    tooltip.hide();
     keyboardModality = viaKeyboard;
     forwardMenuTokens(triggerButton, panel, MENU_TOKEN_VARS);
     ensurePopover().open();
@@ -373,10 +379,15 @@ export function createComposerOverflowMenu(
       if (next === label) return;
       label = next;
       applyLabel();
+      if (tooltip.isOpen) {
+        tooltip.hide();
+        tooltip.show();
+      }
     },
     applyButtonSize,
     destroy: () => {
       destroyed = true;
+      tooltip.destroy();
       detachFocusOut();
       detachPanelFocusIn();
       triggerButton.removeEventListener("click", onTriggerClick);
