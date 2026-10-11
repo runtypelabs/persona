@@ -268,7 +268,11 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
         annotations: {
           readOnlyHint: false,
           untrustedContentHint: false,
-          destructiveHint: true, // MCP-only today; not in the WebMCP dict
+          destructiveHint: true,
+          consequentialHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+          debugging: true,
           evil: () => "not JSON",
         },
       }),
@@ -277,6 +281,11 @@ describe("WebMcpBridge.snapshotForDispatch", () => {
     expect(snap[0]!.annotations).toEqual({
       readOnlyHint: false,
       untrustedContentHint: false,
+      destructiveHint: true,
+      consequentialHint: true,
+      idempotentHint: false,
+      openWorldHint: false,
+      debugging: true,
     });
     expect(snap[0]!).not.toHaveProperty("untrustedContentHint");
   });
@@ -380,6 +389,20 @@ describe("setWebMcpPolyfillLoader", () => {
 });
 
 describe("WebMCP display titles", () => {
+  it("passes sanitized annotations to confirmation without skipping the gate", async () => {
+    registry.tools = [fakeTool({ name: "search", annotations: {
+      readOnlyHint: true, destructiveHint: false, consequentialHint: false,
+      debugging: "yes", extra: () => "ignored",
+    } })];
+    const onConfirm = vi.fn(async () => false);
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    const result = await bridge.executeToolCall("webmcp:search", {});
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ annotations: {
+      readOnlyHint: true, destructiveHint: false, consequentialHint: false,
+    } }));
+    expect(result.isError).toBe(true);
+  });
+
   it("records declared titles on snapshot and exposes them via getWebMcpToolDisplayTitle", async () => {
     registry.tools = [
       fakeTool({ name: "add_to_cart", title: "Add to Cart" }),

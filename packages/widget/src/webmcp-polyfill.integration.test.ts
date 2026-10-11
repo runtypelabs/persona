@@ -129,7 +129,11 @@ describe.each([
           type: "object",
           properties: { query: { type: "string" } },
         },
-        annotations: { readOnlyHint: true, untrustedContentHint: true },
+        annotations: {
+          readOnlyHint: true,
+          untrustedContentHint: true,
+          ...(legacy ? {} : { consequentialHint: false, debugging: false }),
+        },
         untrustedContentHint: true,
       }),
     ]);
