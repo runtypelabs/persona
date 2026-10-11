@@ -8,7 +8,8 @@ import { expect, test } from "@playwright/test";
  * fake mic. For each delegation the server opens it records whether it was answered
  * on the direct route (`client_tool_call`, then `delegation_completed{route:
  * 'direct'}` with the spoken readout) or handed it to the chat pipeline.
- * Writes `bento-direct-tools.json` next to the other artifacts.
+ * Writes `bento-direct-tools.json` next to the other artifacts, including each
+ * outbound mic frame's send time and RMS level so speech end can be located.
  *
  * Serve the example first (the config reuses a server already on E2E_PORT):
  *   pnpm --filter bento-slides dev --port 4471 --strictPort --host 127.0.0.1
@@ -57,12 +58,15 @@ test("live Bento presenter: spoken commands answered on the direct route", async
   const t0 = Date.now();
   const frames: Frame[] = [];
   const audioInAt: number[] = [];
+  /** Each outbound mic frame: when it was sent and its RMS level (PCM16), to find where speech ends. */
+  const audioOut: Array<{ at: number; rms: number }> = [];
   page.on("websocket", (ws) => {
     if (!/\/ws\/agents\/[^/]+\/voice/.test(ws.url())) return;
     const record = (dir: "in" | "out") => (event: { payload: string | Buffer }) => {
       const at = Date.now() - t0;
       if (typeof event.payload !== "string") {
         if (dir === "in") audioInAt.push(at);
+        else audioOut.push({ at, rms: rms16(event.payload) });
         return;
       }
       try {
@@ -163,10 +167,21 @@ test("live Bento presenter: spoken commands answered on the direct route", async
     const fs = await import("node:fs/promises");
     await fs.writeFile(
       testInfo.outputPath("bento-direct-tools.json"),
-      JSON.stringify({ spoken: UTTERANCES, heard: heardTexts, delegations, audioIn: audioInAt.length, frames }, null, 2),
+      JSON.stringify({ spoken: UTTERANCES, heard: heardTexts, delegations, audioInAt, audioOut, frames }, null, 2),
     );
     await page.screenshot({ path: testInfo.outputPath("final.png") }).catch(() => {});
     console.log(`bento artifacts: ${testInfo.outputDir}`);
   }
 });
 
+/** RMS of a little-endian PCM16 frame. */
+function rms16(payload: Buffer): number {
+  const samples = Math.floor(payload.length / 2);
+  if (samples === 0) return 0;
+  let sum = 0;
+  for (let i = 0; i < samples; i++) {
+    const v = payload.readInt16LE(i * 2);
+    sum += v * v;
+  }
+  return Math.round(Math.sqrt(sum / samples));
+}
