@@ -710,7 +710,7 @@ export type RuntypeClientChatRequest = {
 }>;
   metadata?: Record<string, unknown>;
   sessionId: string;
-  submitMode?: "normal" | "interrupt" | "steer";
+  submitMode?: "normal" | "interrupt" | "steer" | "auto";
   turnId?: string;
   voice?: {
   spoken?: boolean;
