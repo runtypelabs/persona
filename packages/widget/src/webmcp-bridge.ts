@@ -74,10 +74,7 @@ export interface ModelContextToolInfo {
    * absent on v4 and whenever the tool declared none -- the spec omits the
    * member rather than emitting an empty object.
    */
-  annotations?: {
-    readOnlyHint?: boolean;
-    untrustedContentHint?: boolean;
-  };
+  annotations?: ClientToolDefinition["annotations"];
 }
 
 export interface ModelContextCoreLike {

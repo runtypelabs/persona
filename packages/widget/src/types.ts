@@ -818,14 +818,18 @@ export type AgentWidgetAgentRequestPayload = {
 // WebMCP Types (page-discovered tools shipped per dispatch)
 // ============================================================================
 
-/**
- * Wire shape for a single client-discovered tool sent on `dispatch.clientTools[]`.
- *
- * Mirrors the SDK's `ClientToolDefinition` in `@runtypelabs/sdk`. Only the
- * JSON-serializable surface of a WebMCP tool: the `execute` function stays
- * client-side; the server merges these into the agent's tool catalog under
- * the `webmcp:` namespace.
- */
+/** Advisory WebMCP and MCP hints. These do not grant approval or safe retry. */
+export type ToolAnnotations = {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  consequentialHint?: boolean;
+  untrustedContentHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  debugging?: boolean;
+};
+
+/** Wire metadata for a client-side tool; its execute function stays in the browser. */
 export type ClientToolDefinition = {
   /** Bare tool name; the server prepends `webmcp:` on the wire. */
   name: string;
@@ -842,20 +846,16 @@ export type ClientToolDefinition = {
   /** Origin of the page that registered the tool: for server-side audit. */
   pageOrigin?: string;
   /**
-   * WebMCP `Tool.annotations` (spec). Not used for gating server-side; the
-   * widget reads these client-side. Forwarded so traces/dashboards can show
-   * `readOnlyHint` / `untrustedContentHint` on tool-call records.
+   * WebMCP hints and MCP compatibility hints forwarded to runtime tool metadata
+   * and confirmation callbacks. No hint skips the default confirmation gate.
    */
-  annotations?: {
-    readOnlyHint?: boolean;
-    untrustedContentHint?: boolean;
-  };
+  annotations?: ToolAnnotations;
   /**
    * Hoisted copy of `annotations.untrustedContentHint`. This is the field the
    * server actually acts on (`InlineClientToolSchema`): it spotlights the
    * tool's output before the model reads it, so instructions embedded in
    * page-provided content (reviews, comments, emails) are not treated as
-   * instructions. `annotations` itself is trace/dashboard metadata only.
+   * instructions. A nested true hint also opts into output protection.
    */
   untrustedContentHint?: boolean;
 };
@@ -875,10 +875,7 @@ export type WebMcpConfirmInfo = {
    * didn't declare one.
    */
   title?: string;
-  annotations?: {
-    readOnlyHint?: boolean;
-    untrustedContentHint?: boolean;
-  };
+  annotations?: ToolAnnotations;
   /**
    * Why the confirm was requested. Currently always `'gate'`: the default
    * confirm-by-default gate that fires before every `webmcp:*` call. Tool

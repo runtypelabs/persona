@@ -239,10 +239,12 @@ export class WebMcpBridge {
     // Confirm-by-default gate. Every `webmcp:*` call routes through here,
     // regardless of `annotations.readOnlyHint`.
     const displayTitle = this.#deps.getToolDisplayTitle(bareName);
+    const annotations = pickAnnotations(info.annotations);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
       args,
       description: info.description,
+      ...(annotations ? { annotations } : {}),
       ...(displayTitle ? { title: displayTitle } : {}),
       reason: "gate",
     };
@@ -442,7 +444,7 @@ const EMPTY_INPUT_SCHEMA = { type: "object", properties: {} } as const;
  * Copy the WebMCP annotation hints onto the wire, dropping anything else.
  *
  * `getTools()` returns `annotations` since `@mcp-b/webmcp-polyfill` v5 (absent
- * on v4 and when the tool declared none). Only the spec's two boolean hints are
+ * on v4 and when the tool declared none). Only supported boolean hints are
  * forwarded -- annotations are page-authored, so an explicit copy keeps
  * functions/junk off the dispatch payload. Returns `undefined` when nothing
  * usable remains so the member is omitted, matching the spec's own
@@ -452,14 +454,14 @@ const pickAnnotations = (
   raw: ModelContextToolInfo["annotations"],
 ): ClientToolDefinition["annotations"] | undefined => {
   if (!raw || typeof raw !== "object") return undefined;
-  const picked = {
-    ...(typeof raw.readOnlyHint === "boolean"
-      ? { readOnlyHint: raw.readOnlyHint }
-      : {}),
-    ...(typeof raw.untrustedContentHint === "boolean"
-      ? { untrustedContentHint: raw.untrustedContentHint }
-      : {}),
-  };
+  const picked: NonNullable<ClientToolDefinition["annotations"]> = {};
+  for (const key of [
+    "readOnlyHint", "destructiveHint", "consequentialHint", "untrustedContentHint",
+    "idempotentHint", "openWorldHint", "debugging",
+  ] as const) {
+    const value = raw[key];
+    if (typeof value === "boolean") picked[key] = value;
+  }
   return Object.keys(picked).length > 0 ? picked : undefined;
 };
 

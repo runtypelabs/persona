@@ -174,6 +174,7 @@ export type {
   // WebMCP: page-discovered tool consumption
   AgentWidgetWebMcpConfig,
   ClientToolDefinition,
+  ToolAnnotations,
   WebMcpConfirmHandler,
   WebMcpConfirmInfo,
   WebMcpToolResult,
