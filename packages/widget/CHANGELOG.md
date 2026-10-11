@@ -1,5 +1,16 @@
 # @runtypelabs/persona
 
+## 4.29.0
+
+### Minor Changes
+
+- c598688: With WebMCP enabled, Runtype voice calls now advertise the page's tools, run tool calls the server routes to the page (skipping the confirm gate only for tools annotated `readOnlyHint: true`), and skip delegated turns the server answers itself. Servers that do not negotiate this see no change.
+
+### Patch Changes
+
+- d815ff6: Forward WebMCP and MCP compatibility annotation hints on client tool definitions and confirmation callbacks, including destructiveHint and consequentialHint. Keep confirmation enabled by default.
+- c598688: WebMCP confirm handlers now receive the call's `signal`. The built-in approval card closes when the call is cancelled or times out, instead of staying open after the tool can no longer run.
+
 ## 4.28.2
 
 ### Patch Changes
