@@ -834,3 +834,119 @@ describe("native preview argument conversion", () => {
     expect(nativeExecute).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("WebMcpBridge.executeVoiceToolCall", () => {
+  it("skips the confirm gate for a tool the registry marks readOnlyHint: true", async () => {
+    const onConfirm = vi.fn(async () => false);
+    registry.tools = [
+      fakeTool({ name: "next_slide", annotations: { readOnlyHint: true }, execute: () => ({ slidePosition: 2 }) }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    const r = await bridge.executeVoiceToolCall("webmcp:next_slide", {}, { autoConfirmReadOnly: true });
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(r).toEqual({ status: "completed", result: { slidePosition: 2 } });
+  });
+
+  it.each([
+    ["no annotations", undefined],
+    ["readOnlyHint false", { readOnlyHint: false }],
+    ["only other hints", { idempotentHint: true }],
+  ])("still shows the gate for a tool with %s, and maps a decline to denied", async (_label, annotations) => {
+    const onConfirm = vi.fn(async () => false);
+    const execute = vi.fn(() => "done");
+    registry.tools = [fakeTool({ name: "edit_slide", annotations, execute })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    const r = await bridge.executeVoiceToolCall("webmcp:edit_slide", {}, { autoConfirmReadOnly: true });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+    expect(r).toEqual({ status: "denied", error: { message: "User declined the tool call." } });
+  });
+
+  it("shows the gate even for a read-only tool when autoConfirmReadOnly is off", async () => {
+    const onConfirm = vi.fn(async () => true);
+    registry.tools = [fakeTool({ name: "next_slide", annotations: { readOnlyHint: true } })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    await bridge.executeVoiceToolCall("webmcp:next_slide", {});
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("answers stale for a tool missing from the registry or excluded by the allowlist", async () => {
+    registry.tools = [fakeTool({ name: "secret", annotations: { readOnlyHint: true } })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll, allowlist: ["public_*"] });
+    expect((await bridge.executeVoiceToolCall("webmcp:gone", {})).status).toBe("stale");
+    expect((await bridge.executeVoiceToolCall("webmcp:secret", {})).status).toBe("stale");
+  });
+
+  it("answers failed with the message when the page tool throws or returns an MCP error", async () => {
+    registry.tools = [
+      fakeTool({
+        name: "boom",
+        annotations: { readOnlyHint: true },
+        execute: () => {
+          throw new Error("kaboom");
+        },
+      }),
+      fakeTool({
+        name: "mcp_err",
+        annotations: { readOnlyHint: true },
+        execute: () => ({ isError: true, content: [{ type: "text", text: "no such slide" }] }),
+      }),
+    ];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm: allowAll });
+    const thrown = await bridge.executeVoiceToolCall("webmcp:boom", {}, { autoConfirmReadOnly: true });
+    expect(thrown).toEqual({ status: "failed", error: { message: "kaboom" } });
+    expect(await bridge.executeVoiceToolCall("webmcp:mcp_err", {}, { autoConfirmReadOnly: true })).toEqual({
+      status: "failed",
+      error: { message: "no such slide" },
+    });
+  });
+
+  it("does not run the tool when the signal aborts while the gate is open", async () => {
+    const abort = new AbortController();
+    const execute = vi.fn(() => "done");
+    const onConfirm = vi.fn(async () => {
+      abort.abort();
+      return true;
+    });
+    registry.tools = [fakeTool({ name: "edit_slide", execute })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    const r = await bridge.executeVoiceToolCall("webmcp:edit_slide", {}, {
+      signal: abort.signal,
+      autoConfirmReadOnly: true,
+    });
+    expect(execute).not.toHaveBeenCalled();
+    expect(r.status).toBe("failed");
+  });
+
+  it("keeps executeToolCall's /resume shape and gate unchanged", async () => {
+    const onConfirm = vi.fn(async () => false);
+    registry.tools = [fakeTool({ name: "next_slide", annotations: { readOnlyHint: true } })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    const r = await bridge.executeToolCall("webmcp:next_slide", {});
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(r).toEqual({ isError: true, content: [{ type: "text", text: "User declined the tool call." }] });
+  });
+});
+
+describe("WebMcpBridge.watchToolChanges", () => {
+  it("calls the listener on the registry's toolchange event until unsubscribed", async () => {
+    const mc = Object.assign(new EventTarget(), makeModelContext());
+    vi.stubGlobal("document", { modelContext: mc });
+    const bridge = new WebMcpBridge({ enabled: true });
+    const listener = vi.fn();
+    const stop = bridge.watchToolChanges(listener);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    mc.dispatchEvent(new Event("toolchange"));
+    expect(listener).toHaveBeenCalledTimes(1);
+    stop();
+    mc.dispatchEvent(new Event("toolchange"));
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it("is inert on a registry without events", async () => {
+    const bridge = new WebMcpBridge({ enabled: true });
+    const stop = bridge.watchToolChanges(vi.fn());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(() => stop()).not.toThrow();
+  });
+});

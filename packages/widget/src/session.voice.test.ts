@@ -623,6 +623,49 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     ]);
   });
 
+  it('offers no client tools when WebMCP is off', () => {
+    expect(h.state.bridge!.clientTools!()).toBeNull();
+  });
+
+  it('records a server-answered (direct) turn: the caption becomes the user turn, the readout an answer', async () => {
+    const caption = (role: 'user' | 'assistant', text: string, turnId: string) =>
+      h.state.transcriptCb!(role, text, true, { turnId, caption: true });
+    caption('user', 'Next slide', 'u1');
+    h.state.bridge!.recordDirectTurn!({
+      delegationId: 'd1',
+      userText: 'Next slide',
+      userUtteranceIds: ['u1'],
+      assistantText: 'Slide 2: Agenda.',
+    });
+    expect(view()).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'Next slide'],
+      ['assistant', 'Slide 2: Agenda.'],
+    ]);
+    expect(messages.find((m) => m.content === 'Next slide')!.voiceCaption).toBeUndefined();
+    expect(spoken('voice-direct-d1')).toBe(true);
+    expect(dispatch).not.toHaveBeenCalled();
+
+    // The next typed turn carries both as conversation.
+    dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Sure.', 'assistant-r2'));
+    await session.sendMessage('and the one after?');
+    const sent = dispatch.mock.calls[0][0].messages.filter((m) => !m.voiceCaption);
+    expect(sent.map((m) => m.content)).toEqual([
+      'Welcome! How can I help?',
+      'Next slide',
+      'Slide 2: Agenda.',
+      'and the one after?',
+    ]);
+  });
+
+  it('records a direct turn with no caption and no readout as just the request', () => {
+    h.state.bridge!.recordDirectTurn!({ delegationId: 'd2', userText: 'Next slide', userUtteranceIds: [], assistantText: '' });
+    expect(view()).toEqual([
+      ['assistant', 'Welcome! How can I help?'],
+      ['user', 'Next slide'],
+    ]);
+  });
+
   it('trims GPT-Live\'s leading space from bubbles and the submitted request', async () => {
     h.state.transcriptCb!('user', ' What are your opening hours', true, { turnId: 'u1', caption: true });
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));

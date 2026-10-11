@@ -16,7 +16,7 @@ import type { VoiceTurnTracker } from "./voice-turn-tracker";
 /** The session members the wiring touches (some are TS-private on the class). */
 export type VoiceWiringSession = Pick<
   AgentWidgetSession,
-  "injectMessage" | "sendMessage" | "resolveWebMcpApproval" | "resolveApproval"
+  "injectMessage" | "sendMessage" | "resolveWebMcpApproval" | "resolveApproval" | "getClient"
 > & {
   messages: AgentWidgetMessage[];
   callbacks: AgentWidgetSession["callbacks"];
@@ -91,6 +91,30 @@ export const wireSessionVoice = (
             // Its stream already ended (browser TTS skipped it then): read it
             // now. A stream still running reads it when it ends, once.
             if (!s.streaming) s.speakLatestAssistantMessage(ids);
+          },
+          clientTools: () => s.getClient().getVoiceClientTools(),
+          recordDirect: ({ delegationId, userText, userUtteranceIds, assistantText }) => {
+            // The heard transcript bubble becomes the conversation turn, as a
+            // delegated send would make it; without one, the request text is.
+            const bubbleId = p.keyed?.claimUserTurn(userText, userUtteranceIds) ?? null;
+            const bubble = bubbleId ? s.messages.find((m) => m.id === bubbleId && m.role === 'user') : undefined;
+            if (bubble) {
+              // upsertMessage merges, so it cannot drop the caption flag: replace the bubble.
+              s.messages = s.messages.map((m) => {
+                if (m.id !== bubble.id) return m;
+                const { voiceCaption: _caption, ...turn } = m;
+                return { ...turn, viaVoice: true };
+              });
+              s.callbacks.onMessagesChanged([...s.messages]);
+            } else if (userText.trim()) {
+              s.injectMessage({ role: 'user', content: userText.trim() });
+            }
+            const answer = assistantText.trim();
+            if (!answer) return;
+            // The voice model speaks this answer: browser TTS must not read it again.
+            const id = `voice-direct-${delegationId}`;
+            s.ttsSpokenMessageIds.add(id);
+            s.injectMessage({ id, role: 'assistant', content: answer });
           },
           decide: (id) => {
             if (s.webMcpApprovalResolvers.has(id)) return s.resolveWebMcpApproval(id, 'denied');

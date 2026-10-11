@@ -4,6 +4,8 @@ import type {
   VoiceDelegationFollowUp,
   VoiceDelegationRequest,
   VoiceDelegationResult,
+  VoiceClientTools,
+  VoiceDirectTurn,
   VoiceSessionBridge,
 } from "../types";
 
@@ -51,6 +53,10 @@ export interface VoiceDelegationHost {
   decide(approvalMessageId: string): void;
   /** Let browser TTS read these messages after all (their spoken result was dropped). */
   unspoken(messageIds: string[]): void;
+  /** WebMCP access for the voice fast tier; `null` when WebMCP is off. */
+  clientTools?(): VoiceClientTools | null;
+  /** Write a server-answered (`route: 'direct'`) turn into the chat. */
+  recordDirect?(turn: VoiceDirectTurn): void;
 }
 
 const SETTLE_POLL_MS = 50;
@@ -185,6 +191,9 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   };
 
   return {
+    clientTools: () => host.clientTools?.() ?? null,
+    recordDirectTurn: (turn) => host.recordDirect?.(turn),
+
     // Read once at call start, before this call has any captions, so the
     // captions here are earlier calls' (e.g. on the previous page of a
     // multi-page site): spoken conversation the new voice session never heard.

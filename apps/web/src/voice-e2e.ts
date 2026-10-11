@@ -80,6 +80,71 @@ if (webmcpDemo) {
   });
 }
 
+// Live harness only (`?slides=1`, the fast-tier spec): a six-slide deck whose
+// read-only navigation tools the voice fast tier can call directly.
+const slidesDemo = params.get("slides") === "1";
+if (slidesDemo) {
+  if (!webmcpDemo) installWebMCP();
+  const slides = [
+    { title: "Welcome", content: "Juniper Bakery quarterly review, presented by the bakery team." },
+    { title: "Agenda", content: "Results, product tour, customers, pricing, and questions." },
+    { title: "Product tour", content: "Sourdough, almond croissants, seasonal tarts, and the new rye loaf." },
+    { title: "Customers", content: "Four hundred regulars a week, plus two cafe wholesale accounts." },
+    { title: "Pricing", content: "Loaves from 6 dollars, pastries from 3 dollars 50, wholesale at 20 percent off." },
+    { title: "Questions", content: "Ask us anything about the bakery." },
+  ];
+  const outline = slides.map((slide, i) => `${i + 1} ${slide.title}`).join(", ");
+  const positions = slides.map((_, i) => i + 1);
+  let current = 1;
+  const deck = document.createElement("div");
+  deck.id = "demo-slides";
+  document.body.prepend(deck);
+  const show = (position: number) => {
+    current = position;
+    deck.textContent = `Slide ${position} of ${slides.length}: ${slides[position - 1]!.title}`;
+    return { slidePosition: position, slideTitle: slides[position - 1]!.title };
+  };
+  show(1);
+  const register = (tool: unknown) =>
+    (document as unknown as { modelContext: { registerTool: (tool: unknown) => void } }).modelContext.registerTool(tool);
+  register({
+    name: "next_slide",
+    title: "Next slide",
+    description: `Advance the presentation to the next slide. Slides: ${outline}.`,
+    inputSchema: { type: "object", properties: {} },
+    annotations: { readOnlyHint: true },
+    execute: async () => show(Math.min(current + 1, slides.length)),
+  });
+  register({
+    name: "jump_to_slide",
+    title: "Jump to slide",
+    description: `Jump to a 1-based slide position. Slides: ${outline}.`,
+    inputSchema: {
+      type: "object",
+      required: ["position"],
+      properties: { position: { type: "integer", enum: positions } },
+    },
+    annotations: { readOnlyHint: true },
+    execute: async (args: { position: number }) => show(args.position),
+  });
+  register({
+    name: "get_slide",
+    title: "Read slide",
+    description: `Read a slide's title and content without changing slides. Slides: ${outline}.`,
+    inputSchema: {
+      type: "object",
+      required: ["position"],
+      properties: { position: { type: "integer", enum: positions } },
+    },
+    annotations: { readOnlyHint: true },
+    execute: async (args: { position: number }) => ({
+      slidePosition: args.position,
+      slideTitle: slides[args.position - 1]?.title,
+      content: slides[args.position - 1]?.content,
+    }),
+  });
+}
+
 const host = document.getElementById("e2e-host") as HTMLElement;
 const status = document.getElementById("e2e-status") as HTMLElement;
 
@@ -94,7 +159,7 @@ const config: AgentWidgetConfig = {
   // A welcome hero would sit between the tests and the transcript.
   welcome: { variant: "none" },
   copy: { ...DEFAULT_WIDGET_CONFIG.copy, inputPlaceholder: "Send a message…" },
-  ...(webmcpDemo ? { webmcp: { enabled: true } } : {}),
+  ...(webmcpDemo || slidesDemo ? { webmcp: { enabled: true } } : {}),
   voiceRecognition: {
     enabled: true,
     provider: {

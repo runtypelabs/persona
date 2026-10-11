@@ -83,8 +83,32 @@
 // completed), and that phase's completion doesn't fold another utterance.
 // Delegated sends carry `voice: { spoken: true }` on the chat request, so the
 // agent answers in speakable sentences.
+//
+// Fast tier (`client_tools` and `delegation_routed`, declared only with client
+// delegation and WebMCP enabled): after `session_config` the provider sends
+// `client_tools{revision, tools}`, the same WebMCP snapshot the chat path
+// sends as `clientTools[]` but with each page tool's FULL name (`webmcp:<name>`;
+// sdk tools stay bare), and sends it again whenever the registry's fingerprint
+// changes, with a strictly larger `revision`. The server may then answer a
+// delegation itself: `delegation_started{route:'direct'}` means the widget
+// does not run that turn; it executes any `client_tool_call{toolCallId, name,
+// arguments, revision, timeoutMs}` through the WebMCP execute path (the confirm
+// gate is skipped only for a tool whose registry entry says `readOnlyHint:
+// true`) and answers `client_tool_result{status}`: `completed`, `denied` (gate
+// declined), `stale` (unknown tool or an outrun revision), `failed`, or
+// `timeout` (past `timeoutMs`, which bounds the gate too, so a late approval
+// never runs the tool). The matching `delegation_completed` writes the user
+// and assistant turns into the chat. A later `delegation_started{route:
+// 'client'}` for the same id (the server fell through) runs the normal path.
+// No `route`, or a server that never negotiated these tokens: unchanged.
 
 import type {
+  ClientToolDefinition,
+  ClientToolCallFrame,
+  ClientToolResultFrame,
+  ClientToolsFrame,
+  VoiceClientToolOutcome,
+  VoiceClientTools,
   VoiceProvider,
   VoiceResult,
   VoiceStatus,
@@ -178,6 +202,17 @@ const CONTEXT_MAX_CHARS = 8000;
 const CONTEXT_HOST_MAX_CHARS = 4000;
 const CONTEXT_MESSAGES = 12;
 const CONTEXT_MESSAGE_MAX_CHARS = 2000;
+const WEBMCP_PREFIX = "webmcp:";
+
+/** The name the server calls a client tool back with: `webmcp:` prefixed for page tools. */
+export function voiceClientToolName(tool: ClientToolDefinition): string {
+  return tool.origin === "webmcp" && !tool.name.startsWith(WEBMCP_PREFIX)
+    ? `${WEBMCP_PREFIX}${tool.name}`
+    : tool.name;
+}
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
 type TranscriptCallback = (
   role: "user" | "assistant",
@@ -327,6 +362,17 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   #foldReadback = false;
   #assistantTurns = new Set<string>();
   #foldedTurns = new Set<string>();
+  // Fast tier (see header). The revision counter is never reset, so it only grows.
+  #toolsRevision = 0;
+  #toolSurface: VoiceClientTools | null = null;
+  #stopToolWatch: (() => void) | null = null;
+  #toolsSync: Promise<void> = Promise.resolve();
+  #sentRevision: number | null = null;
+  #sentFingerprint: string | null = null;
+  #sentTools = new Map<string, ClientToolDefinition>();
+  #toolCalls = new Map<string, { delegationId: string; abort: AbortController }>();
+  // Delegations the server announced as `direct`: their request, for the chat history.
+  #direct = new Map<string, { userText: string; userUtteranceIds: string[] }>();
 
   #resultCallbacks: ((result: VoiceResult) => void)[] = [];
   #errorCallbacks: ((error: Error) => void)[] = [];
@@ -495,8 +541,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    */
   #voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
     const capabilities = ["partial_transcript", "context"];
-    if (this.bridge && this.config?.clientDelegation !== false)
+    if (this.bridge && this.config?.clientDelegation !== false) {
       capabilities.push("client_delegation", "delegation_update", "delegation_read_back", "delegation_stream");
+      if (this.bridge.clientTools?.()) capabilities.push("client_tools", "delegation_routed");
+    }
     if (attach) capabilities.unshift("attach");
     const params = new URLSearchParams({
       voiceProtocol: VOICE_PROTOCOL,
@@ -849,6 +897,18 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           this.#contextSent = true;
           this.#pendingContext = this.#buildContextText();
         }
+        if (this.#clientDelegation && this.#capabilities.has("client_tools") && !this.#toolSurface) {
+          const surface = this.bridge?.clientTools?.() ?? null;
+          if (surface) {
+            this.#toolSurface = surface;
+            this.#syncClientTools(generation);
+            this.#stopToolWatch = surface.onChange(() => this.#syncClientTools(generation));
+          }
+        }
+        break;
+
+      case "client_tool_call":
+        this.#runClientToolCall(msg, generation);
         break;
 
       case "transcript_update": {
@@ -900,10 +960,36 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       case "delegation_started":
       case "delegation_completed": {
         const delegationId = String(msg.delegationId ?? msg.turnId);
-        if (msg.type === "delegation_started") {
+        const routed = this.#clientDelegation && this.#capabilities.has("delegation_routed");
+        if (msg.type === "delegation_started" && routed && msg.route === "direct") {
           this.#flushCallContext(generation);
-          // `input`: run this turn through the chat pipeline (client delegation).
+          // The server answers this one itself: remember the request for the
+          // chat history, and fold its read-back (the chat will show it).
           const input = msg.input;
+          this.#direct.set(delegationId, {
+            userText: String(input?.text ?? ""),
+            userUtteranceIds: Array.isArray(input?.userUtteranceIds)
+              ? input.userUtteranceIds.filter((id: unknown): id is string => typeof id === "string")
+              : [],
+          });
+          this.#answered.add(delegationId);
+        } else if (msg.type === "delegation_started") {
+          this.#flushCallContext(generation);
+          // Fell through after `direct`: the normal path owns it again, with
+          // the request the direct announcement carried if this one has none.
+          const announced = routed && msg.route === "client" ? this.#direct.get(delegationId) : undefined;
+          if (announced) {
+            this.#direct.delete(delegationId);
+            this.#answered.delete(delegationId);
+            // A page tool still waiting (on the gate, or running) must not act after the hand-back.
+            this.#abortToolCalls(delegationId);
+          }
+          // `input`: run this turn through the chat pipeline (client delegation).
+          const input =
+            msg.input ??
+            (announced?.userText
+              ? { text: announced.userText, userUtteranceIds: announced.userUtteranceIds, messages: [] }
+              : undefined);
           if (this.#clientDelegation && input) {
             this.#runDelegation(
               delegationId,
@@ -918,6 +1004,18 @@ export class RuntypeVoiceProvider implements VoiceProvider {
               generation,
             );
           }
+        } else if (this.#direct.has(delegationId)) {
+          // The server answered it: write the turn into the chat, as the chat
+          // pipeline would have. Its read-back folds as for a delegated answer.
+          const direct = this.#direct.get(delegationId)!;
+          this.#direct.delete(delegationId);
+          this.bridge?.recordDirectTurn?.({
+            delegationId,
+            ...direct,
+            assistantText: typeof msg.text === "string" ? msg.text : "",
+          });
+          if (msg.speak !== false && !this.#progressed.delete(delegationId) && !this.#capabilities.has("delegation_read_back"))
+            this.#armFold(delegationId);
         } else if (msg.speak !== false && this.#answered.has(delegationId)) {
           // Every spoken phase (the approval ask, the late result) of an answer
           // the chat shows is read back. A refusal of one that never started
@@ -1086,8 +1184,111 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     // unrelated utterance: disarm it.
     if (this.#foldArmedBy === delegationId) this.#foldReadback = false;
     this.#progressed.delete(delegationId);
+    // A direct answer that never completed has no chat message to fold onto.
+    if (this.#direct.delete(delegationId)) this.#answered.delete(delegationId);
+    this.#abortToolCalls(delegationId);
     this.bridge?.dropDelegation?.(delegationId, expired);
     this.#followUps.get(delegationId)?.abort();
+  }
+
+  /**
+   * Send `client_tools` when the page's tool set differs from the one last
+   * sent (by fingerprint). Serialized, so revisions go out in order.
+   */
+  #syncClientTools(generation: number): void {
+    const surface = this.#toolSurface;
+    if (!surface) return;
+    this.#toolsSync = this.#toolsSync.then(async () => {
+      if (generation !== this.#callGeneration) return;
+      let snapshot: Awaited<ReturnType<VoiceClientTools["snapshot"]>>;
+      try {
+        snapshot = await surface.snapshot();
+      } catch {
+        return;
+      }
+      const ws = this.#ws;
+      if (generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return;
+      if (snapshot.fingerprint === this.#sentFingerprint) return;
+      const tools = snapshot.tools.map((tool) => ({ ...tool, name: voiceClientToolName(tool) }));
+      const frame: ClientToolsFrame = { type: "client_tools", revision: ++this.#toolsRevision, tools };
+      this.#sentTools = new Map(tools.map((tool) => [tool.name, tool]));
+      this.#sentRevision = frame.revision;
+      this.#sentFingerprint = snapshot.fingerprint;
+      ws.send(JSON.stringify(frame));
+    });
+  }
+
+  /** Abort the page tools still running for this delegation (or all); they send nothing. */
+  #abortToolCalls(delegationId?: string): void {
+    for (const [toolCallId, call] of this.#toolCalls) {
+      if (delegationId !== undefined && call.delegationId !== delegationId) continue;
+      this.#toolCalls.delete(toolCallId);
+      call.abort.abort();
+    }
+  }
+
+  /** Run one `client_tool_call` and answer it with exactly one `client_tool_result`. */
+  #runClientToolCall(msg: Partial<ClientToolCallFrame>, generation: number): void {
+    const surface = this.#toolSurface;
+    const delegationId = typeof msg.delegationId === "string" ? msg.delegationId : "";
+    const toolCallId = typeof msg.toolCallId === "string" ? msg.toolCallId : "";
+    // Not negotiated (or malformed): an unknown frame, ignored like any other.
+    if (!surface || !delegationId || !toolCallId) return;
+    const abort = new AbortController();
+    const reply = (outcome: VoiceClientToolOutcome) => {
+      const owned = this.#toolCalls.get(toolCallId)?.abort === abort;
+      this.#toolCalls.delete(toolCallId);
+      const ws = this.#ws;
+      if (!owned || generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return;
+      if (this.#cancelledDelegations.has(delegationId)) return;
+      const frame: ClientToolResultFrame = {
+        type: "client_tool_result",
+        delegationId,
+        toolCallId,
+        status: outcome.status,
+        ...(outcome.result !== undefined && { result: outcome.result }),
+        ...(outcome.error && { error: { message: outcome.error.message } }),
+      };
+      ws.send(JSON.stringify(frame));
+    };
+    this.#toolCalls.get(toolCallId)?.abort.abort();
+    this.#toolCalls.set(toolCallId, { delegationId, abort });
+
+    const name = typeof msg.name === "string" ? msg.name : "";
+    const tool = this.#sentTools.get(name) ?? this.#sentTools.get(`${WEBMCP_PREFIX}${name}`);
+    if (msg.revision !== this.#sentRevision || !tool) {
+      reply({
+        status: "stale",
+        error: { message: tool ? `Tool set revision ${String(msg.revision)} is out of date.` : `Unknown tool: ${name}` },
+      });
+      return;
+    }
+    const args = isPlainObject(msg.arguments) ? msg.arguments : {};
+    const timeoutMs =
+      typeof msg.timeoutMs === "number" && Number.isFinite(msg.timeoutMs) && msg.timeoutMs > 0 ? msg.timeoutMs : null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const deadline =
+      timeoutMs === null
+        ? null
+        : new Promise<VoiceClientToolOutcome>((resolve) => {
+            timer = setTimeout(() => {
+              // Also stops a gate still waiting: a late approval must not run the tool.
+              abort.abort();
+              resolve({ status: "timeout", error: { message: `Page tool exceeded ${timeoutMs}ms.` } });
+            }, timeoutMs);
+          });
+    const run = surface
+      .execute(tool.name, args, { signal: abort.signal, autoConfirmReadOnly: true })
+      .catch(
+        (error: unknown): VoiceClientToolOutcome => ({
+          status: "failed",
+          error: { message: error instanceof Error ? error.message : String(error) },
+        }),
+      );
+    void (deadline ? Promise.race([run, deadline]) : run).then((outcome) => {
+      clearTimeout(timer);
+      reply(outcome);
+    });
   }
 
   /** Run a delegated turn through the session bridge (one at a time) and answer it. */
@@ -1255,6 +1456,15 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     this.#foldReadback = false;
     this.#assistantTurns.clear();
     this.#foldedTurns.clear();
+    this.#stopToolWatch?.();
+    this.#stopToolWatch = null;
+    this.#toolSurface = null;
+    this.#toolsSync = Promise.resolve();
+    this.#sentRevision = null;
+    this.#sentFingerprint = null;
+    this.#sentTools.clear();
+    this.#abortToolCalls();
+    this.#direct.clear();
     this.#finishedArmed = false;
     this.#cancelledUntil = 0;
     this.#playbackEndsAt = 0;

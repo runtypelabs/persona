@@ -25,8 +25,10 @@
  * not replace an existing context. v5's initializeWebMCPPolyfill() and v6's
  * installWebMCP() are both accepted by custom loaders.
  *
- * Every call passes one confirm gate before execution, regardless of
- * annotations.readOnlyHint. v6 callbacks also receive an invocation signal.
+ * Every chat-path call passes one confirm gate before execution, regardless of
+ * annotations.readOnlyHint. The one exception is a voice fast-tier
+ * `client_tool_call`, which skips the gate only for a tool whose registry entry
+ * declares `readOnlyHint: true`. v6 callbacks also receive an invocation signal.
  */
 
 import type { ClientToolDefinition } from "./types";
