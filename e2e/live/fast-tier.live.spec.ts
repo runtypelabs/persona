@@ -114,23 +114,28 @@ test("live fast tier: spoken slide commands, direct route vs client path, speech
 
     const sessionAt = config.at;
     const userFinals = heard().sort((a, b) => a.at - b.at);
-    // Each delegation belongs to one turn: the one its input names, else the first turn whose window holds it.
-    const claimed = new Set<unknown>();
-    const opener = (f: Frame) =>
-      f.dir === "in" && (f.json.type === "client_tool_call" || f.json.type === "delegation_started");
-    const namedBy = (f: Frame) => (f.json.input as { userUtteranceIds?: unknown[] } | undefined)?.userUtteranceIds ?? [];
+    const utteranceOf = (f: Frame) => String(f.json.utteranceId ?? f.json.turnId);
+    // Attribute each delegation (keyed by delegationId) to exactly one utterance: the one a delegation_started
+    // input names, else (a direct turn) the last final user utterance heard before its client_tool_call,
+    // which is the utterance the widget records for it. The first delegation to claim an utterance keeps it.
+    const delegationFor = new Map<string, string>();
+    for (const f of frames) {
+      const delegationId = f.json.delegationId;
+      if (f.dir !== "in" || typeof delegationId !== "string") continue;
+      if (f.json.type !== "client_tool_call" && f.json.type !== "delegation_started") continue;
+      if ([...delegationFor.values()].includes(delegationId)) continue;
+      const named = (f.json.input as { userUtteranceIds?: unknown[] } | undefined)?.userUtteranceIds?.at(-1);
+      const before = userFinals.filter((u) => u.at <= f.at).at(-1);
+      const utterance = typeof named === "string" ? named : before ? utteranceOf(before) : undefined;
+      if (utterance !== undefined && !delegationFor.has(utterance)) delegationFor.set(utterance, delegationId);
+    }
     turns = userFinals.map((final, i) => {
       const end = userFinals[i + 1]?.at ?? Infinity;
-      const inWindow = (f: Frame) => f.at >= final.at - 3_000 && f.at < end;
-      const utteranceId = final.json.utteranceId ?? final.json.turnId;
-      // A direct turn starts with client_tool_call; a client-path turn (or a fall-through) with delegation_started.
-      const first =
-        frames.find((f) => opener(f) && !claimed.has(f.json.delegationId) && namedBy(f).includes(utteranceId)) ??
-        frames.find((f) => opener(f) && inWindow(f) && !claimed.has(f.json.delegationId) && namedBy(f).length === 0);
-      const delegationId = first?.json.delegationId;
-      claimed.add(delegationId);
+      const delegationId = delegationFor.get(utteranceOf(final));
       const ofDelegation = (dir: "in" | "out", type: string) =>
-        frames.find((f) => f.dir === dir && f.json.type === type && f.json.delegationId === delegationId && delegationId !== undefined);
+        delegationId === undefined
+          ? undefined
+          : frames.find((f) => f.dir === dir && f.json.type === type && f.json.delegationId === delegationId);
       const call = ofDelegation("in", "client_tool_call");
       const result = ofDelegation("out", "client_tool_result");
       const started = ofDelegation("in", "delegation_started");

@@ -1259,4 +1259,30 @@ describe('AgentWidgetSession - WebMCP native approval gate', () => {
       getMessages().find((m) => m.variant === 'approval')?.approval?.status
     ).toBe('approved');
   });
+
+  it('closes the bubble and resolves false when the call signal aborts, and ignores a later click', async () => {
+    const { session, getMessages } = makeSession();
+    const abort = new AbortController();
+    const promise = session.requestWebMcpApproval({
+      toolName: 'edit_slide',
+      args: {},
+      reason: 'gate',
+      signal: abort.signal,
+    });
+    const bubble = getMessages().find((m) => m.variant === 'approval')!;
+    expect(bubble.approval?.status).toBe('pending');
+    abort.abort();
+    await expect(promise).resolves.toBe(false);
+    expect(getMessages().find((m) => m.variant === 'approval')?.approval?.status).toBe('timeout');
+    session.resolveWebMcpApproval(bubble.id, 'approved');
+    expect(getMessages().find((m) => m.variant === 'approval')?.approval?.status).toBe('timeout');
+  });
+
+  it('shows no bubble for a call whose signal already aborted', async () => {
+    const { session, getMessages } = makeSession();
+    await expect(
+      session.requestWebMcpApproval({ toolName: 'edit_slide', args: {}, reason: 'gate', signal: AbortSignal.abort() })
+    ).resolves.toBe(false);
+    expect(getMessages().some((m) => m.variant === 'approval')).toBe(false);
+  });
 });

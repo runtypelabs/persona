@@ -333,6 +333,7 @@ export class WebMcpBridge {
       description: info.description,
       ...(annotations ? { annotations } : {}),
       ...(displayTitle ? { title: displayTitle } : {}),
+      ...(signal ? { signal } : {}),
       reason: "gate",
     };
     const skipGate = autoConfirmReadOnly && annotations?.readOnlyHint === true;

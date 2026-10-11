@@ -901,6 +901,18 @@ describe("WebMcpBridge.executeVoiceToolCall", () => {
     });
   });
 
+  it("hands the call's signal to the confirm handler so the gate can close on abort", async () => {
+    const abort = new AbortController();
+    const onConfirm = vi.fn(async (info: { signal?: AbortSignal }) => {
+      expect(info.signal).toBe(abort.signal);
+      return false;
+    });
+    registry.tools = [fakeTool({ name: "edit_slide" })];
+    const bridge = new WebMcpBridge({ enabled: true, onConfirm });
+    await bridge.executeVoiceToolCall("webmcp:edit_slide", {}, { signal: abort.signal, autoConfirmReadOnly: true });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
   it("does not run the tool when the signal aborts while the gate is open", async () => {
     const abort = new AbortController();
     const execute = vi.fn(() => "done");

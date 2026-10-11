@@ -882,6 +882,12 @@ export type WebMcpConfirmInfo = {
    * callbacks on v6 receive an AbortSignal, not a nested confirmation API.
    */
   reason: 'gate';
+  /**
+   * Aborts when the call no longer needs an answer (its deadline passed, or it
+   * was cancelled). A confirm UI should close and resolve `false`; the tool
+   * never runs after it aborts either way.
+   */
+  signal?: AbortSignal;
 };
 
 /**
