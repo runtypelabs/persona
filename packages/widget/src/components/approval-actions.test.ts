@@ -346,3 +346,11 @@ describe("built-in approval — resolved states", () => {
     expect(el?.textContent).toContain("timed out");
   });
 });
+
+it("interrupted approvals explain expiry without action controls", () => {
+  const { el } = render({}, makeMessage({ status: "interrupted" }));
+  expect(el?.textContent).toContain("approval expired");
+  expect(el?.textContent).toContain("chat restarted");
+  expect(el?.textContent).toContain("fresh proposal");
+  expect(el?.querySelector("button, [data-action]")).toBeNull();
+});

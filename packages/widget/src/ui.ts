@@ -1,3 +1,4 @@
+import { isBrowserLocalApproval } from "./utils/restored-browser-state";
 import { activityVariant, activityDuration, createActivityLifecycle, createActivityGroup } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
 import { usesSessionVoice } from "./utils/voice-support";
@@ -3055,8 +3056,8 @@ export const createAgentExperience = (
 
     // WebMCP gate approvals resolve a local Promise the bridge is parked on
     // (no server round-trip); server-driven approvals call the API. The
-    // `toolType` marker set in `requestWebMcpApproval` discriminates the two.
-    if (approvalMessage.approval.toolType === "webmcp") {
+    // `toolType` marker and absent execution id identify browser-local gates.
+    if (isBrowserLocalApproval(approvalMessage.approval)) {
       session.resolveWebMcpApproval(messageId, decision);
     } else {
       session.resolveApproval(approvalMessage.approval, decision);
@@ -6239,7 +6240,8 @@ export const createAgentExperience = (
       return (
         dropCompletedToolCalls &&
         message.variant === "tool" &&
-        message.toolCall?.status === "complete"
+        message.toolCall?.status === "complete" &&
+        !message.toolCall.interrupted
       );
     };
 
@@ -6507,7 +6509,7 @@ export const createAgentExperience = (
               ?.getMessages()
               .find((m) => m.id === approvalMessageId);
             if (!live?.approval) return;
-            if (live.approval.toolType === "webmcp") {
+            if (isBrowserLocalApproval(live.approval)) {
               sessionRef.current?.resolveWebMcpApproval(live.id, decision);
             } else {
               sessionRef.current?.resolveApproval(live.approval, decision, options);
@@ -6801,7 +6803,7 @@ export const createAgentExperience = (
           // A tool call hidden by `completedVisibility: "removed"` does not
           // create a visible break in the transcript, so it should not split
           // an otherwise contiguous group.
-          if (dropCompletedToolCalls && message.toolCall.status === "complete") {
+          if (dropCompletedToolCalls && message.toolCall.status === "complete" && !message.toolCall.interrupted) {
             return;
           }
           currentGroup.push(message);
@@ -6859,10 +6861,12 @@ export const createAgentExperience = (
             id, name: `${group.length} tools`, status: active ? "running" : "complete",
             chunks: group.flatMap(item => item.toolCall?.chunks ?? []),
             success: !group.some(item => item.toolCall?.success === false),
+            interrupted: !active && group.some(item => item.toolCall?.interrupted),
           } };
           activityIds.add(id);
           activityLifecycle.observe(synthetic, "tool", toolExpansionState, config.features.toolCallDisplay);
-          const label = `${active ? "Using" : "Used"} ${group.length} tools`;
+          const label = synthetic.toolCall?.interrupted ? `${group.length} tools · Interrupted`
+            : `${active ? "Using" : "Used"} ${group.length} tools`;
           const custom = config.toolCall?.renderGroupedSummary?.({ messages: group, toolCalls: group.map(item => item.toolCall!), defaultSummary: label, config });
           const row = createActivityGroup(synthetic, config, toolExpansionState.has(id), custom ?? label);
           row.bubble.classList.add("persona-tool-group");
@@ -6888,7 +6892,9 @@ export const createAgentExperience = (
           "persona-tool-group-summary persona-text-xs persona-text-persona-muted";
         summary.id = `tool-group-summary-${group[0].id}`;
 
-        const defaultSummary = `Called ${group.length} ${group.length === 1 ? "tool" : "tools"}`;
+        const toolCount = `${group.length} ${group.length === 1 ? "tool" : "tools"}`;
+        const defaultSummary = group.some(item => item.toolCall?.interrupted)
+          ? `${toolCount} · Interrupted` : `Called ${toolCount}`;
         const renderedSummary = config.toolCall?.renderGroupedSummary?.({
           messages: group,
           toolCalls: group
@@ -13277,8 +13283,8 @@ export const createAgentExperience = (
       // Mirror the in-panel click handler: WebMCP gate bubbles resolve a local
       // Promise the bridge is parked on (no server round-trip and they carry an
       // empty executionId/agentId), so they must NOT hit the server approval
-      // API. Route by the `toolType` marker set in `requestWebMcpApproval`.
-      if (approvalMessage.approval.toolType === "webmcp") {
+      // API. Server-backed approvals retain their execution id and use the API.
+      if (isBrowserLocalApproval(approvalMessage.approval)) {
         session.resolveWebMcpApproval(approvalMessage.id, decision);
         return;
       }

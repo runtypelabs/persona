@@ -8229,7 +8229,9 @@ export type AgentWidgetReasoning = {
 
 export type AgentWidgetToolCall = {
   /** Optional approval state for activity-row status chrome. */
-  approvalStatus?: "pending" | "approved" | "denied" | "timeout";
+  approvalStatus?: "pending" | "approved" | "denied" | "timeout" | "interrupted";
+  /** Terminal browser work whose callback was lost when the chat restarted. */
+  interrupted?: boolean;
   id: string;
   name?: string;
   status: "pending" | "running" | "complete";
@@ -8256,7 +8258,7 @@ export type AgentWidgetToolCall = {
  */
 export type AgentWidgetApproval = {
   id: string;
-  status: "pending" | "approved" | "denied" | "timeout";
+  status: "pending" | "approved" | "denied" | "timeout" | "interrupted";
   agentId: string;
   executionId: string;
   toolName: string;
