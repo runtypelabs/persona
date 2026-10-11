@@ -58,6 +58,7 @@ That said, if you really don't like the idea of building AI without JSX... you p
 | [`examples/echo-sveltekit`](./examples/echo-sveltekit) | SvelteKit | Host matrix: one-line `+server.ts` Web-standard route |
 | [`examples/runtype-script-tag`](./examples/runtype-script-tag) | Static / Runtype | Hosted backend: a `clientToken` embed with no backend at all |
 | [`examples/runtype-hono-proxy`](./examples/runtype-hono-proxy) | Hono (Node / Vercel / Workers) | Runtype API proxy: powers local dev and `proxy.persona-chat.dev` |
+| [`examples/bento-slides`](./examples/bento-slides) | Vite / Runtype | Bento Slides with a voice-and-text Copilot: 23 WebMCP page tools, GPT-Live call that edits the deck and drives the show |
 
 ## Bring Your Own Backend
 
