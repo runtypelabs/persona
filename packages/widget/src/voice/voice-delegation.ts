@@ -49,7 +49,7 @@ export interface VoiceDelegationHost {
    * sendMessage as a voice turn, submitting `userMessageId`'s bubble when
    * given and recording `priorToolResults` as already-run tool calls.
    */
-  send(userText: string, voiceTurn: { userMessageId?: string; priorToolResults?: unknown }): Promise<void>;
+  send(userText: string, voiceTurn: { userMessageId?: string | null; priorToolResults?: unknown }): Promise<void>;
   /** Route the chat stream's assistant messages and failures into `capture` (or stop). */
   track(capture: VoiceDelegationCapture | null): void;
   /** Deny a pending approval (server gate or WebMCP) by its message id. */
@@ -311,7 +311,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       retrack();
       try {
         await host.send(userText, {
-          userMessageId: host.claim(userText, userUtteranceIds) ?? undefined,
+          userMessageId: host.claim(userText, userUtteranceIds),
           priorToolResults,
         });
         // Local tools and approvals may continue the turn past the first stream.

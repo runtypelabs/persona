@@ -2540,7 +2540,7 @@ export class AgentWidgetSession {
        * tools the voice server already ran for this turn, recorded once as
        * completed tool rows after the request (see voicePriorToolRows).
        */
-      voiceTurn?: { userMessageId?: string; priorToolResults?: unknown };
+      voiceTurn?: { userMessageId?: string | null; priorToolResults?: unknown };
     }
   ) {
     const input = rawInput.trim();

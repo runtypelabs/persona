@@ -1762,7 +1762,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           );
         const results = (ws: MockWebSocket) => sentJson(ws).filter((f) => f.type === 'client_tool_result');
 
-        it('declares client_tools only when the bridge has WebMCP tools', async () => {
+        it('declares client_tools and prior_tool_results only when the bridge has WebMCP tools', async () => {
           const { ws } = await startFastCall();
           expect(ws.url).toBe(
             voiceUrl('wss://api.example.com', 'a1', [
@@ -1772,12 +1772,15 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
               'delegation_read_back',
               'delegation_stream',
               'client_tools',
+              'prior_tool_results',
             ]),
           );
           const provider = new RuntypeVoiceProvider(baseConfig());
           provider.setSessionBridge({ ...makeBridge().bridge, clientTools: () => null });
           await provider.startListening();
-          expect(new URL(lastWs().url).searchParams.get('clientCapabilities')).not.toContain('client_tools');
+          const declared = new URL(lastWs().url).searchParams.get('clientCapabilities');
+          expect(declared).not.toContain('client_tools');
+          expect(declared).not.toContain('prior_tool_results');
         });
 
         it('sends client_tools after session_config with full webmcp: names and the dispatch fields', async () => {
@@ -2003,7 +2006,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
         });
 
         it('hands a fall-through its priorToolResults without running them again on the page', async () => {
-          const { ws, calls, executed, recorded, pending } = await startFastCall();
+          const { ws, calls, executed, recorded, pending } = await startFastCall([...FAST_CAPS, 'prior_tool_results']);
           const prior = [
             { toolCallId: 'vtc_01', name: 'webmcp:jump_to_slide', arguments: { position: 5 }, result: { slideTitle: 'Pricing' } },
           ];
