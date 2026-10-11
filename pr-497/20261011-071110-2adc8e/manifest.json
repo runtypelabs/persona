@@ -1,0 +1,103 @@
+{
+  "runId": "20261011-071110-2adc8e",
+  "entries": [
+    {
+      "feature": "browser-history-card",
+      "label": "Earlier browser tool and approval are interrupted",
+      "note": null,
+      "files": [
+        "02-browser-history-card-earlier-browser-tool-and-approval-are-interrupte.png",
+        "02-browser-history-card-earlier-browser-tool-and-approval-are-interrupte.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-11T07:11:56.873Z",
+      "head": "789a866ac9a56afbe9781a2b4b7585fc52d79181",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "browser-history-card",
+      "label": "Load an interrupted browser proposal from older history",
+      "note": null,
+      "files": [
+        "01-browser-history-card-load-an-interrupted-browser-proposal-from-older-.gif",
+        "01-browser-history-card-load-an-interrupted-browser-proposal-from-older-.webm",
+        "01-browser-history-card-load-an-interrupted-browser-proposal-from-older-.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-11T07:11:57.251Z",
+      "head": "789a866ac9a56afbe9781a2b4b7585fc52d79181",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "browser-history-card",
+      "label": "Only history pages fetched; no browser mutation or resume",
+      "note": "2 request(s) crossed the network boundary, 1 controller event(s)",
+      "files": [
+        "03-browser-history-card-only-history-pages-fetched-no-browser-mutation-o.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-11T07:11:57.331Z",
+      "head": "789a866ac9a56afbe9781a2b4b7585fc52d79181",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "browser-history-row",
+      "label": "Earlier row is interrupted with no animation or timer",
+      "note": null,
+      "files": [
+        "05-browser-history-row-earlier-row-is-interrupted-with-no-animation-or-.png",
+        "05-browser-history-row-earlier-row-is-interrupted-with-no-animation-or-.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-11T07:12:47.672Z",
+      "head": "789a866ac9a56afbe9781a2b4b7585fc52d79181",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "browser-history-row",
+      "label": "Paginate to an interrupted browser row",
+      "note": null,
+      "files": [
+        "04-browser-history-row-paginate-to-an-interrupted-browser-row.gif",
+        "04-browser-history-row-paginate-to-an-interrupted-browser-row.webm",
+        "04-browser-history-row-paginate-to-an-interrupted-browser-row.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-11T07:12:48.138Z",
+      "head": "789a866ac9a56afbe9781a2b4b7585fc52d79181",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "browser-history-row",
+      "label": "Pagination side effects",
+      "note": "2 request(s) crossed the network boundary, 1 controller event(s)",
+      "files": [
+        "06-browser-history-row-pagination-side-effects.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-11T07:12:48.215Z",
+      "head": "789a866ac9a56afbe9781a2b4b7585fc52d79181",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "browser-history-card",
+      "pass": true,
+      "skipped": false,
+      "note": "Clicked Messages, opened the saved conversation, and clicked Show earlier messages. Historical gate has no Allow/Deny; tool is Interrupted with no active timer or running activity. Exactly two provider page reads and no dispatch/resume."
+    },
+    {
+      "feature": "browser-history-row",
+      "pass": true,
+      "skipped": false,
+      "note": "Opened Messages and clicked Show earlier messages. Browser approval and grouped row show interruption; zero Allow/Deny, timer attributes, running activity or running animations. Text unchanged after 1.5 seconds. Only two history page reads; no dispatch/resume."
+    },
+    {
+      "feature": "boot-reconciliation",
+      "pass": false,
+      "skipped": true,
+      "note": "Startup replacement and overlapping merge branches pass session regression tests; this visual run exercises older-page loading only."
+    }
+  ]
+}
