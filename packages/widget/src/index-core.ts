@@ -662,6 +662,8 @@ export type {
   VoiceSessionBridge,
   VoiceClientTools,
   VoiceClientToolsSnapshot,
+  VoiceClientToolsChannel,
+  VoiceClientToolsSession,
   VoiceClientToolOutcome,
   VoiceClientToolStatus,
   VoiceDirectTurn,

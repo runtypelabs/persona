@@ -25,6 +25,7 @@
       "@runtypelabs/persona/icons-extra": ["./src/icons-extra.ts"],
       "@runtypelabs/persona/artifacts-ui": ["./src/artifacts-ui.ts"],
       "@runtypelabs/persona/voice-runtime": ["./src/voice-runtime.ts"],
+      "@runtypelabs/persona/voice-client-tools": ["./src/voice-client-tools.ts"],
       "@runtypelabs/persona/forms-ui": ["./src/forms-ui.ts"]
     },
     "declaration": true,

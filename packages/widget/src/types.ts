@@ -5413,6 +5413,28 @@ export interface VoiceClientTools {
     args: Record<string, unknown>,
     options: { signal: AbortSignal; autoConfirmReadOnly: boolean },
   ): Promise<VoiceClientToolOutcome>;
+  /**
+   * Start the call's fast-tier session (loads its lazy chunk): it sends
+   * `client_tools` through `channel` now and on every change, and answers
+   * the `client_tool_call` frames handed to it.
+   */
+  open(channel: VoiceClientToolsChannel): Promise<VoiceClientToolsSession>;
+}
+
+/** The call socket, as the fast-tier session sees it. */
+export type VoiceClientToolsChannel = {
+  /** Send a frame; `false` when the call (socket) is gone. */
+  send(frame: ClientToolsFrame | ClientToolResultFrame): boolean;
+  /** The server cancelled this delegation: its tool results are not sent. */
+  cancelled(delegationId: string): boolean;
+};
+
+/** A call's fast-tier session (see {@link VoiceClientTools.open}). */
+export interface VoiceClientToolsSession {
+  call(frame: Partial<ClientToolCallFrame>): void;
+  /** Abort running tool calls (of one delegation, or all); they send nothing. */
+  abort(delegationId?: string): void;
+  close(): void;
 }
 
 /**

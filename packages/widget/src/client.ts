@@ -34,6 +34,7 @@ import {
   recordWebMcpToolDisplayTitles,
 } from "./webmcp-bridge";
 import { loadWebMcpRuntime } from "./webmcp-runtime-loader";
+import { loadVoiceClientTools } from "./voice-client-tools-loader";
 import type { WebMcpBridge } from "./webmcp-runtime-entry";
 import { resolveTarget } from "./utils/target";
 import { generateTurnId } from "./utils/message-id";
@@ -414,7 +415,8 @@ export class AgentWidgetClient {
   public getVoiceClientTools():import("./types").VoiceClientTools | null {
     if (this.config.webmcp?.enabled !== true) return null;
     const bridge = () => this.#getWebMcpBridge();
-    return {
+    const surface: import("./types").VoiceClientTools = {
+      open: async (channel) => (await loadVoiceClientTools()).createVoiceClientToolsSession(surface, channel),
       snapshot: async () => {
         const tools = (await (await bridge())?.snapshotForDispatch()) ?? [];
         return { tools, fingerprint: computeClientToolsFingerprint(tools) };
@@ -438,6 +440,7 @@ export class AgentWidgetClient {
         return b.executeVoiceToolCall(name, args, options);
       },
     };
+    return surface;
   }
 
   public executeWebMcpToolCall(

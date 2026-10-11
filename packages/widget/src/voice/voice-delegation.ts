@@ -191,8 +191,8 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
   };
 
   return {
-    clientTools: () => host.clientTools?.() ?? null,
-    recordDirectTurn: (turn) => host.recordDirect?.(turn),
+    clientTools: host.clientTools,
+    recordDirectTurn: host.recordDirect,
 
     // Read once at call start, before this call has any captions, so the
     // captions here are earlier calls' (e.g. on the previous page of a

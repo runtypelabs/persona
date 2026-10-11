@@ -96,15 +96,16 @@ export const wireSessionVoice = (
           recordDirect: ({ delegationId, userText, userUtteranceIds, assistantText }) => {
             // The heard transcript bubble becomes the conversation turn, as a
             // delegated send would make it; without one, the request text is.
-            const bubbleId = p.keyed?.claimUserTurn(userText, userUtteranceIds) ?? null;
-            const bubble = bubbleId ? s.messages.find((m) => m.id === bubbleId && m.role === 'user') : undefined;
-            if (bubble) {
-              // upsertMessage merges, so it cannot drop the caption flag: replace the bubble.
-              s.messages = s.messages.map((m) => {
-                if (m.id !== bubble.id) return m;
-                const { voiceCaption: _caption, ...turn } = m;
-                return { ...turn, viaVoice: true };
-              });
+            const bubbleId = p.keyed?.claimUserTurn(userText, userUtteranceIds);
+            let claimed = false;
+            // upsertMessage merges, so it cannot drop the caption flag: replace the bubble.
+            s.messages = s.messages.map((m) => {
+              if (m.id !== bubbleId || m.role !== 'user') return m;
+              claimed = true;
+              const { voiceCaption: _caption, ...turn } = m;
+              return { ...turn, viaVoice: true };
+            });
+            if (claimed) {
               s.callbacks.onMessagesChanged([...s.messages]);
             } else if (userText.trim()) {
               s.injectMessage({ role: 'user', content: userText.trim() });

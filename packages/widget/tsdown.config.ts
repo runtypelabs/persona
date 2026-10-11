@@ -32,6 +32,7 @@ const SUBPATH_CHUNKS = [
   "@runtypelabs/persona/icons-extra",
   "@runtypelabs/persona/artifacts-ui",
   "@runtypelabs/persona/voice-runtime",
+  "@runtypelabs/persona/voice-client-tools",
   "@runtypelabs/persona/forms-ui",
 ];
 
@@ -259,6 +260,7 @@ export default defineConfig([
   // registry tail through its subpath.
   lazyChunk("artifacts-ui", ["./markdown-parsers-entry", "@runtypelabs/persona/icons-extra"]),
   lazyChunk("voice-runtime"),
+  lazyChunk("voice-client-tools"),
   lazyChunk("forms-ui"),
 
   declarations({

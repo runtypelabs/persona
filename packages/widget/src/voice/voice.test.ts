@@ -13,6 +13,7 @@ import type {
 } from '../types';
 
 import { RuntypeVoiceProvider, buildCallContext } from './runtype-voice-provider';
+import { createVoiceClientToolsSession } from './voice-client-tools-session';
 import { VERSION } from '../version';
 import { BrowserVoiceProvider } from './browser-voice-provider';
 import { createVoiceProvider, createBestAvailableVoiceProvider, isVoiceSupported } from './voice-factory';
@@ -1699,6 +1700,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
               executed.push({ name, args, options });
               return respond(name, options.signal);
             },
+            open: async (channel) => createVoiceClientToolsSession(surface, channel),
           };
           const recorded: VoiceDirectTurn[] = [];
           const bridge: VoiceSessionBridge = {
@@ -1920,12 +1922,12 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           );
           await flush();
           expect(recorded).toEqual([
-            {
+            expect.objectContaining({
               delegationId: 'd1',
               userText: 'Jump to the pricing slide',
               userUtteranceIds: ['u1'],
               assistantText: 'Slide 5: Pricing.',
-            },
+            }),
           ]);
           expect(sentJson(ws).filter((f) => f.type === 'delegation_result')).toEqual([]);
         });

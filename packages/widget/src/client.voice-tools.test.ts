@@ -48,4 +48,18 @@ describe("AgentWidgetClient.getVoiceClientTools", () => {
     unsubscribe();
     expect(stop).toHaveBeenCalledTimes(1);
   });
+
+  it("opens a fast-tier session from the lazy chunk that sends the snapshot through the channel", async () => {
+    const client = new AgentWidgetClient({ apiUrl: "http://test", webmcp: { enabled: true } });
+    const slot = client as unknown as { webMcpBridge: unknown };
+    // Let the real lazy bridge adopt first, so it cannot replace the fake mid-test.
+    await vi.waitFor(() => expect(slot.webMcpBridge).not.toBeNull());
+    slot.webMcpBridge = { snapshotForDispatch: async () => [tool], watchToolChanges: () => () => undefined };
+    const surface = client.getVoiceClientTools()!;
+    const sent: Array<Record<string, unknown>> = [];
+    const session = await surface.open({ send: (frame) => (sent.push(frame), true), cancelled: () => false });
+    await vi.waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0]).toMatchObject({ type: "client_tools", tools: [{ ...tool, name: "webmcp:next_slide" }] });
+    session.close();
+  });
 });
