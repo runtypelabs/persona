@@ -742,13 +742,61 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
 
     it('hands the client-token request the executed calls only when the hand-back carried some', async () => {
       dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
-      await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'jump', priorToolResults: [jump, 'junk'] }));
+      await h.state.bridge!.runDelegatedTurn(
+        req({ delegationId: 'd1', userText: 'jump', priorToolResults: [jump, 'junk', { ...jump, result: 'repeat' }] }),
+      );
       await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText: 'next slide' }));
       await session.sendMessage('typed');
       const options = dispatch.mock.calls.map(([o]) => o as { voicePriorToolResults?: unknown });
       expect(options[0].voicePriorToolResults).toEqual([jump]);
+      expect(toolRows()).toHaveLength(1);
       expect(options[1].voicePriorToolResults).toBeUndefined();
       expect(options[2].voicePriorToolResults).toBeUndefined();
+    });
+
+    it('keeps the executed call right after its request on later replays, even past a reply that finished first', async () => {
+      const bodies: Array<{ messages: Array<Record<string, unknown>> }> = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (_url: string, init?: RequestInit) => {
+          bodies.push(JSON.parse(String(init?.body)));
+          return new Response('', { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+        }),
+      );
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        delete (session as unknown as { client: { dispatch?: Dispatch } }).client.dispatch;
+        vi.setSystemTime(new Date('2026-10-10T10:00:00.000Z'));
+        h.state.transcriptCb!('user', 'Jump to the pricing slide', true, { turnId: 'u1', caption: true });
+        vi.setSystemTime(new Date('2026-10-10T10:00:01.000Z'));
+        session.injectMessage({ role: 'assistant', content: 'An earlier answer.' });
+        vi.setSystemTime(new Date('2026-10-10T10:00:02.000Z'));
+        await h.state.bridge!.runDelegatedTurn(
+          req({ delegationId: 'd1', userText: 'Jump to the pricing slide', userUtteranceIds: ['u1'], priorToolResults: [jump] }),
+        );
+        vi.setSystemTime(new Date('2026-10-10T10:00:03.000Z'));
+        await session.sendMessage('and the next one?');
+      } finally {
+        vi.useRealTimers();
+        vi.unstubAllGlobals();
+      }
+      const roles = (body: { messages: Array<Record<string, unknown>> }) =>
+        body.messages.map((m) => (m.toolCalls ? 'calls' : m.toolResults ? 'results' : m.content));
+      expect(roles(bodies[0])).toEqual([
+        'Welcome! How can I help?',
+        'An earlier answer.',
+        'Jump to the pricing slide',
+        'calls',
+        'results',
+      ]);
+      expect(roles(bodies[1])).toEqual([
+        'Welcome! How can I help?',
+        'Jump to the pricing slide',
+        'calls',
+        'results',
+        'An earlier answer.',
+        'and the next one?',
+      ]);
     });
 
     it('replays the executed call to the model as a toolCalls/toolResults pair after the request (proxy mode)', async () => {

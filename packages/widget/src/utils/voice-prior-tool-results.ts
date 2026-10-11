@@ -9,13 +9,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * a completed call carrying `clientToolAnswer`, so proxy/agent payloads replay
  * it to the model as an assistant `toolCalls` + `tool` `toolResults` pair under
  * the same `toolCallId`. Nothing marks it awaiting, so it never runs again.
- * Malformed entries are skipped.
+ * Malformed entries and repeats of a `toolCallId` are skipped.
  */
-export const voicePriorToolRows = (value: unknown, createdAt: string): AgentWidgetMessage[] =>
-  (Array.isArray(value) ? value : []).flatMap((entry): AgentWidgetMessage[] => {
+export const voicePriorToolRows = (value: unknown, createdAt: string): AgentWidgetMessage[] => {
+  const seen = new Set<string>();
+  return (Array.isArray(value) ? value : []).flatMap((entry): AgentWidgetMessage[] => {
     if (!isRecord(entry)) return [];
     const { toolCallId, name } = entry;
     if (typeof toolCallId !== "string" || !toolCallId || typeof name !== "string" || !name) return [];
+    if (seen.has(toolCallId)) return [];
+    seen.add(toolCallId);
     const args = isRecord(entry.arguments) ? entry.arguments : {};
     const result = entry.result ?? null;
     return [
@@ -31,3 +34,4 @@ export const voicePriorToolRows = (value: unknown, createdAt: string): AgentWidg
       },
     ];
   });
+};

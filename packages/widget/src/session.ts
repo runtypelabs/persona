@@ -2707,13 +2707,15 @@ export class AgentWidgetSession {
     const snapshot = voiceBubble
       ? [...this.messages.filter((m) => m !== voiceBubble), { ...voiceBubble, createdAt: sentAt }]
       : [...this.messages];
-    // Tools the voice server already ran answer this request: they follow it,
-    // in the chat and in the request, and are never run again.
-    const priorRows = voicePriorToolRows(options?.voiceTurn?.priorToolResults, sentAt);
+    // Tools the voice server already ran answer this request and are never run
+    // again. Stored at the request's own time, so every later replay keeps them
+    // right after it; this request (moved to `sentAt`) sends them at `sentAt`.
+    const requestAt = (voiceBubble ?? this.messages.find((m) => m.id === userMessageId))?.createdAt ?? sentAt;
+    const priorRows = voicePriorToolRows(options?.voiceTurn?.priorToolResults, requestAt);
     for (const row of priorRows) {
       if (this.messages.some((m) => m.id === row.id)) continue;
       this.#appendMessage(row);
-      snapshot.push(row);
+      snapshot.push({ ...row, createdAt: sentAt });
     }
     // Client-token chat replays from the server's transcript: it gets them as a field.
     const voicePriorToolResults = priorRows.map(({ agentMetadata }) => {
