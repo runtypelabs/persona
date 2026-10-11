@@ -740,6 +740,17 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
       expect(toolRows()[0].toolCall).toMatchObject({ args: {}, result: null });
     });
 
+    it('hands the client-token request the executed calls only when the hand-back carried some', async () => {
+      dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
+      await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'jump', priorToolResults: [jump, 'junk'] }));
+      await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd2', userText: 'next slide' }));
+      await session.sendMessage('typed');
+      const options = dispatch.mock.calls.map(([o]) => o as { voicePriorToolResults?: unknown });
+      expect(options[0].voicePriorToolResults).toEqual([jump]);
+      expect(options[1].voicePriorToolResults).toBeUndefined();
+      expect(options[2].voicePriorToolResults).toBeUndefined();
+    });
+
     it('replays the executed call to the model as a toolCalls/toolResults pair after the request (proxy mode)', async () => {
       const bodies: Array<{ messages: Array<Record<string, unknown>> }> = [];
       const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {

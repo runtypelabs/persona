@@ -14,6 +14,7 @@ import {
   AgentWidgetSSEEventResult as _AgentWidgetSSEEventResult,
   ClientSession,
   ClientChatRequest,
+  VoicePriorToolResult,
   ClientToolDefinition,
   ClientFeedbackRequest,
   ClientFeedbackType,
@@ -81,6 +82,12 @@ type DispatchOptions = {
    * answer.
    */
   voiceSpoken?: boolean;
+  /**
+   * Client-token only: page tools the voice server already ran for this
+   * delegated turn, sent as `voice.priorToolResults` with `voiceSpoken`.
+   * Proxy/agent payloads carry them as replayed tool rows instead.
+   */
+  voicePriorToolResults?: VoicePriorToolResult[];
 };
 
 export type SSEHandler = (event: AgentWidgetEvent) => void;
@@ -1553,7 +1560,12 @@ export class AgentWidgetClient {
         // superseded run and this client can drop its stale events below.
         turnId,
         ...(options.interrupt && { submitMode: 'interrupt' as const }),
-        ...(options.voiceSpoken && { voice: { spoken: true as const } }),
+        ...(options.voiceSpoken && {
+          voice: {
+            spoken: true as const,
+            ...(options.voicePriorToolResults?.length && { priorToolResults: options.voicePriorToolResults }),
+          },
+        }),
       };
 
       // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already
