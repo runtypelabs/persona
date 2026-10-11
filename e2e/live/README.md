@@ -49,13 +49,13 @@ The socket upgrade to deployed core is slow, about 3.4 s on staging compared wit
 
 ## Fast tier (direct route vs client path)
 
-`fast-tier.live.spec.ts` measures the voice fast tier: the server answering a simple page-tool turn itself (`delegation_started{route:'direct'}`, `client_tool_call`, `client_tool_result`) instead of handing it to the chat pipeline. It is skipped unless `LIVE_FAST_TIER=1`, so the main spec's runs never include it. Run it in Mode B against a deployed server with the voice fast tier enabled. **Never point it at production.**
+`fast-tier.live.spec.ts` measures the voice fast tier: the server answering a simple page-tool turn itself (`client_tool_call`, `client_tool_result`, then `delegation_completed{route:'direct'}`) instead of handing it to the chat pipeline. It is skipped unless `LIVE_FAST_TIER=1`, so the main spec's runs never include it. Run it in Mode B against a deployed server with the voice fast tier enabled. **Never point it at production.**
 
 Prerequisites, on top of Mode B's:
 
-- **Agent:** the Mode B voice agent with `voice.delegation.fastTier.enabled: true`. The fixture's slide tools are all annotated `readOnlyHint: true`.
+- **Agent:** the Mode B voice agent with `voice.directTools.enabled: true`. The fixture's slide tools are all annotated `readOnlyHint: true`.
 - **Client token:** bound to a surface whose WebMCP policy admits the harness origin, as for `LIVE_WEBMCP=1`.
-- **Page:** the spec opens `voice-e2e.html?slides=1`, which registers a six-slide deck (`next_slide`, `jump_to_slide`, `get_slide`; slide 5 is Pricing) and enables WebMCP. The widget then declares `client_tools` and `delegation_routed` and sends the tool set right after `session_config`.
+- **Page:** the spec opens `voice-e2e.html?slides=1`, which registers a six-slide deck (`next_slide`, `jump_to_slide`, `get_slide`; slide 5 is Pricing) and enables WebMCP. The widget then declares `client_tools` and sends the tool set right after `session_config`.
 
 One WAV holds all three commands, with silences long enough for each turn to finish:
 
@@ -70,7 +70,7 @@ LIVE_FAST_TIER=1 LIVE_WAV=e2e/live/.out/slides.wav \
 The run writes `fast-tier.json` to the run's results directory and prints one annotation per heard utterance, plus the heard/spoken utterance count. For each utterance it records:
 
 - **Speech end to first spoken audio.** Speech end is the user transcript's `endMs` mapped onto the page clock at `session_config` arrival, or the final transcript's arrival when the server sends no `endMs`. First audio is the first binary audio frame after it, filler included.
-- **Route.** The `delegation_started.route` values in order, for example `direct`, or `direct -> client` when the server fell through.
+- **Route.** `direct` when the turn ended in `delegation_completed{route:'direct'}`, `direct -> client` when a `client_tool_call` was followed by an ordinary delegation (the server fell through), or `client`.
 - **Client tool call.** Whether a `client_tool_call` arrived, its tool and arguments, and the widget's `client_tool_result` status.
 - **Readout.** The `delegation_completed` text and when its audio started.
 

@@ -2,10 +2,10 @@ import { expect, test } from "@playwright/test";
 
 /**
  * LIVE (skipped unless LIVE_FAST_TIER=1): the voice fast tier against a real
- * core. One call, one WAV holding several spoken commands for the slide deck
+ * server. One call, one WAV holding several spoken commands for the slide deck
  * on `voice-e2e.html?slides=1`. For each heard utterance it measures speech end
- * to first spoken audio, and records whether core answered it on the direct
- * route (`delegation_started.route`, `client_tool_call`) or handed it to the
+ * to first spoken audio, and records whether the server answered it on the direct
+ * route (`client_tool_call`, then `delegation_completed.route`) or handed it to the
  * chat pipeline. Writes `fast-tier.json` next to the other artifacts.
  *
  * Env (see e2e/live/README.md, "Fast tier"):
@@ -36,7 +36,7 @@ type Frame = { at: number; dir: "in" | "out"; json: Json };
 type Turn = {
   text: string;
   heardAt: number;
-  /** Speech end on core's clock (`endMs`), mapped to the page clock via session_config. */
+  /** Speech end on the server's clock (`endMs`), mapped to the page clock via session_config. */
   speechEndAt: number | null;
   firstAudioAt: number | null;
   /** Speech end (endMs when present, else the final transcript's arrival) to first audio. */
@@ -93,8 +93,8 @@ test("live fast tier: spoken slide commands, direct route vs client path, speech
     const config = json("in", "session_config")[0]!;
     const capabilities = Array.isArray(config.json.capabilities) ? (config.json.capabilities as string[]) : [];
     testInfo.annotations.push({ type: "capabilities", description: capabilities.join(",") });
-    expect(capabilities, "core did not negotiate the fast tier").toEqual(
-      expect.arrayContaining(["client_delegation", "client_tools", "delegation_routed"]),
+    expect(capabilities, "the server did not negotiate the fast tier").toEqual(
+      expect.arrayContaining(["client_delegation", "client_tools"]),
     );
     await expect.poll(() => json("out", "client_tools").length, { timeout: 10_000 }).toBeGreaterThan(0);
     const toolNames = (json("out", "client_tools")[0]!.json.tools as Array<{ name: string }>).map((t) => t.name);
@@ -114,16 +114,28 @@ test("live fast tier: spoken slide commands, direct route vs client path, speech
 
     const sessionAt = config.at;
     const userFinals = heard().sort((a, b) => a.at - b.at);
+    // Each delegation belongs to one turn: the one its input names, else the first turn whose window holds it.
+    const claimed = new Set<unknown>();
+    const opener = (f: Frame) =>
+      f.dir === "in" && (f.json.type === "client_tool_call" || f.json.type === "delegation_started");
+    const namedBy = (f: Frame) => (f.json.input as { userUtteranceIds?: unknown[] } | undefined)?.userUtteranceIds ?? [];
     turns = userFinals.map((final, i) => {
       const end = userFinals[i + 1]?.at ?? Infinity;
       const inWindow = (f: Frame) => f.at >= final.at - 3_000 && f.at < end;
-      const started = frames.filter((f) => inWindow(f) && f.dir === "in" && f.json.type === "delegation_started");
-      const delegationId = started[0]?.json.delegationId;
+      const utteranceId = final.json.utteranceId ?? final.json.turnId;
+      // A direct turn starts with client_tool_call; a client-path turn (or a fall-through) with delegation_started.
+      const first =
+        frames.find((f) => opener(f) && !claimed.has(f.json.delegationId) && namedBy(f).includes(utteranceId)) ??
+        frames.find((f) => opener(f) && inWindow(f) && !claimed.has(f.json.delegationId) && namedBy(f).length === 0);
+      const delegationId = first?.json.delegationId;
+      claimed.add(delegationId);
       const ofDelegation = (dir: "in" | "out", type: string) =>
         frames.find((f) => f.dir === dir && f.json.type === type && f.json.delegationId === delegationId && delegationId !== undefined);
       const call = ofDelegation("in", "client_tool_call");
       const result = ofDelegation("out", "client_tool_result");
+      const started = ofDelegation("in", "delegation_started");
       const completed = ofDelegation("in", "delegation_completed");
+      const route = completed?.json.route === "direct" ? "direct" : call && started ? "direct -> client" : started ? "client" : null;
       const endMs = typeof final.json.endMs === "number" ? final.json.endMs : null;
       const speechEndAt = endMs === null ? null : sessionAt + endMs;
       const anchor = speechEndAt ?? final.at;
@@ -135,7 +147,7 @@ test("live fast tier: spoken slide commands, direct route vs client path, speech
         speechEndAt,
         firstAudioAt,
         speechEndToFirstAudioMs: firstAudioAt === null ? null : firstAudioAt - anchor,
-        route: started.map((f) => f.json.route).filter((r): r is string => typeof r === "string").join(" -> ") || null,
+        route,
         clientToolCall: call ? { name: call.json.name, arguments: call.json.arguments, at: call.at } : null,
         clientToolResult: result ? { status: result.json.status, at: result.at } : null,
         delegationCompletedAt: completed?.at ?? null,
@@ -152,7 +164,7 @@ test("live fast tier: spoken slide commands, direct route vs client path, speech
       });
     }
     if (EXPECT_DIRECT) {
-      expect(turns.filter((turn) => !turn.clientToolCall).map((turn) => turn.text), "utterances core did not answer directly").toEqual([]);
+      expect(turns.filter((turn) => !turn.clientToolCall).map((turn) => turn.text), "utterances the server did not answer directly").toEqual([]);
     }
 
     await page.locator("[data-persona-composer-mic]").click({ force: true });

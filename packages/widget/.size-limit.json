@@ -146,7 +146,7 @@
   {
     "name": "Lazy · voice fast-tier client tools chunk (voice-client-tools.js)",
     "path": "dist/voice-client-tools.js",
-    "limit": "1.05 kB",
+    "limit": "1.02 kB",
     "gzip": true
   },
   {

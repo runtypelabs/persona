@@ -15,9 +15,6 @@ export function voiceClientToolName(tool: ClientToolDefinition): string {
   return tool.origin === "webmcp" && !tool.name.startsWith(WEBMCP_PREFIX) ? WEBMCP_PREFIX + tool.name : tool.name;
 }
 
-// Page-wide, never reset: every `client_tools` frame's revision is larger than the last.
-let lastRevision = 0;
-
 /**
  * The fast-tier half of a voice call (see runtype-voice-provider.ts): keeps the
  * server's `client_tools` snapshot current and answers each `client_tool_call`
@@ -30,20 +27,18 @@ export function createVoiceClientToolsSession(
 ): VoiceClientToolsSession {
   let closed = false;
   let queue = Promise.resolve();
-  let sentRevision: number | null = null;
   let sentFingerprint: string | null = null;
   let sent = new Map<string, ClientToolDefinition>();
   const calls = new Map<string, { delegationId: string; abort: AbortController }>();
 
-  // Serialized, so revisions go out in order; only a changed fingerprint is resent.
+  // Serialized, so snapshots go out in order; only a changed fingerprint is resent.
   const sync = () => {
     queue = queue.then(async () => {
       const snapshot = closed ? null : await surface.snapshot().catch(() => null);
       if (!snapshot || closed || snapshot.fingerprint === sentFingerprint) return;
       const tools = snapshot.tools.map((tool) => ({ ...tool, name: voiceClientToolName(tool) }));
-      const frame: ClientToolsFrame = { type: "client_tools", revision: lastRevision + 1, tools };
+      const frame: ClientToolsFrame = { type: "client_tools", fingerprint: snapshot.fingerprint, tools };
       if (!channel.send(frame)) return;
-      lastRevision = sentRevision = frame.revision;
       sentFingerprint = snapshot.fingerprint;
       sent = new Map(tools.map((tool) => [tool.name, tool]));
     });
@@ -76,9 +71,10 @@ export function createVoiceClientToolsSession(
       calls.set(toolCallId, { delegationId, abort: controller });
       // Exactly one answer, unless the call was aborted (cancelled, handed back, hang-up).
       const reply = ({ status, result, error }: VoiceClientToolOutcome) => {
-        const owned = calls.get(toolCallId)?.abort === controller;
+        // A replacement call with the same id owns the slot now: leave it alone.
+        if (calls.get(toolCallId)?.abort !== controller) return;
         calls.delete(toolCallId);
-        if (!owned || closed || channel.cancelled(delegationId)) return;
+        if (closed || channel.cancelled(delegationId)) return;
         channel.send({
           type: "client_tool_result",
           delegationId,
@@ -91,8 +87,8 @@ export function createVoiceClientToolsSession(
 
       const name = typeof msg.name === "string" ? msg.name : "";
       const tool = sent.get(name) ?? sent.get(WEBMCP_PREFIX + name);
-      if (!tool || msg.revision !== sentRevision) {
-        return reply({ status: "stale", error: { message: tool ? `Revision ${msg.revision} is stale.` : `Unknown tool: ${name}` } });
+      if (!tool || msg.fingerprint !== sentFingerprint) {
+        return reply({ status: "stale", error: { message: tool ? "The page's tools changed." : `Unknown tool: ${name}` } });
       }
       const args = msg.arguments && typeof msg.arguments === "object" && !Array.isArray(msg.arguments) ? msg.arguments : {};
       const timeoutMs = typeof msg.timeoutMs === "number" && msg.timeoutMs > 0 ? msg.timeoutMs : 0;

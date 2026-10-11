@@ -14,10 +14,8 @@ const dist = (f: string) => resolve(__dirname, "..", "dist", f);
 const MARKERS = ["Page tool exceeded", "Unknown tool: "];
 
 describe("voice-client-tools bundle split", () => {
-  const built =
-    existsSync(dist("index.global.js")) &&
-    existsSync(dist("voice-runtime.js")) &&
-    existsSync(dist("voice-client-tools.js"));
+  // Skip only when nothing was built; a build missing the chunk must fail.
+  const built = existsSync(dist("index.global.js"));
 
   it.runIf(built)("keeps the fast-tier session out of the core IIFE and the voice-runtime chunk", () => {
     for (const file of ["index.global.js", "voice-runtime.js"]) {
@@ -30,6 +28,7 @@ describe("voice-client-tools bundle split", () => {
   });
 
   it.runIf(built)("ships the session in its own chunk, with CJS and declarations", () => {
+    expect(existsSync(dist("voice-client-tools.js")), "dist/voice-client-tools.js is missing").toBe(true);
     const chunk = readFileSync(dist("voice-client-tools.js"), "utf8");
     for (const marker of MARKERS) expect(chunk.includes(marker), `chunk is missing "${marker}"`).toBe(true);
     expect(existsSync(dist("voice-client-tools.cjs"))).toBe(true);

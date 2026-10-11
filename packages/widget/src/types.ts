@@ -5355,12 +5355,11 @@ export interface VoiceSessionBridge {
   /**
    * The page tools a voice call may offer the server's fast tier
    * (`client_tools` / `client_tool_call`). Returns `null` when WebMCP is not
-   * enabled on this widget; the provider then declares neither `client_tools`
-   * nor `delegation_routed`.
+   * enabled on this widget; the provider then does not declare `client_tools`.
    */
   clientTools?(): VoiceClientTools | null;
   /**
-   * The server answered a delegation itself (`delegation_started.route ===
+   * The server answered a delegation itself (`delegation_completed.route ===
    * 'direct'`): record the visitor's turn and the spoken answer in the chat,
    * as a delegated turn would have. `assistantText` may be empty (no readout).
    */
@@ -5439,13 +5438,14 @@ export interface VoiceClientToolsSession {
 
 /**
  * Client → server (`runtype-browser-v1`, `client_tools` capability): the page's
- * tool set, after `session_config` and on every change. `revision` strictly
- * increases. Names are the FULL names the server calls back with: `webmcp:`
- * prefixed for `origin: 'webmcp'`, bare for `sdk`.
+ * tool set, after `session_config` and whenever its fingerprint changes. Names
+ * are the FULL names the server calls back with: `webmcp:` prefixed for
+ * `origin: 'webmcp'`, bare for `sdk`.
  */
 export type ClientToolsFrame = {
   type: 'client_tools';
-  revision: number;
+  /** The content fingerprint the chat path computes for the same `clientTools[]`. */
+  fingerprint: string;
   tools: ClientToolDefinition[];
 };
 
@@ -5457,8 +5457,8 @@ export type ClientToolCallFrame = {
   /** `webmcp:<name>` or bare; the client accepts both. */
   name: string;
   arguments: Record<string, unknown>;
-  /** The `client_tools` revision the call was chosen from. */
-  revision: number;
+  /** The `client_tools` fingerprint the call was chosen from. */
+  fingerprint: string;
   timeoutMs: number;
 };
 
