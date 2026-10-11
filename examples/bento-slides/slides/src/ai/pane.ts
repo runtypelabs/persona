@@ -28,6 +28,7 @@ import { createPcmStreamPlayer } from '@runtypelabs/persona/voice-worklet-player
 import { t } from '../i18n'
 import {
   APPROVAL_REQUIRED_TOOL_NAMES,
+  currentSlideEntry,
   deckContext,
   nonStateSlides,
   slideName,
@@ -134,7 +135,7 @@ const bare = (name: string) => name.replace(/^webmcp[:_]/, '')
 export function voiceCallContext(ctx: AiContext): string {
   const doc = ctx.store.doc
   const entries = nonStateSlides(doc)
-  const current = entries.find((e) => e.slide.id === ctx.store.slide.id)
+  const current = currentSlideEntry(ctx)
   const lines = entries
     .slice(0, 40)
     .map((e) => `${e.position}. ${slideName(e.slide) ?? 'Untitled slide'}`)
@@ -340,7 +341,7 @@ export function mountCopilotPane(ctx: AiContext, host: PaneHost): PaneController
       detailsDisplay: 'collapsed',
     },
     contextProviders: [
-      () => ({ slides_context: JSON.stringify(deckContext(ctx.store, ctx.editor.isPresenting)) }),
+      () => ({ slides_context: JSON.stringify(deckContext(ctx)) }),
     ],
     // no status line — the ⌘Z story is told by the toasts, where it's earned
     statusIndicator: { ...DEFAULT_WIDGET_CONFIG.statusIndicator, visible: false },
