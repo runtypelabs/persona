@@ -99,7 +99,9 @@
 // sent), `failed`, or `timeout` (past `timeoutMs`, which bounds the gate too).
 // Then `delegation_completed{route:'direct', text}` for a delegation that never
 // started here writes the heard user turn and `text` into the chat. When the
-// server falls through, the delegation arrives as today's `delegation_started`.
+// server falls through, the delegation arrives as today's `delegation_started`;
+// its `input.priorToolResults` (page tools the server already ran) ride along to
+// the chat turn as completed calls, never run again here.
 
 import type {
   VoiceClientToolsSession,
@@ -974,6 +976,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
                   ? input.userUtteranceIds.filter((id: unknown): id is string => typeof id === "string")
                   : [],
                 messages: Array.isArray(input.messages) ? input.messages : [],
+                priorToolResults: input.priorToolResults,
               },
               generation,
             );

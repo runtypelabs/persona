@@ -2002,6 +2002,39 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           ]);
         });
 
+        it('hands a fall-through its priorToolResults without running them again on the page', async () => {
+          const { ws, calls, executed, recorded, pending } = await startFastCall();
+          const prior = [
+            { toolCallId: 'vtc_01', name: 'webmcp:jump_to_slide', arguments: { position: 5 }, result: { slideTitle: 'Pricing' } },
+          ];
+          heard(ws);
+          toolCall(ws);
+          await flush();
+          expect(executed).toHaveLength(1);
+          ws.triggerMessage(
+            JSON.stringify({
+              type: 'delegation_started',
+              delegationId: 'd1',
+              input: { text: 'Jump to the pricing slide', userUtteranceIds: ['u1'], messages: [], priorToolResults: prior },
+            }),
+          );
+          await flush();
+          expect(calls).toHaveLength(1);
+          expect(calls[0].priorToolResults).toEqual(prior);
+          pending[0]({ status: 'completed', text: 'You are on Pricing.' });
+          await flush();
+          directCompleted(ws);
+          expect(executed).toHaveLength(1);
+          expect(recorded).toEqual([]);
+        });
+
+        it('leaves priorToolResults unset on a fall-through without them', async () => {
+          const { ws, calls } = await startFastCall();
+          started(ws, 'd1');
+          await flush();
+          expect(calls[0].priorToolResults).toBeUndefined();
+        });
+
         it('ignores a direct completion when client_tools was not negotiated', async () => {
           const { ws, recorded } = await startFastCall(ALL_CAPS);
           heard(ws);

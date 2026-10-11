@@ -42,6 +42,7 @@ import {
   generateAssistantMessageId
 } from "./utils/message-id";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, createTextPart, hasImages } from "./utils/content";
+import { voicePriorToolRows } from "./utils/voice-prior-tool-results";
 import {
   buildArtifactRefRawContent,
   resolveArtifactDisplayMode
@@ -2535,9 +2536,11 @@ export class AgentWidgetSession {
        * Internal (voice client delegation): this is the delegated voice turn.
        * `userMessageId` names an existing transcript bubble to submit as the
        * turn's user message instead of appending a new one, so the spoken
-       * request appears (and is sent) exactly once.
+       * request appears (and is sent) exactly once. `priorToolResults`: page
+       * tools the voice server already ran for this turn, recorded once as
+       * completed tool rows after the request (see voicePriorToolRows).
        */
-      voiceTurn?: { userMessageId?: string };
+      voiceTurn?: { userMessageId?: string; priorToolResults?: unknown };
     }
   ) {
     const input = rawInput.trim();
@@ -2692,12 +2695,17 @@ export class AgentWidgetSession {
 
     // A submitted voice bubble may sit above captions or a turn that finished
     // while it waited: the request still ends on it.
+    const sentAt = new Date().toISOString();
     const snapshot = voiceBubble
-      ? [
-          ...this.messages.filter((m) => m !== voiceBubble),
-          { ...voiceBubble, createdAt: new Date().toISOString() }
-        ]
+      ? [...this.messages.filter((m) => m !== voiceBubble), { ...voiceBubble, createdAt: sentAt }]
       : [...this.messages];
+    // Tools the voice server already ran answer this request: they follow it,
+    // in the chat and in the request, and are never run again.
+    for (const row of voicePriorToolRows(options?.voiceTurn?.priorToolResults, sentAt)) {
+      if (this.messages.some((m) => m.id === row.id)) continue;
+      this.#appendMessage(row);
+      snapshot.push(row);
+    }
 
     try {
       await this.#dispatchWithDeletedRecovery(

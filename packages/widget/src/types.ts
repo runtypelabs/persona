@@ -5268,6 +5268,13 @@ export type VoiceDelegationRequest = {
   /** The voice model's view of the conversation it delegated from. */
   messages: Array<{ role: string; content: unknown }>;
   /**
+   * `delegation_started.input.priorToolResults` as received: page tools the
+   * server already ran for this turn, each `{ toolCallId, name, arguments,
+   * result }`. Unvalidated. The chat turn records them as completed calls and
+   * never runs them again.
+   */
+  priorToolResults?: unknown;
+  /**
    * Set when the server streams delegated answers (`delegation_stream`): called
    * with each speakable piece of the turn's answer, in order, while it renders.
    * The pieces, concatenated, are a prefix of the result's `text`; the result

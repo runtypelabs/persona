@@ -81,8 +81,7 @@ export const wireSessionVoice = (
           busy: () => p.busy(),
           parked: () => s.webMcpApprovalResolvers.size > 0,
           claim: (text, userUtteranceIds) => p.keyed?.claimUserTurn(text, userUtteranceIds) ?? null,
-          send: (text, userMessageId) =>
-            s.sendMessage(text, { viaVoice: true, voiceTurn: { userMessageId } }),
+          send: (text, voiceTurn) => s.sendMessage(text, { viaVoice: true, voiceTurn }),
           track: (capture) => {
             p.setDelegation(capture);
           },

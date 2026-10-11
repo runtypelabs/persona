@@ -666,6 +666,116 @@ describe('AgentWidgetSession - voice client delegation bridge', () => {
     ]);
   });
 
+  describe('prior tool results on a hand-back', () => {
+    const jump = {
+      toolCallId: 'vtc_1',
+      name: 'webmcp:jump_to_slide',
+      arguments: { position: 5 },
+      result: { slidePosition: 5, slideTitle: 'Pricing' },
+    };
+    const toolRows = () => messages.filter((m) => m.variant === 'tool');
+
+    it('records the executed call once, under the request and before the reply, as a completed call', async () => {
+      h.state.transcriptCb!('user', 'Jump to the pricing slide', true, { turnId: 'u1', caption: true });
+      dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'You are on Pricing.'));
+      await h.state.bridge!.runDelegatedTurn(
+        req({ delegationId: 'd1', userText: 'Jump to the pricing slide', userUtteranceIds: ['u1'], priorToolResults: [jump] }),
+      );
+
+      expect(messages.map((m) => [m.role, m.variant ?? '', m.content])).toEqual([
+        ['assistant', '', 'Welcome! How can I help?'],
+        ['user', '', 'Jump to the pricing slide'],
+        ['assistant', 'tool', ''],
+        ['assistant', '', 'You are on Pricing.'],
+      ]);
+      const [row] = toolRows();
+      expect(row.toolCall).toEqual({
+        id: 'vtc_1',
+        name: 'webmcp:jump_to_slide',
+        status: 'complete',
+        args: { position: 5 },
+        result: { slidePosition: 5, slideTitle: 'Pricing' },
+      });
+      expect(row.agentMetadata).toEqual({
+        clientToolAnswer: {
+          toolCallId: 'vtc_1',
+          toolName: 'webmcp:jump_to_slide',
+          args: { position: 5 },
+          result: { slidePosition: 5, slideTitle: 'Pricing' },
+        },
+      });
+      // Nothing marks it awaiting, so the WebMCP resolve path never runs it.
+      expect(row.agentMetadata?.awaitingLocalTool).toBeUndefined();
+
+      // The request ends on the user turn followed by the executed call.
+      const sent = dispatch.mock.calls[0][0].messages.filter((m) => !m.voiceCaption);
+      expect(sent.slice(-2).map((m) => [m.role, m.variant ?? '', m.content])).toEqual([
+        ['user', '', 'Jump to the pricing slide'],
+        ['assistant', 'tool', ''],
+      ]);
+    });
+
+    it('records nothing when the field is absent or holds no well-formed entry', async () => {
+      dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
+      await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'next slide' }));
+      await h.state.bridge!.runDelegatedTurn(
+        req({
+          delegationId: 'd2',
+          userText: 'next slide',
+          priorToolResults: [{ name: 'webmcp:next_slide' }, { toolCallId: 'vtc_2' }, 'junk', null],
+        }),
+      );
+      await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd3', userText: 'next slide', priorToolResults: 'nope' }));
+      expect(toolRows()).toEqual([]);
+      expect(dispatch).toHaveBeenCalledTimes(3);
+    });
+
+    it('defaults missing arguments and result, and never duplicates a call already recorded', async () => {
+      dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Done.'));
+      const bare = { toolCallId: 'vtc_3', name: 'webmcp:next_slide', arguments: 'bad' };
+      await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'next slide', priorToolResults: [bare] }));
+      await h.state.bridge!.runDelegatedTurn(req({ delegationId: 'd1', userText: 'next slide', priorToolResults: [bare] }));
+      await session.sendMessage('thanks');
+      expect(toolRows()).toHaveLength(1);
+      expect(toolRows()[0].toolCall).toMatchObject({ args: {}, result: null });
+    });
+
+    it('replays the executed call to the model as a toolCalls/toolResults pair after the request (proxy mode)', async () => {
+      const bodies: Array<{ messages: Array<Record<string, unknown>> }> = [];
+      const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+        bodies.push(JSON.parse(String(init?.body)));
+        return new Response('', { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+      });
+      vi.stubGlobal('fetch', fetchMock);
+      try {
+        delete (session as unknown as { client: { dispatch?: Dispatch } }).client.dispatch;
+        h.state.transcriptCb!('user', 'Jump to the pricing slide', true, { turnId: 'u1', caption: true });
+        await h.state.bridge!.runDelegatedTurn(
+          req({ delegationId: 'd1', userText: 'Jump to the pricing slide', userUtteranceIds: ['u1'], priorToolResults: [jump] }),
+        );
+      } finally {
+        vi.unstubAllGlobals();
+      }
+      expect(bodies).toHaveLength(1);
+      expect(bodies[0].messages.map(({ createdAt: _at, ...m }) => m)).toEqual([
+        { role: 'assistant', content: 'Welcome! How can I help?' },
+        { role: 'user', content: 'Jump to the pricing slide' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ toolCallId: 'vtc_1', toolName: 'webmcp_jump_to_slide', args: { position: 5 } }],
+        },
+        {
+          role: 'tool',
+          content: '',
+          toolResults: [
+            { toolCallId: 'vtc_1', toolName: 'webmcp_jump_to_slide', result: { slidePosition: 5, slideTitle: 'Pricing' } },
+          ],
+        },
+      ]);
+    });
+  });
+
   it('trims GPT-Live\'s leading space from bubbles and the submitted request', async () => {
     h.state.transcriptCb!('user', ' What are your opening hours', true, { turnId: 'u1', caption: true });
     dispatch.mockImplementation(async (_options, onEvent) => reply(onEvent, 'Nine to five.'));
