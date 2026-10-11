@@ -221,6 +221,12 @@ import { setVoiceRuntimeLoader } from "./voice-runtime-loader";
 
 setVoiceRuntimeLoader(siblingChunk("voice-runtime.js"));
 
+// The voice fast tier (`client_tools`), fetched by client.ts only when a voice
+// call negotiates it. Same sibling-URL scheme.
+import { setVoiceClientToolsLoader } from "./voice-client-tools-loader";
+
+setVoiceClientToolsLoader(siblingChunk("voice-client-tools.js"));
+
 // ---------------------------------------------------------------------------
 // Deferred artifacts-ui loading.
 //

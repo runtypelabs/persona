@@ -1,6 +1,10 @@
 // Voice SDK Tests
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import type {
+  ClientToolDefinition,
+  VoiceClientToolOutcome,
+  VoiceClientTools,
+  VoiceDirectTurn,
   VoiceConfig,
   VoiceDelegationFollowUp,
   VoiceDelegationRequest,
@@ -9,6 +13,7 @@ import type {
 } from '../types';
 
 import { RuntypeVoiceProvider, buildCallContext } from './runtype-voice-provider';
+import { createVoiceClientToolsSession } from './voice-client-tools-session';
 import { VERSION } from '../version';
 import { BrowserVoiceProvider } from './browser-voice-provider';
 import { createVoiceProvider, createBestAvailableVoiceProvider, isVoiceSupported } from './voice-factory';
@@ -1654,6 +1659,361 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd1', reason: 'timeout' }));
           pending[0]({ status: 'completed', text: 'late' });
           await flush();
+          expect(sentJson(ws)).toEqual([]);
+        });
+      });
+
+      describe('fast tier (client_tools)', () => {
+        const FAST_CAPS = [...ALL_CAPS, 'client_tools'];
+        const nextSlide: ClientToolDefinition = {
+          name: 'next_slide',
+          description: 'Advance the presentation to the next slide.',
+          parametersSchema: { type: 'object', properties: {} },
+          origin: 'webmcp',
+          pageOrigin: 'https://example.com',
+          annotations: { readOnlyHint: true },
+        };
+        const jumpToSlide: ClientToolDefinition = {
+          name: 'jump_to_slide',
+          description: 'Jump to a 1-based slide position.',
+          parametersSchema: { type: 'object', required: ['position'], properties: { position: { type: 'integer' } } },
+          origin: 'webmcp',
+          annotations: { readOnlyHint: true },
+        };
+
+        function makeFastBridge(tools: ClientToolDefinition[] = [nextSlide, jumpToSlide]) {
+          const base = makeBridge();
+          const state = { tools, fingerprint: 'fp1' };
+          const listeners = new Set<() => void>();
+          const executed: Array<{ name: string; args: Record<string, unknown>; options: { signal: AbortSignal; autoConfirmReadOnly: boolean } }> = [];
+          let respond: (name: string, signal: AbortSignal) => Promise<VoiceClientToolOutcome> = async () => ({
+            status: 'completed',
+            result: { slidePosition: 5, slideTitle: 'Pricing' },
+          });
+          const surface: VoiceClientTools = {
+            snapshot: async () => ({ tools: state.tools, fingerprint: state.fingerprint }),
+            onChange: (listener) => {
+              listeners.add(listener);
+              return () => listeners.delete(listener);
+            },
+            execute: (name, args, options) => {
+              executed.push({ name, args, options });
+              return respond(name, options.signal);
+            },
+            open: async (channel) => createVoiceClientToolsSession(surface, channel),
+          };
+          const recorded: VoiceDirectTurn[] = [];
+          const bridge: VoiceSessionBridge = {
+            ...base.bridge,
+            clientTools: () => surface,
+            recordDirectTurn: (turn) => recorded.push(turn),
+          };
+          return {
+            ...base,
+            bridge,
+            state,
+            executed,
+            recorded,
+            change: () => listeners.forEach((listener) => listener()),
+            setRespond: (fn: typeof respond) => (respond = fn),
+          };
+        }
+
+        async function startFastCall(capabilities = FAST_CAPS, tools?: ClientToolDefinition[]) {
+          const fast = makeFastBridge(tools);
+          const provider = new RuntypeVoiceProvider({ ...baseConfig(), createPlaybackEngine: () => makeFakeEngine() });
+          provider.setSessionBridge(fast.bridge);
+          await provider.startListening();
+          const ws = lastWs();
+          ws.triggerOpen();
+          ws.triggerMessage(
+            JSON.stringify({ type: 'session_config', interruptionMode: 'barge-in', speechMode: 'speech_to_speech', capabilities }),
+          );
+          await flush();
+          return { ...fast, provider, ws };
+        }
+
+        const toolCall = (ws: MockWebSocket, fields: Record<string, unknown> = {}) =>
+          ws.triggerMessage(
+            JSON.stringify({
+              type: 'client_tool_call',
+              delegationId: 'd1',
+              toolCallId: 'vtc_01',
+              name: 'webmcp:jump_to_slide',
+              arguments: { position: 5 },
+              fingerprint: 'fp1',
+              timeoutMs: 5000,
+              ...fields,
+            }),
+          );
+        const started = (ws: MockWebSocket, delegationId: string, text = 'Jump to the pricing slide') =>
+          ws.triggerMessage(
+            JSON.stringify({
+              type: 'delegation_started',
+              delegationId,
+              input: { text, userUtteranceIds: ['u1'], messages: [] },
+            }),
+          );
+        const heard = (ws: MockWebSocket, text = 'Jump to the pricing slide', utteranceId = 'u1') =>
+          ws.triggerMessage(update('user', text, utteranceId));
+        const directCompleted = (ws: MockWebSocket, delegationId = 'd1', text = 'Slide 5: Pricing.') =>
+          ws.triggerMessage(
+            JSON.stringify({ type: 'delegation_completed', delegationId, route: 'direct', speak: true, text, final: true }),
+          );
+        const results = (ws: MockWebSocket) => sentJson(ws).filter((f) => f.type === 'client_tool_result');
+
+        it('declares client_tools only when the bridge has WebMCP tools', async () => {
+          const { ws } = await startFastCall();
+          expect(ws.url).toBe(
+            voiceUrl('wss://api.example.com', 'a1', [
+              ...BASE_CAPS,
+              'client_delegation',
+              'delegation_update',
+              'delegation_read_back',
+              'delegation_stream',
+              'client_tools',
+            ]),
+          );
+          const provider = new RuntypeVoiceProvider(baseConfig());
+          provider.setSessionBridge({ ...makeBridge().bridge, clientTools: () => null });
+          await provider.startListening();
+          expect(new URL(lastWs().url).searchParams.get('clientCapabilities')).not.toContain('client_tools');
+        });
+
+        it('sends client_tools after session_config with full webmcp: names and the dispatch fields', async () => {
+          const { ws } = await startFastCall();
+          const frames = sentJson(ws).filter((f) => f.type === 'client_tools');
+          expect(frames).toHaveLength(1);
+          expect(frames[0].fingerprint).toBe('fp1');
+          expect(frames[0].tools).toEqual([
+            { ...nextSlide, name: 'webmcp:next_slide' },
+            { ...jumpToSlide, name: 'webmcp:jump_to_slide' },
+          ]);
+        });
+
+        it('keeps sdk-origin names bare and does not double-prefix', async () => {
+          const sdk: ClientToolDefinition = { ...nextSlide, name: 'ask_user_question', origin: 'sdk' };
+          const prefixed: ClientToolDefinition = { ...nextSlide, name: 'webmcp:already' };
+          const { ws } = await startFastCall(FAST_CAPS, [sdk, prefixed]);
+          const [frame] = sentJson(ws).filter((f) => f.type === 'client_tools');
+          expect(frame.tools.map((t: { name: string }) => t.name)).toEqual(['ask_user_question', 'webmcp:already']);
+        });
+
+        it('resends on a fingerprint change with its new fingerprint, and not on an unchanged one', async () => {
+          const { ws, state, change } = await startFastCall();
+          change(); // same fingerprint
+          await flush();
+          expect(sentJson(ws).filter((f) => f.type === 'client_tools')).toHaveLength(1);
+          state.tools = [nextSlide];
+          state.fingerprint = 'fp2';
+          change();
+          await flush();
+          const frames = sentJson(ws).filter((f) => f.type === 'client_tools');
+          expect(frames).toHaveLength(2);
+          expect(frames[1].fingerprint).toBe('fp2');
+          expect(frames[1].tools).toEqual([{ ...nextSlide, name: 'webmcp:next_slide' }]);
+        });
+
+        it('sends no client_tools when the server did not negotiate it', async () => {
+          const { ws } = await startFastCall(ALL_CAPS);
+          expect(sentJson(ws).filter((f) => f.type === 'client_tools')).toEqual([]);
+        });
+
+        it('runs a client_tool_call with the read-only auto-confirm and answers completed', async () => {
+          const { ws, executed } = await startFastCall();
+          toolCall(ws);
+          await flush();
+          expect(executed).toHaveLength(1);
+          expect(executed[0].name).toBe('webmcp:jump_to_slide');
+          expect(executed[0].args).toEqual({ position: 5 });
+          expect(executed[0].options.autoConfirmReadOnly).toBe(true);
+          expect(results(ws)).toEqual([
+            {
+              type: 'client_tool_result',
+              delegationId: 'd1',
+              toolCallId: 'vtc_01',
+              status: 'completed',
+              result: { slidePosition: 5, slideTitle: 'Pricing' },
+            },
+          ]);
+        });
+
+        it('accepts the bare name too', async () => {
+          const { ws, executed } = await startFastCall();
+          toolCall(ws, { name: 'jump_to_slide' });
+          await flush();
+          expect(executed[0].name).toBe('webmcp:jump_to_slide');
+          expect(results(ws)[0].status).toBe('completed');
+        });
+
+        it('answers stale for an unknown tool or a fingerprint other than the last sent, without running anything', async () => {
+          const { ws, executed, state, change } = await startFastCall();
+          toolCall(ws, { name: 'webmcp:delete_deck', toolCallId: 't1' });
+          state.fingerprint = 'fp2';
+          change();
+          await flush();
+          toolCall(ws, { toolCallId: 't2' });
+          await flush();
+          expect(executed).toEqual([]);
+          expect(results(ws).map((r) => [r.toolCallId, r.status])).toEqual([
+            ['t1', 'stale'],
+            ['t2', 'stale'],
+          ]);
+        });
+
+        it('passes denied through and maps a thrown error to failed with its message', async () => {
+          const { ws, setRespond } = await startFastCall();
+          setRespond(async () => ({ status: 'denied', error: { message: 'User declined the tool call.' } }));
+          toolCall(ws, { toolCallId: 't1' });
+          await flush();
+          setRespond(async () => {
+            throw new Error('page exploded');
+          });
+          toolCall(ws, { toolCallId: 't2' });
+          await flush();
+          expect(results(ws)).toEqual([
+            expect.objectContaining({ toolCallId: 't1', status: 'denied' }),
+            expect.objectContaining({ toolCallId: 't2', status: 'failed', error: { message: 'page exploded' } }),
+          ]);
+        });
+
+        it('answers timeout once timeoutMs passes and aborts the page tool', async () => {
+          vi.useFakeTimers();
+          try {
+            const { ws, setRespond } = await startFastCall();
+            let signal: AbortSignal | undefined;
+            setRespond((_name, s) => {
+              signal = s;
+              return new Promise(() => {}); // a page tool that never settles
+            });
+            toolCall(ws, { timeoutMs: 50 });
+            await flush();
+            expect(results(ws)).toEqual([]);
+            await vi.advanceTimersByTimeAsync(60);
+            expect(results(ws)).toEqual([expect.objectContaining({ status: 'timeout' })]);
+            expect(signal?.aborted).toBe(true);
+          } finally {
+            vi.useRealTimers();
+          }
+        });
+
+        it('a call reusing a pending toolCallId replaces it: only the replacement answers', async () => {
+          const { ws, setRespond } = await startFastCall();
+          setRespond((_name, signal) => new Promise((resolve) => signal.addEventListener('abort', () => resolve({ status: 'failed' }))));
+          toolCall(ws);
+          await flush();
+          setRespond(async () => ({ status: 'completed', result: { slidePosition: 2 } }));
+          toolCall(ws);
+          await flush();
+          expect(results(ws)).toEqual([expect.objectContaining({ toolCallId: 'vtc_01', status: 'completed' })]);
+        });
+
+        it('sends nothing for a tool call whose delegation the server cancelled', async () => {
+          const { ws, setRespond } = await startFastCall();
+          let finish!: (o: VoiceClientToolOutcome) => void;
+          setRespond(() => new Promise((resolve) => (finish = resolve)));
+          toolCall(ws);
+          await flush();
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_cancelled', delegationId: 'd1', reason: 'superseded' }));
+          finish({ status: 'completed' });
+          await flush();
+          expect(results(ws)).toEqual([]);
+        });
+
+        it('a direct completion with no started delegation records the heard request and the answer', async () => {
+          const { ws, calls, recorded } = await startFastCall();
+          heard(ws);
+          toolCall(ws);
+          await flush();
+          directCompleted(ws);
+          await flush();
+          expect(calls).toEqual([]);
+          expect(recorded).toEqual([
+            {
+              delegationId: 'd1',
+              userText: 'Jump to the pricing slide',
+              userUtteranceIds: ['u1'],
+              assistantText: 'Slide 5: Pricing.',
+            },
+          ]);
+          directCompleted(ws); // a repeat never records twice
+          expect(recorded).toHaveLength(1);
+          expect(sentJson(ws).filter((f) => f.type === 'delegation_result')).toEqual([]);
+        });
+
+        it('a direct turn keeps the request it answered when the visitor speaks again before it completes', async () => {
+          const { ws, recorded } = await startFastCall();
+          heard(ws);
+          toolCall(ws);
+          await flush();
+          heard(ws, 'Next slide', 'u2');
+          directCompleted(ws);
+          expect(recorded).toEqual([
+            expect.objectContaining({ userText: 'Jump to the pricing slide', userUtteranceIds: ['u1'] }),
+          ]);
+        });
+
+        it('a hand-back aborts the direct tool still running, which then sends nothing', async () => {
+          const { ws, setRespond } = await startFastCall();
+          let signal: AbortSignal | undefined;
+          let finish!: (o: VoiceClientToolOutcome) => void;
+          setRespond((_name, s) => {
+            signal = s;
+            return new Promise((resolve) => (finish = resolve));
+          });
+          heard(ws);
+          toolCall(ws);
+          await flush();
+          started(ws, 'd1');
+          await flush();
+          expect(signal?.aborted).toBe(true);
+          finish({ status: 'completed' });
+          await flush();
+          expect(results(ws)).toEqual([]);
+        });
+
+        it('folds the tagged read-back of a direct turn, which the chat now shows', async () => {
+          const { ws, provider } = await startFastCall([...FAST_CAPS, 'delegation_read_back']);
+          const transcripts: unknown[][] = [];
+          provider.onTranscript((...args) => transcripts.push(args));
+          toolCall(ws);
+          ws.triggerMessage(
+            JSON.stringify({ type: 'transcript_update', role: 'assistant', text: 'Slide 5: Pricing.', utteranceId: 'a9', final: true, delegationId: 'd1' }),
+          );
+          expect(transcripts).toEqual([]);
+        });
+
+        it('a fall-through arrives as an ordinary delegation, and its completion is not a direct turn', async () => {
+          const { ws, calls, recorded, pending, setRespond } = await startFastCall();
+          setRespond(async () => ({ status: 'failed', error: { message: 'nope' } }));
+          heard(ws);
+          toolCall(ws);
+          await flush();
+          started(ws, 'd1');
+          await flush();
+          expect(calls.map((c) => [c.delegationId, c.userText])).toEqual([['d1', 'Jump to the pricing slide']]);
+          pending[0]({ status: 'completed', text: 'Here is pricing.' });
+          await flush();
+          ws.triggerMessage(JSON.stringify({ type: 'delegation_completed', delegationId: 'd1', speak: true, text: 'x' }));
+          directCompleted(ws); // even a mislabeled completion of a started delegation
+          expect(recorded).toEqual([]);
+          expect(sentJson(ws).filter((f) => f.type === 'delegation_result')).toEqual([
+            expect.objectContaining({ delegationId: 'd1', status: 'completed', text: 'Here is pricing.' }),
+          ]);
+        });
+
+        it('ignores a direct completion when client_tools was not negotiated', async () => {
+          const { ws, recorded } = await startFastCall(ALL_CAPS);
+          heard(ws);
+          directCompleted(ws);
+          expect(recorded).toEqual([]);
+        });
+
+        it('against an old core (no new tokens) sends no new frames and ignores client_tool_call', async () => {
+          const { ws, executed } = await startFastCall(ALL_CAPS);
+          toolCall(ws);
+          await flush();
+          expect(executed).toEqual([]);
           expect(sentJson(ws)).toEqual([]);
         });
       });

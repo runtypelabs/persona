@@ -3076,6 +3076,7 @@ export class AgentWidgetSession {
     } catch {
       // fall through to explicit approval
     }
+    if (info.signal?.aborted) return Promise.resolve(false);
 
     const approval: AgentWidgetApproval = {
       id: `webmcp-${++this.#webMcpApprovalSeq}`,
@@ -3102,6 +3103,12 @@ export class AgentWidgetSession {
 
     return new Promise<boolean>((resolve) => {
       this.webMcpApprovalResolvers.set(approvalMessageId, resolve);
+      // The call gave up (deadline or cancel): close the card so a late click cannot look like it ran the tool.
+      info.signal?.addEventListener(
+        "abort",
+        () => this.resolveWebMcpApproval(approvalMessageId, "timeout"),
+        { once: true }
+      );
     });
   }
 
@@ -3113,7 +3120,7 @@ export class AgentWidgetSession {
    */
   public resolveWebMcpApproval(
     approvalMessageId: string,
-    decision: "approved" | "denied"
+    decision: "approved" | "denied" | "timeout"
   ): void {
     const resolve = this.webMcpApprovalResolvers.get(approvalMessageId);
     if (!resolve) return;

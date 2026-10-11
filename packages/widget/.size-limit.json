@@ -144,6 +144,12 @@
     "gzip": true
   },
   {
+    "name": "Lazy · voice fast-tier client tools chunk (voice-client-tools.js)",
+    "path": "dist/voice-client-tools.js",
+    "limit": "1.02 kB",
+    "gzip": true
+  },
+  {
     "name": "Lazy · demo-forms enhancement chunk (forms-ui.js)",
     "path": "dist/forms-ui.js",
     "limit": "1.6 kB",

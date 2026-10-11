@@ -40,6 +40,10 @@ export default defineConfig({
       '@runtypelabs/persona/webmcp-runtime': fileURLToPath(
         new URL('./src/webmcp-runtime.ts', import.meta.url)
       ),
+      // Same for the lazy voice-client-tools chunk subpath.
+      '@runtypelabs/persona/voice-client-tools': fileURLToPath(
+        new URL('./src/voice-client-tools.ts', import.meta.url)
+      ),
       // Same for the lazy icons-extra chunk subpath.
       '@runtypelabs/persona/icons-extra': fileURLToPath(
         new URL('./src/icons-extra.ts', import.meta.url)

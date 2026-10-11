@@ -882,6 +882,12 @@ export type WebMcpConfirmInfo = {
    * callbacks on v6 receive an AbortSignal, not a nested confirmation API.
    */
   reason: 'gate';
+  /**
+   * Aborts when the call no longer needs an answer (its deadline passed, or it
+   * was cancelled). A confirm UI should close and resolve `false`; the tool
+   * never runs after it aborts either way.
+   */
+  signal?: AbortSignal;
 };
 
 /**
@@ -5352,7 +5358,125 @@ export interface VoiceSessionBridge {
    * declined too, as the approval TTL would.
    */
   dropDelegation?(delegationId: string, expired?: boolean): void;
+  /**
+   * The page tools a voice call may offer the server's fast tier
+   * (`client_tools` / `client_tool_call`). Returns `null` when WebMCP is not
+   * enabled on this widget; the provider then does not declare `client_tools`.
+   */
+  clientTools?(): VoiceClientTools | null;
+  /**
+   * The server answered a delegation itself (`delegation_completed.route ===
+   * 'direct'`): record the visitor's turn and the spoken answer in the chat,
+   * as a delegated turn would have. `assistantText` may be empty (no readout).
+   */
+  recordDirectTurn?(turn: VoiceDirectTurn): void;
 }
+
+/** A delegation the server answered on its fast tier, for the chat history. */
+export type VoiceDirectTurn = {
+  delegationId: string;
+  userText: string;
+  userUtteranceIds: string[];
+  assistantText: string;
+};
+
+/** `client_tool_result.status` (open enum on the wire). */
+export type VoiceClientToolStatus =
+  | 'completed'
+  | 'failed'
+  | 'denied'
+  | 'stale'
+  | 'timeout'
+  | (string & {});
+
+/** What running one `client_tool_call` produced. */
+export type VoiceClientToolOutcome = {
+  status: VoiceClientToolStatus;
+  /** The page tool's return value (any JSON), on `completed`. */
+  result?: unknown;
+  error?: { message: string };
+};
+
+/** The page's tool set as of now, plus its content fingerprint. */
+export type VoiceClientToolsSnapshot = {
+  /** Exactly what `/v1/client/chat` would send as `clientTools[]` (bare names). */
+  tools: ClientToolDefinition[];
+  fingerprint: string;
+};
+
+/** WebMCP access for a voice call (see {@link VoiceSessionBridge.clientTools}). */
+export interface VoiceClientTools {
+  snapshot(): Promise<VoiceClientToolsSnapshot>;
+  /** Subscribe to registry changes; returns an unsubscribe. */
+  onChange(listener: () => void): () => void;
+  /**
+   * Run a page tool. `autoConfirmReadOnly`: skip the confirm gate when the
+   * tool's registry entry has `annotations.readOnlyHint === true`.
+   */
+  execute(
+    name: string,
+    args: Record<string, unknown>,
+    options: { signal: AbortSignal; autoConfirmReadOnly: boolean },
+  ): Promise<VoiceClientToolOutcome>;
+  /**
+   * Start the call's fast-tier session (loads its lazy chunk): it sends
+   * `client_tools` through `channel` now and on every change, and answers
+   * the `client_tool_call` frames handed to it.
+   */
+  open(channel: VoiceClientToolsChannel): Promise<VoiceClientToolsSession>;
+}
+
+/** The call socket, as the fast-tier session sees it. */
+export type VoiceClientToolsChannel = {
+  /** Send a frame; `false` when the call (socket) is gone. */
+  send(frame: ClientToolsFrame | ClientToolResultFrame): boolean;
+  /** The server cancelled this delegation: its tool results are not sent. */
+  cancelled(delegationId: string): boolean;
+};
+
+/** A call's fast-tier session (see {@link VoiceClientTools.open}). */
+export interface VoiceClientToolsSession {
+  call(frame: Partial<ClientToolCallFrame>): void;
+  /** Abort running tool calls (of one delegation, or all); they send nothing. */
+  abort(delegationId?: string): void;
+  close(): void;
+}
+
+/**
+ * Client → server (`runtype-browser-v1`, `client_tools` capability): the page's
+ * tool set, after `session_config` and whenever its fingerprint changes. Names
+ * are the FULL names the server calls back with: `webmcp:` prefixed for
+ * `origin: 'webmcp'`, bare for `sdk`.
+ */
+export type ClientToolsFrame = {
+  type: 'client_tools';
+  /** The content fingerprint the chat path computes for the same `clientTools[]`. */
+  fingerprint: string;
+  tools: ClientToolDefinition[];
+};
+
+/** Server → client: the fast tier picked a page tool for this delegation. */
+export type ClientToolCallFrame = {
+  type: 'client_tool_call';
+  delegationId: string;
+  toolCallId: string;
+  /** `webmcp:<name>` or bare; the client accepts both. */
+  name: string;
+  arguments: Record<string, unknown>;
+  /** The `client_tools` fingerprint the call was chosen from. */
+  fingerprint: string;
+  timeoutMs: number;
+};
+
+/** Client → server: the answer to one {@link ClientToolCallFrame}. */
+export type ClientToolResultFrame = {
+  type: 'client_tool_result';
+  delegationId: string;
+  toolCallId: string;
+  status: VoiceClientToolStatus;
+  result?: unknown;
+  error?: { message: string };
+};
 
 /**
  * Extra context for an approval decision, surfaced to `onDecision` and to the

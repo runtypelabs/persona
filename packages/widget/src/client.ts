@@ -34,6 +34,7 @@ import {
   recordWebMcpToolDisplayTitles,
 } from "./webmcp-bridge";
 import { loadWebMcpRuntime } from "./webmcp-runtime-loader";
+import { loadVoiceClientTools } from "./voice-client-tools-loader";
 import type { WebMcpBridge } from "./webmcp-runtime-entry";
 import { resolveTarget } from "./utils/target";
 import { generateTurnId } from "./utils/message-id";
@@ -406,6 +407,42 @@ export class AgentWidgetClient {
    * session that it should fall back to the legacy local-tool resume path,
    * if any).
    */
+  /**
+   * WebMCP access for a Runtype voice call's fast tier: the same per-turn
+   * snapshot `clientTools[]` carries, registry change notifications, and the
+   * voice execute path. `null` when WebMCP is not enabled.
+   */
+  public getVoiceClientTools():import("./types").VoiceClientTools | null {
+    if (this.config.webmcp?.enabled !== true) return null;
+    const bridge = () => this.#getWebMcpBridge();
+    const surface: import("./types").VoiceClientTools = {
+      open: async (channel) => (await loadVoiceClientTools()).createVoiceClientToolsSession(surface, channel),
+      snapshot: async () => {
+        const tools = (await (await bridge())?.snapshotForDispatch()) ?? [];
+        return { tools, fingerprint: computeClientToolsFingerprint(tools) };
+      },
+      onChange: (listener) => {
+        let stop: (() => void) | null = null;
+        let stopped = false;
+        void bridge().then((b) => {
+          if (b && !stopped) stop = b.watchToolChanges(listener);
+        });
+        return () => {
+          stopped = true;
+          stop?.();
+        };
+      },
+      execute: async (name, args, options) => {
+        const b = await bridge();
+        if (!b) {
+          return { status: "failed", error: { message: "WebMCP runtime failed to load." } };
+        }
+        return b.executeVoiceToolCall(name, args, options);
+      },
+    };
+    return surface;
+  }
+
   public executeWebMcpToolCall(
     wireToolName: string,
     args: unknown,
