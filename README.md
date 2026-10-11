@@ -169,6 +169,8 @@ Text, images (PNG, JPEG, GIF, WebP, SVG), and documents (PDF, DOCX, TXT, CSV, JS
 ### Voice Input & Output
 Optional speech-to-text via the Web Speech API or Runtype's WebSocket voice service with barge-in interruption and voice activity detection. Text-to-speech playback for assistant responses: auto-speak via `textToSpeech`, or a per-message "Read aloud" button with play/pause/resume via `messageActions.showReadAloud`. TTS is backed by a pluggable `SpeechEngine` (browser Web Speech API by default, or a hosted engine via `textToSpeech.createEngine`). Enable via `voiceRecognition` and `textToSpeech`.
 
+Opt into a dedicated transcript or waveform capture surface with `voiceRecognition.dictation` and keep speech in the composer with `completionBehavior: "review"`. Dictation supports custom STT, cancel/finish/send controls, instance-scoped lifecycle events, and a `renderDictation` plugin hook in both V4 and V5. See [Dictation](docs/dictation.md).
+
 Custom voice providers use the same microphone controls. Updating or disabling `voiceRecognition.provider` disconnects the old provider before installing its replacement. A provider's `disconnect()` must release its resources and callbacks. For concurrent turns, pass `{ turnId }` as the fourth `onTranscript` callback argument, using the same ID on each turn's user and assistant transcripts. Persona rejects replies belonging to cancelled or superseded identified turns. Providers that omit IDs must discard cancelled output before emitting the next user final; untagged overlapping replies cannot be correlated by the widget.
 
 ### Shared text and voice conversations

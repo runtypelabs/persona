@@ -1,7 +1,9 @@
 import { createLayoutSlots } from "./utils/layout-slots";
 import { activityVariant, activityDuration, createActivityLifecycle, createActivityGroup } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
-import { usesSessionVoice } from "./utils/voice-support";
+import { loadVoiceRuntime } from "./voice-runtime-loader";
+import type { DictationController } from "./voice/dictation";
+import { usesSessionVoice, usesSessionVoiceForConfig } from "./utils/voice-support";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
@@ -14,6 +16,10 @@ import {
   type SessionHistoryState
 } from "./session";
 import {
+  DictationState,
+  DictationRenderContext,
+  DictationRenderHandle,
+  DictationProviderConfig,
   AgentWidgetConfig,
   AgentWidgetConfigPatch,
   AgentWidgetApprovalDecisionOptions,
@@ -566,6 +572,11 @@ type Controller = {
    * No-op unless a resumable durable turn dropped and `reconnectStream` is set.
    */
   reconnect: () => void;
+  startDictation: () => boolean;
+  finishDictation: () => boolean;
+  cancelDictation: () => boolean;
+  sendDictation: () => boolean;
+  getDictationState: () => DictationState;
   startVoiceRecognition: () => boolean;
   stopVoiceRecognition: () => boolean;
   /**
@@ -5521,7 +5532,7 @@ export const createAgentExperience = (
     }));
   };
   const maybeRestoreVoiceFromMetadata = () => {
-    if (config.voiceRecognition?.enabled === false) return;
+    if (config.voiceRecognition?.enabled === false || config.voiceRecognition?.dictation || (config.voiceRecognition?.provider?.type === "custom" && config.voiceRecognition.completionBehavior === "review")) return;
     const rawVoiceState = ensureRecord((persistentMetadata as any).voiceState);
     const wasActive = Boolean(rawVoiceState.active);
     const timestamp = Number(rawVoiceState.timestamp ?? 0);
@@ -9446,7 +9457,7 @@ export const createAgentExperience = (
   scrollSendSeeded = true;
 
   // Setup Runtype voice provider when configured (connects WebSocket for server-side STT)
-  if (config.voiceRecognition?.enabled === true && usesSessionVoice(config.voiceRecognition.provider)) {
+  if (config.voiceRecognition?.enabled === true && usesSessionVoiceForConfig(config)) {
     try {
       session.setupVoice();
     } catch (err) {
@@ -12100,6 +12111,7 @@ export const createAgentExperience = (
    * send paths that never awaited before still don't.
    */
   const performSubmit = (intent: SubmissionIntent = {}): void | Promise<void> => {
+    if (dictationCapturing()) return;
     const draft = (intent.overrideText ?? textarea?.value ?? "").trim();
     if (intent.resolveInlineCommand && draft) {
       return (
@@ -12398,6 +12410,10 @@ export const createAgentExperience = (
   };
 
   const doSubmit = async (submitOptions?: SubmissionIntent) => {
+    if (dictationCapturing()) {
+      if (config.voiceRecognition?.dictation?.showSend && !isComposerSendBlocked()) finishDictation(true);
+      return;
+    }
     if (submitInFlight) return;
     submitInFlight = true;
     try {
@@ -12638,6 +12654,164 @@ export const createAgentExperience = (
     await attachmentManager.handleFiles(clipboardImageFiles);
   };
 
+  // Independent opt-in STT capture. The implementation and renderer share the lazy voice chunk.
+  let dictation: DictationController | null = null;
+  let dictationRender: DictationRenderHandle | null = null;
+  let dictationLoading = false;
+  let dictationLoadFailure: DictationState | null = null;
+  let dictationQueuedFinish: boolean | null = null;
+  let dictationRequest = 0;
+  let dictationDraft = "";
+  let dictationLogicalEnd: number | null = null;
+  let dictationEditorReadOnly = false;
+  let dictationContentEditable: string | null = null;
+  let dictationPhase: DictationState["phase"] = "idle";
+  const dictationHidden = new Map<HTMLElement, string>();
+  const restoreDictationComposer = () => {
+    for (const [element, display] of dictationHidden) element.style.display = display;
+    dictationHidden.clear();
+  };
+  const idleDictation: DictationState = Object.freeze({ phase: "idle", recordingId: 0, transcript: "", interimTranscript: "", error: null, audioLevel: null });
+  const writeDictationText = (text = "") => {
+    const suffix = (dictationDraft && text && !/\s$/.test(dictationDraft) ? " " : "") + text;
+    const input = mentionOrchestrator?.getInlineInput();
+    if (input?.replaceLogicalRange && dictationLogicalEnd !== null) {
+      input.replaceLogicalRange(dictationLogicalEnd, input.getLogicalText().length, suffix);
+      input.dispatchInput();
+    } else textarea.value = dictationDraft + suffix;
+    syncComposerText();
+  };
+  const usesDedicatedDictation = () => !!config.voiceRecognition?.dictation ||
+    (config.voiceRecognition?.provider?.type === "custom" && dictationReviewMode());
+  const dictationCapturing = () => dictationLoading || ["recording", "processing"].includes(dictation?.getState().phase ?? "idle");
+  const dismissDictation = () => {
+    ++dictationRequest;
+    dictationLoading = false;
+    dictationQueuedFinish = null;
+    if (dictationLoadFailure) {
+      dictationLoadFailure = null;
+      dictationRender?.element.remove(); dictationRender = null;
+      const { audioLevel: _level, ...state } = idleDictation;
+      eventBus.emit("dictation:state", { ...state, instanceId, timestamp: Date.now() });
+      return true;
+    }
+    return dictation?.cancel() ?? false;
+  };
+  const finishDictation = (send = false): boolean => {
+    if (dictationLoading) { dictationQueuedFinish = send || dictationQueuedFinish === true; return true; }
+    return dictation?.finish(send) || (send && dictation?.send()) || false;
+  };
+  const startDictation = (): boolean => {
+    if (isComposerInputDisabled() || session.isStreaming() || dictationCapturing() || isActiveSessionVoice()) return false;
+    const voice = config.voiceRecognition;
+    if (voice?.enabled === false) return false;
+    const provider: DictationProviderConfig = voice?.dictation?.provider ??
+      (voice?.provider?.type === "custom" ? { type: "custom", custom: voice.provider.custom } : { type: "browser", browser: voice?.provider?.browser });
+    if (provider.type === "browser" && !getSpeechRecognitionClass()) return false;
+    if (provider.type === "custom" && !provider.custom) return false;
+    if (!open && isPanelToggleable()) setOpenState(true, "system");
+    if (dictationLoadFailure) dismissDictation();
+    dictationDraft = textarea.value;
+    dictationLogicalEnd = mentionOrchestrator?.getInlineInput()?.getLogicalText().length ?? null;
+    dictationEditorReadOnly = textarea.readOnly;
+    dictationContentEditable = textarea.getAttribute("contenteditable");
+    dictationLoading = true;
+    dictationQueuedFinish = null;
+    const request = ++dictationRequest;
+    void loadVoiceRuntime().then((runtime) => {
+      if (request !== dictationRequest) return;
+      dictationLoading = false;
+      dictation ??= new runtime.DictationController({
+        onReview: (text) => {
+          writeDictationText(text);
+        },
+        onSend: () => { if (!isComposerSendBlocked()) void doSubmit({ viaVoice: true }); },
+        onState: (state, levelOnly) => {
+          const previousPhase = dictationPhase;
+          dictationPhase = state.phase;
+          const capturing = state.phase === "recording" || state.phase === "processing";
+          textarea.readOnly = capturing || dictationEditorReadOnly;
+          if (!(textarea instanceof HTMLTextAreaElement)) (textarea as HTMLElement).setAttribute("contenteditable", capturing || isComposerInputDisabled() ? "false" : dictationContentEditable ?? "true");
+          if (state.phase === "idle" && ["recording", "processing", "error"].includes(previousPhase)) {
+            writeDictationText();
+          } else if (capturing && config.voiceRecognition?.dictation?.display === "inline") {
+            const text = state.transcript || state.interimTranscript;
+            writeDictationText(text);
+          }
+          if (state.phase === "error") writeDictationText();
+          const context: DictationRenderContext = {
+            instanceId, state, config,
+            actions: { cancel: () => { dismissDictation(); }, finish: () => { dictation?.finish(); },
+              ...(config.voiceRecognition?.dictation?.showSend && !isComposerSendBlocked() ? { send: () => { if (!isComposerSendBlocked()) dictation?.finish(true) || dictation?.send(); } } : {}) },
+            defaultRenderer: () => runtime.createDictationRenderer(context),
+          };
+          const visible = ["recording", "processing", "error"].includes(state.phase);
+          if (!dictationRender && visible) {
+            for (const plugin of plugins) {
+              const result = plugin.renderDictation?.(context);
+              if (result) { dictationRender = result instanceof HTMLElement ? { element: result } : result; break; }
+            }
+            dictationRender ??= context.defaultRenderer();
+            dictationRender.element.addEventListener("keydown", (event) => {
+              if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismissDictation(); }
+            });
+          }
+          if (dictationRender && visible) {
+            const target = footer.querySelector<HTMLElement>("[data-persona-composer-form]") ?? footer;
+            if (dictationRender.element.parentElement !== target) target.append(dictationRender.element);
+            restoreDictationComposer();
+            const hide = config.voiceRecognition?.dictation?.display === "inline"
+              ? Array.from(target.querySelectorAll<HTMLElement>("[data-persona-composer-actions-start], [data-persona-composer-actions-end]"))
+              : Array.from(target.children).filter((node): node is HTMLElement => node instanceof HTMLElement && node !== dictationRender?.element);
+            for (const node of hide) { dictationHidden.set(node, node.style.display); node.style.display = "none"; }
+            dictationRender.update?.(context);
+            if ((state.phase === "recording" && previousPhase !== "recording" && previousPhase !== "processing") || (state.phase === "error" && previousPhase !== "error")) {
+              dictationRender.element.querySelector<HTMLElement>("button:not(:disabled), [tabindex]")?.focus();
+            }
+          } else {
+            restoreDictationComposer();
+            dictationRender?.destroy?.();
+            dictationRender?.element.remove();
+            dictationRender = null;
+            if ((state.phase === "review" || state.phase === "idle") && state.phase !== previousPhase) textarea.focus();
+          }
+          if (!levelOnly) {
+            const { audioLevel: _level, ...eventState } = state;
+            eventBus.emit("dictation:state", { ...eventState, instanceId, timestamp: Date.now() });
+            voiceState.active = state.phase === "recording";
+            setMicState(capturing ? (state.phase === "recording" ? "recording" : "processing") : "idle");
+            emitVoiceState("system");
+          }
+        },
+      });
+      session.stopSpeaking();
+      dictation.start(provider, { autoSend: !dictationReviewMode(), pauseDuration: voice?.pauseDuration });
+      if (dictationQueuedFinish !== null) { dictation.finish(dictationQueuedFinish); dictationQueuedFinish = null; }
+    }).catch((error: unknown) => {
+      if (request !== dictationRequest) return;
+      dictationLoading = false;
+      const message = error instanceof Error ? error.message : "Unable to load dictation.";
+      dictationLoadFailure = Object.freeze({ ...idleDictation, recordingId: request, phase: "error", error: message });
+      const element = createElement("div", "persona-dictation");
+      element.setAttribute("role", "alert"); element.textContent = message;
+      const close = document.createElement("button"); close.type = "button"; close.textContent = "Dismiss dictation";
+      close.addEventListener("click", () => { dismissDictation(); }); element.append(close);
+      dictationRender = { element }; footer.append(element);
+      const { audioLevel: _level, ...state } = dictationLoadFailure;
+      eventBus.emit("dictation:state", { ...state, instanceId, timestamp: Date.now() });
+    });
+    return true;
+  };
+  destroyCallbacks.push(() => {
+    ++dictationRequest;
+    dictation?.destroy();
+    restoreDictationComposer();
+    dictationRender?.destroy?.();
+    dictationRender?.element.remove();
+  });
+
+  if (config.voiceRecognition?.dictation) void loadVoiceRuntime().catch(() => {});
+
   // Voice recognition state and logic
   let speechRecognition: any = null;
   let isRecording = false;
@@ -12728,7 +12902,9 @@ export const createAgentExperience = (
     }
     const tick = (): void => {
       voiceLevelFrame = requestAnimationFrame(tick);
-      const raw = sessionInitialized ? session.getVoiceLevel() : null;
+      const activeDictation = dictation?.getState().phase === "recording";
+      const raw = activeDictation ? dictation?.getState().audioLevel ?? null : sessionInitialized ? session.getVoiceLevel() : null;
+      if (activeDictation && raw === null) { clearVoiceLevel(); return; }
       if (raw === null) {
         writeVoiceLevel(VOICE_LEVEL_FALLBACK);
         return;
@@ -12763,6 +12939,7 @@ export const createAgentExperience = (
     if (!SpeechRecognitionClass) return;
 
     speechRecognition = new SpeechRecognitionClass();
+    const recognition = speechRecognition;
     const voiceConfig = config.voiceRecognition ?? {};
     const pauseDuration = voiceConfig.pauseDuration ?? 2000;
 
@@ -12776,6 +12953,7 @@ export const createAgentExperience = (
     const initialText = textarea.value;
 
     speechRecognition.onresult = (event: any) => {
+      if (speechRecognition !== recognition || !isRecording) return;
       // Build the complete transcript from all results
       let fullTranscript = "";
       let interimTranscript = "";
@@ -12824,6 +13002,7 @@ export const createAgentExperience = (
     };
 
     speechRecognition.onerror = (event: any) => {
+      if (speechRecognition !== recognition || !isRecording) return;
       // Don't stop on "no-speech" error, just ignore it
       if (event.error !== 'no-speech') {
         stopVoiceRecognition();
@@ -12831,6 +13010,7 @@ export const createAgentExperience = (
     };
 
     speechRecognition.onend = () => {
+      if (speechRecognition !== recognition || !isRecording) return;
       // If recognition ended naturally (not manually stopped), submit if there's text
       if (isRecording) {
         const finalValue = textarea.value.trim();
@@ -12979,6 +13159,7 @@ export const createAgentExperience = (
   // --- Per-state style application ---
 
   const applyRuntypeMicRecordingStyles = () => {
+    setMicState("recording");
     if (!micButton) return;
     storeOriginalMicStyles();
     const voiceConfig = config.voiceRecognition ?? {};
@@ -12999,6 +13180,7 @@ export const createAgentExperience = (
   };
 
   const applyRuntypeMicProcessingStyles = () => {
+    setMicState("processing");
     if (!micButton) return;
     storeOriginalMicStyles();
     const voiceConfig = config.voiceRecognition ?? {};
@@ -13024,6 +13206,7 @@ export const createAgentExperience = (
   };
 
   const applyRuntypeMicSpeakingStyles = () => {
+    setMicState("speaking");
     if (!micButton) return;
     storeOriginalMicStyles();
     const voiceConfig = config.voiceRecognition ?? {};
@@ -13069,6 +13252,7 @@ export const createAgentExperience = (
 
   /** Restore mic button to idle state (icon, colors, aria-label, cursor) */
   const removeRuntypeMicStateStyles = () => {
+    setMicState("idle");
     if (!micButton) return;
     removeAllVoiceStateClasses();
     setMicState("idle");
@@ -13087,6 +13271,11 @@ export const createAgentExperience = (
   const handleMicButtonClick = () => {
     // Dictation is composition: a locked input takes none of it.
     if (isComposerInputDisabled()) return;
+    if (usesDedicatedDictation()) {
+      if (dictation?.getState().phase === "recording") dictation.finish();
+      else if (!dictationCapturing()) startDictation();
+      return;
+    }
     // Runtype provider: use session.toggleVoice() (WebSocket-based STT)
     if (usesSessionVoice(config.voiceRecognition?.provider)) {
       const voiceStatus = session.getVoiceStatus();
@@ -14038,6 +14227,10 @@ export const createAgentExperience = (
   const controller: Controller = {
     get instanceId() { return instanceId; },
     update(nextConfig: AgentWidgetConfigPatch) {
+      const nextVoice = nextConfig.voiceRecognition;
+      if (nextVoice && (nextVoice.enabled === false ||
+        (nextVoice.dictation?.provider && nextVoice.dictation.provider !== config.voiceRecognition?.dictation?.provider) ||
+        (nextVoice.provider?.custom && nextVoice.provider.custom !== config.voiceRecognition?.provider?.custom))) dismissDictation();
       const previousDefaultsVersion = config.future?.v5Defaults === true;
       const previousToolCallConfig = config.toolCall;
       const previousMessageActions = config.messageActions;
@@ -14800,14 +14993,14 @@ export const createAgentExperience = (
       }
 
       // Update voice recognition mic button visibility
-      const voiceRecognitionEnabled = config.voiceRecognition?.enabled === true;
+      const voiceRecognitionEnabled = config.voiceRecognition?.enabled === true && config.voiceRecognition.showButton !== false;
       const hasSpeechRecognition =
         typeof window !== 'undefined' &&
         (typeof (window as any).webkitSpeechRecognition !== 'undefined' ||
          typeof (window as any).SpeechRecognition !== 'undefined');
       const hasSessionProvider =
         usesSessionVoice(config.voiceRecognition?.provider);
-      const hasVoiceInput = hasSpeechRecognition || hasSessionProvider;
+      const hasVoiceInput = hasSpeechRecognition || hasSessionProvider || config.voiceRecognition?.dictation?.provider?.type === "custom";
 
       if (voiceRecognitionEnabled && hasVoiceInput) {
         // Create or update mic button
@@ -14942,11 +15135,13 @@ export const createAgentExperience = (
         // Hide mic button
         if (micButton && micButtonWrapper) {
           micButtonWrapper.style.display = "none";
-          // Stop any active recording if disabling
-          if (usesSessionVoice(config.voiceRecognition?.provider)) {
-            if (session.isVoiceActive()) session.toggleVoice();
-          } else if (isRecording) {
-            stopVoiceRecognition();
+          // Hiding the button retains programmatic voice controls; disabling voice stops capture.
+          if (config.voiceRecognition?.enabled !== true || !hasVoiceInput) {
+            if (usesSessionVoice(config.voiceRecognition?.provider)) {
+              if (session.isVoiceActive()) session.toggleVoice();
+            } else if (isRecording) {
+              stopVoiceRecognition();
+            }
           }
         }
       }
@@ -15395,6 +15590,8 @@ export const createAgentExperience = (
       // visibility, any of which would expose an open panel host's chrome.
       reapplyHistoryHostChrome();
       warnInertSlots(config.layout?.slots ?? {});
+      if (dictationCapturing() && isComposerInputDisabled()) dismissDictation();
+      dictation?.refresh();
       slots.update();
     },
     open() {
@@ -15413,6 +15610,7 @@ export const createAgentExperience = (
       session.reconnectNow();
     },
     clearChat() {
+      dismissDictation();
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
       disposeApprovalRenders();
       artifactsPaneUserHidden = false;
@@ -15477,7 +15675,7 @@ export const createAgentExperience = (
       eventStreamView?.update();
     },
     setMessage(message: string): boolean {
-      if (!textarea) return false;
+      if (!textarea || dictationCapturing()) return false;
       if (session.isStreaming()) return false;
       if (isComposerInputDisabled()) return false;
 
@@ -15492,7 +15690,7 @@ export const createAgentExperience = (
       return true;
     },
     submitMessage(message?: string): boolean {
-      if (session.isStreaming()) return false;
+      if (session.isStreaming() || dictationCapturing()) return false;
       // Every submission path is blocked, including the programmatic one.
       if (isComposerSendBlocked()) return false;
 
@@ -15526,8 +15724,17 @@ export const createAgentExperience = (
     clearQuote(): void {
       setComposerQuote(undefined);
     },
+    startDictation,
+    finishDictation: () => finishDictation(),
+    cancelDictation: () => { const loading = dictationLoading; return dismissDictation() || loading; },
+    sendDictation: () => {
+      if (!config.voiceRecognition?.dictation?.showSend || isComposerSendBlocked()) return false;
+      return finishDictation(true);
+    },
+    getDictationState: () => dictationLoadFailure ?? dictation?.getState() ?? idleDictation,
     startVoiceRecognition(): boolean {
-      if (session.isStreaming()) return false;
+      if (session.isStreaming() || dictationCapturing()) return false;
+      if (usesDedicatedDictation() && !config.voiceRecognition?.dictation?.provider && config.voiceRecognition?.provider?.type !== "runtype") return startDictation();
       if (usesSessionVoice(config.voiceRecognition?.provider)) {
         if (session.isVoiceActive() || session.isBargeInActive()) return true;
         if (!open && isPanelToggleable()) setOpenState(true, "system");
@@ -15550,6 +15757,7 @@ export const createAgentExperience = (
       return true;
     },
     stopVoiceRecognition(): boolean {
+      if (dictationCapturing()) return finishDictation();
       if (usesSessionVoice(config.voiceRecognition?.provider)) {
         if (!session.isVoiceActive() && !session.isBargeInActive()) return false;
         const stop = session.isBargeInActive()

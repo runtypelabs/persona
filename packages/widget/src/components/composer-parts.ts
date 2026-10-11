@@ -370,7 +370,7 @@ export interface MicButtonParts {
 export const createMicButton = (config?: AgentWidgetConfig): MicButtonParts | null => {
   const voiceRecognitionConfig = config?.voiceRecognition ?? {};
   const voiceRecognitionEnabled = voiceRecognitionConfig.enabled === true;
-  if (!voiceRecognitionEnabled) return null;
+  if (!voiceRecognitionEnabled || voiceRecognitionConfig.showButton === false) return null;
 
   const hasSpeechRecognition =
     typeof window !== "undefined" &&
@@ -379,7 +379,7 @@ export const createMicButton = (config?: AgentWidgetConfig): MicButtonParts | nu
   const hasRuntypeProvider = voiceRecognitionConfig.provider?.type === "runtype";
   // Bring-your-own (`custom`) providers own their input pipeline, so the mic
   // renders regardless of Web Speech support (matches the runtime builder).
-  const hasCustomProvider = voiceRecognitionConfig.provider?.type === "custom";
+  const hasCustomProvider = voiceRecognitionConfig.provider?.type === "custom" || voiceRecognitionConfig.dictation?.provider?.type === "custom";
   const hasVoiceInput = hasSpeechRecognition || hasRuntypeProvider || hasCustomProvider;
   if (!hasVoiceInput) return null;
 

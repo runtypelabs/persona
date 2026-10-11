@@ -5,6 +5,13 @@ import {
 } from "./runtime/init";
 
 export type {
+  AgentWidgetDictationConfig,
+  DictationProviderConfig,
+  DictationPhase,
+  DictationState,
+  DictationStateEvent,
+  DictationRenderContext,
+  DictationRenderHandle,
   AgentWidgetConfig,
   AgentWidgetStorageAdapter,
   AgentWidgetStoredState,

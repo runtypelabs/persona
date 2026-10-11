@@ -81,7 +81,7 @@ import {
   ReadAloudController,
   type ReadAloudListener,
 } from "./voice/read-aloud-controller";
-import { isVoiceSupportedProbe, usesSessionVoice, voiceConnectionChanged } from "./utils/voice-support";
+import { isVoiceSupportedProbe, usesSessionVoiceForConfig, voiceConnectionChanged } from "./utils/voice-support";
 import { VoiceTurnTracker } from "./voice/voice-turn-tracker";
 import { loadVoiceRuntime } from "./voice-runtime-loader";
 import { resolveSpeakableText } from "./utils/speech-text";
@@ -2208,7 +2208,7 @@ export class AgentWidgetSession {
     this.config = merged;
     if (replaceVoice) {
       this.cleanupVoice();
-      if (merged.voiceRecognition?.enabled === true && usesSessionVoice(merged.voiceRecognition.provider)) {
+      if (merged.voiceRecognition?.enabled === true && usesSessionVoiceForConfig(merged)) {
         this.setupVoice();
       }
     }

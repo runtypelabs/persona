@@ -52,6 +52,8 @@ export interface ContextMentionOrchestrator {
   hasMentions: () => boolean;
   /** Refs of the currently tracked chips; read-only (nothing is detached). */
   getMentionRefs: () => AgentWidgetContextMentionRef[];
+  /** Inline document edits must preserve atomic mention tokens. */
+  getInlineInput: () => ComposerInputCapability | null;
   collectForSubmit: () =>
     | { refs: AgentWidgetContextMentionRef[]; finalize: () => Promise<MentionSubmitBundle> }
     | null;
@@ -344,6 +346,7 @@ export function createContextMentionOrchestrator(opts: {
     isMenuOpen: () => engine?.isMenuOpen() ?? false,
     hasMentions: () => engine?.hasMentions() ?? false,
     getMentionRefs: () => engine?.getMentionRefs() ?? [],
+    getInlineInput: () => inlineInput,
     collectForSubmit: () => engine?.collectForSubmit() ?? null,
     takeInlineCommand: async (text) => {
       if (!looksLikeCommand(text)) return null;

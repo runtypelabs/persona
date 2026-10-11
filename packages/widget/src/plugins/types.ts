@@ -27,7 +27,9 @@ import {
   AgentWidgetHistoryRenderActions,
   ResolvedHistoryPresentation,
   ComposerAction,
-  ComposerActionContributionContext
+  ComposerActionContributionContext,
+  DictationRenderContext,
+  DictationRenderHandle
 } from "../types";
 
 export type AgentWidgetTransformSuggestionsContext = {
@@ -256,6 +258,9 @@ export interface AgentWidgetPlugin {
   contributeComposerActions?: (
     context: ComposerActionContributionContext
   ) => ComposerAction[];
+
+  /** Optional independent dictation surface. The first non-null result wins. */
+  renderDictation?: (context: DictationRenderContext) => HTMLElement | DictationRenderHandle | null;
 
   /**
    * Custom renderer for composer/input area

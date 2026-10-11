@@ -1397,6 +1397,8 @@ export type AgentWidgetControllerEventMap = {
   "assistant:complete": AgentWidgetMessage;
   "voice:state": AgentWidgetVoiceStateEvent;
   "voice:status": AgentWidgetVoiceStatusEvent;
+  /** Low-frequency dictation lifecycle/transcript events; audio samples stay instance-local. */
+  "dictation:state": DictationStateEvent;
   "action:detected": AgentWidgetActionEventPayload;
   "action:resubmit": AgentWidgetActionEventPayload;
   "widget:opened": AgentWidgetStateEvent;
@@ -4659,6 +4661,57 @@ export type AgentWidgetStatusIndicatorConfig = {
   resumingText?: string;
 };
 
+/** Independent speech-to-text capture; realtime conversation providers remain separate. */
+export type DictationProviderConfig = {
+  type: "browser" | "custom";
+  browser?: { language?: string; continuous?: boolean };
+  /** Prefer a factory returning a fresh provider per recording. disconnect must cancel pending output. */
+  custom?: VoiceProvider | (() => VoiceProvider);
+};
+
+export type AgentWidgetDictationConfig = {
+  /** Defaults to transcript. inline mirrors capture into the existing editor. */
+  display?: "inline" | "transcript" | "waveform";
+  /** Separate STT provider, allowing dictation and a full-duplex voice provider in the same widget. */
+  provider?: DictationProviderConfig;
+  /** Show measured amplitude when available. Defaults to true for waveform display. */
+  waveform?: boolean;
+  interimText?: { fontStyle?: "normal" | "italic"; color?: string };
+  showCancel?: boolean;
+  showFinish?: boolean;
+  /** Enables finish-and-send during capture and Send during review. Defaults to false. */
+  showSend?: boolean;
+};
+
+export type DictationPhase = "idle" | "recording" | "processing" | "review" | "error";
+export type DictationState = Readonly<{
+  phase: DictationPhase;
+  /** Stable identity for one capture, including processing and review. */
+  recordingId: number;
+  transcript: string;
+  interimTranscript: string;
+  error: string | null;
+  /** Measured amplitude (0..1), or null when the provider has no audio graph. */
+  audioLevel: number | null;
+}>;
+
+export type DictationRenderContext = {
+  instanceId: string;
+  state: DictationState;
+  config: AgentWidgetConfig;
+  actions: { cancel: () => void; finish: () => void; send?: () => void };
+  defaultRenderer: () => DictationRenderHandle;
+};
+
+/** First non-null renderer wins. update receives instance-local audio samples as well as lifecycle changes. */
+export type DictationRenderHandle = {
+  element: HTMLElement;
+  update?: (context: DictationRenderContext) => void;
+  destroy?: () => void;
+};
+
+export type DictationStateEvent = Omit<DictationState, "audioLevel"> & { instanceId: string; timestamp: number };
+
 export type AgentWidgetVoiceRecognitionConfig = {
   /**
    * Enable the mic button and voice input. The mic still only renders when the
@@ -4668,21 +4721,17 @@ export type AgentWidgetVoiceRecognitionConfig = {
    */
   enabled?: boolean;
   /**
-   * What happens when dictation finishes on the browser (Web Speech) path.
-   *
-   * - `"send"` (default, unchanged): the transcript submits automatically after
-   *   the pause timeout, on natural end of recognition, and when the user taps
-   *   the mic to stop.
-   * - `"review"`: recognition stops and the transcript stays in the composer
-   *   for editing; the user sends it.
-   *
-   * Only the browser path is governed. The realtime `runtype` provider is full
-   * duplex and the server owns turn taking; a bring-your-own `custom` STT
-   * provider delivers a finished transcript straight to the session rather than
-   * to the composer, so there is no draft to review.
+   * What happens when speech-to-text dictation finishes. "send" submits through
+   * the composer; "review" keeps the draft for editing. Also applies to custom
+   * STT providers when dictation is configured or completionBehavior is review.
+   * Realtime conversation providers retain server-owned turn taking.
    * @default "send"
    */
   completionBehavior?: "send" | "review";
+  /** Opt into the independent dictation surface in either V4 or V5. */
+  dictation?: AgentWidgetDictationConfig;
+  /** Hide the built-in mic while retaining programmatic voice/dictation controls. */
+  showButton?: boolean;
   pauseDuration?: number;
   /** Text shown in the user message placeholder while voice is being processed. Default: "Processing voice..." */
   processingText?: string;
@@ -4950,6 +4999,8 @@ export interface SpeechEngine {
  */
 export type VoiceResult = {
   text: string;
+  /** Dictation-only: false is interim; omitted preserves final-result semantics. */
+  isFinal?: boolean;
   transcript?: string;
   audio?: {
     base64: string;
