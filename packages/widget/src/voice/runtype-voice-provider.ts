@@ -350,6 +350,8 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   // Delegations this call saw start, and the last final user utterance (a direct turn's request).
   #started = new Set<string>();
   #heard: { id: string; text: string } | null = null;
+  // Direct turns in flight: the utterance each answers, captured at its first client_tool_call.
+  #direct = new Map<string, { id: string; text: string } | null>();
 
   #resultCallbacks: ((result: VoiceResult) => void)[] = [];
   #errorCallbacks: ((error: Error) => void)[] = [];
@@ -891,11 +893,16 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         }
         break;
 
-      case "client_tool_call":
-        // A direct turn: its read-back folds, since the chat will show the answer.
-        if (this.#fastTier) this.#answered.add(String(msg.delegationId));
+      case "client_tool_call": {
+        // A direct turn: keep the request it answers (speech may follow) and fold its read-back.
+        const id = String(msg.delegationId);
+        if (this.#fastTier && !this.#direct.has(id)) {
+          this.#direct.set(id, this.#heard);
+          this.#answered.add(id);
+        }
         void this.#fastTier?.then((session) => session?.call(msg));
         break;
+      }
 
       case "transcript_update": {
         const role = msg.role === "assistant" ? "assistant" : "user";
@@ -952,8 +959,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         if (msg.type === "delegation_started") {
           this.#flushCallContext(generation);
           this.#started.add(delegationId);
-          // A direct attempt that fell through: its answer is the chat turn's now.
+          // A direct attempt that fell through: its answer is the chat turn's now, and its tool must not act late.
           this.#answered.delete(delegationId);
+          if (this.#direct.delete(delegationId)) void this.#fastTier?.then((session) => session?.abort(delegationId));
           // `input`: run this turn through the chat pipeline (client delegation).
           const input = msg.input;
           if (this.#clientDelegation && input) {
@@ -971,14 +979,16 @@ export class RuntypeVoiceProvider implements VoiceProvider {
             );
           }
         } else if (msg.route === "direct" && this.#fastTier && !this.#started.has(delegationId)) {
-          // The server answered it itself: write the heard request and its
+          // The server answered it itself: write the request it answered and its
           // answer into the chat, as the chat pipeline would have.
+          const heard = this.#direct.get(delegationId) ?? this.#heard;
+          this.#direct.delete(delegationId);
           this.#started.add(delegationId);
           this.#answered.add(delegationId);
           this.bridge?.recordDirectTurn?.({
             delegationId,
-            userText: this.#heard?.text ?? "",
-            userUtteranceIds: this.#heard ? [this.#heard.id] : [],
+            userText: heard?.text ?? "",
+            userUtteranceIds: heard ? [heard.id] : [],
             assistantText: typeof msg.text === "string" ? msg.text : "",
           });
         }
@@ -1325,6 +1335,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     void this.#fastTier?.then((session) => session?.close());
     this.#fastTier = null;
     this.#started.clear();
+    this.#direct.clear();
     this.#heard = null;
     this.#finishedArmed = false;
     this.#cancelledUntil = 0;

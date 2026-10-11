@@ -1941,6 +1941,37 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           expect(sentJson(ws).filter((f) => f.type === 'delegation_result')).toEqual([]);
         });
 
+        it('a direct turn keeps the request it answered when the visitor speaks again before it completes', async () => {
+          const { ws, recorded } = await startFastCall();
+          heard(ws);
+          toolCall(ws);
+          await flush();
+          heard(ws, 'Next slide', 'u2');
+          directCompleted(ws);
+          expect(recorded).toEqual([
+            expect.objectContaining({ userText: 'Jump to the pricing slide', userUtteranceIds: ['u1'] }),
+          ]);
+        });
+
+        it('a hand-back aborts the direct tool still running, which then sends nothing', async () => {
+          const { ws, setRespond } = await startFastCall();
+          let signal: AbortSignal | undefined;
+          let finish!: (o: VoiceClientToolOutcome) => void;
+          setRespond((_name, s) => {
+            signal = s;
+            return new Promise((resolve) => (finish = resolve));
+          });
+          heard(ws);
+          toolCall(ws);
+          await flush();
+          started(ws, 'd1');
+          await flush();
+          expect(signal?.aborted).toBe(true);
+          finish({ status: 'completed' });
+          await flush();
+          expect(results(ws)).toEqual([]);
+        });
+
         it('folds the tagged read-back of a direct turn, which the chat now shows', async () => {
           const { ws, provider } = await startFastCall([...FAST_CAPS, 'delegation_read_back']);
           const transcripts: unknown[][] = [];
