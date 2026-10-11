@@ -128,54 +128,91 @@ export function setupPresenterTools(ctx: AiContext): void {
     if (!s) throw new Error('no presentation is running')
     return s
   }
-  const state = (ctx2: AiContext) => {
-    const d = ctx2.store.doc
-    const idx = need().currentIndex()
-    const slide = d.slides[idx]
-    return { slideId: slide?.id ?? null, position: slide ? positionOf(d, slide.id) : null, slideCount: nonStateSlides(d).length }
+  // The deck is frozen while the show runs (the editing tools are swapped
+  // out), so the slide list is a closed set: name slides by label, and a voice
+  // request like "go to the pricing slide" resolves to one exact choice.
+  const labels = new Map(nonStateSlides(ctx.store.doc).map((e) => [slideLabel(e.position, e.slide), e.slide.id]))
+  const slideChoice = {
+    type: 'string',
+    enum: [...labels.keys()],
+    description: 'The slide, by its "Slide <position>: <name>" label.',
+  }
+  const otherSlideChoice = {
+    ...slideChoice,
+    description: 'Only when the user names a specific slide ("the pricing slide", "slide 2"). Leave unset for "this slide" or "the current slide": the slide on screen is used.',
+  }
+  const byLabel = (label: unknown): Slide => {
+    const id = labels.get(String(label))
+    const slide = id ? ctx.store.doc.slides.find((s) => s.id === id) : undefined
+    if (!slide) throw new Error(`unknown slide "${String(label)}" (one of: ${[...labels.keys()].join('; ')})`)
+    return slide
+  }
+  const onScreen = (): Slide | undefined => ctx.store.doc.slides[need().currentIndex()]
+  const shown = () => {
+    const d = ctx.store.doc
+    const slide = onScreen()
+    const entry = slide ? showEntry(d, slide) : undefined
+    const data = { slideId: entry?.slide.id ?? null, position: entry?.position ?? null, slideCount: nonStateSlides(d).length }
+    return spokenResult(data, { title: entry ? slideLabel(entry.position, entry.slide) : 'No slide on screen' })
   }
   const tools: ToolDescriptor[] = [
     {
       name: 'next_slide',
       title: 'Next slide',
-      description: 'Advance the running presentation to the next slide.',
+      description: 'Use when the presenter says "next", "next slide" or "keep going": advances the running presentation one step.',
       inputSchema: { type: 'object', properties: {} },
       annotations: { readOnlyHint: true },
-      execute() { need().next(); return toolResult(state(ctx)) },
+      execute() { need().next(); return shown() },
     },
     {
       name: 'prev_slide',
       title: 'Previous slide',
-      description: 'Go back one slide in the running presentation.',
+      description: 'Use when the presenter says "back", "previous slide" or "go back one": steps the running presentation back.',
       inputSchema: { type: 'object', properties: {} },
       annotations: { readOnlyHint: true },
-      execute() { need().prev(); return toolResult(state(ctx)) },
+      execute() { need().prev(); return shown() },
     },
     {
       name: 'jump_to_slide',
       title: 'Jump to a slide',
-      description: 'Jump the running presentation to a slide, by slideId or by the 1-based position get_deck_overview lists.',
-      inputSchema: { type: 'object', properties: { ...SLIDE_TARGET_PROPS } },
+      description: 'Use when the presenter names a slide to show ("go to the pricing slide", "jump to slide 4"): jumps the running presentation to it.',
+      inputSchema: { type: 'object', properties: { slide: slideChoice }, required: ['slide'] },
       annotations: { readOnlyHint: true },
       execute(args) {
-        if (!(typeof args.slideId === 'string' && args.slideId) && typeof args.position !== 'number') {
-          throw new Error('pass slideId or position (see get_deck_overview)')
-        }
-        // the show's own linear order skips hidden slides; the overview's
+        // the show's own linear order skips hidden slides; the labels'
         // positions don't, so go by doc index rather than show position
-        const s = need()
-        s.goTo(resolveSlide(ctx.store, args).index)
-        return toolResult(state(ctx))
+        const target = byLabel(args.slide)
+        need().goTo(ctx.store.doc.slides.indexOf(target))
+        return shown()
+      },
+    },
+    {
+      name: 'get_slide',
+      title: 'Read a slide',
+      description: 'Use when asked what is on a slide ("what\'s on this slide?", "read me the pricing slide"): returns its text and speaker notes. Defaults to the slide on screen.',
+      inputSchema: { type: 'object', properties: { slide: otherSlideChoice } },
+      annotations: { readOnlyHint: true },
+      execute(args) {
+        const slide = args.slide === undefined ? onScreen() : byLabel(args.slide)
+        if (!slide) throw new Error('no slide is on screen')
+        return slideRead(ctx.store.doc, slide)
       },
     },
     {
       name: 'exit_presentation',
       title: 'End the presentation',
-      description: 'Leave the slideshow and return to the editor.',
+      description: 'Use when the presenter says "end the show", "exit presenter mode" or "stop presenting": leaves the slideshow and returns to the editor.',
       inputSchema: { type: 'object', properties: {} },
-      execute() { need().exit(); return toolResult({ presenting: false }) },
+      annotations: { readOnlyHint: true },
+      execute() {
+        const s = need()
+        // exit() swaps the tool sets synchronously, which would unregister
+        // this tool mid-call; end the show once the result is on its way
+        setTimeout(() => s.exit(), 0)
+        return spokenResult({ presenting: false }, { title: 'Presentation ended' })
+      },
     },
-    // orientation read stays available so "jump to the pricing slide" works
+    // orientation read stays available so "what's in this deck" works
     buildTools(ctx).find((tool) => tool.name === 'get_deck_overview')!,
   ]
   for (const tool of tools) registerTool(modelContext, tool, presenterOwner.signal)
@@ -186,24 +223,31 @@ export function teardownPresenterTools(): void {
   presenterOwner = undefined
 }
 
+/** The slide the user is looking at: the one on screen while a show runs, else the one open in the editor. */
+export function currentSlideEntry(ctx: AiContext): SlideEntry | undefined {
+  const doc = ctx.store.doc
+  const shown = ctx.editor.presentSession ? doc.slides[ctx.editor.presentSession.currentIndex()] : undefined
+  return showEntry(doc, shown ?? ctx.store.slide)
+}
+
 /** Small live-state object for the widget's contextProviders. */
-export function deckContext(store: Store, presenting = false): Record<string, unknown> {
+export function deckContext(ctx: AiContext): Record<string, unknown> {
+  const { store } = ctx
   const doc = store.doc
-  const cur = store.slide
+  const cur = currentSlideEntry(ctx)
   const list = nonStateSlides(doc)
-  const curEntry = list.find((e) => e.slide.id === cur.id)
   return {
     deckTitle: doc.title,
     slideCount: list.length,
     currentSlide: {
-      id: cur.id,
-      position: curEntry ? curEntry.position : store.currentIndex + 1,
-      name: slideName(cur),
+      id: cur?.slide.id ?? store.slide.id,
+      position: cur?.position ?? store.currentIndex + 1,
+      name: slideName(cur?.slide ?? store.slide),
     },
     selection: store.selectedElements.map((el) => ({
       id: el.id, type: el.type, x: el.x, y: el.y, w: el.w, h: el.h,
     })),
-    presenting,
+    presenting: ctx.editor.isPresenting,
   }
 }
 
@@ -244,6 +288,19 @@ const assertWritable = (store: Store): void => {
 const toolResult = (data: unknown, summary?: string): unknown => ({
   content: [{ type: 'text', text: `${summary ? `${summary}\n\n` : ''}${JSON.stringify(data)}` }],
   structuredContent: data,
+})
+
+/** What a voice turn can say aloud: a short `title`, a `summary`, or a `text` body. */
+type Speech = { title: string } | { summary: string } | { text: string }
+
+/**
+ * A tool result that a voice call can speak without a model turn: the speech
+ * key sits at the top level beside the MCP envelope (callers that only read
+ * `content` / `structuredContent` see the usual shape).
+ */
+const spokenResult = (data: unknown, speech: Speech): unknown => ({
+  ...speech,
+  ...(toolResult(data, Object.values(speech)[0]) as object),
 })
 
 const registerTool = (
@@ -346,6 +403,47 @@ export const slideName = (slide: Slide): string | null => {
   const firstText = slide.elements.find((e): e is TextElement => e.type === 'text' && !!htmlToText(e.html).trim())
   if (firstText) return truncate(htmlToText(firstText.html).trim(), 60)
   return null
+}
+
+/** "Slide 3: Product tour": how voice names a slide, and the presenter tools' slide choices. */
+export const slideLabel = (position: number, slide: Slide): string =>
+  `Slide ${position}: ${(slideName(slide) ?? 'Untitled').replace(/\s+/g, ' ')}`
+
+/** The listed slide a show is on: an interactive state counts as its parent slide. */
+const showEntry = (doc: BentoDoc, slide: Slide): SlideEntry | undefined => {
+  const id = slide.stateOf ?? slide.id
+  return nonStateSlides(doc).find((e) => e.slide.id === id)
+}
+
+/** Every text box on a slide as plain text, in element order, minus the one already used as its name. */
+const slideBodyText = (slide: Slide): string => {
+  const name = slideName(slide)
+  return slide.elements
+    .flatMap((el) => {
+      if (el.type === 'text') return [htmlToText((el as TextElement).html)]
+      if (el.type === 'table') return (el as TableElement).rows.flatMap((r) => r.cells.map((c) => htmlToText(c.html)))
+      return []
+    })
+    .map((t) => t.replace(/\s+/g, ' ').trim())
+    .filter((t) => t && t !== name)
+    .join('. ')
+}
+
+/** get_slide's result: full element detail, plus a spoken `text` of the slide's label and words. */
+const slideRead = (doc: BentoDoc, slide: Slide): unknown => {
+  const entry = showEntry(doc, slide)
+  const label = entry ? slideLabel(entry.position, entry.slide) : (slideName(slide) ?? 'This slide')
+  const body = slideBodyText(slide)
+  return spokenResult({
+    id: slide.id,
+    position: slide.stateOf ? null : (entry?.position ?? null),
+    isState: !!slide.stateOf,
+    background: slide.background,
+    transition: slide.transition,
+    notes: slide.notes,
+    elements: slide.elements.map(elementDetail),
+    comments: slide.comments?.length ?? 0,
+  }, { text: body ? `${label}. ${body}` : `${label}. It has no text.` })
 }
 
 // ---------------------------------------------------------------------------
@@ -650,7 +748,9 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
           currentSlideId: store.slide.id,
           selectedElementIds: [...store.selection],
         }
-        return toolResult(data, `Deck "${d.title}": ${nonStateSlides(d).length} slides.`)
+        const list = nonStateSlides(d)
+        const outline = list.map((e) => `${e.position} ${(slideName(e.slide) ?? 'Untitled').replace(/\s+/g, ' ')}`).join('; ')
+        return spokenResult(data, { summary: `"${d.title}" has ${list.length} slide${list.length === 1 ? '' : 's'}: ${outline}.` })
       },
     },
     {
@@ -661,17 +761,7 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
       inputSchema: { type: 'object', properties: { ...SLIDE_TARGET_PROPS } },
       annotations: { readOnlyHint: true },
       execute(args) {
-        const { slide, position } = resolveSlide(store, args)
-        return toolResult({
-          id: slide.id,
-          position: slide.stateOf ? null : position,
-          isState: !!slide.stateOf,
-          background: slide.background,
-          transition: slide.transition,
-          notes: slide.notes,
-          elements: slide.elements.map(elementDetail),
-          comments: slide.comments?.length ?? 0,
-        })
+        return slideRead(doc(), resolveSlide(store, args).slide)
       },
     },
     // NOTE (v1.2.x): a get_slide_image tool was built and REMOVED. The relay
@@ -692,12 +782,12 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
       annotations: { readOnlyHint: true },
       execute() {
         const els = store.selectedElements
-        return toolResult({
+        return spokenResult({
           slideId: store.slide.id,
           slidePosition: positionOf(doc(), store.slide.id),
           count: els.length,
           elements: els.map(elementDetail),
-        }, els.length ? `${els.length} element(s) selected.` : 'Nothing is selected.')
+        }, { summary: els.length ? `${els.length} element${els.length === 1 ? '' : 's'} selected: ${els.map((el) => el.type).join(', ')}.` : 'Nothing is selected.' })
       },
     },
     {
@@ -709,13 +799,13 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
       annotations: { readOnlyHint: true },
       execute() {
         const all = [...builtinLayouts(), ...(doc().layouts ?? [])]
-        return toolResult({
+        return spokenResult({
           layouts: all.map((ly) => ({
             id: ly.id,
             name: ly.name ?? ly.id,
             elementRoles: ly.elements.map((e) => e.role).filter(Boolean),
           })),
-        })
+        }, { summary: `${all.length} layouts: ${all.map((ly) => ly.name ?? ly.id).join(', ')}.` })
       },
     },
     {
@@ -744,7 +834,11 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
             resolved: !!c.resolved,
           })),
         )
-        return toolResult({ comments: threads }, `${threads.length} comment thread(s).`)
+        const open = threads.filter((c) => !c.resolved)
+        const gist = open.slice(0, 3).map((c) => `"${truncate(c.text, 40)}" on slide ${positionOf(d, d.slides[c.slideIndex].id) ?? c.slideIndex + 1}`).join('; ')
+        return spokenResult({ comments: threads }, {
+          summary: `${threads.length} comment thread${threads.length === 1 ? '' : 's'}, ${open.length} open${gist ? `: ${gist}` : ''}.`,
+        })
       },
     },
 
@@ -758,7 +852,11 @@ const buildTools = (ctx: AiContext): ToolDescriptor[] => {
       execute(args) {
         const { slide, index } = resolveSlide(store, args)
         store.goTo(index)
-        return toolResult({ slideId: slide.id, position: positionOf(doc(), slide.id) })
+        const entry = showEntry(doc(), slide)
+        return spokenResult(
+          { slideId: slide.id, position: positionOf(doc(), slide.id) },
+          { title: entry ? slideLabel(entry.position, entry.slide) : (slideName(slide) ?? 'Slide opened') },
+        )
       },
     },
 

@@ -13,8 +13,10 @@ slideshow hands-free.
   same approvals, slide thumbnails and ⌘Z as a typed message, then reads the
   answer back.
 - **Present by voice.** Start a show and a small call pill stays above the
-  overlay. "Next", "go back", "jump to the pricing slide", "end the show" map
-  onto the presenter tool set the page swaps in while presenting.
+  overlay. "Next", "go back", "jump to the pricing slide", "what's on this
+  slide", "end the show" map onto the presenter tool set the page swaps in
+  while presenting. With voice direct tools on, the server answers these
+  without a chat turn: it runs the page tool and speaks the result.
 - **Five more doors into the same session:** the Copilot tab in the right rail
   (⌘J), a Firefly-style selection bar with one-shot verbs, a ⌘K palette whose
   free text falls through to the Copilot, a ghost prompt on empty slides, and
@@ -34,12 +36,47 @@ pnpm --filter bento-slides dev
 Open the printed URL, press **⌘J** (or the ✨ Copilot tab), and either type or
 tap the mic. Chrome is the best bet for the voice path (microphone + WebCodecs).
 
-To point it at your own agent (a staging one, say), set `VITE_RUNTYPE_API_URL`,
+To point it at your own agent, set `VITE_RUNTYPE_API_URL`,
 `VITE_RUNTYPE_AGENT_ID` and `VITE_RUNTYPE_CLIENT_TOKEN` in `slides/.env.local`.
 The agent needs `webmcp` enabled on its chat surface, approvals for
 `delete_slide` / `delete_elements` / `set_theme`, and a voice block of
 `speech.mode: "speech_to_speech"` with `openai` / `gpt-live-1` on both lanes
 and `interruptionMode: "barge-in"`.
+
+### Against staging (voice direct tools)
+
+Add `?runtype=staging` to the URL. Only named presets are accepted, so a link
+cannot aim the page at another host. The preset uses:
+
+| | |
+| --- | --- |
+| API host | `https://api.runtype-staging.com` |
+| Agent | `agent_01m4mmq5xaepns7qz61mw62sjx` (`bento-slides-voice-e2e`) |
+| Client token | `ct_test_01m4mmq5_6d5c88819886086741fd1a8d7756c92f` |
+
+The token admits `http://localhost:4471`, `http://127.0.0.1:4471` and this
+branch's Vercel preview, so serve on that port:
+
+```bash
+pnpm --filter @runtypelabs/persona build
+pnpm --filter bento-slides dev --port 4471 --strictPort
+# open http://localhost:4471/?runtype=staging
+```
+
+Start a slideshow, tap **Talk to Copilot** on the call pill, and say "next
+slide", "go to the pricing slide", "what's on this slide", "give me the deck
+overview", "exit presenter mode". A direct turn is spoken back within a few
+hundred milliseconds as the slide label ("Slide 4: Pricing") or the slide's
+text. The live spec `e2e/live/bento-direct-tools.live.spec.ts` drives the same
+script through a WAV file.
+
+A page tool is answered directly only when it is read-only (`readOnlyHint`),
+not destructive, takes closed-domain arguments (an `enum`, a boolean or a small
+bounded integer), and returns something speakable: a top-level `title`,
+`summary`, `text` or `message` string. The presenter tools follow that: the
+slide list is frozen during a show, so `jump_to_slide` and `get_slide` take an
+enum of "Slide N: Name" labels. The editing-mode reads still take free-form
+slide ids, so they go through the chat turn.
 
 `pnpm --filter bento-slides build:single` produces the self-contained
 `slides/dist-single/Bento_Slides.bento.html` with the Copilot (and Persona)
@@ -63,7 +100,7 @@ scripts/  postbuild-compress.mjs (+ lib/b86.mjs) for the single-file build
 | `quiet.ts` | turn choreography: working pill, provenance shimmer on touched elements, toasts |
 | `selectionbar.ts`, `palette.ts`, `ghost.ts`, `comments.ts` | the other doors |
 | `mentions.ts`, `snapshot.ts`, `thumbs.ts` | `@` context (slides get a rendered PNG attached), slide renders for the transcript |
-| `models.ts` | the agent id, client token and API host (env-overridable) |
+| `models.ts` | the agent id, client token and API host (env-overridable, or `?runtype=staging`) |
 
 ## Syncing with upstream Bento
 
