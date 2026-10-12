@@ -30,7 +30,7 @@ export function restoreBrowserToolState(message: AgentWidgetMessage): AgentWidge
       interrupted: true,
       success: false,
       error: BROWSER_TOOL_INTERRUPTION,
-      approvalStatus: tool.approvalStatus === "pending" ? "interrupted" : tool.approvalStatus,
+      approvalStatus: tool.approvalStatus === "pending" ? "timeout" : tool.approvalStatus,
       // Retain recorded durations and paired timestamps. Never fabricate an
       // end timestamp or derive a duration from the time spent off the page.
       startedAt: tool.completedAt === undefined ? undefined : tool.startedAt,
@@ -41,7 +41,7 @@ export function restoreBrowserToolState(message: AgentWidgetMessage): AgentWidge
   return {
     ...message,
     streaming: hasBrowserTool || interruptedApproval ? false : message.streaming,
-    ...(interruptedApproval ? { approval: { ...approval, status: "interrupted" as const } } : {}),
+    ...(interruptedApproval ? { approval: { ...approval, status: "timeout" as const, interrupted: true } } : {}),
     ...(toolCall ? { toolCall } : {}),
     ...(tools ? { tools } : {}),
     ...(hasBrowserTool && message.agentMetadata?.awaitingLocalTool

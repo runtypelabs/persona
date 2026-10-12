@@ -488,7 +488,9 @@ doesn't expose annotations; use top-level `title`.)
 
 Restored history (`initialMessages`, storage, or conversation switching) cannot
 restore browser approval callbacks. Pending browser approvals become
-`status: "interrupted"` and show an expiry notice with no Allow/Deny controls.
+`status: "timeout"` with `interrupted: true` and show an expiry notice with no
+Allow/Deny controls. The existing approval and tool approval-status unions are
+unchanged, so existing exhaustive status handlers do not need a new case.
 Unfinished `webmcp:` calls become terminal (`status: "complete"`,
 `interrupted: true`, `success: false`) with an explanation and no active timer.
 Here `complete` means the lifecycle ended, not that the action succeeded.

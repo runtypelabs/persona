@@ -64,6 +64,24 @@ it("keeps a cardless interrupted tool visible when completed rows are removed", 
   expect(mount.textContent).toContain("chat restarted");
 });
 
+it("supports a custom approval renderer that only handles the original statuses", () => {
+  const labels = { pending: "Waiting", approved: "Allowed", denied: "Denied", timeout: "Expired" };
+  const mount = document.createElement("div"); document.body.appendChild(mount);
+  const render = vi.fn(({ message }: { message: AgentWidgetMessage }) => {
+    const node = document.createElement("span");
+    node.textContent = message.approval ? labels[message.approval.status] : "";
+    return node;
+  });
+  controller = createAgentExperience(mount, {
+    launcher: { enabled: false }, persistState: false,
+    initialMessages: [snapshot().messages![2]],
+    plugins: [{ id: "existing-approval-renderer", renderApproval: render }],
+  });
+  expect(mount.textContent).toContain("Expired");
+  expect(render).toHaveBeenCalled();
+  expect(render.mock.calls[0][0].message.approval).toMatchObject({ status: "timeout", interrupted: true });
+});
+
 it.each(["card", "row"] as const)("loading earlier messages retires browser activity in %s display", async variant => {
   const stored = snapshot();
   const before = structuredClone(stored);

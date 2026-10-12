@@ -101,7 +101,7 @@ export const updateApprovalBubbleUI = (
   if (statusBadge) {
     statusBadge.textContent = approval.status === "approved" ? "Approved"
       : approval.status === "denied" ? "Denied"
-      : approval.status === "interrupted" ? "Interrupted"
+      : (approval.status === "timeout" && approval.interrupted) ? "Interrupted"
       : approval.status === "timeout" ? "Timeout"
       : "Pending";
 
@@ -114,7 +114,7 @@ export const updateApprovalBubbleUI = (
       statusBadge.className = "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium";
       statusBadge.style.backgroundColor = "var(--persona-palette-colors-error-100)";
       statusBadge.style.color = "var(--persona-palette-colors-error-700)";
-    } else if (approval.status === "timeout" || approval.status === "interrupted") {
+    } else if (approval.status === "timeout") {
       statusBadge.className = "persona-inline-flex persona-items-center persona-px-2 persona-py-0.5 persona-rounded-full persona-text-xs persona-font-medium";
       statusBadge.style.backgroundColor = "var(--persona-palette-colors-warning-100)";
       statusBadge.style.color = "var(--persona-palette-colors-warning-700)";
@@ -127,11 +127,11 @@ export const updateApprovalBubbleUI = (
   if (iconContainer) {
     iconContainer.innerHTML = "";
     const iconData = approval.status === "denied" ? ShieldX
-      : (approval.status === "timeout" || approval.status === "interrupted") ? ShieldAlert
+      : approval.status === "timeout" ? ShieldAlert
       : ShieldCheck;
     const iconColor = approval.status === "approved" ? "var(--persona-feedback-success, var(--persona-palette-colors-success-600))"
       : approval.status === "denied" ? "var(--persona-feedback-error, var(--persona-palette-colors-error-600))"
-      : (approval.status === "timeout" || approval.status === "interrupted") ? "var(--persona-feedback-warning, var(--persona-palette-colors-warning-600))"
+      : approval.status === "timeout" ? "var(--persona-feedback-warning, var(--persona-palette-colors-warning-600))"
       : (approvalConfig?.titleColor ?? "currentColor");
     const icon = renderIconNode(iconData, 20, iconColor, 2);
     if (icon) {
@@ -196,11 +196,11 @@ export const createApprovalBubble = (
   const iconContainer = createElement("div", "persona-flex-shrink-0 persona-mt-0.5");
   iconContainer.setAttribute("data-approval-icon", "true");
   const iconData = approval.status === "denied" ? ShieldX
-    : (approval.status === "timeout" || approval.status === "interrupted") ? ShieldAlert
+    : approval.status === "timeout" ? ShieldAlert
     : ShieldCheck;
   const iconColor = approval.status === "approved" ? "var(--persona-feedback-success, var(--persona-palette-colors-success-600))"
     : approval.status === "denied" ? "var(--persona-feedback-error, var(--persona-palette-colors-error-600))"
-    : (approval.status === "timeout" || approval.status === "interrupted") ? "var(--persona-feedback-warning, var(--persona-palette-colors-warning-600))"
+    : approval.status === "timeout" ? "var(--persona-feedback-warning, var(--persona-palette-colors-warning-600))"
     : (approvalConfig?.titleColor ?? "currentColor");
   const icon = renderIconNode(iconData, 20, iconColor, 2);
   if (icon) {
@@ -231,16 +231,16 @@ export const createApprovalBubble = (
       badge.style.backgroundColor = "var(--persona-palette-colors-error-100)";
       badge.style.color = "var(--persona-palette-colors-error-700)";
       badge.textContent = "Denied";
-    } else if (approval.status === "timeout" || approval.status === "interrupted") {
+    } else if (approval.status === "timeout") {
       badge.style.backgroundColor = "var(--persona-palette-colors-warning-100)";
       badge.style.color = "var(--persona-palette-colors-warning-700)";
-      badge.textContent = approval.status === "interrupted" ? "Interrupted" : "Timeout";
+      badge.textContent = (approval.status === "timeout" && approval.interrupted) ? "Interrupted" : "Timeout";
     }
     titleRow.appendChild(badge);
   }
 
   content.appendChild(titleRow);
-  if (approval.status === "interrupted") {
+  if (approval.status === "timeout" && approval.interrupted) {
     const notice = createElement("p", "persona-text-sm");
     notice.textContent = BROWSER_TOOL_INTERRUPTION;
     content.appendChild(notice);

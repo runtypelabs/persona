@@ -5,6 +5,7 @@ import {
   createApprovalBubble,
   humanizeToolName,
   updateApprovalDetailsUI,
+  updateApprovalBubbleUI,
 } from "./approval-bubble";
 import {
   getWebMcpToolDisplayTitle,
@@ -43,6 +44,19 @@ const makeMessage = (
     description: "Approval required",
     ...approval,
   },
+});
+
+it("shows interruption metadata while keeping the existing timeout status", () => {
+  const bubble = createApprovalBubble(makeMessage({ status: "timeout", interrupted: true }));
+  const badge = bubble.querySelector("[data-approval-status]");
+  expect(badge?.getAttribute("data-approval-status")).toBe("timeout");
+  expect(badge?.textContent).toBe("Interrupted");
+  expect(bubble.textContent).toContain("chat restarted");
+  expect(bubble.textContent).toContain("fresh proposal");
+  expect(bubble.querySelector('[data-action="allow"], [data-action="deny"]')).toBeNull();
+  updateApprovalBubbleUI("msg-1", bubble, {}, makeMessage({ status: "timeout", interrupted: true }).approval);
+  expect(badge?.textContent).toBe("Interrupted");
+  expect(badge?.getAttribute("data-approval-status")).toBe("timeout");
 });
 
 describe("createApprovalBubble shadow", () => {

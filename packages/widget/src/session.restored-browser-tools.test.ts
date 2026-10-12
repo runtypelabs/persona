@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import { AgentWidgetSession } from "./session";
-import type { AgentWidgetConfig, AgentWidgetMessage, WebMcpConfirmInfo } from "./types";
+import type { AgentWidgetApproval, AgentWidgetConfig, AgentWidgetMessage, AgentWidgetToolCall, WebMcpConfirmInfo } from "./types";
 import { BROWSER_TOOL_INTERRUPTION } from "./utils/restored-browser-state";
 import { createDemoHistoryProvider } from "./internal/demo-history-provider";
 import type { HistoryPageResult } from "./internal/history-provider";
@@ -19,6 +19,12 @@ const makeSession = (config: AgentWidgetConfig = {}) => new AgentWidgetSession(c
   onMessagesChanged: vi.fn(), onStatusChanged: vi.fn(), onStreamingChanged: vi.fn(),
 });
 
+it("keeps the public approval status unions compatible with existing exhaustive handlers", () => {
+  type ExistingStatus = "pending" | "approved" | "denied" | "timeout";
+  expectTypeOf<AgentWidgetApproval["status"]>().toEqualTypeOf<ExistingStatus>();
+  expectTypeOf<AgentWidgetToolCall["approvalStatus"]>().toEqualTypeOf<ExistingStatus | undefined>();
+});
+
 describe.each(["initial", "hydrate"] as const)("browser history via %s", path => {
   const restore = (messages: AgentWidgetMessage[]) => {
     const session = makeSession(path === "initial" ? { initialMessages: messages } : {});
@@ -29,21 +35,22 @@ describe.each(["initial", "hydrate"] as const)("browser history via %s", path =>
     const snapshot = [approval(), tool()];
     const before = structuredClone(snapshot);
     const session = restore(snapshot);
-    expect(session.getMessages()[0].approval?.status).toBe("interrupted");
+    expect(session.getMessages()[0].approval).toMatchObject({ status: "timeout", interrupted: true });
     const restored = session.getMessages()[1];
     expect(restored.streaming).toBe(false);
     expect(restored.agentMetadata).toEqual({ ...before[1].agentMetadata, awaitingLocalTool: false });
-    expect(restored.toolCall).toEqual({ ...before[1].toolCall, status: "complete", success: false, interrupted: true, error: BROWSER_TOOL_INTERRUPTION, approvalStatus: "interrupted", startedAt: undefined });
+    expect(restored.toolCall).toEqual({ ...before[1].toolCall, status: "complete", success: false, interrupted: true, error: BROWSER_TOOL_INTERRUPTION, approvalStatus: "timeout", startedAt: undefined });
     expect(restored.toolCall?.durationMs).toBeUndefined();
     expect(restored.toolCall?.completedAt).toBeUndefined();
     session.resolveWebMcpApproval(snapshot[0].id, "approved");
-    expect(session.getMessages()[0].approval?.status).toBe("interrupted");
+    expect(session.getMessages()[0].approval).toMatchObject({ status: "timeout", interrupted: true });
     expect(snapshot).toEqual(before);
     session.destroy();
   });
   it.each(["timeout", "approved", "denied"] as const)("settles unfinished tools even with a %s approval", status => {
     const session = restore([approval(status), tool()]);
     expect(session.getMessages()[0].approval?.status).toBe(status);
+    expect(session.getMessages()[0].approval?.interrupted).toBeUndefined();
     expect(session.getMessages()[1].toolCall?.interrupted).toBe(true);
     session.destroy();
   });
@@ -82,7 +89,7 @@ describe.each(["initial", "hydrate"] as const)("browser history via %s", path =>
     session.resolveWebMcpApproval(fresh.id, decision === "approved" ? "denied" : "approved");
     expect(await pending).toBe(decision === "approved");
     expect(session.getMessages().find(m => m.id === fresh.id)?.approval?.status).toBe(decision);
-    expect(session.getMessages().find(m => m.id === "approval-webmcp-1")?.approval?.status).toBe("interrupted");
+    expect(session.getMessages().find(m => m.id === "approval-webmcp-1")?.approval).toMatchObject({ status: "timeout", interrupted: true });
     session.destroy();
   });
 });
@@ -98,7 +105,7 @@ it("conversation switching also retires browser callbacks", async () => {
     onMessagesChanged: vi.fn(), onStatusChanged: vi.fn(), onStreamingChanged: vi.fn(),
   }, { historyProvider: provider });
   await session.openConversation(summary.id);
-  expect(session.getMessages()[0].approval?.status).toBe("interrupted");
+  expect(session.getMessages()[0].approval).toMatchObject({ status: "timeout", interrupted: true });
   expect(session.getMessages()[1].toolCall?.interrupted).toBe(true);
   expect(snapshot[0].approval?.status).toBe("pending");
   session.destroy();
@@ -131,13 +138,13 @@ describe("browser state from provider pages", () => {
     getPage.mockResolvedValue({ summary, messages: snapshot, conversationRevision: "r1", nextCursor: null });
     if (path === "older") {
       const page = await session.loadOlderMessages(summary.id, "older");
-      expect(page.messages.find(m => m.id === approval().id)?.approval?.status).toBe("interrupted");
+      expect(page.messages.find(m => m.id === approval().id)?.approval).toMatchObject({ status: "timeout", interrupted: true });
       expect(page.messages.find(m => m.id === tool().id)?.toolCall?.interrupted).toBe(true);
     } else {
       await session.reconcileBootConversation();
     }
     const restored = session.getMessages();
-    expect(restored.find(m => m.id === approval().id)?.approval?.status).toBe("interrupted");
+    expect(restored.find(m => m.id === approval().id)?.approval).toMatchObject({ status: "timeout", interrupted: true });
     expect(restored.find(m => m.id === tool().id)).toMatchObject({ streaming: false, agentMetadata: { awaitingLocalTool: false }, toolCall: { interrupted: true, status: "complete", success: false } });
     expect(restored.find(m => m.id === server.id)?.approval).toEqual(server.approval);
     expect(restored.find(m => m.id === done.id)?.toolCall).toEqual(done.toolCall);

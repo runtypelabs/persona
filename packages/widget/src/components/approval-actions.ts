@@ -169,7 +169,7 @@ const buildResolvedTrace = (approval: Approval): HTMLElement => {
   if (icon) row.appendChild(icon);
   const name = createElement("span", "persona-approval-resolved-name");
   name.textContent = approval.toolName ? humanizeToolName(approval.toolName) : "Tool";
-  row.append(name, document.createTextNode(approval.status === "interrupted"
+  row.append(name, document.createTextNode(approval.status === "timeout" && approval.interrupted
     ? ` approval expired. ${BROWSER_TOOL_INTERRUPTION}`
     : approval.status === "timeout" ? " timed out" : " denied"));
   return row;
