@@ -1,0 +1,103 @@
+{
+  "runId": "20261012-015511-cf2bc2",
+  "entries": [
+    {
+      "feature": "approval-compatibility-card",
+      "label": "Timeout metadata keeps the interruption explanation and hides actions",
+      "note": null,
+      "files": [
+        "02-approval-compatibility-card-timeout-metadata-keeps-the-interruption-explanat.png",
+        "02-approval-compatibility-card-timeout-metadata-keeps-the-interruption-explanat.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-12T01:56:31.308Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approval-compatibility-card",
+      "label": "Restore a browser approval with timeout and interruption metadata",
+      "note": null,
+      "files": [
+        "01-approval-compatibility-card-restore-a-browser-approval-with-timeout-and-inte.gif",
+        "01-approval-compatibility-card-restore-a-browser-approval-with-timeout-and-inte.webm",
+        "01-approval-compatibility-card-restore-a-browser-approval-with-timeout-and-inte.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-12T01:56:31.700Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approval-compatibility-card",
+      "label": "Original status value and no execution side effects",
+      "note": "2 request(s) crossed the network boundary, 1 controller event(s)",
+      "files": [
+        "03-approval-compatibility-card-original-status-value-and-no-execution-side-effe.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-12T01:56:31.771Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approval-compatibility-row",
+      "label": "Interrupted row and expired gate retain original approval statuses",
+      "note": null,
+      "files": [
+        "05-approval-compatibility-row-interrupted-row-and-expired-gate-retain-original.png",
+        "05-approval-compatibility-row-interrupted-row-and-expired-gate-retain-original.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-12T01:57:07.345Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approval-compatibility-row",
+      "label": "Original approval statuses with interrupted browser rows",
+      "note": null,
+      "files": [
+        "04-approval-compatibility-row-original-approval-statuses-with-interrupted-brow.gif",
+        "04-approval-compatibility-row-original-approval-statuses-with-interrupted-brow.webm",
+        "04-approval-compatibility-row-original-approval-statuses-with-interrupted-brow.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-12T01:57:07.923Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approval-compatibility-row",
+      "label": "Timeout and interruption metadata in the approval event",
+      "note": "2 request(s) crossed the network boundary, 1 controller event(s)",
+      "files": [
+        "06-approval-compatibility-row-timeout-and-interruption-metadata-in-the-approva.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history",
+      "at": "2026-10-12T01:57:07.991Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "approval-compatibility-card",
+      "pass": true,
+      "skipped": false,
+      "note": "Opened saved history through Messages and Show earlier messages. Approval event contains status timeout and interrupted true. Expiry notice remains; zero Allow/Deny, timer or running activity. Only two history page reads and no dispatch/resume."
+    },
+    {
+      "feature": "approval-compatibility-row",
+      "pass": true,
+      "skipped": false,
+      "note": "Messages and Show earlier messages restore a gate with status timeout and interrupted true. No actionable approval buttons, active timers, running activity or running animations. Text stable after 1.5 seconds; only two history page reads and no dispatch/resume."
+    },
+    {
+      "feature": "other-restoration-entry-points",
+      "pass": false,
+      "skipped": true,
+      "note": "Storage reload, initial/hook restoration, server continuations, fresh Allow/Deny and custom renderer compatibility are covered by automated tests; this recording drives custom history pagination."
+    }
+  ]
+}
