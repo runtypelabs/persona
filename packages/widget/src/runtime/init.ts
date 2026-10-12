@@ -3,6 +3,7 @@ import { AgentWidgetConfig as _AgentWidgetConfig, AgentWidgetConfigPatch, AgentW
 import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
 import { mergeConfigUpdate } from "../utils/config-merge";
 import { createWidgetHostLayout } from "./host-layout";
+import { moveWidgetHost } from "./move-host";
 
 const ensureTarget = (target: string | HTMLElement): HTMLElement => {
   if (typeof window === "undefined" || typeof document === "undefined") {
@@ -44,7 +45,11 @@ const mountStyles = (root: ShadowRoot | HTMLElement, ownerDocument: Document) =>
   root.insertBefore(clonedLink, root.firstChild);
 };
 
-export type AgentWidgetInitHandle = AgentWidgetController & { host: HTMLElement };
+export type AgentWidgetInitHandle = AgentWidgetController & {
+  host: HTMLElement;
+  /** Move a live direct-layout widget to a connected container in the same document. */
+  moveTo: (target: string | HTMLElement, options?: { preserveFocus?: boolean }) => void;
+};
 
 // Live handles for every mounted initAgentWidget() instance, oldest first.
 // `persona:chat-ready` is a one-shot broadcast and `windowKey` is opt-in, so
@@ -62,7 +67,7 @@ export const getAgentWidgetHandles = (): AgentWidgetInitHandle[] => [
 export const initAgentWidget = (
   options: AgentWidgetInitOptions
 ): AgentWidgetInitHandle => {
-  const target = ensureTarget(options.target);
+  let target = ensureTarget(options.target);
   const useShadow = options.useShadowDom === true;
   const ownerDocument = target.ownerDocument;
   const instanceId = target.id || `persona-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -71,6 +76,7 @@ export const initAgentWidget = (
   let controller: AgentWidgetController;
   let stateUnsubs: Array<() => void> = [];
   let destroyed = false;
+  let relocate = (move: () => void) => move();
   const hostListeners = new Set<{
     event: keyof AgentWidgetControllerEventMap;
     handler: unknown;
@@ -126,7 +132,8 @@ export const initAgentWidget = (
   const mountController = () => {
     const mount = createMount(hostLayout.host, config);
     controller = createAgentExperience(mount, config, {
-      debugTools: options.debugTools
+      debugTools: options.debugTools,
+      registerHostMove: (move) => { relocate = move; },
     });
     hostListeners.forEach((listener) => listener.bind());
     bindHostState();
@@ -151,6 +158,19 @@ export const initAgentWidget = (
   };
 
   const handleBase = {
+    moveTo(nextTarget: string | HTMLElement, moveOptions?: { preserveFocus?: boolean }) {
+      if (destroyed) throw new Error("Cannot move a destroyed widget");
+      if (hostLayout.mode !== "direct") throw new Error("Docked widgets cannot be moved");
+      const destination = typeof nextTarget === "string" ? ownerDocument.querySelector(nextTarget) : nextTarget;
+      if (!(destination instanceof HTMLElement) || destination.ownerDocument !== ownerDocument ||
+        destination.getRootNode() !== ownerDocument || hostLayout.host.getRootNode() !== ownerDocument ||
+        hostLayout.host.contains(destination)) {
+        throw new Error("Invalid widget move target: expected a connected light-DOM container in the same document");
+      }
+      if (destination === target) return;
+      relocate(() => moveWidgetHost(hostLayout.host, destination, moveOptions?.preserveFocus !== false));
+      target = destination;
+    },
     on<K extends keyof AgentWidgetControllerEventMap>(
       event: K,
       handler: (payload: AgentWidgetControllerEventMap[K], context: AgentWidgetEventContext) => void

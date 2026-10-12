@@ -109,7 +109,7 @@ const isShadowRoot = (root: Node): root is ShadowRoot =>
 const tooltipContainer = (anchor: HTMLElement): HTMLElement | ShadowRoot | null => {
   const root = anchor.getRootNode?.();
   if (isShadowRoot(root)) return root;
-  return anchor.ownerDocument.body;
+  return anchor.closest<HTMLElement>("dialog[open]") ?? anchor.ownerDocument.body;
 };
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -293,10 +293,14 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
       }
       if (label) label.textContent = resolvedText();
       if (hintChip) hintChip.textContent = resolvedHint();
+      const container = tooltipContainer(anchor);
+      if (tooltip && container && tooltip.parentNode !== container) container.appendChild(tooltip);
       reposition();
     };
     ownerWindow.addEventListener("scroll", onReposition, true);
     ownerWindow.addEventListener("resize", onReposition);
+    const moveRoot = anchor.closest("[data-persona-root]");
+    moveRoot?.addEventListener("persona:internal:host-moved", onReposition);
 
     const root = anchor.getRootNode();
     const mutationTarget =
@@ -314,6 +318,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     detachOpenListeners = () => {
       ownerWindow.removeEventListener("scroll", onReposition, true);
       ownerWindow.removeEventListener("resize", onReposition);
+      moveRoot?.removeEventListener("persona:internal:host-moved", onReposition);
       observer?.disconnect();
     };
   };

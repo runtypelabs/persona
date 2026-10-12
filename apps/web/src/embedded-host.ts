@@ -25,6 +25,23 @@ const defaults = document.querySelector<HTMLSelectElement>("#host-defaults")!;
 const status = document.querySelector<HTMLElement>("#host-status")!;
 const log = document.querySelector<HTMLElement>("#host-log")!;
 const lines: string[] = [];
+const modal = document.querySelector<HTMLDialogElement>("#host-modal")!;
+let modalOwner: Name | null = null;
+function returnToSidebar() {
+  if (!modalOwner) return;
+  const name = modalOwner;
+  // Capture transcript geometry while the dialog is still visible. Closing
+  // first removes its layout and resets scrollTop before moveTo can snapshot it.
+  widgets.get(name)?.moveTo(document.getElementById(name)!, { preserveFocus: false });
+  // Skip widget focus restoration while the sidebar is inert; closing the
+  // host dialog now restores its opener and makes the sidebar interactive.
+  modal.close();
+  modalOwner = null;
+  record(name, "moved back to sidebar · same live widget");
+  status.textContent = `${name} returned to the sidebar with its live conversation and composer state.`;
+}
+modal.addEventListener("cancel", (event) => { event.preventDefault(); returnToSidebar(); });
+document.getElementById("host-return")!.addEventListener("click", returnToSidebar);
 function record(instance: string, detail: string) {
   lines.push(`${instance} · ${detail}`);
   if (lines.length > 80) lines.shift();
@@ -93,6 +110,7 @@ function slots(name: Name): NonNullable<NonNullable<AgentWidgetConfig["layout"]>
   } };
 }
 function mount() {
+  returnToSidebar();
   widgets.forEach(widget => widget.destroy());
   widgets.clear();
   for (const name of names) {
@@ -163,6 +181,17 @@ function action(id: string, run: (widget: Handle, name: Name) => void) {
   });
 }
 action("host-run", (widget) => { widget.submitMessage("Show me an independent local reply."); });
+action("host-move", (widget, name) => {
+  returnToSidebar();
+  modal.dataset.scheme = schemes.get(name) ?? "light";
+  document.getElementById("host-modal-title")!.textContent = `${name === "research" ? "Research" : "Support"} in modal`;
+  modal.showModal();
+  widget.moveTo("#host-modal-mount");
+  modalOwner = name;
+  widget.focusInput();
+  record(name, "moved to modal · same live widget");
+  status.textContent = `${name} moved with its draft, messages, and card state. Return to the sidebar or press Escape.`;
+});
 action("host-mode", (widget) => {
   widget.setComposerModes(widget.getComposerState().activeModeIds.includes("concise") ? [] : ["concise"]);
 });

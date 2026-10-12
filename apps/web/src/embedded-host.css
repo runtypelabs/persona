@@ -35,3 +35,9 @@
 .host-pane[data-scheme="dark"] .host-card[data-owner="support"] { background: #20322c; color: #d2e9df; border-color: #3b574b; }
 .host-pane[data-scheme="dark"] .host-composer-slot input { background: #242429; color: #f4f4f5; border-color: #45434d; }
 .host-pane[data-scheme="dark"] .host-composer-slot button { background: #332a46; color: #e8ddfa; border-color: #51465f; }
+
+.host-modal { width: min(900px, calc(100vw - 48px)); max-height: calc(100dvh - 48px); padding: 0; }
+.host-modal::backdrop { background: #17171a88; }
+.host-modal > .host-controls { justify-content: space-between; margin: 0; padding: 8px 16px; }
+.host-modal h2 { border: 0; padding: 8px 0; }
+.host-modal .host-mount { height: min(600px, calc(100dvh - 150px)); }

@@ -8,7 +8,7 @@ vi.mock("./demo-echo-fetch", () => ({ createDemoEchoFetch: () => vi.fn() }));
 async function start() {
   vi.resetModules();
   mocks.source.mockImplementation((source) => source);
-  mocks.init.mockImplementation(() => ({ instanceId: `widget-${mocks.init.mock.calls.length}`, destroy: vi.fn(), on: vi.fn(), injectAssistantMessage: vi.fn(), injectComponentDirective: vi.fn(), update: vi.fn(), submitMessage: vi.fn(), getComposerState: vi.fn(() => ({ activeModeIds: [] })), setComposerModes: vi.fn() }));
+  mocks.init.mockImplementation(() => ({ instanceId: `widget-${mocks.init.mock.calls.length}`, destroy: vi.fn(), moveTo: vi.fn(), focusInput: vi.fn(), on: vi.fn(), injectAssistantMessage: vi.fn(), injectComponentDirective: vi.fn(), update: vi.fn(), submitMessage: vi.fn(), getComposerState: vi.fn(() => ({ activeModeIds: [] })), setComposerModes: vi.fn() }));
   document.body.innerHTML = pageHtml;
   await import("./embedded-host");
 }
@@ -19,6 +19,30 @@ function choose(id: string, value: string) {
 }
 afterEach(() => { window.dispatchEvent(new Event("pagehide")); vi.clearAllMocks(); document.body.innerHTML = ""; });
 describe("embedded host composer scenarios", () => {
+  it.each(["Escape", "return button"])("moves back before hiding the modal using %s", async (returnAction) => {
+    await start();
+    const research = mocks.init.mock.results[0].value;
+    const support = mocks.init.mock.results[1].value;
+    const dialog = document.querySelector<HTMLDialogElement>("#host-modal")!;
+    const show = vi.fn(() => dialog.setAttribute("open", ""));
+    const close = vi.fn(() => dialog.removeAttribute("open"));
+    dialog.showModal = show; dialog.close = close;
+    document.getElementById("host-move")!.click();
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(research.moveTo).toHaveBeenLastCalledWith("#host-modal-mount");
+    expect(research.focusInput).toHaveBeenCalledTimes(1);
+    expect(support.moveTo).not.toHaveBeenCalled(); expect(research.update).not.toHaveBeenCalled();
+    // A closed native dialog has no layout; relocation must snapshot the
+    // transcript while it is still visible, before close() resets its scroll.
+    research.moveTo.mockImplementationOnce(() => expect(dialog.open).toBe(true));
+    if (returnAction === "Escape") dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+    else document.getElementById("host-return")!.click();
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(dialog.open).toBe(false);
+    expect(research.moveTo).toHaveBeenLastCalledWith(document.getElementById("research"), { preserveFocus: false });
+    expect(document.getElementById("host-status")!.textContent).toContain("returned to the sidebar");
+    expect(mocks.init).toHaveBeenCalledTimes(2); expect(research.destroy).not.toHaveBeenCalled();
+  });
   it("starts with a quiet stacked reference and compares both V4 arrangements", async () => {
     await start();
     expect(mocks.init.mock.calls).toHaveLength(2);

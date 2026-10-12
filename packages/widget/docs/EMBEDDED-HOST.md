@@ -48,6 +48,59 @@ Instance identity does not change storage namespaces. For independent persistent
 conversations, configure separate storage adapters/keys and `persistState.keyPrefix`
 values. Set `persistState: false` for ephemeral widgets, as the example does.
 
+## Move a live widget between containers
+
+`initAgentWidget()` handles expose `moveTo(target, { preserveFocus?: boolean })`.
+The target is a selector or an `HTMLElement`. Relocation preserves the handle,
+generated `host`, mount, optional ShadowRoot, `instanceId`, session, active
+stream, draft, mentions, attachments, dictation, and renderer/subscription
+lifetimes. It does not invoke configuration updates or remount renderers.
+
+```ts
+const chat = initAgentWidget({
+  target: "#sidebar-chat",
+  config: { launcher: { enabled: false }, layout: { embedded: true } },
+});
+// Both containers must already be connected to this document's light DOM.
+chat.moveTo("#modal-chat");
+chat.moveTo(document.querySelector<HTMLElement>("#sidebar-chat")!);
+```
+
+This works with both V4 and V5 defaults and keeps the current Persona
+presentation. The host application owns container dimensions, visibility,
+modal/dialog semantics, focus trapping, and returning focus to the opener.
+Open/show a modal destination before moving into it; a hidden or inert container
+cannot retain interactive focus. Give embedded containers a bounded height and
+a shrinkable flex chain, as described in [theme configuration](../THEME-CONFIG.md).
+When returning from a modal, move the widget **before** hiding or closing the
+modal so its visible transcript position can still be measured. Use
+`preserveFocus: false` for that move, then close the dialog to restore its opener.
+
+`preserveFocus` defaults to `true`: widget-owned focus and text selection are
+restored without scrolling the page. Focus outside the widget is left alone.
+With `false`, Persona skips restoration; it does not force a blur, and a native
+move may retain focus. Follow mode stays following; paused readers keep their
+visible-message position across reflow (with scrollTop as a fallback). Open
+Persona popovers and tooltips are repositioned for the new host.
+
+Only direct layouts can move. Docked layouts wrap page content rather than
+simply parenting the widget and are rejected. Destinations in another document,
+ShadowRoot, or detached subtree, and destinations within the generated host,
+are rejected before mutation. Moving a destroyed handle also throws. The
+current target is a no-op. Subsequent `update()` and `destroy()` use the new
+target; changing docked/composer-bar mount modes still follows the existing
+layout-rebuild lifecycle and is not state-preserving relocation.
+
+Where supported, Persona uses the browser's
+[`Element.moveBefore()`](https://developer.mozilla.org/en-US/docs/Web/API/Element/moveBefore)
+to preserve native DOM state. Other browsers reparent with `appendChild()`:
+Persona's state and DOM identities survive, but iframes can reload, custom
+elements can receive disconnect/connect callbacks, and browser animation or
+native popover state can reset. Custom elements need `connectedMoveCallback()`
+to opt into native move lifecycle behavior. Plugin-owned overlays should manage
+their own positioning on host changes. Test iframe-based artifacts and custom
+elements in each supported browser before relying on their browser-owned state.
+
 ## Observe the transcript and runs
 
 `messages:changed` supplies the latest message array, including injections,

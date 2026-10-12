@@ -3,7 +3,8 @@ import { brotliCompressSync, constants } from "node:zlib";
 
 // Binary KB, matching the established 148 / 14.4 / 17.8 KB baselines.
 const budgets = [
-  { file: "index.global.js", bytes: 156 * 1024, exclusive: false },
+  // Live host relocation and dialog-aware popovers/tooltips.
+  { file: "index.global.js", bytes: 156.25 * 1024, exclusive: false },
   { file: "launcher.global.js", bytes: 20 * 1024, exclusive: true },
   // Responsive composer geometry, bounded mentions, and opt-in voice-bar motion.
   { file: "widget.css", bytes: 20.65 * 1024, exclusive: false },

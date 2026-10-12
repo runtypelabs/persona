@@ -149,7 +149,7 @@ export interface PopoverOptions {
   zIndex?: number | null;
   /**
    * Where to mount `content`. Defaults to the anchor's shadow root (when
-   * shadowed) or `document.body`: keeping it inside the same style + stacking
+   * shadowed), its open dialog, or `document.body`: keeping it inside the same style + stacking
    * scope as the anchor while escaping the transcript's scroll clipping.
    */
   container?: HTMLElement | ShadowRoot;
@@ -172,7 +172,7 @@ export interface PopoverHandle {
 function defaultContainer(anchor: HTMLElement): HTMLElement | ShadowRoot {
   const root = anchor.getRootNode?.();
   if (root instanceof ShadowRoot) return root;
-  return (anchor.ownerDocument ?? document).body;
+  return anchor.closest<HTMLElement>("dialog[open]") ?? (anchor.ownerDocument ?? document).body;
 }
 
 /**
@@ -207,12 +207,19 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     onDismiss,
   } = options;
 
-  const container = options.container ?? defaultContainer(anchor);
+  const currentContainer = () => options.container ?? defaultContainer(anchor);
   let open = false;
   let detach: (() => void) | null = null;
 
   const reposition = (): void => {
     if (!open) return;
+    const container = currentContainer();
+    if (content.parentNode !== container) {
+      const focused = content.contains(content.ownerDocument.activeElement)
+        ? content.ownerDocument.activeElement as HTMLElement : null;
+      container.appendChild(content);
+      focused?.focus({ preventScroll: true });
+    }
     const rect = anchor.getBoundingClientRect();
     content.style.position = "fixed";
     if (matchAnchorWidth) content.style.minWidth = `${rect.width}px`;
@@ -260,7 +267,6 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     if (open) return;
     open = true;
     if (zIndex != null) content.style.zIndex = String(zIndex);
-    container.appendChild(content);
     reposition();
 
     const ownerWindow = (anchor.ownerDocument ?? document).defaultView ?? window;
@@ -288,12 +294,15 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     }, 0);
     ownerWindow.addEventListener("scroll", onReposition, true);
     ownerWindow.addEventListener("resize", onReposition);
+    const moveRoot = anchor.closest("[data-persona-root]");
+    moveRoot?.addEventListener("persona:internal:host-moved", onReposition);
 
     detach = () => {
       ownerWindow.clearTimeout(armId);
       ownerDocument.removeEventListener("pointerdown", onOutside, true);
       ownerWindow.removeEventListener("scroll", onReposition, true);
       ownerWindow.removeEventListener("resize", onReposition);
+      moveRoot?.removeEventListener("persona:internal:host-moved", onReposition);
     };
 
     onOpen?.();

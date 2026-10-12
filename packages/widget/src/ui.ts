@@ -485,30 +485,18 @@ function normalizePersistStateConfig(
 ): NormalizedPersistConfig | null {
   if (!config) return null;
 
-  if (config === true) {
-    // Use defaults
-    return {
-      storage: 'session',
-      keyPrefix: 'persona-',
-      persist: {
-        openState: true,
-        voiceState: true,
-        focusInput: true
-      },
-      clearOnChatClear: true
-    };
-  }
+  const settings = config === true ? {} : config;
 
   // Object config - merge with defaults
   return {
-    storage: config.storage ?? 'session',
-    keyPrefix: config.keyPrefix ?? 'persona-',
+    storage: settings.storage ?? 'session',
+    keyPrefix: settings.keyPrefix ?? 'persona-',
     persist: {
-      openState: config.persist?.openState ?? true,
-      voiceState: config.persist?.voiceState ?? true,
-      focusInput: config.persist?.focusInput ?? true
+      openState: settings.persist?.openState ?? true,
+      voiceState: settings.persist?.voiceState ?? true,
+      focusInput: settings.persist?.focusInput ?? true
     },
-    clearOnChatClear: config.clearOnChatClear ?? true
+    clearOnChatClear: settings.clearOnChatClear ?? true
   };
 }
 
@@ -943,7 +931,7 @@ export const mergeFinalizedMentions = (
 export const createAgentExperience = (
   mount: HTMLElement,
   initialConfig?: AgentWidgetConfig,
-  runtimeOptions?: { debugTools?: boolean }
+  runtimeOptions?: { debugTools?: boolean; registerHostMove?: (move: (reparent: () => void) => void) => void }
 ): Controller => {
   if (mount == null) {
     throw new Error(
@@ -14224,6 +14212,35 @@ export const createAgentExperience = (
     });
   }
 
+  // Relocation is deliberately narrower than update(): no renderer, composer,
+  // session, or subscription is rebuilt. Snapshot reader intent before the
+  // browser can clamp scrollTop while moving/reflowing the host.
+  runtimeOptions?.registerHostMove?.((reparent) => {
+    const top = body.scrollTop;
+    const following = isFollowEffective() && autoFollow.isFollowing();
+    const viewportTop = body.getBoundingClientRect().top;
+    const readingAnchor = !following && body.clientHeight > 0
+      ? Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]")).find(
+        (node) => node.getBoundingClientRect().bottom > viewportTop
+      ) : undefined;
+    const anchorOffset = readingAnchor ? readingAnchor.getBoundingClientRect().top - viewportTop : 0;
+    cancelAutoScroll();
+    reparent();
+    recalcPanelHeight();
+    if (railOverlayHost) applyRailChrome();
+    if (following) body.scrollTop = getScrollBottomOffset(body);
+    else if (readingAnchor) body.scrollTop += readingAnchor.getBoundingClientRect().top - body.getBoundingClientRect().top - anchorOffset;
+    else body.scrollTop = top;
+    if (!following && !readerEngagedThisTurn) repinAnchoredMessage();
+    lastScrollTop = body.scrollTop;
+    lastBottomOffset = getScrollBottomOffset(body);
+    syncTranscriptTopFade();
+    syncScrollToBottomButton();
+    // Open popovers/tooltips listen at their own instance root, including
+    // lazy chunks with separate module copies. Other widgets are untouched.
+    mount.dispatchEvent(new Event("persona:internal:host-moved"));
+  });
+
   const controller: Controller = {
     get instanceId() { return instanceId; },
     update(nextConfig: AgentWidgetConfigPatch) {
@@ -16210,105 +16227,33 @@ export const createAgentExperience = (
   // INSTANCE-SCOPED WINDOW EVENTS FOR PROGRAMMATIC CONTROL
   // ============================================================================
   if (typeof window !== "undefined") {
-
-
-    const handleFocusInput = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.focusInput();
-      }
+    type CommandDetail = { instanceId?: string; artifact?: PersonaArtifactManualUpsert; id?: string };
+    const bindCommand = (name: string, run: (detail?: CommandDetail) => unknown) => {
+      const listener = (event: Event) => {
+        const detail = (event as CustomEvent<CommandDetail>).detail;
+        if (!detail?.instanceId || detail.instanceId === instanceId) run(detail);
+      };
+      window.addEventListener(name, listener);
+      destroyCallbacks.push(() => window.removeEventListener(name, listener));
     };
-    window.addEventListener("persona:focusInput", handleFocusInput);
-    destroyCallbacks.push(() => {
-      window.removeEventListener("persona:focusInput", handleFocusInput);
-    });
-
+    bindCommand("persona:focusInput", () => controller.focusInput());
     if (showEventStreamToggle) {
-      const handleShowEvent = (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        if (!detail?.instanceId || detail.instanceId === instanceId) {
-          controller.showEventStream();
-        }
-      };
-      const handleHideEvent = (e: Event) => {
-        const detail = (e as CustomEvent).detail;
-        if (!detail?.instanceId || detail.instanceId === instanceId) {
-          controller.hideEventStream();
-        }
-      };
-      window.addEventListener("persona:showEventStream", handleShowEvent);
-      window.addEventListener("persona:hideEventStream", handleHideEvent);
-      destroyCallbacks.push(() => {
-        window.removeEventListener("persona:showEventStream", handleShowEvent);
-        window.removeEventListener("persona:hideEventStream", handleHideEvent);
-      });
+      bindCommand("persona:showEventStream", () => controller.showEventStream());
+      bindCommand("persona:hideEventStream", () => controller.hideEventStream());
     }
-
     // Show/hide only. Identity status stays on the instance-scoped controller
     // bus so authentication state is never broadcast page-wide.
-    const handleShowHistory = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        void controller.showHistory();
-      }
-    };
-    const handleHideHistory = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.hideHistory();
-      }
-    };
-    window.addEventListener("persona:showHistory", handleShowHistory);
-    window.addEventListener("persona:hideHistory", handleHideHistory);
-    destroyCallbacks.push(() => {
-      window.removeEventListener("persona:showHistory", handleShowHistory);
-      window.removeEventListener("persona:hideHistory", handleHideHistory);
+    bindCommand("persona:showHistory", () => controller.showHistory());
+    bindCommand("persona:hideHistory", () => controller.hideHistory());
+    bindCommand("persona:showArtifacts", () => controller.showArtifacts());
+    bindCommand("persona:hideArtifacts", () => controller.hideArtifacts());
+    bindCommand("persona:upsertArtifact", (detail) => {
+      if (detail?.artifact) controller.upsertArtifact(detail.artifact);
     });
-
-    const handleShowArtifacts = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.showArtifacts();
-      }
-    };
-    const handleHideArtifacts = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.hideArtifacts();
-      }
-    };
-    const handleUpsertArtifact = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.instanceId && detail.instanceId !== instanceId) return;
-      if (detail?.artifact) {
-        controller.upsertArtifact(detail.artifact as PersonaArtifactManualUpsert);
-      }
-    };
-    const handleSelectArtifact = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (detail?.instanceId && detail.instanceId !== instanceId) return;
-      if (typeof detail?.id === "string") {
-        controller.selectArtifact(detail.id);
-      }
-    };
-    const handleClearArtifacts = (e: Event) => {
-      const detail = (e as CustomEvent).detail;
-      if (!detail?.instanceId || detail.instanceId === instanceId) {
-        controller.clearArtifacts();
-      }
-    };
-    window.addEventListener("persona:showArtifacts", handleShowArtifacts);
-    window.addEventListener("persona:hideArtifacts", handleHideArtifacts);
-    window.addEventListener("persona:upsertArtifact", handleUpsertArtifact);
-    window.addEventListener("persona:selectArtifact", handleSelectArtifact);
-    window.addEventListener("persona:clearArtifacts", handleClearArtifacts);
-    destroyCallbacks.push(() => {
-      window.removeEventListener("persona:showArtifacts", handleShowArtifacts);
-      window.removeEventListener("persona:hideArtifacts", handleHideArtifacts);
-      window.removeEventListener("persona:upsertArtifact", handleUpsertArtifact);
-      window.removeEventListener("persona:selectArtifact", handleSelectArtifact);
-      window.removeEventListener("persona:clearArtifacts", handleClearArtifacts);
+    bindCommand("persona:selectArtifact", (detail) => {
+      if (typeof detail?.id === "string") controller.selectArtifact(detail.id);
     });
+    bindCommand("persona:clearArtifacts", () => controller.clearArtifacts());
   }
 
   // ============================================================================

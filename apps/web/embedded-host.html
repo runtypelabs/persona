@@ -20,6 +20,7 @@
       <label>Layout <select id="host-layout"><option value="stacked">Stacked reference</option><option value="single-row">Compact single row</option></select></label>
       <label>Theme <select id="host-scheme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
       <label>Host width <select id="host-width"><option value="full">Full</option><option value="narrow">Narrow (380px)</option></select></label>
+      <button type="button" id="host-move">Move target to modal</button>
     </section>
     <details class="host-test-controls"><summary>Host API and lifecycle controls</summary><div class="host-controls">
       <button type="button" id="host-run">Run local reply</button>
@@ -35,6 +36,10 @@
       <section class="host-pane" aria-label="Research assistant"><h2>Research</h2><div id="research" class="host-mount"></div></section>
       <section class="host-pane" aria-label="Support assistant"><h2>Support</h2><div id="support" class="host-mount"></div></section>
     </div>
+    <dialog id="host-modal" class="host-modal host-pane" aria-labelledby="host-modal-title">
+      <div class="host-controls"><h2 id="host-modal-title">Assistant in modal</h2><button type="button" id="host-return">Return to sidebar</button></div>
+      <div id="host-modal-mount" class="host-mount"></div>
+    </dialog>
     <details class="host-events"><summary>Instance events and lifecycle</summary><p>Both widgets use the component name <code>HostCard</code> with their own renderer. Updating a card preserves its element; removing it releases its listener.</p><pre id="host-log" tabindex="0" aria-label="Recent host events"></pre></details>
     <p><a href="/v5-preview.html">Back to the V5 preview</a> · <a href="/assistant-composers.html">Assistant config lab</a></p>
   </main>
