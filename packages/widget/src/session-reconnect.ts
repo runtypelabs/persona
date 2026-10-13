@@ -37,6 +37,7 @@ export interface ReconnectHost {
   setReconnecting(value: boolean): void;
   setAbortController(controller: AbortController | null): void;
   getMessages(): AgentWidgetMessage[];
+  isAwaitPending?(): boolean;
   notifyMessagesChanged(): void;
   /** Pipe a resumed SSE body through the session, filling the same bubble. */
   resumeConnect(
@@ -244,6 +245,15 @@ export function createReconnectController(
           host.emitReconnect({ phase: "resumed", handle });
           return;
         }
+        // A read-only replay can discover an intentional browser/user await.
+        // Keep its cursor for the normal user resolution path; do not replay
+        // the same await or consume the retry budget while attention is needed.
+        if (host.isAwaitPending?.()) {
+          host.setReconnecting(false);
+          attempt = 0;
+          detachListeners();
+          return;
+        }
         // Made forward progress before dropping again → reset the attempt
         // budget so a long, flaky run isn't capped by total drops.
         if (host.getResumable()!.lastEventId !== before) attempt = 0;
@@ -281,3 +291,5 @@ export function createReconnectController(
     wake,
   };
 }
+
+export { BackgroundConversationController } from "./session-background";

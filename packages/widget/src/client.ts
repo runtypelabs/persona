@@ -11,6 +11,7 @@ import {
   AgentWidgetAgentRequestPayload,
   AgentWidgetCustomFetch,
   AgentWidgetSSEEventParser,
+  AgentWidgetStreamCheckpoint,
   AgentWidgetHeadersFunction,
   AgentWidgetSSEEventResult as _AgentWidgetSSEEventResult,
   StopReasonKind,
@@ -298,6 +299,8 @@ export class AgentWidgetClient {
   private readonly parseSSEEvent?: AgentWidgetSSEEventParser;
   private readonly getHeaders?: AgentWidgetHeadersFunction;
   private onSSEEvent?: SSEEventCallback;
+  private streamGeneration = 0;
+  private streamReaders = new Set<ReadableStreamDefaultReader<Uint8Array>>();
   
   // Client token mode properties
   /**
@@ -447,6 +450,16 @@ export class AgentWidgetClient {
   /**
    * Set callback for capturing raw SSE events
    */
+  /** @internal Invalidate all readers at a local conversation/identity boundary. */
+  public cancelStreams(): void {
+    this.streamGeneration += 1;
+    // Durable detachment explicitly closes its attachment. Other transports
+    // retain their existing customFetch producer teardown contract; invalidate
+    // their events without introducing a new reader.cancel() side effect.
+    if (!this.config.backgroundConversations) return;
+    for (const reader of this.streamReaders) void reader.cancel().catch(() => {});
+  }
+
   public setSSEEventCallback(callback: SSEEventCallback): void {
     this.onSSEEvent = callback;
   }
@@ -1999,7 +2012,7 @@ export class AgentWidgetClient {
 
       // Stream the response (same SSE handling as proxy mode)
       try {
-        await this.streamResponse(response.body, forward, options.assistantMessageId);
+        await this.streamResponse(response.body, forward, options.assistantMessageId, undefined, options.signal);
       } finally {
         forward({ type: "status", status: "idle" });
       }
@@ -2085,7 +2098,7 @@ export class AgentWidgetClient {
 
     onEvent({ type: "status", status: "connected" });
     try {
-      await this.streamResponse(response.body, onEvent);
+      await this.streamResponse(response.body, onEvent, undefined, undefined, options.signal);
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
@@ -2159,7 +2172,7 @@ export class AgentWidgetClient {
 
     onEvent({ type: "status", status: "connected" });
     try {
-      await this.streamResponse(response.body, onEvent, options.assistantMessageId);
+      await this.streamResponse(response.body, onEvent, options.assistantMessageId, undefined, options.signal);
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
@@ -2174,11 +2187,14 @@ export class AgentWidgetClient {
     body: ReadableStream<Uint8Array>,
     onEvent: SSEHandler,
     assistantMessageId?: string,
-    seedContent?: string
+    seedContent?: string,
+    signal?: AbortSignal,
+    resumeMessages?: AgentWidgetMessage[],
+    checkpoint?: AgentWidgetStreamCheckpoint
   ): Promise<void> {
     onEvent({ type: "status", status: "connected" });
     try {
-      await this.streamResponse(body, onEvent, assistantMessageId, seedContent);
+      await this.streamResponse(body, onEvent, assistantMessageId, seedContent, signal, resumeMessages, checkpoint);
     } finally {
       onEvent({ type: "status", status: "idle" });
     }
@@ -2784,9 +2800,17 @@ export class AgentWidgetClient {
     // shown before the drop, so replayed post-cursor deltas APPEND to it
     // instead of a fresh stream clobbering it (the replay carries only
     // `seq > after`, i.e. the new deltas, not the full text).
-    seedContent?: string
+    seedContent?: string,
+    signal?: AbortSignal,
+    resumeMessages?: AgentWidgetMessage[],
+    checkpoint?: AgentWidgetStreamCheckpoint
   ) {
+    const generation = this.streamGeneration;
     const reader = body.getReader();
+    this.streamReaders.add(reader);
+    const cancelOnAbort = !!this.config.backgroundConversations;
+    const abortReader = () => { if (cancelOnAbort) void reader.cancel().catch(() => {}); };
+    signal?.addEventListener("abort", abortReader, { once: true });
     const decoder = new TextDecoder();
     let buffer = "";
 
@@ -2840,7 +2864,7 @@ export class AgentWidgetClient {
     };
 
     const emitMessage = (msg: AgentWidgetMessage) => {
-      if (!shouldEmitMessage(msg)) return;
+      if (signal?.aborted || generation !== this.streamGeneration || !shouldEmitMessage(msg)) return;
       onEvent({
         type: "message",
         message: cloneMessage(msg)
@@ -2878,6 +2902,37 @@ export class AgentWidgetClient {
     const toolMessages = new Map<string, AgentWidgetMessage>();
     const baseAssistantId = assistantMessageId;
     let assistantIdConsumed = false;
+
+    // The cursor belongs to this exact transcript. Restore the open native
+    // block before replay so text_complete can seal it even without a delta,
+    // and a later text_start cannot append a new block to the saved bubble.
+    const resumeAssistant = resumeMessages?.find((message) => message.id === assistantMessageId);
+    if (resumeAssistant) {
+      assistantMessage = cloneMessage(resumeAssistant);
+      assistantMessage.streaming = checkpoint?.openAssistant ?? true;
+      assistantIdConsumed = true;
+      currentTextBlockId = resumeAssistant.agentMetadata?.textBlockId ?? null;
+      pendingTextRaw = resumeAssistant.rawContent ?? resumeAssistant.content;
+      lastAssistantInTurn = assistantMessage;
+      if (checkpoint && !checkpoint.openAssistant) assistantMessage = null;
+    }
+    if (checkpoint) {
+      currentTextBlockId = checkpoint.textBlockId;
+      pendingTextRaw = checkpoint.rawText;
+      checkpoint.nestedParents.forEach(([id, parent]) => nestedBlockParent.set(id, parent));
+      checkpoint.nestedRaw.forEach(([id, raw]) => nestedBlockRaw.set(id, raw));
+    }
+    for (const message of resumeMessages ?? []) {
+      if (message.variant === "tool" && message.toolCall?.id) toolMessages.set(message.toolCall.id, cloneMessage(message));
+      if (message.variant === "reasoning" && message.reasoning?.id) reasoningMessages.set(message.reasoning.id, cloneMessage(message));
+      const blockId = message.agentMetadata?.textBlockId;
+      const parentId = message.agentMetadata?.parentToolId;
+      if (blockId && parentId) {
+        nestedBlockParent.set(blockId, parentId);
+        nestedBlockMessages.set(blockId, cloneMessage(message));
+        nestedBlockRaw.set(blockId, message.rawContent ?? message.content);
+      }
+    }
 
     const ensureAssistantMessage = () => {
       if (assistantMessage) return assistantMessage;
@@ -2940,6 +2995,14 @@ export class AgentWidgetClient {
     const artifactCardMessages = new Map<string, AgentWidgetMessage>();
     // Track artifact IDs that already have a reference card
     const artifactIdsWithCards = new Set<string>();
+    for (const message of resumeMessages ?? []) {
+      if (message.id.startsWith("artifact-ref-")) {
+        const id = message.id.slice("artifact-ref-".length);
+        artifactIdsWithCards.add(id);
+        artifactCardMessages.set(id, cloneMessage(message));
+      }
+    }
+    checkpoint?.artifactTools.forEach((id) => artifactToolCallIds.add(id));
     // Accumulate artifact markdown content (and component props) for embedding
     // in block props on complete. `props` accumulates across `artifact_update`
     // events so an inline component block hydrates with its real props after a
@@ -2954,6 +3017,7 @@ export class AgentWidgetClient {
         props?: Record<string, unknown>;
       }
     >();
+    checkpoint?.artifactContent.forEach(([id, content]) => artifactContent.set(id, { ...content }));
     const isArtifactEmitToolName = (name: string | undefined): boolean => {
       if (!name) return false;
       const normalized = name.replace(/_+/g, "_").replace(/^_|_$/g, "");
@@ -3119,6 +3183,8 @@ export class AgentWidgetClient {
     // tool boundaries never leave a stray bubble) and `step_complete.result.response`
     // reconciles the authoritative final.
     let lastSealedFlowBubble: AgentWidgetMessage | null = null;
+    const sealedFlow = resumeMessages?.find((message) => message.id === checkpoint?.sealedFlowMessageId);
+    if (sealedFlow) lastSealedFlowBubble = cloneMessage(sealedFlow);
 
     // Stream one accumulated chunk of block text through the parser, setting
     // display `content` (extracted) + `rawContent` (raw) and emitting. Mirrors the
@@ -3286,7 +3352,7 @@ export class AgentWidgetClient {
         ...(variant === "reasoning"
           ? { reasoning: { id: blockId, status: "streaming", chunks: [] } }
           : {}),
-        agentMetadata: { parentToolId: parentToolCallId },
+        agentMetadata: { parentToolId: parentToolCallId, textBlockId: blockId },
       };
       nestedBlockMessages.set(blockId, message);
       emitMessage(message);
@@ -3309,12 +3375,13 @@ export class AgentWidgetClient {
       string,
       { mediaType?: string; toolCallId?: string; parts: string[] }
     >();
+    checkpoint?.media.forEach(([id, media]) => mediaBuffers.set(id, { ...media, parts: [...media.parts] }));
     // Tracks the last iteration surfaced as a per-iteration message boundary, so
     // `turn_start` advancing the iteration rotates the bubble in 'separate' mode.
-    let lastIterationSeen = 0;
+    let lastIterationSeen = checkpoint?.iteration ?? 0;
     // Execution kind, resolved from the leading `execution_start` frame. Drives
     // the agent-vs-flow branches that the single wire vocabulary collapses.
-    let executionKind: "agent" | "flow" = "agent";
+    let executionKind: "agent" | "flow" = checkpoint?.executionKind ?? "agent";
     // Whether `executionKind` was set authoritatively by an `execution_start`
     // frame. Continuation streams (e.g. a tool-driven `/resume`) do NOT re-emit
     // `execution_start`, so a fresh `streamResponse` for the continuation starts
@@ -3323,11 +3390,11 @@ export class AgentWidgetClient {
     // text block is sealed, then `step_complete.result.response` re-renders it as
     // a second bubble). When `execution_start` is absent we recover the flow kind
     // from the first flow `step_*` frame below.
-    let executionKindResolved = false;
+    let executionKindResolved = checkpoint?.executionKindResolved ?? false;
     // Open turn id (from `turn_start`). Unified text/reasoning deltas carry their
     // own block id, not the turn id, so the turn id is threaded onto agentMetadata
     // from here.
-    let openTurnId: string | null = null;
+    let openTurnId: string | null = checkpoint?.turnId ?? null;
     // Agent execution state tracking
     let agentExecution: { executionId: string; agentId: string; agentName: string } | null = null;
     const iterationDisplay = this.config.iterationDisplay ?? 'separate';
@@ -3699,6 +3766,7 @@ export class AgentWidgetClient {
             const nested = ensureNestedBlockMessage(deltaBlockId, nestedParent);
             nested.agentMetadata = {
               ...nested.agentMetadata,
+              textBlockId: deltaBlockId ?? undefined,
               executionId: payload.executionId,
               parentToolId: nestedParent,
             };
@@ -3717,6 +3785,7 @@ export class AgentWidgetClient {
             if (pendingTextRaw.trim() === "") continue;
             const assistant = ensureAssistantMessage();
             assistant.agentMetadata = {
+              textBlockId: currentTextBlockId ?? undefined,
               executionId: payload.executionId,
               iteration: lastIterationSeen,
             };
@@ -3736,6 +3805,7 @@ export class AgentWidgetClient {
           pendingTextRaw += agentDelta;
           const assistant = ensureAssistantMessage();
           assistant.agentMetadata = {
+            textBlockId: currentTextBlockId ?? undefined,
             executionId: payload.executionId,
             iteration: lastIterationSeen,
             turnId: openTurnId ?? undefined,
@@ -3851,6 +3921,9 @@ export class AgentWidgetClient {
         } else if (payload.type === "execution_start") {
           executionKind = payload.kind === "flow" ? "flow" : "agent";
           executionKindResolved = true;
+          if (this.config.backgroundConversations) {
+            onEvent({ type: "status", status: "connected", executionId: payload.executionId });
+          }
           if (executionKind === "agent") {
             agentExecution = {
               executionId: payload.executionId,
@@ -4347,9 +4420,14 @@ export class AgentWidgetClient {
       eventQueue.length = 0;
     };
 
+    try {
     // eslint-disable-next-line no-constant-condition
     while (true) {
+      if (generation !== this.streamGeneration) return;
+      signal?.throwIfAborted();
       const { done, value } = await reader.read();
+      if (generation !== this.streamGeneration) return;
+      signal?.throwIfAborted();
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -4357,6 +4435,8 @@ export class AgentWidgetClient {
       buffer = events.pop() ?? "";
 
       for (const event of events) {
+        if (generation !== this.streamGeneration) return;
+        signal?.throwIfAborted();
         const lines = event.split("\n");
         let eventType = "message";
         let data = "";
@@ -4381,7 +4461,19 @@ export class AgentWidgetClient {
 
         const advanceCursor = () => {
           if (frameId !== null && frameId !== "") {
-            onEvent({ type: "cursor", id: frameId });
+            onEvent({ type: "cursor", id: frameId,
+              ...(this.config.backgroundConversations ? { checkpoint: {
+                textBlockId: currentTextBlockId,
+                openAssistant: assistantMessage !== null,
+                sealedFlowMessageId: lastSealedFlowBubble?.id ?? null,
+                rawText: pendingTextRaw,
+                executionKind, executionKindResolved,
+                turnId: openTurnId, iteration: lastIterationSeen,
+                nestedParents: [...nestedBlockParent], nestedRaw: [...nestedBlockRaw],
+                media: [...mediaBuffers].map(([id, media]) => [id, { ...media, parts: [...media.parts] }]),
+                artifactContent: [...artifactContent].map(([id, content]) => [id, { ...content, props: content.props ? { ...content.props } : undefined }]), artifactTools: [...artifactToolCallIds],
+              } satisfies AgentWidgetStreamCheckpoint } : {}),
+            });
           }
         };
 
@@ -4429,6 +4521,8 @@ export class AgentWidgetClient {
             nextSequence,
             customParsePartId
           );
+          if (generation !== this.streamGeneration) return;
+          signal?.throwIfAborted();
           // Update assistantMessage from ref (in case it was created or replaced by partId segmentation)
           if (assistantMessageRef.current && assistantMessageRef.current !== assistantMessage) {
             assistantMessage = assistantMessageRef.current;
@@ -4454,5 +4548,10 @@ export class AgentWidgetClient {
     }
 
     drainReadyQueue();
+    } finally {
+      this.streamReaders.delete(reader);
+      signal?.removeEventListener("abort", abortReader);
+      reader.releaseLock();
+    }
   }
 }

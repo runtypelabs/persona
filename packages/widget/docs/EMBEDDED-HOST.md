@@ -1,9 +1,11 @@
 # Embedded host integration
 
 These APIs work with both V4 and V5 defaults. The `future.v5Defaults` flag changes
-presentation, not access to host APIs. See the [two-widget example](https://persona-chat.dev/embedded-host.html)
-for a browser-local demonstration, and [theme configuration](../THEME-CONFIG.md)
-for `layout.embedded` and bounded host sizing.
+presentation, not access to host APIs. See the
+[two-widget example](https://persona-chat.dev/embedded-host.html) for a browser-local
+demonstration of independent widgets, conversation switching, and relocation, and
+[theme configuration](../THEME-CONFIG.md) for `layout.embedded` and bounded host
+sizing.
 
 ## Identify the source of an event
 
@@ -100,6 +102,112 @@ native popover state can reset. Custom elements need `connectedMoveCallback()`
 to opt into native move lifecycle behavior. Plugin-owned overlays should manage
 their own positioning on host changes. Test iframe-based artifacts and custom
 elements in each supported browser before relying on their browser-owned state.
+
+## Switch conversations inside one widget
+
+Use the existing history API with an enabled history provider. A custom backend
+can supply `features.history.provider`; the built-in provider uses client token
+mode. Keep one controller mounted and open conversations by ID:
+
+```ts
+const chat = initAgentWidget({
+  target: "#chat",
+  config: {
+    launcher: { enabled: false },
+    layout: { embedded: true },
+    features: { history: { enabled: true, provider: myHistoryProvider } },
+  },
+});
+
+await chat.openConversation("project-brief");
+// The visitor writes an unsent draft, attaches a file, and scrolls up.
+await chat.openConversation("release-notes");
+// This conversation starts with its own composer state.
+await chat.openConversation("project-brief", { focus: true });
+// The brief's unsent composer state and reading position return.
+```
+
+Persona retains each visited conversation's unsent text, structured mentions,
+quote context, attachments, selected model, and active composer modes for this
+widget's lifetime. Attachment preparation continues for its originating
+conversation; completing an upload while another conversation is visible does
+not place that file in the other composer. A first visit starts with configured
+composer defaults. Dictation stops at successful activation; reviewed text stays
+with the conversation it came from. A successful open preserves the controller,
+instance identity, host slots, and subscriptions. Transcript renderers follow
+normal removal and mounting lifecycles as the transcript changes.
+
+Readers who scrolled away from the bottom return to their visible message when
+it remains loaded, with a scroll offset fallback. Conversations that followed
+new messages keep following. Provider transcripts are fetched again on reopen;
+the provider owns durable message history, while Persona owns this temporary
+composer and reading state. `persistState: false` still supports continuity.
+The per-conversation cache is memory-only and ends on page reload or widget
+destruction. Existing persistence of the active draft still applies when enabled;
+it does not persist the full per-conversation cache. `moveTo()` can relocate the
+same widget between conversation switches. Reopening the already active ID also
+refreshes its transcript and keeps its draft.
+
+`startNewConversation()` initializes a fresh composer and retains the prior
+conversation's cached draft for reopening. Deleting a conversation discards that
+conversation's cached state. Clearing history, resetting identity, or replacing
+the history provider/identity discards the cache; drafts do not cross those
+boundaries.
+
+Switching while a dispatch, tool/approval pause, or message preparation is active
+rejects by default with `error.code === "conversation_busy"`. The active
+conversation keeps running. A host can deliberately stop it before switching:
+
+```ts
+try {
+  await chat.openConversation("release-notes");
+} catch (error) {
+  if (error && typeof error === "object" &&
+      "code" in error && error.code === "conversation_busy") {
+    showStopAndSwitchAction(async () => {
+      await chat.openConversation("release-notes", { busy: "stop", focus: true });
+    });
+  }
+}
+```
+
+The second argument accepts `busy: "reject" | "stop" | "background"` and `focus?: boolean`.
+`focus` defaults to false. `"stop"` cancels current work; it does not run that
+conversation in the background. An open that fails or is superseded before its
+provider commit preserves the source transcript and draft. Once a provider's
+asynchronous commit has begun, that activation finishes coherently before a
+newer selection commits; its draft remains scoped to that conversation. A newer
+selection suppresses stale public open notifications. If the host chose `"stop"`,
+cancellation remains effective even if loading fails. Keep host navigation
+selection tied to `getActiveConversationId()` after the
+promise settles, including failures, so the selected row reflects the actual
+active conversation.
+
+`"background"` is opt-in: configure `backgroundConversations` with a backend
+adapter that guarantees durable execution and read-only event replay. Persona
+then detaches the browser stream and retains its partial transcript and matching
+event cursor. Reopening that conversation restores the saved transcript before
+replaying missed events; it does not start a second execution. The optional
+`conversation:executionState` event lets a host show running, needs-attention,
+completed, or failed states in its own conversation list. Detached completion
+updates require the adapter's status subscription. See
+[durable reconnect](../../../docs/durable-reconnect.md) for the adapter contract
+and lifecycle limitations. Existing reconnect integrations do not opt in
+automatically.
+
+The [embedded host example](https://persona-chat.dev/embedded-host.html) seeds
+Project brief and Release notes in a separate local provider for each assistant.
+Choose a conversation first, write a draft, attach a text file, and scroll up;
+switch away and return. The initial playground before any conversation is
+opened is not a named history conversation. The page also supports busy
+switching, a failed-open test control, and moving the same widget to its modal.
+Choose **Continue in background**, send a message in Project brief, and switch
+to Release notes to test a simulated durable task. Its completion status updates
+while you are away; return to catch up on the reply. This local simulation keeps
+working after a reader disconnects, but ends when the page or widgets restart.
+History opens simulate a short loading delay. All history and replies stay in
+browser memory; changing defaults restarts the widgets and resets the
+demonstration.
 
 ## Observe the transcript and runs
 

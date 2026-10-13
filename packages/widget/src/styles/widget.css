@@ -3292,37 +3292,52 @@
 .persona-conversation-loading-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-}
-
-/* Leading bubbles stand in for assistant messages, trailing for user ones,
-   so each follows its role's real radius chain. */
-.persona-conversation-loading-bubble {
-  height: 44px;
-  border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem));
-  background: var(--persona-divider, var(--persona-border, #e5e7eb));
-  align-self: flex-start;
+  gap: var(--persona-components-message-gap, 12px);
   animation: persona-conversation-loading-pulse 1400ms ease-in-out infinite;
 }
 
-.persona-conversation-loading-bubble--trailing {
-  align-self: flex-end;
-  border-radius: var(--persona-message-user-radius, var(--persona-radius-lg, 0.5rem));
+.persona-conversation-loading--centered:not([hidden]) {
+  display: grid;
+  flex: 1;
+  min-height: 80px;
+  place-items: center;
+}
+
+.persona-conversation-loading-ring {
+  display: block;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  color: var(--persona-muted, #6b7280);
+  animation: persona-spinner-rotate 800ms linear infinite;
+}
+
+/* The surrounding message uses real role/layout geometry; only its text is
+   replaced. Em-based lines follow the configured transcript type size. */
+.persona-conversation-loading-line {
+  height: 0.65em;
+  margin: 0.55em 0;
+  border-radius: 0.25em;
+  background: currentColor;
+  opacity: 0.12;
 }
 
 @keyframes persona-conversation-loading-pulse {
   0%,
   100% {
-    opacity: 1;
+    opacity: 0.85;
   }
   50% {
-    opacity: 0.55;
+    opacity: 0.5;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .persona-conversation-loading-bubble {
+  .persona-conversation-loading-body,
+  .persona-conversation-loading-ring {
     animation: none;
   }
 }

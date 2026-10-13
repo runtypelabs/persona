@@ -34,6 +34,9 @@ interface PendingMention {
   args: string;
 }
 
+/** In-memory composer context, without live DOM or outstanding requests. */
+export type ContextMentionDraft = Omit<PendingMention, "chip" | "abort" | "resolvePromise" | "reportStatus">[];
+
 /**
  * The stored ref for a selected item — identical shape at every call site
  * (`add`, `track`, and the controller's inline commit), so it lives here once.
@@ -296,6 +299,37 @@ export class ContextMentionManager {
   /** Currently tracked refs, in order. Read-only: does not detach anything. */
   getRefs(): AgentWidgetContextMentionRef[] {
     return this.mentions.map((m) => m.ref);
+  }
+
+  captureDraft(): ContextMentionDraft {
+    return this.mentions.map(({ key, source, item, ref, status, payload, args }) =>
+      ({ key, source, item, ref, status, payload, args }));
+  }
+
+  restoreDraft(draft: ContextMentionDraft, input: import("./composer-input").ComposerInputCapability): void {
+    this.clear();
+    const sources = [
+      ...(this.opts.mentionConfig.sources ?? []),
+      ...(this.opts.mentionConfig.triggers ?? []).flatMap((channel) => channel.sources),
+    ];
+    for (const saved of draft) {
+      const source = sources.find((candidate) => candidate.id === saved.source.id);
+      if (!source) continue;
+      const pending: PendingMention = { ...saved, source };
+      if (input.getDocument?.().blocks.some((block) => block.kind === "mention" && block.id === saved.key)) {
+        pending.reportStatus = (status) => input.setMentionStatus?.(saved.key, status);
+      } else {
+        pending.chip = createMentionChip({ ref: saved.ref, config: this.opts.mentionConfig, onRemove: () => this.remove(saved.key) });
+        this.opts.contextRow.appendChild(pending.chip.el);
+      }
+      this.mentions.push(pending);
+      if (pending.status === "resolving") pending.resolvePromise = this.resolvePending(pending);
+      else {
+        pending.chip?.setStatus(pending.status, pending.payload);
+        pending.reportStatus?.(pending.status === "ready" ? "resolved" : "error");
+      }
+    }
+    this.updateRowVisibility();
   }
 
   /** Remove the most recently added chip (Backspace on an empty composer). */

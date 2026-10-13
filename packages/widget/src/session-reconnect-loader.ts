@@ -11,6 +11,7 @@ import type { ReconnectController, ReconnectHost } from "./session-reconnect";
  */
 export type SessionReconnectModule = {
   createReconnectController: (host: ReconnectHost) => ReconnectController;
+  BackgroundConversationController: typeof import("./session-background").BackgroundConversationController;
 };
 
 const { setLoader, load } = createChunkLoader<SessionReconnectModule>({

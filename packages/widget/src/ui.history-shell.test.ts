@@ -1230,9 +1230,8 @@ describe("history shell", () => {
       )!;
       expect(standIn.getAttribute("role")).toBe("status");
       expect(standIn.getAttribute("aria-label")).toBe("Loading conversation");
-      expect(
-        standIn.querySelectorAll(".persona-conversation-loading-bubble").length
-      ).toBe(3);
+      expect(standIn.querySelector(".persona-conversation-loading-ring")).not.toBeNull();
+      expect(standIn.querySelector(".persona-conversation-loading-bubble")).toBeNull();
       expect(standIn.hidden).toBe(true);
       expect(messagesOf(mount).style.display).toBe("");
       expect(footerOf(mount).hasAttribute("inert")).toBe(true);
@@ -1294,9 +1293,9 @@ describe("history shell", () => {
       expect(messagesOf(mount).style.display).toBe("");
     });
 
-    it("takes the surface with a skeleton once an open outlasts the show delay", async () => {
+    it.each([undefined, "skeleton"] as const)("takes the surface with %s once an open outlasts the show delay", async (conversationOpenVariant) => {
       const { mount, provider } = setup({
-        config: { welcome: { variant: "hero", title: "Welcome home" } },
+        config: { welcome: { variant: "hero", title: "Welcome home" }, loadingIndicator: { conversationOpenVariant } },
       });
       await openHistoryUI(mount);
       // Far past the 250ms delay, so the takeover is observable mid-flight.
@@ -1308,6 +1307,8 @@ describe("history shell", () => {
         ".persona-conversation-loading"
       )!;
       expect(skeleton.hidden).toBe(false);
+      expect(skeleton.querySelectorAll(".persona-conversation-loading-bubble")).toHaveLength(conversationOpenVariant === "skeleton" ? 4 : 0);
+      expect(skeleton.classList.contains("persona-conversation-loading--centered")).toBe(conversationOpenVariant !== "skeleton");
       expect(messagesOf(mount).style.display).toBe("none");
       expect(welcomeOf(mount).hidden).toBe(true);
       expect(footerOf(mount).hasAttribute("inert")).toBe(true);
@@ -1324,6 +1325,46 @@ describe("history shell", () => {
         bodyOf(mount).querySelectorAll("[data-message-id]")
       ).map((node) => node.getAttribute("data-message-id"));
       expect(ids).toEqual(["a1", "a2", "a3"]);
+    });
+
+    it.each([
+      { v5Defaults: false, layout: "bubble" },
+      { v5Defaults: true, layout: "bubble" },
+      { v5Defaults: true, layout: "flat" },
+    ])("matches skeleton message geometry to the transcript: %j", async ({ v5Defaults, layout }) => {
+      const { mount, provider } = setup({
+        config: {
+          future: { v5Defaults },
+          loadingIndicator: { conversationOpenVariant: "skeleton" },
+          layout: { messages: { layout, user: { maxWidth: "60%" }, assistant: { width: "full" } } },
+          theme: { components: { message: { user: { padding: "18px" }, assistant: { padding: "6px" } } } },
+        },
+      });
+      await openHistoryUI(mount);
+      provider.setLatency(100);
+      rowOf(mount, "conv-a")!.click();
+      await flush();
+      const skeleton = mount.querySelector<HTMLElement>(".persona-conversation-loading-body")!;
+      expect(skeleton.style.gap).toBe(messagesOf(mount).style.gap);
+      const samples = (["user", "assistant"] as const).map((role) => {
+        const row = skeleton.querySelector<HTMLElement>(`[data-message-role="${role}"]`)!;
+        const bubble = row.querySelector<HTMLElement>(".persona-message-bubble")!;
+        expect(bubble.querySelectorAll(".persona-conversation-loading-line")).toHaveLength(role === "user" ? 2 : 3);
+        expect(row.getAttribute("aria-hidden")).toBe("true");
+        expect(row.hasAttribute("data-wrapper-id")).toBe(false);
+        return { role, row, bubble };
+      });
+      provider.setLatency(0);
+      await waitUntil(() => !mount.querySelector(".persona-conversation-loading"));
+      for (const { role, row, bubble } of samples) {
+        const actualRow = messagesOf(mount).querySelector<HTMLElement>(`[data-message-role="${role}"]`)!;
+        const actualBubble = actualRow.querySelector<HTMLElement>(".persona-message-bubble")!;
+        expect(row.style.cssText).toBe(actualRow.style.cssText);
+        expect(row.getAttribute("data-message-width")).toBe(actualRow.getAttribute("data-message-width"));
+        expect(bubble.style.padding).toBe(actualBubble.style.padding);
+        expect(bubble.style.backgroundColor).toBe(actualBubble.style.backgroundColor);
+        for (const className of Array.from(actualBubble.classList)) expect(bubble.classList.contains(className)).toBe(true);
+      }
     });
 
     it("keeps the welcome hidden behind the failed-open surface and restores it on the way back", async () => {
@@ -1500,7 +1541,7 @@ describe("history shell", () => {
       ).toEqual(["Try again", "Back to messages"]);
     });
 
-    it("falls back to the default skeleton when hooks return null", async () => {
+    it("falls back to the default spinner when hooks return null", async () => {
       const plugin: AgentWidgetPlugin = {
         id: "test-open-loading-null",
         renderLoadingIndicator: () => null,
@@ -1515,8 +1556,8 @@ describe("history shell", () => {
       rowOf(mount, "conv-a")!.click();
       await flush();
       expect(
-        mount.querySelectorAll(".persona-conversation-loading-bubble").length
-      ).toBe(3);
+        mount.querySelector(".persona-conversation-loading-ring")
+      ).not.toBeNull();
     });
   });
 

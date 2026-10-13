@@ -997,10 +997,42 @@ export type ResumableHandle = {
   status: 'running';
 };
 
+/** Last observed durable server state, scoped to one conversation and execution. */
+export type ConversationExecutionState = {
+  conversationId: string;
+  executionId: string;
+  status: "running" | "needs-attention" | "completed" | "failed";
+  /** Without subscribeStatus, detached state is last-known until reconnect. */
+  detached: boolean;
+};
+
+/** Explicit backend contract for switching away from durable server work. */
+export type BackgroundConversationAdapter = {
+  capabilities: {
+    /** Closing the browser response never cancels the server execution. */
+    durableExecution: true;
+    /** Events are authorized, ordered, strictly after the cursor, and read-only. */
+    readOnlyReplay: true;
+  };
+  reconnectStream(ctx: {
+    conversationId: string;
+    executionId: string;
+    after: string;
+    signal: AbortSignal;
+  }): Promise<Response>;
+  /** Optional server status source. Unsubscribe must release all listeners. */
+  subscribeStatus?(
+    ctx: { conversationId: string; executionId: string },
+    callback: (status: ConversationExecutionState["status"]) => void
+  ): () => void;
+};
+
 /**
  * Metadata attached to messages created during agent execution.
  */
 export type AgentMessageMetadata = {
+  /** Stable native text block identity, retained for durable replay segmentation. */
+  textBlockId?: string;
   executionId?: string;
   iteration?: number;
   turnId?: string;
@@ -1413,6 +1445,7 @@ export type AgentWidgetControllerEventMap = {
   "approval:resolved": { approval: AgentWidgetApproval; decision: string };
   /** A durable stream dropped; the widget is about to reconnect. */
   "stream:paused": { executionId: string; after: string };
+  "conversation:executionState": ConversationExecutionState;
   /** A reconnect attempt is in flight (`attempt` is 1-based). */
   "stream:resuming": { executionId: string; after: string; attempt: number };
   /** The durable turn resumed and reached its terminal after a reconnect. */
@@ -3355,6 +3388,14 @@ export type HistoryViewState =
     }
   | { kind: "rate_limited"; retryAfterSeconds: number }
   | { kind: "new_conversation_required" };
+
+/** Reopen one conversation without remounting the widget. */
+export type AgentWidgetOpenConversationOptions = {
+  /** Move focus to the composer after opening. Default false. */
+  focus?: boolean;
+  /** Default "reject"; "stop" stops locally; "background" requires backgroundConversations. */
+  busy?: "reject" | "stop" | "background";
+};
 
 /** The single in-flight history operation, or `null` when idle. */
 export type HistoryPendingAction =
@@ -7112,6 +7153,8 @@ export type IdleIndicatorRenderContext = {
  * ```
  */
 export type AgentWidgetLoadingIndicatorConfig = {
+  /** Conversation-opening placeholder, independent of the reply waiting indicator. @default "spinner" */
+  conversationOpenVariant?: "spinner" | "skeleton";
   /** Built-in waiting indicator. Defaults to dots in V4 and label in V5. */
   variant?: "dots" | "label";
   /** Text for the label variant. @default "Thinking…" */
@@ -7759,6 +7802,10 @@ export type AgentWidgetConfig = {
    * ```
    */
   customFetch?: AgentWidgetCustomFetch;
+  /** Opt-in durable conversation switching; legacy reconnect closures do not enable it. */
+  backgroundConversations?: BackgroundConversationAdapter;
+  /** Conversation-scoped last observed server state; local Stop does not imply server cancellation. */
+  onConversationExecutionState?: (state: ConversationExecutionState) => void;
   /**
    * Durable-session reconnect transport (host-owned, symmetric to
    * {@link customFetch}). When a durable agent stream drops mid-turn (any
@@ -8485,6 +8532,23 @@ export type PersonaArtifactManualUpsert =
       transcript?: boolean;
     };
 
+/** @internal Native parser state paired with a background transcript/cursor. */
+export type AgentWidgetStreamCheckpoint = {
+  textBlockId: string | null;
+  openAssistant: boolean;
+  sealedFlowMessageId: string | null;
+  rawText: string;
+  executionKind: "agent" | "flow";
+  executionKindResolved: boolean;
+  turnId: string | null;
+  iteration: number;
+  nestedParents: Array<[string, string]>;
+  nestedRaw: Array<[string, string]>;
+  media: Array<[string, { mediaType?: string; toolCallId?: string; parts: string[] }]>;
+  artifactContent: Array<[string, { markdown: string; title?: string; file?: PersonaArtifactFileMeta; props?: Record<string, unknown> }]>;
+  artifactTools: string[];
+};
+
 export type AgentWidgetEvent =
   | { type: "message"; message: AgentWidgetMessage }
   | {
@@ -8497,6 +8561,8 @@ export type AgentWidgetEvent =
        * connection. The durable-reconnect drop detection keys off this.
        */
       terminal?: boolean;
+      /** @internal Execution identity for background status before text appears. */
+      executionId?: string;
     }
   | { type: "error"; error: Error }
   /**
@@ -8506,7 +8572,7 @@ export type AgentWidgetEvent =
    * lane (any resumable execution that stamps `id:` lines, e.g. Claude Managed
    * agents or async/background runs).
    */
-  | { type: "cursor"; id: string }
+  | { type: "cursor"; id: string; /** @internal */ checkpoint?: AgentWidgetStreamCheckpoint }
   | {
       type: "artifact_start";
       id: string;

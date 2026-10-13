@@ -94,6 +94,26 @@ describe("AttachmentManager.remountPreviews", () => {
       second.querySelector<HTMLElement>("[data-attachment-id]")?.dataset.status
     ).toBe("ready");
   });
+
+  it("keeps a detached conversation's upload alive without painting another composer", async () => {
+    const { adapter, calls } = deferredAdapter();
+    const manager = new AttachmentManager({ allowedTypes: ["text/plain"], adapter });
+    const sharedContainer = document.createElement("div");
+    manager.setPreviewsContainer(sharedContainer);
+    const uploading = manager.handleFiles([textFile()]);
+
+    manager.setPreviewsContainer(null);
+    sharedContainer.innerHTML = "<span>Other conversation</span>";
+    calls[0].onProgress(0.5);
+    calls[0].resolve(part("source upload"));
+    await uploading;
+
+    expect(calls[0].signal.aborted).toBe(false);
+    expect(sharedContainer.textContent).toBe("Other conversation");
+    manager.remountPreviews(sharedContainer);
+    expect(sharedContainer.querySelector<HTMLElement>("[data-attachment-id]")?.dataset.status).toBe("ready");
+    expect(manager.getContentParts()).toEqual([part("source upload")]);
+  });
 });
 
 describe("AttachmentManager default adapter", () => {
@@ -287,6 +307,48 @@ describe("AttachmentManager upload adapter", () => {
     manager.destroy();
     expect(calls[2].signal.aborted).toBe(true);
     expect(manager.count()).toBe(0);
+  });
+
+  it("releases abandoned draft uploads, including an adapter completion after disposal", async () => {
+    const { adapter, calls } = deferredAdapter();
+    const remove = vi.fn();
+    const onChange = vi.fn();
+    const manager = new AttachmentManager({
+      allowedTypes: ["text/plain"],
+      adapter: { ...adapter, remove },
+      onAttachmentsChange: onChange,
+    });
+    const uploading = manager.handleFiles([textFile("ready.txt"), textFile("late.txt")]);
+    calls[0].resolve(part("ready"));
+    await flush();
+
+    manager.destroy({ release: true });
+    manager.destroy({ release: true });
+    const changesAtDisposal = onChange.mock.calls.length;
+    expect(calls[1].signal.aborted).toBe(true);
+    expect(remove.mock.calls.map(([value]) => value)).toEqual([part("ready")]);
+
+    calls[1].resolve(part("late"));
+    await uploading;
+    expect(remove.mock.calls.map(([value]) => value)).toEqual([part("ready"), part("late")]);
+    expect(onChange).toHaveBeenCalledTimes(changesAtDisposal);
+    expect(manager.count()).toBe(0);
+  });
+
+  it("retains completed uploaded parts on ordinary teardown", async () => {
+    const { adapter, calls } = deferredAdapter();
+    const remove = vi.fn();
+    const manager = new AttachmentManager({
+      allowedTypes: ["text/plain"],
+      adapter: { ...adapter, remove },
+    });
+    const uploading = manager.handleFiles([textFile("ready.txt"), textFile("late.txt")]);
+    calls[0].resolve(part("ready"));
+    await flush();
+    manager.destroy();
+    calls[1].resolve(part("late"));
+    await uploading;
+    expect(remove).not.toHaveBeenCalled();
   });
 });
 

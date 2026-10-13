@@ -584,6 +584,7 @@ export function createContentEditableComposerInput(
     getValue: () => toDisplayText(getDocument()),
     getLogicalText: () => toLogicalText(getDocument()),
     getDocument,
+    setDocument: (doc) => { render(doc); setCaret(toLogicalText(doc).length); },
     getSelection,
     setSelection: (start, end = start) => {
       const sel = typeof window !== "undefined" ? window.getSelection() : null;

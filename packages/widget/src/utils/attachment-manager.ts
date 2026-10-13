@@ -118,6 +118,7 @@ export class AttachmentManager {
   /** In-flight `adapter.add` per attachment id; aborted on remove/clear/destroy. */
   private pendingAdds = new Map<string, AbortController>();
   private destroyed = false;
+  private releaseOnDestroy = false;
 
   constructor(config: AttachmentManagerConfig = {}) {
     this.config = {
@@ -287,6 +288,7 @@ export class AttachmentManager {
   private async runAdd(attachment: PendingAttachment): Promise<void> {
     const controller = new AbortController();
     this.pendingAdds.set(attachment.id, controller);
+    const adapter = this.adapter();
 
     const stale = (): boolean =>
       this.destroyed ||
@@ -295,7 +297,7 @@ export class AttachmentManager {
       !this.attachments.includes(attachment);
 
     try {
-      const part = await this.adapter().add(attachment.file, {
+      const part = await adapter.add(attachment.file, {
         signal: controller.signal,
         onProgress: (progress) => {
           if (stale() || attachment.status !== "uploading") return;
@@ -304,7 +306,12 @@ export class AttachmentManager {
           this.notify();
         }
       });
-      if (stale()) return;
+      if (stale()) {
+        // An adapter may finish after ignoring the abort. An abandoned draft
+        // still owns that uploaded part and must release it on disposal.
+        if (this.destroyed && this.releaseOnDestroy) this.releasePart(part, adapter);
+        return;
+      }
       attachment.contentPart = part;
       attachment.status = "ready";
       attachment.progress = undefined;
@@ -379,8 +386,11 @@ export class AttachmentManager {
     this.notify();
   }
 
-  private releasePart(part: ContentPart): void {
-    const remove = this.config.adapter?.remove;
+  private releasePart(
+    part: ContentPart,
+    adapter = this.config.adapter
+  ): void {
+    const remove = adapter?.remove;
     if (!remove) return;
     try {
       const result = remove(part, { signal: new AbortController().signal });
@@ -419,14 +429,22 @@ export class AttachmentManager {
     this.notify();
   }
 
-  /** Abort every in-flight upload and stop accepting new work. */
-  destroy(): void {
+  /**
+   * Abort every in-flight upload and stop accepting new work. A discarded
+   * conversation draft also releases ready uploads; ordinary widget teardown
+   * keeps the historical behavior of retaining completed parts.
+   */
+  destroy(opts?: { release?: boolean }): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.releaseOnDestroy = opts?.release === true;
     for (const controller of this.pendingAdds.values()) controller.abort();
     this.pendingAdds.clear();
     for (const attachment of this.attachments) {
       if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
+      if (this.releaseOnDestroy && attachment.status === "ready" && attachment.contentPart) {
+        this.releasePart(attachment.contentPart);
+      }
     }
     this.attachments = [];
     this.previewsContainer = null;

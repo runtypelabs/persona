@@ -3,11 +3,12 @@ import { brotliCompressSync, constants } from "node:zlib";
 
 // Binary KB, matching the established 148 / 14.4 / 17.8 KB baselines.
 const budgets = [
-  // Live host relocation and dialog-aware popovers/tooltips.
-  { file: "index.global.js", bytes: 156.25 * 1024, exclusive: false },
+  // Conversation continuity plus opt-in durable replay checkpoints: measured
+  // 159.32 KiB including conversation loaders; replay stays in the lazy chunk.
+  { file: "index.global.js", bytes: 160 * 1024, exclusive: false },
   { file: "launcher.global.js", bytes: 20 * 1024, exclusive: true },
-  // Responsive composer geometry, bounded mentions, and opt-in voice-bar motion.
-  { file: "widget.css", bytes: 20.65 * 1024, exclusive: false },
+  // Composer geometry, voice-bar motion, and conversation loaders: 20.65 KiB.
+  { file: "widget.css", bytes: 20.7 * 1024, exclusive: false },
 ];
 
 for (const { file, bytes, exclusive } of budgets) {

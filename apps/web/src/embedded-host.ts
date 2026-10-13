@@ -1,14 +1,19 @@
 import "@runtypelabs/persona/widget.css";
 import "./embedded-host.css";
 import { initAgentWidget, createStaticMentionSource, type AgentWidgetConfig } from "@runtypelabs/persona";
+import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-history-provider";
 import { renderExamplesShell } from "./examples-nav";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
+import { createDemoDurableChat } from "./demo-durable-chat";
 
 renderExamplesShell();
 type Handle = ReturnType<typeof initAgentWidget>;
 type Name = "research" | "support";
 const names: Name[] = ["research", "support"];
 const widgets = new Map<Name, Handle>();
+const historyProviders = new Map<Name, ReturnType<typeof createDemoHistoryProvider>>();
+const durableChats = new Map<Name, ReturnType<typeof createDemoDurableChat>>();
+const executionStates = new Map<string, string>();
 type Scenario = "reference" | "basic" | "chips" | "inline" | "crowded" | "responsive";
 const layouts = new Map<Name, "stacked" | "single-row">();
 const layoutSelect = document.querySelector<HTMLSelectElement>("#host-layout")!;
@@ -21,6 +26,56 @@ const scenarioSelect = document.querySelector<HTMLSelectElement>("#host-scenario
 const contextVisible = new Map<Name, boolean>();
 const revision = new Map<Name, number>();
 const target = document.querySelector<HTMLSelectElement>("#host-target")!;
+const conversationSelect = document.querySelector<HTMLSelectElement>("#host-conversation")!;
+const busySelect = document.querySelector<HTMLSelectElement>("#host-busy")!;
+const loaderSelect = document.querySelector<HTMLSelectElement>("#host-loader")!;
+const historyDelaySelect = document.querySelector<HTMLSelectElement>("#host-history-delay")!;
+const loaders = new Map<Name, "spinner" | "skeleton">();
+const historyDelays = new Map<Name, number>();
+const failNextOpen = document.querySelector<HTMLInputElement>("#host-fail-open")!;
+const conversationTitles = { brief: "Project brief", notes: "Release notes" } as const;
+function syncConversationSelect(name: Name) {
+  const id = widgets.get(name)?.getActiveConversationId();
+  conversationSelect.value = id?.startsWith(`host-${name}-`) ? id.slice(`host-${name}-`.length) : "";
+}
+function localHistory(name: Name) {
+  const historyNow = Date.now();
+  const conversations = Object.entries(conversationTitles).map(([key, title]) => ({
+    id: `host-${name}-${key}`,
+    title,
+    messages: Array.from({ length: 24 }, (_, index) => ({
+      id: `host-${name}-${key}-${index}`,
+      createdAt: new Date(historyNow - (24 - index) * 60_000).toISOString(),
+      role: index % 2 === 0 ? "user" as const : "assistant" as const,
+      content: index % 2 === 0
+        ? `${title} · question ${Math.floor(index / 2) + 1}: What should we review next?`
+        : `${title} · note ${Math.floor(index / 2) + 1}: ${key === "brief" ? "Review the audience, goals, and constraints before choosing the next experiment." : "Review shipped changes, open questions, and follow-up tasks before publishing."} This is local sample history for ${name}.`,
+    })),
+  }));
+  const provider = createDemoHistoryProvider({ conversations, pageSize: 100, latencyMs: historyDelays.get(name) ?? 200 });
+  const savedIds = new Map(conversations.map(conversation => [conversation.id, new Set(conversation.messages.map(message => message.id))]));
+  // The demo provider is read-only history by default. Persist completed local
+  // echo runs here so reopening also shows replies sent during this page visit.
+  const saveRun = (widget: Handle) => {
+    const id = widget.getActiveConversationId();
+    if (!id) return;
+    const ids = savedIds.get(id);
+    if (!ids) return;
+    for (const message of widget.getMessages()) {
+      if (message.streaming || message.agentMetadata?.executionId?.startsWith("local-durable-")) continue;
+      if (ids.has(message.id)) continue;
+      provider.appendMessage(id, { id: message.id, role: message.role, content: message.content, createdAt: message.createdAt, contentParts: message.contentParts });
+      ids.add(message.id);
+    }
+  };
+  const saveResult = (run: { conversationId: string; textId: string; text: string }) => {
+    const ids = savedIds.get(run.conversationId);
+    if (!ids || ids.has(run.textId) || !provider.getConversationIds().includes(run.conversationId)) return;
+    provider.appendMessage(run.conversationId, { id: run.textId, role: "assistant", content: run.text });
+    ids.add(run.textId);
+  };
+  return { provider, saveRun, saveResult };
+}
 const defaults = document.querySelector<HTMLSelectElement>("#host-defaults")!;
 const status = document.querySelector<HTMLElement>("#host-status")!;
 const log = document.querySelector<HTMLElement>("#host-log")!;
@@ -113,19 +168,41 @@ function mount() {
   returnToSidebar();
   widgets.forEach(widget => widget.destroy());
   widgets.clear();
+  durableChats.forEach(chat => chat.destroy());
+  durableChats.clear();
+  executionStates.clear();
+  document.getElementById("host-executions")!.textContent = "No background tasks yet.";
+  historyProviders.clear();
   for (const name of names) {
     scenarios.set(name, scenarioSelect.value as Scenario);
     if (!layouts.has(name)) layouts.set(name, "stacked");
     contextVisible.set(name, true);
     revision.set(name, 1);
+    const history = localHistory(name);
+    historyProviders.set(name, history.provider);
+    const durable = createDemoDurableChat({ getConversationId: () => widgets.get(name)?.getActiveConversationId() ?? null, onComplete: history.saveResult });
+    durableChats.set(name, durable);
+    const echo = createDemoEchoFetch({ reply: () => `This reply belongs to ${name}. The other assistant keeps its own messages and component state.` });
     const widget = initAgentWidget({
       target: document.getElementById(name)!,
       config: {
         apiUrl: "/host-local-demo",
-        customFetch: createDemoEchoFetch({ reply: () => `This reply belongs to ${name}. The other assistant keeps its own messages and component state.` }),
+        customFetch: (url, init, payload) => {
+          const active = widgets.get(name);
+          if (!active?.getActiveConversationId()) return echo(url, init, payload);
+          history.saveRun(active);
+          return durable.customFetch(url, init, payload);
+        },
+        backgroundConversations: {
+          capabilities: { durableExecution: true, readOnlyReplay: true },
+          reconnectStream: durable.reconnectStream,
+          subscribeStatus: durable.subscribeStatus,
+        },
         future: { v5Defaults: defaults.value === "v5" },
         colorScheme: schemes.get(name) ?? "light",
+        loadingIndicator: { conversationOpenVariant: loaders.get(name) ?? "spinner" },
         persistState: false,
+        features: { history: { enabled: true, provider: history.provider } },
         launcher: { enabled: false },
         layout: { embedded: true, slots: slots(name) },
         welcome: { variant: "none" },
@@ -167,11 +244,27 @@ function mount() {
     widgets.set(name, widget);
     widget.on("messages:changed", (messages, context) => record(context.instanceId, `${messages.length} messages`));
     widget.on("run:started", (_run, context) => record(context.instanceId, "run started"));
-    widget.on("run:finished", (run, context) => record(context.instanceId, `run finished: ${run.outcome}`));
+    const syncNavigation = () => { if (target.value === name) syncConversationSelect(name); };
+    widget.on("history:conversationOpened", syncNavigation);
+    widget.on("history:conversationStarted", syncNavigation);
+    widget.on("history:conversationDeleted", syncNavigation);
+    widget.on("history:cleared", syncNavigation);
+    widget.on("conversation:executionState", (event) => {
+      const key = event.conversationId.slice(`host-${name}-`.length) as keyof typeof conversationTitles;
+      const title = conversationTitles[key] ?? event.conversationId;
+      executionStates.set(`${name}:${event.conversationId}`, `${name} · ${title}: ${event.status}${event.detached ? " · background" : ""}`);
+      document.getElementById("host-executions")!.textContent = [...executionStates.values()].join(" · ");
+      record(name, `${title}: ${event.status}${event.detached ? " (background)" : ""}`);
+    });
+    widget.on("run:finished", (run, context) => {
+      history.saveRun(widget);
+      record(context.instanceId, `run finished: ${run.outcome}`);
+    });
     widget.injectAssistantMessage({ content: `This is the ${name} assistant. [Open workspace](/workspace/${name}) or try the host controls above.` });
     widget.injectComponentDirective({ id: "host-card", component: "HostCard", props: { count: 1 } });
     record(widget.instanceId, "ready");
   }
+  syncConversationSelect(target.value as Name);
 }
 function action(id: string, run: (widget: Handle, name: Name) => void) {
   document.getElementById(id)!.addEventListener("click", () => {
@@ -237,13 +330,56 @@ schemeSelect.addEventListener("change", () => {
   widgets.get(name)?.update({ colorScheme });
   record(name, `color scheme: ${colorScheme}`);
 });
+conversationSelect.addEventListener("change", async () => {
+  const name = target.value as Name;
+  const widget = widgets.get(name);
+  const key = conversationSelect.value as keyof typeof conversationTitles;
+  if (!widget || !(key in conversationTitles)) return;
+  if (failNextOpen.checked) {
+    historyProviders.get(name)?.failNext("getPage", { code: "unavailable" });
+    failNextOpen.checked = false;
+  }
+  conversationSelect.disabled = true;
+  status.textContent = `Opening ${conversationTitles[key]} for ${name}…`;
+  try {
+    await widget.openConversation(`host-${name}-${key}`, { busy: busySelect.value === "background" ? "background" : busySelect.value === "stop" ? "stop" : "reject" });
+    if (widgets.get(name) !== widget) return;
+    record(name, `opened ${conversationTitles[key]} · same widget`);
+    status.textContent = `${name}: ${conversationTitles[key]}. Draft, attachments, and reading position belong to this conversation. Switch away and back to check them.`;
+  } catch (error) {
+    if (widgets.get(name) !== widget) return;
+    const busy = error && typeof error === "object" && "code" in error && error.code === "conversation_busy";
+    status.textContent = busy
+      ? `${name} is busy. Choose Continue in background to keep a durable task running, or Stop current run, then select the conversation again.`
+      : `Could not open ${conversationTitles[key]}. The current conversation is still available.`;
+    record(name, busy ? "conversation switch rejected: busy" : "conversation switch failed");
+  } finally {
+    conversationSelect.disabled = false;
+    syncConversationSelect(target.value as Name);
+  }
+});
+loaderSelect.addEventListener("change", () => {
+  const name = target.value as Name;
+  const variant = loaderSelect.value === "skeleton" ? "skeleton" : "spinner";
+  loaders.set(name, variant);
+  widgets.get(name)?.update({ loadingIndicator: { conversationOpenVariant: variant } });
+});
+historyDelaySelect.addEventListener("change", () => {
+  const name = target.value as Name;
+  const delay = Number(historyDelaySelect.value);
+  historyDelays.set(name, delay);
+  historyProviders.get(name)?.setLatency(delay);
+});
 target.addEventListener("change", () => {
   const name = target.value as Name;
   scenarioSelect.value = scenarios.get(name) ?? "reference";
   layoutSelect.value = layouts.get(name) ?? "stacked";
   widthSelect.value = widths.get(name) ?? "full";
   schemeSelect.value = schemes.get(name) ?? "light";
+  loaderSelect.value = loaders.get(name) ?? "spinner";
+  historyDelaySelect.value = String(historyDelays.get(name) ?? 200);
+  syncConversationSelect(name);
 });
 defaults.addEventListener("change", mount);
-window.addEventListener("pagehide", () => { widgets.forEach(widget => widget.destroy()); widgets.clear(); });
+window.addEventListener("pagehide", () => { widgets.forEach(widget => widget.destroy()); widgets.clear(); durableChats.forEach(chat => chat.destroy()); durableChats.clear(); });
 mount();

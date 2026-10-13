@@ -11,7 +11,7 @@
   <main class="shell-main host-demo">
     <header class="title-strip">
       <h1>Two assistants, one host</h1>
-      <p>Independent widgets with shared host controls. Messages stay local; no API key is needed. A writing row, a quiet toolbar, and a shared menu for context and tools. Each assistant keeps its own conversation and settings.</p>
+      <p>Independent widgets with shared host controls. Messages stay local; no API key is needed. A writing row, a quiet toolbar, and a shared menu for context and tools. Each assistant keeps its own conversations and settings.</p>
     </header>
     <section class="host-controls" aria-label="Host controls">
       <label>Target <select id="host-target"><option value="research">Research</option><option value="support">Support</option></select></label>
@@ -22,7 +22,20 @@
       <label>Host width <select id="host-width"><option value="full">Full</option><option value="narrow">Narrow (380px)</option></select></label>
       <button type="button" id="host-move">Move target to modal</button>
     </section>
+    <section class="host-conversations" aria-label="Conversation continuity">
+      <div class="host-controls">
+        <label>Target conversation <select id="host-conversation"><option value="">Choose local history…</option><option value="brief">Project brief</option><option value="notes">Release notes</option></select></label>
+        <label>When busy <select id="host-busy"><option value="reject">Keep current run</option><option value="stop">Stop current run</option><option value="background">Continue in background</option></select></label>
+        <label>Conversation loader <select id="host-loader"><option value="spinner">Centered spinner (default)</option><option value="skeleton">Skeleton bubbles</option></select></label>
+        <label>History delay <select id="host-history-delay"><option value="200">Normal</option><option value="1500">Slow — compare loaders</option><option value="0">Instant</option></select></label>
+      </div>
+      <p>Choose Project brief, type an unsent draft, attach a text file, and scroll up. Open Release notes, write a different draft, then return to Project brief: its draft, attachments, and reading position return. Try moving the same widget to the modal between switches. Run a local reply to test switching while busy. History opens simulate a short loading delay. History and drafts last for this page visit; changing defaults restarts both widgets.</p>
+      <p>To try background work, open Project brief, choose Continue in background, and send a message. Switch to Release notes while the reply is streaming, then return to catch up. Named conversations use a local simulated durable job; it runs for about 15 seconds even after its stream disconnects. Reloading the page resets this simulation.</p>
+      <p id="host-executions" role="status" aria-live="polite">No background tasks yet.</p>
+      <p>Compare conversation loaders by selecting a treatment and Slow history delay, then switching conversations. These controls apply to the selected assistant. Both treatments keep the same delay before appearing and fade the transcript in once loaded.</p>
+    </section>
     <details class="host-test-controls"><summary>Host API and lifecycle controls</summary><div class="host-controls">
+      <label><input type="checkbox" id="host-fail-open" /> Fail next conversation open</label>
       <button type="button" id="host-run">Run local reply</button>
       <button type="button" id="host-mode">Toggle concise mode</button>
       <button type="button" id="host-card">Add / reset card</button>

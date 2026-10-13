@@ -12,6 +12,7 @@ import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } f
 import {
   AgentWidgetSession,
   AgentWidgetSessionStatus,
+  SessionHistoryError,
   type SessionHistoryNotice,
   type SessionHistoryState
 } from "./session";
@@ -53,6 +54,7 @@ import {
   AgentWidgetContentSegment,
   AgentWidgetContextMentionRef,
   AgentWidgetStoredDraft,
+  AgentWidgetOpenConversationOptions,
   AgentWidgetSuggestion,
   AgentWidgetSuggestionSource,
   AgentWidgetWelcomeIcon,
@@ -161,7 +163,7 @@ import {
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme, getColorScheme } from "./utils/theme";
-import { resolveTokenValue } from "./utils/tokens";
+import { resolveTokenValue, resolveThemeDefaults } from "./utils/tokens";
 import { deepMerge } from "./utils/deep-merge";
 import { Activity, Check, Copy } from "lucide";
 import { renderLucideIcon, onExtraIconsReady } from "./utils/icons";
@@ -277,6 +279,7 @@ import {
   createStandardBubble,
   createTypingIndicator,
   getBubbleClasses,
+  applyBubbleGeometry,
   CUSTOM_MESSAGE_ACTION_PREFIX,
 } from "./components/message-bubble";
 import { createReasoningBubble, updateReasoningBubbleUI } from "./components/reasoning-bubble";
@@ -715,7 +718,7 @@ type Controller = {
    */
   openConversation: (
     conversationId: string,
-    opts?: { focus?: boolean }
+    opts?: AgentWidgetOpenConversationOptions
   ) => Promise<void>;
   /** Clean local state plus a new owned server conversation. `focus` as on `openConversation`. */
   startNewConversation: (opts?: { focus?: boolean }) => Promise<void>;
@@ -1739,6 +1742,12 @@ export const createAgentExperience = (
     progress: attachment.progress,
     error: attachment.error,
   });
+  const createScopedAttachmentManager = (): AttachmentManager => {
+    const manager = AttachmentManager.fromConfig(config.attachments, (attachments) => {
+      if (attachmentManager === manager) syncComposerAttachments(attachments);
+    });
+    return manager;
+  };
   const syncComposerAttachments = (attachments: PendingAttachment[]): void => {
     const states = Object.freeze(attachments.map(toComposerAttachmentState));
     composerStore.setAttachments(states);
@@ -2328,10 +2337,7 @@ export const createAgentExperience = (
       return;
     }
     if (!attachmentManager) {
-      attachmentManager = AttachmentManager.fromConfig(
-        config.attachments,
-        syncComposerAttachments
-      );
+      attachmentManager = createScopedAttachmentManager();
       attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
     } else {
       attachmentManager.remountPreviews(attachmentPreviewsContainer);
@@ -5591,7 +5597,7 @@ export const createAgentExperience = (
   };
 
   function persistState(messagesOverride?: AgentWidgetMessage[]) {
-    if (!storageAdapter?.save) return;
+    if (conversationPersistenceOwner !== null || !storageAdapter?.save) return;
 
     // Allow saving even if session doesn't exist yet (for metadata during init)
     const messages = messagesOverride
@@ -5629,6 +5635,7 @@ export const createAgentExperience = (
   // keeps owning conversation scoping. No `File` objects: attachments are not
   // part of a persisted draft in v1.
   let currentStoredDraft: AgentWidgetStoredDraft | undefined;
+  let conversationPersistenceOwner: number | null = null;
 
   const draftPersistenceEnabled = (): boolean => {
     if (!storageAdapter?.save) return false;
@@ -9383,6 +9390,13 @@ export const createAgentExperience = (
     onHistoryNotice(notice) {
       historyNoticeHandler(notice);
     },
+    onHistoryScopeInvalidated() {
+      discardConversationContinuity();
+      clearConversationOpenPending();
+    },
+    onConversationExecutionState(state) {
+      eventBus.emit("conversation:executionState", state);
+    },
     onReconnect(event) {
       // Map the durable-reconnect lifecycle to public controller events.
       const { executionId, lastEventId } = event.handle;
@@ -9577,7 +9591,9 @@ export const createAgentExperience = (
     unsubscribeHistoryIdentity?.();
     unsubscribeHistoryIdentity = null;
     historyUnavailable = false;
+    const previousProvider = historyProvider;
     historyProvider = buildHistoryProvider();
+    if (previousProvider && previousProvider !== historyProvider) discardConversationContinuity();
     const next: WidgetHistoryInternals = { ...historyInternals };
     if (historyProvider) next.historyProvider = historyProvider;
     else delete next.historyProvider;
@@ -11125,6 +11141,174 @@ export const createAgentExperience = (
     }
   });
 
+  // Volatile state belongs to this widget/provider/visitor, never to storage.
+  type ConversationReadingState = {
+    top: number;
+    anchorId?: string;
+    anchorOffset: number;
+    following: boolean;
+    followFallback: boolean;
+    anchored: boolean;
+    anchoredId: string | null;
+    readerEngaged: boolean;
+    anchor: { initialSpacerHeight: number; contentHeightAtAnchor: number; spacerHeight: number } | null;
+    unread: number;
+  };
+  type ConversationContinuity = {
+    draft: AgentWidgetStoredDraft;
+    document?: import("./utils/composer-document").ComposerDocument;
+    mentions: import("./utils/context-mention-manager").ContextMentionDraft;
+    attachments: AttachmentManager | null;
+    pending: Readonly<ComposerSubmissionSnapshot> | undefined;
+    reading: ConversationReadingState;
+  };
+  const conversationContinuity = new Map<string, ConversationContinuity>();
+  const conversationStateKey = (id = session.getActiveConversationId(), scope = historyOperationScope()): string =>
+    JSON.stringify([scope, id]);
+  let pendingConversationReading: { key: string; reading: ConversationReadingState } | null = null;
+  let composerConversationGeneration = 0;
+
+  const captureConversationReading = (): ConversationReadingState => {
+    const viewportTop = body.getBoundingClientRect().top;
+    const anchor = body.clientHeight > 0
+      ? Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]")).find(
+        (node) => node.getBoundingClientRect().bottom > viewportTop)
+      : undefined;
+    return {
+      top: body.scrollTop,
+      anchorId: anchor?.dataset.messageId,
+      anchorOffset: anchor ? anchor.getBoundingClientRect().top - viewportTop : 0,
+      following: autoFollow.isFollowing(),
+      followFallback: followFallbackActive,
+      anchored: currentTurnAnchored,
+      anchoredId: anchoredMessageId,
+      readerEngaged: readerEngagedThisTurn,
+      anchor: anchorState ? { ...anchorState } : null,
+      unread: newMessagesSincePause,
+    };
+  };
+
+  const saveConversationContinuity = (): void => {
+    // cancel() synchronously restores the pre-recording draft and invalidates
+    // provider callbacks, so capture only after that restoration.
+    dismissDictation();
+    stopVoiceRecognition("system");
+    if (usesSessionVoiceForConfig(config)) session.cleanupVoice();
+    ++composerConversationGeneration;
+    submissionAbort?.abort();
+    submissionAbort = null;
+    composerStore.setPreparing(false);
+    cancelMessageEdit();
+    flushDraftPersist();
+    const state = composerStore.getState();
+    const key = conversationStateKey();
+    conversationContinuity.set(key, {
+      draft: {
+        text: state.text,
+        mentionRefs: [...state.mentionRefs],
+        contentSegments: readInlineContentSegments(),
+        quote: state.quote,
+        selectedModelId: state.selectedModelId,
+        activeModeIds: [...state.activeModeIds],
+      },
+      document: mentionOrchestrator?.getInlineInput()?.getDocument?.(),
+      mentions: mentionOrchestrator?.captureDraft() ?? [],
+      attachments: attachmentManager,
+      pending: state.pendingSubmission,
+      reading: pendingConversationReading?.key === key
+        ? pendingConversationReading.reading : captureConversationReading(),
+    });
+    draftWriter.cancel();
+  };
+
+  const restoreConversationReading = (reading: ConversationReadingState): void => {
+    followFallbackActive = reading.followFallback;
+    currentTurnAnchored = reading.anchored;
+    anchoredMessageId = reading.anchoredId;
+    readerEngagedThisTurn = reading.readerEngaged;
+    anchorState = reading.anchor ? { ...reading.anchor } : null;
+    setAnchorSpacerHeight(reading.anchor?.spacerHeight ?? 0);
+    if (reading.following) autoFollow.resume(); else autoFollow.pause();
+    newMessagesSincePause = reading.unread;
+    const anchor = Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]"))
+      .find((node) => node.dataset.messageId === reading.anchorId);
+    isAutoScrolling = true;
+    if (reading.following && isFollowEffective()) body.scrollTop = getScrollBottomOffset(body);
+    else if (anchor) body.scrollTop += anchor.getBoundingClientRect().top - body.getBoundingClientRect().top - reading.anchorOffset;
+    else body.scrollTop = reading.top;
+    isAutoScrolling = false;
+    lastScrollTop = body.scrollTop;
+    lastBottomOffset = getScrollBottomOffset(body);
+    updateScrollToBottomCountBadge();
+    syncTranscriptTopFade();
+    syncScrollToBottomButton();
+
+  };
+
+  const restoreConversationContinuity = (fresh = false, persist = true): void => {
+    const saved = fresh ? undefined : conversationContinuity.get(conversationStateKey());
+    mentionOrchestrator?.clear();
+    attachmentManager?.setPreviewsContainer(null);
+    attachmentManager = saved?.attachments ?? (config.attachments?.enabled ? createScopedAttachmentManager() : null);
+    attachmentManager?.remountPreviews(attachmentPreviewsContainer);
+    syncComposerAttachments(attachmentManager?.getAttachments() ?? []);
+    const draft = saved?.draft;
+    const input = mentionOrchestrator?.getInlineInput();
+    if (saved?.document && input?.setDocument) input.setDocument(saved.document);
+    else if (input) input.setValueWithCaret(draft?.text ?? "", (draft?.text ?? "").length);
+    else textarea.value = draft?.text ?? "";
+    mentionOrchestrator?.restoreDraft(saved?.mentions ?? []);
+    syncComposerText();
+    syncComposerMentions();
+    composerStore.setSelectedModelId(draft
+      ? (config.composer?.models?.some((model) => model.id === draft.selectedModelId) ? draft.selectedModelId : undefined)
+      : config.composer?.selectedModelId);
+    composerModelPicker?.repaint();
+    setActiveComposerModes(pruneComposerModes(draft?.activeModeIds ?? config.composer?.defaultActiveModeIds ?? [], composerModes()));
+    setComposerQuote(draft?.quote);
+    setPendingSubmission(saved?.pending);
+    resetHistoryNavigation();
+    resetAnchorState();
+    cancelAutoScroll();
+    // Slow opens hide the transcript; restore its layout before measuring.
+    cancelConversationOpenTakeover();
+    if (conversationOpenPendingEl) conversationOpenPendingEl.hidden = true;
+    conversationOpenTakeover = false;
+    messagesWrapper.style.removeProperty("display");
+    if (saved) {
+      restoreConversationReading(saved.reading);
+    } else {
+      resumeAutoScroll();
+      if (!restoreScrollPosition()) jumpToBottomInstant();
+    }
+    // Persistence resumes only with the complete destination transcript and
+    // composer. Draft opt-out still applies to this in-memory restoration.
+    if (persist) currentStoredDraft = draftPersistenceEnabled() ? buildStoredDraft({ ...composerStore.getState(), contentSegments: readInlineContentSegments() }) : undefined;
+    draftWriter.cancel();
+    if (persist) persistState();
+    pendingConversationReading = { key: conversationStateKey(), reading: saved?.reading ?? captureConversationReading() };
+  };
+
+  const discardConversationContinuity = (id?: string | null, restore = true, persist = true): void => {
+    for (const [key, saved] of conversationContinuity) {
+      if (id !== undefined && (JSON.parse(key) as [HistoryScope, string | null])[1] !== id) continue;
+      saved.attachments?.destroy({ release: true });
+      if (attachmentManager === saved.attachments) attachmentManager = null;
+      conversationContinuity.delete(key);
+    }
+    if (id === undefined || id === session.getActiveConversationId()) {
+      ++composerConversationGeneration;
+      conversationPersistenceOwner = null;
+      submissionAbort?.abort();
+      submissionAbort = null;
+      dismissDictation();
+      attachmentManager?.destroy({ release: true });
+      attachmentManager = null;
+      if (restore) restoreConversationContinuity(true, persist);
+      pendingConversationReading = null;
+    }
+  };
+
   // --- optimistic conversation open ---------------------------------------
   // Selection acknowledges within a frame: the composer gates immediately, the
   // stand-in takes the surface only if the fetch outlasts the show delay, and
@@ -11132,6 +11316,7 @@ export const createAgentExperience = (
   // resolution after a newer open, a new conversation, or a failure the visitor
   // navigated away from.
   let conversationOpenToken = 0;
+  let conversationOpenErrorEl: HTMLElement | null = null;
   // Show delay: opens that land inside it swap straight from the welcome or the
   // previous conversation to the loaded transcript, so no skeleton ever flashes.
   const CONVERSATION_OPEN_TAKEOVER_DELAY_MS = 250;
@@ -11159,6 +11344,8 @@ export const createAgentExperience = (
   const clearConversationOpenPending = (): void => {
     conversationOpenToken += 1;
     cancelConversationOpenTakeover();
+    conversationOpenErrorEl?.remove();
+    conversationOpenErrorEl = null;
     if (!conversationOpenPendingEl) return;
     conversationOpenPendingEl.remove();
     conversationOpenPendingEl = null;
@@ -11188,26 +11375,62 @@ export const createAgentExperience = (
     }
   };
 
-  // The stand-in surfaces get the transcript's centered column from their
-  // container classes, so the hydrated messages land exactly where they stood.
-  const skeletonBubble = (width: string, trailing: boolean): HTMLElement =>
-    createNode("div", {
-      className: cx(
-        "persona-conversation-loading-bubble",
-        trailing && "persona-conversation-loading-bubble--trailing"
-      ),
+  const skeletonMessage = (role: "user" | "assistant"): HTMLElement => {
+    const layout = config.layout?.messages?.layout ?? "bubble";
+    const row = createNode("div", {
+      className: "persona-flex",
       attrs: { "aria-hidden": "true" },
-      style: { width },
     });
+    applyMessageRowLayout(row, role);
+    const bubble = createNode(
+      "div",
+      {
+        className: cx(getBubbleClasses(role, layout).join(" "), "persona-conversation-loading-bubble"),
+        attrs: { "data-persona-theme-zone": `${role}-message` },
+        style: {
+          width: role === "user" ? "64%" : "100%",
+          backgroundColor: layout === "flat" ? "transparent" :
+            `var(--persona-message-${role}-bg, var(--persona-${role === "user" ? "accent" : "container"}))`,
+          color: `var(--persona-message-${role}-text, ${role === "user" && layout !== "flat" ? "white" : "var(--persona-text)"})`,
+        },
+      },
+      ...["94%", ...(role === "assistant" ? ["86%"] : []), "62%"].map((width) =>
+        createNode("div", { className: "persona-conversation-loading-line", style: { width } })
+      )
+    );
+    applyBubbleGeometry(bubble, role, layout, {
+      ...resolveThemeDefaults(config.future).components.message[role],
+      ...config.theme?.components?.message?.[role],
+      ...config.darkTheme?.components?.message?.[role],
+    });
+    row.appendChild(bubble);
+    return row;
+  };
 
   const buildConversationOpenSkeleton = (): HTMLElement =>
     createNode(
       "div",
-      { className: "persona-conversation-loading-body" },
-      skeletonBubble("58%", false),
-      skeletonBubble("72%", true),
-      skeletonBubble("44%", false)
+      {
+        className: "persona-conversation-loading-body",
+        style: { gap: messagesWrapper.style.gap },
+      },
+      skeletonMessage("user"),
+      skeletonMessage("assistant"),
+      skeletonMessage("user"),
+      skeletonMessage("assistant")
     );
+
+  const buildConversationOpenIndicator = (): HTMLElement =>
+    config.loadingIndicator?.conversationOpenVariant === "skeleton"
+      ? buildConversationOpenSkeleton()
+      : createNode(
+          "div",
+          {
+            className: "persona-conversation-loading-spinner",
+            attrs: { "aria-hidden": "true" },
+          },
+          createNode("span", { className: "persona-conversation-loading-ring" })
+        );
 
   const mountConversationOpenState = (element: HTMLElement): void => {
     conversationOpenPendingEl?.remove();
@@ -11231,13 +11454,13 @@ export const createAgentExperience = (
 
   const showConversationOpenPending = (): void => {
     // Same plugin -> config -> default chain as the streaming indicator. The
-    // hook replaces the skeleton only; the container keeps the centered
+    // hook replaces the indicator only; the container keeps the transcript
     // column, the status role, and the composer gate.
     const context: LoadingIndicatorRenderContext = {
       config,
       streaming: false,
       location: "conversation-open",
-      defaultRenderer: buildConversationOpenSkeleton,
+      defaultRenderer: buildConversationOpenIndicator,
     };
     let content: HTMLElement | null = null;
     const loadingPlugin = plugins.find((p) => p.renderLoadingIndicator);
@@ -11247,17 +11470,23 @@ export const createAgentExperience = (
     if (content === null && config.loadingIndicator?.render) {
       content = config.loadingIndicator.render(context);
     }
+    const rendered = content ?? buildConversationOpenIndicator();
     mountConversationOpenState(
       createNode(
         "div",
         {
-          className: "persona-conversation-loading",
+          className: cx(
+            "persona-conversation-loading",
+            rendered.classList.contains("persona-conversation-loading-spinner") &&
+              "persona-conversation-loading--centered"
+          ),
           attrs: {
             role: "status",
             "aria-label": historyShellCopy.openConversationLoadingLabel,
           },
+          style: { maxWidth: messagesWrapper.style.maxWidth || "none" },
         },
-        content ?? buildConversationOpenSkeleton()
+        rendered
       )
     );
   };
@@ -11326,19 +11555,20 @@ export const createAgentExperience = (
       }
       if (content) break;
     }
-    mountConversationOpenState(
-      createNode(
-        "div",
-        {
-          className: "persona-conversation-loading-error",
-          attrs: { role: "alert" },
-        },
-        content ?? buildDefaultBlock()
-      )
+    conversationOpenErrorEl?.remove();
+    conversationOpenErrorEl = createNode(
+      "div", {
+        className: "persona-conversation-loading-error",
+        attrs: { role: "alert" },
+      }, content ?? buildDefaultBlock()
     );
-    // A failure must never sit hidden behind the surface it replaces, so the
-    // error skips the stand-in's show delay.
-    engageConversationOpenTakeover();
+    if (!session.getActiveConversationId() && session.getMessages().length === 0 && !composerStore.getState().text && !attachmentManager?.hasAttachments()) {
+      const element = conversationOpenErrorEl;
+      conversationOpenErrorEl = null;
+      mountConversationOpenState(element);
+      engageConversationOpenTakeover();
+    } else body.insertBefore(conversationOpenErrorEl, messagesWrapper);
+    announceHistory(historyShellCopy.openConversationErrorTitle);
   };
 
   // The panel exit's deferred teardown restores the footer it captured, which
@@ -11357,9 +11587,30 @@ export const createAgentExperience = (
    */
   const openHistoryConversation = async (
     conversationId: string,
-    { focusComposer = false }: { focusComposer?: boolean } = {}
+    { focusComposer = false, busy = "reject" }: { focusComposer?: boolean; busy?: "reject" | "stop" | "background" } = {}
   ): Promise<void> => {
     const scope = historyOperationScope();
+    if (busy === "background") {
+      session.assertBackgroundSwitchable();
+      if (composerStore.getState().phase === "preparing") {
+        throw new SessionHistoryError("conversation_busy", "Finish preparing this turn before switching conversations");
+      }
+    }
+    if (busy === "reject" && (session.isStreaming() || ["paused", "resuming"].includes(session.getStatus()) || composerStore.getState().phase === "preparing")) {
+      throw new SessionHistoryError("conversation_busy", "Finish or stop the current turn before switching conversations");
+    }
+    if (busy === "stop") {
+      ++composerConversationGeneration;
+      submissionAbort?.abort();
+      submissionAbort = null;
+      composerStore.setPreparing(false);
+      session.cancel();
+    }
+    const key = conversationStateKey();
+    if (!conversationOpenPendingEl || pendingConversationReading?.key !== key) {
+      pendingConversationReading = { key, reading: captureConversationReading() };
+    }
+    let persistenceOwner: number | null = null;
     // Seeds the header title binding from the list row before the list leaves.
     // The surface is usually gone by hydration time (the exit outruns the
     // fetch), so this is the only moment the title can be read from the list.
@@ -11373,21 +11624,42 @@ export const createAgentExperience = (
     }
     suppressScrollSend = true;
     try {
-      await session.openConversation(conversationId, { scope });
+      await session.openConversation(conversationId, {
+        scope, busy,
+        onBeforeCommit: () => {
+          saveConversationContinuity();
+          persistenceOwner = composerConversationGeneration;
+          conversationPersistenceOwner = persistenceOwner;
+        },
+        onCommitted: () => {
+          // The composer restoration is inside the session activation lock:
+          // a later queued commit snapshots this conversation, never its origin.
+          restoreConversationContinuity();
+          if (conversationPersistenceOwner === persistenceOwner) conversationPersistenceOwner = null;
+          if (usesSessionVoiceForConfig(config)) session.setupVoice();
+          persistState();
+        },
+      });
     } catch (error) {
+      if (conversationPersistenceOwner === persistenceOwner) conversationPersistenceOwner = null;
+      if (persistenceOwner === composerConversationGeneration && usesSessionVoiceForConfig(config)) session.setupVoice();
       if (token === conversationOpenToken) {
+        const reading = pendingConversationReading?.reading;
+        clearConversationOpenPending();
+        if (reading) restoreConversationReading(reading);
+        pendingConversationReading = null;
+        historySurface?.view.setActiveConversationId(session.getActiveConversationId());
         showConversationOpenError(conversationId);
+        suppressScrollSend = false;
       }
       throw error;
     } finally {
-      suppressScrollSend = false;
+      if (token === conversationOpenToken || !conversationOpenPendingEl) suppressScrollSend = false;
     }
     if (token !== conversationOpenToken) return;
     clearConversationOpenPending();
+    pendingConversationReading = null;
     messageCache.clear();
-    resetAnchorState();
-    resumeAutoScroll();
-    if (!restoreScrollPosition()) jumpToBottomInstant();
     // Fades only after the scroll settles, so the motion covers the final frame.
     fadeInTranscript();
     syncEarlierMessagesPill();
@@ -11413,7 +11685,28 @@ export const createAgentExperience = (
   }: { focusComposer?: boolean } = {}): Promise<void> => {
     // A new conversation supersedes any transcript fetch still in flight.
     clearConversationOpenPending();
-    await session.startNewConversation({ scope: historyOperationScope() });
+    let persistenceOwner: number | null = null;
+    try {
+      await session.startNewConversation({
+        scope: historyOperationScope(),
+        onBeforeCommit: () => {
+          saveConversationContinuity();
+          persistenceOwner = composerConversationGeneration;
+          conversationPersistenceOwner = persistenceOwner;
+        },
+        onCommitted: () => {
+          restoreConversationContinuity(true);
+          if (conversationPersistenceOwner === persistenceOwner) conversationPersistenceOwner = null;
+          if (usesSessionVoiceForConfig(config)) session.setupVoice();
+          persistState();
+          pendingConversationReading = null;
+        },
+      });
+    } catch (error) {
+      if (conversationPersistenceOwner === persistenceOwner) conversationPersistenceOwner = null;
+      if (persistenceOwner === composerConversationGeneration && usesSessionVoiceForConfig(config)) session.setupVoice();
+      throw error;
+    }
     setActiveConversationSummary(null);
     messageCache.clear();
     resetAnchorState();
@@ -11457,6 +11750,12 @@ export const createAgentExperience = (
     const scope = historyOperationScope();
     const wasActive = session.getActiveConversationId() === conversationId;
     await session.deleteConversation(conversationId, { scope });
+    discardConversationContinuity(conversationId);
+    if (wasActive) {
+      attachmentManager?.destroy({ release: true });
+      attachmentManager = null;
+      restoreConversationContinuity(true);
+    }
     // Prune the open list too: the view's own delete flow removes its row
     // after this resolves, but built-in/headless deletes have no view caller.
     historySurface?.view.removeConversationSummary(conversationId);
@@ -11491,6 +11790,7 @@ export const createAgentExperience = (
       ...(targetId ? { targetId } : {}),
       scope,
     });
+    discardConversationContinuity();
     setActiveConversationSummary(null);
     messageCache.clear();
     resetAnchorState();
@@ -11523,6 +11823,8 @@ export const createAgentExperience = (
       const result = await session.resetHistoryDevice();
       remoteRevocationConfirmed = result.remoteRevocationConfirmed;
     } finally {
+      discardConversationContinuity();
+      clearConversationOpenPending();
       setActiveConversationSummary(null);
       session.clearArtifacts();
       messageCache.clear();
@@ -11531,6 +11833,8 @@ export const createAgentExperience = (
       config.clearStoredConversationId?.();
       persistentMetadata = {};
       actionManager.syncFromMetadata();
+      // Remove any stored draft before the terminal clear mutation is queued.
+      clearPersistedDraft();
       if (storageAdapter?.clear) {
         runStorageMutation(
           () => storageAdapter.clear!(),
@@ -11814,6 +12118,8 @@ export const createAgentExperience = (
       notice.code === "history_continuity_reset" ||
       notice.code === "conversation_deleted_recovered"
     ) {
+      discardConversationContinuity();
+      clearConversationOpenPending();
       messageCache.clear();
       resetAnchorState();
       resumeAutoScroll();
@@ -12099,12 +12405,13 @@ export const createAgentExperience = (
    * send paths that never awaited before still don't.
    */
   const performSubmit = (intent: SubmissionIntent = {}): void | Promise<void> => {
-    if (dictationCapturing()) return;
+    if (dictationCapturing() || conversationOpenPendingEl) return;
+    const generation = composerConversationGeneration;
     const draft = (intent.overrideText ?? textarea?.value ?? "").trim();
     if (intent.resolveInlineCommand && draft) {
       return (
         mentionOrchestrator?.takeInlineCommand(draft) ?? Promise.resolve(null)
-      ).then((inline) => continueSubmit(intent, draft, inline));
+      ).then((inline) => { if (generation === composerConversationGeneration) return continueSubmit(intent, draft, inline); });
     }
     return continueSubmit(intent, draft, null);
   };
@@ -12257,8 +12564,10 @@ export const createAgentExperience = (
 
     const abort = new AbortController();
     submissionAbort = abort;
+    const generation = composerConversationGeneration;
     const settle = (outcome: BeforeSendOutcome): void => {
-      submissionAbort = null;
+      if (abort.signal.aborted || generation !== composerConversationGeneration) return;
+      if (submissionAbort === abort) submissionAbort = null;
       if (outcome.status === "error") {
         reportSubmissionError(outcome.error);
         return;
@@ -12275,7 +12584,7 @@ export const createAgentExperience = (
     composerStore.setPreparing(true);
     return outcome
       .then(settle)
-      .finally(() => composerStore.setPreparing(false));
+      .finally(() => { if (generation === composerConversationGeneration) composerStore.setPreparing(false); });
   };
 
   /**
@@ -13349,9 +13658,11 @@ export const createAgentExperience = (
   // explicit Stop or a stream error never reaches this seam, so the item stays
   // pending for the user to send, edit, or remove.
   const pendingSubmissionUnsub = eventBus.on("assistant:complete", () => {
-    if (!composerStore.getState().pendingSubmission) return;
+    const pending = composerStore.getState().pendingSubmission;
+    const generation = composerConversationGeneration;
+    if (!pending) return;
     setTimeout(() => {
-      if (session.isStreaming()) return;
+      if (session.isStreaming() || generation !== composerConversationGeneration || composerStore.getState().pendingSubmission !== pending) return;
       sendPendingSubmission();
     }, 0);
   });
@@ -13363,7 +13674,9 @@ export const createAgentExperience = (
     if (voiceAutoResumeMode === "assistant" && !voiceState.lastUserMessageWasVoice) {
       return;
     }
+    const generation = composerConversationGeneration;
     setTimeout(() => {
+      if (generation !== composerConversationGeneration) return;
       if (!voiceState.active && !voiceState.manuallyDeactivated) {
         if (usesSessionVoice(config.voiceRecognition?.provider)) {
           session.toggleVoice().then(() => {
@@ -13855,6 +14168,8 @@ export const createAgentExperience = (
       });
       window.dispatchEvent(clearEvent);
 
+      // Remove any stored draft before the terminal clear mutation is queued.
+      clearPersistedDraft();
       if (storageAdapter?.clear) {
         runStorageMutation(
           () => storageAdapter.clear!(),
@@ -13865,7 +14180,8 @@ export const createAgentExperience = (
       actionManager.syncFromMetadata();
       // Pending attachments belong to the cleared conversation: drop the tiles
       // and abort anything still uploading.
-      attachmentManager?.clearAttachments();
+      discardConversationContinuity(session.getActiveConversationId(), true, false);
+      clearComposerDraft();
       // The draft, quote, and any deferred submission belong to it too.
       clearPersistedDraft();
       setPendingSubmission(undefined);
@@ -14180,6 +14496,8 @@ export const createAgentExperience = (
     cancelMessageEdit();
     submissionAbort?.abort();
     submissionAbort = null;
+    clearConversationOpenPending();
+    discardConversationContinuity(undefined, false);
     // Aborts every in-flight upload; late completions write no state.
     attachmentManager?.destroy();
     attachmentManager = null;
@@ -14981,6 +15299,10 @@ export const createAgentExperience = (
         config.clientToken !== previousClientToken
       ) {
         closeHistory({ restoreFocus: false });
+        if (config.getIdentityProof !== previousIdentityProof || config.clientToken !== previousClientToken) {
+          discardConversationContinuity();
+          clearConversationOpenPending();
+        }
         installHistoryProvider();
       }
       syncHistoryChromeImpl();
@@ -15669,6 +15991,8 @@ export const createAgentExperience = (
       });
       window.dispatchEvent(clearEvent);
 
+      // Remove any stored draft before the terminal clear mutation is queued.
+      clearPersistedDraft();
       if (storageAdapter?.clear) {
         runStorageMutation(
           () => storageAdapter.clear!(),
@@ -15679,7 +16003,8 @@ export const createAgentExperience = (
       actionManager.syncFromMetadata();
       // Pending attachments belong to the cleared conversation: drop the tiles
       // and abort anything still uploading.
-      attachmentManager?.clearAttachments();
+      discardConversationContinuity(session.getActiveConversationId(), true, false);
+      clearComposerDraft();
       // The draft, quote, and any deferred submission belong to it too.
       clearPersistedDraft();
       setPendingSubmission(undefined);
@@ -15903,10 +16228,11 @@ export const createAgentExperience = (
     },
     openConversation(
       conversationId: string,
-      opts?: { focus?: boolean }
+      opts?: AgentWidgetOpenConversationOptions
     ): Promise<void> {
       return openHistoryConversation(conversationId, {
         focusComposer: opts?.focus === true,
+        busy: opts?.busy,
       });
     },
     startNewConversation(opts?: { focus?: boolean }): Promise<void> {
