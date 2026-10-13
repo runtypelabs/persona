@@ -769,7 +769,7 @@ function readGeneratedConfig(code: string, format: CodeFormat): AgentWidgetConfi
     const attribute = code.match(/data-config='([^']*)'/)?.[1];
     if (!attribute) throw new Error("Missing installer configuration");
     const decoded = attribute
-      .replace(/&#39;/g, "'")
+      .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&amp;/g, "&");
@@ -884,4 +884,61 @@ describe("Client-token demo presentation", () => {
     expect(config.suggestions?.starters?.items).toEqual(["Hello!", "What can you help with?", "Tell me a joke"]);
     expect(source).not.toContain("config as any");
   });
+});
+
+
+describe('authored input code generation', () => {
+  const supplied = {
+    apiUrl: '/chat', parserType: 'plain', future: { v5Defaults: false },
+    brand: { accent: '#7c3aed' }, colorScheme: 'light', debug: false,
+    welcome: { variant: 'none', title: 'Quotes " and \' newline\n</script> &amp;' },
+    suggestionChips: [], suggestions: { starters: { items: [], placement: 'composer' } },
+    theme: { components: { header: { controlSize: '32px' } } },
+    darkTheme: { components: { header: { controlSize: '32px' } } },
+    preferences: { history: { enabled: false } },
+  };
+
+  it.each(allFormats)('evaluates all supplied serializable values without adding defaults in %s', format => {
+    const code = generateCodeSnippet(supplied, format, { authoredOverrides: true });
+    expect(readGeneratedConfig(code, format)).toEqual(supplied);
+    if (format.startsWith('script-') && format !== 'script-installer') {
+      expect((code.match(/<\/script>/g) ?? []).length).toBe(2);
+    }
+  });
+
+  it.each(allFormats)('reports function omissions and omits incomplete implementations in %s', format => {
+    const code = generateCodeSnippet({
+      ...supplied, getHeaders: () => ({}), welcome: { icon: () => 'icon' },
+      storageAdapter: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+      voiceRecognition: { provider: { custom: { start: () => {}, stop: () => {} } } },
+      actionHandlers: [() => {}],
+    }, format, { authoredOverrides: true });
+    const config = readGeneratedConfig(code, format);
+    expect(config).not.toHaveProperty('storageAdapter');
+    expect(config).not.toHaveProperty('voiceRecognition.provider');
+    expect(config).not.toHaveProperty('actionHandlers');
+    expect(code).toContain('getHeaders');
+    expect(code).toContain('welcome.icon');
+    expect(code).toContain('closures cannot be reconstructed');
+  });
+
+  it.each(allFormats.filter(format => format !== 'script-installer'))('retains an explicitly supplied self-contained hook in %s', format => {
+    const code = generateCodeSnippet(supplied, format, { authoredOverrides: true, hooks: { getHeaders: () => ({ 'X-Test': 'yes' }) } });
+    expect(readGeneratedConfig(code, format).getHeaders?.()).toEqual({ 'X-Test': 'yes' });
+  });
+  it.each(allFormats)('honors target and windowKey in authored %s generation', format => {
+    const code = generateCodeSnippet(supplied, format, { authoredOverrides: true, target: '#chat', windowKey: 'myWidget' });
+    if (format === 'script-installer') {
+      expect(readGeneratedConfig(code, format)).toMatchObject({ target: '#chat', windowKey: 'myWidget', config: supplied });
+      return;
+    }
+    let javascript = format.startsWith('script-') ? code.match(/<script>([\s\S]*?)<\/script>/)?.[1] ?? '' : code;
+    javascript = javascript.replace(/^import .*;$/gm, '').replace(/^export /gm, '');
+    if (format.startsWith('react-')) javascript += '\nChatWidget();';
+    let options: unknown;
+    const init = (value: unknown) => { options = value; return { destroy() {} }; };
+    new Function('initAgentWidget', 'window', 'useEffect', javascript)(init, { AgentWidget: { initAgentWidget: init } }, (effect: () => void) => effect());
+    expect(options).toEqual({ target: '#chat', windowKey: 'myWidget', config: supplied });
+  });
+
 });

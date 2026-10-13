@@ -355,6 +355,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline"],
   },
   {
+    slug: "style-migration",
+    href: "/style-migration.html",
+    title: "Style Migration Lab",
+    blurb: "Real legacy/theme comparisons and a mounted widget with live migration, resets, light/dark themes, and narrow layouts.",
+    tier: "reference",
+    tags: ["theming", "migration", "v5", "welcome"],
+    modes: ["inline"],
+  },
+  {
     slug: "v5-preview",
     href: "/v5-preview.html",
     title: "V5 Preview",

@@ -1,5 +1,7 @@
 # Scoped style migrations
 
+For new integrations, start with the [configuration authoring guide](configuration.md). This page covers compatibility, precedence and explicit migration/reset operations; imported legacy opinions are preserved until deliberately cleared.
+
 Persona 4.x supports component theme styling alongside legacy configuration. Both values of `future.v5Defaults` preserve existing unconfigured appearances. This guide describes supported replacements; it does not schedule a removal or move behavior into the theme.
 
 For each migrated property, precedence is **explicit legacy override → explicit component theme value (including the active dark override) → shared component/semantic/default fallback**. Defaults added by Persona do not count as a host override. Existing welcome aliases retain their different precedence: `welcome.*` wins over `copy.welcome*`.
@@ -14,6 +16,96 @@ widget.update({
 ```
 
 Persona's own merge helpers and supported config copies preserve origin. Externally default-filled or JSON-round-tripped config has unknowable origin: present legacy values conservatively remain explicit. Remove those fields, or reset them with own `undefined`, to let component styling take over. Comparing values with defaults cannot determine intent.
+
+## An equivalent welcome and starter migration
+
+For new integrations, author welcome content in `welcome`, starter items in `suggestions.starters`, and appearance in `theme.components`. Keep input placeholders, icons, labels, provider setup and callbacks in their existing configuration groups.
+
+```ts
+import type { AgentWidgetConfig } from '@runtypelabs/persona';
+
+// Before: supported legacy authoring, shown here for comparison.
+const before = {
+  copy: { welcomeTitle: 'Welcome', welcomeSubtitle: 'Ask about your order' },
+  suggestionChips: ['Track an order', 'Find a product', 'Returns', 'Contact us'],
+  suggestionChipsConfig: { fontWeight: '600', paddingX: '16px', paddingY: '8px' },
+} satisfies AgentWidgetConfig;
+
+// After: explicit presentation preserves the original card and composer chips.
+const after = {
+  welcome: { title: 'Welcome', subtitle: 'Ask about your order', variant: 'card' },
+  suggestions: {
+    starters: {
+      items: ['Track an order', 'Find a product', 'Returns', 'Contact us'],
+      variant: 'chip', placement: 'composer', overflow: 'wrap', maxItems: 4,
+    },
+  },
+  theme: { components: { suggestion: { chip: { fontWeight: '600', padding: '8px 16px' } } } },
+} satisfies AgentWidgetConfig;
+```
+
+`maxItems: 4` preserves the legacy renderer's cap. A modern embedded V5 surface defaults to three starters, so omitting the cap can hide the fourth item. Empty starter items are intentional too: migrate `suggestionChips: []` to `suggestions.starters.items: []`, rather than removing the key and exposing default prompts. A hidden welcome migrates `copy.showWelcomeCard: false` to `welcome.variant: 'none'`; the starter placement remains a separate choice.
+
+For a mounted widget, omitting aliases from the new object does not delete the old values. Apply the new content/theme and own-undefined resets together:
+
+```ts
+widget.update({
+  ...after,
+  copy: { welcomeTitle: undefined, welcomeSubtitle: undefined },
+  suggestionChips: undefined,
+  suggestionChipsConfig: { fontWeight: undefined, paddingX: undefined, paddingY: undefined },
+});
+```
+
+Use a JavaScript patch directly. `JSON.stringify` removes `undefined`, so transmitting that patch as JSON would retain the old overrides. JSON is suitable for a fresh configuration with the legacy keys already omitted, not for transporting own-undefined live resets.
+
+## Live control migration, dark overrides and resets
+
+An explicit legacy value stays above theme values in both schemes. Add a theme behind it first to inspect precedence, then clear the old field to let the theme take over. For example, preserve independent clear/close colors without recoloring every header action:
+
+```ts
+widget.update({
+  launcher: {
+    closeButtonColor: undefined,
+    clearChat: { iconColor: undefined },
+  },
+  theme: { components: { header: {
+    close: { foreground: '#b91c1c' },
+    clear: { foreground: '#1d4ed8' },
+  } } },
+  darkTheme: { components: { header: {
+    close: { foreground: '#fca5a5' },
+    clear: { foreground: '#93c5fd' },
+  } } },
+});
+```
+
+Switch `colorScheme` with another sparse update. The active dark override wins over the corresponding light component value; omitting `darkTheme` from an update preserves it. Clear both independent close overrides to expose the shared current header fallback in either scheme, while keeping clear styling:
+
+```ts
+widget.update({
+  theme: { components: { header: { close: undefined } } },
+  darkTheme: { components: { header: { close: undefined } } },
+});
+```
+
+To reset all custom component and semantic theme styling, use `theme: undefined, darkTheme: undefined` after clearing explicit legacy styles. This does not remove separately configured behavior, callback hooks, welcome content or starter items. If a `brand` configuration is present, its generated defaults remain; clear that separately only when a full brand reset is intended.
+
+## Review V4, V5, light, dark and narrow layouts
+
+Run `pnpm dev:widget` and open `/style-migration.html`, or find **Style Migration Lab** in the homepage patterns, example picker or command palette. Its three columns use actual Persona welcome/control/tool/approval renderers. The explicitly labeled legacy fixture and modern component fixture map the same light/dark values; both styled fixtures explicitly pin the same card welcome and wrapped composer chips so V5’s automatic placement does not obscure parity. The baseline shows each defaults mode without those overrides. Voice states are simulated, and unsupported browser dictation is labeled.
+
+The mounted widget below the comparison uses the public update API with local replies. Type a draft or send a message, then use **Add theme behind legacy**, **Migrate and clear aliases**, and **Reset style overrides**. Theme, defaults, width and style changes update the same widget. **Replay scene / clear transcript** deliberately clears the sample history; it is separate from the style reset. The displayed last patch retains literal `undefined` so the reset behavior is inspectable.
+
+Compare these surfaces in both `future.v5Defaults` modes:
+
+- Welcome and suggestions: same content, card, composer placement, chip typography, wrapping and four-item cap.
+- Independent controls: separate close, clear, submit and mic geometry/colors; simulated idle/recording/processing/speaking states.
+- Tools and approval: real detail cards and a local approval decision, with grouping disabled in this lab so the styled surfaces remain visible.
+- Question sheet: select a pill, type a custom answer, and change schemes or reset styles while the sheet is open.
+- Artifact pane: open the local Markdown artifact, compare pane/toolbar chrome, and try the 320px width where responsive drawer behavior can apply.
+
+V4 and V5 defaults intentionally differ. Migration parity means matching the explicit legacy appearance within each defaults mode, not making the two baselines identical. Narrow mode constrains the available space; it does not simulate a touch pointer. Verify the actual target browser, keyboard focus and touch hit areas separately for your integration.
 
 ## Close, clear, submit, and mic
 
@@ -110,7 +202,7 @@ Local feature styles remain highest priority. Layout, grouped navigation, labels
 
 ## Suggestions and retained capabilities
 
-Use `suggestion.chip.fontWeight` and `.padding` for chip typography/padding. Explicit old weight/axes still win; inherited `500`/`6px 12px` no longer defeat the theme. Clearing an axis exposes theme padding for that axis. Card/list variants retain their own styles. Move starter items to `suggestions.starters.items` and explicitly choose `variant: 'chip', placement: 'composer', overflow: 'wrap'` to preserve the legacy chip placement. `welcome.title/subtitle/variant` replace old welcome copy fields; choose `variant: 'none'` to hide it. Existing new welcome values win over old copy aliases.
+Use `suggestion.chip.fontWeight` and `.padding` for chip typography/padding. Explicit old weight/axes still win; inherited `500`/`6px 12px` no longer defeat the theme. Clearing an axis exposes theme padding for that axis. Card/list variants retain their own styles. Move starter items to `suggestions.starters.items` and explicitly choose `variant: 'chip', placement: 'composer', overflow: 'wrap', maxItems: 4` to preserve the legacy chip placement and four-item cap. Modern V5 embedded starters otherwise default to three items; choosing only the placement is not a complete appearance migration. `welcome.title/subtitle/variant` replace old welcome copy fields; choose `variant: 'none'` to hide it. Existing new welcome values win over old copy aliases.
 
 Accepted no-ops remain no-ops: `suggestionChipsConfig.fontFamily`, `unifiedSplitChrome`, and unsupported `messages`/`composer` layout slots. No parity mapping is claimed for them. Widget presets, exported approval builders, callbacks, custom renderers/icons, labels/accessibility, provider settings, and behavior remain supported. Markdown uses `--persona-md-*`; the three compatibility collapsible aliases `--cw-container`, `--cw-surface`, and `--cw-border` remain emitted.
 

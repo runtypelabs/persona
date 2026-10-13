@@ -116,10 +116,13 @@ const homeDemoInputPlaceholder = "Ask away...";
 
 /** Shared welcome copy for the inline embed. */
 const homeDemoSharedAssistant = {
+  welcome: {
+    title: homeDemoWelcomeTitle,
+    subtitle: homeDemoWelcomeSubtitle,
+    variant: "card" as const,
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: homeDemoWelcomeTitle,
-    welcomeSubtitle: homeDemoWelcomeSubtitle,
     inputPlaceholder: homeDemoInputPlaceholder,
   },
 };
@@ -176,7 +179,15 @@ const sharedWidgetConfig: NonNullable<
     keyPrefix: homeDemoPersistKeyPrefix
   },
   storageAdapter: sharedWidgetStorage,
-  suggestionChips: [...homeDemoSuggestionChips],
+  suggestions: {
+    starters: {
+      items: [...homeDemoSuggestionChips],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 };
 

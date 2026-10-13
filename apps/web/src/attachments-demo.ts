@@ -111,16 +111,27 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       enabled: isLauncher,
       width: isLauncher ? "min(420px, 95vw)" : "100%",
     },
+    welcome: {
+      title: "Attachments Demo",
+      subtitle: "Attach images or files and send them with your message.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Attachments Demo",
-      welcomeSubtitle: "Attach images or files and send them with your message.",
       inputPlaceholder: "Type a message or attach a file…",
     },
-    suggestionChips: [
-      "Describe what you see in the image",
-      "Summarize this document",
-    ],
+    suggestions: {
+      starters: {
+        items: [
+          "Describe what you see in the image",
+          "Summarize this document",
+        ],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     attachments,
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };

@@ -123,6 +123,15 @@ export type CodeGeneratorHooks = {
  */
 export type CodeGeneratorOptions = {
   /**
+   * Emit every supplied serializable input without adding defaults or pruning
+   * default-equal values. Pass ThemeEditorState.exportAuthoredConfig().config.
+   * Functions/custom implementations are omitted with path-specific notes;
+   * supported self-contained hooks can be supplied through hooks in JS formats.
+   * This creates fresh configuration, not a mounted-widget reset patch.
+   * @default false
+   */
+  authoredOverrides?: boolean;
+  /**
    * Custom hook code to inject into the generated snippet.
    * Hooks are JavaScript/TypeScript code strings that will be
    * inserted at appropriate locations in the output.
@@ -138,7 +147,7 @@ export type CodeGeneratorOptions = {
   /**
    * If provided, emits `windowKey` in the generated `initAgentWidget()` call
    * so the widget handle is stored on `window[windowKey]`.
-   * Only affects script formats (script-installer, script-manual, script-advanced).
+   * In default generation, only affects script formats (script-installer, script-manual, script-advanced). Authored-overrides generation honors it in all formats.
    */
   windowKey?: string;
 
@@ -644,6 +653,8 @@ export function generateCodeSnippet(
   format: CodeFormat = "esm",
   options?: CodeGeneratorOptions
 ): string {
+  if (options?.authoredOverrides) return generateAuthoredCode(config, format, options);
+
   // Remove non-serializable properties
   const cleanConfig = { ...config };
   delete cleanConfig.postprocessMessage;
@@ -677,6 +688,85 @@ export function generateCodeSnippet(
   if (omittedFunctions.length === 0) return code;
   const note = `Function-valued ${omittedFunctions.join(", ")} omitted; reattach in host JavaScript.`;
   return format.startsWith("script-") ? `<!-- ${note} -->\n${code}` : `// ${note}\n${code}`;
+}
+
+/** Deliberately conservative: implementation objects cannot be reconstructed from JSON. */
+function generateAuthoredCode(config: Record<string, unknown>, format: CodeFormat, options: CodeGeneratorOptions): string {
+  const omitted: string[] = [];
+  const skip = Symbol('omit');
+  const implementations = new Set(['storageAdapter', 'targetProviders', 'components', 'voiceRecognition.provider', 'voiceRecognition.provider.custom']);
+  const containsFunction = (value: unknown): boolean => typeof value === 'function' ||
+    (!!value && typeof value === 'object' && Object.values(value).some(containsFunction));
+  const visit = (value: unknown, path: string): unknown => {
+    if (typeof value === 'function' || typeof value === 'symbol' || value === undefined) {
+      omitted.push(path);
+      return skip;
+    }
+    if (!value || typeof value !== 'object') return value;
+    if ((implementations.has(path) && containsFunction(value)) ||
+        (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype)) {
+      omitted.push(path);
+      return skip;
+    }
+    if (Array.isArray(value)) {
+      const entries = value.map((entry, index) => visit(entry, `${path}.${index}`));
+      // Do not turn function entries into JSON null or reorder implementation lists.
+      if (entries.includes(skip)) { omitted.push(path); return skip; }
+      return entries;
+    }
+    return Object.fromEntries(Object.entries(value).flatMap(([key, entry]) => {
+      const result = visit(entry, path ? `${path}.${key}` : key);
+      return result === skip ? [] : [[key, result]];
+    }));
+  };
+  const serializable = visit(config, '') as Record<string, unknown>;
+  const hooks = normalizeHooks(options.hooks);
+  const isInstaller = format === 'script-installer';
+  let literal = serializeConfigLiteral(serializable, 2);
+  if (hooks) {
+    const hookLines = generateHooksConfig(hooks as CodeGeneratorHooks, '  ');
+    if (hooks.postprocessMessage) hookLines.push(`  postprocessMessage: ${hooks.postprocessMessage},`);
+    const actionHooks = ['onFeedback', 'onCopy'] as const;
+    if (actionHooks.some(key => hooks[key])) {
+      if (!isInstaller) {
+        const baseConfig = { ...serializable };
+        delete baseConfig.messageActions;
+        literal = serializeConfigLiteral(baseConfig, 2);
+      }
+      hookLines.push('  messageActions: {');
+      hookLines.push(...Object.entries((serializable.messageActions ?? {}) as Record<string, unknown>)
+        .map(([key, value]) => `    ${serializeConfigLiteral(key)}: ${serializeConfigLiteral(value)},`));
+      for (const key of actionHooks) if (hooks[key]) hookLines.push(`    ${key}: ${hooks[key]},`);
+      hookLines.push('  },');
+    }
+    if (isInstaller) omitted.push(...Object.keys(hooks).map(key => `hooks.${key}`));
+    else if (hookLines.length) {
+      const baseProperties = literal.slice(1, -1).trim();
+      literal = `{\n${baseProperties}${baseProperties ? ',' : ''}\n${hookLines.join('\n')}\n}`;
+    }
+  }
+  if (format.startsWith('script-')) literal = literal.replace(/<\/script/gi, '<\\/script');
+  let code: string;
+  const target = serializeConfigLiteral(options.target ?? 'body');
+  const windowKey = options.windowKey ? `, windowKey: ${serializeConfigLiteral(options.windowKey)}` : '';
+  const cdn = resolveCdnBase(options);
+  if (isInstaller) {
+    const payload = options.target || options.windowKey
+      ? { config: serializable, ...(options.target ? { target: options.target } : {}), ...(options.windowKey ? { windowKey: options.windowKey } : {}) }
+      : serializable;
+    const attribute = serializeConfigLiteral(payload).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    code = `<script src="${cdn}/install.global.js" data-config='${attribute}'></script>`;
+  } else if (format.startsWith('script-')) {
+    code = `<link rel="stylesheet" href="${cdn}/widget.css" />\n<script src="${cdn}/index.global.js"></script>\n<script>\nvar config = ${literal};\nvar handle = window.AgentWidget.initAgentWidget({ target: ${target}${windowKey}, config });\n</script>`;
+  } else if (format.startsWith('react-')) {
+    code = `'use client';\nimport { useEffect } from 'react';\nimport '@runtypelabs/persona/widget.css';\nimport { initAgentWidget } from '@runtypelabs/persona';\n\nexport function ChatWidget() {\n  useEffect(() => {\n    const handle = initAgentWidget({ target: ${target}${windowKey}, config: ${literal} });\n    return () => handle.destroy();\n  }, []);\n  return null;\n}`;
+  } else {
+    code = `import '@runtypelabs/persona/widget.css';\nimport { initAgentWidget } from '@runtypelabs/persona';\n\ninitAgentWidget({ target: ${target}${windowKey}, config: ${literal} });`;
+  }
+  if (!omitted.length) return code;
+  // Notes are HTML comments in script formats; sanitize path text as well as values.
+  const note = `Omitted non-serializable inputs: ${[...new Set(omitted)].join(', ')}. Reattach functions/custom implementations in host JavaScript; closures cannot be reconstructed.`;
+  return format.startsWith('script-') ? `<!-- ${note.replace(/--/g, '—').replace(/</g, '&lt;').replace(/>/g, '&gt;')} -->\n${code}` : `// ${note.replace(/[\r\n\u2028\u2029]/g, ' ')}\n${code}`;
 }
 
 function generateESMCode(config: any, options?: CodeGeneratorOptions): string {

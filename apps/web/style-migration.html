@@ -1,6 +1,49 @@
 <!doctype html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Style migration comparison · Persona</title>
-<style>
-body{margin:0;padding:32px;background:#f7f6f2;color:#222;font:15px/1.5 system-ui,sans-serif}main{max-width:1300px;margin:auto}h1{font-size:28px;margin:0 0 8px}p{max-width:850px;color:#666}nav{display:flex;gap:20px;align-items:center;margin:24px 0;flex-wrap:wrap}select,nav button{font:inherit;padding:8px;border:1px solid #ccc;border-radius:8px;background:white}#samples{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}main .sample{padding:20px;border:1px solid var(--persona-border);border-radius:16px;background:var(--persona-background);color:var(--persona-text);min-width:0}.sample h2{font:600 17px system-ui;margin:0 0 18px}.sample h3{font:500 12px system-ui;letter-spacing:.08em;text-transform:uppercase;color:var(--persona-text-muted);margin:24px 0 12px}.controls{display:flex;align-items:center;gap:16px;min-height:48px}.sample [data-demo-tool]{margin-bottom:12px}@media(max-width:950px){#samples{grid-template-columns:1fr}}details{margin-top:20px}pre{overflow:auto}
-</style></head><body><main><h1>Style migration comparison</h1><p>Compare unchanged defaults, supported legacy styles, and their component-theme replacements. These are Persona’s real component renderers. Voice states are simulated; no microphone or network request is used.</p>
-<nav><label>Defaults <select id="defaults"><option value="v5">V5</option><option value="v4">V4</option></select></label><label>Theme <select id="scheme"><option>Light</option><option>Dark</option></select></label><label>Voice state <select id="voice"><option>Idle</option><option>Recording</option><option>Processing</option><option>Speaking</option></select></label><button id="reset">Clear custom styles</button></nav><div id="samples"></div></main><script type="module" src="/src/style-migration.ts"></script></body></html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <title>Style Migration Lab · Persona</title>
+</head>
+<body>
+  <main class="shell-main migration-page">
+    <header class="title-strip">
+      <h1>Style migration lab</h1>
+      <p>Compare Persona’s real renderers, then migrate a mounted widget with <code>widget.update()</code>. All replies, approvals, questions, and artifacts use local sample data.</p>
+      <p><a href="https://github.com/runtypelabs/persona/blob/main/docs/style-migrations.md">Read the migration guide</a> · <a href="/theme.html">Open the theme editor</a> · <a href="/v5-preview.html">Explore V5 defaults</a></p>
+    </header>
+    <section class="migration-settings" aria-label="Comparison settings">
+      <label>Defaults <select id="defaults"><option value="v5">V5 preview</option><option value="v4">V4 current</option></select></label>
+      <label>Theme <select id="scheme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
+      <label>Voice state <select id="voice"><option value="idle">Idle</option><option value="recording">Recording</option><option value="processing">Processing</option><option value="speaking">Speaking</option></select></label>
+      <label>Width <select id="width"><option value="wide">Wide</option><option value="narrow">Narrow · 320px</option></select></label>
+      <button type="button" id="reset">Clear comparison styles</button>
+    </section>
+    <p class="migration-note">The legacy column is an intentional compatibility fixture. Each light/dark palette is mapped to equivalent theme values. Both styled fixtures pin a card welcome and wrapped composer chips so V5 placement defaults do not obscure style parity. Voice states below are simulated; no microphone is captured. Narrow mode constrains the samples and live widget to 320px, or the available width on smaller screens.</p>
+    <div id="samples" aria-label="Baseline, legacy and theme comparisons"></div>
+    <section class="migration-live" aria-labelledby="live-title">
+      <h2 id="live-title">Migrate without remounting</h2>
+      <p>Start with legacy overrides. Adding theme values alone keeps explicit legacy styles in charge. Migrate and clear the aliases in one update, then clear the style overrides to expose current V4/V5 defaults. Your draft and conversation stay in the same widget.</p>
+      <div class="migration-actions" aria-label="Live migration actions">
+        <button type="button" id="live-legacy">Apply legacy fixture</button>
+        <button type="button" id="live-layer">Add theme behind legacy</button>
+        <button type="button" id="live-migrate">Migrate and clear aliases</button>
+        <button type="button" id="live-reset">Reset style overrides</button>
+      </div>
+      <div class="migration-actions" aria-label="Local sample scenes">
+        <label>Scene <select id="scene"><option value="welcome">Welcome &amp; suggestions</option><option value="tools">Tool &amp; approval</option><option value="question">Question sheet</option><option value="artifact">Artifact pane</option></select></label>
+        <button type="button" id="replay">Replay scene / clear transcript</button>
+      </div>
+      <p id="live-status" role="status" aria-live="polite"></p>
+      <div class="migration-live-layout">
+        <div class="migration-live-frame"><div id="live-host"></div></div>
+        <details class="migration-code" open><summary>Last live update</summary><pre><code id="live-code"></code></pre><p><code>undefined</code> is an own reset value. JSON serialization would remove it. The snippet shows the patch applied to the existing widget.</p></details>
+      </div>
+    </section>
+    <details class="migration-code"><summary>Equivalent legacy and modern configuration</summary><div class="migration-config-grid"><div><h3>Legacy · compatibility fixture</h3><pre id="legacy-code"></pre></div><div><h3>Modern · new authoring</h3><pre id="theme-code"></pre></div></div></details>
+  </main>
+  <script type="module" src="/src/style-migration.ts"></script>
+</body>
+</html>

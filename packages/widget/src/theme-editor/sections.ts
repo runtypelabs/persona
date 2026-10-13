@@ -551,7 +551,7 @@ const headerColorsSectionDef: SectionDef = {
     { id: 'header-title-fg', label: 'Title color', description: 'Blank follows the header foreground', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
     { id: 'header-subtitle-fg', label: 'Subtitle color', description: 'Blank follows a 72% mix of the foreground over the background', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
     { id: 'header-action-icons-fg', label: 'Clear / close icons', description: 'Blank follows the same 72% foreground mix as the subtitle', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'header-border', label: 'Border', description: 'Blank follows a 14% mix of the foreground over the background', type: 'token-ref', path: 'theme.components.header.border', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    { id: 'header-border', label: 'Border', description: 'Border color or token reference; blank follows a 14% mix of foreground over background', type: 'token-ref', path: 'theme.components.header.border', defaultValue: '', tokenRef: { tokenType: 'color' } },
   ],
 };
 
@@ -719,7 +719,7 @@ const optionalComponentFields = (group: string, leaves: string, color = false): 
     defaultValue: '',
     parseValue: parseOptionalCssValue,
     unsettable: true,
-    description: color ? 'Color or token reference. Unset restores the component fallback.' : 'CSS value; use lengths for sizes/padding, unitless stroke width, and ms/s for duration. Unset restores the component fallback.',
+    description: color ? 'Color or token reference (border fields here are colors). Unset restores the component fallback.' : 'CSS value; use lengths for sizes/padding, unitless stroke width, and ms/s for duration. Unset restores the component fallback.',
   }));
 const independentControlGroups = [
   ['header.close', 'Close Control'], ['header.clear', 'Clear Chat Control'],
@@ -730,14 +730,14 @@ const independentControlShapeSections: SectionDef[] = independentControlGroups.m
   description: group === 'composer.send' ? 'Submit only. Size applies to icon mode; theme padding also supports text mode.' : group === 'voice.control' ? 'Idle mic only. Set both box and glyph size to migrate legacy voiceRecognition.iconSize.' : 'This header control only; Messages and trailing actions keep their own styling.',
   fields: optionalComponentFields(group, 'size iconSize iconStrokeWidth borderWidth borderRadius padding'),
 }));
-const independentControlColorSections: SectionDef[] = independentControlGroups.map(([group, title]) => ({
+const independentControlColorSections: SectionDef[] = [...independentControlGroups, ['button.stop', 'Stop Control'] as const].map(([group, title]) => ({
   id: `comp-${group.replace('.', '-')}-colors`, title: `${title} Colors`, collapsed: true,
-  fields: optionalComponentFields(group, 'background foreground borderColor', true),
+  fields: optionalComponentFields(group, group === 'button.stop' ? 'background foreground' : 'background foreground borderColor', true),
 }));
 const replacementShapeSections: SectionDef[] = [
   { id: 'comp-tool-chrome', title: 'Tool Card & Row Chrome', collapsed: true, fields: optionalComponentFields('toolBubble', 'borderWidth borderRadius header.padding content.padding loading.duration') },
   { id: 'comp-question-chrome', title: 'Question Sheet Chrome', collapsed: true, fields: optionalComponentFields('askUserQuestion', 'sheet.shadow pill.borderRadius') },
-  { id: 'comp-artifact-chrome', title: 'Artifact Chrome', collapsed: true, fields: optionalComponentFields('artifact', 'pane.padding pane.borderRadius pane.shadow pane.border pane.borderLeft chat.shadow split.outerRadius tab.fadeSize') },
+  { id: 'comp-artifact-chrome', title: 'Artifact Chrome', collapsed: true, description: 'pane.border and pane.borderLeft accept full CSS border shorthands; padding/radius/fadeSize are CSS lengths and shadows are CSS box-shadow values.', fields: optionalComponentFields('artifact', 'pane.padding pane.borderRadius pane.shadow pane.border pane.borderLeft chat.shadow split.outerRadius tab.fadeSize') },
   { id: 'comp-suggestion-chip-type', title: 'Suggestion Chip Type & Padding', collapsed: true, fields: optionalComponentFields('suggestion.chip', 'fontWeight padding') },
 ];
 const replacementColorSections: SectionDef[] = [
@@ -835,7 +835,7 @@ function formatAttachmentAllowedTypes(value: unknown): string {
 const copySectionDef: SectionDef = {
   id: 'copy', title: 'Content & Copy', collapsed: false,
   fields: [
-    { id: 'copy-show-welcome-card', label: 'Welcome Surface', type: 'select', path: 'welcome.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Card' }, { value: 'hero', label: 'Hero' }, { value: 'none', label: 'Hidden' }] },
+    { id: 'copy-show-welcome-card', label: 'Welcome Surface', description: 'Hide welcome with variant none. Modern welcome content wins over legacy copy aliases.', type: 'select', path: 'welcome.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Card' }, { value: 'hero', label: 'Hero' }, { value: 'none', label: 'Hidden' }] },
     { id: 'copy-welcome-title', label: 'Welcome Title', type: 'text', path: 'welcome.title', defaultValue: 'Hello 👋' },
     { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'welcome.subtitle', defaultValue: 'I can answer questions and help you get things done here.' },
     { id: 'copy-placeholder', label: 'Input Placeholder', type: 'text', path: 'copy.inputPlaceholder', defaultValue: DEFAULT_INPUT_PLACEHOLDER },
@@ -844,7 +844,7 @@ const copySectionDef: SectionDef = {
 };
 
 const suggestionsSectionDef: SectionDef = {
-  id: 'suggestions', title: 'Suggestions', description: 'Configure starter prompts and agent follow-ups.', collapsed: true,
+  id: 'suggestions', title: 'Suggestions', description: 'Move starters via suggestions.starters.placement; style chips/cards/lists under theme.components.suggestion. Empty items intentionally disables starters.', collapsed: true,
   fields: [
     { id: 'suggestions-list', label: 'Starter Prompts', description: 'Add, edit, and remove starter prompts directly.', type: 'chip-list', path: 'suggestions.starters.items', defaultValue: DEFAULT_SUGGESTION_CHIPS },
     { id: 'suggestions-starter-variant', label: 'Starter Style', type: 'select', path: 'suggestions.starters.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Cards' }, { value: 'chip', label: 'Chips' }, { value: 'list', label: 'List' }] },

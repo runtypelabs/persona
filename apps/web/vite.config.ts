@@ -672,6 +672,7 @@ export default defineConfig({
         main: path.resolve(__dirname, 'index.html'),
         advanced: path.resolve(__dirname, 'advanced.html'),
         'v5-preview': path.resolve(__dirname, 'v5-preview.html'),
+        'style-migration': path.resolve(__dirname, 'style-migration.html'),
         'assistant-composers': path.resolve(__dirname, 'assistant-composers.html'),
         'embedded-host': path.resolve(__dirname, 'embedded-host.html'),
         'action-middleware': path.resolve(__dirname, 'action-middleware.html'),

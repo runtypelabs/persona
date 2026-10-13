@@ -32,3 +32,14 @@ describe("scoped style replacement reference", () => {
     expect(reference.examples.scopedSurfaces.theme.components?.toolBubble?.loading?.duration).toBe("1600ms");
   });
 });
+
+it('starts new authoring at brand/semantic/components with explicit defaults selection', () => {
+  const overview = getThemeReference().tokenDocs.overview;
+  expect(overview).toContain('brand');
+  expect(overview).toContain('theme.semantic');
+  expect(overview).toContain('theme.components');
+  expect(overview).toContain('Current V4 defaults');
+  expect(overview).toContain('future.v5Defaults');
+  expect(overview).not.toContain('non-theme appearance options');
+  expect(getThemeReference().tokenDocs.layers.components.button.description).toContain('button.stop');
+});

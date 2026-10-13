@@ -1,6 +1,6 @@
 # Widget Theme & Configuration Reference
 
-This document provides definitions of all themable configuration options for Persona Widget.
+This document is the exhaustive theme and configuration reference for Persona Widget. Start with the [configuration authoring guide](../../docs/configuration.md) for minimal fresh brand, semantic and send/stop recipes, ownership, mounted update policy, and authored versus resolved editor exports.
 
 For property-by-property legacy mappings, precedence/reset behavior, and retained configuration capabilities, see the [scoped style migration guide](../../docs/style-migrations.md). Compare unconfigured, legacy, and theme samples in the [style migration demo](../../apps/web/style-migration.html). No removal is scheduled in 4.x.
 
@@ -33,7 +33,7 @@ semantic.colors.primary → palette.colors.primary.500 → #171717
 
 ## Quick Start
 
-### Brand configuration
+### Brand configuration (fresh V5 opt-in)
 
 Use `config.brand` to derive a coordinated theme from a few design choices. Each
 field is optional; omitted fields retain Persona's defaults. It works with both

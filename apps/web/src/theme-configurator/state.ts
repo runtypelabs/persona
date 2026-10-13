@@ -14,7 +14,7 @@ import {
 } from '@runtypelabs/persona';
 import type { AgentWidgetController } from '@runtypelabs/persona';
 import { ThemeEditorState } from '@runtypelabs/persona/theme-editor';
-import type { ConfiguratorSnapshot } from '@runtypelabs/persona/theme-editor';
+import type { AuthoredConfigExport, ConfiguratorSnapshot } from '@runtypelabs/persona/theme-editor';
 import {
   PREVIEW_STORAGE_ADAPTER,
   HOME_SUGGESTION_CHIPS,
@@ -93,7 +93,7 @@ let previewBackgroundUrl = '';
 let previewTranscriptEntries: PreviewTranscriptEntryPreset[] = [];
 
 // ─── Core state (delegated to ThemeEditorState) ─────────────────────
-let core = new ThemeEditorState(undefined, getDefaultConfig(), { mergeDefaults: false });
+let core = new ThemeEditorState(undefined, { apiUrl: proxyUrl });
 
 // ─── Configurator-specific state ────────────────────────────────────
 let widgetController: AgentWidgetController | null = null;
@@ -120,9 +120,10 @@ export function initStore(previewMount?: HTMLElement): AgentWidgetController | n
   // Try to load saved config, otherwise use defaults
   const saved = loadFromStorage();
   if (saved) {
-    core = new ThemeEditorState(saved.theme, normalizeConfig(saved.config), { mergeDefaults: false });
+    core = new ThemeEditorState(undefined, { apiUrl: proxyUrl });
+    core.importSnapshot(saved);
   } else {
-    core = new ThemeEditorState(undefined, getDefaultConfig(), { mergeDefaults: false });
+    core = new ThemeEditorState(undefined, { apiUrl: proxyUrl });
   }
 
   // Restore editor UI state
@@ -314,6 +315,11 @@ export function exportSnapshot(): ConfiguratorSnapshot {
   };
 }
 
+/** Supplied inputs only; preview fixtures and materialized defaults stay in backups. */
+export function exportAuthoredConfig(): AuthoredConfigExport {
+  return core.exportAuthoredConfig();
+}
+
 export function getConfigForOutput(): AgentWidgetConfig {
   return {
     ...core.getConfig(),
@@ -436,7 +442,7 @@ export function setTheme(theme: PersonaTheme): void {
 
 /** Replace the entire config (for preset loading) */
 export function setFullConfig(config: AgentWidgetConfig, theme?: PersonaTheme): void {
-  core.setFullConfig(normalizeConfig(config), theme);
+  core.setFullConfig(config, theme);
   applyThemeToWidget();
   immediateWidgetUpdate();
 }
@@ -446,22 +452,25 @@ export function importSnapshot(snapshot: unknown): void {
     throw new Error('Snapshot must be a JSON object');
   }
 
-  const parsed = snapshot as Partial<ConfiguratorSnapshot> & { config?: any; theme?: any };
+  core.importSnapshot(snapshot);
+  applyThemeToWidget();
+  immediateWidgetUpdate();
+}
 
-  if ('config' in parsed || 'theme' in parsed || parsed.version === 2) {
-    const config = normalizeConfig(parsed.config ?? core.getConfig());
-    const theme = createTheme(parsed.theme ?? core.getTheme(), { validate: false });
-    setFullConfig(config, theme);
-    return;
+/** Explicit raw widget-config import; separate from backup/raw-theme imports. */
+export function importAuthoredConfig(config: unknown): void {
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new Error('Configuration must be a JSON object');
   }
-
-  const theme = createTheme(parsed as Partial<PersonaTheme>, { validate: false });
-  setTheme(theme);
+  const supplied = config as Record<string, unknown>;
+  core.importSnapshot({ config: supplied, theme: supplied.theme ?? {} });
+  applyThemeToWidget();
+  immediateWidgetUpdate();
 }
 
 /** Reset to defaults */
 export function resetToDefaults(): void {
-  core = new ThemeEditorState(undefined, getDefaultConfig(), { mergeDefaults: false });
+  core = new ThemeEditorState(undefined, { apiUrl: proxyUrl });
   savedSnapshot = exportSnapshot();
   applyThemeToWidget();
   immediateWidgetUpdate();
@@ -544,9 +553,6 @@ function serializeConfig(config: AgentWidgetConfig): any {
   };
 }
 
-/** Former default launcher icon gray; drop so `theme.components.header.actionIconForeground` can apply. */
-const LEGACY_LAUNCHER_HEADER_ICON_HEX = /^#6b7280$/i;
-
 function normalizeConfig(configLike: any, defaults: AgentWidgetConfig = getDefaultConfig()): AgentWidgetConfig {
   const config = configLike ?? {};
   const rawStatus = config.statusIndicator ?? {};
@@ -558,13 +564,6 @@ function normalizeConfig(configLike: any, defaults: AgentWidgetConfig = getDefau
     ...defaults.launcher?.clearChat,
     ...rawLauncher.clearChat,
   };
-  if (
-    typeof mergedClearChat.iconColor === 'string' &&
-    LEGACY_LAUNCHER_HEADER_ICON_HEX.test(mergedClearChat.iconColor.trim())
-  ) {
-    delete (mergedClearChat as { iconColor?: string }).iconColor;
-  }
-
   const mergedLauncher: Record<string, unknown> = {
     ...defaults.launcher,
     ...rawLauncher,
@@ -574,13 +573,6 @@ function normalizeConfig(configLike: any, defaults: AgentWidgetConfig = getDefau
     },
     clearChat: mergedClearChat,
   };
-
-  if (
-    typeof mergedLauncher.closeButtonColor === 'string' &&
-    LEGACY_LAUNCHER_HEADER_ICON_HEX.test(mergedLauncher.closeButtonColor.trim())
-  ) {
-    delete mergedLauncher.closeButtonColor;
-  }
 
   return {
     ...defaults,

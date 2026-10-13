@@ -346,7 +346,7 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
   });
 });
 
-describe('legacy launcher header icon hex from storage', () => {
+describe('unknown-origin legacy launcher styles from storage', () => {
   const originalMatchMedia = window.matchMedia;
 
   beforeEach(() => {
@@ -390,8 +390,53 @@ describe('legacy launcher header icon hex from storage', () => {
     }
   });
 
-  test('strips former default #6b7280 so header actionIconForeground token applies', () => {
-    expect(state.getConfig().launcher?.closeButtonColor).toBeUndefined();
-    expect(state.getConfig().launcher?.clearChat?.iconColor).toBeUndefined();
+  test('preserves supplied legacy gray rather than inferring default origin', () => {
+    expect(state.getConfig().launcher?.closeButtonColor).toBe('#6b7280');
+    expect(state.getConfig().launcher?.clearChat?.iconColor).toBe('#6b7280');
+  });
+});
+
+
+describe('authored showcase exports', () => {
+  beforeEach(() => { localStorage.clear(); state.initStore(); });
+
+  test('fresh export contains endpoint and edits, not preview fixtures or default legacy styles', () => {
+    state.setImmediate('brand.accent', '#7c3aed');
+    state.setImmediate('theme.components.composer.send.foreground', '#fff');
+    const exported = state.exportAuthoredConfig();
+    expect(Object.keys(exported.config).sort()).toEqual(['apiUrl', 'brand', 'theme']);
+    expect(exported.origin).toBe('authored');
+    expect(exported.config).not.toHaveProperty('initialMessages');
+    expect(state.exportSnapshot().version).toBe(2);
+    expect(state.exportSnapshot().config.launcher).toBeDefined();
+  });
+
+  test('explicit raw widget JSON import round-trips all authored fields and keeps imported origin', () => {
+    const config = {
+      apiUrl: '/chat', brand: { accent: '#7c3aed' }, welcome: { variant: 'none' },
+      future: { v5Defaults: true }, suggestions: { starters: { items: [] } }, debug: false,
+      theme: { components: { composer: { send: { foreground: '#fff' } } } },
+      darkTheme: { components: { composer: { send: { foreground: '#ddd' } } } },
+    };
+    state.importAuthoredConfig(JSON.parse(JSON.stringify(config)));
+    expect(state.exportAuthoredConfig()).toEqual({ origin: 'imported', config });
+    state.undo();
+    expect(state.exportAuthoredConfig().origin).toBe('authored');
+    state.redo();
+    expect(state.exportAuthoredConfig().config).toEqual(config);
+  });
+
+  test('empty and theme-only widget configs use explicit config import; raw themes and backup v2 retain existing import kind', () => {
+    state.importAuthoredConfig({});
+    expect(state.exportAuthoredConfig().config).toEqual({});
+    state.importAuthoredConfig({ theme: { components: { panel: { borderRadius: '20px' } } } });
+    expect(state.exportAuthoredConfig().config).toEqual({ theme: { components: { panel: { borderRadius: '20px' } } } });
+    state.importSnapshot({ components: { panel: { borderRadius: '24px' } } });
+    expect(state.exportAuthoredConfig().config.theme?.components?.panel?.borderRadius).toBe('24px');
+    const backup = JSON.parse(JSON.stringify(state.exportSnapshot()));
+    state.importSnapshot(backup);
+    expect(state.exportSnapshot().version).toBe(2);
+    expect(state.exportAuthoredConfig().config.theme).toEqual(backup.theme);
+    expect(state.exportAuthoredConfig().origin).toBe('imported');
   });
 });

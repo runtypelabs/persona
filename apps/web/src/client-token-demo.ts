@@ -136,7 +136,8 @@ function initializeWidget() {
     },
     suggestions: {
       starters: {
-        items: ['Hello!', 'What can you help with?', 'Tell me a joke']
+        items: ['Hello!', 'What can you help with?', 'Tell me a joke'],
+        variant: 'chip', placement: 'composer', overflow: 'wrap', maxItems: 4
       }
     },
     postprocessMessage: ({ text }: { text: string }) => markdownPostprocessor(text),

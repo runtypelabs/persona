@@ -456,3 +456,19 @@ describe("scoped style replacement editor paths", () => {
     expect(paths).not.toContain("features.artifacts.layout.paneBackground");
   });
 });
+
+describe('modern authoring discovery', () => {
+  it('offers real idle/stop paths and distinguishes border value kinds', () => {
+    const colorFields = COMPONENT_COLOR_SECTIONS.flatMap(section => section.fields);
+    expect(colorFields.some(field => field.path === 'theme.components.composer.send.foreground')).toBe(true);
+    const stopFields = colorFields.filter(field => field.path.startsWith('theme.components.button.stop.'));
+    expect(stopFields.map(field => field.path).sort()).toEqual([
+      'theme.components.button.stop.background', 'theme.components.button.stop.foreground',
+    ]);
+    expect(colorFields.find(field => field.path === 'theme.components.header.border')?.description).toContain('Border color');
+    expect(COMPONENT_SHAPE_SECTIONS.find(section => section.id === 'comp-artifact-chrome')?.description).toContain('full CSS border shorthands');
+    const configure = CONFIGURE_SECTIONS.flatMap(section => section.fields);
+    expect(configure.find(field => field.path === 'welcome.variant')?.options?.some(option => option.value === 'none')).toBe(true);
+    expect(configure.some(field => field.path === 'suggestions.starters.placement')).toBe(true);
+  });
+});

@@ -40,6 +40,7 @@ export function setSearchContext(tabId: string, sectionId: string): void {
 export function registerSearchEntry(field: FieldDef, control: ControlResult): void {
   searchIndex.push({
     fieldId: field.id,
+    path: field.path,
     label: field.label,
     description: field.description ?? '',
     keywords: buildKeywords(field),
@@ -65,6 +66,7 @@ export function registerCatalogSections(
     for (const field of section.fields) {
       searchIndex.push({
         fieldId: field.id,
+        path: field.path,
         label: field.label,
         description: field.description ?? '',
         keywords: buildKeywords(field),
@@ -87,7 +89,7 @@ function buildKeywords(field: FieldDef): string[] {
   }
 
   // Add path segments
-  words.push(...field.path.split('.').map(s => s.toLowerCase()));
+  words.push(field.path.toLowerCase(), ...field.path.split('.').map(s => s.toLowerCase()));
 
   // Add type
   words.push(field.type);
@@ -230,7 +232,7 @@ function displayResults(results: SearchResult[]): void {
 
     const pathSpan = document.createElement('span');
     pathSpan.className = 'search-result-path';
-    pathSpan.textContent = `${getTabDisplayLabel(entry.tabId)} → ${getSectionDisplayLabel(entry.sectionId)}`;
+    pathSpan.textContent = `${entry.path ?? entry.fieldId} · ${getTabDisplayLabel(entry.tabId)} → ${getSectionDisplayLabel(entry.sectionId)}`;
 
     item.appendChild(labelSpan);
     item.appendChild(pathSpan);

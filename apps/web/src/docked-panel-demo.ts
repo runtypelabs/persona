@@ -282,23 +282,33 @@ function createController(): AgentWidgetInitHandle {
       // refined on the CSS seams in docked-panel-demo.html; the panel + header
       // stay flush (radius 0) so the dock sits cleanly against the admin edge.
       theme: buildOttoTheme(),
+      welcome: {
+        title: "How can I help?",
+        subtitle: "I can read your store, draft copy, and take action right here — restock a product, log activity, or reorganize this workspace.",
+        variant: "card",
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: "How can I help?",
-        welcomeSubtitle:
-          "I can read your store, draft copy, and take action right here — restock a product, log activity, or reorganize this workspace.",
         inputPlaceholder: "Ask anything about your store…",
       },
       // Ordered to walk the tool surface: an inline chart (auto-approved),
       // a ranked bar chart, then two mutations that raise Otto's approval
       // bubble — one restocks a product on the page, one restyles + re-docks
       // Otto itself (two grouped tool calls from one ask).
-      suggestionChips: [
-        "How are sales trending this month?",
-        "Show my top products by revenue",
-        "Restock the Ceramic Pour-Over",
-        "Go ocean blue and dock on the left",
-      ],
+      suggestions: {
+        starters: {
+          items: [
+            "How are sales trending this month?",
+            "Show my top products by revenue",
+            "Restock the Ceramic Pour-Over",
+            "Go ocean blue and dock on the left",
+          ],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       webmcp: {
         enabled: true,
         autoApprove: (info: WebMcpConfirmInfo): boolean => READ_ONLY_TOOLS.has(info.toolName),

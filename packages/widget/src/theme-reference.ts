@@ -15,7 +15,7 @@ import type { DeepPartial, PersonaTheme } from './types/theme'
 
 export const THEME_TOKEN_DOCS = {
   overview:
-    'Persona uses a three-layer design token system: palette → semantic → components. Most themes only need palette.colors overrides: semantic and component layers auto-derive from palette values. Config also accepts non-theme appearance options (launcher, sendButton, toolCall, etc.).',
+    'Start fresh with brand for a coordinated look, theme.semantic for shared design intent, and theme.components for exact exceptions. Tokens layer palette → semantic → components; darkTheme overrides inherited light theme inputs. Current V4 defaults apply unless future.v5Defaults is true. Content belongs in welcome/copy and suggestions; behavior and composition remain in features/providers/layout/launcher. Explicit legacy styles still win until reset; modern welcome content wins over old copy aliases. See docs/configuration.md for fresh recipes, mounted update policy and authored versus resolved exports.',
 
   layers: {
     palette: {
@@ -101,7 +101,7 @@ export const THEME_TOKEN_DOCS = {
       description:
         'UI element tokens. Rarely needed for basic theming. Override for fine-grained control. All values are token references or raw CSS strings.',
       button: {
-        description: 'Three variants: primary, secondary, ghost.',
+        description: 'Variants primary, secondary, ghost; button.stop.background/foreground styles streaming stop while composer.send styles idle send.',
         properties: 'background, foreground, borderRadius, padding.',
       },
       input: {
