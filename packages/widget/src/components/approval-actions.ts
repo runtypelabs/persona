@@ -18,7 +18,8 @@
  * tool call takes over the transcript); denied/timeout → a subtle one-line
  * trace.
  */
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
+import { BROWSER_TOOL_INTERRUPTION } from "../utils/restored-browser-state";
 // The webmcp-title lookup is injected by ui.ts at chunk adoption (see
 // approval-deps): this module ships in the lazy approval-ui chunk. Icons are
 // direct lucide data imports.
@@ -168,7 +169,10 @@ const buildResolvedTrace = (approval: Approval): HTMLElement => {
   if (icon) row.appendChild(icon);
   const name = createElement("span", "persona-approval-resolved-name");
   name.textContent = approval.toolName ? humanizeToolName(approval.toolName) : "Tool";
-  row.append(name, document.createTextNode(approval.status === "timeout" ? " timed out" : " denied"));
+  const explanation = approval.status === "timeout" && approval.interrupted
+    ? ` approval expired. ${BROWSER_TOOL_INTERRUPTION}`
+    : approval.status === "timeout" ? " timed out" : " denied";
+  row.appendChild(createNode("span", { className: "persona-approval-resolved-text" }, name, explanation));
   return row;
 };
 

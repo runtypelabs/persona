@@ -280,3 +280,79 @@ test("installer: explicit cssUrl/jsUrl override with a query string still derive
   await chatRoundTrip(page, h);
   expectClean(h);
 });
+
+for (const variant of ["card", "row"] as const) {
+  test(`restored WebMCP ${variant}: expires approval and stops browser activity`, async ({ page }, testInfo) => {
+    const h = await serveDist(page, {
+      "/restored-tools.html": page_(`
+        <link rel="stylesheet" href="/dist/widget.css">
+        <script src="/dist/index.global.js"></script>
+        <script>
+          document.modelContext = {
+            getTools: async () => [{ name: "purchase", title: "Purchase items", description: "Purchase items", inputSchema: { type: "object" } }],
+            executeTool: async () => {
+              localStorage.setItem("mutations", String(Number(localStorage.getItem("mutations") || 0) + 1));
+              return JSON.stringify({ purchased: true });
+            }
+          };
+          window.__handle = window.AgentWidget.initAgentWidget({ target: "body", config: {
+            apiUrl: "/api/chat", launcher: { autoExpand: true }, webmcp: { enabled: true },
+            features: { toolCallDisplay: { variant: "${variant}", grouped: false, expandable: true } },
+            toolCall: { activeTextTemplate: "Using {toolName} ~{duration}~", completeTextTemplate: "Finished {toolName} ~{duration}~" },
+            storageAdapter: {
+              load: () => JSON.parse(localStorage.getItem("restoration-snapshot") || "null"),
+              save: state => localStorage.setItem("restoration-snapshot", JSON.stringify(state)),
+              clear: () => localStorage.removeItem("restoration-snapshot")
+            }
+          }});
+        </script>`),
+    });
+    const requests: string[] = [];
+    await page.route("**/api/chat**", async route => {
+      requests.push(route.request().url());
+      const resume = route.request().url().endsWith("/resume");
+      await route.fulfill({ contentType: "text/event-stream", body: resume
+        ? textTurnStream("Purchase confirmed", "exec_restored")
+        : `event: await\ndata: ${JSON.stringify({ type: "await", executionId: "exec_restored", awaitReason: "local_tool_required", toolCallId: "purchase-call", toolName: "webmcp:purchase", parameters: { quantity: 2 } })}\n\n` });
+    });
+    await page.goto(`${ORIGIN}/restored-tools.html`);
+    const composer = page.locator(sel.composer).first();
+    await composer.fill("Buy two items"); await composer.press("Enter");
+    await expect(page.getByRole("button", { name: "Allow", exact: true })).toBeVisible();
+    await expect(page.locator("[data-tool-elapsed]").first()).toBeVisible();
+    await composer.fill("My unsent proposal");
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("restoration-snapshot") || "{}").draft?.text)).toBe("My unsent proposal");
+    await page.screenshot({ path: testInfo.outputPath(`pending-${variant}.png`) });
+    await testInfo.attach(`Pending ${variant} approval`, { path: testInfo.outputPath(`pending-${variant}.png`), contentType: "image/png" });
+
+    await page.reload();
+    await expect(page.getByText(/approval expired/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Allow", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Deny", exact: true })).toHaveCount(0);
+    await expect(page.locator("[data-tool-elapsed]")).toHaveCount(0);
+    await expect(composer).toHaveValue("My unsent proposal");
+    const restoredTool = page.locator('[data-message-id="tool-purchase-call"]');
+    await expect(restoredTool).toContainText("Interrupted");
+    await expect(restoredTool).not.toContainText("Finished");
+    const textBefore = await restoredTool.innerText();
+    // Real wall time establishes that the UI timer stays stopped after reload.
+    await page.waitForTimeout(1200);
+    expect(await restoredTool.innerText()).toBe(textBefore);
+    const animations = await restoredTool.evaluate(el => el.getAnimations({ subtree: true }).filter(animation => animation.playState === "running").length);
+    expect(animations).toBe(0);
+    expect(requests).toHaveLength(1);
+    expect(await page.evaluate(() => Number(localStorage.getItem("mutations") || 0))).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath(`restored-${variant}.png`) });
+    await testInfo.attach(`Restored ${variant}: no controls or animation`, { path: testInfo.outputPath(`restored-${variant}.png`), contentType: "image/png" });
+
+    // A fresh proposal gets a new card; allowing it still executes exactly once.
+    await composer.fill("Try again"); await composer.press("Enter");
+    await expect(page.getByRole("button", { name: "Allow", exact: true })).toBeVisible();
+    await expect(page.getByText(/approval expired/)).toBeVisible();
+    await page.getByRole("button", { name: "Allow", exact: true }).click();
+    await expect(page.getByText("Purchase confirmed", { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => Number(localStorage.getItem("mutations") || 0))).toBe(1);
+    expect(requests.filter(url => url.endsWith("/resume"))).toHaveLength(1);
+    expectClean(h);
+  });
+}

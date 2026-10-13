@@ -486,6 +486,20 @@ resolution order and `approval.formatDescription` for parameter-aware copy.
 (The legacy `annotations.title` is *not* read: the polyfill's consumer surface
 doesn't expose annotations; use top-level `title`.)
 
+Restored history (`initialMessages`, storage, or conversation switching) cannot
+restore browser approval callbacks. Pending browser approvals become
+`status: "timeout"` with `interrupted: true` and show an expiry notice with no
+Allow/Deny controls. The existing approval and tool approval-status unions are
+unchanged, so existing exhaustive status handlers do not need a new case.
+Unfinished `webmcp:` calls become terminal (`status: "complete"`,
+`interrupted: true`, `success: false`) with an explanation and no active timer.
+Here `complete` means the lifecycle ended, not that the action succeeded.
+Arguments, completed results, recorded durations, and composer drafts remain
+intact. Restoration alone never executes a browser tool. Server-backed approval
+continuations remain available; a reconnect transport can replay a browser await
+through a fresh approval gate under the configured policy. Custom renderers
+should show interrupted calls as interrupted rather than successfully used.
+
 **Using WebMCP against a non-Runtype backend (e.g. the Vercel AI SDK)?** The
 widget's WebMCP loop expects Runtype's proxy wire protocol (an `await` pause
 → `/resume` round-trip). See

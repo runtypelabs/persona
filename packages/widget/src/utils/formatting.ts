@@ -124,6 +124,10 @@ export const formatElapsedMs = (ms: number): string => {
  * Computes the current elapsed time string for a tool call.
  */
 export const computeToolElapsed = (tool: AgentWidgetToolCall): string => {
+  if (
+    tool.interrupted && tool.duration === undefined && tool.durationMs === undefined &&
+    (tool.startedAt === undefined || tool.completedAt === undefined)
+  ) return "";
   const durationMs =
     typeof tool.duration === "number"
       ? tool.duration

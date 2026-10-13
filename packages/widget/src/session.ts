@@ -4,6 +4,7 @@ import {
   type SSEEventCallback,
 } from "./client";
 import { isWebMcpToolName } from "./webmcp-bridge";
+import { isBrowserLocalApproval, restoreBrowserToolState } from "./utils/restored-browser-state";
 import type { SessionActionsHost, SessionActionsInternals } from "./session-actions";
 import {
   getSessionActionsSync,
@@ -437,7 +438,7 @@ export class AgentWidgetSession {
   ) {
     this.historyInternals = this.#composeHistoryInternals(historyInternals);
     this.messages = [...(config.initialMessages ?? [])].map((message) => ({
-      ...message,
+      ...restoreBrowserToolState(message),
       sequence: message.sequence ?? this.#nextSequence()
     }));
     this.messages = this.#sortMessages(this.messages);
@@ -1343,7 +1344,8 @@ export class AgentWidgetSession {
     if (this.#activeConversationId && this.#activeConversationId !== id) {
       return { messages: [], nextMessageCursor: page.nextCursor };
     }
-    const merged = mergeWireMessagesById(this.messages, page.messages);
+    const restored = this.#restoreHistoryPage(page.messages);
+    const merged = mergeWireMessagesById(this.messages, restored);
     this.messages = this.#sortMessages(
       merged.map((message) => this.#ensureSequence(message))
     );
@@ -1354,7 +1356,30 @@ export class AgentWidgetSession {
     this.historyInternals.setStoredMessageCursor?.(page.nextCursor);
     this.callbacks.onMessagesChanged([...this.messages]);
     this.#emitHistoryState();
-    return { messages: page.messages, nextMessageCursor: page.nextCursor };
+    return { messages: restored, nextMessageCursor: page.nextCursor };
+  }
+
+  /** Normalize incoming history without retiring callbacks owned by this chat. */
+  #restoreHistoryPage(messages: AgentWidgetMessage[]): AgentWidgetMessage[] {
+    const current = new Map(this.messages.map(message => [message.id, message]));
+    return messages.map(message => {
+      const live = current.get(message.id);
+      if (live) {
+        if (this.webMcpApprovalResolvers.has(live.id)) return live;
+        // A decision made while the history fetch was in flight must not be
+        // replaced by the page's stale pending copy of the same browser card.
+        if (live.approval && isBrowserLocalApproval(live.approval) &&
+          live.approval.id === message.approval?.id &&
+          live.approval.status !== "pending" && message.approval?.status === "pending") return live;
+        const executionId = live.agentMetadata?.executionId;
+        const tools = [...(live.toolCall ? [live.toolCall] : []), ...(live.tools ?? [])];
+        if (executionId && tools.some(tool =>
+          this.webMcpInflightKeys.has(`${executionId}:${tool.id}`) ||
+          this.webMcpResolvedKeys.has(`${executionId}:${tool.id}`)
+        )) return live;
+      }
+      return restoreBrowserToolState(message);
+    });
   }
 
   /**
@@ -1800,6 +1825,7 @@ export class AgentWidgetSession {
     }
 
     const page = await provider.getPage(conversationId, { context });
+    const restored = this.#restoreHistoryPage(page.messages);
     const serverIds = new Set(page.messages.map((message) => message.id));
     const overlaps = this.messages.some((message) => serverIds.has(message.id));
     const pageOldest = page.messages[0]?.createdAt;
@@ -1807,7 +1833,7 @@ export class AgentWidgetSession {
     let reconciled: AgentWidgetMessage[];
     if (!overlaps) {
       // No shared id: the local transcript is not this record's newest window.
-      reconciled = page.messages.map((message) => this.#ensureSequence(message));
+      reconciled = restored.map((message) => this.#ensureSequence(message));
     } else {
       const durableId = this.#resumable ? this.#activeAssistantMessageId : null;
       const survivors = this.messages.filter((message) => {
@@ -1816,7 +1842,7 @@ export class AgentWidgetSession {
         // Older than the server window is legitimately absent from this page.
         return pageOldest !== undefined && message.createdAt < pageOldest;
       });
-      reconciled = mergeWireMessagesById(survivors, page.messages).map(
+      reconciled = mergeWireMessagesById(survivors, restored).map(
         (message) => this.#ensureSequence(message)
       );
     }
@@ -3078,8 +3104,14 @@ export class AgentWidgetSession {
     }
     if (info.signal?.aborted) return Promise.resolve(false);
 
+    let approvalId: string;
+    do {
+      approvalId = `webmcp-${++this.#webMcpApprovalSeq}`;
+    } while (this.messages.some(message =>
+      message.id === `approval-${approvalId}` || message.approval?.id === approvalId
+    ));
     const approval: AgentWidgetApproval = {
-      id: `webmcp-${++this.#webMcpApprovalSeq}`,
+      id: approvalId,
       status: "pending",
       agentId: "",
       executionId: "",
@@ -3666,7 +3698,7 @@ export class AgentWidgetSession {
     this.webMcpResolvedKeys.clear();
     this.messages = this.#sortMessages(
       messages.map((message) => ({
-        ...message,
+        ...restoreBrowserToolState(message),
         streaming: false,
         sequence: message.sequence ?? this.#nextSequence()
       }))
@@ -3773,7 +3805,9 @@ export class AgentWidgetSession {
             resolveFollowUpsFeature(this.config).enabled));
       if (
         event.message.agentMetadata?.awaitingLocalTool === true &&
-        autoResolvable
+        autoResolvable &&
+        this.messages.find(message => message.id === event.message.id)
+          ?.agentMetadata?.awaitingLocalTool === true
       ) {
         // Collect the await into its executionId's batch instead of resolving
         // it on the spot. Parallel same-tool calls (core#3878) arrive as
@@ -4335,6 +4369,21 @@ export class AgentWidgetSession {
 
     this.messages = this.messages.map((existing, idx) => {
       if (idx !== index) return existing;
+      // An unnamed skeleton precedes tool_start/await on a fresh parser. Keep
+      // history until the populated event identifies the continuation. Also
+      // retain actual terminal browser outcomes across replayed starts/deltas:
+      // those events must never turn a completed mutation back into an await.
+      if (
+        existing.toolCall?.name && isWebMcpToolName(existing.toolCall.name) &&
+        existing.toolCall.status === "complete" &&
+        withSequence.toolCall?.id === existing.toolCall.id &&
+        withSequence.toolCall.status !== "complete" &&
+        ((withSequence.toolCall.status === "pending" && !withSequence.toolCall.name) ||
+          (!existing.toolCall.interrupted &&
+            (existing.toolCall.result !== undefined || existing.toolCall.success !== undefined) &&
+            (!withSequence.agentMetadata?.executionId ||
+              withSequence.agentMetadata.executionId === existing.agentMetadata?.executionId)))
+      ) return existing;
       const merged = { ...existing, ...withSequence };
       // Preserve `ask_user_question` answered state across re-emissions.
       // Top-level merge would otherwise replace `agentMetadata` wholesale:      // post-resume events (e.g. `tool_complete` re-emitted from a stale
@@ -4441,7 +4490,8 @@ export class AgentWidgetSession {
           existing.toolCall?.id === reTcId &&
           existingToolName !== undefined &&
           isAutoResolvedLocalToolName(existingToolName) &&
-          existing.toolCall?.status === "complete";
+          existing.toolCall?.status === "complete" &&
+          !existing.toolCall.interrupted;
         if (isInflight || isResolved || hasCompletedTool) {
           merged.agentMetadata = {
             ...(merged.agentMetadata ?? {}),

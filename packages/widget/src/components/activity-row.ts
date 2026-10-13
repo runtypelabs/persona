@@ -41,13 +41,14 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   const data = kind === "tool" ? message.toolCall : message.reasoning;
   const active = data?.status !== "complete";
   const approval = message.approval?.status ?? message.toolCall?.approvalStatus;
-  const state = approval === "denied" ? "denied" : approval === "pending" ? "awaiting-approval"
+  const state = message.toolCall?.interrupted ? "interrupted"
+    : approval === "denied" ? "denied" : approval === "pending" ? "awaiting-approval"
     : message.toolCall?.success === false ? "error" : !active ? "done"
     : data?.status === "pending" ? "pending" : "running";
   bubble.dataset.activityState = state;
   const icon = createElement("span", "persona-activity-icon");
   icon.dataset.activityIcon = state;
-  const names = { pending: "circle", running: "loader-circle", done: "check", error: "x", denied: "x", "awaiting-approval": "clock" };
+  const names = { pending: "circle", running: "loader-circle", done: "check", error: "x", denied: "x", interrupted: "x", "awaiting-approval": "clock" };
   const customIcon = kind === "reasoning" ? config.features?.reasoningDisplay?.iconName : undefined;
   const glyph = customIcon ? renderLucideIcon(customIcon, 16, "currentColor", 2)
     : state === "pending" ? renderIconNode(Circle, 16, "currentColor", 2)
