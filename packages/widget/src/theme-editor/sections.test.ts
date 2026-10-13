@@ -418,3 +418,41 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(speedField?.parseValue?.("240")).toBe(240);
   });
 });
+
+describe("scoped style replacement editor paths", () => {
+  it("exposes independent controls and all surface migrations with resettable CSS values", () => {
+    const fields = COMPONENTS_SECTIONS.flatMap(section => section.fields);
+    const paths = new Map(fields.map(field => [field.path, field]));
+    for (const group of ["header.close", "header.clear", "composer.send", "voice.control"]) {
+      for (const leaf of ["size", "iconSize", "iconStrokeWidth", "background", "foreground", "borderColor", "borderWidth", "borderRadius", "padding"]) {
+        const field = paths.get(`theme.components.${group}.${leaf}`);
+        expect(field, `${group}.${leaf}`).toBeDefined();
+        expect(field?.parseValue?.("  ")).toBeUndefined();
+        expect(field?.parseValue?.(" 0 ")).toBe("0");
+        expect(field?.unsettable).toBe(true);
+      }
+    }
+    const surfaceLeaves: Record<string, string[]> = {
+      voice: ["recording.indicator", "recording.background", "recording.border", "processing.icon", "processing.background", "processing.border", "speaking.icon", "speaking.background", "speaking.border"],
+      toolBubble: ["background", "borderColor", "borderWidth", "borderRadius", "header.background", "header.foreground", "header.padding", "content.background", "content.foreground", "content.padding", "codeBlock.background", "codeBlock.foreground", "codeBlock.borderColor", "toggleForeground", "labelForeground", "loading.primary", "loading.secondary", "loading.duration"],
+      approval: ["requested.titleColor", "requested.descriptionColor", "requested.reasonColor", "requested.parameters.background", "requested.parameters.foreground", "approve.foreground", "deny.foreground"],
+      askUserQuestion: ["sheet.background", "sheet.border", "sheet.shadow", "pill.background", "pill.foreground", "pill.borderRadius", "pill.selectedBackground", "pill.selectedForeground", "customInput.background"],
+      artifact: ["pane.padding", "pane.borderRadius", "pane.shadow", "pane.border", "pane.borderLeft", "chat.shadow", "split.outerRadius", "toolbar.iconColor", "toolbar.toggleActiveBackground", "toolbar.toggleActiveBorderColor", "toolbar.toggleActiveColor", "tab.fadeSize"],
+    };
+    for (const [group, leaves] of Object.entries(surfaceLeaves)) {
+      for (const leaf of leaves) expect(paths.has(`theme.components.${group}.${leaf}`), `${group}.${leaf}`).toBe(true);
+    }
+    const shapePaths = COMPONENT_SHAPE_SECTIONS.flatMap(section => section.fields.map(field => field.path));
+    expect(shapePaths).not.toContain("theme.components.voice.processing.icon");
+    expect(shapePaths).toContain("theme.components.composer.send.size");
+    expect(paths.get("theme.components.toolBubble.loading.duration")?.parseValue?.(" 1600ms ")).toBe("1600ms");
+  });
+
+  it("writes modern welcome/starters paths and keeps behavior outside the theme", () => {
+    const paths = CONFIGURE_SECTIONS.flatMap(section => section.fields.map(field => field.path));
+    expect(paths).toEqual(expect.arrayContaining(["welcome.title", "welcome.subtitle", "welcome.variant", "suggestions.starters.items", "sendButton.useIcon", "launcher.closeButtonPlacement", "launcher.clearChat.enabled"]));
+    expect(paths).not.toEqual(expect.arrayContaining(["copy.welcomeTitle", "suggestionChips"]));
+    expect(paths).not.toContain("sendButton.paddingX");
+    expect(paths).not.toContain("features.artifacts.layout.paneBackground");
+  });
+});

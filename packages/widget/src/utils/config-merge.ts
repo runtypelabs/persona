@@ -1,6 +1,7 @@
 import { DEFAULTS_V5, mergeWithDefaults } from "../defaults";
 import type { AgentWidgetConfig, AgentWidgetConfigPatch } from "../types";
 import { setPanelAliasProvenance, updatePanelAliasProvenance } from "./panel-config";
+import { setStyleProvenance, updateStyleProvenance } from "./style-provenance";
 
 import { omitInheritedDefaults, setDefaultProvenance, updateDefaultProvenance, versionedDefaultPaths } from "./defaults-provenance";
 
@@ -71,6 +72,7 @@ export function mergeConfigUpdate(
   const merged = setDefaultProvenance(omitInheritedDefaults(
     mergePatch(previousConfig, patch, "") as Partial<AgentWidgetConfig>, paths, explicit
   ), explicit);
+  setStyleProvenance(merged, updateStyleProvenance(previousConfig, patch));
   return setPanelAliasProvenance(
     mergeWithDefaults(merged) as AgentWidgetConfig,
     updatePanelAliasProvenance(previousConfig, patch)

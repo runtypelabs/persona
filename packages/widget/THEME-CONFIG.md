@@ -2,6 +2,8 @@
 
 This document provides definitions of all themable configuration options for Persona Widget.
 
+For property-by-property legacy mappings, precedence/reset behavior, and retained configuration capabilities, see the [scoped style migration guide](../../docs/style-migrations.md). Compare unconfigured, legacy, and theme samples in the [style migration demo](../../apps/web/style-migration.html). No removal is scheduled in 4.x.
+
 ## Theme Architecture
 
 The v2 theme system uses a **three-layer token architecture**:
@@ -584,9 +586,8 @@ at `1rem` / `1.5rem` / weight `600`, the subtitle at `0.75rem` / `1rem`.
 
 #### Header controls
 
-Every header icon button (close, clear chat, `layout.header.trailingActions`,
-and the Messages toggle) is sized by one set of tokens, so they can never
-drift apart:
+Header icon buttons (close, clear chat, `layout.header.trailingActions`,
+and the Messages toggle) share these fallback tokens:
 
 | Token | CSS variable | Default |
 |-------|--------------|---------|
@@ -613,6 +614,16 @@ Per-control config keys still win: `launcher.closeButtonSize` and
 Leave them unset to follow the token. On coarse pointers the box never
 shrinks below 40px, even with a smaller `controlSize`; an explicit per-control
 size opts out of that floor.
+
+`components.header.close` and `.clear` independently accept optional `size`,
+`iconSize`, `iconStrokeWidth`, `background`, `foreground`, `borderColor`,
+`borderWidth`, `borderRadius`, and `padding`. They leave Messages and trailing
+actions unchanged. Size and padding use CSS lengths/shorthands; stroke width is
+unitless. Border color alone does not add width. Unset values fall through the
+shared header controls. Explicit legacy styles win on their individual property;
+legacy padding axes override only that axis. Composer-bar mode retains its
+smaller deliberate control/glyph sizes. The editor exposes independent shape
+and light/dark color controls.
 
 ### Messages rail (`components.history.railHeader.*`)
 
@@ -806,6 +817,26 @@ through this group.
 | `processing.background` | `palette.colors.primary.50` |
 | `speaking.icon` | `palette.colors.success.500` |
 
+The table above describes public token defaults. `recording.indicator` and
+`recording.background` retain their existing consumers. Previously unused
+`recording.border`, `processing.icon/background`, and `speaking.icon` now affect
+rendering only when explicitly supplied by the host; inherited defaults do not
+recolor ordinary widgets. Optional `processing.border` and
+`speaking.background/border` extend those states. Border color does not imply
+width. Recording, processing, speaking, and barge-in preserve historical
+absent-value behavior on browser and hosted/custom providers; theme updates keep
+the active state and idle restoration uses current configuration.
+
+`voice.control` independently styles the idle mic with `size`, `iconSize`,
+`iconStrokeWidth`, `background`, `foreground`, `borderColor`, `borderWidth`,
+`borderRadius`, and `padding`. To migrate `voiceRecognition.iconSize`, set both
+`control.size` and `control.iconSize` to the old nominal size. Inherited padding
+can make a glyph shrink inside its box; changing padding intentionally changes
+that geometry. Explicit old send colors still supply an idle mic fallback;
+set matching mic theme colors when preserving that side effect. Built-in SVGs
+inherit `currentColor`; provider policy, icons, labels, and animation eligibility
+remain configuration.
+
 ### Approval (`components.approval.*`)
 
 The default approval renderer is a neutral surface card whose primary action
@@ -822,6 +853,15 @@ tracks your theme), not the old warning/success/error palette:
 | `approve.foreground` | `semantic.colors.textInverse` (→ `--persona-button-primary-fg`) |
 | `deny.background` | `semantic.colors.container` |
 | `deny.foreground` | `semantic.colors.text` |
+
+Optional `requested.titleColor`, `.descriptionColor`, `.reasonColor`, and
+`.parameters.background/foreground` style each text/code surface independently.
+Specific text colors fall through an explicit `requested.text` to the existing
+element fallback. Previously ineffective requested text and approve/deny
+foreground tokens now work for explicit host input; their materialized defaults
+do not recolor ordinary cards. Both the built-in plugin and public
+`createApprovalBubble` use the mapping while keeping their separate callbacks,
+behavior, and stock deny colors.
 
 **Per-widget overrides (`config.approval.*`)** take precedence over the tokens above:
 
@@ -935,6 +975,42 @@ built-in welcome type.
 | `subtitle.fontSize` | `"0.875rem"` |
 | `subtitle.lineHeight` | `"1.25rem"` |
 | `subtitle.color` | `--persona-muted` |
+
+### Question sheets (`components.askUserQuestion.*`)
+
+All nine appearance leaves are optional: `sheet.background/border/shadow`,
+`pill.background/foreground/borderRadius/selectedBackground/selectedForeground`,
+and `customInput.background`. They feed the existing `--persona-ask-*`
+consumers. Local `features.askUserQuestion.styles` overrides remain highest
+priority. Layout, grouped navigation, labels, enabled/expose flags, and slide
+timing remain feature config.
+
+### Tool chrome (`components.toolBubble.*`)
+
+Card and activity-row variants consume `background`, `borderColor`,
+`borderWidth`, `borderRadius`, `header.background/foreground/padding`,
+`content.background/foreground/padding`,
+`codeBlock.background/foreground/borderColor`, `toggleForeground`,
+`labelForeground`, and `loading.primary/secondary/duration`, alongside existing
+`shadow` and activity tokens. Optional leaves retain each variant's current
+appearance. `content.padding` falls through existing activity/tool body padding;
+legacy one-axis padding overrides only its own axis. Loading duration is CSS
+with units (`'1600ms'`), while the legacy numeric duration is milliseconds.
+Expansion, grouping, animation choice, text templates, and render hooks stay
+configuration. Global Markdown/collapsible colors do not substitute for these
+scoped tool values.
+
+### Artifact chrome (`components.artifact.*`)
+
+Alongside existing pane background/toolbar background and toolbar/tab tokens,
+optional leaves cover `pane.padding/borderRadius/shadow/border/borderLeft`,
+`chat.shadow`, `split.outerRadius`, `toolbar.iconColor`,
+`toolbar.toggleActiveBackground/toggleActiveBorderColor/toggleActiveColor`, and
+`tab.fadeSize`. Full border and left border are CSS shorthands; full border wins.
+Theme values participate in detached/welded/drawer chrome and reset cleanly
+without deleting a valid theme-owned variable. Geometry, resizing, appearance,
+`chatSurface`, toolbar presets, and fade enablement stay layout config.
+`unifiedSplitChrome` remains a no-op.
 
 ### Suggestion (`components.suggestion.*`)
 
@@ -1086,14 +1162,26 @@ Every one of them carries `.persona-composer-control`, and the glyph-token
 consumers also carry `.persona-composer-control--glyph`, so a host stylesheet
 can target the whole set at once.
 
+`composer.send` accepts optional `size`, `iconSize`, `iconStrokeWidth`,
+`background`, `foreground`, `borderColor`, `borderWidth`, `borderRadius`, and
+`padding`. It styles submit independently. Shared `composer.sendIconSize` and
+`sendButtonRadius` remain fallbacks. Size applies to icon mode; theme padding and
+background may intentionally style either mode. Legacy send padding remains
+ignored in icon mode, and legacy send background remains ignored in text mode.
+Stop still uses `button.stop.*` beneath explicit legacy send colors. A theme-only
+send color no longer implies a mic color: set `voice.control` too when migrating
+that historical legacy fallback.
+
 Precedence, narrowest first:
 
 1. **Per-control config** wins. `sendButton.size` sizes the send button;
    `voiceRecognition.iconSize` sizes the mic (box and glyph). Either one writes
    an inline style, which outranks the token. Both are unset by default.
-2. **The token** (`controlSize`, i.e. `--persona-composer-control-size`) sizes
+2. **Independent theme controls** (`composer.send` and `voice.control`) style only
+   their own box/glyph, with shared controls as fallback.
+3. **The token** (`controlSize`, i.e. `--persona-composer-control-size`) sizes
    every control that has no per-control override.
-3. **The stylesheet fallback**, `40px` box and `24px` glyph, applies when no
+4. **The stylesheet fallback**, `40px` box and `24px` glyph, applies when no
    theme variables are on the element at all.
 
 Two related config keys are not sizes and keep working on top of whichever box
@@ -2723,7 +2811,11 @@ theme: {
 
 The deprecated `suggestionChips: string[]` and `suggestionChipsConfig` fields
 remain backwards compatible. They continue to render starter chips above the
-composer until a `suggestions.starters` configuration is supplied.
+composer until a `suggestions.starters` configuration is supplied. Chip
+`fontWeight` and `padding` theme values now override inherited legacy defaults;
+explicit old weight/axes still win. Resetting an axis exposes the theme for that
+axis. `suggestionChipsConfig.fontFamily` remains an accepted no-op, with no
+claimed parity mapping.
 
 ### Complete customization with plugins
 

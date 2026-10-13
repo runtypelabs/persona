@@ -11,11 +11,16 @@ export function versionedDefaultPaths(overlay: object, prefix = ""): string[] {
   });
 }
 
-function suppliedPath(value: unknown, path: string): "absent" | "clear" | "explicit" {
-  for (const key of path.split(".")) {
+export function suppliedPath(value: unknown, path: string): "absent" | "clear" | "explicit" {
+  const keys = path.split(".");
+  for (let index = 0; index < keys.length; index++) {
+    const key = keys[index];
     if (!record(value) || !Object.prototype.hasOwnProperty.call(value, key)) return "absent";
     value = value[key];
     if (value === undefined) return "clear";
+    // Replacing a parent object with a disabled/non-object value drops every
+    // tracked descendant, just as clearing that parent with undefined does.
+    if (index < keys.length - 1 && !record(value)) return "clear";
   }
   return "explicit";
 }

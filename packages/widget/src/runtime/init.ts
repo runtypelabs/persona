@@ -4,6 +4,7 @@ import { isComposerBarMountMode, isDockedMountMode } from "../utils/dock";
 import { mergeConfigUpdate } from "../utils/config-merge";
 import { createWidgetHostLayout } from "./host-layout";
 import { moveWidgetHost } from "./move-host";
+import { createLegacyDiagnosticContext, updateLegacyDiagnostics } from "../utils/legacy-diagnostics";
 
 const ensureTarget = (target: string | HTMLElement): HTMLElement => {
   if (typeof window === "undefined" || typeof document === "undefined") {
@@ -72,6 +73,7 @@ export const initAgentWidget = (
   const ownerDocument = target.ownerDocument;
   const instanceId = target.id || `persona-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
   let config = options.config;
+  const diagnostics = createLegacyDiagnosticContext(config);
   let hostLayout = createWidgetHostLayout(target, config);
   let controller: AgentWidgetController;
   let stateUnsubs: Array<() => void> = [];
@@ -134,6 +136,7 @@ export const initAgentWidget = (
     controller = createAgentExperience(mount, config, {
       debugTools: options.debugTools,
       registerHostMove: (move) => { relocate = move; },
+      diagnostics,
     });
     hostListeners.forEach((listener) => listener.bind());
     bindHostState();
@@ -197,6 +200,7 @@ export const initAgentWidget = (
       }
     },
     update(nextConfig: AgentWidgetConfigPatch) {
+      updateLegacyDiagnostics(diagnostics, nextConfig);
       const mergedConfig = mergeConfigUpdate(config ?? ({} as _AgentWidgetConfig), nextConfig);
       const previousDocked = isDockedMountMode(config);
       const nextDocked = isDockedMountMode(mergedConfig);

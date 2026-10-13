@@ -653,7 +653,15 @@ export function applySceneConfig(
   const config = {
     ...base,
     launcher,
-    suggestionChips: scene === 'home' ? (base.suggestionChips?.length ? base.suggestionChips : HOME_SUGGESTION_CHIPS) : base.suggestionChips,
+    suggestions: scene === 'home' ? {
+      ...base.suggestions,
+      starters: {
+        ...(!base.suggestions?.starters ? { variant: 'chip', placement: 'composer' } : {}),
+        ...base.suggestions?.starters,
+        items: base.suggestions?.starters?.items?.length ? base.suggestions.starters.items
+          : base.suggestionChips?.length ? base.suggestionChips : HOME_SUGGESTION_CHIPS,
+      },
+    } : base.suggestions,
     initialMessages: createPreviewMessages(scene, base, appendedMessages),
     storageAdapter: PREVIEW_STORAGE_ADAPTER,
   } as AgentWidgetConfig;

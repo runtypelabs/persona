@@ -1130,6 +1130,13 @@
   height: var(--persona-composer-control-icon-size, 24px);
 }
 
+/* Theme shorthand remains independent of inline legacy padding axes. */
+
+.persona-control-size {
+  min-width: var(--persona-control-size);
+  min-height: var(--persona-control-size);
+}
+
 /* A smaller controlSize must never shrink a touch target below 40px. An
    explicit per-control size is inline, so it opts out of this floor. */
 @media (pointer: coarse) {
@@ -7491,6 +7498,12 @@
 .persona-activity-row[data-persona-tool-group] > .persona-activity-body {
   margin-left:var(--persona-components-activity-groupIndent, var(--persona-activity-indent));
   padding:var(--persona-components-activity-groupPadding, var(--persona-components-activity-bodyPadding, 8px 0));
+}
+/* Scoped tool padding wins over activity-row geometry; explicit legacy axes stay inline. */
+.persona-tool-bubble > .persona-theme-padding,
+.persona-tool-bubble > .persona-activity-header.persona-theme-padding,
+.persona-tool-bubble.persona-activity-row > .persona-activity-body.persona-theme-padding {
+  padding: var(--persona-theme-padding);
 }
 .persona-activity-row > .persona-activity-body.persona-space-y-3 > :not([hidden]) ~ :not([hidden]) {
   margin-top:var(--persona-components-activity-sectionGap, 12px);

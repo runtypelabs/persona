@@ -604,7 +604,7 @@ describe("message action button styles", () => {
 
 describe("conversation-open skeleton styles", () => {
   it("follows each role's real bubble radius chain", () => {
-    const leading = ".persona-conversation-loading-bubble {";
+    const leading = ".persona-message-assistant-bubble {";
     const start = widgetCss.indexOf(leading);
     const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
     expect(start).toBeGreaterThan(-1);
@@ -612,7 +612,7 @@ describe("conversation-open skeleton styles", () => {
       "border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))",
     );
 
-    const trailing = ".persona-conversation-loading-bubble--trailing {";
+    const trailing = ".persona-message-user-bubble {";
     const trailingStart = widgetCss.indexOf(trailing);
     const trailingRule = widgetCss.slice(
       trailingStart,

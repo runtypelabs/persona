@@ -1,4 +1,9 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+import type { AgentWidgetConfig } from "../types";
+import { DEFAULT_WIDGET_CONFIG } from "../defaults";
+import { createTheme, themeToCssVariables } from "./tokens";
 import { generateCodeSnippet, type CodeFormat, type CodeGeneratorHooks, type CodeGeneratorOptions as _CodeGeneratorOptions } from "./code-generators";
 import { VERSION } from "../version";
 
@@ -727,5 +732,156 @@ describe("windowKey option", () => {
     const code = generateCodeSnippet(minimalConfig, "script-advanced");
 
     expect(code).not.toContain("windowKey");
+  });
+});
+
+
+// Evaluate the actual emitted object instead of only looking for text matches.
+function evaluateConfigObject(source: string, bindings: Record<string, unknown> = {}): AgentWidgetConfig {
+  const parsed = ts.createSourceFile("snippet.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let initializer: ts.Expression | undefined;
+  const visit = (node: ts.Node): void => {
+    if (initializer) return;
+    if (ts.isPropertyAssignment(node) && node.name.getText(parsed) === "config" && ts.isObjectLiteralExpression(node.initializer)) {
+      initializer = node.initializer;
+    } else if (ts.isVariableDeclaration(node) && ["CONFIG", "config"].includes(node.name.getText(parsed)) && node.initializer) {
+      initializer = node.initializer;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(parsed);
+  if (!initializer) throw new Error("Snippet has no configuration object");
+  const javascript = ts.transpileModule(`const result = ${initializer.getText(parsed)};`, {
+    compilerOptions: { target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const dependencies = {
+    loadSavedMessages: () => [],
+    defaultJsonActionParser: () => null,
+    defaultActionHandlers: [],
+    collectDOMContext: () => ({}),
+    ...bindings,
+  };
+  return new Function(...Object.keys(dependencies), `${javascript}\nreturn result;`)(...Object.values(dependencies));
+}
+
+function readGeneratedConfig(code: string, format: CodeFormat): AgentWidgetConfig {
+  if (format === "script-installer") {
+    const attribute = code.match(/data-config='([^']*)'/)?.[1];
+    if (!attribute) throw new Error("Missing installer configuration");
+    const decoded = attribute
+      .replace(/&#39;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&");
+    return JSON.parse(decoded);
+  }
+  const javascript = format.startsWith("script-") ? code.match(/<script>([\s\S]*?)<\/script>/)?.[1] : code;
+  if (!javascript) throw new Error("Missing inline initialization script");
+  return evaluateConfigObject(javascript);
+}
+
+const allFormats: CodeFormat[] = [
+  "esm", "react-component", "react-advanced", "script-installer", "script-manual", "script-advanced",
+];
+
+describe("Welcome and approval export parity", () => {
+  const escapedText = `Quotes " and ', backslash \\, newline\n, \u2028, \u2029, </script>, &amp; &#39;`;
+  const presentation = {
+    copy: { showWelcomeCard: false, welcomeTitle: "", inputPlaceholder: escapedText },
+    welcome: {
+      title: escapedText,
+      subtitle: "",
+      icon: { type: "image", url: "https://example.com/logo?a=1&b=2", alt: "", placement: "inline" },
+      message: "Hello",
+      anchor: "center",
+      composerGap: "0px",
+    },
+    approval: {
+      keyboardShortcuts: false,
+      enableAlwaysAllow: false,
+      reasonLabel: "",
+      approveLabel: escapedText,
+      detailsDisplay: "hidden",
+      shadow: "none",
+    },
+    suggestions: { starters: { items: [] } },
+    theme: { components: { approval: { requested: { background: "transparent" } } } },
+  };
+
+  it.each(allFormats)("round-trips welcome, approval, copy, and empty starters in %s", (format) => {
+    const snippet = generateCodeSnippet({ ...minimalConfig, ...presentation }, format);
+    const exported = readGeneratedConfig(snippet, format);
+    expect(exported.copy).toEqual(presentation.copy);
+    expect(exported.welcome).toEqual(presentation.welcome);
+    expect(exported.approval).toEqual(presentation.approval);
+    expect(exported.suggestions).toEqual(presentation.suggestions);
+    expect(exported.theme).toEqual(presentation.theme);
+    if (format !== "script-installer") {
+      expect(snippet).not.toContain("</script>,");
+    }
+  });
+
+  it.each(allFormats)("preserves scoped approval and question appearance tokens in %s", (format) => {
+    const theme = { components: {
+      approval: { requested: { titleColor: "red", descriptionColor: "green", reasonColor: "blue", parameters: { background: "transparent", foreground: "purple" } }, approve: { foreground: "yellow" }, deny: { foreground: "orange" } },
+      askUserQuestion: { sheet: { background: "pink", border: "red", shadow: "none" }, pill: { background: "white", foreground: "black", borderRadius: "0", selectedBackground: "blue", selectedForeground: "white" }, customInput: { background: "transparent" } },
+    } };
+    expect(readGeneratedConfig(generateCodeSnippet({ ...minimalConfig, theme }, format), format).theme).toEqual(theme);
+  });
+
+  it.each(allFormats)("preserves approval:false and primitive numeric values in %s", (format) => {
+    const exported = readGeneratedConfig(generateCodeSnippet({
+      ...minimalConfig,
+      approval: false,
+      copy: { showWelcomeCard: false },
+      theme: { components: { composer: { submit: { iconSize: 0 } } } },
+    }, format), format);
+    expect(exported.approval).toBe(false);
+    expect(exported.copy?.showWelcomeCard).toBe(false);
+    expect(exported.theme).toEqual({ components: { composer: { submit: { iconSize: 0 } } } });
+  });
+
+  it.each(allFormats)("identifies unsupported functions without changing serializable siblings in %s", (format) => {
+    const icon = () => document.createElement("div");
+    const formatDescription = () => "Custom summary";
+    const onDecision = async () => undefined;
+    const input = { ...minimalConfig, welcome: { title: "Hello", icon }, approval: { title: "Permission", formatDescription, onDecision } };
+    const snippet = generateCodeSnippet(input, format);
+    expect(snippet).toContain("Function-valued welcome.icon, approval.formatDescription, approval.onDecision omitted; reattach in host JavaScript.");
+    const exported = readGeneratedConfig(snippet, format);
+    expect(exported.welcome).toEqual({ title: "Hello" });
+    expect(exported.approval).toEqual({ title: "Permission" });
+    expect(input.welcome.icon).toBe(icon);
+    expect(input.approval.onDecision).toBe(onDecision);
+  });
+
+  it.each(allFormats)("preserves text and Lucide icon objects in %s", (format) => {
+    for (const icon of [{ type: "text", text: "👋" }, { type: "lucide", name: "sparkles", placement: "inline" }]) {
+      const exported = readGeneratedConfig(generateCodeSnippet({ ...minimalConfig, welcome: { icon } }, format), format);
+      expect(exported.welcome?.icon).toEqual(icon);
+    }
+  });
+});
+
+describe("Client-token demo presentation", () => {
+  it("uses semantic colors that reach CSS and preserves welcome/starter content", () => {
+    const source = readFileSync(new URL("../../../../apps/web/src/client-token-demo.ts", import.meta.url), "utf8");
+    const config = evaluateConfigObject(source, {
+      DEFAULT_WIDGET_CONFIG,
+      clientToken: "ct_test",
+      createLocalStorageAdapter: () => ({}),
+    });
+    const css = themeToCssVariables(createTheme(config.theme));
+    expect(css).toMatchObject({
+      "--persona-primary": "#090E34",
+      "--persona-accent": "#3056D3",
+      "--persona-surface": "#ffffff",
+      "--persona-text-muted": "#637381",
+      "--persona-container": "#f3f4f6",
+      "--persona-border": "#e7e7e7",
+    });
+    expect(config.welcome).toEqual({ title: "Welcome! 👋", subtitle: "Connected via client token. Ask me anything!" });
+    expect(config.suggestions?.starters?.items).toEqual(["Hello!", "What can you help with?", "Tell me a joke"]);
+    expect(source).not.toContain("config as any");
   });
 });

@@ -3,12 +3,13 @@ import { brotliCompressSync, constants } from "node:zlib";
 
 // Binary KB, matching the established 148 / 14.4 / 17.8 KB baselines.
 const budgets = [
-  // Conversation continuity plus opt-in durable replay checkpoints: measured
-  // 159.32 KiB including conversation loaders; replay stays in the lazy chunk.
-  { file: "index.global.js", bytes: 160 * 1024, exclusive: false },
+  // Scoped style replacements, explicit legacy-origin tracking and per-widget
+  // debug diagnostics: measured 162.36 KiB (previous continuity baseline 159.32).
+  // Shared control recipes remove duplicate rendering code; no new dependency.
+  { file: "index.global.js", bytes: 163 * 1024, exclusive: false },
   { file: "launcher.global.js", bytes: 20 * 1024, exclusive: true },
-  // Composer geometry, voice-bar motion, and conversation loaders: 20.65 KiB.
-  { file: "widget.css", bytes: 20.7 * 1024, exclusive: false },
+  // Shared padding/size precedence rules: measured 20.71 KiB (previous 20.65).
+  { file: "widget.css", bytes: 20.8 * 1024, exclusive: false },
 ];
 
 for (const { file, bytes, exclusive } of budgets) {

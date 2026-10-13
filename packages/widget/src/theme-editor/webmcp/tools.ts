@@ -124,8 +124,8 @@ const LAUNCHER_POSITIONS = ['bottom-right', 'bottom-left', 'top-right', 'top-lef
 const MESSAGE_STYLES = ['bubble', 'flat', 'minimal'];
 
 const COPY_PATHS: Record<string, string> = {
-  title: 'copy.welcomeTitle',
-  subtitle: 'copy.welcomeSubtitle',
+  title: 'welcome.title',
+  subtitle: 'welcome.subtitle',
   placeholder: 'copy.inputPlaceholder',
   sendLabel: 'copy.sendButtonLabel',
 };
@@ -596,7 +596,7 @@ export function createThemeEditorTools(
           throw new Error('`suggestions` must be an array of strings.');
         }
         const chips = args.suggestions.filter((s): s is string => typeof s === 'string');
-        writes['suggestionChips'] = chips;
+        writes['suggestions.starters.items'] = chips;
         applied.suggestions = chips;
       }
 

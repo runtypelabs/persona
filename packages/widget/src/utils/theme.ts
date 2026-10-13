@@ -6,6 +6,7 @@ import { createTheme, resolveTokens, themeToCssVariables, resolveThemeDefaults, 
 import { isEmbeddedLayout } from "./panel-config";
 import { deriveBrandTheme, inferBrandColorScheme } from './brand';
 import { deepMerge } from './deep-merge';
+import { hasExplicitThemeStyle, OPT_IN_THEME_STYLE_PATHS } from './style-provenance';
 
 export type ColorScheme = 'light' | 'dark' | 'auto';
 
@@ -358,21 +359,37 @@ export const getActiveTheme = (config?: WidgetConfig): PersonaTheme => {
   ) as DeepPartial<PersonaTheme>;
   const darkThemeConfig = normalizeThemeConfig(config?.darkTheme);
 
-  if (scheme === 'dark') {
-    return applyPanelModeWidth(createDarkTheme(
+  const theme = scheme === 'dark'
+    ? applyPanelModeWidth(createDarkTheme(
       deepMerge(
         (lightThemeConfig ?? {}) as Record<string, unknown>,
         (darkThemeConfig ?? {}) as Record<string, unknown>
       ) as DeepPartial<PersonaTheme>,
       { future: config?.future }
-    ), config);
-  }
-
-  return applyPanelModeWidth(createLightTheme(lightThemeConfig, { future: config?.future }), config);
+    ), config)
+    : applyPanelModeWidth(createLightTheme(lightThemeConfig, { future: config?.future }), config);
+  Object.defineProperty(theme, CONSUMER_PATHS, {
+    value: [...OPT_IN_THEME_STYLE_PATHS, 'suggestion.chip.padding', 'suggestion.chip.fontWeight']
+      .filter((path) => hasExplicitThemeStyle(config, path, scheme)),
+  });
+  return theme;
 };
 
+const CONSUMER_PATHS = Symbol('persona.themeConsumerPaths');
 export const getCssVariables = (theme: PersonaTheme): Record<string, string> => {
-  return themeToCssVariables(theme);
+  const variables = themeToCssVariables(theme);
+  // Legacy chip defaults differ from the public token defaults. Keep them
+  // available beneath host theme intent, including observer-only scheme changes.
+  variables['--persona-suggestion-compat-padding'] = '6px 12px';
+  variables['--persona-suggestion-compat-weight'] = '500';
+  for (const path of (theme as PersonaTheme & { [CONSUMER_PATHS]?: readonly string[] })[CONSUMER_PATHS] ?? []) {
+    const suffix = path.split('.').join('-');
+    const value = variables[`--persona-components-${suffix}`];
+    if (value !== undefined) variables[path === 'suggestion.chip.padding'
+      ? '--persona-suggestion-compat-padding' : path === 'suggestion.chip.fontWeight'
+        ? '--persona-suggestion-compat-weight' : `--persona-consumer-${suffix}`] = value;
+  }
+  return variables;
 };
 
 const appliedVariables = new WeakMap<HTMLElement, string[]>();

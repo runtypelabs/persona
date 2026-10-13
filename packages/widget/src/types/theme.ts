@@ -282,7 +282,29 @@ export interface TextStyleTokens {
  * explicit key always wins, and `iconBackground` / `iconForeground` (the avatar
  * tile) keep their own defaults rather than deriving.
  */
+/** Independent control chrome. Optional leaves retain the shared control defaults. */
+export interface ControlTokens {
+  /** Box edge (CSS length); send box sizing applies in icon mode only. */
+  size?: string;
+  /** Glyph edge, independently configurable from the box. */
+  iconSize?: string;
+  /** SVG stroke width (unitless). Built-in glyphs inherit the foreground. */
+  iconStrokeWidth?: string;
+  background?: TokenReference<'color'>;
+  foreground?: TokenReference<'color'>;
+  borderColor?: TokenReference<'color'>;
+  /** CSS length. Border color alone does not introduce a visible border. */
+  borderWidth?: string;
+  borderRadius?: TokenReference<'radius'>;
+  /** CSS padding shorthand. Legacy axis overrides win on their own axis. */
+  padding?: string;
+}
+
 export interface HeaderTokens extends ComponentTokenSet {
+  /** Close control only; other header controls retain their own colors and sizing. */
+  close?: ControlTokens;
+  /** Clear-chat control only, independent of Messages and trailing actions. */
+  clear?: ControlTokens;
   background: TokenReference<'color'>;
   /**
    * Hairline under the header. Unset, it derives as
@@ -649,6 +671,8 @@ export interface MarkdownTokens {
 }
 
 export interface VoiceTokens {
+  /** Idle mic chrome. Legacy iconSize overrides both size and iconSize. */
+  control?: ControlTokens;
   recording: {
     indicator: TokenReference<'color'>;
     background: TokenReference<'color'>;
@@ -657,9 +681,12 @@ export interface VoiceTokens {
   processing: {
     icon: TokenReference<'color'>;
     background: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
   };
   speaking: {
     icon: TokenReference<'color'>;
+    background?: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
   };
 }
 
@@ -670,9 +697,36 @@ export interface ApprovalTokens {
     text: TokenReference<'color'>;
     /** Box-shadow for the approval bubble (token ref or raw CSS, e.g. `none`). */
     shadow: string;
+    /** Title foreground; falls back through an explicit requested.text override. */
+    titleColor?: TokenReference<'color'>;
+    /** Summary and details foreground; falls back through explicit requested.text. */
+    descriptionColor?: TokenReference<'color'>;
+    /** Agent-attributed reason foreground; falls back through explicit requested.text. */
+    reasonColor?: TokenReference<'color'>;
+    parameters?: {
+      background?: TokenReference<'color'>;
+      foreground?: TokenReference<'color'>;
+    };
   };
   approve: ComponentTokenSet;
   deny: ComponentTokenSet;
+}
+
+/** Appearance of the existing question sheet; behavior stays in feature config. */
+export interface AskUserQuestionTokens {
+  sheet?: {
+    background?: TokenReference<'color'>;
+    border?: TokenReference<'color'>;
+    shadow?: string;
+  };
+  pill?: {
+    background?: TokenReference<'color'>;
+    foreground?: TokenReference<'color'>;
+    borderRadius?: string;
+    selectedBackground?: TokenReference<'color'>;
+    selectedForeground?: TokenReference<'color'>;
+  };
+  customInput?: { background?: TokenReference<'color'> };
 }
 
 export interface AttachmentTokens {
@@ -715,6 +769,16 @@ export interface ActivityTokens {
 export interface ToolBubbleTokens extends ActivityTokens {
   /** Box-shadow for tool bubbles (token ref or raw CSS, e.g. `none`). */
   shadow: string;
+  background?: TokenReference<'color'>;
+  borderColor?: TokenReference<'color'>;
+  borderWidth?: string;
+  borderRadius?: string;
+  header?: { background?: TokenReference<'color'>; foreground?: TokenReference<'color'>; padding?: string };
+  content?: { background?: TokenReference<'color'>; foreground?: TokenReference<'color'>; padding?: string };
+  codeBlock?: { background?: TokenReference<'color'>; foreground?: TokenReference<'color'>; borderColor?: TokenReference<'color'> };
+  toggleForeground?: TokenReference<'color'>;
+  labelForeground?: TokenReference<'color'>;
+  loading?: { primary?: TokenReference<'color'>; secondary?: TokenReference<'color'>; duration?: string };
 }
 
 /** Reasoning / “thinking” row chrome. */
@@ -886,6 +950,8 @@ export interface ComposerModeTokens {
 
 /** Composer (message input) chrome. */
 export interface ComposerChromeTokens {
+  /** Submit chrome. Theme padding/background can also style text mode; legacy icon padding and text-mode background remain ignored. */
+  send?: ControlTokens;
   /** Footer background in block placement. Embedded default: transparent. */
   footerBackground?: TokenReference<'color'>;
   /** Footer padding (CSS shorthand), independent of the input form padding. */
@@ -971,6 +1037,10 @@ export interface MotionTokens {
 
 /** Artifact toolbar chrome. */
 export interface ArtifactToolbarTokens {
+  iconColor?: string;
+  toggleActiveBackground?: string;
+  toggleActiveBorderColor?: string;
+  toggleActiveColor?: string;
   iconHoverColor?: string;
   iconHoverBackground?: string;
   iconPadding?: string;
@@ -1004,6 +1074,8 @@ export interface ArtifactToolbarTokens {
 
 /** Artifact tab strip chrome. */
 export interface ArtifactTabTokens {
+  /** Width of enabled edge fades (CSS length). */
+  fadeSize?: string;
   background?: string;
   activeBackground?: string;
   activeBorder?: string;
@@ -1032,6 +1104,12 @@ export interface ArtifactCardTokens {
 
 /** Artifact pane chrome. */
 export interface ArtifactPaneTokens {
+  padding?: string;
+  borderRadius?: string;
+  shadow?: string;
+  /** Full CSS border shorthand; takes precedence over borderLeft. */
+  border?: string;
+  borderLeft?: string;
   /**
    * Background for the artifact column (toolbar + content), resolved from the theme.
    * Defaults to `semantic.colors.container` so the pane matches assistant message surfaces.
@@ -1192,6 +1270,7 @@ export interface ComponentTokens {
   markdown?: MarkdownTokens;
   voice: VoiceTokens;
   approval: ApprovalTokens;
+  askUserQuestion?: AskUserQuestionTokens;
   attachment: AttachmentTokens;
   activity?: ActivityTokens;
   toolBubble: ToolBubbleTokens;
@@ -1218,6 +1297,8 @@ export interface ComponentTokens {
     toolbar?: ArtifactToolbarTokens;
     tab?: ArtifactTabTokens;
     pane?: ArtifactPaneTokens;
+    chat?: { shadow?: string };
+    split?: { outerRadius?: string };
     card?: ArtifactCardTokens;
     inline?: ArtifactInlineTokens;
   };

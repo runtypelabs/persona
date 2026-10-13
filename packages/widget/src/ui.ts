@@ -244,10 +244,10 @@ import {
 import { buildPillComposer } from "./components/pill-composer-builder";
 import {
   COMPOSER_CONTROL_CLASS,
-  COMPOSER_CONTROL_FALLBACK_PX,
   COMPOSER_CONTROL_GLYPH_CLASS,
   COMPOSER_CONTROL_ICON_FALLBACK_PX,
-  buildSendGlyphStack,
+  applySendButtonStyle,
+  applyMicButtonStyle,
   createMicButton,
 } from "./components/composer-parts";
 import { createWidgetView, resolveLauncher } from "./components/widget-view";
@@ -268,7 +268,7 @@ import {
 } from "./welcome";
 import { HEADER_THEME_CSS } from "./components/header-builder";
 import {
-  applyHeaderControlGlyph,
+  applyHeaderControlStyle,
   createHeaderIconButton,
 } from "./components/header-parts";
 import { buildHeaderWithLayout } from "./components/header-layouts";
@@ -330,6 +330,7 @@ import {
 import {
   artifactsSidebarEnabled,
   applyArtifactLayoutCssVars,
+  artifactStyle,
   applyArtifactPaneAppearance,
   isArtifactPaneAppearanceDetached,
   shouldExpandLauncherForArtifacts
@@ -346,6 +347,7 @@ import { loadFormsUi, getFormsUiSync } from "./forms-ui-loader";
 import { pluginRegistry } from "./plugins/registry";
 import { DEFAULT_HEADER_ICON_SIZE, mergeWithDefaults } from "./defaults";
 import { mergeConfigUpdate } from "./utils/config-merge";
+import { createLegacyDiagnosticContext, updateLegacyDiagnostics, type LegacyDiagnosticContext } from "./utils/legacy-diagnostics";
 import { getPanelAliasProvenance, isEmbeddedLayout, isHeaderVisible } from "./utils/panel-config";
 import { createEventBus } from "./utils/events";
 import {
@@ -934,7 +936,7 @@ export const mergeFinalizedMentions = (
 export const createAgentExperience = (
   mount: HTMLElement,
   initialConfig?: AgentWidgetConfig,
-  runtimeOptions?: { debugTools?: boolean; registerHostMove?: (move: (reparent: () => void) => void) => void }
+  runtimeOptions?: { debugTools?: boolean; registerHostMove?: (move: (reparent: () => void) => void) => void; diagnostics?: LegacyDiagnosticContext }
 ): Controller => {
   if (mount == null) {
     throw new Error(
@@ -954,6 +956,7 @@ export const createAgentExperience = (
   }
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
+  const diagnostics = runtimeOptions?.diagnostics ?? createLegacyDiagnosticContext(initialConfig);
   // Message ids are only unique within a widget session. Keep disclosure state
   // beside the widget that renders it, not in component module scope.
   const toolExpansionState = new Set<string>();
@@ -3928,6 +3931,7 @@ export const createAgentExperience = (
       typeof config.features?.artifacts?.layout?.onDocumentToolbarRefresh === "function"
     );
     artifactPaneApi.setCustomActions(config.features?.artifacts?.toolbarActions ?? []);
+    artifactPaneApi.setStyleConfig(config);
     artifactPaneApi.setTabFade(config.features?.artifacts?.layout?.tabFade);
     artifactPaneApi.setRenderTabBar(config.features?.artifacts?.renderTabBar);
     if (!expandToggleEnabled && !artifactPaneExpandedPinned) artifactPaneExpanded = false;
@@ -4579,7 +4583,9 @@ export const createAgentExperience = (
     if (weldedSplitActive) {
       const wl = config.features?.artifacts?.layout;
       weldedOuterRadius =
-        wl?.unifiedSplitOuterRadius?.trim() || wl?.paneBorderRadius?.trim() || panelBorderRadius;
+        wl?.unifiedSplitOuterRadius?.trim() || wl?.paneBorderRadius?.trim() ||
+        artifactStyle(config, undefined, "split.outerRadius") ||
+        artifactStyle(config, undefined, "pane.borderRadius") || panelBorderRadius;
     } else {
       weldedOuterRadius = null;
     }
@@ -4962,9 +4968,18 @@ export const createAgentExperience = (
     }
     // Set up new observer if colorScheme is 'auto'
     if (config.colorScheme === 'auto') {
-      cleanupThemeObserver = createThemeObserver(() => {
-        // Re-apply theme when color scheme changes
-        applyThemeVariables(mount, config);
+      let observedScheme = getColorScheme(config);
+      cleanupThemeObserver = createThemeObserver((scheme) => {
+        if (scheme === observedScheme) return;
+        observedScheme = scheme;
+        // Dark-only optional tokens can activate structural hooks, not just variables.
+        // Reuse existing chrome and transcript updates without resetting expansion state.
+        syncPanelChrome();
+        syncArtifactPane();
+        if (session) {
+          configVersion++;
+          renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+        }
       });
     }
   };
@@ -13113,13 +13128,7 @@ export const createAgentExperience = (
   let speechRecognition: any = null;
   let isRecording = false;
   let pauseTimer: number | null = null;
-  let originalMicStyles: {
-    backgroundColor: string;
-    color: string;
-    borderColor: string;
-    iconName: string;
-    iconSize: number;
-  } | null = null;
+
 
   /**
    * `voiceRecognition.completionBehavior` (roadmap section 14). Default stays
@@ -13139,7 +13148,7 @@ export const createAgentExperience = (
   function setMicState(
     state: "idle" | "recording" | "processing" | "speaking"
   ): void {
-    micButton?.setAttribute("data-state", state);
+    if (micButton) applyMicButtonStyle(micButton, config, state, session.getVoiceInterruptionMode());
     footer?.setAttribute("data-persona-voice-state", state);
     if (state === "recording") startVoiceLevelLoop();
     else stopVoiceLevelLoop();
@@ -13336,36 +13345,8 @@ export const createAgentExperience = (
       // Reconcile content geometry without treating recording as extra content.
       syncComposerCompact();
       if (micButton) {
-        // Store original styles (including icon info for restoration)
-        const voiceConfig = config.voiceRecognition ?? {};
-        originalMicStyles = {
-          backgroundColor: micButton.style.backgroundColor,
-          color: micButton.style.color,
-          borderColor: micButton.style.borderColor,
-          iconName: voiceConfig.iconName ?? "mic",
-          iconSize: parseFloat(voiceConfig.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX,
-        };
-
-        // Apply recording state styles from config or theme tokens
-        const recordingBackgroundColor = voiceConfig.recordingBackgroundColor;
-        const recordingIconColor = voiceConfig.recordingIconColor;
-        const recordingBorderColor = voiceConfig.recordingBorderColor;
-
         micButton.classList.add("persona-voice-recording");
         setMicState("recording");
-        micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
-        micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
-
-        if (recordingIconColor) {
-          const svg = micButton.querySelector("svg");
-          if (svg) {
-            svg.setAttribute("stroke", recordingIconColor);
-          }
-        }
-
-        if (recordingBorderColor) {
-          micButton.style.borderColor = recordingBorderColor;
-        }
 
         micButton.setAttribute("aria-label", "Stop voice recognition");
       }
@@ -13403,165 +13384,48 @@ export const createAgentExperience = (
       micButton.classList.remove("persona-voice-recording");
       setMicState("idle");
 
-      // Restore original styles
-      if (originalMicStyles) {
-        micButton.style.backgroundColor = originalMicStyles.backgroundColor;
-        micButton.style.color = originalMicStyles.color;
-        micButton.style.borderColor = originalMicStyles.borderColor;
-
-        // Restore SVG stroke color if present
-        const svg = micButton.querySelector("svg");
-        if (svg) {
-          svg.setAttribute("stroke", originalMicStyles.color || "currentColor");
-        }
-
-        originalMicStyles = null;
-      }
-
       micButton.setAttribute("aria-label", "Start voice recognition");
     }
   };
 
 
-  // --- Helpers to store/restore original mic button state ---
-
-  const storeOriginalMicStyles = () => {
-    if (!micButton || originalMicStyles) return; // Already stored
-    const voiceConfig = config.voiceRecognition ?? {};
-    originalMicStyles = {
-      backgroundColor: micButton.style.backgroundColor,
-      color: micButton.style.color,
-      borderColor: micButton.style.borderColor,
-      iconName: voiceConfig.iconName ?? "mic",
-      iconSize: parseFloat(voiceConfig.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX,
-    };
-  };
-
-  /** Swap the mic button's SVG icon */
-  const swapMicIcon = (iconName: string, color: string) => {
-    if (!micButton) return;
-    const existingSvg = micButton.querySelector("svg");
-    if (existingSvg) existingSvg.remove();
-    const size = originalMicStyles?.iconSize ?? (parseFloat(config.voiceRecognition?.iconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX);
-    const newSvg = renderLucideIcon(iconName, size, color, 1.5);
-    if (newSvg) micButton.appendChild(newSvg);
-  };
-
-  /** Remove all voice state CSS classes */
   const removeAllVoiceStateClasses = () => {
-    if (!micButton) return;
-    micButton.classList.remove("persona-voice-recording", "persona-voice-processing", "persona-voice-speaking");
+    micButton?.classList.remove("persona-voice-recording", "persona-voice-processing", "persona-voice-speaking");
   };
-
-  // --- Per-state style application ---
 
   const applyRuntypeMicRecordingStyles = () => {
-    setMicState("recording");
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const recordingBackgroundColor = voiceConfig.recordingBackgroundColor;
-    const recordingIconColor = voiceConfig.recordingIconColor;
-    const recordingBorderColor = voiceConfig.recordingBorderColor;
     removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-recording");
+    micButton?.classList.add("persona-voice-recording");
     setMicState("recording");
-    micButton.style.backgroundColor = recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)";
-    micButton.style.color = recordingIconColor ?? "var(--persona-voice-recording-indicator, #ffffff)";
-    if (recordingIconColor) {
-      const svg = micButton.querySelector("svg");
-      if (svg) svg.setAttribute("stroke", recordingIconColor);
-    }
-    if (recordingBorderColor) micButton.style.borderColor = recordingBorderColor;
-    micButton.setAttribute("aria-label", "Stop voice recognition");
+    micButton?.setAttribute("aria-label", "Stop voice recognition");
   };
 
   const applyRuntypeMicProcessingStyles = () => {
-    setMicState("processing");
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const interruptionMode = session.getVoiceInterruptionMode();
-    const iconName = voiceConfig.processingIconName ?? "loader";
-    const iconColor = voiceConfig.processingIconColor ?? originalMicStyles?.color ?? "";
-    const bgColor = voiceConfig.processingBackgroundColor ?? originalMicStyles?.backgroundColor ?? "";
-    const borderColor = voiceConfig.processingBorderColor ?? originalMicStyles?.borderColor ?? "";
-
     removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-processing");
+    micButton?.classList.add("persona-voice-processing");
     setMicState("processing");
-    micButton.style.backgroundColor = bgColor;
-    micButton.style.borderColor = borderColor;
-    const resolvedColor = iconColor || "currentColor";
-    micButton.style.color = resolvedColor;
-    swapMicIcon(iconName, resolvedColor);
-    micButton.setAttribute("aria-label", "Processing voice input");
-    // In "none" mode the button is not actionable during processing
-    if (interruptionMode === "none") {
-      micButton.style.cursor = "default";
-    }
+    micButton?.setAttribute("aria-label", "Processing voice input");
+    if (micButton && session.getVoiceInterruptionMode() === "none") micButton.style.cursor = "default";
   };
 
   const applyRuntypeMicSpeakingStyles = () => {
-    setMicState("speaking");
-    if (!micButton) return;
-    storeOriginalMicStyles();
-    const voiceConfig = config.voiceRecognition ?? {};
-    const interruptionMode = session.getVoiceInterruptionMode();
-    // Default icon depends on interruption mode:
-    // "square" for cancel, "mic" for barge-in (hot mic), "volume-2" otherwise
-    const defaultSpeakingIcon = interruptionMode === "cancel" ? "square"
-      : interruptionMode === "barge-in" ? "mic"
-      : "volume-2";
-    const iconName = voiceConfig.speakingIconName ?? defaultSpeakingIcon;
-    const iconColor = voiceConfig.speakingIconColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingIconColor ?? originalMicStyles?.color ?? "") : (originalMicStyles?.color ?? ""));
-    const bgColor = voiceConfig.speakingBackgroundColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBackgroundColor ?? "var(--persona-voice-recording-bg, #ef4444)") : (originalMicStyles?.backgroundColor ?? ""));
-    const borderColor = voiceConfig.speakingBorderColor
-      ?? (interruptionMode === "barge-in" ? (voiceConfig.recordingBorderColor ?? "") : (originalMicStyles?.borderColor ?? ""));
-
+    const mode = session.getVoiceInterruptionMode();
     removeAllVoiceStateClasses();
-    micButton.classList.add("persona-voice-speaking");
+    micButton?.classList.add("persona-voice-speaking");
+    if (mode === "barge-in") micButton?.classList.add("persona-voice-recording");
     setMicState("speaking");
-    micButton.style.backgroundColor = bgColor;
-    micButton.style.borderColor = borderColor;
-    const resolvedColor = iconColor || "currentColor";
-    micButton.style.color = resolvedColor;
-    swapMicIcon(iconName, resolvedColor);
-
-    // aria-label varies by interruption mode
-    const ariaLabel = interruptionMode === "cancel"
-      ? "Stop playback and re-record"
-      : interruptionMode === "barge-in"
-      ? "Speak to interrupt"
-      : "Agent is speaking";
-    micButton.setAttribute("aria-label", ariaLabel);
-    // In "none" mode the button is not actionable during speaking
-    if (interruptionMode === "none") {
-      micButton.style.cursor = "default";
-    }
-    // In "barge-in" mode, add recording class to show mic is hot
-    if (interruptionMode === "barge-in") {
-      micButton.classList.add("persona-voice-recording");
-    }
+    micButton?.setAttribute("aria-label", mode === "cancel" ? "Stop playback and re-record" : mode === "barge-in" ? "Speak to interrupt" : "Agent is speaking");
+    if (micButton && mode === "none") micButton.style.cursor = "default";
   };
 
-  /** Restore mic button to idle state (icon, colors, aria-label, cursor) */
+  /** Restoration reads current config, so a theme/config change while active survives. */
   const removeRuntypeMicStateStyles = () => {
-    setMicState("idle");
-    if (!micButton) return;
     removeAllVoiceStateClasses();
     setMicState("idle");
-    if (originalMicStyles) {
-      micButton.style.backgroundColor = originalMicStyles.backgroundColor ?? "";
-      micButton.style.color = originalMicStyles.color ?? "";
-      micButton.style.borderColor = originalMicStyles.borderColor ?? "";
-      swapMicIcon(originalMicStyles.iconName, originalMicStyles.color || "currentColor");
-      originalMicStyles = null;
+    if (micButton) {
+      micButton.style.cursor = "";
+      micButton.setAttribute("aria-label", "Start voice recognition");
     }
-    micButton.style.cursor = "";
-    micButton.setAttribute("aria-label", "Start voice recognition");
   };
 
   // Wire up mic button click handler
@@ -14562,6 +14426,7 @@ export const createAgentExperience = (
   const controller: Controller = {
     get instanceId() { return instanceId; },
     update(nextConfig: AgentWidgetConfigPatch) {
+      if (!runtimeOptions?.diagnostics) updateLegacyDiagnostics(diagnostics, nextConfig);
       const nextVoice = nextConfig.voiceRecognition;
       if (nextVoice && (nextVoice.enabled === false ||
         (nextVoice.dictation?.provider && nextVoice.dictation.provider !== config.voiceRecognition?.dictation?.provider) ||
@@ -14596,13 +14461,9 @@ export const createAgentExperience = (
       baseFeatures = config.features;
       config = resolveConfigPreferences(config);
       applyTooltipTiming();
-      // applyFullHeightStyles resets mount.style.cssText, so call it before applyThemeVariables
-      applyFullHeightStyles();
-      applyThemeVariables(mount, config);
-      applyArtifactLayoutCssVars(mount, config);
-      applyArtifactPaneAppearance(mount, config);
-      // Rail width/side are config-derived, so an open rail re-derives here too.
-      applyRailChrome();
+      // The shared chrome pass restores owned variables after resetting mount styles,
+      // including the welded radius even when the artifact split mode stays unchanged.
+      syncPanelChrome();
       syncArtifactPane();
 
       // Re-setup theme observer if colorScheme changed
@@ -14847,7 +14708,10 @@ export const createAgentExperience = (
       const messagesConfigChanged = (config.future?.v5Defaults === true) !== previousDefaultsVersion
         || toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged
         || loadingIndicatorChanged || iterationDisplayChanged || featuresChanged
-        || "errorDisplay" in nextConfig;
+        || "errorDisplay" in nextConfig || "theme" in nextConfig || "darkTheme" in nextConfig
+        || "approval" in nextConfig || config.colorScheme !== previousColorScheme
+        || "askUserQuestion" in (nextConfig.features ?? {})
+        || ("features" in nextConfig && nextConfig.features === undefined);
       if (messagesConfigChanged && session) {
         configVersion++;
         renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
@@ -14984,16 +14848,6 @@ export const createAgentExperience = (
           isPanelToggleable() && config.layout?.header?.showCloseButton !== false;
         closeButton.style.display = layoutShowCloseButton ? "" : "none";
 
-        // Composer-bar mode owns its close sizing, same as clear chat below.
-        // Elsewhere, unset clears the inline box so the header control-size
-        // token wins; writing a fallback here would pin it past the token.
-        if (!isComposerBar()) {
-          const closeButtonSize = launcher.closeButtonSize ?? "";
-          closeButton.style.height = closeButtonSize;
-          closeButton.style.width = closeButtonSize;
-          closeButton.style.minWidth = closeButtonSize;
-          closeButton.style.minHeight = closeButtonSize;
-        }
         const closeButtonPlacement = launcher.closeButtonPlacement ?? "inline";
 
         // Update placement if changed - move the wrapper (not just the button) to preserve tooltip
@@ -15024,63 +14878,10 @@ export const createAgentExperience = (
           }
         }
 
-        // Close icon: launcher color wins; else theme.components.header.actionIconForeground
-        closeButton.style.color =
-          launcher.closeButtonColor || HEADER_THEME_CSS.actionIconColor;
-
-        if (launcher.closeButtonBackgroundColor) {
-          closeButton.style.backgroundColor = launcher.closeButtonBackgroundColor;
-          closeButton.classList.remove("hover:persona-bg-gray-100");
-        } else {
-          closeButton.style.backgroundColor = "";
-          closeButton.classList.add("hover:persona-bg-gray-100");
-        }
-
-        // Apply border if width and/or color are provided
-        if (launcher.closeButtonBorderWidth || launcher.closeButtonBorderColor) {
-          const borderWidth = launcher.closeButtonBorderWidth || "0px";
-          const borderColor = launcher.closeButtonBorderColor || "transparent";
-          closeButton.style.border = `${borderWidth} solid ${borderColor}`;
-          closeButton.classList.remove("persona-border-none");
-        } else {
-          closeButton.style.border = "";
-          closeButton.classList.add("persona-border-none");
-        }
-
-        if (launcher.closeButtonBorderRadius) {
-          closeButton.style.borderRadius = launcher.closeButtonBorderRadius;
-          closeButton.classList.remove("persona-rounded-full");
-        } else {
-          closeButton.style.borderRadius = "";
-          closeButton.classList.add("persona-rounded-full");
-        }
-
-        // Update padding
-        if (launcher.closeButtonPaddingX) {
-          closeButton.style.paddingLeft = launcher.closeButtonPaddingX;
-          closeButton.style.paddingRight = launcher.closeButtonPaddingX;
-        } else {
-          closeButton.style.paddingLeft = "";
-          closeButton.style.paddingRight = "";
-        }
-        if (launcher.closeButtonPaddingY) {
-          closeButton.style.paddingTop = launcher.closeButtonPaddingY;
-          closeButton.style.paddingBottom = launcher.closeButtonPaddingY;
-        } else {
-          closeButton.style.paddingTop = "";
-          closeButton.style.paddingBottom = "";
-        }
-
-        // Update icon through the shared renderer so a restyle can never
-        // repaint the glyph at a different size or stroke than the builder.
-        applyHeaderControlGlyph(
-          closeButton,
-          launcher.closeButtonIconName ?? "x",
-          {
-            iconSize: isComposerBar() ? COMPOSER_BAR_CLOSE_ICON_SIZE : undefined,
-            iconText: launcher.closeButtonIconText ?? "×",
-          }
-        );
+        applyHeaderControlStyle(closeButton, config, "close", {
+          buttonSize: isComposerBar() ? closeButton.style.width : undefined,
+          iconSize: isComposerBar() ? COMPOSER_BAR_CLOSE_ICON_SIZE : undefined,
+        });
 
         // Update tooltip
         const closeButtonTooltipText = launcher.closeButtonTooltipText ?? "Close chat";
@@ -15180,77 +14981,10 @@ export const createAgentExperience = (
         }
 
         if (shouldShowClearChat) {
-          // Update size: composer-bar mode owns its sizing, so leave size
-          // alone there. Elsewhere, unset clears the inline box so the header
-          // control-size token wins.
-          if (!isComposerBar()) {
-            const clearChatSize = clearChatConfig.size ?? "";
-            clearChatButton.style.height = clearChatSize;
-            clearChatButton.style.width = clearChatSize;
-            clearChatButton.style.minWidth = clearChatSize;
-            clearChatButton.style.minHeight = clearChatSize;
-          }
-
-          const clearChatIconColor = clearChatConfig.iconColor ?? "";
-          clearChatButton.style.color =
-            clearChatIconColor || HEADER_THEME_CSS.actionIconColor;
-
-          // Same shared renderer as the builder, so a restyle can never
-          // repaint the glyph at a different size or stroke.
-          applyHeaderControlGlyph(
-            clearChatButton,
-            clearChatConfig.iconName ?? "refresh-cw",
-            {
-              iconSize: isComposerBar()
-                ? COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE
-                : undefined,
-            }
-          );
-
-          // Update background color
-          if (clearChatConfig.backgroundColor) {
-            clearChatButton.style.backgroundColor = clearChatConfig.backgroundColor;
-            clearChatButton.classList.remove("hover:persona-bg-gray-100");
-          } else {
-            clearChatButton.style.backgroundColor = "";
-            clearChatButton.classList.add("hover:persona-bg-gray-100");
-          }
-
-          // Update border
-          if (clearChatConfig.borderWidth || clearChatConfig.borderColor) {
-            const borderWidth = clearChatConfig.borderWidth || "0px";
-            const borderColor = clearChatConfig.borderColor || "transparent";
-            clearChatButton.style.border = `${borderWidth} solid ${borderColor}`;
-            clearChatButton.classList.remove("persona-border-none");
-          } else {
-            clearChatButton.style.border = "";
-            clearChatButton.classList.add("persona-border-none");
-          }
-
-          // Update border radius
-          if (clearChatConfig.borderRadius) {
-            clearChatButton.style.borderRadius = clearChatConfig.borderRadius;
-            clearChatButton.classList.remove("persona-rounded-full");
-          } else {
-            clearChatButton.style.borderRadius = "";
-            clearChatButton.classList.add("persona-rounded-full");
-          }
-
-          // Update padding
-          if (clearChatConfig.paddingX) {
-            clearChatButton.style.paddingLeft = clearChatConfig.paddingX;
-            clearChatButton.style.paddingRight = clearChatConfig.paddingX;
-          } else {
-            clearChatButton.style.paddingLeft = "";
-            clearChatButton.style.paddingRight = "";
-          }
-          if (clearChatConfig.paddingY) {
-            clearChatButton.style.paddingTop = clearChatConfig.paddingY;
-            clearChatButton.style.paddingBottom = clearChatConfig.paddingY;
-          } else {
-            clearChatButton.style.paddingTop = "";
-            clearChatButton.style.paddingBottom = "";
-          }
+          applyHeaderControlStyle(clearChatButton, config, "clear", {
+            buttonSize: isComposerBar() ? clearChatButton.style.width : undefined,
+            iconSize: isComposerBar() ? COMPOSER_BAR_CLEAR_CHAT_ICON_SIZE : undefined,
+          });
 
           const clearChatTooltipText = clearChatConfig.tooltipText ?? "Clear chat";
           const clearChatShowTooltip = clearChatConfig.showTooltip ?? true;
@@ -15377,86 +15111,14 @@ export const createAgentExperience = (
         } else {
           // Update existing mic button with new config
           const voiceConfig = config.voiceRecognition ?? {};
-          const sendButtonConfig = config.sendButton ?? {};
-
-          // Update icon name and size
-          const micIconName = voiceConfig.iconName ?? "mic";
-          // Unset clears the inline box so the control-size token takes over.
-          const micIconSize = voiceConfig.iconSize;
-          const micIconSizeNum =
-            parseFloat(micIconSize ?? "") || COMPOSER_CONTROL_ICON_FALLBACK_PX;
-
-          micButton.classList.add(COMPOSER_CONTROL_CLASS);
-          micButton.classList.toggle(COMPOSER_CONTROL_GLYPH_CLASS, !micIconSize);
-          micButton.style.width = micIconSize ?? "";
-          micButton.style.height = micIconSize ?? "";
-          micButton.style.minWidth = micIconSize ?? "";
-          micButton.style.minHeight = micIconSize ?? "";
-
-
-          // Update icon; color chain and stroke 1.5 match the mount-time
-          // builder (composer-parts.ts) so an unrelated update cannot restyle.
-          const iconColor = voiceConfig.iconColor ?? sendButtonConfig.textColor;
-          micButton.innerHTML = "";
-          const micIconSvg = renderLucideIcon(
-            micIconName,
-            micIconSizeNum,
-            iconColor || "currentColor",
-            1.5
-          );
-          if (micIconSvg) {
-            micButton.appendChild(micIconSvg);
-          } else {
-            micButton.textContent = "🎤";
-          }
-
-          // Update colors from config or theme tokens
-          const backgroundColor = voiceConfig.backgroundColor ?? sendButtonConfig.backgroundColor;
-          if (backgroundColor) {
-            micButton.style.backgroundColor = backgroundColor;
-          } else {
-            micButton.style.backgroundColor = "";
-          }
-
-          if (iconColor) {
-            micButton.style.color = iconColor;
-          } else {
-            micButton.style.color = "var(--persona-text, #111827)";
-          }
-
-          // Update border styling
-          if (voiceConfig.borderWidth) {
-            micButton.style.borderWidth = voiceConfig.borderWidth;
-            micButton.style.borderStyle = "solid";
-          } else {
-            micButton.style.borderWidth = "";
-            micButton.style.borderStyle = "";
-          }
-          if (voiceConfig.borderColor) {
-            micButton.style.borderColor = voiceConfig.borderColor;
-          } else {
-            micButton.style.borderColor = "";
-          }
-
-          // Update padding styling
-          if (voiceConfig.paddingX) {
-            micButton.style.paddingLeft = voiceConfig.paddingX;
-            micButton.style.paddingRight = voiceConfig.paddingX;
-          } else {
-            micButton.style.paddingLeft = "";
-            micButton.style.paddingRight = "";
-          }
-          if (voiceConfig.paddingY) {
-            micButton.style.paddingTop = voiceConfig.paddingY;
-            micButton.style.paddingBottom = voiceConfig.paddingY;
-          } else {
-            micButton.style.paddingTop = "";
-            micButton.style.paddingBottom = "";
-          }
+          const micState = micButton.getAttribute("data-state");
+          applyMicButtonStyle(micButton, config,
+            micState === "recording" || micState === "processing" || micState === "speaking" ? micState : "idle",
+            session.getVoiceInterruptionMode());
 
           const tooltipText = voiceConfig.tooltipText ?? "Start voice recognition";
           const showTooltip = voiceConfig.showTooltip ?? false;
-          micButton.setAttribute("aria-label", tooltipText);
+          if (micState === "idle") micButton.setAttribute("aria-label", tooltipText);
           if (micButtonWrapper) {
             attachTooltip({
               anchor: micButton,
@@ -15660,139 +15322,9 @@ export const createAgentExperience = (
       }
 
       // Update send button styling
-      const sendButtonConfig = config.sendButton ?? {};
-      const useIcon = sendButtonConfig.useIcon ?? false;
-      const iconText = sendButtonConfig.iconText ?? "↑";
-      const iconName = sendButtonConfig.iconName;
-      const tooltipText = sendButtonConfig.tooltipText ?? "Send message";
-      const showTooltip = sendButtonConfig.showTooltip ?? false;
-      // Unset clears the inline box so the control-size token takes over.
-      const buttonSize = sendButtonConfig.size;
-      const buttonSizeNum =
-        parseFloat(buttonSize ?? "") || COMPOSER_CONTROL_FALLBACK_PX;
-      const backgroundColor = sendButtonConfig.backgroundColor;
-      const textColor = sendButtonConfig.textColor;
-
-      // Update button content and styling based on mode
-      if (useIcon) {
-        // Icon mode: circular button
-        sendButton.style.width = buttonSize ?? "";
-        sendButton.style.height = buttonSize ?? "";
-        sendButton.style.minWidth = buttonSize ?? "";
-        sendButton.style.minHeight = buttonSize ?? "";
-        sendButton.style.fontSize = "18px";
-        sendButton.style.lineHeight = "1";
-
-        // Set foreground color from config or theme token
-        if (textColor) {
-          sendButton.style.color = textColor;
-        } else {
-          sendButton.style.color =
-            "var(--persona-send-button-fg, var(--persona-button-primary-fg, #ffffff))";
-        }
-
-        // Skip the icon-content re-render while streaming: the button holds the
-        // stop icon (owned by setSendButtonMode), and clobbering it here would
-        // show the send arrow mid-stream while the aria-label still says stop.
-        if (!session.isStreaming()) {
-          sendButton.innerHTML = "";
-          if (iconName) {
-            // Same derivation as the mount-time builder (composer-parts.ts):
-            // half the box unless `iconSize` names a glyph explicitly.
-            const iconSize =
-              parseFloat(sendButtonConfig.iconSize ?? "") ||
-              Math.round(buttonSizeNum * 0.5);
-            const iconColor = textColor?.trim() || "currentColor";
-            const iconStroke = sendButtonConfig.iconStrokeWidth ?? 2;
-            const iconSvg = renderLucideIcon(iconName, iconSize, iconColor, iconStroke);
-            // Rebuild the crossfade stack, not a bare glyph: `setSendButtonMode`
-            // resolves it from the DOM, so a single-glyph rebuild here would
-            // leave the stop state with nothing to reveal.
-            const stopSvg = renderLucideIcon(
-              sendButtonConfig.stopIconName ?? "square",
-              iconSize,
-              iconColor,
-              iconStroke
-            );
-            if (iconSvg && stopSvg) {
-              // Not streaming, so send is the live mode by definition.
-              sendButton.appendChild(buildSendGlyphStack(iconSvg, stopSvg));
-            } else if (iconSvg) {
-              sendButton.appendChild(iconSvg);
-            } else {
-              sendButton.textContent = iconText;
-            }
-          } else {
-            sendButton.textContent = iconText;
-          }
-        }
-
-        // Update classes
-        sendButton.className = `persona-rounded-button persona-flex persona-items-center persona-justify-center disabled:persona-opacity-50 persona-cursor-pointer ${COMPOSER_CONTROL_CLASS}`;
-
-        if (backgroundColor) {
-          sendButton.style.backgroundColor = backgroundColor;
-          sendButton.classList.remove("persona-bg-persona-primary");
-        } else {
-          sendButton.style.backgroundColor = "";
-          sendButton.classList.add("persona-bg-persona-primary");
-        }
-      } else {
-        // Text mode: existing behavior
-        sendButton.textContent = config.copy?.sendButtonLabel ?? "Send";
-        sendButton.style.width = "";
-        sendButton.style.height = "";
-        sendButton.style.minWidth = "";
-        sendButton.style.minHeight = "";
-        sendButton.style.fontSize = "";
-        sendButton.style.lineHeight = "";
-
-        // Update classes
-        sendButton.className = "persona-rounded-button persona-bg-persona-accent persona-px-4 persona-py-2 persona-text-sm persona-font-semibold persona-text-white disabled:persona-opacity-50 persona-cursor-pointer";
-
-        if (backgroundColor) {
-          sendButton.style.backgroundColor = backgroundColor;
-          sendButton.classList.remove("persona-bg-persona-accent");
-        } else {
-          sendButton.classList.add("persona-bg-persona-accent");
-        }
-
-        if (textColor) {
-          sendButton.style.color = textColor;
-        } else {
-          sendButton.classList.add("persona-text-white");
-        }
-      }
-
-      // Apply border styling
-      if (sendButtonConfig.borderWidth) {
-        sendButton.style.borderWidth = sendButtonConfig.borderWidth;
-        sendButton.style.borderStyle = "solid";
-      } else {
-        sendButton.style.borderWidth = "";
-        sendButton.style.borderStyle = "";
-      }
-      if (sendButtonConfig.borderColor) {
-        sendButton.style.borderColor = sendButtonConfig.borderColor;
-      } else {
-        sendButton.style.borderColor = "";
-      }
-
-      // Apply padding styling (works in both icon and text mode)
-      if (sendButtonConfig.paddingX) {
-        sendButton.style.paddingLeft = sendButtonConfig.paddingX;
-        sendButton.style.paddingRight = sendButtonConfig.paddingX;
-      } else {
-        sendButton.style.paddingLeft = "";
-        sendButton.style.paddingRight = "";
-      }
-      if (sendButtonConfig.paddingY) {
-        sendButton.style.paddingTop = sendButtonConfig.paddingY;
-        sendButton.style.paddingBottom = sendButtonConfig.paddingY;
-      } else {
-        sendButton.style.paddingTop = "";
-        sendButton.style.paddingBottom = "";
-      }
+      const tooltipText = config.sendButton?.tooltipText ?? "Send message";
+      const showTooltip = config.sendButton?.showTooltip ?? false;
+      applySendButtonStyle(sendButton, config);
 
       if (!session.isStreaming()) {
         sendButton.setAttribute("aria-label", tooltipText);

@@ -1,4 +1,5 @@
 import { createElement } from "../utils/dom";
+import { artifactStyle } from "../utils/artifact-gate";
 import type {
   AgentWidgetConfig,
   PersonaArtifactRecord,
@@ -35,6 +36,7 @@ export type ArtifactPaneApi = {
   element: HTMLElement;
   /** Backdrop for mobile drawer (optional separate layer) */
   backdrop: HTMLElement | null;
+  setStyleConfig: (config: AgentWidgetConfig) => void;
   update: (state: { artifacts: PersonaArtifactRecord[]; selectedId: string | null }) => void;
   setMobileOpen: (open: boolean) => void;
   /** Reflect the expanded state on the toolbar toggle (icon + label). */
@@ -90,9 +92,7 @@ export function createArtifactPane(
   const documentChrome = toolbarPreset === "document";
   const toolbarTitle = layout?.toolbarTitle ?? "Artifacts";
   const closeButtonLabel = layout?.closeButtonLabel ?? "Close";
-  const panePadding = layout?.panePadding?.trim();
 
-  const tabFadeSize = layout?.tabFadeSize?.trim();
   // Per-edge fade enablement is mutable so setTabFade can switch it live (the
   // host re-reads config on every sync). false disables both edges; the object
   // form gates each edge; true/undefined keeps both dynamic.
@@ -413,18 +413,11 @@ export function createArtifactPane(
     toolbar.appendChild(defaultActions);
   }
 
-  if (panePadding) {
-    toolbar.style.paddingLeft = panePadding;
-    toolbar.style.paddingRight = panePadding;
-  }
 
   const list = createElement(
     "div",
     "persona-artifact-list persona-shrink-0 persona-flex persona-gap-1 persona-overflow-x-auto persona-p-2 persona-border-b persona-border-persona-border"
   );
-  if (tabFadeSize) {
-    list.style.setProperty("--persona-artifact-tab-fade-size", tabFadeSize);
-  }
 
   // Seam A: a full tab-bar replacement. Both the built-in strip and a custom
   // mount are always built so renderTabBar can switch live (the host re-reads
@@ -497,13 +490,19 @@ export function createArtifactPane(
       setTimeout(resetContentInlineScroll, 0);
     }
   };
-  if (panePadding) {
-    for (const el of [list, customBarMount]) {
-      el.style.paddingLeft = panePadding;
-      el.style.paddingRight = panePadding;
+  const setStyleConfig = (next: AgentWidgetConfig) => {
+    const nextLayout = next.features?.artifacts?.layout;
+    const padding = artifactStyle(next, nextLayout?.panePadding, "pane.padding") ?? "";
+    for (const el of [toolbar, list, customBarMount]) {
+      el.style.paddingLeft = padding;
+      el.style.paddingRight = padding;
     }
-    content.style.padding = panePadding;
-  }
+    content.style.padding = padding;
+    const fade = artifactStyle(next, nextLayout?.tabFadeSize, "tab.fadeSize");
+    if (fade) list.style.setProperty("--persona-artifact-tab-fade-size", fade);
+    else list.style.removeProperty("--persona-artifact-tab-fade-size");
+  };
+  setStyleConfig(config);
 
   shell.appendChild(toolbar);
   shell.appendChild(list);
@@ -761,6 +760,7 @@ export function createArtifactPane(
   };
 
   return {
+    setStyleConfig,
     element: shell,
     backdrop,
     update(state: { artifacts: PersonaArtifactRecord[]; selectedId: string | null }) {

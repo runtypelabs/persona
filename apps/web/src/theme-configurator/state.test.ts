@@ -179,7 +179,7 @@ describe('theme configurator state - editor ui, preview fixtures, and history', 
 
     expect(previewConfig.launcher?.enabled).toBe(true);
     expect(previewConfig.launcher?.autoExpand).toBe(true);
-    expect(previewConfig.suggestionChips?.length).toBeGreaterThan(0);
+    expect(previewConfig.suggestions?.starters?.items?.length).toBeGreaterThan(0);
     expect(previewConfig.initialMessages).toEqual([]);
 
     const exported = state.exportSnapshot();

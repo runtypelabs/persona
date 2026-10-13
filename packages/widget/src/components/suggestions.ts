@@ -18,6 +18,7 @@ import {
   AgentWidgetSuggestionVariant,
 } from "../types";
 import type { AgentWidgetPlugin } from "../plugins/types";
+import { hasExplicitStylePath, hasExplicitThemeStyle } from "../utils/style-provenance";
 
 export type NormalizedSuggestion = Omit<
   AgentWidgetResolvedSuggestion,
@@ -255,14 +256,29 @@ export const createSuggestionElement = (
     // Legacy `suggestionChipsConfig` compat is chip-only: its inline
     // styles would otherwise override the card/list padding tokens.
     if (variant === "chip") {
+      // Standalone callers may pass a separate raw chips object. Widget callers
+      // pass the resolved object, whose origin must survive default materialization.
+      const styleConfig = config.suggestionChipsConfig === chipsConfig
+        ? config : { suggestionChipsConfig: chipsConfig };
+      const explicit = (key: "fontWeight" | "paddingX" | "paddingY") =>
+        hasExplicitStylePath(styleConfig, `suggestionChipsConfig.${key}`);
+      const themed = (leaf: "fontWeight" | "padding") =>
+        hasExplicitThemeStyle(config, `suggestion.chip.${leaf}`, "light") ||
+        hasExplicitThemeStyle(config, `suggestion.chip.${leaf}`, "dark");
       if (chipsConfig?.fontWeight) {
-        button.style.fontWeight = chipsConfig.fontWeight;
+        button.style.fontWeight = !explicit("fontWeight") && themed("fontWeight")
+          ? "var(--persona-suggestion-compat-weight, 500)" : chipsConfig.fontWeight;
       }
-      if (chipsConfig?.paddingX) {
+      const themePadding = themed("padding");
+      if (themePadding) {
+        button.classList.add("persona-theme-padding");
+        button.style.setProperty("--persona-theme-padding", "var(--persona-suggestion-compat-padding, 6px 12px)");
+      }
+      if (chipsConfig?.paddingX && (explicit("paddingX") || !themePadding)) {
         button.style.paddingLeft = chipsConfig.paddingX;
         button.style.paddingRight = chipsConfig.paddingX;
       }
-      if (chipsConfig?.paddingY) {
+      if (chipsConfig?.paddingY && (explicit("paddingY") || !themePadding)) {
         button.style.paddingTop = chipsConfig.paddingY;
         button.style.paddingBottom = chipsConfig.paddingY;
       }

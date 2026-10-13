@@ -1,4 +1,11 @@
 import type { AgentWidgetConfig, PersonaArtifactKind } from "../types";
+import { hasExplicitThemeStyle } from "./style-provenance";
+
+/** Preserve legacy normalization while transporting theme values through CSS. */
+export function artifactStyle(config: AgentWidgetConfig, legacy: string | undefined, path: string): string | undefined {
+  return legacy?.trim() || (hasExplicitThemeStyle(config, `artifact.${path}`)
+    ? `var(--persona-components-artifact-${path.split(".").join("-")})` : undefined);
+}
 
 export function artifactsSidebarEnabled(config: AgentWidgetConfig | undefined): boolean {
   return config?.features?.artifacts?.enabled === true;
@@ -21,8 +28,8 @@ export function applyArtifactPaneBorderTheme(mount: HTMLElement, config: AgentWi
   if (!artifactsSidebarEnabled(config)) return;
 
   const l = config.features?.artifacts?.layout;
-  const full = l?.paneBorder?.trim();
-  const left = l?.paneBorderLeft?.trim();
+  const full = artifactStyle(config, l?.paneBorder, "pane.border");
+  const left = artifactStyle(config, l?.paneBorderLeft, "pane.borderLeft");
   if (full) {
     mount.classList.add("persona-artifact-border-full");
     mount.style.setProperty("--persona-artifact-pane-border", full);
@@ -37,6 +44,7 @@ function clearDocumentToolbarLayoutVars(mount: HTMLElement): void {
   mount.style.removeProperty("--persona-artifact-doc-toolbar-icon-color");
   mount.style.removeProperty("--persona-artifact-doc-toggle-active-bg");
   mount.style.removeProperty("--persona-artifact-doc-toggle-active-border");
+  mount.style.removeProperty("--persona-artifact-doc-toggle-active-color");
 }
 
 const ARTIFACT_APPEARANCE_MODES = ["panel", "seamless", "detached"] as const;
@@ -94,13 +102,13 @@ export function applyArtifactLayoutCssVars(mount: HTMLElement, config: AgentWidg
   } else {
     mount.style.removeProperty("--persona-artifact-pane-min-width");
   }
-  const paneBg = l?.paneBackground?.trim();
+  const paneBg = artifactStyle(config, l?.paneBackground, "pane.background");
   if (paneBg) {
     mount.style.setProperty("--persona-artifact-pane-bg", paneBg);
   } else {
     mount.style.removeProperty("--persona-artifact-pane-bg");
   }
-  const panePad = l?.panePadding?.trim();
+  const panePad = artifactStyle(config, l?.panePadding, "pane.padding");
   if (panePad) {
     mount.style.setProperty("--persona-artifact-pane-padding", panePad);
   } else {
@@ -108,10 +116,10 @@ export function applyArtifactLayoutCssVars(mount: HTMLElement, config: AgentWidg
   }
 
   const docToolbarVars: Array<[string | undefined, string]> = [
-    [l?.documentToolbarIconColor, "--persona-artifact-doc-toolbar-icon-color"],
-    [l?.documentToolbarToggleActiveBackground, "--persona-artifact-doc-toggle-active-bg"],
-    [l?.documentToolbarToggleActiveBorderColor, "--persona-artifact-doc-toggle-active-border"],
-    [l?.documentToolbarToggleActiveColor, "--persona-artifact-doc-toggle-active-color"],
+    [artifactStyle(config, l?.documentToolbarIconColor, "toolbar.iconColor"), "--persona-artifact-doc-toolbar-icon-color"],
+    [artifactStyle(config, l?.documentToolbarToggleActiveBackground, "toolbar.toggleActiveBackground"), "--persona-artifact-doc-toggle-active-bg"],
+    [artifactStyle(config, l?.documentToolbarToggleActiveBorderColor, "toolbar.toggleActiveBorderColor"), "--persona-artifact-doc-toggle-active-border"],
+    [artifactStyle(config, l?.documentToolbarToggleActiveColor, "toolbar.toggleActiveColor"), "--persona-artifact-doc-toggle-active-color"],
   ];
   for (const [raw, name] of docToolbarVars) {
     const value = raw?.trim();
@@ -139,19 +147,19 @@ export function applyArtifactPaneAppearance(mount: HTMLElement, config: AgentWid
   const mode = resolveArtifactPaneAppearance(config);
   mount.classList.add(`persona-artifact-appearance-${mode}`);
 
-  const radius = layout?.paneBorderRadius?.trim();
+  const radius = artifactStyle(config, layout?.paneBorderRadius, "pane.borderRadius");
   if (radius) {
     mount.style.setProperty("--persona-artifact-pane-radius", radius);
   }
 
-  const shadow = layout?.paneShadow?.trim();
+  const shadow = artifactStyle(config, layout?.paneShadow, "pane.shadow");
   if (shadow) {
     mount.style.setProperty("--persona-artifact-pane-shadow", shadow);
   }
 
   // Chat card gains its own front shadow lookup so a detached split can flatten
   // the chat column while the pane stays raised. Unset falls back to the pane chain.
-  const chatShadow = layout?.chatShadow?.trim();
+  const chatShadow = artifactStyle(config, layout?.chatShadow, "chat.shadow");
   if (chatShadow) {
     mount.style.setProperty("--persona-artifact-chat-shadow", chatShadow);
   }

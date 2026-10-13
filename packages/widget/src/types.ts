@@ -1569,13 +1569,18 @@ export type AgentWidgetArtifactsLayoutConfig = {
    * @default 'panel'
    */
   paneAppearance?: "panel" | "seamless" | "detached";
-  /** Border radius on the artifact pane (CSS length). Works with any `paneAppearance`. */
+  /** Border radius on the artifact pane (CSS length). Works with any `paneAppearance`.
+   * @deprecated Prefer `theme.components.artifact.pane.borderRadius`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   paneBorderRadius?: string;
-  /** CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow. */
+  /** CSS `box-shadow` on the artifact pane. Set `"none"` to suppress the default shadow.
+   * @deprecated Prefer `theme.components.artifact.pane.shadow`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   paneShadow?: string;
   /**
    * CSS `box-shadow` for the chat column card in a detached split. Defaults to the same
    * elevation as the artifact pane; set to `"none"` to keep the chat flat while the pane stays raised.
+   * @deprecated Prefer `theme.components.artifact.chat.shadow`. Explicit legacy input remains supported and retains its historical precedence.
    */
   chatShadow?: string;
   /**
@@ -1590,11 +1595,13 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /**
    * Full `border` shorthand for the artifact `<aside>` (all sides). Overrides default pane borders.
    * Example: `"1px solid #cccccc"`.
+   * @deprecated Prefer `theme.components.artifact.pane.border`. Explicit legacy input remains supported and retains its historical precedence.
    */
   paneBorder?: string;
   /**
    * `border-left` shorthand only: typical for split view next to chat (with or without resizer).
    * Ignored if `paneBorder` is set. Example: `"1px solid #cccccc"`.
+   * @deprecated Prefer `theme.components.artifact.pane.borderLeft`. Explicit legacy input remains supported and retains its historical precedence.
    */
   paneBorderLeft?: string;
   /**
@@ -1604,9 +1611,11 @@ export type AgentWidgetArtifactsLayoutConfig = {
   /**
    * Desktop welded split only: override the artifact pane's outer-right corner radius (CSS length).
    * @default matches the panel radius (`--persona-panel-radius`)
+   * @deprecated Prefer `theme.components.artifact.split.outerRadius`. Explicit legacy input remains supported and retains its historical precedence.
    */
   unifiedSplitOuterRadius?: string;
   /**
+   * @deprecated Prefer `theme.components.artifact.pane.background`; explicit legacy input still wins.
    * Strongest override: solid background for the artifact column (CSS color). Sets `--persona-artifact-pane-bg`
    * on the widget root. Leave unset to use theme `components.artifact.pane.background` (defaults to semantic
    * container) so light/dark stays consistent.
@@ -1614,6 +1623,7 @@ export type AgentWidgetArtifactsLayoutConfig = {
   paneBackground?: string;
   /**
    * Horizontal padding for artifact toolbar and content (CSS length), e.g. `24px`.
+   * @deprecated Prefer `theme.components.artifact.pane.padding`. Explicit legacy input remains supported and retains its historical precedence.
    */
   panePadding?: string;
   /**
@@ -1635,13 +1645,21 @@ export type AgentWidgetArtifactsLayoutConfig = {
    * When `toolbarPreset` is `document`, show a small chevron after the copy control (e.g. menu affordance).
    */
   documentToolbarShowCopyChevron?: boolean;
-  /** Document toolbar icon buttons (view, code, copy, refresh, close): CSS color. Sets `--persona-artifact-doc-toolbar-icon-color` on the widget root. */
+  /** Document toolbar icon buttons (view, code, copy, refresh, close): CSS color. Sets `--persona-artifact-doc-toolbar-icon-color` on the widget root.
+   * @deprecated Prefer `theme.components.artifact.toolbar.iconColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   documentToolbarIconColor?: string;
-  /** Active view/source toggle background. Sets `--persona-artifact-doc-toggle-active-bg`. */
+  /** Active view/source toggle background. Sets `--persona-artifact-doc-toggle-active-bg`.
+   * @deprecated Prefer `theme.components.artifact.toolbar.toggleActiveBackground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   documentToolbarToggleActiveBackground?: string;
-  /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`. */
+  /** Active view/source toggle border color. Sets `--persona-artifact-doc-toggle-active-border`.
+   * @deprecated Prefer `theme.components.artifact.toolbar.toggleActiveBorderColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   documentToolbarToggleActiveBorderColor?: string;
-  /** Active view/source toggle icon color (defaults to `documentToolbarIconColor`). Sets `--persona-artifact-doc-toggle-active-color`. */
+  /** Active view/source toggle icon color (defaults to `documentToolbarIconColor`). Sets `--persona-artifact-doc-toggle-active-color`.
+   * @deprecated Prefer `theme.components.artifact.toolbar.toggleActiveColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   documentToolbarToggleActiveColor?: string;
   /** Show an expand/collapse toggle in the artifact toolbar (both presets). Expanded fills the widget with the pane and hides the chat column. Default: false. */
   showExpandToggle?: boolean;
@@ -1649,7 +1667,9 @@ export type AgentWidgetArtifactsLayoutConfig = {
   showCopyButton?: boolean;
   /** Edge fade on the scrollable tab strip. true = both ends (dynamic). @default true */
   tabFade?: boolean | { start?: boolean; end?: boolean };
-  /** Tab fade width (CSS length). @default 24px */
+  /** Tab fade width (CSS length). @default 24px
+   * @deprecated Prefer `theme.components.artifact.tab.fadeSize`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   tabFadeSize?: string;
   /**
    * Invoked when the document toolbar Refresh control is used (before the pane
@@ -2799,14 +2819,23 @@ export type AskUserQuestionPayload = {
  * and are plumbed through as CSS custom properties on the sheet root.
  */
 export type AgentWidgetAskUserQuestionStyles = {
+  /** @deprecated Prefer `theme.components.askUserQuestion.sheet.background`. Explicit legacy input remains supported and retains its historical precedence. */
   sheetBackground?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.sheet.border`. Explicit legacy input remains supported and retains its historical precedence. */
   sheetBorder?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.sheet.shadow`. Explicit legacy input remains supported and retains its historical precedence. */
   sheetShadow?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.background`. Explicit legacy input remains supported and retains its historical precedence. */
   pillBackground?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.selectedBackground`. Explicit legacy input remains supported and retains its historical precedence. */
   pillBackgroundSelected?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.foreground`. Explicit legacy input remains supported and retains its historical precedence. */
   pillTextColor?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.selectedForeground`. Explicit legacy input remains supported and retains its historical precedence. */
   pillTextColorSelected?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.pill.borderRadius`. Explicit legacy input remains supported and retains its historical precedence. */
   pillBorderRadius?: string;
+  /** @deprecated Prefer `theme.components.askUserQuestion.customInput.background`. Explicit legacy input remains supported and retains its historical precedence. */
   customInputBackground?: string;
 };
 
@@ -3912,13 +3941,21 @@ export type AgentWidgetLauncherConfig = {
   headerIconSize?: string;
   headerIconName?: string;
   headerIconHidden?: boolean;
+  /** @deprecated Prefer `theme.components.header.close.size`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonSize?: string;
+  /** @deprecated Prefer `theme.components.header.close.foreground`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonColor?: string;
+  /** @deprecated Prefer `theme.components.header.close.background`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonBackgroundColor?: string;
+  /** @deprecated Prefer `theme.components.header.close.borderWidth`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonBorderWidth?: string;
+  /** @deprecated Prefer `theme.components.header.close.borderColor`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonBorderColor?: string;
+  /** @deprecated Prefer `theme.components.header.close.borderRadius`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonBorderRadius?: string;
+  /** @deprecated Prefer `theme.components.header.close.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonPaddingX?: string;
+  /** @deprecated Prefer `theme.components.header.close.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   closeButtonPaddingY?: string;
   closeButtonPlacement?: "inline" | "top-right";
   closeButtonIconName?: string;
@@ -4019,21 +4056,32 @@ export type AgentWidgetTooltipConfig = {
 };
 
 export type AgentWidgetSendButtonConfig = {
+  /** @deprecated Prefer `theme.components.composer.send.borderWidth`. Explicit legacy input remains supported and retains its historical precedence. */
   borderWidth?: string;
+  /** @deprecated Prefer `theme.components.composer.send.borderColor`. Explicit legacy input remains supported and retains its historical precedence. */
   borderColor?: string;
+  /** @deprecated Prefer `theme.components.composer.send.padding` (CSS Y X shorthand; legacy padding applied in text mode only). Explicit legacy input remains supported and retains its historical precedence. */
   paddingX?: string;
+  /** @deprecated Prefer `theme.components.composer.send.padding` (CSS Y X shorthand; legacy padding applied in text mode only). Explicit legacy input remains supported and retains its historical precedence. */
   paddingY?: string;
   iconText?: string;
   iconName?: string;
-  /** Icon glyph box in icon mode, e.g. "20px". Defaults to half of `size`. */
+  /** Icon glyph box in icon mode, e.g. "20px". Defaults to half of `size`.
+   * @deprecated Prefer `theme.components.composer.send.iconSize`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   iconSize?: string;
-  /** Stroke width for the icon glyph, in viewBox units. Default 2. */
+  /** Stroke width for the icon glyph, in viewBox units. Default 2.
+   * @deprecated Prefer `theme.components.composer.send.iconStrokeWidth`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   iconStrokeWidth?: number;
   useIcon?: boolean;
   tooltipText?: string;
   showTooltip?: boolean;
+  /** @deprecated Prefer `theme.components.composer.send.background` (icon mode); set voice.control.background too to preserve its idle microphone fallback. The legacy field was ignored in text mode. Explicit legacy input remains supported and retains its historical precedence. */
   backgroundColor?: string;
+  /** @deprecated Prefer `theme.components.composer.send.foreground`; set voice.control.foreground too to preserve its idle microphone fallback. Explicit legacy input remains supported and retains its historical precedence. */
   textColor?: string;
+  /** @deprecated Prefer `theme.components.composer.send.size`; preserve the legacy half-size glyph using composer.send.iconSize too. Explicit legacy input remains supported and retains its historical precedence. */
   size?: string;
   /** Lucide icon name shown while a response is streaming. Clicking the button in this state aborts the stream. Default: "square". */
   stopIconName?: string;
@@ -4667,13 +4715,21 @@ export type AgentWidgetClearChatConfig = {
   enabled?: boolean;
   placement?: "inline" | "top-right";
   iconName?: string;
+  /** @deprecated Prefer `theme.components.header.clear.foreground`. Explicit legacy input remains supported and retains its historical precedence. */
   iconColor?: string;
+  /** @deprecated Prefer `theme.components.header.clear.background`. Explicit legacy input remains supported and retains its historical precedence. */
   backgroundColor?: string;
+  /** @deprecated Prefer `theme.components.header.clear.borderWidth`. Explicit legacy input remains supported and retains its historical precedence. */
   borderWidth?: string;
+  /** @deprecated Prefer `theme.components.header.clear.borderColor`. Explicit legacy input remains supported and retains its historical precedence. */
   borderColor?: string;
+  /** @deprecated Prefer `theme.components.header.clear.borderRadius`. Explicit legacy input remains supported and retains its historical precedence. */
   borderRadius?: string;
+  /** @deprecated Prefer `theme.components.header.clear.size`. Explicit legacy input remains supported and retains its historical precedence. */
   size?: string;
+  /** @deprecated Prefer `theme.components.header.clear.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   paddingX?: string;
+  /** @deprecated Prefer `theme.components.header.clear.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   paddingY?: string;
   tooltipText?: string;
   showTooltip?: boolean;
@@ -4779,38 +4835,60 @@ export type AgentWidgetVoiceRecognitionConfig = {
   /** Text shown in the assistant message if voice processing fails. Default: "Voice processing failed. Please try again." */
   processingErrorText?: string;
   iconName?: string;
+  /** @deprecated Prefer `theme.components.voice.control.size` AND voice.control.iconSize to preserve both box and glyph sizing. Explicit legacy input remains supported and retains its historical precedence. */
   iconSize?: string;
+  /** @deprecated Prefer `theme.components.voice.control.foreground`. Explicit legacy input remains supported and retains its historical precedence. */
   iconColor?: string;
+  /** @deprecated Prefer `theme.components.voice.control.background`. Explicit legacy input remains supported and retains its historical precedence. */
   backgroundColor?: string;
+  /** @deprecated Prefer `theme.components.voice.control.borderColor`. Explicit legacy input remains supported and retains its historical precedence. */
   borderColor?: string;
+  /** @deprecated Prefer `theme.components.voice.control.borderWidth`. Explicit legacy input remains supported and retains its historical precedence. */
   borderWidth?: string;
+  /** @deprecated Prefer `theme.components.voice.control.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   paddingX?: string;
+  /** @deprecated Prefer `theme.components.voice.control.padding`. Explicit legacy input remains supported and retains its historical precedence. */
   paddingY?: string;
   tooltipText?: string;
   showTooltip?: boolean;
+  /** @deprecated Prefer `theme.components.voice.recording.indicator`. Explicit legacy input remains supported and retains its historical precedence. */
   recordingIconColor?: string;
+  /** @deprecated Prefer `theme.components.voice.recording.background`. Explicit legacy input remains supported and retains its historical precedence. */
   recordingBackgroundColor?: string;
+  /** @deprecated Prefer `theme.components.voice.recording.border`. Explicit legacy input remains supported and retains its historical precedence. */
   recordingBorderColor?: string;
   showRecordingIndicator?: boolean;
 
   // Processing state (after recording stops, waiting for agent response)
   /** Icon name shown while processing voice input. Default: "loader" */
   processingIconName?: string;
-  /** Icon color during processing. Inherits idle iconColor if not set */
+  /** Icon color during processing. Inherits idle iconColor if not set
+   * @deprecated Prefer `theme.components.voice.processing.icon`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   processingIconColor?: string;
-  /** Button background color during processing. Inherits idle backgroundColor if not set */
+  /** Button background color during processing. Inherits idle backgroundColor if not set
+   * @deprecated Prefer `theme.components.voice.processing.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   processingBackgroundColor?: string;
-  /** Button border color during processing. Inherits idle borderColor if not set */
+  /** Button border color during processing. Inherits idle borderColor if not set
+   * @deprecated Prefer `theme.components.voice.processing.border`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   processingBorderColor?: string;
 
   // Speaking state (agent TTS audio is playing)
   /** Icon name shown while agent is speaking. Default: "volume-2" (or "square" in cancel mode) */
   speakingIconName?: string;
-  /** Icon color while speaking. Inherits idle iconColor if not set */
+  /** Icon color while speaking. Inherits idle iconColor if not set
+   * @deprecated Prefer `theme.components.voice.speaking.icon`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   speakingIconColor?: string;
-  /** Button background color while speaking. Inherits idle backgroundColor if not set */
+  /** Button background color while speaking. Inherits idle backgroundColor if not set
+   * @deprecated Prefer `theme.components.voice.speaking.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   speakingBackgroundColor?: string;
-  /** Button border color while speaking. Inherits idle borderColor if not set */
+  /** Button border color while speaking. Inherits idle borderColor if not set
+   * @deprecated Prefer `theme.components.voice.speaking.border`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   speakingBorderColor?: string;
   autoResume?: boolean | "assistant";
 
@@ -5256,27 +5334,41 @@ export type AgentWidgetApprovalConfig = {
   keyboardShortcuts?: "focused" | "legacy" | false;
   /** Menu label for remembered permission in allow-once primary mode. */
   alwaysAllowLabel?: string;
-  /** Background color of the approval bubble */
+  /** @deprecated Prefer `theme.components.approval.requested.background`. Explicit legacy input still wins. */
   backgroundColor?: string;
-  /** Border color of the approval bubble */
+  /** @deprecated Prefer `theme.components.approval.requested.border`. Explicit legacy input still wins. */
   borderColor?: string;
-  /** Box-shadow for the approval bubble; pass `"none"` to remove it. Overrides the default `persona-shadow-sm`. */
+  /** @deprecated Prefer `theme.components.approval.requested.shadow`. Explicit legacy input still wins; `"none"` removes the shadow. */
   shadow?: string;
-  /** Color for the title text */
+  /** Color for the title text
+   * @deprecated Prefer `theme.components.approval.requested.titleColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   titleColor?: string;
-  /** Color for the description text */
+  /** Color for the description text
+   * @deprecated Prefer `theme.components.approval.requested.descriptionColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   descriptionColor?: string;
-  /** Background color for the approve button */
+  /** @deprecated Prefer `theme.components.approval.approve.background`. Explicit legacy input still wins. */
   approveButtonColor?: string;
-  /** Text color for the approve button */
+  /** Text color for the approve button
+   * @deprecated Prefer `theme.components.approval.approve.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   approveButtonTextColor?: string;
-  /** Background color for the deny button */
+  /** Background color for the deny button
+   * @deprecated Prefer `theme.components.approval.deny.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   denyButtonColor?: string;
-  /** Text color for the deny button */
+  /** Text color for the deny button
+   * @deprecated Prefer `theme.components.approval.deny.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   denyButtonTextColor?: string;
-  /** Background color for the parameters block */
+  /** Background color for the parameters block
+   * @deprecated Prefer `theme.components.approval.requested.parameters.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   parameterBackgroundColor?: string;
-  /** Text color for the parameters block */
+  /** Text color for the parameters block
+   * @deprecated Prefer `theme.components.approval.requested.parameters.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   parameterTextColor?: string;
   /** Title text displayed above the description */
   title?: string;
@@ -5287,6 +5379,7 @@ export type AgentWidgetApprovalConfig = {
   /**
    * Color for the agent-authored reason line (the agent's per-call
    * justification, shown attributed below the summary when present).
+   * @deprecated Prefer `theme.components.approval.requested.reasonColor`. Explicit legacy input remains supported and retains its historical precedence.
    */
   reasonColor?: string;
   /**
@@ -5360,41 +5453,75 @@ export type AgentWidgetApprovalConfig = {
 };
 
 export type AgentWidgetToolCallConfig = {
-  /** Box-shadow for tool-call bubbles; pass `"none"` to remove it. Overrides the `components.toolBubble.shadow` token / `--persona-tool-bubble-shadow`. */
+  /** @deprecated Prefer `theme.components.toolBubble.shadow`. Explicit legacy input still wins; `"none"` removes the shadow. */
   shadow?: string;
-  /** Background color of the tool call bubble container. */
+  /** Background color of the tool call bubble container.
+   * @deprecated Prefer `theme.components.toolBubble.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   backgroundColor?: string;
-  /** Border color of the tool call bubble container. */
+  /** Border color of the tool call bubble container.
+   * @deprecated Prefer `theme.components.toolBubble.borderColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   borderColor?: string;
-  /** Border width of the tool call bubble container (CSS value, e.g. `"1px"`). */
+  /** Border width of the tool call bubble container (CSS value, e.g. `"1px"`).
+   * @deprecated Prefer `theme.components.toolBubble.borderWidth`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   borderWidth?: string;
-  /** Border radius of the tool call bubble container (CSS value, e.g. `"12px"`). */
+  /** Border radius of the tool call bubble container (CSS value, e.g. `"12px"`).
+   * @deprecated Prefer `theme.components.toolBubble.borderRadius`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   borderRadius?: string;
-  /** Background color of the collapsed header row. */
+  /** Background color of the collapsed header row.
+   * @deprecated Prefer `theme.components.toolBubble.header.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   headerBackgroundColor?: string;
-  /** Text color of the collapsed header row (tool name / summary). */
+  /** Text color of the collapsed header row (tool name / summary).
+   * @deprecated Prefer `theme.components.toolBubble.header.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   headerTextColor?: string;
-  /** Horizontal padding of the collapsed header row (CSS value). */
+  /** Horizontal padding of the collapsed header row (CSS value).
+   * @deprecated Prefer `theme.components.toolBubble.header.padding`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   headerPaddingX?: string;
-  /** Vertical padding of the collapsed header row (CSS value). */
+  /** Vertical padding of the collapsed header row (CSS value).
+   * @deprecated Prefer `theme.components.toolBubble.header.padding`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   headerPaddingY?: string;
-  /** Background color of the expanded content area. */
+  /** Background color of the expanded content area.
+   * @deprecated Prefer `theme.components.toolBubble.content.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   contentBackgroundColor?: string;
-  /** Text color of the expanded content area. */
+  /** Text color of the expanded content area.
+   * @deprecated Prefer `theme.components.toolBubble.content.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   contentTextColor?: string;
-  /** Horizontal padding of the expanded content area (CSS value). */
+  /** Horizontal padding of the expanded content area (CSS value).
+   * @deprecated Prefer `theme.components.toolBubble.content.padding`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   contentPaddingX?: string;
-  /** Vertical padding of the expanded content area (CSS value). */
+  /** Vertical padding of the expanded content area (CSS value).
+   * @deprecated Prefer `theme.components.toolBubble.content.padding`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   contentPaddingY?: string;
-  /** Background color of code blocks (arguments / result) in the expanded area. */
+  /** Background color of code blocks (arguments / result) in the expanded area.
+   * @deprecated Prefer `theme.components.toolBubble.codeBlock.background`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   codeBlockBackgroundColor?: string;
-  /** Border color of code blocks in the expanded area. */
+  /** Border color of code blocks in the expanded area.
+   * @deprecated Prefer `theme.components.toolBubble.codeBlock.borderColor`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   codeBlockBorderColor?: string;
-  /** Text color of code blocks in the expanded area. */
+  /** Text color of code blocks in the expanded area.
+   * @deprecated Prefer `theme.components.toolBubble.codeBlock.foreground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   codeBlockTextColor?: string;
-  /** Color of the expand/collapse toggle icon. */
+  /** Color of the expand/collapse toggle icon.
+   * @deprecated Prefer `theme.components.toolBubble.toggleForeground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   toggleTextColor?: string;
-  /** Color of section labels ("Arguments", "Result", "Activity") in the expanded area. */
+  /** Color of section labels ("Arguments", "Result", "Activity") in the expanded area.
+   * @deprecated Prefer `theme.components.toolBubble.labelForeground`. Explicit legacy input remains supported and retains its historical precedence.
+   */
   labelTextColor?: string;
   /**
    * Override the collapsed summary row content for a tool call bubble.
@@ -5467,18 +5594,21 @@ export type AgentWidgetToolCallConfig = {
   /**
    * Primary color for shimmer-color animation mode.
    * Defaults to the current text color.
+   * @deprecated Prefer `theme.components.toolBubble.loading.primary`. Explicit legacy input remains supported and retains its historical precedence.
    */
   loadingAnimationColor?: string;
   /**
    * Secondary/end color for shimmer-color animation mode.
    * Creates a gradient sweep between `loadingAnimationColor` and this color.
    * @default "#3b82f6"
+   * @deprecated Prefer `theme.components.toolBubble.loading.secondary`. Explicit legacy input remains supported and retains its historical precedence.
    */
   loadingAnimationSecondaryColor?: string;
   /**
    * Duration of one full animation cycle in milliseconds.
    * Applies to pulse, shimmer, shimmer-color, and rainbow modes.
    * @default 2000
+   * @deprecated Prefer `theme.components.toolBubble.loading.duration` (convert numeric milliseconds to a CSS duration, e.g. 2000 to 2000ms). Explicit legacy input remains supported and retains its historical precedence.
    */
   loadingAnimationDuration?: number;
 };
@@ -5557,9 +5687,13 @@ export type AgentWidgetReasoningConfig = {
 };
 
 export type AgentWidgetSuggestionChipsConfig = {
+  /** Accepted compatibility no-op: the suggestion renderer does not apply this field. */
   fontFamily?: "sans-serif" | "serif" | "mono";
+  /** @deprecated Prefer `theme.components.suggestion.chip.fontWeight`; chip variant only. Explicit legacy input still wins. */
   fontWeight?: string;
+  /** @deprecated Prefer `theme.components.suggestion.chip.padding` (CSS Y X shorthand); chip variant only. Explicit legacy X overrides only its axis. */
   paddingX?: string;
+  /** @deprecated Prefer `theme.components.suggestion.chip.padding` (CSS Y X shorthand); chip variant only. Explicit legacy Y overrides only its axis. */
   paddingY?: string;
 };
 
@@ -6789,7 +6923,7 @@ export type AgentWidgetMarkdownOptions = {
  * Markdown configuration for customizing how markdown is rendered in chat messages.
  * Provides three levels of control:
  * 
- * 1. **CSS Variables** - Override styles via `--cw-md-*` CSS custom properties
+ * 1. **CSS Variables** - Override styles via `--persona-md-*` CSS custom properties
  * 2. **Parsing Options** - Configure marked behavior via `options`
  * 3. **Custom Renderers** - Full control via `renderer` overrides
  * 
@@ -7529,12 +7663,13 @@ export type AgentWidgetConfig = {
    * `copy.welcomeSubtitle`, and `copy.showWelcomeCard`.
    */
   welcome?: AgentWidgetWelcomeConfig;
-  /** @deprecated Prefer `suggestions.starters.items`. */
+  /** @deprecated Prefer `suggestions.starters.items` with `placement: "composer"` for the legacy placement. */
   suggestionChips?: string[];
-  /** @deprecated Prefer semantic tokens under `theme.components.suggestion`. */
+  /** Compatibility chip styles; only weight and padding apply. `fontFamily` remains an accepted no-op. */
   suggestionChipsConfig?: AgentWidgetSuggestionChipsConfig;
   debug?: boolean;
   formEndpoint?: string;
+  /** @deprecated Prefer `theme.components.panel.width` for the open panel. Explicit legacy input still wins. */
   launcherWidth?: string;
   sendButton?: AgentWidgetSendButtonConfig;
   statusIndicator?: AgentWidgetStatusIndicatorConfig;
@@ -7919,7 +8054,7 @@ export type AgentWidgetConfig = {
    * Customize how markdown is parsed and rendered in chat messages.
    * 
    * Override methods:
-   * 1. **CSS Variables** - Override `--cw-md-*` variables in your stylesheet
+   * 1. **CSS Variables** - Override `--persona-md-*` variables in your stylesheet
    * 2. **Options** - Configure marked parser behavior
    * 3. **Renderers** - Custom rendering functions for specific elements
    * 4. **postprocessMessage** - Complete control over message transformation

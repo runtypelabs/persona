@@ -1067,6 +1067,26 @@ describe("createAgentExperience welded artifact split chrome", () => {
     controller.destroy();
   });
 
+  it("updates themed welded radius and pane padding without losing artifacts, restoring theme after legacy reset", () => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, weldedConfig({}, { components: { artifact: { split: { outerRadius: "12px" }, pane: { padding: "20px" } } } }));
+    openArtifact(controller);
+    expect(mount.style.getPropertyValue("--persona-artifact-welded-outer-radius")).toBe("var(--persona-components-artifact-split-outerRadius)");
+    const pane = mount.querySelector<HTMLElement>(".persona-artifact-pane")!;
+    const content = pane.querySelector<HTMLElement>(".persona-artifact-content")!;
+    expect(content.style.padding).toBe("var(--persona-components-artifact-pane-padding)");
+    controller.update({ features: { artifacts: { layout: { unifiedSplitOuterRadius: "9px", panePadding: "8px" } } } });
+    expect(mount.style.getPropertyValue("--persona-artifact-welded-outer-radius")).toBe("9px");
+    expect(content.style.padding).toBe("8px");
+    controller.update({ features: { artifacts: { layout: { unifiedSplitOuterRadius: undefined, panePadding: undefined } } }, colorScheme: "dark", darkTheme: { components: { artifact: { split: { outerRadius: "16px" }, pane: { padding: "24px" } } } } });
+    expect(mount.querySelector(".persona-artifact-pane")).toBe(pane);
+    expect(mount.style.getPropertyValue("--persona-artifact-welded-outer-radius")).toBe("var(--persona-components-artifact-split-outerRadius)");
+    expect(content.style.padding).toBe("var(--persona-components-artifact-pane-padding)");
+    expect(mount.style.getPropertyValue("--persona-components-artifact-split-outerRadius")).toBe("16px");
+    expect(mount.style.getPropertyValue("--persona-components-artifact-pane-padding")).toBe("24px");
+    controller.destroy();
+  });
+
   it("lets unifiedSplitOuterRadius override the welded outer radius", () => {
     const mount = createMount();
     const controller = createAgentExperience(

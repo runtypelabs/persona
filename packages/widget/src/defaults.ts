@@ -4,6 +4,7 @@ import { deepMerge } from "./utils/deep-merge";
 import { DEFAULT_APPROVAL_V5 } from "./utils/approval-config";
 import { defaultProvenance, inheritDefaultProvenance } from "./utils/defaults-provenance";
 import { inheritPanelAliasProvenance } from "./utils/panel-config";
+import { inheritStyleProvenance } from "./utils/style-provenance";
 import {
   DEFAULT_TOOLTIP_DELAY_MS,
   DEFAULT_TOOLTIP_SKIP_DELAY_MS,
@@ -330,9 +331,9 @@ export function mergeWithDefaults(
   config?: Partial<AgentWidgetConfig>
 ): Partial<AgentWidgetConfig> {
   const defaults = resolveDefaults(config);
-  if (!config) return inheritDefaultProvenance(inheritPanelAliasProvenance(defaults), undefined, DEFAULTS_V5);
+  if (!config) return inheritStyleProvenance(inheritDefaultProvenance(inheritPanelAliasProvenance(defaults), undefined, DEFAULTS_V5));
 
-  return inheritDefaultProvenance(inheritPanelAliasProvenance({
+  return inheritStyleProvenance(inheritDefaultProvenance(inheritPanelAliasProvenance({
     ...defaults,
     ...config,
     // Leave the scheme unresolved for a brand unless the host chose one.
@@ -520,6 +521,6 @@ export function mergeWithDefaults(
       ...defaults.messageActions,
       ...config.messageActions,
     },
-  }, config), config, DEFAULTS_V5);
+  }, config), config, DEFAULTS_V5), config);
 
 }

@@ -24,6 +24,7 @@ import type {
 import type { AgentWidgetPlugin } from "../plugins/types";
 import { humanizeToolName } from "../utils/humanize-tool-name";
 import { resolveApprovalConfig } from "../utils/approval-config";
+import { resolveApprovalStyles } from "../utils/approval-styles";
 
 type Approval = NonNullable<AgentWidgetMessage["approval"]>;
 type Decide = (options?: { remember?: boolean }) => void;
@@ -445,7 +446,7 @@ export const createBuiltInApprovalPlugin = (
     renderApproval: ({ message, approve, deny, config, execution, signal }) => {
       const approval = message?.approval;
       if (!approval) return null;
-      const approvalConfig = resolveApprovalConfig(config);
+      const approvalConfig = { ...resolveApprovalConfig(config), ...resolveApprovalStyles(config, "plugin") };
       // A card can remain mounted while the host processes a decision. Retire
       // both action paths immediately, including click after native key events.
       let decided = false;

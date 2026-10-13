@@ -552,6 +552,14 @@ function generateHooksConfig(hooks: CodeGeneratorHooks | undefined, indent: stri
   return lines;
 }
 
+/** JSON literals are valid JavaScript; escaping `<` also keeps inline scripts intact. */
+function serializeConfigLiteral(value: unknown, space?: number): string {
+  return JSON.stringify(value, null, space)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 function appendSerializableObjectEntries(
   lines: string[],
   value: Record<string, unknown>,
@@ -560,19 +568,21 @@ function appendSerializableObjectEntries(
   Object.entries(value).forEach(([key, entryValue]) => {
     if (entryValue === undefined || typeof entryValue === "function") return;
 
+    const property = /^[a-zA-Z_$][\w$]*$/.test(key) ? key : serializeConfigLiteral(key);
+
     if (Array.isArray(entryValue)) {
-      lines.push(`${indent}${key}: ${JSON.stringify(entryValue)},`);
+      lines.push(`${indent}${property}: ${serializeConfigLiteral(entryValue)},`);
       return;
     }
 
     if (entryValue && typeof entryValue === "object") {
-      lines.push(`${indent}${key}: {`);
+      lines.push(`${indent}${property}: {`);
       appendSerializableObjectEntries(lines, entryValue as Record<string, unknown>, `${indent}  `);
       lines.push(`${indent}},`);
       return;
     }
 
-    lines.push(`${indent}${key}: ${JSON.stringify(entryValue)},`);
+    lines.push(`${indent}${property}: ${serializeConfigLiteral(entryValue)},`);
   });
 }
 
@@ -586,6 +596,17 @@ function appendSerializableObjectBlock(
   lines.push(`${indent}${key}: {`);
   appendSerializableObjectEntries(lines, value, `${indent}  `);
   lines.push(`${indent}},`);
+}
+
+/** Preserve primitive types and the complete serializable welcome/approval shape. */
+function appendPresentationConfig(lines: string[], config: AgentWidgetConfig, indent: string): void {
+  appendSerializableObjectBlock(lines, "copy", config.copy, indent);
+  appendSerializableObjectBlock(lines, "welcome", config.welcome as Record<string, unknown> | undefined, indent);
+  if (config.approval === false) {
+    lines.push(`${indent}approval: false,`);
+  } else {
+    appendSerializableObjectBlock(lines, "approval", config.approval, indent);
+  }
 }
 
 /** Preserve the defaults version and brand inputs rather than flattening derived tokens. */
@@ -609,6 +630,15 @@ function emitTargetSelector(options?: CodeGeneratorOptions): string {
   return (options?.target ?? "body").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+/**
+ * Export serializable widget settings in the selected integration format.
+ * `welcome.icon` object forms are preserved. Function icons, `approval.onDecision`,
+ * and `approval.formatDescription` cannot be exported: snippets identify these
+ * omissions, and hosts must reattach them in JavaScript. Other callbacks/renderers
+ * also require host code; supported hooks can be supplied via `options.hooks`.
+ * Hook functions keep their existing self-contained `.toString()` contract.
+ * The installer format is JSON-only and cannot include hooks or function icons.
+ */
 export function generateCodeSnippet(
   config: any,
   format: CodeFormat = "esm",
@@ -624,19 +654,29 @@ export function generateCodeSnippet(
     ? { ...options, hooks: normalizeHooks(options.hooks) as CodeGeneratorHooks }
     : undefined;
 
+  let code: string;
   if (format === "esm") {
-    return generateESMCode(cleanConfig, normalizedOptions);
+    code = generateESMCode(cleanConfig, normalizedOptions);
   } else if (format === "script-installer") {
-    return generateScriptInstallerCode(cleanConfig, normalizedOptions);
+    code = generateScriptInstallerCode(cleanConfig, normalizedOptions);
   } else if (format === "script-advanced") {
-    return generateScriptAdvancedCode(cleanConfig, normalizedOptions);
+    code = generateScriptAdvancedCode(cleanConfig, normalizedOptions);
   } else if (format === "react-component") {
-    return generateReactComponentCode(cleanConfig, normalizedOptions);
+    code = generateReactComponentCode(cleanConfig, normalizedOptions);
   } else if (format === "react-advanced") {
-    return generateReactAdvancedCode(cleanConfig, normalizedOptions);
+    code = generateReactAdvancedCode(cleanConfig, normalizedOptions);
   } else {
-    return generateScriptManualCode(cleanConfig, normalizedOptions);
+    code = generateScriptManualCode(cleanConfig, normalizedOptions);
   }
+
+  const omittedFunctions = [
+    ["welcome.icon", config.welcome?.icon],
+    ["approval.formatDescription", config.approval?.formatDescription],
+    ["approval.onDecision", config.approval?.onDecision],
+  ].filter(([, value]) => typeof value === "function").map(([path]) => path);
+  if (omittedFunctions.length === 0) return code;
+  const note = `Function-valued ${omittedFunctions.join(", ")} omitted; reattach in host JavaScript.`;
+  return format.startsWith("script-") ? `<!-- ${note} -->\n${code}` : `// ${note}\n${code}`;
 }
 
 function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
@@ -669,13 +709,7 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
     appendSerializableObjectBlock(lines, "launcher", config.launcher, "    ");
   }
 
-  if (config.copy) {
-    lines.push("    copy: {");
-    Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`      ${key}: "${value}",`);
-    });
-    lines.push("    },");
-  }
+  appendPresentationConfig(lines, config, "    ");
 
   if (config.sendButton) {
     lines.push("    sendButton: {");
@@ -820,13 +854,7 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
     appendSerializableObjectBlock(lines, "launcher", config.launcher, "        ");
   }
 
-  if (config.copy) {
-    lines.push("        copy: {");
-    Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`          ${key}: "${value}",`);
-    });
-    lines.push("        },");
-  }
+  appendPresentationConfig(lines, config, "        ");
 
   if (config.sendButton) {
     lines.push("        sendButton: {");
@@ -1088,13 +1116,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     appendSerializableObjectBlock(lines, "launcher", config.launcher, "        ");
   }
 
-  if (config.copy) {
-    lines.push("        copy: {");
-    Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`          ${key}: "${value}",`);
-    });
-    lines.push("        },");
-  }
+  appendPresentationConfig(lines, config, "        ");
 
   if (config.sendButton) {
     lines.push("        sendButton: {");
@@ -1348,6 +1370,8 @@ function buildSerializableConfig(config: any): Record<string, any> {
   if (config.colorScheme !== undefined) serializableConfig.colorScheme = config.colorScheme;
   if (config.launcher) serializableConfig.launcher = config.launcher;
   if (config.copy) serializableConfig.copy = config.copy;
+  if (config.welcome !== undefined) serializableConfig.welcome = config.welcome;
+  if (config.approval !== undefined) serializableConfig.approval = config.approval;
   if (config.sendButton) serializableConfig.sendButton = config.sendButton;
   if (config.voiceRecognition) serializableConfig.voiceRecognition = config.voiceRecognition;
   if (config.statusIndicator) serializableConfig.statusIndicator = config.statusIndicator;
@@ -1465,8 +1489,12 @@ function generateScriptInstallerCode(config: any, options?: CodeGeneratorOptions
       }
     : serializableConfig;
 
-  // Escape single quotes in JSON for HTML attribute
-  const configJson = JSON.stringify(payload, null, 0).replace(/'/g, "&#39;");
+  // Preserve literal entities and quotes when the browser decodes the HTML attribute.
+  const configJson = JSON.stringify(payload)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/'/g, "&#39;");
 
   return `<script src="${resolveCdnBase(options)}/install.global.js" data-config='${configJson}'></script>`;
 }
@@ -1508,13 +1536,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     appendSerializableObjectBlock(lines, "launcher", config.launcher, "      ");
   }
 
-  if (config.copy) {
-    lines.push("      copy: {");
-    Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`        ${key}: "${value}",`);
-    });
-    lines.push("      },");
-  }
+  appendPresentationConfig(lines, config, "      ");
 
   if (config.sendButton) {
     lines.push("      sendButton: {");
@@ -1624,7 +1646,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
 function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions): string {
   const hooks = options?.hooks;
   const serializableConfig = buildSerializableConfig(config);
-  const configJson = JSON.stringify(serializableConfig, null, 2);
+  const configJson = serializeConfigLiteral(serializableConfig, 2);
 
   const lines: string[] = [
     "<script>",
