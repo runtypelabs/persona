@@ -1,0 +1,25 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Clear chat" [ref=e22]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e23]
+    - paragraph
+      - StaticText "Scenario: approval. Replies are scripted in-page; no backend."
+    - generic
+      - paragraph
+        - StaticText "find the approval docs"
+      - generic
+        - paragraph
+        - button "Copy message" [ref=e27]
+      - StaticText "Search docs"
+      - StaticText " denied"
+      - generic
+        - paragraph
+          - StaticText "Understood: I won't search. Here's what I know without it."
+        - button "Copy message" [ref=e28]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e24]
+      - button "Start voice recognition" [ref=e25]
+      - button "Send message" [ref=e26]

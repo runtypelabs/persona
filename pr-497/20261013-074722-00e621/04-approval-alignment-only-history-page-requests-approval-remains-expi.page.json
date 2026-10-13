@@ -1,0 +1,67 @@
+{
+  "scenario": "browser-history",
+  "mode": "inline",
+  "theme": "light",
+  "voice": null,
+  "requests": [
+    {
+      "at": 66003,
+      "url": "history:getPage",
+      "body": {
+        "id": "interrupted-browser-history",
+        "cursor": null
+      }
+    },
+    {
+      "at": 66306,
+      "url": "history:getPage",
+      "body": {
+        "id": "interrupted-browser-history",
+        "cursor": "older-browser-proposal"
+      }
+    }
+  ],
+  "events": [
+    {
+      "at": 66309,
+      "type": "approval:requested",
+      "detail": {
+        "approval": {
+          "id": "saved-gate",
+          "status": "timeout",
+          "executionId": "",
+          "agentId": "",
+          "toolName": "purchase",
+          "toolType": "webmcp",
+          "description": "Purchase two items",
+          "parameters": {
+            "quantity": 2
+          },
+          "interrupted": true
+        },
+        "message": {
+          "id": "saved-browser-approval",
+          "role": "assistant",
+          "content": "",
+          "variant": "approval",
+          "createdAt": "2026-01-01T10:00:01Z",
+          "approval": {
+            "id": "saved-gate",
+            "status": "timeout",
+            "executionId": "",
+            "agentId": "",
+            "toolName": "purchase",
+            "toolType": "webmcp",
+            "description": "Purchase two items",
+            "parameters": {
+              "quantity": 2
+            },
+            "interrupted": true
+          },
+          "streaming": false,
+          "sequence": 1791877677910
+        }
+      }
+    }
+  ]
+}

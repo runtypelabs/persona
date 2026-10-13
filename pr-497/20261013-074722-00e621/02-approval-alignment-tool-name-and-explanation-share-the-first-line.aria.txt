@@ -1,0 +1,20 @@
+- generic
+  - StaticText "Verify fixture"
+  - StaticText "Here to help you get answers fast"
+  - button "Messages" [ref=e13]
+  - button "New conversation" [ref=e14]
+  - generic
+    - heading "Verify fixture" [level=2, ref=e15]
+    - paragraph
+      - StaticText "Scenario: browser-history. Replies are scripted in-page; no backend."
+    - generic
+      - button "webmcp:purchase · Interrupted" [expanded=false, ref=e19]
+      - StaticText "Purchase"
+      - StaticText " approval expired. The chat restarted and this browser tool was interrupted. Request a fresh proposal to try again."
+      - generic
+        - button "Copy message" [ref=e20]
+  - generic
+    - form
+      - textbox "Send a message…" [ref=e16]
+      - button "Start voice recognition" [ref=e17]
+      - button "Send message" [ref=e18]

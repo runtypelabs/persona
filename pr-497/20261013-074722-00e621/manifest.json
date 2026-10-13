@@ -1,0 +1,129 @@
+{
+  "runId": "20261013-074722-00e621",
+  "entries": [
+    {
+      "feature": "approval-alignment",
+      "label": "Tool name and explanation share the first line",
+      "note": null,
+      "files": [
+        "02-approval-alignment-tool-name-and-explanation-share-the-first-line.png",
+        "02-approval-alignment-tool-name-and-explanation-share-the-first-line.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-13T07:49:04.373Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "68173c544c68"
+    },
+    {
+      "feature": "approval-alignment",
+      "label": "Narrow width keeps the icon on the first line and wraps the notice naturally",
+      "note": null,
+      "files": [
+        "03-approval-alignment-narrow-width-keeps-the-icon-on-the-first-line-an.png",
+        "03-approval-alignment-narrow-width-keeps-the-icon-on-the-first-line-an.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-13T07:49:21.279Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "68173c544c68"
+    },
+    {
+      "feature": "approval-alignment",
+      "label": "Open a wrapped browser approval notice",
+      "note": null,
+      "files": [
+        "01-approval-alignment-open-a-wrapped-browser-approval-notice.gif",
+        "01-approval-alignment-open-a-wrapped-browser-approval-notice.webm",
+        "01-approval-alignment-open-a-wrapped-browser-approval-notice.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-13T07:49:43.879Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "68173c544c68"
+    },
+    {
+      "feature": "approval-alignment",
+      "label": "Only history page requests; approval remains expired",
+      "note": "2 request(s) crossed the network boundary, 1 controller event(s)",
+      "files": [
+        "04-approval-alignment-only-history-page-requests-approval-remains-expi.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-13T07:49:43.957Z",
+      "head": "cf66ca775100faa2b5eca800909aea378df0587a",
+      "diffHash": "68173c544c68"
+    },
+    {
+      "feature": "approval-denial",
+      "label": "Plain denial remains a short aligned notice",
+      "note": null,
+      "files": [
+        "06-approval-denial-plain-denial-remains-a-short-aligned-notice.png",
+        "06-approval-denial-plain-denial-remains-a-short-aligned-notice.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-13T07:50:54.926Z",
+      "head": "590ced8801d778d038a4ee9c381ae070474f9c53",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approval-denial",
+      "label": "Ordinary denied approval keeps its compact trace",
+      "note": null,
+      "files": [
+        "05-approval-denial-ordinary-denied-approval-keeps-its-compact-trace.gif",
+        "05-approval-denial-ordinary-denied-approval-keeps-its-compact-trace.webm",
+        "05-approval-denial-ordinary-denied-approval-keeps-its-compact-trace.contact-sheet.png"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-13T07:50:55.149Z",
+      "head": "590ced8801d778d038a4ee9c381ae070474f9c53",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approval-denial",
+      "label": "One denied decision through the configured transport",
+      "note": "2 request(s) crossed the network boundary, 9 controller event(s)",
+      "files": [
+        "07-approval-denial-one-denied-decision-through-the-configured-trans.page.json"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-13T07:50:55.224Z",
+      "head": "590ced8801d778d038a4ee9c381ae070474f9c53",
+      "diffHash": "e3b0c44298fc"
+    },
+    {
+      "feature": "approval-denial",
+      "label": "Denied approval after the reply finishes",
+      "note": null,
+      "files": [
+        "08-approval-denial-denied-approval-after-the-reply-finishes.png",
+        "08-approval-denial-denied-approval-after-the-reply-finishes.aria.txt"
+      ],
+      "url": "http://127.0.0.1:4390/verify.html?scenario=browser-history&config=%7B%22features%22%3A%7B%22toolCallDisplay%22%3A%7B%22variant%22%3A%22row%22%2C%22grouped%22%3Atrue%7D%7D%7D",
+      "at": "2026-10-13T07:52:15.400Z",
+      "head": "590ced8801d778d038a4ee9c381ae070474f9c53",
+      "diffHash": "e3b0c44298fc"
+    }
+  ],
+  "verdicts": [
+    {
+      "feature": "approval-alignment",
+      "pass": true,
+      "skipped": false,
+      "note": "Opened Messages and Show earlier messages through the real UI. Tool name and explanation now flow together; icon stays on the first line. Verified at 1100px and 390px viewports with no horizontal overflow, approval buttons or browser execution."
+    },
+    {
+      "feature": "other-entry-points",
+      "pass": false,
+      "skipped": true,
+      "note": "Recorded the interrupted history notice in row display at wide/narrow widths and ordinary denial. Storage restoration and fresh approvals also pass the seven built-package Chromium scenarios; other visual variants were not driven in this recording."
+    },
+    {
+      "feature": "approval-denial",
+      "pass": true,
+      "skipped": false,
+      "note": "Clicked Deny on a real pending card. Plain Search docs denied trace stays compact and aligned. Exactly one chat dispatch and one denied transport decision; four approval:resolved events were captured (known event duplication). Final screenshot shows the idle composer."
+    }
+  ]
+}
