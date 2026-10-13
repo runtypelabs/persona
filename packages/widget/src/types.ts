@@ -1826,6 +1826,10 @@ export type AgentWidgetArtifactsFeature = {
    * Where artifact bodies render. A single mode applies to all artifacts;
    * the object form sets a default plus scoped overrides.
    * Defaults to "panel" (current behavior).
+   *
+   * `update({ features: { artifacts: { display } } })` replaces the entire
+   * rule object, including nested selector maps. Include every rule to retain;
+   * sibling artifact options merge. This differs from preference-layer resolution.
    */
   display?:
     | PersonaArtifactDisplayModeInput
@@ -2679,6 +2683,9 @@ export type AgentWidgetStreamAnimationFeature = {
    * Extra animation plugins available to this widget instance. Keys are
    * plugin names; the matching plugin activates when `type` is set to that
    * name. Built-in types (`typewriter`, `pop-bubble`) are always registered.
+   *
+   * `update({ features: { streamAnimation: { plugins } } })` replaces this
+   * entire map; include every plugin to retain. Sibling animation options merge.
    */
   plugins?: Record<string, StreamAnimationPlugin>;
 };
@@ -4979,6 +4986,11 @@ export type AgentWidgetVoiceRecognitionConfig = {
      * providers deliver a final transcript via `onResult` (sent as a user
      * message); full-duplex providers can drive `onTranscript`/`onMetrics` like
      * the realtime `runtype` provider.
+     *
+     * `update({ voiceRecognition: { provider: { custom } } })` replaces the
+     * entire implementation or factory. Supply a complete provider; omitted
+     * methods are not inherited. Sibling provider options merge. This policy
+     * applies specifically to `voiceRecognition.provider.custom`.
      */
     custom?: VoiceProvider | (() => VoiceProvider);
   };
@@ -5944,7 +5956,12 @@ export interface AgentWidgetWelcomeConfig {
   kicker?: string;
   /** Scope statement in the assistant's voice. Empty string omits it. */
   subtitle?: string;
-  /** Avatar or logo shown above the title, or beside it under `icon.placement`. */
+  /**
+   * Avatar or logo shown above the title, or beside it under `icon.placement`.
+   * `update({ welcome: { icon } })` replaces the entire icon. Supply a complete
+   * discriminated variant or renderer; old variant fields and placement are not
+   * inherited. Sibling welcome fields merge; own `undefined` clears the icon.
+   */
   icon?: AgentWidgetWelcomeIcon;
   /**
    * Horizontal alignment of the kicker, title, subtitle, and starter
@@ -7438,6 +7455,9 @@ export type AgentWidgetConfig = {
    * fragment its backend expects. Register a `default` resolver to also accept
    * bare (unprefixed, non-TypeID) target names. The built-in `runtype` provider
    * is always available and does not need to be registered.
+   *
+   * `update({ targetProviders })` replaces the entire map. Include every
+   * resolver to retain; `{}` removes all host registrations.
    */
   targetProviders?: Record<string, TargetResolver>;
   /**
@@ -7470,6 +7490,10 @@ export type AgentWidgetConfig = {
    * Agent configuration for agent execution mode.
    * When provided, the widget uses agent loop execution instead of flow dispatch.
    * Mutually exclusive with `flowId`.
+   *
+   * `update({ agent })` replaces the entire definition. Supply a complete
+   * agent, including name, model and systemPrompt; omitted tools/loop options
+   * are not inherited. To edit one field, spread the current agent yourself.
    *
    * Note: `@runtypelabs/persona-proxy` rejects a client-supplied `agent` (it was
    * an open relay). This option is only for endpoints authorized to accept a
@@ -7603,6 +7627,8 @@ export type AgentWidgetConfig = {
   /**
    * Static headers to include with each request.
    * For dynamic headers (e.g., auth tokens), use `getHeaders` instead.
+   * `update({ headers })` replaces the entire map. Include every header to
+   * retain; `{}` removes all static headers. `getHeaders` is independent.
    */
   headers?: Record<string, string>;
   /**
@@ -7642,12 +7668,13 @@ export type AgentWidgetConfig = {
      */
     stopReasonNotice?: Partial<Record<StopReasonKind, string>>;
   };
-  /**
-   * Semantic design tokens (`palette`, `semantic`, `components`).
-   * Omit for library defaults.
-   */
   /** Derive theme tokens from a small brand palette. Explicit theme tokens win. */
   brand?: BrandConfig;
+  /**
+   * Semantic design tokens (`palette`, `semantic`, `components`).
+   * Omit for library defaults. Mounted updates recursively merge token objects,
+   * including `theme.components`; omitted sibling tokens remain in place.
+   */
   theme?: DeepPartial<PersonaTheme>;
   /**
    * Dark-mode token overrides. Merged over `theme` when the active scheme is dark.
@@ -7673,7 +7700,8 @@ export type AgentWidgetConfig = {
    * `display` values replace the base rule subtree; objects refine it per
    * key. Each `controller.update({ preferences })` replaces the previous
    * slice wholesale (dropped keys revert to the base `features`); an
-   * explicit-undefined patch clears it entirely.
+   * explicit-undefined patch clears it entirely. A sparse slice is the host's
+   * complete opinion, not a partial update to the previous slice.
    */
   preferences?: WidgetPreferenceSlice;
   /**
@@ -7800,6 +7828,12 @@ export type AgentWidgetConfig = {
   requestMiddleware?: AgentWidgetRequestMiddleware;
   actionParsers?: AgentWidgetActionParser[];
   actionHandlers?: AgentWidgetActionHandler[];
+  /**
+   * Host persistence implementation. In the merged configuration,
+   * `update({ storageAdapter })` replaces the entire adapter; omitted optional
+   * methods are not inherited and own `undefined` clears it. Persistence
+   * captures its active adapter at mount time; remount to change that adapter.
+   */
   storageAdapter?: AgentWidgetStorageAdapter;
   /**
    * Called after state is loaded from the storage adapter, but before the widget
@@ -7865,6 +7899,11 @@ export type AgentWidgetConfig = {
    * Registry of custom components that can be rendered from JSON directives.
    * Components are registered by name and can be invoked via JSON responses
    * with the format: `{"component": "ComponentName", "props": {...}}`
+   *
+   * `update({ components })` replaces this entire renderer map; include every
+   * renderer to retain. `{}` removes all host-configured registrations; plugins
+   * may still provide components. This top-level registry differs from
+   * `theme.components`, whose token objects recursively merge.
    * 
    * @example
    * ```typescript
@@ -8260,9 +8299,20 @@ export type AgentWidgetConfig = {
 /**
  * Patch-aware deep-partial of {@link AgentWidgetConfig} accepted by `update()`.
  * Function types and arrays are preserved whole (not mapped over); plain-object
- * leaves recurse so a partial patch merges into the live config. See the merge
- * policy in utils/config-merge.ts (some plain-object fields still replace
- * wholesale at runtime; that is not encoded at the type level).
+ * leaves recurse so ordinary partial objects merge into the live config.
+ *
+ * Whole-object replacements are `headers`, `agent`, `storageAdapter`, top-level
+ * `components`, `targetProviders`, `voiceRecognition.provider.custom`,
+ * `features.artifacts.display`, `features.streamAnimation.plugins`,
+ * `preferences`, and `welcome.icon`. Supply the complete desired value at each
+ * of these paths; omitted members of the previous object are removed. The
+ * recursive type remains permissive for compatibility and does not enforce
+ * completeness. Use the corresponding field type with `satisfies` to check an
+ * agent, provider or icon replacement.
+ *
+ * Omitted keys retain values; own `undefined` resets an override (including a
+ * parent and its descendants). Arrays/functions replace. See the mounted-update
+ * table in `docs/configuration.md` and runtime policy in `utils/config-merge.ts`.
  */
 export type AgentWidgetConfigPatch = ConfigPatch<AgentWidgetConfig>;
 

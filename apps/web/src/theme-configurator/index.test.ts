@@ -347,6 +347,7 @@ describe('theme configurator shell', () => {
     const iframe = document.querySelector('iframe[data-mount-id="preview-current"]');
     expect(iframe).not.toBeNull();
     expect((iframe as HTMLIFrameElement).srcdoc).toContain('preview-current');
+    expect(document.querySelector('.control-path')).toBeNull();
   });
 
   test('real light/dark component paths are discoverable before opening their drill-down', async () => {
@@ -364,7 +365,8 @@ describe('theme configurator shell', () => {
       expect(document.getElementById('style-drilldown')?.classList.contains('hidden')).toBe(false);
       expect(state.getEditingTheme()).toBe(path.startsWith('darkTheme.') ? 'dark' : 'light');
       const variant = path.startsWith('darkTheme.') ? 'dark' : 'light';
-      const field = document.querySelector(`#drilldown-content .control-label[title="${path}"]`);
+      const fieldId = catalog.search(path).find(result => result.entry.path === path)!.entry.fieldId;
+      const field = document.getElementById(fieldId);
       expect(field).not.toBeNull();
       expect(field?.closest('.editing-target-group')?.getAttribute('data-editing-target')).toBe(variant);
     }

@@ -22,6 +22,29 @@ describe('configuration authoring fixtures', () => {
         authoredOverrides: true, hooks: { onCopy: () => {} },
       }),
     ];
+    fixtures.push(`
+      import type { AgentConfig, AgentWidgetConfigPatch, AgentWidgetWelcomeIcon, VoiceProvider } from '@runtypelabs/persona';
+      const agent = { name: 'Support', model: 'model-id', systemPrompt: 'Help customers.' } satisfies AgentConfig;
+      const provider = {
+        type: 'custom', connect: async () => {}, disconnect: async () => {},
+        startListening: async () => {}, stopListening: async () => {},
+        onResult: () => {}, onError: () => {}, onStatusChange: () => {},
+      } satisfies VoiceProvider;
+      const providerFactory: () => VoiceProvider = () => provider;
+      const icon = { type: 'image', url: '/logo.png', alt: 'Support' } satisfies AgentWidgetWelcomeIcon;
+      const complete: AgentWidgetConfigPatch = { agent, voiceRecognition: { provider: { type: 'custom', custom: providerFactory } }, welcome: { icon } };
+      // Preserve existing recursive-patch source compatibility, including sparse replacement objects.
+      const compatible: AgentWidgetConfigPatch = { agent: { systemPrompt: 'New prompt' }, voiceRecognition: { provider: { custom: { type: 'custom' } } }, welcome: { icon: { type: 'image' } } };
+      // Full field types provide an opt-in completeness check at authoring time.
+      // @ts-expect-error A complete agent needs name and model.
+      const incompleteAgent = { systemPrompt: 'New prompt' } satisfies AgentConfig;
+      // @ts-expect-error A complete provider needs its lifecycle and callback methods.
+      const incompleteProvider = { type: 'custom' } satisfies VoiceProvider;
+      // @ts-expect-error An image icon needs alt text, including empty alt for decorative images.
+      const incompleteIcon = { type: 'image', url: '/logo.png' } satisfies AgentWidgetWelcomeIcon;
+      // @ts-expect-error Icon variants cannot carry fields from another variant.
+      const hybridIcon = { type: 'text', text: 'Hello', url: '/logo.png' } satisfies AgentWidgetWelcomeIcon;
+    `);
     const virtualFiles = new Map(fixtures.map((text, index) => [`${packageRoot}src/authoring-fixture-${index}.tsx`, text]));
     const parsedConfig = ts.parseJsonConfigFileContent(
       ts.readConfigFile(`${packageRoot}tsconfig.json`, ts.sys.readFile).config,

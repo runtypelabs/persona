@@ -1,6 +1,6 @@
 # Config schema developer-experience plan
 
-Status: stages 1 and 2 implemented, 2026-10-13. Stages 3–5 remain proposed and are outside this implementation. Builds on [Phase 13](phase-13-replacement-plan.md) and the bounded [Phase 14 showcase audit](phase-14-showcase-audit.md). Existing integrations, aliases, precedence, and V4/V5 behavior remain the compatibility baseline.
+Status: stages 1–3 implemented, 2026-10-13. Stages 4–5 remain optional proposals and are outside this implementation. Builds on [Phase 13](phase-13-replacement-plan.md) and the bounded [Phase 14 showcase audit](phase-14-showcase-audit.md). Existing integrations, aliases, precedence, and V4/V5 behavior remain the compatibility baseline.
 
 ## Recommendation
 
@@ -60,7 +60,7 @@ Provide format-specific notes when functions/renderers are omitted. Existing Jav
 
 **Release/size/risk:** showcase UI-only work has no changeset; package behavior fixes are patch; a new public authored-export method is minor. Medium effort/risk because materialized defaults and authored intent coexist. Do not promise sparse output for provenance that was already lost.
 
-## Stage 3 — expose patch replacement policy without breaking callers
+## Stage 3 — expose patch replacement policy without breaking callers (implemented)
 
 **Deliverable:** make the stage 1 policy table authoritative and add path-specific JSDoc/editor hints to the replacement-object fields. In particular, `agent`/custom provider implementations must be complete replacements; sparse `preferences` is the host's complete opinion; `welcome.icon` cannot splice discriminated variants. Add a bounded shared internal policy list only if it removes verified duplication; avoid a universal runtime schema registry.
 
@@ -69,6 +69,10 @@ Assess path-aware types against real consumer fixtures before changing `AgentWid
 **Files/tests:** `types.ts`, `utils/config-merge.ts`, associated tests and editor field help. Compile positive/negative examples for full agent/provider/icon replacements; verify all ten paths replace without stale keys while `theme.components` and normal feature objects retain siblings. Test parent reset and boolean/object transitions in both defaults modes. Existing `config-merge.test.ts` already covers much of this; add only gaps.
 
 **Release/size/risk:** JSDoc/internal alignment is patch with widget changeset; any additive public strict type is minor; reject an unannounced narrowing of the existing patch type. Small effort for guidance, medium if types change. Depends on stage 1's exact semantics, not stage 2 exports.
+
+Stage 3 verified that the guide and `REPLACE_LEAF_PATHS` agree on all ten paths. The guide now gives each path's replacement contract; field JSDoc explains whole-object replacement versus sibling merging. Following design review, the visual editor keeps plain-language help; technical guidance remains in the guide, autocomplete, and advanced export links. Inline field paths are removed while exact-path search remains available. Existing patch types remain unchanged. Full agent/provider/icon field types provide opt-in completeness checks through `satisfies`; compiled consumer fixtures accept complete replacements, reject incomplete full values and confirm that existing sparse patches still compile. No stricter type or shared schema registry was needed.
+
+The existing V4/V5 merge suite already covered headers, storage adapters, preferences, artifact display and stream plugin maps, ordinary merges and boolean/object transitions. Stage 3 fills the agent/custom-provider/renderer-registry/target-resolver gaps, exercises icon object/function transitions in both defaults modes, checks parent resets and contrasts top-level renderer replacement with `theme.components` sibling retention. The artifact-display fixture now actually uses the selected V4/V5 defaults. Runtime merge code changes only by adding a guide cross-reference. The guide also distinguishes merge policy from activation lifecycle: persistence captures its active storage adapter at mount time and requires a remount to change it. Published comments/editor help have a widget patch changeset.
 
 ## Stage 4 — optional targeted token diagnostics
 
@@ -102,10 +106,10 @@ For new APIs, prefer `background`/`foreground` for paired surface colors, named 
 
 Reject for this effort: flattening all component tokens, moving behavior/content under theme, silent precedence reversal, null reset sentinels, a second stop-style tree, guessing intent by default equality, automatic conversion of unknown-origin imports, and exhaustive alias proliferation. Defer a full machine-readable config schema and stronger token-reference type system until there is a consumer and maintenance owner.
 
-Stage 2 uses the additive public `exportAuthoredConfig()` method alongside showcase UI. Remaining decisions are confined to later stages: whether opt-in strict patch typing is worthwhile; which concrete consumer warrants token diagnostics or JSON reset; and the reset adapter's allowed path scope. Keep the remaining first-party migration inventory separate; migrate each coherent example group with its existing visual/integration checks.
+Stage 2 uses the additive public `exportAuthoredConfig()` method alongside showcase UI. Remaining decisions are confined to later stages: which concrete consumer warrants token diagnostics or JSON reset, and the reset adapter's allowed path scope. Keep the remaining first-party migration inventory separate; migrate each coherent example group with its existing visual/integration checks.
 
 ## Verification boundary
 
-Stages 1 and 2 implement the [configuration guide](configuration.md), aligned published reference/editor help and real-path discovery. The headless editor adds `exportAuthoredConfig()`; code generation adds an opt-in `authoredOverrides` mode. Fresh showcase state supplies only the endpoint; preview fixtures stay separate. Imported backups/configurations remain explicit and are labeled imported. Snapshot version 2 and existing generator defaults remain available. A widget minor changeset covers the additive APIs and published help.
+Stages 1–3 implement the [configuration guide](configuration.md), aligned published reference/editor help and real-path discovery. The headless editor adds `exportAuthoredConfig()`; code generation adds an opt-in `authoredOverrides` mode. Fresh showcase state supplies only the endpoint; preview fixtures stay separate. Imported backups/configurations remain explicit and are labeled imported. Snapshot version 2 and existing generator defaults remain available. A widget minor changeset covers the additive APIs and published help.
 
-Verification includes authored light/dark round-trips in V4/V5, explicit default-equal/false/empty values, callbacks in memory and undo/redo, conservative legacy imports, six-format generated-code evaluation/escaping, guide and ESM/React compilation against public types, representative generated-code mounts, metadata/search checks, and existing showcase/migration-lab tests. Direct package/showcase typechecks, lint and builds are checked separately from the known upstream generated-contract drift in root typecheck; no unrelated contract is regenerated. Existing uncommitted Phase 14 work is retained. No commits, pushes or branch creation are part of this implementation.
+Verification includes authored light/dark round-trips in V4/V5, explicit default-equal/false/empty values, callbacks in memory and undo/redo, conservative legacy imports, six-format generated-code evaluation/escaping, guide and ESM/React compilation against public types, representative generated-code mounts, metadata/search checks, and existing showcase/migration-lab tests. Direct package/showcase typechecks, lint and builds are checked separately from the known upstream generated-contract drift in root typecheck; no unrelated contract is regenerated. Existing uncommitted Phase 14 work is retained. Stage 3 additionally checks focused merge/welcome/custom-voice/editor tests, compiled public replacement fixtures, direct widget TypeScript and relevant lint without regenerating upstream contracts. No commits, pushes or branch creation are part of this implementation.

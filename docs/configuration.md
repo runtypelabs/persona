@@ -83,7 +83,37 @@ Fresh config supplies inputs once. `widget.update(patch)` changes a mounted widg
 | Ordinary object | Recursively merge |
 | Designated object | Replace the whole object |
 
-The ten replacement paths are `headers`, `agent`, `storageAdapter`, top-level `components`, `targetProviders`, `voiceRecognition.provider.custom`, `features.artifacts.display`, `features.streamAnimation.plugins`, `preferences`, and `welcome.icon`. Top-level custom-renderer `components` replaces; `theme.components` recursively merges.
+The following ten paths replace whole objects in mounted updates. Include every member you want to retain; omitted members of the previous object disappear. This table matches the policy in [`config-merge.ts`](../packages/widget/src/utils/config-merge.ts).
+
+| Replacement path | What to supply |
+| --- | --- |
+| `headers` | The full static header map; `{}` removes all static headers. `getHeaders` remains independent. |
+| `agent` | A complete agent definition, including `name`, `model` and `systemPrompt`. Old tools and loop options are not inherited. |
+| `storageAdapter` | The complete new persistence adapter in the merged configuration. Optional methods omitted from it are removed; remount to change the active persistence adapter. |
+| Top-level `components` | The full host-configured custom-renderer registry; `{}` removes its registrations. Plugin-provided components remain available. `theme.components` recursively merges token objects. |
+| `targetProviders` | The full host resolver map; `{}` removes all host registrations. The built-in provider remains available. |
+| `voiceRecognition.provider.custom` | A complete voice implementation or factory. Old optional methods are not inherited; sibling provider options merge. This rule applies to this exact path. |
+| `features.artifacts.display` | The whole display rule object, including nested selector maps. Sibling artifact options merge. Preference-layer rule resolution is a separate operation. |
+| `features.streamAnimation.plugins` | The full plugin map. Sibling animation options merge. |
+| `preferences` | The host's complete sparse opinion. Dropped keys revert to base `features`; `{}` expresses no overrides. |
+| `welcome.icon` | A complete discriminated icon variant or renderer. Old variant fields and placement are not inherited; sibling welcome fields merge. |
+
+`AgentWidgetConfigPatch` remains a recursive partial for source compatibility; it does not enforce complete replacement objects. Check replacements against their field types with `satisfies`, then pass them to `update()`. To change one field of an agent definition, spread the current complete definition yourself:
+
+```typescript
+import type { AgentConfig, AgentWidgetWelcomeIcon } from '@runtypelabs/persona';
+
+declare const currentAgent: AgentConfig;
+const agent = { ...currentAgent, systemPrompt: 'Help customers track orders.' } satisfies AgentConfig;
+const icon = { type: 'image', url: '/logo.png', alt: 'Support' } satisfies AgentWidgetWelcomeIcon;
+widget.update({ agent, welcome: { icon } });
+```
+
+For a custom voice replacement, use `satisfies VoiceProvider` on the complete implementation or type its factory as `() => VoiceProvider`. A patch such as `{ agent: { systemPrompt: 'New prompt' } }` still typechecks today but replaces the agent without its required name/model; it is not a safe way to edit an agent. Likewise, an icon patch must include every required field of its chosen variant.
+
+These are configuration merge rules; feature/provider activation follows its own lifecycle. In particular, persistence captures `storageAdapter` at mount time, so an update changes its stored configuration but changing the active adapter requires a remount.
+
+An own `undefined` resets an override at any of these paths. Resetting a parent, such as `{ voiceRecognition: { provider: undefined } }` or `{ welcome: undefined }`, clears its descendants and exposes defaults or resolver fallbacks. Omitted siblings remain unchanged. A boolean/object transition replaces the value; two ordinary objects merge recursively.
 
 Explicit legacy style fields take precedence over modern component tokens. Clear an old style explicitly when migrating:
 
@@ -101,6 +131,8 @@ For welcome content, the rule differs: modern `welcome.*` wins over old welcome 
 ## Copying editor configuration
 
 In the [theme configurator](https://persona-chat.dev/theme.html), **Actions → Copy configuration** copies your supplied settings and edits. Open **Advanced → Include default settings** to include Persona’s defaults. **Copy settings as JSON** follows the same defaults checkbox. To import that JSON, select **Widget configuration**; use **Editor backup / raw theme** for existing backups or token trees. **Copy editor backup** retains the version 2 backup format for restoring the editor.
+
+Design controls use plain-language labels without inline configuration paths. Developers can still search by exact path, inspect exported code, or open **Actions → Advanced → Updating an existing widget?** for the update rules above.
 
 Imported backups, full configurations and older saved configurations have unknown origin. Their supplied fields stay explicit and the editor labels them **Imported configuration**. Re-authoring a smaller configuration is a deliberate choice; exports do not migrate aliases or guess which supplied values were once defaults. A copied authored configuration is fresh setup, not a reset patch.
 

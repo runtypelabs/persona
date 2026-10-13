@@ -1865,15 +1865,6 @@ body {
   flex-shrink: 0;
 }
 
-.control-path {
-  display: block;
-  min-width: 0;
-  margin-bottom: 6px;
-  overflow-wrap: anywhere;
-  font-size: 11px;
-  color: #9ca3af;
-}
-
 .search-result-item {
   width: 100%;
   text-align: left;

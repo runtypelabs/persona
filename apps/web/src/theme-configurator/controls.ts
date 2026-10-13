@@ -70,7 +70,7 @@ export function createColorControl(
 ): ControlResult {
   const wrapper = el('div', { className: 'control-row' });
 
-  const label = el('label', { className: 'control-label', for: field.id, title: field.path }, [field.label]);
+  const label = el('label', { className: 'control-label', for: field.id }, [field.label]);
   const inputGroup = el('div', { className: 'color-input-wrapper' });
 
   const colorPicker = el('input', {
@@ -89,7 +89,6 @@ export function createColorControl(
   inputGroup.appendChild(colorPicker);
   inputGroup.appendChild(textInput);
   wrapper.appendChild(label);
-  wrapper.appendChild(el('code', { className: 'control-path' }, [field.path]));
   if (field.description) {
     wrapper.appendChild(el('span', { className: 'control-description' }, [field.description]));
   }
@@ -160,7 +159,7 @@ export function createSliderControl(
   const opts = field.slider!;
   const wrapper = el('div', { className: 'control-row' });
 
-  const label = el('label', { className: 'control-label', for: field.id, title: field.path }, [field.label]);
+  const label = el('label', { className: 'control-label', for: field.id }, [field.label]);
   const inputGroup = el('div', { className: 'slider-input-wrapper' });
 
   const slider = el('input', {
@@ -181,7 +180,6 @@ export function createSliderControl(
   inputGroup.appendChild(slider);
   inputGroup.appendChild(textInput);
   wrapper.appendChild(label);
-  wrapper.appendChild(el('code', { className: 'control-path' }, [field.path]));
   if (field.description) {
     wrapper.appendChild(el('span', { className: 'control-description' }, [field.description]));
   }
@@ -304,7 +302,7 @@ export function createToggleControl(
 ): ControlResult {
   const wrapper = el('div', { className: 'control-row control-row-toggle' });
 
-  const label = el('label', { className: 'control-label', for: field.id, title: field.path }, [field.label]);
+  const label = el('label', { className: 'control-label', for: field.id }, [field.label]);
   const toggle = el('label', { className: 'toggle-switch' });
 
   const checkbox = el('input', {
@@ -318,7 +316,6 @@ export function createToggleControl(
 
   const copy = el('div', { className: 'control-toggle-copy' });
   copy.appendChild(label);
-  copy.appendChild(el('code', { className: 'control-path' }, [field.path]));
   if (field.description) {
     copy.appendChild(el('span', { className: 'control-description' }, [field.description]));
   }
@@ -358,7 +355,7 @@ export function createSelectControl(
 ): ControlResult {
   const wrapper = el('div', { className: 'control-row' });
 
-  const label = el('label', { className: 'control-label', for: field.id, title: field.path }, [field.label]);
+  const label = el('label', { className: 'control-label', for: field.id }, [field.label]);
   const select = el('select', { id: field.id, className: 'control-select' }) as HTMLSelectElement;
 
   for (const opt of field.options ?? []) {
@@ -367,7 +364,6 @@ export function createSelectControl(
   }
 
   wrapper.appendChild(label);
-  wrapper.appendChild(el('code', { className: 'control-path' }, [field.path]));
   if (field.description) {
     wrapper.appendChild(el('span', { className: 'control-description' }, [field.description]));
   }
@@ -406,7 +402,7 @@ export function createTextControl(
 ): ControlResult {
   const wrapper = el('div', { className: 'control-row' });
 
-  const label = el('label', { className: 'control-label', for: field.id, title: field.path }, [field.label]);
+  const label = el('label', { className: 'control-label', for: field.id }, [field.label]);
   const input = el('input', {
     type: 'text',
     id: field.id,
@@ -415,7 +411,6 @@ export function createTextControl(
   }) as HTMLInputElement;
 
   wrapper.appendChild(label);
-  wrapper.appendChild(el('code', { className: 'control-path' }, [field.path]));
   if (field.description) {
     wrapper.appendChild(el('span', { className: 'control-description' }, [field.description]));
   }
@@ -464,7 +459,6 @@ export function createChipListControl(
   const addButton = el('button', { className: 'add-button', type: 'button' }, ['+ Add suggestion']);
 
   wrapper.appendChild(label);
-  wrapper.appendChild(el('code', { className: 'control-path' }, [field.path]));
   if (field.description) {
     wrapper.appendChild(el('span', { className: 'control-description' }, [field.description]));
   }
@@ -703,7 +697,7 @@ export function createTokenRefControl(
   const opts = field.tokenRef!;
   const wrapper = el('div', { className: 'control-row' });
 
-  const label = el('label', { className: 'control-label', for: field.id, title: field.path }, [field.label]);
+  const label = el('label', { className: 'control-label', for: field.id }, [field.label]);
   const selectWrapper = el('div', { className: 'token-ref-wrapper' });
 
   const select = el('select', { id: field.id, className: 'token-ref-select' }) as HTMLSelectElement;
@@ -713,7 +707,6 @@ export function createTokenRefControl(
   selectWrapper.appendChild(select);
 
   wrapper.appendChild(label);
-  wrapper.appendChild(el('code', { className: 'control-path' }, [field.path]));
   if (field.description) {
     wrapper.appendChild(el('span', { className: 'control-description' }, [field.description]));
   }

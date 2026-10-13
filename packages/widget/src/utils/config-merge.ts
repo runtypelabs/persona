@@ -12,6 +12,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 // Dotted paths whose plain-object value replaces wholesale instead of recursing.
+// Documented in docs/configuration.md (mounted-update replacement table).
 // - user-defined key maps: recursive merge would strand stale keys from the old value
 //   (headers, targetProviders, components, artifact display scopes,
 //   features.streamAnimation.plugins).

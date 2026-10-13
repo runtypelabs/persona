@@ -835,7 +835,7 @@ function formatAttachmentAllowedTypes(value: unknown): string {
 const copySectionDef: SectionDef = {
   id: 'copy', title: 'Content & Copy', collapsed: false,
   fields: [
-    { id: 'copy-show-welcome-card', label: 'Welcome Surface', description: 'Hide welcome with variant none. Modern welcome content wins over legacy copy aliases.', type: 'select', path: 'welcome.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Card' }, { value: 'hero', label: 'Hero' }, { value: 'none', label: 'Hidden' }] },
+    { id: 'copy-show-welcome-card', label: 'Welcome Surface', description: 'Choose a welcome layout, or hide it.', type: 'select', path: 'welcome.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Card' }, { value: 'hero', label: 'Hero' }, { value: 'none', label: 'Hidden' }] },
     { id: 'copy-welcome-title', label: 'Welcome Title', type: 'text', path: 'welcome.title', defaultValue: 'Hello 👋' },
     { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'welcome.subtitle', defaultValue: 'I can answer questions and help you get things done here.' },
     { id: 'copy-placeholder', label: 'Input Placeholder', type: 'text', path: 'copy.inputPlaceholder', defaultValue: DEFAULT_INPUT_PLACEHOLDER },
@@ -844,7 +844,7 @@ const copySectionDef: SectionDef = {
 };
 
 const suggestionsSectionDef: SectionDef = {
-  id: 'suggestions', title: 'Suggestions', description: 'Move starters via suggestions.starters.placement; style chips/cards/lists under theme.components.suggestion. Empty items intentionally disables starters.', collapsed: true,
+  id: 'suggestions', title: 'Suggestions', description: 'Choose the suggested prompts, where they appear, and what happens when selected. Remove all prompts to hide them.', collapsed: true,
   fields: [
     { id: 'suggestions-list', label: 'Starter Prompts', description: 'Add, edit, and remove starter prompts directly.', type: 'chip-list', path: 'suggestions.starters.items', defaultValue: DEFAULT_SUGGESTION_CHIPS },
     { id: 'suggestions-starter-variant', label: 'Starter Style', type: 'select', path: 'suggestions.starters.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Cards' }, { value: 'chip', label: 'Chips' }, { value: 'list', label: 'List' }] },
@@ -1006,23 +1006,23 @@ const featuresSectionDef: SectionDef = {
   fields: [
     { id: 'feat-voice', label: 'Voice Recognition', description: 'Enable voice input', type: 'toggle', path: 'voiceRecognition.enabled', defaultValue: false },
     { id: 'feat-auto-focus', label: 'Auto Focus Input', description: 'Focus input after panel opens', type: 'toggle', path: 'autoFocusInput', defaultValue: false },
-    { id: 'feat-scroll-bottom-enabled', label: 'Scroll To Bottom', description: 'Show a jump-to-latest affordance when the user scrolls away from new content', type: 'toggle', path: 'features.scrollToBottom.enabled', defaultValue: true },
+    { id: 'feat-scroll-bottom-enabled', label: 'Scroll To Bottom', description: 'Show a button to return to the latest messages.', type: 'toggle', path: 'features.scrollToBottom.enabled', defaultValue: true },
     { id: 'feat-scroll-bottom-icon', label: 'Scroll To Bottom Icon', type: 'text', path: 'features.scrollToBottom.iconName', defaultValue: 'arrow-down' },
     { id: 'feat-scroll-bottom-label', label: 'Scroll To Bottom Label', description: 'Leave empty for icon-only mode', type: 'text', path: 'features.scrollToBottom.label', defaultValue: '' },
     { id: 'feat-scroll-bottom-streaming', label: 'Streaming Below', type: 'select', path: 'features.scrollToBottom.streamingIndicator', defaultValue: 'arrow', options: [{ value: 'arrow', label: 'Arrow' }, { value: 'dots', label: 'Dots' }] },
-    { id: 'feat-scroll-bottom-behavior', label: 'Jump To Latest Motion', description: 'User-triggered jump; separate from automatic following and button visibility', type: 'select', path: 'features.scrollToBottom.scrollBehavior', defaultValue: 'instant', options: [{ value: 'instant', label: 'Instant' }, { value: 'smooth', label: 'Smooth' }] },
-    { id: 'feat-scroll-bottom-duration', label: 'Jump Duration (ms)', description: 'Smooth jumps only. Default 220; 0 jumps instantly. Reduced motion always jumps instantly', type: 'text', path: 'features.scrollToBottom.scrollDurationMs', defaultValue: 220, formatValue: (v: unknown) => String(v ?? 220), parseValue: (v: unknown) => String(v).trim() === '' ? undefined : Number(v) },
+    { id: 'feat-scroll-bottom-behavior', label: 'Jump To Latest Motion', description: 'How the conversation scrolls when you click the jump button.', type: 'select', path: 'features.scrollToBottom.scrollBehavior', defaultValue: 'instant', options: [{ value: 'instant', label: 'Instant' }, { value: 'smooth', label: 'Smooth' }] },
+    { id: 'feat-scroll-bottom-duration', label: 'Jump Duration (ms)', description: 'How long smooth scrolling takes. Set to 0 for an instant jump.', type: 'text', path: 'features.scrollToBottom.scrollDurationMs', defaultValue: 220, formatValue: (v: unknown) => String(v ?? 220), parseValue: (v: unknown) => String(v).trim() === '' ? undefined : Number(v) },
     { id: 'feat-scroll-bottom-transition', label: 'Scroll Button Transition', type: 'select', path: 'features.scrollToBottom.transition', defaultValue: 'none', options: [{ value: 'none', label: 'None' }, { value: 'fade', label: 'Fade' }] },
   ],
 };
 
 const streamAnimationSectionDef: SectionDef = {
-  id: 'stream-animation', title: 'Stream Animation', description: 'Control how assistant text appears while streaming.', collapsed: true,
+  id: 'stream-animation', title: 'Stream Animation', description: 'Choose how text appears as the assistant responds.', collapsed: true,
   fields: [
     {
       id: 'stream-anim-type',
       label: 'Animation',
-      description: 'Reveal effect applied to each assistant reply as it streams.',
+      description: 'The visual effect used to reveal a reply.',
       type: 'select',
       path: 'features.streamAnimation.type',
       defaultValue: 'none',
@@ -1038,8 +1038,8 @@ const streamAnimationSectionDef: SectionDef = {
     },
     {
       id: 'stream-anim-placeholder',
-      label: 'Pre-first-token Placeholder',
-      description: 'What to show before the first token arrives.',
+      label: 'Before the Reply Starts',
+      description: 'What to show while waiting for a reply.',
       type: 'select',
       path: 'features.streamAnimation.placeholder',
       defaultValue: 'none',
@@ -1050,20 +1050,20 @@ const streamAnimationSectionDef: SectionDef = {
     },
     {
       id: 'stream-anim-buffer',
-      label: 'Content Buffering',
-      description: 'Trim in-progress units so only complete words/lines reveal.',
+      label: 'Reveal Text By',
+      description: 'Show text as it arrives, or wait for a complete word or line.',
       type: 'select',
       path: 'features.streamAnimation.buffer',
       defaultValue: 'none',
       options: [
-        { value: 'none', label: 'None: stream every character' },
-        { value: 'word', label: 'Word: hold until whitespace' },
-        { value: 'line', label: 'Line: hold until newline' },
+        { value: 'none', label: 'Each character' },
+        { value: 'word', label: 'Complete words' },
+        { value: 'line', label: 'Complete lines' },
       ],
     },
     {
       id: 'stream-anim-speed',
-      label: 'Per-unit Duration (ms)',
+      label: 'Text Animation Duration (ms)',
       description: 'Animation length for each character or word.',
       type: 'select',
       path: 'features.streamAnimation.speed',
@@ -1081,8 +1081,8 @@ const streamAnimationSectionDef: SectionDef = {
     },
     {
       id: 'stream-anim-duration',
-      label: 'Container Duration (ms)',
-      description: 'Length of container-level effects (pop-bubble, custom plugins).',
+      label: 'Bubble Animation Duration (ms)',
+      description: 'How long effects on the whole reply bubble take.',
       type: 'select',
       path: 'features.streamAnimation.duration',
       defaultValue: 1800,
@@ -1158,11 +1158,11 @@ const INHERITABLE_DISPLAY_FIELD = {
 export const ARTIFACT_DISPLAY_PREFERENCE_SECTION: SectionDef = {
   id: 'artifact-display-preferences',
   title: 'Artifact display',
-  description: 'Choose where recognizable artifact groups appear.',
+  description: 'Choose where generated files and other content appear.',
   requiresCapability: 'artifacts',
   fields: [
     { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-files', label: 'Generated files', description: 'Default for HTML, CSV, documents, and code files.', path: 'features.artifacts.display.files' },
-    { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-components', label: 'Registered UI components', description: 'Charts, forms, cards, and custom UI rendered by the host.', path: 'features.artifacts.display.byKind.component' },
+    { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-components', label: 'Interactive content', description: 'Charts, forms, cards, and other interactive content.', path: 'features.artifacts.display.byKind.component' },
     { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-default', label: 'Other artifacts', description: 'Plain documents and anything without a narrower rule.', path: 'features.artifacts.display.default' },
     {
       id: 'artifact-file-preview',

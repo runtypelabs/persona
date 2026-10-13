@@ -82,6 +82,7 @@ function renderDropdownContent(container: HTMLElement): void {
       <p class="control-description">Copies Persona’s defaults along with your settings.</p>
       <button type="button" id="copy-authored-json-btn" class="btn btn-sm">Copy settings as JSON</button>
       <a href="https://github.com/runtypelabs/persona/blob/main/docs/configuration.md" target="_blank" rel="noopener noreferrer">Configuration guide</a>
+      <p><a href="https://github.com/runtypelabs/persona/blob/main/docs/configuration.md#mounted-updates-and-clearing-an-old-style" target="_blank" rel="noopener noreferrer">Updating an existing widget?</a></p>
     </details>
   `;
   container.appendChild(codeSection);
