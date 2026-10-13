@@ -7,7 +7,7 @@ vi.mock("./examples-nav", () => ({ renderExamplesShell: vi.fn() }));
 vi.mock("./demo-echo-fetch", () => ({ createDemoEchoFetch: () => vi.fn() }));
 async function start() {
   vi.resetModules();
-  mocks.init.mockReturnValue({ injectTestMessage: mocks.inject, destroy: mocks.destroy, upsertArtifact: mocks.upsertArtifact });
+  mocks.init.mockReturnValue({ injectTestMessage: mocks.inject, destroy: mocks.destroy, on: vi.fn(), upsertArtifact: mocks.upsertArtifact });
   document.body.innerHTML = pageHtml;
   await import("./v5-preview");
 }
@@ -18,6 +18,27 @@ function choose(id: string, value: string) {
 }
 afterEach(() => { window.dispatchEvent(new Event("pagehide")); vi.useRealTimers(); vi.clearAllMocks(); document.body.innerHTML = ""; });
 describe("V5 preview", () => {
+  it("compares scroll glyphs, transitions, and an application-owned animation hook", async () => {
+    await start();
+    choose("scene", "scroll-control");
+    let config = mocks.init.mock.lastCall?.[0].config;
+    expect(config.features.scrollBehavior.mode).toBe("none");
+    expect(config.customFetch).toBeTypeOf("function");
+    choose("scroll-glyph", "dots");
+    choose("scroll-transition", "fade");
+    choose("scroll-behavior", "smooth");
+    choose("scroll-duration", "350");
+    config = mocks.init.mock.lastCall?.[0].config;
+    expect(config.features.scrollToBottom).toMatchObject({ streamingIndicator: "dots", transition: "fade", scrollBehavior: "smooth", scrollDurationMs: 350 });
+    choose("scroll-duration", "0");
+    expect(mocks.init.mock.lastCall?.[0].config.features.scrollToBottom.scrollDurationMs).toBe(0);
+    choose("scroll-duration", "default");
+    expect(mocks.init.mock.lastCall?.[0].config.features.scrollToBottom.scrollDurationMs).toBeUndefined();
+    choose("scroll-glyph", "custom");
+    expect(mocks.init.mock.lastCall?.[0].config.features.scrollToBottom.renderIcon).toBeTypeOf("function");
+    expect(document.querySelector<HTMLElement>("#v5-scroll-hook-note")!.hidden).toBe(false);
+  });
+
   it("compares header glyphs and custom images with public background/padding controls", async () => {
     await start();
     choose("header-icon", "image");

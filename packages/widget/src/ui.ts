@@ -1,3 +1,5 @@
+import { createScrollAnimation, createScrollToLatest } from "./utils/scroll-animation";
+import { createScrollToBottomControl } from "./components/scroll-to-bottom";
 import { createLayoutSlots } from "./utils/layout-slots";
 import { activityVariant, activityDuration, createActivityLifecycle, createActivityGroup } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
@@ -1266,7 +1268,6 @@ export const createAgentExperience = (
   let showReasoning = config.features?.showReasoning ?? true;
   let showToolCalls = config.features?.showToolCalls ?? true;
   let showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
-  let scrollToBottomFeature = config.features?.scrollToBottom ?? {};
   let scrollBehaviorFeature = config.features?.scrollBehavior ?? {};
   // Live-read: `update()` may change the persistState shape, which re-keys the
   // visitor store.
@@ -1484,9 +1485,7 @@ export const createAgentExperience = (
   body.classList.add("persona-relative");
   const SCROLL_TO_BOTTOM_EDGE_OFFSET = 12;
 
-  const getScrollToBottomLabel = () => scrollToBottomFeature.label ?? "";
-  const getScrollToBottomIconName = () => scrollToBottomFeature.iconName ?? "arrow-down";
-  const isScrollToBottomEnabled = () => scrollToBottomFeature.enabled !== false;
+  const isScrollToBottomEnabled = () => config.features?.scrollToBottom?.enabled !== false;
   // Default is "anchor-top" (see DEFAULT_WIDGET_CONFIG). This `??` only applies
   // when a partial config sets `scrollBehavior.mode` to undefined explicitly;
   // it must agree with the declared default.
@@ -1509,23 +1508,8 @@ export const createAgentExperience = (
     scrollBehaviorFeature.showActivityWhilePinned !== false;
   const isAnnounceEnabled = () => scrollBehaviorFeature.announce === true;
   const getScrollbarPolicy = () => scrollBehaviorFeature.scrollbar ?? "on-scroll";
-  const scrollToBottomButton = createElement(
-    "button",
-    "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-z-10 persona-flex persona-items-center persona-gap-1 persona-text-xs persona-transform persona--translate-x-1/2 persona-cursor-pointer"
-  ) as HTMLButtonElement;
-  scrollToBottomButton.type = "button";
-  scrollToBottomButton.style.display = "none";
-  scrollToBottomButton.setAttribute("data-persona-scroll-to-bottom", "true");
-  const scrollToBottomIcon = createElement("span", "persona-flex persona-items-center");
-  const scrollToBottomLabel = createElement("span", "");
-  // Count of messages that arrived while auto-follow was paused (or, in
-  // non-follow scroll modes, while the user was away from the bottom).
-  // Rendered as a small badge on the scroll-to-bottom affordance, mirroring
-  // the event stream view's "Jump to latest (N)" indicator.
-  const scrollToBottomCount = createElement("span", "");
-  scrollToBottomCount.setAttribute("data-persona-scroll-to-bottom-count", "");
-  scrollToBottomCount.style.display = "none";
-  scrollToBottomButton.append(scrollToBottomIcon, scrollToBottomLabel, scrollToBottomCount);
+  const scrollToBottomControl = createScrollToBottomControl(renderLucideIcon, "transcript", body);
+  const scrollToBottomButton = scrollToBottomControl.element;
   container.appendChild(scrollToBottomButton);
 
   // Anchor-top scroll mode: zero-height spacer kept after the messages
@@ -1678,23 +1662,7 @@ export const createAgentExperience = (
     updateScrollToBottomButtonOffset();
   };
 
-  const renderScrollToBottomButton = () => {
-    const hasLabel = Boolean(getScrollToBottomLabel());
-    scrollToBottomButton.setAttribute("aria-label", getScrollToBottomLabel() || "Jump to latest");
-    scrollToBottomButton.title = getScrollToBottomLabel();
-    scrollToBottomButton.setAttribute("data-persona-scroll-to-bottom-has-label", hasLabel ? "true" : "false");
-    scrollToBottomIcon.innerHTML = "";
-    const icon = renderLucideIcon(getScrollToBottomIconName(), "14px", "currentColor", 2);
-    if (icon) {
-      scrollToBottomIcon.appendChild(icon);
-      scrollToBottomIcon.style.display = "";
-    } else {
-      scrollToBottomIcon.style.display = "none";
-    }
-    scrollToBottomLabel.textContent = getScrollToBottomLabel();
-    scrollToBottomLabel.style.display = hasLabel ? "" : "none";
-  };
-  renderScrollToBottomButton();
+  scrollToBottomControl.update(config, false);
 
   // Initialized after composer plugins rebind footer DOM (see `bindComposerRefsFromFooter`)
   let attachmentManager: AttachmentManager | null = null;
@@ -2016,6 +1984,7 @@ export const createAgentExperience = (
       ensureEventStreamRuntime();
       return;
     }
+    latestScroll.cancel();
     eventStreamVisible = true;
     if (!eventStreamView) {
       // The panel lives in a lazy chunk; mount when it resolves, unless the
@@ -2033,6 +2002,9 @@ export const createAgentExperience = (
               throughputTracker?.getMetric() ?? { status: "idle" },
             // Inject the string-name resolver: the chunk carries no registry.
             renderIconByName: renderLucideIcon,
+            getResponseActive: isScrollResponseActive,
+            getConfig: () => config,
+            getViewVisible: () => eventStreamVisible,
           });
           mountEventStreamView();
         })
@@ -2068,6 +2040,7 @@ export const createAgentExperience = (
     if (!eventStreamVisible) return;
     eventStreamVisible = false;
     if (eventStreamView) {
+      eventStreamView.update();
       eventStreamView.element.remove();
     }
     body.style.display = "";
@@ -5732,7 +5705,7 @@ export const createAgentExperience = (
   }
 
   // Track ongoing smooth scroll animation
-  let smoothScrollRAF: number | null = null;
+  const smoothScrollAnimation = createScrollAnimation();
 
   // Get the scrollable container using its unique ID
   const getScrollableContainer = (): HTMLElement => {
@@ -5743,10 +5716,7 @@ export const createAgentExperience = (
   };
 
   const cancelSmoothScroll = () => {
-    if (smoothScrollRAF !== null) {
-      cancelAnimationFrame(smoothScrollRAF);
-      smoothScrollRAF = null;
-    }
+    smoothScrollAnimation.cancel();
     isAutoScrolling = false;
   };
 
@@ -5764,33 +5734,23 @@ export const createAgentExperience = (
   // the scroll-to-bottom affordance (Principle 8: show what's happening out of
   // view). In anchor-top mode this is gated behind `showActivityWhilePinned`
   // so the historical "silent while pinned" behavior is preserved by default.
+  // Busy covers network/tool work too. Durable reconnects and waits for user
+  // input are idle even while the session retains its busy state.
+  const isScrollResponseActive = () => {
+    const status = session?.getStatus();
+    return isStreaming && status !== "paused" && status !== "resuming" && status !== "error" &&
+      !session?.getMessages().some((message) =>
+        (message.agentMetadata?.awaitingLocalTool === true && message.agentMetadata.askUserQuestionAnswered !== true) ||
+        (message.variant === "approval" && message.approval?.status === "pending"));
+  };
   const isStreamingOutOfView = () =>
-    isStreaming &&
-    isAwayFromLatest() &&
+    isScrollResponseActive() && isAwayFromLatest() &&
     (getScrollMode() !== "anchor-top" || isActivityWhilePinnedEnabled());
 
   const updateScrollToBottomCountBadge = () => {
-    const base = getScrollToBottomLabel() || "Jump to latest";
-    const streamingBelow = isStreamingOutOfView();
-    scrollToBottomButton.toggleAttribute(
-      "data-persona-scroll-to-bottom-streaming",
-      streamingBelow
-    );
-    if (newMessagesSincePause > 0) {
-      scrollToBottomCount.textContent = String(newMessagesSincePause);
-      scrollToBottomCount.style.display = "";
-      scrollToBottomButton.setAttribute(
-        "aria-label",
-        `${base} (${newMessagesSincePause} new)`
-      );
-    } else {
-      scrollToBottomCount.textContent = "";
-      scrollToBottomCount.style.display = "none";
-      scrollToBottomButton.setAttribute(
-        "aria-label",
-        streamingBelow ? `${base} (response streaming below)` : base
-      );
-    }
+    scrollToBottomControl.update(config,
+      scrollToBottomButton.getAttribute("data-persona-scroll-to-bottom-visible") === "true",
+      isStreamingOutOfView(), newMessagesSincePause);
   };
 
   const resetNewMessagesCount = () => {
@@ -5829,10 +5789,10 @@ export const createAgentExperience = (
 
   const syncScrollToBottomButton = () => {
     if (!isScrollToBottomEnabled() || fullPanelOverlayVisible()) {
+      scrollToBottomControl.update(config, false);
       if (scrollToBottomButton.parentNode) {
         scrollToBottomButton.remove();
       }
-      scrollToBottomButton.style.display = "none";
       return;
     }
     if (scrollToBottomButton.parentNode !== container) {
@@ -5840,14 +5800,9 @@ export const createAgentExperience = (
     }
     updateScrollToBottomButtonOffset();
     const hasOverflow = getScrollBottomOffset(body) > 0;
-    const show = hasOverflow && isAwayFromLatest() && transcriptHasMessages();
-    if (!show) {
-      resetNewMessagesCount();
-    } else {
-      // Refresh the streaming-below hint while the affordance is visible.
-      updateScrollToBottomCountBadge();
-    }
-    scrollToBottomButton.style.display = show ? "" : "none";
+    const show = !latestScroll.active && hasOverflow && isAwayFromLatest() && transcriptHasMessages();
+    if (!show) newMessagesSincePause = 0;
+    scrollToBottomControl.update(config, show, isStreamingOutOfView(), newMessagesSincePause);
   };
 
   const pauseAutoScroll = () => {
@@ -5866,7 +5821,7 @@ export const createAgentExperience = (
     // Auto-follow applies in "follow" mode, and in anchor-top only for a
     // no-anchor fallback turn (see `isFollowEffective`). Anchored anchor-top
     // turns and "none" never chase the bottom during streaming.
-    if (!isFollowEffective()) return;
+    if (latestScroll.active || !isFollowEffective()) return;
     if (!transcriptHasMessages()) return;
 
     if (!autoFollow.isFollowing()) return;
@@ -5908,66 +5863,17 @@ export const createAgentExperience = (
     duration: number,
     shouldContinue: () => boolean = () => true
   ) => {
-    const start = element.scrollTop;
-    let target = resolveTarget();
-    let distance = target - start;
-
-    // Cancel any ongoing smooth scroll animation
     cancelSmoothScroll();
-
-    // Nothing to scroll: land exactly on target and skip the rAF loop. Avoids a
-    // no-op animation when already in place (e.g. anchoring with zero overflow),
-    // which also keeps environments with a synchronous rAF from spinning.
-    if (Math.abs(distance) < 1) {
-      isAutoScrolling = true;
-      element.scrollTop = target;
-      lastScrollTop = element.scrollTop;
-      isAutoScrolling = false;
-      return;
-    }
-
-    const startTime = performance.now();
     isAutoScrolling = true;
-
-    // Easing function: ease-out cubic for smooth deceleration
-    const easeOutCubic = (t: number): number => {
-      return 1 - Math.pow(1 - t, 3);
-    };
-
-    const animate = (currentTime: number) => {
-      if (!shouldContinue()) {
-        cancelSmoothScroll();
-        return;
-      }
-
-      // Recalculate target each frame in case scrollHeight changed
-      const currentTarget = resolveTarget();
-      if (currentTarget !== target) {
-        target = currentTarget;
-        distance = target - start;
-      }
-
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = easeOutCubic(progress);
-
-      const currentScroll = start + distance * eased;
-      element.scrollTop = currentScroll;
-      lastScrollTop = element.scrollTop;
-
-      if (progress < 1) {
-        smoothScrollRAF = requestAnimationFrame(animate);
-      } else {
-        // Ensure we end exactly at the target
-        element.scrollTop = target;
-        lastScrollTop = element.scrollTop;
-        smoothScrollRAF = null;
-        isAutoScrolling = false;
-      }
-    };
-
-    smoothScrollRAF = requestAnimationFrame(animate);
+    smoothScrollAnimation.start(element, resolveTarget, duration,
+      () => { lastScrollTop = element.scrollTop; },
+      () => { isAutoScrolling = false; }, shouldContinue);
   };
+
+  const latestScroll = createScrollToLatest(body, container,
+    () => { lastScrollTop = body.scrollTop; },
+    () => { resumeAutoScroll(); scheduleAutoScroll(true); syncScrollToBottomButton(); },
+    () => { autoFollow.pause(); syncScrollToBottomButton(); });
 
   // Custom smooth scroll animation with easing
   const smoothScrollToBottom = (element: HTMLElement, duration = 500) => {
@@ -6145,6 +6051,7 @@ export const createAgentExperience = (
     // Also stop an in-flight anchor scroll animation: otherwise its
     // remaining frames keep easing scrollTop toward the stale anchor target
     // after a jump-to-latest, chat clear, or scroll-mode change.
+    latestScroll.cancel();
     cancelSmoothScroll();
     anchorState = null;
     anchorSpacer.style.height = "0px";
@@ -9190,6 +9097,8 @@ export const createAgentExperience = (
     renderSuggestions(messages);
     scheduleAutoScroll(!isStreaming);
     trackMessages(messages);
+    syncScrollToBottomButton();
+    eventStreamView?.update();
 
     if (messages.length === 0) {
       resetAnchorState();
@@ -9296,6 +9205,8 @@ export const createAgentExperience = (
         return statusCopy[s];
       };
       applyStatusToElement(statusText, getCurrentStatusText(status), currentStatusConfig, status);
+      syncScrollToBottomButton();
+      eventStreamView?.update();
       // A paused/resuming durable turn gates the history button too.
       historyChromeSync();
     },
@@ -9333,6 +9244,7 @@ export const createAgentExperience = (
       // Keep the "streaming below" hint and its announcement in sync with the
       // streaming lifecycle (Principles 8 + 15).
       syncScrollToBottomButton();
+      eventStreamView?.update();
       announce(streaming ? "Responding…" : "Response complete.");
       // Composer-bar peek: streaming state is one of the two visibility
       // triggers (the other is composer hover), so re-evaluate now.
@@ -13791,6 +13703,12 @@ export const createAgentExperience = (
     const bottomOffsetShrank = currentBottomOffset < lastBottomOffset;
     lastBottomOffset = currentBottomOffset;
 
+    if (latestScroll.interrupted) {
+      lastScrollTop = scrollTop;
+      syncScrollToBottomButton();
+      return;
+    }
+
     if (!isFollowEffective()) {
       // No follow state to manage (anchored anchor-top / none): just keep the
       // scroll-to-bottom affordance in sync with the user's position.
@@ -13813,7 +13731,7 @@ export const createAgentExperience = (
       lastScrollTop,
       nearBottom: isElementNearBottom(body, BOTTOM_THRESHOLD),
       userScrollThreshold: USER_SCROLL_THRESHOLD,
-      isAutoScrolling: isAutoScrolling || hasPendingAutoScroll || bottomOffsetShrank,
+      isAutoScrolling: latestScroll.active || isAutoScrolling || hasPendingAutoScroll || bottomOffsetShrank,
       pauseOnUpwardScroll: true,
       pauseWhenAwayFromBottom: false,
       resumeRequiresDownwardScroll: true
@@ -13914,6 +13832,7 @@ export const createAgentExperience = (
   });
 
   const handleWheel = (event: WheelEvent) => {
+    if (latestScroll.interruptedBy(event)) { markReaderEngaged(); return; }
     // A wheel tick is unambiguous reader intent in every mode — including
     // anchored anchor-top, where there is no follow state to pause.
     if (event.deltaY !== 0) markReaderEngaged();
@@ -13946,13 +13865,13 @@ export const createAgentExperience = (
     // first so "bottom" means the real end of content, not spacer padding
     // that would keep shrinking underneath the reader.
     resetAnchorState();
-    body.scrollTop = body.scrollHeight;
-    lastScrollTop = body.scrollTop;
-    resumeAutoScroll();
-    scheduleAutoScroll(true);
+    cancelAutoScroll();
+    autoFollow.pause();
+    latestScroll.start(config);
     syncScrollToBottomButton();
   });
-  destroyCallbacks.push(() => scrollToBottomButton.remove());
+  destroyCallbacks.push(() => latestScroll.destroy());
+  destroyCallbacks.push(() => scrollToBottomControl.destroy());
   destroyCallbacks.push(() => {
     cancelAutoScroll();
     resetAnchorState();
@@ -14482,7 +14401,7 @@ export const createAgentExperience = (
       autoExpand = config.launcher?.autoExpand ?? false;
       showReasoning = config.features?.showReasoning ?? true;
       showToolCalls = config.features?.showToolCalls ?? true;
-      scrollToBottomFeature = config.features?.scrollToBottom ?? {};
+      latestScroll.cancel();
       const prevScrollMode = getScrollMode();
       scrollBehaviorFeature = config.features?.scrollBehavior ?? {};
       if (prevScrollMode !== getScrollMode()) {
@@ -14492,7 +14411,6 @@ export const createAgentExperience = (
         resumeAutoScroll();
       }
       applyScrollbarPolicy();
-      renderScrollToBottomButton();
       syncScrollToBottomButton();
       const prevShowEventStreamToggle = showEventStreamToggle;
       showEventStreamToggle = config.features?.showEventStreamToggle ?? false;
@@ -14541,6 +14459,8 @@ export const createAgentExperience = (
       } else if (!showEventStreamToggle && prevShowEventStreamToggle) {
         // Flag changed from true to false - hide and clean up
         toggleEventStreamOff();
+        eventStreamView?.destroy();
+        eventStreamView = null;
         if (eventStreamToggleBtn) {
           eventStreamToggleBtn.remove();
           eventStreamToggleBtn = null;

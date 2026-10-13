@@ -1009,6 +1009,10 @@ const featuresSectionDef: SectionDef = {
     { id: 'feat-scroll-bottom-enabled', label: 'Scroll To Bottom', description: 'Show a jump-to-latest affordance when the user scrolls away from new content', type: 'toggle', path: 'features.scrollToBottom.enabled', defaultValue: true },
     { id: 'feat-scroll-bottom-icon', label: 'Scroll To Bottom Icon', type: 'text', path: 'features.scrollToBottom.iconName', defaultValue: 'arrow-down' },
     { id: 'feat-scroll-bottom-label', label: 'Scroll To Bottom Label', description: 'Leave empty for icon-only mode', type: 'text', path: 'features.scrollToBottom.label', defaultValue: '' },
+    { id: 'feat-scroll-bottom-streaming', label: 'Streaming Below', type: 'select', path: 'features.scrollToBottom.streamingIndicator', defaultValue: 'arrow', options: [{ value: 'arrow', label: 'Arrow' }, { value: 'dots', label: 'Dots' }] },
+    { id: 'feat-scroll-bottom-behavior', label: 'Jump To Latest Motion', description: 'User-triggered jump; separate from automatic following and button visibility', type: 'select', path: 'features.scrollToBottom.scrollBehavior', defaultValue: 'instant', options: [{ value: 'instant', label: 'Instant' }, { value: 'smooth', label: 'Smooth' }] },
+    { id: 'feat-scroll-bottom-duration', label: 'Jump Duration (ms)', description: 'Smooth jumps only. Default 220; 0 jumps instantly. Reduced motion always jumps instantly', type: 'text', path: 'features.scrollToBottom.scrollDurationMs', defaultValue: 220, formatValue: (v: unknown) => String(v ?? 220), parseValue: (v: unknown) => String(v).trim() === '' ? undefined : Number(v) },
+    { id: 'feat-scroll-bottom-transition', label: 'Scroll Button Transition', type: 'select', path: 'features.scrollToBottom.transition', defaultValue: 'none', options: [{ value: 'none', label: 'None' }, { value: 'fade', label: 'Fade' }] },
   ],
 };
 

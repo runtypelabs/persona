@@ -1019,7 +1019,7 @@ export interface ComposerChromeTokens {
 }
 
 /**
- * Motion timing shared by every composer animation.
+ * Motion timing shared by composer animations and scroll-to-bottom visibility fades.
  *
  * Setting either duration to `0ms` is a kill switch: the transitions and
  * keyframes that consume these tokens complete instantly, with no other config

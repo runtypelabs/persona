@@ -1,3 +1,5 @@
+import { createScrollToLatest } from "../utils/scroll-animation";
+import { createScrollToBottomControl } from "./scroll-to-bottom";
 import { createElement } from "../utils/dom";
 import { Check, ChevronDown, ChevronRight, Clipboard as ClipboardIcon, ClipboardCopy, Search, X, type IconNode } from "lucide";
 import { renderIconNode } from "../utils/icon-node";
@@ -454,6 +456,12 @@ export type EventStreamViewOptions = {
    * summary row is rendered and refreshed on each update.
    */
   getThroughput?: () => ThroughputMetric;
+  /** Current live response activity; historical events never imply activity. */
+  getResponseActive?: () => boolean;
+  /** Live widget configuration, including scroll-control renderer replacement. */
+  getConfig?: () => AgentWidgetConfig;
+  /** False while a retained inspector is temporarily detached. */
+  getViewVisible?: () => boolean;
   /**
    * Resolver for host-configurable icon names (`scrollToBottom.iconName`).
    * Injected by ui.ts (its `renderLucideIcon`): this chunk must not import
@@ -486,10 +494,8 @@ export function createEventStreamView(
   // Missing injection (direct mounts in tests) degrades to no icon, the same
   // as an unknown registry name.
   const renderConfigIcon = options.renderIconByName ?? (() => null);
-  const scrollToBottomConfig = config?.features?.scrollToBottom;
-  const scrollToBottomEnabled = scrollToBottomConfig?.enabled !== false;
-  const scrollToBottomIconName = scrollToBottomConfig?.iconName ?? "arrow-down";
-  const scrollToBottomLabel = scrollToBottomConfig?.label ?? "";
+  const getScrollConfig = () => options.getConfig?.() ?? config ?? {};
+  const isScrollToBottomEnabled = () => getScrollConfig().features?.scrollToBottom?.enabled !== false;
 
   const esConfig: EventStreamConfig = config?.features?.eventStream ?? {};
 
@@ -798,26 +804,26 @@ export function createEventStreamView(
     eventsList.style.height = "100%";
 
     // Scroll-to-bottom indicator
-    const scrollIndicator = createElement(
-      "div",
-      "persona-scroll-to-bottom-indicator persona-absolute persona-bottom-3 persona-left-1/2 persona-transform persona--translate-x-1/2 persona-cursor-pointer persona-z-10 persona-text-xs"
-    );
+    const scrollControl = createScrollToBottomControl(renderConfigIcon, "event-stream", eventsList);
+    const scrollIndicator = scrollControl.element;
     applyCustomClasses(scrollIndicator, customClasses?.scrollIndicator);
-    scrollIndicator.style.display = "none";
-    scrollIndicator.setAttribute(
-      "data-persona-scroll-to-bottom-has-label",
-      scrollToBottomLabel ? "true" : "false"
-    );
-    const arrowIcon = renderConfigIcon(
-      scrollToBottomIconName,
-      "14px",
-      "currentColor",
-      2
-    );
-    if (arrowIcon) scrollIndicator.appendChild(arrowIcon);
-    const indicatorText = createElement("span", "");
-    indicatorText.textContent = scrollToBottomLabel;
-    scrollIndicator.appendChild(indicatorText);
+    const latestScroll = createScrollToLatest(eventsList, container,
+      () => { lastScrollTop = eventsList.scrollTop; },
+      () => { autoFollow.resume(); newEventsSincePause = 0; syncScrollControl(); },
+      () => { autoFollow.pause(); syncScrollControl(); });
+    let jumpConfig = getScrollConfig().features?.scrollToBottom;
+    let jumpV5 = getScrollConfig().future?.v5Defaults;
+    function syncScrollControl() {
+      const current = getScrollConfig();
+      const next = current.features?.scrollToBottom;
+      const cancelJump = options.getViewVisible?.() === false || next?.enabled === false || next?.scrollBehavior !== jumpConfig?.scrollBehavior || next?.scrollDurationMs !== jumpConfig?.scrollDurationMs || current.future?.v5Defaults !== jumpV5;
+      jumpConfig = next;
+      jumpV5 = current.future?.v5Defaults;
+      if (cancelJump) latestScroll.cancel();
+      const visible = !latestScroll.active && options.getViewVisible?.() !== false && !autoFollow.isFollowing() && !isNearBottom() && filteredEvents.length > 0;
+      scrollControl.update(getScrollConfig(), visible, options.getResponseActive?.() ?? false, newEventsSincePause);
+    }
+    scrollControl.update(getScrollConfig(), false);
 
     // No matching events message
     const noResultsMsg = createElement(
@@ -920,10 +926,11 @@ export function createEventStreamView(
     }
 
     function resetScrollState() {
+      latestScroll.cancel();
       lastFilteredCount = 0;
       newEventsSincePause = 0;
       autoFollow.resume();
-      scrollIndicator.style.display = "none";
+      syncScrollControl();
     }
 
     function toggleExpand(eventId: string) {
@@ -944,6 +951,7 @@ export function createEventStreamView(
         autoFollow.resume();
       }
       suppressScrollHandler = false;
+      syncScrollControl();
     }
 
     // ========================================================================
@@ -994,12 +1002,8 @@ export function createEventStreamView(
       }
 
       // Track new events since user scrolled up
-      if (scrollToBottomEnabled && !autoFollow.isFollowing() && newCount > lastFilteredCount) {
+      if (isScrollToBottomEnabled() && !autoFollow.isFollowing() && newCount > lastFilteredCount) {
         newEventsSincePause += newCount - lastFilteredCount;
-        indicatorText.textContent = scrollToBottomLabel
-          ? `${scrollToBottomLabel}${newEventsSincePause > 0 ? ` (${newEventsSincePause})` : ""}`
-          : "";
-        scrollIndicator.style.display = "";
       }
       lastFilteredCount = newCount;
 
@@ -1102,12 +1106,14 @@ export function createEventStreamView(
       }
 
       // Auto-scroll if user hasn't scrolled up
-      if (autoFollow.isFollowing()) {
+      if (!latestScroll.active && autoFollow.isFollowing()) {
         eventsList.scrollTop = eventsList.scrollHeight;
       }
+      syncScrollControl();
     }
 
     function update() {
+      syncScrollControl();
       const now = Date.now();
       const elapsed = now - lastRenderTime;
 
@@ -1226,6 +1232,11 @@ export function createEventStreamView(
 
     const handleListScroll = () => {
       if (suppressScrollHandler) return;
+      if (latestScroll.active || latestScroll.interrupted) {
+        lastScrollTop = eventsList.scrollTop;
+        syncScrollControl();
+        return;
+      }
       const currentScrollTop = eventsList.scrollTop;
       const { action, nextLastScrollTop } = resolveFollowStateFromScroll({
         following: autoFollow.isFollowing(),
@@ -1240,19 +1251,17 @@ export function createEventStreamView(
       if (action === "resume") {
         autoFollow.resume();
         newEventsSincePause = 0;
-        scrollIndicator.style.display = "none";
+        syncScrollControl();
       } else if (action === "pause") {
         autoFollow.pause();
-        if (scrollToBottomEnabled) {
-          indicatorText.textContent = scrollToBottomLabel;
-          scrollIndicator.style.display = "";
-        }
+        syncScrollControl();
       }
     };
 
     // Wheel events fire synchronously before rAF callbacks, so we can
     // detect upward scroll intent before the next updateNow() auto-scrolls.
     const handleWheel = (e: WheelEvent) => {
+      if (latestScroll.interruptedBy(e)) return;
       const action = resolveFollowStateFromWheel({
         following: autoFollow.isFollowing(),
         deltaY: e.deltaY,
@@ -1262,23 +1271,19 @@ export function createEventStreamView(
 
       if (action === "pause") {
         autoFollow.pause();
-        if (scrollToBottomEnabled) {
-          indicatorText.textContent = scrollToBottomLabel;
-          scrollIndicator.style.display = "";
-        }
+        syncScrollControl();
       } else if (action === "resume") {
         autoFollow.resume();
         newEventsSincePause = 0;
-        scrollIndicator.style.display = "none";
+        syncScrollControl();
       }
     };
 
     const handleScrollIndicatorClick = () => {
-      if (!scrollToBottomEnabled) return;
-      eventsList.scrollTop = eventsList.scrollHeight;
-      autoFollow.resume();
-      newEventsSincePause = 0;
-      scrollIndicator.style.display = "none";
+      if (!isScrollToBottomEnabled()) return;
+      autoFollow.pause();
+      latestScroll.start(getScrollConfig());
+      syncScrollControl();
     };
 
     // Delegated click handler for expand/collapse (survives DOM rebuilds)
@@ -1341,6 +1346,8 @@ export function createEventStreamView(
     // ========================================================================
 
     function destroy() {
+      latestScroll.destroy();
+      scrollControl.destroy();
       if (searchTimeout) clearTimeout(searchTimeout);
       if (pendingRafId !== null) {
         cancelAnimationFrame(pendingRafId);

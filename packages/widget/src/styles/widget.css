@@ -5269,7 +5269,8 @@
   gap: 0;
 }
 
-[data-persona-root] .persona-scroll-to-bottom-indicator svg {
+[data-persona-root] .persona-scroll-to-bottom-indicator svg,
+[data-persona-root] .persona-scroll-to-bottom-indicator > [aria-hidden="true"] {
   width: var(--persona-scroll-to-bottom-icon-size, 14px);
   height: var(--persona-scroll-to-bottom-icon-size, 14px);
 }
@@ -5300,6 +5301,36 @@
 [data-persona-root] .persona-scroll-to-bottom-indicator:focus-visible {
   outline: 2px solid var(--persona-accent, #171717);
   outline-offset: 2px;
+}
+
+/* Visibility reverses in CSS; hidden controls immediately leave hit testing. */
+[data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-visible="false"] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+[data-persona-root] .persona-scroll-to-bottom-dots {
+  display: flex;
+  gap: 2px;
+}
+[data-persona-root] .persona-scroll-to-bottom-dots > span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-transition="fade"] {
+    transition: opacity var(--persona-motion-duration-fast, 120ms) var(--persona-motion-easing, ease-out), visibility 0s;
+  }
+  [data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-transition="fade"][data-persona-scroll-to-bottom-visible="false"] {
+    transition-delay: 0s, var(--persona-motion-duration-fast, 120ms);
+  }
+  [data-persona-root] .persona-scroll-to-bottom-dots > span {
+    animation: persona-tool-loading-pulse 900ms var(--persona-motion-easing, ease-out) infinite;
+  }
 }
 
 /* Toggle group: mutually exclusive button set created by createToggleGroup() */

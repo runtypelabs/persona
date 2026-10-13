@@ -95,6 +95,8 @@ function createMockElement(tag = "div"): any {
     setAttribute(name: string, value: string) {
       el[`__attr_${name}`] = value;
     },
+    removeAttribute(name: string) { delete el[`__attr_${name}`]; },
+    getRootNode() { return document; },
     getAttribute(name: string) {
       return el[`__attr_${name}`] ?? null;
     },
@@ -924,6 +926,145 @@ describe("createEventStreamView", () => {
   });
 
   describe("scroll-to-bottom affordance", () => {
+    const animationFrames = () => {
+      let now = 0;
+      let nextId = 0;
+      const pending = new Map<number, (time: number) => void>();
+      vi.spyOn(performance, "now").mockImplementation(() => now);
+      globalThis.requestAnimationFrame = callback => { pending.set(++nextId, callback); return nextId; };
+      globalThis.cancelAnimationFrame = id => { pending.delete(id); };
+      return { step(count = 1) {
+        for (let i = 0; i < count; i++) {
+          now += 16;
+          const frame = [...pending.values()]; pending.clear();
+          frame.forEach(callback => callback(now));
+        }
+      } };
+    };
+
+    const smoothView = async () => {
+      const frames = animationFrames();
+      const { createEventStreamView } = await loadModule();
+      const buffer = createMockBuffer([makeEvent("text_delta", 1)]);
+      let config: import("../types").AgentWidgetConfig = { future: { v5Defaults: true } };
+      let visible = true;
+      const view = createEventStreamView({ buffer: buffer as any, getConfig: () => config, getViewVisible: () => visible });
+      const list = getEventsList(view.element);
+      let top = 0;
+      list.scrollHeight = 10300; list.clientHeight = 300;
+      Object.defineProperty(list, "scrollTop", { get: () => top, set: value => { top = Math.max(0, Math.min(value, list.scrollHeight - list.clientHeight)); } });
+      view.update(); frames.step(1);
+      list.__fireEvent("wheel", { deltaY: -24 }); list.scrollTop = 0;
+      list.__fireEvent("scroll");
+      return { frames, view, buffer, list, button: getScrollIndicator(view.element), setConfig: (next: typeof config) => { config = next; }, hide: () => { visible = false; } };
+    };
+
+    it("animates a long event log to a growing target in a bounded duration, then resumes event following", async () => {
+      const { frames, view, buffer, list, button } = await smoothView();
+      button.__fireEvent("click");
+      expect(list.scrollTop).toBe(0);
+      frames.step(4);
+      expect(list.scrollTop).toBeGreaterThan(0);
+      expect(list.scrollTop).toBeLessThan(10000);
+      list.__fireEvent("scroll"); // animation-generated scroll must not change follow state
+      list.scrollHeight = 12300;
+      buffer.push(makeEvent("text_delta", 2)); view.update();
+      frames.step(1);
+      expect(list.scrollTop).toBeLessThan(12000); // render cannot snap to bottom
+      frames.step(9);
+      expect(list.scrollTop).toBe(12000);
+      list.scrollHeight = 13300;
+      buffer.push(makeEvent("text_delta", 3)); view.update(); frames.step(1);
+      expect(list.scrollTop).toBe(13000);
+      view.destroy();
+    });
+
+    it.each(["wheel", "touchstart", "pointerdown", "keydown"])("cancels an event jump on %s near bottom without resuming follow", async input => {
+      const { frames, view, buffer, list, button } = await smoothView();
+      button.__fireEvent("click"); frames.step(12);
+      const stopped = list.scrollTop;
+      expect(10000 - stopped).toBeLessThan(50);
+      if (input === "keydown") view.element.__fireEvent(input, { key: "PageDown" });
+      else list.__fireEvent(input, { deltaY: 24 });
+      list.scrollTop = stopped + 8; list.__fireEvent("scroll");
+      list.scrollHeight = 11300;
+      buffer.push(makeEvent("text_delta", 2)); view.update(); frames.step(20);
+      expect(list.scrollTop).toBe(stopped + 8);
+      view.destroy();
+    });
+
+    it("refreshes the idle event control after a cancelling wheel moves away without a render", async () => {
+      const { frames, view, list, button } = await smoothView();
+      button.__fireEvent("click"); frames.step(12);
+      list.__fireEvent("wheel", { deltaY: -24 });
+      list.scrollTop = 0; list.__fireEvent("scroll");
+      expect(button.disabled).toBe(false);
+      expect(button.getAttribute("data-persona-scroll-to-bottom-visible")).toBe("true");
+      frames.step(20); expect(list.scrollTop).toBe(0);
+      view.destroy();
+    });
+
+    it("uses the configured duration for event log jumps", async () => {
+      const { frames, view, list, button, setConfig } = await smoothView();
+      setConfig({ future: { v5Defaults: true }, features: { scrollToBottom: { scrollDurationMs: 350 } } });
+      view.update(); button.__fireEvent("click"); frames.step(14);
+      expect(list.scrollTop).toBeGreaterThan(0);
+      expect(list.scrollTop).toBeLessThan(10000);
+      frames.step(8);
+      expect(list.scrollTop).toBe(10000);
+      view.destroy();
+    });
+
+    it.each(["configuration", "duration", "hidden", "destroy"])("stops a pending event jump when %s", async action => {
+      const { frames, view, list, button, setConfig, hide } = await smoothView();
+      button.__fireEvent("click"); frames.step(3);
+      const stopped = list.scrollTop;
+      if (action === "configuration") setConfig({ future: { v5Defaults: true }, features: { scrollToBottom: { scrollBehavior: "instant" } } });
+      if (action === "duration") setConfig({ future: { v5Defaults: true }, features: { scrollToBottom: { scrollDurationMs: 600 } } });
+      if (action === "hidden") hide();
+      if (action === "destroy") view.destroy(); else view.update();
+      frames.step(20);
+      expect(list.scrollTop).toBe(stopped);
+      if (action !== "destroy") view.destroy();
+    });
+
+    it.each([false, true])("keeps event jumps instant with an explicit instant override (V5 %s)", async v5 => {
+      const { view, list, button, setConfig } = await smoothView();
+      setConfig({ future: { v5Defaults: v5 }, features: { scrollToBottom: { scrollBehavior: "instant" } } });
+      view.update(); button.__fireEvent("click");
+      expect(list.scrollTop).toBe(10000);
+      view.destroy();
+    });
+
+    it("uses a native button and a live activity getter rather than historical event types", async () => {
+      const { createEventStreamView } = await loadModule();
+      const buffer = createMockBuffer([makeEvent("text_delta", 1)]);
+      let active = false;
+      let visible = true;
+      let config: any = { future: { v5Defaults: true }, features: { scrollToBottom: {} } };
+      const view = createEventStreamView({ buffer: buffer as any, getConfig: () => config, getResponseActive: () => active, getViewVisible: () => visible });
+      view.update();
+      const list = getEventsList(view.element);
+      list.scrollHeight = 900; list.clientHeight = 300; list.scrollTop = 0;
+      list.__fireEvent("wheel", { deltaY: -24 });
+      const button = getScrollIndicator(view.element);
+      expect(button.tagName).toBe("BUTTON");
+      expect(button.type).toBe("button");
+      expect(button.disabled).toBe(false);
+      expect(button.children[0].children[0].__iconName).toBe("arrow-down");
+      active = true; view.update();
+      expect(button.children[0].children[0].className).toBe("persona-scroll-to-bottom-dots");
+      visible = false; view.update();
+      expect(button.disabled).toBe(true);
+      visible = true; active = false; view.update();
+      expect(button.children[0].children[0].__iconName).toBe("arrow-down");
+      config = { ...config, features: { scrollToBottom: { enabled: false } } }; view.update();
+      expect(button.disabled).toBe(true);
+      expect(button.style.display).toBe("none");
+      expect(button.getAttribute("aria-hidden")).toBe("true");
+      view.destroy();
+    });
+
     it("uses icon-only arrow-down defaults when paused and new events arrive", async () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
@@ -948,7 +1089,7 @@ describe("createEventStreamView", () => {
       const indicator = getScrollIndicator(element);
       expect(indicator.style.display).toBe("");
       expect(indicator.children[1]?.textContent).toBe("");
-      expect(indicator.children[0]?.__iconName).toBe("arrow-down");
+      expect(indicator.children[0]?.children[0]?.__iconName).toBe("arrow-down");
       vi.useRealTimers();
     });
 
@@ -1019,7 +1160,7 @@ describe("createEventStreamView", () => {
       const indicator = getScrollIndicator(element);
       expect(indicator.style.display).toBe("");
       expect(indicator.children[1]?.textContent).toBe("");
-      expect(indicator.children[0]?.__iconName).toBe("arrow-down");
+      expect(indicator.children[0]?.children[0]?.__iconName).toBe("arrow-down");
       vi.useRealTimers();
     });
 
@@ -1057,7 +1198,7 @@ describe("createEventStreamView", () => {
       const indicator = getScrollIndicator(element);
       expect(indicator.style.display).toBe("");
       expect(indicator.children[1]?.textContent).toContain("Jump to latest");
-      expect(indicator.children[0]?.__iconName).toBe("arrow-down");
+      expect(indicator.children[0]?.children[0]?.__iconName).toBe("arrow-down");
       vi.useRealTimers();
     });
   });

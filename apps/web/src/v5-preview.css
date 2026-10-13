@@ -54,3 +54,7 @@
 .v5-embedded-frame > #v5-host { flex: 1; min-height: 0; }
 
 .v5-controls [hidden] { display: none; }
+
+.v5-scroll-custom-icon { display: inline-block; font-size: 18px; line-height: 1; }
+
+@media (min-width: 801px) { .v5-preview-pane { position: sticky; top: 88px; } }

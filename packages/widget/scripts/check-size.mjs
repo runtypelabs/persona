@@ -3,13 +3,11 @@ import { brotliCompressSync, constants } from "node:zlib";
 
 // Binary KB, matching the established 148 / 14.4 / 17.8 KB baselines.
 const budgets = [
-  // Scoped style replacements, explicit legacy-origin tracking and per-widget
-  // debug diagnostics: measured 162.36 KiB (previous continuity baseline 159.32).
-  // Shared control recipes remove duplicate rendering code; no new dependency.
-  { file: "index.global.js", bytes: 163 * 1024, exclusive: false },
+  // Shared scroll-control glyphs, live activity, and smooth jumps: 163.48 KiB (was 162.36).
+  { file: "index.global.js", bytes: 163.5 * 1024, exclusive: false },
   { file: "launcher.global.js", bytes: 20 * 1024, exclusive: true },
-  // Shared padding/size precedence rules: measured 20.71 KiB (previous 20.65).
-  { file: "widget.css", bytes: 20.8 * 1024, exclusive: false },
+  // Scroll-control fade, dots, and stable glyph sizing: 20.82 KiB (was 20.71).
+  { file: "widget.css", bytes: 20.9 * 1024, exclusive: false },
 ];
 
 for (const { file, bytes, exclusive } of budgets) {

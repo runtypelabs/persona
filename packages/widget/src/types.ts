@@ -2286,6 +2286,30 @@ export type AgentWidgetScrollBehaviorFeature = {
   scrollbar?: AgentWidgetScrollbarPolicy;
 };
 
+/** Decorative glyph state. Hidden glyphs should pause host-owned animation. */
+export type AgentWidgetScrollToBottomIconState = {
+  activity: "idle" | "generating-below";
+  visible: boolean;
+  hovered: boolean;
+  focused: boolean;
+  reducedMotion: boolean;
+};
+
+export type AgentWidgetScrollToBottomIconContext = {
+  config: AgentWidgetConfig;
+  state: Readonly<AgentWidgetScrollToBottomIconState>;
+  view: "transcript" | "event-stream";
+  /** Aborted before cleanup on replacement, disable, or destruction. */
+  signal: AbortSignal;
+};
+
+export type AgentWidgetScrollToBottomIconHandle = {
+  element: HTMLElement | null;
+  /** Called only when state or scroll-control configuration changes. */
+  update?: (context: AgentWidgetScrollToBottomIconContext) => void;
+  destroy?: () => void;
+};
+
 export type AgentWidgetScrollToBottomFeature = {
   /**
    * When true, Persona shows a scroll-to-bottom affordance when the user breaks
@@ -2304,6 +2328,29 @@ export type AgentWidgetScrollToBottomFeature = {
    * @default ""
    */
   label?: string;
+  /** Glyph while a live response is arriving below. V4 defaults to arrow; V5 to dots. */
+  streamingIndicator?: "dots" | "arrow";
+  /** Visibility transition. V4 defaults to none; V5 to fade. Honors reduced motion. */
+  transition?: "fade" | "none";
+  /** User-triggered jump behavior, separate from automatic follow and button fade.
+   * V4 defaults to instant; V5 to a smooth jump. Reduced motion
+   * jumps instantly. Manual scrolling cancels a smooth jump.
+   */
+  scrollBehavior?: "smooth" | "instant";
+  /** Smooth jump duration in milliseconds. 0 jumps instantly. Negative or
+   * non-finite values fall back to 220. Ignored for instant or reduced motion.
+   * @default 220
+   */
+  scrollDurationMs?: number;
+  /**
+   * Mount a decorative, noninteractive inner glyph once. Persona owns the button,
+   * accessible label, count, position, and click behavior. Return null to use the
+   * built-in glyph. A managed handle receives changes and cleanup; a plain element
+   * stays mounted until replacement, disable, or destruction. Honor reducedMotion
+   * and visible when animating. Exceptions fall back to the built-in glyph.
+   */
+  renderIcon?: (context: AgentWidgetScrollToBottomIconContext) => HTMLElement | AgentWidgetScrollToBottomIconHandle | null;
+
 };
 
 export type AgentWidgetToolCallCollapsedMode =

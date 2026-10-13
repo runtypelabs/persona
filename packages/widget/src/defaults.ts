@@ -167,6 +167,10 @@ export const DEFAULTS_BASE: Partial<AgentWidgetConfig> = {
       enabled: true,
       iconName: "arrow-down",
       label: "",
+      streamingIndicator: "arrow",
+      scrollBehavior: "instant",
+      scrollDurationMs: 220,
+      transition: "none",
     },
     scrollBehavior: {
       // ChatGPT-style default: pin the just-sent message near the top and let
@@ -277,6 +281,7 @@ export const DEFAULTS_V5: Partial<AgentWidgetConfig> = {
   launcher: DEFAULT_LAUNCHER_V5,
   features: {
     artifacts: { enabled: true },
+    scrollToBottom: { streamingIndicator: "dots", transition: "fade", scrollBehavior: "smooth" },
     toolCallDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, grouped: true, groupedMode: "collapsible", loadingAnimation: "shimmer" },
     reasoningDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, loadingAnimation: "shimmer" },
   },

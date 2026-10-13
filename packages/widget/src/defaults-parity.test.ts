@@ -167,6 +167,18 @@ describe("4.22.0 defaults parity (flag off)", () => {
       ...resolvedActual.mergedDefaultConfig.tooltip,
       delayMs: baseline.mergedDefaultConfig.tooltip.delayMs,
     };
+    // Additive controls preserve V4 appearance; keep the historical fixture intact.
+    const scroll = resolvedActual.mergedDefaultConfig.features!.scrollToBottom!;
+    expect(baseline.mergedDefaultConfig.features.scrollToBottom).not.toHaveProperty("streamingIndicator");
+    expect(baseline.mergedDefaultConfig.features.scrollToBottom).not.toHaveProperty("transition");
+    expect(scroll.streamingIndicator).toBe("arrow");
+    expect(scroll.transition).toBe("none");
+    expect(scroll.scrollBehavior).toBe("instant");
+    expect(scroll.scrollDurationMs).toBe(220);
+    delete scroll.streamingIndicator;
+    delete scroll.transition;
+    delete scroll.scrollBehavior;
+    delete scroll.scrollDurationMs;
     expect(resolvedActual).toEqual(resolvedBaseline);
   });
 });

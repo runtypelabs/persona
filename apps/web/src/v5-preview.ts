@@ -2,6 +2,7 @@ import "@runtypelabs/persona/widget.css";
 import "./v5-preview.css";
 import { initAgentWidget, type AgentWidgetConfig, type AgentWidgetMessage, type AgentWidgetPlugin } from "@runtypelabs/persona";
 import { renderExamplesShell } from "./examples-nav";
+import { renderScrollToBottomIcon } from "./scroll-to-bottom-icon";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 // Reuse the documented application-level hook; this is not a library default.
 import { renderToolActivitySummary } from "../../../examples/ai-sdk-next/app/lib/tool-activity-summary";
@@ -139,7 +140,10 @@ function configuration(): AgentWidgetConfig {
   };
   return {
     apiUrl: "/v5-local-demo",
-    customFetch: createDemoEchoFetch({ reply: () => "This is a local preview reply. Try opening tool details, switching themes, or comparing V4 and V5. No message is sent to a model." }),
+    customFetch: createDemoEchoFetch(select("scene").value === "scroll-control" ? {
+      chunkSize: 36, delayMs: 150,
+      reply: () => Array.from({ length: 10 }, (_, i) => `### Step ${i + 1}\n\nThis response is arriving below your reading position. The scroll control shows live activity until generation ends. Jump to latest to hide the control, then scroll upward to show it again.\n\n`).join(""),
+    } : { reply: () => "This is a local preview reply. Try opening tool details, switching themes, or comparing V4 and V5. No message is sent to a model." }),
     future: { v5Defaults: v5 },
     ...(brandPresets[select("brand").value] ? { brand: brandPresets[select("brand").value] } : {}),
     ...(select("error-display").value === "default" ? {} : { errorDisplay: select("error-display").value as "bubble" | "block" }),
@@ -194,6 +198,14 @@ function configuration(): AgentWidgetConfig {
     } : { welcome: { variant: "none" }, suggestions: { ...(select("suggestion-edges").value === "default" ? {} : { followUps: { placement: "composer" as const, edgeStyle: select("suggestion-edges").value as "clip" | "fade" } }), starters: { items: [] } } }),
     features: {
       showToolCalls: true, showReasoning: true,
+      ...(select("scene").value === "scroll-control" ? { showEventStreamToggle: true, scrollBehavior: { mode: "none" as const } } : {}),
+      scrollToBottom: {
+        ...(select("scroll-behavior").value === "default" ? {} : { scrollBehavior: select("scroll-behavior").value as "smooth" | "instant" }),
+        ...(select("scroll-duration").value === "default" ? {} : { scrollDurationMs: Number(select("scroll-duration").value) }),
+        ...(select("scroll-glyph").value === "default" || select("scroll-glyph").value === "custom" ? {} : { streamingIndicator: select("scroll-glyph").value as "arrow" | "dots" }),
+        ...(select("scroll-glyph").value === "custom" ? { renderIcon: renderScrollToBottomIcon } : {}),
+        ...(select("scroll-transition").value === "default" ? {} : { transition: select("scroll-transition").value as "fade" | "none" }),
+      },
       ...(select("scene").value === "artifacts" || select("artifacts").value !== "default" ? { artifacts: {
         ...(select("artifacts").value === "default" ? {} : { enabled: select("artifacts").value === "on" }),
         display: "collapsed", allowedTypes: ["markdown", "component"],
@@ -214,6 +226,11 @@ function reset() {
   frame.dataset.scheme = select("theme").value;
   const config = configuration();
   widget = initAgentWidget({ target: host, config });
+  if (select("scene").value === "scroll-control") widget.on("run:finished", ({ outcome }) => {
+    status.textContent = outcome === "cancel" ? "Stopped. The idle glyph returns; jump to latest or scroll to compare visibility."
+      : outcome === "error" ? "The local response failed. The idle glyph returns; Run stream to try again."
+      : "Response complete. The idle glyph returns. Jump to latest hides the control; scroll up to reveal it.";
+  });
   const brandSummary = document.querySelector<HTMLElement>("#v5-brand-summary")!;
   brandSummary.hidden = !config.brand;
   document.querySelector("#v5-brand-config")!.textContent = JSON.stringify({ brand: config.brand }, null, 2);
@@ -221,6 +238,7 @@ function reset() {
   document.querySelector("#v5-config")!.textContent = JSON.stringify(shown, (_key, value) => typeof value === "function" ? `${_key} (local example hook)` : value, 2);
   document.querySelector<HTMLElement>("#v5-hook-note")!.hidden = select("group").value !== "descriptive";
   document.querySelector<HTMLElement>("#v5-approval-hook-note")!.hidden = select("scene").value !== "approval-custom";
+  document.querySelector<HTMLElement>("#v5-scroll-hook-note")!.hidden = select("scroll-glyph").value !== "custom";
   streamButton.textContent = select("scene").value.startsWith("approval") ? "Replay approvals" : "Run stream";
   document.querySelector("#v5-caption")!.textContent = `${select("version").value.toUpperCase()} ${select("theme").value} · ${select("scene").selectedOptions[0].textContent} · ${select("brand").selectedOptions[0].textContent}`;
 }
@@ -258,6 +276,14 @@ function showFollowUps() {
 function loadScene() {
   reset();
   const scene = select("scene").value;
+  if (scene === "scroll-control") {
+    for (let i = 0; i < 8; i++) {
+      inject({ id: `scroll-user-${i}`, role: "user", content: `Explain step ${i + 1}.` });
+      inject({ id: `scroll-answer-${i}`, content: "Keep each step small and reviewable. Start with a clear goal, explore the options, and verify the result.\n\nThis earlier response stays readable while new content arrives below. Use Run stream to compare the scroll glyph and visibility transition." });
+    }
+    status.textContent = "Run stream to start a real local SSE response below. Jump to latest, scroll upward, or press Esc to stop. Open the event log to compare its control.";
+    return;
+  }
   if (scene.startsWith("approval")) { approvalScene(); return; }
   if (scene === "errors") {
     inject({ id: "user", role: "user", content: "Help me compare the theme options." });
@@ -322,6 +348,16 @@ function loadScene() {
   status.textContent = scene === "states" ? "Sample running and failed states. Expand a call to inspect its output." : scene === "details" ? "The first tool is open. The service-status tool demonstrates a response without a request." : "Open a group, then a tool. Manual expansion preserves your reading position.";
 }
 function runStream() {
+  if (select("scene").value === "scroll-control") {
+    loadScene();
+    const input = host.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]");
+    if (!input) return;
+    input.value = "Continue the guide while I read the earlier responses.";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    host.querySelector<HTMLButtonElement>("[data-persona-composer-submit]")?.click();
+    status.textContent = "A local SSE response is generating below. Jump to latest hides the control; scroll up to reveal it. Press Esc or Stop to finish early.";
+    return;
+  }
   if (select("scene").value.startsWith("approval")) { loadScene(); return; }
   if (select("scene").value === "errors" || select("scene").value === "artifacts") { loadScene(); return; }
   if (select("scene").value === "actions") {

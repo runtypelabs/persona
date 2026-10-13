@@ -1590,7 +1590,7 @@ The edit-and-resend editor replaces a user bubble and carries
 
 ### Motion (`components.motion.*`)
 
-Shared timing for every composer animation.
+Shared timing for composer animations and scroll-to-bottom visibility fades.
 
 | Token | Default | CSS Variable |
 |-------|---------|--------------|
@@ -1712,6 +1712,98 @@ Its controls are `background`, `foreground`, `border`, `borderRadius`,
 retains its 18px minimum size, 11px/600 type, pill radius, and semantic
 surface/primary colors. These controls apply to the jump-to-latest unread
 count, not other badge families.
+
+The button appears only when latest content is out of view. The optional
+`features.scrollToBottom.streamingIndicator` selects `"dots"` or `"arrow"` during
+live activity below; completed, failed, cancelled, user-input waits, and paused
+or resuming reconnects use the idle `iconName`. Historical event records and
+message `streaming` flags do not imply live activity. `showActivityWhilePinned:
+false` keeps activity silent in anchor-top mode.
+
+`features.scrollToBottom.transition` selects `"fade"` or `"none"`. V4 defaults to
+`"arrow"` / `"none"`; `future.v5Defaults: true` defaults to `"dots"` / `"fade"`.
+Either can be explicitly configured in both versions. Fades reuse
+`components.motion.durationFast` and `easing`; hidden buttons immediately leave
+keyboard navigation, accessibility, and pointer interaction. Reduced motion
+shows static dots and changes visibility instantly.
+
+`features.scrollToBottom.scrollBehavior` selects `"smooth"` or `"instant"`
+for a button-triggered jump in the transcript and event log. V4 defaults to
+`"instant"`; V5 defaults to `"smooth"`. Smooth jumps default to 220ms even across
+long histories, keep tracking the latest content during streaming, and cancel
+on wheel, touch, navigation keys, or a pointer press in the scroll viewport.
+Reduced motion always jumps instantly. This setting is separate from
+`features.scrollBehavior.mode` (automatic following) and `transition` (button
+visibility). A jump in `mode: "none"` does not enable automatic following.
+
+Set `scrollDurationMs` to customize the smooth jump duration in milliseconds.
+`0` jumps instantly; negative or non-finite values fall back to 220ms.
+The duration is ignored for instant jumps and reduced motion. This is a
+JavaScript scroll animation, so CSS transition durations do not control it.
+
+```typescript
+features: {
+  scrollToBottom: {
+    streamingIndicator: "dots",
+    transition: "fade",
+    scrollBehavior: "smooth",
+    scrollDurationMs: 350, // optional; defaults to 220ms
+    iconName: "arrow-down",
+    label: "", // optional text beside the glyph
+  },
+},
+```
+
+For a custom animation, `features.scrollToBottom.renderIcon(context)` mounts
+only a decorative inner glyph. Return an `HTMLElement`, a managed
+`{ element, update, destroy }` handle, or `null` for the built-in glyph.
+Persona retains the node through text deltas. Managed `update(context)` calls
+occur when glyph state or scroll-control configuration changes; count updates
+are owned by Persona. `context.state` provides `activity` (`"idle"` or
+`"generating-below"`), `visible`, `hovered`, `focused`, and `reducedMotion`.
+`context.view` distinguishes `"transcript"` and `"event-stream"`;
+`context.config` contains the widget configuration. Keep the glyph
+noninteractive; Persona owns the surrounding button, label, count, position,
+click action, and fade.
+
+The following host renderer uses the Web Animations API. The same lifecycle can
+mount an animation library in your application without adding it to Persona.
+Pause animations while hidden or reduced motion is requested. On renderer
+replacement, feature disable, or view/widget destruction, Persona aborts
+`context.signal` before calling `destroy`. Mount or update errors fall back to
+the built-in glyph. A temporary hidden state keeps the renderer mounted.
+
+```typescript
+import type { AgentWidgetScrollToBottomIconContext } from "@runtypelabs/persona";
+
+function renderScrollIcon(context: AgentWidgetScrollToBottomIconContext) {
+  const element = document.createElement("span");
+  let animation: Animation | undefined;
+  let running = false;
+  const stop = () => { animation?.cancel(); animation = undefined; };
+  const update = ({ state }: AgentWidgetScrollToBottomIconContext) => {
+    const active = state.activity === "generating-below";
+    element.textContent = active ? "✦" : "↓";
+    const next = active && state.visible && !state.reducedMotion;
+    if (running === next) return;
+    running = next;
+    stop();
+    if (running) animation = element.animate(
+      [{ opacity: 0.4 }, { opacity: 1 }],
+      { duration: 650, iterations: Infinity, direction: "alternate" }
+    );
+  };
+  update(context);
+  context.signal.addEventListener("abort", stop, { once: true });
+  return { element, update, destroy: stop };
+}
+
+// features: { scrollToBottom: { renderIcon: renderScrollIcon } }
+```
+
+See the [live scroll-control preview](https://persona-chat.dev/v5-preview.html)
+and [application renderer source](../../apps/web/src/scroll-to-bottom-icon.ts)
+for a local SSE example with built-in and custom glyph controls.
 
 ### Event Stream Badges (`components.eventStream.badge.*`)
 
@@ -3183,7 +3275,7 @@ These merge into `PersonaTheme` and are exposed as CSS variables on the widget r
 |----------|-------------|
 | `showReasoning` | Show AI reasoning/thinking steps |
 | `showToolCalls` | Show tool call invocations |
-| `scrollToBottom` | Shared transcript + event-stream affordance config: `enabled`, `iconName`, `label` (empty string renders icon-only). Defaults: `enabled: true`, `iconName: "arrow-down"`, `label: ""`. |
+| `scrollToBottom` | Shared transcript + event-stream affordance: `enabled`, `iconName`, `label`, `streamingIndicator`, `transition`, `scrollBehavior`, `scrollDurationMs`, and `renderIcon`. V4 uses arrow/none/instant; V5 uses dots/fade/smooth. See the scroll-control example above. |
 | `artifacts` | Artifact sidebar: `enabled`, `allowedTypes`, optional `layout` (split/drawer sizing, launcher widen, resize handle, `paneAppearance`, `toolbarPreset` `default` \| `document`, `documentToolbarShowCopyLabel`, `documentToolbarShowCopyChevron`, `documentToolbarIconColor`, `documentToolbarToggleActiveBackground`, `documentToolbarToggleActiveBorderColor`, `documentToolbarToggleActiveColor`, borders, `unifiedSplitChrome`, etc.). See README **Features** table for defaults. |
 
 ---
