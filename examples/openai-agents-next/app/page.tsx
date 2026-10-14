@@ -29,7 +29,7 @@ export default function Page() {
             title="OpenAI Agents SDK"
             subtitle="Ask a question and the agent run's stream will be wrapped for Persona."
             accent="#10a37f"
-            suggestionChips={[
+            starterItems={[
               "Explain what this adapter does",
               "Write a haiku about streaming",
               "Give me a short checklist for production",

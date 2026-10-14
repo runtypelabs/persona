@@ -50,9 +50,12 @@
         target: "#persona-root",
         apiUrl: "/dispatch",
         launcher: { enabled: false },
+        welcome: {
+          title: "Persona × bare HTML",
+          subtitle: "Installed with one script tag. Ask anything. The echo agent streams it back.",
+          variant: "card",
+        },
         copy: {
-          welcomeTitle: "Persona × bare HTML",
-          welcomeSubtitle: "Installed with one script tag. Ask anything. The echo agent streams it back.",
           inputPlaceholder: "Ask anything...",
         },
         theme: {
@@ -65,11 +68,19 @@
             },
           },
         },
-        suggestionChips: [
-          "Echo this back to me",
-          "What does the script-tag install do?",
-          "Explain the Persona wire",
-        ],
+        suggestions: {
+          starters: {
+            items: [
+              "Echo this back to me",
+              "What does the script-tag install do?",
+              "Explain the Persona wire",
+            ],
+            variant: "chip",
+            placement: "composer",
+            overflow: "wrap",
+            maxItems: 4,
+          },
+        },
       };
     </script>
     <script src="/persona/install.global.js"></script>

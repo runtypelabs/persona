@@ -57,9 +57,12 @@
         // flowId: "flow_…",
         // agent: { agentId: "agent_…" },
         launcher: { enabled: false },
+        welcome: {
+          title: "Persona × Runtype",
+          subtitle: "Talking straight to the Runtype API. No backend in this example.",
+          variant: "card",
+        },
         copy: {
-          welcomeTitle: "Persona × Runtype",
-          welcomeSubtitle: "Talking straight to the Runtype API. No backend in this example.",
           inputPlaceholder: "Ask anything...",
         },
         theme: {
@@ -72,11 +75,19 @@
             },
           },
         },
-        suggestionChips: [
-          "What can you help me with?",
-          "How is this different from the other examples?",
-          "What's a clientToken?",
-        ],
+        suggestions: {
+          starters: {
+            items: [
+              "What can you help me with?",
+              "How is this different from the other examples?",
+              "What's a clientToken?",
+            ],
+            variant: "chip",
+            placement: "composer",
+            overflow: "wrap",
+            maxItems: 4,
+          },
+        },
       };
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@runtypelabs/persona@latest/dist/install.global.js"></script>
