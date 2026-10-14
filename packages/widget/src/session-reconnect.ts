@@ -20,6 +20,7 @@ import type {
   ResumableHandle,
 } from "./types";
 import type { AgentWidgetSessionStatus } from "./session";
+import { RECONNECT_FAILED_ID_PREFIX } from "./utils/local-only-message";
 
 /**
  * The narrow surface the reconnect loop needs from the owning session. The
@@ -45,6 +46,12 @@ export interface ReconnectHost {
     seedContent: string
   ): Promise<void>;
   appendMessage(message: AgentWidgetMessage): void;
+  /**
+   * After an attempt that did not finish the run: if the run is parked on an
+   * await (or a reload-interrupted page tool), settle the session quietly and
+   * return true so the loop stops; return false for an ordinary drop.
+   */
+  settleParked(executionId: string): boolean;
   nextSequence(): number;
   emitReconnect(event: {
     phase: "paused" | "resuming" | "resumed";
@@ -170,9 +177,10 @@ export function createReconnectController(
     );
     if (content) {
       host.appendMessage({
-        id: `reconnect-failed-${handle?.executionId ?? host.nextSequence()}`,
+        id: `${RECONNECT_FAILED_ID_PREFIX}${handle?.executionId ?? host.nextSequence()}`,
         role: "assistant",
         content,
+        localOnly: true,
         createdAt: new Date().toISOString(),
         streaming: false,
         sequence: host.nextSequence(),
@@ -246,6 +254,15 @@ export function createReconnectController(
         // Made forward progress before dropping again → reset the attempt
         // budget so a long, flaky run isn't capped by total drops.
         if (host.getResumable()!.lastEventId !== before) attempt = 0;
+      }
+
+      // A parked run has nothing more to replay; retrying would only end in
+      // the "Connection lost" bubble. Only a reconnect that actually reached
+      // the server can prove that — a failed request keeps retrying.
+      if (body && host.getResumable() && host.settleParked(handle.executionId)) {
+        attempt = 0;
+        detachListeners();
+        return;
       }
 
       if (host.getResumable() && attempt < maxAttempts) {

@@ -7229,7 +7229,8 @@ export type AgentWidgetPersistStateConfig = {
    */
   storage?: 'local' | 'session';
   /**
-   * Prefix for storage keys.
+   * Prefix for storage keys. Also scopes the default transcript key
+   * (`${keyPrefix}state` in localStorage) when no `storageAdapter` is given.
    * @default 'persona-'
    */
   keyPrefix?: string;
@@ -8532,6 +8533,13 @@ export type AgentWidgetMessage = {
    * model as conversation.
    */
   voiceCaption?: boolean;
+  /**
+   * Set on widget-generated failure notices (a failed dispatch, a rejected
+   * approval decision, a reconnect that gave up). The bubble renders in this
+   * browser only: it is never sent to the model as conversation history and
+   * never written to the storage adapter.
+   */
+  localOnly?: boolean;
   /**
    * Raw structured payload for this message (e.g., JSON action response).
    * Populated automatically when structured parsers run.

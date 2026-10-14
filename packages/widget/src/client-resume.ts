@@ -41,7 +41,8 @@ export type ClientResumeHost = {
 export async function resolveApproval(
   h: ClientResumeHost,
   approval: { agentId: string; executionId: string; approvalId: string },
-  decision: "approved" | "denied"
+  decision: "approved" | "denied",
+  options?: { assistantMessageId?: string }
 ): Promise<Response> {
   let headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -68,7 +69,10 @@ export async function resolveApproval(
 
   // Same re-validation as `resumeFlow`: an approval can sit for a long time.
   const { sessionId } = await h.initSession();
-  const response = await post('/v1/client/approve', { sessionId });
+  const response = await post('/v1/client/approve', {
+    sessionId,
+    ...(options?.assistantMessageId ? { assistantMessageId: options.assistantMessageId } : {}),
+  });
   // A core without the route answers with its generic `Not Found`; an unknown
   // or expired pause 404s with its own error, which the caller surfaces.
   if (response.status === 404) {
@@ -83,7 +87,13 @@ export async function resumeFlow(
   h: ClientResumeHost,
   executionId: string,
   toolOutputs: Record<string, unknown>,
-  options?: { streamResponse?: boolean; signal?: AbortSignal; after?: string }
+  options?: {
+    streamResponse?: boolean;
+    signal?: AbortSignal;
+    after?: string;
+    /** Id of the local bubble the resumed stream renders into (client-token only). */
+    assistantMessageId?: string;
+  }
 ): Promise<Response> {
   const isClientToken = h.isClientTokenMode();
   const url = isClientToken
@@ -125,6 +135,8 @@ export async function resumeFlow(
   // Thread the (refreshed) sessionId through like `/v1/client/chat` does.
   if (resumeSessionId) {
     body.sessionId = resumeSessionId;
+    // WHY(runtypelabs/core#9961): the server stores the reply under this id, so a later re-send dedupes by id.
+    if (options?.assistantMessageId) body.assistantMessageId = options.assistantMessageId;
   }
 
   if (isClientToken && resumeSessionId) {

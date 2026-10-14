@@ -56,6 +56,7 @@ import type { ClientResumeHost } from "./client-resume";
 /** History transcripts stay on the wire shape; `utils/history-messages.ts` maps them. */
 export type { HistoryWireMessage } from "./utils/history-messages";
 import { divergentDisplayProjection } from "./utils/history-messages";
+import { isLocalOnlyMessage } from "./utils/local-only-message";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
@@ -160,6 +161,7 @@ const isHistoryClientError = (
 const hasValidContent = (message: AgentWidgetMessage): boolean => {
   // Display-only voice captions are never conversation.
   if (message.voiceCaption) return false;
+  if (isLocalOnlyMessage(message)) return false;
   // Check contentParts (multi-modal content)
   if (message.contentParts && message.contentParts.length > 0) {
     return true;
@@ -1879,9 +1881,10 @@ export class AgentWidgetClient {
    */
   public async resolveApproval(
     approval: { agentId: string; executionId: string; approvalId: string },
-    decision: 'approved' | 'denied'
+    decision: 'approved' | 'denied',
+    options?: { assistantMessageId?: string }
   ): Promise<Response> {
-    return (await loadClientStream()).resolveApproval(this.#resumeHost(), approval, decision);
+    return (await loadClientStream()).resolveApproval(this.#resumeHost(), approval, decision, options);
   }
 
   /**
@@ -2021,7 +2024,12 @@ export class AgentWidgetClient {
   public async resumeFlow(
     executionId: string,
     toolOutputs: Record<string, unknown>,
-    options?: { streamResponse?: boolean; signal?: AbortSignal; after?: string }
+    options?: {
+      streamResponse?: boolean;
+      signal?: AbortSignal;
+      after?: string;
+      assistantMessageId?: string;
+    }
   ): Promise<Response> {
     return (await loadClientStream()).resumeFlow(this.#resumeHost(), executionId, toolOutputs, options);
   }
