@@ -64,7 +64,7 @@ describe("current product composer presets", () => {
     expect(perplexity.composer?.modeGroups?.[0]?.chipVisibility).toBe("hidden");
   });
 
-  it("uses the standalone Gemini and Copilot model-picker treatments", () => {
+  it("retains the Gemini Pro variant and uses the measured personal Copilot composer", () => {
     const gemini = applyCurrentProductComposer("gemini", {});
     const copilot = applyCurrentProductComposer("copilot", {});
 
@@ -74,10 +74,10 @@ describe("current product composer presets", () => {
     expect(gemini.theme?.components?.composer?.modelPicker?.labelColor).toBe(
       "#c4c7c5"
     );
-    expect(copilot.composer?.selectedModelId).toBe("smart");
-    expect(copilot.composer?.models?.[0]?.description).toBe(
-      "Picks the right response style"
-    );
+    expect(copilot.composer?.layout).toBe("single-row");
+    expect(copilot.composer?.models).toBeUndefined();
+    expect(copilot.voiceRecognition?.showButton).toBe(false);
+    expect(copilot.sendButton?.visibility).toBe("when-text");
   });
 
   it("opens a slash menu on the two products that have one", () => {

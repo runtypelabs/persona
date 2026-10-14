@@ -25,6 +25,16 @@ const fixture = (patch: Partial<AgentWidgetConfig>) => {
 };
 
 describe.each([false, true])("control live updates V5=%s", v5 => {
+  it("restores the current custom idle label after browser dictation", () => {
+    const { controller, mic } = fixture({ future: { v5Defaults: v5 }, voiceRecognition: { enabled: true, tooltipText: "Dictate" } });
+    expect(mic.getAttribute("aria-label")).toBe("Dictate");
+    controller.startVoiceRecognition();
+    expect(mic.getAttribute("aria-label")).toBe("Stop voice recognition");
+    controller.update({ voiceRecognition: { tooltipText: "Record a note" } });
+    controller.stopVoiceRecognition();
+    expect(mic.getAttribute("aria-label")).toBe("Record a note");
+  });
+
   it("keeps browser recording styles and restores current idle styling after an override reset", () => {
     const { controller, mic, mount } = fixture({ future: { v5Defaults: v5 }, voiceRecognition: { enabled: true, iconColor: "orange", recordingIconColor: "red" }, theme: { components: { voice: { control: { foreground: "green" }, recording: { indicator: "yellow" } } } } });
     controller.startVoiceRecognition();
@@ -60,9 +70,10 @@ describe.each([false, true])("control live updates V5=%s", v5 => {
     expect(mic.getAttribute("data-state")).toBe("speaking");
     expect(mic.getAttribute("aria-label")).toBe(label);
     expect(mount.style.getPropertyValue("--persona-consumer-voice-speaking-icon")).toBe("purple");
+    controller.update({ voiceRecognition: { tooltipText: "Dictate" } });
     emit("idle");
     expect(mic.style.color).toContain("voice-control-foreground");
     expect(mic.style.cursor).toBe("");
-    expect(mic.getAttribute("aria-label")).toBe("Start voice recognition");
+    expect(mic.getAttribute("aria-label")).toBe("Dictate");
   });
 });

@@ -1,3 +1,4 @@
+import { createAssistantPreset } from "./assistant-presets";
 import { createSlashCommandsSource } from "@runtypelabs/persona";
 import type {
   AgentWidgetConfig,
@@ -172,6 +173,11 @@ const inertAction = (
   onSelect: () => {},
 });
 
+// Keep explicit send sizes below 40px: component size tokens enforce the
+// coarse-pointer floor, which would change these measured recreations.
+// Personal Copilot shares the measured reference with the assistant lab.
+// Other recreations retain their deliberately different tool/model variants.
+const currentCopilot = createAssistantPreset("copilot", () => {});
 const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
   chatgpt: {
     colorScheme: "dark",
@@ -219,16 +225,12 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
     voiceRecognition: {
       enabled: true,
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#ececec",
       showTooltip: false,
     },
     sendButton: {
       useIcon: true,
       iconName: "arrow-up",
       size: "36px",
-      iconSize: "20px",
       showTooltip: false,
       visibility: "when-text",
     },
@@ -253,7 +255,9 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           title: { fontSize: "24px", fontWeight: "400", lineHeight: "28px", color: "#ffffff" },
         },
         input: { background: "#212121", borderRadius: "28px" },
+        voice: { control: { background: "transparent", borderWidth: "0", foreground: "#ececec" } },
         composer: {
+          send: { iconSize: "20px" },
           shadow: "rgba(255, 255, 255, 0.2) 0 0 1px inset",
           padding: "8px",
           gap: "8px",
@@ -362,16 +366,12 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
     voiceRecognition: {
       enabled: true,
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#87867f",
-      showTooltip: false,
+      tooltipText: "Dictate",
+      showTooltip: true,
     },
     sendButton: {
       useIcon: true,
       iconName: "arrow-up",
-      iconSize: "18px",
-      iconStrokeWidth: 1.5,
       showTooltip: false,
       visibility: "when-text",
     },
@@ -401,7 +401,9 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           },
         },
         input: { background: "rgba(255, 255, 255, 0.8)", borderRadius: "20px", backdropFilter: "blur(8px)" },
+        voice: { control: { background: "transparent", borderWidth: "0", foreground: "#20201f", borderRadius: "8px" } },
         composer: {
+          send: { iconSize: "18px", iconStrokeWidth: "1.5" },
           shadow: "0 4px 20px rgba(0, 0, 0, 0.035), 0 0 0 0.5px rgba(32, 32, 31, 0.15)",
           padding: "14px",
           gap: "12px",
@@ -449,16 +451,11 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
     voiceRecognition: {
       enabled: true,
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#e3e3e3",
       showTooltip: false,
     },
     sendButton: {
       useIcon: true,
       iconName: "arrow-up",
-      size: "40px",
-      iconSize: "20px",
       showTooltip: false,
       visibility: "when-text",
     },
@@ -494,7 +491,9 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           },
         },
         input: { background: "#1e1f20", borderRadius: "32px" },
+        voice: { control: { background: "transparent", borderWidth: "0", foreground: "#e3e3e3" } },
         composer: {
+          send: { size: "40px", iconSize: "20px" },
           shadow: "0 2px 8px -2px rgba(0, 0, 0, 0.16)",
           padding: "12px 16px",
           gap: "8px",
@@ -533,93 +532,13 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
   },
   copilot: {
-    colorScheme: "dark",
-    copy: { inputPlaceholder: "Message Copilot" },
-    attachments: {
-      enabled: true,
-      buttonIconName: "plus",
-      buttonTooltipText: "Add files and more",
-    },
-    composer: {
-      models: [
-        { id: "smart", label: "Smart", icon: "sparkles", description: "Picks the right response style" },
-        { id: "think-deeper", label: "Think deeper", icon: "lightbulb", description: "Takes longer on hard problems" },
-        { id: "study-and-learn", label: "Study and learn", icon: "bookmark", description: "Works through topics with you" },
-        { id: "search", label: "Search", icon: "search", description: "Looks things up on the web" },
-      ],
-      selectedModelId: "smart",
-      modelPicker: { presentation: "popover" },
-    },
-    voiceRecognition: {
-      enabled: true,
-      iconName: "activity",
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#8791b0",
-      showTooltip: false,
-    },
-    sendButton: {
-      useIcon: true,
-      iconName: "arrow-up",
-      size: "36px",
-      iconSize: "20px",
-      showTooltip: false,
-    },
-    theme: {
-      semantic: {
-        colors: {
-          background: "#0e111b",
-          container: "#0e111b",
-          surface: "#0e111b",
-          text: "#e5ebfa",
-          textMuted: "#8791b0",
-          border: "rgba(255, 255, 255, 0.08)",
-          divider: "transparent",
-          primary: "#dbe4fd",
-          accent: "#dbe4fd",
-        },
-      },
-      components: {
-        panel: { borderRadius: "0", border: "none" },
-        introCard: {
-          title: { fontSize: "1.75rem", lineHeight: "2rem", fontWeight: "600", color: "#e5ebfa" },
-        },
-        input: { background: "rgba(25, 31, 50, 0.75)", borderRadius: "26px" },
-        composer: {
-          shadow: "0 12px 36px rgba(3, 6, 16, 0.5)",
-          padding: "16px 16px 12px",
-          gap: "14px",
-          fontSize: "16px",
-          lineHeight: "22px",
-          controlSize: "36px",
-          controlIconSize: "18px",
-          modelPicker: {
-            menuBackground: "#1c2338",
-            labelColor: "#e5ebfa",
-            descriptionColor: "#8791b0",
-            rowHoverBackground: "rgba(255, 255, 255, 0.06)",
-          },
-        },
-        button: {
-          primary: { background: "#dbe4fd", foreground: "#0e111b", borderRadius: "9999px" },
-          ghost: {
-            background: "rgba(255, 255, 255, 0.05)",
-            foreground: "#aeb8d6",
-            hoverBackground: "rgba(255, 255, 255, 0.1)",
-            borderRadius: "9999px",
-          },
-        },
-        suggestion: {
-          card: {
-            background: "rgba(25, 31, 50, 0.75)",
-            foreground: "#e5ebfa",
-            border: "rgba(255, 255, 255, 0.08)",
-            hoverBackground: "#242b40",
-            hoverBorder: "rgba(255, 255, 255, 0.14)",
-          },
-        },
-      },
-    },
+    colorScheme: currentCopilot.colorScheme,
+    copy: currentCopilot.copy,
+    attachments: currentCopilot.attachments,
+    composer: currentCopilot.composer,
+    voiceRecognition: currentCopilot.voiceRecognition,
+    sendButton: currentCopilot.sendButton,
+    theme: currentCopilot.theme!,
   },
   perplexity: {
     colorScheme: "dark",
@@ -667,17 +586,12 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     },
     voiceRecognition: {
       enabled: true,
-      backgroundColor: "transparent",
-      borderWidth: "0",
-      iconColor: "#8f8d89",
       showTooltip: false,
     },
     sendButton: {
       useIcon: true,
       iconName: "arrow-right",
       size: "36px",
-      iconSize: "18px",
-      iconStrokeWidth: 1.5,
       showTooltip: false,
     },
     theme: {
@@ -709,7 +623,9 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           },
         },
         input: { background: "#1e1d1c", borderRadius: "16px" },
+        voice: { control: { background: "transparent", borderWidth: "0", foreground: "#8f8d89" } },
         composer: {
+          send: { iconSize: "18px", iconStrokeWidth: "1.5" },
           shadow: "none",
           padding: "14px 12px 10px",
           gap: "12px",

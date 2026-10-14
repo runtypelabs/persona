@@ -26,6 +26,7 @@ function mount() {
   const display = element<HTMLSelectElement>("lab-dictation-display").value as "transcript" | "waveform" | "inline";
   config.future = { ...config.future, v5Defaults: element<HTMLSelectElement>("lab-defaults").value === "v5" };
   config.voiceRecognition = {
+    ...config.voiceRecognition,
     enabled: true,
     completionBehavior: "review",
     dictation: {
@@ -37,7 +38,7 @@ function mount() {
   };
   config.composer = { ...config.composer, actions: config.composer?.actions?.filter(action => action.id !== "dictate") };
   element("lab-stage").style.setProperty("--lab-canvas", preset.canvas);
-  element("lab-stage").style.setProperty("--lab-width", element<HTMLSelectElement>("lab-width").value === "narrow" ? "380px" : `${preset.width + 32}px`);
+  element("lab-stage").style.setProperty("--lab-width", element<HTMLSelectElement>("lab-width").value === "narrow" ? "380px" : selected === "gemini" ? "100%" : `${preset.width + 32}px`);
   element("lab-name").textContent = preset.name;
   element("lab-evidence").textContent = preset.evidence;
   element<HTMLAnchorElement>("lab-source").href = preset.source;
@@ -75,7 +76,7 @@ function mount() {
     return configured;
   };
   const refresh = () => {
-    widget?.update({ voiceRecognition: { showButton: !active() }, composer: { actions: actions() } });
+    widget?.update({ voiceRecognition: { showButton: selected !== "copilot" && !active() }, composer: { actions: actions() } });
     element<HTMLButtonElement>("lab-dictate").disabled = active();
     element("lab-voice").textContent = active() ? "End voice conversation" : "Simulate voice";
     element("lab-voice").setAttribute("aria-pressed", String(active()));
@@ -125,7 +126,7 @@ function mount() {
   element("lab-dictate").setAttribute("aria-pressed", "false");
   element<HTMLButtonElement>("lab-voice").disabled = false;
   refresh();
-  notice("Try the microphone for editable dictation, or Simulate voice for a conversation. No microphone or audio is used.");
+  notice(selected === "copilot" ? "Type to reveal send. Explore / Shop / Play fill local prompts; use the lab controls to simulate dictation or voice." : "Try the microphone for editable dictation, or Simulate voice for a conversation. No microphone or audio is used.");
 }
 for (const preset of assistantPresets) {
   const button = document.createElement("button");
@@ -135,7 +136,7 @@ for (const preset of assistantPresets) {
 }
 element("lab-width").addEventListener("change", () => {
   const preset = assistantPresets.find(p => p.id === selected)!;
-  element("lab-stage").style.setProperty("--lab-width", element<HTMLSelectElement>("lab-width").value === "narrow" ? "380px" : `${preset.width + 32}px`);
+  element("lab-stage").style.setProperty("--lab-width", element<HTMLSelectElement>("lab-width").value === "narrow" ? "380px" : selected === "gemini" ? "100%" : `${preset.width + 32}px`);
 });
 element("lab-reset").addEventListener("click", mount);
 for (const id of ["lab-dictation-display", "lab-defaults", "lab-dictation-send"]) element(id).addEventListener("change", mount);

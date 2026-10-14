@@ -13296,7 +13296,7 @@ export const createAgentExperience = (
       micButton.classList.remove("persona-voice-recording");
       setMicState("idle");
 
-      micButton.setAttribute("aria-label", "Start voice recognition");
+      micButton.setAttribute("aria-label", config.voiceRecognition?.tooltipText ?? "Start voice recognition");
     }
   };
 
@@ -13336,7 +13336,7 @@ export const createAgentExperience = (
     setMicState("idle");
     if (micButton) {
       micButton.style.cursor = "";
-      micButton.setAttribute("aria-label", "Start voice recognition");
+      micButton.setAttribute("aria-label", config.voiceRecognition?.tooltipText ?? "Start voice recognition");
     }
   };
 
