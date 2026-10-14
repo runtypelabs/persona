@@ -1762,7 +1762,7 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           );
         const results = (ws: MockWebSocket) => sentJson(ws).filter((f) => f.type === 'client_tool_result');
 
-        it('declares client_tools only when the bridge has WebMCP tools', async () => {
+        it('declares client_tools and prior_tool_results only when the bridge has WebMCP tools', async () => {
           const { ws } = await startFastCall();
           expect(ws.url).toBe(
             voiceUrl('wss://api.example.com', 'a1', [
@@ -1772,12 +1772,15 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
               'delegation_read_back',
               'delegation_stream',
               'client_tools',
+              'prior_tool_results',
             ]),
           );
           const provider = new RuntypeVoiceProvider(baseConfig());
           provider.setSessionBridge({ ...makeBridge().bridge, clientTools: () => null });
           await provider.startListening();
-          expect(new URL(lastWs().url).searchParams.get('clientCapabilities')).not.toContain('client_tools');
+          const declared = new URL(lastWs().url).searchParams.get('clientCapabilities');
+          expect(declared).not.toContain('client_tools');
+          expect(declared).not.toContain('prior_tool_results');
         });
 
         it('sends client_tools after session_config with full webmcp: names and the dispatch fields', async () => {
@@ -2000,6 +2003,39 @@ describe('RuntypeVoiceProvider (realtime streaming)', () => {
           expect(sentJson(ws).filter((f) => f.type === 'delegation_result')).toEqual([
             expect.objectContaining({ delegationId: 'd1', status: 'completed', text: 'Here is pricing.' }),
           ]);
+        });
+
+        it('hands a fall-through its priorToolResults without running them again on the page', async () => {
+          const { ws, calls, executed, recorded, pending } = await startFastCall([...FAST_CAPS, 'prior_tool_results']);
+          const prior = [
+            { toolCallId: 'vtc_01', name: 'webmcp:jump_to_slide', arguments: { position: 5 }, result: { slideTitle: 'Pricing' } },
+          ];
+          heard(ws);
+          toolCall(ws);
+          await flush();
+          expect(executed).toHaveLength(1);
+          ws.triggerMessage(
+            JSON.stringify({
+              type: 'delegation_started',
+              delegationId: 'd1',
+              input: { text: 'Jump to the pricing slide', userUtteranceIds: ['u1'], messages: [], priorToolResults: prior },
+            }),
+          );
+          await flush();
+          expect(calls).toHaveLength(1);
+          expect(calls[0].priorToolResults).toEqual(prior);
+          pending[0]({ status: 'completed', text: 'You are on Pricing.' });
+          await flush();
+          directCompleted(ws);
+          expect(executed).toHaveLength(1);
+          expect(recorded).toEqual([]);
+        });
+
+        it('leaves priorToolResults unset on a fall-through without them', async () => {
+          const { ws, calls } = await startFastCall();
+          started(ws, 'd1');
+          await flush();
+          expect(calls[0].priorToolResults).toBeUndefined();
         });
 
         it('ignores a direct completion when client_tools was not negotiated', async () => {

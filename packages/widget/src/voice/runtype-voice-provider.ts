@@ -99,7 +99,10 @@
 // sent), `failed`, or `timeout` (past `timeoutMs`, which bounds the gate too).
 // Then `delegation_completed{route:'direct', text}` for a delegation that never
 // started here writes the heard user turn and `text` into the chat. When the
-// server falls through, the delegation arrives as today's `delegation_started`.
+// server falls through, the delegation arrives as today's `delegation_started`;
+// its `input.priorToolResults` (page tools the server already ran; sent only
+// with `prior_tool_results`, declared beside `client_tools`) ride along to the
+// chat turn as completed calls, never run again here.
 
 import type {
   VoiceClientToolsSession,
@@ -519,17 +522,17 @@ export class RuntypeVoiceProvider implements VoiceProvider {
    * the URL, and these params are not secrets.
    */
   #voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
-    const capabilities = ["partial_transcript", "context"];
+    let capabilities = "partial_transcript,context";
     if (this.bridge && this.config?.clientDelegation !== false) {
-      capabilities.push("client_delegation", "delegation_update", "delegation_read_back", "delegation_stream");
-      if (this.bridge.clientTools?.()) capabilities.push("client_tools");
+      capabilities += ",client_delegation,delegation_update,delegation_read_back,delegation_stream";
+      if (this.bridge.clientTools?.()) capabilities += ",client_tools,prior_tool_results";
     }
-    if (attach) capabilities.unshift("attach");
+    if (attach) capabilities = `attach,${capabilities}`;
     const params = new URLSearchParams({
       voiceProtocol: VOICE_PROTOCOL,
       clientVersion: `persona/${VERSION}`,
       voiceCapabilities: FULL_DUPLEX_CAPABILITY,
-      clientCapabilities: capabilities.join(","),
+      clientCapabilities: capabilities,
     });
     attach?.forEach((value, key) => params.set(key, value));
     return `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice?${params}`;
@@ -877,9 +880,10 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           this.#pendingContext = this.#buildContextText();
         }
         if (this.#clientDelegation && this.#capabilities.has("client_tools") && !this.#fastTier) {
+          // INVARIANT: #clientDelegation implies a bridge.
           this.#fastTier =
-            this.bridge
-              ?.clientTools?.()
+            this.bridge!
+              .clientTools?.()
               ?.open({
                 send: (frame) => {
                   const ws = this.#ws;
@@ -974,6 +978,7 @@ export class RuntypeVoiceProvider implements VoiceProvider {
                   ? input.userUtteranceIds.filter((id: unknown): id is string => typeof id === "string")
                   : [],
                 messages: Array.isArray(input.messages) ? input.messages : [],
+                priorToolResults: input.priorToolResults,
               },
               generation,
             );

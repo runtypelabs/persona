@@ -43,12 +43,14 @@ import {
   generateAssistantMessageId
 } from "./utils/message-id";
 import { IMAGE_ONLY_MESSAGE_FALLBACK_TEXT, createTextPart, hasImages } from "./utils/content";
+import { voicePriorToolRows } from "./utils/voice-prior-tool-results";
 import {
   buildArtifactRefRawContent,
   resolveArtifactDisplayMode
 } from "./utils/artifact-display";
 import type {
   VoiceProvider,
+  VoicePriorToolResult,
   VoiceStatus,
   VoiceConfig,
   ReadAloudState,
@@ -2068,7 +2070,12 @@ export class AgentWidgetSession {
     controller: AbortController,
     assistantMessageId: string,
     userMessageId: string,
-    turnOptions?: { composerOptions?: ComposerOptionsPayload; interrupt?: boolean; voiceSpoken?: boolean }
+    turnOptions?: {
+      composerOptions?: ComposerOptionsPayload;
+      interrupt?: boolean;
+      voiceSpoken?: boolean;
+      voicePriorToolResults?: VoicePriorToolResult[];
+    }
   ): Promise<void> {
     this.#recordDispatchedProjections(snapshot);
     try {
@@ -2079,7 +2086,8 @@ export class AgentWidgetSession {
           assistantMessageId,
           composerOptions: turnOptions?.composerOptions,
           interrupt: turnOptions?.interrupt,
-          voiceSpoken: turnOptions?.voiceSpoken
+          voiceSpoken: turnOptions?.voiceSpoken,
+          voicePriorToolResults: turnOptions?.voicePriorToolResults
         },
         this.handleEvent
       );
@@ -2098,6 +2106,7 @@ export class AgentWidgetSession {
           assistantMessageId,
           composerOptions: turnOptions?.composerOptions,
           voiceSpoken: turnOptions?.voiceSpoken,
+          voicePriorToolResults: turnOptions?.voicePriorToolResults,
         },
         this.handleEvent
       );
@@ -2561,9 +2570,11 @@ export class AgentWidgetSession {
        * Internal (voice client delegation): this is the delegated voice turn.
        * `userMessageId` names an existing transcript bubble to submit as the
        * turn's user message instead of appending a new one, so the spoken
-       * request appears (and is sent) exactly once.
+       * request appears (and is sent) exactly once. `priorToolResults`: page
+       * tools the voice server already ran for this turn, recorded once as
+       * completed tool rows after the request (see voicePriorToolRows).
        */
-      voiceTurn?: { userMessageId?: string };
+      voiceTurn?: { userMessageId?: string | null; priorToolResults?: unknown };
     }
   ) {
     const input = rawInput.trim();
@@ -2718,12 +2729,25 @@ export class AgentWidgetSession {
 
     // A submitted voice bubble may sit above captions or a turn that finished
     // while it waited: the request still ends on it.
+    const sentAt = new Date().toISOString();
     const snapshot = voiceBubble
-      ? [
-          ...this.messages.filter((m) => m !== voiceBubble),
-          { ...voiceBubble, createdAt: new Date().toISOString() }
-        ]
+      ? [...this.messages.filter((m) => m !== voiceBubble), { ...voiceBubble, createdAt: sentAt }]
       : [...this.messages];
+    // Tools the voice server already ran answer this request and are never run
+    // again. Stored at the request's own time, so every later replay keeps them
+    // right after it; this request (moved to `sentAt`) sends them at `sentAt`.
+    const requestAt = (voiceBubble ?? this.messages.find((m) => m.id === userMessageId))?.createdAt ?? sentAt;
+    const priorRows = voicePriorToolRows(options?.voiceTurn?.priorToolResults, requestAt);
+    for (const row of priorRows) {
+      if (this.messages.some((m) => m.id === row.id)) continue;
+      this.#appendMessage(row);
+      snapshot.push({ ...row, createdAt: sentAt });
+    }
+    // Client-token chat replays from the server's transcript: it gets them as a field.
+    const voicePriorToolResults = priorRows.map(({ agentMetadata }) => {
+      const { toolCallId, toolName, args, result } = agentMetadata!.clientToolAnswer!;
+      return { toolCallId, name: toolName, arguments: args as Record<string, unknown>, result };
+    });
 
     try {
       await this.#dispatchWithDeletedRecovery(
@@ -2735,7 +2759,8 @@ export class AgentWidgetSession {
           composerOptions: options?.composerOptions,
           interrupt: options?.interrupt,
           // The delegated voice turn's reply is read aloud (spoken-reply hint).
-          voiceSpoken: !!options?.voiceTurn
+          voiceSpoken: !!options?.voiceTurn,
+          ...(voicePriorToolResults.length > 0 && { voicePriorToolResults })
         }
       );
     } catch (error) {

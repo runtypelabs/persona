@@ -45,8 +45,11 @@ export interface VoiceDelegationHost {
   parked(): boolean;
   /** The transcript bubble the request came from (see KeyedVoiceTranscript.claimUserTurn). */
   claim(userText: string, userUtteranceIds: string[]): string | null;
-  /** sendMessage as a voice turn, submitting `userMessageId`'s bubble when given. */
-  send(userText: string, userMessageId: string | undefined): Promise<void>;
+  /**
+   * sendMessage as a voice turn, submitting `userMessageId`'s bubble when
+   * given and recording `priorToolResults` as already-run tool calls.
+   */
+  send(userText: string, voiceTurn: { userMessageId?: string | null; priorToolResults?: unknown }): Promise<void>;
   /** Route the chat stream's assistant messages and failures into `capture` (or stop). */
   track(capture: VoiceDelegationCapture | null): void;
   /** Deny a pending approval (server gate or WebMCP) by its message id. */
@@ -240,6 +243,7 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       userText,
       userUtteranceIds,
       stream,
+      priorToolResults,
     }: VoiceDelegationRequest): Promise<VoiceDelegationResult> {
       const live = parks.filter((park) => pendingOf(park).length);
       const pendingIds = live.flatMap(pendingOf);
@@ -306,7 +310,10 @@ export function createVoiceSessionBridge(host: VoiceDelegationHost): VoiceSessio
       active = capture;
       retrack();
       try {
-        await host.send(userText, host.claim(userText, userUtteranceIds) ?? undefined);
+        await host.send(userText, {
+          userMessageId: host.claim(userText, userUtteranceIds),
+          priorToolResults,
+        });
         // Local tools and approvals may continue the turn past the first stream.
         await settled(capture);
       } catch {

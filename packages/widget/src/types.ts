@@ -5268,6 +5268,13 @@ export type VoiceDelegationRequest = {
   /** The voice model's view of the conversation it delegated from. */
   messages: Array<{ role: string; content: unknown }>;
   /**
+   * `delegation_started.input.priorToolResults` as received: page tools the
+   * server already ran for this turn, each `{ toolCallId, name, arguments,
+   * result }`. Unvalidated. The chat turn records them as completed calls and
+   * never runs them again.
+   */
+  priorToolResults?: unknown;
+  /**
    * Set when the server streams delegated answers (`delegation_stream`): called
    * with each speakable piece of the turn's answer, in order, while it renders.
    * The pieces, concatenated, are a prefix of the result's `text`; the result
@@ -6404,7 +6411,23 @@ export type ClientChatRequest = {
    * reads aloud: the server asks the agent for a speakable answer (the direct
    * answer first, in plain sentences). Not persisted into history.
    */
-  voice?: { spoken: true };
+  voice?: {
+    spoken: true;
+    /**
+     * Page tools the voice server already ran for this hand-back
+     * (`delegation_started.input.priorToolResults`), sent only when it carried
+     * some. The agent narrates their results instead of calling them again.
+     */
+    priorToolResults?: VoicePriorToolResult[];
+  };
+};
+
+/** A page tool call the voice server already ran, as `/v1/client/chat` takes it. */
+export type VoicePriorToolResult = {
+  toolCallId: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  result: unknown;
 };
 
 /**
