@@ -332,7 +332,8 @@ import {
   defaultActionHandlers,
   defaultJsonActionParser
 } from "./utils/actions";
-import { createLocalStorageAdapter } from "./utils/storage";
+import { createLocalStorageAdapter, transcriptStorageKey } from "./utils/storage";
+import { isLocalOnlyMessage } from "./utils/local-only-message";
 import { createVisitorStore, type VisitorStore } from "./utils/visitor-store";
 import { loadHistoryView } from "./history-view-loader";
 import { getHistoryShellSync, loadHistoryShell, type HistoryShellModule } from "./history-shell-loader";
@@ -502,11 +503,13 @@ const ensureRecord = (value: unknown): Record<string, unknown> => {
   return { ...(value as Record<string, unknown>) };
 };
 
-const stripStreamingFromMessages = (messages: AgentWidgetMessage[]) =>
-  messages.map((message) => ({
-    ...message,
-    streaming: false
-  }));
+const messagesForStorage = (messages: AgentWidgetMessage[]) =>
+  messages
+    .filter((message) => !isLocalOnlyMessage(message))
+    .map((message) => ({
+      ...message,
+      streaming: false
+    }));
 
 type Controller = {
   update: (config: AgentWidgetConfigPatch) => void;
@@ -1065,7 +1068,12 @@ export const createAgentExperience = (
   const storageAdapter: AgentWidgetStorageAdapter | null =
     messagePersistenceDisabled
       ? null
-      : (config.storageAdapter ?? createLocalStorageAdapter());
+      : (config.storageAdapter ??
+        createLocalStorageAdapter(
+          transcriptStorageKey(
+            typeof config.persistState === "object" ? config.persistState.keyPrefix : undefined
+          )
+        ));
   const personaOwnsClientTokenRecovery =
     Boolean(config.clientToken) && typeof config.reconnectStream !== "function";
   let persistentMetadata: Record<string, unknown> = {};
@@ -5160,7 +5168,7 @@ export const createAgentExperience = (
 
   const getMessagesForPersistence = () =>
     session
-      ? stripStreamingFromMessages(session.getMessages()).filter(msg => !(msg as any).__skipPersist)
+      ? messagesForStorage(session.getMessages()).filter(msg => !(msg as any).__skipPersist)
       : [];
 
   let storageMutationTail: Promise<void> | null = null;
@@ -5210,7 +5218,7 @@ export const createAgentExperience = (
 
     // Allow saving even if session doesn't exist yet (for metadata during init)
     const messages = messagesOverride
-      ? stripStreamingFromMessages(messagesOverride)
+      ? messagesForStorage(messagesOverride)
       : session
         ? getMessagesForPersistence()
         : [];

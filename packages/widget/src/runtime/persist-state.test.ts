@@ -268,3 +268,89 @@ describe("persistState gates storage adapter", () => {
     controller.destroy();
   });
 });
+
+describe("default transcript key and local-only notices (runtypelabs/core#9961)", () => {
+  afterEach(() => {
+    document.body.innerHTML = "";
+    try {
+      window.localStorage.clear();
+    } catch {
+      /* jsdom edge cases */
+    }
+  });
+
+  const mount = () => {
+    const el = document.createElement("div");
+    document.body.appendChild(el);
+    return el;
+  };
+  const storedContents = (key: string): string[] =>
+    (JSON.parse(window.localStorage.getItem(key) ?? "{}").messages ?? []).map(
+      (m: { content?: string }) => m.content
+    );
+
+  it("scopes each widget's transcript by persistState.keyPrefix", () => {
+    const a = createAgentExperience(mount(), {
+      ...baseConfig(),
+      persistState: { keyPrefix: "ops-" },
+    });
+    const b = createAgentExperience(mount(), {
+      ...baseConfig(),
+      persistState: { keyPrefix: "ehr-" },
+    });
+
+    a.injectAssistantMessage({ content: "ops reply" });
+    b.injectAssistantMessage({ content: "ehr reply" });
+
+    expect(storedContents("ops-state")).toEqual(["ops reply"]);
+    expect(storedContents("ehr-state")).toEqual(["ehr reply"]);
+    expect(window.localStorage.getItem(DEFAULT_KEY)).toBeNull();
+    a.destroy();
+    b.destroy();
+  });
+
+  it("keeps reading the legacy key only for the default prefix", () => {
+    window.localStorage.setItem(
+      DEFAULT_KEY,
+      JSON.stringify({
+        messages: [
+          { id: "legacy-1", role: "assistant", content: "legacy reply", createdAt: "2026-01-01T00:00:00.000Z" },
+        ],
+      })
+    );
+
+    const unprefixed = createAgentExperience(mount(), baseConfig());
+    const prefixed = createAgentExperience(mount(), {
+      ...baseConfig(),
+      persistState: { keyPrefix: "ops-" },
+    });
+
+    expect(unprefixed.getMessages().map((m) => m.content)).toEqual(["legacy reply"]);
+    expect(prefixed.getMessages().map((m) => m.content)).toEqual([]);
+    unprefixed.destroy();
+    prefixed.destroy();
+  });
+
+  it("never stores a local-only notice, including legacy reconnect-failure bubbles", () => {
+    window.localStorage.setItem(
+      DEFAULT_KEY,
+      JSON.stringify({
+        messages: [
+          { id: "u1", role: "user", content: "hi", createdAt: "2026-01-01T00:00:00.000Z" },
+          {
+            id: "reconnect-failed-exec_1",
+            role: "assistant",
+            content: "Connection lost and the response could not be resumed.",
+            createdAt: "2026-01-01T00:00:01.000Z",
+          },
+        ],
+      })
+    );
+    const controller = createAgentExperience(mount(), baseConfig());
+
+    controller.injectAssistantMessage({ content: "kept" });
+
+    expect(storedContents(DEFAULT_KEY)).toEqual(["hi", "kept"]);
+    controller.destroy();
+  });
+});

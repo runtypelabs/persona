@@ -2791,6 +2791,7 @@ export class AgentWidgetSession {
             role: "assistant",
             createdAt: new Date().toISOString(),
             content,
+            localOnly: true,
             sequence: this.#nextSequence()
           };
 
@@ -2979,6 +2980,7 @@ export class AgentWidgetSession {
             role: "assistant",
             createdAt: new Date().toISOString(),
             content,
+            localOnly: true,
             sequence: this.#nextSequence()
           };
 
@@ -4088,6 +4090,7 @@ export class AgentWidgetSession {
           seedContent,
         }),
       appendMessage: (message) => session.#appendMessage(message),
+      settleParked: (executionId) => session.#settleParkedReconnect(executionId),
       nextSequence: () => session.#nextSequence(),
       emitReconnect: (event) => session.callbacks.onReconnect?.(event),
       buildErrorContent: (message) =>
@@ -4119,7 +4122,28 @@ export class AgentWidgetSession {
     if (typeof this.config.reconnectStream !== "function") return;
     if (this.#reconnecting) return;
 
-    let assistantId = this.#reopenTrailingAssistant();
+    // A run parked on an await the restored transcript can still answer (an
+    // ask_user_question card, a server approval) has no stream to replay, and
+    // reconnecting would spin into a "Connection lost" bubble. Keep the cursor
+    // so the answer's `/resume` attaches after the await frame, as in-session.
+    if (this.#isAwaitPending()) {
+      this.#adoptBootExecution(resume.executionId);
+      this.#resumable = {
+        executionId: resume.executionId,
+        lastEventId: resume.after,
+        assistantMessageId: this.#activeAssistantMessageId ?? "",
+        status: "running",
+      };
+      return;
+    }
+
+    // Parked on a WebMCP call the reload interrupted: still reconnect once, so
+    // a replayed `await` re-dispatches the call on this page, but don't reopen
+    // the pre-tool text bubble or paint an empty one. The reconnect loop ends
+    // the turn quietly when nothing replays (`#settleParkedReconnect`).
+    let assistantId = this.#hasInterruptedBrowserTool(resume.executionId)
+      ? generateAssistantMessageId()
+      : this.#reopenTrailingAssistant();
     if (!assistantId) {
       assistantId = generateAssistantMessageId();
       this.#appendMessage({
@@ -4132,16 +4156,7 @@ export class AgentWidgetSession {
       });
     }
     this.#activeAssistantMessageId = assistantId;
-    if (!this.agentExecution) {
-      this.agentExecution = {
-        executionId: resume.executionId,
-        agentId: "",
-        agentName: "",
-        status: "running",
-        currentIteration: 0,
-        maxTurns: 0,
-      };
-    }
+    this.#adoptBootExecution(resume.executionId);
     this.#resumable = {
       executionId: resume.executionId,
       lastEventId: resume.after,
@@ -4149,6 +4164,63 @@ export class AgentWidgetSession {
       status: "running",
     };
     this.#beginReconnect();
+  }
+
+  /**
+   * A reconnect attempt left the run parked rather than dropped: the turn is
+   * waiting on the visitor or a page tool (keep the cursor, as an in-session
+   * await pause does), or on a WebMCP call the reload interrupted (nothing can
+   * answer it, so drop the handle). Either way stop reconnecting without a
+   * failure bubble. Returns false for an ordinary drop, which keeps retrying.
+   */
+  #settleParkedReconnect(executionId: string): boolean {
+    const pageToolBusy =
+      this.webMcpResolveControllers.size > 0 || this.webMcpAwaitBatches.size > 0;
+    if (!pageToolBusy && !this.#isAwaitPending()) {
+      if (!this.#hasInterruptedBrowserTool(executionId)) return false;
+      this.#clearResumable();
+    }
+    this.#reconnecting = false;
+    if (!pageToolBusy) {
+      let changed = false;
+      for (const msg of this.messages) {
+        if (msg.streaming) {
+          msg.streaming = false;
+          changed = true;
+        }
+      }
+      if (changed) this.callbacks.onMessagesChanged([...this.messages]);
+      this.#setStreaming(false);
+      this.abortController = null;
+    }
+    this.#setStatus("idle");
+    return true;
+  }
+
+  /** Restore the running execution a boot resume refers to, if none is live. */
+  #adoptBootExecution(executionId: string): void {
+    if (this.agentExecution) return;
+    this.agentExecution = {
+      executionId,
+      agentId: "",
+      agentName: "",
+      status: "running",
+      currentIteration: 0,
+      maxTurns: 0,
+    };
+  }
+
+  /**
+   * True when restore settled one of this execution's WebMCP calls as
+   * interrupted (see `restoreBrowserToolState`): the run is parked on a
+   * browser callback that no longer exists.
+   */
+  #hasInterruptedBrowserTool(executionId: string): boolean {
+    return this.messages.some(
+      (m) =>
+        m.agentMetadata?.executionId === executionId &&
+        [m.toolCall, ...(m.tools ?? [])].some((tool) => tool?.interrupted === true)
+    );
   }
 
   /**
