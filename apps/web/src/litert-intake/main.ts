@@ -176,14 +176,25 @@ function mountWidget(): void {
           header: { borderRadius: "0" },
         },
       },
+      welcome: {
+        title: "Tell me what happened",
+        subtitle:
+          "Describe your accident in plain words and I'll fill the claim form for you — right here in your browser. Nothing you type ever leaves this page. Load a model from the toolbar to begin.",
+        variant: "card",
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: "Tell me what happened",
-        welcomeSubtitle:
-          "Describe your accident in plain words and I'll fill the claim form for you — right here in your browser. Nothing you type ever leaves this page. Load a model from the toolbar to begin.",
         inputPlaceholder: "Describe what happened…",
       },
-      suggestionChips: ["Use a sample story", "What's still missing?", "Reset the form"],
+      suggestions: {
+        starters: {
+          items: ["Use a sample story", "What's still missing?", "Reset the form"],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       launcher: {
         ...DEFAULT_WIDGET_CONFIG.launcher,
         mountMode: "docked",
