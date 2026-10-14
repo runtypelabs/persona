@@ -187,6 +187,35 @@ describe("local-only failure notices", () => {
 });
 
 describe("boot resume of a run parked on an await", () => {
+  it("keeps retrying when the reconnect request itself fails", async () => {
+    let calls = 0;
+    const reconnectStream = vi.fn(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("network blip");
+      return new Response(sseStream(""));
+    });
+    const { session, state } = track({
+      apiUrl: "http://test",
+      webmcp: { enabled: true },
+      reconnectStream,
+      reconnect: { backoffMs: [1, 1, 1, 1, 1], maxAttempts: 5 },
+    });
+    session.hydrateMessages([
+      { id: "u1", role: "user", content: "buy one", createdAt: "2026-01-01T00:00:00.000Z" },
+      { id: "a1", role: "assistant", content: "Buying it now.", createdAt: "2026-01-01T00:00:00.500Z" },
+      awaitingWebMcpTool(),
+    ]);
+
+    session.resumeFromHandle({ executionId: "exec-1", after: "7" });
+    await vi.waitFor(() => expect(state.status).toBe("idle"));
+    await new Promise((r) => setTimeout(r, 20));
+
+    expect(reconnectStream).toHaveBeenCalledTimes(2);
+    expect(state.errors).toEqual([]);
+    expect(session.getResumableHandle()).toBeNull();
+    session.destroy();
+  });
+
   it("ends quietly when the reload interrupted the WebMCP call and nothing replays", async () => {
     const executionStates: Array<ResumableHandle | null> = [];
     const reconnectStream = vi.fn(async () => new Response(sseStream("")));

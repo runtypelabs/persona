@@ -257,8 +257,9 @@ export function createReconnectController(
       }
 
       // A parked run has nothing more to replay; retrying would only end in
-      // the "Connection lost" bubble.
-      if (host.getResumable() && host.settleParked(handle.executionId)) {
+      // the "Connection lost" bubble. Only a reconnect that actually reached
+      // the server can prove that — a failed request keeps retrying.
+      if (body && host.getResumable() && host.settleParked(handle.executionId)) {
         attempt = 0;
         detachListeners();
         return;
