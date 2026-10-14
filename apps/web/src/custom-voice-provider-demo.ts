@@ -129,14 +129,25 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       title: "BYO Voice",
       subtitle: "Custom speech provider",
     },
+    welcome: {
+      title: "Bring-Your-Own Voice",
+      subtitle:
+        "Custom Web Speech provider in via provider.custom; replies spoken back via browser TTS.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Bring-Your-Own Voice",
-      welcomeSubtitle:
-        "Custom Web Speech provider in via provider.custom; replies spoken back via browser TTS.",
       inputPlaceholder: "Tap the mic and speak, or type…",
     },
-    suggestionChips: ["What can you do?", "Tell me a joke"],
+    suggestions: {
+      starters: {
+        items: ["What can you do?", "Tell me a joke"],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };
 };
@@ -233,14 +244,25 @@ if (runtypeSlot) {
         },
       },
       launcher: { ...DEFAULT_WIDGET_CONFIG.launcher, enabled: false, width: "100%" },
+      welcome: {
+        title: "Hosted realtime voice",
+        subtitle:
+          "Full-duplex runtype provider: it streams its own spoken reply.",
+        variant: "card",
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: "Hosted realtime voice",
-        welcomeSubtitle:
-          "Full-duplex runtype provider: it streams its own spoken reply.",
         inputPlaceholder: "Tap the mic to talk…",
       },
-      suggestionChips: [],
+      suggestions: {
+        starters: {
+          items: [],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     });
     log("Hosted realtime voice section mounted from the voice client token.");

@@ -133,19 +133,30 @@ function initializeWidget() {
         container: '#f8fafc',
         border: '#e2e8f0'
       },
-      copy: {
-        ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: 'Feedback Demo 👍',
-        welcomeSubtitle: isDemoMode 
+      welcome: {
+        title: 'Feedback Demo 👍',
+        subtitle: isDemoMode
           ? 'Demo mode: Chat works, feedback logged locally'
           : 'Try the feedback buttons on my responses!',
+        variant: "card",
+      },
+      copy: {
+        ...DEFAULT_WIDGET_CONFIG.copy,
         inputPlaceholder: 'Ask me anything...'
       },
-      suggestionChips: [
-        'Tell me a joke',
-        'What is the meaning of life?',
-        'Write a haiku'
-      ],
+      suggestions: {
+        starters: {
+          items: [
+            'Tell me a joke',
+            'What is the meaning of life?',
+            'Write a haiku'
+          ],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       
       // ✨ THE KEY PART: Just enable the buttons!
       messageActions: {
