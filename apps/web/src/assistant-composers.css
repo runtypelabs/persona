@@ -20,4 +20,5 @@
 .lab-code summary { cursor: pointer; font-weight: 500; }
 .lab-code p { font-size: 13px; }
 .lab-code pre { max-height: 480px; overflow: auto; background: #22231f; color: #e5e7dd; padding: 20px; border-radius: 8px; font-size: 12px; }
+.lab-code pre code { color: inherit; background: transparent; padding: 0; border-radius: 0; font-size: inherit; }
 @media (max-width: 650px) { .lab-findings { grid-template-columns: 1fr; gap: 16px; } .lab-controls span { margin-left: 0; } #lab-mount { height: 480px; } }
