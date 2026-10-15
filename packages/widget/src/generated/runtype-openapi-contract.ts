@@ -35,6 +35,7 @@ export type RuntypeExecutionStreamEvent = ({
   finalOutput?: string;
   iterations?: number;
   kind: "agent" | "flow";
+  outcome?: "completed" | "error" | "aborted";
   seq: number;
   stepErrorCount?: number;
   stopReason?: string;
@@ -60,6 +61,7 @@ export type RuntypeExecutionStreamEvent = ({
   executionId: string;
   finalOutput?: string;
   kind: "agent" | "flow";
+  outcome?: "completed" | "error" | "aborted";
   seq: number;
   stopReason?: string;
   type: "execution_error";
@@ -379,6 +381,15 @@ export type RuntypeExecutionStreamEvent = ({
   seq: number;
   type: "state_delta";
 }) | ({
+  annotations?: {
+  consequentialHint?: boolean;
+  debugging?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  readOnlyHint?: boolean;
+  untrustedContentHint?: boolean;
+};
   executionId: string;
   hiddenParameterNames?: Array<string>;
   iteration?: number;
@@ -477,6 +488,15 @@ export type RuntypeExecutionStreamEvent = ({
   seq: number;
   type: "approval_complete";
 }) | ({
+  annotations?: {
+  consequentialHint?: boolean;
+  debugging?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  readOnlyHint?: boolean;
+  untrustedContentHint?: boolean;
+};
   awaitReason?: string;
   awaitedAt?: string;
   crawlId?: string;
@@ -619,7 +639,7 @@ export type RuntypeClientInitResponse = {
   conversationRevision: string;
   durableRecovery?: {
   enabled: boolean;
-  join?: boolean;
+  steer?: boolean;
 };
   expiresAt: string;
   flow?: {
@@ -641,6 +661,15 @@ export type RuntypeClientInitResponse = {
 export type RuntypeClientChatRequest = {
   assistantMessageId?: string;
   clientTools?: Array<{
+  annotations?: {
+  consequentialHint?: boolean;
+  debugging?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  readOnlyHint?: boolean;
+  untrustedContentHint?: boolean;
+};
   description: string;
   name: string;
   origin?: "webmcp" | "sdk";
@@ -681,8 +710,11 @@ export type RuntypeClientChatRequest = {
 }>;
   metadata?: Record<string, unknown>;
   sessionId: string;
-  submitMode?: "normal" | "interrupt" | "join";
+  submitMode?: "normal" | "interrupt" | "steer" | "auto";
   turnId?: string;
+  voice?: {
+  spoken?: boolean;
+};
 };
 
 export type RuntypeClientChatStreamEvent = RuntypeExecutionStreamEvent;
@@ -691,6 +723,15 @@ export type RuntypeClientResumeRequest = {
   after?: string;
   assistantMessageId?: string;
   clientTools?: Array<{
+  annotations?: {
+  consequentialHint?: boolean;
+  debugging?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  readOnlyHint?: boolean;
+  untrustedContentHint?: boolean;
+};
   description: string;
   name: string;
   origin?: "webmcp" | "sdk";
