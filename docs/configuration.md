@@ -71,6 +71,122 @@ const config = {
 
 Some visual presentation choices remain configuration: welcome variants, suggestion placement/variants, artifact layout, send icon selection and animation timings. Use the documented owner for each task rather than moving content or behavior into theme.
 
+## Composer attachment previews
+
+Attachment upload and validation remain under `attachments`. Preview options
+only change how pending attachments appear in the composer. Existing configurations
+keep compact tiles and always-visible overlapping remove buttons.
+
+```typescript
+import type { AgentWidgetConfig } from '@runtypelabs/persona';
+
+const config = {
+  attachments: {
+    enabled: true,
+    preview: {
+      image: {
+        fit: 'cover',
+        remove: { visibility: 'always', placement: 'inside' },
+      },
+      file: {
+        layout: 'horizontal',
+        name: 'full',
+        metadata: 'size',
+        badge: 'extension',
+        remove: { visibility: 'always', placement: 'inline' },
+      },
+    },
+  },
+  composer: { attachmentLayout: 'single-row' },
+  theme: {
+    components: {
+      attachment: {
+        composer: {
+          image: { width: '112px', height: '112px', borderRadius: '16px' },
+          file: { padding: '12px', borderRadius: '12px' },
+        },
+      },
+    },
+  },
+} satisfies AgentWidgetConfig;
+```
+
+| Option | Values |
+| --- | --- |
+| `preview.image.layout` | `thumbnail` (default), `chip` |
+| `preview.image.name` | `hidden` (default), `full`, `basename` (without extension) |
+| `preview.image.fit` | `cover` (default), `contain` |
+| `preview.file.layout` | `tile` (default), `horizontal`, `vertical` |
+| `preview.file.icon` | `true` (default), `false` |
+| `preview.file.iconName` | Optional Lucide icon name; omitted uses the file-type icon |
+| `preview.file.iconPlacement` | `start` (default), `center` |
+| `preview.file.name` | `hidden` (default), `full`, `basename` (without extension) |
+| `preview.file.metadata` | `none` (default), `size`, `line-count` |
+| `preview.file.badge` | `type` (default), `extension`, `none` |
+| `preview.image.remove` / `preview.file.remove` | `visibility: always` (default) or `hover`; `placement: overlap` (default), `inside`, or `inline` |
+| `composer.attachmentLayout` | `stacked` (default), `single-row` |
+
+Hover removal also appears on keyboard focus and stays visible on touch devices.
+Line counts are optional, computed only for supported text files within a bounded
+size; binary documents do not receive guessed line counts. The single-row option
+keeps input and controls together below previews when space and draft content permit.
+Style these previews through `theme.components.attachment.composer`, with dark
+exceptions under `darkTheme.components.attachment.composer`. The existing
+`components.attachment.image` tokens retain their separate meaning.
+
+Image chips place the thumbnail, optional name, and inline remove button in a
+compact row. `image.width` and `image.height` theme tokens always size the thumbnail;
+`image.chip` tokens style the surrounding chip. Full filenames remain available
+as tooltips when display names are shortened. File icons can use a Lucide name
+such as `file` or `code-xml`; `iconPlacement: 'center'` centers the icon in a vertical
+card above its name.
+
+Shared `composer.remove` tokens style both kinds. Set `composer.image.remove` or
+`composer.file.remove` for independent overrides; each omitted field inherits the
+shared value. For example, an image can use a solid circular remove button while
+a file card uses a transparent button with a hover background. These options also
+work with the existing custom renderer hook and `defaultRenderer()`.
+
+### Custom attachment preview renderer
+
+Plugins may implement `renderAttachmentPreview(context)`. Like `renderDictation`,
+the first non-null result wins. Return `null` to defer to another plugin or the
+built-in preview, an `HTMLElement` for a simple preview, or a managed handle for
+live progress and cleanup:
+
+```typescript
+import type { AgentWidgetPlugin, AttachmentPreviewRenderContext } from '@runtypelabs/persona';
+
+const attachmentCards: AgentWidgetPlugin = {
+  id: 'attachment-cards',
+  renderAttachmentPreview(context) {
+    const element = document.createElement('button');
+    element.type = 'button';
+    const update = (next: AttachmentPreviewRenderContext) => {
+      element.textContent = `${next.state.name} — ${next.state.status}`;
+      element.setAttribute('aria-label', `Remove ${next.state.name}`);
+    };
+    const remove = () => context.actions.remove();
+    element.addEventListener('click', remove);
+    update(context);
+    return {
+      element,
+      update,
+      destroy() { element.removeEventListener('click', remove); },
+    };
+  },
+};
+```
+
+The context provides attachment `state`, widget `config`, `instanceId`,
+`actions.remove()`, `actions.retry()`, and `defaultRenderer()`. The default renderer
+returns a managed handle, so a plugin can delegate to it for selected file types.
+A custom card owns its accessibility, labels, and interaction design. Persona
+retains validation, upload, cancellation, retry, and message submission. Framework
+components can mount into the returned element and unmount in `destroy`.
+Use a managed handle to receive state updates without recreating the preview.
+Renderer functions belong in host JavaScript; a JSON configuration cannot carry them.
+
 ## Mounted updates and clearing an old style
 
 Fresh config supplies inputs once. `widget.update(patch)` changes a mounted widget. Editor backup snapshots describe resolved state. They are different operations.

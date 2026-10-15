@@ -4611,6 +4611,8 @@ export type ComposerModelPickerConfig = {
 
 /** Optional composer UI state for custom `renderComposer` implementations. */
 export type AgentWidgetComposerConfig = {
+  /** Editor/control arrangement below attachment previews. Omitted preserves the existing layout fallback. */
+  attachmentLayout?: "stacked" | "single-row";
   /**
    * Host-contributed composer controls. Merged with the core built-ins and
    * every plugin's `contributeComposerActions` into one ordered row, and
@@ -7091,7 +7093,62 @@ export type AgentWidgetAttachmentAdapter = {
   ) => void | Promise<void>;
 };
 
+/** Remove remains keyboard reachable in hover mode and visible on touch devices. */
+export type AttachmentPreviewRemoveConfig = {
+  visibility?: "always" | "hover";
+  placement?: "inside" | "overlap" | "inline";
+};
+
+export type AgentWidgetAttachmentPreviewConfig = {
+  image?: {
+    /** Image width and height tokens always size the thumbnail. @default "thumbnail" */
+    layout?: "thumbnail" | "chip";
+    /** @default "hidden" */
+    name?: "hidden" | "full" | "basename";
+    fit?: "cover" | "contain";
+    remove?: AttachmentPreviewRemoveConfig;
+  };
+  file?: {
+    layout?: "tile" | "horizontal" | "vertical";
+    /** Show the document icon. @default true */
+    icon?: boolean;
+    /** Optional Lucide or registered icon override; MIME-based icons are the default. */
+    iconName?: string;
+    /** Placement within vertical cards. @default "start" */
+    iconPlacement?: "start" | "center";
+    name?: "full" | "basename" | "hidden";
+    /** Line counts are read only for supported text files up to 1 MiB. */
+    metadata?: "none" | "size" | "line-count";
+    badge?: "none" | "extension" | "type";
+    remove?: AttachmentPreviewRemoveConfig;
+  };
+};
+
+/** Instance-local attachment preview state; object URLs live only until removal. */
+export type AttachmentPreviewState = ComposerAttachmentState & {
+  kind: "image" | "file";
+  previewUrl: string | null;
+  lineCount?: number;
+};
+
+export type AttachmentPreviewRenderContext = {
+  instanceId: string;
+  state: Readonly<AttachmentPreviewState>;
+  config: AgentWidgetConfig;
+  actions: { remove: () => void; retry: () => void };
+  defaultRenderer: () => AttachmentPreviewRenderHandle;
+};
+
+/** Plain elements are retained; use update for progress, metadata, and config changes. */
+export type AttachmentPreviewRenderHandle = {
+  element: HTMLElement;
+  update?: (context: AttachmentPreviewRenderContext) => void;
+  destroy?: () => void;
+};
+
 export type AgentWidgetAttachmentsConfig = {
+  /** Composer-only image and document presentation; outgoing content is unchanged. */
+  preview?: AgentWidgetAttachmentPreviewConfig;
   /**
    * Enable/disable file attachments.
    * @default false

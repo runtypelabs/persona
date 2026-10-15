@@ -472,3 +472,30 @@ describe('modern authoring discovery', () => {
     expect(configure.some(field => field.path === 'suggestions.starters.placement')).toBe(true);
   });
 });
+
+
+describe("attachment preview editor controls", () => {
+  it("offers presentation choices separately from theme colors and sizes", () => {
+    const fields = CONFIGURE_SECTIONS.find(section => section.id === "attachments-config")?.fields ?? [];
+    const paths = fields.map(field => field.path);
+    expect(paths).toEqual(expect.arrayContaining([
+      "attachments.preview.file.layout", "attachments.preview.file.name",
+      "attachments.preview.file.metadata", "attachments.preview.file.badge",
+      "attachments.preview.file.iconName", "attachments.preview.file.iconPlacement",
+      "attachments.preview.image.layout", "attachments.preview.image.name",
+      "attachments.preview.image.fit", "attachments.preview.image.remove.visibility",
+      "attachments.preview.file.remove.visibility", "composer.attachmentLayout",
+    ]));
+    expect(fields.find(field => field.path === "attachments.preview.file.layout")?.options?.map(option => option.value))
+      .toEqual(["tile", "horizontal", "vertical"]);
+    const colors = COMPONENT_COLOR_SECTIONS.flatMap(section => section.fields.map(field => field.path));
+    const shapes = COMPONENT_SHAPE_SECTIONS.flatMap(section => section.fields.map(field => field.path));
+    expect(colors).toContain("theme.components.attachment.composer.remove.foreground");
+    expect(shapes).toContain("theme.components.attachment.composer.image.width");
+    expect(shapes).toContain("theme.components.attachment.composer.image.chip.width");
+    expect(shapes).toContain("theme.components.attachment.composer.file.remove.borderWidth");
+    expect(colors).toContain("theme.components.attachment.composer.file.iconBackground");
+    expect(colors).toContain("theme.components.attachment.composer.image.remove.hoverForeground");
+    expect(shapes).not.toContain("theme.components.attachment.composer.remove.foreground");
+  });
+});

@@ -185,11 +185,13 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     // Their "/" tool menu, carrying the same labels and glyphs as the "+" modes.
     contextMentions: slashOnlyMentions("tools", "Tools", CHATGPT_TOOL_COMMANDS),
     attachments: {
+      preview: createAssistantPreset("chatgpt", () => {}).attachments?.preview,
       enabled: true,
       buttonIconName: "image",
       buttonTooltipText: "Add photos & files",
     },
     composer: {
+      attachmentLayout: "stacked",
       layout: "single-row",
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
       models: [
@@ -248,6 +250,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
+        attachment: createAssistantPreset("chatgpt", () => {}).theme?.components?.attachment,
         panel: { borderRadius: "0" },
         introCard: {
           background: "transparent",
@@ -260,6 +263,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
           send: { iconSize: "20px" },
           shadow: "rgba(255, 255, 255, 0.2) 0 0 1px inset",
           padding: "8px",
+          expandedPadding: "12px 16px",
           gap: "8px",
           fontSize: "16px",
           lineHeight: "24px",
@@ -307,11 +311,13 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     // The placeholder promises a skills menu, so "/" opens one.
     contextMentions: slashOnlyMentions("skills", "Skills", CLAUDE_SKILL_COMMANDS),
     attachments: {
+      preview: createAssistantPreset("claude", () => {}).attachments?.preview,
       enabled: true,
       buttonIconName: "paperclip",
       buttonTooltipText: "Upload a file",
     },
     composer: {
+      attachmentLayout: "stacked",
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"], order: 0 },
       models: [
         { id: "opus-5", label: "Opus 5", description: "Powerful model for complex challenges" },
@@ -390,6 +396,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
+        attachment: createAssistantPreset("claude", () => {}).theme?.components?.attachment,
         panel: { borderRadius: "0" },
         introCard: {
           title: {
@@ -429,11 +436,13 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     colorScheme: "dark",
     copy: { inputPlaceholder: "Ask Gemini" },
     attachments: {
+      preview: createAssistantPreset("gemini", () => {}).attachments?.preview,
       enabled: true,
       buttonIconName: "upload",
       buttonTooltipText: "Upload files",
     },
     composer: {
+      attachmentLayout: "stacked",
       layout: "single-row",
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"] },
       models: [
@@ -474,6 +483,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
+        attachment: createAssistantPreset("gemini", () => {}).theme?.components?.attachment,
         // The backdrop behind the flush chat surface (see the panel's
         // `features.artifacts.layout`): the pill reads as a pill only when the
         // footer band is not its own #1e1f20.
@@ -544,11 +554,13 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
     colorScheme: "dark",
     copy: { inputPlaceholder: "Ask anything..." },
     attachments: {
+      preview: createAssistantPreset("perplexity", () => {}).attachments?.preview,
       enabled: true,
       buttonIconName: "paperclip",
       buttonTooltipText: "Attach files",
     },
     composer: {
+      attachmentLayout: "stacked",
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"], order: 0 },
       // Chips off: an active mode's removable chip has no product equivalent.
       modeGroups: [{ id: "surface", selection: "single", chipVisibility: "hidden" }],
@@ -609,6 +621,7 @@ const patches: Record<ComposerRecreationProduct, ComposerPatch> = {
         },
       },
       components: {
+        attachment: createAssistantPreset("perplexity", () => {}).theme?.components?.attachment,
         panel: { borderRadius: "0" },
         introCard: {
           background: "transparent",

@@ -729,7 +729,37 @@ export interface AskUserQuestionTokens {
   customInput?: { background?: TokenReference<'color'> };
 }
 
+/** Each preview kind inherits unset values from composer.remove. */
+export interface AttachmentRemoveTokens {
+  size?: string;
+  iconSize?: string;
+  background?: string;
+  foreground?: string;
+  hoverBackground?: string;
+  hoverForeground?: string;
+  borderColor?: string;
+  borderWidth?: string;
+  borderRadius?: string;
+  inset?: string;
+}
+
 export interface AttachmentTokens {
+  /** Composer previews only; transcript attachment tokens remain independent. */
+  composer?: {
+    gap?: string;
+    image?: {
+      /** Thumbnail dimensions, including inside a chip. */
+      width?: string;
+      height?: string;
+      borderRadius?: string;
+      background?: string;
+      borderColor?: string;
+      chip?: { background?: string; borderColor?: string; borderRadius?: string; padding?: string; gap?: string; foreground?: string; fontSize?: string; width?: string; minHeight?: string };
+      remove?: AttachmentRemoveTokens;
+    };
+    file?: { width?: string; minHeight?: string; borderRadius?: string; background?: string; borderColor?: string; foreground?: string; mutedForeground?: string; padding?: string; gap?: string; iconSize?: string; iconForeground?: string; iconBackground?: string; fontSize?: string; remove?: AttachmentRemoveTokens };
+    remove?: AttachmentRemoveTokens;
+  };
   image: {
     background: TokenReference<'color'>;
     border: TokenReference<'color'>;

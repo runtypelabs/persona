@@ -86,11 +86,23 @@ export function createAssistantPreset(id: string, notice: (message: string) => v
     launcher: { enabled: false }, layout: { embedded: true, contentMaxWidth: `${p.width}px` },
     welcome: { variant: "hero", layout: "centered", anchor: "center", anchorComposerTop: "45%", composerGap: greetingGap, title: p.title, subtitle: "", align: p.id === "perplexity" ? "start" : "center", ...(serif ? { icon: { type: "image", url: radialSymbol, alt: "", placement: "inline" } } : {}), ...(p.id === "perplexity" ? { kicker: "Search" } : {}) },
     copy: { inputPlaceholder: p.placeholder },
-    attachments: { enabled: true, maxFiles: 3 },
+    attachments: { enabled: true, maxFiles: 3, preview: {
+      image: {
+        layout: perplexity ? "chip" : "thumbnail", name: perplexity ? "full" : "hidden",
+        fit: serif || gemini || chatgpt ? "contain" : "cover",
+        remove: { placement: perplexity ? "inline" : chatgpt ? "overlap" : "inside", visibility: copilot ? "always" : "hover" },
+      },
+      file: {
+        layout: perplexity || copilot ? "horizontal" : "vertical", icon: !serif,
+        ...(gemini ? { iconName: "code-xml" } : {}), iconPlacement: chatgpt ? "center" : "start",
+        name: gemini ? "basename" : "full", metadata: serif ? "line-count" : "none", badge: serif ? "extension" : "none",
+        remove: { placement: perplexity ? "inline" : chatgpt ? "overlap" : "inside", visibility: copilot ? "always" : "hover" },
+      },
+    } },
     voiceRecognition: { enabled: false, ...(copilot ? { showButton: false } : {}), ...(serif ? { tooltipText: "Dictate", showTooltip: true } : {}) },
     sendButton: { visibility: "when-text", useIcon: true, iconName: "arrow-up", ...(!chatgpt ? { size: controlSize } : {}), ...(gemini ? { stopIconName: "assistant-stop" } : {}) },
     composer: {
-      layout: p.layout, placement: gemini ? "overlay" : "block", maxLines: 6,
+      layout: p.layout, attachmentLayout: copilot ? "single-row" : "stacked", placement: gemini ? "overlay" : "block", maxLines: 6,
       actionOverflow: { enabled: true, includeBuiltIns: ["attachments"], order: 0, collapseAutoActions: "fit" },
       modes: modes.map(label => ({ id: label.toLowerCase().replace(/ /g, "-"), groupId: "task", label, shortLabel: label, ...(perplexity ? { iconName: label === "Search" ? "search" : "assistant-computer", ...(label === "Search" ? { trailingIconName: "chevron-down" } : {}) } : {}), presentation: "bar" })),
       modeGroups: [{ id: "task", selection: "single", presentation: serif ? "segmented" : "buttons", chipVisibility: "hidden", label: "Task mode" }],
@@ -107,6 +119,31 @@ export function createAssistantPreset(id: string, notice: (message: string) => v
     theme: {
       semantic: { colors: { background: p.canvas, surface: p.surface, container: dark ? "#292929" : "#f0efeb", text: p.text, textMuted: p.muted, border: p.border, primary: p.text, accent: serif ? "#c96945" : p.text }, typography: { fontFamily: font } },
       components: {
+        attachment: { composer: {
+          gap: "12px",
+          image: {
+            width: serif ? "124px" : chatgpt ? "120px" : gemini ? "112px" : copilot ? "48px" : "20px",
+            height: serif ? "124px" : chatgpt ? "120px" : gemini ? "112px" : copilot ? "48px" : "20px",
+            borderRadius: perplexity ? "4px" : gemini ? "20px" : "12px",
+            ...(serif ? { background: "semantic.colors.surface" } : {}),
+            ...(perplexity ? { chip: { background: "transparent", borderColor: p.border, borderRadius: "8px", padding: "4px 8px", gap: "8px", fontSize: "14px", minHeight: "30px", width: "auto" } } : {}),
+            ...(copilot ? { remove: { background: "#6b6b6b", foreground: "#ffffff" } } : {}),
+          },
+          file: {
+            width: serif ? "124px" : chatgpt ? "160px" : gemini ? "112px" : copilot ? "188px" : "auto",
+            minHeight: serif ? "124px" : chatgpt ? "120px" : gemini ? "112px" : copilot ? "50px" : "30px",
+            fontSize: perplexity ? "14px" : "12px", borderRadius: gemini ? "20px" : serif || chatgpt || copilot ? "12px" : "8px",
+            ...(serif ? { background: "semantic.colors.surface" } : {}),
+            ...(chatgpt ? { background: "#000000", iconSize: "32px", iconForeground: "#c4c4c4" } : {}),
+            ...(gemini ? { background: "#383a3a", iconSize: "28px", iconForeground: "#ffffff", iconBackground: "#b9312b" } : {}),
+            ...(copilot ? { iconSize: "28px", padding: "10px 32px 10px 10px", remove: { background: "transparent", foreground: p.muted, hoverBackground: "#555555", hoverForeground: "#ffffff" } } : {}),
+            ...(perplexity ? { background: "transparent", borderColor: p.border, padding: "4px 8px", gap: "8px", iconSize: "18px" } : {}),
+          },
+          remove: chatgpt ? { background: "#eeeeee", foreground: "#242424", borderColor: "#000000", borderWidth: "3px", size: "24px", iconSize: "12px", inset: "6px" } :
+            gemini ? { background: "#ffffff", foreground: "#202122", size: "24px", iconSize: "14px", inset: "6px" } :
+            perplexity ? { background: "transparent", foreground: p.muted, size: "16px", iconSize: "12px" } :
+            copilot ? { size: "20px", iconSize: "12px", inset: "6px" } : {},
+        } },
         panel: { background: gemini ? `radial-gradient(ellipse 65% 45% at 50% 55%, #202c65 0%, #141a35 50%, ${p.canvas} 100%)` : p.canvas },
         input: { background: p.surface, foreground: p.text, placeholder: p.muted, borderRadius: p.radius },
         button: { ghost: { background: "transparent", foreground: p.text, borderRadius: "9999px", hoverBackground: dark ? "#333333" : "#f0efed" }, ...(gemini ? { primary: { background: "#e3e3e3", foreground: "#202122" }, stop: { background: "#e3e3e3", foreground: "#202122" } } : {}) },
@@ -116,7 +153,7 @@ export function createAssistantPreset(id: string, notice: (message: string) => v
           footerPadding: gemini ? "16px 16px 24px" : "8px 16px 16px", footerBorder: "none",
           footerBackground: gemini ? "transparent" : p.canvas,
           ...(gemini ? { overlayBand: "transparent" } : {}),
-          padding, expandedPadding: padding,
+          padding, expandedPadding: p.layout === "single-row" ? "12px 16px" : padding,
           expandedBorderRadius: p.layout === "stacked" ? p.radius : "24px",
           borderColor: p.border, focusBorderColor: dark ? "#666666" : "#b7b7b1", focusRing: "none",
           fontSize: serif ? "15px" : chatgpt || gemini ? "17px" : "16px", lineHeight: serif ? "21px" : copilot ? "27.2px" : "24px",

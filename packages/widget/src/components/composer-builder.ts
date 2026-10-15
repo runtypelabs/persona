@@ -97,7 +97,6 @@ export const buildComposer = (context: ComposerBuildContext): ComposerElements =
   });
   composerForm.append(header);
   if (attachment) {
-    attachment.previewsContainer.style.gap = "8px";
     header.append(attachment.previewsContainer);
     composerForm.append(attachment.input);
   }

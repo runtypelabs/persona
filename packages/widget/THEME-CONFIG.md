@@ -942,6 +942,27 @@ working.
 | `image.background` | `palette.colors.gray.100` |
 | `image.border` | `palette.colors.gray.200` |
 
+Composer attachment previews have their own optional `components.attachment.composer`
+tokens. They do not change attachment rendering in sent messages. Omitted colors
+follow the active theme; explicit colors can be overridden under `darkTheme`.
+
+| Composer token group | Fields |
+| --- | --- |
+| `gap` | Space between previews |
+| `image` | `width`, `height`, `borderRadius`, `background`, `borderColor` |
+| `image.chip` | `width`, `minHeight`, `padding`, `gap`, `borderRadius`, `background`, `borderColor`, `foreground`, `fontSize` |
+| `file` | `width`, `minHeight`, `padding`, `gap`, `borderRadius`, `background`, `borderColor`, `foreground`, `mutedForeground`, `iconSize`, `iconForeground`, `iconBackground`, `fontSize` |
+| `remove`, `image.remove`, `file.remove` | `size`, `iconSize`, `background`, `foreground`, `hoverBackground`, `hoverForeground`, `borderRadius`, `borderColor`, `borderWidth`, `inset` |
+
+Image dimensions always size the thumbnail, including inside a chip. Per-kind
+remove tokens inherit shared `remove` tokens field by field. File icon colors
+style the glyph and its surrounding tile.
+
+Dimensions accept CSS lengths; colors accept CSS colors or token references.
+Use `attachments.preview` to choose card layout, metadata, image fitting, and
+remove visibility/placement. Use the `renderAttachmentPreview` plugin hook for
+a custom presentation. See [attachment preview configuration](../../docs/configuration.md#composer-attachment-previews).
+
 ### Intro Card (`components.introCard.*`)
 
 The welcome panel rendered above the message list when no messages exist.
@@ -1238,8 +1259,10 @@ Configuring it stamps `data-persona-composer-layout="single-row"` on the footer;
 leaving it unset stamps nothing, so host CSS keeps owning the form. The core
 rules require compact content and enough horizontal space, so a wrapped draft, chips,
 attachment previews, a quote, or a pending card fall back to the
-stacked card. Ignored in `launcher.mountMode: "composer-bar"`, whose pill is
-already one row.
+stacked card. Set `composer.attachmentLayout: "single-row"` to keep the editor
+and controls together below the attachment row when there is enough room. The
+default `"stacked"` retains the existing attachment expansion. Ignored in
+`launcher.mountMode: "composer-bar"`, whose pill is already one row.
 
 V5 uses `components.composer.expandedBorderRadius: "24px"` and
 `expandedPadding: "12px 16px"` for the expanded form, including a narrow host

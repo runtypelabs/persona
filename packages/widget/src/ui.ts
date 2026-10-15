@@ -1713,10 +1713,24 @@ export const createAgentExperience = (
     progress: attachment.progress,
     error: attachment.error,
   });
+  const attachmentRenderingConfig = () => ({
+    instanceId, widgetConfig: config, preview: config.attachments?.preview,
+    renderAttachmentPreview: renderAttachmentPreviewForInstance,
+  });
+  const renderAttachmentPreviewForInstance = (context: import("./types").AttachmentPreviewRenderContext) => {
+    for (const plugin of pluginRegistry.getForInstance(config.plugins)) {
+      try {
+        const rendered = plugin.renderAttachmentPreview?.(context);
+        if (rendered) return rendered;
+      } catch (error) { console.error(`[AgentWidget] plugin ${plugin.id} attachment preview failed:`, error); }
+    }
+    return null;
+  };
   const createScopedAttachmentManager = (): AttachmentManager => {
     const manager = AttachmentManager.fromConfig(config.attachments, (attachments) => {
       if (attachmentManager === manager) syncComposerAttachments(attachments);
     });
+    manager.updateConfig(attachmentRenderingConfig());
     return manager;
   };
   const syncComposerAttachments = (attachments: PendingAttachment[]): void => {
@@ -2588,7 +2602,7 @@ export const createAgentExperience = (
   function syncComposerCompact(): void {
     const state = composerStore.getState();
     const measuredFit = composerFit.measure();
-    const fits = config.composer?.layout !== "single-row" || measuredFit;
+    const fits = config.composer?.layout !== "single-row" && config.composer?.attachmentLayout !== "single-row" || measuredFit;
     const crowded = composerFit.toolbarCrowded();
     if (footer.hasAttribute("data-persona-composer-crowded") !== crowded) {
       footer.toggleAttribute("data-persona-composer-crowded", crowded);
@@ -2600,6 +2614,8 @@ export const createAgentExperience = (
       fits && isEditorWrapped(textarea as unknown as HTMLElement | null),
       state.text
     );
+    footer.toggleAttribute("data-persona-has-attachments", state.attachments.length > 0);
+    footer.toggleAttribute("data-persona-attachment-row-compact", isComposerCompact({ text: state.text, wrapped, hasAttachments: false, hasChips: hasComposerChips(), hasQuote: state.quote !== undefined, hasPendingSubmission: state.pendingSubmission !== undefined }));
     const compact = isComposerCompact({
       text: state.text,
       wrapped,
@@ -2628,6 +2644,8 @@ export const createAgentExperience = (
     } else {
       footer.removeAttribute("data-persona-composer-layout");
     }
+    if (config.composer?.attachmentLayout) footer.setAttribute("data-persona-attachment-layout", config.composer.attachmentLayout);
+    else footer.removeAttribute("data-persona-attachment-layout");
     syncComposerCompact();
   }
   syncComposerLayout();
@@ -11177,6 +11195,7 @@ export const createAgentExperience = (
     mentionOrchestrator?.clear();
     attachmentManager?.setPreviewsContainer(null);
     attachmentManager = saved?.attachments ?? (config.attachments?.enabled ? createScopedAttachmentManager() : null);
+    attachmentManager?.updateConfig(attachmentRenderingConfig());
     attachmentManager?.remountPreviews(attachmentPreviewsContainer);
     syncComposerAttachments(attachmentManager?.getAttachments() ?? []);
     const draft = saved?.draft;
@@ -15163,10 +15182,7 @@ export const createAgentExperience = (
 
           // Initialize attachment manager
           if (!attachmentManager && attachmentInput && attachmentPreviewsContainer) {
-            attachmentManager = AttachmentManager.fromConfig(
-              attachmentsConfig,
-              syncComposerAttachments
-            );
+            attachmentManager = createScopedAttachmentManager();
             attachmentManager.setPreviewsContainer(attachmentPreviewsContainer);
 
             composerBindings?.addListener(attachmentInput, "change", async () => {
@@ -15194,7 +15210,8 @@ export const createAgentExperience = (
               allowedTypes: attachmentsConfig.allowedTypes,
               maxFileSize: attachmentsConfig.maxFileSize,
               maxFiles: attachmentsConfig.maxFiles,
-              adapter: attachmentsConfig.adapter
+              adapter: attachmentsConfig.adapter,
+              ...attachmentRenderingConfig(),
             });
           }
         }
@@ -15259,6 +15276,11 @@ export const createAgentExperience = (
         });
       }
 
+      const attachmentManagers = new Set([attachmentManager, ...Array.from(conversationContinuity.values(), saved => saved.attachments)]);
+      for (const manager of attachmentManagers) {
+        manager?.updateConfig(attachmentRenderingConfig());
+      }
+      if ("plugins" in nextConfig) attachmentManager?.remountPreviews(attachmentPreviewsContainer);
       syncComposerLayout();
       // Placement may change through a live option or defaults-version switch.
       applyComposerPlacement();

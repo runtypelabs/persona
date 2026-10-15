@@ -4,6 +4,35 @@ import { getActiveTheme } from '../utils/theme';
 import { ThemeEditorState } from './state';
 
 describe('authored config exports', () => {
+  it('round-trips attachment presentation, dark colors, and explicit reset', () => {
+    const state = new ThemeEditorState(undefined, { apiUrl: '/chat' });
+    state.set('attachments.preview.file.layout', 'horizontal');
+    state.set('attachments.preview.file.remove.visibility', 'hover');
+    state.set('attachments.preview.image.fit', 'contain');
+    state.set('attachments.preview.image.layout', 'chip');
+    state.set('attachments.preview.image.name', 'full');
+    state.set('attachments.preview.file.iconName', 'code-xml');
+    state.set('attachments.preview.file.iconPlacement', 'center');
+    state.set('theme.components.attachment.composer.image.chip.width', '200px');
+    state.set('darkTheme.components.attachment.composer.file.remove.hoverBackground', '#333');
+    state.set('composer.attachmentLayout', 'single-row');
+    state.set('theme.components.attachment.composer.image.width', '112px');
+    state.set('darkTheme.components.attachment.composer.remove.foreground', '#fff');
+    const exported = state.exportAuthoredConfig().config;
+    const restored = new ThemeEditorState(undefined, JSON.parse(JSON.stringify(exported)));
+    expect(restored.exportAuthoredConfig().config).toEqual(exported);
+    expect(restored.get('attachments.preview.file.layout')).toBe('horizontal');
+    expect(restored.get('attachments.preview.image.layout')).toBe('chip');
+    expect(restored.get('attachments.preview.file.iconName')).toBe('code-xml');
+    expect(restored.get('theme.components.attachment.composer.image.chip.width')).toBe('200px');
+    expect(restored.get('darkTheme.components.attachment.composer.file.remove.hoverBackground')).toBe('#333');
+    expect(restored.get('attachments.preview.file.remove.visibility')).toBe('hover');
+    expect(restored.get('darkTheme.components.attachment.composer.remove.foreground')).toBe('#fff');
+    restored.set('attachments.preview.file.remove.visibility', undefined);
+    expect(restored.exportAuthoredConfig().config.attachments?.preview?.file?.layout).toBe('horizontal');
+    expect(restored.exportAuthoredConfig().config.attachments?.preview?.file?.remove?.visibility).toBeUndefined();
+  });
+
   it.each([false, true])('round-trips sparse brand and light/dark edits in V5=%s', v5Defaults => {
     const input: Partial<AgentWidgetConfig> = {
       apiUrl: '/chat', future: { v5Defaults }, brand: { accent: '#7c3aed' },

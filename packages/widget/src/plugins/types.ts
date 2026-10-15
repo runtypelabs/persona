@@ -29,6 +29,8 @@ import {
   ComposerAction,
   ComposerActionContributionContext,
   DictationRenderContext,
+  AttachmentPreviewRenderContext,
+  AttachmentPreviewRenderHandle,
   DictationRenderHandle
 } from "../types";
 
@@ -258,6 +260,9 @@ export interface AgentWidgetPlugin {
   contributeComposerActions?: (
     context: ComposerActionContributionContext
   ) => ComposerAction[];
+
+  /** First non-null preview renderer wins; managed handles receive updates and one cleanup. */
+  renderAttachmentPreview?: (context: AttachmentPreviewRenderContext) => HTMLElement | AttachmentPreviewRenderHandle | null;
 
   /** Optional independent dictation surface. The first non-null result wins. */
   renderDictation?: (context: DictationRenderContext) => HTMLElement | DictationRenderHandle | null;

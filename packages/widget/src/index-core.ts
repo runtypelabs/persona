@@ -79,6 +79,11 @@ export type {
   MessageContent,
   // Attachment config type
   AgentWidgetAttachmentsConfig,
+  AgentWidgetAttachmentPreviewConfig,
+  AttachmentPreviewRemoveConfig,
+  AttachmentPreviewState,
+  AttachmentPreviewRenderContext,
+  AttachmentPreviewRenderHandle,
   AgentWidgetComposerConfig,
   // Composer state + submission snapshot (controller.getComposerState,
   // persona:composer:state, composer.onBeforeSend)
@@ -572,6 +577,8 @@ export type {
   SemanticTypography,
   ComponentTokens,
   TextStyleTokens,
+  AttachmentTokens,
+  AttachmentRemoveTokens,
   ArtifactToolbarTokens,
   ArtifactTabTokens,
   ArtifactPaneTokens,

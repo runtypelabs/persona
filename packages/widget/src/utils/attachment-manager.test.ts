@@ -37,6 +37,23 @@ function deferredAdapter() {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("AttachmentManager.remountPreviews", () => {
+  it("lets theme CSS control remove contrast and removes the file", async () => {
+    const manager = new AttachmentManager({ allowedTypes: ["text/plain"] });
+    const container = document.createElement("div");
+    container.style.setProperty("--persona-text-inverse", "#111111");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([textFile()]);
+
+    const remove = container.querySelector<HTMLButtonElement>(".persona-attachment-remove")!;
+    expect(remove.style.color).toBe("");
+    expect(container.firstElementChild?.getAttribute("data-kind")).toBe("file");
+    expect(remove.querySelector("svg")?.getAttribute("stroke")).toBe("currentColor");
+    remove.click();
+    expect(manager.count()).toBe(0);
+    expect(container.querySelector(".persona-attachment-preview")).toBeNull();
+    manager.destroy();
+  });
+
   it("repaints pending previews into a new container (composer rebuild)", async () => {
     const manager = new AttachmentManager({ allowedTypes: ["text/plain"] });
     const first = document.createElement("div");
@@ -372,5 +389,107 @@ describe("AttachmentManager.fromConfig", () => {
 
     manager.clearAttachments();
     expect(seen).toEqual([1, 1, 0]);
+  });
+});
+
+describe("configurable composer attachment previews", () => {
+  it("keeps image fit and removal independent of document policies", async () => {
+    const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:preview");
+    const revokeUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const manager = new AttachmentManager({ adapter: { add: async () => part("done") }, preview: {
+      image: { fit: "contain", remove: { placement: "inside", visibility: "always" } },
+      file: { remove: { placement: "inline", visibility: "hover" } },
+    } });
+    const container = document.createElement("div");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([new File(["pixels"], "photo.png", { type: "image/png" }), textFile()]);
+    const image = container.querySelector<HTMLImageElement>("img")!;
+    expect(image.style.objectFit).toBe("contain");
+    expect(image.alt).toBe("photo.png");
+    expect(image.parentElement?.dataset.removePlacement).toBe("inside");
+    expect(image.parentElement?.dataset.removeVisibility).toBe("always");
+    manager.clearAttachments();
+    expect(revokeUrl).toHaveBeenCalledWith("blob:preview");
+    manager.destroy();
+    createUrl.mockRestore();
+    revokeUrl.mockRestore();
+  });
+
+  it("renders filename, size, badge and distinct remove policy without changing outgoing parts", async () => {
+    const manager = AttachmentManager.fromConfig({ preview: { file: { layout: "horizontal", name: "full", metadata: "size", badge: "extension", remove: { placement: "inline", visibility: "hover" } } } });
+    const container = document.createElement("div");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([textFile("report.final.txt")]);
+    expect(container.querySelector(".persona-attachment-file-name")?.textContent).toBe("report.final.txt");
+    expect(container.querySelector(".persona-attachment-file-metadata")?.textContent).toBe("5 B");
+    expect(container.querySelector(".persona-attachment-file-badge")?.textContent).toBe("TXT");
+    expect(container.firstElementChild?.getAttribute("data-remove-visibility")).toBe("hover");
+    expect(container.firstElementChild?.getAttribute("data-remove-placement")).toBe("inline");
+    expect(manager.getContentParts()).toHaveLength(1);
+    manager.updateConfig({ preview: { file: { layout: "vertical", name: "basename", badge: "none", icon: false } } });
+    expect(container.querySelector(".persona-attachment-file-name")?.textContent).toBe("report.final");
+    expect(container.querySelector(".persona-attachment-file-icon")).toBeNull();
+    expect(container.querySelector(".persona-attachment-file-badge")).toBeNull();
+    manager.destroy();
+  });
+
+  it("counts bounded supported text asynchronously and skips binary formats", async () => {
+    const manager = new AttachmentManager({ preview: { file: { metadata: "line-count" } }, allowedTypes: ["text/plain", "application/pdf"], adapter: { add: async () => part("uploaded") } });
+    const container = document.createElement("div");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([new File(["first\r\nsecond\n"], "lines.txt", { type: "text/plain" }), new File(["binary\nbytes"], "document.pdf", { type: "application/pdf" })]);
+    await vi.waitFor(() => expect(container.querySelector(".persona-attachment-file-metadata")?.textContent).toBe("2 lines"));
+    expect(manager.getAttachments()[1].lineCount).toBeUndefined();
+    manager.destroy();
+  });
+
+  it("reads line counts when metadata is enabled on existing files", async () => {
+    const manager = new AttachmentManager({ adapter: { add: async () => part("done") } });
+    await manager.handleFiles([textFile()]);
+    manager.updateConfig({ preview: { file: { metadata: "line-count" } } });
+    await vi.waitFor(() => expect(manager.getAttachments()[0].lineCount).toBe(1));
+    manager.destroy();
+  });
+
+  it("updates managed renderers through upload states and cleans each mount once", async () => {
+    const { adapter, calls } = deferredAdapter();
+    const update = vi.fn();
+    const destroy = vi.fn();
+    const contexts: import("../types").AttachmentPreviewRenderContext[] = [];
+    const manager = new AttachmentManager({ adapter, instanceId: "widget-a", renderAttachmentPreview: context => { contexts.push(context); return { element: document.createElement("section"), update, destroy }; } });
+    const first = document.createElement("div");
+    manager.setPreviewsContainer(first);
+    const pending = manager.handleFiles([textFile()]);
+    calls[0].onProgress(0.4);
+    expect(update.mock.calls[0][0].state.progress).toBe(0.4);
+    expect(contexts[0].instanceId).toBe("widget-a");
+    expect(Object.isFrozen(contexts[0].state)).toBe(true);
+    calls[0].resolve(part("done"));
+    await pending;
+    expect(update.mock.calls.at(-1)?.[0].state.status).toBe("ready");
+    manager.remountPreviews(document.createElement("div"));
+    expect(destroy).toHaveBeenCalledTimes(1);
+    contexts[1].actions.remove();
+    expect(destroy).toHaveBeenCalledTimes(2);
+    manager.clearAttachments();
+    manager.destroy();
+    expect(destroy).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back from null and throwing renderers and isolates failed cleanup", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const manager = new AttachmentManager({ renderAttachmentPreview: () => { throw new Error("broken renderer"); } });
+    const container = document.createElement("div");
+    manager.setPreviewsContainer(container);
+    await manager.handleFiles([textFile()]);
+    expect(container.querySelector(".persona-attachment-preview")).not.toBeNull();
+    manager.updateConfig({ renderAttachmentPreview: () => ({ element: document.createElement("div"), destroy: () => { throw new Error("broken cleanup"); } }) });
+    expect(() => manager.clearAttachments()).not.toThrow();
+    expect(manager.count()).toBe(0);
+    manager.updateConfig({ renderAttachmentPreview: () => null });
+    await manager.handleFiles([textFile()]);
+    expect(container.querySelector(".persona-attachment-preview")).not.toBeNull();
+    manager.destroy();
+    error.mockRestore();
   });
 });
