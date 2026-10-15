@@ -961,6 +961,26 @@ export interface ComposerOverflowMenuTokens {
   foreground?: TokenReference<'color'>;
   /** Panel elevation (raw CSS box-shadow, `none` allowed). @default palette.shadows.md */
   shadow?: string;
+  /** Panel inset and vertical space between rows. */
+  padding?: string;
+  rowGap?: string;
+  /** Row inset and corner radius. */
+  rowPadding?: string;
+  rowBorderRadius?: TokenReference<'radius'>;
+  fontSize?: string;
+  lineHeight?: string;
+  /** Glyph box and space between glyph and label. */
+  iconSize?: string;
+  iconGap?: string;
+  hoverBackground?: TokenReference<'color'>;
+  focusBackground?: TokenReference<'color'>;
+  descriptionColor?: TokenReference<'color'>;
+  descriptionFontSize?: string;
+  dividerColor?: TokenReference<'color'>;
+  dividerSpacing?: string;
+  /** Content width floor and panel height cap, both constrained to the viewport. */
+  minWidth?: string;
+  maxHeight?: string;
 }
 
 /** Independent mode buttons; unset keys retain the existing action-button appearance. */

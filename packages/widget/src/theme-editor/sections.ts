@@ -735,6 +735,7 @@ const independentControlColorSections: SectionDef[] = [...independentControlGrou
   fields: optionalComponentFields(group, group === 'button.stop' ? 'background foreground' : 'background foreground borderColor', true),
 }));
 const replacementShapeSections: SectionDef[] = [
+  { id: 'comp-composer-menu-shape', title: 'More Menu Shape', collapsed: true, fields: optionalComponentFields('composer.overflowMenu', 'borderRadius padding rowGap rowPadding rowBorderRadius fontSize lineHeight iconSize iconGap descriptionFontSize dividerSpacing minWidth maxHeight shadow') },
   { id: 'comp-attachment-shape', title: 'Attachment Preview Shape', collapsed: true, fields: optionalComponentFields('attachment.composer', 'gap image.width image.height image.borderRadius image.chip.width image.chip.minHeight image.chip.borderRadius image.chip.padding image.chip.gap image.chip.fontSize file.width file.minHeight file.borderRadius file.padding file.gap file.iconSize file.fontSize remove.size remove.iconSize remove.borderRadius remove.inset remove.borderWidth image.remove.size image.remove.iconSize image.remove.borderRadius image.remove.inset image.remove.borderWidth file.remove.size file.remove.iconSize file.remove.borderRadius file.remove.inset file.remove.borderWidth') },
   { id: 'comp-tool-chrome', title: 'Tool Card & Row Chrome', collapsed: true, fields: optionalComponentFields('toolBubble', 'borderWidth borderRadius header.padding content.padding loading.duration') },
   { id: 'comp-question-chrome', title: 'Question Sheet Chrome', collapsed: true, fields: optionalComponentFields('askUserQuestion', 'sheet.shadow pill.borderRadius') },
@@ -742,6 +743,7 @@ const replacementShapeSections: SectionDef[] = [
   { id: 'comp-suggestion-chip-type', title: 'Suggestion Chip Type & Padding', collapsed: true, fields: optionalComponentFields('suggestion.chip', 'fontWeight padding') },
 ];
 const replacementColorSections: SectionDef[] = [
+  { id: 'comp-composer-menu-colors', title: 'More Menu Colors', collapsed: true, fields: optionalComponentFields('composer.overflowMenu', 'background foreground borderColor hoverBackground focusBackground descriptionColor dividerColor', true) },
   { id: 'comp-attachment-colors', title: 'Attachment Preview Colors', collapsed: true, fields: optionalComponentFields('attachment.composer', 'image.background image.borderColor image.chip.background image.chip.borderColor image.chip.foreground file.background file.borderColor file.foreground file.mutedForeground file.iconBackground file.iconForeground remove.background remove.foreground remove.hoverBackground remove.hoverForeground remove.borderColor image.remove.background image.remove.foreground image.remove.hoverBackground image.remove.hoverForeground image.remove.borderColor file.remove.background file.remove.foreground file.remove.hoverBackground file.remove.hoverForeground file.remove.borderColor', true) },
   { id: 'comp-voice-states', title: 'Voice State Colors', collapsed: true, description: 'Explicit values activate state colors. Unset preserves historical provider/browser defaults.', fields: optionalComponentFields('voice', 'recording.indicator recording.background recording.border processing.icon processing.background processing.border speaking.icon speaking.background speaking.border', true) },
   { id: 'comp-tool-colors', title: 'Tool Card & Row Colors', collapsed: true, fields: optionalComponentFields('toolBubble', 'background borderColor header.background header.foreground content.background content.foreground codeBlock.background codeBlock.foreground codeBlock.borderColor toggleForeground labelForeground loading.primary loading.secondary', true) },
@@ -1101,6 +1103,18 @@ const streamAnimationSectionDef: SectionDef = {
   ],
 };
 
+const composerMenuSectionDef: SectionDef = {
+  id: 'composer-menu-config', title: 'More Menu', collapsed: true,
+  fields: [
+    { id: 'composer-menu-enabled', label: 'Show More Menu', type: 'toggle', path: 'composer.actionOverflow.enabled', defaultValue: false },
+    { id: 'composer-menu-width', label: 'Menu Width', type: 'select', path: 'composer.actionOverflow.menu.width', defaultValue: 'content', options: [{ value: 'content', label: 'Fit contents' }, { value: 'composer', label: 'Match message box' }, { value: '240px', label: 'Compact (240px)' }, { value: '320px', label: 'Wide (320px)' }] },
+    { id: 'composer-menu-placement', label: 'Open Menu', description: 'Moves to fit the available space.', type: 'select', path: 'composer.actionOverflow.menu.placement', defaultValue: 'above', options: [{ value: 'above', label: 'Above message box' }, { value: 'below', label: 'Below message box' }] },
+    { id: 'composer-menu-descriptions', label: 'Menu Descriptions', type: 'select', path: 'composer.actionOverflow.menu.descriptionLayout', defaultValue: 'stacked', options: [{ value: 'stacked', label: 'Below labels' }, { value: 'inline', label: 'Beside labels' }] },
+    { id: 'composer-menu-icon', label: 'Menu Icon', type: 'text', path: 'composer.actionOverflow.menu.triggerIconName', defaultValue: 'plus' },
+    { id: 'composer-menu-open-icon', label: 'Open Menu Icon', type: 'select', path: 'composer.actionOverflow.menu.openTriggerIconName', defaultValue: 'plus', options: [{ value: 'plus', label: 'Plus' }, { value: 'x', label: 'Close' }] },
+  ],
+};
+
 const attachmentsSectionDef: SectionDef = {
   id: 'attachments-config', title: 'Attachments', collapsed: true,
   fields: [
@@ -1244,7 +1258,7 @@ export const CONFIGURE_SUB_GROUPS: SubGroupDef[] = [
   { label: 'Content', sections: [copySectionDef, suggestionsSectionDef] },
   { label: 'Layout', sections: [generalLayoutSectionDef, headerLayoutSectionDef, messagesLayoutSectionDef, messageActionsSectionDef] },
   { label: 'Widget', sections: [launcherBasicsSectionDef, launcherAdvancedSectionDef, sendButtonSectionDef, closeButtonSectionDef, clearChatSectionDef, statusIndicatorSectionDef] },
-  { label: 'Features', sections: [featuresSectionDef, streamAnimationSectionDef, attachmentsSectionDef, artifactsSectionDef, artifactCustomizationSectionDef] },
+  { label: 'Features', sections: [featuresSectionDef, streamAnimationSectionDef, composerMenuSectionDef, attachmentsSectionDef, artifactsSectionDef, artifactCustomizationSectionDef] },
   STREAM_AND_ARTIFACTS_SUB_GROUP,
   { label: 'Developer', collapsedByDefault: true, sections: [apiIntegrationSectionDef, debugSectionDef, markdownSectionDef] },
 ];

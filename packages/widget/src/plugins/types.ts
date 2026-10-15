@@ -28,6 +28,8 @@ import {
   ResolvedHistoryPresentation,
   ComposerAction,
   ComposerActionContributionContext,
+  ComposerMenuRenderContext,
+  ComposerMenuRenderHandle,
   DictationRenderContext,
   AttachmentPreviewRenderContext,
   AttachmentPreviewRenderHandle,
@@ -260,6 +262,9 @@ export interface AgentWidgetPlugin {
   contributeComposerActions?: (
     context: ComposerActionContributionContext
   ) => ComposerAction[];
+
+  /** First non-null menu renderer wins. Recreated per opening; update handles live state. */
+  renderComposerMenu?: (context: ComposerMenuRenderContext) => HTMLElement | ComposerMenuRenderHandle | null;
 
   /** First non-null preview renderer wins; managed handles receive updates and one cleanup. */
   renderAttachmentPreview?: (context: AttachmentPreviewRenderContext) => HTMLElement | AttachmentPreviewRenderHandle | null;

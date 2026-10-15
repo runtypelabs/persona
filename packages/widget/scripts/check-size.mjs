@@ -2,12 +2,13 @@ import { readFileSync } from "node:fs";
 import { brotliCompressSync, constants } from "node:zlib";
 
 // Binary KB, matching the established 148 / 14.4 / 17.8 KB baselines.
+// Managed composer menus add ~1.70 KiB JS and ~0.23 KiB CSS (Brotli).
 const budgets = [
-  // Configurable composer previews and managed rendering: 164.29 KiB (previous budget 163.5).
-  { file: "index.global.js", bytes: 164.4 * 1024, exclusive: false },
+  // Composer menus and managed rendering: ~165.95 KiB (previous budget 164.4).
+  { file: "index.global.js", bytes: 166 * 1024, exclusive: false },
   { file: "launcher.global.js", bytes: 20 * 1024, exclusive: true },
-  // Composer previews, image chips, and per-kind remove styling: 21.81 KiB (previous budget 21.5).
-  { file: "widget.css", bytes: 21.9 * 1024, exclusive: false },
+  // Menu row tokens and descriptions: ~22.04 KiB (previous budget 21.9).
+  { file: "widget.css", bytes: 22.1 * 1024, exclusive: false },
 ];
 
 for (const { file, bytes, exclusive } of budgets) {

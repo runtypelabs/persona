@@ -4315,6 +4315,10 @@ export type ComposerActionBase = {
    * @default "always"
    */
   visibility?: ComposerActionVisibility;
+  /** Optional secondary text in the overflow menu. */
+  description?: string;
+  /** Adjacent rows with different groups are separated in the default menu. */
+  group?: string;
   disabled?: boolean | ((state: Readonly<ComposerState>) => boolean);
   /** Disable while a response streams, through the composer's own mechanism. */
   disableWhenStreaming?: boolean;
@@ -4450,6 +4454,66 @@ export type ComposerActionOverflowConfig = {
    * @default 900
    */
   order?: number;
+  /** Appearance and placement of the managed overflow popover. */
+  menu?: ComposerOverflowMenuConfig;
+};
+
+/** Appearance of the overflow popover; CSS lengths also accept custom properties. */
+export type ComposerOverflowMenuConfig = {
+  /** Content-sized by default; composer matches the composer form width. */
+  width?: "content" | "composer" | (string & {});
+  /** Preferred side; flips when the other side has more room. @default "above" */
+  placement?: "above" | "below";
+  /** Secondary text below the label or beside it with wrapping. @default "stacked" */
+  descriptionLayout?: "stacked" | "inline";
+  /** @default "plus" */
+  triggerIconName?: string;
+  /** Icon while open. Omit to retain the closed icon; use "x" for plus-to-X. */
+  openTriggerIconName?: string;
+  /** Menu-only overrides keyed by final action id, including core:attachment. */
+  items?: Record<string, { label?: string; description?: string; group?: string }>;
+};
+
+/** Safe action metadata; no callbacks or mutable action descriptors are exposed. */
+export type ComposerMenuItem = Readonly<{
+  id: string;
+  kind: "button" | "custom" | "builtin";
+  label: string;
+  description?: string;
+  group?: string;
+  iconName?: string;
+  disabled: boolean;
+  busy: boolean;
+  pressed?: boolean;
+}>;
+
+export type ComposerMenuRenderContext = {
+  /** Frozen copy of composer.actionOverflow.menu, rather than widget internals. */
+  config: Readonly<ComposerOverflowMenuConfig>;
+  state: Readonly<ComposerState>;
+  items: readonly ComposerMenuItem[];
+  /** Aborted on close, renderer replacement, plugin removal, or widget destroy. */
+  signal: AbortSignal;
+  actions: {
+    /** Activates a currently visible, enabled menu action. False if unavailable. */
+    invoke: (id: string) => boolean;
+    /** Opens the built-in attachment picker only when currently available. */
+    openAttachmentPicker: () => void;
+    close: () => void;
+    /** Coalesced refresh; reruns contributions and calls the current handle update. */
+    requestUpdate: () => void;
+  };
+  /** Builds the standard rows, preserving contributed controls and their behavior. */
+  defaultRenderer: () => ComposerMenuRenderHandle;
+};
+
+/** One instance per opening. Persona owns outer placement, dismissal, and focus restoration. */
+export type ComposerMenuRenderHandle = {
+  element: HTMLElement;
+  update?: (context: ComposerMenuRenderContext) => void;
+  destroy?: () => void;
+  /** Custom content defaults to dialog. Custom renderers own their internal keyboard model. */
+  role?: "dialog" | "menu";
 };
 
 /**

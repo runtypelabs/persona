@@ -499,3 +499,13 @@ describe("attachment preview editor controls", () => {
     expect(shapes).not.toContain("theme.components.attachment.composer.remove.foreground");
   });
 });
+
+describe("composer More menu editor", () => {
+  it("keeps menu choices separate from theme sizes and colors", () => {
+    const paths = CONFIGURE_SECTIONS.find(section => section.id === "composer-menu-config")?.fields.map(field => field.path);
+    expect(paths).toContain("composer.actionOverflow.menu.width");
+    expect(paths).toContain("composer.actionOverflow.menu.placement");
+    expect(COMPONENT_SHAPE_SECTIONS.flatMap(section => section.fields.map(field => field.path))).toContain("theme.components.composer.overflowMenu.rowPadding");
+    expect(COMPONENT_COLOR_SECTIONS.flatMap(section => section.fields.map(field => field.path))).toContain("theme.components.composer.overflowMenu.focusBackground");
+  });
+});

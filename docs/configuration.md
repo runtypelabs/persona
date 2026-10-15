@@ -71,6 +71,123 @@ const config = {
 
 Some visual presentation choices remain configuration: welcome variants, suggestion placement/variants, artifact layout, send icon selection and animation timings. Use the documented owner for each task rather than moving content or behavior into theme.
 
+## Composer More menus
+
+Enable the existing overflow menu and optionally configure its layout. Omitted
+options retain the compact menu above the trigger. Placement is a preference:
+Persona flips and constrains the popover to fit the viewport.
+
+```typescript
+import type { AgentWidgetConfig } from '@runtypelabs/persona';
+
+const config = {
+  composer: {
+    actionOverflow: {
+      enabled: true,
+      includeBuiltIns: ['attachments'],
+      menu: {
+        width: 'composer', // 'content', 'composer', or a CSS width
+        placement: 'below', // 'above' by default
+        descriptionLayout: 'inline', // 'stacked' by default
+        triggerIconName: 'plus',
+        openTriggerIconName: 'x',
+        items: {
+          'core:attachment': {
+            label: 'Add photos & files',
+            description: 'Upload from computer',
+          },
+        },
+      },
+    },
+    actions: [{
+      id: 'library', label: 'Open library', description: 'Browse saved files',
+      group: 'saved', iconName: 'files', placement: 'start',
+      presentation: 'overflow', onSelect: () => console.info('Open your library'),
+    }],
+  },
+  attachments: { enabled: true },
+  theme: {
+    components: {
+      composer: {
+        overflowMenu: {
+          background: '#303030', foreground: '#eee', borderRadius: '16px',
+          padding: '8px', rowPadding: '10px 12px', rowBorderRadius: '12px',
+          fontSize: '14px', iconSize: '20px', hoverBackground: '#454545',
+          descriptionColor: '#aaa',
+        },
+      },
+    },
+  },
+} satisfies AgentWidgetConfig;
+```
+
+`description` and `group` are optional action fields. Consecutive group changes
+insert dividers; they do not reorder actions. `menu.items` overrides labels,
+descriptions and groups by final action ID, including built-ins such as
+`core:attachment` and plugin-namespaced IDs. Changing a label does not change
+which action is executed. Actions still come from the existing composer registry.
+
+### Managed menu content
+
+For a searchable picker, nested panels, or a tool gallery, a plugin can supply
+`renderComposerMenu`. The first non-null renderer wins; returning `null` uses the
+next plugin or built-in renderer. Return `context.defaultRenderer()` directly to
+use the standard rows and their keyboard navigation.
+
+```typescript
+import type { AgentWidgetPlugin } from '@runtypelabs/persona';
+
+const customMenu: AgentWidgetPlugin = {
+  id: 'custom-menu',
+  renderComposerMenu(context) {
+    const element = document.createElement('div');
+    const upload = document.createElement('button');
+    upload.type = 'button';
+    upload.textContent = 'Add photos & files';
+    element.append(upload);
+    let current = context;
+    upload.onclick = () => current.actions.openAttachmentPicker();
+    const update = (next: typeof context) => {
+      current = next;
+      upload.disabled = !next.items.some(item =>
+        item.id === 'core:attachment' && !item.disabled && !item.busy);
+    };
+    update(context);
+    return {
+      element, role: 'dialog', update,
+      destroy() { upload.onclick = null; },
+    };
+  },
+};
+```
+
+The hook receives frozen snapshots of `config` (the **menu options**, not the
+whole widget), composer `state`, and visible menu `items`. `actions.invoke(id)`
+checks current visibility, disabled and busy state before activating an existing
+action. `openAttachmentPicker()` follows the same checks for the built-in upload
+action. `actions.close()` restores focus to the trigger; `requestUpdate()`
+refreshes contributions and calls the current renderer's `update` method.
+
+Each opening gets a new renderer and `AbortSignal`. Pass `context.signal` to
+application fetches; it aborts before cleanup on close, replacement, or widget
+destruction. Release subscriptions and framework mounts in `destroy()`. Late
+callbacks should check the signal before changing UI. No remote data loading is
+performed by Persona itself.
+
+Persona owns the trigger, outer positioning, theme forwarding, initial focus,
+outside dismissal, and focus restoration. Arbitrary content defaults to a
+non-modal `dialog`: normal Tab navigation works and leaving the popover dismisses
+it. Your renderer owns labels and navigation inside custom content, including
+submenus. It can consume Escape to close a nested panel before Escape reaches
+the outer popover. Declaring `role: 'menu'` on custom content does **not** add
+arrow-key navigation; the renderer must implement that menu interaction model.
+
+The [showcase helper](../apps/web/src/assistant-menu-presets.ts) demonstrates
+separate floating submenus with hover, click and keyboard entry, delayed loading,
+checkbox selections, disabled options, and Escape/Left return navigation.
+These are examples, not built-in submenu APIs or live
+product integrations. Existing static menus need no hook.
+
 ## Composer attachment previews
 
 Attachment upload and validation remain under `attachments`. Preview options

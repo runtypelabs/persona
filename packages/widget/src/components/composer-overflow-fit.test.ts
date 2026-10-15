@@ -36,7 +36,7 @@ function mount(actions: ComposerAction[], options: ComposerActionOverflowConfig 
   renderer.resolve();
   return { renderer, bindings, elements, actions, resize: (next: number) => { width = next; renderer.sync(); } };
 }
-const folded = (harness: ReturnType<typeof mount>) => Array.from(harness.renderer.getOverflowMenu()?.panel.children ?? [])
+const folded = (harness: ReturnType<typeof mount>) => Array.from(harness.renderer.getOverflowMenu()?.panel.querySelectorAll("[data-persona-composer-action]") ?? [])
   .map((node) => node.getAttribute("data-persona-composer-action"));
 
 describe("measured composer action overflow", () => {
@@ -145,7 +145,7 @@ describe("measured composer action overflow", () => {
     const render = vi.fn(() => ({ element: input }));
     const harness = mount([{ id: "custom", label: "Custom", kind: "custom", placement: "start", presentation: "auto", render }]);
     harness.resize(250);
-    expect(folded(harness)).toEqual([null]);
+    expect(folded(harness)).toEqual(["custom"]);
     expect(harness.renderer.getOverflowMenu()!.panel.contains(input)).toBe(true);
     harness.resize(420);
     expect(input.parentElement).toBe(harness.bindings.actionsStart);

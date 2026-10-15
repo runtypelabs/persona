@@ -1,3 +1,4 @@
+import { createAssistantMenuPreset } from "./assistant-menu-presets";
 import { createAssistantPreset } from "./assistant-presets";
 import { createSlashCommandsSource } from "@runtypelabs/persona";
 import type {
@@ -688,17 +689,20 @@ export function applyCurrentProductComposer(
   config: AgentWidgetConfig
 ): AgentWidgetConfig {
   const patch = patches[product];
+  const menu = createAssistantMenuPreset(product, message => console.info(message));
+  const theme = mergeTheme(config.theme, patch.theme);
   return {
     ...config,
     colorScheme: patch.colorScheme,
     copy: { ...config.copy, ...patch.copy },
     attachments: patch.attachments,
-    composer: patch.composer,
+    composer: { ...patch.composer, ...(menu.modes.length ? { modes: [...menu.modes, ...(patch.composer?.modes ?? [])], modeGroups: [...(patch.composer?.modeGroups ?? []), ...menu.modeGroups] } : {}), actionOverflow: { ...patch.composer?.actionOverflow, menu: menu.menu }, actions: [...(patch.composer?.actions ?? []).filter(action => action.presentation !== "overflow"), ...menu.actions] },
+    plugins: [...(config.plugins ?? []), ...menu.plugins],
     // Only the two products with a live slash menu carry one; the rest keep
     // whatever the page passed in (nothing today).
     contextMentions: patch.contextMentions ?? config.contextMentions,
     voiceRecognition: patch.voiceRecognition,
     sendButton: patch.sendButton,
-    theme: mergeTheme(config.theme, patch.theme),
+    theme: { ...theme, components: { ...theme.components, composer: { ...theme.components?.composer, overflowMenu: menu.theme } } },
   };
 }

@@ -47,12 +47,14 @@ function mount() {
   for (const button of element("assistant-tabs").querySelectorAll("button")) button.setAttribute("aria-pressed", String(button.dataset.preset === selected));
   // Functions are retained as source instead of silently disappearing in JSON.
   const functions: string[] = [];
-  code = JSON.stringify(config, (_key, value: unknown) => {
+  const exportConfig = { ...config, plugins: [], composer: { ...config.composer, actions: config.composer?.actions?.filter(action => action.presentation !== "overflow") } };
+  code = JSON.stringify(exportConfig, (_key, value: unknown) => {
     if (typeof value !== "function") return value;
     functions.push(value.toString());
     return `__CALLBACK_${functions.length - 1}__`;
   }, 2).replace(/"__CALLBACK_(\d+)__"/g, (_match, index: string) => functions[Number(index)]);
-  code = `import { registerIcons } from "@runtypelabs/persona";\nregisterIcons(${JSON.stringify(assistantIcons, null, 2)});\n\n// Demo callback; replace with your host integration.\nconst notice = (message) => console.info(message);\n\nconst config = ${code};`;
+  code = `import { registerIcons } from "@runtypelabs/persona";\nregisterIcons(${JSON.stringify(assistantIcons, null, 2)});\n\n// Demo callback; replace with your host integration.\nconst notice = (message) => console.info(message);\n\nconst config = ${code};\n\n// Copy the showcase helper alongside this example for the local submenu demo.\n// Replace its callbacks with your own integrations.\nconst menuDemo = createAssistantMenuPreset(${JSON.stringify(selected)}, notice);\nconfig.plugins = menuDemo.plugins;\nconfig.composer.actions.push(...menuDemo.actions);`;
+  code = `import { createAssistantMenuPreset } from "./assistant-menu-presets";\n${code}`;
   element("lab-config").textContent = code;
   const voiceProvider = createDemoVoiceProvider();
   let muted = false;

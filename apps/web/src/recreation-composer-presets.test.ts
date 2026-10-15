@@ -41,8 +41,8 @@ describe("current product composer presets", () => {
     expect(composer?.modelPicker?.background).toBe("#303030");
     expect(composer?.modelPicker?.hoverBackground).toBe("#3b3b3b");
     expect(composer?.modelPicker?.borderRadius).toBe("9999px");
-    expect(composer?.overflowMenu?.background).toBe("#353535");
-    expect(composer?.overflowMenu?.borderColor).toBe("rgba(255, 255, 255, 0.08)");
+    expect(composer?.overflowMenu?.background).toBe("#303030");
+    expect(composer?.overflowMenu?.borderColor).toBe("#454545");
   });
 
   it("authors the current Claude and Perplexity resting modes", () => {

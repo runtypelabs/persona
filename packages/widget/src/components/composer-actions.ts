@@ -36,6 +36,9 @@ import type {
   ComposerButtonAction,
   ComposerCustomAction,
   ComposerState,
+  ComposerMenuItem,
+  ComposerMenuRenderContext,
+  ComposerMenuRenderHandle,
 } from "../types";
 import { createElement, createNode, cx } from "../utils/dom";
 import { renderLucideIcon } from "../utils/icons";
@@ -428,6 +431,13 @@ export function visibleTextOf(element: HTMLElement): string {
 const isIconOnly = (element: HTMLElement): boolean =>
   visibleTextOf(element).length === 0;
 
+/** Clone public data so renderer mutations cannot affect config or composer state. */
+const freezeMenuView = <T>(value: T): T => {
+  if (!value || typeof value !== "object") return value;
+  if (Array.isArray(value)) return Object.freeze(value.map(freezeMenuView)) as T;
+  return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, child]) => [key, freezeMenuView(child)]))) as T;
+};
+
 export function createComposerActionRenderer(
   options: ComposerActionRendererOptions
 ): ComposerActionRenderer {
@@ -435,6 +445,9 @@ export function createComposerActionRenderer(
   let order: ResolvedComposerAction[] = [];
   let destroyed = false;
   let activatedMenuActionId: string | null = null;
+  let activePlugins: readonly AgentWidgetPlugin[] = [];
+  let menuEntries: Entry[] = [];
+  const defaultMenuContent = createElement("div", "persona-composer-overflow-menu__content");
 
   /** Explicit override, or undefined when the control-size token owns the box. */
   const buttonSize = (): string | undefined => options.getButtonSize?.();
@@ -460,7 +473,7 @@ export function createComposerActionRenderer(
     ] as const) {
       button.style[property] = "";
     }
-    button.style.lineHeight = "1";
+    button.style.lineHeight = "";
     if (action.showTooltip !== false && action.tooltipText) button.setAttribute("title", action.tooltipText);
     else button.removeAttribute("title");
 
@@ -474,8 +487,16 @@ export function createComposerActionRenderer(
       if (icon) iconHolder.appendChild(icon);
     }
     const text = createElement("span", "persona-composer-overflow-menu__label");
-    text.textContent = action.shortLabel ?? action.label;
-    button.append(iconHolder, text);
+    const override = options.getOverflow?.()?.menu?.items?.[entry.resolved.id];
+    text.textContent = override?.label ?? action.shortLabel ?? action.label;
+    const content = createElement("span", "persona-composer-overflow-menu__text");
+    content.appendChild(text);
+    const description = override?.description ?? action.description;
+    button.setAttribute("aria-label", override?.label ?? action.label);
+    if (description) button.setAttribute("aria-description", description);
+    else button.removeAttribute("aria-description");
+    if (description) content.appendChild(createNode("span", { className: "persona-composer-overflow-menu__description", text: description }));
+    button.append(iconHolder, content);
   };
 
   const applyButtonAppearance = (
@@ -497,6 +518,7 @@ export function createComposerActionRenderer(
     }
     button.removeAttribute("role");
     button.removeAttribute("tabindex");
+    button.removeAttribute("aria-description");
     button.removeAttribute("title");
 
     const size = buttonSize();
@@ -559,6 +581,36 @@ export function createComposerActionRenderer(
     });
   };
 
+  const activateEntry = (entry: Entry, event: Event): boolean => {
+    if (destroyed || entries.get(entry.resolved.id) !== entry || entry.busy) return false;
+    const action = entry.resolved.action;
+    const state = options.getState();
+    if (!entry.visible || (action && (!evaluate(action.visible, state, true) ||
+      !matchesComposerActionVisibility(action.visibility, state) || evaluate(action.disabled, state, false) ||
+      (action.disableWhenStreaming === true && state.phase === "streaming")))) return false;
+    const control = controlOf(entry.element);
+    if ((control as HTMLButtonElement).disabled || control.getAttribute("aria-disabled") === "true") return false;
+    if (entry.mode === "menu" || overflowMenu?.isOpen()) {
+      activatedMenuActionId = entry.resolved.id;
+      overflowMenu?.close(true);
+    }
+    if (!action || isCustom(action)) { control.click(); return true; }
+    let result: void | Promise<void>;
+    try { result = action.onSelect(options.actionContext, event); }
+    catch (error) { options.reportError(error, { actionId: entry.resolved.id }); return true; }
+    if (result && typeof result.then === "function") {
+      entry.busy = true;
+      entry.button?.setAttribute("aria-busy", "true");
+      void result.catch((error: unknown) => options.reportError(error, { actionId: entry.resolved.id }))
+        .finally(() => {
+          entry.busy = false;
+          entry.button?.removeAttribute("aria-busy");
+          if (!destroyed && entries.get(entry.resolved.id) === entry) sync();
+        });
+    }
+    return true;
+  };
+
   /**
    * A button action renders as a bar icon button or as a menu row; the two are
    * different elements, so a presentation flip rebuilds the entry.
@@ -593,34 +645,8 @@ export function createComposerActionRenderer(
 
     const onClick = (event: Event): void => {
       event.preventDefault();
-      // The composer form focuses the input on any click that is not a known
-      // control; an action button is a control.
       event.stopPropagation();
-      if (entry.busy || button.disabled) return;
-      const current = entry.resolved.action as ComposerButtonAction;
-      // Menu semantics: activating a row closes the menu and returns focus.
-      if (entry.mode === "menu") {
-        activatedMenuActionId = entry.resolved.id;
-        overflowMenu?.close(true);
-      }
-      let result: void | Promise<void>;
-      try {
-        result = current.onSelect(options.actionContext, event);
-      } catch (error) {
-        options.reportError(error, { actionId: entry.resolved.id });
-        return;
-      }
-      if (!result || typeof (result as Promise<void>).then !== "function") return;
-      entry.busy = true;
-      button.setAttribute("aria-busy", "true");
-      void (result as Promise<void>)
-        .catch((error: unknown) => {
-          options.reportError(error, { actionId: entry.resolved.id });
-        })
-        .finally(() => {
-          entry.busy = false;
-          button.removeAttribute("aria-busy");
-        });
+      activateEntry(entry, event);
     };
     button.addEventListener("click", onClick);
     entry.detach = () => button.removeEventListener("click", onClick);
@@ -796,11 +822,160 @@ export function createComposerActionRenderer(
     return value?.enabled === true ? value : undefined;
   };
 
+  let menuController: AbortController | null = null;
+  let menuHandle: ComposerMenuRenderHandle | null = null;
+  let menuPlugin: AgentWidgetPlugin | null = null;
+  let menuHook: AgentWidgetPlugin["renderComposerMenu"];
+  let menuUsesDefault = true;
+  let menuUpdateQueued = false;
+  let updatingMenu = false;
+
+  const reportMenuError = (error: unknown): void => options.reportError(error, { actionId: COMPOSER_OVERFLOW_ACTION_ID });
+  const destroyMenuHandle = (handle: ComposerMenuRenderHandle | null): void => {
+    try { handle?.destroy?.(); } catch (error) { reportMenuError(error); }
+  };
+  const releaseMenu = (): void => {
+    const controller = menuController;
+    const handle = menuHandle;
+    menuController = null;
+    menuHandle = null;
+    menuPlugin = null;
+    menuHook = undefined;
+    menuUpdateQueued = false;
+    controller?.abort();
+    destroyMenuHandle(handle);
+    // Restore the reusable default rows without destroying their live controls.
+    overflowMenu?.panel.replaceChildren(defaultMenuContent);
+    overflowMenu?.setContentMode("menu", true);
+    menuUsesDefault = true;
+  };
+
+  const menuItem = (entry: Entry): ComposerMenuItem => {
+    const action = entry.resolved.action;
+    const override = overflowConfig()?.menu?.items?.[entry.resolved.id];
+    const control = controlOf(entry.element);
+    const state = options.getState();
+    return Object.freeze({
+      id: entry.resolved.id,
+      kind: !action ? "builtin" : isCustom(action) ? "custom" : "button",
+      label: override?.label ?? (action ? (!isCustom(action) ? action.shortLabel : undefined) ?? action.label : accessibleNameOf(entry.element)),
+      description: override?.description ?? action?.description,
+      group: override?.group ?? action?.group,
+      iconName: action && !isCustom(action) ? action.iconName : undefined,
+      disabled: Boolean((control as HTMLButtonElement).disabled || control.getAttribute("aria-disabled") === "true" ||
+        (action && (evaluate(action.disabled, state, false) || (action.disableWhenStreaming === true && state.phase === "streaming")))),
+      busy: entry.busy,
+      pressed: action && !isCustom(action) ? action.pressed : undefined,
+    });
+  };
+
+  const createMenuContext = (controller: AbortController): ComposerMenuRenderContext => {
+    const live = (): boolean => !destroyed && menuController === controller && !controller.signal.aborted;
+    const invoke = (id: string): boolean => {
+      if (!live() || !overflowMenu?.isOpen()) return false;
+      const entry = entries.get(id);
+      if (!entry || entry.mode !== "menu" || !menuEntries.includes(entry)) return false;
+      return activateEntry(entry, new Event("click", { bubbles: true, cancelable: true }));
+    };
+    return Object.freeze({
+      config: freezeMenuView(overflowConfig()?.menu ?? {}),
+      state: freezeMenuView(options.getState()),
+      items: Object.freeze(menuEntries.map(menuItem)),
+      signal: controller.signal,
+      actions: Object.freeze({
+        invoke,
+        openAttachmentPicker: () => {
+          if (!live() || !overflowMenu?.isOpen()) return;
+          const attachment = entries.get("core:attachment");
+          if (attachment) activateEntry(attachment, new Event("click", { bubbles: true, cancelable: true }));
+        },
+        close: () => { if (live()) overflowMenu?.close(true); },
+        requestUpdate: () => {
+          if (!live() || menuUpdateQueued) return;
+          menuUpdateQueued = true;
+          void Promise.resolve().then(() => {
+            if (!live()) return;
+            menuUpdateQueued = false;
+            resolve();
+          });
+        },
+      }),
+      defaultRenderer: () => ({ element: defaultMenuContent, role: "menu" as const }),
+    });
+  };
+
+  const beginMenu = (): boolean => {
+    const controller = new AbortController();
+    menuController = controller;
+    const context = createMenuContext(controller);
+    for (const plugin of activePlugins) {
+      if (controller.signal.aborted || menuController !== controller || destroyed) return false;
+      if (!plugin.renderComposerMenu) continue;
+      let result: HTMLElement | ComposerMenuRenderHandle | null;
+      try { result = plugin.renderComposerMenu(context); }
+      catch (error) { reportMenuError(error); continue; }
+      if (!result) continue;
+      const handle = result instanceof HTMLElement ? { element: result } : result;
+      if (controller.signal.aborted || menuController !== controller || destroyed) {
+        destroyMenuHandle(handle);
+        return false;
+      }
+      if (!(handle.element instanceof HTMLElement)) { destroyMenuHandle(handle); continue; }
+      menuHandle = handle;
+      menuPlugin = plugin;
+      menuHook = plugin.renderComposerMenu;
+      menuUsesDefault = handle.element === defaultMenuContent;
+      overflowMenu?.panel.replaceChildren(handle.element);
+      overflowMenu?.setContentMode(handle.role ?? (menuUsesDefault ? "menu" : "dialog"), menuUsesDefault);
+      return true;
+    }
+    if (controller.signal.aborted || destroyed) return false;
+    menuUsesDefault = true;
+    overflowMenu?.panel.replaceChildren(defaultMenuContent);
+    overflowMenu?.setContentMode("menu", true);
+    return true;
+  };
+
+  const updateMenu = (): void => {
+    if (!menuController || menuController.signal.aborted || !overflowMenu?.isOpen()) return;
+    if (menuPlugin && !activePlugins.some((plugin) => plugin.id === menuPlugin?.id && plugin.renderComposerMenu === menuHook)) {
+      overflowMenu.close();
+      return;
+    }
+    if (updatingMenu) return;
+    const controller = menuController;
+    const handle = menuHandle;
+    updatingMenu = true;
+    try { handle?.update?.(createMenuContext(controller)); }
+    catch (error) {
+      reportMenuError(error);
+      // The failed custom handle is retired for this opening; core rows remain usable.
+      if (menuController === controller) {
+        menuController = null;
+        menuHandle = null;
+        controller.abort();
+        destroyMenuHandle(handle);
+        if (destroyed || !overflowMenu?.isOpen() || menuController) return;
+        menuController = new AbortController();
+        menuPlugin = null;
+        menuHook = undefined;
+        menuUsesDefault = true;
+        overflowMenu.panel.replaceChildren(defaultMenuContent);
+        overflowMenu.setContentMode("menu", true);
+      }
+    } finally { updatingMenu = false; }
+    overflowMenu?.refresh();
+  };
+
   const ensureOverflowMenu = (): ComposerOverflowMenu => {
     if (!overflowMenu) {
       overflowMenu = createComposerOverflowMenu({
         label: options.getOverflowLabel?.() ?? "More actions",
         getButtonSize: buttonSize,
+        getConfig: () => overflowConfig()?.menu,
+        getComposer: () => options.getBindings()?.form,
+        beforeOpen: beginMenu,
+        onClose: releaseMenu,
       });
     } else {
       overflowMenu.setLabel(options.getOverflowLabel?.() ?? "More actions");
@@ -896,13 +1071,15 @@ export function createComposerActionRenderer(
   const syncMenuSlotLabel = (entry: Entry): void => {
     const slot = entry.menuSlot;
     if (!slot) return;
-    if (!isIconOnly(entry.element)) {
+    const override = overflowConfig()?.menu?.items?.[entry.resolved.id];
+    const description = override?.description ?? entry.resolved.action?.description;
+    if (!override?.label && !description && !isIconOnly(entry.element)) {
       // The control grew its own text; ours would read twice.
       entry.menuLabel?.remove();
       entry.menuLabel = undefined;
       return;
     }
-    const name = accessibleNameOf(entry.element);
+    const name = override?.label ?? accessibleNameOf(entry.element);
     if (!name) {
       entry.menuLabel?.remove();
       entry.menuLabel = undefined;
@@ -914,7 +1091,8 @@ export function createComposerActionRenderer(
         "persona-composer-overflow-menu__label"
       );
     }
-    if (entry.menuLabel.textContent !== name) entry.menuLabel.textContent = name;
+    entry.menuLabel.replaceChildren(createNode("span", { text: name }));
+    if (description) entry.menuLabel.appendChild(createNode("span", { className: "persona-composer-overflow-menu__description", text: description }));
     if (entry.menuLabel.parentElement !== slot) slot.appendChild(entry.menuLabel);
   };
 
@@ -996,7 +1174,14 @@ export function createComposerActionRenderer(
 
   /** Place the menu rows in resolved order inside the panel. */
   const placeMenu = (panel: HTMLElement, rows: Entry[]): void => {
-    const nodes = rows.map((entry) => entry.menuSlot ?? entry.element);
+    const oldDividers = Array.from(panel.querySelectorAll<HTMLElement>(".persona-composer-overflow-menu__divider"));
+    let dividerIndex = 0;
+    const nodes: HTMLElement[] = [];
+    rows.forEach((entry, index) => {
+      const group = menuItem(entry).group;
+      if (index && group !== menuItem(rows[index - 1]).group) nodes.push(oldDividers[dividerIndex++] ?? createNode("div", { className: "persona-composer-overflow-menu__divider", attrs: { role: "separator" } }));
+      nodes.push(entry.menuSlot ?? entry.element);
+    });
     nodes.forEach((node, index) => {
       const current = panel.children[index];
       if (current === node) return;
@@ -1147,11 +1332,18 @@ export function createComposerActionRenderer(
       }
     }
 
+    menuEntries = menuRows;
     if (menuRows.length > 0) {
       const menu = ensureOverflowMenu();
-      placeMenu(menu.panel, menuRows);
+      if (!menuController) menu.panel.replaceChildren(defaultMenuContent);
+      placeMenu(defaultMenuContent, menuRows);
+      for (const entry of menuRows) {
+        const action = entry.resolved.action;
+        if (action && !isCustom(action)) applyMenuItemAppearance(entry, action);
+      }
       menu.setItems(menuRows.map((entry) => entry.menuSlot ?? entry.element));
-      menu.applyButtonSize();
+      menu.refresh();
+      updateMenu();
       // The trigger is a start-cluster control ordered like any other; the
       // 900 anchor is only its default, so `order: 0` leads the bar.
       const triggerOrder = Number.isFinite(overflow?.order)
@@ -1190,7 +1382,7 @@ export function createComposerActionRenderer(
       if (focused.mode === "bar") {
         overflowMenu?.close();
         resolveMenuFocusTarget(focused.element).focus();
-      } else if (overflowMenu?.isOpen()) resolveMenuFocusTarget(focused.menuSlot ?? focused.element).focus();
+      } else if (overflowMenu?.isOpen() && menuUsesDefault) resolveMenuFocusTarget(focused.menuSlot ?? focused.element).focus();
       else overflowMenu?.triggerButton.focus();
     } else if (triggerFocused && !menuRows.length) {
       const restored = activatedMenuActionId ? entries.get(activatedMenuActionId) : undefined;
@@ -1202,7 +1394,9 @@ export function createComposerActionRenderer(
 
   const resolve = (): void => {
     if (destroyed) return;
-    const next = resolveComposerActions(options.collect());
+    const input = options.collect();
+    activePlugins = input.plugins;
+    const next = resolveComposerActions(input);
     const nextIds = new Set(next.map((item) => item.id));
 
     for (const [id, entry] of entries) {
@@ -1275,6 +1469,8 @@ export function createComposerActionRenderer(
       resizeObserver?.disconnect();
       resizeObserver = null;
       observedFooter = null;
+      overflowMenu?.close();
+      releaseMenu();
       for (const entry of entries.values()) teardown(entry);
       entries.clear();
       overflowMenu?.destroy();

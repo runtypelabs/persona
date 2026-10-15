@@ -262,6 +262,62 @@ describe("createPopover", () => {
   });
 });
 
+describe("viewport-constrained popovers", () => {
+  const rect = (left: number, top: number, width: number, height: number): DOMRect =>
+    ({ left, top, right: left + width, bottom: top + height, width, height }) as DOMRect;
+
+  it("flips the preferred side and clamps horizontally without changing legacy placement", () => {
+    const anchor = document.createElement("button");
+    const content = document.createElement("div");
+    document.body.appendChild(anchor);
+    vi.spyOn(anchor, "getBoundingClientRect").mockReturnValue(rect(window.innerWidth - 40, 20, 32, 32));
+    vi.spyOn(content, "getBoundingClientRect").mockReturnValue(rect(0, 0, 240, 200));
+    const legacy = createPopover({ anchor, content, placement: "top-start" });
+    legacy.open();
+    expect(content.style.top).toBe("-186px");
+    legacy.destroy();
+    let placement: "top-start" | "bottom-start" = "top-start";
+    const fitted = createPopover({ anchor, content, getPlacement: () => placement, viewportPadding: 8 });
+    fitted.open();
+    expect(content.style.top).toBe("58px");
+    expect(content.style.left).toBe(`${window.innerWidth - 248}px`);
+    vi.mocked(anchor.getBoundingClientRect).mockReturnValue(rect(20, window.innerHeight - 60, 32, 32));
+    placement = "bottom-start";
+    fitted.reposition();
+    expect(content.style.top).toBe(`${window.innerHeight - 266}px`);
+    fitted.destroy();
+  });
+
+  it("repositions when asynchronous custom content resizes and disconnects on close", () => {
+    let notify!: (entries: ResizeObserverEntry[], observer: ResizeObserver) => void;
+    const disconnect = vi.fn();
+    const observe = vi.fn();
+    const OriginalObserver = window.ResizeObserver;
+    window.ResizeObserver = class {
+      constructor(callback: (entries: ResizeObserverEntry[], observer: ResizeObserver) => void) { notify = callback; }
+      observe = observe;
+      unobserve = vi.fn();
+      disconnect = disconnect;
+    };
+    try {
+      const anchor = document.createElement("button");
+      const content = document.createElement("div");
+      document.body.appendChild(anchor);
+      vi.spyOn(anchor, "getBoundingClientRect").mockReturnValue(rect(10, 400, 32, 32));
+      const measure = vi.spyOn(content, "getBoundingClientRect").mockReturnValue(rect(0, 0, 200, 100));
+      const popover = createPopover({ anchor, content, placement: "top-start", viewportPadding: 8 });
+      popover.open();
+      expect(content.style.top).toBe("294px");
+      expect(observe).toHaveBeenCalledWith(content);
+      measure.mockReturnValue(rect(0, 0, 400, 240));
+      notify([], {} as ResizeObserver);
+      expect(content.style.top).toBe("154px");
+      popover.close();
+      expect(disconnect).toHaveBeenCalledOnce();
+    } finally { window.ResizeObserver = OriginalObserver; }
+  });
+});
+
 describe("isEditableEventTarget", () => {
   it("is true for input / textarea / contenteditable targets", () => {
     const input = document.createElement("input");

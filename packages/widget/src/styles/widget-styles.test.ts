@@ -630,8 +630,8 @@ describe("overflow menu row shading", () => {
     const at = widgetCss.indexOf(".persona-composer-overflow-menu__item {");
     const row = widgetCss.slice(at, widgetCss.indexOf("}", at));
     expect(row).toContain("font-family: inherit");
-    expect(row).toContain("font-size: 13px");
-    expect(row).toContain("padding: 6px 8px");
+    expect(row).toContain("font-size: var(--persona-components-composer-overflowMenu-fontSize, 13px)");
+    expect(row).toContain("padding: var(--persona-components-composer-overflowMenu-rowPadding, 6px 8px)");
   });
 
   it("uses a V5 menu radius while retaining explicit per-instance overrides", () => {

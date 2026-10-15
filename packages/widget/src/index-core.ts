@@ -111,6 +111,10 @@ export type {
   ComposerActionRenderContext,
   ComposerActionContributionContext,
   ComposerActionOverflowConfig,
+  ComposerOverflowMenuConfig,
+  ComposerMenuItem,
+  ComposerMenuRenderContext,
+  ComposerMenuRenderHandle,
   // Model picker (composer.models, composer.modelPicker)
   ComposerModel,
   ComposerModelPickerConfig,
@@ -576,6 +580,7 @@ export type {
   SemanticSpacing,
   SemanticTypography,
   ComponentTokens,
+  ComposerOverflowMenuTokens,
   TextStyleTokens,
   AttachmentTokens,
   AttachmentRemoveTokens,

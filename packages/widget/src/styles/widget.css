@@ -1428,11 +1428,13 @@
 .persona-composer-overflow-menu {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 180px;
-  max-height: 320px;
+  gap: var(--persona-components-composer-overflowMenu-rowGap, 2px);
+  min-width: min(var(--persona-components-composer-overflowMenu-minWidth, 180px), calc(100vw - 16px));
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  max-height: min(var(--persona-components-composer-overflowMenu-maxHeight, 320px), calc(100vh - 16px));
   overflow-y: auto;
-  padding: 4px;
+  padding: var(--persona-components-composer-overflowMenu-padding, 4px);
   border-radius: var(
     --persona-components-composer-overflowMenu-borderRadius,
     var(--persona-radius-lg, 0.5rem)
@@ -1455,27 +1457,31 @@
     var(--persona-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12))
   );
   font-family: var(--persona-font-family, inherit);
+  line-height: var(--persona-components-composer-overflowMenu-lineHeight, 1.35);
 }
 
 .persona-composer-overflow-menu__item {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--persona-components-composer-overflowMenu-iconGap, 8px);
   width: 100%;
-  padding: 6px 8px;
+  padding: var(--persona-components-composer-overflowMenu-rowPadding, 6px 8px);
   border: none;
-  border-radius: var(--persona-radius-md, 0.375rem);
+  border-radius: var(--persona-components-composer-overflowMenu-rowBorderRadius, var(--persona-radius-md, 0.375rem));
   background: transparent;
   color: inherit;
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--persona-components-composer-overflowMenu-fontSize, 13px);
   text-align: start;
   cursor: pointer;
 }
 
-.persona-composer-overflow-menu__item:hover:not(:disabled),
+.persona-composer-overflow-menu__item:hover:not(:disabled) {
+  background: var(--persona-components-composer-overflowMenu-hoverBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+}
+
 .persona-composer-overflow-menu__item:focus-visible {
-  background: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
+  background: var(--persona-components-composer-overflowMenu-focusBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
 }
 
 .persona-composer-overflow-menu__item[aria-pressed="true"] {
@@ -1497,7 +1503,41 @@
   display: inline-flex;
   align-items: center;
   flex: 0 0 auto;
-  width: 16px;
+  width: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  height: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+}
+
+.persona-composer-overflow-menu__content { display: contents; }
+
+.persona-composer-overflow-menu__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.persona-composer-overflow-menu__icon > svg { width: 100%; height: 100%; }
+
+.persona-composer-overflow-menu__description {
+  display: block;
+  color: var(--persona-components-composer-overflowMenu-descriptionColor, var(--persona-text-muted, #6b7280));
+  font-size: var(--persona-components-composer-overflowMenu-descriptionFontSize, 12px);
+  line-height: var(--persona-components-composer-overflowMenu-lineHeight, 1.35);
+  white-space: normal;
+}
+
+.persona-composer-overflow-menu[data-persona-menu-description-layout="inline"] .persona-composer-overflow-menu__text,
+.persona-composer-overflow-menu[data-persona-menu-description-layout="inline"] .persona-composer-overflow-menu__slot > .persona-composer-overflow-menu__label {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 var(--persona-components-composer-overflowMenu-iconGap, 8px);
+}
+
+.persona-composer-overflow-menu__divider {
+  flex-shrink: 0;
+  border-top: 1px solid var(--persona-components-composer-overflowMenu-dividerColor, var(--persona-border, #e5e7eb));
+  margin: var(--persona-components-composer-overflowMenu-dividerSpacing, 4px 0);
 }
 
 .persona-composer-overflow-menu__label {
@@ -1516,11 +1556,11 @@
 .persona-composer-overflow-menu__slot {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--persona-components-composer-overflowMenu-iconGap, 8px);
   width: 100%;
-  padding: 6px 8px;
-  border-radius: var(--persona-radius-md, 0.375rem);
-  font-size: 13px;
+  padding: var(--persona-components-composer-overflowMenu-rowPadding, 6px 8px);
+  border-radius: var(--persona-components-composer-overflowMenu-rowBorderRadius, var(--persona-radius-md, 0.375rem));
+  font-size: var(--persona-components-composer-overflowMenu-fontSize, 13px);
   text-align: start;
   cursor: pointer;
 }
@@ -1529,9 +1569,12 @@
    `:focus-within` would shade this row on every MOUSE open, because opening the
    menu programmatically focuses the first row and this row sorts first. The
    menu publishes the attribute only when that focus should be visible. */
-.persona-composer-overflow-menu__slot:hover,
+.persona-composer-overflow-menu__slot:hover {
+  background: var(--persona-components-composer-overflowMenu-hoverBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+}
+
 .persona-composer-overflow-menu__slot[data-persona-menu-focus] {
-  background: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
+  background: var(--persona-components-composer-overflowMenu-focusBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
 }
 
 /* The bar wraps each control for tooltip hit area; in a row it must add no box. */
@@ -1543,10 +1586,10 @@
    icon column. Scoped to the shared composer-control class so a folded CUSTOM
    action keeps whatever styling its renderer chose. */
 .persona-composer-overflow-menu__slot .persona-composer-control {
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
-  min-height: 16px;
+  width: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  height: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  min-width: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  min-height: var(--persona-components-composer-overflowMenu-iconSize, 16px);
   flex: 0 0 auto;
   padding: 0;
   border: none;
@@ -1561,8 +1604,8 @@
 }
 
 .persona-composer-overflow-menu__slot .persona-composer-control > svg {
-  width: 16px;
-  height: 16px;
+  width: var(--persona-components-composer-overflowMenu-iconSize, 16px);
+  height: var(--persona-components-composer-overflowMenu-iconSize, 16px);
 }
 
 /* In a menu the ROW shading is the focus indicator, exactly as it is for a

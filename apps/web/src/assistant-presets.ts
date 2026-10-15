@@ -1,3 +1,4 @@
+import { createAssistantMenuPreset } from "./assistant-menu-presets";
 import type { AgentWidgetConfig } from "@runtypelabs/persona";
 
 type Preset = {
@@ -81,7 +82,9 @@ export function createAssistantPreset(id: string, notice: (message: string) => v
   // 8px with an inline icon) in the measured title-to-form gaps 48/36/40/28px.
   const greetingGap = chatgpt ? "20px" : serif ? "20px" : gemini ? "4px" : perplexity ? "0px" : "28.6px";
   const modes = serif ? ["Chat", "Cowork"] : p.id === "perplexity" ? ["Search", "Computer"] : [];
+  const menuPreset = createAssistantMenuPreset(p.id, notice);
   return {
+    plugins: menuPreset.plugins,
     future: { v5Defaults: true }, colorScheme: dark ? "dark" : "light", persistState: false,
     launcher: { enabled: false }, layout: { embedded: true, contentMaxWidth: `${p.width}px` },
     welcome: { variant: "hero", layout: "centered", anchor: "center", anchorComposerTop: "45%", composerGap: greetingGap, title: p.title, subtitle: "", align: p.id === "perplexity" ? "start" : "center", ...(serif ? { icon: { type: "image", url: radialSymbol, alt: "", placement: "inline" } } : {}), ...(p.id === "perplexity" ? { kicker: "Search" } : {}) },
@@ -103,13 +106,13 @@ export function createAssistantPreset(id: string, notice: (message: string) => v
     sendButton: { visibility: "when-text", useIcon: true, iconName: "arrow-up", ...(!chatgpt ? { size: controlSize } : {}), ...(gemini ? { stopIconName: "assistant-stop" } : {}) },
     composer: {
       layout: p.layout, attachmentLayout: copilot ? "single-row" : "stacked", placement: gemini ? "overlay" : "block", maxLines: 6,
-      actionOverflow: { enabled: true, includeBuiltIns: ["attachments"], order: 0, collapseAutoActions: "fit" },
-      modes: modes.map(label => ({ id: label.toLowerCase().replace(/ /g, "-"), groupId: "task", label, shortLabel: label, ...(perplexity ? { iconName: label === "Search" ? "search" : "assistant-computer", ...(label === "Search" ? { trailingIconName: "chevron-down" } : {}) } : {}), presentation: "bar" })),
-      modeGroups: [{ id: "task", selection: "single", presentation: serif ? "segmented" : "buttons", chipVisibility: "hidden", label: "Task mode" }],
+      actionOverflow: { enabled: true, includeBuiltIns: ["attachments"], order: 0, collapseAutoActions: "fit", menu: menuPreset.menu },
+      modes: [...menuPreset.modes, ...modes.map(label => ({ id: label.toLowerCase().replace(/ /g, "-"), groupId: "task", label, shortLabel: label, ...(perplexity ? { iconName: label === "Search" ? "search" : "assistant-computer", ...(label === "Search" ? { trailingIconName: "chevron-down" } : {}) } : {}), presentation: "bar" as const })),],
+      modeGroups: [...menuPreset.modeGroups, { id: "task", selection: "single", presentation: serif ? "segmented" : "buttons", chipVisibility: "hidden", label: "Task mode" }],
       defaultActiveModeIds: serif ? ["chat"] : p.id === "perplexity" ? ["search"] : [],
       ...(p.model ? { models: [{ id: "reference", label: p.model }, { id: "alternate", label: "Alternative", description: "Local demonstration only" }], selectedModelId: "reference", modelPicker: { presentation: "popover", ...(serif ? { suffix: "Medium" } : {}) }, onModelChange: () => notice("Model selection is local. This example has no model backend.") } : {}),
       actions: [
-        { id: "tools", label: "Explore tools", iconName: "sparkles", placement: "start", presentation: "overflow", onSelect: () => notice("Tool menus can be populated with your own composer actions and integrations.") },
+        ...menuPreset.actions,
         ...(!copilot ? [{ id: "dictate", label: "Dictate (demo)", iconName: "mic", placement: "end" as const, presentation: "bar" as const, order: 700, onSelect: () => notice("Dictation is a demo control. Enable voiceRecognition and a provider to capture speech.") }] : []),
         ...(voice ? [{ id: "voice", label: "Start voice (demo)", iconName: "voice-bars", iconAnimation: "voice" as const, placement: "end" as const, presentation: "bar" as const, order: 900, visibility: "when-empty" as const, iconColor: chatgpt ? "#eeeeee" : serif ? p.text : "#1e1d1c", backgroundColor: chatgpt ? "#363636" : serif ? "transparent" : "#d6d5d4", onSelect: () => notice("Voice bars animate during live transcription. This demo has no voice provider, so no microphone is being captured.") }] : []),
       ],
@@ -149,6 +152,7 @@ export function createAssistantPreset(id: string, notice: (message: string) => v
         button: { ghost: { background: "transparent", foreground: p.text, borderRadius: "9999px", hoverBackground: dark ? "#333333" : "#f0efed" }, ...(gemini ? { primary: { background: "#e3e3e3", foreground: "#202122" }, stop: { background: "#e3e3e3", foreground: "#202122" } } : {}) },
         voice: { control: { background: "transparent", foreground: perplexity ? p.muted : p.text, borderRadius: serif ? "8px" : "9999px", borderWidth: "0" } },
         composer: {
+          overflowMenu: menuPreset.theme,
           send: { ...(chatgpt ? { size: controlSize } : {}), iconSize: copilot ? "16px" : glyphSize, ...(!gemini ? { background: copilot ? "transparent" : dark ? "#eeeeee" : "#242424", foreground: copilot ? p.text : dark ? "#171717" : "#ffffff" } : {}) },
           footerPadding: gemini ? "16px 16px 24px" : "8px 16px 16px", footerBorder: "none",
           footerBackground: gemini ? "transparent" : p.canvas,

@@ -1362,6 +1362,23 @@ theme: {
 }
 ```
 
+Additional optional menu tokens use the same `--persona-components-composer-overflowMenu-` prefix:
+
+| Fields | Purpose |
+| --- | --- |
+| `padding`, `rowGap`, `minWidth`, `maxHeight` | Panel spacing and bounds |
+| `rowPadding`, `rowBorderRadius`, `fontSize`, `lineHeight` | Row shape and text |
+| `iconSize`, `iconGap` | Row icons and spacing |
+| `hoverBackground`, `focusBackground` | Pointer and keyboard row highlights |
+| `descriptionColor`, `descriptionFontSize` | Secondary action descriptions |
+| `dividerColor`, `dividerSpacing` | Group separators |
+
+These apply to built-in controls and ordinary action rows. Custom content may
+reuse the menu classes or style its own nodes. Colors can also be supplied under
+`darkTheme.components.composer.overflowMenu`. Set width, preferred placement and
+trigger icons under `composer.actionOverflow.menu`, and descriptions/groups on
+actions. See [menu configuration and managed renderer lifecycle](../../docs/configuration.md#composer-more-menus).
+
 The trigger sorts in the start cluster at order 900 by default.
 `composer.actionOverflow.order` moves it on the same scale as
 `ComposerAction.order`, so `order: 0` leads the bar ahead of the mention (100)

@@ -117,12 +117,18 @@ export type PopoverPlacement =
 export interface PopoverOptions {
   /** Element the popover is positioned against. */
   anchor: HTMLElement;
+  /** Optional positioning bounds; dismissal and mounting still belong to anchor. */
+  getAnchorRect?: () => DOMRect;
   /** The floating element (menu, tooltip, panel). Built detached; mounted on `open`. */
   content: HTMLElement;
   /** Where to place `content` relative to `anchor`. Default `"bottom-start"`. */
   placement?: PopoverPlacement;
   /** Gap in px between anchor and content. Default `6`. */
   offset?: number;
+  /** Live placement override; evaluated on each reposition. */
+  getPlacement?: () => PopoverPlacement;
+  /** Opt-in viewport clamping and vertical flip, in CSS pixels. */
+  viewportPadding?: number;
   /** Set `content`'s `min-width` to the anchor's width. Default `false`. */
   matchAnchorWidth?: boolean;
   /**
@@ -220,7 +226,7 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
       container.appendChild(content);
       focused?.focus({ preventScroll: true });
     }
-    const rect = anchor.getBoundingClientRect();
+    const rect = options.getAnchorRect?.() ?? anchor.getBoundingClientRect();
     content.style.position = "fixed";
     if (matchAnchorWidth) content.style.minWidth = `${rect.width}px`;
     // Trigger-anchored mode: content is sized to its own contents but never wider
@@ -232,12 +238,13 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
 
     const offY = verticalOffset?.() ?? null;
     const anchorTop = offY != null ? rect.top + offY : rect.top;
-    const top =
-      placement === "top-start" || placement === "top-end"
+    const currentPlacement = options.getPlacement?.() ?? placement;
+    let top =
+      currentPlacement === "top-start" || currentPlacement === "top-end"
         ? anchorTop - offset - contentRect.height
         : rect.bottom + offset;
 
-    const isEnd = placement === "bottom-end" || placement === "top-end";
+    const isEnd = currentPlacement === "bottom-end" || currentPlacement === "top-end";
     // Default: anchor left (or anchor right for `*-end`). Trigger-anchored mode
     // (offset present and non-null) overrides with the clamped trigger position so
     // the menu never overflows the anchor's edges — a near-right trigger shifts it
@@ -249,6 +256,19 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
       left = Math.min(Math.max(rect.left + off, rect.left), maxLeft);
     }
 
+    if (options.viewportPadding !== undefined) {
+      const padding = options.viewportPadding;
+      const view = anchor.ownerDocument.defaultView;
+      const height = view?.innerHeight ?? 0;
+      const width = view?.innerWidth ?? 0;
+      const above = anchorTop - offset - padding;
+      const below = height - rect.bottom - offset - padding;
+      const preferAbove = currentPlacement.startsWith("top");
+      const useAbove = preferAbove ? above >= contentRect.height || above >= below : !(below >= contentRect.height || below >= above);
+      top = useAbove ? anchorTop - offset - contentRect.height : rect.bottom + offset;
+      top = Math.max(padding, Math.min(top, height - padding - contentRect.height));
+      left = Math.max(padding, Math.min(left, width - padding - contentRect.width));
+    }
     content.style.top = `${top}px`;
     content.style.left = `${left}px`;
   };
@@ -288,6 +308,11 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
       onDismiss?.("outside");
     };
 
+    const observer = options.viewportPadding !== undefined && ownerWindow.ResizeObserver
+      ? new ownerWindow.ResizeObserver(onReposition) : null;
+    observer?.observe(content);
+    observer?.observe(anchor);
+
     // Defer arming so the click that opened the popover doesn't dismiss it.
     const armId = ownerWindow.setTimeout(() => {
       ownerDocument.addEventListener("pointerdown", onOutside, true);
@@ -298,6 +323,7 @@ export function createPopover(options: PopoverOptions): PopoverHandle {
     moveRoot?.addEventListener("persona:internal:host-moved", onReposition);
 
     detach = () => {
+      observer?.disconnect();
       ownerWindow.clearTimeout(armId);
       ownerDocument.removeEventListener("pointerdown", onOutside, true);
       ownerWindow.removeEventListener("scroll", onReposition, true);
