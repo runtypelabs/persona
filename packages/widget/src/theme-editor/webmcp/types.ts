@@ -4,7 +4,7 @@
  *
  * We deliberately keep our own small WebMCP types rather than depending on
  * `@mcp-b/webmcp-types`, so the tool definitions are transport-agnostic and the
- * widget package takes on no polyfill dependency. These mirror the WebMCP draft
+ * tool definitions do not depend on the polyfill's types. These mirror the WebMCP draft
  * (`registerTool(tool, { signal })`) and the MCP tool-result envelope that
  * `@mcp-b/webmcp-polyfill` expects `execute` to return.
  */

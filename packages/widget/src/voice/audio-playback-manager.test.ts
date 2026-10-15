@@ -91,6 +91,40 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
     expect(started).toHaveBeenCalledTimes(1);
   });
 
+  it("continuous mode releases a held tail after a prebuffer of quiet, and stays usable", () => {
+    vi.useFakeTimers();
+    try {
+      const m = new AudioPlaybackManager(24000, { prebufferMs: 200 });
+      m.setContinuousMode(true);
+      m.enqueue(pcm(500)); // below the waterline and no markStreamEnd will ever come
+      vi.advanceTimersByTime(150);
+      m.enqueue(pcm(500)); // more input restarts the quiet window
+      vi.advanceTimersByTime(150);
+      expect(MockAudioContext.instances).toHaveLength(0);
+      vi.advanceTimersByTime(50);
+      const ctx = MockAudioContext.instances[0];
+      expect(ctx.sources).toHaveLength(2);
+
+      // The next reply still plays through the same, never-ended stream.
+      m.enqueue(pcm(100));
+      expect(ctx.sources).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("without continuous mode a short held tail waits for markStreamEnd", () => {
+    vi.useFakeTimers();
+    try {
+      const m = new AudioPlaybackManager(24000, { prebufferMs: 200 });
+      m.enqueue(pcm(500));
+      vi.advanceTimersByTime(1000);
+      expect(MockAudioContext.instances).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("plays a reply shorter than the prebuffer (markStreamEnd flushes the gate)", () => {
     const m = new AudioPlaybackManager(24000, { prebufferMs: 200 });
     const finished = vi.fn();
@@ -155,5 +189,28 @@ describe("AudioPlaybackManager (PcmStreamPlayer surface)", () => {
     m.onStarted(startedAgain);
     m.enqueue(pcm(100));
     expect(startedAgain).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores onended from sources a flush stopped, so the next reply drains on its own audio", () => {
+    const m = new AudioPlaybackManager(24000);
+    m.enqueue(pcm(100));
+    m.enqueue(pcm(100));
+    const ctx = MockAudioContext.instances[0];
+    // Browsers fire onended for stopped sources after flush(); capture the
+    // handlers as the browser would have them queued.
+    const staleEnded = ctx.sources.map((s) => s.onended);
+    m.flush();
+    expect(ctx.sources.every((s) => s.onended === null)).toBe(true);
+
+    const finished = vi.fn();
+    m.onFinished(finished);
+    m.enqueue(pcm(100)); // the next reply
+    m.markStreamEnd();
+    for (const ended of staleEnded) ended?.();
+    expect(finished).not.toHaveBeenCalled();
+    expect(m.isPlaying()).toBe(true);
+
+    ctx.sources[2].onended?.();
+    expect(finished).toHaveBeenCalledTimes(1);
   });
 });

@@ -3,7 +3,7 @@
  *
  * The IIFE/CDN widget bundle marks `@runtypelabs/persona/history-view` external
  * so the Messages surface is excluded from the core payload; this file is built
- * as a self-contained sibling chunk (`tsup.history-view.config.ts`) and loaded on
+ * as a self-contained sibling chunk (`tsdown.config.ts`) and loaded on
  * demand by the loader registered in `index-global.ts`. ESM/CJS consumers reach
  * it via this same (external) subpath.
  *
@@ -12,6 +12,9 @@
  */
 
 export { createHistoryView } from "./history-view-entry";
+// The destructive-action confirm rides this chunk: every caller is already an
+// async history action, so it costs the core bundle nothing.
+export { showHistoryConfirm } from "./components/history-confirm-dialog";
 export {
   HISTORY_VIEW_COPY_DEFAULTS,
   resolveHistoryViewCopy,

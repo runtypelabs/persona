@@ -15,6 +15,7 @@ import {
 import { GALLERY_EXAMPLES } from "./examples-nav";
 import { STANDALONE_EXAMPLES } from "./standalone-nav";
 import { editorialWidgetTheme } from "./editorial-widget-theme";
+import { createDeepWikiToolPlugin } from "./plugins/deepwiki-tool-plugin";
 
 installCommandPalette({
   trigger: document.querySelector<HTMLElement>("[data-command-palette-trigger]"),
@@ -103,11 +104,31 @@ const homeDemoSuggestionChips = [
 ] as const;
 
 
+// The docs agent is defined as code (apps/web/runtype/docs-assistant.agent.ts)
+// and converged into Runtype by `pnpm --filter web runtype:ensure`, which also
+// mints the public client token. With both set, the widget talks to Runtype
+// directly in client-token mode. Without them (e.g. a fresh local checkout) it
+// falls back to the proxy's server-pinned `/api/chat/dispatch-docs` route.
+const runtypeClientToken: string | undefined = import.meta.env.VITE_RUNTYPE_CLIENT_TOKEN;
+const runtypeDocsAgentId: string | undefined = import.meta.env.VITE_RUNTYPE_DOCS_AGENT_ID;
+const runtypeApiUrl: string | undefined = import.meta.env.VITE_RUNTYPE_API_URL;
+
 const proxyPort = import.meta.env.VITE_PROXY_PORT ?? 43111;
 const proxyUrl =
   import.meta.env.VITE_PROXY_URL ?
     `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-docs` :
     `http://localhost:${proxyPort}/api/chat/dispatch-docs`;
+
+const homeDemoConnection =
+  runtypeClientToken && runtypeDocsAgentId
+    ? {
+        clientToken: runtypeClientToken,
+        agentId: runtypeDocsAgentId,
+        // Always set: overrides DEFAULT_WIDGET_CONFIG's proxy-style apiUrl so
+        // client routes resolve against api.runtype.com, or a staging API.
+        apiUrl: runtypeApiUrl,
+      }
+    : { apiUrl: proxyUrl };
 
 const homeDemoWelcomeTitle = "Welcome to Persona";
 const homeDemoWelcomeSubtitle =
@@ -143,7 +164,7 @@ const sharedWidgetConfig: NonNullable<
   Parameters<typeof createAgentExperience>[1]
 > = {
   ...DEFAULT_WIDGET_CONFIG,
-  apiUrl: proxyUrl,
+  ...homeDemoConnection,
   ...homeDemoSharedAssistant,
   // Match the page's editorial/terminal design: paper surfaces, square
   // corners, ink text, teal accents, mono/Geist type. Shared so embedded
@@ -156,16 +177,18 @@ const sharedWidgetConfig: NonNullable<
   },
   features: {
     showEventStreamToggle: true,
+    // The docs model's reasoning is sub-second, so a reasoning bubble just
+    // flickers in and out; the typing indicator covers that beat.
+    showReasoning: false,
     // Scroll: anchor-top (ChatGPT-style — pin the sent message near the top and
     // stream the reply below) is now the library default, so no per-instance
     // scrollBehavior override is needed here.
   },
   // Read aloud uses Runtype-hosted TTS (provider: 'runtype'): the button
-  // streams audio from Runtype's per-agent `/speak` endpoint. This demo talks
-  // to a proxy with no clientToken/agentId, so `browserFallback` transparently
-  // speaks with the OS voice today and auto-upgrades to the Runtype voice once a
-  // real clientToken + agentId (and the endpoint) are wired in. `enabled: false`
-  // keeps auto-speak off — only the per-message button uses the engine.
+  // streams audio from Runtype's per-agent `/speak` endpoint, using the
+  // clientToken + agentId above. On the proxy fallback there is no token, so
+  // `browserFallback` speaks with the OS voice instead. `enabled: false` keeps
+  // auto-speak off — only the per-message button uses the engine.
   textToSpeech: {
     enabled: false,
     provider: "runtype",
@@ -187,6 +210,24 @@ const sharedWidgetConfig: NonNullable<
       overflow: "wrap",
       maxItems: 4,
     },
+  },
+  // DeepWiki lookups render as a branded card; any other tool keeps the
+  // default bubble.
+  plugins: [createDeepWikiToolPlugin({ defaultRepo: "runtypelabs/persona" })],
+  // Client-token session init on hover instead of the default first keystroke,
+  // so `/v1/client/init` has already fired by the time a starter chip is
+  // clicked (touch fires pointerenter too). `keydown` covers keyboard users and
+  // the replaced keystroke trigger; unlike `focusin` it never fires for
+  // autofocus, so page views alone don't spend an init. `warm` is latched and
+  // re-arms after "clear chat", so the listeners stay attached rather than
+  // `once`. Ignored on the proxy fallback.
+  sessionInit: ({ warm, mount }) => {
+    mount.addEventListener("pointerenter", warm);
+    mount.addEventListener("keydown", warm);
+    return () => {
+      mount.removeEventListener("pointerenter", warm);
+      mount.removeEventListener("keydown", warm);
+    };
   },
   postprocessMessage: ({ text, streaming }) => codeBlockCopyPostprocessor(text, streaming)
 };

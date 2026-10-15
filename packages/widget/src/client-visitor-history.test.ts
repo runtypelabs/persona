@@ -755,6 +755,7 @@ describe('controller wiring', () => {
     const controller = createAgentExperience(mount, {
       apiUrl: API_URL,
       clientToken: CLIENT_TOKEN,
+      sessionInit: 'mount',
       launcher: { enabled: false },
     });
     await vi.waitFor(() => expect(requests).toHaveLength(1));
@@ -800,6 +801,7 @@ describe('controller wiring', () => {
     const controller = createAgentExperience(mount, {
       apiUrl: API_URL,
       clientToken: CLIENT_TOKEN,
+      sessionInit: 'mount',
       launcher: { enabled: false },
     });
     await vi.waitFor(() => expect(requests).toHaveLength(1));
@@ -849,6 +851,7 @@ describe('controller wiring', () => {
     const controller = createAgentExperience(mount, {
       apiUrl: API_URL,
       clientToken: CLIENT_TOKEN,
+      sessionInit: 'mount',
       launcher: { enabled: false },
     });
     await vi.waitFor(() => expect(requests).toHaveLength(1));
@@ -907,6 +910,7 @@ describe('controller wiring', () => {
     const controller = createAgentExperience(mount, {
       apiUrl: API_URL,
       clientToken: CLIENT_TOKEN,
+      sessionInit: 'mount',
       launcher: { enabled: false },
       storageAdapter: {
         save: async (state) => {
@@ -1037,6 +1041,7 @@ describe('controller wiring', () => {
     const controller = createAgentExperience(mount, {
       apiUrl: API_URL,
       clientToken: CLIENT_TOKEN,
+      sessionInit: 'mount',
       launcher: { enabled: false },
       reconnectStream,
       storageAdapter: {
@@ -1089,6 +1094,7 @@ describe('voice integration visitor credential access', () => {
     const controller = createAgentExperience(mount, {
       apiUrl: API_URL,
       clientToken: CLIENT_TOKEN,
+      sessionInit: 'mount',
       launcher: { enabled: false },
       ...config,
     });

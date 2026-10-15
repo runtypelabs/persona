@@ -11,7 +11,7 @@ import {
   type AgentWidgetInitHandle,
   type ComponentRenderer,
 } from "@runtypelabs/persona";
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 import type { ChartAssemblyInput } from "flint-chart";
 import type { ECharts, EChartsOption } from "echarts";
 import { fitFlintInputToCanvas } from "./analytics-chart-layout";
@@ -548,7 +548,7 @@ const createFlintArtifact = async ({
 };
 
 const registerAnalyticsTools = (): AbortController => {
-  initializeWebMCPPolyfill();
+  installWebMCP();
   const modelContext = (
     document as Document & { modelContext?: RegisterableModelContext }
   ).modelContext;

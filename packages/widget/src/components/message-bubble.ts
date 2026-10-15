@@ -1310,6 +1310,8 @@ export const createStandardBubble = (
   const shouldShowActions =
     message.role === "assistant" &&
     !message.streaming &&
+    // A voice caption (the voice model's own speech) is display-only.
+    !message.voiceCaption &&
     message.content &&
     message.content.trim() &&
     actionsConfig?.enabled !== false;

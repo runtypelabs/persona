@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { AgentWidgetClient, preferFinalStructuredContent } from './client';
+import { AgentWidgetClient } from './client';
+import { preferFinalStructuredContent } from './client-stream';
 import { AgentWidgetEvent, AgentWidgetMessage, AgentWidgetArtifactsFeature } from './types';
 import { createJsonStreamParser } from './utils/formatting';
 import { VERSION } from './version';
@@ -150,6 +151,35 @@ describe('AgentWidgetClient - Empty Message Filtering', () => {
       (m: any) => !m.content || (typeof m.content === 'string' && m.content.trim() === '')
     );
     expect(hasEmptyContent).toBe(false);
+  });
+
+  it('never sends display-only voice captions', async () => {
+    global.fetch = vi.fn().mockImplementation(async (_url: string, options: any) => {
+      capturedPayload = JSON.parse(options.body);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode('data: {"type":"execution_complete","success":true}\n\n'));
+          controller.close();
+        }
+      });
+      return { ok: true, body: stream };
+    });
+
+    await client.dispatch(
+      {
+        messages: [
+          { id: 'u0', role: 'user', content: 'small talk', voiceCaption: true, createdAt: '2025-01-01T00:00:00.000Z' },
+          { id: 'u1', role: 'user', content: 'What are your opening hours', createdAt: '2025-01-01T00:00:01.000Z' },
+          { id: 'a1', role: 'assistant', content: "Yeah, I'll", voiceCaption: true, createdAt: '2025-01-01T00:00:02.000Z' },
+        ],
+      },
+      (event) => events.push(event)
+    );
+
+    expect(capturedPayload.messages).toEqual([
+      expect.objectContaining({ role: 'user', content: 'What are your opening hours' }),
+    ]);
   });
 
   it('should filter out messages with whitespace-only content', async () => {
@@ -2240,6 +2270,26 @@ describe('AgentWidgetClient - stopReason propagation', () => {
     expect(final!.content).toBe('');
     expect(final!.stopReason).toBe('max_tool_calls');
   });
+
+  it.each(['end_turn', 'unknown'] as const)(
+    'adds no assistant message for an empty response with a natural stopReason=%s',
+    async (stopReason) => {
+      // A resumed leg that ends the turn after suggest_replies streams no text:
+      // a natural stop has no notice, so an empty bubble would only sit behind the answer.
+      const events = await runDispatch([
+        `data: ${JSON.stringify({
+          type: 'step_complete',
+          id: 'agent-response',
+          stepType: 'prompt',
+          success: true,
+          result: { response: '' },
+          stopReason,
+        })}\n\n`,
+        `data: ${JSON.stringify({ type: 'execution_complete', success: true })}\n\n`,
+      ]);
+      expect(events.some((e) => e.type === 'message' && e.message.role === 'assistant')).toBe(false);
+    }
+  );
 
   it('turn_complete.stopReason overrides any earlier step_complete value (agent-loop path)', async () => {
     // Build an agent-mode stream that emits both events. turn_complete

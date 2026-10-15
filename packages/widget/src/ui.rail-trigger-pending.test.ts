@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { setHistoryViewLoader } from "./history-view-loader";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
 import { createDemoHistoryProvider } from "./internal/demo-history-provider";
@@ -103,7 +104,7 @@ describe("rail trigger during a docking open", () => {
     setHistoryViewLoader(
       () =>
         new Promise((resolve) => {
-          release = () => resolve({ createHistoryView });
+          release = () => resolve({ createHistoryView, showHistoryConfirm });
         })
     );
     const { controller: ctl } = setup();

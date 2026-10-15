@@ -1,0 +1,10 @@
+{
+  "type": "metrics",
+  "llm_ms": 820,
+  "tts_ms": 310,
+  "first_audio_ms": 1050,
+  "total_ms": 1400,
+  "first_synthesis_ms": 900,
+  "first_text_ms": 400,
+  "incremental": true
+}

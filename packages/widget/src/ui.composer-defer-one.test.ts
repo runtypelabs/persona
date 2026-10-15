@@ -159,6 +159,23 @@ describe("streamingSubmitBehavior: defer-one", () => {
     expect(status?.textContent).toContain("already queued");
   });
 
+  it("keeps a notice in the status line when the chat status changes under it", async () => {
+    const { mount } = makeController();
+    await startStreaming(mount);
+    type(mount, "queued message");
+    pressEnter(mount);
+    await flush();
+    type(mount, "second attempt");
+    pressEnter(mount);
+    await flush();
+
+    stream.push(unifiedFrames());
+    stream.close();
+    await flush(50);
+    const status = mount.querySelector<HTMLElement>("[data-persona-composer-notice]");
+    expect(status?.textContent).toContain("already queued");
+  });
+
   it("card Edit restores the snapshot into the draft and drops the card", async () => {
     const { mount, controller } = makeController();
     await startStreaming(mount);

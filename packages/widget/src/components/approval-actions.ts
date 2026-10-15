@@ -7,7 +7,8 @@
  * retains decisions as compact, inspectable rows. Each behavior is configurable.
  * Installed through renderApproval so user plugins can replace or decorate it.
  */
-import { createElement } from "../utils/dom";
+import { createElement, createNode } from "../utils/dom";
+import { BROWSER_TOOL_INTERRUPTION } from "../utils/restored-browser-state";
 // The webmcp-title lookup is injected by ui.ts at chunk adoption (see
 // approval-deps): this module ships in the lazy approval-ui chunk. Icons are
 // direct lucide data imports.
@@ -157,7 +158,10 @@ const buildResolvedTrace = (approval: Approval): HTMLElement => {
   if (icon) row.appendChild(icon);
   const name = createElement("span", "persona-approval-resolved-name");
   name.textContent = approval.toolName ? humanizeToolName(approval.toolName) : "Tool";
-  row.append(name, document.createTextNode(approval.status === "timeout" ? " timed out" : " denied"));
+  const explanation = approval.status === "timeout" && approval.interrupted
+    ? ` approval expired. ${BROWSER_TOOL_INTERRUPTION}`
+    : approval.status === "timeout" ? " timed out" : " denied";
+  row.appendChild(createNode("span", { className: "persona-approval-resolved-text" }, name, explanation));
   return row;
 };
 
@@ -170,6 +174,7 @@ const buildPending = (
   approve: Decide,
   deny: Decide,
   enableAlways: boolean,
+  showRawCall = false,
   resolvedLabel?: string
 ): HTMLElement => {
   const compact = resolvedLabel !== undefined;
@@ -190,7 +195,7 @@ const buildPending = (
   // name), so the description is only ever visible here. Mirrors the legacy
   // bubble, which also opened a disclosure when only a description was present.
   const hasDescription = Boolean(approval.description) && detailsMode !== "hidden";
-  const hasParams = approval.parameters != null && detailsMode !== "hidden";
+  const hasParams = approval.parameters != null && detailsMode !== "hidden" && !showRawCall;
   const hasReason = Boolean(approval.reason) && detailsMode !== "hidden";
   const hasDetails = hasDescription || hasParams || (compact && hasReason);
   const expanded = hasDetails && isDetailsExpanded(message.id, expansionState, approvalConfig);
@@ -279,6 +284,24 @@ const buildPending = (
     body.appendChild(details);
   }
 
+  // The raw tool name and arguments, always visible and above the reason, so
+  // what will actually run is never less prominent than the agent's claim.
+  if (showRawCall) {
+    const call = createElement("div", "persona-approval-call");
+    call.setAttribute("data-role", "raw-call");
+    const name = createElement("code", "persona-approval-tool-name");
+    name.textContent = approval.toolName;
+    call.appendChild(name);
+    if (approval.parameters != null) {
+      const pre = createElement("pre", "persona-approval-params");
+      if (approvalConfig?.parameterBackgroundColor) pre.style.background = approvalConfig.parameterBackgroundColor;
+      if (approvalConfig?.parameterTextColor) pre.style.color = approvalConfig.parameterTextColor;
+      pre.textContent = formatUnknownValue(approval.parameters);
+      call.appendChild(pre);
+    }
+    body.appendChild(call);
+  }
+
   // Agent-authored justification: attacker-writable, so plain text + attributed.
   if (approval.reason) {
     const reasonLine = createElement("p", "persona-approval-reason");
@@ -299,7 +322,7 @@ const buildPending = (
   const toggleDetails = (): void => {
     const details = card.querySelector<HTMLElement>('[data-role="params"]');
     if (!details) return;
-    const willOpen = details.hidden;
+    const willOpen = details.hidden !== false;
     details.hidden = !willOpen;
     if (compact) body.hidden = !willOpen;
     updateDisclosureLabel(willOpen);
@@ -473,7 +496,7 @@ export const createBuiltInApprovalPlugin = (
           : execution?.status === "completed" ? "Completed"
           : execution?.status === "failed" ? "Failed" : "Allowed";
         if (approvalConfig?.resolvedDisplay === "row") {
-          return buildPending(state, expansionState, message, approval, approvalConfig, approve, deny, false, resolvedLabel);
+          return buildPending(state, expansionState, message, approval, approvalConfig, approve, deny, false, false, resolvedLabel);
         }
         if (approvalConfig?.resolvedDisplay === "status-line") {
           const card = buildPending(state, expansionState, message, approval, approvalConfig, approve, deny, false);
@@ -497,6 +520,9 @@ export const createBuiltInApprovalPlugin = (
       // closures, but KEEP this approval's place in the pending order so a
       // re-render of an older card doesn't reorder it ahead of a newer one.
       detachMessage(state, message.id);
+      // Client-token visitors answer the gate themselves, so they see the
+      // exact call rather than just the agent's framing.
+      const visitorGate = Boolean(config?.clientToken);
       const enableAlways = approvalConfig?.enableAlwaysAllow === true;
       const card = buildPending(
         state,
@@ -506,7 +532,8 @@ export const createBuiltInApprovalPlugin = (
         approvalConfig,
         approve,
         deny,
-        enableAlways
+        enableAlways,
+        visitorGate
       );
 
       const keyboardMode = approvalConfig?.keyboardShortcuts ?? "legacy";

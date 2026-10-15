@@ -123,8 +123,8 @@ function defaultClock(): number {
  * event via {@link processEvent}; read the current state via {@link getMetric}.
  */
 export class ThroughputTracker {
-  private metric: ThroughputMetric = { status: "idle" };
-  private run: ThroughputRunStats | null = null;
+  #metric: ThroughputMetric = { status: "idle" };
+  #run: ThroughputRunStats | null = null;
   private readonly now: () => number;
 
   constructor(now: () => number = defaultClock) {
@@ -136,47 +136,47 @@ export class ThroughputTracker {
     // clock on each read. The view polls this every ~200ms, so without this a
     // pause between deltas would keep showing the stale rate from the last
     // event; recomputing lets the displayed tok/s decay as time passes.
-    const run = this.run;
+    const run = this.#run;
     if (
       run &&
-      this.metric.status === "running" &&
+      this.#metric.status === "running" &&
       run.firstDeltaAt !== undefined &&
-      this.metric.outputTokens !== undefined
+      this.#metric.outputTokens !== undefined
     ) {
       const durationMs = this.now() - run.firstDeltaAt;
       return {
-        ...this.metric,
+        ...this.#metric,
         durationMs,
         tokensPerSecond: calculateTokensPerSecond(
-          this.metric.outputTokens,
+          this.#metric.outputTokens,
           durationMs
         ),
       };
     }
-    return this.metric;
+    return this.#metric;
   }
 
   /** Reset back to idle (e.g. when the chat is cleared). */
   reset(): void {
-    this.run = null;
-    this.metric = { status: "idle" };
+    this.#run = null;
+    this.#metric = { status: "idle" };
   }
 
-  private startRun(now: number): void {
-    this.run = {
+  #startRun(now: number): void {
+    this.#run = {
       startedAt: now,
       visibleCharCount: 0,
       exactOutputTokens: 0,
     };
-    this.metric = { status: "running" };
+    this.#metric = { status: "running" };
   }
 
   processEvent(eventType: string, payload: unknown): void {
     if (!isRecord(payload)) {
       // Non-object payloads can still signal lifecycle (e.g. bare "execution_error").
-      if (eventType === "execution_error" && this.run) {
-        this.run = null;
-        this.metric = { status: "error" };
+      if (eventType === "execution_error" && this.#run) {
+        this.#run = null;
+        this.#metric = { status: "error" };
       }
       return;
     }
@@ -186,13 +186,13 @@ export class ThroughputTracker {
 
     if (type === "execution_start") {
       // New request: start fresh, discarding any incomplete prior run.
-      this.startRun(now);
+      this.#startRun(now);
       return;
     }
 
     if (STEP_START_EVENTS.has(type)) {
       // Mid-request step marker: only begin a run if none is active.
-      if (!this.run) this.startRun(now);
+      if (!this.#run) this.#startRun(now);
       return;
     }
 
@@ -201,8 +201,8 @@ export class ThroughputTracker {
       if (!text) return;
 
       // Lazily start a run if the stream began without a recognized start event.
-      if (!this.run) this.startRun(now);
-      const stats = this.run!;
+      if (!this.#run) this.#startRun(now);
+      const stats = this.#run!;
 
       stats.firstDeltaAt ??= now;
       stats.visibleCharCount += text.length;
@@ -214,7 +214,7 @@ export class ThroughputTracker {
         stats.exactOutputTokens +
         estimateTokensFromCharCount(stats.visibleCharCount);
       const durationMs = now - stats.firstDeltaAt;
-      this.metric = {
+      this.#metric = {
         status: "running",
         tokensPerSecond: calculateTokensPerSecond(outputTokens, durationMs),
         outputTokens,
@@ -227,8 +227,8 @@ export class ThroughputTracker {
     if (INTERMEDIATE_COMPLETE_EVENTS.has(type)) {
       // Accumulate exact usage but keep the run going: these fire per
       // step/turn, not at the end of the whole run.
-      if (!this.run) return;
-      const stats = this.run;
+      if (!this.#run) return;
+      const stats = this.#run;
       const exact = getOutputTokens(payload);
       if (exact !== undefined) {
         stats.exactOutputTokens += exact;
@@ -242,8 +242,8 @@ export class ThroughputTracker {
       const outputTokens =
         stats.exactOutputTokens +
         estimateTokensFromCharCount(stats.visibleCharCount);
-      const durationMs = this.resolveDuration(stats, payload, now);
-      this.metric = {
+      const durationMs = this.#resolveDuration(stats, payload, now);
+      this.#metric = {
         status: "running",
         tokensPerSecond: calculateTokensPerSecond(outputTokens, durationMs),
         outputTokens,
@@ -254,8 +254,8 @@ export class ThroughputTracker {
     }
 
     if (type === "execution_complete") {
-      if (!this.run) return;
-      const stats = this.run;
+      if (!this.#run) return;
+      const stats = this.#run;
       // Prefer exact output tokens from this terminal event, else accumulated
       // usage from intermediate completes, else the text estimate.
       const terminalExact = getOutputTokens(payload);
@@ -270,22 +270,22 @@ export class ThroughputTracker {
         terminalExact !== undefined || stats.exactOutputTokens > 0
           ? "usage"
           : "estimate";
-      const durationMs = this.resolveDuration(stats, payload, now);
-      this.metric = {
+      const durationMs = this.#resolveDuration(stats, payload, now);
+      this.#metric = {
         status: "complete",
         tokensPerSecond: calculateTokensPerSecond(outputTokens, durationMs),
         outputTokens,
         durationMs,
         source,
       };
-      this.run = null;
+      this.#run = null;
       return;
     }
 
     if (type === "execution_error" || (type === "error" && payload.recoverable === false)) {
-      if (!this.run) return;
-      this.run = null;
-      this.metric = { status: "error" };
+      if (!this.#run) return;
+      this.#run = null;
+      this.#metric = { status: "error" };
     }
   }
 
@@ -294,7 +294,7 @@ export class ThroughputTracker {
    * threshold; otherwise fall back to provider execution time, then to the
    * whole-request duration.
    */
-  private resolveDuration(
+  #resolveDuration(
     stats: ThroughputRunStats,
     payload: Record<string, unknown>,
     now: number

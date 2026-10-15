@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { setHistoryViewLoader } from "./history-view-loader";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
 import {
@@ -118,7 +119,7 @@ describe("features.history.provider", () => {
     window.scrollTo = vi.fn();
     // No registry override: this suite exercises the public config path only.
     setHistoryProviderFactory(null);
-    setHistoryViewLoader(async () => ({ createHistoryView }));
+    setHistoryViewLoader(async () => ({ createHistoryView, showHistoryConfirm }));
   });
 
   afterEach(() => {

@@ -99,12 +99,12 @@ export async function createCheckoutSession(
 
     // Build line items for URL encoding
     const lineItems = items.map((item) => ({
-      price_data: {
+      "price_data": {
         currency: "usd",
-        product_data: {
+        "product_data": {
           name: item.name,
         },
-        unit_amount: item.price,
+        "unit_amount": item.price,
       },
       quantity: item.quantity,
     }));

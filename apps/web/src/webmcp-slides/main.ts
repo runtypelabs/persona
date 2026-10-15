@@ -13,7 +13,7 @@ import {
 } from "@runtypelabs/persona";
 // `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext`; it must be initialized before tools register.
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
 import { DeckStore, createSeedDeck } from "./store";
 import { THEMES, getTheme } from "./themes";
@@ -25,7 +25,7 @@ import {
   setupSlidesTools,
 } from "./tools";
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 const store = new DeckStore(createSeedDeck);
 

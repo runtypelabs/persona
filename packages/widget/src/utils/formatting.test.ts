@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createJsonStreamParser, parseFormattedTemplate, computeReasoningElapsed } from "./formatting";
+import { createJsonStreamParser, parseFormattedTemplate, computeReasoningElapsed, computeToolElapsed } from "./formatting";
 
 describe("JSON Stream Parser", () => {
   it("should extract text field incrementally as JSON streams in", () => {
@@ -267,4 +267,12 @@ describe("computeReasoningElapsed", () => {
     });
     expect(result).toBe("<0.1s");
   });
+});
+
+it("never invents an interrupted tool's duration, including elapsed render hooks", () => {
+  const tool = { id: "browser", status: "complete" as const, interrupted: true };
+  expect(computeToolElapsed(tool)).toBe("");
+  expect(computeToolElapsed({ ...tool, startedAt: 1 })).toBe("");
+  expect(computeToolElapsed({ ...tool, durationMs: 2000 })).toBe("2s");
+  expect(computeToolElapsed({ ...tool, startedAt: 1000, completedAt: 4000 })).toBe("3s");
 });

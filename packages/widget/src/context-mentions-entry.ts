@@ -1,7 +1,7 @@
 /**
  * Context-mentions runtime entry — the HEAVY module that assembles the menu
  * controller + chip manager. It is NEVER statically imported on the core path:
- * the IIFE/CDN build marks it external (`tsup.global.config.ts`) and loads the
+ * the IIFE/CDN build marks it external (`tsdown.config.ts`) and loads the
  * standalone `context-mentions.js` chunk from a sibling URL only when
  * `contextMentions.enabled` and the user first interacts. The core orchestrator
  * (`utils/context-mention-orchestrator.ts`) reaches it through

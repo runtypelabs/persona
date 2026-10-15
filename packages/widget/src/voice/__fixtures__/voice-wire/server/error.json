@@ -1,0 +1,6 @@
+{
+  "type": "error",
+  "error": "Voice processing error",
+  "code": "VOICE_CALL_PROTOCOL",
+  "fatal": true
+}

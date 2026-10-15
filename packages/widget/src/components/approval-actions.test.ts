@@ -125,6 +125,33 @@ describe("built-in approval — flag off (default)", () => {
   });
 });
 
+describe("built-in approval — client-token visitor", () => {
+  const cfg: AgentWidgetConfig = {
+    clientToken: "ct_live_demo",
+    approval: { detailsDisplay: "hidden" },
+  };
+  const message = makeMessage({
+    toolName: "place_pickup_order",
+    parameters: { item: "croissant", qty: 12 },
+    reason: "The user asked for this.",
+  });
+
+  it("keeps the raw call behind the disclosure without a client token", () => {
+    const { el } = render({}, message);
+    expect(el?.querySelector('[data-role="raw-call"]')).toBeNull();
+  });
+
+  it("shows the raw tool name and parameters above the agent's reason", () => {
+    const { el } = render(cfg, message);
+    const call = el?.querySelector('[data-role="raw-call"]') as HTMLElement | null;
+    expect(call?.querySelector(".persona-approval-tool-name")?.textContent).toBe("place_pickup_order");
+    expect(call?.querySelector(".persona-approval-params")?.textContent).toContain("croissant");
+    const reason = el?.querySelector(".persona-approval-reason");
+    expect(reason?.textContent).toContain("Agent's stated reason:");
+    expect(call!.compareDocumentPosition(reason!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe("built-in approval — flag on (enableAlwaysAllow)", () => {
   const cfg: AgentWidgetConfig = { approval: { enableAlwaysAllow: true } };
 
@@ -457,4 +484,12 @@ it("honors initially expanded compact rows without enabling decision shortcuts",
   el?.querySelector("button")?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   expect(approve).not.toHaveBeenCalled();
   expect(deny).not.toHaveBeenCalled();
+});
+
+it("interrupted approvals explain expiry without action controls", () => {
+  const { el } = render({}, makeMessage({ status: "timeout", interrupted: true }));
+  expect(el?.textContent).toContain("approval expired");
+  expect(el?.textContent).toContain("chat restarted");
+  expect(el?.textContent).toContain("fresh proposal");
+  expect(el?.querySelector("button, [data-action]")).toBeNull();
 });

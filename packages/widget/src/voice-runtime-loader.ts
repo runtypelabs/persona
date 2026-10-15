@@ -7,7 +7,7 @@ import { createChunkLoader } from "./utils/chunk-loader";
  */
 export type VoiceRuntimeModule = typeof import("./voice-runtime");
 
-const { setLoader, load } = createChunkLoader<VoiceRuntimeModule>({
+const { setLoader, load, getSync } = createChunkLoader<VoiceRuntimeModule>({
   fallbackImport: () => import("@runtypelabs/persona/voice-runtime"),
 });
 
@@ -16,3 +16,6 @@ export const setVoiceRuntimeLoader = setLoader;
 
 /** Load the voice provider runtime. Memoized; retries after rejection. */
 export const loadVoiceRuntime = load;
+
+/** Synchronous access once loaded; null before that. */
+export const getVoiceRuntimeSync = getSync;

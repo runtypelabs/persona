@@ -1,0 +1,5 @@
+{
+  "type": "delegation_cancelled",
+  "delegationId": "del_1",
+  "reason": "deadline"
+}

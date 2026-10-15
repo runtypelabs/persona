@@ -8,6 +8,17 @@
 //           JSON control frames (transcript_interim / transcript_final /
 //           audio_end / metrics).
 //
+// Full duplex (speech-to-speech, e.g. GPT-Live): the client always declares
+// `voiceCapabilities=full-duplex-v1`; engines that don't speak it ignore the
+// param. A full-duplex session announces itself with
+// `session_config{speechMode:'speech_to_speech'}` and then sends turn-keyed
+// `transcript_update{role,text,turnId,final}` frames (later frames replace the
+// text for the same (turnId, role); user and assistant turns can overlap),
+// `delegation_started/completed` around agent tool turns, and `audio_clear` on
+// barge-in. Reply audio has no per-turn end marker in that mode, so playback is
+// treated as continuous: the "speaking" status is released by a timer derived
+// from the queued audio duration rather than by the engine's end-of-stream.
+//
 // The server's STT owns turn-taking, so the client streams continuously and
 // has no client-side VAD, barge-in monitoring, or batch upload. Auth rides the
 // `Sec-WebSocket-Protocol` subprotocol (`['runtype.bearer', clientToken]`),
@@ -16,20 +27,108 @@
 // A continuous always-hot mic is, in UX terms, a permanent barge-in session, so
 // `getInterruptionMode()` reports the constant `'barge-in'` and the existing
 // mic-button wiring (ui.ts) treats a click as "hang up at any state" unchanged.
+//
+// Prewarm (`prewarm()`, called on mic intent): by default a fire-and-forget
+// `POST /v1/client/agents/:agentId/voice/prewarm`. With `prewarmMode: 'attach'`
+// the WebSocket opens early with `clientCapabilities=attach` and the extra
+// `runtype.attach` subprotocol. If the server negotiates `runtype.attach`, the
+// socket idles (no call) until `startListening()` sends `{"type":"start"}`; if
+// it negotiates plain `runtype.bearer`, it ignored attach and the call is
+// already live, so `startListening()` adopts it as is.
+//
+// Wire vocabulary v1 (contract Amendment 5). Every socket sends
+// `voiceProtocol=runtype-browser-v1`, `clientVersion=persona/<version>` and the
+// snake_case `clientCapabilities` it supports. The server answers with
+// `session_config.capabilities` (the negotiated intersection), the only gate
+// for the client frames `context`, `delegation_update` and client delegation:
+// a server without `capabilities` gets none of them. Receivers ignore unknown
+// frames, fields and enum values. Non-fatal problems arrive as `warning`
+// frames; an `error` always ends the call.
+//
+// Client delegation (full duplex, when the session supplied a bridge and
+// `clientDelegation` isn't false, and `client_delegation` was negotiated): a
+// `delegation_started{delegationId, input}` asks the widget to run the turn
+// through its chat pipeline (one at a time). The provider answers with exactly
+// one terminal `delegation_result{delegationId, status, text}`. A turn that
+// parks on a tool approval first sends the non-terminal
+// `delegation_update{delegationId, status:'pending_approval', text}`, then the
+// terminal result once the visitor decides (or the approval lapses or is
+// replaced). A second gated tool in the same turn sends another update.
+// `delegation_cancelled{delegationId}` (or a `warning` refusing a frame for
+// it) stops all frames for that id; the chat turn still renders, and since
+// nobody speaks it now, browser TTS may read it. The voice model's spoken read-back of
+// an answered delegation is folded: the chat already shows it. With
+// `delegation_read_back` negotiated it is the utterance the server tags with that
+// `delegationId`; otherwise it is the first new assistant utterance after
+// `delegation_completed`, unless the visitor speaks first. Transcripts in such a call are display-only captions, never sent to the
+// agent as conversation; a user bubble becomes conversation only when it is
+// submitted. With `context` negotiated, one `context{text}` frame (chat history
+// as of call start plus the host's `callContext`) is held until the visitor's
+// first final transcript or first delegation; a delegation's frames (deltas
+// and result) wait for it (up to 2 s, then it is dropped).
+//
+// Streaming (`delegation_stream` and `delegation_read_back` both negotiated,
+// with client delegation; the read-back tags are what keep a streamed answer
+// spoken as several utterances folded): while a
+// delegated turn renders, its assistant answer goes out as ordered
+// `delegation_delta{delegationId, text}` pieces (clause-sized, see
+// voice-clause-buffer.ts; approval cards, tool bubbles and captions never
+// stream), all before the delegation's first `delegation_update` or
+// `delegation_result`. That frame then carries `streamedChars`: how many
+// leading characters of its `text` the deltas already sent (an approval
+// script appended after the answer is the unstreamed rest). Absent or 0: none.
+// The server reports each spoken chunk with `delegation_progress{delegationId,
+// text}`; the first one of a spoken phase folds the read-back as
+// `delegation_completed{speak:true}` does (status stays "processing" until
+// completed), and that phase's completion doesn't fold another utterance.
+// Delegated sends carry `voice: { spoken: true }` on the chat request, so the
+// agent answers in speakable sentences.
+//
+// Fast tier (`client_tools`, declared only with client delegation and WebMCP
+// enabled; the session ships in the lazy voice-client-tools chunk): after
+// `session_config` the provider sends `client_tools{fingerprint, tools}`, the
+// same WebMCP snapshot and fingerprint the chat path sends as `clientTools[]`
+// but with each page tool's FULL name (`webmcp:<name>`; sdk tools stay bare),
+// and again whenever the fingerprint changes. The server may then answer a
+// delegation itself, with no `delegation_started`: it sends
+// `client_tool_call{delegationId, toolCallId, name, arguments, fingerprint,
+// timeoutMs}`, which runs through the WebMCP execute path (the confirm gate is
+// skipped only for a tool whose registry entry says `readOnlyHint: true`) and
+// is answered by one `client_tool_result{status}`: `completed`, `denied` (gate
+// declined), `stale` (unknown tool, or a fingerprint other than the last one
+// sent), `failed`, or `timeout` (past `timeoutMs`, which bounds the gate too).
+// Then `delegation_completed{route:'direct', text}` for a delegation that never
+// started here writes the heard user turn and `text` into the chat. When the
+// server falls through, the delegation arrives as today's `delegation_started`;
+// its `input.priorToolResults` (page tools the server already ran; sent only
+// with `prior_tool_results`, declared beside `client_tools`) ride along to the
+// chat turn as completed calls, never run again here.
 
 import type {
+  VoiceClientToolsSession,
   VoiceProvider,
   VoiceResult,
   VoiceStatus,
   VoiceConfig,
+  VoiceDelegationRequest,
+  VoiceDelegationResult,
   VoiceMetrics,
   VoicePlaybackEngine,
+  VoiceSessionBridge,
+  VoiceTranscriptMetadata,
 } from "../types";
 import { AudioPlaybackManager } from "./audio-playback-manager";
+import { VERSION } from "../version";
 
 const CAPTURE_SAMPLE_RATE = 16000;
 const PLAYBACK_SAMPLE_RATE = 24000;
 const CAPTURE_BUFFER_SIZE = 4096;
+/**
+ * Mic audio held while the call socket handshakes (a slow upgrade can take
+ * seconds, and the visitor is already talking): 8 s of 16-bit PCM, 256 KB,
+ * well under the server's startup queue. Past it the oldest frames go.
+ */
+const PRE_OPEN_AUDIO_MAX_BYTES = CAPTURE_SAMPLE_RATE * 2 * 8;
 /**
  * RMS-to-0..1 gain for the published capture level. Conversational speech sits
  * around 0.05 to 0.3 RMS, so the raw value would never leave the bottom of the
@@ -37,6 +136,106 @@ const CAPTURE_BUFFER_SIZE = 4096;
  */
 const LEVEL_RMS_SCALE = 4;
 const RIFF_MAGIC = 0x52494646; // "RIFF"
+/** `prewarm()` warms at most once per this window per provider instance. */
+const PREWARM_THROTTLE_MS = 30_000;
+/** How long a call start waits for a suspended capture context to run. */
+const AUDIO_RESUME_TIMEOUT_MS = 1_000;
+/** How long `startListening()` waits on an attach still handshaking. */
+const ATTACH_HANDSHAKE_TIMEOUT_MS = 5_000;
+/** Attached-socket idle window: server default and clamp range. */
+const ATTACH_IDLE_DEFAULT_MS = 30_000;
+const ATTACH_IDLE_MIN_MS = 30_000;
+const ATTACH_IDLE_MAX_MS = 600_000;
+
+/** A socket opened by an `'attach'` prewarm, waiting for the click. */
+type AttachedSocket = {
+  ws: WebSocket;
+  /**
+   * `connecting` until the handshake completes; then `attached` (no call yet,
+   * needs `start`) or `live` (the server ignored attach and the call is live).
+   */
+  state: "connecting" | "attached" | "live";
+  /** Settles when the handshake completes, fails, or the socket is released. */
+  ready: Promise<void>;
+  settle: () => void;
+  openedAt: number;
+  idleTimer: ReturnType<typeof setTimeout> | undefined;
+};
+/** Declared on every call; non-full-duplex engines ignore it. */
+const FULL_DUPLEX_CAPABILITY = "full-duplex-v1";
+/**
+ * Slack added to the computed end of queued speech-to-speech audio before the
+ * provider reports the reply as drained (covers engine prebuffer + scheduling).
+ */
+const CONTINUOUS_DRAIN_GRACE_MS = 300;
+/**
+ * How long a client `cancel` waits for the server's `audio_clear` before audio
+ * is accepted again, so a lost acknowledgement can't mute the call for good.
+ */
+const CANCEL_ACK_TIMEOUT_MS = 2000;
+/**
+ * How long a `delegation_result` waits for the call context still being built
+ * (a slow host `callContext`), so context always precedes the result. Past it,
+ * the result goes out and that context is dropped.
+ */
+const CONTEXT_BEFORE_RESULT_TIMEOUT_MS = 2000;
+const VOICE_PROTOCOL = "runtype-browser-v1";
+/** `approvalTimeoutMs` cap: below core's delegation deadline (600 s, restarted by each update). */
+const APPROVAL_TIMEOUT_MAX_MS = 540_000;
+const DISCLOSURE_TEXT = "You're talking to an AI assistant. Voice is processed by OpenAI.";
+/** Status-line text per `session_end.reason` (Amendment 6); unlisted reasons show nothing. */
+const SESSION_END_TEXT = new Map([
+  ["idle_timeout", "Voice call ended after a quiet period."],
+  ["max_duration", "This voice call reached its time limit."],
+  ["provider_ended", "The voice session ended."],
+  ["quota", "Voice is unavailable right now."],
+  ["auth_expired", "Voice session expired. Tap the mic to reconnect."],
+]);
+/** Reasons that get one automatic reconnect. */
+const RECONNECT_REASONS = ["provider_error", "server_restart"];
+const CONNECTION_LOST = "Voice connection lost.";
+/** Call-start context frame: total cap, host share, history window, per-message cap. */
+const CONTEXT_MAX_CHARS = 8000;
+const CONTEXT_HOST_MAX_CHARS = 4000;
+const CONTEXT_MESSAGES = 12;
+const CONTEXT_MESSAGE_MAX_CHARS = 2000;
+
+type TranscriptCallback = (
+  role: "user" | "assistant",
+  text: string,
+  isFinal: boolean,
+  metadata?: VoiceTranscriptMetadata,
+) => void;
+
+/**
+ * The call-start `context` text: "Conversation so far:" plus the last
+ * {@link CONTEXT_MESSAGES} messages (newest kept when over budget), then the
+ * host's extra context (at most {@link CONTEXT_HOST_MAX_CHARS}, so history
+ * always fits). Capped at {@link CONTEXT_MAX_CHARS}; "" when empty.
+ */
+export function buildCallContext(
+  history: Array<{ role: "user" | "assistant"; content: string }>,
+  extra: string,
+): string {
+  const header = "Conversation so far:";
+  const tail = extra.slice(0, CONTEXT_HOST_MAX_CHARS).trim();
+  let budget = CONTEXT_MAX_CHARS - (tail ? tail.length + 2 : 0) - header.length;
+  const lines: string[] = [];
+  for (const message of history.slice(-CONTEXT_MESSAGES).reverse()) {
+    let text = message.content.replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    if (text.length > CONTEXT_MESSAGE_MAX_CHARS) {
+      text = `${text.slice(0, CONTEXT_MESSAGE_MAX_CHARS - 1)}…`;
+    }
+    const line = `${message.role === "user" ? "User" : "Assistant"}: ${text}`;
+    if (line.length + 1 > budget) break;
+    budget -= line.length + 1;
+    lines.unshift(line);
+  }
+  const parts = lines.length > 0 ? [`${header}\n${lines.join("\n")}`] : [];
+  if (tail) parts.push(tail);
+  return parts.join("\n\n");
+}
 
 /**
  * Strip the canonical 44-byte WAV header (if present) and return the raw PCM16
@@ -63,39 +262,105 @@ function toWsBase(host: string): string {
   return `${secure ? "wss:" : "ws:"}//${trimmed}`;
 }
 
+/** Derive an http(s):// base URL from a configured host (the ws base, reversed). */
+function toHttpBase(host: string): string {
+  return toWsBase(host).replace(/^ws/i, "http");
+}
+
+function clampAttachIdleMs(ms: number | undefined): number {
+  if (typeof ms !== "number" || !Number.isFinite(ms)) return ATTACH_IDLE_DEFAULT_MS;
+  return Math.min(ATTACH_IDLE_MAX_MS, Math.max(ATTACH_IDLE_MIN_MS, Math.round(ms)));
+}
+
 export class RuntypeVoiceProvider implements VoiceProvider {
   type: "runtype" = "runtype";
 
-  private ws: WebSocket | null = null;
-  private captureContext: AudioContext | null = null;
-  private levelCallbacks: ((level: number) => void)[] = [];
-  private mediaStream: MediaStream | null = null;
-  private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private processor: ScriptProcessorNode | null = null;
-  private playback: VoicePlaybackEngine | null = null;
+  #ws: WebSocket | null = null;
+  #captureContext: AudioContext | null = null;
+  #levelCallbacks: ((level: number) => void)[] = [];
+  #mediaStream: MediaStream | null = null;
+  #sourceNode: MediaStreamAudioSourceNode | null = null;
+  #processor: ScriptProcessorNode | null = null;
+  // Captured before the call socket opened; flushed in order on open.
+  #preOpenAudio: ArrayBuffer[] = [];
+  #preOpenBytes = 0;
+  #playback: VoicePlaybackEngine | null = null;
 
   // True while a call (WS session) is live: drives the idempotent start guard
   // and `isBargeInActive()`.
-  private callLive = false;
-  private isSpeaking = false;
+  #callLive = false;
+  #isSpeaking = false;
 
   // Invalidates in-flight async work (playback-engine creation, late frames,
   // status transitions) after a teardown/restart so a stale callback can't act
   // on a newer call's resources. Bumped on every start and every cleanup.
-  private callGeneration = 0;
+  #callGeneration = 0;
 
   // Distinguishes a user-initiated close (code 1000) from a dropped connection.
-  private intentionalClose = false;
+  #intentionalClose = false;
 
-  private resultCallbacks: ((result: VoiceResult) => void)[] = [];
-  private errorCallbacks: ((error: Error) => void)[] = [];
-  private statusCallbacks: ((status: VoiceStatus) => void)[] = [];
-  private transcriptCallbacks: ((
-    role: "user" | "assistant",
-    text: string,
-    isFinal: boolean,
-  ) => void)[] = [];
-  private metricsCallbacks: ((metrics: VoiceMetrics) => void)[] = [];
+  // Prewarm latch and the (at most one) socket an `'attach'` prewarm opened.
+  #lastPrewarmAt = Number.NEGATIVE_INFINITY;
+  #attached: AttachedSocket | null = null;
+  // Full-duplex (speech-to-speech) session state; reset on every cleanup.
+  #speechToSpeech = false;
+  #delegating = false;
+  // Until this time, audio and assistant text belong to a reply the client cancelled.
+  #cancelledUntil = 0;
+  #playbackEndsAt = 0;
+  #drainTimer: ReturnType<typeof setTimeout> | undefined;
+  // Engine `onFinished` callbacks are one-shot (cleared on fire and on flush),
+  // so the provider re-registers before each reply that may need it.
+  #finishedArmed = false;
+  // Client delegation (see header); per-call state reset on every cleanup.
+  private bridge: VoiceSessionBridge | null = null;
+  #clientDelegation = false;
+  // session_config.capabilities: the negotiated client frame types.
+  #capabilities = new Set<string>();
+  // Per delegation: aborts its pending approval follow-up (cancelled, or call end).
+  #followUps = new Map<string, AbortController>();
+  // Delegations the server cancelled (or refused a frame for): no more frames for them.
+  #cancelledDelegations = new Set<string>();
+  // session_config.callId: the server's id for this call, for logs.
+  #callId: string | undefined;
+  // Amendment 6: why the server ended this call (its last frame), if it said.
+  #sessionEnd: { reason: string; message?: string } | null = null;
+  // Status-line text for the UI, read once (`takeNotice`).
+  #notice: string | null = null;
+  // One automatic reconnect per call the visitor started: pending, and spent.
+  #reconnectTimer: ReturnType<typeof setTimeout> | undefined;
+  #reconnected = false;
+  #autoReconnect = false;
+  // Call-start context, built at session_config and held until the visitor's
+  // first final transcript (sent earlier, the voice model tends to answer it).
+  #contextSent = false;
+  #pendingContext: Promise<string> | null = null;
+  // The released context's send; settles once it went out (or never will).
+  #contextSend: { done: Promise<void>; drop: () => void } | null = null;
+  #delegations: Promise<void> = Promise.resolve();
+  // Delegations answered ok (or that streamed part of their answer): their
+  // spoken read-back is folded.
+  #answered = new Set<string>();
+  // Delegations whose current spoken phase already folded on `delegation_progress`.
+  #progressed = new Set<string>();
+  // The delegation whose read-back `#foldReadback` is waiting for.
+  #foldArmedBy: string | null = null;
+  #foldReadback = false;
+  #assistantTurns = new Set<string>();
+  #foldedTurns = new Set<string>();
+  // Fast tier (see header): the call's session, from the lazy voice-client-tools chunk.
+  #fastTier: Promise<VoiceClientToolsSession | null> | null = null;
+  // Delegations this call saw start, and the last final user utterance (a direct turn's request).
+  #started = new Set<string>();
+  #heard: { id: string; text: string } | null = null;
+  // Direct turns in flight: the utterance each answers, captured at its first client_tool_call.
+  #direct = new Map<string, { id: string; text: string } | null>();
+
+  #resultCallbacks: ((result: VoiceResult) => void)[] = [];
+  #errorCallbacks: ((error: Error) => void)[] = [];
+  #statusCallbacks: ((status: VoiceStatus) => void)[] = [];
+  #transcriptCallbacks: TranscriptCallback[] = [];
+  #metricsCallbacks: ((metrics: VoiceMetrics) => void)[] = [];
 
   constructor(private config: VoiceConfig["runtype"]) {}
 
@@ -104,9 +369,185 @@ export class RuntypeVoiceProvider implements VoiceProvider {
   /** No-op: the WS session opens lazily in `startListening` (the "call"). */
   async connect(): Promise<void> {}
 
+  setSessionBridge(bridge: VoiceSessionBridge): void {
+    this.bridge = bridge;
+  }
+
+  /**
+   * Warm the voice path ahead of the click. Fire-and-forget and throttled to
+   * once per {@link PREWARM_THROTTLE_MS}; never emits an error or a status.
+   */
+  prewarm(): void {
+    if (this.#callLive || this.#attached) return;
+    const agentId = this.config?.agentId;
+    const token = this.config?.clientToken;
+    const host = this.config?.host;
+    if (!agentId || !token || !host) return;
+    const now = Date.now();
+    if (now - this.#lastPrewarmAt < PREWARM_THROTTLE_MS) return;
+    this.#lastPrewarmAt = now;
+    try {
+      if (this.config?.prewarmMode === "attach") {
+        this.#attach(host, agentId, token);
+      } else {
+        this.#requestPrewarm(host, agentId, token);
+      }
+    } catch {
+      // A prewarm must never surface an error; the click connects normally.
+    }
+  }
+
+  #requestPrewarm(host: string, agentId: string, token: string): void {
+    if (typeof fetch !== "function") return;
+    const url = `${toHttpBase(host)}/v1/client/agents/${encodeURIComponent(agentId)}/voice/prewarm`;
+    void fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  #attach(host: string, agentId: string, token: string): void {
+    const params = new URLSearchParams();
+    const configuredIdleMs = this.config?.attachIdleMs;
+    const idleMs = clampAttachIdleMs(configuredIdleMs);
+    if (configuredIdleMs !== undefined) params.set("attachIdleMs", String(idleMs));
+    const ws = new WebSocket(this.#voiceSocketUrl(host, agentId, params), [
+      "runtype.bearer",
+      "runtype.attach",
+      token,
+    ]);
+    ws.binaryType = "arraybuffer";
+    let settle: () => void = () => {};
+    const ready = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const entry: AttachedSocket = {
+      ws,
+      state: "connecting",
+      ready,
+      settle,
+      openedAt: 0,
+      idleTimer: undefined,
+    };
+    this.#attached = entry;
+
+    ws.onopen = () => {
+      if (this.#attached !== entry) return;
+      entry.state = ws.protocol === "runtype.attach" ? "attached" : "live";
+      entry.openedAt = Date.now();
+      this.#armAttachIdle(entry, idleMs);
+      if (entry.state === "attached") ws.send('{"type":"ping"}');
+      entry.settle();
+    };
+    ws.onmessage = (event) => {
+      if (this.#attached !== entry || typeof event.data !== "string") return;
+      let msg: { type?: unknown; idleMs?: unknown };
+      try {
+        msg = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      // The server's idle window is authoritative; close no later than it does.
+      if (msg.type === "attached" && typeof msg.idleMs === "number") {
+        this.#armAttachIdle(entry, msg.idleMs - (Date.now() - entry.openedAt));
+      }
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => {
+      if (this.#attached === entry) this.#releaseAttached();
+    };
+  }
+
+  #armAttachIdle(entry: AttachedSocket, ms: number): void {
+    clearTimeout(entry.idleTimer);
+    entry.idleTimer = setTimeout(() => {
+      if (this.#attached === entry) this.#releaseAttached();
+    }, Math.max(0, ms));
+  }
+
+  /** Close and forget the prewarmed socket, if any. Silent by design. */
+  #releaseAttached(): void {
+    const entry = this.#attached;
+    if (!entry) return;
+    this.#attached = null;
+    clearTimeout(entry.idleTimer);
+    const { ws } = entry;
+    ws.onopen = null;
+    ws.onmessage = null;
+    ws.onerror = null;
+    ws.onclose = null;
+    entry.settle();
+    if (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.close(1000, "prewarm released");
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  /**
+   * Hand the prewarmed socket to the call, waiting up to
+   * {@link ATTACH_HANDSHAKE_TIMEOUT_MS} for a handshake still in flight.
+   * Resolves `null` when there is none, it stalled, or it dropped, so the
+   * caller opens a fresh socket.
+   */
+  async #takeAttachedSocket(): Promise<{ ws: WebSocket; live: boolean } | null> {
+    const entry = this.#attached;
+    if (!entry) return null;
+    if (entry.state === "connecting") {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        entry.ready,
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, ATTACH_HANDSHAKE_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+    }
+    if (this.#attached !== entry) return null;
+    if (entry.state === "connecting" || entry.ws.readyState !== WebSocket.OPEN) {
+      this.#releaseAttached();
+      return null;
+    }
+    this.#attached = null;
+    clearTimeout(entry.idleTimer);
+    return { ws: entry.ws, live: entry.state === "live" };
+  }
+
+  /**
+   * The call socket URL. Every socket declares the full-duplex capability;
+   * `extra` adds params (e.g. an attach prewarm's). The token never goes in
+   * the URL, and these params are not secrets.
+   */
+  #voiceSocketUrl(host: string, agentId: string, attach?: URLSearchParams): string {
+    let capabilities = "partial_transcript,context";
+    if (this.bridge && this.config?.clientDelegation !== false) {
+      capabilities += ",client_delegation,delegation_update,delegation_read_back,delegation_stream";
+      if (this.bridge.clientTools?.()) capabilities += ",client_tools,prior_tool_results";
+    }
+    if (attach) capabilities = `attach,${capabilities}`;
+    const params = new URLSearchParams({
+      voiceProtocol: VOICE_PROTOCOL,
+      clientVersion: `persona/${VERSION}`,
+      voiceCapabilities: FULL_DUPLEX_CAPABILITY,
+      clientCapabilities: capabilities,
+    });
+    attach?.forEach((value, key) => params.set(key, value));
+    return `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice?${params}`;
+  }
+
   /** Start the call: acquire mic, open the WS, stream PCM until hang-up. */
   async startListening(): Promise<void> {
-    if (this.callLive) return; // idempotent: a call is already live
+    if (this.#callLive) return; // idempotent: a call is already live
+    // A call the visitor starts gets a fresh reconnect; the automatic one doesn't.
+    const auto = this.#autoReconnect;
+    if (!auto) {
+      this.#reconnected = false;
+      this.#notice = null;
+    }
+    this.#autoReconnect = false;
 
     const agentId = this.config?.agentId;
     const token = this.config?.clientToken;
@@ -115,9 +556,9 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     if (!token) throw new Error("Runtype voice requires a clientToken");
     if (!host) throw new Error("Runtype voice requires a host (or widget apiUrl)");
 
-    const generation = ++this.callGeneration;
-    this.intentionalClose = false;
-    this.callLive = true;
+    const generation = ++this.#callGeneration;
+    this.#intentionalClose = false;
+    this.#callLive = true;
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -127,11 +568,11 @@ export class RuntypeVoiceProvider implements VoiceProvider {
           echoCancellation: true,
         },
       });
-      if (generation !== this.callGeneration) {
+      if (generation !== this.#callGeneration) {
         stream.getTracks().forEach((t) => t.stop());
         return;
       }
-      this.mediaStream = stream;
+      this.#mediaStream = stream;
 
       // Create + resume both contexts inside the click gesture (iOS autoplay).
       const AudioCtx =
@@ -139,100 +580,191 @@ export class RuntypeVoiceProvider implements VoiceProvider {
       const captureContext: AudioContext = new AudioCtx({
         sampleRate: CAPTURE_SAMPLE_RATE,
       });
+      this.#captureContext = captureContext;
       if (captureContext.state === "suspended") {
-        await captureContext.resume().catch(() => {});
+        // Outside a click (the automatic reconnect, or a call restored after a
+        // page navigation) the autoplay policy can leave audio suspended and
+        // `resume()` pending forever: fail fast rather than hang or open a dead call.
+        await Promise.race([
+          captureContext.resume().catch(() => {}),
+          new Promise((resolve) => setTimeout(resolve, auto ? 500 : AUDIO_RESUME_TIMEOUT_MS)),
+        ]);
+        if (generation !== this.#callGeneration) return; // hung up meanwhile
+        if ((captureContext.state as string) !== "running") {
+          if (auto) throw new Error((this.#notice = `${CONNECTION_LOST} Tap the mic to reconnect.`));
+          // A restored call: the widget asks for a tap to resume.
+          throw new Error("Audio blocked until a tap");
+        }
       }
-      this.captureContext = captureContext;
 
       const engine = this.config?.createPlaybackEngine
         ? await this.config.createPlaybackEngine()
         : new AudioPlaybackManager(PLAYBACK_SAMPLE_RATE);
-      if (generation !== this.callGeneration) {
+      if (generation !== this.#callGeneration) {
         // Torn down while async work was in flight: free what we acquired.
         void engine.destroy();
         stream.getTracks().forEach((t) => t.stop());
         captureContext.close().catch(() => {});
         return;
       }
-      this.playback = engine;
-      engine.onFinished(() => {
-        if (generation !== this.callGeneration) return;
-        this.isSpeaking = false;
-        // Reply drained: the call stays open, so return to listening.
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-          this.emitStatus("listening");
-        }
-      });
+      this.#playback = engine;
+      this.#armPlaybackFinished();
+      // Capture from now: frames buffer until the call socket is open.
+      this.#startCapture(captureContext, stream, generation);
 
-      const wsUrl = `${toWsBase(host)}/ws/agents/${encodeURIComponent(agentId)}/voice`;
+      const adopted = await this.#takeAttachedSocket();
+      if (generation !== this.#callGeneration) {
+        adopted?.ws.close(1000, "client ended call");
+        return;
+      }
+      if (adopted) {
+        const { ws } = adopted;
+        this.#ws = ws;
+        this.#bindCallSocket(ws, generation);
+        if (!adopted.live) ws.send('{"type":"start"}');
+        this.#flushPreOpenAudio(ws);
+        this.#emitStatus("listening");
+        return;
+      }
+
       // Token rides the subprotocol; `runtype.bearer` is the marker the server
       // echoes as the negotiated subprotocol (browsers fail the handshake if an
       // offered subprotocol goes unanswered).
-      const ws = new WebSocket(wsUrl, ["runtype.bearer", token]);
+      const ws = new WebSocket(this.#voiceSocketUrl(host, agentId), ["runtype.bearer", token]);
       ws.binaryType = "arraybuffer";
-      this.ws = ws;
+      this.#ws = ws;
 
       ws.onopen = () => {
-        if (generation !== this.callGeneration) return;
-        this.emitStatus("listening");
-        this.startCapture(captureContext, stream, ws, generation);
+        if (generation !== this.#callGeneration) return;
+        this.#flushPreOpenAudio(ws);
+        this.#emitStatus("listening");
       };
-
-      ws.onmessage = (event) => this.handleMessage(event, generation);
-
-      ws.onerror = () => {
-        if (generation !== this.callGeneration) return;
-        this.emitError(new Error("Voice connection failed"));
-        this.emitStatus("error");
-        this.cleanup();
-      };
-
-      ws.onclose = (evt) => {
-        if (this.intentionalClose) {
-          this.intentionalClose = false;
-          return;
-        }
-        if (generation !== this.callGeneration) return;
-        if (evt.code !== 1000) {
-          const codeMsg = evt.code ? ` (code ${evt.code})` : "";
-          this.emitError(new Error(`Voice connection closed${codeMsg}`));
-          this.emitStatus("error");
-        } else {
-          this.emitStatus("idle");
-        }
-        this.cleanup();
-      };
+      this.#bindCallSocket(ws, generation);
     } catch (error) {
-      this.cleanup();
-      this.emitError(error as Error);
-      this.emitStatus("error");
+      this.#cleanup();
+      this.#emitError(error as Error);
+      this.#emitStatus("error");
       throw error;
     }
   }
 
+  /** Route a call socket's frames, errors, and close into this call. */
+  #bindCallSocket(ws: WebSocket, generation: number): void {
+    ws.onmessage = (event) => this.#handleMessage(event, generation);
+
+    ws.onerror = () => {
+      // After `session_end`, the close that follows reports the server's reason.
+      if (generation !== this.#callGeneration || this.#sessionEnd) return;
+      this.#emitError(new Error("Voice connection failed"));
+      this.#emitStatus("error");
+      this.#cleanup();
+    };
+
+    ws.onclose = (evt) => {
+      if (this.#intentionalClose) {
+        this.#intentionalClose = false;
+        return;
+      }
+      if (generation !== this.#callGeneration) return;
+      // Why the server ended it: its `session_end`, or the attach idle close.
+      const end = this.#sessionEnd ?? (evt.code === 4408 ? { reason: "idle_timeout" } : null);
+      if (!end) {
+        // No reason given (a deploy, a dropped connection): as before.
+        if (evt.code !== 1000) {
+          const codeMsg = evt.code ? ` (code ${evt.code})` : "";
+          this.#emitError(new Error(`Voice connection closed${codeMsg}`));
+          this.#emitStatus("error");
+        } else {
+          this.#emitStatus("idle");
+        }
+        this.#cleanup();
+        return;
+      }
+      this.#endCall(end.reason, end.message);
+    };
+  }
+
+  /**
+   * The server ended the call with a reason (`session_end`, Amendment 6): show
+   * its text, and reconnect once after a provider error or a restart. Unknown
+   * reasons are an ordinary end (`ended_by_server`).
+   */
+  #endCall(reason: string, message?: string): void {
+    const retry = RECONNECT_REASONS.includes(reason) && !this.#reconnected;
+    this.#cleanup();
+    if (retry) {
+      // Keep the call "live" while it waits, so the mic button hangs up (and cancels).
+      this.#reconnected = true;
+      this.#callLive = true;
+      this.#notice = reason === "provider_error" ? `${CONNECTION_LOST} Reconnecting…` : "Reconnecting…";
+      // A hang-up meanwhile runs #cleanup, which clears this timer.
+      this.#reconnectTimer = setTimeout(
+        () => {
+          this.#callLive = false;
+          this.#autoReconnect = true;
+          void this.startListening().catch(() => {});
+        },
+        1000 + Math.random() * 1000,
+      );
+      this.#emitStatus("idle");
+      return;
+    }
+    if (RECONNECT_REASONS.includes(reason)) {
+      // The reconnect already ran: this end is the second failure.
+      this.#notice = CONNECTION_LOST;
+      this.#emitError(new Error(CONNECTION_LOST));
+      return this.#emitStatus("error");
+    }
+    // `error`: the preceding `error` frame already reported it.
+    if (reason === "error") return this.#emitStatus("error");
+    this.#notice = (reason === "quota" && message) || SESSION_END_TEXT.get(reason) || null;
+    this.#emitStatus("idle");
+  }
+
+  /** Status-line text for the call (why it ended, or that it is reconnecting), once. */
+  takeNotice(): string | null {
+    const notice = this.#notice;
+    this.#notice = null;
+    return notice;
+  }
+
+  /** The AI-disclosure notice for a live speech-to-speech call (`disclosureText`; `false` hides it). */
+  getDisclosure(): string | null {
+    const text = this.config?.disclosureText;
+    return this.#callLive && this.#speechToSpeech && text !== false ? text || DISCLOSURE_TEXT : null;
+  }
+
   /** End the call (hang up). */
   async stopListening(): Promise<void> {
-    this.cleanup();
-    this.emitStatus("idle");
+    this.#cleanup();
+    this.#emitStatus("idle");
   }
 
   /** Tear down the call and drop all callbacks (used by `cleanupVoice`). */
   async disconnect(): Promise<void> {
-    this.cleanup();
-    this.emitStatus("disconnected");
-    this.resultCallbacks = [];
-    this.errorCallbacks = [];
-    this.statusCallbacks = [];
-    this.transcriptCallbacks = [];
-    this.metricsCallbacks = [];
+    this.#cleanup();
+    this.#emitStatus("disconnected");
+    this.#resultCallbacks = [];
+    this.#errorCallbacks = [];
+    this.#statusCallbacks = [];
+    this.#transcriptCallbacks = [];
+    this.#metricsCallbacks = [];
   }
 
-  /** Stop the spoken reply without ending the call. */
+  /**
+   * Stop the spoken reply without ending the call. In a speech-to-speech
+   * session this also asks the server to cancel the response; audio is dropped
+   * until its `audio_clear` acknowledgement arrives.
+   */
   stopPlayback(): void {
-    if (this.playback) this.playback.flush();
-    this.isSpeaking = false;
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.emitStatus("listening");
+    this.#clearLocalPlayback();
+    const ws = this.#ws;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      if (this.#speechToSpeech) {
+        this.#cancelledUntil = Date.now() + CANCEL_ACK_TIMEOUT_MS;
+        ws.send('{"type":"cancel"}');
+      }
+      this.#emitStatus("listening");
     }
   }
 
@@ -245,35 +777,33 @@ export class RuntypeVoiceProvider implements VoiceProvider {
 
   /** True while the call (hot mic) is live. */
   isBargeInActive(): boolean {
-    return this.callLive;
+    return this.#callLive;
   }
 
   /** "Hang up" the always-on mic. */
   onLevel(callback: (level: number) => void): void {
-    this.levelCallbacks.push(callback);
+    this.#levelCallbacks.push(callback);
   }
 
   async deactivateBargeIn(): Promise<void> {
-    this.cleanup();
-    this.emitStatus("idle");
+    this.#cleanup();
+    this.#emitStatus("idle");
   }
 
   // --- Capture ---------------------------------------------------------------
 
-  private startCapture(
-    context: AudioContext,
-    stream: MediaStream,
-    ws: WebSocket,
-    generation: number,
-  ): void {
+  #startCapture(context: AudioContext, stream: MediaStream, generation: number): void {
     const source = context.createMediaStreamSource(stream);
-    this.sourceNode = source;
+    this.#sourceNode = source;
     const processor = context.createScriptProcessor(CAPTURE_BUFFER_SIZE, 1, 1);
-    this.processor = processor;
+    this.#processor = processor;
 
     processor.onaudioprocess = (e) => {
-      if (generation !== this.callGeneration) return;
-      if (ws.readyState !== WebSocket.OPEN) return;
+      if (generation !== this.#callGeneration) return;
+      // No socket yet (adopting a prewarm) or still handshaking: buffer.
+      const ws = this.#ws;
+      const open = ws?.readyState === WebSocket.OPEN;
+      if (ws && !open && ws.readyState !== WebSocket.CONNECTING) return;
       const input = e.inputBuffer.getChannelData(0);
       const pcm16 = new Int16Array(input.length);
       let sumSquares = 0;
@@ -282,14 +812,23 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         sumSquares += s * s;
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
-      ws.send(pcm16.buffer);
+      if (ws && open) {
+        this.#flushPreOpenAudio(ws);
+        ws.send(pcm16.buffer);
+      } else {
+        this.#preOpenAudio.push(pcm16.buffer);
+        this.#preOpenBytes += pcm16.byteLength;
+        while (this.#preOpenBytes > PRE_OPEN_AUDIO_MAX_BYTES) {
+          this.#preOpenBytes -= this.#preOpenAudio.shift()!.byteLength;
+        }
+      }
       // Amplitude comes free from the buffer we already walked: no analyser
       // node, no second capture. RMS is scaled because speech rarely exceeds
       // ~0.3 RMS, so raw values would sit near the bottom of the 0..1 range.
-      if (this.levelCallbacks.length > 0) {
+      if (this.#levelCallbacks.length > 0) {
         const rms = Math.sqrt(sumSquares / input.length);
         const level = Math.max(0, Math.min(1, rms * LEVEL_RMS_SCALE));
-        for (const cb of this.levelCallbacks) cb(level);
+        for (const cb of this.#levelCallbacks) cb(level);
       }
     };
 
@@ -299,13 +838,19 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     processor.connect(context.destination);
   }
 
+  #flushPreOpenAudio(ws: WebSocket): void {
+    for (const frame of this.#preOpenAudio) ws.send(frame);
+    this.#preOpenAudio = [];
+    this.#preOpenBytes = 0;
+  }
+
   // --- Downstream ------------------------------------------------------------
 
-  private handleMessage(event: MessageEvent, generation: number): void {
-    if (generation !== this.callGeneration) return;
+  #handleMessage(event: MessageEvent, generation: number): void {
+    if (generation !== this.#callGeneration) return;
 
     if (event.data instanceof ArrayBuffer) {
-      this.handleAudioFrame(event.data, generation);
+      this.#handleAudioFrame(event.data, generation);
       return;
     }
 
@@ -317,30 +862,228 @@ export class RuntypeVoiceProvider implements VoiceProvider {
     }
 
     switch (msg.type) {
+      case "session_config":
+        // The follow-up session_config carries only interruptionMode: keep the mode.
+        if (msg.speechMode) {
+          this.#speechToSpeech = msg.speechMode === "speech_to_speech";
+          this.#playback?.setContinuousMode?.(this.#speechToSpeech);
+        }
+        // The negotiated client frame types. A server without `capabilities`
+        // predates them: no client delegation, context or updates.
+        if (Array.isArray(msg.capabilities)) this.#capabilities = new Set(msg.capabilities);
+        if (typeof msg.callId === "string") this.#callId = msg.callId;
+        this.#clientDelegation = this.#speechToSpeech && this.#capabilities.has("client_delegation") && !!this.bridge;
+        // Speech-to-speech is known only now: let the UI show its disclosure.
+        if (this.#speechToSpeech && !this.#isSpeaking) this.#emitStatus("listening");
+        if (this.#capabilities.has("context") && !this.#contextSent) {
+          this.#contextSent = true;
+          this.#pendingContext = this.#buildContextText();
+        }
+        if (this.#clientDelegation && this.#capabilities.has("client_tools") && !this.#fastTier) {
+          // INVARIANT: #clientDelegation implies a bridge.
+          this.#fastTier =
+            this.bridge!
+              .clientTools?.()
+              ?.open({
+                send: (frame) => {
+                  const ws = this.#ws;
+                  if (generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return false;
+                  ws.send(JSON.stringify(frame));
+                  return true;
+                },
+                cancelled: (id) => this.#cancelledDelegations.has(id),
+              })
+              .catch(() => null) ?? null;
+        }
+        break;
+
+      case "client_tool_call": {
+        // A direct turn: keep the request it answers (speech may follow) and fold its read-back.
+        const id = String(msg.delegationId);
+        if (this.#fastTier && !this.#direct.has(id)) {
+          this.#direct.set(id, this.#heard);
+          this.#answered.add(id);
+        }
+        void this.#fastTier?.then((session) => session?.call(msg));
+        break;
+      }
+
+      case "transcript_update": {
+        const role = msg.role === "assistant" ? "assistant" : "user";
+        // A reply the client cancelled keeps streaming until the server clears it.
+        const utteranceId = msg.utteranceId ?? msg.turnId;
+        if (!utteranceId || (role === "assistant" && this.#isCancelling())) break;
+        const turnId = String(utteranceId);
+        if (role === "user") {
+          // Release on a final user transcript, not a partial: a mid-utterance
+          // context append makes the voice model answer early (or not delegate).
+          if (msg.final === true) {
+            this.#flushCallContext(generation);
+            this.#heard = { id: turnId, text: String(msg.text ?? "") };
+          }
+          this.#foldReadback = false;
+        } else {
+          // Read-back of a delegated result the chat already renders. A server
+          // that negotiated `delegation_read_back` tags it with its delegation;
+          // an older one rotates the assistant id at completion, so it is the
+          // first new id after it (a guess a filler finishing late defeats).
+          if (this.#capabilities.has("delegation_read_back")) {
+            // Fold only from the first frame: hiding an utterance already shown would strand a partial caption.
+            const tag = msg.delegationId;
+            if (typeof tag === "string" && this.#answered.has(tag) && !this.#assistantTurns.has(turnId)) {
+              this.#foldedTurns.add(turnId);
+              this.#foldReadback = false;
+            } else if (this.#foldReadback && !this.#assistantTurns.has(turnId)) {
+              // Armed by `delegation_progress`: the server may leave the
+              // read-back untagged (it continued a filler it cut), so the
+              // first new utterance after it is the read-back.
+              this.#foldedTurns.add(turnId);
+              this.#foldReadback = false;
+            }
+          } else if (this.#foldReadback && !this.#assistantTurns.has(turnId)) {
+            this.#foldedTurns.add(turnId);
+            this.#foldReadback = false;
+          }
+          this.#assistantTurns.add(turnId);
+          if (this.#foldedTurns.has(turnId)) break;
+        }
+        this.#emitTranscript(role, msg.text ?? "", msg.final === true, {
+          turnId,
+          ...(typeof msg.startMs === "number" && { startMs: msg.startMs }),
+          ...(typeof msg.endMs === "number" && { endMs: msg.endMs }),
+          // The chat pipeline owns the conversation: speech is only captioned.
+          ...(this.#clientDelegation && { caption: true }),
+        });
+        break;
+      }
+
+      case "delegation_started":
+      case "delegation_completed": {
+        const delegationId = String(msg.delegationId ?? msg.turnId);
+        if (msg.type === "delegation_started") {
+          this.#flushCallContext(generation);
+          this.#started.add(delegationId);
+          // A direct attempt that fell through: its answer is the chat turn's now, and its tool must not act late.
+          this.#answered.delete(delegationId);
+          if (this.#direct.delete(delegationId)) void this.#fastTier?.then((session) => session?.abort(delegationId));
+          // `input`: run this turn through the chat pipeline (client delegation).
+          const input = msg.input;
+          if (this.#clientDelegation && input) {
+            this.#runDelegation(
+              delegationId,
+              {
+                delegationId,
+                userText: String(input.text ?? ""),
+                userUtteranceIds: Array.isArray(input.userUtteranceIds)
+                  ? input.userUtteranceIds.filter((id: unknown): id is string => typeof id === "string")
+                  : [],
+                messages: Array.isArray(input.messages) ? input.messages : [],
+                priorToolResults: input.priorToolResults,
+              },
+              generation,
+            );
+          }
+        } else if (msg.route === "direct" && this.#fastTier && !this.#started.has(delegationId)) {
+          // The server answered it itself: write the request it answered and its
+          // answer into the chat, as the chat pipeline would have.
+          const heard = this.#direct.get(delegationId) ?? this.#heard;
+          this.#direct.delete(delegationId);
+          this.#started.add(delegationId);
+          this.#answered.add(delegationId);
+          this.bridge?.recordDirectTurn?.({
+            delegationId,
+            userText: heard?.text ?? "",
+            userUtteranceIds: heard ? [heard.id] : [],
+            assistantText: typeof msg.text === "string" ? msg.text : "",
+          });
+        }
+        if (msg.type === "delegation_completed" && msg.speak !== false && this.#answered.has(delegationId)) {
+          // Every spoken phase (the approval ask, the late result) of an answer
+          // the chat shows is read back. A refusal of one that never started
+          // here has no chat answer: it renders. `final` may never come. A
+          // phase whose first `delegation_progress` already armed the fold
+          // ends here without arming it again. With `delegation_read_back`
+          // the tag marks the read-back, so completion arms nothing (only
+          // progress does, for a read-back the server left untagged).
+          if (!this.#progressed.delete(delegationId) && !this.#capabilities.has("delegation_read_back"))
+            this.#armFold(delegationId);
+        }
+        this.#delegating = msg.type === "delegation_started";
+        if (!this.#isSpeaking && !this.#isCancelling()) {
+          this.#emitStatus(this.#delegating ? "processing" : "listening");
+        }
+        break;
+      }
+
+      case "delegation_progress": {
+        // The server handed a spoken chunk of this delegation to the voice
+        // model: its read-back is starting. The first one of a phase folds it,
+        // as `delegation_completed{speak:true}` does; later ones (and that
+        // phase's completion) don't fold another utterance. Still delegating.
+        const delegationId = String(msg.delegationId);
+        if (
+          this.#answered.has(delegationId) &&
+          !this.#progressed.has(delegationId) &&
+          !this.#cancelledDelegations.has(delegationId)
+        ) {
+          this.#progressed.add(delegationId);
+          this.#armFold(delegationId);
+        }
+        break;
+      }
+
+      case "delegation_cancelled":
+        // The server gave up on it: no more frames for it, and its approval
+        // timers stop. The chat turn still renders. Past its deadline (or for
+        // an unknown reason), a parked approval card is also declined, as the
+        // approval TTL would; the call ending or the voice model cancelling
+        // leaves the card usable in the chat.
+        this.#dropDelegation(
+          String(msg.delegationId),
+          msg.reason !== "session_ending" && msg.reason !== "provider_cancelled",
+        );
+        break;
+
+      case "warning":
+        // Non-fatal (an unknown or refused frame): the call goes on. A refused
+        // delegation frame means the server is done with that delegation.
+        console.warn(`[Persona voice] ${msg.code}: ${msg.message ?? ""}`, this.#callId ?? "");
+        if (msg.delegationId && (msg.code === "UNKNOWN_DELEGATION" || msg.code === "LATE_RESULT_LIMIT")) {
+          this.#dropDelegation(String(msg.delegationId));
+        }
+        break;
+
+      case "audio_clear":
+        // Barge-in (or our own cancel acknowledged): stop playback now.
+        this.#clearLocalPlayback();
+        this.#cancelledUntil = 0;
+        this.#emitStatus("listening");
+        break;
+
       case "transcript_interim":
-        this.emitStatus("listening");
-        this.emitTranscript("user", msg.text ?? "", false);
+        this.#emitStatus("listening");
+        this.#emitTranscript("user", msg.text ?? "", false);
         break;
 
       case "transcript_final": {
         const role = msg.role === "assistant" ? "assistant" : "user";
         // user final → agent is now thinking; assistant final → reply incoming.
-        this.emitStatus(role === "user" ? "processing" : "speaking");
-        this.emitTranscript(role, msg.text ?? "", true);
+        this.#emitStatus(role === "user" ? "processing" : "speaking");
+        this.#emitTranscript(role, msg.text ?? "", true);
         break;
       }
 
       case "audio_end":
-        if (this.playback) {
-          this.playback.markStreamEnd();
+        if (this.#playback) {
+          this.#playback.markStreamEnd();
         } else {
-          this.isSpeaking = false;
-          this.emitStatus("listening");
+          this.#isSpeaking = false;
+          this.#emitStatus("listening");
         }
         break;
 
       case "metrics":
-        this.emitMetrics({
+        this.#emitMetrics({
           llmMs: msg.llm_ms,
           ttsMs: msg.tts_ms,
           firstAudioMs: msg.first_audio_ms,
@@ -349,105 +1092,335 @@ export class RuntypeVoiceProvider implements VoiceProvider {
         break;
 
       case "error":
-        this.emitError(new Error(msg.error || "Voice error"));
-        this.emitStatus("error");
+        this.#emitError(new Error(msg.error || "Voice error"));
+        this.#emitStatus("error");
+        break;
+
+      case "session_end":
+        // The server's last frame before it closes: the close acts on it.
+        this.#sessionEnd = {
+          reason: String(msg.reason),
+          ...(typeof msg.message === "string" && { message: msg.message }),
+        };
         break;
     }
   }
 
-  private handleAudioFrame(buf: ArrayBuffer, generation: number): void {
-    if (generation !== this.callGeneration) return;
-    if (!this.playback) return;
+  /** Send the call-start `context` frame (history + host context), if any. */
+  /**
+   * The call-start `context` text. History is read now, before any of this
+   * call's voice bubbles exist, so it never includes the utterance in progress.
+   */
+  async #buildContextText(): Promise<string> {
+    const history = this.bridge?.getHistory() ?? [];
+    let extra = "";
+    try {
+      const source = this.config?.callContext;
+      extra = String((typeof source === "function" ? await source() : source) ?? "");
+    } catch {
+      // A failing host callback only loses its own part of the context.
+    }
+    return buildCallContext(history, extra);
+  }
+
+  /** Send the held call-start context, once: at the first final user transcript or delegation. */
+  #flushCallContext(generation: number): void {
+    const pending = this.#pendingContext;
+    if (!pending) return;
+    this.#pendingContext = null;
+    let dropped = false;
+    const done = pending.then((text) => {
+      const ws = this.#ws;
+      if (dropped || !text || generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: "context", text }));
+    });
+    this.#contextSend = { done, drop: () => (dropped = true) };
+  }
+
+  /** Let a released context go out first; a hung host callback is dropped. */
+  async #awaitContextSend(): Promise<void> {
+    const send = this.#contextSend;
+    if (!send) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = await Promise.race([
+      send.done.then(() => false),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(true), CONTEXT_BEFORE_RESULT_TIMEOUT_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (timedOut) send.drop();
+  }
+
+  /** The next new assistant utterance is this delegation's read-back: fold it. */
+  #armFold(delegationId: string): void {
+    this.#foldReadback = true;
+    this.#foldArmedBy = delegationId;
+  }
+
+  /** No more frames for this delegation; its chat answer goes back to browser TTS. */
+  #dropDelegation(delegationId: string, expired = false): void {
+    this.#cancelledDelegations.add(delegationId);
+    // A fold it armed whose read-back never started would hide the next
+    // unrelated utterance: disarm it.
+    if (this.#foldArmedBy === delegationId) this.#foldReadback = false;
+    this.#progressed.delete(delegationId);
+    // A direct answer that never completed has no chat message to fold onto.
+    if (!this.#started.has(delegationId)) this.#answered.delete(delegationId);
+    void this.#fastTier?.then((session) => session?.abort(delegationId));
+    this.bridge?.dropDelegation?.(delegationId, expired);
+    this.#followUps.get(delegationId)?.abort();
+  }
+
+  /** Run a delegated turn through the session bridge (one at a time) and answer it. */
+  #runDelegation(delegationId: string, request: VoiceDelegationRequest, generation: number): void {
+    const bridge = this.bridge!;
+    /** Send a frame for this delegation, unless the call or the delegation ended. */
+    const send = ({ type, ...fields }: Record<string, unknown> & { type: string }) => {
+      const ws = this.#ws;
+      if (generation !== this.#callGeneration || ws?.readyState !== WebSocket.OPEN) return false;
+      if (this.#cancelledDelegations.has(delegationId)) return false;
+      ws.send(JSON.stringify({ type, delegationId, ...fields }));
+      return true;
+    };
+    const answer = (type: "delegation_update" | "delegation_result", status: string, text: string, streamedChars = 0) =>
+      send({ type, status, text, ...(streamedChars > 0 && { streamedChars }) });
+    this.#delegations = this.#delegations.then(async () => {
+      // Cancelled while queued behind another turn: never start it.
+      if (generation !== this.#callGeneration || this.#cancelledDelegations.has(delegationId)) return;
+      // Streaming (`delegation_stream`): the answer goes out as
+      // `delegation_delta` pieces while the chat renders it, after the call
+      // context, and all of them before the result.
+      let deltas: Promise<void> | null = null;
+      // Only with read-back tags: a streamed answer can be spoken as several
+      // utterances, and the tags are what keep all of them folded.
+      const streaming = this.#capabilities.has("delegation_stream") && this.#capabilities.has("delegation_read_back");
+      const stream = (text: string) => {
+        deltas = (deltas ?? this.#awaitContextSend()).then(() => {
+          // The chat shows what was streamed: its read-back is folded.
+          if (send({ type: "delegation_delta", text })) this.#answered.add(delegationId);
+        });
+      };
+      const result: VoiceDelegationResult = await bridge
+        .runDelegatedTurn(streaming ? { ...request, stream } : request)
+        .catch(() => ({ status: "failed", text: "" }));
+      await this.#awaitContextSend();
+      await deltas;
+      const streamedChars = streaming ? (result.streamedChars ?? 0) : 0;
+      // Parked on an approval: ask now (non-terminal), answer once the visitor
+      // decides. A server that can't take an update gets the ask as the result.
+      const parked = !!result.followUp;
+      const update = parked && this.#capabilities.has("delegation_update");
+      const sent = answer(
+        update ? "delegation_update" : "delegation_result",
+        parked && !update ? "completed" : result.status,
+        result.text,
+        streamedChars,
+      );
+      if (!sent) return;
+      if (result.status !== "failed" && result.inChat !== false) this.#answered.add(delegationId);
+      if (!result.followUp) return;
+      // The approval bookkeeping (expiry, supersede) runs either way.
+      const abort = new AbortController();
+      this.#followUps.set(delegationId, abort);
+      void result
+        .followUp({
+          signal: abort.signal,
+          // Under the server's 600 s deadline, which restarts at each update.
+          approvalTimeoutMs: this.config?.approvalTimeoutMs && Math.min(this.config.approvalTimeoutMs, APPROVAL_TIMEOUT_MAX_MS),
+          readBack: update,
+          // Another gated tool in the same turn: another (non-terminal) update.
+          onUpdate: (text) => answer("delegation_update", "pending_approval", text),
+        })
+        .then((followUp) => {
+          this.#followUps.delete(delegationId);
+          // Hang-up and cancellation send nothing.
+          if (update && followUp && !abort.signal.aborted) answer("delegation_result", followUp.status, followUp.text);
+        });
+    });
+  }
+
+  #handleAudioFrame(buf: ArrayBuffer, generation: number): void {
+    if (generation !== this.#callGeneration) return;
+    if (!this.#playback) return;
+    if (this.#isCancelling()) return;
     const pcm = stripWavHeader(buf);
     if (pcm.length === 0) return;
-    if (!this.isSpeaking) {
-      this.isSpeaking = true;
-      this.emitStatus("speaking");
+    if (!this.#isSpeaking) {
+      this.#isSpeaking = true;
+      this.#emitStatus("speaking");
     }
-    this.playback.enqueue(pcm);
+    this.#armPlaybackFinished();
+    this.#playback.enqueue(pcm);
+    if (this.#speechToSpeech) this.#scheduleContinuousDrain(pcm.length);
+  }
+
+  #isCancelling(): boolean {
+    return Date.now() < this.#cancelledUntil;
+  }
+
+  /** Register the (one-shot) engine drain callback if none is pending. */
+  #armPlaybackFinished(): void {
+    if (this.#finishedArmed || !this.#playback) return;
+    this.#finishedArmed = true;
+    const generation = this.#callGeneration;
+    this.#playback.onFinished(() => {
+      if (generation !== this.#callGeneration) return;
+      this.#finishedArmed = false;
+      this.#handlePlaybackDrained();
+    });
+  }
+
+  /**
+   * Speech-to-speech replies never get an end-of-stream, so estimate when the
+   * queued audio finishes from its duration and release "speaking" then. The
+   * engine is never marked ended, so the next reply's audio plays through the
+   * same stream untouched and an underrun is never mistaken for a reply end.
+   */
+  #scheduleContinuousDrain(byteLength: number): void {
+    const now = Date.now();
+    // PCM16 @ 24 kHz: 48 bytes per millisecond.
+    this.#playbackEndsAt = Math.max(now, this.#playbackEndsAt) + byteLength / 48;
+    clearTimeout(this.#drainTimer);
+    this.#drainTimer = setTimeout(
+      () => this.#handlePlaybackDrained(),
+      this.#playbackEndsAt - now + CONTINUOUS_DRAIN_GRACE_MS,
+    );
+  }
+
+  #handlePlaybackDrained(): void {
+    this.#isSpeaking = false;
+    this.#playbackEndsAt = 0;
+    // Reply drained: the call stays open, so return to listening (or to
+    // processing while an agent delegation is still running).
+    if (this.#ws && this.#ws.readyState === WebSocket.OPEN) {
+      this.#emitStatus(this.#delegating ? "processing" : "listening");
+    }
+  }
+
+  /** Drop queued audio locally and reset the speaking/drain bookkeeping. */
+  #clearLocalPlayback(): void {
+    this.#playback?.flush();
+    // flush() discards registered callbacks: re-arm for the next reply.
+    this.#finishedArmed = false;
+    this.#armPlaybackFinished();
+    this.#isSpeaking = false;
+    this.#playbackEndsAt = 0;
+    clearTimeout(this.#drainTimer);
   }
 
   // --- Teardown --------------------------------------------------------------
 
-  private cleanup(): void {
+  #cleanup(): void {
     // Invalidate any in-flight async continuation / late frames first.
-    this.callGeneration += 1;
-    this.callLive = false;
-    this.isSpeaking = false;
+    this.#callGeneration += 1;
+    this.#callLive = false;
+    this.#isSpeaking = false;
+    this.#releaseAttached();
+    this.#speechToSpeech = false;
+    this.#delegating = false;
+    this.#clientDelegation = false;
+    this.#capabilities = new Set();
+    for (const abort of this.#followUps.values()) abort.abort();
+    this.#followUps.clear();
+    this.#cancelledDelegations.clear();
+    this.#callId = undefined;
+    this.#sessionEnd = null;
+    clearTimeout(this.#reconnectTimer);
+    this.#contextSent = false;
+    this.#pendingContext = null;
+    this.#contextSend = null;
+    this.#delegations = Promise.resolve();
+    this.#answered.clear();
+    this.#progressed.clear();
+    this.#foldArmedBy = null;
+    this.#foldReadback = false;
+    this.#assistantTurns.clear();
+    this.#foldedTurns.clear();
+    void this.#fastTier?.then((session) => session?.close());
+    this.#fastTier = null;
+    this.#started.clear();
+    this.#direct.clear();
+    this.#heard = null;
+    this.#finishedArmed = false;
+    this.#cancelledUntil = 0;
+    this.#playbackEndsAt = 0;
+    clearTimeout(this.#drainTimer);
+    this.#preOpenAudio = [];
+    this.#preOpenBytes = 0;
 
-    if (this.processor) {
-      this.processor.onaudioprocess = null;
-      this.processor.disconnect();
-      this.processor = null;
+    if (this.#processor) {
+      this.#processor.onaudioprocess = null;
+      this.#processor.disconnect();
+      this.#processor = null;
     }
-    if (this.sourceNode) {
-      this.sourceNode.disconnect();
-      this.sourceNode = null;
+    if (this.#sourceNode) {
+      this.#sourceNode.disconnect();
+      this.#sourceNode = null;
     }
-    if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach((t) => t.stop());
-      this.mediaStream = null;
+    if (this.#mediaStream) {
+      this.#mediaStream.getTracks().forEach((t) => t.stop());
+      this.#mediaStream = null;
     }
-    if (this.captureContext) {
-      this.captureContext.close().catch(() => {});
-      this.captureContext = null;
+    if (this.#captureContext) {
+      this.#captureContext.close().catch(() => {});
+      this.#captureContext = null;
     }
-    if (this.playback) {
-      void this.playback.destroy();
-      this.playback = null;
+    if (this.#playback) {
+      void this.#playback.destroy();
+      this.#playback = null;
     }
-    if (this.ws) {
-      this.intentionalClose = true;
+    if (this.#ws) {
+      this.#intentionalClose = true;
       try {
-        this.ws.close(1000, "client ended call");
+        this.#ws.close(1000, "client ended call");
       } catch {
         // ignore
       }
-      this.ws = null;
+      this.#ws = null;
     }
   }
 
   // --- Callback registration + emit -----------------------------------------
 
   onResult(callback: (result: VoiceResult) => void): void {
-    this.resultCallbacks.push(callback);
+    this.#resultCallbacks.push(callback);
   }
 
   onError(callback: (error: Error) => void): void {
-    this.errorCallbacks.push(callback);
+    this.#errorCallbacks.push(callback);
   }
 
   onStatusChange(callback: (status: VoiceStatus) => void): void {
-    this.statusCallbacks.push(callback);
+    this.#statusCallbacks.push(callback);
   }
 
-  onTranscript(
-    callback: (role: "user" | "assistant", text: string, isFinal: boolean) => void,
-  ): void {
-    this.transcriptCallbacks.push(callback);
+  onTranscript(callback: TranscriptCallback): void {
+    this.#transcriptCallbacks.push(callback);
   }
 
   onMetrics(callback: (metrics: VoiceMetrics) => void): void {
-    this.metricsCallbacks.push(callback);
+    this.#metricsCallbacks.push(callback);
   }
 
-  private emitStatus(status: VoiceStatus): void {
-    this.statusCallbacks.forEach((cb) => cb(status));
+  #emitStatus(status: VoiceStatus): void {
+    this.#statusCallbacks.forEach((cb) => cb(status));
   }
 
-  private emitError(error: Error): void {
-    this.errorCallbacks.forEach((cb) => cb(error));
+  #emitError(error: Error): void {
+    this.#errorCallbacks.forEach((cb) => cb(error));
   }
 
-  private emitTranscript(
+  #emitTranscript(
     role: "user" | "assistant",
     text: string,
     isFinal: boolean,
+    metadata?: VoiceTranscriptMetadata,
   ): void {
-    this.transcriptCallbacks.forEach((cb) => cb(role, text, isFinal));
+    this.#transcriptCallbacks.forEach((cb) => cb(role, text, isFinal, metadata));
   }
 
-  private emitMetrics(metrics: VoiceMetrics): void {
-    this.metricsCallbacks.forEach((cb) => cb(metrics));
+  #emitMetrics(metrics: VoiceMetrics): void {
+    this.#metricsCallbacks.forEach((cb) => cb(metrics));
   }
 }

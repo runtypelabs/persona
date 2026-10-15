@@ -79,7 +79,8 @@ const getToolSummaryText = (
         message,
         toolDisplayConfig?.previewMaxLines ?? DEFAULT_TOOL_CALL_DISPLAY.previewMaxLines
       );
-  const defaultSummary = tool ? (activityVariant(config, "tool") === "row" ? `${tool.status === "complete" ? "Used" : "Using"} ${tool.name?.trim() || "tool"}` : describeToolTitle(tool)) : "";
+  const defaultSummary = tool?.interrupted ? `${tool.name?.trim() || "Tool"} · Interrupted`
+    : tool ? (activityVariant(config, "tool") === "row" ? `${tool.status === "complete" ? "Used" : "Using"} ${tool.name?.trim() || "tool"}` : describeToolTitle(tool)) : "";
 
   if (!tool) {
     return { summary: defaultSummary, previewText, isActive: false };
@@ -97,11 +98,14 @@ const getToolSummaryText = (
   // Apply text templates if configured
   if (isActive && toolCallConfig.activeTextTemplate) {
     summary = resolveToolHeaderText(tool, toolCallConfig.activeTextTemplate, summary);
-  } else if (!isActive && toolCallConfig.completeTextTemplate) {
+  } else if (!isActive && !tool.interrupted && toolCallConfig.completeTextTemplate) {
     summary = resolveToolHeaderText(tool, toolCallConfig.completeTextTemplate, summary);
   }
 
-  if (tool.success === false) summary += " · Failed";
+  if (tool.interrupted) {
+    if (!summary.includes(" · Interrupted")) summary += " · Interrupted";
+  } else if (tool.success === false) summary += " · Failed";
+  else if (tool.superseded) summary += " · Approved, ran again below";
   return { summary, previewText, isActive };
 };
 
@@ -177,7 +181,7 @@ export const createToolBubble = (
   // Helper: build a <span data-tool-elapsed> that the global timer in ui.ts updates
   const createElapsedSpan = (): HTMLElement => {
     const span = createElement("span", "");
-    span.setAttribute("data-tool-elapsed", startedAt);
+    if (isActive) span.setAttribute("data-tool-elapsed", startedAt);
     span.textContent = computeToolElapsed(tool);
     return span;
   };
@@ -206,7 +210,7 @@ export const createToolBubble = (
   // Apply loading animation when tool is active and no custom HTMLElement was provided
   const loadingAnimation = toolDisplayConfig.loadingAnimation ?? DEFAULT_TOOL_CALL_DISPLAY.loadingAnimation;
   const activeTemplate = toolCallConfig.activeTextTemplate;
-  const completeTemplate = toolCallConfig.completeTextTemplate;
+  const completeTemplate = tool.interrupted ? undefined : toolCallConfig.completeTextTemplate;
   const currentTemplate = isActive ? activeTemplate : completeTemplate;
   const skipCustomElement = customSummary instanceof HTMLElement;
 
