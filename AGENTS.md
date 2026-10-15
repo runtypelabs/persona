@@ -20,6 +20,7 @@ Persona is a pnpm monorepo containing a themeable, pluggable streaming chat UI l
 - **Host matrix** (`examples/echo-hono`, `examples/echo-script-tag`, `examples/echo-express`, `examples/echo-sveltekit`) - the same canonical echo adapter re-hosted four ways. `persona-wire.ts` + the adapter are exact copies across all four; only the host wrapper changes. Hono/SvelteKit return the Web `Response` directly; Express/bare-`node:http` bridge the `(req, res)` callback style. All run keyless (echo agent) with a documented one-line swap to a real model.
 - `examples/runtype-script-tag` - the no-backend path: a static `clientToken` embed talking directly to `api.runtype.com`. Mirrors `echo-script-tag` but swaps `apiUrl: "/dispatch"` for a `clientToken` (zero-dep static server; loads the published widget from jsDelivr, not the workspace build). The hosted counterpart to the BYO examples.
 - `examples/runtype-hono-proxy` - Runtype API proxy on Hono (Node/Vercel/Workers; powers `pnpm dev`)
+- `examples/bento-slides` - a vendored copy of [Bento Slides](https://github.com/nyblnet/bento) (`kernel/` + `slides/`, upstream 1.2.6) with Persona embedded as "Bento Copilot": `slides/src/ai/` registers 23 WebMCP page tools and mounts the widget headless in the editor's right rail, with a GPT-Live voice call (client delegation) that can edit the deck and drive a running slideshow. Hosted Runtype agent on `qwen3.8-27b`; see its README for the upstream-sync notes.
 
 ## Requirements
 
@@ -144,6 +145,10 @@ The widget uses a layered architecture:
 
 **WebMCP page tools:** `webmcp.enabled` snapshots tools from `document.modelContext`, sends them as `clientTools[]`, executes returned `webmcp:<name>` calls in the browser with approval gating, and resumes via `${apiUrl}/resume`. `contextProviders` run on both agent and flow/proxy paths.
 
+For page-tool authoring or audits, read `docs/webmcp-authoring.md` and the typed
+example in `examples/webmcp-typed-tools`. Upstream skills supplement that guidance;
+they do not replace approval, authorization, or v5/v6 compatibility contracts.
+
 **Deferred Launcher Loading:** For the common floating-launcher case, `install.ts` paints the real launcher from the tiny `launcher.global.js` (< 20 KB brotli) at page load and defers the full `index.global.js` until the user's first click. `shouldDeferPanel()` gates this: floating launcher, not auto-expanded, no restored/`onStateLoaded` open state, derivable launcher URL , and everything else eager-loads unchanged. The critical launcher is mount-then-destroyed at handoff and renders pixel-identically to the full widget's, so the swap is invisible. Installer lifecycle hooks (`onScriptLoad` / `onLauncherShown` / `onChatReady` / `onError`) and matching `persona:*` DOM events expose each stage; `onChatReady` (which replaced the `onReady` alias removed in 4.0) fires after first open in a deferred install. See the header comment in `launcher-global.ts` and the gate/handoff comments in `install.ts` for the invariants.
 
 ### Proxy Package (`packages/proxy/src/`)
@@ -189,16 +194,20 @@ Key test files:
 
 When adding new functionality, add tests alongside the implementation in the same directory.
 
+### Visual verification (agents)
+
+To prove a widget change in a real browser and attach evidence to a PR, follow `.claude/skills/verify/SKILL.md`. Its lever is `node scripts/verify/control-persona.mjs` (agent-browser, against the keyless `apps/web/verify.html` fixture). Voice changes have their own layer: mocked Web Speech for the browser provider, and a real audio round trip through a scripted voice socket for the Runtype provider. Evidence goes to `.verify/` (gitignored), and `publish --pr N` posts one comment per PR.
+
 ## Build Outputs
 
-The widget builds to multiple formats via tsup:
+The widget builds to multiple formats via tsdown (Rolldown + Oxc), from the single `packages/widget/tsdown.config.ts` (one build per entry; declarations come from one tsgo-backed dts build):
 - `dist/index.js` - ESM (primary)
 - `dist/index.cjs` - CommonJS
 - `dist/index.global.js` - IIFE (for script tag / CDN usage)
 - `dist/install.global.js` - IIFE installer bootstrap (reads `window.siteAgentConfig`; the script-tag entry point)
 - `dist/launcher.global.js` - IIFE critical launcher bundle (deferred-loading fast path; see "Deferred Launcher Loading")
 - `dist/webmcp-polyfill.js` - Self-contained ESM chunk with `@mcp-b/webmcp-polyfill`; lazy-imported by the IIFE bundle (which marks the polyfill external) only when `config.webmcp.enabled` is true and the page has no `document.modelContext`. URL is derived from the widget script's `src` by the loader registered in `index-global.ts`.
-- `dist/index.d.ts` - TypeScript declarations
+- `dist/index.d.ts` / `dist/index.d.cts` - TypeScript declarations (shared declaration chunks are hashed)
 - `dist/widget.css` - Prefixed, hand-authored utility CSS (for consumers who import styles separately)
 
 ## CI
@@ -216,7 +225,7 @@ All five checks must pass before a PR can be merged.
 
 - **CSS classes:** `persona-` prefix on all utility classes. `widget.css` is hand-authored with Tailwind-style names (there is no Tailwind build), and the prefix prevents collisions with host page styles. Add the rule by hand when you use a new utility class.
 - **Filenames:** kebab-case (`component-name.ts`, `my-util.ts`)
-- **Linting:** ESLint + Prettier: run `pnpm lint` before committing; CI enforces this
+- **Linting:** oxlint (root `.oxlintrc.json`): run `pnpm lint` before committing; CI enforces this. Type checking runs on the native TS 7 compiler (`tsgo --noEmit`).
 - **Type safety:** Avoid `any`; prefer explicit types from `types.ts`
 - **Exports:** Named exports preferred; only use default exports where a clear single-export module pattern applies
 - **DOM construction (`widget/src/utils/dom.ts`):** `createElement(tag, className)` for class-only nodes; `createNode(tag, { className, attrs, style, text }, ...children)` when a node also needs attributes, inline styles, or children (nullish `style`/`children` values are skipped, so conditionals inline without `if`s); `cx(...)` to join conditional class fragments instead of `classList.add`. Leave heavily conditional/imperative builders on whatever reads clearest: don't force `createNode`.

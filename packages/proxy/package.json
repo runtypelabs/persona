@@ -1,6 +1,6 @@
 {
   "name": "@runtypelabs/persona-proxy",
-  "version": "4.23.2",
+  "version": "4.29.2",
   "description": "Proxy server for @runtypelabs/persona widget - handles flow configuration and forwards requests to AI backends.",
   "type": "module",
   "main": "dist/index.cjs",
@@ -18,9 +18,9 @@
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && tsup src/index.ts --format esm,cjs --dts --sourcemap",
-    "lint": "eslint . --ext .ts",
-    "typecheck": "tsc --noEmit",
+    "build": "tsdown",
+    "lint": "oxlint",
+    "typecheck": "tsgo --noEmit",
     "test:run": "vitest run"
   },
   "dependencies": {
@@ -28,14 +28,11 @@
   },
   "devDependencies": {
     "@types/node": "^20.12.7",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
-    "eslint": "^8.57.0",
-    "eslint-config-prettier": "^9.1.0",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "rimraf": "^5.0.5",
-    "tsup": "^8.0.1",
-    "typescript": "^5.4.5",
-    "vitest": "^4.1.8"
+    "tsdown": "^0.23.0",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3"
   },
   "engines": {
     "node": ">=20.0.0"

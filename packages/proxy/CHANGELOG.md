@@ -1,5 +1,23 @@
 # @runtypelabs/persona-proxy
 
+## 4.29.2
+
+### Patch Changes
+
+- a5e0e92: Add `PHONE_RECEPTIONIST_AGENT`, a server-pinned Sunrise Travel receptionist on PhoneLLM Mini (`phonellm-mini`) with keyless weather and office-hours tools, for the Phone Agent demo.
+
+## 4.28.2
+
+### Patch Changes
+
+- fac63b3: Build with tsdown (Rolldown + Oxc) instead of tsup, and minify `widget.css` with Lightning CSS. Published filenames, exports and type declarations are unchanged; most bundles are a few percent smaller.
+
+## 4.24.0
+
+### Patch Changes
+
+- 5b97f2a: Switch the Paint Pal demo flow to `gpt-6-sol`.
+
 ## 4.23.2
 
 ### Patch Changes

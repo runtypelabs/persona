@@ -17,7 +17,8 @@ import {
 } from './session';
 import { createDemoHistoryProvider } from './internal/demo-history-provider';
 import { createRuntypeHistoryProvider } from './internal/runtype-history-provider';
-import type { HistoryProvider } from './internal/history-provider';
+import { HistoryProviderError, type HistoryProvider } from './internal/history-provider';
+import { HistoryClientError } from './client';
 import {
   createVisitorStore,
   visitorStoreKeys,
@@ -467,6 +468,7 @@ async function createRuntypeHarness(): Promise<Harness> {
   );
 
   const provider = createRuntypeHistoryProvider({
+    errors: { HistoryClientError, HistoryProviderError },
     client: shell.session.getClient(),
     getIdentityProofConfigured: () => false,
     onActivationCommitted: (clientSession) =>

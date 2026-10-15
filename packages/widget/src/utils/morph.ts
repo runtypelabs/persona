@@ -24,6 +24,16 @@ export const morphMessages = (
       beforeNodeMorphed(oldNode: Node, newNode: Node): boolean | void {
         if (!(oldNode instanceof HTMLElement)) return;
 
+        // Render passes stand in an unchanged transcript row with an empty
+        // `data-persona-reuse` stub: keep the live row as is.
+        if (
+          newNode instanceof HTMLElement &&
+          newNode.hasAttribute("data-persona-reuse") &&
+          oldNode.id === newNode.id
+        ) {
+          return false;
+        }
+
         // Preserve typing indicator dots to maintain animation continuity
         // Also preserve elements with data-preserve-animation attribute for custom loading indicators
         if (preserveTypingAnimation) {

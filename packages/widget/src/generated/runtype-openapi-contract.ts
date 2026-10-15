@@ -713,6 +713,12 @@ export type RuntypeClientChatRequest = {
   submitMode?: "normal" | "interrupt" | "steer" | "auto";
   turnId?: string;
   voice?: {
+  priorToolResults?: Array<{
+  arguments: Record<string, unknown>;
+  name: string;
+  result?: unknown;
+  toolCallId: string;
+}>;
   spoken?: boolean;
 };
 };

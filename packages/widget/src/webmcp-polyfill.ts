@@ -1,10 +1,13 @@
 /**
- * Standalone WebMCP polyfill chunk (`dist/webmcp-polyfill.js`).
+ * Standalone WebMCP v5 fallback chunk (`dist/webmcp-polyfill.js`).
+ * Keep this fallback on v5 so upgrades do not change existing consumers'
+ * browser requirements or callback-result semantics. Host-installed v6 is
+ * supported separately by the bridge's dual-contract argument adapter.
  *
  * The IIFE/CDN widget bundle marks `@mcp-b/webmcp-polyfill` external so the
- * ~35 kB (minified) polyfill + its transitive `@cfworker/json-schema` never
- * ship to consumers who don't enable WebMCP. When `config.webmcp.enabled` is
- * true and no `document.modelContext` exists yet, the bridge dynamically
+ * polyfill never ships to consumers who don't enable WebMCP. When
+ * `config.webmcp.enabled` is true and no `document.modelContext` exists yet,
+ * the bridge dynamically
  * imports this chunk from a URL derived from the widget script's own `src`
  * (see the loader registered in `index-global.ts`).
  *

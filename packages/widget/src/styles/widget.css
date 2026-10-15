@@ -4244,6 +4244,50 @@
     opacity: 1;
     pointer-events: auto;
   }
+
+  /* Room for the hover pill so it never covers text. Right-aligned: an inline
+     spacer as wide as its buttons ends the last line (it wraps to a line of its
+     own when the last line is full). Left/center, or six or more buttons: a
+     line below the text. */
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill.persona-message-actions-right)
+    .persona-message-content
+    > :last-child::after,
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill.persona-message-actions-right)
+    .persona-message-content:not(:has(*))::after {
+    content: "";
+    display: inline-block;
+    width: calc(var(--persona-message-actions-count, 1) * 32px - 4px);
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(2)) {
+    --persona-message-actions-count: 2;
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(3)) {
+    --persona-message-actions-count: 3;
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(4)) {
+    --persona-message-actions-count: 4;
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(5)) {
+    --persona-message-actions-count: 5;
+  }
+
+  /* Six or more buttons: no inline spacer, a line below the text instead. */
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(6)) {
+    --persona-message-actions-count: 0;
+  }
+
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill:not(.persona-message-actions-right))
+    .persona-message-content::after,
+  .persona-message-bubble:has(> .persona-message-actions-hover.persona-message-actions-pill button:nth-child(6))
+    .persona-message-content::after {
+    content: "";
+    display: block;
+    height: 28px;
+  }
 }
 
 /* On touch devices (no hover support), show inline and always visible */
@@ -4866,6 +4910,20 @@
   max-height: 9rem;
 }
 
+.persona-approval-call {
+  margin: 0 0 0.6rem;
+}
+.persona-approval-tool-name {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  margin: 0 0 0.35rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--persona-text, #1f2937);
+}
+
 .persona-approval-reason {
   margin: 0 0 0.6rem;
   font-size: 0.8125rem;
@@ -4876,14 +4934,16 @@
 
 .persona-approval-resolved {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.45rem;
   margin: 0.5rem 0;
   padding: 0.3rem 0.15rem;
   font-size: 0.8rem;
+  line-height: 1.4;
   color: var(--persona-muted, #6b7280);
 }
-.persona-approval-resolved svg { width: 0.95rem; height: 0.95rem; display: block; flex-shrink: 0; }
+.persona-approval-resolved svg { width: 0.95rem; height: 0.95rem; display: block; flex-shrink: 0; margin-top: 0.085rem; }
+.persona-approval-resolved-text { min-width: 0; overflow-wrap: anywhere; }
 .persona-approval-resolved-name { font-weight: 600; }
 
 .persona-approval-actions {

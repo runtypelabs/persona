@@ -37,6 +37,16 @@ const GITHUB_MARK_SVG = `<svg viewBox="0 0 16 16" width="16" height="16" fill="c
 
 export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
   {
+    slug: "bento",
+    href: "/bento/",
+    title: "Bento Slides Copilot",
+    blurb: "A real slide editor you can talk to: GPT-Live voice, 23 WebMCP tools, hands-free presenting.",
+    badge: "Voice",
+    tier: "start",
+    tags: ["agent", "voice", "webmcp", "presentation"],
+    modes: ["inline"],
+  },
+  {
     slug: "analytics-agent-demo",
     href: "/analytics-agent-demo.html",
     title: "Talk to Your Data",
@@ -272,6 +282,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     modes: ["inline", "launcher"],
   },
   {
+    slug: "voice-navigation-demo",
+    href: "/voice-navigation-demo.html",
+    title: "Voice Across Pages",
+    blurb: "Keep a voice call going while the visitor (or agent) navigates a multi-page site.",
+    tier: "start",
+    tags: ["voice", "audio", "navigation"],
+    modes: ["launcher"],
+  },
+  {
     slug: "server-tts-demo",
     href: "/server-tts-demo.html",
     title: "Server TTS (streaming)",
@@ -289,6 +308,15 @@ export const ADVANCED_EXAMPLES: readonly AdvancedExample[] = [
     tags: ["agent", "tool-use", "streaming"],
     modes: ["inline", "launcher"],
     gallery: false,
+  },
+  {
+    slug: "phone-agent-demo",
+    href: "/phone-agent-demo.html",
+    title: "Phone Agent",
+    blurb: "Low-latency voice receptionist on PhoneLLM Mini, calling a live weather tool.",
+    tier: "start",
+    tags: ["agent", "voice", "tool-use"],
+    modes: ["inline", "launcher"],
   },
   {
     slug: "dynamic-form-fields",

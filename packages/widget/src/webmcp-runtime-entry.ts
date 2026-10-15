@@ -16,6 +16,7 @@
 import type {
   AgentWidgetWebMcpConfig,
   ClientToolDefinition,
+  VoiceClientToolOutcome,
   WebMcpConfirmHandler,
   WebMcpConfirmInfo,
   WebMcpToolResult,
@@ -38,6 +39,22 @@ export interface WebMcpBridgeDeps {
 
 const DEFAULT_TOOL_TIMEOUT_MS = 30_000;
 
+/**
+ * One run of a page tool, before it is shaped for `/resume` (`executeToolCall`)
+ * or for a voice `client_tool_result` (`executeVoiceToolCall`). `message` is
+ * the exact text the `/resume` error result has always carried.
+ */
+type ToolRunFailureReason = "stale" | "denied" | "failed" | "timeout" | "aborted";
+type ToolRunOutcome =
+  | { ok: true; raw: string | null }
+  | { ok: false; reason: ToolRunFailureReason; message: string };
+
+const runFailure = (reason: ToolRunFailureReason, message: string): ToolRunOutcome => ({
+  ok: false,
+  reason,
+  message,
+});
+
 // Local copies of the wire-prefix helpers: pure, and duplicating them keeps
 // this chunk free of any value edge into core webmcp-bridge state.
 const WEBMCP_TOOL_PREFIX = "webmcp:";
@@ -56,26 +73,28 @@ const log = {
 };
 
 export class WebMcpBridge {
-  private confirmHandler: WebMcpConfirmHandler | null;
-  private readonly timeoutMs: number;
+  #confirmHandler: WebMcpConfirmHandler | null;
+  readonly #timeoutMs: number;
 
   /** `true` once the polyfill has been (idempotently) installed. */
-  private installed = false;
+  #installed = false;
   /** Memoizes the one-shot async install so concurrent callers share it. */
-  private readyPromise: Promise<void> | null = null;
+  #readyPromise: Promise<void> | null = null;
   /**
    * Warn-once latch for a present-but-incompatible `document.modelContext`
    * (some other / older WebMCP polyfill squatting the global). `getModelContext`
    * is hit on every snapshot + execute, so we log the diagnostic only once.
    */
-  private incompatibleContextWarned = false;
+  #incompatibleContextWarned = false;
 
+  readonly #deps: WebMcpBridgeDeps;
   constructor(
     private readonly config: AgentWidgetWebMcpConfig,
-    private readonly deps: WebMcpBridgeDeps,
+    deps: WebMcpBridgeDeps,
   ) {
-    this.confirmHandler = config.onConfirm ?? null;
-    this.timeoutMs = DEFAULT_TOOL_TIMEOUT_MS;
+    this.#deps = deps;
+    this.#confirmHandler = config.onConfirm ?? null;
+    this.#timeoutMs = DEFAULT_TOOL_TIMEOUT_MS;
   }
 
   /**
@@ -84,7 +103,7 @@ export class WebMcpBridge {
    * lifecycle constructs the client before the panel renders).
    */
   public setConfirmHandler(handler: WebMcpConfirmHandler | null): void {
-    this.confirmHandler = handler;
+    this.#confirmHandler = handler;
   }
 
   /**
@@ -99,8 +118,8 @@ export class WebMcpBridge {
    */
   public isOperational(): boolean {
     if (this.config.enabled !== true) return false;
-    if (!this.installed) return false;
-    return this.getModelContext() !== null;
+    if (!this.#installed) return false;
+    return this.#getModelContext() !== null;
   }
 
   /**
@@ -111,25 +130,25 @@ export class WebMcpBridge {
    * builders in `client.ts` already `await`, so this adds no new ceremony.
    */
   public async snapshotForDispatch(): Promise<ClientToolDefinition[]> {
-    await this.ensureReady();
+    await this.#ensureReady();
     if (this.config.enabled !== true) return [];
 
-    const mc = this.getModelContext();
+    const mc = this.#getModelContext();
     if (!mc) return [];
 
     let infos: ModelContextToolInfo[];
     try {
-      infos = await mc.getTools();
+      infos = (await mc.getTools()).filter(isLocalTool);
     } catch (err) {
       log.warn("getTools() threw: shipping an empty WebMCP snapshot.", err);
       return [];
     }
-    this.deps.recordToolDisplayTitles(infos);
+    this.#deps.recordToolDisplayTitles(infos);
 
     const pageOrigin = typeof location !== "undefined" ? location.origin : "";
 
     return infos
-      .filter((info) => this.passesClientAllowlist(info.name))
+      .filter((info) => this.#passesClientAllowlist(info.name))
       .map<ClientToolDefinition>((info) => {
         const annotations = pickAnnotations(info.annotations);
         const def: ClientToolDefinition = {
@@ -160,7 +179,7 @@ export class WebMcpBridge {
    *   - tool not in registry (e.g. unmounted between snapshot and call)
    *   - tool excluded by the client allowlist
    *   - user declined the confirm gate
-   *   - `execute()` threw or failed schema validation
+   *   - `execute()` threw or returned a non-serializable result
    *   - `execute()` exceeded the 30s timeout
    *   - `signal` fired (session-level `cancel()`)
    *
@@ -176,14 +195,81 @@ export class WebMcpBridge {
     signal?: AbortSignal,
     toolCallId?: string,
   ): Promise<WebMcpToolResult> {
-    await this.ensureReady();
+    const outcome = await this.#run(wireToolName, args, signal, false, toolCallId);
+    return outcome.ok
+      ? normalizeSerializedResult(outcome.raw)
+      : errorResult(outcome.message);
+  }
+
+  /**
+   * Execute a page tool the voice server picked for a delegation
+   * (`client_tool_call`) and return its `client_tool_result` outcome.
+   *
+   * Same registry lookup, allowlist, abort points and timeout as
+   * `executeToolCall`, with one difference: when `autoConfirmReadOnly` is set,
+   * a tool whose LIVE registry entry declares `annotations.readOnlyHint ===
+   * true` skips the confirm gate. Every other tool still shows it, and a
+   * decline answers `denied`. A tool missing from the registry or excluded by
+   * the allowlist answers `stale` (the server's snapshot is out of date).
+   * `signal` aborting (the caller's deadline, a hang-up) answers `failed`;
+   * the caller decides whether that was its timeout.
+   */
+  public async executeVoiceToolCall(
+    wireToolName: string,
+    args: unknown,
+    options: { signal?: AbortSignal; autoConfirmReadOnly?: boolean } = {},
+  ): Promise<VoiceClientToolOutcome> {
+    const outcome = await this.#run(
+      wireToolName,
+      args,
+      options.signal,
+      options.autoConfirmReadOnly === true,
+    );
+    if (!outcome.ok) {
+      return {
+        status: outcome.reason === "aborted" ? "failed" : outcome.reason,
+        error: { message: outcome.message },
+      };
+    }
+    return voiceOutcomeFromRaw(outcome.raw);
+  }
+
+  /**
+   * Call `listener` whenever the page's tool registry changes (the WebMCP
+   * `toolchange` event on `document.modelContext`). Returns an unsubscribe.
+   * A registry without the event never calls it: callers then keep the
+   * snapshot they took first.
+   */
+  public watchToolChanges(listener: () => void): () => void {
+    let stopped = false;
+    let target: EventTarget | null = null;
+    void this.#ensureReady().then(() => {
+      if (stopped || this.config.enabled !== true) return;
+      const mc = this.#getModelContext() as unknown as Partial<EventTarget> | null;
+      if (!mc || typeof mc.addEventListener !== "function") return;
+      target = mc as EventTarget;
+      target.addEventListener("toolchange", listener);
+    });
+    return () => {
+      stopped = true;
+      target?.removeEventListener("toolchange", listener);
+      target = null;
+    };
+  }
+
+  async #run(
+    wireToolName: string,
+    args: unknown,
+    signal: AbortSignal | undefined,
+    autoConfirmReadOnly: boolean,
+    toolCallId?: string,
+  ): Promise<ToolRunOutcome> {
+    await this.#ensureReady();
     if (this.config.enabled !== true) {
-      return errorResult(
-        "WebMCP is not enabled on this widget.",
-      );
+      return runFailure("failed", "WebMCP is not enabled on this widget.");
     }
 
-    const mc = this.getModelContext();
+    const mc = this.#getModelContext();
     if (!mc) {
       // Distinguish "no modelContext at all" from "present but incompatible"
       // (a foreign/older polyfill squatting document.modelContext) so the
@@ -192,7 +278,8 @@ export class WebMcpBridge {
       const present =
         typeof document !== "undefined" &&
         Boolean((document as Document & { modelContext?: unknown }).modelContext);
-      return errorResult(
+      return runFailure(
+        "failed",
         present
           ? "WebMCP is not operational: document.modelContext is present but does not expose the strict getTools()/executeTool() surface (likely a different or older WebMCP polyfill)."
           : "WebMCP bridge is not operational on this page (document.modelContext not available).",
@@ -203,16 +290,17 @@ export class WebMcpBridge {
 
     let infos: ModelContextToolInfo[];
     try {
-      infos = await mc.getTools();
+      infos = (await mc.getTools()).filter(isLocalTool);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return errorResult(`Failed to read WebMCP registry: ${message}`);
+      return runFailure("failed", `Failed to read WebMCP registry: ${message}`);
     }
-    this.deps.recordToolDisplayTitles(infos);
+    this.#deps.recordToolDisplayTitles(infos);
     const info = infos.find((candidate) => candidate.name === bareName);
 
     if (!info) {
-      return errorResult(
+      return runFailure(
+        "stale",
         `WebMCP tool not registered on this page: ${bareName}`,
       );
     }
@@ -223,8 +311,9 @@ export class WebMcpBridge {
     // history, a server bug, or a page that re-registered a previously-hidden
     // tool. The server is the trust boundary; this is a defense-in-depth
     // convenience check to keep us symmetric with the snapshot.
-    if (!this.passesClientAllowlist(bareName)) {
-      return errorResult(
+    if (!this.#passesClientAllowlist(bareName)) {
+      return runFailure(
+        "stale",
         `WebMCP tool not allowed by client allowlist: ${bareName}`,
       );
     }
@@ -232,29 +321,34 @@ export class WebMcpBridge {
     // Bail before the confirm renders: a late approval after cancel() would
     // otherwise fire a host-page side effect with no matching /resume.
     if (signal?.aborted) {
-      return errorResult("Aborted by cancel()");
+      return runFailure("aborted", "Aborted by cancel()");
     }
 
-    // Confirm-by-default gate. Every `webmcp:*` call routes through here,
-    // regardless of `annotations.readOnlyHint`.
-    const displayTitle = this.deps.getToolDisplayTitle(bareName);
+    // Confirm-by-default gate. Every chat-path `webmcp:*` call routes through
+    // here regardless of `annotations.readOnlyHint`; only a voice fast-tier
+    // call (`autoConfirmReadOnly`) of a tool the registry marks read-only skips it.
+    const displayTitle = this.#deps.getToolDisplayTitle(bareName);
+    const annotations = pickAnnotations(info.annotations);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
       ...(toolCallId ? { toolCallId } : {}),
       args,
       description: info.description,
+      ...(annotations ? { annotations } : {}),
       ...(displayTitle ? { title: displayTitle } : {}),
+      ...(signal ? { signal } : {}),
       reason: "gate",
     };
-    if (!(await this.requestConfirm(gateInfo))) {
-      return errorResult("User declined the tool call.");
+    const skipGate = autoConfirmReadOnly && annotations?.readOnlyHint === true;
+    if (!skipGate && !(await this.#requestConfirm(gateInfo))) {
+      return runFailure("denied", "User declined the tool call.");
     }
 
     // The await above may have parked us long enough for cancel() to fire.
     // Bail before invoking `execute()` so we don't fire a side effect that
     // the server can no longer accept a `/resume` for.
     if (signal?.aborted) {
-      return errorResult("Aborted by cancel()");
+      return runFailure("aborted", "Aborted by cancel()");
     }
 
     // Drive both the 30s timeout and the caller's `signal` through a single
@@ -267,7 +361,7 @@ export class WebMcpBridge {
     const timer = setTimeout(() => {
       timedOut = true;
       controller.abort();
-    }, this.timeoutMs);
+    }, this.#timeoutMs);
     const onAbort = () => controller.abort();
     if (signal) {
       if (signal.aborted) controller.abort();
@@ -275,21 +369,22 @@ export class WebMcpBridge {
     }
 
     try {
-      const raw = await mc.executeTool(info, safeStringifyArgs(args), {
+      const raw = await mc.executeTool(info, createCompatibleToolInput(args), {
         signal: controller.signal,
       });
-      return normalizeSerializedResult(raw);
+      return { ok: true, raw };
     } catch (err) {
       if (timedOut) {
-        return errorResult(
-          `WebMCP tool '${bareName}' timed out after ${this.timeoutMs}ms`,
+        return runFailure(
+          "timeout",
+          `WebMCP tool '${bareName}' timed out after ${this.#timeoutMs}ms`,
         );
       }
       if (signal?.aborted) {
-        return errorResult("Aborted by cancel()");
+        return runFailure("aborted", "Aborted by cancel()");
       }
       const message = err instanceof Error ? err.message : String(err);
-      return errorResult(message);
+      return runFailure("failed", message);
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener("abort", onAbort);
@@ -307,36 +402,37 @@ export class WebMcpBridge {
    * registers tools at load before Persona's first dispatch needs the global to
    * already exist.
    */
-  private ensureReady(): Promise<void> {
+  #ensureReady(): Promise<void> {
     if (this.config.enabled !== true) return Promise.resolve();
-    if (!this.readyPromise) {
-      this.readyPromise = this.install();
+    if (!this.#readyPromise) {
+      this.#readyPromise = this.#install();
     }
-    return this.readyPromise;
+    return this.#readyPromise;
   }
 
-  private async install(): Promise<void> {
+  async #install(): Promise<void> {
     try {
       // A compatible registry is already on the page (the host installed the
       // polyfill, or a native impl): initialize would no-op against it, so
       // skip loading the module entirely. Pages that register tools before
       // Persona's first dispatch always land here, because registering
       // requires `document.modelContext` to exist.
-      if (this.getModelContext()) {
-        this.installed = true;
+      if (this.#getModelContext()) {
+        this.#installed = true;
         return;
       }
-      const mod = await this.deps.loadPolyfill();
+      const mod = await this.#deps.loadPolyfill();
       // Idempotent: no-ops if `document.modelContext` already exists (native or
       // a prior install by the host page).
-      mod.initializeWebMCPPolyfill();
-      this.installed = true;
+      if ("initializeWebMCPPolyfill" in mod) mod.initializeWebMCPPolyfill();
+      else mod.installWebMCP();
+      this.#installed = true;
     } catch (err) {
       log.warn(
         "Failed to load @mcp-b/webmcp-polyfill: WebMCP consumption disabled.",
         err,
       );
-      this.installed = false;
+      this.#installed = false;
     }
   }
 
@@ -344,7 +440,7 @@ export class WebMcpBridge {
    * Read the consumer surface off `document.modelContext`, returning `null`
    * when it is absent or doesn't expose the producer-preview API we rely on.
    */
-  private getModelContext(): ModelContextCoreLike | null {
+  #getModelContext(): ModelContextCoreLike | null {
     if (typeof document === "undefined") return null;
     const mc = (document as Document & { modelContext?: unknown }).modelContext;
     if (!mc || typeof mc !== "object") {
@@ -364,8 +460,8 @@ export class WebMcpBridge {
       // draft) installed the global first: which `@mcp-b/webmcp-polyfill`
       // correctly declines to overwrite. Warn once so integrators understand
       // why WebMCP is inert instead of seeing a silent no-op.
-      if (!this.incompatibleContextWarned) {
-        this.incompatibleContextWarned = true;
+      if (!this.#incompatibleContextWarned) {
+        this.#incompatibleContextWarned = true;
         log.warn(
           "document.modelContext is present but does not expose getTools()/executeTool(): " +
             "WebMCP consumption is disabled. Another (incompatible or older) WebMCP polyfill " +
@@ -378,8 +474,8 @@ export class WebMcpBridge {
     return mc as ModelContextCoreLike;
   }
 
-  private async requestConfirm(info: WebMcpConfirmInfo): Promise<boolean> {
-    const handler = this.confirmHandler ?? defaultBrowserConfirmHandler;
+  async #requestConfirm(info: WebMcpConfirmInfo): Promise<boolean> {
+    const handler = this.#confirmHandler ?? defaultBrowserConfirmHandler;
     try {
       return await handler(info);
     } catch (err) {
@@ -391,7 +487,7 @@ export class WebMcpBridge {
     }
   }
 
-  private passesClientAllowlist(toolName: string): boolean {
+  #passesClientAllowlist(toolName: string): boolean {
     const list = this.config.allowlist;
     if (!list || list.length === 0) return true;
     return list.some((pattern) => matchesGlob(toolName, pattern));
@@ -441,7 +537,7 @@ const EMPTY_INPUT_SCHEMA = { type: "object", properties: {} } as const;
  * Copy the WebMCP annotation hints onto the wire, dropping anything else.
  *
  * `getTools()` returns `annotations` since `@mcp-b/webmcp-polyfill` v5 (absent
- * on v4 and when the tool declared none). Only the spec's two boolean hints are
+ * on v4 and when the tool declared none). Only supported boolean hints are
  * forwarded -- annotations are page-authored, so an explicit copy keeps
  * functions/junk off the dispatch payload. Returns `undefined` when nothing
  * usable remains so the member is omitted, matching the spec's own
@@ -451,14 +547,14 @@ const pickAnnotations = (
   raw: ModelContextToolInfo["annotations"],
 ): ClientToolDefinition["annotations"] | undefined => {
   if (!raw || typeof raw !== "object") return undefined;
-  const picked = {
-    ...(typeof raw.readOnlyHint === "boolean"
-      ? { readOnlyHint: raw.readOnlyHint }
-      : {}),
-    ...(typeof raw.untrustedContentHint === "boolean"
-      ? { untrustedContentHint: raw.untrustedContentHint }
-      : {}),
-  };
+  const picked: NonNullable<ClientToolDefinition["annotations"]> = {};
+  for (const key of [
+    "readOnlyHint", "destructiveHint", "consequentialHint", "untrustedContentHint",
+    "idempotentHint", "openWorldHint", "debugging",
+  ] as const) {
+    const value = raw[key];
+    if (typeof value === "boolean") picked[key] = value;
+  }
   return Object.keys(picked).length > 0 ? picked : undefined;
 };
 
@@ -516,10 +612,65 @@ const normalizeSerializedResult = (raw: string | null): WebMcpToolResult => {
   return { content: [{ type: "text", text }] };
 };
 
+/**
+ * One invocation works with both contracts: v5/native previews coerce input to
+ * JSON text, whereas v6 serializes the object. Keep the coercion hook off the
+ * JSON payload and clone first so we never mutate caller-owned arguments.
+ * Do not probe by executing/retrying: page tools may have irreversible effects.
+ */
+const createCompatibleToolInput = (args: unknown): object => {
+  let json: string;
+  try {
+    json = JSON.stringify(args) ?? "{}";
+  } catch {
+    // Preserve the historical fallback for non-serializable arguments.
+    json = "{}";
+  }
+  const input: unknown = JSON.parse(json);
+  if (input === null || typeof input !== "object") {
+    throw new TypeError("WebMCP tool arguments must be an object or array.");
+  }
+  Object.defineProperty(input, Symbol.toPrimitive, { value: () => json });
+  return input;
+};
+
 const errorResult = (message: string): WebMcpToolResult => ({
   isError: true,
   content: [{ type: "text", text: message }],
 });
+
+const textOfContent = (content: unknown): string =>
+  Array.isArray(content)
+    ? content
+        .map((block: unknown) =>
+          block && typeof block === "object" && typeof (block as { text?: unknown }).text === "string"
+            ? (block as { text: string }).text
+            : "",
+        )
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
+/**
+ * A page tool's serialized return as a voice `client_tool_result`: the tool's
+ * own JSON value (not the MCP content wrapper `/resume` gets), so the server
+ * can template a readout from its fields. A tool that returned an MCP error
+ * (`isError: true`) is `failed`, with its text as the message.
+ */
+const voiceOutcomeFromRaw = (raw: string | null): VoiceClientToolOutcome => {
+  if (raw === null || raw === undefined) return { status: "completed" };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { status: "completed", result: raw };
+  }
+  if (parsed !== null && typeof parsed === "object" && (parsed as { isError?: unknown }).isError === true) {
+    const message = textOfContent((parsed as { content?: unknown }).content);
+    return { status: "failed", error: { message: message || "The page tool reported an error." } };
+  }
+  return parsed === undefined ? { status: "completed" } : { status: "completed", result: parsed };
+};
 
 /**
  * Fallback confirm UI: `window.confirm()`. Production deployments should wire
@@ -549,20 +700,12 @@ const previewArgs = (args: unknown): string => {
   }
 };
 
-/**
- * Stringify tool args for `executeTool(toolInfo, inputArgsJson)`. Falls back to
- * `{}` for `undefined`/non-serializable args so the polyfill always receives a
- * valid JSON object string to validate against the tool schema.
- */
-const safeStringifyArgs = (args: unknown): string => {
-  if (args === undefined) return "{}";
-  try {
-    const json = JSON.stringify(args);
-    return json === undefined ? "{}" : json;
-  } catch {
-    return "{}";
-  }
-};
+/** Keep name-only dispatch scoped to this document, not related frames. */
+const isLocalTool = (info: ModelContextToolInfo): boolean =>
+  (info.window === undefined ||
+    (typeof window !== "undefined" && info.window === window)) &&
+  (info.origin === undefined ||
+    (typeof location !== "undefined" && info.origin === location.origin));
 
 /**
  * `JSON.stringify` that tolerates circular references and non-serializable

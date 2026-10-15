@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import viteConfigSource from "../vite.config.ts?raw";
+import webPackageJson from "../package.json";
 import { ADVANCED_EXAMPLES, renderExamplesShell } from "./examples-nav";
 
 describe("examples command palette", () => {
@@ -110,7 +111,22 @@ describe("examples build registration", () => {
     eager: true,
   });
 
-  test.each(ADVANCED_EXAMPLES.map((entry) => [entry.slug, entry.href] as const))(
+  // A directory href ("/bento/") is a separately built app that the site's
+  // build script writes into dist/<dir>; it needs that step instead.
+  const siteBuild = (webPackageJson as { scripts: { build: string } }).scripts.build;
+  test.each(
+    ADVANCED_EXAMPLES.filter((entry) => entry.href.endsWith("/")).map(
+      (entry) => [entry.slug] as const,
+    ),
+  )("%s is built into the site by the build script", (slug) => {
+    expect(siteBuild).toContain(`--filter ${slug === "bento" ? "bento-slides" : slug} build:web`);
+  });
+
+  test.each(
+    ADVANCED_EXAMPLES.filter((entry) => !entry.href.endsWith("/")).map(
+      (entry) => [entry.slug, entry.href] as const,
+    ),
+  )(
     "%s has an html page and a rollup input",
     (_slug, href) => {
       const file = href.replace(/^\//, "");

@@ -1,4 +1,5 @@
 /** @deprecated Built-in approvals use the renderApproval plugin in approval-actions. */
+import { BROWSER_TOOL_INTERRUPTION } from "../utils/restored-browser-state";
 import { createElement } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
 import { formatUnknownValue } from "../utils/formatting";
@@ -87,6 +88,7 @@ export const updateApprovalBubbleUI = (
   if (statusBadge) {
     statusBadge.textContent = approval.status === "approved" ? "Approved"
       : approval.status === "denied" ? "Denied"
+      : (approval.status === "timeout" && approval.interrupted) ? "Interrupted"
       : approval.status === "timeout" ? "Timeout"
       : "Pending";
 
@@ -221,12 +223,17 @@ export const createApprovalBubble = (
     } else if (approval.status === "timeout") {
       badge.style.backgroundColor = "var(--persona-palette-colors-warning-100)";
       badge.style.color = "var(--persona-palette-colors-warning-700)";
-      badge.textContent = "Timeout";
+      badge.textContent = (approval.status === "timeout" && approval.interrupted) ? "Interrupted" : "Timeout";
     }
     titleRow.appendChild(badge);
   }
 
   content.appendChild(titleRow);
+  if (approval.status === "timeout" && approval.interrupted) {
+    const notice = createElement("p", "persona-text-sm");
+    notice.textContent = BROWSER_TOOL_INTERRUPTION;
+    content.appendChild(notice);
+  }
 
   // User-facing summary line. The wire `description` is the tool's
   // agent-facing description (prompt prose, usage rules), so it is not shown

@@ -1,0 +1,11 @@
+{
+  "type": "artifact",
+  "turnId": "turn_2",
+  "executionId": "exec_1",
+  "event": {
+    "type": "artifact_start",
+    "id": "art_1",
+    "artifactType": "markdown",
+    "title": "Menu"
+  }
+}

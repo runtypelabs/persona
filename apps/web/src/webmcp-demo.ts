@@ -8,7 +8,7 @@ import {
   type AgentWidgetConfig,
   type WebMcpConfirmInfo,
 } from "@runtypelabs/persona";
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 import { setupMountMode, renderInlineMount } from "./mount-mode";
 import type { Mode } from "./examples-nav";
 import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp-catalog";
@@ -22,7 +22,7 @@ import { CATALOG, searchCatalog, findBySku, type CatalogProduct } from "./webmcp
 //
 // `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext` (registerTool / getTools / executeTool). We call
-// `initializeWebMCPPolyfill()` explicitly so the order is obvious: it is
+// `installWebMCP()` explicitly so the order is obvious: it is
 // idempotent and no-ops if a native `document.modelContext` is already present.
 // The widget also lazily installs it from its WebMCP bridge, but the *producer*
 // page should install it first so the global exists by the time we register.
@@ -44,7 +44,7 @@ interface RegisterableModelContext {
       annotations?: Record<string, unknown>;
       execute: (
         args: Record<string, unknown>,
-        client: { requestUserInteraction: (cb: () => unknown) => Promise<unknown> },
+        options: { signal: AbortSignal },
       ) => unknown;
     },
     options?: { signal?: AbortSignal },
@@ -396,7 +396,7 @@ renderCart();
 // 4. Register the page tools.
 // ===========================================================================
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 const modelContext = (
   document as Document & { modelContext?: RegisterableModelContext }
@@ -513,8 +513,14 @@ if (!modelContext) {
       },
       annotations: { readOnlyHint: false },
       async execute(input): Promise<unknown> {
-        const latency = await simulateToolLatency("add_to_cart");
         const { sku, quantity = 1 } = input as { sku: string; quantity?: number };
+        if (!Number.isSafeInteger(quantity) || quantity < 1) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "quantity must be a positive integer." }],
+          };
+        }
+        const latency = await simulateToolLatency("add_to_cart");
         const product = findBySku(sku);
         if (!product) {
           logWire(
@@ -562,8 +568,14 @@ if (!modelContext) {
       },
       annotations: { readOnlyHint: false },
       async execute(input): Promise<unknown> {
-        const latency = await simulateToolLatency("remove_from_cart");
         const { sku, quantity } = input as { sku: string; quantity?: number };
+        if (quantity !== undefined && (!Number.isSafeInteger(quantity) || quantity < 1)) {
+          return {
+            isError: true,
+            content: [{ type: "text", text: "quantity must be a positive integer." }],
+          };
+        }
+        const latency = await simulateToolLatency("remove_from_cart");
         // Resolve the SKU the same way add_to_cart/view_product do (trimmed,
         // case-insensitive): the cart is keyed by the canonical product.sku, so
         // a raw `cart.get(sku)` would miss on different casing/spacing.
@@ -593,9 +605,8 @@ if (!modelContext) {
             cart: cartSummary(),
           };
         }
-        // Only a positive partial quantity decrements; anything else (omitted,
-        // ≤0, or ≥ the line qty) removes the whole line, so a negative quantity
-        // can't subtract-a-negative and inflate the cart.
+        // A smaller quantity decrements; omitted or >= the line quantity
+        // removes the whole line. Invalid quantities were rejected above.
         const partial =
           typeof quantity === "number" && quantity >= 1 && quantity < line.quantity;
         if (partial) {
@@ -684,12 +695,8 @@ const proxyApiUrl = import.meta.env.VITE_PROXY_URL
   ? `${import.meta.env.VITE_PROXY_URL}/api/chat/dispatch-webmcp`
   : `http://localhost:${proxyPort}/api/chat/dispatch-webmcp`;
 
-// Tools the storefront treats as read-only (safe to run without approval). We
-// gate by name rather than by the registered `readOnlyHint` annotation because
-// @mcp-b/webmcp-polyfill@3.0.0's `getTools()` does NOT echo annotations back to
-// consumers, so the widget can't populate `WebMcpConfirmInfo.annotations`: the
-// page is the authority on which of *its own* tools mutate state. (The tools
-// still carry `readOnlyHint` for spec-correctness and the server snapshot.)
+// The page owns this explicit read-only policy. Mutating tools always use
+// Persona's approval gate, regardless of page-authored annotation hints.
 const READ_ONLY_TOOLS = new Set(["search_products", "view_product"]);
 
 logWire("send", "mode", `proxy → ${esc(proxyApiUrl)}`);

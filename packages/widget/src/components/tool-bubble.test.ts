@@ -49,3 +49,12 @@ describe("tool failure presentation", () => {
     expect(bubble.querySelector("script")).toBeNull();
   });
 });
+
+describe("approval-superseded presentation", () => {
+  it("labels an approved call that ran again under a new id", () => {
+    const message = makeMessage();
+    message.toolCall = { ...message.toolCall!, approvalStatus: "approved", superseded: true };
+    const bubble = createToolBubble(message);
+    expect(bubble.textContent).toContain("Approved, ran again below");
+  });
+});

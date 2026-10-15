@@ -183,9 +183,27 @@ describe("standalone typing indicator with hidden activity rows", () => {
     document.body.innerHTML = "";
     if (typeof localStorage !== "undefined") localStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
+  // Streaming transcript updates render once per animation frame; queue the
+  // frames so each injection can be rendered synchronously.
+  let frames = new Map<number, (time: number) => void>();
+  let nextFrameId = 1;
+  const renderFrame = () => {
+    const pending = [...frames.values()];
+    frames.clear();
+    pending.forEach((callback) => callback(0));
+  };
+
   const mountStreaming = async (config: Record<string, unknown>) => {
+    frames = new Map();
+    vi.stubGlobal("requestAnimationFrame", (callback: (time: number) => void) => {
+      const id = nextFrameId++;
+      frames.set(id, callback);
+      return id;
+    });
+    vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
     global.fetch = vi.fn().mockImplementation(
       () => new Promise(() => {})
     ) as unknown as typeof fetch;
@@ -228,6 +246,7 @@ describe("standalone typing indicator with hidden activity rows", () => {
         toolCall: { id, name: "lookup", status },
       },
     });
+    renderFrame();
   };
 
   const injectReasoning = (
@@ -249,6 +268,7 @@ describe("standalone typing indicator with hidden activity rows", () => {
         reasoning: { id, status, chunks: ["thinking"] },
       },
     });
+    renderFrame();
   };
 
   const typingIndicator = (mount: HTMLElement) =>
@@ -383,6 +403,7 @@ describe("standalone typing indicator with hidden activity rows", () => {
         streaming: true,
       },
     });
+    renderFrame();
     expect(typingIndicator(mount)).toBeNull();
 
     controller.destroy();

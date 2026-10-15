@@ -4,14 +4,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm --filter @runtypelabs/persona build && vite build",
+    "build": "pnpm --filter @runtypelabs/persona build && vite build && pnpm --filter bento-slides build:web",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
-    "test:run": "vitest run src"
+    "typecheck": "tsgo --noEmit",
+    "test:run": "vitest run src",
+    "runtype:ensure": "node runtype/ensure-docs-agent.ts"
   },
   "dependencies": {
-    "@mcp-b/global": "^4.0.0",
-    "@mcp-b/webmcp-polyfill": "^5.1.0",
+    "@mcp-b/global": "^6.0.0",
+    "@mcp-b/webmcp-polyfill": "^6.0.0",
     "@runtypelabs/persona": "workspace:^",
     "alasql": "^4.17.3",
     "echarts": "^6.1.0",
@@ -25,9 +26,11 @@
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
+    "@runtypelabs/persona-proxy": "workspace:^",
+    "@runtypelabs/sdk": "^10.3.1",
     "jsdom": "^28.1.0",
-    "typescript": "^5.4.5",
-    "vite": "^5.4.1",
-    "vitest": "4.0.18"
+    "typescript": "^6.0.3",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.3"
   }
 }

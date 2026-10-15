@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
 import { createHistoryView } from "./components/history-view";
+import { showHistoryConfirm } from "./components/history-confirm-dialog";
 import { setHistoryViewLoader } from "./history-view-loader";
 import { setHistoryProviderFactory } from "./internal/history-provider-registry";
 import {
@@ -53,7 +54,7 @@ const wait = (ms: number) =>
 /** Past the 300ms pointer-out grace. */
 const GRACE = 380;
 
-const loadHistoryChunk = vi.fn(async () => ({ createHistoryView }));
+const loadHistoryChunk = vi.fn(async () => ({ createHistoryView, showHistoryConfirm }));
 
 const setup = (
   options: {

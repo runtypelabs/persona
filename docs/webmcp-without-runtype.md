@@ -1,5 +1,9 @@
 # Using Persona's WebMCP with AI SDK
 
+For tool design, schema-inferred types, trust boundaries, and evaluation, read
+[Design and verify WebMCP page tools](webmcp-authoring.md). Keep the transport
+and pause/resume contracts below when applying upstream WebMCP guidance.
+
 Persona's WebMCP support lets the agent call **page-defined tools** (registered
 on `document.modelContext`). A common question: can that work against a **direct
 [Vercel AI SDK](https://ai-sdk.dev) backend** instead of the Runtype API?

@@ -36,6 +36,23 @@ export type MessageCacheEntry = {
 
 export type MessageCache = Map<string, MessageCacheEntry>;
 
+// Every render pass fingerprints every message, so re-stringifying tool args
+// each time would cost O(total args bytes) per pass. Streaming replaces the
+// args object rather than mutating it, so the length is memoized per object.
+const argsLengths = new WeakMap<object, number>();
+
+function argsLength(args: unknown): number {
+  if (typeof args === "string") return args.length;
+  if (!args) return 0;
+  if (typeof args !== "object") return JSON.stringify(args)?.length ?? 0;
+  let length = argsLengths.get(args);
+  if (length === undefined) {
+    length = JSON.stringify(args)?.length ?? 0;
+    argsLengths.set(args, length);
+  }
+  return length;
+}
+
 /**
  * Compute a fast fingerprint for a message to detect changes.
  * Uses string concatenation with a delimiter rather than JSON.stringify for performance.
@@ -64,11 +81,7 @@ export function computeMessageFingerprint(
     message.toolCall?.name ?? "",
     message.toolCall?.chunks?.length ?? 0,
     message.toolCall?.chunks?.[message.toolCall.chunks.length - 1]?.slice(-32) ?? "",
-    typeof message.toolCall?.args === "string"
-      ? message.toolCall.args.length
-      : message.toolCall?.args
-        ? JSON.stringify(message.toolCall.args).length
-        : 0,
+    argsLength(message.toolCall?.args),
     message.reasoning?.chunks?.length ?? 0,
     message.reasoning?.chunks?.[message.reasoning.chunks.length - 1]?.length ?? 0,
     message.reasoning?.chunks?.[message.reasoning.chunks.length - 1]?.slice(-32) ?? "",

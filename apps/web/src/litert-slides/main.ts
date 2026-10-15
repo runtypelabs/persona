@@ -14,7 +14,7 @@ import {
   initAgentWidget,
   markdownPostprocessor,
 } from "@runtypelabs/persona";
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
 import { DeckStore, createSeedDeck } from "../webmcp-slides/store";
 import { createCanvas } from "../webmcp-slides/canvas";
@@ -29,7 +29,7 @@ import {
 } from "../litert-shared/litert-engine";
 import { wireModelLoader } from "../litert-shared/model-loader";
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 // Fake dispatch URL: the engine patches window.fetch to answer this path (and
 // `${API_PATH}/resume`) from the in-browser model. Kept off `/api/...` so the

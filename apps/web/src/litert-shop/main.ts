@@ -25,7 +25,7 @@ import {
 } from "@runtypelabs/persona";
 // `@mcp-b/webmcp-polyfill` polyfills the strict standard surface on
 // `document.modelContext`; it must be initialized before tools register.
-import { initializeWebMCPPolyfill } from "@mcp-b/webmcp-polyfill";
+import { installWebMCP } from "@mcp-b/webmcp-polyfill";
 
 import { createEvalHud } from "../litert-shared/eval-hud";
 import {
@@ -43,7 +43,7 @@ import {
 import { ShopStore, type FacetKey } from "./store";
 import { setupShopTools } from "./tools";
 
-initializeWebMCPPolyfill();
+installWebMCP();
 
 // Fake dispatch URL: the engine patches window.fetch to answer this path (and
 // `${API_PATH}/resume`) from the in-browser model. Kept off `/api/...` so the

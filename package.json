@@ -8,7 +8,7 @@
     "lint": "pnpm --filter @runtypelabs/persona lint && pnpm --filter @runtypelabs/persona-proxy lint",
     "typecheck": "pnpm --filter @runtypelabs/persona typecheck && pnpm --filter @runtypelabs/persona-proxy typecheck && pnpm --filter web typecheck",
     "test": "pnpm test:run",
-    "test:run": "pnpm check:persona-wire && pnpm --filter @runtypelabs/persona test:run && pnpm --filter @runtypelabs/persona-proxy test:run && pnpm --filter web test:run && pnpm --filter echo-express --filter echo-hono --filter echo-script-tag --filter echo-sveltekit --filter eve-next --filter langgraph-next --filter openai-agents-next --filter runtype-hono-proxy test",
+    "test:run": "pnpm check:persona-wire && pnpm --filter @runtypelabs/persona test:run && pnpm --filter @runtypelabs/persona-proxy test:run && pnpm --filter web test:run && pnpm --filter echo-express --filter echo-hono --filter echo-script-tag --filter echo-sveltekit --filter eve-next --filter langgraph-next --filter openai-agents-next --filter runtype-hono-proxy --filter bento-slides --filter webmcp-typed-tools test",
     "verify": "pnpm build && pnpm lint && pnpm typecheck && pnpm test:run",
     "sync:persona-wire": "node scripts/sync-persona-wire.mjs",
     "check:persona-wire": "node scripts/sync-persona-wire.mjs --check",
@@ -28,7 +28,11 @@
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
     "@playwright/test": "^1.62.1",
-    "concurrently": "^8.2.2"
+    "@types/ws": "^8.18.2",
+    "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "concurrently": "^8.2.2",
+    "oxlint": "^1.87.0",
+    "ws": "^8.20.1"
   },
-  "packageManager": "pnpm@12.3.4+sha512.961aa41fb077da3a04a441d9f8e15ebc0c96da8ef710b2eb67bf9ee7cb0610eabd48f1fd85f51cffe73846785fa0f87c56a3a872a1d893f8446741b5cce45457"
+  "packageManager": "pnpm@12.11.2+sha512.25a51652a196785af5f28bda6dfe8dc582ebefa4ac1d180221ce1390231c5fb76637822ea4b6e4633ce74acdcb0a77f725af11bad38177fdeddaee818a955cb9"
 }

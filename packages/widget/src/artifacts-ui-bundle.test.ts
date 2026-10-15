@@ -11,8 +11,8 @@ import { resolve } from "node:path";
  * loaded on demand: the IIFE via a sibling URL, ESM/CJS via the external
  * `@runtypelabs/persona/artifacts-ui` subpath.
  *
- * Also guards the chunk itself against two regressions its tsup config
- * carves out of `noExternal` (which OVERRIDES `external` in tsup): inlining
+ * Also guards the chunk itself against two regressions its build config
+ * carves out of `deps.alwaysBundle` via `neverBundle` (tsdown.config.ts): inlining
  * marked + DOMPurify via its dead `./markdown-parsers-entry` fallback, and
  * inlining the extra icon data via its icons-extra loader copy.
  *
@@ -83,7 +83,7 @@ describe("artifacts-ui bundle split", () => {
       // bundlers that follow the artifacts-ui subpath statically (webpack in a
       // Next.js consumer fails the whole build otherwise). The shim re-exports
       // the markdown-parsers chunk, built from the same source module (written
-      // by tsup.markdown-parsers.config.ts onSuccess).
+      // by tsdown.config.ts onSuccess).
       expect(existsSync(dist("markdown-parsers-entry.js"))).toBe(true);
       expect(readFileSync(dist("markdown-parsers-entry.js"), "utf8")).toContain(
         './markdown-parsers.js'

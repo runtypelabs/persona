@@ -104,8 +104,13 @@ When `clientToken` is set, the widget uses `/v1/client/*` endpoints directly fro
 | `clientToken` | `string` | Runtype client token for direct browser-to-API communication (e.g. `ct_live_...`). Mutually exclusive with `headers` auth. |
 | `onSessionInit` | `(session: ClientSession) => void` | Called when the session is initialized. Receives session ID, expiry, flow info. |
 | `onSessionExpired` | `() => void` | Called when the session expires or errors. Prompt the user to refresh. |
+| `sessionInit` | `'input' \| 'focus' \| 'mount' \| 'send' \| (ctx) => void \| (() => void)` | When to call `/v1/client/init` ahead of the first send. Default `'input'`. See [Session init timing](#session-init-timing). |
 | `getStoredSessionId` | `() => string \| null` | Return a previously stored session ID for session resumption. |
 | `setStoredSessionId` | `(sessionId: string) => void` | Persist the session ID so conversations can be resumed later. |
+| `identityProvider` | `string?` | Provider name registered with Runtype, such as `clerk`. Enables fresh identity proofs on every client-token chat POST, independently of history. |
+| `getIdentityProof` | `() => string \| null \| Promise<string \| null>` | Return a fresh identity token. With `identityProvider`, a missing token or callback failure stops the chat request. Also supplies proofs for verified history operations. Tokens are not cached or persisted by Persona. |
+| `features.history.enabled` | `boolean?` | Enable conversation history. Not required for chat identity. Defaults to disabled. |
+| `features.history.scope` | `'browser' \| 'verified-user'` | History access scope. Defaults to `verified-user` when `getIdentityProof` is configured, otherwise `browser`. Does not change execution identity. |
 
 ```typescript
 config: {
@@ -117,6 +122,67 @@ config: {
   setStoredSessionId: (id) => localStorage.setItem('session_id', id)
 }
 ```
+
+#### Session init timing
+
+In client token mode the widget calls `/v1/client/init` when the visitor shows intent to send, not when the widget mounts, and not only when the first message is sent. Starting init early removes its round trip from the first message. It also gives the server time to prepare the conversation, and init does real work server-side, so page views that never chat don't pay for one.
+
+| `sessionInit` | Fires |
+| --- | --- |
+| `'input'` (default) | On the first user keystroke, paste, or drop that leaves non-empty text in the composer. Programmatic edits (restored drafts, `setMessage()`, history recall) do not count. |
+| `'focus'` | When the visitor clicks, taps, or tabs into the composer (first input also counts). Programmatic focus, including `autoFocusInput` on open or mount, does not count. |
+| `'mount'` | When the widget mounts (the behavior before 4.23). Use it when your client token has a server-configured welcome message: that message arrives with the init response, so with later triggers it only shows once init has run. |
+| `'send'` | Never early; the first send initializes the session. |
+| function | Your own trigger. Called on mount with `{ warm, mount }` (and again if `update()` swaps in a different function); call `warm()` whenever you like and optionally return a cleanup that runs on `destroy()` or replacement. Replaces the built-in triggers. |
+
+The early init sends exactly the same request the send would, runs at most once per session lifetime (re-armed when the session expires or a new conversation starts), and is fire-and-forget: a failure is swallowed and resurfaces normally when the send retries init. A send during an in-flight early init reuses it, so there is only ever one `/v1/client/init`. With `features.history.enabled`, the widget still initializes on mount to restore the conversation. Upvote/downvote on a restored transcript initializes on demand. Outside client token mode the option is ignored.
+
+You can also trigger init from your own code with `controller.warmSession()`, for example when the visitor hovers your own "Chat with us" button:
+
+```typescript
+const widget = initAgentWidget({ target: '#chat', config: { clientToken: 'ct_live_...', sessionInit: 'send' } });
+document.querySelector('#help-button')?.addEventListener('pointerenter', () => widget.warmSession(), { once: true });
+
+// or declaratively, e.g. when the pointer enters the widget:
+config: {
+  clientToken: 'ct_live_...',
+  sessionInit: ({ warm, mount }) => {
+    mount.addEventListener('pointerenter', warm, { once: true });
+  },
+}
+```
+
+#### Verified execution identity
+
+Register your identity provider with Runtype and enable Identity Exchange admission for your organization. Then configure the provider name and a callback that obtains a fresh token. For Clerk, use a JWT template with the audience and organization claims expected by your Runtype integration:
+
+```typescript
+config: {
+  clientToken: 'YOUR_CLIENT_TOKEN',
+  agentId: 'YOUR_AGENT_ID',
+  identityProvider: 'clerk',
+  getIdentityProof: async () => {
+    const token = await Clerk.session?.getToken({
+      template: 'runtype',
+      skipCache: true,
+    });
+    return token ?? null;
+  },
+  features: { history: { enabled: false } },
+}
+```
+
+This example assumes Clerk is initialized and the user is signed in. For organization-scoped agents, select an active Clerk organization before sending a message. Keep management API keys out of the browser.
+
+Persona sends `identityProof: { provider: 'clerk', token }` at the top level of each `/v1/client/chat` request. It obtains another proof before each retry, including session renewal and client-tool registry recovery. If the callback fails or returns no token, Persona reports an error and sends no chat request. An API rejection of the proof is reported as an identity error, not an expired chat session.
+
+Cancelling a turn stops waiting for its proof, even if the callback never resolves. A late result cannot send the cancelled message. Persona does not cancel the callback's underlying network request.
+
+An identity admitted during initialization binds visitor history; it does not replace the proof required for each execution. Chat identity does not enable history or change its scope. Without `identityProvider`, `getIdentityProof` retains its history-only behavior and is not called by chat dispatch. Custom-backend and proxy transports are unchanged.
+
+After logout or an organization change, reset the previous identity's conversation state before starting a new conversation. If you enabled verified history, use `resetHistoryIdentity()` to clear the visitor binding. Never reuse another user's session or visitor credentials.
+
+See [end-user identity](https://docs.runtype.com/developer-guides/guides/end-user-identity) for provider registration and agent isolation, and [conversation history](https://docs.runtype.com/developer-guides/guides/client-conversation-history) for history admission and scope.
 
 ### Agent Mode
 
@@ -390,6 +456,7 @@ config: {
 | `processingErrorText` | `string?` | Error text on voice failure. Default: `'Voice processing failed. Please try again.'`. |
 | `autoResume` | `boolean \| 'assistant'?` | Auto-resume listening after playback. `'assistant'` resumes after assistant finishes. |
 | `provider` | `{ type, browser?, runtype?, custom? }?` | Voice provider configuration (see below). |
+| `prewarm` | `'hover' \| false \| (ctx) => void \| (() => void)` | Warm the voice path on mic intent, before the click. Default `'hover'` in client token mode, otherwise `false`. See [Voice prewarm](#voice-prewarm). |
 | `iconName`, `iconSize`, `iconColor`, `backgroundColor`, `borderColor`, `borderWidth`, `paddingX`, `paddingY`, `tooltipText`, `showTooltip`, `recordingIconColor`, `recordingBackgroundColor`, `recordingBorderColor`, `showRecordingIndicator` | various | Styling options for the voice button. See [THEME-CONFIG.md](../THEME-CONFIG.md). |
 
 **`provider.browser`**
@@ -407,6 +474,12 @@ config: {
 | `clientToken` | `string?` | Runtype client token for authentication. Defaults to top-level `clientToken` when omitted. |
 | `host` | `string?` | API host override. |
 | `voiceId` | `string?` | Voice ID for TTS. |
+| `prewarmMode` | `'request' \| 'attach'?` | How the prewarm warms the call. Default `'request'`. See [Voice prewarm](#voice-prewarm). |
+| `attachIdleMs` | `number?` | `'attach'` mode: how long (ms) the early socket waits for the click. The server clamps it to 30000 to 600000. Default: `30000`. |
+| `clientDelegation` | `boolean?` | Full-duplex (speech-to-speech) calls: run the agent turns the voice model hands off through the widget's chat pipeline. Default: `true`. See [Full-duplex voice](#full-duplex-voice). |
+| `callContext` | `string \| (() => string \| Promise<string>)?` | Full-duplex calls: extra context for the voice model, after the chat history as of call start. Sent when the visitor finishes their first utterance. Capped at 4000 characters. |
+| `approvalTimeoutMs` | `number?` | Full-duplex calls: how long (ms) a tool approval raised by a spoken request may wait before it is declined as timed out. Hanging up never declines it. Capped at `540000`, under the server's 10-minute delegation deadline. Default: `300000`. |
+| `disclosureText` | `string \| false?` | Speech-to-speech calls: the one-line notice shown when the call starts. `false` hides it. Default: `"You're talking to an AI assistant. Voice is processed by OpenAI."` |
 | `pauseDuration` | `number?` | Silence duration (ms) before auto-stop. Default: `2000`. |
 | `silenceThreshold` | `number?` | RMS volume threshold for silence detection. Default: `0.01`. |
 
@@ -426,6 +499,79 @@ config: {
     provider: {
       type: 'runtype',
       runtype: { agentId: 'agent_01abc', clientToken: 'ct_live_...' }
+    }
+  }
+}
+```
+
+#### Voice prewarm
+
+The widget can warm the voice path when the visitor shows intent to talk, so the call starts faster after the click. In client token mode this is on by default: hovering the mic button, focusing it, or the first touch on it starts the warm-up. No configuration is needed.
+
+| `voiceRecognition.prewarm` | Fires |
+| --- | --- |
+| `'hover'` (default in client token mode) | When the pointer enters the mic button, the button receives focus, or (on touch) the first pointer-down on it. |
+| `false` (default otherwise) | Never. |
+| function | Your own trigger. Called with `{ warm, micButton, mount }` while the mic button exists, and again when the button is rebuilt or `update()` swaps in a different function. Call `warm()` whenever you like and optionally return a cleanup that runs on `destroy()`, rebuild, or replacement. Replaces the built-in trigger. |
+
+What `warm()` does depends on the provider:
+
+- **`runtype`**: sends `POST {host}/v1/client/agents/{agentId}/voice/prewarm` with the client token. It runs at most once every 30 seconds per provider.
+- **`custom`**: calls the provider's optional `prewarm()` method, if it has one.
+- **Browser (Web Speech)**: speech recognition cannot start before the click, so the warm-up starts the client-token session init instead (the same request `sessionInit` sends).
+
+Warming is fire-and-forget: it never shows an error or changes the mic state. If it fails, the click connects as usual.
+
+```typescript
+// Opt out
+voiceRecognition: { enabled: true, prewarm: false, provider: { type: 'runtype', runtype: { agentId: 'agent_01abc' } } }
+
+// Warm when the visitor hovers your own "Talk to us" button instead
+voiceRecognition: {
+  enabled: true,
+  provider: { type: 'runtype', runtype: { agentId: 'agent_01abc' } },
+  prewarm: ({ warm }) => {
+    const button = document.querySelector('#talk-to-us');
+    button?.addEventListener('pointerenter', warm);
+    return () => button?.removeEventListener('pointerenter', warm);
+  },
+}
+```
+
+**Attach mode.** With `provider.runtype.prewarmMode: 'attach'`, the warm-up opens the voice WebSocket early instead of sending the HTTP request. The socket is attached but no call starts until the click, which reuses it. If the visitor does not click within `attachIdleMs` (default 30 seconds), the socket closes. If the click comes while the socket is still connecting, the widget waits up to 5 seconds for it and then opens a fresh connection. Attach mode can create server work before the visitor clicks, so it is opt-in.
+
+#### Full-duplex voice
+
+Some Runtype voice agents use a speech-to-speech model such as GPT-Live. The model talks with the visitor directly and hands the real work to the agent. The widget shows each utterance as its own chat bubble. When the visitor speaks while a reply is still playing, both bubbles stay separate.
+
+With `provider.runtype.clientDelegation` on (the default), the widget runs each agent turn the model hands off through its normal chat pipeline:
+
+- The visitor's transcript bubble becomes the user message. The request is sent once, in the same conversation as typed messages.
+- The answer streams in as a regular assistant message. Tool and approval UI, WebMCP page tools, and conversation history work as they do for typed messages.
+- The voice model reads the answer aloud. On servers that support streaming and tag the voice model's read-back, the widget passes the answer on in sentence-sized pieces while it renders, so the voice model starts speaking before the agent finishes. Its spoken read-back is not added as a second bubble, and browser text-to-speech skips the answer. Short phrases it says while the agent works, such as "let me check", still show.
+- A handed-off turn tells the agent its reply will be spoken, so the agent leads with a short, direct answer in plain sentences.
+- The voice model's own speech, and anything the visitor said that wasn't handed off, shows as captions. Captioned messages carry `voiceCaption: true` and are never sent to the agent as conversation.
+- If a turn stops for a tool approval, the voice model says what is about to happen (the tool, the key details, the agent's reason) and asks the visitor to approve or decline it in the chat. Nothing is ever approved by voice. Once the visitor decides, the voice model reads the outcome aloud.
+- While exactly one such approval waits, an unambiguous spoken decline ("cancel that", "never mind") declines it. A newer request for the same tool replaces the earlier approval, and an approval left unanswered for `approvalTimeoutMs` is declined as timed out. Hanging up declines nothing: the approval card in the chat stays usable.
+- If a turn stops for a question, the voice model tells the visitor to answer it in the chat.
+- A hand-off that arrives while another chat turn is still streaming waits for that turn to finish.
+
+When the visitor finishes their first utterance, the widget sends the voice model the last 12 chat messages from before the call (at most 8000 characters) and the `callContext` text, so it can refer to what was already said. If the voice model hands off a turn first, the context goes out then. It waits because the voice model tends to answer context that arrives earlier: before anyone speaks, or partway through the visitor's sentence. This works whether `clientDelegation` is on or off.
+
+Known gap: the voice model usually hands off the first turn about half a second before the visitor's final transcript. So it decides whether to answer the first turn itself without the earlier chat history. Later turns and the read-back have the history, and the agent turn itself always runs with the full chat history.
+
+A speech-to-speech call shows a one-line AI-disclosure notice in the composer status area when it starts (`disclosureText`).
+
+These features need a server that supports them: the widget declares what it supports when the call opens (Runtype browser voice protocol v1), and uses only what the server confirms. Older servers run the agent turn on the server and transcribe its spoken reply instead. Set `clientDelegation: false` to always run the agent turn on the server.
+
+```typescript
+voiceRecognition: {
+  enabled: true,
+  provider: {
+    type: 'runtype',
+    runtype: {
+      agentId: 'agent_01abc',
+      callContext: () => `The visitor is on ${location.pathname}.`
     }
   }
 }
@@ -476,7 +622,7 @@ config: {
 | `title` | `string?` | Title text above the description. |
 | `approveLabel` | `string?` | Label for the approve button. |
 | `denyLabel` | `string?` | Label for the deny button. |
-| `detailsDisplay` | `'collapsed' \| 'expanded' \| 'hidden'?` | How the technical details (agent-facing tool description + raw parameters JSON) are presented. Default: `'collapsed'` (behind a "Show details" toggle). `'expanded'` shows them open; `'hidden'` never renders them. |
+| `detailsDisplay` | `'collapsed' \| 'expanded' \| 'hidden'?` | How the technical details (agent-facing tool description + raw parameters JSON) are presented. Default: `'collapsed'` (behind a "Show details" toggle). `'expanded'` shows them open; `'hidden'` never renders them. Exception: in client-token mode the card always shows the raw tool name and arguments above the agent's stated reason, whatever this is set to, so the visitor sees exactly what will run. |
 | `showDetailsLabel`, `hideDetailsLabel` | `string?` | Labels for the details toggle. Defaults: `"Show details"` / `"Hide details"`. |
 | `formatDescription` | `(approval) => string \| undefined` | Build the user-facing summary line. Receives `{ toolName, toolType, description, parameters, displayTitle, reason }`. Return a falsy value to fall back to the default copy for that approval. If you include `reason`, keep it attributed to the agent. |
 | `backgroundColor`, `borderColor`, `shadow`, `titleColor`, `descriptionColor` | `string?` | Bubble styling; pass `shadow: "none"` to remove the default shadow. |
@@ -485,6 +631,23 @@ config: {
 | `denyButtonColor`, `denyButtonTextColor` | `string?` | Deny button styling. |
 | `parameterBackgroundColor`, `parameterTextColor` | `string?` | Parameters block styling. |
 | `onDecision` | `(data, decision, options?) => Promise<Response \| ReadableStream \| void>?` | Custom approval handler. Return `void` for SDK auto-resolve. `options.remember` is forwarded from custom "always allow" affordances. |
+
+**Where the decision goes.** Without `onDecision`, the widget posts the decision
+itself and streams the continued run into the same conversation:
+
+- **Client-token mode** (`clientToken`): `POST /v1/client/approve` with the
+  current `sessionId`, no API key. Runtype answers only gates the agent marks
+  `tools.approval.approver: 'end-user'`. A gate that needs the owner returns
+  `403 APPROVAL_APPROVER_NOT_END_USER`; a second decision returns
+  `409 APPROVAL_ALREADY_RESOLVED`. A Runtype API without this route (404
+  `Not Found`) gets the owner route below instead.
+- **Proxy / API-key mode**: `POST /v1/agents/{agentId}/approve` with your
+  configured `headers`.
+
+When the request fails, the widget adds an assistant message with the
+server's reason and calls `onError`. If the pause is gone (`409
+APPROVAL_ALREADY_RESOLVED`, or a 404 for an expired or unknown pause), the card
+shows `timeout`. Otherwise it returns to `pending` so the user can try again.
 
 **How the summary line is chosen.** A tool's wire `description` is written for the
 agent (usage rules, prompt prose), not for end users, so the bubble doesn't lead

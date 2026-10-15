@@ -226,6 +226,29 @@ describe('AgentWidgetSession - Message Injection', () => {
       expect(messages[0].content).toBe('First message');
       expect(messages[1].content).toBe('Second message');
     });
+
+    it('should re-sort when an update moves a message past its neighbors', () => {
+      session.injectMessage({
+        id: 'a',
+        role: 'user',
+        content: 'A',
+        createdAt: '2025-01-01T00:00:01.000Z'
+      });
+      session.injectMessage({
+        id: 'b',
+        role: 'assistant',
+        content: 'B',
+        createdAt: '2025-01-01T00:00:02.000Z'
+      });
+      session.injectMessage({
+        id: 'a',
+        role: 'user',
+        content: 'A, later',
+        createdAt: '2025-01-01T00:00:03.000Z'
+      });
+
+      expect(messages.map((message) => message.content)).toEqual(['B', 'A, later']);
+    });
   });
 
   describe('backward compatibility', () => {
@@ -1283,5 +1306,31 @@ describe('AgentWidgetSession - WebMCP native approval gate', () => {
     expect(
       getMessages().find((m) => m.variant === 'approval')?.approval?.status
     ).toBe('approved');
+  });
+
+  it('closes the bubble and resolves false when the call signal aborts, and ignores a later click', async () => {
+    const { session, getMessages } = makeSession();
+    const abort = new AbortController();
+    const promise = session.requestWebMcpApproval({
+      toolName: 'edit_slide',
+      args: {},
+      reason: 'gate',
+      signal: abort.signal,
+    });
+    const bubble = getMessages().find((m) => m.variant === 'approval')!;
+    expect(bubble.approval?.status).toBe('pending');
+    abort.abort();
+    await expect(promise).resolves.toBe(false);
+    expect(getMessages().find((m) => m.variant === 'approval')?.approval?.status).toBe('timeout');
+    session.resolveWebMcpApproval(bubble.id, 'approved');
+    expect(getMessages().find((m) => m.variant === 'approval')?.approval?.status).toBe('timeout');
+  });
+
+  it('shows no bubble for a call whose signal already aborted', async () => {
+    const { session, getMessages } = makeSession();
+    await expect(
+      session.requestWebMcpApproval({ toolName: 'edit_slide', args: {}, reason: 'gate', signal: AbortSignal.abort() })
+    ).resolves.toBe(false);
+    expect(getMessages().some((m) => m.variant === 'approval')).toBe(false);
   });
 });

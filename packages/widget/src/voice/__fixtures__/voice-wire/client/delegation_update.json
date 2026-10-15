@@ -1,0 +1,6 @@
+{
+  "type": "delegation_update",
+  "delegationId": "del_1",
+  "status": "pending_approval",
+  "text": "Placing a pickup order needs your approval in the chat. Briefly tell the user what you're about to do and ask them to approve or decline it in the chat. Don't claim it's done."
+}

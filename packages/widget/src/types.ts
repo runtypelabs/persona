@@ -818,14 +818,18 @@ export type AgentWidgetAgentRequestPayload = {
 // WebMCP Types (page-discovered tools shipped per dispatch)
 // ============================================================================
 
-/**
- * Wire shape for a single client-discovered tool sent on `dispatch.clientTools[]`.
- *
- * Mirrors the SDK's `ClientToolDefinition` in `@runtypelabs/sdk`. Only the
- * JSON-serializable surface of a WebMCP tool: the `execute` function stays
- * client-side; the server merges these into the agent's tool catalog under
- * the `webmcp:` namespace.
- */
+/** Advisory WebMCP and MCP hints. These do not grant approval or safe retry. */
+export type ToolAnnotations = {
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  consequentialHint?: boolean;
+  untrustedContentHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+  debugging?: boolean;
+};
+
+/** Wire metadata for a client-side tool; its execute function stays in the browser. */
 export type ClientToolDefinition = {
   /** Bare tool name; the server prepends `webmcp:` on the wire. */
   name: string;
@@ -842,20 +846,16 @@ export type ClientToolDefinition = {
   /** Origin of the page that registered the tool: for server-side audit. */
   pageOrigin?: string;
   /**
-   * WebMCP `Tool.annotations` (spec). Not used for gating server-side; the
-   * widget reads these client-side. Forwarded so traces/dashboards can show
-   * `readOnlyHint` / `untrustedContentHint` on tool-call records.
+   * WebMCP hints and MCP compatibility hints forwarded to runtime tool metadata
+   * and confirmation callbacks. No hint skips the default confirmation gate.
    */
-  annotations?: {
-    readOnlyHint?: boolean;
-    untrustedContentHint?: boolean;
-  };
+  annotations?: ToolAnnotations;
   /**
    * Hoisted copy of `annotations.untrustedContentHint`. This is the field the
    * server actually acts on (`InlineClientToolSchema`): it spotlights the
    * tool's output before the model reads it, so instructions embedded in
    * page-provided content (reviews, comments, emails) are not treated as
-   * instructions. `annotations` itself is trace/dashboard metadata only.
+   * instructions. A nested true hint also opts into output protection.
    */
   untrustedContentHint?: boolean;
 };
@@ -877,17 +877,19 @@ export type WebMcpConfirmInfo = {
    * didn't declare one.
    */
   title?: string;
-  annotations?: {
-    readOnlyHint?: boolean;
-    untrustedContentHint?: boolean;
-  };
+  annotations?: ToolAnnotations;
   /**
    * Why the confirm was requested. Currently always `'gate'`: the default
-   * confirm-by-default gate that fires before every `webmcp:*` call. (The
-   * `@mcp-b/webmcp-polyfill` owns the spec's `requestUserInteraction` callback
-   * internally, so Persona no longer surfaces a nested in-tool confirm.)
+   * confirm-by-default gate that fires before every `webmcp:*` call. Tool
+   * callbacks on v6 receive an AbortSignal, not a nested confirmation API.
    */
   reason: 'gate';
+  /**
+   * Aborts when the call no longer needs an answer (its deadline passed, or it
+   * was cancelled). A confirm UI should close and resolve `false`; the tool
+   * never runs after it aborts either way.
+   */
+  signal?: AbortSignal;
 };
 
 /**
@@ -3229,8 +3231,8 @@ export interface AgentWidgetHistoryFeature {
    * otherwise `"browser"`) and narrows it to what the provider advertises, so a
    * browser-only provider is never asked for a scope it cannot serve. An
    * explicit `features.history.scope` is a hard request and still fails closed
-   * with `unsupported_scope`. `getIdentityProof` is never called for a supplied
-   * provider, and `HistoryOperationContext` carries only the resolved scope;
+   * with `unsupported_scope`. History operations on a supplied provider never
+   * call `getIdentityProof`, and `HistoryOperationContext` carries only the resolved scope;
    * report your own identity through `getIdentityStatus()` /
    * `subscribeIdentityStatus()`, which is what the scope banner and its retry
    * affordance read.
@@ -4929,6 +4931,24 @@ export type DictationRenderHandle = {
 
 export type DictationStateEvent = Omit<DictationState, "audioLevel"> & { instanceId: string; timestamp: number };
 
+/** Built-in `voiceRecognition.prewarm` triggers. See {@link AgentWidgetVoiceRecognitionConfig.prewarm}. */
+export type AgentWidgetVoicePrewarmTrigger = 'hover';
+
+/**
+ * Custom `voiceRecognition.prewarm` trigger. Runs while the composer has a mic
+ * button, and again when the button is rebuilt or `update()` swaps in a
+ * different function. Call `warm()` whenever the visitor shows intent to talk
+ * (it is safe to call repeatedly). Return a cleanup to run on replacement.
+ */
+export type AgentWidgetVoicePrewarmHook = (context: {
+  /** Fire-and-forget voice warm-up; latched and error-swallowing. */
+  warm: () => void;
+  /** The composer's current mic button. */
+  micButton: HTMLButtonElement;
+  /** The widget's mount element. */
+  mount: HTMLElement;
+}) => void | (() => void);
+
 export type AgentWidgetVoiceRecognitionConfig = {
   /**
    * Enable the mic button and voice input. The mic still only renders when the
@@ -5018,6 +5038,30 @@ export type AgentWidgetVoiceRecognitionConfig = {
    */
   onMetrics?: (metrics: VoiceMetrics) => void;
 
+  /**
+   * Warm the voice path when the visitor shows intent to talk, before the mic
+   * click, so the call starts faster.
+   *
+   * - `'hover'`: when the pointer enters the mic button, it receives focus, or
+   *   (on touch) the first pointer-down on it.
+   * - `false`: never.
+   * - A function: custom trigger. Called with `{ warm, micButton, mount }`
+   *   while the mic button exists (and again when the button is rebuilt or
+   *   `update()` swaps in a different function); call `warm()` whenever you
+   *   decide, e.g. when the panel opens. May return a cleanup that runs on
+   *   destroy, rebuild, or replacement. Replaces the built-in trigger.
+   *
+   * What `warm()` does depends on the provider: `runtype` fires its prewarm
+   * (see `provider.runtype.prewarmMode`), a `custom` provider's optional
+   * {@link VoiceProvider.prewarm} runs, and the browser (Web Speech) path
+   * starts the client-token session init (as `sessionInit` does), since speech
+   * recognition itself cannot start before the click. Warming is
+   * fire-and-forget, latched, and never surfaces an error or UI state.
+   *
+   * @default 'hover' in client token mode, otherwise `false`
+   */
+  prewarm?: AgentWidgetVoicePrewarmTrigger | AgentWidgetVoicePrewarmHook | false;
+
   // Voice provider configuration
   provider?: {
     type: 'browser' | 'runtype' | 'custom';
@@ -5040,6 +5084,62 @@ export type AgentWidgetVoiceRecognitionConfig = {
        * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
        */
       createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
+      /**
+       * How `prewarm()` warms the voice path (see `voiceRecognition.prewarm`).
+       *
+       * - `'request'` (default): a fire-and-forget
+       *   `POST {host}/v1/client/agents/{agentId}/voice/prewarm`.
+       * - `'attach'`: open the voice WebSocket ahead of the click without
+       *   starting a call; the click then starts the call on that socket. It can
+       *   create server work before the visitor clicks, so it is opt-in.
+       * @default 'request'
+       */
+      prewarmMode?: 'request' | 'attach';
+      /**
+       * `'attach'` mode: how long (ms) an attached socket waits for the click
+       * before it closes. The server clamps it to 30000..600000.
+       * @default 30000
+       */
+      attachIdleMs?: number;
+      /**
+       * Full-duplex (speech-to-speech, e.g. GPT-Live) calls: run the turns the
+       * voice model hands off to the agent through this widget's normal chat
+       * pipeline. The spoken request becomes the user message, and the answer
+       * renders as a regular assistant message (streaming, tool and approval
+       * UI, WebMCP page tools, persistence) that the voice model then reads
+       * aloud. Only takes effect when the server supports it (it confirms in
+       * `session_config`); otherwise the agent turn runs on the server and its
+       * spoken reply is transcribed, as before. Set `false` to always keep the
+       * agent turn on the server.
+       * @default true
+       */
+      clientDelegation?: boolean;
+      /**
+       * Full-duplex calls: extra context for the voice model (for example the
+       * page the visitor is on), sent after the chat history as of call start.
+       * The frame goes out once, when the visitor finishes their first
+       * utterance (or at the first agent hand-off). A function is
+       * called at call start and may be async. This text is capped at 4000 characters and the whole frame
+       * (history included) at 8000. Sent only to servers that accept call
+       * context (they announce it in `session_config`).
+       */
+      callContext?: string | (() => string | Promise<string>);
+      /**
+       * Full-duplex calls with client delegation: how long a tool approval
+       * that a spoken request raised may wait before it is declined as
+       * expired (and the voice model says so). Server-side approval gates
+       * keep their own timeout too. Hanging up never declines it: the
+       * approval card in the chat stays usable. Capped at 540000 (9 minutes),
+       * under the server's 10-minute delegation deadline.
+       * @default 300000
+       */
+      approvalTimeoutMs?: number;
+      /**
+       * Speech-to-speech calls: the one-line notice shown in the composer
+       * status area when the call starts. `false` hides it.
+       * @default "You're talking to an AI assistant. Voice is processed by OpenAI."
+       */
+      disclosureText?: string | false;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
       pauseDuration?: number;
       /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5305,6 +5405,13 @@ export interface VoicePlaybackEngine {
   onFinished(callback: () => void): void;
   /** Release all audio resources. */
   destroy(): Promise<void> | void;
+  /**
+   * Optional. Speech-to-speech calls stream reply audio with no end-of-stream
+   * marker, so an engine that holds audio below a prebuffer waterline must, while
+   * continuous, release that held tail on its own (e.g. after a short input gap)
+   * instead of waiting for {@link markStreamEnd}. Engines without a prebuffer can omit it.
+   */
+  setContinuousMode?(enabled: boolean): void;
 }
 
 /**
@@ -5354,6 +5461,18 @@ export type VoiceConfig = {
      * `@runtypelabs/persona/voice-worklet-player` for a jitter-buffered engine.
      */
     createPlaybackEngine?: () => VoicePlaybackEngine | Promise<VoicePlaybackEngine>;
+    /** See `voiceRecognition.provider.runtype.prewarmMode`. @default 'request' */
+    prewarmMode?: 'request' | 'attach';
+    /** See `voiceRecognition.provider.runtype.attachIdleMs`. @default 30000 */
+    attachIdleMs?: number;
+    /** See `voiceRecognition.provider.runtype.clientDelegation`. @default true */
+    clientDelegation?: boolean;
+    /** See `voiceRecognition.provider.runtype.callContext`. */
+    callContext?: string | (() => string | Promise<string>);
+    /** See `voiceRecognition.provider.runtype.approvalTimeoutMs`. @default 300000 (capped at 540000) */
+    approvalTimeoutMs?: number;
+    /** See `voiceRecognition.provider.runtype.disclosureText`. */
+    disclosureText?: string | false;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
     pauseDuration?: number;
     /** @deprecated No-op on the realtime path: the server's STT owns turn-taking. */
@@ -5391,13 +5510,24 @@ export interface VoiceProvider {
    * Register a callback for incremental transcript updates during a voice turn.
    * `isFinal=false` is a live interim update (user partials, or assistant deltas
    * on providers that stream them); `isFinal=true` finalizes that role's text.
-   * On the realtime `runtype` path, interim updates fire for the `user` only and
-   * the `assistant` arrives as a single final. Providers with overlapping turns
-   * must include the same turnId on user and assistant finals; without IDs,
-   * providers must discard cancelled output before emitting the next user final.
+   * On the classic realtime `runtype` path, interim updates fire for the `user`
+   * only and the `assistant` arrives as a single final; without a turnId the
+   * session assumes strictly alternating turns, and providers must discard
+   * cancelled output before emitting the next user final.
+   *
+   * When `metadata.turnId` is present (full-duplex / speech-to-speech, e.g.
+   * GPT-Live), the session reconciles by `(turnId, role)`: each pair owns one
+   * bubble that later updates replace in place, turns may overlap or arrive in
+   * any order, and no empty assistant placeholder is injected. User and
+   * assistant may share a turnId (a late user bubble then renders above its
+   * reply) or use distinct ones. `metadata.startMs` (call-relative ms when the
+   * utterance began) orders a new bubble among the call's other keyed bubbles;
+   * without it bubbles order by first arrival. After a stop, keyed providers
+   * must drop the cancelled reply's output until the server acknowledges the
+   * cancel: the session renders every reply it receives.
    */
   onTranscript?(
-    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean, metadata?: { turnId?: string }) => void,
+    callback: (role: 'user' | 'assistant', text: string, isFinal: boolean, metadata?: VoiceTranscriptMetadata) => void,
   ): void;
 
   /** Register a callback for per-turn latency metrics (realtime path). */
@@ -5425,7 +5555,275 @@ export interface VoiceProvider {
 
   /** Stop playback / cancel in-flight request without starting recording */
   stopPlayback?(): void;
+
+  /**
+   * Warm the provider ahead of `startListening()` (the widget calls it on mic
+   * intent, see `voiceRecognition.prewarm`). Must be fire-and-forget: never
+   * throw, emit errors or status, or acquire the microphone. May be called
+   * repeatedly; throttle as needed.
+   */
+  prewarm?(): void;
+
+  /**
+   * Called by the session once after construction with the chat-side surface
+   * a full-duplex provider uses to hand agent turns to the chat pipeline
+   * ({@link VoiceSessionBridge}). Providers without client delegation omit it.
+   */
+  setSessionBridge?(bridge: VoiceSessionBridge): void;
+  /** The AI-disclosure notice for the live call, if one should show (speech-to-speech). */
+  getDisclosure?(): string | null;
+  /**
+   * Status-line text for the call, returned once: why the server ended it
+   * (`session_end`) or that it is reconnecting. `null` when there is none.
+   */
+  takeNotice?(): string | null;
 }
+
+/** Metadata on a {@link VoiceProvider.onTranscript} update. */
+export type VoiceTranscriptMetadata = {
+  /** Groups updates that belong to one utterance bubble (full duplex). */
+  turnId?: string;
+  /** Call-relative ms when the utterance began; orders late bubbles. */
+  startMs?: number;
+  /** Call-relative ms of the latest audio this update covers. */
+  endMs?: number;
+  /**
+   * The bubble only captions speech (see `AgentWidgetMessage.voiceCaption`).
+   * The chat pipeline owns the conversation, as with client delegation.
+   */
+  caption?: boolean;
+};
+
+/** An agent turn a full-duplex voice model handed to the widget. */
+export type VoiceDelegationRequest = {
+  /** The voice model's delegation id (`delegation_started.delegationId`). */
+  delegationId: string;
+  /** What the visitor asked, as the voice model heard it. */
+  userText: string;
+  /**
+   * The user transcript utterances `userText` joins, oldest first (the last
+   * is the one it came from). May be empty.
+   */
+  userUtteranceIds: string[];
+  /** The voice model's view of the conversation it delegated from. */
+  messages: Array<{ role: string; content: unknown }>;
+  /**
+   * `delegation_started.input.priorToolResults` as received: page tools the
+   * server already ran for this turn, each `{ toolCallId, name, arguments,
+   * result }`. Unvalidated. The chat turn records them as completed calls and
+   * never runs them again.
+   */
+  priorToolResults?: unknown;
+  /**
+   * Set when the server streams delegated answers (`delegation_stream`): called
+   * with each speakable piece of the turn's answer, in order, while it renders.
+   * The pieces, concatenated, are a prefix of the result's `text`; the result
+   * says how much of it with `streamedChars`.
+   */
+  stream?: (text: string) => void;
+};
+
+/**
+ * How a delegated turn ended, or that it waits on an approval (contract
+ * Amendment 5). `pending_approval` is the only non-terminal status. Open:
+ * a receiver treats an unknown terminal status as `failed`.
+ * - `completed`: the work ran.
+ * - `denied`: the visitor said no (Deny tap, or a spoken decline).
+ * - `timeout`: the approval lapsed (`approvalTimeoutMs`, or the server's own timeout).
+ * - `cancelled`: replaced by a newer request, or abandoned by the system.
+ * - `failed`: an error.
+ */
+export type VoiceDelegationStatus =
+  | 'completed'
+  | 'pending_approval'
+  | 'denied'
+  | 'timeout'
+  | 'cancelled'
+  | 'failed'
+  | (string & {});
+
+/** The terminal result of a turn that parked on approvals. */
+export type VoiceDelegationFollowUp = {
+  status: VoiceDelegationStatus;
+  /** What to read aloud (Markdown allowed). May be empty: nothing more to say. */
+  text: string;
+};
+
+/** The delegated turn's answer, sent back for the voice model to read aloud. */
+export type VoiceDelegationResult = {
+  /** `pending_approval` when `followUp` is set; otherwise terminal. */
+  status: VoiceDelegationStatus;
+  /** The assistant text (Markdown allowed). */
+  text: string;
+  /**
+   * `false` when no chat message carries this answer (it is only spoken), so
+   * the voice model's read-back of it stays visible as a caption.
+   * @default true
+   */
+  inChat?: boolean;
+  /**
+   * How many leading characters of `text` already went out through
+   * `request.stream` (the rest, such as an approval script, is unstreamed).
+   * Omitted or 0: nothing was streamed.
+   */
+  streamedChars?: number;
+  /**
+   * Set when the turn parked on approvals (`text` then asks for the decision).
+   * Resolves with the terminal result once the visitor decides (or the
+   * approval is replaced, declined by voice, or unanswered for
+   * `approvalTimeoutMs`) and the resumed turn finishes; `null` only when
+   * `signal` aborts first (hang-up, or the server cancelled the delegation).
+   */
+  followUp?: (options: {
+    signal: AbortSignal;
+    approvalTimeoutMs?: number;
+    /** `false`: run only the approval bookkeeping (expiry, supersede); nothing will be read back. @default true */
+    readBack?: boolean;
+    /** The resumed turn stopped on another approval: ask for it too (`text` is its approval script). */
+    onUpdate?: (text: string) => void;
+  }) => Promise<VoiceDelegationFollowUp | null>;
+};
+
+/**
+ * Chat-side surface the session hands a full-duplex provider: the visible
+ * history (for the call-start context) and a way to run a delegated turn
+ * through the normal chat pipeline.
+ */
+export interface VoiceSessionBridge {
+  /** Visible user/assistant messages, oldest first. */
+  getHistory(): Array<{ role: 'user' | 'assistant'; content: string }>;
+  /**
+   * Submit the turn as the visitor's message (reusing its transcript bubble)
+   * and resolve with the assistant's final answer once the turn settles.
+   * Waits for any chat turn already in flight first. Never rejects.
+   */
+  runDelegatedTurn(request: VoiceDelegationRequest): Promise<VoiceDelegationResult>;
+  /**
+   * The server dropped this delegation's result (cancelled it, or refused a
+   * late result): its chat answer is no longer spoken, so browser TTS may read it.
+   * `expired`: the server's deadline passed, so its pending approvals are
+   * declined too, as the approval TTL would.
+   */
+  dropDelegation?(delegationId: string, expired?: boolean): void;
+  /**
+   * The page tools a voice call may offer the server's fast tier
+   * (`client_tools` / `client_tool_call`). Returns `null` when WebMCP is not
+   * enabled on this widget; the provider then does not declare `client_tools`.
+   */
+  clientTools?(): VoiceClientTools | null;
+  /**
+   * The server answered a delegation itself (`delegation_completed.route ===
+   * 'direct'`): record the visitor's turn and the spoken answer in the chat,
+   * as a delegated turn would have. `assistantText` may be empty (no readout).
+   */
+  recordDirectTurn?(turn: VoiceDirectTurn): void;
+}
+
+/** A delegation the server answered on its fast tier, for the chat history. */
+export type VoiceDirectTurn = {
+  delegationId: string;
+  userText: string;
+  userUtteranceIds: string[];
+  assistantText: string;
+};
+
+/** `client_tool_result.status` (open enum on the wire). */
+export type VoiceClientToolStatus =
+  | 'completed'
+  | 'failed'
+  | 'denied'
+  | 'stale'
+  | 'timeout'
+  | (string & {});
+
+/** What running one `client_tool_call` produced. */
+export type VoiceClientToolOutcome = {
+  status: VoiceClientToolStatus;
+  /** The page tool's return value (any JSON), on `completed`. */
+  result?: unknown;
+  error?: { message: string };
+};
+
+/** The page's tool set as of now, plus its content fingerprint. */
+export type VoiceClientToolsSnapshot = {
+  /** Exactly what `/v1/client/chat` would send as `clientTools[]` (bare names). */
+  tools: ClientToolDefinition[];
+  fingerprint: string;
+};
+
+/** WebMCP access for a voice call (see {@link VoiceSessionBridge.clientTools}). */
+export interface VoiceClientTools {
+  snapshot(): Promise<VoiceClientToolsSnapshot>;
+  /** Subscribe to registry changes; returns an unsubscribe. */
+  onChange(listener: () => void): () => void;
+  /**
+   * Run a page tool. `autoConfirmReadOnly`: skip the confirm gate when the
+   * tool's registry entry has `annotations.readOnlyHint === true`.
+   */
+  execute(
+    name: string,
+    args: Record<string, unknown>,
+    options: { signal: AbortSignal; autoConfirmReadOnly: boolean },
+  ): Promise<VoiceClientToolOutcome>;
+  /**
+   * Start the call's fast-tier session (loads its lazy chunk): it sends
+   * `client_tools` through `channel` now and on every change, and answers
+   * the `client_tool_call` frames handed to it.
+   */
+  open(channel: VoiceClientToolsChannel): Promise<VoiceClientToolsSession>;
+}
+
+/** The call socket, as the fast-tier session sees it. */
+export type VoiceClientToolsChannel = {
+  /** Send a frame; `false` when the call (socket) is gone. */
+  send(frame: ClientToolsFrame | ClientToolResultFrame): boolean;
+  /** The server cancelled this delegation: its tool results are not sent. */
+  cancelled(delegationId: string): boolean;
+};
+
+/** A call's fast-tier session (see {@link VoiceClientTools.open}). */
+export interface VoiceClientToolsSession {
+  call(frame: Partial<ClientToolCallFrame>): void;
+  /** Abort running tool calls (of one delegation, or all); they send nothing. */
+  abort(delegationId?: string): void;
+  close(): void;
+}
+
+/**
+ * Client → server (`runtype-browser-v1`, `client_tools` capability): the page's
+ * tool set, after `session_config` and whenever its fingerprint changes. Names
+ * are the FULL names the server calls back with: `webmcp:` prefixed for
+ * `origin: 'webmcp'`, bare for `sdk`.
+ */
+export type ClientToolsFrame = {
+  type: 'client_tools';
+  /** The content fingerprint the chat path computes for the same `clientTools[]`. */
+  fingerprint: string;
+  tools: ClientToolDefinition[];
+};
+
+/** Server → client: the fast tier picked a page tool for this delegation. */
+export type ClientToolCallFrame = {
+  type: 'client_tool_call';
+  delegationId: string;
+  toolCallId: string;
+  /** `webmcp:<name>` or bare; the client accepts both. */
+  name: string;
+  arguments: Record<string, unknown>;
+  /** The `client_tools` fingerprint the call was chosen from. */
+  fingerprint: string;
+  timeoutMs: number;
+};
+
+/** Client → server: the answer to one {@link ClientToolCallFrame}. */
+export type ClientToolResultFrame = {
+  type: 'client_tool_result';
+  delegationId: string;
+  toolCallId: string;
+  status: VoiceClientToolStatus;
+  result?: unknown;
+  error?: { message: string };
+};
 
 /**
  * Extra context for an approval decision, surfaced to `onDecision` and to the
@@ -6405,6 +6803,8 @@ export interface WidgetHistoryInternals {
  */
 export type ClientChatRequest = {
   sessionId: string;
+  /** Fresh identity proof for this execution, independent of visitor history. */
+  identityProof?: RuntypeClientChatRequest['identityProof'];
   messages: Array<{
     id?: string;
     role: 'user' | 'assistant' | 'system';
@@ -6435,6 +6835,28 @@ export type ClientChatRequest = {
   turnId?: RuntypeClientChatRequest['turnId'];
   /** Whether this turn should interrupt a prior in-flight response (from Core public OpenAPI). */
   submitMode?: RuntypeClientChatRequest['submitMode'];
+  /**
+   * Spoken-reply hint, set on a delegated voice turn whose reply a voice model
+   * reads aloud: the server asks the agent for a speakable answer (the direct
+   * answer first, in plain sentences). Not persisted into history.
+   */
+  voice?: {
+    spoken: true;
+    /**
+     * Page tools the voice server already ran for this hand-back
+     * (`delegation_started.input.priorToolResults`), sent only when it carried
+     * some. The agent narrates their results instead of calling them again.
+     */
+    priorToolResults?: VoicePriorToolResult[];
+  };
+};
+
+/** A page tool call the voice server already ran, as `/v1/client/chat` takes it. */
+export type VoicePriorToolResult = {
+  toolCallId: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  result: unknown;
 };
 
 /**
@@ -7331,7 +7753,8 @@ export type AgentWidgetPersistStateConfig = {
    */
   storage?: 'local' | 'session';
   /**
-   * Prefix for storage keys.
+   * Prefix for storage keys. Also scopes the default transcript key
+   * (`${keyPrefix}state` in localStorage) when no `storageAdapter` is given.
    * @default 'persona-'
    */
   keyPrefix?: string;
@@ -7520,6 +7943,22 @@ export type AgentWidgetLoadingIndicatorConfig = {
   renderIdle?: (context: IdleIndicatorRenderContext) => HTMLElement | null;
 };
 
+/** Built-in `sessionInit` triggers. See {@link AgentWidgetConfig.sessionInit}. */
+export type AgentWidgetSessionInitTrigger = 'input' | 'focus' | 'mount' | 'send';
+
+/**
+ * Custom `sessionInit` trigger. Runs when the widget mounts in client token mode,
+ * and again if `update()` swaps in a different function. Call `warm()` whenever
+ * the visitor shows intent (it is safe to call repeatedly). Return a cleanup to
+ * run when the widget is destroyed or the hook is replaced.
+ */
+export type AgentWidgetSessionInitHook = (context: {
+  /** Fire-and-forget early session init; latched and error-swallowing. */
+  warm: () => void;
+  /** The widget's mount element. */
+  mount: HTMLElement;
+}) => void | (() => void);
+
 export type AgentWidgetConfig = {
   /** Opt in to upcoming major-version defaults without changing explicit settings. */
   future?: {
@@ -7693,6 +8132,46 @@ export type AgentWidgetConfig = {
    */
   onSessionExpired?: () => void;
   /**
+   * When the widget calls `/v1/client/init` in client token mode, ahead of the
+   * first send. Ignored outside client token mode.
+   *
+   * - `'input'` (default): on the composer's first user keystroke that leaves
+   *   non-empty text. Programmatic value changes (restored drafts,
+   *   `setMessage()`, history recall) do not count.
+   * - `'focus'`: when the visitor focuses the composer by pointer or Tab (and
+   *   on first input, as a fallback). Programmatic focus, such as
+   *   `autoFocusInput` on open or mount, does not count.
+   * - `'mount'`: as soon as the widget mounts (the behavior before this option
+   *   existed). Use it when a server-configured welcome message, which arrives
+   *   with the init response, must show before the visitor types.
+   * - `'send'`: no early init; the first send initializes the session.
+   * - A function: custom trigger. Called on mount (and when `update()` swaps
+   *   in a different function) with a `warm` callback to call whenever you
+   *   decide (e.g. on hover); may return a cleanup that runs on destroy or
+   *   replacement. Replaces the built-in triggers.
+   *
+   * The early init is fire-and-forget: it runs at most once per session
+   * lifetime (re-armed after expiry or a new conversation), sends exactly the
+   * same request the send would, and swallows errors. A failure resurfaces
+   * when the send retries init. A send during an in-flight early init reuses
+   * it, so only one `/v1/client/init` is issued. When visitor history is
+   * enabled the widget still initializes on mount to restore the conversation.
+   * Hosts can also trigger it imperatively with `controller.warmSession()`.
+   *
+   * @default 'input'
+   *
+   * @example
+   * ```typescript
+   * config: {
+   *   clientToken: 'ct_live_...',
+   *   sessionInit: ({ warm, mount }) => {
+   *     mount.addEventListener('pointerenter', warm, { once: true });
+   *   }
+   * }
+   * ```
+   */
+  sessionInit?: AgentWidgetSessionInitTrigger | AgentWidgetSessionInitHook;
+  /**
    * Get stored session ID for session resumption (client token mode only).
    * Called when initializing a new session to check if there's a previous session_id
    * that should be passed to /client/init to resume the same conversation record.
@@ -7724,13 +8203,20 @@ export type AgentWidgetConfig = {
    */
   setStoredSessionId?: (sessionId: string) => void;
   /**
-   * Called immediately before any cross-device history request and before a
+   * With identityProvider, called before every client-token chat POST, including retries, independently of history.
+   * Also called immediately before any cross-device history request and before a
    * conversationId resume of a conversation discovered on another device.
-   * Return a fresh end-user access token (rt_eu_… / JWT). Null uses exact-browser
-   * scope only for a never-bound visitor; a previously bound visitor fails closed
-   * until resetHistoryIdentity() runs. Never cached by the widget.
+   * Return a fresh end-user access token (rt_eu_… / JWT). Null stops identity-enabled chat.
+   * For history only, null uses exact-browser scope for a never-bound visitor;
+   * a bound visitor fails closed until resetHistoryIdentity(). Never cached.
    */
   getIdentityProof?: () => string | null | Promise<string | null>;
+  /**
+   * Provider name registered with Runtype, for example "clerk". Enables per-request
+   * chat identity through getIdentityProof without enabling history. A missing or
+   * failed proof stops the turn; omitting this preserves history-only callbacks.
+   */
+  identityProvider?: string;
   /**
    * Read the persisted active conversation id (client token mode only).
    * Called only after the internal stored-state bootstrap gate resolves.
@@ -7909,8 +8395,11 @@ export type AgentWidgetConfig = {
   /**
    * WebMCP: consume page-registered tools (`document.modelContext.registerTool`).
    * When `enabled`, the widget installs `@mcp-b/webmcp-polyfill`, snapshots the
-   * registry on every dispatch, ships it as `clientTools[]`, and executes
-   * returned `webmcp:*` tool calls with confirm-by-default gating.
+   * current document's registry on every dispatch, ships it as `clientTools[]`,
+   * and executes returned `webmcp:*` calls with confirm-by-default gating.
+   * Supports host-installed v5 JSON-string and v6 object-input contracts.
+   * The automatic fallback stays on v5 to preserve existing browser support
+   * and callback-result behavior.
    *
    * Server-side policy on the chat surface is the source of truth: these
    * fields layer on top.
@@ -8465,6 +8954,8 @@ export type AgentWidgetReasoning = {
 export type AgentWidgetToolCall = {
   /** Optional approval state for activity-row status chrome. */
   approvalStatus?: "pending" | "approved" | "denied" | "timeout";
+  /** Terminal browser work whose callback was lost when the chat restarted. */
+  interrupted?: boolean;
   id: string;
   name?: string;
   status: "pending" | "running" | "complete";
@@ -8478,6 +8969,11 @@ export type AgentWidgetToolCall = {
   startedAt?: number;
   completedAt?: number;
   durationMs?: number;
+  /**
+   * The call paused for an approval that was granted, and the agent re-ran it
+   * as a new tool call: that later call carries the result, this one has none.
+   */
+  superseded?: boolean;
 };
 
 /**
@@ -8489,6 +8985,8 @@ export type AgentWidgetApproval = {
   toolCallId?: string;
   id: string;
   status: "pending" | "approved" | "denied" | "timeout";
+  /** A browser callback lost on restart. The approval expires with status `timeout`. */
+  interrupted?: boolean;
   agentId: string;
   executionId: string;
   toolName: string;
@@ -8606,6 +9104,20 @@ export type AgentWidgetMessage = {
    * }
    */
   voiceProcessing?: boolean;
+  /**
+   * Display-only caption of full-duplex voice speech, such as the voice
+   * model's own words, or something the visitor said that wasn't submitted
+   * as a chat turn. It renders in the transcript but is never sent to the
+   * model as conversation.
+   */
+  voiceCaption?: boolean;
+  /**
+   * Set on widget-generated failure notices (a failed dispatch, a rejected
+   * approval decision, a reconnect that gave up). The bubble renders in this
+   * browser only: it is never sent to the model as conversation history and
+   * never written to the storage adapter.
+   */
+  localOnly?: boolean;
   /**
    * Raw structured payload for this message (e.g., JSON action response).
    * Populated automatically when structured parsers run.
@@ -8736,6 +9248,9 @@ export type InjectMessageOptions = {
    * Consumers can detect this in `messageTransform` to render custom UI.
    */
   voiceProcessing?: boolean;
+
+  /** See {@link AgentWidgetMessage.voiceCaption}. */
+  voiceCaption?: boolean;
 
   /**
    * Raw structured payload (typically a JSON string) representing the

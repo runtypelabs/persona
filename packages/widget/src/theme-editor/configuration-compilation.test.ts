@@ -46,12 +46,13 @@ describe('configuration authoring fixtures', () => {
       const hybridIcon = { type: 'text', text: 'Hello', url: '/logo.png' } satisfies AgentWidgetWelcomeIcon;
     `);
     const virtualFiles = new Map(fixtures.map((text, index) => [`${packageRoot}src/authoring-fixture-${index}.tsx`, text]));
+    virtualFiles.set(`${packageRoot}src/authoring-styles.d.ts`, 'declare module "@runtypelabs/persona/widget.css";');
     const parsedConfig = ts.parseJsonConfigFileContent(
       ts.readConfigFile(`${packageRoot}tsconfig.json`, ts.sys.readFile).config,
       ts.sys, packageRoot,
     );
     const options: ts.CompilerOptions = {
-      ...parsedConfig.options, noEmit: true,
+      ...parsedConfig.options, noEmit: true, rootDir: packageRoot,
       paths: { ...parsedConfig.options.paths, react: ['../../examples/ai-sdk-next/node_modules/@types/react/index.d.ts'] },
     };
     const host = ts.createCompilerHost(options);

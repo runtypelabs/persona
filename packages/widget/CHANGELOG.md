@@ -1,5 +1,186 @@
 # @runtypelabs/persona
 
+## 4.29.2
+
+### Patch Changes
+
+- 5db41a2: Fix `connectStream` replay of long tool-heavy transcripts hanging and crashing the tab. While a turn streams, transcript updates now render once per animation frame (user messages, approvals, and pending local tools still apply immediately), unchanged rows stay in place instead of being cloned and re-morphed on every pass, and the session no longer re-sorts the whole transcript on each streamed message. Replay cost is now linear in the number of frames.
+- a5e0e92: Regenerate the Runtype OpenAPI contract types (adds `voice.priorToolResults` to the client chat request).
+
+## 4.29.1
+
+### Patch Changes
+
+- cd241ac: Settle interrupted WebMCP browser tools and expire lost browser approval callbacks when restoring chat history. Preserve completed results, recorded timing, server continuations, and composer drafts, and prevent new approvals from overwriting restored cards. Retain existing approval status values and expose interruption through optional metadata for custom renderer compatibility. Align resolved approval icons with the first line and let tool names and explanations wrap together.
+- 1710989: Fix duplicated and polluted conversation history in client-token chats (runtypelabs/core#9961).
+
+  - `/v1/client/resume` and `/v1/client/approve` now send the id of the local bubble the resumed reply renders into as `assistantMessageId`, so the server stores the reply under the same id the widget later re-sends and deduplicates it by id instead of appending it again one turn later.
+  - Widget failure notices (a failed dispatch, a rejected approval decision, a reconnect that gave up) are marked `localOnly`: they render, but are never sent to the model as history or written to the storage adapter. Reconnect-failure bubbles stored by earlier versions are dropped the same way.
+  - A reload while a turn is parked on an await no longer spins the reconnect loop into a "Connection lost" bubble. A pending `ask_user_question` card or approval keeps its cursor for the answer's `/resume`; a WebMCP call interrupted by the reload gets one reconnect (so a replayed `await` re-dispatches it on the new page) and otherwise the turn ends quietly.
+  - The default localStorage transcript key now follows `persistState.keyPrefix` (`${keyPrefix}state`). The default prefix still uses `persona-state`, so existing unprefixed widgets keep their conversation; widgets with a custom prefix start a fresh, isolated transcript instead of sharing one.
+
+- d0424f5: Voice: when the server hands a turn back to the chat with `delegation_started.input.priorToolResults`, the widget records each already-run page tool once as a completed tool row under that turn and never runs it again. Proxy and agent requests replay it to the model as a `toolCalls`/`toolResults` pair with the same `toolCallId`. Client-token requests send it as `voice.priorToolResults`. The widget declares the `prior_tool_results` voice capability.
+
+## 4.29.0
+
+### Minor Changes
+
+- c598688: With WebMCP enabled, Runtype voice calls now advertise the page's tools, run tool calls the server routes to the page (skipping the confirm gate only for tools annotated `readOnlyHint: true`), and skip delegated turns the server answers itself. Servers that do not negotiate this see no change.
+
+### Patch Changes
+
+- d815ff6: Forward WebMCP and MCP compatibility annotation hints on client tool definitions and confirmation callbacks, including destructiveHint and consequentialHint. Keep confirmation enabled by default.
+- c598688: WebMCP confirm handlers now receive the call's `signal`. The built-in approval card closes when the call is cancelled or times out, instead of staying open after the tool can no longer run.
+
+## 4.28.2
+
+### Patch Changes
+
+- fac63b3: Build with tsdown (Rolldown + Oxc) instead of tsup, and minify `widget.css` with Lightning CSS. Published filenames, exports and type declarations are unchanged; most bundles are a few percent smaller.
+
+## 4.28.1
+
+### Patch Changes
+
+- 4ec6910: Support host-installed WebMCP polyfill v5 and v6 with a single, non-retried tool invocation. Preserve the v5 automatic fallback, browser support, callback-result behavior, and legacy custom-loader initializer. Scope tool discovery to the current document so related-frame tools cannot collide with name-only dispatch. Add integration tests against both published runtimes; update producer demos to v6 independently.
+
+## 4.28.0
+
+### Minor Changes
+
+- 709919c: Full-duplex voice (GPT-Live) now streams handed-off answers. When the server supports it (`delegation_stream` together with `delegation_read_back`), the widget sends the delegated turn's answer to the voice model in sentence-sized `delegation_delta` pieces while it renders, so speech starts before the agent finishes. The terminal frame then carries `streamedChars`, and an approval script is sent as the unstreamed rest. The widget folds the voice model's read-back on the server's first `delegation_progress`. Delegated chat requests carry `voice: { spoken: true }` so the agent answers in speakable sentences.
+
+## 4.27.0
+
+### Minor Changes
+
+- 4490160: The Runtype voice provider now handles the server's `session_end { reason, message?, retryable? }` frame (voice protocol Amendment 6) and says why a call ended in the composer status line:
+
+  - **Status text:** "Voice call ended after a quiet period." (`idle_timeout`), "This voice call reached its time limit." (`max_duration`), "The voice session ended." (`provider_ended`), "Voice session expired. Tap the mic to reconnect." (`auth_expired`), or the server's message for `quota` (default "Voice is unavailable right now."). An unknown reason is treated as an ordinary server end and shows nothing.
+  - **Reconnect:** after `provider_error` or `server_restart`, the call reconnects once after 1–2 seconds ("Voice connection lost. Reconnecting…" / "Reconnecting…"). A second failure shows "Voice connection lost." It never reconnects after the visitor hangs up, and never twice. If the browser keeps audio suspended outside a click (iOS), the reconnect stops with "Voice connection lost. Tap the mic to reconnect."
+  - **Attach idle:** the close (code 4408) is now a quiet end instead of an error.
+  - **No `session_end`:** an abnormal close without the frame behaves as before.
+
+  `VoiceProvider` gains optional `takeNotice()`, and the session gains `getVoiceNotice()`.
+
+### Patch Changes
+
+- 409eabc: Don't add an empty assistant bubble for a buffered `step_complete` that carries no response and a natural stop reason (`end_turn` / `unknown`). A resumed leg that ends the turn after `suggest_replies` streams no text, and since a natural stop has no notice, the empty bubble just sat behind the answer. Empty responses with a notice-worthy stop reason (`max_tool_calls`, `length`, `content_filter`, `error`) still surface their bubble.
+- 8077ac7: A live voice call now resumes on the next page of a multi-page site: the widget records a full-duplex call as live (not only while its status is `listening`), re-stamps it on `pagehide` so long calls stay within the restore window, and redials immediately on load. When the browser blocks audio until the visitor interacts with the new page, the call no longer hangs: the widget asks for a mic tap to resume. A new call's `context` now also carries what was said aloud in earlier calls (previously only typed chat), so the agent on the next page knows the spoken conversation.
+
+## 4.26.1
+
+### Patch Changes
+
+- 997d1f8: An approved tool call no longer flashes "Approved, ran again below" before its real result appears. The server now runs the paused call itself under its original id, so the widget waits until the resumed stream ends and settles the paused bubble only if no result arrived for it (older servers that re-issue the call under a new id still get the superseded settle).
+- 4bca64b: Full-duplex (GPT-Live) calls no longer show a delegated answer twice. The Runtype voice provider now declares the `delegation_read_back` capability. When the server confirms it, the provider hides exactly the spoken read-back the server tags with an answered delegation's `delegationId`, instead of guessing "the first new assistant utterance after `delegation_completed`". That guess hid a filler that was still finishing, and showed the real read-back as a second reply. A read-back is hidden only from its first frame, so a caption is never left half-shown. Servers that don't confirm the capability keep the previous behavior.
+
+  `VoiceDelegationResult` gains an optional `inChat` (default `true`). Set it to `false` for an answer no chat message carries, so its spoken read-back stays visible as a caption. A spoken "cancel that" for a pending voice approval now does this, so its acknowledgement no longer vanishes from the chat.
+
+## 4.26.0
+
+### Minor Changes
+
+- 55f5dd0: Client-token embeds can now answer server-side approval gates. In client-token mode, the approval card posts the decision to `POST /v1/client/approve` with the current session (runtypelabs/core#9518) and streams the continued run into the same conversation. Runtype answers only gates the agent marks `tools.approval.approver: 'end-user'`. Proxy and API-key mode still post to `/v1/agents/{agentId}/approve`, and a Runtype API without the new route falls back to that route.
+
+  When an approval request fails (for example `403 APPROVAL_APPROVER_NOT_END_USER` or `409 APPROVAL_ALREADY_RESOLVED`), the widget now adds an assistant message with the server's reason, and the card no longer shows a decision that didn't apply. A pause that is gone (already resolved, or an expired or unknown pause) shows as `timeout`; any other failure returns the card to `pending`.
+
+- 5c9a1d0: Support full-duplex (speech-to-speech) voice calls, such as GPT-Live, in the built-in Runtype voice provider. The voice WebSocket now speaks Runtype browser voice protocol v1: it always sends `voiceProtocol=runtype-browser-v1`, `clientVersion=persona/<version>`, `voiceCapabilities=full-duplex-v1`, and the snake_case `clientCapabilities` it supports (`partial_transcript`, `context`, and with client delegation `client_delegation` and `delegation_update`; `attach` on an attach prewarm). It uses only what `session_config.capabilities` confirms, ignores unknown frames, fields and statuses, and logs `warning` frames without ending the call (an `error` always ends it). It handles `session_config`, utterance-keyed `transcript_update` (`utteranceId`, falling back to `turnId`), `delegation_started`/`delegation_completed`/`delegation_cancelled`, and `audio_clear` (barge-in) frames. In a speech-to-speech session, reply audio plays continuously, and "speaking" ends when the queued audio has played. A stopped reply is also cancelled on the server.
+
+  Voice transcripts that carry a `turnId` are now reconciled by `(turnId, role)`. Each pair keeps one chat bubble that updates in place. Overlapping turns stay separate. A bubble whose transcript carries a `startMs` sorts above any bubble from the same call that started later, so a user transcript that arrives late still renders above the reply it prompted. No empty assistant placeholder is injected; the typing indicator covers the wait. Transcripts without a `turnId` keep the existing alternating behavior. After a stop, a later reply (for example an agent answer that the stop didn't cancel) now gets its bubble while its audio plays.
+
+  Client delegation: with the new `voiceRecognition.provider.runtype.clientDelegation` option (default `true`), a full-duplex call hands the agent turns that the voice model delegates to the widget's normal chat pipeline. When the server negotiates `client_delegation`, each `delegation_started` that carries `input` is submitted as the visitor's message, reusing the transcript bubble (`input.userUtteranceIds`) so the request is shown and sent once. The answer streams in as a regular assistant message, with tool and approval UI, WebMCP page tools, and history, and goes back to the voice model as one terminal `delegation_result { delegationId, status, text }` to be read aloud. Its spoken read-back is not added as a second bubble, and browser text-to-speech skips it. A spoken refusal for a delegation the widget never started has no chat answer, so it renders as a normal bubble. After `delegation_cancelled`, or a `warning` refusing a frame for that delegation (`UNKNOWN_DELEGATION`, `LATE_RESULT_LIMIT`), the widget sends nothing more for it; the chat turn still renders, and since the voice model won't speak it, browser text-to-speech may. In such a call, the voice model's own speech, and anything the visitor said that wasn't submitted, shows as display-only captions (the new `voiceCaption` message flag). Captions are never sent to the agent, so the delegated request is always the last message in the chat request. A turn that arrives while another chat turn is streaming waits for it. Servers that don't negotiate client delegation keep today's server-side behavior. Separately, when the server negotiates `context`, the widget sends the voice model one `context` frame, whether delegation is on or off. The frame holds the chat history as of call start and the new `callContext` option. It is sent when the visitor finishes their first utterance (or at the first delegation, if that comes first). The voice model tends to answer context that arrives earlier: before anyone speaks, or partway through the visitor's sentence. Servers that send no `capabilities` receive neither new frame.
+
+  `VoiceProvider` gains an optional `setSessionBridge(bridge)` method, and transcript metadata gains `startMs`, `endMs`, and `caption`. New exported types: `VoiceSessionBridge`, `VoiceDelegationRequest`, `VoiceDelegationResult`, and `VoiceTranscriptMetadata`.
+
+  `VoicePlaybackEngine` gains an optional `setContinuousMode(enabled)` method. The provider calls it for speech-to-speech sessions. In continuous mode, the worklet player and `AudioPlaybackManager` release audio held below the prebuffer waterline after one waterline of input silence, so a short reply still plays without an end-of-stream signal. Custom engines without a prebuffer can omit the method.
+
+  The realtime provider now re-registers its playback-drained callback for every reply, so later replies also return the status to "listening". `AudioPlaybackManager.flush()` now ignores the late `onended` events of the sources it stopped, so the next reply is no longer reported as finished early.
+
+  The Runtype voice provider now captures from the moment the microphone opens instead of waiting for the voice socket. Audio recorded while the socket handshakes is held, capped at 8 seconds with the oldest dropped first, then sent in order once the socket opens. On a slow upgrade, the visitor's first words used to be lost. The held audio is discarded if the call ends, errors, or closes before the socket opens.
+
+  Approvals during a full-duplex call: when a delegated turn stops on a tool approval, the widget sends a non-terminal `delegation_update { delegationId, status: 'pending_approval', text }` that explains what is about to happen, so the voice model can ask for the decision in its own words. The text gives each pending tool's name in plain words (`place_pickup_order` becomes "place pickup order"), its description, a short summary of its arguments, and the agent's stated reason, and tells the voice model not to claim the action is done. It is capped at about 1,000 characters. If the resumed turn stops on another gated tool, another `delegation_update` asks for that one too. Once the visitor has decided and the resumed turn finishes, the widget sends the outcome as that delegation's one terminal `delegation_result` for the voice model to read aloud. Its read-back is folded like any other. A call that ends first sends nothing. A server without `delegation_update` gets the ask as the result instead.
+
+  Voice captions (the voice model's own speech, shown as display-only bubbles) no longer show message actions such as copy. Separately, the default hover action pill no longer covers the end of a short reply. On hover-capable devices, the bubble reserves room for the pill at the end of the last line, or a line below the text when the pill is aligned left or center. This applies to every assistant message.
+
+  Approval hardening, for tool approvals that a spoken request raises, both server gates and WebMCP page tools:
+
+  - **Status:** every `delegation_result` carries a `status`: `completed`, `denied` (a Deny tap or a spoken decline), `timeout`, `cancelled` (replaced by a newer request), or `failed`. `pending_approval` rides only `delegation_update`. The status set is open.
+  - **Supersede:** a new pending approval for the same tool declines the earlier one, which closes as `cancelled`, and the voice model says it was replaced. A new spoken request also replaces a pending WebMCP approval instead of waiting behind it.
+  - **Expiry:** an approval left unanswered for `voiceRecognition.provider.runtype.approvalTimeoutMs` (default 5 minutes, capped at 9 so it stays under the server's 10-minute delegation deadline) is declined and closes as `timeout`. If the server's deadline cancels the delegation anyway, the card is declined the same way and nothing more is sent. Hanging up never declines it; the approval card in the chat stays usable.
+  - **Spoken decline:** while exactly one such approval is pending, an unambiguous spoken decline ("cancel that", "never mind") declines it (`denied`). Nothing is ever approved by voice, and an ambiguous reply runs as a normal turn.
+  - **AI disclosure:** a speech-to-speech call now shows a one-line AI-disclosure notice in the composer status area: "You're talking to an AI assistant. Voice is processed by OpenAI." Change it with `voiceRecognition.provider.runtype.disclosureText`, or hide it with `false`.
+  - **API:** `VoiceDelegationRequest` is `{ delegationId, userText, userUtteranceIds, messages }`. `VoiceDelegationResult` is `{ status, text, followUp? }` (no `ok`), and `followUp({ signal, approvalTimeoutMs, readBack })` resolves with the terminal `{ status, text }`, or `null` when the call ends or the server cancels the delegation first. New exported types: `VoiceDelegationStatus` (an open union) and `VoiceDelegationFollowUp`.
+
+### Patch Changes
+
+- ac26dbe: Approval cards: an older approval decision that fails can no longer reopen a card that a newer decision already settled, even when both decisions are made in the same millisecond. Each decision request now carries its own token, and only the card's latest request may restore it after a failure.
+- e0c8e54: Approval card fixes: long tool names wrap inside the card instead of overflowing, and an older approval request that succeeds late no longer clears a newer request's failure notice. Docs now note that client-token mode always shows the raw tool call, even with `detailsDisplay: "hidden"`.
+- 11818e0: In client-token mode the approval card always shows the raw tool name and arguments, above the agent's stated reason.
+- 914e167: After an approval decision, the paused tool bubble now settles instead of spinning forever. The server resumes an approval by re-running the agent, which re-issues the tool call under a new id. On `approval_complete`, a denied or timed-out call now shows as failed ("Denied" / "Approval timed out"), and an approved call is marked complete and `superseded`, with the result on the re-run call. `AgentWidgetApproval` gains `toolCallId` and `AgentWidgetToolCall` gains `superseded`.
+- a518f94: Approval decision tokens (added to stop an older failed decision from reopening a card) are now dropped once their request settles, so a long-lived session no longer keeps one per resolved card.
+- 0628021: Shrink the CDN bundle (`index.global.js`) further, from 145.7 to 129.5 KiB Brotli (184.8 → 163.6 kB gzip), by loading code that only runs after something happens from lazy sibling chunks next to `index.global.js`: the SSE stream processor and approval / resume requests (`client-stream.js`, fetched in parallel with each request), visitor-history REST and the history shell (`client-history.js`, `history-shell.js`), the approval / ask-user-question / WebMCP resolve paths (`session-actions.js`), the ask-user sheet handlers and context-mention orchestrator (`ui-extras.js`), and voice wiring (`voice-runtime.js`). Self-hosted CDN deployments must serve these files alongside `index.global.js`. npm (ESM/CJS) consumers keep everything bundled and registered up front.
+- ec84e77: Shrink the CDN bundle (`index.global.js`) by 10.6 KiB Brotli (156.3 → 145.7 KiB; 195.6 → 184.8 kB gzip) with no behavior change. The `*.global.js` bundles get a second terser minification pass (frequency-ordered identifier mangling compresses better), TypeScript `private` class members are now native `#private` fields so their names minify too, and the history confirm dialog now loads with the lazy `history-view.js` chunk. Build output now targets ES2022 (native private fields: Chrome 84+, Firefox 90+, Safari 15+).
+- 75d530d: Delete, clear, and reset in the Messages view keep working when the CDN serves a fresh `index.global.js` with a cached `history-view.js` that predates its confirm dialog: a failed load or a chunk without `showHistoryConfirm` falls back to the native `confirm()` instead of failing silently.
+- ec84e77: A client-token first init that is still queued behind another tab's visitor lock when its widget is destroyed (teardown or client-token swap) now rejects instead of running after teardown, so it can no longer mint and store a visitor that races the replacement widget's own init.
+
+## 4.25.0
+
+### Minor Changes
+
+- a72d4d9: Warm the voice path on mic intent so calls start faster. New `voiceRecognition.prewarm` option (`'hover'`, `false`, or a custom `({ warm, micButton, mount }) => cleanup` hook), on by default (`'hover'`) in client token mode. The `runtype` provider sends a throttled, fire-and-forget `POST /v1/client/agents/{agentId}/voice/prewarm`; the browser (Web Speech) path warms the client-token session. Custom providers can opt in with an optional `VoiceProvider.prewarm()`. New opt-in `voiceRecognition.provider.runtype.prewarmMode: 'attach'` (with `attachIdleMs`) opens the voice WebSocket early and starts the call on it at the click.
+
+## 4.24.0
+
+### Minor Changes
+
+- 143686f: Wire header padding, transcript gap, panel dimensions, and per-mode panel chrome to theme tokens while preserving the existing default layout. Keep legacy sizing options as aliases with their existing precedence. Add prefixed collapsible-widget CSS variables while retaining the legacy aliases.
+- fc20eb2: Add configurable tool and reasoning activity rows with status icons, elapsed durations, automatic disclosure, and collapsible tool groups. Use rows by default with future.v5Defaults while preserving the legacy card default in V4. Expose shared activity tokens and retain legacy theme overrides.
+
+  Match the V5 header background to the transcript container for a continuous surface in light and dark themes, while preserving explicit header overrides.
+
+  Add configurable transcript top-edge fading, enabled by default in V5 and hidden at the start of the conversation. Expose layout.topFade and the message.topFadeHeight theme token.
+
+- 9f190ca: Add welcome.layout with centered V5 greetings, responsive starter defaults, and a reduced-motion-aware fullscreen composer transition while preserving V4 defaults.
+
+  Use lighter V5 welcome, header, and suggestion typography with pill input corners. Expose suggestion variant weights as theme tokens in both defaults modes.
+
+- 17510df: Add the opt-in `future.v5Defaults` flag and shared versioned config and theme defaults. Both states initially render the same defaults. Preserve the selected state through the installer, deferred launcher, theme editor, and generated configs, and expose it as `data-persona-defaults` on the widget root.
+- 0a7ee80: Keep V5 tool and reasoning activity rows collapsed while streaming by default. Set autoExpand to true to opt into automatic expansion; V4 defaults are unchanged.
+
+  Use text-only hover feedback for activity rows, preserving the background hover treatment on legacy cards.
+
+  Flatten V5 activity indentation and tighten expanded content spacing, with configurable groupIndent, groupGap, groupPadding, bodyPadding, and sectionGap activity tokens.
+
+  Use 4px between consecutive V5 activity entries and 12px before assistant responses, configurable with activity.transcriptGap and activity.responseGap.
+
+  Pause automatic scrolling when users toggle tool, reasoning, or approval details so expanded content stays at their reading position.
+
+- d92e0fc: Client token mode: call `/v1/client/init` when the visitor shows intent to send, instead of on mount. The new `sessionInit` option picks the moment: `'input'` (default, first keystroke), `'focus'` (user focus of the composer, never programmatic autofocus), `'mount'` (the previous behavior), `'send'` (no early init), or a function for a custom trigger such as hover. `controller.warmSession()` triggers it imperatively. The early init is fire-and-forget: it runs at most once per session lifetime, errors are swallowed and resurface when the send retries, and a send reuses an in-flight init, so the requests are the same as before, only earlier. Widgets with `features.history.enabled` still init on mount. Feedback on a restored transcript now initializes the session on demand. If your client token has a server-configured welcome message you want shown before the visitor types, set `sessionInit: 'mount'`.
+- db8a3f9: Keep composer layout stable when audio capture starts or remains active in both V4 and V5. Recording feedback remains on the microphone; wrapped or multiline text and other composer content still expand the layout. No new configuration option is needed.
+- f7a60cc: Refine opt-in V5 header controls with muted icons, softly rounded hover surfaces, and a keyboard focus ring. Add theme tokens while preserving per-button overrides.
+- b144f68: Use the same compact spacing for consecutive V5 reasoning and tool activity rows, with no extra transcript gap. Preserve the 12px gap before assistant responses and explicit activity spacing overrides.
+
+  Use 13px regular-weight expanded V5 reasoning text with 1.5 line height. Add activity bodySize, bodyLineHeight, and bodyFontWeight tokens for customization.
+
+  Add iconVisibility to tool and reasoning row configuration. V5 hides successful completion icons by default, retaining active and attention-needed indicators; always and never modes are also available.
+
+- cae9da2: Add pill and circle launcher variants, defaulting to a themeable 48px circle under V5 while preserving the V4 pill. Share variant defaults and rendering across deferred and full launchers.
+- cae9da2: Default the V5 composer to overlay placement with a theme-aware 24px fade. Preserve V4 placement and explicit composer placement/background overrides.
+- e141b7e: Refine V5 composer defaults with a circular submit button, smaller upward-arrow icon, and no footer divider. Expose sendIconSize, sendButtonRadius, and footerBorder theme tokens in both defaults states while preserving V4 rendering.
+
+  Add a subtle neutral composer focus border and outer ring to V5. Expose focusBorderColor and focusRing theme tokens in both defaults states; preserve V4 focus appearance and custom resting shadows without layout shift.
+
+- b51c2aa: Opt into the v5 transcript, compact header, single-row composer, and panel defaults with `future.v5Defaults`. Add a transient connection status mode that renders above the composer. Existing v4 defaults remain unchanged, and explicit configuration and theme tokens continue to take precedence.
+- 2f87874: Add an opt-in V5 dark palette with dark neutral surfaces, readable controls and markdown colors, and preserved dark shades when overriding individual palette tokens. Enable with `future.v5Defaults: true`; V4 defaults remain unchanged.
+- 6e74f78: Use Request and Response blocks for opt-in V5 tool details. Omit empty requests, replace streamed output with the final response, and offer contextual copy icons with copied feedback. Preserve V4 rendering and explicit tool colors.
+
+### Patch Changes
+
+- 6ed9009: Add `identityProvider` to forward fresh `getIdentityProof` tokens on client-token chat requests without requiring history. Refresh proofs on retries, stop requests when proof retrieval fails, let cancelled turns stop waiting for a stalled provider, and redact proofs from debug logs.
+- a96c2b9: Preserve nested tool and reasoning display defaults when overriding individual options. Isolate expansion state between widget instances and clear it with chat history. Align header icon and feedback fallbacks with the defaults, inherit the theme font in suggestion chips, and cap legacy starter chips at four. Remove unreachable shadow and legacy approval color fallbacks.
+- 1883da0: Keep inline widgets at host width unless a width is explicitly configured. Rebase inherited theme-editor defaults when switching V4/V5, preserving authored values and undo/redo history.
+
 ## 4.23.2
 
 ### Patch Changes

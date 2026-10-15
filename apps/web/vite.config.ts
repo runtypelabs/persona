@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 
 const proxyPort = Number(process.env.PROXY_PORT ?? 43111);
 const PREVIEW_EMBED_CHECK_TIMEOUT_MS = 5000;
@@ -176,8 +177,31 @@ function registerPreviewEmbedCheckMiddleware(
 // can load the local IIFE build instead of the CDN version during development.
 // During production builds, copies the files into the output directory.
 function serveWidgetDist(): Plugin {
-  const distDir = path.resolve(__dirname, "../../packages/widget/dist");
-  const filesToCopy = ["widget.css", "index.global.js", "index.global.js.map"];
+  const widgetDir = path.resolve(__dirname, "../../packages/widget");
+  const distDir = path.join(widgetDir, "dist");
+  // `index.global.js` lazy-loads its sibling chunks (`client-stream.js`,
+  // `history-view.js`, ...) from URLs derived from its own `src`, so every
+  // chunk `index-global.ts` registers must sit next to it in the production
+  // output too. Read the list from that source so a new `siblingChunk(...)`
+  // registration can't be forgotten here.
+  const indexGlobalSource = fs.readFileSync(
+    path.join(widgetDir, "src/index-global.ts"),
+    "utf8",
+  );
+  const siblingChunks = [
+    ...indexGlobalSource.matchAll(/siblingChunk\(\s*"([^"]+\.js)"/g),
+  ].map((match) => match[1]);
+  if (siblingChunks.length === 0) {
+    throw new Error(
+      "serve-widget-dist: no siblingChunk(...) registrations found in index-global.ts",
+    );
+  }
+  const filesToCopy = [
+    "widget.css",
+    "index.global.js",
+    "index.global.js.map",
+    ...siblingChunks,
+  ];
 
   return {
     name: "serve-widget-dist",
@@ -226,6 +250,16 @@ function serveWidgetDist(): Plugin {
       });
     },
     writeBundle(options) {
+      // The showcase itself resolves `@runtypelabs/persona` from source, so a
+      // build without the widget built (the e2e workflow's
+      // `build:web-preview`) is legitimate: it just has no /widget-dist to
+      // ship. Only the standalone examples need these files.
+      if (!fs.existsSync(distDir)) {
+        this.warn(
+          `serve-widget-dist: ${distDir} does not exist; skipping /widget-dist (standalone examples need \`pnpm build:widget\` first)`,
+        );
+        return;
+      }
       const outDir = options.dir ?? path.resolve(__dirname, "dist");
       const targetDir = path.join(outDir, "widget-dist");
       if (!fs.existsSync(targetDir)) {
@@ -233,9 +267,15 @@ function serveWidgetDist(): Plugin {
       }
       for (const file of filesToCopy) {
         const src = path.join(distDir, file);
-        if (fs.existsSync(src)) {
-          fs.copyFileSync(src, path.join(targetDir, file));
+        if (!fs.existsSync(src)) {
+          // A built dist missing a registered chunk is a broken deploy
+          // (silently skipping is how `client-stream.js` went missing once):
+          // fail the build instead.
+          throw new Error(
+            `serve-widget-dist: ${file} is missing from ${distDir}; rebuild @runtypelabs/persona`,
+          );
         }
+        fs.copyFileSync(src, path.join(targetDir, file));
       }
     },
   };
@@ -287,6 +327,54 @@ function resolveJsPaint(): { dir: string; base: string } {
 }
 
 const JSPAINT = resolveJsPaint();
+
+// /bento/ is Bento Slides (examples/bento-slides), a separate app the site
+// build writes into dist/bento as one self-contained file. In dev, build that
+// file on the first visit (once per server start) and serve it, so the gallery
+// link works without a second dev server. For HMR on Bento itself, run
+// `pnpm --filter bento-slides dev`.
+function serveBento(): Plugin {
+  const file = path.resolve(__dirname, "dist/bento/index.html");
+  let build: Promise<boolean> | null = null;
+  const root = path.resolve(__dirname, "../..");
+  const run = (filter: string, script: string) =>
+    new Promise<boolean>((resolve) => {
+      const child = spawn("pnpm", ["--filter", filter, script], { cwd: root, stdio: "inherit" });
+      child.on("error", () => resolve(false));
+      child.on("exit", (code) => resolve(code === 0));
+    });
+  // Bento imports the widget's built dist, which `pnpm dev` doesn't produce
+  const widgetBuilt = () => fs.existsSync(path.join(root, "packages/widget/dist/index.js"));
+  const ensureBuilt = () =>
+    (build ??= (async () =>
+      (widgetBuilt() || (await run("@runtypelabs/persona", "build"))) &&
+      run("bento-slides", "build:web"))());
+  return {
+    name: "serve-bento",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+        if (pathname === "/bento") {
+          res.statusCode = 302;
+          res.setHeader("Location", "/bento/");
+          res.end();
+          return;
+        }
+        if (pathname !== "/bento/" && pathname !== "/bento/index.html") return next();
+        void ensureBuilt().then((ok) => {
+          if (!ok || !fs.existsSync(file)) {
+            build = null; // retry on the next visit
+            res.statusCode = 500;
+            res.end("Bento Slides failed to build: run `pnpm --filter bento-slides build:web`.");
+            return;
+          }
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          res.end(fs.readFileSync(file));
+        });
+      });
+    },
+  };
+}
 
 function serveJsPaint(): Plugin {
   const { dir: jspaintDir, base } = JSPAINT;
@@ -385,6 +473,7 @@ function llmsTxt(): Plugin {
     "THEME-CONFIG.md",
   ].map((p) => path.resolve(widgetDir, p));
   const integrationDocPaths = [
+    "docs/webmcp-authoring.md",
     "docs/webmcp-without-runtype.md",
     "docs/durable-reconnect.md",
   ].map((p) => path.resolve(repoDir, p));
@@ -631,6 +720,7 @@ export default defineConfig({
     crossOriginIsolateLiteRt(),
     serveWidgetDist(),
     serveJsPaint(),
+    serveBento(),
     llmsTxt(),
     previewEmbedCheck(),
     demoSlowResource(),
@@ -689,6 +779,8 @@ export default defineConfig({
         'analytics-agent-demo': path.resolve(__dirname, 'analytics-agent-demo.html'),
         // Agent demo
         'agent-demo': path.resolve(__dirname, 'agent-demo.html'),
+        // Phone agent: PhoneLLM Mini receptionist with a live weather tool
+        'phone-agent-demo': path.resolve(__dirname, 'phone-agent-demo.html'),
         // WebMCP: page-discovered tools
         'webmcp-demo': path.resolve(__dirname, 'webmcp-demo.html'),
         // WebMCP: calendar copilot (client-token mode)
@@ -737,6 +829,10 @@ export default defineConfig({
         'history-demo': path.resolve(__dirname, 'history-demo.html'),
         // Internal fixture for the Playwright history suite (e2e/); not in examples-nav.
         'history-e2e': path.resolve(__dirname, 'history-e2e.html'),
+        // Internal fixture for the Playwright full-duplex voice suite (e2e/); not in examples-nav.
+        'voice-e2e': path.resolve(__dirname, 'voice-e2e.html'),
+        // Internal keyless fixture for the agent verification skill (.claude/skills/verify); not in examples-nav.
+        verify: path.resolve(__dirname, 'verify.html'),
         'composer-actions-demo': path.resolve(__dirname, 'composer-actions-demo.html'),
         'composer-suite': path.resolve(__dirname, 'composer-suite.html'),
         'tool-loading-demo': path.resolve(__dirname, 'tool-loading-demo.html'),
@@ -745,6 +841,7 @@ export default defineConfig({
         'ask-user-question-demo': path.resolve(__dirname, 'ask-user-question-demo.html'),
         'voice-integration-demo': path.resolve(__dirname, 'voice-integration-demo.html'),
         'custom-voice-provider-demo': path.resolve(__dirname, 'custom-voice-provider-demo.html'),
+        'voice-navigation-demo': path.resolve(__dirname, 'voice-navigation-demo.html'),
         'server-tts-demo': path.resolve(__dirname, 'server-tts-demo.html'),
         'autoscroll-stress-test': path.resolve(__dirname, 'autoscroll-stress-test.html'),
         'scroll-engineering': path.resolve(__dirname, 'scroll-engineering.html'),

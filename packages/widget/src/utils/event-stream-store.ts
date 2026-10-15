@@ -1,33 +1,33 @@
 import type { SSEEventRecord } from "../types";
 
 export class EventStreamStore {
-  private db: IDBDatabase | null = null;
-  private pendingWrites: SSEEventRecord[] = [];
-  private flushScheduled = false;
-  private isDestroyed = false;
-  private readonly dbName: string;
-  private readonly storeName: string;
+  #db: IDBDatabase | null = null;
+  #pendingWrites: SSEEventRecord[] = [];
+  #flushScheduled = false;
+  #isDestroyed = false;
+  readonly #dbName: string;
+  readonly #storeName: string;
 
   constructor(dbName = "persona-event-stream", storeName = "events") {
-    this.dbName = dbName;
-    this.storeName = storeName;
+    this.#dbName = dbName;
+    this.#storeName = storeName;
   }
 
   open(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        const request = indexedDB.open(this.dbName, 1);
+        const request = indexedDB.open(this.#dbName, 1);
 
         request.onupgradeneeded = () => {
           const db = request.result;
-          if (!db.objectStoreNames.contains(this.storeName)) {
-            const store = db.createObjectStore(this.storeName, { keyPath: "id" });
+          if (!db.objectStoreNames.contains(this.#storeName)) {
+            const store = db.createObjectStore(this.#storeName, { keyPath: "id" });
             store.createIndex("timestamp", "timestamp", { unique: false });
           }
         };
 
         request.onsuccess = () => {
-          this.db = request.result;
+          this.#db = request.result;
           resolve();
         };
 
@@ -41,19 +41,19 @@ export class EventStreamStore {
   }
 
   put(event: SSEEventRecord): void {
-    if (!this.db || this.isDestroyed) return;
-    this.pendingWrites.push(event);
-    if (!this.flushScheduled) {
-      this.flushScheduled = true;
-      queueMicrotask(() => this.flushWrites());
+    if (!this.#db || this.#isDestroyed) return;
+    this.#pendingWrites.push(event);
+    if (!this.#flushScheduled) {
+      this.#flushScheduled = true;
+      queueMicrotask(() => this.#flushWrites());
     }
   }
 
   putBatch(events: SSEEventRecord[]): void {
-    if (!this.db || this.isDestroyed || events.length === 0) return;
+    if (!this.#db || this.#isDestroyed || events.length === 0) return;
     try {
-      const tx = this.db.transaction(this.storeName, "readwrite");
-      const store = tx.objectStore(this.storeName);
+      const tx = this.#db.transaction(this.#storeName, "readwrite");
+      const store = tx.objectStore(this.#storeName);
       for (const event of events) {
         store.put(event);
       }
@@ -64,13 +64,13 @@ export class EventStreamStore {
 
   getAll(): Promise<SSEEventRecord[]> {
     return new Promise((resolve, reject) => {
-      if (!this.db) {
+      if (!this.#db) {
         resolve([]);
         return;
       }
       try {
-        const tx = this.db.transaction(this.storeName, "readonly");
-        const store = tx.objectStore(this.storeName);
+        const tx = this.#db.transaction(this.#storeName, "readonly");
+        const store = tx.objectStore(this.#storeName);
         const index = store.index("timestamp");
         const request = index.getAll();
 
@@ -89,13 +89,13 @@ export class EventStreamStore {
 
   getCount(): Promise<number> {
     return new Promise((resolve, reject) => {
-      if (!this.db) {
+      if (!this.#db) {
         resolve(0);
         return;
       }
       try {
-        const tx = this.db.transaction(this.storeName, "readonly");
-        const store = tx.objectStore(this.storeName);
+        const tx = this.#db.transaction(this.#storeName, "readonly");
+        const store = tx.objectStore(this.#storeName);
         const request = store.count();
 
         request.onsuccess = () => {
@@ -113,14 +113,14 @@ export class EventStreamStore {
 
   clear(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (!this.db) {
+      if (!this.#db) {
         resolve();
         return;
       }
-      this.pendingWrites = [];
+      this.#pendingWrites = [];
       try {
-        const tx = this.db.transaction(this.storeName, "readwrite");
-        const store = tx.objectStore(this.storeName);
+        const tx = this.#db.transaction(this.#storeName, "readwrite");
+        const store = tx.objectStore(this.#storeName);
         const request = store.clear();
 
         request.onsuccess = () => {
@@ -137,19 +137,19 @@ export class EventStreamStore {
   }
 
   close(): void {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
+    if (this.#db) {
+      this.#db.close();
+      this.#db = null;
     }
   }
 
   destroy(): Promise<void> {
-    this.isDestroyed = true;
-    this.pendingWrites = [];
+    this.#isDestroyed = true;
+    this.#pendingWrites = [];
     this.close();
     return new Promise((resolve, reject) => {
       try {
-        const request = indexedDB.deleteDatabase(this.dbName);
+        const request = indexedDB.deleteDatabase(this.#dbName);
 
         request.onsuccess = () => {
           resolve();
@@ -164,14 +164,14 @@ export class EventStreamStore {
     });
   }
 
-  private flushWrites(): void {
-    this.flushScheduled = false;
-    if (!this.db || this.isDestroyed || this.pendingWrites.length === 0) return;
-    const toWrite = this.pendingWrites;
-    this.pendingWrites = [];
+  #flushWrites(): void {
+    this.#flushScheduled = false;
+    if (!this.#db || this.#isDestroyed || this.#pendingWrites.length === 0) return;
+    const toWrite = this.#pendingWrites;
+    this.#pendingWrites = [];
     try {
-      const tx = this.db.transaction(this.storeName, "readwrite");
-      const store = tx.objectStore(this.storeName);
+      const tx = this.#db.transaction(this.#storeName, "readwrite");
+      const store = tx.objectStore(this.#storeName);
       for (const event of toWrite) {
         store.put(event);
       }

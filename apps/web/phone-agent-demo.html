@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="/src/demo-shared.css">
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <title>Phone Agent (PhoneLLM Mini) Demo</title>
+  <style>
+    .latency-grid {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.35rem 0.75rem;
+      margin: 0.6rem 0 0;
+      font-size: 0.82rem;
+    }
+    .latency-grid dt { color: var(--muted); }
+    .latency-grid dd {
+      margin: 0;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      color: var(--foreground);
+    }
+  </style>
+</head>
+<body>
+  <main class="shell-main">
+    <div class="stage">
+      <aside class="stage-controls">
+        <header class="demo-meta">
+          <h1>Phone Agent</h1>
+          <p>A Sunrise Travel front-desk receptionist running on Pipecat's PhoneLLM Mini, a model tuned for voice agents: sub-100&nbsp;ms time to first token, reliable tool calls, and no reasoning pass to wait through. Ask about the weather where you're headed and it looks it up live mid-conversation.</p>
+          <div class="mount-toolbar" data-mount-toolbar></div>
+        </header>
+
+        <div class="info-section">
+          <h3>Voice</h3>
+          <div class="toggle-section">
+            <label for="voice-toggle">Talk instead of type</label>
+            <label class="toggle-switch">
+              <input type="checkbox" id="voice-toggle" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="toggle-status" id="voice-status">Browser voice: your browser transcribes and speaks; PhoneLLM Mini writes the replies</div>
+        </div>
+
+        <div class="info-section">
+          <h3>Last turn latency</h3>
+          <p class="hint" id="latency-path">Measured in the browser from send, through the proxy.</p>
+          <dl class="latency-grid">
+            <dt id="latency-first-event-label">First event</dt><dd id="latency-first-event">—</dd>
+            <dt>Tool call</dt><dd id="latency-tool">—</dd>
+            <dt id="latency-first-word-label">First word</dt><dd id="latency-first-word">—</dd>
+            <dt>Total turn</dt><dd id="latency-total">—</dd>
+          </dl>
+        </div>
+
+        <div class="info-section">
+          <h3>Realtime voice (optional)</h3>
+          <p class="hint">Runtype's server-side speech pipeline needs a client token and a saved agent set to <code>phonellm-mini</code>. Leave blank to use the browser's speech recognition and voices; typing always works without them.</p>
+          <form id="realtime-voice-form">
+            <div class="field">
+              <label for="client-token-input">Client token</label>
+              <input type="password" id="client-token-input" placeholder="ct_live_..." autocomplete="off" spellcheck="false">
+            </div>
+            <div class="field">
+              <label for="agent-id-input">Agent id</label>
+              <input type="text" id="agent-id-input" placeholder="agent_..." autocomplete="off" spellcheck="false">
+            </div>
+            <button type="submit" class="btn" style="margin-top: 0.6rem;">Apply</button>
+          </form>
+        </div>
+
+        <div data-config-inspector></div>
+      </aside>
+
+      <div class="stage-widget"></div>
+    </div>
+
+    <section class="notes">
+      <h2 class="notes-heading">Notes</h2>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">The model</h3>
+        <p><strong>PhoneLLM Mini Alpha 2</strong> from Pipecat (Daily), served on Cloudflare Workers AI and routed by Runtype as <code>phonellm-mini</code>. It is post-trained from Nemotron 3 Nano 30B-A3B for phone and voice agents: fast tool calling, short conversational replies, no reasoning tokens. Runtype forces temperature to 0 and disables thinking server-side. Pricing is $0.06 / $0.24 per million input / output tokens.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">How it works</h3>
+        <p>The widget posts to <code>/api/chat/dispatch-phone-agent</code> on the demo proxy, which pins the agent server-side (<code>PHONE_RECEPTIONIST_AGENT</code> in <code>@runtypelabs/persona-proxy</code>) and keeps the Runtype API key off the page. PhoneLLM Mini is a text model: it never hears or produces audio itself. With voice on, the browser's Web Speech API transcribes you and its built-in voices read each reply aloud; supply a client token and agent id to switch speech-to-text and text-to-speech to Runtype's realtime voice pipeline instead.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">The weather tool</h3>
+        <p>A keyless external GET against Open-Meteo. The model fills in coordinates from the place name itself.</p>
+        <pre class="code-block">{
+  <span class="prop">name</span>: <span class="string">"get_current_weather"</span>,
+  <span class="prop">toolType</span>: <span class="string">"external"</span>,
+  <span class="prop">parametersSchema</span>: {
+    <span class="prop">type</span>: <span class="string">"object"</span>,
+    <span class="prop">properties</span>: {
+      <span class="prop">latitude</span>: { <span class="prop">type</span>: <span class="string">"number"</span> },
+      <span class="prop">longitude</span>: { <span class="prop">type</span>: <span class="string">"number"</span> },
+    },
+    <span class="prop">required</span>: [<span class="string">"latitude"</span>, <span class="string">"longitude"</span>],
+  },
+  <span class="prop">config</span>: {
+    <span class="prop">method</span>: <span class="string">"GET"</span>,
+    <span class="prop">url</span>: <span class="string">"https://api.open-meteo.com/v1/forecast?latitude={{latitude}}&amp;longitude={{longitude}}&amp;current=temperature_2m,weather_code&amp;temperature_unit=fahrenheit"</span>,
+  },
+}</pre>
+        <p>A second tool, <code>check_office_hours</code>, reads the office's local time from timeapi.io so the receptionist can say whether it's open.</p>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">What to look for</h3>
+        <ul>
+          <li>A one-line holding phrase ("Let me check the weather in Austin for you"), then the tool bubble, then the answer: the model looks it up rather than guessing, and fills the silence the way a receptionist would.</li>
+          <li>Replies are one or two short sentences with numbers spelled out, written to be spoken.</li>
+          <li>No reasoning bubble: the model answers without a thinking pass.</li>
+          <li>The latency readout: the first words arrive before the tool call even starts, and the whole turn, live weather lookup included, finishes in a few seconds.</li>
+        </ul>
+      </div>
+
+      <div class="notes-section">
+        <h3 class="notes-section-title">Caveats</h3>
+        <p>PhoneLLM Mini is an <strong>alpha</strong> model and speaks <strong>English only</strong>. Expect occasional rough edges on long or multi-part requests; it is built for short phone-style exchanges.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/src/phone-agent-demo.ts"></script>
+  <script type="module">
+    import { renderExamplesShell } from "/src/examples-nav.ts";
+    renderExamplesShell("phone-agent-demo");
+  </script>
+</body>
+</html>

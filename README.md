@@ -58,6 +58,7 @@ That said, if you really don't like the idea of building AI without JSX... you p
 | [`examples/echo-sveltekit`](./examples/echo-sveltekit) | SvelteKit | Host matrix: one-line `+server.ts` Web-standard route |
 | [`examples/runtype-script-tag`](./examples/runtype-script-tag) | Static / Runtype | Hosted backend: a `clientToken` embed with no backend at all |
 | [`examples/runtype-hono-proxy`](./examples/runtype-hono-proxy) | Hono (Node / Vercel / Workers) | Runtype API proxy: powers local dev and `proxy.persona-chat.dev` |
+| [`examples/bento-slides`](./examples/bento-slides) | Vite / Runtype | Bento Slides with a voice-and-text Copilot: 23 WebMCP page tools, GPT-Live call that edits the deck and drives the show |
 
 ## Bring Your Own Backend
 
@@ -88,6 +89,7 @@ The adapter is a plain Web `(Request) => Response`, so it runs anywhere, not jus
 ### Protocol Documentation
 
 - [**WebMCP without Runtype**](./docs/webmcp-without-runtype.md): Deep dive into streaming the Persona protocol over the Vercel AI SDK.
+- [**Design WebMCP page tools**](./docs/webmcp-authoring.md): User journeys, trust and confirmation rules, typed tools, and layered evaluation.
 - [**Durable session reconnect**](./docs/durable-reconnect.md): Resume a dropped durable agent turn (any resumable, server-persisted execution, e.g. Claude Managed agents or async/background runs) from the SSE cursor, including the tab-reload persistence handshake.
 - [**Adapter SDK Minimal**](./examples/ai-sdk-next): Minimal reference implementations for AI SDK and OpenAI Responses, including [choosing a model/assistant with `target`](./examples/ai-sdk-next#choosing-a-modelassistant-with-target).
 

@@ -30,27 +30,33 @@ export class FallbackSpeechEngine implements SpeechEngine {
 
   // Whichever engine is currently driving playback, so pause/resume/stop route
   // to the right one after a fallback has (or hasn't) kicked in.
-  private active: SpeechEngine;
+  #active: SpeechEngine;
 
+  readonly #primary: SpeechEngine;
+  readonly #fallback: SpeechEngine;
+  readonly #options: FallbackSpeechEngineOptions;
   constructor(
-    private readonly primary: SpeechEngine,
-    private readonly fallback: SpeechEngine,
-    private readonly options: FallbackSpeechEngineOptions = {},
+    primary: SpeechEngine,
+    fallback: SpeechEngine,
+    options: FallbackSpeechEngineOptions = {},
   ) {
-    this.active = primary;
+    this.#primary = primary;
+    this.#fallback = fallback;
+    this.#options = options;
+    this.#active = primary;
   }
 
   // Pause/resume only matters once something is playing, and both built-in
   // engines support it; report the active engine's capability.
   get supportsPause(): boolean {
-    return this.active.supportsPause;
+    return this.#active.supportsPause;
   }
 
   speak(request: SpeechRequest, callbacks: SpeechCallbacks): void {
-    this.active = this.primary;
+    this.#active = this.#primary;
     let started = false;
 
-    this.primary.speak(request, {
+    this.#primary.speak(request, {
       onStart: () => {
         started = true;
         callbacks.onStart?.();
@@ -63,27 +69,27 @@ export class FallbackSpeechEngine implements SpeechEngine {
           return;
         }
         // Pre-start failure: silently hand the utterance to the fallback.
-        this.options.onFallback?.(error);
-        this.active = this.fallback;
-        this.fallback.speak(request, callbacks);
+        this.#options.onFallback?.(error);
+        this.#active = this.#fallback;
+        this.#fallback.speak(request, callbacks);
       },
     });
   }
 
   pause(): void {
-    this.active.pause();
+    this.#active.pause();
   }
 
   resume(): void {
-    this.active.resume();
+    this.#active.resume();
   }
 
   stop(): void {
-    this.active.stop();
+    this.#active.stop();
   }
 
   destroy(): void {
-    this.primary.destroy?.();
-    this.fallback.destroy?.();
+    this.#primary.destroy?.();
+    this.#fallback.destroy?.();
   }
 }
