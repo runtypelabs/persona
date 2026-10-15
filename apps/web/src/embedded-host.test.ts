@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import pageHtml from "../embedded-host.html?raw";
 const mocks = vi.hoisted(() => ({ init: vi.fn(), source: vi.fn() }));
-vi.mock("@runtypelabs/persona", () => ({ initAgentWidget: mocks.init, createStaticMentionSource: mocks.source }));
+vi.mock("@runtypelabs/persona", () => ({ initAgentWidget: mocks.init, createStaticMentionSource: mocks.source, registerIcons: vi.fn() }));
 vi.mock("./examples-nav", () => ({ renderExamplesShell: vi.fn() }));
 vi.mock("./demo-echo-fetch", () => ({ createDemoEchoFetch: () => vi.fn() }));
 async function start() {
@@ -211,7 +211,7 @@ describe("embedded host conversation continuity", () => {
     const research = mocks.init.mock.results[0].value;
     const support = mocks.init.mock.results[1].value;
     choose("conversation", "brief");
-    await vi.waitFor(() => expect(document.getElementById("host-status")!.textContent).toContain("reading position belong"));
+    await vi.waitFor(() => expect(document.getElementById("host-status")!.textContent).toContain("Project brief opened."));
     expect(research.openConversation).toHaveBeenLastCalledWith("host-research-brief", { busy: "reject" });
     choose("conversation", "notes");
     await vi.waitFor(() => expect(document.querySelector<HTMLSelectElement>("#host-conversation")!.disabled).toBe(false));

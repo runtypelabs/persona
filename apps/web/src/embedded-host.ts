@@ -1,11 +1,12 @@
 import "@runtypelabs/persona/widget.css";
 import "./embedded-host.css";
-import { initAgentWidget, createStaticMentionSource, type AgentWidgetConfig } from "@runtypelabs/persona";
+import { initAgentWidget, createStaticMentionSource, registerIcons, type AgentWidgetConfig } from "@runtypelabs/persona";
 import { createDemoHistoryProvider } from "@runtypelabs/persona/internal/demo-history-provider";
 import { renderExamplesShell } from "./examples-nav";
 import { createDemoEchoFetch } from "./demo-echo-fetch";
 import { createDemoDurableChat } from "./demo-durable-chat";
 
+registerIcons({ "host-concise": [["path", { d: "M4 9h16M4 15h10" }]] });
 renderExamplesShell();
 type Handle = ReturnType<typeof initAgentWidget>;
 type Name = "research" | "support";
@@ -93,7 +94,7 @@ function returnToSidebar() {
   modal.close();
   modalOwner = null;
   record(name, "moved back to sidebar · same live widget");
-  status.textContent = `${name} returned to the sidebar with its live conversation and composer state.`;
+  status.textContent = `${name} returned to the sidebar. Conversation and draft preserved.`;
 }
 modal.addEventListener("cancel", (event) => { event.preventDefault(); returnToSidebar(); });
 document.getElementById("host-return")!.addEventListener("click", returnToSidebar);
@@ -115,7 +116,7 @@ function composerScenario(name: Name): Pick<AgentWidgetConfig, "composer" | "con
       layout: layouts.get(name) ?? "stacked",
       ...(defaults.value === "v4" ? { layout: "stacked" as const } : {}),
       ...(defaults.value === "v4-single" ? { layout: "single-row" as const } : {}),
-      modes: [{ id: "concise", label: "Concise", shortLabel: "Concise", presentation: "bar", iconName: "sparkles", placeholder: "Ask for a short answer…" }],
+      modes: [{ id: "concise", label: "Concise", shortLabel: "Concise", presentation: "bar", iconName: "host-concise", placeholder: "Ask for a short answer…" }],
       actionOverflow: { enabled: reference || responsive, collapseAutoActions: responsive ? "fit" : undefined, includeBuiltIns: reference || responsive ? ["attachments", "mentions"] : [], order: 0 },
       actions: responsive ? [
         { label: "Summarize", iconName: "file-text", prompt: "Summarize the key points." },
@@ -171,7 +172,7 @@ function mount() {
   durableChats.forEach(chat => chat.destroy());
   durableChats.clear();
   executionStates.clear();
-  document.getElementById("host-executions")!.textContent = "No background tasks yet.";
+  document.getElementById("host-executions")!.textContent = "No background tasks.";
   historyProviders.clear();
   for (const name of names) {
     scenarios.set(name, scenarioSelect.value as Scenario);
@@ -283,7 +284,7 @@ action("host-move", (widget, name) => {
   modalOwner = name;
   widget.focusInput();
   record(name, "moved to modal · same live widget");
-  status.textContent = `${name} moved with its draft, messages, and card state. Return to the sidebar or press Escape.`;
+  status.textContent = `${name} moved to the modal. Press Escape to return.`;
 });
 action("host-mode", (widget) => {
   widget.setComposerModes(widget.getComposerState().activeModeIds.includes("concise") ? [] : ["concise"]);
@@ -345,7 +346,7 @@ conversationSelect.addEventListener("change", async () => {
     await widget.openConversation(`host-${name}-${key}`, { busy: busySelect.value === "background" ? "background" : busySelect.value === "stop" ? "stop" : "reject" });
     if (widgets.get(name) !== widget) return;
     record(name, `opened ${conversationTitles[key]} · same widget`);
-    status.textContent = `${name}: ${conversationTitles[key]}. Draft, attachments, and reading position belong to this conversation. Switch away and back to check them.`;
+    status.textContent = `${name}: ${conversationTitles[key]} opened.`;
   } catch (error) {
     if (widgets.get(name) !== widget) return;
     const busy = error && typeof error === "object" && "code" in error && error.code === "conversation_busy";

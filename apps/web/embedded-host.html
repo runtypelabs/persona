@@ -5,36 +5,43 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="/src/demo-shared.css" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
-  <title>Embedded Host APIs: Persona</title>
+  <title>Embedded assistants · Persona</title>
 </head>
 <body>
   <main class="shell-main host-demo">
     <header class="title-strip">
-      <h1>Two assistants, one host</h1>
-      <p>Independent widgets with shared host controls. Messages stay local; no API key is needed. A writing row, a quiet toolbar, and a shared menu for context and tools. Each assistant keeps its own conversations and settings.</p>
+      <h1>Embedded assistants</h1>
+      <p>Test independent widgets, switch conversations, and move a widget into a modal. Replies are mocked.</p>
     </header>
     <section class="host-controls" aria-label="Host controls">
-      <label>Target <select id="host-target"><option value="research">Research</option><option value="support">Support</option></select></label>
+      <label>Assistant <select id="host-target"><option value="research">Research</option><option value="support">Support</option></select></label>
       <label>Defaults <select id="host-defaults"><option value="v5">V5</option><option value="v4">V4 stacked</option><option value="v4-single">V4 single row</option></select></label>
       <label>Composer <select id="host-scenario"><option value="reference">Reference composer</option><option value="basic">Basic modes</option><option value="chips">Context chips</option><option value="inline">Inline mentions</option><option value="responsive">Responsive tools</option><option value="crowded">Crowded toolbar + slot</option></select></label>
-      <label>Layout <select id="host-layout"><option value="stacked">Stacked reference</option><option value="single-row">Compact single row</option></select></label>
+      <label>Layout <select id="host-layout"><option value="stacked">Stacked</option><option value="single-row">Single row</option></select></label>
       <label>Theme <select id="host-scheme"><option value="light">Light</option><option value="dark">Dark</option></select></label>
       <label>Host width <select id="host-width"><option value="full">Full</option><option value="narrow">Narrow (380px)</option></select></label>
-      <button type="button" id="host-move">Move target to modal</button>
+      <button type="button" id="host-move">Move to modal</button>
     </section>
     <section class="host-conversations" aria-label="Conversation continuity">
       <div class="host-controls">
-        <label>Target conversation <select id="host-conversation"><option value="">Choose local history…</option><option value="brief">Project brief</option><option value="notes">Release notes</option></select></label>
+        <label>Conversation <select id="host-conversation"><option value="">Choose a conversation…</option><option value="brief">Project brief</option><option value="notes">Release notes</option></select></label>
         <label>When busy <select id="host-busy"><option value="reject">Keep current run</option><option value="stop">Stop current run</option><option value="background">Continue in background</option></select></label>
-        <label>Conversation loader <select id="host-loader"><option value="spinner">Centered spinner (default)</option><option value="skeleton">Skeleton bubbles</option></select></label>
-        <label>History delay <select id="host-history-delay"><option value="200">Normal</option><option value="1500">Slow — compare loaders</option><option value="0">Instant</option></select></label>
+        <label>Loading indicator <select id="host-loader"><option value="spinner">Spinner</option><option value="skeleton">Skeleton bubbles</option></select></label>
+        <label>History delay <select id="host-history-delay"><option value="200">Normal</option><option value="1500">Slow (1.5s)</option><option value="0">Instant</option></select></label>
       </div>
-      <p>Choose Project brief, type an unsent draft, attach a text file, and scroll up. Open Release notes, write a different draft, then return to Project brief: its draft, attachments, and reading position return. Try moving the same widget to the modal between switches. Run a local reply to test switching while busy. History opens simulate a short loading delay. History and drafts last for this page visit; changing defaults restarts both widgets.</p>
-      <p>To try background work, open Project brief, choose Continue in background, and send a message. Switch to Release notes while the reply is streaming, then return to catch up. Named conversations use a local simulated durable job; it runs for about 15 seconds even after its stream disconnects. Reloading the page resets this simulation.</p>
-      <p id="host-executions" role="status" aria-live="polite">No background tasks yet.</p>
-      <p>Compare conversation loaders by selecting a treatment and Slow history delay, then switching conversations. These controls apply to the selected assistant. Both treatments keep the same delay before appearing and fade the transcript in once loaded.</p>
+      <p>Controls apply to the selected assistant. Changing defaults restarts both widgets; reloading clears demo history.</p>
+      <details class="host-walkthrough">
+        <summary>Things to try</summary>
+        <ul>
+          <li><strong>Restore a conversation:</strong> Open Project brief, write a draft, attach a file, and scroll up. Switch to Release notes and back to restore the draft, attachments, and reading position.</li>
+          <li><strong>Continue in the background:</strong> Select Continue in background, send a message, then switch conversations. Return to see the reply. The local simulation runs for about 15 seconds.</li>
+          <li><strong>Compare loading indicators:</strong> Set History delay to Slow, choose Spinner or Skeleton bubbles, then switch conversations.</li>
+          <li><strong>Move a widget:</strong> Select Move to modal to keep using the same conversation in a different container.</li>
+        </ul>
+      </details>
+      <p id="host-executions" role="status" aria-live="polite">No background tasks.</p>
     </section>
-    <details class="host-test-controls"><summary>Host API and lifecycle controls</summary><div class="host-controls">
+    <details class="host-test-controls"><summary>Additional test controls</summary><div class="host-controls">
       <label><input type="checkbox" id="host-fail-open" /> Fail next conversation open</label>
       <button type="button" id="host-run">Run local reply</button>
       <button type="button" id="host-mode">Toggle concise mode</button>
@@ -42,9 +49,9 @@
       <button type="button" id="host-update">Update card</button>
       <button type="button" id="host-remove">Remove card</button>
       <button type="button" id="host-slot">Toggle context slot</button>
-      <button type="button" id="host-clear">Clear target</button>
+      <button type="button" id="host-clear">Clear assistant</button>
     </div></details>
-    <p id="host-status" role="status">Use + to attach a file or add sample context, and Concise for shorter answers. Responsive tools fold into + as the host narrows and return when it grows. Layout, scenario, theme, and width apply to the selected assistant; changing defaults restarts both. V4 comparison presets pin their named layout.</p>
+    <p id="host-status" role="status">Use + for files and context, or Concise for shorter replies. Responsive tools move into + at narrow widths. V4 presets use a fixed layout.</p>
     <div class="host-grid">
       <section class="host-pane" aria-label="Research assistant"><h2>Research</h2><div id="research" class="host-mount"></div></section>
       <section class="host-pane" aria-label="Support assistant"><h2>Support</h2><div id="support" class="host-mount"></div></section>
@@ -53,8 +60,8 @@
       <div class="host-controls"><h2 id="host-modal-title">Assistant in modal</h2><button type="button" id="host-return">Return to sidebar</button></div>
       <div id="host-modal-mount" class="host-mount"></div>
     </dialog>
-    <details class="host-events"><summary>Instance events and lifecycle</summary><p>Both widgets use the component name <code>HostCard</code> with their own renderer. Updating a card preserves its element; removing it releases its listener.</p><pre id="host-log" tabindex="0" aria-label="Recent host events"></pre></details>
-    <p><a href="/v5-preview.html">Back to the V5 preview</a> · <a href="/assistant-composers.html">Assistant config lab</a></p>
+    <details class="host-events"><summary>Widget events</summary><p>Each widget owns its <code>HostCard</code> renderer. Update or remove a card to inspect its lifecycle events.</p><pre id="host-log" tabindex="0" aria-label="Recent host events"></pre></details>
+    <p><a href="/v5-preview.html">Back to the V5 preview</a> · <a href="/assistant-composers.html">Assistant composer examples</a></p>
   </main>
   <script type="module" src="/src/embedded-host.ts"></script>
 </body>
