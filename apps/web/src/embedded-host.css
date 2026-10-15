@@ -1,6 +1,7 @@
 .host-demo { max-width: 1400px; margin: auto; }
 .host-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block: 20px; }
 .host-controls button, .host-controls select { padding: 9px 12px; border: 1px solid #ccc7be; border-radius: 8px; background: white; color: #292721; font: inherit; }
+.host-controls { --demo-select-border: #ccc7be; }
 .host-controls label { display: flex; align-items: center; gap: 8px; }
 .host-controls button { cursor: pointer; }
 .host-controls button:hover { background: #eeeae2; }
