@@ -167,8 +167,9 @@ describe("install.ts: deferred launcher path", () => {
     let reject!: (error: Error) => void;
     const ready = new Promise<void>((_, fail) => { reject = fail; });
     initAgentWidget.mockImplementation(() => ({ ...fakeHandle, ready }));
-    const onError = vi.fn();
-    await install({ target, config: { apiUrl: "/api", launcher: { enabled: false } }, onError });
+    const onError = vi.fn(), cleanup = vi.fn();
+    const renderLoading = vi.fn(() => cleanup);
+    await install({ target, config: { apiUrl: "/api", launcher: { enabled: false } }, onError, renderLoading });
     await flush();
     expect(target.querySelector("[data-persona-loading]")).not.toBeNull();
     reject(new Error("offline"));
@@ -176,6 +177,8 @@ describe("install.ts: deferred launcher path", () => {
     expect(target.querySelector("[data-persona-loading]")).toBeNull();
     expect(target.hasAttribute("aria-busy")).toBe(false);
     expect(onError).toHaveBeenCalledOnce();
+    expect(renderLoading).toHaveBeenCalledOnce();
+    expect(cleanup).toHaveBeenCalledOnce();
   });
 
   it("retains the launcher until renderer preparation finishes", async () => {

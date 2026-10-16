@@ -279,6 +279,47 @@ for (const mode of ["embedded", "pill", "circle"]) {
   });
 }
 
+for (const embedded of [true, false]) {
+  test(`installer manages custom loading UI (${embedded ? "embedded" : "launcher"})`, async ({ page }) => {
+    const h = await serveDist(page, {
+      "/custom-loading.html": page_(`
+        <div id="widget" style="width:600px;height:500px"></div>
+        <script>
+          window.__cleanupCount = 0;
+          window.siteAgentConfig = {
+            target: "#widget",
+            config: { apiUrl: "/api/chat", persistState: false, launcher: { enabled: ${!embedded} } },
+            renderLoading({ container, target, kind }) {
+              window.__loadingKind = kind;
+              window.__loadingConnected = container.isConnected && container.parentNode === target;
+              container.textContent = "Preparing your assistant";
+              return () => { window.__cleanupCount++; };
+            }
+          };
+        </script><script src="/dist/install.global.js"></script>`),
+    });
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    await page.route("**/dist/activity-ui.js", async route => {
+      await barrier;
+      await route.fulfill({ contentType: "text/javascript", body: readFileSync(join(DIST, "activity-ui.js")) });
+    });
+    await page.goto(`${ORIGIN}/custom-loading.html`, { waitUntil: "domcontentloaded" });
+    if (!embedded) await page.locator(sel.launcherButton).click();
+    const loading = page.getByText("Preparing your assistant");
+    await expect(loading).toBeVisible();
+    await expect(loading).toHaveCSS("animation-name", "none");
+    await expect(page.locator('[data-persona-loading="default"]')).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __loadingKind: string }).__loadingKind)).toBe(embedded ? "embedded" : "launcher");
+    expect(await page.evaluate(() => (window as unknown as { __loadingConnected: boolean }).__loadingConnected)).toBe(true);
+    release();
+    await expect(page.locator(sel.composer)).toBeVisible();
+    await expect(loading).toHaveCount(0);
+    expect(await page.evaluate(() => (window as unknown as { __cleanupCount: number }).__cleanupCount)).toBe(1);
+    expectClean(h);
+  });
+}
+
 test("a failed renderer keeps the launcher and retries without an incomplete panel", async ({ page }) => {
   const h = await serveDist(page, {
     "/retry-renderer.html": page_(`

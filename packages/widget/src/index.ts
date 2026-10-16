@@ -37,6 +37,7 @@ import "./session-actions-eager";
 
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";
+export type { InstallLoadingContext, InstallLoadingRenderer } from "./types/install-loading";
 export { default } from "./index-core";
 
 // Theme-plugin factories: config-time helpers with no runtime caller in the

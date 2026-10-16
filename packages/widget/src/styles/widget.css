@@ -6848,10 +6848,10 @@
 .persona-attachment-preview[data-layout="chip"] .persona-attachment-image { flex-shrink: 0; }
 .persona-attachment-preview[data-layout="vertical"][data-icon-placement="center"] .persona-attachment-file-icon { align-self: center; margin-block: auto; }
 /* Installer feedback has inline geometry so it also paints before this file. */
-[data-persona-loading] {
+[data-persona-loading="default"] {
   animation: persona-install-spin .8s linear infinite;
 }
-[data-persona-launcher-variant="circle"] > [data-persona-loading] {
+[data-persona-launcher-variant="circle"] > [data-persona-loading="default"] {
   /* Surround the existing icon instead of putting a badge on top of it. */
   width: calc(100% - 8px) !important;
   height: calc(100% - 8px) !important;
@@ -6862,5 +6862,5 @@
   to { transform: rotate(360deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  [data-persona-loading] { animation: none; }
+  [data-persona-loading="default"] { animation: none; }
 }
