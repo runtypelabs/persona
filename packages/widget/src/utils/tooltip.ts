@@ -92,7 +92,8 @@ const handles = new WeakMap<HTMLElement, TooltipHandle>();
  * menu sets it on each row: a menu item already shows its name as visible text,
  * so a floating tooltip over it would be redundant and wrong.
  */
-export const TOOLTIP_SUPPRESSED_ATTR = "data-persona-tooltip-suppressed";
+import { TOOLTIP_SUPPRESSED_ATTR } from "./tooltip-constants";
+export { TOOLTIP_SUPPRESSED_ATTR } from "./tooltip-constants";
 
 const isSuppressed = (anchor: HTMLElement): boolean =>
   typeof anchor.closest === "function" &&

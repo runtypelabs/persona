@@ -43,7 +43,12 @@ const mountStyles = (root: ShadowRoot | HTMLElement, ownerDocument: Document) =>
   }
 
   const clonedLink = globalLink.cloneNode(true) as HTMLLinkElement;
+  const ready = new Promise<void>((resolve, reject) => {
+    clonedLink.onload = () => resolve();
+    clonedLink.onerror = () => reject(new Error("Unable to load the widget stylesheet"));
+  });
   root.insertBefore(clonedLink, root.firstChild);
+  return ready;
 };
 
 export type AgentWidgetInitHandle = AgentWidgetController & {
@@ -75,9 +80,18 @@ export const initAgentWidget = (
   let config = options.config;
   const diagnostics = createLegacyDiagnosticContext(config);
   let hostLayout = createWidgetHostLayout(target, config);
-  let controller: AgentWidgetController;
+  let controller!: AgentWidgetController;
   let stateUnsubs: Array<() => void> = [];
   let destroyed = false;
+  let readyNotified = false;
+  const notifyReady = () => {
+    const mounted = controller;
+    void mounted.ready.then(() => {
+      if (destroyed || readyNotified || mounted !== controller) return;
+      readyNotified = true;
+      options.onChatReady?.();
+    }, () => {});
+  };
   let relocate = (move: () => void) => move();
   const hostListeners = new Set<{
     event: keyof AgentWidgetControllerEventMap;
@@ -86,7 +100,7 @@ export const initAgentWidget = (
     unsubscribe: () => void;
   }>();
 
-  const createMount = (host: HTMLElement, nextConfig?: _AgentWidgetConfig): HTMLElement => {
+  const createMount = (host: HTMLElement, nextConfig?: _AgentWidgetConfig) => {
     const launcherEnabled = nextConfig?.launcher?.enabled ?? true;
     const shouldFillHost = !launcherEnabled || isDockedMountMode(nextConfig);
     const mount = ownerDocument.createElement("div");
@@ -104,10 +118,11 @@ export const initAgentWidget = (
       mount.style.minWidth = "0";
     }
 
+    let stylesReady: Promise<void> | undefined;
     if (useShadow) {
       const shadowRoot = host.attachShadow({ mode: "open" });
       shadowRoot.appendChild(mount);
-      mountStyles(shadowRoot, ownerDocument);
+      stylesReady = mountStyles(shadowRoot, ownerDocument);
     } else {
       host.appendChild(mount);
       mountStyles(host, ownerDocument);
@@ -115,7 +130,7 @@ export const initAgentWidget = (
 
     mount.setAttribute("data-persona-instance", instanceId);
 
-    return mount;
+    return { mount, stylesReady };
   };
 
   const syncHostState = () => {
@@ -132,14 +147,16 @@ export const initAgentWidget = (
   };
 
   const mountController = () => {
-    const mount = createMount(hostLayout.host, config);
+    const { mount, stylesReady } = createMount(hostLayout.host, config);
     controller = createAgentExperience(mount, config, {
       debugTools: options.debugTools,
       registerHostMove: (move) => { relocate = move; },
       diagnostics,
+      preparation: stylesReady ? [stylesReady] : [],
     });
     hostListeners.forEach((listener) => listener.bind());
     bindHostState();
+    notifyReady();
   };
 
   const destroyCurrentController = () => {
@@ -149,8 +166,6 @@ export const initAgentWidget = (
   };
 
   mountController();
-  // Fired when the controller is mounted and its API is callable.
-  options.onChatReady?.();
 
   const rebuildLayout = (nextConfig?: _AgentWidgetConfig) => {
     destroyCurrentController();
@@ -218,6 +233,7 @@ export const initAgentWidget = (
       // as absent keys, which the controller's patch merge would preserve
       // instead of clearing. Both layers share mergeConfigUpdate, so they converge.
       controller.update(nextConfig);
+      notifyReady();
       syncHostState();
     },
     destroy() {

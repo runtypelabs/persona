@@ -1,3 +1,5 @@
+import * as sharedIcons from "../utils/icons";
+import * as sharedTooltips from "../utils/tooltip";
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -309,7 +311,7 @@ const mountRenderer = (options: {
     plugins: options.plugins ?? [],
   };
 
-  const renderer = createComposerActionRenderer({
+  const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor },
     getBindings: () => bindings,
     collect: () => ({
       builtIns: [

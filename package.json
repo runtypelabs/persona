@@ -15,6 +15,7 @@
     "test:e2e": "pnpm build:web-preview && playwright test --config e2e/playwright.config.ts",
     "test:e2e:ui": "playwright test --config e2e/playwright.config.ts --ui",
     "build:web-preview": "pnpm --filter web exec vite build",
+    "preview:compressed": "node scripts/compressed-preview/server.mjs",
     "dev:widget": "pnpm --filter web dev",
     "dev:runtype-hono-proxy": "pnpm --filter runtype-hono-proxy dev",
     "dev:runtype-workers": "pnpm --filter runtype-hono-proxy dev:workers",

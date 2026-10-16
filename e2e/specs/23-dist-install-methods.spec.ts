@@ -165,6 +165,53 @@ function expectClean(h: Harness) {
   expect(h.consoleErrors, "console.error output").toEqual([]);
 }
 
+for (const useShadowDom of [false, true]) {
+  test(`cold renderers reveal together (${useShadowDom ? "shadow" : "light"} DOM)`, async ({ page }) => {
+    let releaseControls!: () => void, releaseActivity!: () => void;
+    const controls = new Promise<void>(resolve => { releaseControls = resolve; });
+    const activity = new Promise<void>(resolve => { releaseActivity = resolve; });
+    const h = await serveDist(page, {
+      "/atomic.html": page_(`
+        <link data-persona rel="stylesheet" href="/dist/widget.css">
+        <div id="widget"></div>
+        <script src="/dist/index.global.js"></script>
+        <script>
+          window.__handle = AgentWidget.initAgentWidget({ target: "#widget", useShadowDom: ${useShadowDom},
+            config: { apiUrl: "/api/chat", persistState: false, autoFocusInput: true, launcher: { enabled: false },
+              composer: { actions: [{ id: "custom", label: "Custom action", icon: "search", kind: "button", placement: "start", presentation: "bar", onSelect() {} }] }
+            }
+          });
+        </script>`),
+    });
+    for (const [name, barrier] of [["composer-actions-runtime.js", controls], ["activity-ui.js", activity]] as const) {
+      await page.route(`**/dist/${name}`, async route => {
+        await barrier;
+        await route.fulfill({ contentType: "text/javascript", body: readFileSync(join(DIST, name)) });
+      });
+    }
+    await page.goto(`${ORIGIN}/atomic.html`, { waitUntil: "domcontentloaded" });
+    const root = page.locator("[data-persona-root]");
+    const composer = page.locator(sel.composer).first();
+    await expect(root).toHaveAttribute("data-persona-preparing", "");
+    await expect(composer).not.toBeVisible();
+    const controlsDownloaded = page.waitForResponse("**/dist/composer-actions-runtime.js");
+    releaseControls();
+    await controlsDownloaded;
+    // Controls have arrived, but activity has not: no intermediate reveal.
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    await expect(composer).not.toBeVisible();
+    releaseActivity();
+    await page.evaluate(() => (window as unknown as { __handle: { ready: Promise<void> } }).__handle.ready);
+    await expect(composer).toBeVisible();
+    await expect(composer).toBeFocused();
+    await expect(page.getByRole("button", { name: "Custom action" })).toBeVisible();
+    await expect(root).not.toHaveAttribute("data-persona-preparing");
+    expect(await root.evaluate(el => (el as HTMLElement).inert)).toBe(false);
+    await chatRoundTrip(page, h);
+    expectClean(h);
+  });
+}
+
 test("IIFE: <script src=index.global.js> exposes window.AgentWidget and mounts", async ({ page }) => {
   const h = await serveDist(page, {
     "/iife.html": page_(`
@@ -187,6 +234,120 @@ test("IIFE: <script src=index.global.js> exposes window.AgentWidget and mounts",
   await page.locator(sel.launcherButton).first().click();
   await expect(page.locator(sel.panel).first()).toBeVisible();
   await chatRoundTrip(page, h);
+  expectClean(h);
+});
+
+for (const mode of ["embedded", "pill", "circle"]) {
+  const embedded = mode === "embedded";
+  test(`delayed installer feedback stays in place until ready (${mode})`, async ({ page }) => {
+    const h = await serveDist(page, {
+      "/loading.html": page_(`
+        <div id="widget" style="width:600px;height:500px"></div>
+        <script>window.siteAgentConfig = { target: "#widget", config: { apiUrl: "/api/chat", persistState: false, future: { v5Defaults: ${mode === "circle"} }, launcher: { enabled: ${!embedded} } } };</script>
+        <script src="/dist/install.global.js"></script>`),
+    });
+    let release!: () => void;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    // Embedded feedback must work before CSS and JS, launcher feedback while
+    // the main bundle is still loading. Prefetch is deliberately held too.
+    const file = embedded ? "widget.css" : "index.global.js";
+    await page.route(`**/dist/${file}`, async route => {
+      await barrier;
+      await route.fulfill({ contentType: embedded ? "text/css" : "text/javascript", body: readFileSync(join(DIST, file)) });
+    });
+    await page.goto(`${ORIGIN}/loading.html`, { waitUntil: "domcontentloaded" });
+    const target = page.locator(embedded ? "#widget" : sel.launcherButton);
+    if (!embedded) {
+      // Let the existing two-pixel hover lift settle before measuring layout.
+      await target.hover();
+      await expect(target).toHaveCSS("transform", "matrix(1, 0, 0, 1, 0, -2)");
+      await target.click();
+    }
+    const before = await target.boundingBox();
+    const loading = page.getByRole("status", { name: "Loading assistant" });
+    await expect(loading).toBeVisible();
+    await expect(target).toHaveAttribute("aria-busy", "true");
+    expect(await target.boundingBox()).toEqual(before);
+    await page.screenshot({ path: `/tmp/persona-loading-${mode}.png` });
+    await expect(page.locator(sel.composer)).not.toBeVisible();
+    release();
+    await expect(page.locator(sel.composer)).toBeVisible();
+    await expect(loading).toHaveCount(0);
+    await expect(page.locator("[aria-busy=true]")).toHaveCount(0);
+    if (embedded) expect(await target.boundingBox()).toEqual(before);
+    expectClean(h);
+  });
+}
+
+test("a failed renderer keeps the launcher and retries without an incomplete panel", async ({ page }) => {
+  const h = await serveDist(page, {
+    "/retry-renderer.html": page_(`
+      <script>window.siteAgentConfig = { apiUrl: "/api/chat", config: { persistState: false } };</script>
+      <script src="/dist/install.global.js"></script>`),
+  });
+  let attempts = 0;
+  let fail!: () => void;
+  const failure = new Promise<void>(resolve => { fail = resolve; });
+  await page.route("**/dist/activity-ui.js*", async route => {
+    attempts++;
+    if (attempts === 1) {
+      await failure;
+      return route.fulfill({ status: 503, body: "temporarily unavailable" });
+    }
+    return route.fulfill({ contentType: "text/javascript", body: readFileSync(join(DIST, "activity-ui.js")) });
+  });
+  await page.goto(`${ORIGIN}/retry-renderer.html`);
+  await page.locator(sel.launcherButton).first().click();
+  await expect(page.getByRole("status", { name: "Loading assistant" })).toBeVisible();
+  fail();
+  await expect.poll(async () => (await events(page)).map(e => e.name)).toContain("persona:error");
+  await expect(page.locator("[data-persona-loading]")).toHaveCount(0);
+  await expect(page.locator(sel.launcherButton)).not.toHaveAttribute("aria-busy");
+  await expect(page.locator(sel.composer)).toHaveCount(0);
+  await expect(page.locator(sel.launcherButton)).toBeVisible();
+  await page.locator(sel.launcherButton).click();
+  await expect(page.locator(sel.composer)).toBeVisible();
+  expect(attempts).toBe(2);
+  expect((await events(page)).filter(e => e.name === "persona:chat-ready")).toHaveLength(1);
+  expect(h.pageErrors).toEqual([]);
+});
+
+test("shadow widget waits for its stylesheet even after renderer modules arrive", async ({ page }) => {
+  let releaseCss!: () => void;
+  const css = new Promise<void>(resolve => { releaseCss = resolve; });
+  const h = await serveDist(page, {
+    "/slow-style.html": page_(`
+      <div id="widget"></div><script src="/dist/index.global.js"></script>
+      <script>
+        const link = document.createElement("link");
+        link.rel = "stylesheet"; link.href = "/dist/widget.css"; link.dataset.persona = "";
+        document.head.append(link);
+        window.__handle = AgentWidget.initAgentWidget({ target: "#widget", useShadowDom: true,
+          config: { apiUrl: "/api/chat", persistState: false, launcher: { enabled: false } }
+        });
+        window.__ready = false;
+        window.__handle.ready.then(() => { window.__ready = true; });
+      </script>`),
+  });
+  await page.route("**/dist/widget.css", async route => {
+    await css;
+    await route.fulfill({ contentType: "text/css", body: readFileSync(join(DIST, "widget.css")) });
+  });
+  await page.goto(`${ORIGIN}/slow-style.html`, { waitUntil: "domcontentloaded" });
+  await expect.poll(() => h.requested.includes("/dist/activity-ui.js")).toBe(true);
+  await expect(page.locator(sel.composer)).not.toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __ready: boolean }).__ready)).toBe(false);
+  // Updating while styles are pending must keep the original readiness waiter
+  // and hidden surface behind the stylesheet, even if modules are now cached.
+  await page.evaluate(() => {
+    (window as unknown as { __handle: { update: (config: object) => void } }).__handle.update({ copy: { placeholder: "Updated prompt" } });
+  });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await expect(page.locator(sel.composer)).not.toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __ready: boolean }).__ready)).toBe(false);
+  releaseCss();
+  await page.evaluate(() => (window as unknown as { __handle: { ready: Promise<void> } }).__handle.ready);
+  await expect(page.locator(sel.composer)).toBeVisible();
   expectClean(h);
 });
 
@@ -353,6 +514,49 @@ for (const variant of ["card", "row"] as const) {
     await expect(page.getByText("Purchase confirmed", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => Number(localStorage.getItem("mutations") || 0))).toBe(1);
     expect(requests.filter(url => url.endsWith("/resume"))).toHaveLength(1);
+    expectClean(h);
+  });
+}
+
+for (const shadow of [false, true]) {
+  test(`lazy composer and artifact styles survive relocation (shadow=${shadow})`, async ({ page }) => {
+    const h = await serveDist(page, {
+      "/optional.html": page_(`
+        <link rel="stylesheet" href="/dist/widget.css">
+        <div id="first" style="height:600px"></div><div id="second" style="height:600px"></div>
+        <script src="/dist/index.global.js"></script>
+        <script>
+          window.__handle = window.AgentWidget.initAgentWidget({ target: '#first', useShadowDom: ${shadow}, config: {
+            apiUrl: '/api/chat', persistState: false, launcher: { enabled: false }, layout: { embedded: true },
+            composer: { actionOverflow: { enabled: true }, actions: [{ id: 'sample', kind: 'button', label: 'Sample action', placement: 'start', presentation: 'overflow', onSelect() {} }] },
+            features: { artifacts: { enabled: true } }
+          } });
+          window.__handle.upsertArtifact({ id: 'doc', artifactType: 'markdown', title: 'Sample document', content: '# A document' });
+          window.__handle.showArtifacts();
+        </script>`),
+    });
+    await page.goto(`${ORIGIN}/optional.html`);
+    const trigger = page.locator('[data-persona-composer-overflow-trigger]');
+    await trigger.click();
+    const menu = page.locator('[data-persona-composer-overflow-menu]');
+    await expect(menu).toBeVisible();
+    expect(await menu.evaluate(node => getComputedStyle(node).display)).toBe('flex');
+    expect(await menu.evaluate(node => getComputedStyle(node).flexDirection)).toBe('column');
+    await expect(page.locator('.persona-artifact-pane').first()).toBeVisible();
+    expect(h.requested).toContain('/dist/composer-actions-runtime.js');
+    expect(h.requested).toContain('/dist/artifacts-ui.js');
+    await page.keyboard.press('Escape');
+    const stylesheetRoots = await page.evaluate(() => {
+      const handle = (window as unknown as { __handle: { host: HTMLElement; moveTo(target: string): void } }).__handle;
+      handle.moveTo('#second');
+      const root = handle.host.shadowRoot ?? document;
+      return Array.from(root.querySelectorAll('style')).map(style => style.textContent).join('\n');
+    });
+    expect(stylesheetRoots).toContain('.persona-composer-overflow-menu');
+    expect(stylesheetRoots).toContain('.persona-artifact-split-root');
+    await trigger.click();
+    await expect(menu).toBeVisible();
+    expect(await menu.evaluate(node => getComputedStyle(node).display)).toBe('flex');
     expectClean(h);
   });
 }

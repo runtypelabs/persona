@@ -17,8 +17,8 @@
 import { createPopover, type PopoverHandle } from "../plugin-kit";
 import type { ComposerCustomAction, ComposerModel } from "../types";
 import { createElement, createNode } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
-import { forwardMenuTokens } from "./composer-parts";
+import type { renderLucideIcon } from "../utils/icons";
+import { forwardMenuTokens } from "./composer-tokens";
 
 export const COMPOSER_MODEL_PICKER_ACTION_ID = "core:model";
 export const COMPOSER_MODEL_PICKER_ORDER = 700;
@@ -38,6 +38,7 @@ const MENU_TOKEN_VARS = [
 ] as const;
 
 export interface ComposerModelPickerOptions {
+  renderIcon: typeof renderLucideIcon;
   getModels: () => ReadonlyArray<ComposerModel>;
   getSelectedModelId: () => string | undefined;
   onSelect: (modelId: string) => void;
@@ -245,7 +246,7 @@ export function createComposerModelPickerAction(
         },
       }) as HTMLButtonElement;
       if (model.icon) {
-        const glyph = renderLucideIcon(
+        const glyph = options.renderIcon(
           model.icon,
           ROW_ICON_SIZE,
           "currentColor",
@@ -277,7 +278,7 @@ export function createComposerModelPickerAction(
       // selection change never rebuilds a row.
       const check = createElement("span", "persona-composer-model-option-check");
       check.setAttribute("aria-hidden", "true");
-      const tick = renderLucideIcon("check", ROW_ICON_SIZE, "currentColor", 2);
+      const tick = options.renderIcon("check", ROW_ICON_SIZE, "currentColor", 2);
       if (tick) check.appendChild(tick);
       button.appendChild(check);
       button.addEventListener("click", onRowClick);

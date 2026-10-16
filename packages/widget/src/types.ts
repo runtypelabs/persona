@@ -9463,7 +9463,8 @@ export type AgentWidgetInitOptions = {
   target: string | HTMLElement;
   config?: AgentWidgetConfig;
   useShadowDom?: boolean;
-  /** Fired when the widget controller is mounted and its API is callable. */
+  /** Fired when the configured renderers and styles are ready for display.
+   * The returned handle is callable immediately; handle.ready also exposes failures. */
   onChatReady?: () => void;
   windowKey?: string; // If provided, stores the controller on window[windowKey] for global access
   debugTools?: boolean;

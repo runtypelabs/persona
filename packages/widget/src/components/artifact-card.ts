@@ -1,3 +1,4 @@
+import { ensureArtifactStyles } from "./artifact-styles";
 import type { ComponentContext } from "./registry";
 import type {
   PersonaArtifactFileMeta,
@@ -10,7 +11,7 @@ import {
   clearArtifactStatusTracking,
   resolveArtifactStatusLabel
 } from "../utils/artifact-status-label";
-import { createLabelButton } from "../utils/buttons";
+import { createLabelButton } from "./artifact-buttons";
 import { buildArtifactActionButton } from "../utils/artifact-custom-actions";
 import type { PersonaArtifactActionContext } from "../types";
 
@@ -50,6 +51,7 @@ function renderDefaultArtifactCard(
       : "Document";
 
   const root = document.createElement("div");
+  ensureArtifactStyles(root);
   root.className =
     "persona-artifact-card persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-px-4 persona-py-3";
   root.tabIndex = 0;

@@ -33,8 +33,7 @@ import "./ui-extras-eager";
 // (lazy `session-actions.js` in the IIFE).
 import "./session-actions-eager";
 
-// And the visitor-history shell (lazy `history-shell.js` in the IIFE).
-import "./history-shell-eager";
+// Visitor history uses the same on-demand shell in all formats.
 
 // Full public API (everything except the two dev-only helpers below).
 export * from "./index-core";

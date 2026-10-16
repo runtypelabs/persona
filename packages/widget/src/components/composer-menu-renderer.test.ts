@@ -1,3 +1,5 @@
+import * as sharedIcons from "../utils/icons";
+import * as sharedTooltips from "../utils/tooltip";
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
 import type { AgentWidgetPlugin } from "../plugins/types";
@@ -23,7 +25,7 @@ function mount(options: { plugins?: AgentWidgetPlugin[]; shadow?: boolean } = {}
   const bindings = bindComposerSurface(elements.footer)!;
   const reportError = vi.fn();
   const collect = vi.fn(() => ({ builtIns: [{ id: "core:attachment", placement: "start" as const, order: 200, element: elements.attachmentButtonWrapper! }], configActions: actions, plugins, contributionContext: { config, getState: () => state, requestRender: () => renderer.resolve() } }));
-  const renderer = createComposerActionRenderer({ getBindings: () => bindings, collect, getState: () => state, getOverflow: () => config.composer!.actionOverflow, reportError, actionContext: { getState: () => state, getValue: () => state.text, setValue: (text) => { state = { ...state, text }; }, submit: () => {}, openAttachmentPicker: () => {}, toggleVoice: () => {}, requestRender: () => renderer.resolve() } });
+  const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor }, getBindings: () => bindings, collect, getState: () => state, getOverflow: () => config.composer!.actionOverflow, reportError, actionContext: { getState: () => state, getValue: () => state.text, setValue: (text) => { state = { ...state, text }; }, submit: () => {}, openAttachmentPicker: () => {}, toggleVoice: () => {}, requestRender: () => renderer.resolve() } });
   renderer.resolve();
   cleanups.push(renderer.destroy);
   const menu = renderer.getOverflowMenu()!;

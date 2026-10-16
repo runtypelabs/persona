@@ -1,14 +1,11 @@
 import { readFileSync } from "node:fs";
 import { brotliCompressSync, constants } from "node:zlib";
 
-// Binary KiB, measured with Brotli quality 11. V5 composer, rendering and
-// conversation lifecycle additions bring the merged core to ~149.1 KiB;
-// retain upstream lazy chunks and keep a narrow 150 KiB regression ceiling.
+// Original regression ceilings, in binary KiB at Brotli quality 11.
 const budgets = [
-  { file: "index.global.js", bytes: 150 * 1024, exclusive: false },
+  { file: "index.global.js", bytes: 131 * 1024, exclusive: false },
   { file: "launcher.global.js", bytes: 20 * 1024, exclusive: true },
-  // Menu row tokens and descriptions: ~22.04 KiB (previous budget 21.9).
-  { file: "widget.css", bytes: 22.1 * 1024, exclusive: false },
+  { file: "widget.css", bytes: 20 * 1024, exclusive: false },
 ];
 
 for (const { file, bytes, exclusive } of budgets) {

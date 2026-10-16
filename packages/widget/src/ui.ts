@@ -1,16 +1,21 @@
+import type { BrowserRecognitionEvent } from "./voice/browser-recognition-handlers";
+import { createRenderReadiness } from "./utils/render-readiness";
+import { prepareRendererModules } from "./renderer-preparation";
+import { loadDictationRuntime, getDictationRuntimeSync, type DictationRuntimeModule } from "./dictation-runtime-loader";
+import { getComposerActionsSync, loadComposerActions, type ComposerActionsModule } from "./composer-actions-loader";
 import { createScrollAnimation, createScrollToLatest } from "./utils/scroll-animation";
 import { createScrollToBottomControl } from "./components/scroll-to-bottom";
 import { createLayoutSlots } from "./utils/layout-slots";
 import { isBrowserLocalApproval } from "./utils/restored-browser-state";
-import { activityVariant, activityDuration, createActivityLifecycle, createActivityGroup } from "./components/activity-row";
+import { activityVariant, activityDuration, createActivityLifecycle } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
-import type { DictationController } from "./voice/dictation";
+import type { DictationSession } from "./dictation-session";
 import { usesSessionVoice, usesSessionVoiceForConfig } from "./utils/voice-support";
 import { escapeHtml, createMarkdownProcessorFromConfig } from "./postprocessors";
 import { resolveSanitizer } from "./utils/sanitize";
 import { stabilizeStreamingTables } from "./utils/streaming-table";
 import { wrapScrollableTables, refreshTableScrollFades } from "./utils/table-scroll-fade";
-import { onMarkdownParsersReady, getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
+import { getMarkdownParsersSync } from "./markdown-parsers-loader";
 import { loadClientStream } from "./client-stream-loader";
 import { HistoryClientError } from "./client";
 import { HistoryProviderError } from "./internal/history-provider";
@@ -25,7 +30,6 @@ import {
 } from "./session";
 import {
   DictationState,
-  DictationRenderContext,
   DictationRenderHandle,
   DictationProviderConfig,
   AgentWidgetConfig,
@@ -93,19 +97,10 @@ import {
 import {
   COMPOSER_ACTION_ORDER,
   COMPOSER_ACTION_ATTR,
-  createComposerActionRenderer,
   type ComposerActionRenderer,
   type ComposerBuiltInDescriptor,
 } from "./components/composer-actions";
-import {
-  createComposerModelPickerAction,
-  type ComposerModelPicker,
-} from "./components/composer-model-picker";
-import { createComposerModeChipRow } from "./components/composer-mode-chips";
-import {
-  createComposerSegmentedModeAction,
-  type ComposerSegmentedModeControl,
-} from "./components/composer-segmented-modes";
+import type { createComposerModeChipRow } from "./components/composer-mode-chips";
 import {
   COMPOSER_CHIP_ROW_SELECTOR,
   ensureComposerChipRow,
@@ -131,8 +126,6 @@ import {
   chipVisibleComposerModes,
   clearOnceComposerModes,
   composerModeActionId,
-  composerModeOrder,
-  isSegmentedModeGroup,
   pruneComposerModes,
   resolveComposerModePlaceholder,
   toggleComposerMode,
@@ -170,10 +163,10 @@ import { createMentionButton } from "./components/context-mention-button";
 import type { MentionSubmitBundle } from "./utils/context-mention-manager";
 import { createTextPart, ALL_SUPPORTED_MIME_TYPES } from "./utils/content";
 import { applyThemeVariables, createThemeObserver, getActiveTheme, getColorScheme } from "./utils/theme";
-import { resolveTokenValue } from "./utils/tokens";
+import { resolveTokenValue, resolveThemeDefaults } from "./utils/tokens";
 import { deepMerge } from "./utils/deep-merge";
 import { Activity, Check, Copy } from "lucide";
-import { renderLucideIcon, onExtraIconsReady } from "./utils/icons";
+import { renderLucideIcon } from "./utils/icons";
 import { renderIconNode } from "./utils/icon-node";
 import { createElement } from "./utils/dom";
 import { resolveContentMaxWidth } from "./utils/content-width";
@@ -184,12 +177,12 @@ import {
   parseAnchorFraction,
   resolveComposerPlacement,
 } from "./utils/composer-placement";
-import { attachTooltip, configureTooltipTiming } from "./utils/tooltip";
+import { attachTooltip, hideTooltipFor, configureTooltipTiming } from "./utils/tooltip";
 import {
   DEFAULT_TOOLTIP_DELAY_MS,
   DEFAULT_TOOLTIP_SKIP_DELAY_MS,
 } from "./utils/tooltip-timing";
-import { createShortcutRegistry } from "./utils/shortcuts";
+import { createShortcutRegistry, parseCombo, formatCombo, ariaCombo } from "./utils/shortcuts";
 // The artifact download/copy helpers live in the lazy artifacts-ui chunk;
 // reached via getArtifactsUiSync() in the delegated click handlers (which can
 // only fire on DOM the adopted chunk rendered).
@@ -282,11 +275,12 @@ import {
   createStandardBubble,
   createTypingIndicator,
   getBubbleClasses,
+  applyBubbleGeometry,
   CUSTOM_MESSAGE_ACTION_PREFIX,
 } from "./components/message-bubble";
-import { createReasoningBubble, updateReasoningBubbleUI } from "./components/reasoning-bubble";
+import { getActivityUiSync, type ActivityUiModule } from "./activity-ui-loader";
 import { copyToolDetail } from "./components/tool-details";
-import { createToolBubble, updateToolBubbleUI } from "./components/tool-bubble";
+
 import {
   ensureAskUserQuestionSheet,
   isAskUserQuestionMessage,
@@ -334,8 +328,6 @@ import { resolveConfigPreferences } from "./utils/feature-preferences";
 import {
   ARTIFACT_RESIZE_CHAT_MIN_PX,
   ARTIFACT_RESIZE_RAILED_TRANSCRIPT_MIN_PX,
-  readFlexGapPx,
-  resolveArtifactPaneWidthPx,
 } from "./utils/artifact-resize";
 import { loadFormsUi, getFormsUiSync } from "./forms-ui-loader";
 import { pluginRegistry } from "./plugins/registry";
@@ -517,6 +509,9 @@ const messagesForStorage = (messages: AgentWidgetMessage[]) =>
     }));
 
 type Controller = {
+  /** Resolves once the configured UI and its styles can be shown together.
+   * Rejects on a preparation failure; update() retries missing modules. */
+  readonly ready: Promise<void>;
   readonly instanceId: string;
   update: (config: AgentWidgetConfigPatch) => void;
   destroy: () => void;
@@ -779,9 +774,7 @@ export const buildPostprocessor = (
   // since DOMPurify will strip any tags/attributes not in the allowlist.
   if (cfg?.postprocessMessage && sanitize && cfg?.sanitize === undefined) {
     console.warn(
-      "[Persona] A custom postprocessMessage is active with the default HTML sanitizer. " +
-      "Tags or attributes not in the built-in allowlist will be stripped. " +
-      "To keep custom HTML, set `sanitize: false` or provide a custom sanitize function."
+      "[Persona] postprocessMessage HTML is sanitized: unsupported tags/attributes are stripped. Provide a custom sanitize function to allow them, or sanitize: false only for trusted HTML."
     );
   }
 
@@ -925,7 +918,7 @@ export const mergeFinalizedMentions = (
 export const createAgentExperience = (
   mount: HTMLElement,
   initialConfig?: AgentWidgetConfig,
-  runtimeOptions?: { debugTools?: boolean; registerHostMove?: (move: (reparent: () => void) => void) => void; diagnostics?: LegacyDiagnosticContext }
+  runtimeOptions?: { debugTools?: boolean; registerHostMove?: (move: (reparent: () => void) => void) => void; diagnostics?: LegacyDiagnosticContext; preparation?: Promise<unknown>[] }
 ): Controller => {
   if (mount == null) {
     throw new Error(
@@ -945,17 +938,28 @@ export const createAgentExperience = (
   }
 
   let config = mergeWithDefaults(initialConfig) as AgentWidgetConfig;
+  const renderReadiness = createRenderReadiness(mount);
   const diagnostics = runtimeOptions?.diagnostics ?? createLegacyDiagnosticContext(initialConfig);
   // Message ids are only unique within a widget session. Keep disclosure state
   // beside the widget that renders it, not in component module scope.
+  let activityUi: ActivityUiModule | null = null;
+  const ensureActivityUi = (): ActivityUiModule | null => {
+    if (activityUi) return activityUi;
+    const ready = getActivityUiSync();
+    if (ready) {
+      ready.initActivityUi(renderLucideIcon);
+      return activityUi = ready;
+    }
+    return null;
+  };
   const toolExpansionState = new Set<string>();
   const reasoningExpansionState = new Set<string>();
   const activityLifecycle = createActivityLifecycle((id, kind) => {
     messageCache.delete(id);
     const bubble = Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]")).find(node => node.dataset.messageId === id);
     if (!bubble) return;
-    if (kind === "tool") updateToolBubbleUI(id, bubble, toolExpansionState, config);
-    else updateReasoningBubbleUI(id, bubble, reasoningExpansionState);
+    if (kind === "tool") activityUi?.updateToolBubbleUI(id, bubble, toolExpansionState, config);
+    else activityUi?.updateReasoningBubbleUI(id, bubble, reasoningExpansionState);
   });
   const approvalDetailsExpansionState = new Map<string, boolean>();
   const applyTooltipTiming = (): void => {
@@ -1004,12 +1008,14 @@ export const createAgentExperience = (
   let teardownBuiltInApprovals: (() => void) | null = null;
   let approvalUiDisposed = false;
   let onApprovalUiReady: (() => void) | null = null;
-  const adoptApprovalUi = (mod: ApprovalUiModule): void => {
+  const adoptApprovalUi = (mod: ApprovalUiModule, controls: ComposerActionsModule): void => {
     approvalUi = mod;
     // Inject the core bridge's webmcp title map: the chunk is bundled
     // noExternal and must not read its own (empty) copy.
     mod.initApprovalUi({
       webMcpToolTitle: getWebMcpToolDisplayTitle,
+      popover: controls,
+      icons: { render: renderLucideIcon, node: renderIconNode },
     });
     const built = mod.createBuiltInApprovalPlugin(approvalDetailsExpansionState);
     builtInApprovalPlugin = built.plugin;
@@ -1020,16 +1026,17 @@ export const createAgentExperience = (
     // Synchronous when the module was provided eagerly (tests) or already
     // loaded by another widget instance on the page.
     const sync = getApprovalUiSync();
-    if (sync) {
-      adoptApprovalUi(sync);
+    const controls = getComposerActionsSync();
+    if (sync && controls) {
+      adoptApprovalUi(sync, controls);
       return sync;
     }
     // No local in-flight flag: the chunk loader dedupes concurrent loads,
     // caches success, and clears a rejection so the next render retries.
-    void loadApprovalUi()
-      .then((mod) => {
+    void Promise.all([loadApprovalUi(), loadComposerActions()])
+      .then(([mod, controls]) => {
         if (approvalUiDisposed || approvalUi) return;
-        adoptApprovalUi(mod);
+        adoptApprovalUi(mod, controls);
         onApprovalUiReady?.();
       })
       .catch(() => {
@@ -1774,7 +1781,7 @@ export const createAgentExperience = (
   function selectComposerModel(modelId: string): void {
     if (composerStore.getState().selectedModelId === modelId) return;
     composerStore.setSelectedModelId(modelId);
-    composerModelPicker?.repaint();
+    composerCoreControls?.repaint();
     try {
       config.composer?.onModelChange?.(modelId);
     } catch (error) {
@@ -1785,7 +1792,7 @@ export const createAgentExperience = (
   function setActiveComposerModes(ids: readonly string[]): void {
     composerStore.setActiveModeIds(ids);
     composerModeChips?.render(ids, composerChipModes());
-    composerSegmentedGroups.forEach((group) => group.repaint());
+    composerCoreControls?.repaint();
     // `pressed` is read off config at resolve time, so the row must re-resolve.
     composerActionRenderer?.resolve();
     updateCopy();
@@ -1821,13 +1828,8 @@ export const createAgentExperience = (
     }
   }
 
-  /** Model picker + one toggle per configured mode, as ordinary actions. */
-  let composerModelPicker: ComposerModelPicker | null = null;
-  /** Presentation the cached picker was built for; a change rebuilds it. */
-  let composerModelPickerMode: "native" | "popover" | null = null;
+  let composerCoreControls: ReturnType<ComposerActionsModule["createComposerCoreControls"]> | null = null;
   let composerModeChips: ReturnType<typeof createComposerModeChipRow> | null = null;
-  /** One cached segmented track per `presentation: "segmented"` mode group. */
-  const composerSegmentedGroups = new Map<string, ComposerSegmentedModeControl>();
 
   // --- Quote / reply-to (roadmap section 13) --------------------------------
   let composerQuoteBanner: ReturnType<typeof createComposerQuoteBanner> | null = null;
@@ -1874,84 +1876,14 @@ export const createAgentExperience = (
     syncComposerCompact();
   }
 
-  /** Cached so the track keeps its element identity across re-resolves. */
-  const ensureSegmentedModeGroup = (
-    groupId: string
-  ): ComposerSegmentedModeControl => {
-    const existing = composerSegmentedGroups.get(groupId);
-    if (existing) return existing;
-    const control = createComposerSegmentedModeAction({
-      groupId,
-      getGroup: () =>
-        config.composer?.modeGroups?.find((group) => group.id === groupId),
-      getModes: () =>
-        composerModes().filter((mode) => mode.groupId === groupId),
-      getActiveIds: () => composerStore.getState().activeModeIds,
-      onSelect: (modeId) => toggleComposerModeById(modeId),
-    });
-    composerSegmentedGroups.set(groupId, control);
-    return control;
-  };
-
   const collectComposerCoreActions = (): ComposerAction[] => {
-    const actions: ComposerAction[] = [];
-    const active = composerStore.getState().activeModeIds;
-    const chipModeIds = new Set(composerChipModes().map((mode) => mode.id));
-    const seenSegmentedGroups = new Set<string>();
-    composerModes().forEach((mode, index) => {
-      // A segmented group contributes one track at its first member's slot; the
-      // members themselves contribute no loose buttons.
-      if (isSegmentedModeGroup(mode.groupId, config.composer?.modeGroups)) {
-        const groupId = mode.groupId as string;
-        if (seenSegmentedGroups.has(groupId)) return;
-        seenSegmentedGroups.add(groupId);
-        const control = ensureSegmentedModeGroup(groupId);
-        control.action.order = composerModeOrder(index);
-        control.action.label =
-          config.composer?.modeGroups?.find((group) => group.id === groupId)
-            ?.label ?? groupId;
-        actions.push(control.action);
-        return;
-      }
-      const selectedLabel = active.includes(mode.id) && !chipModeIds.has(mode.id);
-      actions.push({
-        id: composerModeActionId(mode.id),
-        kind: "button",
-        placement: "start",
-        order: composerModeOrder(index),
-        presentation: selectedLabel ? "bar" : (mode.presentation ?? "auto"),
-        label: mode.label,
-        shortLabel: selectedLabel ? (mode.shortLabel ?? mode.label) : mode.shortLabel,
-        iconName: mode.iconName,
-        trailingIconName: mode.trailingIconName,
-        pressed: active.includes(mode.id),
-        onSelect: () => toggleComposerModeById(mode.id),
-      });
+    composerCoreControls ??= getComposerActionsSync()!.createComposerCoreControls({
+      getConfig: () => config, getState: () => composerStore.getState(),
+      getModes: composerModes, getChipModes: composerChipModes,
+      hasComposerPlugin: () => plugins.some(plugin => plugin.renderComposer),
+      renderIcon: renderLucideIcon, onModelChange: selectComposerModel, onModeChange: toggleComposerModeById,
     });
-    // Exactly symmetric with the plugin handoff: a `renderComposer` plugin
-    // already receives `models`/`selectedModelId`/`onModelChange` and owns the
-    // control, so the built-in picker would be a second affordance.
-    if (
-      config.composer?.models?.length &&
-      !plugins.some((plugin) => plugin.renderComposer)
-    ) {
-      // A presentation flip is a different control, so it rebuilds: the fresh
-      // `render` identity is what makes the action registry swap the element.
-      const presentation =
-        config.composer?.modelPicker?.presentation ?? "native";
-      if (!composerModelPicker || composerModelPickerMode !== presentation) {
-        composerModelPickerMode = presentation;
-        composerModelPicker = createComposerModelPickerAction({
-          getModels: () => config.composer?.models ?? [],
-          getSelectedModelId: () => composerStore.getState().selectedModelId,
-          onSelect: (modelId) => selectComposerModel(modelId),
-          presentation,
-          getSuffix: () => config.composer?.modelPicker?.suffix,
-        });
-      }
-      actions.push(composerModelPicker.action);
-    }
-    return actions;
+    return composerCoreControls.collect();
   };
 
   /** Wired after `handleMicButtonClick` is defined; used by `renderComposer` `onVoiceToggle`. */
@@ -2007,6 +1939,7 @@ export const createAgentExperience = (
         .then((mod) => {
           if (eventStreamView || !eventStreamVisible || !eventStreamBuffer) return;
           eventStreamView = mod.createEventStreamView({
+            scroll: { createScrollToLatest, createScrollToBottomControl },
             buffer: eventStreamBuffer,
             getFullHistory: () => eventStreamBuffer!.getAllFromStore(),
             onClose: () => toggleEventStreamOff(),
@@ -2491,9 +2424,14 @@ export const createAgentExperience = (
   };
 
   /** Rebuild the renderer against the CURRENT bindings and resolve once. */
+  let composerActionsTornDown = false;
   const setupComposerActions = (): void => {
+    if (composerActionsTornDown) return;
+    const runtime = getComposerActionsSync();
+    if (!runtime) return;
     composerActionRenderer?.destroy();
-    composerActionRenderer = createComposerActionRenderer({
+    composerActionRenderer = runtime.createComposerActionRenderer({
+      deps: { renderLucideIcon, attachTooltip, hideTooltipFor },
       getBindings: () => composerBindings,
       collect: () => ({
         builtIns: collectComposerBuiltIns(),
@@ -2541,7 +2479,10 @@ export const createAgentExperience = (
     if (!composerChipModes().length) return;
     const header = composerBindings?.header;
     if (!header) return;
-    composerModeChips = createComposerModeChipRow({
+    const runtime = getComposerActionsSync();
+    if (!runtime) return;
+    composerModeChips = runtime.createComposerModeChipRow({
+      renderIcon: renderLucideIcon,
       row: ensureComposerChipRow(header),
       onRemove: (modeId) => toggleComposerModeById(modeId),
       // A rebuild hands the new row the chips the user is already looking at;
@@ -2687,7 +2628,7 @@ export const createAgentExperience = (
     if (!inert.length) return;
     warnedInertSlots = true;
     console.warn(
-      `[persona] layout.slots.${inert.join(" and layout.slots.")} ${inert.length > 1 ? "are" : "is"} deprecated and unsupported: renderer output is ignored. Use the message render hooks for the transcript and the renderComposer plugin hook for the composer.`
+      `[persona] Ignoring deprecated layout.slots.${inert.join(" / layout.slots.")}. Use message render hooks or the renderComposer plugin hook.`
     );
   };
 
@@ -2855,14 +2796,14 @@ export const createAgentExperience = (
       } else {
         reasoningExpansionState.add(messageId);
       }
-      updateReasoningBubbleUI(messageId, bubble, reasoningExpansionState);
+      activityUi?.updateReasoningBubbleUI(messageId, bubble, reasoningExpansionState);
     } else if (bubbleType === 'tool') {
       if (toolExpansionState.has(messageId)) {
         toolExpansionState.delete(messageId);
       } else {
         toolExpansionState.add(messageId);
       }
-      updateToolBubbleUI(messageId, bubble, toolExpansionState, config);
+      activityUi?.updateToolBubbleUI(messageId, bubble, toolExpansionState, config);
     } else if (bubbleType === 'approval' && approvalUi) {
       // approvalUi is always set here: approval bubbles only exist after the
       // chunk was adopted. The guard keeps a stray click on a stub harmless.
@@ -3506,9 +3447,7 @@ export const createAgentExperience = (
   document.addEventListener("keydown", handleAskUserDigitKey);
 
   let artifactSplitRoot: HTMLElement | null = null;
-  let artifactResizeHandle: HTMLElement | null = null;
-  let artifactResizeUnbind: (() => void) | null = null;
-  let artifactResizeDocEnd: (() => void) | null = null;
+  let artifactResizer: ReturnType<ArtifactsUiModule["createArtifactResizer"]> | null = null;
   let reconcileArtifactResize: () => void = () => {};
   // Expanded-state transition tracking: stash the resizer's inline width/maxWidth
   // (which would otherwise beat the expanded class) once per enter, restore once
@@ -3516,11 +3455,6 @@ export const createAgentExperience = (
   let artifactExpandedApplied = false;
   let artifactStashedWidth = "";
   let artifactStashedMaxWidth = "";
-
-  function stopArtifactResizePointer() {
-    artifactResizeDocEnd?.();
-    artifactResizeDocEnd = null;
-  }
 
   /**
    * Chat-column minimum for an artifact drag. A docked in-flow rail lives
@@ -3539,37 +3473,6 @@ export const createAgentExperience = (
   };
 
   /** Flush split: overlay handle on the seam so it does not consume flex gap (extension + resizable). */
-  const positionExtensionArtifactResizeHandle = () => {
-    if (!artifactSplitRoot || !artifactResizeHandle) return;
-    // Welded splits (panel + seamless) have gap 0, so the handle overlays the seam
-    // instead of consuming flex width; detached keeps a real gap and a flex handle.
-    const ext = mount.classList.contains("persona-artifact-welded-split");
-    const ownerWin = mount.ownerDocument.defaultView ?? window;
-    const mobile = ownerWin.innerWidth <= 640;
-    if (!ext || mount.classList.contains("persona-artifact-narrow-host") || mobile) {
-      artifactResizeHandle.style.removeProperty("position");
-      artifactResizeHandle.style.removeProperty("left");
-      artifactResizeHandle.style.removeProperty("top");
-      artifactResizeHandle.style.removeProperty("bottom");
-      artifactResizeHandle.style.removeProperty("width");
-      artifactResizeHandle.style.removeProperty("z-index");
-      return;
-    }
-    const chat = artifactSplitRoot.firstElementChild as HTMLElement | null;
-    if (!chat || chat === artifactResizeHandle) return;
-    const hitW = 10;
-    artifactResizeHandle.style.position = "absolute";
-    artifactResizeHandle.style.top = "0";
-    artifactResizeHandle.style.bottom = "0";
-    artifactResizeHandle.style.width = `${hitW}px`;
-    artifactResizeHandle.style.zIndex = "5";
-    // Center the overlay on the seam: with an explicit welded gap the seam sits
-    // half a gap past the chat's right edge (welded default gap is 0).
-    const gapPx = readFlexGapPx(artifactSplitRoot, ownerWin);
-    const left = chat.offsetWidth + gapPx / 2 - hitW / 2;
-    artifactResizeHandle.style.left = `${Math.max(0, left)}px`;
-  };
-
   /** No-op until artifact pane is created; replaced below when artifacts are enabled. */
   let applyLauncherArtifactPanelWidth: () => void = () => {};
 
@@ -3738,6 +3641,8 @@ export const createAgentExperience = (
             syncArtifactPane();
           }
         });
+        artifactResizer = mod.createArtifactResizer({ mount, splitRoot, pane: artifactPaneApi,
+          getConfig: () => config, chatMinWidth: railedChatMinPx, isVisible: artifactPaneVisible });
         artifactPaneApi.element.classList.add("persona-hidden");
         splitRoot.appendChild(artifactPaneApi.element);
         if (artifactPaneApi.backdrop) {
@@ -3763,103 +3668,7 @@ export const createAgentExperience = (
       });
     }
 
-    reconcileArtifactResize = () => {
-      if (!artifactSplitRoot || !artifactPaneApi) return;
-      const want = config.features?.artifacts?.layout?.resizable === true;
-      if (!want) {
-        artifactResizeUnbind?.();
-        artifactResizeUnbind = null;
-        stopArtifactResizePointer();
-        if (artifactResizeHandle) {
-          artifactResizeHandle.remove();
-          artifactResizeHandle = null;
-        }
-        artifactPaneApi.element.style.removeProperty("width");
-        artifactPaneApi.element.style.removeProperty("maxWidth");
-        return;
-      }
-      if (!artifactResizeHandle) {
-        const handle = createElement(
-          "div",
-          "persona-artifact-split-handle persona-shrink-0 persona-h-full"
-        );
-        handle.setAttribute("role", "separator");
-        handle.setAttribute("aria-orientation", "vertical");
-        handle.setAttribute("aria-label", "Resize artifacts panel");
-        handle.tabIndex = 0;
-
-        const doc = mount.ownerDocument;
-        const win = doc.defaultView ?? window;
-
-        const onPointerDown = (e: PointerEvent) => {
-          if (!artifactPaneApi || e.button !== 0) return;
-          if (mount.classList.contains("persona-artifact-narrow-host")) return;
-          if (mount.classList.contains("persona-artifact-expanded")) return;
-          if (win.innerWidth <= 640) return;
-          e.preventDefault();
-          stopArtifactResizePointer();
-          const startX = e.clientX;
-          const startW = artifactPaneApi.element.getBoundingClientRect().width;
-          const layout = config.features?.artifacts?.layout;
-          const onMove = (ev: PointerEvent) => {
-            const splitW = artifactSplitRoot!.getBoundingClientRect().width;
-            const weldedChrome = mount.classList.contains("persona-artifact-welded-split");
-            // Read the effective flex gap either way: welded defaults to 0 but an
-            // explicit splitGap opens a real gap that still consumes row width.
-            const gapPx = readFlexGapPx(artifactSplitRoot!, win);
-            // Welded overlays the handle on the seam (out of flow), so it consumes
-            // no width; detached keeps it as an in-flow flex child.
-            const handleW = weldedChrome ? 0 : handle.getBoundingClientRect().width || 6;
-            // Handle is left of the artifact: drag left widens artifact, drag right narrows it.
-            const next = startW - (ev.clientX - startX);
-            const clamped = resolveArtifactPaneWidthPx(
-              next,
-              splitW,
-              gapPx,
-              handleW,
-              layout?.resizableMinWidth,
-              layout?.resizableMaxWidth,
-              railedChatMinPx()
-            );
-            artifactPaneApi!.element.style.width = `${clamped}px`;
-            artifactPaneApi!.element.style.maxWidth = "none";
-            positionExtensionArtifactResizeHandle();
-          };
-          const onUp = () => {
-            doc.removeEventListener("pointermove", onMove);
-            doc.removeEventListener("pointerup", onUp);
-            doc.removeEventListener("pointercancel", onUp);
-            artifactResizeDocEnd = null;
-            try {
-              handle.releasePointerCapture(e.pointerId);
-            } catch {
-              /* ignore */
-            }
-          };
-          artifactResizeDocEnd = onUp;
-          doc.addEventListener("pointermove", onMove);
-          doc.addEventListener("pointerup", onUp);
-          doc.addEventListener("pointercancel", onUp);
-          try {
-            handle.setPointerCapture(e.pointerId);
-          } catch {
-            /* ignore */
-          }
-        };
-
-        handle.addEventListener("pointerdown", onPointerDown);
-        artifactResizeHandle = handle;
-        artifactSplitRoot.insertBefore(handle, artifactPaneApi.element);
-        artifactResizeUnbind = () => {
-          handle.removeEventListener("pointerdown", onPointerDown);
-        };
-      }
-      if (artifactResizeHandle) {
-        const has = artifactPaneVisible();
-        artifactResizeHandle.classList.toggle("persona-hidden", !has);
-        positionExtensionArtifactResizeHandle();
-      }
-    };
+    reconcileArtifactResize = () => artifactResizer?.update();
 
     applyLauncherArtifactPanelWidth = () => {
       if (!launcherEnabled || !artifactPaneApi) return;
@@ -4654,13 +4463,8 @@ export const createAgentExperience = (
   }
 
   destroyCallbacks.push(() => {
-    artifactResizeUnbind?.();
-    artifactResizeUnbind = null;
-    stopArtifactResizePointer();
-    if (artifactResizeHandle) {
-      artifactResizeHandle.remove();
-      artifactResizeHandle = null;
-    }
+    artifactResizer?.destroy();
+    artifactResizer = null;
     artifactPaneApi?.element.style.removeProperty("width");
     artifactPaneApi?.element.style.removeProperty("maxWidth");
     // Release the pane preview's pending file-preview timers/listeners.
@@ -4839,7 +4643,7 @@ export const createAgentExperience = (
     if (warnedPinnedStarterPlacement || config.debug !== true) return;
     warnedPinnedStarterPlacement = true;
     console.warn(
-      '[persona] suggestions.starters.placement is pinned to "welcome" but the welcome surface is hidden (welcome.variant: "none" or copy.showWelcomeCard: false), so no starters render. Use "auto" or "composer".',
+      '[persona] Starters are hidden: suggestions.starters.placement is "welcome", but welcome is disabled. Use "auto" or "composer".',
     );
   };
   // Debug-only setup hint: a stream this session ended without the agent ever
@@ -4860,7 +4664,7 @@ export const createAgentExperience = (
     if (messages.some(isSuggestRepliesMessage)) return;
     hintedFollowUpsNeverCalled = true;
     console.info(
-      "[persona] Follow-up suggestions are enabled but the agent has not called suggest_replies. The model needs the tool declared (runtimeTools server-side, suggestions.followUps.expose: true from the widget, or your own backend's tool definition) and benefits from instructions telling it when to offer follow-ups. See the integration paths table in UI-COMPONENTS.md."
+      "[persona] No suggest_replies call received. Declare the tool server-side or set suggestions.followUps.expose: true, and instruct the model when to use it. See UI-COMPONENTS.md."
     );
   };
 
@@ -5134,11 +4938,6 @@ export const createAgentExperience = (
   }
 
   let configVersion = 0;
-  // Whether the markdown parsers (marked + dompurify) were already loaded when
-  // this widget mounted. False only on the IIFE/CDN lazy path before the
-  // `markdown-parsers.js` chunk resolves; in that window messages render as
-  // escaped plain text and are re-rendered once the chunk lands (see below).
-  const markdownReadyAtInit = getMarkdownParsersSync() !== null;
   const autoFollow = createFollowStateController();
   let lastScrollTop = 0;
   let scrollRAF: number | null = null;
@@ -5471,7 +5270,7 @@ export const createAgentExperience = (
     }
     if (restored.selectedModelId) {
       composerStore.setSelectedModelId(restored.selectedModelId);
-      composerModelPicker?.repaint();
+      composerCoreControls?.repaint();
     }
     // Unconditional: a restored draft's selection beats
     // `composer.defaultActiveModeIds`, including when it deselected everything.
@@ -6230,19 +6029,6 @@ export const createAgentExperience = (
     };
 
     const inlineLoadingRenderer = getInlineLoadingIndicatorRenderer();
-    const appendRenderedValue = (
-      containerEl: HTMLElement,
-      value: HTMLElement | string | null | undefined
-    ): boolean => {
-      if (value == null) return false;
-      if (typeof value === "string") {
-        containerEl.textContent = value;
-        return true;
-      }
-      containerEl.appendChild(value);
-      return true;
-    };
-
     // Track active message IDs for cache pruning
     const activeMessageIds = new Set<string>();
     const messageRolesById = new Map<string, AgentWidgetMessage["role"]>();
@@ -6366,6 +6152,12 @@ export const createAgentExperience = (
       }
       activeMessageIds.add(message.id);
       messageRolesById.set(message.id, message.role);
+      if (((message.variant === "tool" && message.toolCall && showToolCalls) ||
+           (message.variant === "reasoning" && message.reasoning && showReasoning)) && !ensureActivityUi()) {
+        tempContainer.appendChild(createMessageRow(message.id, message.role));
+        return;
+      }
+
 
       // Edited message: append a runtime-preserved stub now and graft the live
       // editor in post-morph. The editor element is built once per edit session,
@@ -6711,14 +6503,14 @@ export const createAgentExperience = (
           if (!showReasoning) return;
           bubble = matchingPlugin.renderReasoning({
             message,
-            defaultRenderer: () => createReasoningBubble(message, config, reasoningExpansionState),
+            defaultRenderer: () => activityUi!.createReasoningBubble(message, config, reasoningExpansionState),
             config
           });
         } else if (message.variant === "tool" && message.toolCall && matchingPlugin.renderToolCall) {
           if (!showToolCalls) return;
           bubble = matchingPlugin.renderToolCall({
             message,
-            defaultRenderer: () => createToolBubble(message, config, toolExpansionState),
+            defaultRenderer: () => activityUi!.createToolBubble(message, config, toolExpansionState),
             config
           });
         } else if (matchingPlugin.renderMessage) {
@@ -6924,10 +6716,10 @@ export const createAgentExperience = (
       if (!bubble) {
         if (message.variant === "reasoning" && message.reasoning) {
           if (!showReasoning) return;
-          bubble = createReasoningBubble(message, config, reasoningExpansionState);
+          bubble = activityUi!.createReasoningBubble(message, config, reasoningExpansionState);
         } else if (message.variant === "tool" && message.toolCall) {
           if (!showToolCalls) return;
-          bubble = createToolBubble(message, config, toolExpansionState);
+          bubble = activityUi!.createToolBubble(message, config, toolExpansionState);
         } else if (message.variant === "approval" && message.approval) {
           if (config.approval === false) return;
           const approvalMod = ensureApprovalUi();
@@ -6978,153 +6770,8 @@ export const createAgentExperience = (
       });
     }
 
-    if (config.features?.toolCallDisplay?.grouped) {
-      const toolGroups: AgentWidgetMessage[][] = [];
-      let currentGroup: AgentWidgetMessage[] = [];
-      const summaryOnly =
-        config.features.toolCallDisplay.groupedMode === "summary";
-
-      messages.forEach((message) => {
-        if (message.variant === "tool" && message.toolCall && showToolCalls) {
-          // A tool call hidden by `completedVisibility: "removed"` does not
-          // create a visible break in the transcript, so it should not split
-          // an otherwise contiguous group.
-          if (dropCompletedToolCalls && message.toolCall.status === "complete" && !message.toolCall.interrupted) {
-            return;
-          }
-          currentGroup.push(message);
-          return;
-        }
-        // A hidden reasoning row does not create a visible break in the
-        // transcript, so it should not split an otherwise contiguous tool
-        // sequence into separate groups.
-        if (
-          message.variant === "reasoning" &&
-          (!showReasoning ||
-            (message.reasoning?.status === "complete" &&
-              dropReasoningRow(message.reasoning)))
-        ) {
-          return;
-        }
-        // Summary mode owns the visible row from the first tool onward. Waiting
-        // for a second tool would replace the standalone tool bubble with a new
-        // group row, restarting custom activity animations and transiently
-        // dropping interactive DOM state during the handoff.
-        if (currentGroup.length > 1 || (summaryOnly && currentGroup.length > 0)) {
-          toolGroups.push(currentGroup);
-        }
-        currentGroup = [];
-      });
-      if (currentGroup.length > 1 || (summaryOnly && currentGroup.length > 0)) {
-        toolGroups.push(currentGroup);
-      }
-
-      toolGroups.forEach((group) => {
-        const wrappers = group
-          .map((groupMessage) =>
-            Array.from(tempContainer.children).find(
-              (child) =>
-                child instanceof HTMLElement &&
-                child.getAttribute("data-wrapper-id") === groupMessage.id
-            ) as HTMLElement | undefined
-          )
-          .filter((wrapper): wrapper is HTMLElement => Boolean(wrapper));
-
-        if (wrappers.length < (summaryOnly ? 1 : 2)) {
-          return;
-        }
-
-        const groupWrapper = createMessageRow(
-          `tool-group-${group[0].id}`,
-          "assistant"
-        );
-        groupWrapper.setAttribute("data-persona-tool-group-row", "true");
-
-        if (config.features?.toolCallDisplay?.groupedMode === "collapsible") {
-          const id = `tool-group-${group[0].id}`;
-          const active = group.some(item => item.toolCall?.status !== "complete");
-          const synthetic: AgentWidgetMessage = { ...group[0], id, toolCall: {
-            id, name: `${group.length} tools`, status: active ? "running" : "complete",
-            chunks: group.flatMap(item => item.toolCall?.chunks ?? []),
-            success: !group.some(item => item.toolCall?.success === false),
-            interrupted: !active && group.some(item => item.toolCall?.interrupted),
-          } };
-          activityIds.add(id);
-          activityLifecycle.observe(synthetic, "tool", toolExpansionState, config.features.toolCallDisplay);
-          const label = synthetic.toolCall?.interrupted ? `${group.length} tools · Interrupted`
-            : `${active ? "Using" : "Used"} ${group.length} tools`;
-          const custom = config.toolCall?.renderGroupedSummary?.({ messages: group, toolCalls: group.map(item => item.toolCall!), defaultSummary: label, config });
-          const row = createActivityGroup(synthetic, config, toolExpansionState.has(id), custom ?? label);
-          row.bubble.classList.add("persona-tool-group");
-          row.body.dataset.personaToolGroupStack = "true";
-          wrappers[0].before(groupWrapper);
-          groupWrapper.appendChild(row.bubble);
-          wrappers.forEach((wrapper, index) => {
-            wrapper.style.setProperty("--persona-message-row-max-width", "100%");
-            wrapper.style.setProperty("--persona-activity-stagger", `${index * 40}ms`);
-            wrapper.classList.add("persona-activity-group-child");
-            row.body.appendChild(wrapper);
-          });
-          return;
-        }
-
-        const groupContainer = document.createElement("div");
-        groupContainer.className =
-          "persona-tool-group persona-flex persona-w-full persona-flex-col persona-gap-2";
-        groupContainer.setAttribute("data-persona-tool-group", "true");
-
-        const summary = document.createElement("div");
-        summary.className =
-          "persona-tool-group-summary persona-text-xs persona-text-persona-muted";
-        summary.id = `tool-group-summary-${group[0].id}`;
-
-        const toolCount = `${group.length} ${group.length === 1 ? "tool" : "tools"}`;
-        const defaultSummary = group.some(item => item.toolCall?.interrupted)
-          ? `${toolCount} · Interrupted` : `Called ${toolCount}`;
-        const renderedSummary = config.toolCall?.renderGroupedSummary?.({
-          messages: group,
-          toolCalls: group
-            .map((groupMessage) => groupMessage.toolCall)
-            .filter((toolCall): toolCall is NonNullable<typeof group[number]["toolCall"]> => Boolean(toolCall)),
-          defaultSummary,
-          config,
-        });
-        if (!appendRenderedValue(summary, renderedSummary)) {
-          summary.textContent = defaultSummary;
-        }
-
-        const stack = document.createElement("div");
-        stack.className = "persona-tool-group-stack persona-flex persona-flex-col";
-        stack.id = `tool-group-stack-${group[0].id}`;
-        stack.setAttribute("data-persona-tool-group-stack", "true");
-
-        groupContainer.appendChild(summary);
-        if (!summaryOnly) {
-          groupContainer.appendChild(stack);
-        }
-        groupWrapper.appendChild(groupContainer);
-        wrappers[0].before(groupWrapper);
-
-        wrappers.forEach((wrapper, wrapperIndex) => {
-          if (summaryOnly) {
-            wrapper.remove();
-            return;
-          }
-          // The outer group row owns role sizing. Inner message rows fill that
-          // resolved track instead of applying the role max-width a second
-          // time (which would turn an 85% cap into 72.25%).
-          wrapper.style.setProperty("--persona-message-row-max-width", "100%");
-          const item = document.createElement("div");
-          item.className = "persona-tool-group-item persona-relative";
-          item.setAttribute("data-persona-tool-group-item", "true");
-          if (wrapperIndex < wrappers.length - 1) {
-            item.setAttribute("data-persona-tool-group-connector", "true");
-          }
-          item.appendChild(wrapper);
-          stack.appendChild(item);
-        });
-      });
-    }
+    activityUi?.groupToolRows({ config, messages, tempContainer, showToolCalls, showReasoning,
+      dropCompletedToolCalls, dropReasoningRow, createMessageRow, activityIds, activityLifecycle, toolExpansionState });
 
     activityLifecycle.prune(activityIds);
 
@@ -7421,34 +7068,16 @@ export const createAgentExperience = (
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic.
   // Re-apply read-aloud button state after each render so a playing/paused
   // message keeps its icon across idiomorph DOM morphs.
-  // Markdown parsers (marked + DOMPurify) live in a lazy sibling chunk. Warm
-  // them the first time the panel is actually visible OR the first time a
-  // non-empty transcript renders (restored history, intro/injected messages —
-  // content that would otherwise paint escaped while closed and flash at
-  // open), instead of at page load: visitors who never open the launcher and
-  // have no messages never fetch the ~21 kB chunk. Renders that still beat the
-  // chunk show escaped text and self-heal via onMarkdownParsersReady
-  // (subscriber at the end of the factory).
-  let markdownParsersWarmed = false;
-  const warmMarkdownParsers = () => {
-    if (markdownParsersWarmed) return;
-    markdownParsersWarmed = true;
-    // The stream processor is needed for the first reply; warm it too.
-    loadClientStream().catch(() => {});
-    loadMarkdownParsers().catch(() => {
-      // Failed fetch (ad blocker, offline): allow the next visibility change
-      // or render to retry; the chunk loader resets its cached promise on
-      // rejection.
-      markdownParsersWarmed = false;
-    });
-  };
+  // Renderers and parsers are prepared before reveal. Warm request processing
+  // on panel visibility so sending does not wait for another download.
+  const warmClientStream = () => { void loadClientStream().catch(() => {}); };
 
   const renderMessagesWithPlugins = (
     container: HTMLElement,
     messages: AgentWidgetMessage[],
     transform: MessageTransform
   ) => {
-    if (messages.length > 0) warmMarkdownParsers();
+    if (messages.length > 0) warmClientStream();
     renderMessagesWithPluginsImpl(container, messages, transform);
     refreshReadAloudButtons();
   };
@@ -7879,7 +7508,7 @@ export const createAgentExperience = (
   const updateOpenState = () => {
     // Before the toggleable check: docked/fullscreen panels are visible from
     // init but never toggle, and must still warm the markdown chunk.
-    if (open) warmMarkdownParsers();
+    if (open) warmClientStream();
     if (!isPanelToggleable()) return;
 
     // Composer-bar mode morphs the wrapper between collapsed pill and
@@ -8265,6 +7894,10 @@ export const createAgentExperience = (
   };
 
   const maybeFocusInput = () => {
+    if (mount.hasAttribute("data-persona-preparing")) {
+      void renderReadiness.ready.then(maybeFocusInput, () => {});
+      return;
+    }
     if (voiceState.active) return;
     if (!textarea) return;
     textarea.focus();
@@ -9493,7 +9126,7 @@ export const createAgentExperience = (
     composerStore.setSelectedModelId(draft
       ? (config.composer?.models?.some((model) => model.id === draft.selectedModelId) ? draft.selectedModelId : undefined)
       : config.composer?.selectedModelId);
-    composerModelPicker?.repaint();
+    composerCoreControls?.repaint();
     setActiveComposerModes(pruneComposerModes(draft?.activeModeIds ?? config.composer?.defaultActiveModeIds ?? [], composerModes()));
     setComposerQuote(draft?.quote);
     setPendingSubmission(saved?.pending);
@@ -9574,6 +9207,10 @@ export const createAgentExperience = (
   // `features.history` is enabled (at mount or by a later `update()`), or on
   // the first history API call. Until then history is simply unavailable.
   const historyShellContext: HistoryShellContext = {
+    getBubbleClasses,
+    parseCombo, formatCombo, ariaCombo, usesSessionVoiceForConfig,
+    applyBubbleGeometry,
+    resolveThemeDefaults,
     composerStore,
     get attachmentManager() { return attachmentManager; },
     set attachmentManager(value) { attachmentManager = value; },
@@ -9847,7 +9484,7 @@ export const createAgentExperience = (
           }
           // Restored markdown exists before the first open: warm the parsers
           // now so opening paints markdown instead of flashing escaped text.
-          warmMarkdownParsers();
+          warmClientStream();
         }
         if (state.artifacts?.length) {
           session.hydrateArtifacts(
@@ -10006,7 +9643,7 @@ export const createAgentExperience = (
     }
     if (pending.options.selectedModelId) {
       composerStore.setSelectedModelId(pending.options.selectedModelId);
-      composerModelPicker?.repaint();
+      composerCoreControls?.repaint();
     }
     if (pending.options.activeModeIds?.length) {
       setActiveComposerModes(pending.options.activeModeIds);
@@ -10590,32 +10227,13 @@ export const createAgentExperience = (
   };
 
   // Independent opt-in STT capture. The implementation and renderer share the lazy voice chunk.
-  let dictation: DictationController | null = null;
+  let dictation: DictationSession | null = null;
   let dictationRender: DictationRenderHandle | null = null;
   let dictationLoading = false;
   let dictationLoadFailure: DictationState | null = null;
   let dictationQueuedFinish: boolean | null = null;
   let dictationRequest = 0;
-  let dictationDraft = "";
-  let dictationLogicalEnd: number | null = null;
-  let dictationEditorReadOnly = false;
-  let dictationContentEditable: string | null = null;
-  let dictationPhase: DictationState["phase"] = "idle";
-  const dictationHidden = new Map<HTMLElement, string>();
-  const restoreDictationComposer = () => {
-    for (const [element, display] of dictationHidden) element.style.display = display;
-    dictationHidden.clear();
-  };
   const idleDictation: DictationState = Object.freeze({ phase: "idle", recordingId: 0, transcript: "", interimTranscript: "", error: null, audioLevel: null });
-  const writeDictationText = (text = "") => {
-    const suffix = (dictationDraft && text && !/\s$/.test(dictationDraft) ? " " : "") + text;
-    const input = mentionOrchestrator?.getInlineInput();
-    if (input?.replaceLogicalRange && dictationLogicalEnd !== null) {
-      input.replaceLogicalRange(dictationLogicalEnd, input.getLogicalText().length, suffix);
-      input.dispatchInput();
-    } else textarea.value = dictationDraft + suffix;
-    syncComposerText();
-  };
   const usesDedicatedDictation = () => !!config.voiceRecognition?.dictation ||
     (config.voiceRecognition?.provider?.type === "custom" && dictationReviewMode());
   const dictationCapturing = () => dictationLoading || ["recording", "processing"].includes(dictation?.getState().phase ?? "idle");
@@ -10646,81 +10264,31 @@ export const createAgentExperience = (
     if (provider.type === "custom" && !provider.custom) return false;
     if (!open && isPanelToggleable()) setOpenState(true, "system");
     if (dictationLoadFailure) dismissDictation();
-    dictationDraft = textarea.value;
-    dictationLogicalEnd = mentionOrchestrator?.getInlineInput()?.getLogicalText().length ?? null;
-    dictationEditorReadOnly = textarea.readOnly;
-    dictationContentEditable = textarea.getAttribute("contenteditable");
+    const draft = { text: textarea.value,
+      logicalEnd: mentionOrchestrator?.getInlineInput()?.getLogicalText().length ?? null,
+      readOnly: textarea.readOnly, contentEditable: textarea.getAttribute("contenteditable") };
     dictationLoading = true;
     dictationQueuedFinish = null;
     const request = ++dictationRequest;
-    void loadVoiceRuntime().then((runtime) => {
+    void loadDictationRuntime().then((runtime) => {
       if (request !== dictationRequest) return;
       dictationLoading = false;
-      dictation ??= new runtime.DictationController({
-        onReview: (text) => {
-          writeDictationText(text);
-        },
-        onSend: () => { if (!isComposerSendBlocked()) void doSubmit({ viaVoice: true }); },
-        onState: (state, levelOnly) => {
-          const previousPhase = dictationPhase;
-          dictationPhase = state.phase;
-          const capturing = state.phase === "recording" || state.phase === "processing";
-          textarea.readOnly = capturing || dictationEditorReadOnly;
-          if (!(textarea instanceof HTMLTextAreaElement)) (textarea as HTMLElement).setAttribute("contenteditable", capturing || isComposerInputDisabled() ? "false" : dictationContentEditable ?? "true");
-          if (state.phase === "idle" && ["recording", "processing", "error"].includes(previousPhase)) {
-            writeDictationText();
-          } else if (capturing && config.voiceRecognition?.dictation?.display === "inline") {
-            const text = state.transcript || state.interimTranscript;
-            writeDictationText(text);
-          }
-          if (state.phase === "error") writeDictationText();
-          const context: DictationRenderContext = {
-            instanceId, state, config,
-            actions: { cancel: () => { dismissDictation(); }, finish: () => { dictation?.finish(); },
-              ...(config.voiceRecognition?.dictation?.showSend && !isComposerSendBlocked() ? { send: () => { if (!isComposerSendBlocked()) dictation?.finish(true) || dictation?.send(); } } : {}) },
-            defaultRenderer: () => runtime.createDictationRenderer(context),
-          };
-          const visible = ["recording", "processing", "error"].includes(state.phase);
-          if (!dictationRender && visible) {
-            for (const plugin of plugins) {
-              const result = plugin.renderDictation?.(context);
-              if (result) { dictationRender = result instanceof HTMLElement ? { element: result } : result; break; }
-            }
-            dictationRender ??= context.defaultRenderer();
-            dictationRender.element.addEventListener("keydown", (event) => {
-              if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); dismissDictation(); }
-            });
-          }
-          if (dictationRender && visible) {
-            const target = footer.querySelector<HTMLElement>("[data-persona-composer-form]") ?? footer;
-            if (dictationRender.element.parentElement !== target) target.append(dictationRender.element);
-            restoreDictationComposer();
-            const hide = config.voiceRecognition?.dictation?.display === "inline"
-              ? Array.from(target.querySelectorAll<HTMLElement>("[data-persona-composer-actions-start], [data-persona-composer-actions-end]"))
-              : Array.from(target.children).filter((node): node is HTMLElement => node instanceof HTMLElement && node !== dictationRender?.element);
-            for (const node of hide) { dictationHidden.set(node, node.style.display); node.style.display = "none"; }
-            dictationRender.update?.(context);
-            if ((state.phase === "recording" && previousPhase !== "recording" && previousPhase !== "processing") || (state.phase === "error" && previousPhase !== "error")) {
-              dictationRender.element.querySelector<HTMLElement>("button:not(:disabled), [tabindex]")?.focus();
-            }
-          } else {
-            restoreDictationComposer();
-            dictationRender?.destroy?.();
-            dictationRender?.element.remove();
-            dictationRender = null;
-            if ((state.phase === "review" || state.phase === "idle") && state.phase !== previousPhase) textarea.focus();
-          }
-          if (!levelOnly) {
-            const { audioLevel: _level, ...eventState } = state;
-            eventBus.emit("dictation:state", { ...eventState, instanceId, timestamp: Date.now() });
-            voiceState.active = state.phase === "recording";
-            setMicState(capturing ? (state.phase === "recording" ? "recording" : "processing") : "idle");
-            emitVoiceState("system");
-          }
+      dictation ??= runtime.createDictationSession({
+        instanceId, textarea, footer, getConfig: () => config, plugins,
+        getInlineInput: () => mentionOrchestrator?.getInlineInput(),
+        isInputDisabled: isComposerInputDisabled, isSendBlocked: isComposerSendBlocked,
+        syncText: syncComposerText, onSend: () => { void doSubmit({ viaVoice: true }); },
+        rendererDeps: { renderLucideIcon, attachTooltip },
+        onState: (state, capturing) => {
+          const { audioLevel: _level, ...eventState } = state;
+          eventBus.emit("dictation:state", { ...eventState, instanceId, timestamp: Date.now() });
+          voiceState.active = state.phase === "recording";
+          setMicState(capturing ? (state.phase === "recording" ? "recording" : "processing") : "idle");
+          emitVoiceState("system");
         },
       });
       session.stopSpeaking();
-      dictation.start(provider, { autoSend: !dictationReviewMode(), pauseDuration: voice?.pauseDuration });
+      dictation.start(provider, { autoSend: !dictationReviewMode(), pauseDuration: voice?.pauseDuration }, draft);
       if (dictationQueuedFinish !== null) { dictation.finish(dictationQueuedFinish); dictationQueuedFinish = null; }
     }).catch((error: unknown) => {
       if (request !== dictationRequest) return;
@@ -10740,17 +10308,16 @@ export const createAgentExperience = (
   destroyCallbacks.push(() => {
     ++dictationRequest;
     dictation?.destroy();
-    restoreDictationComposer();
     dictationRender?.destroy?.();
     dictationRender?.element.remove();
   });
 
-  if (config.voiceRecognition?.dictation) void loadVoiceRuntime().catch(() => {});
+  if (config.voiceRecognition?.dictation) void loadDictationRuntime().catch(() => {});
 
   // Voice recognition state and logic
   let speechRecognition: any = null;
   let isRecording = false;
-  let pauseTimer: number | null = null;
+  let disposeRecognitionHandlers: (() => void) | undefined;
 
   /**
    * `voiceRecognition.completionBehavior` (roadmap section 14). Default stays
@@ -10776,81 +10343,30 @@ export const createAgentExperience = (
     else stopVoiceLevelLoop();
   }
 
-  // --- Live voice level (`--persona-voice-level`) ----------------------------
-  // One rAF loop, alive only while the mic is recording. It publishes a 0..1
-  // amplitude so a theme can drive waveforms and pulse intensity in pure CSS.
-  //
-  // The variable is DATA, not motion, so it keeps updating under
-  // prefers-reduced-motion; only the default visual that consumes it is gated.
-  const VOICE_LEVEL_PROPERTY = "--persona-voice-level";
-  /** Providers with no audio graph report nothing; assume a steady midpoint. */
-  const VOICE_LEVEL_FALLBACK = 0.5;
-  let voiceLevelFrame: number | null = null;
-  let voiceLevelPublished = -1;
-  let voiceLevelSmoothed = 0;
-
-  /** Every element the property is written to. */
-  const voiceLevelTargets = (): HTMLElement[] => {
-    const targets: HTMLElement[] = [];
-    // The wrapper, not the button: the recording ring is a ::after on the
-    // button, and a theme's own waveform usually sits beside the glyph.
-    const wrapper = micButtonWrapper ?? micButton?.parentElement ?? null;
-    if (wrapper) targets.push(wrapper);
-    // Mirrored on the footer so a theme can place a waveform anywhere in the
-    // composer without having to descend from the mic.
-    if (footer) targets.push(footer);
-    return targets;
-  };
-
-  const writeVoiceLevel = (value: number): void => {
-    // Quantized to 0.01 and skipped when unchanged: at 60fps this turns a
-    // continuous signal into at most a handful of style writes per second.
-    const quantized = Math.round(Math.max(0, Math.min(1, value)) * 100) / 100;
-    if (quantized === voiceLevelPublished) return;
-    voiceLevelPublished = quantized;
-    for (const target of voiceLevelTargets()) {
-      target.style.setProperty(VOICE_LEVEL_PROPERTY, String(quantized));
-    }
-  };
-
-  const clearVoiceLevel = (): void => {
-    voiceLevelPublished = -1;
-    voiceLevelSmoothed = 0;
-    for (const target of voiceLevelTargets()) {
-      target.style.removeProperty(VOICE_LEVEL_PROPERTY);
-    }
-  };
-
+  let voiceLevelIndicator: ReturnType<DictationRuntimeModule["createVoiceLevelIndicator"]> | undefined;
+  let voiceLevelActive = false;
   function startVoiceLevelLoop(): void {
-    if (voiceLevelFrame !== null) return;
-    if (typeof requestAnimationFrame !== "function") {
-      // No frame loop available: publish once so the property still exists.
-      writeVoiceLevel(sessionInitialized ? (session.getVoiceLevel() ?? VOICE_LEVEL_FALLBACK) : VOICE_LEVEL_FALLBACK);
-      return;
-    }
-    const tick = (): void => {
-      voiceLevelFrame = requestAnimationFrame(tick);
-      const activeDictation = dictation?.getState().phase === "recording";
-      const raw = activeDictation ? dictation?.getState().audioLevel ?? null : sessionInitialized ? session.getVoiceLevel() : null;
-      if (activeDictation && raw === null) { clearVoiceLevel(); return; }
-      if (raw === null) {
-        writeVoiceLevel(VOICE_LEVEL_FALLBACK);
-        return;
-      }
-      // Providers report at their capture cadence (~85ms), far slower than a
-      // frame, so the published value eases toward the latest sample.
-      voiceLevelSmoothed += (raw - voiceLevelSmoothed) * 0.3;
-      writeVoiceLevel(voiceLevelSmoothed);
+    voiceLevelActive = true;
+    const start = (runtime: DictationRuntimeModule) => {
+      if (!voiceLevelActive) return;
+      voiceLevelIndicator ??= runtime.createVoiceLevelIndicator({
+        targets: () => [micButtonWrapper ?? micButton?.parentElement, footer].filter((node): node is HTMLElement => !!node),
+        sample: () => {
+          const state = dictation?.getState();
+          return state?.phase === "recording"
+            ? { level: state.audioLevel, fallback: false }
+            : { level: sessionInitialized ? session.getVoiceLevel() : null, fallback: true };
+        },
+      });
+      voiceLevelIndicator.start();
     };
-    voiceLevelFrame = requestAnimationFrame(tick);
+    const ready = getDictationRuntimeSync();
+    if (ready) start(ready);
+    else void loadDictationRuntime().then(start, () => {});
   }
-
   function stopVoiceLevelLoop(): void {
-    if (voiceLevelFrame !== null) {
-      cancelAnimationFrame(voiceLevelFrame);
-      voiceLevelFrame = null;
-    }
-    clearVoiceLevel();
+    voiceLevelActive = false;
+    voiceLevelIndicator?.stop();
   }
 
   const getSpeechRecognitionClass = (): any => {
@@ -10880,80 +10396,28 @@ export const createAgentExperience = (
     // Store the initial text that was in the textarea
     const initialText = textarea.value;
 
-    speechRecognition.onresult = (event: any) => {
-      if (speechRecognition !== recognition || !isRecording) return;
-      // Build the complete transcript from all results
-      let fullTranscript = "";
-      let interimTranscript = "";
-
-      // Process all results from the beginning
-      for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i];
-        const transcript = result[0].transcript;
-
-        if (result.isFinal) {
-          fullTranscript += transcript + " ";
-        } else {
-          // Only take the last interim result
-          interimTranscript = transcript;
-        }
-      }
-
-      // Update textarea with initial text + full transcript + interim
-      const newValue = initialText + fullTranscript + interimTranscript;
-      textarea.value = newValue;
-      // Programmatic write: no input event fires, so mirror it explicitly.
-      syncComposerText();
-
-      // Reset pause timer on each result
-      if (pauseTimer) {
-        clearTimeout(pauseTimer);
-      }
-
-      // Set timer to auto-submit after pause when we have any speech
-      if (fullTranscript || interimTranscript) {
-        pauseTimer = window.setTimeout(() => {
-          const finalValue = textarea.value.trim();
-          if (finalValue && speechRecognition && isRecording) {
-            stopVoiceRecognition();
-            // `review`: the transcript is already in the composer (and the
-            // store); leave it there for the user to edit and send.
-            if (dictationReviewMode()) return;
-            // Route through the normal submit path so mentions are collected +
-            // cleared like a manual send (the transcript already lives in the
-            // composer). Sending directly would leave stale tracked mention
-            // context to attach to the next unrelated message.
-            void doSubmit({ viaVoice: true });
-          }
-        }, pauseDuration);
-      }
+    let handlers: ReturnType<DictationRuntimeModule["createBrowserRecognitionHandlers"]> | undefined;
+    const route = (kind: "result" | "error" | "end", event: BrowserRecognitionEvent) => {
+      const apply = (runtime: DictationRuntimeModule) => {
+        if (speechRecognition !== recognition || !isRecording) return;
+        handlers ??= runtime.createBrowserRecognitionHandlers({
+          textarea, initialText, pauseDuration,
+          isActive: () => speechRecognition === recognition && isRecording,
+          syncText: syncComposerText, stop: stopVoiceRecognition, review: dictationReviewMode,
+          submit: () => { void doSubmit({ viaVoice: true }); },
+        });
+        disposeRecognitionHandlers = () => handlers?.dispose();
+        handlers[kind](event);
+      };
+      const ready = getDictationRuntimeSync();
+      if (ready) apply(ready);
+      else void loadDictationRuntime().then(apply, () => {
+        if (speechRecognition === recognition) stopVoiceRecognition("system");
+      });
     };
-
-    speechRecognition.onerror = (event: any) => {
-      if (speechRecognition !== recognition || !isRecording) return;
-      // Don't stop on "no-speech" error, just ignore it
-      if (event.error !== 'no-speech') {
-        stopVoiceRecognition();
-      }
-    };
-
-    speechRecognition.onend = () => {
-      if (speechRecognition !== recognition || !isRecording) return;
-      // If recognition ended naturally (not manually stopped), submit if there's text
-      if (isRecording) {
-        const finalValue = textarea.value.trim();
-        if (
-          !dictationReviewMode() &&
-          finalValue &&
-          finalValue !== initialText.trim()
-        ) {
-          // Route through the normal submit path (mentions collect + clear), same
-          // as the pause-timer branch above.
-          void doSubmit({ viaVoice: true });
-        }
-        stopVoiceRecognition();
-      }
-    };
+    recognition.onresult = (event: BrowserRecognitionEvent) => route("result", event);
+    recognition.onerror = (event: BrowserRecognitionEvent) => route("error", event);
+    recognition.onend = (event: BrowserRecognitionEvent) => route("end", event);
 
     try {
       speechRecognition.start();
@@ -10983,10 +10447,8 @@ export const createAgentExperience = (
     if (!isRecording) return;
 
     isRecording = false;
-    if (pauseTimer) {
-      clearTimeout(pauseTimer);
-      pauseTimer = null;
-    }
+    disposeRecognitionHandlers?.();
+    disposeRecognitionHandlers = undefined;
 
     if (speechRecognition) {
       try {
@@ -12017,6 +11479,7 @@ export const createAgentExperience = (
     // No rAF may outlive the widget.
     stopVoiceLevelLoop();
     // Runs every custom action's `destroy()` and tears down the overflow menu.
+    composerActionsTornDown = true;
     composerActionRenderer?.destroy();
     composerActionRenderer = null;
     composerModeChips?.destroy();
@@ -12025,8 +11488,7 @@ export const createAgentExperience = (
     composerQuoteBanner = null;
     composerPendingCard?.destroy();
     composerPendingCard = null;
-    composerModelPicker = null;
-    composerModelPickerMode = null;
+    composerCoreControls = null;
     // Flush before the store is destroyed: the pending write reads its state.
     flushDraftPersist();
     draftWriter.destroy();
@@ -12082,6 +11544,8 @@ export const createAgentExperience = (
     const anchorOffset = readingAnchor ? readingAnchor.getBoundingClientRect().top - viewportTop : 0;
     cancelAutoScroll();
     reparent();
+    getComposerActionsSync()?.ensureComposerActionStyles(mount);
+    getArtifactsUiSync()?.ensureArtifactStyles(mount);
     recalcPanelHeight();
     applyRailChrome();
     if (following) body.scrollTop = getScrollBottomOffset(body);
@@ -12097,9 +11561,44 @@ export const createAgentExperience = (
     mount.dispatchEvent(new Event("persona:internal:host-moved"));
   });
 
+  const showFeedback = (create: () => HTMLElement) => {
+    if (!open && isPanelToggleable()) setOpenState(true, "system");
+    messagesWrapper.querySelector(".persona-feedback-container")?.remove();
+    const element = create();
+    messagesWrapper.appendChild(element);
+    element.scrollIntoView({ behavior: "smooth", block: "end" });
+  };
+
+  let presentationPrepared = false;
+  let queuedUpdates: AgentWidgetConfigPatch[] = [];
+  let applyingPreparedUpdates = false;
+  const applyQueuedUpdates = () => {
+    const updates = queuedUpdates;
+    queuedUpdates = [];
+    applyingPreparedUpdates = true;
+    try { for (const patch of updates) controller.update(patch); }
+    finally { applyingPreparedUpdates = false; }
+  };
   const controller: Controller = {
+    get ready() { return renderReadiness.ready; },
     get instanceId() { return instanceId; },
     update(nextConfig: AgentWidgetConfigPatch) {
+      // Keep a complete existing view while a newly enabled renderer loads.
+      // Replay raw patches so explicit-undefined resets and provenance survive.
+      if (!applyingPreparedUpdates) {
+        queuedUpdates.push(nextConfig);
+        const nextPresentation = queuedUpdates.reduce(mergeConfigUpdate, { ...config, features: baseFeatures });
+        const pending = prepareRendererModules(resolveConfigPreferences(nextPresentation));
+        if (pending.length) {
+          renderReadiness.prepare(pending, applyQueuedUpdates, presentationPrepared);
+          return;
+        }
+        if (queuedUpdates.length > 1) {
+          renderReadiness.prepare([], applyQueuedUpdates, presentationPrepared);
+          return;
+        }
+        queuedUpdates = [];
+      }
       if (!runtimeOptions?.diagnostics) updateLegacyDiagnostics(diagnostics, nextConfig);
       const nextVoice = nextConfig.voiceRecognition;
       if (nextVoice && (nextVoice.enabled === false ||
@@ -13036,22 +12535,14 @@ export const createAgentExperience = (
       const wantsModeChips = composerChipModes().length > 0;
       if (wantsModeChips !== Boolean(composerModeChips)) setupComposerModeChips();
       composerModeChips?.render(prunedModes, composerChipModes());
-      // Drop tracks whose group is gone, then repaint the survivors: a live edit
-      // can change a group's modes, label, or presentation.
-      for (const groupId of [...composerSegmentedGroups.keys()]) {
-        if (!isSegmentedModeGroup(groupId, config.composer?.modeGroups)) {
-          composerSegmentedGroups.delete(groupId);
-        }
-      }
-      composerSegmentedGroups.forEach((group) => group.repaint());
-      // A live `composer.models` edit changes options the picker built once.
-      composerModelPicker?.repaint();
+      composerCoreControls?.repaint();
 
       // Re-resolve the action row LAST of the composer work: `composer.actions`,
       // the plugin list, and the built-in elements above have all settled, so
       // added/removed/changed actions re-render and every `visible`/`disabled`
       // predicate is re-evaluated against the current state.
-      composerActionRenderer?.resolve();
+      if (composerActionRenderer) composerActionRenderer.resolve();
+      else setupComposerActions();
 
       // Update contentMaxWidth on messages wrapper and composer. Same
       // composer-bar fallback as the initial read above.
@@ -13147,6 +12638,7 @@ export const createAgentExperience = (
       if (dictationCapturing() && isComposerInputDisabled()) dismissDictation();
       dictation?.refresh();
       slots.update();
+      preparePresentation();
     },
     open() {
       if (!isPanelToggleable()) return;
@@ -13672,18 +13164,7 @@ export const createAgentExperience = (
     },
     // Feedback methods (CSAT/NPS)
     showCSATFeedback(options?: Partial<CSATFeedbackOptions>) {
-      // Auto-open widget if closed and the panel is toggleable
-      if (!open && isPanelToggleable()) {
-        setOpenState(true, "system");
-      }
-
-      // Remove any existing feedback forms
-      const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
-      if (existingFeedback) {
-        existingFeedback.remove();
-      }
-
-      const feedbackEl = createCSATFeedback({
+      showFeedback(() => createCSATFeedback({
         onSubmit: async (rating, comment) => {
           if (session.isClientTokenMode()) {
             await session.submitCSATFeedback(rating, comment);
@@ -13692,25 +13173,10 @@ export const createAgentExperience = (
         },
         onDismiss: options?.onDismiss,
         ...options,
-      });
-
-      // Append to messages area at the bottom
-      messagesWrapper.appendChild(feedbackEl);
-      feedbackEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }));
     },
     showNPSFeedback(options?: Partial<NPSFeedbackOptions>) {
-      // Auto-open widget if closed and the panel is toggleable
-      if (!open && isPanelToggleable()) {
-        setOpenState(true, "system");
-      }
-
-      // Remove any existing feedback forms
-      const existingFeedback = messagesWrapper.querySelector('.persona-feedback-container');
-      if (existingFeedback) {
-        existingFeedback.remove();
-      }
-
-      const feedbackEl = createNPSFeedback({
+      showFeedback(() => createNPSFeedback({
         onSubmit: async (rating, comment) => {
           if (session.isClientTokenMode()) {
             await session.submitNPSFeedback(rating, comment);
@@ -13719,11 +13185,7 @@ export const createAgentExperience = (
         },
         onDismiss: options?.onDismiss,
         ...options,
-      });
-
-      // Append to messages area at the bottom
-      messagesWrapper.appendChild(feedbackEl);
-      feedbackEl.scrollIntoView({ behavior: 'smooth', block: 'end' });
+      }));
     },
     async submitCSATFeedback(rating: number, comment?: string): Promise<void> {
       return session.submitCSATFeedback(rating, comment);
@@ -13732,6 +13194,7 @@ export const createAgentExperience = (
       return session.submitNPSFeedback(rating, comment);
     },
     destroy() {
+      renderReadiness.destroy();
       slots.destroy();
       mount.removeEventListener("click", routeLinkClick);
       // Commit the latest coalesced transcript while the live DOM and storage
@@ -13918,31 +13381,8 @@ export const createAgentExperience = (
   // the panel.
   syncComposerBarPeek();
 
-  // IIFE/CDN lazy path only: the parsers were not ready at mount, so any
-  // messages rendered so far (restored history, eager intro/injected messages)
-  // were escaped to plain text. Once the `markdown-parsers.js` chunk resolves,
-  // bust the message cache and re-render so they pick up real markdown. Bumping
-  // `configVersion` + clearing the cache is required because the message
-  // content is unchanged, so the fingerprint cache would otherwise reuse the
-  // stale escaped wrappers. `onMarkdownParsersReady` no-ops when the parsers are
-  // already loaded (the ESM build, and the CDN build after the first load), so
-  // the `markdownReadyAtInit` guard is redundant — kept only to skip the
-  // subscription bookkeeping on the common eager path.
-  if (!markdownReadyAtInit) {
-    const unsubscribeParsersReady = onMarkdownParsersReady(() => {
-      if (!session) return;
-      configVersion++;
-      messageCache.clear();
-      renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
-    });
-    // Drop the subscription on teardown so a late chunk resolution can't clear
-    // the cache and render into a detached `messagesWrapper`.
-    destroyCallbacks.push(unsubscribeParsersReady);
-  }
-
   // Approval rows rendered while the approval-ui chunk was in flight are empty
-  // stubs; once it lands, rebuild them into real cards. Mirrors the markdown
-  // heal above. (`approvalUiDisposed` guards a post-destroy resolution.)
+  // stubs; once it lands, rebuild them into real cards. (`approvalUiDisposed` guards a post-destroy resolution.)
   onApprovalUiReady = () => {
     if (!session) return;
     configVersion++;
@@ -13950,46 +13390,20 @@ export const createAgentExperience = (
     renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
   };
 
-  // Synchronously restored/seeded transcripts (sync storage adapter,
-  // initialMessages, onStateLoaded) exist before any render or open — a
-  // floating launcher starts closed. Warm the parsers now so the first open
-  // paints markdown instead of flashing escaped text. The async-adapter path
-  // warms in its hydration `.then` above; fresh empty sessions fetch nothing.
-  if (session.getMessages().length > 0) warmMarkdownParsers();
+  // Seeded/restored transcripts may send immediately after reveal.
+  if (session.getMessages().length > 0) warmClientStream();
 
   // Form placeholders rendered while the forms-ui chunk was in flight are the
   // bare divs the postprocessor emitted; once the chunk lands, rebuild them
-  // into real forms. Mirrors the markdown heal above. (`formsUiDisposed`
+  // into real forms. (`formsUiDisposed`
   // guards a post-destroy resolution.)
-  onFormsUiReady = () => {
-    if (!session) return;
-    configVersion++;
-    messageCache.clear();
-    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
-  };
-
-  // Extra-tier icons rendered into the transcript fill their placeholders in
-  // place, but the fingerprint cache + idiomorph CLONE nodes — a cloned
-  // pending placeholder never self-fills. Re-render once the icons-extra
-  // chunk lands so cloned copies rebuild with real data. Chrome surfaces
-  // (header, composer, launcher) keep their original elements and fill in
-  // place without this.
-  const unsubscribeExtraIcons = onExtraIconsReady(() => {
-    if (!session) return;
-    configVersion++;
-    messageCache.clear();
-    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
-  });
-  destroyCallbacks.push(unsubscribeExtraIcons);
+  onFormsUiReady = onApprovalUiReady;
 
   // Artifact directives rendered while the artifacts-ui chunk was in flight
   // are empty placeholders; once it's adopted, rebuild them into real
   // cards/inline blocks and sync the pane. Same heal shape as above.
   const unsubscribeArtifactsUi = onArtifactsUiReady(() => {
-    if (!session) return;
-    configVersion++;
-    messageCache.clear();
-    renderMessagesWithPlugins(messagesWrapper, session.getMessages(), postprocess);
+    onApprovalUiReady?.();
     getArtifactsUiSync()?.updateInlineArtifactBlocks(
       messagesWrapper,
       lastArtifactsState.artifacts,
@@ -13999,6 +13413,25 @@ export const createAgentExperience = (
   });
   destroyCallbacks.push(unsubscribeArtifactsUi);
 
+  const preparePresentation = () => {
+    const pending = prepareRendererModules(config);
+    if (!presentationPrepared) pending.push(...(runtimeOptions?.preparation ?? []));
+    if (historyFeatureEnabled() && !historyShell) pending.push(ensureHistoryShell());
+    if (!pending.length && !mount.hasAttribute("data-persona-preparing")) {
+      presentationPrepared = true;
+      return;
+    }
+    renderReadiness.prepare(pending, () => {
+      if (!composerActionRenderer) setupComposerActions();
+      if (!composerModeChips) setupComposerModeChips();
+      if (getActivityUiSync()) ensureActivityUi();
+      getComposerActionsSync()?.ensureComposerActionStyles(mount);
+      getArtifactsUiSync()?.ensureArtifactStyles(mount);
+      onApprovalUiReady?.();
+      presentationPrepared = true;
+    });
+  };
+  preparePresentation();
   return controller;
 };
 

@@ -45,6 +45,8 @@ describe("icon registry partition", () => {
   });
 
   it("extra names return a sized pending placeholder that fills in place", async () => {
+    vi.resetModules();
+    const { renderLucideIcon } = await import("./utils/icons");
     // In vitest the loader's fallback import resolves via the alias, so the
     // fill happens after a microtask hop.
     const svg = renderLucideIcon("shopping-cart", 20);

@@ -11,12 +11,13 @@
 
 import type { ComposerCustomAction, ComposerMode, ComposerModeGroup } from "../types";
 import { createElement, createNode } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import type { renderLucideIcon } from "../utils/icons";
 import { composerModeGroupActionId } from "../utils/composer-modes";
 
 const SEGMENT_ICON_SIZE = 16;
 
 export interface ComposerSegmentedModeOptions {
+  renderIcon: typeof renderLucideIcon;
   groupId: string;
   getGroup: () => ComposerModeGroup | undefined;
   /** The group's modes, in `composer.modes` order. Re-read on every repaint. */
@@ -76,7 +77,7 @@ export function createComposerSegmentedModeAction(
           },
         }) as HTMLButtonElement;
         if (mode.iconName) {
-          const icon = renderLucideIcon(
+          const icon = options.renderIcon(
             mode.iconName,
             SEGMENT_ICON_SIZE,
             "currentColor",

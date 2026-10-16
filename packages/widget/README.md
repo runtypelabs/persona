@@ -107,8 +107,18 @@ when no default exists.
 | `target` | `string \| HTMLElement` | CSS selector or element where widget mounts. |
 | `config` | `AgentWidgetConfig` | Widget configuration object (see the [Configuration Reference](./docs/CONFIGURATION-REFERENCE.md)). |
 | `useShadowDom` | `boolean` | Use Shadow DOM for style isolation (default: `false`). |
-| `onChatReady` | `() => void` | Callback fired when the widget is initialized and its API is callable. |
+| `onChatReady` | `() => void` | Callback fired once the configured renderers and styles are ready for display. |
 | `windowKey` | `string` | If provided, stores the controller on `window[windowKey]` for global access. Automatically cleaned up on `destroy()`. |
+
+The returned controller is callable immediately. Await `controller.ready` when
+you need the complete UI: Persona prepares its renderers and styles before
+revealing the widget. Script-tag installs keep the launcher visible until this
+finishes. An update that needs another renderer keeps the current UI until that
+renderer is ready; ordinary updates remain synchronous. Read `controller.ready`
+after the update to await its completion. Failed preparation rejects the promise;
+calling `update({})` retries missing modules. The installer reports failures through
+`onError` and lets the launcher retry on the next click. This covers Persona's
+renderer modules and styles, not external assets fetched by custom renderers.
 
 When `config.launcher.mountMode` is `'docked'`, `target` is treated as the page container that Persona should wrap. Use a concrete element such as `#workspace-main`; `body` and `html` are rejected.
 

@@ -127,14 +127,49 @@
       "import": "./dist/forms-ui.js",
       "require": "./dist/forms-ui.cjs"
     },
-    "./widget.css": "./dist/widget.css"
+    "./widget.css": "./dist/widget.css",
+    "./composer-actions-runtime": {
+      "types": "./dist/composer-actions-runtime.d.ts",
+      "import": "./dist/composer-actions-runtime.js",
+      "require": "./dist/composer-actions-runtime.cjs"
+    },
+    "./dictation-runtime": {
+      "types": "./dist/dictation-runtime.d.ts",
+      "import": "./dist/dictation-runtime.js",
+      "require": "./dist/dictation-runtime.cjs"
+    },
+    "./background-runtime": {
+      "types": "./dist/background-runtime.d.ts",
+      "import": "./dist/background-runtime.js",
+      "require": "./dist/background-runtime.cjs"
+    },
+    "./config-diagnostics": {
+      "types": "./dist/config-diagnostics.d.ts",
+      "import": "./dist/config-diagnostics.js",
+      "require": "./dist/config-diagnostics.cjs"
+    },
+    "./history-shell": {
+      "types": "./dist/history-shell.d.ts",
+      "import": "./dist/history-shell.js",
+      "require": "./dist/history-shell.cjs"
+    },
+    "./activity-ui": {
+      "types": "./dist/activity-ui.d.ts",
+      "import": "./dist/activity-ui.js",
+      "require": "./dist/activity-ui.cjs"
+    },
+    "./preferences-runtime": {
+      "types": "./dist/preferences-runtime.d.ts",
+      "import": "./dist/preferences-runtime.js",
+      "require": "./dist/preferences-runtime.cjs"
+    }
   },
   "files": [
     "dist",
     "src"
   ],
   "scripts": {
-    "build": "rimraf dist && pnpm run build:styles && tsdown && node scripts/terser-global.mjs dist/index.global.js dist/install.global.js dist/launcher.global.js && pnpm run check:dist-vite8 && pnpm run check:size",
+    "build": "rimraf dist && pnpm run build:styles && node scripts/build-bundles.mjs && node scripts/terser-global.mjs dist/index.global.js dist/install.global.js dist/launcher.global.js dist/client-stream.js dist/theme-editor.js && pnpm run check:dist-vite8 && pnpm run check:size",
     "check:size": "node scripts/check-size.mjs",
     "check:dist-vite8": "node scripts/check-dist-no-in-for-init.mjs",
     "build:styles": "node scripts/build-styles.mjs",

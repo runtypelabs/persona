@@ -1,5 +1,5 @@
 /** Tracks host intent for versioned defaults without comparing values to defaults. */
-const DEFAULTS_PROVENANCE = Symbol("persona.defaultsProvenance");
+const DEFAULTS_PROVENANCE = Symbol.for("persona.defaultsProvenance");
 type Provenance = { [DEFAULTS_PROVENANCE]?: readonly string[] };
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

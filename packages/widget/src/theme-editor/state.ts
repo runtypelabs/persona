@@ -2,7 +2,7 @@
 
 import type { AgentWidgetConfig } from '../types';
 import type { DeepPartial, PersonaTheme } from '../types/theme';
-import { createTheme } from '../utils/theme';
+import { createTheme } from '../utils/tokens';
 import { resolveDefaults, resolveDefaultsVersion } from '../defaults';
 import { deepMerge } from '../utils/deep-merge';
 import type { AuthoredConfigExport, ConfiguratorSnapshot, ConfigChangeListener } from './types';

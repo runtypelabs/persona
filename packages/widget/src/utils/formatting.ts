@@ -14,19 +14,7 @@ const unescapeJsonString = (str: string): string => {
     .replace(/\\\\/g, '\\');
 };
 
-export const formatUnknownValue = (value: unknown): string => {
-  if (value === null) return "null";
-  if (value === undefined) return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch (error) {
-    return String(value);
-  }
-};
+export { formatUnknownValue } from "./format-value";
 
 export const formatReasoningDuration = (reasoning: AgentWidgetReasoning) => {
   const end = reasoning.completedAt ?? Date.now();

@@ -1,7 +1,7 @@
 import { isHeaderVisible } from "./utils/panel-config";
-import { getBubbleClasses, applyBubbleGeometry } from "./components/message-bubble";
-import { resolveThemeDefaults } from "./utils/tokens";
-import { usesSessionVoiceForConfig } from "./utils/voice-support";
+import type { getBubbleClasses, applyBubbleGeometry } from "./components/message-bubble";
+import type { resolveThemeDefaults } from "./utils/tokens";
+import type { usesSessionVoiceForConfig } from "./utils/voice-support";
 /**
  * Visitor conversation history shell (docs/visitor-history-implementation-plan.md
  * D6/D7/D8): placement, open/close, inertness of the obscured conversation,
@@ -22,7 +22,7 @@ import { type HistoryRenderSurface, createHistoryRenderSurface } from "./history
 import { type HistoryReturnSurface, type HistoryScope, type HistoryIdentityStatus, type WidgetHistoryInternals, type ResolvedHistoryPresentation, type LoadingIndicatorRenderContext, type AgentWidgetRenderHistoryOpenErrorContext, type HistoryConversationPatch, type HistoryConversationSummary } from "./types";
 import { type HistoryViewHandle, type HistoryRailSection, type HistoryHeaderPlacement, type HistoryViewOptions } from "./history-view-entry";
 import { createElement, createNode, cx } from "./utils/dom";
-import { parseCombo, formatCombo, ariaCombo } from "./utils/shortcuts";
+import type { parseCombo, formatCombo, ariaCombo } from "./utils/shortcuts";
 import { PORTALED_OVERLAY_Z_INDEX } from "./utils/constants";
 import { type HistoryConfirmOptions } from "./components/history-confirm-dialog";
 import type { getHistoryProviderFactory } from "./internal/history-provider-registry";
@@ -50,6 +50,13 @@ export type ConversationReadingState = {
   };
 
 export type HistoryShellContext = {
+  parseCombo: typeof parseCombo;
+  formatCombo: typeof formatCombo;
+  ariaCombo: typeof ariaCombo;
+  usesSessionVoiceForConfig: typeof usesSessionVoiceForConfig;
+  getBubbleClasses: typeof getBubbleClasses;
+  applyBubbleGeometry: typeof applyBubbleGeometry;
+  resolveThemeDefaults: typeof resolveThemeDefaults;
   composerStore: ReturnType<typeof import("./utils/composer-store").createComposerStore>;
   attachmentManager: import("./utils/attachment-manager").AttachmentManager | null;
   composerConversationGeneration: number;
@@ -713,8 +720,8 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     aria: string;
   } | null => {
     const combo = ctx.config.features?.history?.rail?.collapseShortcut;
-    if (!combo || !parseCombo(combo)) return null;
-    return { combo, hint: formatCombo(combo), aria: ariaCombo(combo) };
+    if (!combo || !ctx.parseCombo(combo)) return null;
+    return { combo, hint: ctx.formatCombo(combo), aria: ctx.ariaCombo(combo) };
   };
 
   // --- collapsed rail as a floating overlay --------------------------------
@@ -1733,7 +1740,7 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
     const bubble = createNode(
       "div",
       {
-        className: cx(getBubbleClasses(role, layout).join(" "), "persona-conversation-loading-bubble"),
+        className: cx(ctx.getBubbleClasses(role, layout).join(" "), "persona-conversation-loading-bubble"),
         attrs: { "data-persona-theme-zone": `${role}-message` },
         style: {
           width: role === "user" ? "64%" : "100%",
@@ -1746,8 +1753,8 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
         createNode("div", { className: "persona-conversation-loading-line", style: { width } })
       )
     );
-    applyBubbleGeometry(bubble, role, layout, {
-      ...resolveThemeDefaults(ctx.config.future).components.message[role],
+    ctx.applyBubbleGeometry(bubble, role, layout, {
+      ...ctx.resolveThemeDefaults(ctx.config.future).components.message[role],
       ...ctx.config.theme?.components?.message?.[role],
       ...ctx.config.darkTheme?.components?.message?.[role],
     });
@@ -1984,13 +1991,13 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
           // a later queued commit snapshots this conversation, never its origin.
           ctx.restoreConversationContinuity();
           if (ctx.conversationPersistenceOwner === persistenceOwner) ctx.conversationPersistenceOwner = null;
-          if (usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
+          if (ctx.usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
           ctx.persistState();
         },
       });
     } catch (error) {
       if (ctx.conversationPersistenceOwner === persistenceOwner) ctx.conversationPersistenceOwner = null;
-      if (persistenceOwner === ctx.composerConversationGeneration && usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
+      if (persistenceOwner === ctx.composerConversationGeneration && ctx.usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
       if (token === conversationOpenToken) {
         const reading = ctx.pendingConversationReading?.reading;
         clearConversationOpenPending();
@@ -2045,14 +2052,14 @@ export const createHistoryShell = (ctx: HistoryShellContext) => {
         onCommitted: () => {
           ctx.restoreConversationContinuity(true);
           if (ctx.conversationPersistenceOwner === persistenceOwner) ctx.conversationPersistenceOwner = null;
-          if (usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
+          if (ctx.usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
           ctx.persistState();
           ctx.pendingConversationReading = null;
         },
       });
     } catch (error) {
       if (ctx.conversationPersistenceOwner === persistenceOwner) ctx.conversationPersistenceOwner = null;
-      if (persistenceOwner === ctx.composerConversationGeneration && usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
+      if (persistenceOwner === ctx.composerConversationGeneration && ctx.usesSessionVoiceForConfig(ctx.config)) ctx.session.setupVoice();
       throw error;
     }
     ctx.setActiveConversationSummary(null);

@@ -1,8 +1,8 @@
 import { resolveToolStyles } from "../utils/tool-styles";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { createNode } from "../utils/dom";
-import { formatUnknownValue } from "../utils/formatting";
-import { renderLucideIcon } from "../utils/icons";
+import { formatUnknownValue } from "../utils/format-value";
+import { renderLucideIcon } from "./activity-deps";
 
 const isEmptyRequest = (value: unknown): boolean => {
   if (value == null) return true;

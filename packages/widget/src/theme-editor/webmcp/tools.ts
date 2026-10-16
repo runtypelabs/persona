@@ -9,8 +9,8 @@
  * coverage. Every mutation returns a compact summary + contrast warnings.
  */
 
-import { createTheme } from '../../utils/theme';
-import { applyFeaturePreferences } from '../../utils/feature-preferences';
+import { createTheme } from '../../utils/tokens';
+
 import type { AgentWidgetConfig } from '../../types';
 import type { PersonaTheme } from '../../types/theme';
 import { generateColorScale, SHADE_KEYS } from '../color-utils';
@@ -461,13 +461,16 @@ export function createThemeEditorTools(
       required: ['presetId'],
       additionalProperties: false,
     },
-    execute(input) {
+    async execute(input) {
       const { presetId } = rec(input);
       const preset = getThemeEditorPreset(String(presetId ?? ''));
       if (!preset) {
         const valid = THEME_EDITOR_PRESETS.map((p) => p.id).join(', ');
         throw new Error(`Unknown preset "${presetId}". Valid presets: ${valid}.`);
       }
+      const preferences = preset.behavior
+        ? await import("@runtypelabs/persona/preferences-runtime")
+        : null;
       const theme = createTheme(preset.theme, { validate: false });
       const config: AgentWidgetConfig = { ...state.getConfig() };
       if (preset.darkTheme) {
@@ -475,8 +478,8 @@ export function createThemeEditorTools(
         config.colorScheme = 'auto';
       }
       if (preset.toolCall) config.toolCall = preset.toolCall;
-      if (preset.behavior) {
-        config.features = applyFeaturePreferences(config.features, [preset.behavior]);
+      if (preset.behavior && preferences) {
+        config.features = preferences.applyFeaturePreferences(config.features, [preset.behavior]);
       }
       state.setFullConfig(config, theme);
       const warnings = quickContrastWarnings(state, ['body', 'assistant-message'], 'light');

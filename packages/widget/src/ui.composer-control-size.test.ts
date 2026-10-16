@@ -90,8 +90,9 @@ describe("composer control size token", () => {
     }
   });
 
-  it("resizes controls through a live controller.update()", () => {
+  it("resizes controls through a live controller.update()", async () => {
     const { mount, controller } = makeController();
+    await controller.ready;
     expect(controlSize(mount)).toBe("40px");
 
     controller.update({

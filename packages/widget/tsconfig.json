@@ -26,7 +26,14 @@
       "@runtypelabs/persona/artifacts-ui": ["./src/artifacts-ui.ts"],
       "@runtypelabs/persona/voice-runtime": ["./src/voice-runtime.ts"],
       "@runtypelabs/persona/voice-client-tools": ["./src/voice-client-tools.ts"],
-      "@runtypelabs/persona/forms-ui": ["./src/forms-ui.ts"]
+      "@runtypelabs/persona/forms-ui": ["./src/forms-ui.ts"],
+      "@runtypelabs/persona/composer-actions-runtime": ["./src/composer-actions-runtime.ts"],
+      "@runtypelabs/persona/dictation-runtime": ["./src/dictation-runtime.ts"],
+      "@runtypelabs/persona/background-runtime": ["./src/background-runtime.ts"],
+      "@runtypelabs/persona/config-diagnostics": ["./src/config-diagnostics.ts"],
+      "@runtypelabs/persona/history-shell": ["./src/history-shell.ts"],
+      "@runtypelabs/persona/activity-ui": ["./src/activity-ui.ts"],
+      "@runtypelabs/persona/preferences-runtime": ["./src/preferences-runtime.ts"]
     },
     "declaration": true,
     "outDir": "dist"

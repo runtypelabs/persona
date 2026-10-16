@@ -1013,16 +1013,7 @@ const emitAliases = (cssVars: Record<string, string>, rows: AliasRow[]): void =>
   }
 };
 
-export function themeToCssVariables(theme: PersonaTheme): Record<string, string> {
-  const resolved = resolveTokens(theme);
-  const cssVars: Record<string, string> = {};
-
-  for (const [path, token] of Object.entries(resolved)) {
-    const varName = path.replace(/\./g, '-');
-    cssVars[`--persona-${varName}`] = token.value;
-  }
-
-  emitAliases(cssVars, [
+const COMMON_ALIASES: AliasRow[] = [
     ['primary', 'semantic-colors-primary', 'palette-colors-primary-500'],
     ['secondary', 'semantic-colors-secondary', 'palette-colors-secondary-500'],
     ['accent', 'semantic-colors-accent', 'palette-colors-accent-500'],
@@ -1035,6 +1026,82 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['border', 'semantic-colors-border', 'palette-colors-gray-200'],
     ['divider', 'semantic-colors-divider', 'palette-colors-gray-200'],
     ['muted', 'text-muted'],
+    ['font-family', 'semantic-typography-fontFamily', 'palette-typography-fontFamily-sans'],
+    ['font-size', 'semantic-typography-fontSize', 'palette-typography-fontSize-base'],
+    ['font-weight', 'semantic-typography-fontWeight', 'palette-typography-fontWeight-normal'],
+    ['line-height', 'semantic-typography-lineHeight', 'palette-typography-lineHeight-normal'],
+    ['input-font-family', 'font-family'],
+    ['input-font-weight', 'font-weight'],
+    ['radius-sm', 'palette-radius-sm', '=0.125rem'],
+    ['radius-md', 'palette-radius-md', '=0.375rem'],
+    ['radius-lg', 'palette-radius-lg', '=0.5rem'],
+    ['radius-xl', 'palette-radius-xl', '=0.75rem'],
+    ['radius-full', 'palette-radius-full', '=9999px'],
+    ['launcher-radius', 'components-launcher-borderRadius', 'palette-radius-full', '=9999px'],
+    ['launcher-bg', 'components-launcher-background', 'surface'],
+    ['launcher-fg', 'components-launcher-foreground', 'primary'],
+];
+
+// The collapsed launcher needs canonical tokens and shared text/launcher aliases,
+// but none of the panel, artifact, or message compatibility aliases.
+const canonicalThemeVariables = (theme: PersonaTheme): Record<string, string> => {
+  const resolved = resolveTokens(theme);
+  const cssVars: Record<string, string> = {};
+
+  for (const [path, token] of Object.entries(resolved)) {
+    const varName = path.replace(/\./g, '-');
+    cssVars[`--persona-${varName}`] = token.value;
+  }
+
+  return cssVars;
+};
+
+const emitLauncherMuted = (cssVars: Record<string, string>): void => {
+  // Subtitle keeps the shared muted tone while the foreground is stock (it
+  // resolves to primary); a custom foreground washes to 70% so both pill
+  // text lines recolor together. Compared by resolved value, not key
+  // presence: DEFAULT_COMPONENTS materializes launcher.foreground into
+  // every theme.
+  const launcherFg = cssVars['--persona-components-launcher-foreground'];
+  cssVars['--persona-launcher-fg-muted'] =
+    launcherFg && launcherFg !== cssVars['--persona-primary']
+      ? `color-mix(in srgb, ${launcherFg} 70%, transparent)`
+      : cssVars['--persona-muted'];
+
+};
+
+const resolveHeaderIconPadding = (cssVars: Record<string, string>): void => {
+  // Resolve after aliases so palette references and dark/brand overrides count.
+  // CSS variables with runtime-dependent colors can use explicit iconPadding.
+  const iconPadding = cssVars['--persona-components-header-iconPadding'];
+  if (iconPadding === 'auto') {
+    const background = (cssVars['--persona-components-header-iconBackground'] ?? cssVars['--persona-primary']).trim().toLowerCase();
+    const channels = background.match(/^(?:rgba?|hsla?)\(([^)]+)\)$/)?.[1].split(/[,\s/]+/).filter(Boolean);
+    const transparent = background === 'transparent' ||
+      /^#(?:[\da-f]{3}0|[\da-f]{6}00)$/.test(background) ||
+      (channels?.length === 4 && parseFloat(channels[3]) === 0);
+    cssVars['--persona-components-header-iconPadding'] = transparent ? '0px' : '6px';
+  }
+
+};
+
+export function launcherThemeToCssVariables(theme: PersonaTheme): Record<string, string> {
+  const cssVars = canonicalThemeVariables(theme);
+  emitAliases(cssVars, COMMON_ALIASES);
+  emitLauncherMuted(cssVars);
+  emitAliases(cssVars, [
+    ['launcher-border', 'components-launcher-border', 'border'],
+    ['launcher-shadow', 'components-launcher-shadow', '=0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)'],
+  ]);
+  resolveHeaderIconPadding(cssVars);
+  return cssVars;
+}
+
+export function themeToCssVariables(theme: PersonaTheme): Record<string, string> {
+  const cssVars = canonicalThemeVariables(theme);
+
+  emitAliases(cssVars, COMMON_ALIASES);
+  emitAliases(cssVars, [
     ['ask-sheet-bg', 'components-askUserQuestion-sheet-background'],
     ['ask-sheet-border', 'components-askUserQuestion-sheet-border'],
     ['ask-sheet-shadow', 'components-askUserQuestion-sheet-shadow'],
@@ -1056,31 +1123,8 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['approval-deny-bg', 'components-approval-deny-background', 'container'],
     ['attachment-image-bg', 'components-attachment-image-background', 'palette-colors-gray-100'],
     ['attachment-image-border', 'components-attachment-image-border', 'palette-colors-gray-200'],
-    ['font-family', 'semantic-typography-fontFamily', 'palette-typography-fontFamily-sans'],
-    ['font-size', 'semantic-typography-fontSize', 'palette-typography-fontSize-base'],
-    ['font-weight', 'semantic-typography-fontWeight', 'palette-typography-fontWeight-normal'],
-    ['line-height', 'semantic-typography-lineHeight', 'palette-typography-lineHeight-normal'],
-    ['input-font-family', 'font-family'],
-    ['input-font-weight', 'font-weight'],
-    ['radius-sm', 'palette-radius-sm', '=0.125rem'],
-    ['radius-md', 'palette-radius-md', '=0.375rem'],
-    ['radius-lg', 'palette-radius-lg', '=0.5rem'],
-    ['radius-xl', 'palette-radius-xl', '=0.75rem'],
-    ['radius-full', 'palette-radius-full', '=9999px'],
-    ['launcher-radius', 'components-launcher-borderRadius', 'palette-radius-full', '=9999px'],
-    ['launcher-bg', 'components-launcher-background', 'surface'],
-    ['launcher-fg', 'components-launcher-foreground', 'primary'],
   ]);
-  // Subtitle keeps the shared muted tone while the foreground is stock (it
-  // resolves to primary); a custom foreground washes to 70% so both pill
-  // text lines recolor together. Compared by resolved value, not key
-  // presence: DEFAULT_COMPONENTS materializes launcher.foreground into
-  // every theme.
-  const launcherFg = cssVars['--persona-components-launcher-foreground'];
-  cssVars['--persona-launcher-fg-muted'] =
-    launcherFg && launcherFg !== cssVars['--persona-primary']
-      ? `color-mix(in srgb, ${launcherFg} 70%, transparent)`
-      : cssVars['--persona-muted'];
+  emitLauncherMuted(cssVars);
 
   emitAliases(cssVars, [
     ['launcher-border', 'components-launcher-border', 'border'],
@@ -1153,17 +1197,7 @@ export function themeToCssVariables(theme: PersonaTheme): Record<string, string>
     ['header-icon-fg', 'components-header-iconForeground', 'text-inverse'],
   ]);
 
-  // Resolve after aliases so palette references and dark/brand overrides count.
-  // CSS variables with runtime-dependent colors can use explicit iconPadding.
-  const iconPadding = cssVars['--persona-components-header-iconPadding'];
-  if (iconPadding === 'auto') {
-    const background = cssVars['--persona-header-icon-bg'].trim().toLowerCase();
-    const channels = background.match(/^(?:rgba?|hsla?)\(([^)]+)\)$/)?.[1].split(/[,\s/]+/).filter(Boolean);
-    const transparent = background === 'transparent' ||
-      /^#(?:[\da-f]{3}0|[\da-f]{6}00)$/.test(background) ||
-      (channels?.length === 4 && parseFloat(channels[3]) === 0);
-    cssVars['--persona-components-header-iconPadding'] = transparent ? '0px' : '6px';
-  }
+  resolveHeaderIconPadding(cssVars);
 
   // `title.color` / `subtitle.color` supersede the legacy *Foreground tokens.
   cssVars['--persona-header-title-fg'] =

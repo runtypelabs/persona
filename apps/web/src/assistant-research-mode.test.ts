@@ -15,6 +15,7 @@ it.each([false, true])("uses real mode state for research selection, submission 
   const openMenu = () => host.querySelector<HTMLButtonElement>('[data-persona-composer-overflow-trigger]')!.click();
   const activeButton = () => host.querySelector<HTMLButtonElement>('[data-persona-composer-action="core:mode:research"] > button');
   expect(activeButton()).toBeNull();
+  await vi.waitFor(() => expect(host.querySelector('[data-persona-composer-overflow-trigger]')).not.toBeNull());
   openMenu();
   document.querySelector<HTMLButtonElement>('[data-action="core:mode:research"]')!.click();
   expect(widget.getComposerState().activeModeIds).toEqual(["research", "chat"]);

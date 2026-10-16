@@ -1,3 +1,5 @@
+import { createScrollToLatest } from "../utils/scroll-animation";
+import { createScrollToBottomControl } from "../components/scroll-to-bottom";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import type { SSEEventRecord } from "../types";
 
@@ -289,7 +291,7 @@ describe("createEventStreamView", () => {
   it("should create a container element with expected children", async () => {
     const { createEventStreamView } = await loadModule();
     const buffer = createMockBuffer();
-    const { element } = createEventStreamView({ buffer: buffer as any });
+    const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
     // Container should have tabindex for keyboard events
     expect(element.getAttribute("tabindex")).toBe("0");
@@ -301,7 +303,7 @@ describe("createEventStreamView", () => {
   it("should return update and destroy functions", async () => {
     const { createEventStreamView } = await loadModule();
     const buffer = createMockBuffer();
-    const view = createEventStreamView({ buffer: buffer as any });
+    const view = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
     expect(typeof view.update).toBe("function");
     expect(typeof view.destroy).toBe("function");
@@ -312,7 +314,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -324,7 +326,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
       expect(getAllEventsOptionText(element)).toBe("All events (1)");
@@ -347,7 +349,7 @@ describe("createEventStreamView", () => {
         makeEvent("execution_complete", 3),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -365,7 +367,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -391,7 +393,7 @@ describe("createEventStreamView", () => {
         makeEvent("text_delta", 3),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -409,7 +411,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1, '{"message":"hello world"}')];
       const buffer = createMockBuffer(events);
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       const searchInput = getSearchInput(element);
 
@@ -429,7 +431,7 @@ describe("createEventStreamView", () => {
     it("should show clear button when search has text", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       const searchInput = getSearchInput(element);
       const clearBtn = getSearchClearBtn(element);
@@ -449,7 +451,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       const searchInput = getSearchInput(element);
       const clearBtn = getSearchClearBtn(element);
@@ -474,7 +476,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1, '{"data":"hello"}')];
       const buffer = createMockBuffer(events);
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       const searchInput = getSearchInput(element);
 
@@ -500,7 +502,7 @@ describe("createEventStreamView", () => {
         makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       const copyAllBtn = getCopyAllBtn(element);
 
@@ -527,7 +529,7 @@ describe("createEventStreamView", () => {
       ];
       const buffer = createMockBuffer(events);
       const getFullHistory = vi.fn().mockResolvedValue(events);
-      const { element } = createEventStreamView({
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         getFullHistory,
       });
@@ -561,7 +563,7 @@ describe("createEventStreamView", () => {
       const buffer = createMockBuffer(events);
       const fullHistory = [...events, makeEvent("old_event", 0)];
       const getFullHistory = vi.fn().mockResolvedValue(fullHistory);
-      const { element, update } = createEventStreamView({
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         getFullHistory,
       });
@@ -585,7 +587,7 @@ describe("createEventStreamView", () => {
       ];
       const buffer = createMockBuffer(events);
       const getFullHistory = vi.fn().mockResolvedValue([]);
-      const { element } = createEventStreamView({
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         getFullHistory,
       });
@@ -608,7 +610,7 @@ describe("createEventStreamView", () => {
     it("should focus search on Ctrl+F", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       const searchInput = getSearchInput(element);
 
@@ -630,7 +632,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element } = createEventStreamView({ buffer: buffer as any });
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       const searchInput = getSearchInput(element);
 
@@ -659,7 +661,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
       const onClose = vi.fn();
-      const { element } = createEventStreamView({
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         onClose,
       });
@@ -687,7 +689,7 @@ describe("createEventStreamView", () => {
         { id: "evt-2", type: "step_start", timestamp: 1361, payload: '{"stepName":"Chatbot 1"}' },
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -701,7 +703,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { update } = createEventStreamView({
+      const { update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {
           features: { eventStream: { timestampFormat: "absolute" } },
@@ -720,7 +722,7 @@ describe("createEventStreamView", () => {
         { id: "evt-1", type: "execution_start", timestamp: 1000, payload: '{"flowName":"My Flow"}' },
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -733,7 +735,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { update } = createEventStreamView({
+      const { update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {
           features: { eventStream: { showSequenceNumbers: false } },
@@ -748,7 +750,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("custom_type", 1)];
       const buffer = createMockBuffer(events);
-      const { update } = createEventStreamView({
+      const { update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {
           features: {
@@ -772,7 +774,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1, '{"message":"hello"}')];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -831,7 +833,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1), makeEvent("text_delta", 2)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // Initial render (Path A: first render)
       update();
@@ -866,7 +868,7 @@ describe("createEventStreamView", () => {
         makeEvent("text_delta", 3, '{"msg":"third"}'),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // Initial render
       update();
@@ -902,7 +904,7 @@ describe("createEventStreamView", () => {
         makeEvent("text_delta", 3),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // Initial render
       update();
@@ -948,7 +950,7 @@ describe("createEventStreamView", () => {
       const buffer = createMockBuffer([makeEvent("text_delta", 1)]);
       let config: import("../types").AgentWidgetConfig = { future: { v5Defaults: true } };
       let visible = true;
-      const view = createEventStreamView({ buffer: buffer as any, getConfig: () => config, getViewVisible: () => visible });
+      const view = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any, getConfig: () => config, getViewVisible: () => visible });
       const list = getEventsList(view.element);
       let top = 0;
       list.scrollHeight = 10300; list.clientHeight = 300;
@@ -1042,7 +1044,7 @@ describe("createEventStreamView", () => {
       let active = false;
       let visible = true;
       let config: any = { future: { v5Defaults: true }, features: { scrollToBottom: {} } };
-      const view = createEventStreamView({ buffer: buffer as any, getConfig: () => config, getResponseActive: () => active, getViewVisible: () => visible });
+      const view = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any, getConfig: () => config, getResponseActive: () => active, getViewVisible: () => visible });
       view.update();
       const list = getEventsList(view.element);
       list.scrollHeight = 900; list.clientHeight = 300; list.scrollTop = 0;
@@ -1070,7 +1072,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any
       });
 
@@ -1098,7 +1100,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {
           features: {
@@ -1131,7 +1133,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {
           features: {
@@ -1169,7 +1171,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {
           features: {
@@ -1208,7 +1210,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1, '{"message":"hello"}')];
       const buffer = createMockBuffer(events);
-      const { update } = createEventStreamView({ buffer: buffer as any });
+      const { update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -1225,7 +1227,7 @@ describe("createEventStreamView", () => {
         makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -1249,7 +1251,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -1276,7 +1278,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -1289,7 +1291,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // First update renders immediately
       update();
@@ -1320,7 +1322,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // First update
       update();
@@ -1342,7 +1344,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("text_delta", 1)]);
-      const { update } = createEventStreamView({ buffer: buffer as any });
+      const { update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // First call: immediate render
       update();
@@ -1372,7 +1374,7 @@ describe("createEventStreamView", () => {
         makeEvent("execution_complete", 2),
       ];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // Initial render
       update();
@@ -1392,7 +1394,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("text_delta", 1)]);
-      const { update, destroy } = createEventStreamView({ buffer: buffer as any });
+      const { update, destroy } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // First update: immediate
       update();
@@ -1415,7 +1417,7 @@ describe("createEventStreamView", () => {
       const { createEventStreamView } = await loadModule();
       const events = [makeEvent("text_delta", 1)];
       const buffer = createMockBuffer(events);
-      const { element, update } = createEventStreamView({ buffer: buffer as any });
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       update();
 
@@ -1432,7 +1434,7 @@ describe("createEventStreamView", () => {
     it("should clean up event listeners on destroy", async () => {
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer();
-      const { destroy } = createEventStreamView({ buffer: buffer as any });
+      const { destroy } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       // Should not throw
       expect(() => destroy()).not.toThrow();
@@ -1442,7 +1444,7 @@ describe("createEventStreamView", () => {
       vi.useFakeTimers();
       const { createEventStreamView } = await loadModule();
       const buffer = createMockBuffer([makeEvent("a", 1)]);
-      const { element, destroy } = createEventStreamView({ buffer: buffer as any });
+      const { element, destroy } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl }, buffer: buffer as any });
 
       const searchInput = getSearchInput(element);
 
@@ -1472,7 +1474,7 @@ describe("createEventStreamView", () => {
         renderEventStreamRow: vi.fn(() => customRow),
       };
 
-      const { update } = createEventStreamView({
+      const { update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {} as any,
         plugins: [plugin],
@@ -1500,7 +1502,7 @@ describe("createEventStreamView", () => {
         renderEventStreamToolbar: vi.fn(() => customToolbar),
       };
 
-      const { element } = createEventStreamView({
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {} as any,
         plugins: [plugin],
@@ -1522,7 +1524,7 @@ describe("createEventStreamView", () => {
         renderEventStreamView: vi.fn(() => customView),
       };
 
-      const { element } = createEventStreamView({
+      const { element } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {} as any,
         plugins: [plugin],
@@ -1542,7 +1544,7 @@ describe("createEventStreamView", () => {
         renderEventStreamRow: vi.fn(() => null),
       };
 
-      const { element, update } = createEventStreamView({
+      const { element, update } = createEventStreamView({ scroll: { createScrollToLatest, createScrollToBottomControl },
         buffer: buffer as any,
         config: {} as any,
         plugins: [plugin],

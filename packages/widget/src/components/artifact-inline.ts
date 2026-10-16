@@ -1,3 +1,4 @@
+import { ensureArtifactStyles } from "./artifact-styles";
 import type { ComponentContext } from "./registry";
 import type {
   AgentWidgetArtifactsFeature,
@@ -13,7 +14,7 @@ import {
   resolveArtifactStatusLabel
 } from "../utils/artifact-status-label";
 import { artifactRecordActionContext, buildArtifactActionButton } from "../utils/artifact-custom-actions";
-import { createIconButton, createToggleGroup } from "../utils/buttons";
+import { createIconButton, createToggleGroup } from "./artifact-buttons";
 import { FileText } from "lucide";
 import { renderIconNode } from "../utils/icon-node";
 import {
@@ -498,6 +499,7 @@ function renderDefaultArtifactInline(
     "div",
     "persona-artifact-inline persona-w-full persona-max-w-full"
   );
+  ensureArtifactStyles(root);
   root.setAttribute("data-persona-theme-zone", "artifact-inline");
   if (record.id) {
     root.setAttribute("data-artifact-inline", record.id);

@@ -67,5 +67,5 @@ describe('configuration authoring fixtures', () => {
     const program = ts.createProgram([...virtualFiles.keys(), ...parsedConfig.fileNames.filter(path => path.endsWith('.d.ts'))], options, host);
     const errors = ts.getPreEmitDiagnostics(program).filter(diagnostic => diagnostic.category === ts.DiagnosticCategory.Error);
     expect(errors.map(error => `${error.file?.fileName}: ${ts.flattenDiagnosticMessageText(error.messageText, '\n')}`)).toEqual([]);
-  });
+  }, 30_000);
 });

@@ -2,7 +2,7 @@ import { CIRCLE_LAUNCHER_TOKENS, resolveLauncherVariant } from "./launcher-varia
 import type { BrandConfig, CreateThemeOptions, DeepPartial, PersonaTheme } from '../types/theme';
 import type { AgentWidgetConfig } from '../types';
 import { resolveDefaultsVersion } from '../defaults';
-import { createTheme, resolveTokens, themeToCssVariables, resolveThemeDefaults, DEFAULT_COMPONENTS_V4 } from './tokens';
+import { createTheme, resolveTokens, themeToCssVariables, launcherThemeToCssVariables, resolveThemeDefaults, DEFAULT_COMPONENTS_V4 } from './tokens';
 import { isEmbeddedLayout } from "./panel-config";
 import { deriveBrandTheme, inferBrandColorScheme } from './brand';
 import { deepMerge } from './deep-merge';
@@ -394,13 +394,16 @@ export const getCssVariables = (theme: PersonaTheme): Record<string, string> => 
 
 const appliedVariables = new WeakMap<HTMLElement, string[]>();
 
-export const applyThemeVariables = (
-  element: HTMLElement,
-  config?: WidgetConfig
-): void => {
-  const theme = getActiveTheme(config);
-  const cssVars = getCssVariables(theme);
+export const applyThemeVariables = (element: HTMLElement, config?: WidgetConfig): void => {
+  applyVariables(element, getCssVariables(getActiveTheme(config)), config);
+};
 
+/** Same resolved theme, with only aliases used by the collapsed launcher. */
+export const applyLauncherThemeVariables = (element: HTMLElement, config?: WidgetConfig): void => {
+  applyVariables(element, launcherThemeToCssVariables(getActiveTheme(config)), config);
+};
+
+const applyVariables = (element: HTMLElement, cssVars: Record<string, string>, config?: WidgetConfig): void => {
   for (const name of appliedVariables.get(element) ?? []) {
     if (!(name in cssVars)) element.style.removeProperty(name);
   }
