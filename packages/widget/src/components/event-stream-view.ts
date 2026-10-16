@@ -1,5 +1,5 @@
-import { createScrollToLatest } from "../utils/scroll-animation";
-import { createScrollToBottomControl } from "./scroll-to-bottom";
+import type { createScrollToLatest } from "../utils/scroll-animation";
+import type { createScrollToBottomControl } from "./scroll-to-bottom";
 import { createElement } from "../utils/dom";
 import { Check, ChevronDown, ChevronRight, Clipboard as ClipboardIcon, ClipboardCopy, Search, X, type IconNode } from "lucide";
 import { renderIconNode } from "../utils/icon-node";
@@ -445,6 +445,7 @@ function renderEventRow(
 // ============================================================================
 
 export type EventStreamViewOptions = {
+  scroll: { createScrollToLatest: typeof createScrollToLatest; createScrollToBottomControl: typeof createScrollToBottomControl };
   buffer: EventStreamBuffer;
   getFullHistory?: () => Promise<SSEEventRecord[]>;
   onClose?: () => void;
@@ -804,10 +805,10 @@ export function createEventStreamView(
     eventsList.style.height = "100%";
 
     // Scroll-to-bottom indicator
-    const scrollControl = createScrollToBottomControl(renderConfigIcon, "event-stream", eventsList);
+    const scrollControl = options.scroll.createScrollToBottomControl(renderConfigIcon, "event-stream", eventsList);
     const scrollIndicator = scrollControl.element;
     applyCustomClasses(scrollIndicator, customClasses?.scrollIndicator);
-    const latestScroll = createScrollToLatest(eventsList, container,
+    const latestScroll = options.scroll.createScrollToLatest(eventsList, container,
       () => { lastScrollTop = eventsList.scrollTop; },
       () => { autoFollow.resume(); newEventsSincePause = 0; syncScrollControl(); },
       () => { autoFollow.pause(); syncScrollControl(); });

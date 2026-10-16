@@ -12,12 +12,12 @@ import { BROWSER_TOOL_INTERRUPTION } from "../utils/restored-browser-state";
 // The webmcp-title lookup is injected by ui.ts at chunk adoption (see
 // approval-deps): this module ships in the lazy approval-ui chunk. Icons are
 // direct lucide data imports.
-import { getWebMcpToolDisplayTitle } from "./approval-deps";
-import { Ban, ChevronDown, ShieldCheck } from "lucide";
-import { renderIconNode } from "../utils/icon-node";
-import { formatUnknownValue } from "../utils/formatting";
+import { getWebMcpToolDisplayTitle, getApprovalPopoverDeps } from "./approval-deps";
+import { Ban } from "lucide";
+import { renderApprovalIcon, renderApprovalIconNode as renderIconNode } from "./approval-deps";
+import { formatUnknownValue } from "../utils/format-value";
 import { WEBMCP_TOOL_PREFIX } from "../webmcp-bridge";
-import { createPopover, isEditableEventTarget, type PopoverHandle } from "../plugin-kit";
+import type { PopoverHandle } from "../plugin-kit";
 import type {
   AgentWidgetMessage,
   AgentWidgetApprovalConfig,
@@ -219,7 +219,7 @@ const buildPending = (
   }
 
   const logo = createElement("span", "persona-approval-logo");
-  const glyph = renderIconNode(ShieldCheck, 16, "currentColor", 2);
+  const glyph = renderApprovalIcon("shield-check", 16, "currentColor", 2);
   if (glyph) logo.appendChild(glyph);
   if (!compact) head.appendChild(logo);
 
@@ -239,7 +239,7 @@ const buildPending = (
   if (hasDetails) {
     const toggle = createElement("span", "persona-approval-toggle");
     toggle.setAttribute("aria-hidden", "true");
-    const chevron = renderIconNode(ChevronDown, 14, "currentColor", 2);
+    const chevron = renderApprovalIcon("chevron-down", 14, "currentColor", 2);
     if (chevron) toggle.appendChild(chevron);
     title.append(" ");
     title.appendChild(toggle);
@@ -371,7 +371,7 @@ const buildPending = (
     caret.setAttribute("data-action", "toggle-menu");
     caret.setAttribute("aria-label", "More options");
     applyPrimaryColors(caret);
-    const caretIcon = renderIconNode(ChevronDown, 15, "currentColor", 2);
+    const caretIcon = renderApprovalIcon("chevron-down", 15, "currentColor", 2);
     if (caretIcon) caret.appendChild(caretIcon);
 
     split.append(primary, caret);
@@ -386,7 +386,7 @@ const buildPending = (
     once.append(oncePrimary ? (approvalConfig?.alwaysAllowLabel ?? "Always allow") : "Allow once");
     if (!oncePrimary && legacyKeys) once.append(kbd("⌘⏎"));
     menu.appendChild(once);
-    popover = createPopover({
+    popover = getApprovalPopoverDeps().createPopover({
       anchor: split,
       content: menu,
       placement: "bottom-start",
@@ -543,7 +543,7 @@ export const createBuiltInApprovalPlugin = (
         // of which card happens to be re-rendering right now.
         state.latestPendingApprovalId = state.pendingOrder[state.pendingOrder.length - 1];
         const onKeydown = (e: KeyboardEvent): void => {
-          if (e.defaultPrevented || e.isComposing || isEditableEventTarget(e)) return;
+          if (e.defaultPrevented || e.isComposing || getApprovalPopoverDeps().isEditableEventTarget(e)) return;
           if (keyboardMode === "focused") {
             // A document listener also receives host-page keys and retargeted
             // Shadow DOM events. Only the focused approval's composed path owns them.

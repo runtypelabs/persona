@@ -3,7 +3,7 @@ import type {
   PersonaArtifactCustomAction,
   PersonaArtifactRecord,
 } from "../types";
-import { createIconButton, createLabelButton } from "./buttons";
+import { createIconButton, createLabelButton } from "../components/artifact-buttons";
 import { createElement } from "./dom";
 
 /** Base class applied to every custom artifact action button. */

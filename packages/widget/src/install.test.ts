@@ -115,6 +115,7 @@ beforeEach(() => {
   launcherDestroy = vi.fn();
   launcherMount = vi.fn((opts: any) => {
     capturedOnOpen = opts.onOpen;
+    document.body.append(launcherElement);
     return {
       root: document.createElement("div"),
       element: launcherElement,
@@ -159,6 +160,59 @@ describe("install.ts: onScriptLoad beacon", () => {
 });
 
 describe("install.ts: deferred launcher path", () => {
+  it("clears slow embedded feedback on failure", async () => {
+    markCssLoaded(); provideFullBundle();
+    const target = document.createElement("div");
+    document.body.append(target);
+    let reject!: (error: Error) => void;
+    const ready = new Promise<void>((_, fail) => { reject = fail; });
+    initAgentWidget.mockImplementation(() => ({ ...fakeHandle, ready }));
+    const onError = vi.fn();
+    await install({ target, config: { apiUrl: "/api", launcher: { enabled: false } }, onError });
+    await flush();
+    expect(target.querySelector("[data-persona-loading]")).not.toBeNull();
+    reject(new Error("offline"));
+    await flush();
+    expect(target.querySelector("[data-persona-loading]")).toBeNull();
+    expect(target.hasAttribute("aria-busy")).toBe(false);
+    expect(onError).toHaveBeenCalledOnce();
+  });
+
+  it("retains the launcher until renderer preparation finishes", async () => {
+    markCssLoaded(); provideFullBundle(); provideLauncherBundle();
+    let resolve!: () => void;
+    const ready = new Promise<void>(done => { resolve = done; });
+    initAgentWidget.mockImplementation(() => ({ ...fakeHandle, ready }));
+    const onChatReady = vi.fn();
+    await install({ config: { apiUrl: "/api", launcher: { enabled: true } }, onChatReady });
+    await flush(); capturedOnOpen!(); await flush();
+    expect(launcherDestroy).not.toHaveBeenCalled();
+    expect(fakeHandle.open).not.toHaveBeenCalled();
+    expect(onChatReady).not.toHaveBeenCalled();
+    expect(launcherElement.querySelector("[data-persona-loading]")).not.toBeNull();
+    resolve(); await flush();
+    expect(launcherElement.querySelector("[data-persona-loading]")).toBeNull();
+    expect(fakeHandle.open).toHaveBeenCalledOnce();
+    expect(launcherDestroy).toHaveBeenCalledOnce();
+    expect(onChatReady).toHaveBeenCalledOnce();
+  });
+
+  it("destroys a failed mount and lets the retained launcher retry preparation", async () => {
+    markCssLoaded(); provideFullBundle(); provideLauncherBundle();
+    const destroy = vi.fn(), onError = vi.fn();
+    initAgentWidget.mockImplementationOnce(() => ({
+      ...fakeHandle, destroy, ready: Promise.reject(new Error("renderer offline")),
+    }));
+    await install({ config: { apiUrl: "/api", launcher: { enabled: true } }, onError });
+    await flush(); capturedOnOpen!(); await flush();
+    expect(destroy).toHaveBeenCalledOnce();
+    expect(launcherDestroy).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledOnce();
+    capturedOnOpen!(); await flush();
+    expect(initAgentWidget).toHaveBeenCalledTimes(2);
+    expect(launcherDestroy).toHaveBeenCalledOnce();
+  });
+
   it("mounts the critical launcher, fires onLauncherShown, and defers onChatReady until open", async () => {
     markCssLoaded();
     provideFullBundle(); // so loadJS resolves instantly when the user opens

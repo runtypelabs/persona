@@ -1,3 +1,5 @@
+import * as sharedIcons from "../utils/icons";
+import * as sharedTooltips from "../utils/tooltip";
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +10,7 @@ describe("composer overflow tooltip", () => {
   let menu: ReturnType<typeof createComposerOverflowMenu>;
   beforeEach(() => {
     resetTooltipTiming({ delayMs: 0, skipDelayMs: 0 });
-    menu = createComposerOverflowMenu({ label: "More actions" });
+    menu = createComposerOverflowMenu({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip }, label: "More actions" });
     document.body.appendChild(menu.trigger);
   });
   afterEach(() => {

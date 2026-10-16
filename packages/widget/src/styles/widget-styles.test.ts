@@ -4,10 +4,17 @@ import { describe, expect, it } from "vitest";
 
 import { createTheme, themeToCssVariables } from "../utils/tokens";
 
-const widgetCss = readFileSync(
-  new URL("./widget.css", import.meta.url),
-  "utf8",
-);
+const coreCss = readFileSync(new URL("./widget.css", import.meta.url), "utf8");
+const artifactCss = readFileSync(new URL("./artifacts.css", import.meta.url), "utf8");
+const menuCss = readFileSync(new URL("./composer-menu.css", import.meta.url), "utf8");
+const widgetCss = [coreCss, artifactCss, menuCss].join("\n");
+
+it("keeps optional surfaces in their feature stylesheets", () => {
+  expect(coreCss).not.toContain(".persona-composer-overflow-menu {");
+  expect(menuCss).toContain(".persona-composer-overflow-menu {");
+  expect(coreCss).not.toContain(".persona-artifact-card {");
+  expect(artifactCss).toContain(".persona-artifact-card {");
+});
 
 describe("suggestion interaction styles", () => {
   it("keeps suggestion surfaces from collapsing inside constrained transcripts", () => {

@@ -9,7 +9,7 @@
 
 import type { ComposerMode } from "../types";
 import { createElement, createNode } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import type { renderLucideIcon } from "../utils/icons";
 import { syncComposerChipRow } from "./composer-chip-row";
 
 const MODE_CHIP_SELECTOR = ":scope > [data-persona-composer-mode]";
@@ -23,6 +23,7 @@ export interface ComposerModeChipRow {
 }
 
 export function createComposerModeChipRow(options: {
+  renderIcon: typeof renderLucideIcon;
   /** Shared header chip row, from `ensureComposerChipRow`. */
   row: HTMLElement;
   onRemove: (modeId: string) => void;
@@ -45,7 +46,7 @@ export function createComposerModeChipRow(options: {
     });
     if (mode.iconName) {
       const holder = createElement("span", "persona-mention-chip-icon");
-      const icon = renderLucideIcon(mode.iconName, 12, "currentColor", 1.5);
+      const icon = options.renderIcon(mode.iconName, 12, "currentColor", 1.5);
       if (icon) holder.appendChild(icon);
       root.appendChild(holder);
     }
@@ -57,7 +58,7 @@ export function createComposerModeChipRow(options: {
       className: "persona-mention-chip-remove",
       attrs: { type: "button", "aria-label": `Remove ${mode.label}` },
     }) as HTMLButtonElement;
-    const icon = renderLucideIcon("x", 12, "currentColor", 2);
+    const icon = options.renderIcon("x", 12, "currentColor", 2);
     if (icon) remove.appendChild(icon);
     else remove.textContent = "×";
     remove.addEventListener("click", (event) => {

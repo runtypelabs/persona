@@ -1,3 +1,4 @@
+import { ensureArtifactStyles } from "./artifact-styles";
 import { createElement } from "../utils/dom";
 import { artifactStyle } from "../utils/artifact-gate";
 import type {
@@ -29,7 +30,7 @@ import {
   createSplitButton,
   createToggleGroup,
   type SplitButtonHandle,
-} from "../utils/buttons";
+} from "./artifact-buttons";
 import { createRovingTablist } from "../utils/roving-tablist";
 
 export type ArtifactPaneApi = {
@@ -129,6 +130,7 @@ export function createArtifactPane(
     "aside",
     "persona-artifact-pane persona-flex persona-flex-col persona-min-h-0 persona-min-w-0 persona-bg-persona-surface persona-text-persona-primary persona-border-l persona-border-persona-border"
   );
+  ensureArtifactStyles(shell);
   shell.setAttribute("data-persona-theme-zone", "artifact-pane");
   if (documentChrome) {
     shell.classList.add("persona-artifact-pane-document");

@@ -22,6 +22,7 @@ function createMockController(config?: { launcher?: { enabled?: boolean; autoExp
   };
 
   return {
+    ready: Promise.resolve(),
     update: vi.fn(),
     destroy: vi.fn(),
     getState: vi.fn(() => ({
@@ -226,6 +227,7 @@ describe("initAgentWidget onChatReady", () => {
       config: { launcher: { enabled: false } },
     });
 
+    await handle.ready;
     expect(onChatReady).toHaveBeenCalledOnce();
     expect(warn).not.toHaveBeenCalled();
 

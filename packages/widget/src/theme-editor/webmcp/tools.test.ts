@@ -118,7 +118,7 @@ describe('createThemeEditorTools', () => {
   it('apply_preset validates id and applies', async () => {
     const out = await call(tools.get('apply_preset')!, { presetId: 'default-dark' });
     expect(out.applied.appliedPreset.id).toBe('default-dark');
-    expect(() => tools.get('apply_preset')!.execute({ presetId: 'nope' })).toThrow(
+    await expect(tools.get('apply_preset')!.execute({ presetId: 'nope' })).rejects.toThrow(
       /Valid presets/
     );
   });

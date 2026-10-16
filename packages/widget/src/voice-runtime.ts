@@ -17,8 +17,6 @@ export {
 } from "./voice/voice-factory";
 export { RuntypeVoiceProvider } from "./voice/runtype-voice-provider";
 export { BrowserVoiceProvider } from "./voice/browser-voice-provider";
-export { DictationController } from './voice/dictation';
-export { createDictationRenderer } from './components/dictation';
 export { KeyedVoiceTranscript } from "./voice/keyed-voice-transcript";
 export { createVoiceSessionBridge } from "./voice/voice-delegation";
 // Internal: the session's provider wiring (`setupVoice` calls it once this

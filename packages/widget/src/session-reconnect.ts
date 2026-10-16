@@ -308,5 +308,3 @@ export function createReconnectController(
     wake,
   };
 }
-
-export { BackgroundConversationController } from "./session-background";

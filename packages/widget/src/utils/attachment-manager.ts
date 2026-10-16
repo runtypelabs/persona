@@ -97,24 +97,24 @@ function generateAttachmentId(): string {
  * Creates and manages attachments for the composer
  */
 export class AttachmentManager {
-  private attachments: PendingAttachment[] = [];
-  private config: Required<
+  #attachments: PendingAttachment[] = [];
+  #config: Required<
     Pick<AttachmentManagerConfig, "allowedTypes" | "maxFileSize" | "maxFiles">
   > &
     Pick<
       AttachmentManagerConfig,
       "onFileRejected" | "onAttachmentsChange" | "adapter" | "preview" | "widgetConfig" | "instanceId" | "renderAttachmentPreview"
     >;
-  private lineCountsRequested = new Set<string>();
-  private renders = new Map<string, AttachmentPreviewRenderHandle>();
+  #lineCountsRequested = new Set<string>();
+  #renders = new Map<string, AttachmentPreviewRenderHandle>();
   #previewsContainer: HTMLElement | null = null;
   /** In-flight `adapter.add` per attachment id; aborted on remove/clear/destroy. */
   #pendingAdds = new Map<string, AbortController>();
   #destroyed = false;
-  private releaseOnDestroy = false;
+  #releaseOnDestroy = false;
 
   constructor(config: AttachmentManagerConfig = {}) {
-    this.config = {
+    this.#config = {
       allowedTypes: config.allowedTypes ?? DEFAULTS.allowedTypes,
       maxFileSize: config.maxFileSize ?? DEFAULTS.maxFileSize,
       maxFiles: config.maxFiles ?? DEFAULTS.maxFiles,
@@ -130,12 +130,12 @@ export class AttachmentManager {
 
   /** True when the host supplied an adapter (tiles then show upload state). */
   #hasCustomAdapter(): boolean {
-    return typeof this.config.adapter?.add === "function";
+    return typeof this.#config.adapter?.add === "function";
   }
 
   #adapter(): AgentWidgetAttachmentAdapter {
     return this.#hasCustomAdapter()
-      ? (this.config.adapter as AgentWidgetAttachmentAdapter)
+      ? (this.#config.adapter as AgentWidgetAttachmentAdapter)
       : BASE64_ADAPTER;
   }
 
@@ -143,7 +143,7 @@ export class AttachmentManager {
    * Set the previews container element
    */
   setPreviewsContainer(container: HTMLElement | null): void {
-    if (this.#previewsContainer !== container) this.disposePreviews();
+    if (this.#previewsContainer !== container) this.#disposePreviews();
     this.#previewsContainer = container;
   }
 
@@ -152,11 +152,11 @@ export class AttachmentManager {
    * rebuild swaps the footer, so pending attachments must follow it.
    */
   remountPreviews(container: HTMLElement | null): void {
-    this.disposePreviews();
+    this.#disposePreviews();
     this.#previewsContainer = container;
     if (container) {
       container.innerHTML = "";
-      for (const attachment of this.attachments) {
+      for (const attachment of this.#attachments) {
         this.#renderPreview(attachment);
       }
     }
@@ -168,42 +168,42 @@ export class AttachmentManager {
    */
   updateConfig(config: Partial<AttachmentManagerConfig>): void {
     if (config.allowedTypes !== undefined) {
-      this.config.allowedTypes = config.allowedTypes.length > 0 ? config.allowedTypes : DEFAULTS.allowedTypes;
+      this.#config.allowedTypes = config.allowedTypes.length > 0 ? config.allowedTypes : DEFAULTS.allowedTypes;
     }
     if (config.maxFileSize !== undefined) {
-      this.config.maxFileSize = config.maxFileSize;
+      this.#config.maxFileSize = config.maxFileSize;
     }
     if (config.maxFiles !== undefined) {
-      this.config.maxFiles = config.maxFiles;
+      this.#config.maxFiles = config.maxFiles;
     }
     if (config.onFileRejected !== undefined) {
-      this.config.onFileRejected = config.onFileRejected;
+      this.#config.onFileRejected = config.onFileRejected;
     }
     if (config.onAttachmentsChange !== undefined) {
-      this.config.onAttachmentsChange = config.onAttachmentsChange;
+      this.#config.onAttachmentsChange = config.onAttachmentsChange;
     }
-    if ("adapter" in config) this.config.adapter = config.adapter;
-    if ("preview" in config) this.config.preview = config.preview;
-    if ("widgetConfig" in config) this.config.widgetConfig = config.widgetConfig;
-    if ("instanceId" in config) this.config.instanceId = config.instanceId;
-    if ("renderAttachmentPreview" in config && config.renderAttachmentPreview !== this.config.renderAttachmentPreview) {
-      this.config.renderAttachmentPreview = config.renderAttachmentPreview;
+    if ("adapter" in config) this.#config.adapter = config.adapter;
+    if ("preview" in config) this.#config.preview = config.preview;
+    if ("widgetConfig" in config) this.#config.widgetConfig = config.widgetConfig;
+    if ("instanceId" in config) this.#config.instanceId = config.instanceId;
+    if ("renderAttachmentPreview" in config && config.renderAttachmentPreview !== this.#config.renderAttachmentPreview) {
+      this.#config.renderAttachmentPreview = config.renderAttachmentPreview;
       this.remountPreviews(this.#previewsContainer);
     } else {
-      for (const attachment of this.attachments) { this.#updatePreview(attachment); void this.readLineCount(attachment); }
+      for (const attachment of this.#attachments) { this.#updatePreview(attachment); void this.#readLineCount(attachment); }
     }
   }
 
   /** Every attachment holds a content part; the send gate reads this. */
   isReady(): boolean {
-    return this.attachments.every((a) => a.status === "ready");
+    return this.#attachments.every((a) => a.status === "ready");
   }
 
   /**
    * Get current attachments
    */
   getAttachments(): PendingAttachment[] {
-    return [...this.attachments];
+    return [...this.#attachments];
   }
 
   /**
@@ -212,7 +212,7 @@ export class AttachmentManager {
    * before it can be reached.
    */
   getContentParts(): ContentPart[] {
-    return this.attachments
+    return this.#attachments
       .map((a) => a.contentPart)
       .filter((part): part is ContentPart => part !== null);
   }
@@ -221,14 +221,14 @@ export class AttachmentManager {
    * Check if there are any attachments
    */
   hasAttachments(): boolean {
-    return this.attachments.length > 0;
+    return this.#attachments.length > 0;
   }
 
   /**
    * Get the number of attachments
    */
   count(): number {
-    return this.attachments.length;
+    return this.#attachments.length;
   }
 
   /**
@@ -248,21 +248,21 @@ export class AttachmentManager {
     const accepted: PendingAttachment[] = [];
     for (const file of files) {
       // Check if we've hit the max files limit
-      if (this.attachments.length >= this.config.maxFiles) {
-        this.config.onFileRejected?.(file, "count");
+      if (this.#attachments.length >= this.#config.maxFiles) {
+        this.#config.onFileRejected?.(file, "count");
         continue;
       }
 
       // Validate the file
       const validation = validateFile(
         file,
-        this.config.allowedTypes,
-        this.config.maxFileSize
+        this.#config.allowedTypes,
+        this.#config.maxFileSize
       );
 
       if (!validation.valid) {
         const reason = validation.error?.includes("type") ? "type" : "size";
-        this.config.onFileRejected?.(file, reason);
+        this.#config.onFileRejected?.(file, reason);
         continue;
       }
 
@@ -275,10 +275,10 @@ export class AttachmentManager {
         status: this.#hasCustomAdapter() ? "uploading" : "processing",
         progress: this.#hasCustomAdapter() ? 0 : undefined
       };
-      this.attachments.push(attachment);
+      this.#attachments.push(attachment);
       this.#renderPreview(attachment);
       accepted.push(attachment);
-      void this.readLineCount(attachment);
+      void this.#readLineCount(attachment);
     }
 
     this.#updatePreviewsVisibility();
@@ -301,7 +301,7 @@ export class AttachmentManager {
       this.#destroyed ||
       controller.signal.aborted ||
       this.#pendingAdds.get(attachment.id) !== controller ||
-      !this.attachments.includes(attachment);
+      !this.#attachments.includes(attachment);
 
     try {
       const part = await adapter.add(attachment.file, {
@@ -316,7 +316,7 @@ export class AttachmentManager {
       if (stale()) {
         // An adapter may finish after ignoring the abort. An abandoned draft
         // still owns that uploaded part and must release it on disposal.
-        if (this.#destroyed && this.releaseOnDestroy) this.#releasePart(part, adapter);
+        if (this.#destroyed && this.#releaseOnDestroy) this.#releasePart(part, adapter);
         return;
       }
       attachment.contentPart = part;
@@ -340,7 +340,7 @@ export class AttachmentManager {
 
   /** Retry a failed attachment from its error tile. */
   retryAttachment(id: string): void {
-    const attachment = this.attachments.find((a) => a.id === id);
+    const attachment = this.#attachments.find((a) => a.id === id);
     if (!attachment || attachment.status !== "error" || this.#destroyed) return;
     attachment.status = this.#hasCustomAdapter() ? "uploading" : "processing";
     attachment.progress = this.#hasCustomAdapter() ? 0 : undefined;
@@ -363,10 +363,10 @@ export class AttachmentManager {
    * completed one back to the adapter so remote storage can be released.
    */
   removeAttachment(id: string): void {
-    const index = this.attachments.findIndex((a) => a.id === id);
+    const index = this.#attachments.findIndex((a) => a.id === id);
     if (index === -1) return;
 
-    const attachment = this.attachments[index];
+    const attachment = this.#attachments[index];
     this.#abortAdd(id);
 
     // Revoke the object URL to free memory (only for images)
@@ -375,10 +375,10 @@ export class AttachmentManager {
     }
 
     // Remove from array
-    this.attachments.splice(index, 1);
+    this.#attachments.splice(index, 1);
 
-    this.disposePreview(id);
-    this.lineCountsRequested.delete(id);
+    this.#disposePreview(id);
+    this.#lineCountsRequested.delete(id);
 
     // Remove from DOM
     const previewEl = this.#previewsContainer?.querySelector(
@@ -398,7 +398,7 @@ export class AttachmentManager {
 
   #releasePart(
     part: ContentPart,
-    adapter = this.config.adapter
+    adapter = this.#config.adapter
   ): void {
     const remove = adapter?.remove;
     if (!remove) return;
@@ -420,16 +420,16 @@ export class AttachmentManager {
    * have just been handed to the model.
    */
   clearAttachments(): void {
-    this.disposePreviews();
-    this.lineCountsRequested.clear();
-    for (const attachment of this.attachments) {
+    this.#disposePreviews();
+    this.#lineCountsRequested.clear();
+    for (const attachment of this.#attachments) {
       this.#abortAdd(attachment.id);
       if (attachment.previewUrl) {
         URL.revokeObjectURL(attachment.previewUrl);
       }
     }
 
-    this.attachments = [];
+    this.#attachments = [];
     this.#pendingAdds.clear();
 
     // Clear the previews container
@@ -449,33 +449,33 @@ export class AttachmentManager {
   destroy(opts?: { release?: boolean }): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
-    this.disposePreviews();
-    this.releaseOnDestroy = opts?.release === true;
+    this.#disposePreviews();
+    this.#releaseOnDestroy = opts?.release === true;
     for (const controller of this.#pendingAdds.values()) controller.abort();
     this.#pendingAdds.clear();
-    for (const attachment of this.attachments) {
+    for (const attachment of this.#attachments) {
       if (attachment.previewUrl) URL.revokeObjectURL(attachment.previewUrl);
-      if (this.releaseOnDestroy && attachment.status === "ready" && attachment.contentPart) {
+      if (this.#releaseOnDestroy && attachment.status === "ready" && attachment.contentPart) {
         this.#releasePart(attachment.contentPart);
       }
     }
-    this.attachments = [];
+    this.#attachments = [];
     this.#previewsContainer = null;
   }
 
   #notify(): void {
     if (this.#destroyed) return;
-    this.config.onAttachmentsChange?.(this.getAttachments());
+    this.#config.onAttachmentsChange?.(this.getAttachments());
   }
 
-  private previewContext(attachment: PendingAttachment): AttachmentPreviewRenderContext {
+  #previewContext(attachment: PendingAttachment): AttachmentPreviewRenderContext {
     const context: AttachmentPreviewRenderContext = {
-      instanceId: this.config.instanceId ?? "",
+      instanceId: this.#config.instanceId ?? "",
       state: Object.freeze({ id: attachment.id, name: attachment.file.name,
         mimeType: attachment.file.type, size: attachment.file.size, status: attachment.status,
         progress: attachment.progress, error: attachment.error, lineCount: attachment.lineCount,
         kind: isImageFile(attachment.file) ? "image" : "file", previewUrl: attachment.previewUrl }),
-      config: { ...this.config.widgetConfig, attachments: { ...this.config.widgetConfig?.attachments, preview: this.config.preview } },
+      config: { ...this.#config.widgetConfig, attachments: { ...this.#config.widgetConfig?.attachments, preview: this.#config.preview } },
       actions: { remove: () => this.removeAttachment(attachment.id), retry: () => this.retryAttachment(attachment.id) },
       defaultRenderer: () => createAttachmentPreview(context),
     };
@@ -484,40 +484,40 @@ export class AttachmentManager {
 
   #renderPreview(attachment: PendingAttachment): void {
     if (!this.#previewsContainer) return;
-    const context = this.previewContext(attachment);
+    const context = this.#previewContext(attachment);
     let rendered: HTMLElement | AttachmentPreviewRenderHandle | null = null;
-    try { rendered = this.config.renderAttachmentPreview?.(context) ?? null; }
+    try { rendered = this.#config.renderAttachmentPreview?.(context) ?? null; }
     catch (error) { console.error("[AttachmentManager] preview renderer failed:", error); }
     rendered ??= context.defaultRenderer();
     const handle = rendered instanceof HTMLElement ? { element: rendered } : rendered;
     handle.element.dataset.attachmentId = attachment.id;
-    this.renders.set(attachment.id, handle);
+    this.#renders.set(attachment.id, handle);
     this.#previewsContainer.appendChild(handle.element);
   }
 
   #updatePreview(attachment: PendingAttachment): void {
-    try { this.renders.get(attachment.id)?.update?.(this.previewContext(attachment)); }
+    try { this.#renders.get(attachment.id)?.update?.(this.#previewContext(attachment)); }
     catch (error) { console.error("[AttachmentManager] preview update failed:", error); }
   }
 
-  private disposePreview(id: string): void {
-    const handle = this.renders.get(id);
+  #disposePreview(id: string): void {
+    const handle = this.#renders.get(id);
     if (!handle) return;
-    this.renders.delete(id);
+    this.#renders.delete(id);
     try { handle.destroy?.(); } catch (error) { console.error("[AttachmentManager] preview cleanup failed:", error); } finally { handle.element.remove(); }
   }
 
-  private disposePreviews(): void {
-    for (const id of this.renders.keys()) this.disposePreview(id);
+  #disposePreviews(): void {
+    for (const id of this.#renders.keys()) this.#disposePreview(id);
   }
 
   /** Never inspect binary formats; bounded text decoding does not block uploads. */
-  private async readLineCount(attachment: PendingAttachment): Promise<void> {
+  async #readLineCount(attachment: PendingAttachment): Promise<void> {
     const file = attachment.file;
-    if (this.lineCountsRequested.has(attachment.id)) return;
-    if (this.config.preview?.file?.metadata !== "line-count" || file.size > 1024 * 1024 ||
+    if (this.#lineCountsRequested.has(attachment.id)) return;
+    if (this.#config.preview?.file?.metadata !== "line-count" || file.size > 1024 * 1024 ||
       !["text/plain", "text/markdown", "text/csv", "application/json"].includes(file.type)) return;
-    this.lineCountsRequested.add(attachment.id);
+    this.#lineCountsRequested.add(attachment.id);
     try {
       const text = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -525,7 +525,7 @@ export class AttachmentManager {
         reader.onerror = () => reject(reader.error);
         reader.readAsText(file);
       });
-      if (this.#destroyed || !this.attachments.includes(attachment) || text.includes("\0")) return;
+      if (this.#destroyed || !this.#attachments.includes(attachment) || text.includes("\0")) return;
       attachment.lineCount = text === "" ? 0 : text.split(/\r\n|\r|\n/).length - (/\r?\n$|\r$/.test(text) ? 1 : 0);
       this.#updatePreview(attachment);
     } catch { /* Metadata is optional and never changes upload state. */ }
@@ -537,7 +537,7 @@ export class AttachmentManager {
   #updatePreviewsVisibility(): void {
     if (!this.#previewsContainer) return;
     this.#previewsContainer.style.display =
-      this.attachments.length > 0 ? "flex" : "none";
+      this.#attachments.length > 0 ? "flex" : "none";
   }
 
   /**

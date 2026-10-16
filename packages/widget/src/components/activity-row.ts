@@ -4,7 +4,7 @@ import { renderIconNode } from "../utils/icon-node";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { DEFAULT_TOOL_CALL_DISPLAY, DEFAULT_REASONING_DISPLAY, DEFAULTS_V5 } from "../defaults";
 import { createElement } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import { renderLucideIcon } from "./activity-deps";
 import { appendHeaderToggle } from "./expandable-bubble";
 
 export type ActivityKind = "tool" | "reasoning";

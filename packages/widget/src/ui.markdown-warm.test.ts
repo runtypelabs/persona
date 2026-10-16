@@ -1,17 +1,8 @@
 // @vitest-environment jsdom
 
-/**
- * Warm-trigger test for the lazy markdown-parsers chunk: the fetch must kick
- * when a session starts with restored/seeded messages (which would otherwise
- * paint escaped while closed and flash at first open) and must NOT kick for a
- * fresh widget with no messages, so visitors who never engage never pay the
- * ~21 kB fetch.
- *
- * The vitest setup file eagerly provides the parsers (mirroring the npm
- * build), which would satisfy every load before the trigger is observable —
- * so the loader module is mocked here to behave like the CDN build before the
- * chunk lands: nothing loaded, loads never resolve.
- */
+/** Render preparation fetches markdown before reveal, including empty closed
+ * widgets created directly. The installer still defers the entire widget until
+ * launcher interaction. An unresolved parser must keep content hidden. */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAgentExperience } from "./ui";
@@ -41,20 +32,21 @@ const restoredMessages = [
   },
 ];
 
-describe("markdown-parsers warm trigger", () => {
+describe("markdown-parsers preparation", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     if (typeof localStorage !== "undefined") localStorage.clear();
     vi.mocked(loadMarkdownParsers).mockClear();
   });
 
-  it("does not fetch for a fresh closed widget with no messages", () => {
+  it("prepares a fresh closed widget before its first reveal", () => {
     const controller = createAgentExperience(createMount(), {
       apiUrl: "https://api.example.com/chat",
       persistState: false,
     } as unknown as Parameters<typeof createAgentExperience>[1]);
 
-    expect(loadMarkdownParsers).not.toHaveBeenCalled();
+    expect(loadMarkdownParsers).toHaveBeenCalledOnce();
+    expect(document.querySelector("[data-persona-preparing]")).not.toBeNull();
     controller.destroy();
   });
 
@@ -71,10 +63,11 @@ describe("markdown-parsers warm trigger", () => {
 
     // Warmed before any open: the panel is still closed.
     expect(loadMarkdownParsers).toHaveBeenCalled();
+    expect(document.querySelector("[data-persona-preparing]")).not.toBeNull();
     controller.destroy();
   });
 
-  it("fetches when an async storage adapter resolves with messages", async () => {
+  it("prepares before an async storage adapter resolves with messages", async () => {
     const controller = createAgentExperience(createMount(), {
       apiUrl: "https://api.example.com/chat",
       persistState: true,
@@ -85,9 +78,10 @@ describe("markdown-parsers warm trigger", () => {
       },
     } as unknown as Parameters<typeof createAgentExperience>[1]);
 
-    expect(loadMarkdownParsers).not.toHaveBeenCalled();
+    expect(loadMarkdownParsers).toHaveBeenCalledOnce();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(loadMarkdownParsers).toHaveBeenCalled();
+    expect(document.querySelector("[data-persona-preparing]")).not.toBeNull();
     controller.destroy();
   });
 });

@@ -26,7 +26,7 @@ export interface ComponentRegistrationOptions {
  * Component registry for managing custom components
  */
 class ComponentRegistry {
-  private components: Map<string, ComponentRenderer> = new Map();
+  #components: Map<string, ComponentRenderer> = new Map();
   #options: Map<string, ComponentRegistrationOptions> = new Map();
 
   /**
@@ -37,10 +37,10 @@ class ComponentRegistry {
     renderer: ComponentRenderer,
     options?: ComponentRegistrationOptions
   ): void {
-    if (this.components.has(name)) {
+    if (this.#components.has(name)) {
       console.warn(`[ComponentRegistry] Component "${name}" is already registered. Overwriting.`);
     }
-    this.components.set(name, renderer);
+    this.#components.set(name, renderer);
     if (options) {
       this.#options.set(name, options);
     } else {
@@ -52,7 +52,7 @@ class ComponentRegistry {
    * Unregister a component
    */
   unregister(name: string): void {
-    this.components.delete(name);
+    this.#components.delete(name);
     this.#options.delete(name);
   }
 
@@ -60,14 +60,14 @@ class ComponentRegistry {
    * Get a component renderer by name
    */
   get(name: string): ComponentRenderer | undefined {
-    return this.components.get(name);
+    return this.#components.get(name);
   }
 
   /**
    * Check if a component is registered
    */
   has(name: string): boolean {
-    return this.components.has(name);
+    return this.#components.has(name);
   }
 
   /**
@@ -81,14 +81,14 @@ class ComponentRegistry {
    * Get all registered component names
    */
   getAllNames(): string[] {
-    return Array.from(this.components.keys());
+    return Array.from(this.#components.keys());
   }
 
   /**
    * Clear all registered components
    */
   clear(): void {
-    this.components.clear();
+    this.#components.clear();
     this.#options.clear();
   }
 

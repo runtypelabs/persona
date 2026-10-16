@@ -13,18 +13,20 @@
  */
 
 import type { ComposerOverflowMenuConfig } from "../types";
+import { ensureComposerActionStyles } from "./composer-action-styles";
 import { createPopover, type PopoverHandle } from "../plugin-kit";
 import { createElement, createNode } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
-import { attachTooltip } from "../utils/tooltip";
+import type { renderLucideIcon } from "../utils/icons";
+import type { attachTooltip } from "../utils/tooltip";
 import {
   COMPOSER_CONTROL_CLASS,
   COMPOSER_CONTROL_GLYPH_CLASS,
   COMPOSER_CONTROL_ICON_FALLBACK_PX,
   forwardMenuTokens,
-} from "./composer-parts";
+} from "./composer-tokens";
 
 export interface ComposerOverflowMenuOptions {
+  deps: { renderLucideIcon: typeof renderLucideIcon; attachTooltip: typeof attachTooltip };
   /** Accessible name for the trigger and the menu. */
   label: string;
   /**
@@ -103,6 +105,7 @@ const isDisabled = (element: HTMLElement): boolean =>
 export function createComposerOverflowMenu(
   options: ComposerOverflowMenuOptions
 ): ComposerOverflowMenu {
+  const { renderLucideIcon, attachTooltip } = options.deps;
   let label = options.label;
   let destroyed = false;
   let opening = false;
@@ -306,6 +309,7 @@ export function createComposerOverflowMenu(
 
   const open = (focusIndex = 0, viaKeyboard = false): void => {
     if (destroyed || preparing || closing || isOpen()) return;
+    ensureComposerActionStyles(triggerButton);
     tooltip.hide();
     opening = true;
     preparing = true;

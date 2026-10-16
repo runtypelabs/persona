@@ -30,7 +30,7 @@ const TRACKED_PATHS = /* @__PURE__ */ (() => [
   ...["theme", "darkTheme"].flatMap((group) =>
     OPT_IN_THEME_STYLE_PATHS.map((path) => `${group}.components.${path}`)),
 ])();
-const STYLE_PROVENANCE = Symbol("persona.styleProvenance");
+const STYLE_PROVENANCE = Symbol.for("persona.styleProvenance");
 type Origin = { explicit: readonly string[]; values: Readonly<Record<string, unknown>> };
 type Marked = { [STYLE_PROVENANCE]?: Origin };
 export const hasStyleProvenance = (config: object): boolean =>

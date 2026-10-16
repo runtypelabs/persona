@@ -1,4 +1,5 @@
-import type { RuntypeClientInitResponse } from "./generated/runtype-openapi-contract";
+import { getClientDispatchSync, loadClientDispatch } from "./client-dispatch-loader";
+import type { CreateClientSessionOptions, ClientDispatchHost } from "./client-dispatch";
 import {
   AgentWidgetConfig,
   AgentWidgetMessage,
@@ -6,8 +7,6 @@ import {
   AgentWidgetStreamParser,
   AgentWidgetContextProvider,
   AgentWidgetRequestMiddleware,
-  AgentWidgetRequestPayload,
-  AgentWidgetAgentRequestPayload,
   AgentWidgetCustomFetch,
   AgentWidgetSSEEventParser,
   AgentWidgetStreamCheckpoint,
@@ -18,7 +17,6 @@ import {
   VoicePriorToolResult,
   ClientToolDefinition,
   ClientFeedbackRequest,
-  ClientFeedbackType,
   PreparedClientSession,
   WidgetHistoryInternals,
   HistoryScope,
@@ -41,7 +39,6 @@ import type { WebMcpBridge } from "./webmcp-runtime-entry";
 import { resolveTarget } from "./utils/target";
 import { generateTurnId } from "./utils/message-id";
 import { builtInClientToolsForDispatch } from "./ask-user-question-tool";
-import { serializeWithToolPairs } from "./utils/tool-pair-replay";
 import {
   createPlainTextParser,
   createJsonStreamParser,
@@ -56,12 +53,10 @@ import type { ClientResumeHost } from "./client-resume";
 
 /** History transcripts stay on the wire shape; `utils/history-messages.ts` maps them. */
 export type { HistoryWireMessage } from "./utils/history-messages";
-import { divergentDisplayProjection } from "./utils/history-messages";
-import { isLocalOnlyMessage } from "./utils/local-only-message";
 // artifactsSidebarEnabled is used in ui.ts to gate the sidebar pane rendering;
 // artifact events are always processed here regardless of config.
 
-type DispatchOptions = {
+export type DispatchOptions = {
   messages: AgentWidgetMessage[];
   signal?: AbortSignal;
   /** Pre-generated ID for the expected assistant response (for feedback tracking) */
@@ -145,55 +140,6 @@ export class HistoryClientError extends Error {
 const identityReason = (status: HistoryIdentityStatus): string | undefined =>
   "reason" in status ? status.reason : undefined;
 
-
-const PROOF_REJECTED_MESSAGE = "The identity proof was rejected";
-
-const isHistoryClientError = (
-  error: unknown,
-  code: HistoryClientErrorCode
-): boolean => error instanceof HistoryClientError && error.code === code;
-
-
-/**
- * Check if a message has valid (non-empty) content for sending to the API.
- * Filters out messages with empty content that would cause validation errors.
- *
- */
-const hasValidContent = (message: AgentWidgetMessage): boolean => {
-  // Display-only voice captions are never conversation.
-  if (message.voiceCaption) return false;
-  if (isLocalOnlyMessage(message)) return false;
-  // Check contentParts (multi-modal content)
-  if (message.contentParts && message.contentParts.length > 0) {
-    return true;
-  }
-  // Check llmContent (explicit LLM content)
-  if (message.llmContent && message.llmContent.trim().length > 0) {
-    return true;
-  }
-  // Check rawContent (structured parser output)
-  if (message.rawContent && message.rawContent.trim().length > 0) {
-    return true;
-  }
-  // Check content (display content)
-  if (message.content && message.content.trim().length > 0) {
-    return true;
-  }
-  return false;
-};
-
-const sortByCreatedAt = (messages: AgentWidgetMessage[]): AgentWidgetMessage[] =>
-  messages
-    .slice()
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-
-// Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
-const toPayloadMessage = (message: AgentWidgetMessage) => ({
-  role: message.role,
-  content: message.contentParts ?? message.llmContent ?? message.rawContent ?? message.content,
-  createdAt: message.createdAt
-});
-
 /**
  * Maps parserType string to the corresponding parser factory function
  */
@@ -213,11 +159,12 @@ function getParserFromType(parserType?: "plain" | "json" | "regex-json" | "xml")
 
 export type SSEEventCallback = (eventType: string, payload: unknown) => void;
 
-
 export class AgentWidgetClient {
   readonly #apiUrl: string;
   readonly #headers: Record<string, string>;
-  private readonly debug: boolean;
+  readonly #debug: boolean;
+  #historyInternals: WidgetHistoryInternals;
+  #config: AgentWidgetConfig;
   readonly #createStreamParser: () => AgentWidgetStreamParser;
   readonly #contextProviders: AgentWidgetContextProvider[];
   readonly #requestMiddleware?: AgentWidgetRequestMiddleware;
@@ -225,8 +172,8 @@ export class AgentWidgetClient {
   readonly #parseSSEEvent?: AgentWidgetSSEEventParser;
   readonly #getHeaders?: AgentWidgetHeadersFunction;
   #onSSEEvent?: SSEEventCallback;
-  private streamGeneration = 0;
-  private streamReaders = new Set<ReadableStreamDefaultReader<Uint8Array>>();
+  #streamGeneration = 0;
+  #streamReaders = new Set<ReadableStreamDefaultReader<Uint8Array>>();
   
   // Client token mode properties
   /**
@@ -287,9 +234,11 @@ export class AgentWidgetClient {
   #pendingWebMcpConfirmHandler: WebMcpConfirmHandler | null | undefined;
 
   constructor(
-    private config: AgentWidgetConfig = {},
-    private historyInternals: WidgetHistoryInternals = {}
+    config: AgentWidgetConfig = {},
+    historyInternals: WidgetHistoryInternals = {}
   ) {
+    this.#config = config;
+    this.#historyInternals = historyInternals;
     if (config.target && (config.agentId || config.flowId || config.agent)) {
       throw new Error(
         "[Persona] `target` is mutually exclusive with `agentId`, `flowId`, and `agent`. Set only one routing field.",
@@ -301,7 +250,7 @@ export class AgentWidgetClient {
       "X-Persona-Version": VERSION,
       ...config.headers
     };
-    this.debug = Boolean(config.debug);
+    this.#debug = Boolean(config.debug);
     // Use custom stream parser if provided, otherwise use parserType, or fall back to plain text parser
     this.#createStreamParser = config.streamParser ?? getParserFromType(config.parserType);
     this.#contextProviders = config.contextProviders ?? [];
@@ -347,9 +296,9 @@ export class AgentWidgetClient {
   /** Resolve the bridge, loading the runtime chunk on first use. */
   #getWebMcpBridge(): Promise<WebMcpBridge | null> {
     if (this.webMcpBridge) return Promise.resolve(this.webMcpBridge);
-    if (this.config.webmcp?.enabled !== true) return Promise.resolve(null);
+    if (this.#config.webmcp?.enabled !== true) return Promise.resolve(null);
     if (!this.#webMcpBridgePromise) {
-      this.#webMcpBridgePromise = this.#createWebMcpBridge(this.config.webmcp);
+      this.#webMcpBridgePromise = this.#createWebMcpBridge(this.#config.webmcp);
     }
     return this.#webMcpBridgePromise;
   }
@@ -373,12 +322,12 @@ export class AgentWidgetClient {
    * in-flight resolve alive.
    */
   public updateConfig(next: AgentWidgetConfig): void {
-    this.config = next;
+    this.#config = next;
   }
 
   /** Re-thread the controller-owned history dependencies (store rebuild). */
   public setHistoryInternals(internals: WidgetHistoryInternals): void {
-    this.historyInternals = internals;
+    this.#historyInternals = internals;
   }
 
   /**
@@ -386,12 +335,12 @@ export class AgentWidgetClient {
    */
   /** @internal Invalidate all readers at a local conversation/identity boundary. */
   public cancelStreams(): void {
-    this.streamGeneration += 1;
+    this.#streamGeneration += 1;
     // Durable detachment explicitly closes its attachment. Other transports
     // retain their existing customFetch producer teardown contract; invalidate
     // their events without introducing a new reader.cancel() side effect.
-    if (!this.config.backgroundConversations) return;
-    for (const reader of this.streamReaders) void reader.cancel().catch(() => {});
+    if (!this.#config.backgroundConversations) return;
+    for (const reader of this.#streamReaders) void reader.cancel().catch(() => {});
   }
 
   public setSSEEventCallback(callback: SSEEventCallback): void {
@@ -435,7 +384,7 @@ export class AgentWidgetClient {
    * voice execute path. `null` when WebMCP is not enabled.
    */
   public getVoiceClientTools():import("./types").VoiceClientTools | null {
-    if (this.config.webmcp?.enabled !== true) return null;
+    if (this.#config.webmcp?.enabled !== true) return null;
     const bridge = () => this.#getWebMcpBridge();
     const surface: import("./types").VoiceClientTools = {
       open: async (channel) => (await loadVoiceClientTools()).createVoiceClientToolsSession(surface, channel),
@@ -474,7 +423,7 @@ export class AgentWidgetClient {
     // Route on CONFIG, not bridge presence: the lazily-loaded bridge may not
     // have adopted yet, and returning null would misroute the call to the
     // legacy local-tool resume path.
-    if (this.config.webmcp?.enabled !== true) return null;
+    if (this.#config.webmcp?.enabled !== true) return null;
     return this.#getWebMcpBridge().then((bridge) =>
       bridge
         ? bridge.executeToolCall(wireToolName, args, signal, toolCallId)
@@ -498,7 +447,7 @@ export class AgentWidgetClient {
    * Check if running in client token mode
    */
   public isClientTokenMode(): boolean {
-    return !!this.config.clientToken;
+    return !!this.#config.clientToken;
   }
 
   /**
@@ -513,7 +462,7 @@ export class AgentWidgetClient {
     flowId?: string;
     targetPayload?: Record<string, unknown>;
   } {
-    const { agentId, flowId, target, targetProviders } = this.config;
+    const { agentId, flowId, target, targetProviders } = this.#config;
     if (!target) {
       return { agentId, flowId };
     }
@@ -527,7 +476,7 @@ export class AgentWidgetClient {
    * Check if operating in agent execution mode
    */
   public isAgentMode(): boolean {
-    return !!(this.config.agent || this.#routing().agentId);
+    return !!(this.#config.agent || this.#routing().agentId);
   }
 
   /**
@@ -538,7 +487,7 @@ export class AgentWidgetClient {
    */
   #clientApiBase(): string {
     return (
-      this.config.apiUrl?.replace(/\/+$/, '').replace(/\/v1\/dispatch$/, '') ||
+      this.#config.apiUrl?.replace(/\/+$/, '').replace(/\/v1\/dispatch$/, '') ||
       DEFAULT_CLIENT_API_BASE
     );
   }
@@ -675,7 +624,7 @@ export class AgentWidgetClient {
         // the set under. (Belt-and-suspenders with the sessionId comparison in the
         // send decision and the server's 409 resend signal.)
         this.resetClientToolsFingerprint();
-        this.config.onSessionInit?.(session);
+        this.#config.onSessionInit?.(session);
         return session;
       })
       .finally(() => {
@@ -687,14 +636,14 @@ export class AgentWidgetClient {
   /** Visitor history rides on client-token init only, and latches off after a 403 degrade. */
   #isHistoryCapable(): boolean {
     return (
-      this.config.features?.history?.enabled === true &&
+      this.#config.features?.history?.enabled === true &&
       this.isClientTokenMode() &&
       !this.#historyUnavailable
     );
   }
 
   private async readVisitorToken(): Promise<string | null> {
-    const store = this.historyInternals.visitorStore;
+    const store = this.#historyInternals.visitorStore;
     if (!store) return null;
     await store.ready;
     return (await store.get()) ?? null;
@@ -713,7 +662,7 @@ export class AgentWidgetClient {
         '[Persona] Visitor history is disabled for this surface; continuing without it.'
       );
     }
-    this.historyInternals.onHistoryAvailabilityChanged?.(false);
+    this.#historyInternals.onHistoryAvailabilityChanged?.(false);
     for (const subscriber of [...this.#historyAvailabilitySubscribers]) {
       subscriber(false);
     }
@@ -750,7 +699,7 @@ export class AgentWidgetClient {
     if (!this.isClientTokenMode()) {
       return { state: 'unavailable', reason: 'ineligible_mode' };
     }
-    if (this.config.features?.history?.enabled !== true || this.#historyUnavailable) {
+    if (this.#config.features?.history?.enabled !== true || this.#historyUnavailable) {
       return { state: 'unavailable', reason: 'history_disabled' };
     }
     return this.#browserOnlyStatus();
@@ -764,10 +713,10 @@ export class AgentWidgetClient {
   }
 
   #derivedBrowserOnly(): HistoryIdentityStatus {
-    if (this.config.features?.history?.scope === 'browser') {
+    if (this.#config.features?.history?.scope === 'browser') {
       return { state: 'browser_only', reason: 'configured_browser_scope' };
     }
-    if (!this.config.getIdentityProof) {
+    if (!this.#config.getIdentityProof) {
       return { state: 'browser_only', reason: 'no_identity_provider' };
     }
     return { state: 'browser_only', reason: 'proof_unavailable_before_binding' };
@@ -780,7 +729,7 @@ export class AgentWidgetClient {
       current.state === next.state && identityReason(current) === identityReason(next);
     this.#historyIdentityStatus = next;
     if (unchanged) return;
-    this.historyInternals.onHistoryIdentityStatusChanged?.(next);
+    this.#historyInternals.onHistoryIdentityStatusChanged?.(next);
     for (const subscriber of [...this.#historyIdentitySubscribers]) subscriber(next);
   }
 
@@ -789,193 +738,14 @@ export class AgentWidgetClient {
    * `conversationId` and `sessionId` are mutually exclusive on the wire (strict
    * server union), so a resume never carries the stored session id.
    */
-  async #createClientSession(opts: {
-    conversationId?: string;
-    durableResume?: boolean;
-    identityProof?: string | null;
-    storedSessionId?: string | null;
-    omitVisitorFields?: boolean;
-    signal?: AbortSignal;
-  }): Promise<ClientSession> {
-    const historyCapable = this.#isHistoryCapable() && !opts.omitVisitorFields;
-    // Recovery is negotiated independently from the history UI. New servers
-    // return an explicit capability bit; old strict servers reject the
-    // additive request field, which the fallback below handles once.
-    const durableRecoveryRequested = !opts.omitVisitorFields;
-    let visitorToken: string | null = null;
-    if (historyCapable || durableRecoveryRequested) {
-      // Never read persisted state before the controller's stored-state gate.
-      await this.historyInternals.historyBootstrapReady;
-      visitorToken = await this.readVisitorToken();
-    }
-
-    const routed = this.#routing();
-    const sessionTargetId = routed.agentId ?? routed.flowId;
-    const resumeConversationId =
-      historyCapable || opts.durableResume ? opts.conversationId : undefined;
-    const requestBody: Record<string, unknown> = {
-      token: this.config.clientToken,
-      ...(sessionTargetId && { flowId: sessionTargetId }),
-      ...(historyCapable && { visitorHistory: true }),
-      ...(durableRecoveryRequested && { durableRecovery: true }),
-      ...((historyCapable || durableRecoveryRequested) && visitorToken
-        ? { visitorToken }
-        : {}),
-      // Independent of the strict conversationId/sessionId union: a proof also
-      // binds the visitor on an ordinary init.
-      ...(historyCapable && opts.identityProof
-        ? { identityProof: opts.identityProof }
-        : {}),
-      ...(resumeConversationId
-        ? { conversationId: resumeConversationId }
-        : opts.storedSessionId
-          ? { sessionId: opts.storedSessionId }
-          : {}),
-    };
-
-    opts.signal?.throwIfAborted();
-    const response = await fetch(this.#getClientApiUrl('init'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Persona-Version': VERSION,
-      },
-      body: JSON.stringify(requestBody),
-      signal: opts.signal,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Session initialization failed' }));
-      if (historyCapable && response.status === 403 && error.error === 'visitor_history_disabled') {
-        this.#markHistoryUnavailable();
-        // A resume must not silently degrade into some other conversation.
-        if (resumeConversationId) {
-          throw new HistoryClientError(
-            'history_disabled',
-            'Visitor history is disabled for this surface'
-          );
-        }
-        return this.#createClientSession({ ...opts, omitVisitorFields: true });
-      }
-      if (response.status === 403 && error.error === 'durable_recovery_disabled') {
-        throw new HistoryClientError(
-          'history_disabled',
-          'Durable recovery is disabled for this surface'
-        );
-      }
-      if (
-        (historyCapable || opts.durableResume) &&
-        response.status === 401 &&
-        error.error === 'visitor_required'
-      ) {
-        throw new HistoryClientError('visitor_required', 'Visitor credential no longer resolves');
-      }
-      if (resumeConversationId && response.status === 404) {
-        throw new HistoryClientError('not_found', 'Conversation not found');
-      }
-      if (response.status === 401) {
-        throw new Error(`Invalid client token: ${error.hint || error.error}`);
-      }
-      if (response.status === 403) {
-        throw new Error(`Origin not allowed: ${error.hint || error.error}`);
-      }
-      throw new Error(error.error || 'Failed to initialize session');
-    }
-
-    const data: RuntypeClientInitResponse = await response.json();
-
-    // First awaited op after parse: the server cannot re-issue a minted secret.
-    if (data.visitor?.token) {
-      await this.historyInternals.visitorStore?.set(data.visitor.token);
-    }
-
-    return {
-      sessionId: data.sessionId,
-      expiresAt: new Date(data.expiresAt),
-      // Preserve the published session facade while consuming the current wire type.
-      flow: data.flow as ClientSession["flow"],
-      ...(data.conversationId ? { conversationId: data.conversationId } : {}),
-      ...(data.targetId ? { targetId: data.targetId } : {}),
-      ...(data.conversationRevision
-        ? { conversationRevision: data.conversationRevision }
-        : {}),
-      ...(data.durableRecovery ? { durableRecovery: data.durableRecovery } : {}),
-      ...(data.visitor ? { visitor: data.visitor } : {}),
-      config: {
-        welcomeMessage: data.config.welcomeMessage,
-        placeholder: data.config.placeholder,
-        theme: data.config.theme as ClientSession["config"]["theme"],
-      },
-    };
+  async #createClientSession(opts: CreateClientSessionOptions): Promise<ClientSession> {
+    const runtime = getClientDispatchSync() ?? await loadClientDispatch();
+    return new runtime.ClientDispatch(this.#dispatchHost()).createClientSession(opts);
   }
 
   async #_doInitSession(): Promise<ClientSession> {
-    await this.historyInternals.historyBootstrapReady;
-    const previousConversationId = this.config.getStoredConversationId?.() || null;
-    const durableResume =
-      this.historyInternals.shouldResumeDurableConversation?.() === true;
-    if (!this.#isHistoryCapable() && !durableResume) {
-      return this.#ordinaryInit(previousConversationId, false);
-    }
-    const storedToken = await this.readVisitorToken();
-
-    // Boot resume: reopening the record beats replaying a possibly idle-expired
-    // session id, so benign expiry never forks or wipes the conversation.
-    if (previousConversationId && storedToken) {
-      try {
-        const resumed = await this.#createClientSession({
-          conversationId: previousConversationId,
-          durableResume,
-        });
-        if (durableResume && resumed.durableRecovery?.enabled !== true) {
-          this.historyInternals.setStoredResumableHandle?.(null);
-        }
-        return this.#finishInit(resumed, previousConversationId, false);
-      } catch (error) {
-        if (
-          !isHistoryClientError(error, 'not_found') &&
-          !isHistoryClientError(error, 'visitor_required') &&
-          !isHistoryClientError(error, 'history_disabled')
-        ) {
-          throw error;
-        }
-        if (durableResume) {
-          this.historyInternals.setStoredResumableHandle?.(null);
-        }
-        // Record gone or credential dead: exactly one ordinary fallback, never a loop.
-        return this.#ordinaryInit(previousConversationId, true);
-      }
-    }
-
-    return this.#ordinaryInit(previousConversationId, false);
-  }
-
-  /**
-   * An empty store means this init may mint a visitor, so it runs under the
-   * cross-tab first-init lock: a waiter re-reads inside the lock and joins the
-   * winner's visitor instead of minting a second one.
-   */
-  async #ordinaryInit(
-    previousConversationId: string | null,
-    continuityBroken: boolean
-  ): Promise<ClientSession> {
-    const store = this.historyInternals.visitorStore;
-    if (store && !(await this.readVisitorToken())) {
-      return store.withFirstInitLock(() =>
-        this.#doOrdinaryInit(previousConversationId, continuityBroken)
-      );
-    }
-    return this.#doOrdinaryInit(previousConversationId, continuityBroken);
-  }
-
-  async #doOrdinaryInit(
-    previousConversationId: string | null,
-    continuityBroken: boolean
-  ): Promise<ClientSession> {
-    const storedSessionId = this.config.getStoredSessionId?.() || null;
-    const first = await this.#createClientSession({ storedSessionId });
-    const session = await this.#claimFirstConversation(first);
-    return this.#finishInit(session, previousConversationId, continuityBroken);
+    const runtime = getClientDispatchSync() ?? await loadClientDispatch();
+    return new runtime.ClientDispatch(this.#dispatchHost()).initializeSession();
   }
 
   /**
@@ -984,8 +754,8 @@ export class AgentWidgetClient {
    * the result as the live session.
    */
   async #reinitWithProof(proof: string): Promise<ClientSession> {
-    const storedSessionId = this.config.getStoredSessionId?.() || null;
-    const previousConversationId = this.config.getStoredConversationId?.() || null;
+    const storedSessionId = this.#config.getStoredSessionId?.() || null;
+    const previousConversationId = this.#config.getStoredConversationId?.() || null;
     const session = await this.#createClientSession({
       storedSessionId,
       identityProof: proof,
@@ -996,29 +766,6 @@ export class AgentWidgetClient {
     this.#sessionWarmLatch = false;
     this.resetClientToolsFingerprint();
     return installed;
-  }
-
-  /**
-   * A minted visitor means the record this session just created is still
-   * unowned; one immediate re-init with `{visitorToken, sessionId}` claims it.
-   */
-  async #claimFirstConversation(first: ClientSession): Promise<ClientSession> {
-    if (
-      !first.visitor?.token ||
-      this.#claimInFlight ||
-      (!this.#isHistoryCapable() && first.durableRecovery?.enabled !== true)
-    ) {
-      return first;
-    }
-    this.#claimInFlight = true;
-    try {
-      return await this.#createClientSession({ storedSessionId: first.sessionId });
-    } catch {
-      // Non-fatal: the next page load claims through the normal backend path.
-      return first;
-    } finally {
-      this.#claimInFlight = false;
-    }
   }
 
   /**
@@ -1036,15 +783,15 @@ export class AgentWidgetClient {
       previousConversationId &&
       (continuityBroken || conversationId !== previousConversationId)
     ) {
-      this.historyInternals.onHistoryContinuityChanged?.({
+      this.#historyInternals.onHistoryContinuityChanged?.({
         previousConversationId,
         conversationId,
       });
     }
-    this.config.setStoredSessionId?.(session.sessionId);
+    this.#config.setStoredSessionId?.(session.sessionId);
     if (conversationId) {
-      this.config.setStoredConversationId?.(conversationId);
-      this.historyInternals.setStoredConversationRevision?.(
+      this.#config.setStoredConversationId?.(conversationId);
+      this.#historyInternals.setStoredConversationRevision?.(
         session.conversationRevision ?? null
       );
     }
@@ -1087,7 +834,7 @@ export class AgentWidgetClient {
         'Visitor history is disabled for this surface'
       );
     }
-    await this.historyInternals.historyBootstrapReady;
+    await this.#historyInternals.historyBootstrapReady;
     const proof = opts?.proof ?? null;
     const visitorToken = await this.readVisitorToken();
     if (!visitorToken && !proof) {
@@ -1108,7 +855,7 @@ export class AgentWidgetClient {
     if (!this.isClientTokenMode()) {
       throw new Error('prepareNewConversationSession() only available in client token mode');
     }
-    await this.historyInternals.historyBootstrapReady;
+    await this.#historyInternals.historyBootstrapReady;
     const session = await this.#createClientSession({});
     return this.#prepared(session);
   }
@@ -1144,13 +891,6 @@ export class AgentWidgetClient {
     this.lastSentClientToolsFingerprint = null;
     this.clientToolsFingerprintSessionId = null;
     this.#sentNonEmptyClientToolsSessionId = null;
-  }
-
-  /**
-   * Get the feedback API URL
-   */
-  #getFeedbackApiUrl(): string {
-    return `${this.#clientApiBase()}/v1/client/feedback`;
   }
 
   /**
@@ -1196,59 +936,8 @@ export class AgentWidgetClient {
       throw new Error('No active session. Please initialize session first.');
     }
 
-    // Validate messageId is provided for message-level feedback types
-    const messageFeedbackTypes: ClientFeedbackType[] = ['upvote', 'downvote', 'copy'];
-    if (messageFeedbackTypes.includes(feedback.type) && !feedback.messageId) {
-      throw new Error(`messageId is required for ${feedback.type} feedback type`);
-    }
-
-    // Validate rating is provided for csat/nps feedback types
-    if (feedback.type === 'csat') {
-      if (feedback.rating === undefined || feedback.rating < 1 || feedback.rating > 5) {
-        throw new Error('CSAT rating must be between 1 and 5');
-      }
-    }
-    if (feedback.type === 'nps') {
-      if (feedback.rating === undefined || feedback.rating < 0 || feedback.rating > 10) {
-        throw new Error('NPS rating must be between 0 and 10');
-      }
-    }
-
-    if (this.debug) {
-      // eslint-disable-next-line no-console
-      console.debug("[AgentWidgetClient] sending feedback", feedback);
-    }
-
-    // Scope the feedback request to the caller's client token, sourced the same
-    // way as the chat/init requests. sendFeedback is client-token-mode only
-    // (guarded above), so clientToken is always present here and an API key can
-    // never leak into the body. Left undefined only when the embed has none.
-    const requestBody = {
-      ...feedback,
-      ...(this.config.clientToken && { token: this.config.clientToken }),
-    };
-
-    const response = await fetch(this.#getFeedbackApiUrl(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Persona-Version': VERSION,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: 'Feedback submission failed' }));
-      
-      if (response.status === 401) {
-        this.clientSession = null;
-        this.#sessionWarmLatch = false;
-        this.config.onSessionExpired?.();
-        throw new Error('Session expired. Please refresh to continue.');
-      }
-      
-      throw new Error(errorData.error || 'Failed to submit feedback');
-    }
+    const runtime = getClientDispatchSync() ?? await loadClientDispatch();
+    return new runtime.ClientDispatch(this.#dispatchHost()).sendFeedback(feedback);
   }
 
   /**
@@ -1316,9 +1005,9 @@ export class AgentWidgetClient {
 
   async #resolveChatIdentityProof(signal?: AbortSignal): Promise<ClientChatRequest['identityProof']> {
     signal?.throwIfAborted();
-    const provider = this.config.identityProvider;
+    const provider = this.#config.identityProvider;
     if (provider === undefined) return undefined;
-    const getIdentityProof = this.config.getIdentityProof;
+    const getIdentityProof = this.#config.getIdentityProof;
     if (!provider.trim() || !getIdentityProof) {
       throw new Error('Chat identity requires identityProvider and getIdentityProof.');
     }
@@ -1356,11 +1045,11 @@ export class AgentWidgetClient {
     const client = this;
     return (this.#resumeHostCache ??= {
       get config() {
-        return client.config;
+        return client.#config;
       },
       headers: this.#headers,
       getHeaders: this.#getHeaders,
-      debug: this.debug,
+      debug: this.#debug,
       clientApiBase: () => client.#clientApiBase(),
       getClientApiUrl: (endpoint) => client.#getClientApiUrl(endpoint),
       getWebMcpBridge: () => client.#getWebMcpBridge(),
@@ -1381,10 +1070,10 @@ export class AgentWidgetClient {
     return (this.#historyHostCache ??= {
       HistoryClientError,
       get config() {
-        return client.config;
+        return client.#config;
       },
       get historyInternals() {
-        return client.historyInternals;
+        return client.#historyInternals;
       },
       get clientSession() {
         return client.clientSession;
@@ -1471,395 +1160,59 @@ export class AgentWidgetClient {
     // Fetch the stream processor in parallel with the request; a failure here
     // is retried by the awaited load in #streamResponse.
     loadClientStream().catch(() => {});
-    if (this.isClientTokenMode()) {
-      return this.#dispatchClientToken(options, onEvent);
-    }
-    if (this.isAgentMode()) {
-      return this.#dispatchAgent(options, onEvent);
-    }
-    return this.#dispatchProxy(options, onEvent);
-  }
-
-  /**
-   * Client token mode dispatch
-   */
-  async #dispatchClientToken(options: DispatchOptions, onEvent: SSEHandler) {
-    // Claim the turn before any await: a later dispatch that interrupts this one
-    // takes the claim, and every event this call still receives is then stale.
+    const clientToken = this.isClientTokenMode();
+    const agentMode = this.isAgentMode();
+    // Claim before loading: an interrupted turn must never resume after its
+    // replacement merely because its module request completed later.
     const turnId = generateTurnId();
-    this.#currentClientTurnId = turnId;
-    const isCurrentTurn = () => this.#currentClientTurnId === turnId;
-    // Terminal frames of a superseded run must not reopen the composer or paint
-    // into the new turn's bubble; status frames are equally misleading.
-    const forward: SSEHandler = (event) => {
-      if (!isCurrentTurn()) return;
-      onEvent(event);
-    };
-
+    if (clientToken) this.#currentClientTurnId = turnId;
     onEvent({ type: "status", status: "connecting" });
-
-    try {
-      const assertCurrentTurn = () => {
-        options.signal?.throwIfAborted();
-        if (!isCurrentTurn()) throw new DOMException('Turn superseded', 'AbortError');
-      };
-      let session = this.clientSession ?? (await this.initSession());
-      assertCurrentTurn();
-      const renewSession = async () => {
-        assertCurrentTurn();
-        const previous = session;
-        const durable = previous.durableRecovery?.enabled === true;
-        if (durable && (!previous.conversationId || !(await this.readVisitorToken()))) {
-          throw new Error('Renewing this conversation requires its visitor credential.');
-        }
-        assertCurrentTurn();
-        const renewed = await this.#createClientSession({
-          ...(durable || this.#isHistoryCapable()
-            ? { conversationId: previous.conversationId, durableResume: durable }
-            : { storedSessionId: previous.sessionId }),
-          signal: options.signal,
-        });
-        assertCurrentTurn();
-        if (
-          (previous.conversationId && renewed.conversationId !== previous.conversationId) ||
-          (durable && renewed.durableRecovery?.enabled !== true)
-        ) {
-          throw new Error('Session renewal did not preserve this conversation.');
-        }
-        session = this.#finishInit(renewed, previous.conversationId ?? null, false);
-        this.clientSession = session;
-        this.#sessionWarmLatch = false;
-        this.resetClientToolsFingerprint();
-        this.config.onSessionInit?.(session);
-      };
-      if (Date.now() >= session.expiresAt.getTime() - 60000) {
-        await renewSession();
-      }
-
-      // Build the standard payload to get context/metadata from middleware
-      const basePayload = await this.#buildPayload(options.messages);
-
-      // Build the chat request payload with message IDs for feedback tracking
-      // Filter out sessionId from metadata if present (it's only for local storage)
-      const sanitizedMetadata = basePayload.metadata
-        ? Object.fromEntries(
-            Object.entries(basePayload.metadata).filter(([key]) => key !== 'sessionId' && key !== 'session_id')
-          )
-        : undefined;
-      
-      // Common (tools-independent) fields for the chat request.
-      const historyCapable = this.#isHistoryCapable();
-      const baseChatRequest: Omit<ClientChatRequest, 'clientTools' | 'clientToolsFingerprint'> = {
-        sessionId: session.sessionId,
-        // Filter out messages with empty content to prevent validation errors
-        messages: options.messages.filter(hasValidContent).map(m => {
-          // The visitor-visible projection rides along only where it diverges
-          // from the model channel, and only on the history-capable plane.
-          const displayContent = historyCapable
-            ? divergentDisplayProjection(m)
-            : undefined;
-          return {
-            id: m.id, // Include message ID for tracking
-            role: m.role,
-            // Priority: contentParts (multi-modal) > llmContent (explicit LLM content) > rawContent (structured parsers) > content (display)
-            content: m.contentParts ?? m.llmContent ?? m.rawContent ?? m.content,
-            ...(displayContent !== undefined && { displayContent }),
-          };
-        }),
-        // Include pre-generated assistant message ID if provided
-        ...(options.assistantMessageId && { assistantMessageId: options.assistantMessageId }),
-        // Include metadata/context from middleware if present (excluding sessionId)
-        ...(sanitizedMetadata && Object.keys(sanitizedMetadata).length > 0 && { metadata: sanitizedMetadata }),
-        ...(basePayload.inputs && Object.keys(basePayload.inputs).length > 0 && { inputs: basePayload.inputs }),
-        ...(basePayload.context && { context: basePayload.context }),
-        // Every client-token turn carries a turnId so the server can suppress a
-        // superseded run and this client can drop its stale events below.
-        turnId,
-        ...(options.interrupt && { submitMode: 'interrupt' as const }),
-        ...(options.voiceSpoken && {
-          voice: {
-            spoken: true as const,
-            ...(options.voicePriorToolResults?.length && { priorToolResults: options.voicePriorToolResults }),
-          },
-        }),
-      };
-
-      // Diff-only / send-once WebMCP tool dispatch. `buildPayload()` already
-      // snapshotted the full set; `sendWithClientToolsDiff` decides whether to
-      // ship it again or just its fingerprint (retrying once on a 409 registry
-      // miss). The cache is committed only after a successful stream start
-      // (below), so a 409/failure leaves it untouched.
-      const send = async () => {
-        assertCurrentTurn();
-        const recoveryVisitorToken =
-          session.durableRecovery?.enabled === true ? await this.readVisitorToken() : null;
-        assertCurrentTurn();
-        return this.#sendWithClientToolsDiff(session.sessionId, basePayload.clientTools, async (toolFields) => {
-          assertCurrentTurn();
-          const identityProof = await this.#resolveChatIdentityProof(options.signal);
-          assertCurrentTurn();
-          const chatRequest: ClientChatRequest = {
-            ...baseChatRequest,
-            sessionId: session.sessionId,
-            ...toolFields,
-            ...(identityProof && { identityProof }),
-          };
-
-          if (this.debug) {
-            // eslint-disable-next-line no-console
-            console.debug("[AgentWidgetClient] client token dispatch", {
-              ...chatRequest,
-              ...(identityProof && { identityProof: { provider: identityProof.provider, token: '[REDACTED]' } }),
-            });
-          }
-
-          return fetch(this.#getClientApiUrl('chat'), {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Persona-Version': VERSION,
-              ...(recoveryVisitorToken
-                ? { 'X-Visitor-Token': recoveryVisitorToken }
-                : {}),
-            },
-            body: JSON.stringify(chatRequest),
-            signal: options.signal,
-          });
-        });
-      };
-      let result = await send();
-      assertCurrentTurn();
-      if (result.response.status === 401) {
-        const rejection = await result.response.clone().json().catch(() => null);
-        assertCurrentTurn();
-        if (rejection?.error === 'Session not found or expired') {
-          await renewSession();
-          result = await send();
-          assertCurrentTurn();
-        }
-      }
-      const { response, commit: commitClientToolsFingerprint } = result;
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({ error: 'Chat request failed' }));
-
-        if (response.status === 401 && data.error === 'invalid_identity_proof') {
-          const error = new HistoryClientError('invalid_identity_proof', PROOF_REJECTED_MESSAGE);
-          forward({ type: 'error', error });
-          throw error;
-        }
-
-        if (response.status === 401) {
-          // Session expired
-          this.clearClientSession();
-          this.config.onSessionExpired?.();
-          const error = new Error('Session expired. Please refresh to continue.');
-          forward({ type: "error", error });
-          throw error;
-        }
-
-        if (response.status === 429) {
-          const error = new Error(data.hint || 'Message limit reached for this session.');
-          forward({ type: "error", error });
-          throw error;
-        }
-
-        // The active record was deleted elsewhere. No client-level retry: the
-        // old payload would recreate the transcript in a fresh record, so
-        // WidgetSession owns recovery.
-        if (response.status === 410 && data.error === 'conversation_deleted') {
-          const error = new HistoryClientError(
-            'conversation_deleted',
-            'This conversation was deleted'
-          );
-          forward({ type: "error", error });
-          throw error;
-        }
-
-        const error = new Error(data.error || 'Failed to send message');
-        forward({ type: "error", error });
-        throw error;
-      }
-
-      if (!response.body) {
-        const error = new Error('No response body received');
-        forward({ type: "error", error });
-        throw error;
-      }
-
-      // Stream is good: the server now holds this tool set under this
-      // fingerprint for the session. Commit the cache so unchanged follow-up
-      // turns can send fingerprint-only.
-      commitClientToolsFingerprint();
-
-      forward({ type: "status", status: "connected" });
-
-      // Stream the response (same SSE handling as proxy mode)
-      try {
-        await this.#streamResponse(response.body, forward, options.assistantMessageId, undefined, options.signal);
-      } finally {
-        forward({ type: "status", status: "idle" });
-      }
-    } catch (error) {
+    const runtime = getClientDispatchSync() ?? await loadClientDispatch().catch((error: unknown) => {
       const err = error instanceof Error ? error : new Error(String(error));
-      // Only emit error if it wasn't already emitted
-      if (
-        !(err instanceof HistoryClientError) &&
-        !err.message.includes('Session expired') &&
-        !err.message.includes('Message limit')
-      ) {
-        forward({ type: "error", error: err });
-      }
+      if (!clientToken || this.#currentClientTurnId === turnId) onEvent({ type: "error", error: err });
       throw err;
-    }
+    });
+    options.signal?.throwIfAborted();
+    if (clientToken && this.#currentClientTurnId !== turnId) throw new DOMException("Turn superseded", "AbortError");
+    const dispatch = new runtime.ClientDispatch(this.#dispatchHost());
+    if (clientToken) return dispatch.dispatchClientToken(options, onEvent, turnId);
+    if (agentMode) return dispatch.dispatchAgent(options, onEvent);
+    return dispatch.dispatchProxy(options, onEvent);
   }
 
-  /**
-   * Proxy mode dispatch (original implementation)
-   */
-  async #dispatchProxy(options: DispatchOptions, onEvent: SSEHandler) {
-    onEvent({ type: "status", status: "connecting" });
-
-    const payload = await this.#buildPayload(
-      options.messages,
-      options.composerOptions
-    );
-
-    if (this.debug) {
-      // eslint-disable-next-line no-console
-      console.debug("[AgentWidgetClient] dispatch payload", payload);
-    }
-
-    // Build headers - merge static headers with dynamic headers if provided
-    let headers = { ...this.#headers };
-    if (this.#getHeaders) {
-      try {
-        const dynamicHeaders = await this.#getHeaders();
-        headers = { ...headers, ...dynamicHeaders };
-      } catch (error) {
-        if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.error("[AgentWidget] getHeaders error:", error);
-        }
-      }
-    }
-
-    // Use customFetch if provided, otherwise use default fetch
-    let response: Response;
-    if (this.#customFetch) {
-      try {
-        response = await this.#customFetch(
-          this.#apiUrl,
-          {
-            method: "POST",
-            headers,
-            body: JSON.stringify(payload),
-            signal: options.signal
-          },
-          payload
-        );
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        onEvent({ type: "error", error: err });
-        throw err;
-      }
-    } else {
-      response = await fetch(this.#apiUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        signal: options.signal
-      });
-    }
-
-    if (!response.ok || !response.body) {
-      const error = new Error(
-        `Chat backend request failed: ${response.status} ${response.statusText}`
-      );
-      onEvent({ type: "error", error });
-      throw error;
-    }
-
-    onEvent({ type: "status", status: "connected" });
-    try {
-      await this.#streamResponse(response.body, onEvent, undefined, undefined, options.signal);
-    } finally {
-      onEvent({ type: "status", status: "idle" });
-    }
-  }
-
-  /**
-   * Agent mode dispatch
-   */
-  async #dispatchAgent(options: DispatchOptions, onEvent: SSEHandler) {
-    onEvent({ type: "status", status: "connecting" });
-
-    const payload = await this.#buildAgentPayload(
-      options.messages,
-      options.composerOptions
-    );
-
-    if (this.debug) {
-      // eslint-disable-next-line no-console
-      console.debug("[AgentWidgetClient] agent dispatch payload", payload);
-    }
-
-    // Build headers - merge static headers with dynamic headers if provided
-    let headers = { ...this.#headers };
-    if (this.#getHeaders) {
-      try {
-        const dynamicHeaders = await this.#getHeaders();
-        headers = { ...headers, ...dynamicHeaders };
-      } catch (error) {
-        if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.error("[AgentWidget] getHeaders error:", error);
-        }
-      }
-    }
-
-    // Use customFetch if provided, otherwise use default fetch
-    let response: Response;
-    if (this.#customFetch) {
-      try {
-        response = await this.#customFetch(
-          this.#apiUrl,
-          {
-            method: "POST",
-            headers,
-            body: JSON.stringify(payload),
-            signal: options.signal
-          },
-          payload as unknown as AgentWidgetRequestPayload
-        );
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error(String(error));
-        onEvent({ type: "error", error: err });
-        throw err;
-      }
-    } else {
-      response = await fetch(this.#apiUrl, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payload),
-        signal: options.signal
-      });
-    }
-
-    if (!response.ok || !response.body) {
-      const error = new Error(
-        `Agent execution request failed: ${response.status} ${response.statusText}`
-      );
-      onEvent({ type: "error", error });
-      throw error;
-    }
-
-    onEvent({ type: "status", status: "connected" });
-    try {
-      await this.#streamResponse(response.body, onEvent, options.assistantMessageId, undefined, options.signal);
-    } finally {
-      onEvent({ type: "status", status: "idle" });
-    }
+  #dispatchHost(): ClientDispatchHost {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const client = this;
+    return Object.setPrototypeOf({
+      HistoryClientError,
+      get claimInFlight() { return client.#claimInFlight; },
+      set claimInFlight(value: boolean) { client.#claimInFlight = value; },
+      get clientToolsFingerprintSessionId() { return client.clientToolsFingerprintSessionId; },
+      set clientToolsFingerprintSessionId(value: string | null) { client.clientToolsFingerprintSessionId = value; },
+      get lastSentClientToolsFingerprint() { return client.lastSentClientToolsFingerprint; },
+      set lastSentClientToolsFingerprint(value: string | null) { client.lastSentClientToolsFingerprint = value; },
+      get sentNonEmptyClientToolsSessionId() { return client.#sentNonEmptyClientToolsSessionId; },
+      set sentNonEmptyClientToolsSessionId(value: string | null) { client.#sentNonEmptyClientToolsSessionId = value; },
+      get historyInternals() { return client.#historyInternals; },
+      markHistoryUnavailable: () => client.#markHistoryUnavailable(),
+      apiUrl: this.#apiUrl,
+      contextProviders: this.#contextProviders,
+      requestMiddleware: this.#requestMiddleware,
+      customFetch: this.#customFetch,
+      get clientSession() { return client.clientSession; },
+      set clientSession(value: ClientSession | null) { client.clientSession = value; },
+      isCurrentTurn: (turnId: string) => client.#currentClientTurnId === turnId,
+      isHistoryCapable: () => client.#isHistoryCapable(),
+      createClientSession: (opts: Parameters<ClientDispatchHost["createClientSession"]>[0]) => client.#createClientSession(opts),
+      finishInit: (session: ClientSession, expected: string | null, warm: boolean) => client.#finishInit(session, expected, warm),
+      resetSessionWarmLatch: () => { client.#sessionWarmLatch = false; },
+      resetClientToolsFingerprint: () => client.resetClientToolsFingerprint(),
+      clearClientSession: () => client.clearClientSession(),
+      resolveChatIdentityProof: (signal?: AbortSignal) => client.#resolveChatIdentityProof(signal),
+      routing: () => client.#routing(),
+      builtInClientTools: builtInClientToolsForDispatch,
+      streamResponse: (...args: Parameters<ClientDispatchHost["streamResponse"]>) => client.#streamResponse(...args),
+    }, this.#resumeHost()) as ClientDispatchHost;
   }
 
   /**
@@ -1971,71 +1324,8 @@ export class AgentWidgetClient {
     ) => Promise<Response>,
     opts?: { emptyMeansReplace?: boolean }
   ): Promise<{ response: Response; commit: () => void }> {
-    const hasClientTools = !!(fullClientTools && fullClientTools.length > 0);
-    const clientToolsFingerprint = hasClientTools
-      ? computeClientToolsFingerprint(fullClientTools!)
-      : undefined;
-    const sameSession = this.clientToolsFingerprintSessionId === sessionId;
-    const unchanged =
-      hasClientTools && sameSession && this.lastSentClientToolsFingerprint === clientToolsFingerprint;
-    // Keyed on `sentNonEmptyClientToolsSessionId`, NOT the fingerprint: an
-    // interleaved empty-tool chat turn commits a null fingerprint without
-    // clearing the tools persisted for a still-paused execution, so the
-    // fingerprint alone would lose the pending clear. The dedicated flag
-    // survives omitted-empty commits and is reset only once an explicit []
-    // replace is confirmed.
-    const sendEmptyReplace =
-      !hasClientTools &&
-      opts?.emptyMeansReplace === true &&
-      this.#sentNonEmptyClientToolsSessionId === sessionId;
-
-    // `forceFull` flips to true after a 409 cache-miss so the single retry
-    // resends the full list.
-    let forceFull = false;
-    let response: Response;
-    for (let attempt = 0; ; attempt++) {
-      const sendFull = hasClientTools && (forceFull || !unchanged);
-      response = await doFetch({
-        ...(sendFull && fullClientTools ? { clientTools: fullClientTools } : {}),
-        ...(sendEmptyReplace ? { clientTools: [] } : {}),
-        ...(clientToolsFingerprint ? { clientToolsFingerprint } : {}),
-      });
-
-      // Diff-only cache miss: the server has no stored tool set matching our
-      // fingerprint. Retry exactly once with the full list. A second miss
-      // falls through to the caller's normal error handling (no infinite loop).
-      if (response.status === 409 && attempt === 0 && hasClientTools) {
-        const body = (await response
-          .clone()
-          .json()
-          .catch(() => null)) as { error?: string } | null;
-        if (body?.error === 'client_tools_resend_required') {
-          forceFull = true;
-          // Invalidate so future turns also resend until a clean success
-          // commits a fresh fingerprint.
-          this.lastSentClientToolsFingerprint = null;
-          continue;
-        }
-      }
-      break;
-    }
-
-    return {
-      response,
-      commit: () => {
-        this.lastSentClientToolsFingerprint = clientToolsFingerprint ?? null;
-        this.clientToolsFingerprintSessionId = sessionId;
-        if (hasClientTools) {
-          this.#sentNonEmptyClientToolsSessionId = sessionId;
-        } else if (sendEmptyReplace) {
-          // The explicit [] replaced the persisted set server-side; the
-          // pending clear is done.
-          this.#sentNonEmptyClientToolsSessionId = null;
-        }
-        // Omitted-empty commits (chat with zero tools) leave the flag set:
-        // they don't touch tools persisted for a paused execution.
-      },
-    };
+    const runtime = getClientDispatchSync() ?? await loadClientDispatch();
+    return new runtime.ClientDispatch(this.#dispatchHost()).sendWithClientToolsDiff(sessionId, fullClientTools, doFetch, opts);
   }
 
   public async resumeFlow(
@@ -2060,236 +1350,6 @@ export class AgentWidgetClient {
    * The default model-visible path (`llmAppend`) already rode into the message's
    * `llmContent`/`contentParts`, so it needs nothing here.
    */
-  #latestMentionContext(
-    messages: AgentWidgetMessage[]
-  ): Record<string, unknown> | null {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const m = messages[i];
-      if (m.role !== "user") continue;
-      // First user message from the end IS the latest user turn: use its
-      // mention context if any, and never look further back.
-      if (m.mentionContext && Object.keys(m.mentionContext).length > 0) {
-        return { mentions: m.mentionContext };
-      }
-      return null;
-    }
-    return null;
-  }
-
-  /**
-   * Aggregate request `context`: merge every context provider's result with the
-   * opt-in mention context from the latest user turn. Returns null when nothing
-   * contributed, so callers can skip setting `payload.context`. Shared by the
-   * agent and flow payload builders.
-   */
-  async #buildContextAggregate(
-    messages: AgentWidgetMessage[]
-  ): Promise<Record<string, unknown> | null> {
-    const contextAggregate: Record<string, unknown> = {};
-    if (this.#contextProviders.length) {
-      await Promise.all(
-        this.#contextProviders.map(async (provider) => {
-          try {
-            const result = await provider({
-              messages,
-              config: this.config
-            });
-            if (result && typeof result === "object") {
-              Object.assign(contextAggregate, result);
-            }
-          } catch (error) {
-            if (typeof console !== "undefined") {
-              // eslint-disable-next-line no-console
-              console.warn("[AgentWidget] Context provider failed:", error);
-            }
-          }
-        })
-      );
-    }
-    const mentionContext = this.#latestMentionContext(messages);
-    if (mentionContext) Object.assign(contextAggregate, mentionContext);
-    return Object.keys(contextAggregate).length ? contextAggregate : null;
-  }
-
-  /**
-   * Non-empty composer selections only. An empty snapshot leaves the field off
-   * the wire entirely, so a widget with no picker and no modes sends exactly
-   * what it sent before.
-   */
-  #normalizeComposerOptions(
-    options: ComposerOptionsPayload | undefined
-  ): ComposerOptionsPayload | undefined {
-    if (!options) return undefined;
-    const normalized: ComposerOptionsPayload = {};
-    if (options.selectedModelId) normalized.selectedModelId = options.selectedModelId;
-    if (options.activeModeIds?.length) {
-      normalized.activeModeIds = [...options.activeModeIds];
-    }
-    return Object.keys(normalized).length > 0 ? normalized : undefined;
-  }
-
-  /**
-   * Rule 4: an inline client-defined agent may take the turn's model from the
-   * composer, but only for an id the host actually declared in
-   * `composer.models`. Config is untouched; the mapping is per request.
-   */
-  #applyInlineAgentModel(
-    agent: AgentWidgetAgentRequestPayload["agent"],
-    composerOptions: ComposerOptionsPayload | undefined
-  ): AgentWidgetAgentRequestPayload["agent"] {
-    const selected = composerOptions?.selectedModelId;
-    if (!selected || !("model" in agent)) return agent;
-    const declared = this.config.composer?.models?.some(
-      (model) => model.id === selected
-    );
-    return declared ? { ...agent, model: selected } : agent;
-  }
-
-  async #buildAgentPayload(
-    messages: AgentWidgetMessage[],
-    composerOptions?: ComposerOptionsPayload
-  ): Promise<AgentWidgetAgentRequestPayload> {
-    const routedAgentId = this.#routing().agentId;
-    if (!this.config.agent && !routedAgentId) {
-      throw new Error('Agent configuration required for agent mode');
-    }
-
-    // Filter out messages with empty content and normalize; answered
-    // client-tool calls replay as paired toolCalls/toolResults messages.
-    const normalizedMessages = serializeWithToolPairs(
-      sortByCreatedAt(messages),
-      (message) =>
-        hasValidContent(message) &&
-        (message.role === "user" || message.role === "assistant" || message.role === "system") &&
-        (!message.variant || message.variant === "assistant")
-          ? toPayloadMessage(message)
-          : null
-    );
-
-    const composer = this.#normalizeComposerOptions(composerOptions);
-    const payload: AgentWidgetAgentRequestPayload = {
-      agent: this.#applyInlineAgentModel(
-        this.config.agent ?? { agentId: routedAgentId! },
-        composer
-      ),
-      messages: normalizedMessages,
-      options: {
-        streamResponse: true,
-        recordMode: 'virtual',
-        ...this.config.agentOptions
-      }
-    };
-    if (composer) payload.composerOptions = composer;
-
-    // Client tools: built-in widget tools (ask_user_question, when exposed)
-    // plus the per-turn WebMCP page-registry snapshot. Name collisions are
-    // impossible: WebMCP entries are `webmcp:`-prefixed server-side while
-    // `sdk`-origin built-ins keep bare names. Both kinds ride the same
-    // diff-only fingerprint path in client-token mode. Kept to a single await
-    // so dispatch microtask timing is unchanged.
-    const clientTools = [
-      ...builtInClientToolsForDispatch(this.config),
-      ...((await (await this.#getWebMcpBridge())?.snapshotForDispatch()) ?? []),
-    ];
-    if (clientTools.length > 0) {
-      payload.clientTools = clientTools;
-    }
-
-    // Add context from providers + opt-in mention context.
-    const contextAggregate = await this.#buildContextAggregate(messages);
-    if (contextAggregate) payload.context = contextAggregate;
-
-    return payload;
-  }
-
-  async #buildPayload(
-    messages: AgentWidgetMessage[],
-    composerOptions?: ComposerOptionsPayload
-  ): Promise<AgentWidgetRequestPayload> {
-    // Filter out messages with empty content to prevent validation errors;
-    // answered client-tool calls replay as paired toolCalls/toolResults
-    // messages. Client-token mode maps `options.messages` itself and never
-    // reads these, so the server stays the replay owner there.
-    const normalizedMessages = serializeWithToolPairs(
-      sortByCreatedAt(messages),
-      (message) => (hasValidContent(message) ? toPayloadMessage(message) : null)
-    );
-
-    const routed = this.#routing();
-    const payload: AgentWidgetRequestPayload = {
-      messages: normalizedMessages,
-      ...(routed.agentId
-        ? { agent: { agentId: routed.agentId } }
-        : routed.flowId
-          ? { flowId: routed.flowId }
-          : {})
-    };
-
-    // Custom-provider targets (e.g. `eve:support`) resolve to a payload
-    // fragment that is merged into the dispatch body so a BYO backend can read
-    // whatever routing keys its resolver chose. `messages` is authoritative and
-    // can never be overridden by a resolver.
-    if (routed.targetPayload) {
-      for (const [key, value] of Object.entries(routed.targetPayload)) {
-        if (key === "messages") continue;
-        (payload as Record<string, unknown>)[key] = value;
-      }
-    }
-
-    // Client tools: same built-in + WebMCP merge as buildAgentPayload
-    // (flow-dispatch path).
-    const clientTools = [
-      ...builtInClientToolsForDispatch(this.config),
-      ...((await (await this.#getWebMcpBridge())?.snapshotForDispatch()) ?? []),
-    ];
-    if (clientTools.length > 0) {
-      payload.clientTools = clientTools;
-    }
-
-    const contextAggregate = await this.#buildContextAggregate(messages);
-    if (contextAggregate) payload.context = contextAggregate;
-
-    // Its own field, never folded into `context`: a value in generic context
-    // does not change inference, and each transport must decide explicitly.
-    // Set before the middleware runs so hosts can read, rewrite, or drop it.
-    const composer = this.#normalizeComposerOptions(composerOptions);
-    if (composer) payload.composerOptions = composer;
-
-    if (this.#requestMiddleware) {
-      try {
-        const result = await this.#requestMiddleware({
-          payload: { ...payload },
-          config: this.config
-        });
-        if (result && typeof result === "object") {
-          const next = result as AgentWidgetRequestPayload;
-          // Preserve `clientTools` if the middleware returned a fresh
-          // payload object without it. Naive middlewares often rebuild
-          // the payload by listing the fields they care about and
-          // dropping `clientTools` accidentally; the WebMCP wire surface
-          // is invisible to them. The integrator can still set
-          // `clientTools: []` or `clientTools: undefined` explicitly to
-          // strip them on purpose: we only fall back when the field is
-          // entirely absent from the returned object.
-          if (
-            payload.clientTools !== undefined &&
-            !("clientTools" in next)
-          ) {
-            next.clientTools = payload.clientTools;
-          }
-          return next;
-        }
-      } catch (error) {
-        if (typeof console !== "undefined") {
-          // eslint-disable-next-line no-console
-          console.error("[AgentWidget] Request middleware error:", error);
-        }
-      }
-    }
-
-    return payload;
-  }
-
   async #streamResponse(
     body: ReadableStream<Uint8Array>,
     onEvent: SSEHandler,
@@ -2302,9 +1362,9 @@ export class AgentWidgetClient {
     const { streamResponse } = getClientStreamSync() ?? (await loadClientStream());
     return streamResponse(
       {
-        config: () => this.config,
-        streamGeneration: () => this.streamGeneration,
-        streamReaders: this.streamReaders,
+        config: () => this.#config,
+        streamGeneration: () => this.#streamGeneration,
+        streamReaders: this.#streamReaders,
         createStreamParser: this.#createStreamParser,
         parseSSEEvent: this.#parseSSEEvent,
         onSSEEvent: (eventType, payload) => this.#onSSEEvent?.(eventType, payload),

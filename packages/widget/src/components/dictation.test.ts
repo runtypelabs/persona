@@ -1,3 +1,5 @@
+import { renderLucideIcon } from "../utils/icons";
+import { attachTooltip } from "../utils/tooltip";
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
 import type { DictationRenderContext } from '../types';
@@ -16,7 +18,7 @@ function context(): DictationRenderContext {
 describe('dictation renderer', () => {
   it('styles interim text and only displays a waveform for measured levels', () => {
     const ctx = context();
-    const view = createDictationRenderer(ctx);
+    const view = createDictationRenderer(ctx, { renderLucideIcon, attachTooltip });
     const interim = view.element.querySelector<HTMLElement>('[data-persona-dictation-interim]')!;
     const waveform = view.element.querySelector<HTMLElement>('[data-persona-dictation-waveform]')!;
     expect(interim.textContent).toBe('Provisional words');
@@ -34,7 +36,7 @@ describe('dictation renderer', () => {
   it('keeps waveform transcripts hidden and routes actions through the latest context', () => {
     const ctx = context();
     ctx.config.voiceRecognition!.dictation!.display = 'waveform';
-    const view = createDictationRenderer(ctx);
+    const view = createDictationRenderer(ctx, { renderLucideIcon, attachTooltip });
     expect(view.element.querySelector<HTMLElement>('[data-persona-dictation-transcript]')!.hidden).toBe(true);
     const send = view.element.querySelector<HTMLButtonElement>('[data-persona-dictation-action="send"]')!;
     expect(send.hidden).toBe(true);

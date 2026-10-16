@@ -1148,7 +1148,7 @@ describe("follow-ups never called debug hint", () => {
     info.mockClear();
     return () =>
       info.mock.calls.filter((call) =>
-        String(call[0]).includes("has not called suggest_replies"),
+        String(call[0]).includes("No suggest_replies call received"),
       );
   };
 

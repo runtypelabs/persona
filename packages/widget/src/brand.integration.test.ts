@@ -35,6 +35,17 @@ const variables = (root: HTMLElement) => Object.fromEntries(
   Array.from(root.style).filter((key) => key.startsWith("--persona-") && !geometryVariables.has(key)).map((key) => [key, root.style.getPropertyValue(key)])
 );
 
+// The critical launcher intentionally excludes panel-only aliases. Every value
+// it does emit must match the full widget, including all canonical host tokens.
+const expectLauncherParity = (critical: HTMLElement, full: HTMLElement) => {
+  const actual = variables(critical);
+  expect(Object.keys(actual).length).toBeGreaterThan(100);
+  expect(variables(full)).toMatchObject(actual);
+  for (const key of ["--persona-launcher-bg", "--persona-launcher-fg", "--persona-launcher-border", "--persona-launcher-shadow"]) {
+    expect(actual[key], key).toBeTruthy();
+  }
+};
+
 beforeEach(() => { window.scrollTo = vi.fn(); });
 afterEach(() => {
   handles.splice(0).forEach((handle) => handle.destroy());
@@ -50,16 +61,16 @@ describe.each([false, true])("brand public lifecycle (v5=%s)", (v5Defaults) => {
     } });
     const full = widget(value);
     const critical = launcher(value);
-    expect(variables(critical.root)).toEqual(variables(full.root));
+    expectLauncherParity(critical.root, full.root);
     expect(full.root.dataset.personaColorScheme).toBe(critical.root.dataset.personaColorScheme);
     expect(full.root.style.cssText).toContain("Georgia");
     const next = { ...value, brand: { ...value.brand, accent: "#0b785a", font: "Arial, sans-serif" } };
     full.handle.update({ brand: next.brand });
     critical.update(next);
-    expect(variables(critical.root)).toEqual(variables(full.root));
+    expectLauncherParity(critical.root, full.root);
     full.handle.update({ brand: undefined });
     critical.update({ ...value, brand: undefined });
-    expect(variables(critical.root)).toEqual(variables(full.root));
+    expectLauncherParity(critical.root, full.root);
   });
 
   it("restores the absent-brand theme after removal and preserves sibling fields during patches", () => {
@@ -75,7 +86,7 @@ describe.each([false, true])("brand public lifecycle (v5=%s)", (v5Defaults) => {
     expect(variables(live.root)).toEqual(before);
     expect(variables(baseline.root)).toEqual(before);
     const critical = launcher(value);
-    expect(variables(critical.root)).toEqual(before);
+    expectLauncherParity(critical.root, baseline.root);
   });
 
   it("keeps explicit light and dark component overrides above brand derivation across updates", () => {
@@ -123,7 +134,7 @@ it("keeps explicit auto responsive to OS changes with a dark brand neutral", () 
     expect(live.root.dataset.personaColorScheme).toBe("dark");
     expect(variables(live.root)).not.toEqual(light);
     const critical = launcher(value);
-    expect(variables(critical.root)).toEqual(variables(live.root));
+    expectLauncherParity(critical.root, live.root);
     dark = false;
     listeners.forEach((listener) => listener());
     expect(live.root.dataset.personaColorScheme).toBe("light");
@@ -139,7 +150,7 @@ it("infers a dark brand scheme consistently for deferred and initialized widgets
   const critical = launcher(value);
   expect(full.root.dataset.personaColorScheme).toBe("dark");
   expect(critical.root.dataset.personaColorScheme).toBe("dark");
-  expect(variables(full.root)).toEqual(variables(critical.root));
+  expectLauncherParity(critical.root, full.root);
   full.handle.update({ brand: { neutral: "#ffffff" } });
   expect(full.root.dataset.personaColorScheme).toBe("light");
   full.handle.update({ brand: { neutral: "#151515" } });

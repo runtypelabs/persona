@@ -1,10 +1,15 @@
 import type { DictationRenderContext, DictationRenderHandle } from '../types';
 import { createNode } from '../utils/dom';
-import { renderLucideIcon } from '../utils/icons';
-import { attachTooltip } from '../utils/tooltip';
+import type { renderLucideIcon } from '../utils/icons';
+import type { attachTooltip } from '../utils/tooltip';
+
+export type DictationRendererDeps = {
+  renderLucideIcon: typeof renderLucideIcon;
+  attachTooltip: typeof attachTooltip;
+};
 
 /** The built-in surface uses the same state/actions/lifecycle as plugin renderers. */
-export function createDictationRenderer(initial: DictationRenderContext): DictationRenderHandle {
+export function createDictationRenderer(initial: DictationRenderContext, { renderLucideIcon, attachTooltip }: DictationRendererDeps): DictationRenderHandle {
   let context = initial;
   const element = createNode('section', {
     className: 'persona-dictation',

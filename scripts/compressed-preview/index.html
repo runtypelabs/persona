@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Compressed widget preview</title>
+  <style>
+    body { font: 16px/1.5 system-ui, sans-serif; color: #242424; background: #faf9f6; margin: 0; }
+    main { max-width: 850px; margin: 48px auto; padding: 0 24px 120px; }
+    h1 { font-size: 30px; margin-bottom: 8px; } p { max-width: 72ch; }
+    button { font: inherit; padding: 8px 16px; background: white; border: 1px solid #bbb; border-radius: 8px; cursor: pointer; }
+    #status { padding: 16px; background: white; border: 1px solid #ddd; border-radius: 12px; }
+    table { border-collapse: collapse; width: 100%; font-size: 14px; }
+    th, td { text-align: left; border-bottom: 1px solid #ddd; padding: 8px; }
+    td:nth-child(n+4), th:nth-child(n+4) { text-align: right; }
+    #events { white-space: pre-wrap; font: 13px/1.6 monospace; }
+  </style>
+</head>
+<body><main>
+  <h1>Compressed widget preview</h1>
+  <p>The current built widget, served locally with Brotli or gzip. Replies are mocked.</p>
+  <p>For a cold test, clear the browser cache once, leave DevTools → Network → <strong>Disable cache unchecked</strong>, choose throttling, reload, and click the launcher. This allows prefetch reuse during the visit. Reload again for a warm test.</p>
+  <button onclick="location.reload()">Reload preview</button>
+  <p id="status" role="status">Loading the launcher…</p>
+  <p>Timing runs from the first launcher click to <code>onChatReady</code>. The normal installer prefetch remains enabled. This measures the current build; it does not establish the difference from a previous build.</p>
+  <div id="events"></div>
+  <h2>Downloaded widget assets</h2>
+  <p>Sizes are decimal kB. Transferred includes response headers; compressed and decoded are body sizes. A cached reuse transfers 0 bytes. Separate rows show prefetch and use.</p>
+  <table><thead><tr><th>Asset</th><th>Initiator</th><th>Encoding</th><th>Transferred</th><th>Compressed</th><th>Decoded</th></tr></thead><tbody id="assets"></tbody></table>
+</main>
+<script>
+  const status = document.querySelector("#status"), log = document.querySelector("#events");
+  const preview = window.__preview = { clickedAt: null, readyMs: null, resources: [], errors: [] };
+  const note = message => { log.textContent += `${Math.round(performance.now())} ms  ${message}\n`; };
+  const refreshAssets = () => {
+    preview.resources = performance.getEntriesByType("resource").filter(e => new URL(e.name).pathname.startsWith("/dist/")).map(e => ({
+      name: new URL(e.name).pathname.split("/").pop(),
+      encoding: e.serverTiming.find(t => t.name === "encoding")?.description ?? "—",
+      initiator: e.initiatorType, transferred: e.transferSize,
+      encoded: e.encodedBodySize, decoded: e.decodedBodySize, cached: e.transferSize === 0,
+    }));
+    document.querySelector("#assets").replaceChildren(...preview.resources.map(e => {
+      const row = document.createElement("tr");
+      for (const text of [e.name, e.initiator, e.cached ? `${e.encoding} · cached` : e.encoding, (e.transferred / 1000).toFixed(2), (e.encoded / 1000).toFixed(2), (e.decoded / 1000).toFixed(2)]) {
+        const cell = document.createElement("td"); cell.textContent = text; row.append(cell);
+      }
+      return row;
+    }));
+  };
+  new PerformanceObserver(refreshAssets).observe({ type: "resource", buffered: true });
+  window.siteAgentConfig = {
+    target: "body", cssUrl: "/dist/widget.css", jsUrl: "/dist/index.global.js",
+    config: { apiUrl: "/api/chat", persistState: false, future: { v5Defaults: true }, launcher: { enabled: true, title: "Compressed preview" } },
+    onScriptLoad() { note("Installer loaded"); },
+    onLauncherShown({ deferred, element }) {
+      note(`Launcher visible (deferred: ${deferred})`);
+      status.textContent = "Click the launcher to measure opening time.";
+      element?.addEventListener("click", () => {
+        if (preview.clickedAt !== null) return;
+        preview.clickedAt = performance.now(); note("Launcher clicked");
+        status.textContent = "Loading the complete widget…";
+      }, { capture: true });
+    },
+    onChatReady(handle) {
+      window.__handle = handle;
+      preview.readyMs = preview.clickedAt === null ? null : performance.now() - preview.clickedAt;
+      status.textContent = preview.readyMs === null ? "Widget ready (no launcher click recorded)." : `Click → ready: ${Math.round(preview.readyMs)} ms`;
+      note("Widget ready"); refreshAssets();
+    },
+    onError({ phase, error }) {
+      const message = `${phase}: ${error?.message ?? error}`;
+      preview.errors.push(message); status.textContent = message; note(message);
+      preview.clickedAt = null;
+    },
+  };
+</script>
+<script src="/dist/install.global.js"></script>
+</body></html>

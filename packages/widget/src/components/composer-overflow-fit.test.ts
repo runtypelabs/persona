@@ -1,3 +1,5 @@
+import * as sharedIcons from "../utils/icons";
+import * as sharedTooltips from "../utils/tooltip";
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ComposerAction, ComposerActionOverflowConfig, ComposerButtonAction, ComposerState } from "../types";
@@ -25,7 +27,7 @@ function mount(actions: ComposerAction[], options: ComposerActionOverflowConfig 
     bindings.footer.setAttribute("data-persona-composer-layout", "single-row");
     bindings.footer.setAttribute("data-persona-composer-compact", "");
   }
-  const renderer = createComposerActionRenderer({ getBindings: () => bindings,
+  const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor }, getBindings: () => bindings,
     collect: () => ({ builtIns: [{ id: "core:send", placement: "end", order: 1000, element: elements.sendButtonWrapper }],
       configActions: actions, plugins: [], contributionContext: { config, getState: () => state, requestRender: () => {} } }),
     getState: () => state, getOverflow: () => options,

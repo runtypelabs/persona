@@ -6,7 +6,7 @@
 
 import type { AgentWidgetConfig } from '../types';
 import type { AgentWidgetMessage } from '../types';
-import { createTheme } from '../utils/theme';
+import { createTheme } from '../utils/tokens';
 import { resolveDefaults } from '../defaults';
 
 // ─── Constants ──────────────────────────────────────────────────

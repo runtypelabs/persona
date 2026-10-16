@@ -1,3 +1,5 @@
+import * as sharedIcons from "../utils/icons";
+import * as sharedTooltips from "../utils/tooltip";
 // @vitest-environment jsdom
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -93,7 +95,7 @@ const mount = (options: {
           },
         ]
       : []);
-  const renderer = createComposerActionRenderer({
+  const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor },
     getBindings: () => bindings,
     collect: () => ({
       builtIns,
@@ -288,7 +290,7 @@ describe("composer overflow menu", () => {
     const elements = buildComposer({ config });
     document.body.appendChild(elements.footer);
     const bindings = bindComposerSurface(elements.footer)!;
-    const renderer = createComposerActionRenderer({
+    const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor },
       getBindings: () => bindings,
       collect: () => ({
         builtIns: [
@@ -406,7 +408,7 @@ describe("composer overflow menu", () => {
     const elements = buildComposer({ config });
     document.body.appendChild(elements.footer);
     const bindings = bindComposerSurface(elements.footer)!;
-    const renderer = createComposerActionRenderer({
+    const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor },
       getBindings: () => bindings,
       collect: () => ({
         builtIns: [
@@ -718,7 +720,7 @@ describe("composer overflow menu", () => {
     const elements = buildComposer({ config });
     root.appendChild(elements.footer);
     const bindings = bindComposerSurface(elements.footer)!;
-    const renderer = createComposerActionRenderer({
+    const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor },
       getBindings: () => bindings,
       collect: () => ({
         builtIns: [],
@@ -756,7 +758,7 @@ describe("composer overflow menu", () => {
     const elements = buildComposer({ config });
     document.body.appendChild(elements.footer);
     const bindings = bindComposerSurface(elements.footer)!;
-    const renderer = createComposerActionRenderer({
+    const renderer = createComposerActionRenderer({ deps: { renderLucideIcon: sharedIcons.renderLucideIcon, attachTooltip: sharedTooltips.attachTooltip, hideTooltipFor: sharedTooltips.hideTooltipFor },
       getBindings: () => bindings,
       collect: () => ({
         builtIns: [],

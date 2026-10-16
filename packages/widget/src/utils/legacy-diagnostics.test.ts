@@ -1,6 +1,7 @@
+import { LEGACY_MIGRATIONS } from "../config-diagnostics";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mergeWithDefaults, resolveDefaults } from "../defaults";
-import { createLegacyDiagnosticContext, LEGACY_MIGRATIONS, updateLegacyDiagnostics } from "./legacy-diagnostics";
+import { createLegacyDiagnosticContext, updateLegacyDiagnostics } from "./legacy-diagnostics";
 import { mergeConfigUpdate } from "./config-merge";
 import type { AgentWidgetConfig } from "../types";
 import { LEGACY_STYLE_PATHS } from "./style-provenance";

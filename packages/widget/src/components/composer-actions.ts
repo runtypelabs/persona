@@ -1,3 +1,5 @@
+import { ensureComposerActionStyles } from "./composer-action-styles";
+import { TOOLTIP_SUPPRESSED_ATTR } from "../utils/tooltip-constants";
 /**
  * Composer action registry.
  *
@@ -41,11 +43,10 @@ import type {
   ComposerMenuRenderHandle,
 } from "../types";
 import { createElement, createNode, cx } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import type { renderLucideIcon } from "../utils/icons";
 import {
-  attachTooltip,
-  hideTooltipFor,
-  TOOLTIP_SUPPRESSED_ATTR,
+  type attachTooltip,
+  type hideTooltipFor,
   type TooltipHandle,
 } from "../utils/tooltip";
 import type { ComposerSurfaceBindings } from "./composer-bindings";
@@ -53,7 +54,7 @@ import {
   COMPOSER_CONTROL_CLASS,
   COMPOSER_CONTROL_GLYPH_CLASS,
   COMPOSER_CONTROL_ICON_FALLBACK_PX,
-} from "./composer-parts";
+} from "./composer-tokens";
 import {
   createComposerOverflowMenu,
   resolveMenuFocusTarget,
@@ -284,6 +285,7 @@ const describeSource = (entry: ResolvedComposerAction): string =>
 // --- rendering -------------------------------------------------------------
 
 export interface ComposerActionRendererOptions {
+  deps: { renderLucideIcon: typeof renderLucideIcon; attachTooltip: typeof attachTooltip; hideTooltipFor: typeof hideTooltipFor };
   /** The live surface; null while no bindable composer is mounted. */
   getBindings: () => ComposerSurfaceBindings | null;
   /** Re-run contributors and rebuild the input for `resolve()`. */
@@ -441,6 +443,7 @@ const freezeMenuView = <T>(value: T): T => {
 export function createComposerActionRenderer(
   options: ComposerActionRendererOptions
 ): ComposerActionRenderer {
+  const { renderLucideIcon, attachTooltip, hideTooltipFor } = options.deps;
   const entries = new Map<string, Entry>();
   let order: ResolvedComposerAction[] = [];
   let destroyed = false;
@@ -970,6 +973,7 @@ export function createComposerActionRenderer(
   const ensureOverflowMenu = (): ComposerOverflowMenu => {
     if (!overflowMenu) {
       overflowMenu = createComposerOverflowMenu({
+        deps: options.deps,
         label: options.getOverflowLabel?.() ?? "More actions",
         getButtonSize: buttonSize,
         getConfig: () => overflowConfig()?.menu,
@@ -1258,6 +1262,7 @@ export function createComposerActionRenderer(
   const sync = (): void => {
     if (destroyed) return;
     const bindings = options.getBindings();
+    if (bindings) ensureComposerActionStyles(bindings.form);
     if (!bindings) return;
     const state = options.getState();
     const streaming = state.phase === "streaming";
