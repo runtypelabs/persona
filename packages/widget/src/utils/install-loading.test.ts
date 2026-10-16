@@ -46,3 +46,63 @@ it("does not mutate disconnected targets or overwrite a host position change", (
   done();
   expect(target.style.position).toBe("fixed");
 });
+
+it("does not invoke a custom renderer for a fast load", () => {
+  const render = vi.fn();
+  const stop = delayInstallLoading(document.body, false, render);
+  vi.advanceTimersByTime(299);
+  stop();
+  vi.runAllTimers();
+  expect(render).not.toHaveBeenCalled();
+});
+
+for (const launcher of [false, true]) {
+  it(`owns the custom container and runs cleanup once (launcher: ${launcher})`, () => {
+    const target = document.createElement("div");
+    document.body.append(target);
+    const cleanup = vi.fn();
+    const render = vi.fn(({ container, target: host, kind }) => {
+      expect(container.isConnected).toBe(true);
+      expect(host).toBe(target);
+      expect(kind).toBe(launcher ? "launcher" : "embedded");
+      container.textContent = "Preparing…";
+      return cleanup;
+    });
+    const stop = delayInstallLoading(target, launcher, render);
+    vi.advanceTimersByTime(300);
+    expect(render).toHaveBeenCalledOnce();
+    expect(target.querySelector('[data-persona-loading="default"]')).toBeNull();
+    expect(target.textContent).toBe("Preparing…");
+    stop(); stop();
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(target.childElementCount).toBe(0);
+    expect(target.hasAttribute("aria-busy")).toBe(false);
+  });
+}
+
+it("falls back to the default ring when rendering throws", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const stop = delayInstallLoading(document.body, false, ({ container }) => {
+    container.textContent = "Partial loading UI";
+    container.remove();
+    throw new Error("render failed");
+  });
+  vi.advanceTimersByTime(300);
+  expect(document.querySelector('[data-persona-loading="default"]')).not.toBeNull();
+  expect(document.body.textContent).toBe("");
+  stop();
+  expect(document.body.childElementCount).toBe(0);
+  expect(warn).toHaveBeenCalledOnce();
+  warn.mockRestore();
+});
+
+it("still removes the container when custom cleanup throws", () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const stop = delayInstallLoading(document.body, false, () => () => { throw new Error("cleanup failed"); });
+  vi.advanceTimersByTime(300);
+  stop(); stop();
+  expect(document.querySelector("[role=status]")).toBeNull();
+  expect(document.body.hasAttribute("aria-busy")).toBe(false);
+  expect(warn).toHaveBeenCalledOnce();
+  warn.mockRestore();
+});

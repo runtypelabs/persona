@@ -44,8 +44,8 @@ and configured artifact/mention/history UI. Session voice configurations also
 prepare their provider module, without starting capture or connecting a call.
 These bytes count toward the complete widget's initial download, not savings
 from deferral. For example, core + widget CSS + markdown + icons + composer
-controls + activity + dictation total **244.34 kB gzip / 199.50 KiB Brotli**.
-Enabling artifacts brings that subtotal to **265.13 kB gzip / 217.84 KiB Brotli**.
+controls + activity + dictation total **244.35 kB gzip / 199.51 KiB Brotli**.
+Enabling artifacts brings that subtotal to **265.14 kB gzip / 217.85 KiB Brotli**.
 These are sums of separately compressed files, excluding installer/launcher,
 request handling, history, and any other configured features; they are not a
 measurement of the complete network transfer. Diagnostics, background work, and request handling retain their
@@ -66,6 +66,8 @@ without replacing content, respects reduced motion, and clears on success or
 failure. This feedback lives in the installer so it can appear before the main
 bundle or stylesheet arrives; direct SDK hosts can provide their own loading
 surface while awaiting `controller.ready`.
+The optional installer `renderLoading` hook replaces the ring's appearance while
+retaining its timing and lifecycle, without adding runtime code to the main bundle.
 
 The preparation selector is separate from the rendering barrier and reuses the
 existing cached chunk loaders. It is an internal foundation, not a new public
