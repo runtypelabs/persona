@@ -189,13 +189,31 @@ export function setupPresenterTools(ctx: AiContext): void {
     {
       name: 'get_slide',
       title: 'Read a slide',
-      description: 'Use when asked what is on a slide ("what\'s on this slide?", "read me the pricing slide"): returns its text and speaker notes. Defaults to the slide on screen.',
+      description: 'Use when asked what is on a slide ("what\'s on this slide?", "read me the pricing slide"): returns the text the audience sees. Defaults to the slide on screen. For speaker notes use get_speaker_notes.',
       inputSchema: { type: 'object', properties: { slide: otherSlideChoice } },
       annotations: { readOnlyHint: true },
       execute(args) {
         const slide = args.slide === undefined ? onScreen() : byLabel(args.slide)
         if (!slide) throw new Error('no slide is on screen')
         return slideRead(ctx.store.doc, slide)
+      },
+    },
+    {
+      name: 'get_speaker_notes',
+      title: 'Read speaker notes',
+      description: 'Use when the presenter asks for their notes ("what are my notes?", "read the notes for the pricing slide"): returns the speaker notes, which the audience does not see. Defaults to the slide on screen.',
+      inputSchema: { type: 'object', properties: { slide: otherSlideChoice } },
+      annotations: { readOnlyHint: true },
+      execute(args) {
+        const slide = args.slide === undefined ? onScreen() : byLabel(args.slide)
+        if (!slide) throw new Error('no slide is on screen')
+        const entry = showEntry(ctx.store.doc, slide)
+        const label = entry ? slideLabel(entry.position, entry.slide) : (slideName(slide) ?? 'This slide')
+        const notes = slide.notes.replace(/\s+/g, ' ').trim()
+        return spokenResult(
+          { slideId: slide.id, notes: slide.notes },
+          { text: notes ? `Notes for ${label}: ${notes}` : `${label} has no speaker notes.` },
+        )
       },
     },
     {
