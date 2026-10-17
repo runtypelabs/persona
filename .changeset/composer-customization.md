@@ -13,3 +13,4 @@ Expand composer customization while preserving existing V4 layouts and explicitl
 - Prepare configured renderers, icon data, and styles before revealing the widget. Expose controller readiness, retain the launcher during preparation, and preserve the current UI while a newly enabled renderer loads. Retry failed downloads without showing incomplete controls.
 - Show installer loading feedback only after 300ms for embedded surfaces and launcher opens; remove it on completion or failure without shifting the layout.
 - Allow custom installer loading UI through a managed `renderLoading` hook with automatic container removal and optional cleanup, retaining the built-in ring as the default.
+- Keep fit-based overflow stable while idle, reconnect dictation to rebuilt composers, and distinguish deferred bundle failures from initialization failures.

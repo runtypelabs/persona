@@ -1538,7 +1538,8 @@ export class AgentWidgetSession {
       if (contextEpoch !== this.#historyContextEpoch || provider !== this.#historyProvider) {
         throw new SessionHistoryError("superseded", "The history identity changed");
       }
-      this.#discardConversationState();
+      // The committed activation already persisted its replacement session.
+      this.#discardConversationState(false, true);
       this.#activeConversationId = prepared.conversationId || null;
       this.#activeConversationRevision = prepared.conversationRevision || null;
       this.#historyNextMessageCursor = null;
@@ -1787,7 +1788,7 @@ export class AgentWidgetSession {
    * Irreversible local + persisted clear. Used by new-conversation, active
    * deletion, 410 recovery, reset, and the continuity wipe.
    */
-  #discardConversationState(preserveRun = false): void {
+  #discardConversationState(preserveRun = false, preserveSessionId = false): void {
     this.client.cancelStreams();
     this.stopSpeaking();
     this.abortController?.abort();
@@ -1798,7 +1799,7 @@ export class AgentWidgetSession {
     this.messages = [];
     this.#resetConversationScopedState();
     this.#olderPageRequests.clear();
-    this.config.clearStoredSessionId?.();
+    if (!preserveSessionId) this.config.clearStoredSessionId?.();
     this.config.clearStoredConversationId?.();
     this.historyInternals.setStoredConversationRevision?.(null);
     this.historyInternals.setStoredMessageCursor?.(null);

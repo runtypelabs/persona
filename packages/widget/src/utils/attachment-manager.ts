@@ -167,16 +167,16 @@ export class AttachmentManager {
    * Update the configuration (e.g., when allowed types change)
    */
   updateConfig(config: Partial<AttachmentManagerConfig>): void {
-    if (config.allowedTypes !== undefined) {
-      this.#config.allowedTypes = config.allowedTypes.length > 0 ? config.allowedTypes : DEFAULTS.allowedTypes;
+    if ("allowedTypes" in config) {
+      this.#config.allowedTypes = config.allowedTypes?.length ? config.allowedTypes : DEFAULTS.allowedTypes;
     }
-    if (config.maxFileSize !== undefined) {
-      this.#config.maxFileSize = config.maxFileSize;
+    if ("maxFileSize" in config) {
+      this.#config.maxFileSize = config.maxFileSize ?? DEFAULTS.maxFileSize;
     }
-    if (config.maxFiles !== undefined) {
-      this.#config.maxFiles = config.maxFiles;
+    if ("maxFiles" in config) {
+      this.#config.maxFiles = config.maxFiles ?? DEFAULTS.maxFiles;
     }
-    if (config.onFileRejected !== undefined) {
+    if ("onFileRejected" in config) {
       this.#config.onFileRejected = config.onFileRejected;
     }
     if (config.onAttachmentsChange !== undefined) {

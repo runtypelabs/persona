@@ -9,17 +9,18 @@ Measurements from the October 2026 composer optimization and renderer-readiness 
 
 | File | Gzip kB | Existing limit kB |
 | --- | ---: | ---: |
-| `index.global.js` | 164.95 | 166 |
+| `index.global.js` | 164.98 | 166 |
 | `launcher.global.js` | 17.53 | 19.75 |
 | `widget.css` | 22.96 | 24 |
-| `install.global.js` | 2.99 | 3 |
-| `index.js` | 203.80 | 215.75 |
-| `index.cjs` | 203.54 | 216.75 |
+| `install.global.js` | 3.00 | 3 |
+| `index.js` | 203.83 | 215.75 |
+| `index.cjs` | 203.57 | 216.75 |
 | `theme-editor.js` | 40.34 | 40.5 |
 | `voice-runtime.js` | 13.48 | 14 |
 | `history-shell.js` | 13.63 | 13.75 |
 
-The CDN widget is 130.99 KiB Brotli. Its remaining headroom is small: run both
+The installer is 2,998 bytes gzip; the table rounds to two decimal places.
+The CDN widget is 130.97 KiB Brotli. Its remaining headroom is small: run both
 size checks when changing core code. These are per-file budgets, not a claim
 that the complete interaction downloads only the core file.
 
@@ -29,9 +30,9 @@ Each new chunk has an explicit gzip budget in the same size-limit file.
 
 | Chunk | Gzip kB | Loaded when |
 | --- | ---: | --- |
-| `composer-actions-runtime.js` | 15.24 | Before the widget is revealed; also supplies approval popover helpers |
+| `composer-actions-runtime.js` | 15.26 | Before the widget is revealed; also supplies approval popover helpers |
 | `activity-ui.js` | 11.80 | Before reveal when tool or reasoning messages are enabled |
-| `dictation-runtime.js` | 4.65 | Before reveal when voice recognition is enabled |
+| `dictation-runtime.js` | 4.66 | Before reveal when voice recognition is enabled |
 | `client-dispatch.js` | 5.22 | The CDN client initializes a session, sends a message, or submits feedback |
 | `config-diagnostics.js` | 1.60 | Debug migration diagnostics are enabled |
 | `background-runtime.js` | 0.67 | Background conversation work is enabled |
@@ -44,8 +45,8 @@ and configured artifact/mention/history UI. Session voice configurations also
 prepare their provider module, without starting capture or connecting a call.
 These bytes count toward the complete widget's initial download, not savings
 from deferral. For example, core + widget CSS + markdown + icons + composer
-controls + activity + dictation total **244.35 kB gzip / 199.51 KiB Brotli**.
-Enabling artifacts brings that subtotal to **265.14 kB gzip / 217.85 KiB Brotli**.
+controls + activity + dictation total **244.40 kB gzip / 199.51 KiB Brotli**.
+Enabling artifacts brings that subtotal to **265.18 kB gzip / 217.85 KiB Brotli**.
 These are sums of separately compressed files, excluding installer/launcher,
 request handling, history, and any other configured features; they are not a
 measurement of the complete network transfer. Diagnostics, background work, and request handling retain their

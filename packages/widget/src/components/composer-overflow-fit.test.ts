@@ -180,4 +180,48 @@ describe("measured composer action overflow", () => {
     harness.renderer.destroy();
     expect(cancel).toHaveBeenCalled();
   });
+
+  it.each([undefined, 150, 0])("settles with a persistent overflow trigger (order %s), preserving focus and observing real changes", async (order) => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => { frames.push(callback); return frames.length; });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const harness = mount([action("auto", 100), action("pinned", 950, "bar"), action("menu", 200, "overflow")],
+      { enabled: true, collapseAutoActions: "fit", order });
+    harness.resize(600);
+    const button = harness.bindings.actionsStart.querySelector<HTMLButtonElement>('[data-persona-composer-action="pinned"] button')!;
+    button.focus();
+    const blur = vi.fn();
+    button.addEventListener("blur", blur);
+    // Initial placement can schedule one follow-up, but an unchanged fit pass
+    // must not keep mutating the bar and scheduling another animation frame.
+    await Promise.resolve();
+    frames.splice(0).forEach((frame) => frame(0));
+    await Promise.resolve();
+    expect(frames).toHaveLength(0);
+    expect(folded(harness)).toEqual(["menu"]);
+    expect(document.activeElement).toBe(button);
+    expect(blur).not.toHaveBeenCalled();
+
+    const existingOrder = Array.from(harness.bindings.actionsStart.children);
+    harness.renderer.sync();
+    await Promise.resolve();
+    expect(frames).toHaveLength(0);
+    expect(Array.from(harness.bindings.actionsStart.children)).toEqual(existingOrder);
+    expect(blur).not.toHaveBeenCalled();
+
+    // A host-driven label change still invalidates fit and folds the auto
+    // action. Do not silence observer records to make idle passes converge.
+    sizes.set("pinned", 400);
+    button.textContent = "A much longer pinned control";
+    await Promise.resolve();
+    expect(frames).toHaveLength(1);
+    frames.splice(0).forEach((frame) => frame(0));
+    expect(folded(harness)).toEqual(["auto", "menu"]);
+    await Promise.resolve();
+    frames.splice(0).forEach((frame) => frame(0));
+    await Promise.resolve();
+    expect(frames).toHaveLength(0);
+    expect(document.activeElement).toBe(button);
+    expect(blur).not.toHaveBeenCalled();
+  });
 });

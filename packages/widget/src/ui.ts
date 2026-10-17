@@ -1720,7 +1720,12 @@ export const createAgentExperience = (
     progress: attachment.progress,
     error: attachment.error,
   });
-  const attachmentRenderingConfig = () => ({
+  const attachmentManagerConfig = () => ({
+    allowedTypes: config.attachments?.allowedTypes,
+    maxFileSize: config.attachments?.maxFileSize,
+    maxFiles: config.attachments?.maxFiles,
+    adapter: config.attachments?.adapter,
+    onFileRejected: config.attachments?.onFileRejected,
     instanceId, widgetConfig: config, preview: config.attachments?.preview,
     renderAttachmentPreview: renderAttachmentPreviewForInstance,
   });
@@ -1737,7 +1742,7 @@ export const createAgentExperience = (
     const manager = AttachmentManager.fromConfig(config.attachments, (attachments) => {
       if (attachmentManager === manager) syncComposerAttachments(attachments);
     });
-    manager.updateConfig(attachmentRenderingConfig());
+    manager.updateConfig(attachmentManagerConfig());
     return manager;
   };
   const syncComposerAttachments = (attachments: PendingAttachment[]): void => {
@@ -9126,7 +9131,7 @@ export const createAgentExperience = (
     mentionOrchestrator?.clear();
     attachmentManager?.setPreviewsContainer(null);
     attachmentManager = saved?.attachments ?? (config.attachments?.enabled ? createScopedAttachmentManager() : null);
-    attachmentManager?.updateConfig(attachmentRenderingConfig());
+    attachmentManager?.updateConfig(attachmentManagerConfig());
     attachmentManager?.remountPreviews(attachmentPreviewsContainer);
     syncComposerAttachments(attachmentManager?.getAttachments() ?? []);
     const draft = saved?.draft;
@@ -10288,7 +10293,7 @@ export const createAgentExperience = (
       if (request !== dictationRequest) return;
       dictationLoading = false;
       dictation ??= runtime.createDictationSession({
-        instanceId, textarea, footer, getConfig: () => config, plugins,
+        instanceId, getTextarea: () => textarea, getFooter: () => footer, getConfig: () => config, plugins,
         getInlineInput: () => mentionOrchestrator?.getInlineInput(),
         isInputDisabled: isComposerInputDisabled, isSendBlocked: isComposerSendBlocked,
         syncText: syncComposerText, onSend: () => { void doSubmit({ viaVoice: true }); },
@@ -11282,6 +11287,7 @@ export const createAgentExperience = (
       applyComposerInputConfig();
       applyComposerLock();
       syncComposerText();
+      dictation?.refresh();
     });
   };
   registerComposerSwapHandler();
@@ -11377,6 +11383,7 @@ export const createAgentExperience = (
       // has to restore the live state, which also re-arms the level loop
       // against the new footer and wrapper.
       if (voiceState.active) setMicState("recording");
+      dictation?.refresh();
       // The new footer carries none of the per-mode inline styles. Full
       // chrome sync, not bare applyFullHeightStyles: the latter resets
       // mount.style.cssText, which silently drops every theme variable.
@@ -12457,17 +12464,6 @@ export const createAgentExperience = (
             attachmentInput.accept = (attachmentsConfig.allowedTypes ?? ALL_SUPPORTED_MIME_TYPES).join(",");
             attachmentInput.multiple = (attachmentsConfig.maxFiles ?? 4) > 1;
           }
-
-          // Update attachment manager config
-          if (attachmentManager) {
-            attachmentManager.updateConfig({
-              allowedTypes: attachmentsConfig.allowedTypes,
-              maxFileSize: attachmentsConfig.maxFileSize,
-              maxFiles: attachmentsConfig.maxFiles,
-              adapter: attachmentsConfig.adapter,
-              ...attachmentRenderingConfig(),
-            });
-          }
         }
 
         // Rebuild the overlay so live dropOverlay updates restyle it; visibility
@@ -12532,7 +12528,7 @@ export const createAgentExperience = (
 
       const attachmentManagers = new Set([attachmentManager, ...Array.from(conversationContinuity.values(), saved => saved.attachments)]);
       for (const manager of attachmentManagers) {
-        manager?.updateConfig(attachmentRenderingConfig());
+        manager?.updateConfig(attachmentManagerConfig());
       }
       if ("plugins" in nextConfig) attachmentManager?.remountPreviews(attachmentPreviewsContainer);
       syncComposerLayout();

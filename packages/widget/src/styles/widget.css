@@ -6523,7 +6523,9 @@
   margin-left:var(--persona-components-activity-groupIndent, var(--persona-activity-indent));
   padding:var(--persona-components-activity-groupPadding, var(--persona-components-activity-bodyPadding, 8px 0));
 }
-/* Scoped tool padding wins over activity-row geometry; explicit legacy axes stay inline. */
+/* Theme padding beats utility, suggestion, and activity-row geometry;
+   explicit legacy axes stay inline. Controls share this shorthand transport. */
+.persona-theme-padding,
 .persona-tool-bubble > .persona-theme-padding,
 .persona-tool-bubble > .persona-activity-header.persona-theme-padding,
 .persona-tool-bubble.persona-activity-row > .persona-activity-body.persona-theme-padding {

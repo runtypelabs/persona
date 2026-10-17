@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import type { AgentWidgetConfig } from "../types";
 import type { AgentWidgetSession } from "../session";
 import { mergeWithDefaults, resolveDefaults } from "../defaults";
@@ -104,5 +105,24 @@ describe.each([false, true])("suggestion style migration (v5=%s)", (v5Defaults) 
     document.documentElement.classList.remove("dark");
     applyThemeVariables(container, config);
     expect(container.style.getPropertyValue("--persona-suggestion-compat-padding")).toBe("6px 12px");
+  });
+
+  it("consumes the shared padding transport for an existing chip across theme changes", () => {
+    const style = document.createElement("style");
+    style.textContent = readFileSync("src/styles/widget.css", "utf8");
+    document.head.appendChild(style);
+    try {
+      const config = resolved({ future: { v5Defaults }, colorScheme: "auto", darkTheme: theme });
+      const { container, button } = render(config);
+      expect(getComputedStyle(button).padding).toBe("var(--persona-theme-padding)");
+      document.documentElement.classList.add("dark");
+      applyThemeVariables(container, config);
+      expect(container.querySelector("button")).toBe(button);
+      expect(container.style.getPropertyValue("--persona-suggestion-compat-padding")).toBe("10px 20px");
+      expect(getComputedStyle(button).padding).toBe("var(--persona-theme-padding)");
+      const explicit = render(mergeConfigUpdate(config, { suggestionChipsConfig: { paddingX: "3px" } })).button;
+      expect(explicit.classList.contains("persona-theme-padding")).toBe(true);
+      expect(getComputedStyle(explicit).paddingLeft).toBe("3px");
+    } finally { style.remove(); }
   });
 });
