@@ -36,6 +36,25 @@ function deferredAdapter() {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+describe("AttachmentManager.updateConfig", () => {
+  it("preserves omitted upload settings and resets explicitly undefined settings", async () => {
+    const add = vi.fn(async () => part("uploaded"));
+    const rejected = vi.fn();
+    const manager = new AttachmentManager({ allowedTypes: ["application/json"], maxFileSize: 1, maxFiles: 1, adapter: { add }, onFileRejected: rejected });
+    manager.updateConfig({ preview: { file: { icon: false } } });
+    await manager.handleFiles([textFile()]);
+    expect(rejected).toHaveBeenLastCalledWith(expect.any(File), "type");
+    expect(add).not.toHaveBeenCalled();
+    manager.updateConfig({ allowedTypes: undefined, maxFileSize: undefined, maxFiles: undefined, adapter: undefined, onFileRejected: undefined });
+    await manager.handleFiles([textFile(), textFile("two.txt"), textFile("three.txt"), textFile("four.txt"), textFile("five.txt")]);
+    expect(manager.getAttachments()).toHaveLength(4);
+    expect(manager.getAttachments().every(attachment => attachment.status === "ready")).toBe(true);
+    expect(add).not.toHaveBeenCalled();
+    expect(rejected).toHaveBeenCalledTimes(1);
+    manager.destroy();
+  });
+});
+
 describe("AttachmentManager.remountPreviews", () => {
   it("lets theme CSS control remove contrast and removes the file", async () => {
     const manager = new AttachmentManager({ allowedTypes: ["text/plain"] });

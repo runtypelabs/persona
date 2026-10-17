@@ -107,6 +107,45 @@ describe("conversation composer and reader continuity", () => {
     expect(mount.querySelector(`[data-attachment-id="${attachmentId}"]`)).not.toBeNull();
   });
 
+  it("applies current upload adapters and limits to retained conversation drafts", async () => {
+    const oldAdd = vi.fn(async (): Promise<ContentPart> => ({ type: "text", text: "old" }));
+    const newAdd = vi.fn(async (): Promise<ContentPart> => ({ type: "text", text: "new" }));
+    const rejected = vi.fn();
+    const { mount, controller } = setup({ attachments: {
+      enabled: true, adapter: { add: oldAdd }, allowedTypes: ["text/plain"], maxFiles: 1, maxFileSize: 3,
+    } });
+    const pick = async (name: string, type: string, text: string) => {
+      const picker = mount.querySelector<HTMLInputElement>("[data-persona-composer-attachment-input]")!;
+      Object.defineProperty(picker, "files", { configurable: true, value: [new File([text], name, { type })] });
+      picker.dispatchEvent(new Event("change", { bubbles: true })); await flush();
+    };
+    await controller.openConversation("a"); await pick("a.txt", "text/plain", "hi");
+    await controller.openConversation("b");
+    controller.update({ attachments: { adapter: { add: newAdd }, allowedTypes: ["application/json"], maxFiles: 3, maxFileSize: 10, onFileRejected: rejected } });
+    await controller.openConversation("a");
+    await pick("type.txt", "text/plain", "hi");
+    expect(rejected).toHaveBeenLastCalledWith(expect.objectContaining({ name: "type.txt" }), "type");
+    await pick("size.json", "application/json", "more than ten bytes");
+    expect(rejected).toHaveBeenLastCalledWith(expect.objectContaining({ name: "size.json" }), "size");
+    await pick("new.json", "application/json", "[123]");
+    await pick("third.json", "application/json", "{}");
+    expect(controller.getComposerState().attachments).toHaveLength(3);
+    expect(oldAdd).toHaveBeenCalledTimes(1);
+    expect(newAdd).toHaveBeenCalledTimes(2);
+    await pick("fourth.json", "application/json", "{}");
+    expect(rejected).toHaveBeenLastCalledWith(expect.objectContaining({ name: "fourth.json" }), "count");
+
+    await controller.openConversation("b");
+    controller.update({ attachments: { adapter: undefined, allowedTypes: undefined, maxFiles: undefined, maxFileSize: undefined, onFileRejected: undefined } });
+    await controller.openConversation("a");
+    await pick("default.txt", "text/plain", "larger than the previous limit");
+    await vi.waitFor(() => expect(controller.getComposerState().attachments[3]?.status).toBe("ready"));
+    expect(newAdd).toHaveBeenCalledTimes(2);
+    await pick("fifth.txt", "text/plain", "hi");
+    expect(controller.getComposerState().attachments).toHaveLength(4);
+    expect(rejected).toHaveBeenCalledTimes(3);
+  });
+
   it("keeps the old draft available after starting a new conversation", async () => {
     const { controller } = setup();
     await controller.openConversation("a"); controller.setMessage("Keep old A");

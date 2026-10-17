@@ -1282,10 +1282,14 @@ export function createComposerActionRenderer(
     if (fit) {
       const visible = order.map((resolved) => entries.get(resolved.id)).filter((entry): entry is Entry => Boolean(entry))
         .filter((entry) => !entry.resolved.action || (evaluate(entry.resolved.action.visible, state, true) && matchesComposerActionVisibility(entry.resolved.action.visibility, state)));
-      // New bar nodes must acquire their real inherited styles before measuring.
-      for (const placement of ["start", "end"] as const) {
-        place(placement === "start" ? bindings.actionsStart : bindings.actionsEnd,
-          visible.filter((entry) => entry.mode === "bar" && entry.resolved.placement === placement));
+      // Attach new bar nodes to acquire inherited styles before measuring.
+      // Existing nodes already have those styles. Reordering them here would
+      // omit the overflow trigger, then move them back in the final placement
+      // pass, blurring controls and feeding the mutation observer every frame.
+      for (const entry of visible) {
+        if (!entry.managed || entry.mode !== "bar") continue;
+        const cluster = entry.resolved.placement === "start" ? bindings.actionsStart : bindings.actionsEnd;
+        if (entry.element.parentElement !== cluster) cluster.appendChild(entry.element);
       }
       fitFolded = fitSelection(bindings, visible, overflow!);
     } else fitFolded.clear();

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { mergeWithDefaults } from "../defaults";
 import { mergeConfigUpdate } from "../utils/config-merge";
 import { applyHeaderControlStyle, createClearChatButton, createCloseButton, createHeaderIconButton } from "./header-parts";
@@ -20,6 +21,36 @@ const theme: AgentWidgetConfig["theme"] = {
 const config = (v5Defaults: boolean, patch: Partial<AgentWidgetConfig> = {}) => mergeWithDefaults({ apiUrl: "/api", future: { v5Defaults }, voiceRecognition: { enabled: true, provider: { type: "runtype" } }, theme, ...patch });
 
 describe.each([false, true])("independent controls V5=%s", (v5) => {
+  it("consumes theme padding through the stylesheet for every control and preserves explicit axes", () => {
+    const style = document.createElement("style");
+    style.textContent = readFileSync("src/styles/widget.css", "utf8");
+    document.head.appendChild(style);
+    const input = config(v5, { sendButton: { useIcon: false } });
+    const controls = [createCloseButton(input).button, createClearChatButton(input).button,
+      createSendButton(input).button, createMicButton(input)!.button];
+    document.body.append(...controls);
+    try {
+      for (const button of controls) {
+        expect(button.classList.contains("persona-theme-padding")).toBe(true);
+        // jsdom leaves custom-property values unresolved, but this proves the
+        // rule reaches the control and wins over its default padding classes.
+        expect(getComputedStyle(button).padding).toBe("var(--persona-theme-padding)");
+      }
+      const explicit = mergeConfigUpdate(input, {
+        launcher: { closeButtonPaddingX: "9px", clearChat: { paddingY: "11px" } },
+        sendButton: { paddingX: "13px" }, voiceRecognition: { paddingY: "15px" },
+      });
+      applyHeaderControlStyle(controls[0], explicit, "close");
+      applyHeaderControlStyle(controls[1], explicit, "clear");
+      applySendButtonStyle(controls[2], explicit);
+      applyMicButtonStyle(controls[3], explicit);
+      expect(getComputedStyle(controls[0]).paddingLeft).toBe("9px");
+      expect(getComputedStyle(controls[1]).paddingTop).toBe("11px");
+      expect(getComputedStyle(controls[2]).paddingLeft).toBe("13px");
+      expect(getComputedStyle(controls[3]).paddingTop).toBe("15px");
+    } finally { controls.forEach((button) => button.remove()); style.remove(); }
+  });
+
   it("scopes theme leaves to each sibling and keeps other header actions untouched", () => {
     const input = config(v5);
     const close = createCloseButton(input).button;

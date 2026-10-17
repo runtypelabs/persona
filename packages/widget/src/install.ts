@@ -470,9 +470,11 @@ declare global {
     const onOpen = () => {
       if (phase !== "idle") return; // already loading or handed off
       phase = "loading";
+      let errorPhase: "bundle" | "init" = "bundle";
       const stopLoading = delayInstallLoading(launcherHandle?.element ?? null, true, config.renderLoading);
       loadJS()
         .then(async () => {
+          errorPhase = "init";
           await initWidget(true);    // keep the critical launcher until the panel is complete
           stopLoading();
           launcherHandle?.destroy();  // remove the critical launcher (same component → invisible)
@@ -481,7 +483,7 @@ declare global {
         .catch((error) => {
           stopLoading();
           phase = "idle";            // allow the click to be retried
-          fail("bundle", error);
+          fail(errorPhase, error);
         });
     };
 

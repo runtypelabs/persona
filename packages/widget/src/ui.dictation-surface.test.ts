@@ -61,6 +61,48 @@ describe('dictation surface', () => {
     expect(document.activeElement).toBe(input);
   });
 
+  it('uses the rebuilt composer for later recordings and focuses the reviewed draft', async () => {
+    const { controller, mount, input, mock } = setup();
+    controller.startDictation(); await settle(); mock.result('first');
+    controller.update({ contextMentions: { enabled: false } });
+    const rebuilt = mount.querySelector<HTMLTextAreaElement>('[data-persona-composer-input]')!;
+    expect(rebuilt).not.toBe(input);
+    controller.startDictation(); await settle();
+    expect(rebuilt.readOnly).toBe(true);
+    expect(mount.querySelector('[data-persona-dictation]')).not.toBeNull();
+    mock.result('second');
+    expect(rebuilt.value).toBe('first second');
+    expect(controller.getComposerState().text).toBe('first second');
+    expect(rebuilt.readOnly).toBe(false);
+    expect(document.activeElement).toBe(rebuilt);
+    expect(input.value).toBe('first');
+  });
+
+  it.each([['transcript', 'recording'], ['transcript', 'processing'], ['inline', 'recording'], ['inline', 'processing']] as const)('remounts %s dictation while %s across a composer rebuild and inline input swap', async (display, phase) => {
+    const { controller, mount, mock } = setup();
+    controller.update({ voiceRecognition: { dictation: { display } } });
+    controller.setMessage('draft');
+    controller.startDictation(); await settle();
+    mock.result('before rebuild', false);
+    if (phase === 'processing') controller.finishDictation();
+    const surface = mount.querySelector<HTMLElement>('[data-persona-dictation]')!;
+    controller.update({ contextMentions: { enabled: true, display: 'inline', sources: [createStaticMentionSource({ id: 'files', label: 'Files', items: [], resolve: () => ({ llmAppend: 'context' }) })] } });
+    await loadContextMentionsInline(); await settle();
+    const rebuilt = mount.querySelector<HTMLElement>('[data-persona-composer-input]')!;
+    expect(rebuilt).not.toBeInstanceOf(HTMLTextAreaElement);
+    expect(rebuilt.getAttribute('contenteditable')).toBe('false');
+    expect(mount.querySelector('[data-persona-dictation]')).toBe(surface);
+    expect(surface.parentElement).toBe(mount.querySelector('[data-persona-composer-form]'));
+    expect(controller.getDictationState().phase).toBe(phase);
+    mock.result('new interim', false);
+    expect(controller.getComposerState().text).toBe(display === 'inline' ? 'draft new interim' : 'draft');
+    mock.result('after rebuild');
+    expect(controller.getComposerState().text).toBe('draft after rebuild');
+    expect(rebuilt.getAttribute('contenteditable')).toBe('true');
+    expect(mount.querySelector('[data-persona-dictation]')).toBeNull();
+    expect(document.activeElement).toBe(rebuilt);
+  });
+
   it('keeps attachments and mention references across capture, cancel and final review', async () => {
     const { controller, mount, input, mock } = setup({ attachments: { enabled: true }, contextMentions: { enabled: true, sources: [createStaticMentionSource({ id: 'files', label: 'Files', items: [{ id: 'app', label: 'app' }], resolve: () => ({ llmAppend: 'context' }) })] } });
     input.value = '@app'; input.dispatchEvent(new Event('input', { bubbles: true }));

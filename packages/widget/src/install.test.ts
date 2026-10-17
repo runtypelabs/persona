@@ -556,6 +556,55 @@ describe("install.ts: CDN base derivation", () => {
 });
 
 describe("install.ts: onError", () => {
+  it.each(["throw", "ready rejection"])("reports deferred %s as an init error and retains a retryable launcher", async (failure) => {
+    markCssLoaded();
+    provideFullBundle();
+    provideLauncherBundle();
+    const boom = new Error("renderer offline");
+    const destroy = vi.fn();
+    let rejectReady!: (error: Error) => void;
+    const ready = new Promise<void>((_, reject) => { rejectReady = reject; });
+    initAgentWidget.mockImplementationOnce(() => {
+      if (failure === "throw") throw boom;
+      return { ...fakeHandle, destroy, ready };
+    });
+    const events = recordEvents();
+    const onError = vi.fn();
+    const onChatReady = vi.fn();
+    const cleanup = vi.fn();
+    await install({
+      config: { apiUrl: "/api", launcher: { enabled: true } },
+      onError, onChatReady, renderLoading: () => cleanup,
+    });
+    await flush();
+    capturedOnOpen!();
+    await flush();
+    if (failure === "ready rejection") {
+      expect(launcherElement.querySelector("[data-persona-loading]")).not.toBeNull();
+      rejectReady(boom);
+      await flush();
+      expect(destroy).toHaveBeenCalledOnce();
+      expect(cleanup).toHaveBeenCalledOnce();
+    }
+
+    expect(onError).toHaveBeenCalledExactlyOnceWith({ phase: "init", error: boom });
+    expect(events.log.filter(event => event.type === "persona:error").map(event => event.detail))
+      .toEqual([{ phase: "init", error: boom }]);
+    expect(onChatReady).not.toHaveBeenCalled();
+    expect(fakeHandle.open).not.toHaveBeenCalled();
+    expect(launcherDestroy).not.toHaveBeenCalled();
+    expect(launcherElement.querySelector("[data-persona-loading]")).toBeNull();
+    expect(launcherElement.hasAttribute("aria-busy")).toBe(false);
+
+    capturedOnOpen!();
+    await flush();
+    expect(initAgentWidget).toHaveBeenCalledTimes(2);
+    expect(fakeHandle.open).toHaveBeenCalledOnce();
+    expect(launcherDestroy).toHaveBeenCalledOnce();
+    expect(onChatReady).toHaveBeenCalledExactlyOnceWith(fakeHandle);
+    events.stop();
+  });
+
   it("fires onError with phase 'init' and dispatches persona:error when initialization throws", async () => {
     markCssLoaded();
     provideFullBundle();

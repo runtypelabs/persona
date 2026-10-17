@@ -6,8 +6,8 @@ import { createDictationRenderer, type DictationRendererDeps } from "./component
 
 export interface DictationSessionOptions {
   instanceId: string;
-  textarea: HTMLTextAreaElement;
-  footer: HTMLElement;
+  getTextarea: () => HTMLTextAreaElement;
+  getFooter: () => HTMLElement;
   getConfig: () => AgentWidgetConfig;
   plugins: AgentWidgetPlugin[];
   getInlineInput: () => ComposerInputCapability | null | undefined;
@@ -21,7 +21,6 @@ export interface DictationSessionOptions {
 
 /** Per-instance composer integration, fetched only for dedicated dictation. */
 export function createDictationSession(options: DictationSessionOptions) {
-  const { textarea, footer } = options;
   let dictationRender: DictationRenderHandle | null = null;
   let dictationDraft = "";
   let dictationLogicalEnd: number | null = null;
@@ -39,7 +38,7 @@ export function createDictationSession(options: DictationSessionOptions) {
     if (input?.replaceLogicalRange && dictationLogicalEnd !== null) {
       input.replaceLogicalRange(dictationLogicalEnd, input.getLogicalText().length, suffix);
       input.dispatchInput();
-    } else textarea.value = dictationDraft + suffix;
+    } else options.getTextarea().value = dictationDraft + suffix;
     options.syncText();
   };
 
@@ -48,6 +47,8 @@ export function createDictationSession(options: DictationSessionOptions) {
     onSend: () => { if (!options.isSendBlocked()) options.onSend(); },
     onState: (state, levelOnly) => {
           const config = options.getConfig();
+          const textarea = options.getTextarea();
+          const footer = options.getFooter();
           const previousPhase = dictationPhase;
           dictationPhase = state.phase;
           const capturing = state.phase === "recording" || state.phase === "processing";
