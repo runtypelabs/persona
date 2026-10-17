@@ -1,6 +1,7 @@
 import { createIconButton, createLabelButton, createSplitButton, createToggleGroup } from "./utils/buttons";
 import { createChunkLoader } from "./utils/chunk-loader";
 import { componentRegistry } from "./components/registry";
+import { getLoadingLabelRuntimeSync, loadLoadingLabelRuntime } from "./loading-label-runtime-loader";
 import {
   getMarkdownParsersSync,
   onMarkdownParsersReady,
@@ -41,7 +42,7 @@ const adopt = (mod: ArtifactsUiModule): ArtifactsUiModule => {
   if (adopted) return adopted;
   adopted = mod;
 
-  mod.initArtifactsUi({ componentRegistry, buttons: { createIconButton, createLabelButton, createSplitButton, createToggleGroup } });
+  mod.initArtifactsUi({ componentRegistry, loadingLabels: getLoadingLabelRuntimeSync()!, buttons: { createIconButton, createLabelButton, createSplitButton, createToggleGroup } });
 
   // Host-registered components (config.components / registerAll at widget
   // init) must keep overriding the built-ins, exactly as they did against the
@@ -93,17 +94,18 @@ export const setArtifactsUiLoader = setLoader;
 
 /** Load AND adopt the artifacts UI. Memoized; retries after rejection. */
 export const loadArtifactsUi = (): Promise<ArtifactsUiModule> =>
-  load().then(adopt);
+  Promise.all([load(), loadLoadingLabelRuntime()]).then(([mod]) => adopt(mod));
 
 /** Eagerly supply + adopt the module (tests that assert synchronous panes). */
 export const provideArtifactsUi = (mod: ArtifactsUiModule): void => {
   provide(mod);
-  adopt(mod);
+  if (getLoadingLabelRuntimeSync()) adopt(mod);
 };
 
 /** Synchronous access once adopted; null before that. */
 export const getArtifactsUiSync = (): ArtifactsUiModule | null => {
   if (adopted) return adopted;
+  if (!getLoadingLabelRuntimeSync()) return null;
   const sync = getSync();
   return sync ? adopt(sync) : null;
 };

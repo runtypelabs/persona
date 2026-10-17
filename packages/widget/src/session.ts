@@ -302,11 +302,17 @@ export class AgentWidgetSession {
   private messages: AgentWidgetMessage[];
   private status: AgentWidgetSessionStatus = "idle";
   #activeRun: AgentWidgetRunStartedEvent | null = null;
+  #runToolIds = new Set<string>();
   #runFailed = false;
   #runFinishTimer: ReturnType<typeof setTimeout> | null = null;
 
-  #beginRun(): void {
+  #beginRun(executionId?: string): void {
     this.#finishRun("cancel");
+    this.#runToolIds.clear();
+    // Restoration only claims tools with the known resumed execution.
+    if (executionId) for (const message of this.messages) {
+      if (message.variant === "tool" && message.agentMetadata?.executionId === executionId) this.#runToolIds.add(message.id);
+    }
     this.#runFailed = false;
     this.#activeRun = { runId: `run-${generateAssistantMessageId()}`, timestamp: Date.now() };
     this.callbacks.onRunStarted?.({ ...this.#activeRun });
@@ -1190,6 +1196,7 @@ export class AgentWidgetSession {
     this.#historyOpenEpoch += 1;
     this.#historyContextEpoch += 1;
     this.cancel();
+    this.#runToolIds.clear();
     this.cleanupVoice();
     this.#visitorStoreUnsubscribe?.();
     this.#visitorStoreUnsubscribe = null;
@@ -1774,6 +1781,7 @@ export class AgentWidgetSession {
 
   /** Conversation-scoped caches that must not leak across records. */
   #resetConversationScopedState(): void {
+    this.#runToolIds.clear();
     this.historyInternals.setStoredResumableHandle?.(null);
     this.agentExecution = null;
     this.#clearArtifactState();
@@ -2027,6 +2035,7 @@ export class AgentWidgetSession {
     }
     // Metadata first, transcript last: one persist covers both.
     this.#persistConversationMetadata();
+    this.#runToolIds.clear();
     this.messages = this.#sortMessages(reconciled);
     this.callbacks.onMessagesChanged([...this.messages]);
   }
@@ -2401,6 +2410,10 @@ export class AgentWidgetSession {
 
   public getStatus() {
     return this.status;
+  }
+
+  public getRunToolIds(): ReadonlySet<string> {
+    return this.#runToolIds;
   }
 
   public isStreaming() {
@@ -3646,6 +3659,7 @@ export class AgentWidgetSession {
     // to be wiped, and a microtask-deferred resolve must not survive the clear.
     this.#abortWebMcpResolves();
     this.#actionsEpoch++;
+    this.#runToolIds.clear();
     this.messages = [];
     this.agentExecution = null;
     this.#clearArtifactState();
@@ -3880,6 +3894,7 @@ export class AgentWidgetSession {
     // incoming snapshot is treated as a fresh conversation context.
     this.webMcpInflightKeys.clear();
     this.webMcpResolvedKeys.clear();
+    this.#runToolIds.clear();
     this.messages = this.#sortMessages(
       messages.map((message) => ({
         ...restoreBrowserToolState(message),
@@ -3925,6 +3940,8 @@ export class AgentWidgetSession {
       }
     }
     if (event.type === "message") {
+      // Only incoming run events establish ownership, before rendering.
+      if (this.#activeRun && !readOnlyReplay && event.message.variant === "tool") this.#runToolIds.add(event.message.id);
       this.upsertMessage(event.message);
       if (event.message.agentMetadata?.awaitingLocalTool ||
           (event.message.variant === "approval" && event.message.approval?.status === "pending")) {
@@ -4192,7 +4209,7 @@ export class AgentWidgetSession {
   }
 
   #restoreBackgroundCheckpoint(checkpoint: BackgroundCheckpoint): void {
-    this.#beginRun();
+    this.#beginRun(checkpoint.handle.executionId);
     this.#activeAssistantMessageId = checkpoint.handle.assistantMessageId;
     const assistant = this.messages.find((message) => message.id === this.#activeAssistantMessageId);
     if (assistant) assistant.streaming = checkpoint.streamCheckpoint?.openAssistant ?? true;
@@ -4385,7 +4402,7 @@ export class AgentWidgetSession {
   public resumeFromHandle(resume: { executionId: string; after: string }): void {
     if (typeof this.config.reconnectStream !== "function") return;
     if (this.#reconnecting) return;
-    this.#beginRun();
+    this.#beginRun(resume.executionId);
 
     // A run parked on an await the restored transcript can still answer (an
     // ask_user_question card, a server approval) has no stream to replay, and

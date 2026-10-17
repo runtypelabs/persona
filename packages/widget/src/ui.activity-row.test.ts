@@ -89,3 +89,70 @@ it('copies current tool output after a streaming DOM update', async () => {
     else Reflect.deleteProperty(navigator, 'clipboard');
   }
 });
+
+it.each(['stack', 'summary', 'collapsible'] as const)('preserves %s group DOM from its singleton through later iterations', mode => {
+  start(true, { grouped: true, groupedMode: mode, groupBoundary: 'iteration' });
+  inject('tool1', 'running', ['one']);
+  const group = mount.querySelector('[data-persona-tool-group-row]')!;
+  const bubble = mount.querySelector('[data-persona-tool-group]')!;
+  const child = mount.querySelector('[data-wrapper-id="tool1"]');
+  inject('tool2', 'complete', ['two']);
+  expect(mount.querySelector('[data-persona-tool-group-row]')).toBe(group);
+  expect(mount.querySelector('[data-persona-tool-group]')).toBe(bubble);
+  if (mode !== 'summary') expect(mount.querySelector('[data-wrapper-id="tool1"]')).toBe(child);
+  inject('tool1', 'complete', ['updated']);
+  expect(mount.querySelector('[data-persona-tool-group-row]')).toBe(group);
+  if (mode !== 'summary') expect(mount.querySelector('[data-wrapper-id="tool1"]')).toBe(child);
+});
+it('keeps group icon overrides separate from actual child icons and custom label content', () => {
+  controller = createAgentExperience(mount, { apiUrl: '/test', persistState: false, launcher: { enabled: false }, future: { v5Defaults: true },
+    features: { toolCallDisplay: { grouped: true, groupBoundary: 'iteration', groupIconVisibility: 'always', iconVisibility: 'never' } },
+    toolCall: { renderGroupedSummary: () => { const icon = document.createElement('i'); icon.dataset.customIcon = 'true'; return icon; } } });
+  inject('tool1', 'complete', ['one']);
+  expect(header('tool-group-tool1').querySelector('.persona-activity-icon')).not.toBeNull();
+  expect(header('tool-group-tool1').querySelector('[data-custom-icon]')).not.toBeNull();
+  expect(header('tool1').querySelector('.persona-activity-icon')).toBeNull();
+});
+
+it.each(['stack', 'summary', 'collapsible'] as const)('collapses %s activity locally without invoking grouped summary renderers', groupedMode => {
+  const renderGroupedSummary = vi.fn(() => 'Custom activity');
+  controller = createAgentExperience(mount, { apiUrl: '/test', persistState: false, launcher: { enabled: false }, future: { v5Defaults: true },
+    features: { toolCallDisplay: { grouped: true, groupedMode, groupBoundary: 'iteration', autoExpand: true } },
+    toolCall: { renderGroupedSummary } });
+  vi.useFakeTimers();
+  inject('tool1', 'running', ['one']); inject('tool2', 'running', ['two']);
+  inject('tool1', 'complete', ['one']); inject('tool2', 'complete', ['two']);
+  const callsBeforeCollapse = renderGroupedSummary.mock.calls.length;
+  expect(callsBeforeCollapse).toBeGreaterThan(0);
+  vi.advanceTimersByTime(1000);
+  expect(renderGroupedSummary).toHaveBeenCalledTimes(callsBeforeCollapse);
+  if (groupedMode === 'collapsible') expect(header('tool-group-tool1').getAttribute('aria-expanded')).toBe('false');
+  if (groupedMode !== 'summary') expect(header('tool1').getAttribute('aria-expanded')).toBe('false');
+});
+
+it.each(['stack', 'summary', 'collapsible'] as const)('manages loading effects on %s group labels, tools and reasoning through updates and completion', groupedMode => {
+  const started: { kind: string; element: HTMLElement; update: ReturnType<typeof vi.fn>; destroy: ReturnType<typeof vi.fn> }[] = [];
+  controller = createAgentExperience(mount, { apiUrl: '/test', persistState: false, launcher: { enabled: false }, future: { v5Defaults: true },
+    features: { toolCallDisplay: { grouped: true, groupedMode, groupBoundary: 'iteration' } },
+    loadingLabel: { animate: ({ element, kind }) => {
+      expect(element.isConnected).toBe(true);
+      const entry = { element, kind, update: vi.fn(), destroy: vi.fn() }; started.push(entry); return entry;
+    } } });
+  inject('tool1', 'running', ['one']);
+  const group = started.find(entry => entry.kind === 'tool-group')!;
+  expect(group).toBeDefined();
+  inject('tool2', 'running', ['two']);
+  expect(started.filter(entry => entry.kind === 'tool-group')).toHaveLength(1);
+  expect(group.update).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('2 tools') }));
+  expect(started.filter(entry => entry.kind === 'tool')).toHaveLength(groupedMode === 'summary' ? 0 : 2);
+  inject('tool1', 'complete', ['one']); inject('tool2', 'complete', ['two']);
+  for (const entry of started) expect(entry.destroy).toHaveBeenCalledTimes(1);
+  const message: AgentWidgetMessage = { id: 'r1', role: 'assistant', content: '', createdAt: '2026-01-01', variant: 'reasoning', reasoning: { id: 'r1', status: 'streaming', chunks: ['Thinking'] } };
+  controller.injectTestMessage({ type: 'message', message });
+  const reason = started.find(entry => entry.kind === 'reasoning')!;
+  expect(reason).toBeDefined();
+  controller.injectTestMessage({ type: 'message', message: { ...message, reasoning: { ...message.reasoning!, chunks: ['More thinking'] } } });
+  expect(reason.update).toHaveBeenCalled();
+  controller.injectTestMessage({ type: 'message', message: { ...message, reasoning: { ...message.reasoning!, status: 'complete' } } });
+  expect(reason.destroy).toHaveBeenCalledTimes(1);
+});

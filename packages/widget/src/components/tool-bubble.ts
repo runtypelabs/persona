@@ -1,11 +1,11 @@
-import { resolveToolStyles, applyToolPadding, toolLoadingDuration } from "../utils/tool-styles";
+import { resolveToolStyles, applyToolPadding } from "../utils/tool-styles";
 import { appendToolDetails } from "./tool-details";
 import { applyActivityRow, activityDisplay, activityVariant } from "./activity-row";
 import { createElement, createNode } from "../utils/dom";
 import { AgentWidgetMessage, AgentWidgetConfig } from "../types";
-import { DEFAULT_TOOL_CALL_DISPLAY } from "../defaults";
+import { DEFAULT_TOOL_CALL_DISPLAY } from "../utils/activity-display-defaults";
 import { formatUnknownValue, describeToolTitle, resolveToolHeaderText, computeToolElapsed, parseFormattedTemplate } from "../utils/formatting";
-import { appendCharSpans } from "../utils/tool-loading-animation";
+import { applyLoadingLabel } from "../utils/loading-label-deps";
 import {
   appendHeaderToggle,
   applyExpansionDisplay,
@@ -208,7 +208,6 @@ export const createToolBubble = (
   }
 
   // Apply loading animation when tool is active and no custom HTMLElement was provided
-  const loadingAnimation = toolDisplayConfig.loadingAnimation ?? DEFAULT_TOOL_CALL_DISPLAY.loadingAnimation;
   const activeTemplate = toolCallConfig.activeTextTemplate;
   const completeTemplate = tool.interrupted ? undefined : toolCallConfig.completeTextTemplate;
   const currentTemplate = isActive ? activeTemplate : completeTemplate;
@@ -218,13 +217,11 @@ export const createToolBubble = (
    * Renders a template into the title element, handling:
    * - Inline formatting markers: **bold**, *italic*, ~dim~
    * - {duration} as a live-updating elapsed span (active) or static text (complete)
-   * - Character-by-character animation wrapping when `animated` is true
    */
-  const renderFormattedTitle = (template: string, animated: boolean) => {
+  const renderFormattedTitle = (template: string) => {
     title.textContent = "";
     const toolName = tool.name?.trim() || "tool";
     const segments = parseFormattedTemplate(template, toolName);
-    let charIndex = 0;
 
     for (const seg of segments) {
       // Determine parent: wrap in a styled span if formatting is present
@@ -242,52 +239,14 @@ export const createToolBubble = (
       } else {
         // Static text (or resolved duration for completed tools)
         const text = seg.isDuration ? computeToolElapsed(tool) : seg.text;
-        if (animated) {
-          charIndex = appendCharSpans(parent, text, charIndex);
-        } else {
-          parent.appendChild(document.createTextNode(text));
-        }
+        parent.appendChild(document.createTextNode(text));
       }
     }
   };
 
   if (!skipCustomElement) {
-    if (isActive && loadingAnimation !== "none") {
-      const animDuration = toolLoadingDuration(config);
-      title.setAttribute("data-preserve-animation", "true");
-
-      if (loadingAnimation === "pulse") {
-        title.classList.add("persona-tool-loading-pulse");
-        title.style.setProperty("--persona-tool-anim-duration", animDuration);
-        if (currentTemplate) {
-          renderFormattedTitle(currentTemplate, false);
-        }
-      } else {
-        // Character-by-character modes: shimmer, shimmer-color, rainbow
-        title.classList.add(`persona-tool-loading-${loadingAnimation}`);
-        title.style.setProperty("--persona-tool-anim-duration", animDuration);
-
-        if (loadingAnimation === "shimmer-color") {
-          if (toolCallConfig.loadingAnimationColor) {
-            title.style.setProperty("--persona-tool-anim-color", toolCallConfig.loadingAnimationColor);
-          }
-          if (toolCallConfig.loadingAnimationSecondaryColor) {
-            title.style.setProperty("--persona-tool-anim-secondary-color", toolCallConfig.loadingAnimationSecondaryColor);
-          }
-        }
-
-        if (currentTemplate) {
-          renderFormattedTitle(currentTemplate, true);
-        } else {
-          const text = title.textContent || summary;
-          title.textContent = "";
-          appendCharSpans(title, text, 0);
-        }
-      }
-    } else if (currentTemplate) {
-      // Template with formatting but no animation (or completed tool)
-      renderFormattedTitle(currentTemplate, false);
-    }
+    if (currentTemplate) renderFormattedTitle(currentTemplate);
+    if (isActive) applyLoadingLabel(title, config, "tool");
   }
 
   const iconColor = toolChevronColor(toolCallConfig, activityVariant(config, "tool") === "row");

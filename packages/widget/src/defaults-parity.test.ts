@@ -168,6 +168,10 @@ describe("4.22.0 defaults parity (flag off)", () => {
       delayMs: baseline.mergedDefaultConfig.tooltip.delayMs,
     };
     // Additive controls preserve V4 appearance; keep the historical fixture intact.
+    const tools = resolvedActual.mergedDefaultConfig.features!.toolCallDisplay!;
+    expect(baseline.mergedDefaultConfig.features.toolCallDisplay).not.toHaveProperty("groupBoundary");
+    expect(tools.groupBoundary).toBe("adjacent");
+    delete tools.groupBoundary;
     const scroll = resolvedActual.mergedDefaultConfig.features!.scrollToBottom!;
     expect(baseline.mergedDefaultConfig.features.scrollToBottom).not.toHaveProperty("streamingIndicator");
     expect(baseline.mergedDefaultConfig.features.scrollToBottom).not.toHaveProperty("transition");

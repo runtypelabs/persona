@@ -33,6 +33,7 @@
       "@runtypelabs/persona/config-diagnostics": ["./src/config-diagnostics.ts"],
       "@runtypelabs/persona/history-shell": ["./src/history-shell.ts"],
       "@runtypelabs/persona/activity-ui": ["./src/activity-ui.ts"],
+      "@runtypelabs/persona/loading-label-runtime": ["./src/loading-label-runtime.ts"],
       "@runtypelabs/persona/preferences-runtime": ["./src/preferences-runtime.ts"]
     },
     "declaration": true,

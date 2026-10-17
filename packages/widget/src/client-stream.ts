@@ -433,9 +433,15 @@ export async function streamResponse(
     return normalized === "emit_artifact_markdown" || normalized === "emit_artifact_component";
   };
 
-  const ensureToolMessage = (toolId: string) => {
+  const ensureToolMessage = (toolId: string, executionId?: string, iteration?: number) => {
     const existing = toolMessages.get(toolId);
+    const agentMetadata = {
+      ...existing?.agentMetadata,
+      executionId: executionId ?? existing?.agentMetadata?.executionId,
+      iteration: iteration ?? existing?.agentMetadata?.iteration ?? (lastIterationSeen || undefined),
+    };
     if (existing) {
+      existing.agentMetadata = agentMetadata;
       return existing;
     }
 
@@ -446,6 +452,9 @@ export async function streamResponse(
       createdAt: new Date().toISOString(),
       streaming: true,
       variant: "tool",
+      // The pending emission is already renderable: grouping must not first
+      // merge it into the previous iteration and split it on the next event.
+      agentMetadata,
       sequence: nextSequence(),
       toolCall: {
         id: toolId,
@@ -964,7 +973,7 @@ export async function streamResponse(
           artifactToolCallIds.add(toolId);
           continue;
         }
-        const toolMessage = ensureToolMessage(toolId);
+        const toolMessage = ensureToolMessage(toolId, payload.executionId, payload.iteration);
         const tool = toolMessage.toolCall ?? {
           id: toolId,
           status: "pending"
@@ -984,17 +993,11 @@ export async function streamResponse(
         tool.durationMs = undefined;
         toolMessage.toolCall = tool;
         toolMessage.streaming = true;
-        if (payload.executionId) {
-          toolMessage.agentMetadata = {
-            executionId: payload.executionId,
-            iteration: payload.iteration,
-          };
-        }
         emitMessage(toolMessage);
       } else if (payload.type === "tool_output_delta") {
         const toolId = payload.toolCallId;
         if (artifactToolCallIds.has(toolId)) continue;
-        const toolMessage = ensureToolMessage(toolId);
+        const toolMessage = ensureToolMessage(toolId, payload.executionId);
         const tool = toolMessage.toolCall ?? {
           id: toolId,
           status: "running"
@@ -1010,12 +1013,6 @@ export async function streamResponse(
         tool.status = "running";
         toolMessage.toolCall = tool;
         toolMessage.streaming = true;
-        if (payload.executionId) {
-          toolMessage.agentMetadata = toolMessage.agentMetadata ?? {
-            executionId: payload.executionId,
-            iteration: lastIterationSeen,
-          };
-        }
         emitMessage(toolMessage);
       } else if (payload.type === "tool_complete") {
         const toolId = payload.toolCallId;
@@ -1023,7 +1020,7 @@ export async function streamResponse(
           artifactToolCallIds.delete(toolId);
           continue;
         }
-        const toolMessage = ensureToolMessage(toolId);
+        const toolMessage = ensureToolMessage(toolId, payload.executionId, payload.iteration);
         const tool = toolMessage.toolCall ?? {
           id: toolId,
           status: "running"
@@ -1049,12 +1046,6 @@ export async function streamResponse(
         }
         toolMessage.toolCall = tool;
         toolMessage.streaming = false;
-        if (payload.executionId) {
-          toolMessage.agentMetadata = toolMessage.agentMetadata ?? {
-            executionId: payload.executionId,
-            iteration: payload.iteration ?? lastIterationSeen,
-          };
-        }
         emitMessage(toolMessage);
       } else if (payload.type === "await" && payload.toolName) {
         // Unified LOCAL tool pause for either dispatch kind. The execution
@@ -1081,7 +1072,7 @@ export async function streamResponse(
             : undefined;
         const toolId =
           toolCallId ?? (payload.toolId as string) ?? `local-${nextSequence()}`;
-        const toolMessage = ensureToolMessage(toolId);
+        const toolMessage = ensureToolMessage(toolId, payload.executionId);
         const rawToolName = payload.toolName as string;
         // Page tools may arrive with a bare name; synthesize the
         // `webmcp:` prefix so isWebMcpToolName (and the bridge's prefix-strip on
@@ -1384,7 +1375,7 @@ export async function streamResponse(
         }
       } else if (payload.type === "tool_input_complete") {
         if (artifactToolCallIds.has(payload.toolCallId)) continue;
-        const toolMessage = ensureToolMessage(payload.toolCallId);
+        const toolMessage = ensureToolMessage(payload.toolCallId, payload.executionId);
         const tool = toolMessage.toolCall!;
         tool.args = payload.parameters;
         tool.name = payload.toolName ?? tool.name;

@@ -9,6 +9,7 @@ describe("tool call display defaults", () => {
       activePreview: false,
       grouped: false,
       groupedMode: "stack",
+      groupBoundary: "adjacent",
       previewMaxLines: 3,
       expandable: true,
       loadingAnimation: "none",

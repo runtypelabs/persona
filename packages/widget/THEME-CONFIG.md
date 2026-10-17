@@ -2691,6 +2691,9 @@ Templates support **inline formatting markers**: `~dim text~`, `*italic text*`, 
 | `activeMinHeight` |: | CSS min-height for active collapsed rows (e.g. `"100px"`) |
 | `previewMaxLines` | `3` | Maximum preview lines for collapsed active tool calls |
 | `grouped` | `false` | Visually group consecutive tool call rows |
+| `groupedMode` | `"stack"` | `"stack"`, `"summary"`, or `"collapsible"` (V5 default) |
+| `groupBoundary` | `"adjacent"` | `"iteration"` splits visible neighbors when both have different known iterations or execution IDs; unknown metadata retains adjacency |
+| `groupIconVisibility` | inherits `iconVisibility` | `"always"`, `"active"`, or `"never"` for the built-in collapsible group header only |
 | `expandable` | `true` | Allow expand/collapse toggle; `false` shows summary only |
 | `loadingAnimation` | `"none"` | Animation mode: `"none"` \| `"pulse"` \| `"shimmer"` \| `"shimmer-color"` \| `"rainbow"` |
 | `completedVisibility` | `"kept"` | `"removed"` renders no row once the tool call completes, so the transcript gap closes with it. The tool call stays on the message and in `getMessages()` |
@@ -3424,7 +3427,11 @@ V5 defaults to `"active"`: pending/running, error, denied, and approval-waiting
 indicators remain visible; successful completion icons disappear without leaving
 an empty icon slot. V4 rows default to `"always"`. `"never"` hides all leading
 status icons. Disclosure chevrons remain available in all modes. This option
-also applies to grouped row summaries; custom summary content controls its own icons.
+also applies to grouped row summaries. Set `toolCallDisplay.groupIconVisibility` to
+`"always"`, `"active"`, or `"never"` to override only the built-in collapsible header;
+child rows still use `iconVisibility`, and custom summary content controls its own icons.
+Like `iconVisibility`, the group icon override is developer-owned styling and is
+excluded from persisted preferences.
 
 V5 tool and reasoning rows stay collapsed while streaming (`autoExpand: false`).
 Set `autoExpand: true` on either display config to open on the first content chunk;
@@ -3441,6 +3448,33 @@ V5 tool display defaults to `grouped: true`, `groupedMode: "collapsible"` and
 calls become an expandable `Used N tools` row (or `Using N tools` while active),
 with a 40ms stagger between children. `grouped: false` keeps individual rows.
 The existing `"stack"` and `"summary"` grouping modes keep their behavior.
+
+`groupBoundary: "adjacent"` preserves the default visible adjacency grouping.
+`groupBoundary: "iteration"` refines those groups at neighboring tools with different
+known `agentMetadata.iteration` or `agentMetadata.executionId` values, in every
+mode. Unknown metadata preserves adjacency pairwise: iterations `[1, undefined, 2]`
+stay together. Hidden reasoning and removed completed tools do not create visible
+boundaries. Iteration grouping includes singleton groups from their first tool,
+keeping the group wrapper stable as more calls arrive. `groupBoundary` and all
+three `groupedMode` values are supported in persisted preferences and the editor.
+
+`toolCall.renderGroupedSummary` receives `streaming`, `isLatestGroup`, and
+`isCurrentRunGroup` alongside `messages`, `toolCalls`, `defaultSummary`, and `config`.
+`streaming` reflects the session stream, including completed-tool batch gaps.
+`isLatestGroup` identifies the last rendered tool group even when assistant prose
+follows it. `isCurrentRunGroup` means the group contains at least one tool observed
+in the current session run; starting a new send or continuation resets that ownership
+before rendering. A continuation can append tools to an existing adjacent group,
+which then becomes current. Restored tools count only when their known execution
+matches the resumed execution. These flags update on streaming changes even without
+new messages.
+
+The built-in adjacent collapsible header remains active during a completed-tool
+batch gap only for the latest current-run group while the session streams.
+Completed iteration groups finish immediately. Errors, interruption, denied calls,
+and pending approvals retain their attention state. Resumed activity cancels a
+pending automatic collapse; final completion can schedule it again without reopening
+the group or overriding a manual toggle.
 
 `theme.components.activity` accepts `rowHeight` (32px), `labelSize` (13px),
 `iconSize` (16px), `indent` (0px for details), `groupIndent` (0px for grouped children),
@@ -3621,9 +3655,108 @@ separate it from collapsible code widgets.
 
 `loadingIndicator.variant` selects `"dots"` or `"label"` independently of
 the defaults version. V4 uses dots; V5 uses a muted 13px “Thinking…” label
-with a 20px minimum height and subtle shimmer. Reduced-motion preferences
-disable the shimmer. Set `loadingIndicator.label` to localize or replace
-the text. Existing custom rendering hooks remain available.
+with subtle shimmer and a spinning `loader-circle` icon. Its default waiting row uses the shared activity
+`rowHeight`, `labelSize`, and `iconSize` tokens (32px, 13px, and 16px), with
+a real icon so its text aligns with active tool group labels. Hiding
+tool group icons also hides the waiting icon and removes its spacing. Empty streaming assistant messages
+use the same geometry. Set `loadingIndicator.showBubble: true` to retain
+assistant bubble styling and the label's original 20px minimum height.
+Reduced-motion preferences disable the shimmer and icon rotation. Set `loadingIndicator.label`
+to localize or replace the text. Existing custom rendering hooks remain available.
+
+`loadingIndicator.iconName` selects an icon from the shared registry, including
+icons supplied through `registerIcons()`. `iconVisibility` accepts `"always"`,
+`"active"`, or `"never"`; waiting is always active. An explicit value takes
+precedence over the inherited tool icon setting. When omitted, a collapsible
+group's `groupIconVisibility` takes precedence over `toolCallDisplay.iconVisibility`,
+matching the activity that follows. Other group modes inherit the child icon setting.
+V4's label keeps its original text-only appearance unless `iconName` or
+`iconVisibility` is explicitly supplied. Dots retain their existing appearance.
+
+`loadingIndicator.iconAnimation` accepts `"none"` or `"spin"`, independently
+of text animation. The default `loader-circle` spins; custom icon names remain
+still unless `"spin"` is requested. For example:
+
+```ts
+loadingIndicator: {
+  iconName: "sparkles",
+  iconVisibility: "always",
+  iconAnimation: "none",
+}
+```
+
+The icon shares activity sizing, muted color, and the 8px label gap. A custom
+`loadingIndicator.render` continues to own the entire indicator; these built-in
+options apply only when it delegates to `defaultRenderer()`. Reset an option to
+`undefined` in `update()` to restore its default/inherited behavior.
+
+The waiting text, active tool labels, grouped-tool headers, and active
+reasoning labels use the same loading animation renderer. Configure them together
+with `loadingLabel`:
+
+```ts
+loadingLabel: {
+  animation: "shimmer-color", // none | pulse | shimmer | shimmer-color | rainbow
+  duration: 2400, // milliseconds
+  color: "#64748b",
+  secondaryColor: "#8b5cf6",
+}
+```
+
+Each supplied shared field overrides its corresponding per-feature setting.
+Omitted fields retain `features.toolCallDisplay.loadingAnimation`,
+`features.reasoningDisplay.loadingAnimation`, and their existing duration/color
+settings (including tool loading theme tokens). Waiting labels default to shimmer.
+`none` renders plain text and disables the custom effect too. Artifacts retain
+`features.artifacts` loading settings independently. Animated waiting labels prepare
+only the small shared loading-label module before `ready`; they do not load the
+tool/reasoning renderer when those features are disabled. With tools, reasoning,
+and artifacts disabled, `loadingLabel.animation: "none"` keeps plain waiting text
+without that download. V4 still defaults to dots
+and static tool/reasoning labels; explicitly selecting a waiting label retains
+its shimmer.
+
+For a custom effect, supply `loadingLabel.animate`. It starts once on the
+committed live label element, then its optional `update` receives later text and
+configuration changes on that same element. `destroy` releases resources before
+a replacement effect or builtin is rendered, or when the label completes,
+is removed, or the widget is destroyed. Reduced-motion preferences prevent
+startup, clean up a running effect, and allow it to start again when motion is
+restored. `animation: "none"` also prevents startup; set another mode when opting
+into custom effects on V4 tool/reasoning labels.
+
+```ts
+loadingLabel: {
+  animation: "pulse",
+  duration: 2000,
+  animate: ({ element, config }) => {
+    const effect = element.animate(
+      [{ opacity: 1 }, { opacity: 0.4 }, { opacity: 1 }],
+      { duration: config.loadingLabel?.duration ?? 2000, iterations: Infinity },
+    );
+    return {
+      update: ({ config }) => {
+        effect.effect?.updateTiming({ duration: config.loadingLabel?.duration ?? 2000 });
+      },
+      destroy: () => effect.cancel(),
+    };
+  },
+}
+```
+
+The callback context also includes `text`, `kind` (`waiting`, `tool`, `tool-group`,
+or `reasoning`), and `reducedMotion`. Custom `HTMLElement` summaries and loading
+indicator renderers own their effects; returning `defaultRenderer()` delegates
+to the shared lifecycle. String summaries participate. This hook is separate
+from stream animation plugins; their registration and lifecycle are unchanged.
+Avoid throwing from host callbacks; errors are reported without stopping the
+widget. To switch back to a builtin on a mounted widget:
+
+```ts
+controller.update({ loadingLabel: { animation: "shimmer", animate: undefined } });
+// Restore every per-feature/default setting:
+controller.update({ loadingLabel: undefined });
+```
 
 V5 follow-ups use a single scrolling row with the existing edge fade.
 They clear when the user types, sends, or starts another run, and stay hidden

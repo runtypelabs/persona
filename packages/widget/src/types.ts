@@ -2377,6 +2377,42 @@ export type AgentWidgetToolCallLoadingAnimation =
   | "shimmer-color"
   | "rainbow";
 
+/** Live default-owned loading label. Stream animation plugins use a separate API. */
+export type LoadingLabelAnimationContext = {
+  element: HTMLElement;
+  /** Unanimated label text, including any live elapsed value at render time. */
+  text: string;
+  kind: "waiting" | "tool" | "tool-group" | "reasoning";
+  config: AgentWidgetConfig;
+  reducedMotion: boolean;
+};
+
+export type LoadingLabelAnimationHandle = {
+  /** Called after later committed renders, including label/config changes. */
+  update?: (context: LoadingLabelAnimationContext) => void;
+  /** Release animation resources on completion, removal, replacement or destroy. */
+  destroy: () => void;
+};
+
+/** Shared overrides for built-in waiting, tool, grouped-tool and reasoning labels. */
+export type AgentWidgetLoadingLabelConfig = {
+  /** Overrides per-feature animation settings when supplied. `none` also disables animate. */
+  animation?: AgentWidgetToolCallLoadingAnimation;
+  /** Cycle duration in milliseconds; overrides per-feature duration. */
+  duration?: number;
+  /** Primary shimmer-color color; overrides per-feature color. */
+  color?: string;
+  /** Secondary shimmer-color color; overrides per-feature color. */
+  secondaryColor?: string;
+  /**
+   * Starts on committed live DOM, replacing the built-in effect. Return a
+   * handle to receive updates and cleanup. Not started under reduced motion.
+   * Custom HTMLElement renderers retain ownership; defaultRenderer delegates
+   * participate. Clear with `animate: undefined` in update() to restore builtins.
+   */
+  animate?: (context: LoadingLabelAnimationContext) => LoadingLabelAnimationHandle | void;
+};
+
 export type AgentWidgetToolCallDisplayFeature = {
   /** Activity chrome. Defaults to card in V4 and row with future.v5Defaults. */
   variant?: "card" | "row";
@@ -2420,6 +2456,10 @@ export type AgentWidgetToolCallDisplayFeature = {
    * @default "stack"
    */
   groupedMode?: "stack" | "summary" | "collapsible";
+  /** Split adjacent tools at known iteration or execution changes. Missing metadata preserves adjacency. @default "adjacent" */
+  groupBoundary?: "adjacent" | "iteration";
+  /** Built-in collapsible header icon visibility. Inherits iconVisibility; child rows and custom summary content keep their own icons. */
+  groupIconVisibility?: "always" | "active" | "never";
   /**
    * What happens to a tool call row once it completes.
    *
@@ -2783,6 +2823,7 @@ export type WidgetPreferenceSlice = {
     | "expandable"
     | "grouped"
     | "groupedMode"
+    | "groupBoundary"
     | "loadingAnimation"
   >;
   reasoningDisplay?: Pick<
@@ -6088,6 +6129,12 @@ export type AgentWidgetToolCallConfig = {
     messages: AgentWidgetMessage[];
     toolCalls: AgentWidgetToolCall[];
     defaultSummary: string;
+    /** Whether the session is currently streaming, including gaps between tool batches. */
+    streaming: boolean;
+    /** The last rendered tool group, even when followed by assistant prose. */
+    isLatestGroup: boolean;
+    /** This group contains tools observed in the current session run. */
+    isCurrentRunGroup: boolean;
     config: AgentWidgetConfig;
   }) => HTMLElement | string | null;
   /**
@@ -7820,7 +7867,7 @@ export type LoadingIndicatorRenderContext = {
    */
   location: 'inline' | 'standalone' | 'conversation-open';
   /**
-   * Function to render the default 3-dot bouncing indicator.
+   * Function to render the configured built-in waiting indicator.
    * Call this if you want to use the default for certain cases.
    */
   defaultRenderer: () => HTMLElement;
@@ -7901,11 +7948,19 @@ export type AgentWidgetLoadingIndicatorConfig = {
   variant?: "dots" | "label";
   /** Text for the label variant. @default "Thinking…" */
   label?: string;
+  /** Label icon from the icon registry, including registerIcons(). @default "loader-circle" */
+  iconName?: string;
+  /** Label icon visibility. Waiting is always active. Inherits tool/group visibility in V5; V4 labels remain text-only unless iconName or iconVisibility is supplied. */
+  iconVisibility?: "always" | "active" | "never";
+  /** Label icon motion, independent of loadingLabel text effects. Defaults to spin for loader-circle, none for custom icons. Respects reduced motion. */
+  iconAnimation?: "none" | "spin";
 
   /**
    * Whether to show the bubble background and border around the standalone loading indicator.
    * Set to false to render the loading indicator without any bubble styling.
-   * @default true
+   * The built-in V5 label defaults to activity row geometry, including inline
+   * empty-message loading. Set true to keep assistant bubble styling instead.
+   * Dots and custom renderers retain bubble styling by default.
    */
   showBubble?: boolean;
 
@@ -8904,6 +8959,8 @@ export type AgentWidgetConfig = {
    * ```
    */
   loadingIndicator?: AgentWidgetLoadingIndicatorConfig;
+  /** Shared loading-label animation overrides and optional managed custom effect. */
+  loadingLabel?: AgentWidgetLoadingLabelConfig;
 };
 
 /**

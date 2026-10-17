@@ -3157,7 +3157,7 @@
 }
 
 /* Prefers-reduced-motion: disable all tool loading animations */
-@media (prefers-reduced-motion: reduce) {
+@media (prefers-reduced-motion: reduce), (forced-colors: active) {
   [data-persona-root] .persona-tool-loading-pulse,
   [data-persona-root] .persona-tool-loading-shimmer .persona-tool-char,
   [data-persona-root] .persona-tool-loading-shimmer-color .persona-tool-char,
@@ -6514,7 +6514,7 @@
 .persona-activity-header:not([data-expand-header]) { cursor:default; }
 .persona-activity-label { min-width:0; }
 .persona-activity-label, .persona-activity-label > span { font-size:var(--persona-activity-label-size); color:inherit; }
-.persona-activity-icon { display:inline-flex; flex:none; width:var(--persona-activity-icon-size); height:var(--persona-activity-icon-size); }
+.persona-activity-icon { display:inline-flex; flex:none; width:var(--persona-activity-icon-size, var(--persona-components-activity-iconSize, 16px)); height:var(--persona-activity-icon-size, var(--persona-components-activity-iconSize, 16px)); }
 .persona-activity-icon svg { width:100%; height:100%; }
 .persona-activity-chevron { margin-left:0; flex:none; }
 .persona-activity-duration { font-size:12px; white-space:nowrap; }
@@ -6541,23 +6541,15 @@
 .persona-activity-row[data-activity-state="error"] > .persona-activity-header > .persona-activity-icon { color:var(--persona-danger, #dc2626); }
 .persona-activity-row[data-activity-state="denied"] > .persona-activity-header > .persona-activity-icon { color:var(--persona-warning-strong, #b45309); }
 .persona-activity-row[data-activity-state="awaiting-approval"] > .persona-activity-header > .persona-activity-icon { color:var(--persona-warning, #d97706); }
-.persona-activity-row[data-activity-state="running"] > .persona-activity-header > .persona-activity-icon { animation:persona-activity-spin 1s linear infinite; }
+.persona-activity-row[data-activity-state="running"] > .persona-activity-header > .persona-activity-icon,
+.persona-activity-icon[data-loading-icon-animation="spin"] { animation:persona-activity-spin 1s linear infinite; }
 @keyframes persona-activity-spin { to { transform:rotate(360deg); } }
 @keyframes persona-activity-enter { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:none; } }
 .persona-activity-group-child { animation:persona-activity-enter 160ms ease both; animation-delay:var(--persona-activity-stagger, 0ms); }
 @media (prefers-reduced-motion: reduce) {
-  .persona-activity-row[data-activity-state="running"] > .persona-activity-header > .persona-activity-icon, .persona-activity-group-child { animation:none; }
+  .persona-activity-row[data-activity-state="running"] > .persona-activity-header > .persona-activity-icon,
+  .persona-activity-icon[data-loading-icon-animation="spin"], .persona-activity-group-child { animation:none; }
 }
-.persona-activity-row[data-activity-group-shimmer][data-activity-state="running"] > .persona-activity-header > .persona-activity-label {
-  background:linear-gradient(100deg, var(--persona-muted) 25%, var(--persona-text) 50%, var(--persona-muted) 75%);
-  background-size:200% 100%; background-clip:text; -webkit-background-clip:text; color:transparent;
-  animation:persona-activity-shimmer 2s linear infinite;
-}
-@keyframes persona-activity-shimmer { to { background-position:-200% 0; } }
-@media (prefers-reduced-motion: reduce) {
-  .persona-activity-row[data-activity-group-shimmer] > .persona-activity-header > .persona-activity-label { animation:none; background:none; color:var(--persona-muted); }
-}
-
 /* Keep the top edge soft only while earlier transcript content is out of view. */
 .persona-widget-container:has(> .persona-widget-body[data-persona-top-fade="true"]) {
   background-color: var(--persona-transcript-top-fade-background, var(--persona-container));
@@ -6686,24 +6678,29 @@
 
 /* Built-in waiting label; keep readable text when motion is disabled. */
 .persona-loading-label {
+  display:flex;
+  align-items:center;
+  gap:8px;
   min-height:20px;
   font-size:13px;
   line-height:20px;
   color:var(--persona-muted);
   width:fit-content;
-  background:linear-gradient(90deg, var(--persona-muted) 35%, var(--persona-text) 50%, var(--persona-muted) 65%);
-  background-size:200% 100%;
-  background-clip:text;
-  -webkit-background-clip:text;
-  -webkit-text-fill-color:transparent;
-  animation:persona-activity-shimmer 2s linear infinite;
+
 }
-@media (prefers-reduced-motion:reduce), (forced-colors:active) {
-  .persona-loading-label {
-    animation:none;
-    background:none;
-    -webkit-text-fill-color:currentColor;
-  }
+/* Default V5 waiting labels occupy the same row as the activity that follows.
+   Apply the chrome reset to standalone and empty-message loaders alike; custom
+   renderers and explicitly requested bubbles keep their normal geometry. */
+.persona-message-bubble:has(> .persona-loading-label.persona-activity-row) {
+  padding:0 !important;
+  border:0;
+  box-shadow:none !important;
+  background:transparent !important;
+}
+.persona-loading-label.persona-activity-row {
+  min-height:var(--persona-activity-height);
+  font-size:var(--persona-activity-label-size);
+  line-height:inherit;
 }
 
 /* Keep V5 chip strips quiet even while hovered or actively scrolling. */

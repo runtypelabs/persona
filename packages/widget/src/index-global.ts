@@ -334,6 +334,9 @@ setConfigDiagnosticsLoader(siblingChunk("config-diagnostics.js"));
 import { setActivityUiLoader } from "./activity-ui-loader";
 setActivityUiLoader(siblingChunk("activity-ui.js"));
 
+import { setLoadingLabelRuntimeLoader } from "./loading-label-runtime-loader";
+setLoadingLabelRuntimeLoader(siblingChunk("loading-label-runtime.js"));
+
 // Request construction and dispatch are needed only when sending a turn.
 import { setClientDispatchLoader } from "./client-dispatch-loader";
 setClientDispatchLoader(siblingChunk("client-dispatch.js"));

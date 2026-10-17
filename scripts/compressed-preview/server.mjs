@@ -26,6 +26,9 @@ for (const name of ["install.global.js", "launcher.global.js", "index.global.js"
 }
 const html = await readFile(new URL("./index.html", import.meta.url));
 const fullscreen = await readFile(new URL("./fullscreen.html", import.meta.url));
+// Give this preview its own asset URLs so an older open tab cannot reuse a stale build.
+const activityPrefix = `/dist/activity-${Date.now()}/`;
+const activity = (await readFile(new URL("./activity.html", import.meta.url), "utf8")).replaceAll("/dist/", activityPrefix);
 const quality = (header, encoding) => {
   const entries = header.split(",").map(part => part.trim().split(";"));
   const match = entries.find(([name]) => name === encoding) ?? entries.find(([name]) => name === "*");
@@ -53,12 +56,13 @@ createServer((req, res) => {
     return;
   }
   if (!["GET", "HEAD"].includes(req.method)) { res.writeHead(405).end(); return; }
-  if (url.pathname === "/" || url.pathname === "/fullscreen") {
+  if (url.pathname === "/" || url.pathname === "/fullscreen" || url.pathname === "/activity") {
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
-    res.end(req.method === "HEAD" ? undefined : url.pathname === "/fullscreen" ? fullscreen : html);
+    res.end(req.method === "HEAD" ? undefined : url.pathname === "/activity" ? activity : url.pathname === "/fullscreen" ? fullscreen : html);
     return;
   }
-  const name = url.pathname.startsWith("/dist/") ? url.pathname.slice(6) : "";
+  const name = url.pathname.startsWith(activityPrefix) ? url.pathname.slice(activityPrefix.length)
+    : url.pathname.startsWith("/dist/") ? url.pathname.slice(6) : "";
   const asset = assets.get(name);
   if (!asset) { res.writeHead(404).end("Not found"); return; }
   const accept = req.headers["accept-encoding"] ?? "";

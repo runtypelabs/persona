@@ -24,6 +24,7 @@ import { defineConfig, type UserConfig } from "tsdown";
 const SUBPATH_CHUNKS = [
   "@runtypelabs/persona/preferences-runtime",
   "@runtypelabs/persona/activity-ui",
+  "@runtypelabs/persona/loading-label-runtime",
   "@runtypelabs/persona/history-shell",
   "@runtypelabs/persona/config-diagnostics",
   "@runtypelabs/persona/background-runtime",
@@ -285,6 +286,7 @@ export default defineConfig([
   lazyChunk("voice-client-tools"),
   lazyChunk("forms-ui"),
   lazyChunk("activity-ui"),
+  lazyChunk("loading-label-runtime"),
   lazyChunk("preferences-runtime"),
   lazyChunk("config-diagnostics"),
   lazyChunk("background-runtime"),

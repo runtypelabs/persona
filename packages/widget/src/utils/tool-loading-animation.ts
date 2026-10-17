@@ -22,3 +22,33 @@ export const appendCharSpans = (
   }
   return idx;
 };
+
+export type LoadingAnimationOptions = {
+  animation: import("../types").AgentWidgetToolCallLoadingAnimation;
+  duration?: string;
+  color?: string;
+  secondaryColor?: string;
+};
+
+/** Shared builtin renderer; preserves formatting and independently updated timers. */
+export function applyLoadingAnimation(element: HTMLElement, options: LoadingAnimationOptions): void {
+  const { animation, duration, color, secondaryColor } = options;
+  if (animation === "none") return;
+  element.setAttribute("data-preserve-animation", "true");
+  element.classList.add(`persona-tool-loading-${animation}`);
+  if (duration) element.style.setProperty("--persona-tool-anim-duration", duration);
+  if (color) element.style.setProperty("--persona-tool-anim-color", color);
+  if (secondaryColor) element.style.setProperty("--persona-tool-anim-secondary-color", secondaryColor);
+  if (animation === "pulse") return;
+  let index = 0;
+  const wrap = (parent: HTMLElement) => {
+    for (const node of Array.from(parent.childNodes)) {
+      if (node.nodeType === 3) {
+        const fragment = document.createElement("span");
+        index = appendCharSpans(fragment, node.textContent ?? "", index);
+        node.replaceWith(...Array.from(fragment.childNodes));
+      } else if (node instanceof HTMLElement && !node.hasAttribute("data-tool-elapsed")) wrap(node);
+    }
+  };
+  wrap(element);
+}

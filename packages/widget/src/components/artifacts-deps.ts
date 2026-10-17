@@ -1,4 +1,6 @@
 import type { ComponentRenderer } from "./registry";
+import type { LoadingLabelRuntime } from "../loading-label-runtime-loader";
+import { initLoadingLabelRuntime } from "../utils/loading-label-deps";
 
 /**
  * Injected core dependencies for the lazy artifacts-ui chunk.
@@ -13,6 +15,8 @@ import type { ComponentRenderer } from "./registry";
  * `artifacts-ui-entry.ts`.)
  */
 export interface ArtifactsUiDeps {
+  /** Required internal renderer dependency; standalone builders must inject it. */
+  loadingLabels: LoadingLabelRuntime;
   buttons?: Pick<typeof import("../utils/buttons"), "createIconButton" | "createLabelButton" | "createSplitButton" | "createToggleGroup">;
   /** Core's global componentRegistry (host-registered components live there). */
   componentRegistry: {
@@ -24,6 +28,7 @@ let injectedRegistry: ArtifactsUiDeps["componentRegistry"] | null = null;
 
 export const initArtifactsUi = (deps: ArtifactsUiDeps): void => {
   injectedRegistry = deps.componentRegistry;
+  initLoadingLabelRuntime(deps.loadingLabels);
   if (deps.buttons) injectedButtons = deps.buttons;
 };
 

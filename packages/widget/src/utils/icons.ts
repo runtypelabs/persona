@@ -347,20 +347,11 @@ export const __eagerlyProvideExtraIcons = (
 export const prepareIconRegistry = (): Promise<void> | null => extraIconsLoaded ? null :
   loadIconsExtra().then(mod => __eagerlyProvideExtraIcons(mod.EXTRA_LUCIDE_ICONS));
 
-let extraIconsKickFailedRetry = false;
 const kickExtraIcons = (): void => {
-  void loadIconsExtra()
-    .then((mod) => {
-      __eagerlyProvideExtraIcons(mod.EXTRA_LUCIDE_ICONS);
-    })
-    .catch((err) => {
-      // Failed fetch (ad blocker, offline, renamed self-hosted bundle):
-      // placeholders stay empty and the next extra-name render retries via
-      // the chunk loader's rejection-retry. Surface the loader's guidance
-      // (e.g. the self-hosting rename message) instead of swallowing it.
-      extraIconsKickFailedRetry = true;
-      console.warn("[Persona] Failed to load the icons-extra chunk", err);
-    });
+  void prepareIconRegistry()?.catch((err) => {
+    // Placeholders stay empty; the next render retries via the chunk loader.
+    console.warn("[Persona] Failed to load the icons-extra chunk", err);
+  });
 };
 
 const createPlaceholderSvg = (
@@ -368,16 +359,8 @@ const createPlaceholderSvg = (
   color: string,
   strokeWidth: number
 ): SVGElement => {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("width", String(size));
-  svg.setAttribute("height", String(size));
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", color);
-  svg.setAttribute("stroke-width", String(strokeWidth));
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
-  svg.setAttribute("aria-hidden", "true");
+  // The same shell as a resolved glyph, so filling it never changes geometry.
+  const svg = renderIconNode([], size, color, strokeWidth)!;
   svg.setAttribute("data-persona-icon-pending", "true");
   return svg;
 };
@@ -409,7 +392,6 @@ export const renderLucideIcon = (
   if (iconData) return renderIconNode(iconData, size, color, strokeWidth);
 
   if ((EXTRA_ICON_NAMES as readonly string[]).includes(iconName)) {
-    if (extraIconsKickFailedRetry) extraIconsKickFailedRetry = false;
     const el = createPlaceholderSvg(size, color, strokeWidth);
     // Bounded: a permanently failing chunk (ad blocker) must not accumulate
     // element refs without limit. Oldest entries are dropped — they simply
@@ -424,9 +406,7 @@ export const renderLucideIcon = (
   }
 
   console.warn(
-    `Lucide icon "${iconName}" is not in the Persona registry. ` +
-    `Register it via registerIcons(), or add it to packages/widget/src/utils/icons.ts ` +
-    `(see docs/icon-registry-shortlist.md).`
+    `Unknown Persona icon "${iconName}". Use registerIcons().`
   );
   return null;
 };

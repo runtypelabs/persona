@@ -1,3 +1,5 @@
+import { DEFAULT_TOOL_CALL_DISPLAY, DEFAULT_REASONING_DISPLAY, DEFAULT_TOOL_CALL_DISPLAY_V5, DEFAULT_REASONING_DISPLAY_V5 } from "./utils/activity-display-defaults";
+export { DEFAULT_TOOL_CALL_DISPLAY, DEFAULT_REASONING_DISPLAY } from "./utils/activity-display-defaults";
 import type { AgentWidgetConfig, AgentWidgetLauncherConfig } from "./types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
 import { deepMerge } from "./utils/deep-merge";
@@ -28,24 +30,6 @@ export const DEFAULT_HEADER_ICON_SIZE = "40px";
  * they cannot drift from `DEFAULT_WIDGET_CONFIG.copy.inputPlaceholder`.
  */
 export const DEFAULT_INPUT_PLACEHOLDER = "How can I help...";
-
-/** Shared by config resolution and standalone transcript component builders. */
-export const DEFAULT_TOOL_CALL_DISPLAY = {
-  collapsedMode: "tool-call",
-  activePreview: false,
-  grouped: false,
-  groupedMode: "stack",
-  previewMaxLines: 3,
-  expandable: true,
-  loadingAnimation: "none",
-} satisfies NonNullable<NonNullable<AgentWidgetConfig["features"]>["toolCallDisplay"]>;
-
-export const DEFAULT_REASONING_DISPLAY = {
-  activePreview: false,
-  previewMaxLines: 3,
-  expandable: true,
-  loadingAnimation: "none",
-} satisfies NonNullable<NonNullable<AgentWidgetConfig["features"]>["reasoningDisplay"]>;
 
 export const DEFAULT_LAUNCHER_CONFIG: AgentWidgetLauncherConfig = {
   enabled: true,
@@ -282,8 +266,8 @@ export const DEFAULTS_V5: Partial<AgentWidgetConfig> = {
   features: {
     artifacts: { enabled: true },
     scrollToBottom: { streamingIndicator: "dots", transition: "fade", scrollBehavior: "smooth" },
-    toolCallDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, grouped: true, groupedMode: "collapsible", loadingAnimation: "shimmer" },
-    reasoningDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, loadingAnimation: "shimmer" },
+    toolCallDisplay: DEFAULT_TOOL_CALL_DISPLAY_V5,
+    reasoningDisplay: DEFAULT_REASONING_DISPLAY_V5,
   },
   composer: { layout: "single-row", placement: "overlay" },
   sendButton: { iconName: "arrow-up" },

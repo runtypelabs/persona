@@ -2,6 +2,7 @@ import { prepareIconRegistry } from "./utils/icons";
 import type { AgentWidgetConfig } from "./types";
 import { getComposerActionsSync, loadComposerActions } from "./composer-actions-loader";
 import { getActivityUiSync, loadActivityUi } from "./activity-ui-loader";
+import { getLoadingLabelRuntimeSync, loadLoadingLabelRuntime } from "./loading-label-runtime-loader";
 import { getDictationRuntimeSync, loadDictationRuntime } from "./dictation-runtime-loader";
 import { getMarkdownParsersSync, loadMarkdownParsers } from "./markdown-parsers-loader";
 import { getArtifactsUiSync, loadArtifactsUi } from "./artifacts-ui-loader";
@@ -18,7 +19,10 @@ export const prepareRendererModules = (config: AgentWidgetConfig): Promise<unkno
   };
   require(true, getComposerActionsSync(), loadComposerActions);
   require(true, getMarkdownParsersSync(), loadMarkdownParsers);
-  require(config.features?.showToolCalls !== false || config.features?.showReasoning !== false, getActivityUiSync(), loadActivityUi);
+  const activity = config.features?.showToolCalls !== false || config.features?.showReasoning !== false;
+  require(activity, getActivityUiSync(), loadActivityUi);
+  require(activity || config.loadingLabel?.animation !== "none" && (!!config.loadingLabel?.animate ||
+    (config.loadingIndicator?.variant ?? (config.future?.v5Defaults ? "label" : "dots")) === "label"), getLoadingLabelRuntimeSync(), loadLoadingLabelRuntime);
   require(config.voiceRecognition?.enabled !== false, getDictationRuntimeSync(), loadDictationRuntime);
   require(config.voiceRecognition?.enabled !== false && usesSessionVoiceForConfig(config), getVoiceRuntimeSync(), loadVoiceRuntime);
   require(config.features?.artifacts?.enabled === true, getArtifactsUiSync(), loadArtifactsUi);

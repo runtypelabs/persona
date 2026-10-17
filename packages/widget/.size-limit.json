@@ -204,6 +204,12 @@
     "gzip": true
   },
   {
+    "name": "Lazy · shared loading-label effects and lifecycle (loading-label-runtime.js)",
+    "path": "dist/loading-label-runtime.js",
+    "limit": "2.75 kB",
+    "gzip": true
+  },
+  {
     "name": "Lazy · request construction and session initialization (client-dispatch.js)",
     "path": "dist/client-dispatch.js",
     "limit": "5.5 kB",

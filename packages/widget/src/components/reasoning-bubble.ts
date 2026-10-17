@@ -2,9 +2,9 @@ import { applyActivityRow, activityDisplay, activityVariant, activityDuration } 
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "./activity-deps";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
-import { DEFAULT_REASONING_DISPLAY } from "../defaults";
+import { DEFAULT_REASONING_DISPLAY } from "../utils/activity-display-defaults";
 import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/formatting";
-import { appendCharSpans } from "../utils/tool-loading-animation";
+import { applyLoadingLabel } from "../utils/loading-label-deps";
 import {
   appendHeaderToggle,
   applyExpansionDisplay,
@@ -103,7 +103,6 @@ export const createReasoningBubble = (
   if (!row) headerContent.appendChild(status);
 
   // Template and animation support
-  const loadingAnimation = reasoningDisplayConfig.loadingAnimation ?? DEFAULT_REASONING_DISPLAY.loadingAnimation;
   const activeTemplate = reasoningConfig.activeTextTemplate;
   const completeTemplate = reasoningConfig.completeTextTemplate;
   const currentTemplate = isActive ? activeTemplate : completeTemplate;
@@ -113,12 +112,10 @@ export const createReasoningBubble = (
    * Renders a template into the title element, handling:
    * - Inline formatting markers: **bold**, *italic*, ~dim~
    * - {duration} as a live-updating elapsed span (active) or static text (complete)
-   * - Character-by-character animation wrapping when `animated` is true
    */
-  const renderFormattedTitle = (template: string, animated: boolean) => {
+  const renderFormattedTitle = (template: string) => {
     title.textContent = "";
     const segments = parseFormattedTemplate(template, "");
-    let charIndex = 0;
 
     for (const seg of segments) {
       const parent = seg.styles.length > 0
@@ -133,85 +130,18 @@ export const createReasoningBubble = (
         parent.appendChild(createElapsedSpan());
       } else {
         const text = seg.isDuration ? computeReasoningElapsed(reasoning) : seg.text;
-        if (animated) {
-          charIndex = appendCharSpans(parent, text, charIndex);
-        } else {
-          parent.appendChild(document.createTextNode(text));
-        }
+        parent.appendChild(document.createTextNode(text));
       }
     }
   };
 
-  // Apply template + animation, or fall back to legacy title/status approach
-  if (!skipCustomElement && currentTemplate) {
-    // Template mode: unified title replaces separate title/status spans
-    status.style.display = "none";
-    title.style.display = "";
-
-    if (isActive && loadingAnimation !== "none") {
-      const animDuration = reasoningConfig.loadingAnimationDuration ?? 2000;
-      title.setAttribute("data-preserve-animation", "true");
-
-      if (loadingAnimation === "pulse") {
-        title.classList.add("persona-tool-loading-pulse");
-        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
-        renderFormattedTitle(currentTemplate, false);
-      } else {
-        title.classList.add(`persona-tool-loading-${loadingAnimation}`);
-        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
-
-        if (loadingAnimation === "shimmer-color") {
-          if (reasoningConfig.loadingAnimationColor) {
-            title.style.setProperty("--persona-tool-anim-color", reasoningConfig.loadingAnimationColor);
-          }
-          if (reasoningConfig.loadingAnimationSecondaryColor) {
-            title.style.setProperty("--persona-tool-anim-secondary-color", reasoningConfig.loadingAnimationSecondaryColor);
-          }
-        }
-
-        renderFormattedTitle(currentTemplate, true);
-      }
-    } else {
-      renderFormattedTitle(currentTemplate, false);
+  if (!skipCustomElement) {
+    if (currentTemplate) {
+      status.style.display = "none";
+      renderFormattedTitle(currentTemplate);
     }
-  } else if (!skipCustomElement && isActive && loadingAnimation !== "none") {
-    // Animation without template: animate the default "Thinking..." text
-    title.style.display = "";
-    const animDuration = reasoningConfig.loadingAnimationDuration ?? 2000;
-    title.setAttribute("data-preserve-animation", "true");
-
-    if (loadingAnimation === "pulse") {
-      title.classList.add("persona-tool-loading-pulse");
-      title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
-    } else {
-      title.classList.add(`persona-tool-loading-${loadingAnimation}`);
-      title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
-
-      if (loadingAnimation === "shimmer-color") {
-        if (reasoningConfig.loadingAnimationColor) {
-          title.style.setProperty("--persona-tool-anim-color", reasoningConfig.loadingAnimationColor);
-        }
-        if (reasoningConfig.loadingAnimationSecondaryColor) {
-          title.style.setProperty("--persona-tool-anim-secondary-color", reasoningConfig.loadingAnimationSecondaryColor);
-        }
-      }
-
-      const text = title.textContent || defaultSummary;
-      title.textContent = "";
-      appendCharSpans(title, text, 0);
-    }
-
-    // Legacy: hide title on complete, show status
-    if (reasoning.status === "complete" && !row) {
-      title.style.display = "none";
-    }
-  } else if (!skipCustomElement) {
-    // Legacy path: no template, no animation
-    if (reasoning.status === "complete" && !row) {
-      title.style.display = "none";
-    } else {
-      title.style.display = "";
-    }
+    title.style.display = !currentTemplate && !isActive && !row ? "none" : "";
+    if (isActive) applyLoadingLabel(title, config, "reasoning");
   }
 
   // `reasoningDisplay.iconName`: a leading glyph in the header row. Appended

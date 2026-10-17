@@ -601,3 +601,104 @@ for (const shadow of [false, true]) {
     expectClean(h);
   });
 }
+
+
+for (const boundary of ["adjacent", "iteration"] as const) {
+  test(`streamed ${boundary} tool groups preserve run state and DOM identity`, async ({ page }) => {
+    const h = await serveDist(page, {
+      "/groups.html": page_(`
+        <link data-persona rel="stylesheet" href="/dist/widget.css">
+        <div id="widget"></div>
+        <script src="/dist/index.global.js"></script>
+        <script>
+          window.__summaries = [];
+          window.__dispatches = 0;
+          let sequence = 0;
+          window.__handle = AgentWidget.initAgentWidget({ target: "#widget", config: {
+            apiUrl: "/api/chat", persistState: false, launcher: { enabled: false },
+            future: { v5Defaults: true },
+            features: { toolCallDisplay: { grouped: true, groupedMode: "collapsible",
+              groupBoundary: "${boundary}", groupIconVisibility: "never", iconVisibility: "always",
+              autoCollapseDelay: false } },
+            toolCall: { renderGroupedSummary(context) {
+              window.__summaries.push({ ids: context.toolCalls.map(tool => tool.id),
+                streaming: context.streaming, latest: context.isLatestGroup,
+                current: context.isCurrentRunGroup });
+              return null;
+            } },
+            customFetch: async () => new Response(new ReadableStream({ start(controller) {
+              window.__dispatches++;
+              window.__frames = (frames, close) => {
+                for (const frame of frames) controller.enqueue(new TextEncoder().encode(
+                  'event: ' + frame.type + '\\ndata: ' + JSON.stringify({ ...frame, seq: sequence++ }) + '\\n\\n'));
+                if (close) controller.close();
+              };
+            } }), { headers: { "Content-Type": "text/event-stream" } })
+          } });
+        </script>`),
+    });
+    await page.goto(`${ORIGIN}/groups.html`);
+    const composer = page.locator(sel.composer).first();
+    await expect(composer).toBeVisible();
+    await composer.fill("Run the tools");
+    await composer.press("Enter");
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __dispatches: number }).__dispatches)).toBe(1);
+    const emit = async (frames: Record<string, unknown>[], close = false) => {
+      await page.evaluate(({ frames, close }) => {
+        (window as unknown as { __frames: (frames: Record<string, unknown>[], close: boolean) => void }).__frames(frames, close);
+      }, { frames, close });
+    };
+    const executionId = "group-run-1";
+    const toolFrames = (id: string, iteration: number) => [
+      { type: "tool_start", executionId, iteration, toolCallId: id, toolName: id, parameters: {} },
+      { type: "tool_output_delta", executionId, toolCallId: id, delta: "Tool output" },
+      { type: "tool_complete", executionId, iteration, toolCallId: id, toolName: id, success: true, result: "Done" },
+    ];
+    await emit([
+      { type: "execution_start", executionId, kind: "agent", agentId: "fixture", agentName: "Fixture", maxTurns: 3 },
+      { type: "turn_start", executionId, id: "turn-1", role: "assistant", iteration: 1 },
+      ...toolFrames("first", 1), ...toolFrames("second", 1),
+    ]);
+    const groups = page.locator('[data-persona-tool-group="true"]');
+    await expect(groups).toHaveCount(1);
+    await expect(groups.first()).toHaveAttribute("data-activity-state", boundary === "adjacent" ? "running" : "done");
+    await expect(groups.first().locator(":scope > .persona-activity-header > .persona-activity-icon")).toHaveCount(0);
+    await expect(groups.first().locator(".persona-activity-group-child .persona-activity-icon")).toHaveCount(2);
+    await groups.first().evaluate(node => {
+      (window as unknown as { __firstGroup: Element }).__firstGroup = node;
+    });
+    await emit([
+      { type: "turn_start", executionId, id: "turn-2", role: "assistant", iteration: 2 },
+      ...toolFrames("third", 2),
+    ]);
+    await expect(groups).toHaveCount(boundary === "adjacent" ? 1 : 2);
+    await expect.poll(() => page.evaluate(() => {
+      const w = window as unknown as { __summaries: Array<{ ids: string[] }> };
+      return w.__summaries.some(summary => summary.ids.includes("third"));
+    })).toBe(true);
+    expect(await groups.first().evaluate(node => node === (window as unknown as { __firstGroup: Element }).__firstGroup)).toBe(true);
+    if (boundary === "iteration") {
+      // Even the first pending emission must have metadata: no temporary merged group.
+      expect(await page.evaluate(() => (window as unknown as { __summaries: Array<{ ids: string[] }> }).__summaries
+        .some(summary => summary.ids.includes("first") && summary.ids.includes("third")))).toBe(false);
+    }
+    await emit([{ type: "execution_complete", executionId, kind: "agent", success: true, stopReason: "end_turn" }], true);
+    await expect(groups.first()).toHaveAttribute("data-activity-state", "done");
+    await expect.poll(() => page.evaluate(() => (window as unknown as {
+      __summaries: Array<{ streaming: boolean; latest: boolean; current: boolean }>;
+    }).__summaries.at(-1))).toMatchObject({ streaming: false, latest: true, current: true });
+
+    // An open new response has no current tool group until it actually emits a tool.
+    await composer.fill("Start another run");
+    await composer.press("Enter");
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __dispatches: number }).__dispatches)).toBe(2);
+    await expect.poll(() => page.evaluate(() => (window as unknown as {
+      __summaries: Array<{ streaming: boolean; latest: boolean; current: boolean }>;
+    }).__summaries.at(-1))).toMatchObject({ streaming: true, latest: true, current: false });
+    await expect(groups.last()).toHaveAttribute("data-activity-state", "done");
+    await emit([{ type: "execution_complete", executionId: "group-run-2", kind: "agent", success: true, stopReason: "end_turn" }], true);
+    expect(h.requested).toContain("/dist/activity-ui.js");
+    expect(h.requested).toContain("/dist/client-stream.js");
+    expectClean(h);
+  });
+}

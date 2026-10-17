@@ -36,16 +36,20 @@ import * as configDiagnostics from "./src/config-diagnostics";
 import { provideConfigDiagnostics } from "./src/config-diagnostics-loader";
 provideConfigDiagnostics(configDiagnostics);
 
+import * as loadingLabelRuntime from "./src/loading-label-runtime";
+import { provideLoadingLabelRuntime } from "./src/loading-label-runtime-loader";
+provideLoadingLabelRuntime(loadingLabelRuntime);
+
 import * as activityUi from "./src/activity-ui";
 import { provideActivityUi } from "./src/activity-ui-loader";
 import { renderLucideIcon as activityIcon } from "./src/utils/icons";
-activityUi.initActivityUi(activityIcon);
+activityUi.initActivityUi(activityIcon, loadingLabelRuntime);
 provideActivityUi(activityUi);
 
 import { initArtifactsUi } from "./src/components/artifacts-deps";
 import * as artifactButtons from "./src/utils/buttons";
 import { componentRegistry } from "./src/components/registry";
-initArtifactsUi({ componentRegistry, buttons: artifactButtons });
+initArtifactsUi({ componentRegistry, buttons: artifactButtons, loadingLabels: loadingLabelRuntime });
 
 import { initApprovalUi } from "./src/components/approval-deps";
 import { createPopover, isEditableEventTarget } from "./src/plugin-kit";

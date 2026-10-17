@@ -112,6 +112,9 @@ const CSS_LENGTH: PreferenceNode = {
   message: "Expected a CSS length string.",
 };
 const BOOLEAN: PreferenceNode = { kind: "boolean" };
+const enumPreference = (...values: string[]): PreferenceNode => ({
+  kind: "enum", values: new Set(values), message: UNSUPPORTED_VALUE_MESSAGE,
+});
 
 // Keyed by the preference type so the table stays exhaustive; string keys are
 // declared before boolean keys because issue order follows declaration order.
@@ -138,27 +141,10 @@ const ROOT_NODE: PreferenceNode = {
     toolCallDisplay: {
       kind: "object",
       children: {
-        collapsedMode: {
-          kind: "enum",
-          values: new Set(["tool-call", "tool-name", "tool-preview"]),
-          message: UNSUPPORTED_VALUE_MESSAGE,
-        },
-        groupedMode: {
-          kind: "enum",
-          values: new Set(["stack", "summary"]),
-          message: UNSUPPORTED_VALUE_MESSAGE,
-        },
-        loadingAnimation: {
-          kind: "enum",
-          values: new Set([
-            "none",
-            "pulse",
-            "shimmer",
-            "shimmer-color",
-            "rainbow",
-          ]),
-          message: UNSUPPORTED_VALUE_MESSAGE,
-        },
+        collapsedMode: enumPreference("tool-call", "tool-name", "tool-preview"),
+        groupedMode: enumPreference("stack", "summary", "collapsible"),
+        groupBoundary: enumPreference("adjacent", "iteration"),
+        loadingAnimation: enumPreference("none", "pulse", "shimmer", "shimmer-color", "rainbow"),
         expandable: BOOLEAN,
         grouped: BOOLEAN,
       },

@@ -98,3 +98,17 @@ describe('activity lifecycle', () => {
     }
   });
 });
+
+it('cancels a completion timer on resumed activity, then rearms without reopening', () => {
+  vi.useFakeTimers(); const changed = vi.fn(); const lifecycle = createActivityLifecycle(changed); const expanded = new Set<string>();
+  lifecycle.observe(message('running', ['one']), 'tool', expanded);
+  lifecycle.observe(message('complete', ['one']), 'tool', expanded, { autoCollapseDelay: 100 });
+  vi.advanceTimersByTime(50);
+  lifecycle.observe(message('running', ['two']), 'tool', expanded);
+  vi.advanceTimersByTime(100); expect(expanded.has('tool')).toBe(true); expect(changed).not.toHaveBeenCalled();
+  lifecycle.observe(message('complete', ['two']), 'tool', expanded, { autoCollapseDelay: 100 });
+  vi.advanceTimersByTime(100); expect(expanded.size).toBe(0); expect(changed).toHaveBeenCalledTimes(1);
+  lifecycle.observe(message('running', ['three']), 'tool', expanded); expect(expanded.size).toBe(0);
+  lifecycle.manual('tool'); lifecycle.observe(message('complete', ['three']), 'tool', expanded);
+  vi.advanceTimersByTime(2000); expect(changed).toHaveBeenCalledTimes(1);
+});

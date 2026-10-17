@@ -509,3 +509,10 @@ describe("composer More menu editor", () => {
     expect(COMPONENT_COLOR_SECTIONS.flatMap(section => section.fields.map(field => field.path))).toContain("theme.components.composer.overflowMenu.focusBackground");
   });
 });
+
+it('offers collapsible groups and explicit iteration boundaries in preferences', () => {
+  const fields = getThemeEditorTabs().flatMap(tab => tab.sections).flatMap(section => section.fields);
+  expect(fields.find(field => field.path === 'features.toolCallDisplay.groupedMode')?.options?.map(option => option.value)).toEqual(['stack', 'summary', 'collapsible']);
+  expect(fields.find(field => field.path === 'features.toolCallDisplay.groupBoundary')?.options?.map(option => option.value)).toEqual(['adjacent', 'iteration']);
+  expect(fields.some(field => field.path === 'features.toolCallDisplay.groupIconVisibility')).toBe(false);
+});

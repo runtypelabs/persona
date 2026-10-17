@@ -1,5 +1,5 @@
 import type { AgentWidgetArtifactsFeature } from "../types";
-import { appendCharSpans } from "./tool-loading-animation";
+import { applyLoadingAnimation } from "./loading-label-deps";
 
 /**
  * Apply the artifact "Generating …" streaming animation to a status element.
@@ -18,38 +18,11 @@ export function applyArtifactLoadingStatus(
   text: string,
   artifactsCfg: AgentWidgetArtifactsFeature | undefined
 ): void {
-  const loadingAnimation = artifactsCfg?.loadingAnimation ?? "shimmer";
-  const duration = artifactsCfg?.loadingAnimationDuration ?? 2000;
-
-  if (loadingAnimation === "none") {
-    statusText.textContent = text;
-    return;
-  }
-
-  if (loadingAnimation === "pulse") {
-    statusText.setAttribute("data-preserve-animation", "true");
-    statusText.classList.add("persona-tool-loading-pulse");
-    statusText.style.setProperty("--persona-tool-anim-duration", `${duration}ms`);
-    statusText.textContent = text;
-    return;
-  }
-
-  statusText.setAttribute("data-preserve-animation", "true");
-  statusText.classList.add(`persona-tool-loading-${loadingAnimation}`);
-  statusText.style.setProperty("--persona-tool-anim-duration", `${duration}ms`);
-  if (loadingAnimation === "shimmer-color") {
-    if (artifactsCfg?.loadingAnimationColor) {
-      statusText.style.setProperty(
-        "--persona-tool-anim-color",
-        artifactsCfg.loadingAnimationColor
-      );
-    }
-    if (artifactsCfg?.loadingAnimationSecondaryColor) {
-      statusText.style.setProperty(
-        "--persona-tool-anim-secondary-color",
-        artifactsCfg.loadingAnimationSecondaryColor
-      );
-    }
-  }
-  appendCharSpans(statusText, text, 0);
+  statusText.textContent = text;
+  applyLoadingAnimation(statusText, {
+    animation: artifactsCfg?.loadingAnimation ?? "shimmer",
+    duration: `${artifactsCfg?.loadingAnimationDuration ?? 2000}ms`,
+    color: artifactsCfg?.loadingAnimationColor,
+    secondaryColor: artifactsCfg?.loadingAnimationSecondaryColor,
+  });
 }

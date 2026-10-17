@@ -72,3 +72,17 @@ these as composer timings or try to bypass them. Signed-in warm reloads require
 a separate existing-browser measurement and must be labeled separately from
 these signed-out, controlled cold tests. The local Persona fixture excludes
 production authentication, account loading, and remote server overhead.
+
+## Grouped activity preview
+
+Open http://localhost:5204/activity to compare adjacent and iteration groups using
+the built widget. **Run both** streams four mocked tool calls over three iterations,
+with pauses between batches. Run again to check that historical groups stay done.
+The switches exercise custom summaries and group-only icon visibility; expand a
+group to check its child rows. The animation selector applies the same style to
+waiting labels, individual tools, and group headers, and can be changed mid-run.
+Custom pulse demonstrates the loading-label lifecycle hook using the Web Animations
+API; its start/update/destroy counters are available in `window.loadingLabelPreview`.
+The Thinking icon controls select a built-in or registered custom glyph, hide it,
+and set icon motion independently of the text animation.
+No backend or API key is required.

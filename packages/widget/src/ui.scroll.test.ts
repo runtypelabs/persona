@@ -750,6 +750,7 @@ describe("createAgentExperience streaming scroll", () => {
       variant: "tool", toolCall: { id: "input-await", name: "manual_input", status: "complete" },
       agentMetadata: { awaitingLocalTool: false }
     } });
+    raf.flush();
     expect(dots()).not.toBeNull();
     controller.update({ autoFocusInput: true });
     expect(dots()).not.toBeNull();

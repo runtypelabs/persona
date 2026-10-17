@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentWidgetSession } from "./session";
 import { AgentWidgetClient } from "./client";
-import type { AgentWidgetEvent } from "./types";
+import type { AgentWidgetEvent, AgentWidgetMessage } from "./types";
 
 const create = () => {
   const started = vi.fn();
@@ -110,4 +110,84 @@ describe("session-owned run lifecycle", () => {
     expect(finished).toHaveBeenCalledTimes(1);
     expect(finished.mock.calls[0][0].outcome).toBe("cancel");
   });
+});
+
+const toolMessage = (id: string, executionId?: string): AgentWidgetMessage => ({ id, role: 'assistant', content: '', createdAt: 'now', variant: 'tool', agentMetadata: executionId ? { executionId } : undefined, toolCall: { id, name: 'Search', status: 'complete' } });
+describe('current-run tool ownership', () => {
+  it.each(['send', 'continue'] as const)('resets before %s renders and records new tools before observer notification', async next => {
+    vi.useFakeTimers();
+    const { session } = create();
+    const snapshots: string[][] = [];
+    const dispatch = vi.spyOn(AgentWidgetClient.prototype, 'dispatch').mockImplementation(async (_options, emit) => {
+      emit({ type: 'message', message: toolMessage('first') });
+      emit({ type: 'status', status: 'idle', terminal: true });
+    });
+    await session.sendMessage('first run'); await vi.runAllTimersAsync();
+    expect([...session.getRunToolIds()]).toEqual(['first']);
+    dispatch.mockImplementation(async (_options, emit) => {
+      snapshots.push([...session.getRunToolIds()]);
+      emit({ type: 'message', message: toolMessage('second') });
+      snapshots.push([...session.getRunToolIds()]);
+      emit({ type: 'status', status: 'idle', terminal: true });
+    });
+    if (next === 'send') await session.sendMessage('second run'); else await session.continueConversation();
+    expect(snapshots).toEqual([[], ['second']]);
+    expect(session.getMessages().filter(message => message.role === 'user')).toHaveLength(next === 'send' ? 2 : 1);
+    session.hydrateMessages([toolMessage('first')]); expect(session.getRunToolIds().size).toBe(0);
+    session.destroy();
+  });
+  it('retains ownership through approval pauses and stream reentry, then clears it with the transcript', async () => {
+    vi.useFakeTimers(); const { session } = create();
+    vi.spyOn(AgentWidgetClient.prototype, 'dispatch').mockImplementation(async (_options, emit) => {
+      emit({ type: 'message', message: toolMessage('before-pause') });
+      emit({ type: 'message', message: { id: 'approval', role: 'assistant', content: '', createdAt: 'now', variant: 'approval', approval: { id: 'a', status: 'pending' } } } as AgentWidgetEvent);
+      emit({ type: 'status', status: 'idle' });
+    });
+    await session.sendMessage('hello'); await vi.runAllTimersAsync();
+    expect([...session.getRunToolIds()]).toEqual(['before-pause']);
+    vi.spyOn(AgentWidgetClient.prototype, 'processStream').mockImplementation(async (_stream, emit) => {
+      expect([...session.getRunToolIds()]).toEqual(['before-pause']);
+      emit({ type: 'message', message: toolMessage('after-pause') });
+      emit({ type: 'status', status: 'idle', terminal: true });
+    });
+    await session.connectStream(new ReadableStream({ start(controller) { controller.close(); } }), { allowReentry: true });
+    expect([...session.getRunToolIds()]).toEqual(['before-pause', 'after-pause']);
+    session.clearMessages(); expect(session.getRunToolIds().size).toBe(0); session.destroy();
+  });
+  it('seeds a durable parked execution using matching tool metadata only', () => {
+    const session = new AgentWidgetSession({ apiUrl: '/chat', reconnectStream: async () => new Response(), initialMessages: [
+      toolMessage('matching', 'e1'), toolMessage('other', 'e2'), toolMessage('unknown'),
+      { id: 'approval', role: 'assistant', content: '', createdAt: 'now', variant: 'approval', approval: { id: 'a', status: 'pending', executionId: 'e1' } } as AgentWidgetMessage,
+    ] }, { onMessagesChanged: vi.fn(), onStatusChanged: vi.fn(), onStreamingChanged: vi.fn() });
+    expect(session.getRunToolIds().size).toBe(0);
+    session.resumeFromHandle({ executionId: 'e1', after: '5' });
+    expect([...session.getRunToolIds()]).toEqual(['matching']); session.destroy();
+  });
+});
+
+it('makes current tool ownership available inside the messages-changed callback', async () => {
+  let session: AgentWidgetSession;
+  const observed: boolean[] = [];
+  session = new AgentWidgetSession({ apiUrl: '/chat' }, {
+    onMessagesChanged: messages => {
+      for (const message of messages) if (message.variant === 'tool') observed.push(session.getRunToolIds().has(message.id));
+    }, onStatusChanged: vi.fn(), onStreamingChanged: vi.fn(),
+  });
+  vi.spyOn(AgentWidgetClient.prototype, 'dispatch').mockImplementation(async (_options, emit) => {
+    emit({ type: 'message', message: toolMessage('current') });
+    emit({ type: 'status', status: 'idle', terminal: true });
+  });
+  await session.continueConversation();
+  expect(observed).toEqual([true]); session.destroy(); expect(session.getRunToolIds().size).toBe(0);
+});
+
+it('does not claim historical tools encountered in read-only replay', async () => {
+  vi.spyOn(AgentWidgetClient.prototype, 'processStream').mockImplementation(async (_stream, emit) => {
+    emit({ type: 'message', message: toolMessage('historical') });
+    emit({ type: 'status', status: 'idle', terminal: true });
+  });
+  const { session } = create();
+  await session.connectStream(new ReadableStream({ start(controller) { controller.close(); } }), { readOnlyReplay: true });
+  expect(session.getMessages().some(message => message.id === 'historical')).toBe(true);
+  expect(session.getRunToolIds().size).toBe(0); session.destroy();
 });

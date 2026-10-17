@@ -1,11 +1,12 @@
+import { applyLoadingLabel } from "../utils/loading-label-deps";
 import { resolveToolStyles } from "../utils/tool-styles";
 import { Circle, Clock } from "lucide";
 import { renderIconNode } from "../utils/icon-node";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
-import { DEFAULT_TOOL_CALL_DISPLAY, DEFAULT_REASONING_DISPLAY, DEFAULTS_V5 } from "../defaults";
+import { DEFAULT_TOOL_CALL_DISPLAY, DEFAULT_REASONING_DISPLAY, DEFAULT_TOOL_CALL_DISPLAY_V5, DEFAULT_REASONING_DISPLAY_V5 } from "../utils/activity-display-defaults";
 import { createElement } from "../utils/dom";
 import { renderLucideIcon } from "./activity-deps";
-import { appendHeaderToggle } from "./expandable-bubble";
+import { appendHeaderToggle, createExpandableBubbleShell, createExpandableHeader } from "./expandable-bubble";
 
 export type ActivityKind = "tool" | "reasoning";
 
@@ -14,7 +15,7 @@ export function activityDisplay(config: AgentWidgetConfig | undefined, kind: Act
   const key = kind === "tool" ? "toolCallDisplay" : "reasoningDisplay";
   return { ...config, features: { ...config?.features, [key]: {
     ...(kind === "tool" ? DEFAULT_TOOL_CALL_DISPLAY : DEFAULT_REASONING_DISPLAY),
-    ...(config?.future?.v5Defaults === true ? DEFAULTS_V5.features?.[key] : {}),
+    ...(config?.future?.v5Defaults === true ? kind === "tool" ? DEFAULT_TOOL_CALL_DISPLAY_V5 : DEFAULT_REASONING_DISPLAY_V5 : {}),
     ...config?.features?.[key],
   } } };
 }
@@ -31,8 +32,8 @@ export function activityDuration(ms: number | undefined): string {
 }
 
 /** Reuses card content/render hooks while replacing only its visual chrome. */
-export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessage, config: AgentWidgetConfig, kind: ActivityKind): HTMLElement {
-  if (activityVariant(config, kind) !== "row") return bubble;
+export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessage, config: AgentWidgetConfig, kind: ActivityKind, groupHeader = false): HTMLElement {
+  if (!groupHeader && activityVariant(config, kind) !== "row") return bubble;
   bubble.className = `persona-message-bubble persona-${kind}-bubble persona-activity-row`;
   bubble.dataset.activityKind = kind;
   if (kind === "tool" && config.toolCall?.shadow === undefined) bubble.style.boxShadow = "var(--persona-tool-bubble-shadow, none)";
@@ -59,7 +60,7 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   if (glyph) icon.appendChild(glyph);
   header.querySelector(".persona-reasoning-header-icon")?.remove();
   const displayKey = kind === "tool" ? "toolCallDisplay" : "reasoningDisplay";
-  const visibility = config.features?.[displayKey]?.iconVisibility ??
+  const visibility = (groupHeader ? config.features?.toolCallDisplay?.groupIconVisibility : undefined) ?? config.features?.[displayKey]?.iconVisibility ??
     (config.future?.v5Defaults ? "active" : "always");
   if (visibility === "always" || (visibility === "active" && state !== "done")) header.prepend(icon);
   if (kind === "tool" && data) {
@@ -81,60 +82,58 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
 
 /** Per-widget lifecycle: one open and one delayed close; user intent is sticky. */
 export function createActivityLifecycle(onCollapse: (id: string, kind: ActivityKind) => void) {
-  const seen = new Set<string>();
-  const manual = new Set<string>();
-  const finished = new Set<string>();
-  const timers = new Map<string, ReturnType<typeof setTimeout>>();
-  const cancel = (id: string) => { clearTimeout(timers.get(id)); timers.delete(id); };
+  type State = { seen?: boolean; manual?: boolean; finished?: boolean; timer?: ReturnType<typeof setTimeout> };
+  const states = new Map<string, State>();
+  const stateFor = (id: string) => {
+    let state = states.get(id);
+    if (!state) { state = {}; states.set(id, state); }
+    return state;
+  };
+  const cancel = (state: State) => { clearTimeout(state.timer); state.timer = undefined; };
   return {
     observe(message: AgentWidgetMessage, kind: ActivityKind, expanded: Set<string>, options: { autoExpand?: boolean; autoCollapseDelay?: number | false } = {}) {
       const data = kind === "tool" ? message.toolCall : message.reasoning;
-      if (!data || manual.has(message.id)) return;
-      if (!seen.has(message.id) && data.status !== "complete" && data.chunks?.some(Boolean)) {
-        seen.add(message.id);
+      if (!data) return;
+      const state = stateFor(message.id);
+      if (state.manual) return;
+      if (data.status !== "complete") { cancel(state); state.finished = false; }
+      if (!state.seen && data.status !== "complete" && data.chunks?.some(Boolean)) {
+        state.seen = true;
         if (options.autoExpand !== false) expanded.add(message.id);
       }
-      if (seen.has(message.id) && data.status === "complete" && !finished.has(message.id)) {
-        finished.add(message.id);
+      if (state.seen && data.status === "complete" && !state.finished) {
+        state.finished = true;
         if (options.autoCollapseDelay === false) return;
-        timers.set(message.id, setTimeout(() => {
-          timers.delete(message.id);
+        state.timer = setTimeout(() => {
+          state.timer = undefined;
           expanded.delete(message.id);
           onCollapse(message.id, kind);
-        }, options.autoCollapseDelay ?? 1000));
+        }, options.autoCollapseDelay ?? 1000);
       }
     },
-    manual(id: string) { manual.add(id); cancel(id); },
+    manual(id: string) { const state = stateFor(id); state.manual = true; cancel(state); },
     prune(ids: Set<string>) {
-      for (const id of new Set([...seen, ...manual, ...finished])) {
-        if (!ids.has(id)) { cancel(id); seen.delete(id); manual.delete(id); finished.delete(id); }
-      }
+      for (const [id, state] of states) if (!ids.has(id)) { cancel(state); states.delete(id); }
     },
-    clear() { for (const id of timers.keys()) cancel(id); seen.clear(); manual.clear(); finished.clear(); },
+    clear() { states.forEach(cancel); states.clear(); },
   };
 }
 
 /** A collapsible group uses the same accessible row and expansion contract. */
 export function createActivityGroup(message: AgentWidgetMessage, config: AgentWidgetConfig, expanded: boolean, label: string | HTMLElement): { bubble: HTMLElement; body: HTMLElement } {
-  const bubble = createElement("div", "");
-  bubble.id = `bubble-${message.id}`;
-  bubble.dataset.messageId = message.id;
-  const header = createElement("button", "") as HTMLButtonElement;
-  header.type = "button";
-  header.dataset.expandHeader = "true";
-  header.dataset.bubbleType = "tool";
-  header.setAttribute("aria-expanded", String(expanded));
+  const bubble = createExpandableBubbleShell("persona-tool-bubble", message.id);
+  const header = createExpandableHeader({ expandable: true, expanded, bubbleType: "tool" });
   const copy = createElement("div", "");
   if (typeof label === "string") copy.textContent = label; else copy.appendChild(label);
   const toolStyles = resolveToolStyles(config);
   appendHeaderToggle(header, copy, { expandable: true, expanded, iconColor: toolStyles.toggleTextColor || toolStyles.headerTextColor || "currentColor", metaGap: true });
   const body = createElement("div", "persona-border-t");
-  body.id = `activity-details-${message.id}`;
   body.style.display = expanded ? "" : "none";
-  header.setAttribute("aria-controls", body.id);
   bubble.append(header, body);
-  applyActivityRow(bubble, message, { ...config, features: { ...config.features, toolCallDisplay: { ...config.features?.toolCallDisplay, variant: "row" } } }, "tool");
+  applyActivityRow(bubble, message, config, "tool", true);
   bubble.dataset.personaToolGroup = "true";
-  if (config.features?.toolCallDisplay?.loadingAnimation === "shimmer") bubble.dataset.activityGroupShimmer = "true";
+  if (typeof label === "string" && (bubble.dataset.activityState === "running" || bubble.dataset.activityState === "pending")) {
+    applyLoadingLabel(copy, config, "tool-group");
+  }
   return { bubble, body };
 }

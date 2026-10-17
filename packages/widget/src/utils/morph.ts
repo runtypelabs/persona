@@ -66,18 +66,14 @@ export const morphMessages = (
             return;
           }
           if (oldNode.hasAttribute("data-preserve-animation")) {
-            // Allow morph when the new node drops the attribute (e.g. tool completed)
-            if (newNode instanceof HTMLElement && !newNode.hasAttribute("data-preserve-animation")) {
-              return;
-            }
-            // Allow morph when content has meaningfully changed (e.g. tool name arrived)
-            if (newNode instanceof HTMLElement && newNode.hasAttribute("data-preserve-animation")) {
-              const oldText = oldNode.textContent ?? "";
-              const newText = newNode.textContent ?? "";
-              if (oldText !== newText) {
-                return;
-              }
-            }
+            // Shared labels compare their render signature because custom effects
+            // can mutate live text. Generic custom indicators retain text matching.
+            if (newNode instanceof HTMLElement && (
+              !newNode.hasAttribute("data-preserve-animation") ||
+              (oldNode.dataset.personaLoadingLabel
+                ? oldNode.dataset.personaLoadingAnimation !== newNode.dataset.personaLoadingAnimation
+                : oldNode.textContent !== newNode.textContent)
+            )) return;
             return false;
           }
         }

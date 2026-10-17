@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import * as activity from "./activity-ui";
+import * as loadingLabels from "./loading-label-runtime";
 import * as dictation from "./dictation-runtime";
 import type { createAgentExperience } from "./ui";
 
@@ -90,4 +91,43 @@ it("starts browser recognition synchronously and ignores queued results after st
   expect(controller.startVoiceRecognition()).toBe(true);
   instances[1].onresult?.({ results: [{ isFinal: true, 0: { transcript: "current" } }] });
   expect(editor.value).toBe("current ");
+});
+
+it('adopts one lifecycle per widget after activity readiness and ignores a destroyed waiter', async () => {
+  const load = pending<typeof activity>();
+  const createLifecycle = vi.fn(activity.createActivityLifecycle);
+  const { setActivityUiLoader } = await import('./activity-ui-loader');
+  setActivityUiLoader(() => load.promise);
+  const { createAgentExperience } = await import('./ui');
+  const firstMount = document.createElement('div'); document.body.append(firstMount);
+  const first = createAgentExperience(firstMount, { apiUrl: '/chat', launcher: { enabled: false }, persistState: false });
+  first.destroy();
+  const mount = document.createElement('div'); document.body.append(mount);
+  controller = createAgentExperience(mount, { apiUrl: '/chat', launcher: { enabled: false }, persistState: false,
+    features: { toolCallDisplay: { grouped: false, variant: 'row', autoExpand: true } } });
+  const message = { id: 'tool', role: 'assistant' as const, content: '', createdAt: 'now', variant: 'tool' as const,
+    toolCall: { id: 'tool', name: 'Search', status: 'running' as const, chunks: ['content'] } };
+  controller.injectTestMessage({ type: 'message', message });
+  expect(createLifecycle).not.toHaveBeenCalled();
+  load.resolve({ ...activity, createActivityLifecycle: createLifecycle });
+  await controller.ready; await flush();
+  expect(createLifecycle).toHaveBeenCalledTimes(1);
+  expect(mount.querySelector('[data-message-id="tool"] button')?.getAttribute('aria-expanded')).toBe('true');
+  controller.injectTestMessage({ type: 'message', message: { ...message, toolCall: { ...message.toolCall, chunks: ['new content'] } } });
+  expect(createLifecycle).toHaveBeenCalledTimes(1);
+});
+
+it.each([undefined, 'none'] as const)('prepares loading-label code only for animated text-only waiting labels (%s)', async animation => {
+  const { setLoadingLabelRuntimeLoader } = await import('./loading-label-runtime-loader');
+  const { setActivityUiLoader } = await import('./activity-ui-loader');
+  const activityLoad = vi.fn(async () => activity); setActivityUiLoader(activityLoad);
+  const load = vi.fn(async () => loadingLabels); setLoadingLabelRuntimeLoader(load);
+  const { createAgentExperience } = await import('./ui');
+  const mount = document.createElement('div'); document.body.append(mount);
+  controller = createAgentExperience(mount, { apiUrl: '/chat', launcher: { enabled: false }, persistState: false,
+    future: { v5Defaults: true }, features: { showToolCalls: false, showReasoning: false, artifacts: { enabled: false } },
+    loadingLabel: { animation, animate: vi.fn() } });
+  await controller.ready;
+  expect(load).toHaveBeenCalledTimes(animation === 'none' ? 0 : 1);
+  expect(activityLoad).not.toHaveBeenCalled();
 });

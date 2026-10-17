@@ -7,7 +7,7 @@ import { createScrollAnimation, createScrollToLatest } from "./utils/scroll-anim
 import { createScrollToBottomControl } from "./components/scroll-to-bottom";
 import { createLayoutSlots } from "./utils/layout-slots";
 import { isBrowserLocalApproval } from "./utils/restored-browser-state";
-import { activityVariant, activityDuration, createActivityLifecycle } from "./components/activity-row";
+import { activityVariant, activityDuration } from "./components/activity-row";
 import { applyStatusIndicatorState, placeStatusIndicator } from "./utils/status-indicator";
 import type { DictationSession } from "./dictation-session";
 import { usesSessionVoice, usesSessionVoiceForConfig } from "./utils/voice-support";
@@ -270,7 +270,7 @@ import {
 import { buildHeaderWithLayout } from "./components/header-layouts";
 import { positionMap } from "./utils/positioning";
 import type { HeaderElements as _HeaderElements, ComposerElements as _ComposerElements } from "./components/panel";
-import { MessageTransform, MessageActionCallbacks, LoadingIndicatorRenderer, MessageActionEligibility } from "./components/message-bubble";
+import { MessageTransform, MessageActionCallbacks, MessageActionEligibility } from "./components/message-bubble";
 import {
   createStandardBubble,
   createTypingIndicator,
@@ -279,6 +279,7 @@ import {
   CUSTOM_MESSAGE_ACTION_PREFIX,
 } from "./components/message-bubble";
 import { getActivityUiSync, type ActivityUiModule } from "./activity-ui-loader";
+import { getLoadingLabelRuntimeSync, type LoadingLabelRuntime } from "./loading-label-runtime-loader";
 import { copyToolDetail } from "./components/tool-details";
 
 import {
@@ -943,24 +944,29 @@ export const createAgentExperience = (
   // Message ids are only unique within a widget session. Keep disclosure state
   // beside the widget that renders it, not in component module scope.
   let activityUi: ActivityUiModule | null = null;
+  let loadingLabelLifecycle: ReturnType<LoadingLabelRuntime["createLoadingLabelLifecycle"]> | undefined;
+  let activityLifecycle: ReturnType<ActivityUiModule["createActivityLifecycle"]> | undefined;
   const ensureActivityUi = (): ActivityUiModule | null => {
+    const loadingLabels = getLoadingLabelRuntimeSync();
+    loadingLabelLifecycle ??= loadingLabels?.createLoadingLabelLifecycle(mount, () => config);
     if (activityUi) return activityUi;
     const ready = getActivityUiSync();
-    if (ready) {
-      ready.initActivityUi(renderLucideIcon);
+    if (ready && loadingLabels) {
+      ready.initActivityUi(renderLucideIcon, loadingLabels);
+      activityLifecycle = ready.createActivityLifecycle((id, kind) => {
+        messageCache.delete(id);
+        const bubble = queryMessageBubble(id);
+        const tool = kind === "tool";
+        if (bubble) (tool ? ready.updateToolBubbleUI : ready.updateReasoningBubbleUI)(
+          id, bubble, tool ? toolExpansionState : reasoningExpansionState, config
+        );
+      });
       return activityUi = ready;
     }
     return null;
   };
   const toolExpansionState = new Set<string>();
   const reasoningExpansionState = new Set<string>();
-  const activityLifecycle = createActivityLifecycle((id, kind) => {
-    messageCache.delete(id);
-    const bubble = Array.from(messagesWrapper.querySelectorAll<HTMLElement>("[data-message-id]")).find(node => node.dataset.messageId === id);
-    if (!bubble) return;
-    if (kind === "tool") activityUi?.updateToolBubbleUI(id, bubble, toolExpansionState, config);
-    else activityUi?.updateReasoningBubbleUI(id, bubble, reasoningExpansionState);
-  });
   const approvalDetailsExpansionState = new Map<string, boolean>();
   const applyTooltipTiming = (): void => {
     configureTooltipTiming({
@@ -2788,9 +2794,9 @@ export const createAgentExperience = (
     pauseAutoScroll();
     const bubbleType = headerButton.getAttribute('data-bubble-type');
     if (bubble.classList.contains("persona-activity-row")) {
-      activityLifecycle.manual(messageId);
+      activityLifecycle?.manual(messageId);
       const group = bubble.parentElement?.closest<HTMLElement>("[data-persona-tool-group]");
-      if (group?.dataset.messageId) activityLifecycle.manual(group.dataset.messageId);
+      if (group?.dataset.messageId) activityLifecycle?.manual(group.dataset.messageId);
     }
 
 
@@ -6019,7 +6025,8 @@ export const createAgentExperience = (
       const display = kind === "tool" ? config.features?.toolCallDisplay : config.features?.reasoningDisplay;
       if (display?.expandable === false) continue;
       activityIds.add(message.id);
-      activityLifecycle.observe(message, kind, kind === "tool" ? toolExpansionState : reasoningExpansionState, display);
+      ensureActivityUi();
+      activityLifecycle?.observe(message, kind, kind === "tool" ? toolExpansionState : reasoningExpansionState, display);
     }
     // Build new content in a temporary container for morphing
     const tempContainer = document.createElement("div");
@@ -6039,24 +6046,9 @@ export const createAgentExperience = (
     }
     const nextLiveRowFingerprints = new Map<string, string>();
 
-    // Create inline loading indicator renderer using priority chain: plugin -> config -> default
-    const getInlineLoadingIndicatorRenderer = (): LoadingIndicatorRenderer | undefined => {
-      // Check if any plugin has renderLoadingIndicator
-      const loadingPlugin = plugins.find(p => p.renderLoadingIndicator);
-      if (loadingPlugin?.renderLoadingIndicator) {
-        return loadingPlugin.renderLoadingIndicator;
-      }
-
-      // Check if config has loadingIndicator.render
-      if (config.loadingIndicator?.render) {
-        return config.loadingIndicator.render;
-      }
-
-      // Return undefined to use default in createStandardBubble
-      return undefined;
-    };
-
-    const inlineLoadingRenderer = getInlineLoadingIndicatorRenderer();
+    // Custom renderers take precedence; the built-in path remains in the bubble.
+    const inlineLoadingRenderer = plugins.find(plugin => plugin.renderLoadingIndicator)?.renderLoadingIndicator
+      ?? config.loadingIndicator?.render;
     // Track active message IDs for cache pruning
     const activeMessageIds = new Set<string>();
     const messageRolesById = new Map<string, AgentWidgetMessage["role"]>();
@@ -6811,10 +6803,11 @@ export const createAgentExperience = (
       });
     }
 
-    activityUi?.groupToolRows({ config, messages, tempContainer, showToolCalls, showReasoning,
-      dropCompletedToolCalls, dropReasoningRow, createMessageRow, activityIds, activityLifecycle, toolExpansionState });
+    activityUi?.groupToolRows({ config, messages, tempContainer, streaming: sessionInitialized ? session.isStreaming() : false,
+      currentRunToolIds: sessionInitialized ? session.getRunToolIds() : undefined, showToolCalls, showReasoning,
+      dropCompletedToolCalls, dropReasoningRow, createMessageRow, activityIds, activityLifecycle: activityLifecycle!, toolExpansionState });
 
-    activityLifecycle.prune(activityIds);
+    activityLifecycle?.prune(activityIds);
 
     for (const id of componentLifetimes.keys()) {
       if (!activeMessageIds.has(id)) disposeComponentRender(id);
@@ -6875,29 +6868,15 @@ export const createAgentExperience = (
         defaultRenderer: () => createTypingIndicator(config)
       };
 
-      // Try plugin renderLoadingIndicator first
-      const loadingPlugin = plugins.find(p => p.renderLoadingIndicator);
-      let typingIndicator: HTMLElement | null = null;
-
-      if (loadingPlugin?.renderLoadingIndicator) {
-        typingIndicator = loadingPlugin.renderLoadingIndicator(loadingIndicatorContext);
-      }
-
-      // Try config loadingIndicator.render if no plugin handled it
-      if (typingIndicator === null && config.loadingIndicator?.render) {
-        typingIndicator = config.loadingIndicator.render(loadingIndicatorContext);
-      }
-
-      // Fall back to default
-      if (typingIndicator === null) {
-        typingIndicator = createTypingIndicator(config);
-      }
+      const typingIndicator = plugins.find(plugin => plugin.renderLoadingIndicator)?.renderLoadingIndicator?.(loadingIndicatorContext)
+        ?? config.loadingIndicator?.render?.(loadingIndicatorContext)
+        ?? createTypingIndicator(config);
 
       // Only render if we have an indicator (allows hiding via returning null)
       if (typingIndicator) {
-        // Bubble wrapper for the typing indicator. It borrows the assistant
-        // bubble's classes and background so the "thinking" bubble matches the
-        // message bubbles that replace it under every layout preset.
+        // Dots and custom renderers borrow the assistant bubble's chrome.
+        // CSS removes it around a built-in V5 activity label, just as it does
+        // for the same label inside an empty streaming assistant message.
         const typingBubble = document.createElement("div");
         const showBubble = config.loadingIndicator?.showBubble !== false; // default true
         const messageLayout = config.layout?.messages?.layout ?? "bubble";
@@ -6943,18 +6922,8 @@ export const createAgentExperience = (
       };
 
       // Get idle indicator using priority chain: plugin -> config -> null (default)
-      // Try plugin renderIdleIndicator first
-      const idlePlugin = plugins.find(p => p.renderIdleIndicator);
-      let idleIndicator: HTMLElement | null = null;
-
-      if (idlePlugin?.renderIdleIndicator) {
-        idleIndicator = idlePlugin.renderIdleIndicator(idleIndicatorContext);
-      }
-
-      // Try config loadingIndicator.renderIdle if no plugin handled it
-      if (idleIndicator === null && config.loadingIndicator?.renderIdle) {
-        idleIndicator = config.loadingIndicator.renderIdle(idleIndicatorContext);
-      }
+      const idleIndicator = plugins.find(plugin => plugin.renderIdleIndicator)?.renderIdleIndicator?.(idleIndicatorContext)
+        ?? config.loadingIndicator?.renderIdle?.(idleIndicatorContext);
 
       // Only render if we have an indicator (default is null - no idle indicator)
       if (idleIndicator) {
@@ -6993,6 +6962,8 @@ export const createAgentExperience = (
     // wrapper exists on both sides of the diff (survives streaming re-renders).
     wrapScrollableTables(tempContainer);
 
+    // Dispose replaced effects before cleanup can disturb the new default DOM.
+    loadingLabelLifecycle?.prepare(tempContainer);
     // Use idiomorph to morph the container contents
     morphMessages(container, tempContainer);
     liveRowFingerprints = nextLiveRowFingerprints;
@@ -7114,6 +7085,8 @@ export const createAgentExperience = (
         if (!activeMessageIds.has(id)) lastApprovalBubbleFingerprint.delete(id);
       }
     }
+    ensureActivityUi();
+    loadingLabelLifecycle?.sync();
   };
 
   // Alias for clarity - the implementation handles flicker prevention via typing indicator logic.
@@ -11630,7 +11603,6 @@ export const createAgentExperience = (
       const previousMessageActions = config.messageActions;
       const previousLayoutMessages = config.layout?.messages;
       const previousColorScheme = config.colorScheme;
-      const previousLoadingIndicator = config.loadingIndicator;
       const previousIterationDisplay = config.iterationDisplay;
       const previousShowReasoning = config.features?.showReasoning;
       const previousShowToolCalls = config.features?.showToolCalls;
@@ -11890,11 +11862,6 @@ export const createAgentExperience = (
       const layoutMessagesChanged = JSON.stringify(config.layout?.messages) !== JSON.stringify(previousLayoutMessages)
         || config.layout?.messages?.renderAssistantMessage !== previousLayoutMessages?.renderAssistantMessage
         || config.layout?.messages?.renderUserMessage !== previousLayoutMessages?.renderUserMessage;
-      const loadingIndicatorChanged = config.loadingIndicator?.variant !== previousLoadingIndicator?.variant
-        || config.loadingIndicator?.label !== previousLoadingIndicator?.label
-        || config.loadingIndicator?.render !== previousLoadingIndicator?.render
-        || config.loadingIndicator?.renderIdle !== previousLoadingIndicator?.renderIdle
-        || config.loadingIndicator?.showBubble !== previousLoadingIndicator?.showBubble;
       const iterationDisplayChanged = config.iterationDisplay !== previousIterationDisplay;
       const featuresChanged = (config.features?.showReasoning ?? true) !== (previousShowReasoning ?? true)
         || (config.features?.showToolCalls ?? true) !== (previousShowToolCalls ?? true)
@@ -11902,7 +11869,8 @@ export const createAgentExperience = (
         || JSON.stringify(config.features?.reasoningDisplay) !== JSON.stringify(previousReasoningDisplay);
       const messagesConfigChanged = (config.future?.v5Defaults === true) !== previousDefaultsVersion
         || toolCallConfigChanged || messageActionsChanged || layoutMessagesChanged
-        || loadingIndicatorChanged || iterationDisplayChanged || featuresChanged
+        || "loadingIndicator" in nextConfig || iterationDisplayChanged || featuresChanged
+        || "loadingLabel" in nextConfig
         || "errorDisplay" in nextConfig || "theme" in nextConfig || "darkTheme" in nextConfig
         || "approval" in nextConfig || config.colorScheme !== previousColorScheme
         || "askUserQuestion" in (nextConfig.features ?? {})
@@ -12670,7 +12638,7 @@ export const createAgentExperience = (
       // Clear messages in session (this will trigger onMessagesChanged which re-renders)
       disposeApprovalRenders();
       artifactsPaneUserHidden = false;
-      activityLifecycle.clear();
+      activityLifecycle?.clear();
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
@@ -13215,7 +13183,8 @@ export const createAgentExperience = (
         clearInterval(toolElapsedTimerId);
         toolElapsedTimerId = null;
       }
-      activityLifecycle.clear();
+      activityLifecycle?.clear();
+      loadingLabelLifecycle?.destroy();
       toolExpansionState.clear();
       reasoningExpansionState.clear();
       approvalDetailsExpansionState.clear();
@@ -13434,7 +13403,7 @@ export const createAgentExperience = (
     renderReadiness.prepare(pending, () => {
       if (!composerActionRenderer) setupComposerActions();
       if (!composerModeChips) setupComposerModeChips();
-      if (getActivityUiSync()) ensureActivityUi();
+      ensureActivityUi();
       getComposerActionsSync()?.ensureComposerActionStyles(mount);
       getArtifactsUiSync()?.ensureArtifactStyles(mount);
       onApprovalUiReady?.();

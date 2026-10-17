@@ -153,6 +153,11 @@
       "import": "./dist/history-shell.js",
       "require": "./dist/history-shell.cjs"
     },
+    "./loading-label-runtime": {
+      "types": "./dist/loading-label-runtime.d.ts",
+      "import": "./dist/loading-label-runtime.js",
+      "require": "./dist/loading-label-runtime.cjs"
+    },
     "./activity-ui": {
       "types": "./dist/activity-ui.d.ts",
       "import": "./dist/activity-ui.js",

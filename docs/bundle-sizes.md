@@ -5,22 +5,23 @@ measures gzip in decimal kB; `scripts/check-size.mjs` measures Brotli quality 11
 in binary KiB. The original Brotli ceilings are 131 KiB for the CDN widget,
 20 KiB for its stylesheet, and less than 20 KiB for the deferred launcher.
 
-Measurements from the October 2026 composer optimization and renderer-readiness build:
+Measurements from the October 2026 shared loading-label and renderer-readiness build:
 
 | File | Gzip kB | Existing limit kB |
 | --- | ---: | ---: |
-| `index.global.js` | 164.98 | 166 |
-| `launcher.global.js` | 17.53 | 19.75 |
-| `widget.css` | 22.96 | 24 |
+| `index.global.js` | 165.15 | 166 |
+| `launcher.global.js` | 17.44 | 19.75 |
+| `widget.css` | 22.90 | 24 |
 | `install.global.js` | 3.00 | 3 |
-| `index.js` | 203.83 | 215.75 |
-| `index.cjs` | 203.57 | 216.75 |
-| `theme-editor.js` | 40.34 | 40.5 |
+| `index.js` | 203.85 | 215.75 |
+| `index.cjs` | 203.61 | 216.75 |
+| `theme-editor.js` | 40.43 | 40.5 |
 | `voice-runtime.js` | 13.48 | 14 |
 | `history-shell.js` | 13.63 | 13.75 |
 
 The installer is 2,998 bytes gzip; the table rounds to two decimal places.
-The CDN widget is 130.97 KiB Brotli. Its remaining headroom is small: run both
+The CDN widget is 130.92 KiB Brotli (134,067 bytes, with 77 bytes of headroom).
+Its remaining headroom is small: run both
 size checks when changing core code. These are per-file budgets, not a claim
 that the complete interaction downloads only the core file.
 
@@ -31,12 +32,44 @@ Each new chunk has an explicit gzip budget in the same size-limit file.
 | Chunk | Gzip kB | Loaded when |
 | --- | ---: | --- |
 | `composer-actions-runtime.js` | 15.26 | Before the widget is revealed; also supplies approval popover helpers |
-| `activity-ui.js` | 11.80 | Before reveal when tool or reasoning messages are enabled |
+| `activity-ui.js` | 10.32 | Before reveal when tool/reasoning messages are enabled |
+| `loading-label-runtime.js` | 2.44 | Before reveal for animated waiting labels, enabled tool/reasoning UI, or artifact UI; 2.75 kB gzip budget |
 | `dictation-runtime.js` | 4.66 | Before reveal when voice recognition is enabled |
 | `client-dispatch.js` | 5.22 | The CDN client initializes a session, sends a message, or submits feedback |
 | `config-diagnostics.js` | 1.60 | Debug migration diagnostics are enabled |
 | `background-runtime.js` | 0.67 | Background conversation work is enabled |
-| `preferences-runtime.js` | 1.91 | The theme editor applies a preset with behavior preferences |
+| `preferences-runtime.js` | 1.94 | The theme editor applies a preset with behavior preferences |
+
+The activity chunk owns per-widget disclosure timers and grouped rendering.
+The shared loading-label module owns builtin effects, configuration resolution,
+and custom-hook lifecycle factories. With tools, reasoning, and artifacts disabled,
+animated waiting labels fetch **2,438 bytes gzip / 2,170 bytes Brotli**, replacing
+the previous 11,185-byte gzip / 10,075-byte Brotli activity download. This saves
+8,747 bytes gzip / 7,905 bytes Brotli with the same single optional request.
+Plain `loadingLabel.animation: "none"` and V4 dots-only text configurations avoid
+both modules. Enabled tool/reasoning renderers require the shared module even
+when their configured labels use `none`, because their internal builders receive
+that renderer at initialization.
+
+Tool-enabled paths now fetch two files: activity + loading-label total **12,756
+bytes gzip / 11,453 bytes Brotli**, versus 11,185 / 10,075 before the split. This
+adds one request and 1,571 bytes gzip / 1,378 bytes Brotli. Separate compression,
+injection adapters, and stateless style/provenance helpers bundled in both files
+contribute to that overhead; animation implementations and handle state are not
+duplicated. Artifact UI also receives the same runtime: artifacts + loading-label
+total **23,209 bytes gzip / 20,942 bytes Brotli**, versus 20,881 / 18,842 before.
+If tool or waiting UI already prepared the runtime, artifacts reuse that download.
+Artifact animation settings remain independent of `loadingLabel`.
+
+The named internal `LoadingLabelRuntime` contract supplies fresh-label rendering,
+per-widget lifecycle creation, and builtin artifact effects. Activity/artifact
+transport entries receive it through their initialization contracts; direct
+internal builders must initialize those dependencies too. This is an internal
+replacement boundary, with no public provider-registration API. There are no
+static module imports between these three chunks: failed dependencies can retry
+independently, concurrent requests share the core loader, and CDN URL version
+queries remain intact. Handles are initialized once per widget and automatic
+collapse updates the affected bubble without rerendering the transcript.
 
 Renderer chunks are separate files, but the configured UI now waits for them
 before display. The initial preparation includes composer controls, markdown
@@ -45,8 +78,11 @@ and configured artifact/mention/history UI. Session voice configurations also
 prepare their provider module, without starting capture or connecting a call.
 These bytes count toward the complete widget's initial download, not savings
 from deferral. For example, core + widget CSS + markdown + icons + composer
-controls + activity + dictation total **244.40 kB gzip / 199.51 KiB Brotli**.
-Enabling artifacts brings that subtotal to **265.18 kB gzip / 217.85 KiB Brotli**.
+controls + loading labels + dictation total **235.14 kB gzip / 191.23 KiB Brotli**
+for an animated text-only configuration. Enabling tools/reasoning adds activity,
+bringing the subtotal to **245.46 kB gzip / 200.29 KiB Brotli** (previously
+243.76 kB / 198.95 KiB). Enabling artifacts as well brings that subtotal to
+**266.23 kB gzip / 218.62 KiB Brotli** (previously 264.64 kB / 217.35 KiB).
 These are sums of separately compressed files, excluding installer/launcher,
 request handling, history, and any other configured features; they are not a
 measurement of the complete network transfer. Diagnostics, background work, and request handling retain their

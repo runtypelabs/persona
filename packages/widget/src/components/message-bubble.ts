@@ -1,3 +1,4 @@
+import { getLoadingLabelRuntimeSync } from "../loading-label-runtime-loader";
 import { createElement, createNode } from "../utils/dom";
 import {
   AgentWidgetMessage,
@@ -514,43 +515,45 @@ const createMessageFilePreviews = (
 };
 
 // Create typing indicator element
-export const createTypingIndicator = (config?: import("../types").AgentWidgetConfig): HTMLElement => {
-  const variant = config?.loadingIndicator?.variant ?? (config?.future?.v5Defaults ? "label" : "dots");
+export const createTypingIndicator = (config: import("../types").AgentWidgetConfig = {}): HTMLElement => {
+  const loading = config.loadingIndicator;
+  const v5 = config.future?.v5Defaults;
+  const variant = loading?.variant ?? (v5 ? "label" : "dots");
   if (variant === "label") {
-    const label = document.createElement("div");
-    label.className = "persona-loading-label";
-    label.textContent = config?.loadingIndicator?.label ?? "Thinking…";
-    label.setAttribute("role", "status");
+    const label = createNode("div", { className: "persona-loading-label", attrs: { role: "status" } });
+    if (v5 && loading?.showBubble !== true) {
+      label.classList.add("persona-activity-row", "persona-activity-header");
+    }
+    const display = config.features?.toolCallDisplay;
+    const visibility = loading?.iconVisibility ?? (display?.grouped !== false && (display?.groupedMode ?? "collapsible") === "collapsible"
+      ? display?.groupIconVisibility : undefined) ?? display?.iconVisibility;
+    const name = loading?.iconName ?? "loader-circle";
+    if (visibility !== "never" && (v5 || loading?.iconName || loading?.iconVisibility)) {
+      const icon = renderLucideIcon(name, 16);
+      if (icon) {
+        icon.classList.add("persona-activity-icon");
+        icon.dataset.loadingIconAnimation = loading?.iconAnimation ?? (name === "loader-circle" ? "spin" : "none");
+        label.appendChild(icon);
+      }
+    }
+    const text = createNode("span", { text: loading?.label ?? "Thinking…" });
+    label.appendChild(text);
+    getLoadingLabelRuntimeSync()?.applyLoadingLabel(text, config, "waiting");
     return label;
   }
-  const container = document.createElement("div");
-  container.className = "persona-flex persona-items-center persona-space-x-1 persona-h-5 persona-mt-2";
+  const container = createElement("div", "persona-flex persona-items-center persona-space-x-1 persona-h-5 persona-mt-2");
 
-  const dot1 = document.createElement("div");
-  dot1.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
-  dot1.style.backgroundColor = "currentColor";
-  dot1.style.opacity = "0.4";
-  dot1.style.animationDelay = "0ms";
+  for (let index = 0; index < 3; index++) {
+    const dot = createElement("div", "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5");
+    dot.style.backgroundColor = "currentColor";
+    dot.style.opacity = "0.4";
+    dot.style.animationDelay = `${index * 250}ms`;
+    container.appendChild(dot);
+  }
 
-  const dot2 = document.createElement("div");
-  dot2.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
-  dot2.style.backgroundColor = "currentColor";
-  dot2.style.opacity = "0.4";
-  dot2.style.animationDelay = "250ms";
-
-  const dot3 = document.createElement("div");
-  dot3.className = "persona-animate-typing persona-rounded-full persona-h-1.5 persona-w-1.5";
-  dot3.style.backgroundColor = "currentColor";
-  dot3.style.opacity = "0.4";
-  dot3.style.animationDelay = "500ms";
-
-  const srOnly = document.createElement("span");
-  srOnly.className = "persona-sr-only";
+  const srOnly = createElement("span", "persona-sr-only");
   srOnly.textContent = "Loading";
 
-  container.appendChild(dot1);
-  container.appendChild(dot2);
-  container.appendChild(dot3);
   container.appendChild(srOnly);
 
   return container;
@@ -573,16 +576,7 @@ export const renderLoadingIndicatorWithFallback = (
     defaultRenderer: () => createTypingIndicator(widgetConfig)
   };
 
-  // Try custom renderer first
-  if (customRenderer) {
-    const result = customRenderer(context);
-    if (result !== null) {
-      return result;
-    }
-  }
-
-  // Fall back to default
-  return createTypingIndicator(widgetConfig);
+  return customRenderer?.(context) ?? createTypingIndicator(widgetConfig);
 };
 
 /**
