@@ -118,9 +118,9 @@ describe('createThemeEditorTools', () => {
   it('apply_preset validates id and applies', async () => {
     const out = await call(tools.get('apply_preset')!, { presetId: 'default-dark' });
     expect(out.applied.appliedPreset.id).toBe('default-dark');
-    expect(() => tools.get('apply_preset')!.execute({ presetId: 'nope' })).toThrow(
-      /Valid presets/
-    );
+    const invalid = await tools.get('apply_preset')!.execute({ presetId: 'nope' });
+    expect(invalid.isError).toBe(true);
+    expect(invalid.content[0]).toMatchObject({ type: 'text', text: expect.stringMatching(/Valid presets/) });
   });
 
   it('apply_preset installs both Persona default slots with automatic scheme selection', async () => {

@@ -20,10 +20,13 @@
  * Only tools owned by this document are exposed: the wire addresses tools by
  * name, not by frame. Callbacks must validate their own input.
  *
- * The automatic fallback stays on v5 to preserve its browser requirements and
- * result semantics. Host pages may install v5 or v6 themselves; Persona does
- * not replace an existing context. v5's initializeWebMCPPolyfill() and v6's
- * installWebMCP() are both accepted by custom loaders.
+ * The automatic fallback is the upstream polyfill (`@mcp-b/webmcp-polyfill`
+ * v6). It needs a secure context and Chrome/Firefox 126+ or Safari 18+, and
+ * follows upstream result semantics: callbacks must return JSON-serializable
+ * values, and thrown errors reach the model only as a generic failure (return
+ * an `isError` result instead). Host pages may install any runtime
+ * themselves; Persona never replaces an existing context. v6's installWebMCP()
+ * and v5's initializeWebMCPPolyfill() are both accepted by custom loaders.
  *
  * Every chat-path call passes one confirm gate before execution, regardless of
  * annotations.readOnlyHint. The one exception is a voice fast-tier

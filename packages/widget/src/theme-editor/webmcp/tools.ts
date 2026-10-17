@@ -20,6 +20,7 @@ import { THEME_EDITOR_PRESETS, getThemeEditorPreset } from '../presets';
 import { ALL_TABS, CONFIGURE_SUB_GROUPS } from '../sections';
 import {
   toolResult,
+  type ToolResult,
   type WebMcpTool,
   type ThemeEditorLike,
   type EditTarget,
@@ -748,7 +749,7 @@ export function createThemeEditorTools(
     },
   };
 
-  return [
+  const tools = [
     getThemeOverview,
     setBrandColors,
     assignColorRole,
@@ -762,6 +763,32 @@ export function createThemeEditorTools(
     checkContrast,
     manageSession,
   ];
+  return tools.map(withToolErrorResult);
+}
+
+/**
+ * Report a thrown validation error as an `isError` result instead. The
+ * upstream WebMCP runtime replaces thrown callback errors with a generic
+ * "Tool execution failed", which would hide the actionable "Valid: ..." hints
+ * the model needs to correct its call.
+ */
+export function withToolErrorResult(tool: WebMcpTool): WebMcpTool {
+  const { execute } = tool;
+  const toErrorResult = (error: unknown): ToolResult => ({
+    isError: true,
+    content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }],
+  });
+  return {
+    ...tool,
+    execute: (input) => {
+      try {
+        const result = execute(input);
+        return result instanceof Promise ? result.catch(toErrorResult) : result;
+      } catch (error) {
+        return toErrorResult(error);
+      }
+    },
+  };
 }
 
 // ─── Field value validation (escape hatch) ──────────────────────
