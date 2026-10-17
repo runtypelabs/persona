@@ -1,3 +1,4 @@
+import { resolveToolStyles, applyToolPadding, toolLoadingDuration } from "../utils/tool-styles";
 import { appendToolDetails } from "./tool-details";
 import { applyActivityRow, activityDisplay, activityVariant } from "./activity-row";
 import { createElement, createNode } from "../utils/dom";
@@ -118,7 +119,7 @@ export const updateToolBubbleUI = (
   updateExpandableBubbleUI(messageId, bubble, {
     stateSet: expansionState,
     previewKind: "tool",
-    iconColor: toolChevronColor(config?.toolCall ?? {}, bubble.classList.contains("persona-activity-row")),
+    iconColor: toolChevronColor(resolveToolStyles(config), bubble.classList.contains("persona-activity-row")),
   });
 };
 
@@ -129,7 +130,7 @@ export const createToolBubble = (
 ): HTMLElement => {
   config = activityDisplay(config, "tool");
   const tool = message.toolCall;
-  const toolCallConfig = config?.toolCall ?? {};
+  const toolCallConfig = resolveToolStyles(config);
 
   const bubble = createExpandableBubbleShell("persona-tool-bubble", message.id);
 
@@ -166,14 +167,7 @@ export const createToolBubble = (
   if (toolCallConfig.headerBackgroundColor) {
     header.style.backgroundColor = toolCallConfig.headerBackgroundColor;
   }
-  if (toolCallConfig.headerPaddingX) {
-    header.style.paddingLeft = toolCallConfig.headerPaddingX;
-    header.style.paddingRight = toolCallConfig.headerPaddingX;
-  }
-  if (toolCallConfig.headerPaddingY) {
-    header.style.paddingTop = toolCallConfig.headerPaddingY;
-    header.style.paddingBottom = toolCallConfig.headerPaddingY;
-  }
+  applyToolPadding(header, config, "header");
 
   const headerContent = createElement("div", "persona-flex persona-flex-col persona-text-left");
   const title = createElement("span", "persona-text-xs persona-text-persona-primary");
@@ -259,19 +253,19 @@ export const createToolBubble = (
 
   if (!skipCustomElement) {
     if (isActive && loadingAnimation !== "none") {
-      const animDuration = toolCallConfig.loadingAnimationDuration ?? 2000;
+      const animDuration = toolLoadingDuration(config);
       title.setAttribute("data-preserve-animation", "true");
 
       if (loadingAnimation === "pulse") {
         title.classList.add("persona-tool-loading-pulse");
-        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
+        title.style.setProperty("--persona-tool-anim-duration", animDuration);
         if (currentTemplate) {
           renderFormattedTitle(currentTemplate, false);
         }
       } else {
         // Character-by-character modes: shimmer, shimmer-color, rainbow
         title.classList.add(`persona-tool-loading-${loadingAnimation}`);
-        title.style.setProperty("--persona-tool-anim-duration", `${animDuration}ms`);
+        title.style.setProperty("--persona-tool-anim-duration", animDuration);
 
         if (loadingAnimation === "shimmer-color") {
           if (toolCallConfig.loadingAnimationColor) {
@@ -340,14 +334,7 @@ export const createToolBubble = (
   if (toolCallConfig.contentTextColor) {
     content.style.color = toolCallConfig.contentTextColor;
   }
-  if (toolCallConfig.contentPaddingX) {
-    content.style.paddingLeft = toolCallConfig.contentPaddingX;
-    content.style.paddingRight = toolCallConfig.contentPaddingX;
-  }
-  if (toolCallConfig.contentPaddingY) {
-    content.style.paddingTop = toolCallConfig.contentPaddingY;
-    content.style.paddingBottom = toolCallConfig.contentPaddingY;
-  }
+  applyToolPadding(content, config, "content");
 
   if (config.future?.v5Defaults === true) {
     appendToolDetails(content, message, config);

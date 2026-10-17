@@ -26,6 +26,20 @@ import {
   ROLE_BORDERS,
 } from './role-mappings';
 
+/** Fresh field objects keep independently scoped editor sections editable. */
+const colorTokenField = (id: string, label: string, path: string, defaultValue: unknown, description?: string): FieldDef => ({
+  id, label, type: 'token-ref', path, defaultValue, tokenRef: { tokenType: 'color' },
+  ...(description === undefined ? {} : { description }),
+});
+
+const simpleField = (type: 'toggle' | 'text' | 'color', id: string, label: string, path: string, defaultValue: unknown, description?: string): FieldDef => ({
+  id, label, type, path, defaultValue, ...(description === undefined ? {} : { description }),
+});
+
+const sliderField = (id: string, label: string, path: string, defaultValue: unknown, slider: FieldDef['slider'], description?: string): FieldDef => ({
+  id, label, type: 'slider', path, defaultValue, slider, ...(description === undefined ? {} : { description }),
+});
+
 const parseOptionalCssValue = (value: unknown): string | undefined => {
   const normalized = String(value ?? '').trim();
   return normalized || undefined;
@@ -70,9 +84,9 @@ const brandColorsSectionDef: SectionDef = {
   description: 'Pick your brand colors. A full shade scale is generated automatically for both light and dark themes.',
   collapsed: false,
   fields: [
-    { id: 'brand-primary', label: 'Primary', description: 'Main brand color for buttons, links, and accents', type: 'color', path: 'theme.palette.colors.primary.500', defaultValue: '#171717' },
-    { id: 'brand-secondary', label: 'Secondary', description: 'Supporting brand color', type: 'color', path: 'theme.palette.colors.secondary.500', defaultValue: '#7c3aed' },
-    { id: 'brand-accent', label: 'Accent', description: 'Highlight and decorative color', type: 'color', path: 'theme.palette.colors.accent.500', defaultValue: '#06b6d4' },
+    simpleField('color', 'brand-primary', 'Primary', 'theme.palette.colors.primary.500', '#171717', 'Main brand color for buttons, links, and accents'),
+    simpleField('color', 'brand-secondary', 'Secondary', 'theme.palette.colors.secondary.500', '#7c3aed', 'Supporting brand color'),
+    simpleField('color', 'brand-accent', 'Accent', 'theme.palette.colors.accent.500', '#06b6d4', 'Highlight and decorative color'),
   ],
 };
 
@@ -82,17 +96,17 @@ const chatColorsSectionDef: SectionDef = {
   description: 'Customize the main colors of the chat interface.',
   collapsed: true,
   fields: [
-    { id: 'chat-header-bg', label: 'Header Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-fg', label: 'Header Foreground', description: 'Anchors the header text. The title takes it, the subtitle and button icons take a 72% mix of it over the background', type: 'token-ref', path: 'theme.components.header.foreground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-icon-bg', label: 'Header Icon Background', type: 'token-ref', path: 'theme.components.header.iconBackground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-icon-fg', label: 'Header Icon Color', type: 'token-ref', path: 'theme.components.header.iconForeground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-title-fg', label: 'Header Title Color', description: 'Blank follows the header foreground', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-subtitle-fg', label: 'Header Subtitle Color', description: 'Blank follows the 72% foreground mix', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-header-action-icons-fg', label: 'Header Button Icons', description: 'Blank follows the 72% foreground mix', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-msg-user-bg', label: 'User Message Background', type: 'token-ref', path: 'theme.components.message.user.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-msg-user-text', label: 'User Message Text', type: 'token-ref', path: 'theme.components.message.user.text', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-msg-assistant-bg', label: 'Assistant Message Background', type: 'token-ref', path: 'theme.components.message.assistant.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
-    { id: 'chat-msg-assistant-text', label: 'Assistant Message Text', type: 'token-ref', path: 'theme.components.message.assistant.text', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
+    colorTokenField('chat-header-bg', 'Header Background', 'theme.components.header.background', 'semantic.colors.surface'),
+    colorTokenField('chat-header-fg', 'Header Foreground', 'theme.components.header.foreground', '', 'Anchors the header text. The title takes it, the subtitle and button icons take a 72% mix of it over the background'),
+    colorTokenField('chat-header-icon-bg', 'Header Icon Background', 'theme.components.header.iconBackground', 'semantic.colors.primary'),
+    colorTokenField('chat-header-icon-fg', 'Header Icon Color', 'theme.components.header.iconForeground', 'semantic.colors.textInverse'),
+    colorTokenField('chat-header-title-fg', 'Header Title Color', 'theme.components.header.titleForeground', '', 'Blank follows the header foreground'),
+    colorTokenField('chat-header-subtitle-fg', 'Header Subtitle Color', 'theme.components.header.subtitleForeground', '', 'Blank follows the 72% foreground mix'),
+    colorTokenField('chat-header-action-icons-fg', 'Header Button Icons', 'theme.components.header.actionIconForeground', '', 'Blank follows the 72% foreground mix'),
+    colorTokenField('chat-msg-user-bg', 'User Message Background', 'theme.components.message.user.background', 'semantic.colors.primary'),
+    colorTokenField('chat-msg-user-text', 'User Message Text', 'theme.components.message.user.text', 'semantic.colors.textInverse'),
+    colorTokenField('chat-msg-assistant-bg', 'Assistant Message Background', 'theme.components.message.assistant.background', 'semantic.colors.container'),
+    colorTokenField('chat-msg-assistant-text', 'Assistant Message Text', 'theme.components.message.assistant.text', 'semantic.colors.text'),
   ],
 };
 
@@ -133,7 +147,7 @@ const launcherStyleSectionDef: SectionDef = {
   description: 'Control launcher appearance.',
   collapsed: true,
   fields: [
-    { id: 'style-launcher-size', label: 'Launcher Size', type: 'slider', path: 'theme.components.launcher.size', defaultValue: '60px', slider: { min: 32, max: 80, step: 2 } },
+    sliderField('style-launcher-size', 'Launcher Size', 'theme.components.launcher.size', '60px', { min: 32, max: 80, step: 2 }),
     { id: 'style-launcher-shape', label: 'Launcher Shape', type: 'select', path: 'theme.components.launcher.borderRadius', defaultValue: 'palette.radius.full', options: [
       { value: 'palette.radius.md', label: 'Rounded Square' },
       { value: 'palette.radius.lg', label: 'Rounded' },
@@ -156,11 +170,11 @@ const shapeSectionDef: SectionDef = {
   description: 'Control the corner roundness across the widget.',
   collapsed: true,
   fields: [
-    { id: 'radius-sm', label: 'Small', type: 'slider', path: 'theme.palette.radius.sm', defaultValue: '0.125rem', slider: { min: 0, max: 16, step: 1 } },
-    { id: 'radius-md', label: 'Medium', type: 'slider', path: 'theme.palette.radius.md', defaultValue: '0.375rem', slider: { min: 0, max: 24, step: 1 } },
-    { id: 'radius-lg', label: 'Large', type: 'slider', path: 'theme.palette.radius.lg', defaultValue: '0.5rem', slider: { min: 0, max: 32, step: 1 } },
-    { id: 'radius-xl', label: 'Extra Large', type: 'slider', path: 'theme.palette.radius.xl', defaultValue: '0.75rem', slider: { min: 0, max: 48, step: 1 } },
-    { id: 'radius-full', label: 'Full', type: 'slider', path: 'theme.palette.radius.full', defaultValue: '9999px', slider: { min: 0, max: 100, step: 1, isRadiusFull: true } },
+    sliderField('radius-sm', 'Small', 'theme.palette.radius.sm', '0.125rem', { min: 0, max: 16, step: 1 }),
+    sliderField('radius-md', 'Medium', 'theme.palette.radius.md', '0.375rem', { min: 0, max: 24, step: 1 }),
+    sliderField('radius-lg', 'Large', 'theme.palette.radius.lg', '0.5rem', { min: 0, max: 32, step: 1 }),
+    sliderField('radius-xl', 'Extra Large', 'theme.palette.radius.xl', '0.75rem', { min: 0, max: 48, step: 1 }),
+    sliderField('radius-full', 'Full', 'theme.palette.radius.full', '9999px', { min: 0, max: 100, step: 1, isRadiusFull: true }),
   ],
   presets: [
     { id: 'radius-default', label: 'Default', values: { 'theme.palette.radius.sm': '0.125rem', 'theme.palette.radius.md': '0.375rem', 'theme.palette.radius.lg': '0.5rem', 'theme.palette.radius.xl': '0.75rem', 'theme.palette.radius.full': '9999px' } },
@@ -174,10 +188,10 @@ const shadowsSectionDef: SectionDef = {
   title: 'Shadows',
   collapsed: true,
   fields: [
-    { id: 'shadow-sm', label: 'Small', type: 'text', path: 'theme.palette.shadows.sm', defaultValue: '0 1px 2px 0 rgb(0 0 0 / 0.05)' },
-    { id: 'shadow-md', label: 'Medium', type: 'text', path: 'theme.palette.shadows.md', defaultValue: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)' },
-    { id: 'shadow-lg', label: 'Large', type: 'text', path: 'theme.palette.shadows.lg', defaultValue: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' },
-    { id: 'shadow-xl', label: 'Extra Large', type: 'text', path: 'theme.palette.shadows.xl', defaultValue: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)' },
+    simpleField('text', 'shadow-sm', 'Small', 'theme.palette.shadows.sm', '0 1px 2px 0 rgb(0 0 0 / 0.05)'),
+    simpleField('text', 'shadow-md', 'Medium', 'theme.palette.shadows.md', '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)'),
+    simpleField('text', 'shadow-lg', 'Large', 'theme.palette.shadows.lg', '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)'),
+    simpleField('text', 'shadow-xl', 'Extra Large', 'theme.palette.shadows.xl', '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)'),
   ],
 };
 
@@ -201,7 +215,7 @@ const widgetStyleSectionDef: SectionDef = {
       { value: 'palette.shadows.lg', label: 'Large' },
       { value: 'palette.shadows.xl', label: 'Extra Large' },
     ] },
-    { id: 'style-panel-canvas-bg', label: 'Detached Canvas Background', description: 'Fills the region behind a detached panel; defaults to transparent', type: 'token-ref', path: 'theme.components.panel.canvasBackground', defaultValue: DEFAULT_PANEL_CANVAS_BACKGROUND, tokenRef: { tokenType: 'color' } },
+    colorTokenField('style-panel-canvas-bg', 'Detached Canvas Background', 'theme.components.panel.canvasBackground', DEFAULT_PANEL_CANVAS_BACKGROUND, 'Fills the region behind a detached panel; defaults to transparent'),
     { id: 'style-msg-user-radius', label: 'User Message Radius', type: 'select', path: 'theme.components.message.user.borderRadius', defaultValue: 'palette.radius.lg', options: [
       { value: 'palette.radius.none', label: 'None' },
       { value: 'palette.radius.sm', label: 'Small' },
@@ -259,26 +273,26 @@ const semanticColorsSectionDef: SectionDef = {
   description: 'Map intents to palette colors.',
   collapsed: true,
   fields: [
-    { id: 'sem-primary', label: 'Primary', description: 'Main brand/action color', type: 'token-ref', path: 'theme.semantic.colors.primary', defaultValue: 'palette.colors.primary.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-secondary', label: 'Secondary', description: 'Secondary actions', type: 'token-ref', path: 'theme.semantic.colors.secondary', defaultValue: 'palette.colors.gray.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-accent', label: 'Accent', description: 'Accent/highlight color', type: 'token-ref', path: 'theme.semantic.colors.accent', defaultValue: 'palette.colors.primary.600', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-surface', label: 'Surface', description: 'Primary surface background', type: 'token-ref', path: 'theme.semantic.colors.surface', defaultValue: 'palette.colors.gray.50', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-background', label: 'Background', description: 'Page/widget background', type: 'token-ref', path: 'theme.semantic.colors.background', defaultValue: 'palette.colors.gray.50', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-container', label: 'Container', description: 'Container/card background', type: 'token-ref', path: 'theme.semantic.colors.container', defaultValue: 'palette.colors.gray.100', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-text', label: 'Text', description: 'Primary text color', type: 'token-ref', path: 'theme.semantic.colors.text', defaultValue: 'palette.colors.gray.900', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-text-muted', label: 'Text Muted', description: 'Secondary/muted text', type: 'token-ref', path: 'theme.semantic.colors.textMuted', defaultValue: 'palette.colors.gray.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-text-inverse', label: 'Text Inverse', description: 'Text on dark backgrounds', type: 'token-ref', path: 'theme.semantic.colors.textInverse', defaultValue: 'palette.colors.gray.50', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-border', label: 'Border', description: 'Default border color', type: 'token-ref', path: 'theme.semantic.colors.border', defaultValue: 'palette.colors.gray.200', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-divider', label: 'Divider', description: 'Divider/separator color', type: 'token-ref', path: 'theme.semantic.colors.divider', defaultValue: 'palette.colors.gray.200', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-interactive-default', label: 'Interactive Default', type: 'token-ref', path: 'theme.semantic.colors.interactive.default', defaultValue: 'palette.colors.primary.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-interactive-hover', label: 'Interactive Hover', type: 'token-ref', path: 'theme.semantic.colors.interactive.hover', defaultValue: 'palette.colors.primary.600', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-interactive-focus', label: 'Interactive Focus', type: 'token-ref', path: 'theme.semantic.colors.interactive.focus', defaultValue: 'palette.colors.primary.700', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-interactive-active', label: 'Interactive Active', type: 'token-ref', path: 'theme.semantic.colors.interactive.active', defaultValue: 'palette.colors.primary.800', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-interactive-disabled', label: 'Interactive Disabled', type: 'token-ref', path: 'theme.semantic.colors.interactive.disabled', defaultValue: 'palette.colors.gray.300', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-feedback-success', label: 'Success', type: 'token-ref', path: 'theme.semantic.colors.feedback.success', defaultValue: 'palette.colors.success.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-feedback-warning', label: 'Warning', type: 'token-ref', path: 'theme.semantic.colors.feedback.warning', defaultValue: 'palette.colors.warning.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-feedback-error', label: 'Error', type: 'token-ref', path: 'theme.semantic.colors.feedback.error', defaultValue: 'palette.colors.error.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sem-feedback-info', label: 'Info', type: 'token-ref', path: 'theme.semantic.colors.feedback.info', defaultValue: 'palette.colors.primary.500', tokenRef: { tokenType: 'color' } },
+    colorTokenField('sem-primary', 'Primary', 'theme.semantic.colors.primary', 'palette.colors.primary.500', 'Main brand/action color'),
+    colorTokenField('sem-secondary', 'Secondary', 'theme.semantic.colors.secondary', 'palette.colors.gray.500', 'Secondary actions'),
+    colorTokenField('sem-accent', 'Accent', 'theme.semantic.colors.accent', 'palette.colors.primary.600', 'Accent/highlight color'),
+    colorTokenField('sem-surface', 'Surface', 'theme.semantic.colors.surface', 'palette.colors.gray.50', 'Primary surface background'),
+    colorTokenField('sem-background', 'Background', 'theme.semantic.colors.background', 'palette.colors.gray.50', 'Page/widget background'),
+    colorTokenField('sem-container', 'Container', 'theme.semantic.colors.container', 'palette.colors.gray.100', 'Container/card background'),
+    colorTokenField('sem-text', 'Text', 'theme.semantic.colors.text', 'palette.colors.gray.900', 'Primary text color'),
+    colorTokenField('sem-text-muted', 'Text Muted', 'theme.semantic.colors.textMuted', 'palette.colors.gray.500', 'Secondary/muted text'),
+    colorTokenField('sem-text-inverse', 'Text Inverse', 'theme.semantic.colors.textInverse', 'palette.colors.gray.50', 'Text on dark backgrounds'),
+    colorTokenField('sem-border', 'Border', 'theme.semantic.colors.border', 'palette.colors.gray.200', 'Default border color'),
+    colorTokenField('sem-divider', 'Divider', 'theme.semantic.colors.divider', 'palette.colors.gray.200', 'Divider/separator color'),
+    colorTokenField('sem-interactive-default', 'Interactive Default', 'theme.semantic.colors.interactive.default', 'palette.colors.primary.500'),
+    colorTokenField('sem-interactive-hover', 'Interactive Hover', 'theme.semantic.colors.interactive.hover', 'palette.colors.primary.600'),
+    colorTokenField('sem-interactive-focus', 'Interactive Focus', 'theme.semantic.colors.interactive.focus', 'palette.colors.primary.700'),
+    colorTokenField('sem-interactive-active', 'Interactive Active', 'theme.semantic.colors.interactive.active', 'palette.colors.primary.800'),
+    colorTokenField('sem-interactive-disabled', 'Interactive Disabled', 'theme.semantic.colors.interactive.disabled', 'palette.colors.gray.300'),
+    colorTokenField('sem-feedback-success', 'Success', 'theme.semantic.colors.feedback.success', 'palette.colors.success.500'),
+    colorTokenField('sem-feedback-warning', 'Warning', 'theme.semantic.colors.feedback.warning', 'palette.colors.warning.500'),
+    colorTokenField('sem-feedback-error', 'Error', 'theme.semantic.colors.feedback.error', 'palette.colors.error.500'),
+    colorTokenField('sem-feedback-info', 'Info', 'theme.semantic.colors.feedback.info', 'palette.colors.primary.500'),
   ],
 };
 
@@ -299,10 +313,10 @@ const panelLayoutSectionDef: SectionDef = {
   title: 'Panel',
   collapsed: false,
   fields: [
-    { id: 'panel-width', label: 'Width', type: 'text', path: 'theme.components.panel.width', defaultValue: DEFAULT_FLOATING_LAUNCHER_WIDTH },
-    { id: 'panel-max-width', label: 'Max Width', type: 'text', path: 'theme.components.panel.maxWidth', defaultValue: DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH },
-    { id: 'panel-height', label: 'Height', type: 'text', path: 'theme.components.panel.height', defaultValue: '600px' },
-    { id: 'panel-max-height', label: 'Max Height', type: 'text', path: 'theme.components.panel.maxHeight', defaultValue: 'calc(100vh - 80px)' },
+    simpleField('text', 'panel-width', 'Width', 'theme.components.panel.width', DEFAULT_FLOATING_LAUNCHER_WIDTH),
+    simpleField('text', 'panel-max-width', 'Max Width', 'theme.components.panel.maxWidth', DEFAULT_FLOATING_LAUNCHER_MAX_WIDTH),
+    simpleField('text', 'panel-height', 'Height', 'theme.components.panel.height', '600px'),
+    simpleField('text', 'panel-max-height', 'Max Height', 'theme.components.panel.maxHeight', 'calc(100vh - 80px)'),
     { id: 'panel-border-radius', label: 'Border Radius', type: 'select', path: 'theme.components.panel.borderRadius', defaultValue: 'palette.radius.xl', options: [
       { value: 'palette.radius.none', label: 'None' },
       { value: 'palette.radius.sm', label: 'Small' },
@@ -317,7 +331,7 @@ const panelLayoutSectionDef: SectionDef = {
       { value: 'palette.shadows.lg', label: 'Large' },
       { value: 'palette.shadows.xl', label: 'Extra Large' },
     ] },
-    { id: 'panel-inset', label: 'Detached Inset', description: 'Gap around the card when launcher.detachedPanel is on', type: 'text', path: 'theme.components.panel.inset', defaultValue: DEFAULT_PANEL_INSET },
+    simpleField('text', 'panel-inset', 'Detached Inset', 'theme.components.panel.inset', DEFAULT_PANEL_INSET, 'Gap around the card when launcher.detachedPanel is on'),
   ],
 };
 
@@ -326,8 +340,8 @@ const launcherLayoutSectionDef: SectionDef = {
   title: 'Launcher',
   collapsed: true,
   fields: [
-    { id: 'launcher-size', label: 'Size', type: 'slider', path: 'theme.components.launcher.size', defaultValue: '60px', slider: { min: 32, max: 80, step: 2 } },
-    { id: 'launcher-icon-size', label: 'Icon Size', type: 'slider', path: 'theme.components.launcher.iconSize', defaultValue: '28px', slider: { min: 16, max: 48, step: 2 } },
+    sliderField('launcher-size', 'Size', 'theme.components.launcher.size', '60px', { min: 32, max: 80, step: 2 }),
+    sliderField('launcher-icon-size', 'Icon Size', 'theme.components.launcher.iconSize', '28px', { min: 16, max: 48, step: 2 }),
     { id: 'launcher-icon-stroke-width', label: 'Icon Stroke Width', description: 'Unitless line weight for the agent glyph and the call-to-action arrow', type: 'slider', path: 'theme.components.launcher.iconStrokeWidth', defaultValue: '1.5', slider: { min: 1, max: 2.5, step: 0.25, unit: 'none' }, parseValue: parseSliderUnitless },
     { id: 'launcher-border-radius', label: 'Border Radius', type: 'select', path: 'theme.components.launcher.borderRadius', defaultValue: 'palette.radius.full', options: [
       { value: 'palette.radius.md', label: 'Medium' },
@@ -378,7 +392,7 @@ const historyRailHeaderColorsSectionDef: SectionDef = {
   title: 'Messages Rail Header Colors',
   collapsed: true,
   fields: [
-    { id: 'rail-header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.history.railHeader.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
+    colorTokenField('rail-header-bg', 'Background', 'theme.components.history.railHeader.background', 'semantic.colors.container'),
   ],
 };
 
@@ -402,7 +416,7 @@ const historyOverlayColorsSectionDef: SectionDef = {
   title: 'Messages Floating Rail Colors',
   collapsed: true,
   fields: [
-    { id: 'history-overlay-bg', label: 'Background', type: 'token-ref', path: 'theme.components.history.overlay.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
+    colorTokenField('history-overlay-bg', 'Background', 'theme.components.history.overlay.background', 'semantic.colors.container'),
   ],
 };
 
@@ -439,7 +453,7 @@ const tooltipShapeSectionDef: SectionDef = {
       { value: 'palette.radius.xl', label: 'Extra Large' },
     ] },
     { id: 'tooltip-font-size', label: 'Font Size', description: 'CSS length. Blank stays at 12px', type: 'text', path: 'theme.components.tooltip.fontSize', defaultValue: '', parseValue: parseOptionalCssValue },
-    { id: 'tooltip-arrow', label: 'Show Arrow', description: 'The caret pointing at the control', type: 'toggle', path: 'theme.components.tooltip.arrow', defaultValue: true },
+    simpleField('toggle', 'tooltip-arrow', 'Show Arrow', 'theme.components.tooltip.arrow', true, 'The caret pointing at the control'),
   ],
 };
 
@@ -448,9 +462,9 @@ const tooltipColorsSectionDef: SectionDef = {
   title: 'Tooltip Colors',
   collapsed: true,
   fields: [
-    { id: 'tooltip-bg', label: 'Background', type: 'token-ref', path: 'theme.components.tooltip.background', defaultValue: 'palette.colors.gray.900', tokenRef: { tokenType: 'color' } },
-    { id: 'tooltip-fg', label: 'Label', type: 'token-ref', path: 'theme.components.tooltip.foreground', defaultValue: 'palette.colors.primary.50', tokenRef: { tokenType: 'color' } },
-    { id: 'tooltip-hint-fg', label: 'Shortcut Hint', type: 'token-ref', path: 'theme.components.tooltip.hintForeground', defaultValue: 'palette.colors.gray.400', tokenRef: { tokenType: 'color' } },
+    colorTokenField('tooltip-bg', 'Background', 'theme.components.tooltip.background', 'palette.colors.gray.900'),
+    colorTokenField('tooltip-fg', 'Label', 'theme.components.tooltip.foreground', 'palette.colors.primary.50'),
+    colorTokenField('tooltip-hint-fg', 'Shortcut Hint', 'theme.components.tooltip.hintForeground', 'palette.colors.gray.400'),
   ],
 };
 
@@ -496,12 +510,32 @@ const composerSpacingSectionDef: SectionDef = {
   title: 'Composer Spacing',
   collapsed: true,
   fields: [
-    { id: 'composer-padding', label: 'Padding', type: 'text', path: 'theme.components.composer.padding', defaultValue: '0.75rem 1rem' },
-    { id: 'composer-gap', label: 'Row Gap', description: 'Space between the textarea row and the actions row', type: 'text', path: 'theme.components.composer.gap', defaultValue: '0.5rem' },
-    { id: 'composer-font-size', label: 'Font Size', type: 'text', path: 'theme.components.composer.fontSize', defaultValue: '0.875rem' },
-    { id: 'composer-line-height', label: 'Line Height', type: 'text', path: 'theme.components.composer.lineHeight', defaultValue: '1.25rem' },
-    { id: 'composer-control-size', label: 'Control Size', description: 'Edge of every icon control in the action row', type: 'slider', path: 'theme.components.composer.controlSize', defaultValue: '40px', slider: { min: 24, max: 64, step: 2 } },
-    { id: 'composer-control-icon-size', label: 'Control Icon Size', description: 'Glyph inside those controls', type: 'slider', path: 'theme.components.composer.controlIconSize', defaultValue: '24px', slider: { min: 12, max: 40, step: 1 } },
+    simpleField('text', 'composer-padding', 'Padding', 'theme.components.composer.padding', '0.75rem 1rem'),
+    simpleField('text', 'composer-expanded-padding', 'Expanded Padding', 'theme.components.composer.expandedPadding', '12px 16px'),
+    simpleField('text', 'composer-expanded-radius', 'Expanded Corners', 'theme.components.composer.expandedBorderRadius', '24px'),
+    simpleField('text', 'composer-gap', 'Row Gap', 'theme.components.composer.gap', '0.5rem', 'Space between the textarea row and the actions row'),
+    simpleField('text', 'composer-control-gap', 'Control Gap', 'theme.components.composer.controlGap', '0.5rem'),
+    simpleField('text', 'composer-editor-min-height', 'Editor Minimum Height', 'theme.components.composer.editorMinHeight', '24px'),
+    simpleField('text', 'composer-editor-padding', 'Editor Padding', 'theme.components.composer.editorPadding', '2px'),
+    simpleField('text', 'composer-suggestions-gap', 'Below Composer Suggestions Gap', 'theme.components.composer.suggestionsGap', '0.5rem'),
+    simpleField('text', 'composer-segmented-gap', 'Segment Gap', 'theme.components.composer.segmented.gap', '2px'),
+    simpleField('text', 'composer-segmented-font-size', 'Segment Font Size', 'theme.components.composer.segmented.fontSize', '0.875rem'),
+    simpleField('text', 'composer-segmented-line-height', 'Segment Line Height', 'theme.components.composer.segmented.lineHeight', '1.25rem'),
+    simpleField('text', 'composer-segmented-height', 'Segment Minimum Height', 'theme.components.composer.segmented.minHeight', '0px'),
+    simpleField('text', 'composer-segmented-font-weight', 'Segment Font Weight', 'theme.components.composer.segmented.fontWeight', '400'),
+    simpleField('text', 'composer-mode-font-size', 'Mode Font Size', 'theme.components.composer.mode.fontSize', '0.875rem'),
+    simpleField('text', 'composer-mode-height', 'Mode Height', 'theme.components.composer.mode.height', '40px'),
+    simpleField('text', 'composer-mode-padding', 'Mode Horizontal Padding', 'theme.components.composer.mode.paddingInline', '0.625rem'),
+    simpleField('text', 'composer-mode-gap', 'Mode Label Gap', 'theme.components.composer.mode.gap', '0.25rem'),
+    simpleField('text', 'composer-model-font-size', 'Model Font Size', 'theme.components.composer.modelPicker.fontSize', '0.8125rem'),
+    simpleField('text', 'composer-model-font-weight', 'Model Font Weight', 'theme.components.composer.modelPicker.fontWeight', '400'),
+    simpleField('text', 'composer-model-height', 'Model Height', 'theme.components.composer.modelPicker.height', '40px'),
+    simpleField('text', 'composer-model-width', 'Model Minimum Width', 'theme.components.composer.modelPicker.minWidth', '0px'),
+    simpleField('text', 'composer-model-padding', 'Model Horizontal Padding', 'theme.components.composer.modelPicker.paddingInline', '0.625rem 1.75rem'),
+    simpleField('text', 'composer-font-size', 'Font Size', 'theme.components.composer.fontSize', '0.875rem'),
+    simpleField('text', 'composer-line-height', 'Line Height', 'theme.components.composer.lineHeight', '1.25rem'),
+    sliderField('composer-control-size', 'Control Size', 'theme.components.composer.controlSize', '40px', { min: 24, max: 64, step: 2 }, 'Edge of every icon control in the action row'),
+    sliderField('composer-control-icon-size', 'Control Icon Size', 'theme.components.composer.controlIconSize', '24px', { min: 12, max: 40, step: 1 }, 'Glyph inside those controls'),
   ],
 };
 
@@ -524,14 +558,14 @@ const headerColorsSectionDef: SectionDef = {
   title: 'Header Colors',
   collapsed: true,
   fields: [
-    { id: 'header-bg', label: 'Background', type: 'token-ref', path: 'theme.components.header.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'header-fg', label: 'Foreground', description: 'Anchors the header text. Background and foreground together derive every color left blank below', type: 'token-ref', path: 'theme.components.header.foreground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'header-icon-bg', label: 'Icon background', type: 'token-ref', path: 'theme.components.header.iconBackground', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'header-icon-fg', label: 'Icon color', type: 'token-ref', path: 'theme.components.header.iconForeground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'header-title-fg', label: 'Title color', description: 'Blank follows the header foreground', type: 'token-ref', path: 'theme.components.header.titleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'header-subtitle-fg', label: 'Subtitle color', description: 'Blank follows a 72% mix of the foreground over the background', type: 'token-ref', path: 'theme.components.header.subtitleForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'header-action-icons-fg', label: 'Clear / close icons', description: 'Blank follows the same 72% foreground mix as the subtitle', type: 'token-ref', path: 'theme.components.header.actionIconForeground', defaultValue: '', tokenRef: { tokenType: 'color' } },
-    { id: 'header-border', label: 'Border', description: 'Blank follows a 14% mix of the foreground over the background', type: 'token-ref', path: 'theme.components.header.border', defaultValue: '', tokenRef: { tokenType: 'color' } },
+    colorTokenField('header-bg', 'Background', 'theme.components.header.background', 'semantic.colors.surface'),
+    colorTokenField('header-fg', 'Foreground', 'theme.components.header.foreground', '', 'Anchors the header text. Background and foreground together derive every color left blank below'),
+    colorTokenField('header-icon-bg', 'Icon background', 'theme.components.header.iconBackground', 'semantic.colors.primary'),
+    colorTokenField('header-icon-fg', 'Icon color', 'theme.components.header.iconForeground', 'semantic.colors.textInverse'),
+    colorTokenField('header-title-fg', 'Title color', 'theme.components.header.titleForeground', '', 'Blank follows the header foreground'),
+    colorTokenField('header-subtitle-fg', 'Subtitle color', 'theme.components.header.subtitleForeground', '', 'Blank follows a 72% mix of the foreground over the background'),
+    colorTokenField('header-action-icons-fg', 'Clear / close icons', 'theme.components.header.actionIconForeground', '', 'Blank follows the same 72% foreground mix as the subtitle'),
+    colorTokenField('header-border', 'Border', 'theme.components.header.border', '', 'Border color or token reference; blank follows a 14% mix of foreground over background'),
   ],
 };
 
@@ -540,10 +574,10 @@ const messageColorsSectionDef: SectionDef = {
   title: 'Message Colors',
   collapsed: true,
   fields: [
-    { id: 'msg-user-bg', label: 'User Bubble Background', type: 'token-ref', path: 'theme.components.message.user.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'msg-user-text', label: 'User Bubble Text', type: 'token-ref', path: 'theme.components.message.user.text', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'msg-assistant-bg', label: 'Assistant Bubble Background', type: 'token-ref', path: 'theme.components.message.assistant.background', defaultValue: 'semantic.colors.container', tokenRef: { tokenType: 'color' } },
-    { id: 'msg-assistant-text', label: 'Assistant Bubble Text', type: 'token-ref', path: 'theme.components.message.assistant.text', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
+    colorTokenField('msg-user-bg', 'User Bubble Background', 'theme.components.message.user.background', 'semantic.colors.primary'),
+    colorTokenField('msg-user-text', 'User Bubble Text', 'theme.components.message.user.text', 'semantic.colors.textInverse'),
+    colorTokenField('msg-assistant-bg', 'Assistant Bubble Background', 'theme.components.message.assistant.background', 'semantic.colors.container'),
+    colorTokenField('msg-assistant-text', 'Assistant Bubble Text', 'theme.components.message.assistant.text', 'semantic.colors.text'),
   ],
 };
 
@@ -552,10 +586,10 @@ const inputColorsSectionDef: SectionDef = {
   title: 'Input Colors',
   collapsed: true,
   fields: [
-    { id: 'input-bg', label: 'Background', type: 'token-ref', path: 'theme.components.input.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'input-placeholder', label: 'Placeholder Color', type: 'token-ref', path: 'theme.components.input.placeholder', defaultValue: 'semantic.colors.textMuted', tokenRef: { tokenType: 'color' } },
-    { id: 'input-focus-border', label: 'Focus Border', type: 'token-ref', path: 'theme.components.input.focus.border', defaultValue: 'semantic.colors.interactive.focus', tokenRef: { tokenType: 'color' } },
-    { id: 'input-focus-ring', label: 'Focus Ring', type: 'token-ref', path: 'theme.components.input.focus.ring', defaultValue: 'semantic.colors.interactive.focus', tokenRef: { tokenType: 'color' } },
+    colorTokenField('input-bg', 'Background', 'theme.components.input.background', 'semantic.colors.surface'),
+    colorTokenField('input-placeholder', 'Placeholder Color', 'theme.components.input.placeholder', 'semantic.colors.textMuted'),
+    colorTokenField('input-focus-border', 'Focus Border', 'theme.components.input.focus.border', 'semantic.colors.interactive.focus'),
+    colorTokenField('input-focus-ring', 'Focus Ring', 'theme.components.input.focus.ring', 'semantic.colors.interactive.focus'),
   ],
 };
 
@@ -564,12 +598,12 @@ const buttonColorsSectionDef: SectionDef = {
   title: 'Button Colors',
   collapsed: true,
   fields: [
-    { id: 'btn-primary-bg', label: 'Primary Background', type: 'token-ref', path: 'theme.components.button.primary.background', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'btn-primary-fg', label: 'Primary Foreground', type: 'token-ref', path: 'theme.components.button.primary.foreground', defaultValue: 'semantic.colors.textInverse', tokenRef: { tokenType: 'color' } },
-    { id: 'btn-secondary-bg', label: 'Secondary Background', type: 'token-ref', path: 'theme.components.button.secondary.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'btn-secondary-fg', label: 'Secondary Foreground', type: 'token-ref', path: 'theme.components.button.secondary.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
-    { id: 'btn-ghost-bg', label: 'Ghost Background', type: 'color', path: 'theme.components.button.ghost.background', defaultValue: 'transparent' },
-    { id: 'btn-ghost-fg', label: 'Ghost Foreground', type: 'token-ref', path: 'theme.components.button.ghost.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
+    colorTokenField('btn-primary-bg', 'Primary Background', 'theme.components.button.primary.background', 'semantic.colors.primary'),
+    colorTokenField('btn-primary-fg', 'Primary Foreground', 'theme.components.button.primary.foreground', 'semantic.colors.textInverse'),
+    colorTokenField('btn-secondary-bg', 'Secondary Background', 'theme.components.button.secondary.background', 'semantic.colors.surface'),
+    colorTokenField('btn-secondary-fg', 'Secondary Foreground', 'theme.components.button.secondary.foreground', 'semantic.colors.text'),
+    simpleField('color', 'btn-ghost-bg', 'Ghost Background', 'theme.components.button.ghost.background', 'transparent'),
+    colorTokenField('btn-ghost-fg', 'Ghost Foreground', 'theme.components.button.ghost.foreground', 'semantic.colors.text'),
   ],
 };
 
@@ -579,10 +613,10 @@ const scrollToBottomSectionDef: SectionDef = {
   description: 'Style the floating jump-to-latest affordance.',
   collapsed: true,
   fields: [
-    { id: 'scroll-bottom-bg', label: 'Background', type: 'token-ref', path: 'theme.components.scrollToBottom.background', defaultValue: 'components.button.primary.background', tokenRef: { tokenType: 'color' } },
-    { id: 'scroll-bottom-fg', label: 'Foreground', type: 'token-ref', path: 'theme.components.scrollToBottom.foreground', defaultValue: 'components.button.primary.foreground', tokenRef: { tokenType: 'color' } },
-    { id: 'scroll-bottom-border', label: 'Border', type: 'token-ref', path: 'theme.components.scrollToBottom.border', defaultValue: 'semantic.colors.primary', tokenRef: { tokenType: 'color' } },
-    { id: 'scroll-bottom-size', label: 'Size', type: 'text', path: 'theme.components.scrollToBottom.size', defaultValue: '40px' },
+    colorTokenField('scroll-bottom-bg', 'Background', 'theme.components.scrollToBottom.background', 'components.button.primary.background'),
+    colorTokenField('scroll-bottom-fg', 'Foreground', 'theme.components.scrollToBottom.foreground', 'components.button.primary.foreground'),
+    colorTokenField('scroll-bottom-border', 'Border', 'theme.components.scrollToBottom.border', 'semantic.colors.primary'),
+    simpleField('text', 'scroll-bottom-size', 'Size', 'theme.components.scrollToBottom.size', '40px'),
     { id: 'scroll-bottom-radius', label: 'Border Radius', type: 'select', path: 'theme.components.scrollToBottom.borderRadius', defaultValue: 'palette.radius.full', options: [
       { value: 'palette.radius.md', label: 'Medium' },
       { value: 'palette.radius.lg', label: 'Large' },
@@ -596,10 +630,10 @@ const scrollToBottomSectionDef: SectionDef = {
       { value: 'palette.shadows.lg', label: 'Large' },
       { value: 'palette.shadows.xl', label: 'Extra Large' },
     ] },
-    { id: 'scroll-bottom-padding', label: 'Padding', type: 'text', path: 'theme.components.scrollToBottom.padding', defaultValue: '0.5rem 0.875rem' },
-    { id: 'scroll-bottom-gap', label: 'Gap', type: 'text', path: 'theme.components.scrollToBottom.gap', defaultValue: '0.5rem' },
-    { id: 'scroll-bottom-font-size', label: 'Font Size', type: 'text', path: 'theme.components.scrollToBottom.fontSize', defaultValue: '0.875rem' },
-    { id: 'scroll-bottom-icon-size', label: 'Icon Size', type: 'text', path: 'theme.components.scrollToBottom.iconSize', defaultValue: '14px' },
+    simpleField('text', 'scroll-bottom-padding', 'Padding', 'theme.components.scrollToBottom.padding', '0.5rem 0.875rem'),
+    simpleField('text', 'scroll-bottom-gap', 'Gap', 'theme.components.scrollToBottom.gap', '0.5rem'),
+    simpleField('text', 'scroll-bottom-font-size', 'Font Size', 'theme.components.scrollToBottom.fontSize', '0.875rem'),
+    simpleField('text', 'scroll-bottom-icon-size', 'Icon Size', 'theme.components.scrollToBottom.iconSize', '14px'),
   ],
 };
 
@@ -609,26 +643,26 @@ const suggestionStyleSectionDef: SectionDef = {
   description: 'Style starter cards, follow-up chips, and list rows.',
   collapsed: true,
   fields: [
-    { id: 'suggestion-chip-bg', label: 'Chip Background', type: 'token-ref', path: 'theme.components.suggestion.chip.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-chip-fg', label: 'Chip Text', type: 'token-ref', path: 'theme.components.suggestion.chip.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-chip-border', label: 'Chip Border', type: 'token-ref', path: 'theme.components.suggestion.chip.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-chip-hover', label: 'Chip Hover', type: 'token-ref', path: 'theme.components.suggestion.chip.hoverBackground', defaultValue: 'palette.colors.gray.100', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-chip-focus', label: 'Chip Focus Ring', type: 'token-ref', path: 'theme.components.suggestion.chip.focusRing', defaultValue: 'semantic.colors.interactive.focus', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-card-bg', label: 'Card Background', type: 'token-ref', path: 'theme.components.suggestion.card.background', defaultValue: 'semantic.colors.surface', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-card-fg', label: 'Card Text', type: 'token-ref', path: 'theme.components.suggestion.card.foreground', defaultValue: 'semantic.colors.text', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-card-border', label: 'Card Border', type: 'token-ref', path: 'theme.components.suggestion.card.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-card-hover', label: 'Card Hover', type: 'token-ref', path: 'theme.components.suggestion.card.hoverBackground', defaultValue: 'palette.colors.gray.100', tokenRef: { tokenType: 'color' } },
+    colorTokenField('suggestion-chip-bg', 'Chip Background', 'theme.components.suggestion.chip.background', 'semantic.colors.surface'),
+    colorTokenField('suggestion-chip-fg', 'Chip Text', 'theme.components.suggestion.chip.foreground', 'semantic.colors.text'),
+    colorTokenField('suggestion-chip-border', 'Chip Border', 'theme.components.suggestion.chip.border', 'semantic.colors.border'),
+    colorTokenField('suggestion-chip-hover', 'Chip Hover', 'theme.components.suggestion.chip.hoverBackground', 'palette.colors.gray.100'),
+    colorTokenField('suggestion-chip-focus', 'Chip Focus Ring', 'theme.components.suggestion.chip.focusRing', 'semantic.colors.interactive.focus'),
+    colorTokenField('suggestion-card-bg', 'Card Background', 'theme.components.suggestion.card.background', 'semantic.colors.surface'),
+    colorTokenField('suggestion-card-fg', 'Card Text', 'theme.components.suggestion.card.foreground', 'semantic.colors.text'),
+    colorTokenField('suggestion-card-border', 'Card Border', 'theme.components.suggestion.card.border', 'semantic.colors.border'),
+    colorTokenField('suggestion-card-hover', 'Card Hover', 'theme.components.suggestion.card.hoverBackground', 'palette.colors.gray.100'),
     { id: 'suggestion-card-shadow', label: 'Card Shadow', type: 'select', path: 'theme.components.suggestion.card.shadow', defaultValue: 'palette.shadows.sm', options: [
       { value: 'palette.shadows.none', label: 'None' },
       { value: 'palette.shadows.sm', label: 'Small' },
       { value: 'palette.shadows.md', label: 'Medium' },
       { value: 'palette.shadows.lg', label: 'Large' },
     ] },
-    { id: 'suggestion-list-bg', label: 'List Background', type: 'color', path: 'theme.components.suggestion.list.background', defaultValue: 'transparent' },
-    { id: 'suggestion-list-border', label: 'List Border', type: 'token-ref', path: 'theme.components.suggestion.list.border', defaultValue: 'semantic.colors.border', tokenRef: { tokenType: 'color' } },
-    { id: 'suggestion-chip-item-gap', label: 'Chip Spacing', description: 'Space between chips', type: 'text', path: 'theme.components.suggestion.chip.itemGap', defaultValue: '8px' },
-    { id: 'suggestion-card-item-gap', label: 'Card Spacing', description: 'Space between cards', type: 'text', path: 'theme.components.suggestion.card.itemGap', defaultValue: '8px' },
-    { id: 'suggestion-list-item-gap', label: 'List Spacing', description: 'Space between list rows', type: 'text', path: 'theme.components.suggestion.list.itemGap', defaultValue: '8px' },
+    simpleField('color', 'suggestion-list-bg', 'List Background', 'theme.components.suggestion.list.background', 'transparent'),
+    colorTokenField('suggestion-list-border', 'List Border', 'theme.components.suggestion.list.border', 'semantic.colors.border'),
+    simpleField('text', 'suggestion-chip-item-gap', 'Chip Spacing', 'theme.components.suggestion.chip.itemGap', '8px', 'Space between chips'),
+    simpleField('text', 'suggestion-card-item-gap', 'Card Spacing', 'theme.components.suggestion.card.itemGap', '8px', 'Space between cards'),
+    simpleField('text', 'suggestion-list-item-gap', 'List Spacing', 'theme.components.suggestion.list.itemGap', '8px', 'Space between list rows'),
   ],
 };
 
@@ -688,7 +722,53 @@ const textStylesSectionDef: SectionDef = {
   ],
 };
 
+/** Optional component overrides: clearing a field restores its renderer fallback. */
+const optionalComponentFields = (group: string, leaves: string, color = false): FieldDef[] =>
+  leaves.split(' ').map(leaf => ({
+    id: `component-${group.replace(/\./g, '-')}-${leaf.replace(/\./g, '-')}`,
+    label: leaf.replace(/\./g, ' / ').replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase()),
+    path: `theme.components.${group}.${leaf}`,
+    type: color ? 'token-ref' : 'text',
+    ...(color ? { tokenRef: { tokenType: 'color' as const } } : {}),
+    defaultValue: '',
+    parseValue: parseOptionalCssValue,
+    unsettable: true,
+    description: color ? 'Color or token reference (border fields here are colors). Unset restores the component fallback.' : 'CSS value; use lengths for sizes/padding, unitless stroke width, and ms/s for duration. Unset restores the component fallback.',
+  }));
+const independentControlGroups = [
+  ['header.close', 'Close Control'], ['header.clear', 'Clear Chat Control'],
+  ['composer.send', 'Submit Control'], ['voice.control', 'Microphone Control'],
+] as const;
+const independentControlShapeSections: SectionDef[] = independentControlGroups.map(([group, title]) => ({
+  id: `comp-${group.replace('.', '-')}-shape`, title, collapsed: true,
+  description: group === 'composer.send' ? 'Submit only. Size applies to icon mode; theme padding also supports text mode.' : group === 'voice.control' ? 'Idle mic only. Set both box and glyph size to migrate legacy voiceRecognition.iconSize.' : 'This header control only; Messages and trailing actions keep their own styling.',
+  fields: optionalComponentFields(group, 'size iconSize iconStrokeWidth borderWidth borderRadius padding'),
+}));
+const independentControlColorSections: SectionDef[] = [...independentControlGroups, ['button.stop', 'Stop Control'] as const].map(([group, title]) => ({
+  id: `comp-${group.replace('.', '-')}-colors`, title: `${title} Colors`, collapsed: true,
+  fields: optionalComponentFields(group, group === 'button.stop' ? 'background foreground' : 'background foreground borderColor', true),
+}));
+const replacementShapeSections: SectionDef[] = [
+  { id: 'comp-composer-menu-shape', title: 'More Menu Shape', collapsed: true, fields: optionalComponentFields('composer.overflowMenu', 'borderRadius padding rowGap rowPadding rowBorderRadius fontSize lineHeight iconSize iconGap descriptionFontSize dividerSpacing minWidth maxHeight shadow') },
+  { id: 'comp-attachment-shape', title: 'Attachment Preview Shape', collapsed: true, fields: optionalComponentFields('attachment.composer', 'gap image.width image.height image.borderRadius image.chip.width image.chip.minHeight image.chip.borderRadius image.chip.padding image.chip.gap image.chip.fontSize file.width file.minHeight file.borderRadius file.padding file.gap file.iconSize file.fontSize remove.size remove.iconSize remove.borderRadius remove.inset remove.borderWidth image.remove.size image.remove.iconSize image.remove.borderRadius image.remove.inset image.remove.borderWidth file.remove.size file.remove.iconSize file.remove.borderRadius file.remove.inset file.remove.borderWidth') },
+  { id: 'comp-tool-chrome', title: 'Tool Card & Row Chrome', collapsed: true, fields: optionalComponentFields('toolBubble', 'borderWidth borderRadius header.padding content.padding loading.duration') },
+  { id: 'comp-question-chrome', title: 'Question Sheet Chrome', collapsed: true, fields: optionalComponentFields('askUserQuestion', 'sheet.shadow pill.borderRadius') },
+  { id: 'comp-artifact-chrome', title: 'Artifact Chrome', collapsed: true, description: 'pane.border and pane.borderLeft accept full CSS border shorthands; padding/radius/fadeSize are CSS lengths and shadows are CSS box-shadow values.', fields: optionalComponentFields('artifact', 'pane.padding pane.borderRadius pane.shadow pane.border pane.borderLeft chat.shadow split.outerRadius tab.fadeSize') },
+  { id: 'comp-suggestion-chip-type', title: 'Suggestion Chip Type & Padding', collapsed: true, fields: optionalComponentFields('suggestion.chip', 'fontWeight padding') },
+];
+const replacementColorSections: SectionDef[] = [
+  { id: 'comp-composer-menu-colors', title: 'More Menu Colors', collapsed: true, fields: optionalComponentFields('composer.overflowMenu', 'background foreground borderColor hoverBackground focusBackground descriptionColor dividerColor', true) },
+  { id: 'comp-attachment-colors', title: 'Attachment Preview Colors', collapsed: true, fields: optionalComponentFields('attachment.composer', 'image.background image.borderColor image.chip.background image.chip.borderColor image.chip.foreground file.background file.borderColor file.foreground file.mutedForeground file.iconBackground file.iconForeground remove.background remove.foreground remove.hoverBackground remove.hoverForeground remove.borderColor image.remove.background image.remove.foreground image.remove.hoverBackground image.remove.hoverForeground image.remove.borderColor file.remove.background file.remove.foreground file.remove.hoverBackground file.remove.hoverForeground file.remove.borderColor', true) },
+  { id: 'comp-voice-states', title: 'Voice State Colors', collapsed: true, description: 'Explicit values activate state colors. Unset preserves historical provider/browser defaults.', fields: optionalComponentFields('voice', 'recording.indicator recording.background recording.border processing.icon processing.background processing.border speaking.icon speaking.background speaking.border', true) },
+  { id: 'comp-tool-colors', title: 'Tool Card & Row Colors', collapsed: true, fields: optionalComponentFields('toolBubble', 'background borderColor header.background header.foreground content.background content.foreground codeBlock.background codeBlock.foreground codeBlock.borderColor toggleForeground labelForeground loading.primary loading.secondary', true) },
+  { id: 'comp-approval-colors', title: 'Approval Colors', collapsed: true, fields: optionalComponentFields('approval', 'requested.background requested.border requested.text requested.titleColor requested.descriptionColor requested.reasonColor requested.parameters.background requested.parameters.foreground approve.background approve.foreground deny.background deny.foreground', true) },
+  { id: 'comp-question-colors', title: 'Question Sheet Colors', collapsed: true, fields: optionalComponentFields('askUserQuestion', 'sheet.background sheet.border pill.background pill.foreground pill.selectedBackground pill.selectedForeground customInput.background', true) },
+  { id: 'comp-artifact-colors', title: 'Artifact Chrome Colors', collapsed: true, fields: optionalComponentFields('artifact', 'pane.background toolbar.iconColor toolbar.toggleActiveBackground toolbar.toggleActiveBorderColor toolbar.toggleActiveColor', true) },
+];
+
 export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
+  ...independentControlShapeSections,
+  ...replacementShapeSections,
   panelLayoutSectionDef,
   launcherLayoutSectionDef,
   // Sizes, not colors: kept out of COMPONENT_COLOR_SECTIONS so scopeSection
@@ -708,6 +788,8 @@ export const COMPONENT_SHAPE_SECTIONS: SectionDef[] = [
 
 /** Component color sections (can be scoped for light/dark) */
 export const COMPONENT_COLOR_SECTIONS: SectionDef[] = [
+  ...independentControlColorSections,
+  ...replacementColorSections,
   headerColorsSectionDef,
   historyRailHeaderColorsSectionDef,
   historyOverlayColorsSectionDef,
@@ -771,20 +853,20 @@ function formatAttachmentAllowedTypes(value: unknown): string {
 const copySectionDef: SectionDef = {
   id: 'copy', title: 'Content & Copy', collapsed: false,
   fields: [
-    { id: 'copy-show-welcome-card', label: 'Show Welcome Card', type: 'toggle', path: 'copy.showWelcomeCard', defaultValue: true },
-    { id: 'copy-welcome-title', label: 'Welcome Title', type: 'text', path: 'copy.welcomeTitle', defaultValue: 'Hello 👋' },
-    { id: 'copy-welcome-subtitle', label: 'Welcome Subtitle', type: 'text', path: 'copy.welcomeSubtitle', defaultValue: 'I can answer questions and help you get things done here.' },
-    { id: 'copy-placeholder', label: 'Input Placeholder', type: 'text', path: 'copy.inputPlaceholder', defaultValue: DEFAULT_INPUT_PLACEHOLDER },
-    { id: 'copy-send-label', label: 'Send Button Label', type: 'text', path: 'copy.sendButtonLabel', defaultValue: 'Send' },
+    { id: 'copy-show-welcome-card', label: 'Welcome Surface', description: 'Choose a welcome layout, or hide it.', type: 'select', path: 'welcome.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Card' }, { value: 'hero', label: 'Hero' }, { value: 'none', label: 'Hidden' }] },
+    simpleField('text', 'copy-welcome-title', 'Welcome Title', 'welcome.title', 'Hello 👋'),
+    simpleField('text', 'copy-welcome-subtitle', 'Welcome Subtitle', 'welcome.subtitle', 'I can answer questions and help you get things done here.'),
+    simpleField('text', 'copy-placeholder', 'Input Placeholder', 'copy.inputPlaceholder', DEFAULT_INPUT_PLACEHOLDER),
+    simpleField('text', 'copy-send-label', 'Send Button Label', 'copy.sendButtonLabel', 'Send'),
   ],
 };
 
 const suggestionsSectionDef: SectionDef = {
-  id: 'suggestions', title: 'Suggestions', description: 'Configure starter prompts and agent follow-ups.', collapsed: true,
+  id: 'suggestions', title: 'Suggestions', description: 'Choose the suggested prompts, where they appear, and what happens when selected. Remove all prompts to hide them.', collapsed: true,
   fields: [
-    { id: 'suggestions-list', label: 'Starter Prompts', description: 'Add, edit, and remove starter prompts directly.', type: 'chip-list', path: 'suggestionChips', defaultValue: DEFAULT_SUGGESTION_CHIPS },
+    { id: 'suggestions-list', label: 'Starter Prompts', description: 'Add, edit, and remove starter prompts directly.', type: 'chip-list', path: 'suggestions.starters.items', defaultValue: DEFAULT_SUGGESTION_CHIPS },
     { id: 'suggestions-starter-variant', label: 'Starter Style', type: 'select', path: 'suggestions.starters.variant', defaultValue: 'card', options: [{ value: 'card', label: 'Cards' }, { value: 'chip', label: 'Chips' }, { value: 'list', label: 'List' }] },
-    { id: 'suggestions-starter-placement', label: 'Starter Placement', type: 'select', path: 'suggestions.starters.placement', defaultValue: 'auto', options: [{ value: 'auto', label: 'Automatic' }, { value: 'welcome', label: 'Welcome Surface' }, { value: 'composer', label: 'Above Composer' }] },
+    { id: 'suggestions-starter-placement', label: 'Starter Placement', type: 'select', path: 'suggestions.starters.placement', defaultValue: 'auto', options: [{ value: 'auto', label: 'Automatic' }, { value: 'welcome', label: 'Welcome Surface' }, { value: 'composer', label: 'Above Composer' }, { value: 'below-composer', label: 'Below Composer' }] },
     { id: 'suggestions-starter-behavior', label: 'Starter Click', type: 'select', path: 'suggestions.starters.behavior', defaultValue: 'send', options: [{ value: 'send', label: 'Send Immediately' }, { value: 'fill', label: 'Fill Composer' }] },
     { id: 'suggestions-starter-overflow', label: 'Starter Overflow', type: 'select', path: 'suggestions.starters.overflow', defaultValue: 'wrap', options: [{ value: 'wrap', label: 'Wrap Rows' }, { value: 'scroll', label: 'Horizontal Scroll' }] },
     { id: 'suggestions-followup-variant', label: 'Follow-up Style', type: 'select', path: 'suggestions.followUps.variant', defaultValue: 'chip', options: [{ value: 'chip', label: 'Chips' }, { value: 'card', label: 'Cards' }, { value: 'list', label: 'List' }] },
@@ -797,9 +879,9 @@ const suggestionsSectionDef: SectionDef = {
 const generalLayoutSectionDef: SectionDef = {
   id: 'general-layout', title: 'Layout Basics', collapsed: true,
   fields: [
-    { id: 'layout-show-header', label: 'Show Header', type: 'toggle', path: 'layout.showHeader', defaultValue: true },
-    { id: 'layout-show-footer', label: 'Show Footer', type: 'toggle', path: 'layout.showFooter', defaultValue: true },
-    { id: 'layout-content-max-width', label: 'Content Max Width', description: 'Max width for messages + composer', type: 'text', path: 'layout.contentMaxWidth', defaultValue: '' },
+    simpleField('toggle', 'layout-show-header', 'Show Header', 'layout.showHeader', true),
+    simpleField('toggle', 'layout-show-footer', 'Show Footer', 'layout.showFooter', true),
+    simpleField('text', 'layout-content-max-width', 'Content Max Width', 'layout.contentMaxWidth', '', 'Max width for messages + composer'),
   ],
 };
 
@@ -807,11 +889,11 @@ const headerLayoutSectionDef: SectionDef = {
   id: 'header-layout', title: 'Header', collapsed: true,
   fields: [
     { id: 'layout-header', label: 'Header Layout', type: 'select', path: 'layout.header.layout', defaultValue: 'default', options: [{ value: 'default', label: 'Default' }, { value: 'minimal', label: 'Minimal' }] },
-    { id: 'layout-show-icon', label: 'Show Header Icon', type: 'toggle', path: 'layout.header.showIcon', defaultValue: true },
-    { id: 'layout-show-title', label: 'Show Header Title', type: 'toggle', path: 'layout.header.showTitle', defaultValue: true },
-    { id: 'layout-show-subtitle', label: 'Show Header Subtitle', type: 'toggle', path: 'layout.header.showSubtitle', defaultValue: true },
-    { id: 'layout-show-close', label: 'Show Close Button', type: 'toggle', path: 'layout.header.showCloseButton', defaultValue: true },
-    { id: 'layout-show-clear', label: 'Show Clear Chat', type: 'toggle', path: 'layout.header.showClearChat', defaultValue: true },
+    simpleField('toggle', 'layout-show-icon', 'Show Header Icon', 'layout.header.showIcon', true),
+    simpleField('toggle', 'layout-show-title', 'Show Header Title', 'layout.header.showTitle', true),
+    simpleField('toggle', 'layout-show-subtitle', 'Show Header Subtitle', 'layout.header.showSubtitle', true),
+    simpleField('toggle', 'layout-show-close', 'Show Close Button', 'layout.header.showCloseButton', true),
+    simpleField('toggle', 'layout-show-clear', 'Show Clear Chat', 'layout.header.showClearChat', true),
   ],
 };
 
@@ -823,12 +905,12 @@ const messagesLayoutSectionDef: SectionDef = {
     { id: 'layout-message-user-max-width', label: 'User Max Width', description: 'Optional CSS width such as 80%, 42rem, or 72ch; blank uses the width mode default', type: 'text', path: 'layout.messages.user.maxWidth', defaultValue: '', parseValue: parseOptionalCssValue },
     { id: 'layout-message-assistant-width', label: 'Assistant Width', description: 'Content hugs the message; Full fills the transcript track', type: 'select', path: 'layout.messages.assistant.width', defaultValue: 'content', options: [{ value: 'content', label: 'Content' }, { value: 'full', label: 'Full' }] },
     { id: 'layout-message-assistant-max-width', label: 'Assistant Max Width', description: 'Optional CSS width such as 80%, 42rem, or 72ch; blank uses the width mode default', type: 'text', path: 'layout.messages.assistant.maxWidth', defaultValue: '', parseValue: parseOptionalCssValue },
-    { id: 'layout-group', label: 'Group Consecutive', type: 'toggle', path: 'layout.messages.groupConsecutive', defaultValue: false },
-    { id: 'layout-avatar-show', label: 'Show Avatars', type: 'toggle', path: 'layout.messages.avatar.show', defaultValue: false },
+    simpleField('toggle', 'layout-group', 'Group Consecutive', 'layout.messages.groupConsecutive', false),
+    simpleField('toggle', 'layout-avatar-show', 'Show Avatars', 'layout.messages.avatar.show', false),
     { id: 'layout-avatar-pos', label: 'Avatar Position', type: 'select', path: 'layout.messages.avatar.position', defaultValue: 'left', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
-    { id: 'layout-avatar-user', label: 'User Avatar URL', type: 'text', path: 'layout.messages.avatar.userAvatar', defaultValue: '' },
-    { id: 'layout-avatar-assistant', label: 'Assistant Avatar URL', type: 'text', path: 'layout.messages.avatar.assistantAvatar', defaultValue: '' },
-    { id: 'layout-timestamp-show', label: 'Show Timestamps', type: 'toggle', path: 'layout.messages.timestamp.show', defaultValue: false },
+    simpleField('text', 'layout-avatar-user', 'User Avatar URL', 'layout.messages.avatar.userAvatar', ''),
+    simpleField('text', 'layout-avatar-assistant', 'Assistant Avatar URL', 'layout.messages.avatar.assistantAvatar', ''),
+    simpleField('toggle', 'layout-timestamp-show', 'Show Timestamps', 'layout.messages.timestamp.show', false),
     { id: 'layout-timestamp-pos', label: 'Timestamp Position', type: 'select', path: 'layout.messages.timestamp.position', defaultValue: 'inline', options: [{ value: 'inline', label: 'Inline' }, { value: 'below', label: 'Below' }] },
   ],
 };
@@ -836,11 +918,11 @@ const messagesLayoutSectionDef: SectionDef = {
 const messageActionsSectionDef: SectionDef = {
   id: 'message-actions', title: 'Message Actions', collapsed: true,
   fields: [
-    { id: 'msg-actions-enabled', label: 'Enabled', type: 'toggle', path: 'messageActions.enabled', defaultValue: true },
-    { id: 'msg-actions-copy', label: 'Show Copy', type: 'toggle', path: 'messageActions.showCopy', defaultValue: true },
-    { id: 'msg-actions-upvote', label: 'Show Upvote', type: 'toggle', path: 'messageActions.showUpvote', defaultValue: true },
-    { id: 'msg-actions-downvote', label: 'Show Downvote', type: 'toggle', path: 'messageActions.showDownvote', defaultValue: true },
-    { id: 'msg-actions-read-aloud', label: 'Show Read Aloud', type: 'toggle', path: 'messageActions.showReadAloud', defaultValue: false },
+    simpleField('toggle', 'msg-actions-enabled', 'Enabled', 'messageActions.enabled', true),
+    simpleField('toggle', 'msg-actions-copy', 'Show Copy', 'messageActions.showCopy', true),
+    simpleField('toggle', 'msg-actions-upvote', 'Show Upvote', 'messageActions.showUpvote', true),
+    simpleField('toggle', 'msg-actions-downvote', 'Show Downvote', 'messageActions.showDownvote', true),
+    simpleField('toggle', 'msg-actions-read-aloud', 'Show Read Aloud', 'messageActions.showReadAloud', false),
     { id: 'msg-actions-visibility', label: 'Visibility', type: 'select', path: 'messageActions.visibility', defaultValue: 'hover', options: [{ value: 'hover', label: 'On Hover' }, { value: 'always', label: 'Always Visible' }] },
     { id: 'msg-actions-align', label: 'Alignment', type: 'select', path: 'messageActions.align', defaultValue: 'right', options: [{ value: 'left', label: 'Left' }, { value: 'right', label: 'Right' }] },
     { id: 'msg-actions-layout', label: 'Layout', type: 'select', path: 'messageActions.layout', defaultValue: 'pill-inside', options: [{ value: 'pill-inside', label: 'Pill' }, { value: 'row-inside', label: 'Row' }] },
@@ -850,13 +932,13 @@ const messageActionsSectionDef: SectionDef = {
 const launcherBasicsSectionDef: SectionDef = {
   id: 'launcher-basics', title: 'Launcher', collapsed: true,
   fields: [
-    { id: 'launch-enabled', label: 'Enabled', type: 'toggle', path: 'launcher.enabled', defaultValue: true },
+    simpleField('toggle', 'launch-enabled', 'Enabled', 'launcher.enabled', true),
     { id: 'launch-mount-mode', label: 'Mount Mode', type: 'select', path: 'launcher.mountMode', defaultValue: 'floating', options: [{ value: 'floating', label: 'Floating' }, { value: 'docked', label: 'Docked' }] },
     { id: 'launch-position', label: 'Position', type: 'select', path: 'launcher.position', defaultValue: 'bottom-right', options: [{ value: 'bottom-right', label: 'Bottom Right' }, { value: 'bottom-left', label: 'Bottom Left' }, { value: 'top-right', label: 'Top Right' }, { value: 'top-left', label: 'Top Left' }] },
-    { id: 'launch-width', label: 'Width', type: 'text', path: 'launcher.width', defaultValue: DEFAULT_FLOATING_LAUNCHER_WIDTH },
-    { id: 'launch-auto-expand', label: 'Auto Expand', type: 'toggle', path: 'launcher.autoExpand', defaultValue: false },
-    { id: 'launch-title', label: 'Title', type: 'text', path: 'launcher.title', defaultValue: 'Chat Assistant' },
-    { id: 'launch-subtitle', label: 'Subtitle', type: 'text', path: 'launcher.subtitle', defaultValue: 'Here to help you get answers fast' },
+    simpleField('text', 'launch-width', 'Width', 'launcher.width', DEFAULT_FLOATING_LAUNCHER_WIDTH),
+    simpleField('toggle', 'launch-auto-expand', 'Auto Expand', 'launcher.autoExpand', false),
+    simpleField('text', 'launch-title', 'Title', 'launcher.title', 'Chat Assistant'),
+    simpleField('text', 'launch-subtitle', 'Subtitle', 'launcher.subtitle', 'Here to help you get answers fast'),
   ],
 };
 
@@ -864,105 +946,101 @@ const launcherAdvancedSectionDef: SectionDef = {
   id: 'launcher-advanced', title: 'Launcher Advanced', collapsed: true,
   fields: [
     { id: 'launch-dock-side', label: 'Dock Side', type: 'select', path: 'launcher.dock.side', defaultValue: 'right', options: [{ value: 'right', label: 'Right' }, { value: 'left', label: 'Left' }] },
-    { id: 'launch-dock-width', label: 'Dock Width', type: 'text', path: 'launcher.dock.width', defaultValue: '420px' },
-    { id: 'launch-dock-animate', label: 'Dock Animate', type: 'toggle', path: 'launcher.dock.animate', defaultValue: true },
+    simpleField('text', 'launch-dock-width', 'Dock Width', 'launcher.dock.width', '420px'),
+    simpleField('toggle', 'launch-dock-animate', 'Dock Animate', 'launcher.dock.animate', true),
     { id: 'launch-dock-reveal', label: 'Dock Reveal', type: 'select', path: 'launcher.dock.reveal', defaultValue: 'resize', options: [{ value: 'resize', label: 'Resize' }, { value: 'overlay', label: 'Overlay' }, { value: 'push', label: 'Push' }, { value: 'emerge', label: 'Emerge' }] },
-    { id: 'launch-text-hidden', label: 'Hide Text', type: 'toggle', path: 'launcher.textHidden', defaultValue: false },
-    { id: 'launch-icon-text', label: 'Agent Icon Text', type: 'text', path: 'launcher.agentIconText', defaultValue: '💬' },
-    { id: 'launch-icon-name', label: 'Agent Icon Name (Lucide)', type: 'text', path: 'launcher.agentIconName', defaultValue: 'bot' },
-    { id: 'launch-icon-hidden', label: 'Hide Agent Icon', type: 'toggle', path: 'launcher.agentIconHidden', defaultValue: false },
-    { id: 'launch-icon-size', label: 'Agent Icon Size', type: 'slider', path: 'launcher.agentIconSize', defaultValue: '40px', slider: { min: 16, max: 72, step: 2 } },
-    { id: 'launch-icon-url', label: 'Icon Image URL', description: 'Custom image URL (overrides emoji/lucide)', type: 'text', path: 'launcher.iconUrl', defaultValue: '' },
-    { id: 'launch-header-icon-name', label: 'Header Icon Name (Lucide)', type: 'text', path: 'launcher.headerIconName', defaultValue: 'bot' },
-    { id: 'launch-header-icon-size', label: 'Header Icon Size', type: 'slider', path: 'launcher.headerIconSize', defaultValue: '48px', slider: { min: 24, max: 80, step: 2 } },
-    { id: 'launch-header-icon-hidden', label: 'Hide Header Icon', type: 'toggle', path: 'launcher.headerIconHidden', defaultValue: false },
-    { id: 'launch-full-height', label: 'Full Height', type: 'toggle', path: 'launcher.fullHeight', defaultValue: false },
-    { id: 'launch-sidebar', label: 'Sidebar Mode', type: 'toggle', path: 'launcher.sidebarMode', defaultValue: false },
-    { id: 'launch-sidebar-width', label: 'Sidebar Width', type: 'text', path: 'launcher.sidebarWidth', defaultValue: '420px' },
-    { id: 'launch-mobile-fullscreen', label: 'Mobile Fullscreen', description: 'Fullscreen on mobile devices', type: 'toggle', path: 'launcher.mobileFullscreen', defaultValue: true },
+    simpleField('toggle', 'launch-text-hidden', 'Hide Text', 'launcher.textHidden', false),
+    simpleField('text', 'launch-icon-text', 'Agent Icon Text', 'launcher.agentIconText', '💬'),
+    simpleField('text', 'launch-icon-name', 'Agent Icon Name (Lucide)', 'launcher.agentIconName', 'bot'),
+    simpleField('toggle', 'launch-icon-hidden', 'Hide Agent Icon', 'launcher.agentIconHidden', false),
+    sliderField('launch-icon-size', 'Agent Icon Size', 'launcher.agentIconSize', '40px', { min: 16, max: 72, step: 2 }),
+    simpleField('text', 'launch-icon-url', 'Icon Image URL', 'launcher.iconUrl', '', 'Custom image URL (overrides emoji/lucide)'),
+    simpleField('text', 'launch-header-icon-name', 'Header Icon Name (Lucide)', 'launcher.headerIconName', 'bot'),
+    sliderField('launch-header-icon-size', 'Header Icon Size', 'launcher.headerIconSize', '48px', { min: 24, max: 80, step: 2 }),
+    simpleField('toggle', 'launch-header-icon-hidden', 'Hide Header Icon', 'launcher.headerIconHidden', false),
+    simpleField('toggle', 'launch-full-height', 'Full Height', 'launcher.fullHeight', false),
+    simpleField('toggle', 'launch-sidebar', 'Sidebar Mode', 'launcher.sidebarMode', false),
+    simpleField('text', 'launch-sidebar-width', 'Sidebar Width', 'launcher.sidebarWidth', '420px'),
+    simpleField('toggle', 'launch-mobile-fullscreen', 'Mobile Fullscreen', 'launcher.mobileFullscreen', true, 'Fullscreen on mobile devices'),
     { id: 'launch-mobile-breakpoint', label: 'Mobile Breakpoint (px)', type: 'text', path: 'launcher.mobileBreakpoint', defaultValue: 640, formatValue: (v: unknown) => String(v ?? 640), parseValue: (v: unknown) => Number(v) },
     { id: 'launch-height-offset', label: 'Height Offset (px)', type: 'text', path: 'launcher.heightOffset', defaultValue: 0, formatValue: (v: unknown) => String(v ?? 0), parseValue: (v: unknown) => Number(v) },
-    { id: 'launch-collapsed-max-width', label: 'Collapsed Max Width', description: 'Max width of launcher pill when closed', type: 'text', path: 'launcher.collapsedMaxWidth', defaultValue: '' },
-    { id: 'launch-cta-text', label: 'CTA Icon Text', type: 'text', path: 'launcher.callToActionIconText', defaultValue: '↗' },
-    { id: 'launch-cta-name', label: 'CTA Icon Name', type: 'text', path: 'launcher.callToActionIconName', defaultValue: '' },
-    { id: 'launch-cta-hidden', label: 'Hide CTA Icon', type: 'toggle', path: 'launcher.callToActionIconHidden', defaultValue: false },
-    { id: 'launch-cta-size', label: 'CTA Icon Size', type: 'slider', path: 'launcher.callToActionIconSize', defaultValue: '32px', slider: { min: 16, max: 64, step: 2 } },
-    { id: 'launch-cta-padding', label: 'CTA Icon Padding', type: 'slider', path: 'launcher.callToActionIconPadding', defaultValue: '5px', slider: { min: 0, max: 24, step: 1 } },
-    { id: 'launch-cta-bg', label: 'CTA Icon Background', type: 'color', path: 'launcher.callToActionIconBackgroundColor', defaultValue: '' },
+    simpleField('text', 'launch-collapsed-max-width', 'Collapsed Max Width', 'launcher.collapsedMaxWidth', '', 'Max width of launcher pill when closed'),
+    simpleField('text', 'launch-cta-text', 'CTA Icon Text', 'launcher.callToActionIconText', '↗'),
+    simpleField('text', 'launch-cta-name', 'CTA Icon Name', 'launcher.callToActionIconName', ''),
+    simpleField('toggle', 'launch-cta-hidden', 'Hide CTA Icon', 'launcher.callToActionIconHidden', false),
+    sliderField('launch-cta-size', 'CTA Icon Size', 'launcher.callToActionIconSize', '32px', { min: 16, max: 64, step: 2 }),
+    sliderField('launch-cta-padding', 'CTA Icon Padding', 'launcher.callToActionIconPadding', '5px', { min: 0, max: 24, step: 1 }),
+    simpleField('color', 'launch-cta-bg', 'CTA Icon Background', 'launcher.callToActionIconBackgroundColor', ''),
   ],
 };
 
 const sendButtonSectionDef: SectionDef = {
   id: 'send-button', title: 'Send Button', collapsed: true,
   fields: [
-    { id: 'send-use-icon', label: 'Use Icon', type: 'toggle', path: 'sendButton.useIcon', defaultValue: false },
-    { id: 'send-icon-text', label: 'Icon Text', type: 'text', path: 'sendButton.iconText', defaultValue: '↑' },
-    { id: 'send-icon-name', label: 'Icon Name (Lucide)', type: 'text', path: 'sendButton.iconName', defaultValue: '' },
-    { id: 'send-size', label: 'Size', type: 'slider', path: 'sendButton.size', defaultValue: '40px', slider: { min: 24, max: 64, step: 2 } },
-    { id: 'send-border-width', label: 'Border Width', type: 'slider', path: 'sendButton.borderWidth', defaultValue: '0px', slider: { min: 0, max: 10, step: 1 } },
-    { id: 'send-padding-x', label: 'Padding X', type: 'slider', path: 'sendButton.paddingX', defaultValue: '10px', slider: { min: 0, max: 32, step: 1 } },
-    { id: 'send-padding-y', label: 'Padding Y', type: 'slider', path: 'sendButton.paddingY', defaultValue: '6px', slider: { min: 0, max: 32, step: 1 } },
-    { id: 'send-show-tooltip', label: 'Show Tooltip', type: 'toggle', path: 'sendButton.showTooltip', defaultValue: false },
-    { id: 'send-tooltip-text', label: 'Tooltip Text', type: 'text', path: 'sendButton.tooltipText', defaultValue: 'Send message' },
+    simpleField('toggle', 'send-use-icon', 'Use Icon', 'sendButton.useIcon', false),
+    simpleField('text', 'send-icon-text', 'Icon Text', 'sendButton.iconText', '↑'),
+    simpleField('text', 'send-icon-name', 'Icon Name (Lucide)', 'sendButton.iconName', ''),
+    simpleField('toggle', 'send-show-tooltip', 'Show Tooltip', 'sendButton.showTooltip', false),
+    simpleField('text', 'send-tooltip-text', 'Tooltip Text', 'sendButton.tooltipText', 'Send message'),
   ],
 };
 
 const closeButtonSectionDef: SectionDef = {
   id: 'close-button', title: 'Close Button', collapsed: true,
   fields: [
-    { id: 'close-size', label: 'Size', type: 'slider', path: 'launcher.closeButtonSize', defaultValue: '32px', slider: { min: 16, max: 64, step: 1 } },
     { id: 'close-placement', label: 'Placement', type: 'select', path: 'launcher.closeButtonPlacement', defaultValue: 'inline', options: [{ value: 'inline', label: 'Inline' }, { value: 'top-right', label: 'Top Right' }] },
-    { id: 'close-border-width', label: 'Border Width', type: 'slider', path: 'launcher.closeButtonBorderWidth', defaultValue: '0px', slider: { min: 0, max: 8, step: 1 } },
-    { id: 'close-border-radius', label: 'Border Radius', type: 'slider', path: 'launcher.closeButtonBorderRadius', defaultValue: '50%', slider: { min: 0, max: 100, step: 1, isRadiusFull: true } },
-    { id: 'close-icon-name', label: 'Icon Name', type: 'text', path: 'launcher.closeButtonIconName', defaultValue: 'x' },
-    { id: 'close-icon-text', label: 'Icon Text', type: 'text', path: 'launcher.closeButtonIconText', defaultValue: '×' },
-    { id: 'close-show-tooltip', label: 'Show Tooltip', type: 'toggle', path: 'launcher.closeButtonShowTooltip', defaultValue: true },
-    { id: 'close-tooltip-text', label: 'Tooltip Text', type: 'text', path: 'launcher.closeButtonTooltipText', defaultValue: 'Close chat' },
+    simpleField('text', 'close-icon-name', 'Icon Name', 'launcher.closeButtonIconName', 'x'),
+    simpleField('text', 'close-icon-text', 'Icon Text', 'launcher.closeButtonIconText', '×'),
+    simpleField('toggle', 'close-show-tooltip', 'Show Tooltip', 'launcher.closeButtonShowTooltip', true),
+    simpleField('text', 'close-tooltip-text', 'Tooltip Text', 'launcher.closeButtonTooltipText', 'Close chat'),
   ],
 };
 
 const clearChatSectionDef: SectionDef = {
   id: 'clear-chat', title: 'Clear Chat Button', collapsed: true,
   fields: [
-    { id: 'clear-enabled', label: 'Enabled', type: 'toggle', path: 'launcher.clearChat.enabled', defaultValue: true },
+    simpleField('toggle', 'clear-enabled', 'Enabled', 'launcher.clearChat.enabled', true),
     { id: 'clear-placement', label: 'Placement', type: 'select', path: 'launcher.clearChat.placement', defaultValue: 'inline', options: [{ value: 'inline', label: 'Inline' }, { value: 'top-right', label: 'Top Right' }] },
-    { id: 'clear-icon-name', label: 'Icon Name', type: 'text', path: 'launcher.clearChat.iconName', defaultValue: 'refresh-cw' },
-    { id: 'clear-size', label: 'Size', type: 'slider', path: 'launcher.clearChat.size', defaultValue: '32px', slider: { min: 16, max: 64, step: 1 } },
-    { id: 'clear-show-tooltip', label: 'Show Tooltip', type: 'toggle', path: 'launcher.clearChat.showTooltip', defaultValue: true },
-    { id: 'clear-tooltip-text', label: 'Tooltip Text', type: 'text', path: 'launcher.clearChat.tooltipText', defaultValue: 'Clear chat' },
+    simpleField('text', 'clear-icon-name', 'Icon Name', 'launcher.clearChat.iconName', 'refresh-cw'),
+    simpleField('toggle', 'clear-show-tooltip', 'Show Tooltip', 'launcher.clearChat.showTooltip', true),
+    simpleField('text', 'clear-tooltip-text', 'Tooltip Text', 'launcher.clearChat.tooltipText', 'Clear chat'),
   ],
 };
 
 const statusIndicatorSectionDef: SectionDef = {
   id: 'status-indicator', title: 'Status Indicator', collapsed: true,
   fields: [
-    { id: 'status-visible', label: 'Visible', type: 'toggle', path: 'statusIndicator.visible', defaultValue: true },
+    simpleField('toggle', 'status-visible', 'Visible', 'statusIndicator.visible', true),
     { id: 'status-align', label: 'Alignment', type: 'select', path: 'statusIndicator.align', defaultValue: 'right', options: [{ value: 'left', label: 'Left' }, { value: 'center', label: 'Center' }, { value: 'right', label: 'Right' }] },
-    { id: 'status-idle-text', label: 'Idle Text', type: 'text', path: 'statusIndicator.idleText', defaultValue: 'Online' },
-    { id: 'status-connecting-text', label: 'Connecting Text', type: 'text', path: 'statusIndicator.connectingText', defaultValue: 'Connecting…' },
-    { id: 'status-connected-text', label: 'Connected Text', type: 'text', path: 'statusIndicator.connectedText', defaultValue: 'Streaming…' },
-    { id: 'status-error-text', label: 'Error Text', type: 'text', path: 'statusIndicator.errorText', defaultValue: 'Offline' },
+    simpleField('text', 'status-idle-text', 'Idle Text', 'statusIndicator.idleText', 'Online'),
+    simpleField('text', 'status-connecting-text', 'Connecting Text', 'statusIndicator.connectingText', 'Connecting…'),
+    simpleField('text', 'status-connected-text', 'Connected Text', 'statusIndicator.connectedText', 'Streaming…'),
+    simpleField('text', 'status-error-text', 'Error Text', 'statusIndicator.errorText', 'Offline'),
   ],
 };
 
 const featuresSectionDef: SectionDef = {
   id: 'features', title: 'Features', collapsed: true,
   fields: [
-    { id: 'feat-voice', label: 'Voice Recognition', description: 'Enable voice input', type: 'toggle', path: 'voiceRecognition.enabled', defaultValue: false },
-    { id: 'feat-auto-focus', label: 'Auto Focus Input', description: 'Focus input after panel opens', type: 'toggle', path: 'autoFocusInput', defaultValue: false },
-    { id: 'feat-scroll-bottom-enabled', label: 'Scroll To Bottom', description: 'Show a jump-to-latest affordance when the user scrolls away from new content', type: 'toggle', path: 'features.scrollToBottom.enabled', defaultValue: true },
-    { id: 'feat-scroll-bottom-icon', label: 'Scroll To Bottom Icon', type: 'text', path: 'features.scrollToBottom.iconName', defaultValue: 'arrow-down' },
-    { id: 'feat-scroll-bottom-label', label: 'Scroll To Bottom Label', description: 'Leave empty for icon-only mode', type: 'text', path: 'features.scrollToBottom.label', defaultValue: '' },
+    simpleField('toggle', 'feat-voice', 'Voice Recognition', 'voiceRecognition.enabled', false, 'Enable voice input'),
+    simpleField('toggle', 'feat-auto-focus', 'Auto Focus Input', 'autoFocusInput', false, 'Focus input after panel opens'),
+    simpleField('toggle', 'feat-scroll-bottom-enabled', 'Scroll To Bottom', 'features.scrollToBottom.enabled', true, 'Show a button to return to the latest messages.'),
+    simpleField('text', 'feat-scroll-bottom-icon', 'Scroll To Bottom Icon', 'features.scrollToBottom.iconName', 'arrow-down'),
+    simpleField('text', 'feat-scroll-bottom-label', 'Scroll To Bottom Label', 'features.scrollToBottom.label', '', 'Leave empty for icon-only mode'),
+    { id: 'feat-scroll-bottom-streaming', label: 'Streaming Below', type: 'select', path: 'features.scrollToBottom.streamingIndicator', defaultValue: 'arrow', options: [{ value: 'arrow', label: 'Arrow' }, { value: 'dots', label: 'Dots' }] },
+    { id: 'feat-scroll-bottom-behavior', label: 'Jump To Latest Motion', description: 'How the conversation scrolls when you click the jump button.', type: 'select', path: 'features.scrollToBottom.scrollBehavior', defaultValue: 'instant', options: [{ value: 'instant', label: 'Instant' }, { value: 'smooth', label: 'Smooth' }] },
+    { id: 'feat-scroll-bottom-duration', label: 'Jump Duration (ms)', description: 'How long smooth scrolling takes. Set to 0 for an instant jump.', type: 'text', path: 'features.scrollToBottom.scrollDurationMs', defaultValue: 220, formatValue: (v: unknown) => String(v ?? 220), parseValue: (v: unknown) => String(v).trim() === '' ? undefined : Number(v) },
+    { id: 'feat-scroll-bottom-transition', label: 'Scroll Button Transition', type: 'select', path: 'features.scrollToBottom.transition', defaultValue: 'none', options: [{ value: 'none', label: 'None' }, { value: 'fade', label: 'Fade' }] },
   ],
 };
 
 const streamAnimationSectionDef: SectionDef = {
-  id: 'stream-animation', title: 'Stream Animation', description: 'Control how assistant text appears while streaming.', collapsed: true,
+  id: 'stream-animation', title: 'Stream Animation', description: 'Choose how text appears as the assistant responds.', collapsed: true,
   fields: [
     {
       id: 'stream-anim-type',
       label: 'Animation',
-      description: 'Reveal effect applied to each assistant reply as it streams.',
+      description: 'The visual effect used to reveal a reply.',
       type: 'select',
       path: 'features.streamAnimation.type',
       defaultValue: 'none',
@@ -978,8 +1056,8 @@ const streamAnimationSectionDef: SectionDef = {
     },
     {
       id: 'stream-anim-placeholder',
-      label: 'Pre-first-token Placeholder',
-      description: 'What to show before the first token arrives.',
+      label: 'Before the Reply Starts',
+      description: 'What to show while waiting for a reply.',
       type: 'select',
       path: 'features.streamAnimation.placeholder',
       defaultValue: 'none',
@@ -990,20 +1068,20 @@ const streamAnimationSectionDef: SectionDef = {
     },
     {
       id: 'stream-anim-buffer',
-      label: 'Content Buffering',
-      description: 'Trim in-progress units so only complete words/lines reveal.',
+      label: 'Reveal Text By',
+      description: 'Show text as it arrives, or wait for a complete word or line.',
       type: 'select',
       path: 'features.streamAnimation.buffer',
       defaultValue: 'none',
       options: [
-        { value: 'none', label: 'None: stream every character' },
-        { value: 'word', label: 'Word: hold until whitespace' },
-        { value: 'line', label: 'Line: hold until newline' },
+        { value: 'none', label: 'Each character' },
+        { value: 'word', label: 'Complete words' },
+        { value: 'line', label: 'Complete lines' },
       ],
     },
     {
       id: 'stream-anim-speed',
-      label: 'Per-unit Duration (ms)',
+      label: 'Text Animation Duration (ms)',
       description: 'Animation length for each character or word.',
       type: 'select',
       path: 'features.streamAnimation.speed',
@@ -1021,8 +1099,8 @@ const streamAnimationSectionDef: SectionDef = {
     },
     {
       id: 'stream-anim-duration',
-      label: 'Container Duration (ms)',
-      description: 'Length of container-level effects (pop-bubble, custom plugins).',
+      label: 'Bubble Animation Duration (ms)',
+      description: 'How long effects on the whole reply bubble take.',
       type: 'select',
       path: 'features.streamAnimation.duration',
       defaultValue: 1800,
@@ -1039,20 +1117,47 @@ const streamAnimationSectionDef: SectionDef = {
   ],
 };
 
+const composerMenuSectionDef: SectionDef = {
+  id: 'composer-menu-config', title: 'More Menu', collapsed: true,
+  fields: [
+    simpleField('toggle', 'composer-menu-enabled', 'Show More Menu', 'composer.actionOverflow.enabled', false),
+    { id: 'composer-menu-width', label: 'Menu Width', type: 'select', path: 'composer.actionOverflow.menu.width', defaultValue: 'content', options: [{ value: 'content', label: 'Fit contents' }, { value: 'composer', label: 'Match message box' }, { value: '240px', label: 'Compact (240px)' }, { value: '320px', label: 'Wide (320px)' }] },
+    { id: 'composer-menu-placement', label: 'Open Menu', description: 'Moves to fit the available space.', type: 'select', path: 'composer.actionOverflow.menu.placement', defaultValue: 'above', options: [{ value: 'above', label: 'Above message box' }, { value: 'below', label: 'Below message box' }] },
+    { id: 'composer-menu-descriptions', label: 'Menu Descriptions', type: 'select', path: 'composer.actionOverflow.menu.descriptionLayout', defaultValue: 'stacked', options: [{ value: 'stacked', label: 'Below labels' }, { value: 'inline', label: 'Beside labels' }] },
+    simpleField('text', 'composer-menu-icon', 'Menu Icon', 'composer.actionOverflow.menu.triggerIconName', 'plus'),
+    { id: 'composer-menu-open-icon', label: 'Open Menu Icon', type: 'select', path: 'composer.actionOverflow.menu.openTriggerIconName', defaultValue: 'plus', options: [{ value: 'plus', label: 'Plus' }, { value: 'x', label: 'Close' }] },
+  ],
+};
+
 const attachmentsSectionDef: SectionDef = {
   id: 'attachments-config', title: 'Attachments', collapsed: true,
   fields: [
-    { id: 'attach-enabled', label: 'Enabled', type: 'toggle', path: 'attachments.enabled', defaultValue: false },
+    simpleField('toggle', 'attach-enabled', 'Enabled', 'attachments.enabled', false),
     { id: 'attach-max-files', label: 'Max Files', type: 'select', path: 'attachments.maxFiles', defaultValue: 4, options: [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '4', label: '4' }, { value: '6', label: '6' }, { value: '8', label: '8' }, { value: '10', label: '10' }], formatValue: (v: unknown) => String(v ?? 4), parseValue: (v: unknown) => Number(v) },
     { id: 'attach-max-size', label: 'Max File Size (MB)', type: 'select', path: 'attachments.maxFileSize', defaultValue: 10 * MB, options: [{ value: '1', label: '1 MB' }, { value: '5', label: '5 MB' }, { value: '10', label: '10 MB' }, { value: '25', label: '25 MB' }, { value: '50', label: '50 MB' }], formatValue: formatAttachmentMaxFileSize, parseValue: parseAttachmentMaxFileSize },
     { id: 'attach-types', label: 'Allowed File Types', type: 'select', path: 'attachments.allowedTypes', defaultValue: ATTACHMENT_TYPE_PRESETS.images, options: [{ value: 'images', label: 'Images only' }, { value: 'images-pdf', label: 'Images + PDF' }, { value: 'images-text-pdf', label: 'Images + text + PDF' }, { value: 'all', label: 'All supported types' }], formatValue: formatAttachmentAllowedTypes, parseValue: parseAttachmentAllowedTypes },
+    { id: 'attach-file-layout', label: 'File Card Layout', type: 'select', path: 'attachments.preview.file.layout', defaultValue: 'tile', options: [{ value: 'tile', label: 'Compact tile' }, { value: 'horizontal', label: 'Horizontal card' }, { value: 'vertical', label: 'Vertical card' }] },
+    simpleField('toggle', 'attach-file-icon', 'Show File Icon', 'attachments.preview.file.icon', true),
+    { id: 'attach-file-icon-name', label: 'File Icon', type: 'text', path: 'attachments.preview.file.iconName', defaultValue: '', unsettable: true },
+    { id: 'attach-file-icon-placement', label: 'File Icon Position', type: 'select', path: 'attachments.preview.file.iconPlacement', defaultValue: 'start', options: [{ value: 'start', label: 'At the start' }, { value: 'center', label: 'Centered' }] },
+    { id: 'attach-file-name', label: 'File Name', type: 'select', path: 'attachments.preview.file.name', defaultValue: 'hidden', options: [{ value: 'hidden', label: 'Hidden' }, { value: 'full', label: 'Full name' }, { value: 'basename', label: 'Without extension' }] },
+    { id: 'attach-file-metadata', label: 'File Details', description: 'Line count is available for supported text files.', type: 'select', path: 'attachments.preview.file.metadata', defaultValue: 'none', options: [{ value: 'none', label: 'None' }, { value: 'size', label: 'File size' }, { value: 'line-count', label: 'Line count' }] },
+    { id: 'attach-file-badge', label: 'File Badge', type: 'select', path: 'attachments.preview.file.badge', defaultValue: 'type', options: [{ value: 'none', label: 'None' }, { value: 'extension', label: 'Extension' }, { value: 'type', label: 'File type' }] },
+    { id: 'attach-image-layout', label: 'Image Preview', type: 'select', path: 'attachments.preview.image.layout', defaultValue: 'thumbnail', options: [{ value: 'thumbnail', label: 'Thumbnail' }, { value: 'chip', label: 'Compact chip' }] },
+    { id: 'attach-image-name', label: 'Image File Name', type: 'select', path: 'attachments.preview.image.name', defaultValue: 'hidden', options: [{ value: 'hidden', label: 'Hidden' }, { value: 'full', label: 'Full name' }, { value: 'basename', label: 'Without extension' }] },
+    { id: 'attach-image-fit', label: 'Image Fit', type: 'select', path: 'attachments.preview.image.fit', defaultValue: 'cover', options: [{ value: 'cover', label: 'Fill thumbnail' }, { value: 'contain', label: 'Show whole image' }] },
+    { id: 'attach-file-remove-visibility', label: 'File Remove Button', description: 'Always visible on touch devices.', type: 'select', path: 'attachments.preview.file.remove.visibility', defaultValue: 'always', options: [{ value: 'always', label: 'Always visible' }, { value: 'hover', label: 'On hover or focus' }] },
+    { id: 'attach-file-remove-placement', label: 'File Remove Position', type: 'select', path: 'attachments.preview.file.remove.placement', defaultValue: 'overlap', options: [{ value: 'overlap', label: 'Overlapping corner' }, { value: 'inside', label: 'Inside corner' }, { value: 'inline', label: 'Beside content' }] },
+    { id: 'attach-image-remove-visibility', label: 'Image Remove Button', description: 'Always visible on touch devices.', type: 'select', path: 'attachments.preview.image.remove.visibility', defaultValue: 'always', options: [{ value: 'always', label: 'Always visible' }, { value: 'hover', label: 'On hover or focus' }] },
+    { id: 'attach-image-remove-placement', label: 'Image Remove Position', type: 'select', path: 'attachments.preview.image.remove.placement', defaultValue: 'overlap', options: [{ value: 'overlap', label: 'Overlapping corner' }, { value: 'inside', label: 'Inside corner' }, { value: 'inline', label: 'Beside content' }] },
+    { id: 'attach-composer-layout', label: 'Input Below Attachments', description: 'Uses separate rows when space is limited.', type: 'select', path: 'composer.attachmentLayout', defaultValue: 'stacked', options: [{ value: 'stacked', label: 'Text above controls' }, { value: 'single-row', label: 'Text beside controls' }] },
   ],
 };
 
 const artifactsSectionDef: SectionDef = {
   id: 'artifacts-config', title: 'Artifacts', collapsed: true,
   fields: [
-    { id: 'art-enabled', label: 'Enabled', description: 'Show artifact sidebar for documents and components', type: 'toggle', path: 'features.artifacts.enabled', defaultValue: false },
+    simpleField('toggle', 'art-enabled', 'Enabled', 'features.artifacts.enabled', false, 'Show artifact sidebar for documents and components'),
     { id: 'art-appearance', label: 'Pane Appearance', type: 'select', path: 'features.artifacts.layout.paneAppearance', defaultValue: 'panel', options: [{ value: 'panel', label: 'Panel (bordered)' }, { value: 'seamless', label: 'Seamless' }] },
   ],
 };
@@ -1061,22 +1166,21 @@ const artifactCustomizationSectionDef: SectionDef = {
   id: 'artifacts-customization', title: 'Artifact Customization', collapsed: true,
   fields: [
     { id: 'art-toolbar', label: 'Toolbar Preset', type: 'select', path: 'features.artifacts.layout.toolbarPreset', defaultValue: 'default', options: [{ value: 'default', label: 'Default' }, { value: 'document', label: 'Document' }] },
-    { id: 'art-toolbar-title', label: 'Toolbar Title', type: 'text', path: 'features.artifacts.layout.toolbarTitle', defaultValue: 'Artifacts' },
-    { id: 'art-close-label', label: 'Close Button Label', type: 'text', path: 'features.artifacts.layout.closeButtonLabel', defaultValue: 'Close' },
-    { id: 'art-pane-width', label: 'Pane Width', description: 'CSS width (e.g. 40%, 28rem)', type: 'text', path: 'features.artifacts.layout.paneWidth', defaultValue: '40%' },
-    { id: 'art-pane-max-width', label: 'Pane Max Width', type: 'text', path: 'features.artifacts.layout.paneMaxWidth', defaultValue: '28rem' },
-    { id: 'art-split-gap', label: 'Split Gap', type: 'text', path: 'features.artifacts.layout.splitGap', defaultValue: '0' },
-    { id: 'art-pane-bg', label: 'Pane Background', type: 'color', path: 'features.artifacts.layout.paneBackground', defaultValue: '' },
-    { id: 'art-resizable', label: 'Resizable', description: 'Allow dragging the pane divider', type: 'toggle', path: 'features.artifacts.layout.resizable', defaultValue: false },
-    { id: 'art-expand-panel', label: 'Expand Panel When Open', description: 'Widen the launcher panel to fit artifacts', type: 'toggle', path: 'features.artifacts.layout.expandLauncherPanelWhenOpen', defaultValue: true },
+    simpleField('text', 'art-toolbar-title', 'Toolbar Title', 'features.artifacts.layout.toolbarTitle', 'Artifacts'),
+    simpleField('text', 'art-close-label', 'Close Button Label', 'features.artifacts.layout.closeButtonLabel', 'Close'),
+    simpleField('text', 'art-pane-width', 'Pane Width', 'features.artifacts.layout.paneWidth', '40%', 'CSS width (e.g. 40%, 28rem)'),
+    simpleField('text', 'art-pane-max-width', 'Pane Max Width', 'features.artifacts.layout.paneMaxWidth', '28rem'),
+    simpleField('text', 'art-split-gap', 'Split Gap', 'features.artifacts.layout.splitGap', '0'),
+    simpleField('toggle', 'art-resizable', 'Resizable', 'features.artifacts.layout.resizable', false, 'Allow dragging the pane divider'),
+    simpleField('toggle', 'art-expand-panel', 'Expand Panel When Open', 'features.artifacts.layout.expandLauncherPanelWhenOpen', true, 'Widen the launcher panel to fit artifacts'),
   ],
 };
 
 const apiIntegrationSectionDef: SectionDef = {
   id: 'api-integration', title: 'API & Integration', description: 'Runtime and integration options.', collapsed: true,
   fields: [
-    { id: 'dev-api-url', label: 'API URL', type: 'text', path: 'apiUrl', defaultValue: '' },
-    { id: 'dev-flow', label: 'Flow ID', type: 'text', path: 'flowId', defaultValue: '' },
+    simpleField('text', 'dev-api-url', 'API URL', 'apiUrl', ''),
+    simpleField('text', 'dev-flow', 'Flow ID', 'flowId', ''),
     { id: 'dev-parser', label: 'Stream Parser', type: 'select', path: 'parserType', defaultValue: 'plain', options: [{ value: 'plain', label: 'Plain Text' }, { value: 'json', label: 'JSON' }, { value: 'regex-json', label: 'Regex JSON' }, { value: 'xml', label: 'XML' }] },
   ],
 };
@@ -1099,11 +1203,11 @@ const INHERITABLE_DISPLAY_FIELD = {
 export const ARTIFACT_DISPLAY_PREFERENCE_SECTION: SectionDef = {
   id: 'artifact-display-preferences',
   title: 'Artifact display',
-  description: 'Choose where recognizable artifact groups appear.',
+  description: 'Choose where generated files and other content appear.',
   requiresCapability: 'artifacts',
   fields: [
     { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-files', label: 'Generated files', description: 'Default for HTML, CSV, documents, and code files.', path: 'features.artifacts.display.files' },
-    { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-components', label: 'Registered UI components', description: 'Charts, forms, cards, and custom UI rendered by the host.', path: 'features.artifacts.display.byKind.component' },
+    { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-components', label: 'Interactive content', description: 'Charts, forms, cards, and other interactive content.', path: 'features.artifacts.display.byKind.component' },
     { ...INHERITABLE_DISPLAY_FIELD, id: 'artifact-display-default', label: 'Other artifacts', description: 'Plain documents and anything without a narrower rule.', path: 'features.artifacts.display.default' },
     {
       id: 'artifact-file-preview',
@@ -1143,24 +1247,24 @@ export const STREAM_AND_ARTIFACTS_SUB_GROUP: SubGroupDef = {
 const debugSectionDef: SectionDef = {
   id: 'debug-inspection', title: 'Debug & Inspection', collapsed: true,
   fields: [
-    { id: 'dev-tool-active-preview', label: 'Tool Preview While Active', description: 'Show a lightweight preview in collapsed active tool rows', type: 'toggle', path: 'features.toolCallDisplay.activePreview', defaultValue: false },
+    simpleField('toggle', 'dev-tool-active-preview', 'Tool Preview While Active', 'features.toolCallDisplay.activePreview', false, 'Show a lightweight preview in collapsed active tool rows'),
     { id: 'dev-tool-preview-lines', label: 'Tool Preview Lines', type: 'select', path: 'features.toolCallDisplay.previewMaxLines', defaultValue: 3, options: [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }, { value: '5', label: '5' }], formatValue: (v: unknown) => String(v ?? 3), parseValue: (v: unknown) => Number(v) },
-    { id: 'dev-tool-active-min-height', label: 'Tool Active Min Height', description: 'CSS min-height for collapsed active tool rows (e.g. 5rem)', type: 'text', path: 'features.toolCallDisplay.activeMinHeight', defaultValue: '' },
+    simpleField('text', 'dev-tool-active-min-height', 'Tool Active Min Height', 'features.toolCallDisplay.activeMinHeight', '', 'CSS min-height for collapsed active tool rows (e.g. 5rem)'),
     { id: 'dev-reasoning-preview-lines', label: 'Reasoning Preview Lines', type: 'select', path: 'features.reasoningDisplay.previewMaxLines', defaultValue: 3, options: [{ value: '1', label: '1' }, { value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }, { value: '5', label: '5' }], formatValue: (v: unknown) => String(v ?? 3), parseValue: (v: unknown) => Number(v) },
-    { id: 'dev-reasoning-active-min-height', label: 'Reasoning Active Min Height', description: 'CSS min-height for collapsed active reasoning rows (e.g. 5rem)', type: 'text', path: 'features.reasoningDisplay.activeMinHeight', defaultValue: '' },
-    { id: 'dev-debug', label: 'Debug Mode', description: 'Show debug information', type: 'toggle', path: 'debug', defaultValue: false },
+    simpleField('text', 'dev-reasoning-active-min-height', 'Reasoning Active Min Height', 'features.reasoningDisplay.activeMinHeight', '', 'CSS min-height for collapsed active reasoning rows (e.g. 5rem)'),
+    simpleField('toggle', 'dev-debug', 'Debug Mode', 'debug', false, 'Show debug information'),
   ],
 };
 
 const markdownSectionDef: SectionDef = {
   id: 'markdown', title: 'Markdown Options', collapsed: true,
   fields: [
-    { id: 'md-gfm', label: 'GitHub Flavored Markdown', type: 'toggle', path: 'markdown.options.gfm', defaultValue: true },
-    { id: 'md-breaks', label: 'Line Breaks', type: 'toggle', path: 'markdown.options.breaks', defaultValue: true },
-    { id: 'md-header-ids', label: 'Header IDs', type: 'toggle', path: 'markdown.options.headerIds', defaultValue: false },
-    { id: 'md-pedantic', label: 'Pedantic Mode', type: 'toggle', path: 'markdown.options.pedantic', defaultValue: false },
-    { id: 'md-silent', label: 'Silent', type: 'toggle', path: 'markdown.options.silent', defaultValue: false },
-    { id: 'md-disable-styles', label: 'Disable Default Styles', type: 'toggle', path: 'markdown.disableDefaultStyles', defaultValue: false },
+    simpleField('toggle', 'md-gfm', 'GitHub Flavored Markdown', 'markdown.options.gfm', true),
+    simpleField('toggle', 'md-breaks', 'Line Breaks', 'markdown.options.breaks', true),
+    simpleField('toggle', 'md-header-ids', 'Header IDs', 'markdown.options.headerIds', false),
+    simpleField('toggle', 'md-pedantic', 'Pedantic Mode', 'markdown.options.pedantic', false),
+    simpleField('toggle', 'md-silent', 'Silent', 'markdown.options.silent', false),
+    simpleField('toggle', 'md-disable-styles', 'Disable Default Styles', 'markdown.disableDefaultStyles', false),
   ],
 };
 
@@ -1168,7 +1272,7 @@ export const CONFIGURE_SUB_GROUPS: SubGroupDef[] = [
   { label: 'Content', sections: [copySectionDef, suggestionsSectionDef] },
   { label: 'Layout', sections: [generalLayoutSectionDef, headerLayoutSectionDef, messagesLayoutSectionDef, messageActionsSectionDef] },
   { label: 'Widget', sections: [launcherBasicsSectionDef, launcherAdvancedSectionDef, sendButtonSectionDef, closeButtonSectionDef, clearChatSectionDef, statusIndicatorSectionDef] },
-  { label: 'Features', sections: [featuresSectionDef, streamAnimationSectionDef, attachmentsSectionDef, artifactsSectionDef, artifactCustomizationSectionDef] },
+  { label: 'Features', sections: [featuresSectionDef, streamAnimationSectionDef, composerMenuSectionDef, attachmentsSectionDef, artifactsSectionDef, artifactCustomizationSectionDef] },
   STREAM_AND_ARTIFACTS_SUB_GROUP,
   { label: 'Developer', collapsedByDefault: true, sections: [apiIntegrationSectionDef, debugSectionDef, markdownSectionDef] },
 ];
@@ -1208,10 +1312,10 @@ export const BRAND_PALETTE_SECTION: SectionDef = {
   description: 'Set your brand, accent, and neutral colors. These are used to generate the interface theme.',
   collapsed: false,
   fields: [
-    { id: 'bp-primary', label: 'Primary', description: 'Main brand color', type: 'color', path: 'theme.palette.colors.primary.500', defaultValue: '#171717' },
-    { id: 'bp-secondary', label: 'Secondary', description: 'Supporting brand color', type: 'color', path: 'theme.palette.colors.secondary.500', defaultValue: '#8b5cf6' },
-    { id: 'bp-accent', label: 'Accent', description: 'Highlight and decorative color', type: 'color', path: 'theme.palette.colors.accent.500', defaultValue: '#06b6d4' },
-    { id: 'bp-neutral', label: 'Neutral', description: 'Backgrounds, text, and borders', type: 'color', path: 'theme.palette.colors.gray.500', defaultValue: '#6b7280' },
+    simpleField('color', 'bp-primary', 'Primary', 'theme.palette.colors.primary.500', '#171717', 'Main brand color'),
+    simpleField('color', 'bp-secondary', 'Secondary', 'theme.palette.colors.secondary.500', '#8b5cf6', 'Supporting brand color'),
+    simpleField('color', 'bp-accent', 'Accent', 'theme.palette.colors.accent.500', '#06b6d4', 'Highlight and decorative color'),
+    simpleField('color', 'bp-neutral', 'Neutral', 'theme.palette.colors.gray.500', '#6b7280', 'Backgrounds, text, and borders'),
   ],
 };
 
@@ -1222,10 +1326,10 @@ export const STATUS_PALETTE_SECTION: SectionDef = {
   description: 'Colors for system feedback states.',
   collapsed: true,
   fields: [
-    { id: 'sp-success', label: 'Success', type: 'color', path: 'theme.palette.colors.success.500', defaultValue: '#22c55e' },
-    { id: 'sp-warning', label: 'Warning', type: 'color', path: 'theme.palette.colors.warning.500', defaultValue: '#eab308' },
-    { id: 'sp-error', label: 'Error', type: 'color', path: 'theme.palette.colors.error.500', defaultValue: '#ef4444' },
-    { id: 'sp-notice', label: 'Notice', description: 'Info and notice states', type: 'color', path: 'theme.semantic.colors.feedback.info', defaultValue: 'palette.colors.primary.500' },
+    simpleField('color', 'sp-success', 'Success', 'theme.palette.colors.success.500', '#22c55e'),
+    simpleField('color', 'sp-warning', 'Warning', 'theme.palette.colors.warning.500', '#eab308'),
+    simpleField('color', 'sp-error', 'Error', 'theme.palette.colors.error.500', '#ef4444'),
+    simpleField('color', 'sp-notice', 'Notice', 'theme.semantic.colors.feedback.info', 'palette.colors.primary.500', 'Info and notice states'),
   ],
 };
 
@@ -1309,10 +1413,10 @@ export const STATUS_COLORS_SECTION: SectionDef = {
   description: 'Used for system states like success, warning, notice, and error.',
   collapsed: true,
   fields: [
-    { id: 'sc-notice', label: 'Notice', type: 'token-ref', path: 'theme.semantic.colors.feedback.info', defaultValue: 'palette.colors.primary.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sc-success', label: 'Success', type: 'token-ref', path: 'theme.semantic.colors.feedback.success', defaultValue: 'palette.colors.success.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sc-warning', label: 'Warning', type: 'token-ref', path: 'theme.semantic.colors.feedback.warning', defaultValue: 'palette.colors.warning.500', tokenRef: { tokenType: 'color' } },
-    { id: 'sc-error', label: 'Error', type: 'token-ref', path: 'theme.semantic.colors.feedback.error', defaultValue: 'palette.colors.error.500', tokenRef: { tokenType: 'color' } },
+    colorTokenField('sc-notice', 'Notice', 'theme.semantic.colors.feedback.info', 'palette.colors.primary.500'),
+    colorTokenField('sc-success', 'Success', 'theme.semantic.colors.feedback.success', 'palette.colors.success.500'),
+    colorTokenField('sc-warning', 'Warning', 'theme.semantic.colors.feedback.warning', 'palette.colors.warning.500'),
+    colorTokenField('sc-error', 'Error', 'theme.semantic.colors.feedback.error', 'palette.colors.error.500'),
   ],
 };
 

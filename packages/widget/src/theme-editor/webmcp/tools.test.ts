@@ -118,7 +118,7 @@ describe('createThemeEditorTools', () => {
   it('apply_preset validates id and applies', async () => {
     const out = await call(tools.get('apply_preset')!, { presetId: 'default-dark' });
     expect(out.applied.appliedPreset.id).toBe('default-dark');
-    expect(() => tools.get('apply_preset')!.execute({ presetId: 'nope' })).toThrow(
+    await expect(tools.get('apply_preset')!.execute({ presetId: 'nope' })).rejects.toThrow(
       /Valid presets/
     );
   });
@@ -154,8 +154,8 @@ describe('createThemeEditorTools', () => {
       title: 'Hi there',
       suggestions: ['a', 'b'],
     });
-    expect(state.get('copy.welcomeTitle')).toBe('Hi there');
-    expect(state.get('suggestionChips')).toEqual(['a', 'b']);
+    expect(state.get('welcome.title')).toBe('Hi there');
+    expect(state.get('suggestions.starters.items')).toEqual(['a', 'b']);
   });
 
   it('set_theme_fields resolves field ids and reports per-update status', async () => {

@@ -7,8 +7,7 @@ import { resolve } from "node:path";
  *
  * The CDN IIFE (`dist/index.global.js`) must not carry the shell: it ships as
  * the sibling chunk `dist/history-shell.js`, fetched only when
- * `features.history` is enabled or a history API is called. npm builds inline
- * it (`history-shell-eager.ts`). A stray static import from core would pull
+ * `features.history` is enabled or a history API is called. npm builds resolve the same lazy package subpath. A stray static import from core would pull
  * it back into the IIFE; this fails then.
  *
  * Skips when `dist/` hasn't been built (e.g. a test-only CI step).
@@ -25,7 +24,7 @@ const RUNTIME_MARKERS = [
 
 // Stateful core modules arrive through the shell's ctx, never bundled copies:
 // the icon registry's map keys and the tooltip module only exist where bundled.
-const NOT_IN_CHUNK = ["shopping-cart", "persona-tooltip"];
+const NOT_IN_CHUNK = ["shopping-cart", "clipboard-copy", "persona-tooltip", "semantic.colors.container", "palette.radius.lg"];
 
 describe("history-shell bundle split", () => {
   const iifeBuilt =

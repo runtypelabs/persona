@@ -134,6 +134,7 @@ const calendarCopilotTheme = {
         shadow: 'none',
       },
     },
+    suggestion: { chip: { fontWeight: '700' } },
     introCard: {
       background: '#ffffff',
       border: 'rgba(30, 41, 59, 0.08)',
@@ -318,21 +319,29 @@ if (!workspaceTarget) {
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
       colorScheme: 'light',
       theme: calendarCopilotTheme,
+      welcome: {
+        title: 'Ask Calendar Copilot',
+        subtitle:
+          'I can inspect availability, create events, and update this dashboard using the page’s WebMCP tools.',
+        variant: 'card',
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: 'Ask Calendar Copilot',
-        welcomeSubtitle:
-          'I can inspect availability, create events, and update this dashboard using the page’s WebMCP tools.',
         inputPlaceholder: 'Ask Copilot to schedule, move, or summarize events…',
       },
-      suggestionChips: [
-        'Create a Team Standup tomorrow at 10am',
-        'Find a free 30 minute slot tomorrow',
-        'What events are visible this week?',
-        'Move Sprint Planning to Friday afternoon',
-      ],
-      suggestionChipsConfig: {
-        fontWeight: '700',
+      suggestions: {
+        starters: {
+          items: [
+            'Create a Team Standup tomorrow at 10am',
+            'Find a free 30 minute slot tomorrow',
+            'What events are visible this week?',
+            'Move Sprint Planning to Friday afternoon',
+          ],
+          variant: 'chip',
+          placement: 'composer',
+          overflow: 'wrap',
+          maxItems: 4,
+        },
       },
       launcher: {
         ...DEFAULT_WIDGET_CONFIG.launcher,

@@ -13,7 +13,7 @@ describe("theme editor preview demo data", () => {
     const config = buildPreviewConfig({ scene: "home" });
 
     expect(config.initialMessages).toEqual([]);
-    expect(config.suggestionChips?.length).toBeGreaterThan(0);
+    expect(config.suggestions?.starters?.items?.length).toBeGreaterThan(0);
   });
 
   it("keeps an authored v5 defaults opt-in in the preview config", () => {

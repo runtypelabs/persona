@@ -1,9 +1,10 @@
+import { resolveToolStyles } from "../utils/tool-styles";
 import { Circle, Clock } from "lucide";
 import { renderIconNode } from "../utils/icon-node";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { DEFAULT_TOOL_CALL_DISPLAY, DEFAULT_REASONING_DISPLAY, DEFAULTS_V5 } from "../defaults";
 import { createElement } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import { renderLucideIcon } from "./activity-deps";
 import { appendHeaderToggle } from "./expandable-bubble";
 
 export type ActivityKind = "tool" | "reasoning";
@@ -37,7 +38,8 @@ export function applyActivityRow(bubble: HTMLElement, message: AgentWidgetMessag
   if (kind === "tool" && config.toolCall?.shadow === undefined) bubble.style.boxShadow = "var(--persona-tool-bubble-shadow, none)";
   const header = bubble.querySelector<HTMLButtonElement>(":scope > button");
   if (!header) return bubble;
-  header.className = "persona-activity-header";
+  header.className = header.classList.contains("persona-theme-padding")
+    ? "persona-activity-header persona-theme-padding" : "persona-activity-header";
   const data = kind === "tool" ? message.toolCall : message.reasoning;
   const active = data?.status !== "complete";
   const approval = message.approval?.status ?? message.toolCall?.approvalStatus;
@@ -124,7 +126,8 @@ export function createActivityGroup(message: AgentWidgetMessage, config: AgentWi
   header.setAttribute("aria-expanded", String(expanded));
   const copy = createElement("div", "");
   if (typeof label === "string") copy.textContent = label; else copy.appendChild(label);
-  appendHeaderToggle(header, copy, { expandable: true, expanded, iconColor: config.toolCall?.toggleTextColor || config.toolCall?.headerTextColor || "currentColor", metaGap: true });
+  const toolStyles = resolveToolStyles(config);
+  appendHeaderToggle(header, copy, { expandable: true, expanded, iconColor: toolStyles.toggleTextColor || toolStyles.headerTextColor || "currentColor", metaGap: true });
   const body = createElement("div", "persona-border-t");
   body.id = `activity-details-${message.id}`;
   body.style.display = expanded ? "" : "none";

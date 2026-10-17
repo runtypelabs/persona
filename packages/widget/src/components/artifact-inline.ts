@@ -1,4 +1,5 @@
-import type { ComponentContext, ComponentRenderer } from "./registry";
+import { ensureArtifactStyles } from "./artifact-styles";
+import type { ComponentContext } from "./registry";
 import type {
   AgentWidgetArtifactsFeature,
   PersonaArtifactFileMeta,
@@ -13,7 +14,7 @@ import {
   resolveArtifactStatusLabel
 } from "../utils/artifact-status-label";
 import { artifactRecordActionContext, buildArtifactActionButton } from "../utils/artifact-custom-actions";
-import { createIconButton, createToggleGroup } from "../utils/buttons";
+import { createIconButton, createToggleGroup } from "./artifact-buttons";
 import { FileText } from "lucide";
 import { renderIconNode } from "../utils/icon-node";
 import {
@@ -498,6 +499,7 @@ function renderDefaultArtifactInline(
     "div",
     "persona-artifact-inline persona-w-full persona-max-w-full"
   );
+  ensureArtifactStyles(root);
   root.setAttribute("data-persona-theme-zone", "artifact-inline");
   if (record.id) {
     root.setAttribute("data-artifact-inline", record.id);
@@ -912,7 +914,14 @@ function renderDefaultArtifactInline(
   return root;
 }
 
-export const PersonaArtifactInline: ComponentRenderer = (props, context) => {
+export const PersonaArtifactInline = (props: Record<string, unknown>, context: ComponentContext): HTMLElement => {
+  // V4 historically showed transcript references even when its pane was off.
+  // V5 applies the feature gate before custom renderers or preview work runs.
+  if (context?.config?.future?.v5Defaults === true && context.config.features?.artifacts?.enabled !== true) {
+    const hidden = document.createElement("div");
+    hidden.hidden = true;
+    return hidden;
+  }
   const customRenderer = context?.config?.features?.artifacts?.renderInline;
   if (customRenderer) {
     const title =

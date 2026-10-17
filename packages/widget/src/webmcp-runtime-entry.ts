@@ -193,8 +193,9 @@ export class WebMcpBridge {
     wireToolName: string,
     args: unknown,
     signal?: AbortSignal,
+    toolCallId?: string,
   ): Promise<WebMcpToolResult> {
-    const outcome = await this.#run(wireToolName, args, signal, false);
+    const outcome = await this.#run(wireToolName, args, signal, false, toolCallId);
     return outcome.ok
       ? normalizeSerializedResult(outcome.raw)
       : errorResult(outcome.message);
@@ -261,6 +262,7 @@ export class WebMcpBridge {
     args: unknown,
     signal: AbortSignal | undefined,
     autoConfirmReadOnly: boolean,
+    toolCallId?: string,
   ): Promise<ToolRunOutcome> {
     await this.#ensureReady();
     if (this.config.enabled !== true) {
@@ -329,6 +331,7 @@ export class WebMcpBridge {
     const annotations = pickAnnotations(info.annotations);
     const gateInfo: WebMcpConfirmInfo = {
       toolName: bareName,
+      ...(toolCallId ? { toolCallId } : {}),
       args,
       description: info.description,
       ...(annotations ? { annotations } : {}),
@@ -716,4 +719,3 @@ const safeStringify = (value: unknown): string => {
     return String(value);
   }
 };
-

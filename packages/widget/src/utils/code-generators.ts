@@ -123,6 +123,15 @@ export type CodeGeneratorHooks = {
  */
 export type CodeGeneratorOptions = {
   /**
+   * Emit every supplied serializable input without adding defaults or pruning
+   * default-equal values. Pass ThemeEditorState.exportAuthoredConfig().config.
+   * Functions/custom implementations are omitted with path-specific notes;
+   * supported self-contained hooks can be supplied through hooks in JS formats.
+   * This creates fresh configuration, not a mounted-widget reset patch.
+   * @default false
+   */
+  authoredOverrides?: boolean;
+  /**
    * Custom hook code to inject into the generated snippet.
    * Hooks are JavaScript/TypeScript code strings that will be
    * inserted at appropriate locations in the output.
@@ -138,7 +147,7 @@ export type CodeGeneratorOptions = {
   /**
    * If provided, emits `windowKey` in the generated `initAgentWidget()` call
    * so the widget handle is stored on `window[windowKey]`.
-   * Only affects script formats (script-installer, script-manual, script-advanced).
+   * In default generation, only affects script formats (script-installer, script-manual, script-advanced). Authored-overrides generation honors it in all formats.
    */
   windowKey?: string;
 
@@ -552,6 +561,14 @@ function generateHooksConfig(hooks: CodeGeneratorHooks | undefined, indent: stri
   return lines;
 }
 
+/** JSON literals are valid JavaScript; escaping `<` also keeps inline scripts intact. */
+function serializeConfigLiteral(value: unknown, space?: number): string {
+  return JSON.stringify(value, null, space)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 function appendSerializableObjectEntries(
   lines: string[],
   value: Record<string, unknown>,
@@ -560,19 +577,21 @@ function appendSerializableObjectEntries(
   Object.entries(value).forEach(([key, entryValue]) => {
     if (entryValue === undefined || typeof entryValue === "function") return;
 
+    const property = /^[a-zA-Z_$][\w$]*$/.test(key) ? key : serializeConfigLiteral(key);
+
     if (Array.isArray(entryValue)) {
-      lines.push(`${indent}${key}: ${JSON.stringify(entryValue)},`);
+      lines.push(`${indent}${property}: ${serializeConfigLiteral(entryValue)},`);
       return;
     }
 
     if (entryValue && typeof entryValue === "object") {
-      lines.push(`${indent}${key}: {`);
+      lines.push(`${indent}${property}: {`);
       appendSerializableObjectEntries(lines, entryValue as Record<string, unknown>, `${indent}  `);
       lines.push(`${indent}},`);
       return;
     }
 
-    lines.push(`${indent}${key}: ${JSON.stringify(entryValue)},`);
+    lines.push(`${indent}${property}: ${serializeConfigLiteral(entryValue)},`);
   });
 }
 
@@ -588,10 +607,26 @@ function appendSerializableObjectBlock(
   lines.push(`${indent}},`);
 }
 
-/** Preserve an explicitly authored defaults-version opt-in in every snippet. */
-function appendFutureDefaultsConfig(lines: string[], config: any, indent: string): void {
+/** Preserve primitive types and the complete serializable welcome/approval shape. */
+function appendPresentationConfig(lines: string[], config: AgentWidgetConfig, indent: string): void {
+  appendSerializableObjectBlock(lines, "copy", config.copy, indent);
+  appendSerializableObjectBlock(lines, "welcome", config.welcome as Record<string, unknown> | undefined, indent);
+  if (config.approval === false) {
+    lines.push(`${indent}approval: false,`);
+  } else {
+    appendSerializableObjectBlock(lines, "approval", config.approval, indent);
+  }
+}
+
+/** Preserve the defaults version and brand inputs rather than flattening derived tokens. */
+function appendThemeDefaultsConfig(lines: string[], config: any, indent: string): void {
   if (config.future?.v5Defaults !== undefined) {
     lines.push(`${indent}future: { v5Defaults: ${config.future.v5Defaults === true} },`);
+  }
+  appendSerializableObjectBlock(lines, "brand", config.brand, indent);
+  appendSerializableObjectBlock(lines, "darkTheme", config.darkTheme, indent);
+  if (config.colorScheme !== undefined) {
+    lines.push(`${indent}colorScheme: ${JSON.stringify(config.colorScheme)},`);
   }
 }
 
@@ -604,11 +639,22 @@ function emitTargetSelector(options?: CodeGeneratorOptions): string {
   return (options?.target ?? "body").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+/**
+ * Export serializable widget settings in the selected integration format.
+ * `welcome.icon` object forms are preserved. Function icons, `approval.onDecision`,
+ * and `approval.formatDescription` cannot be exported: snippets identify these
+ * omissions, and hosts must reattach them in JavaScript. Other callbacks/renderers
+ * also require host code; supported hooks can be supplied via `options.hooks`.
+ * Hook functions keep their existing self-contained `.toString()` contract.
+ * The installer format is JSON-only and cannot include hooks or function icons.
+ */
 export function generateCodeSnippet(
   config: any,
   format: CodeFormat = "esm",
   options?: CodeGeneratorOptions
 ): string {
+  if (options?.authoredOverrides) return generateAuthoredCode(config, format, options);
+
   // Remove non-serializable properties
   const cleanConfig = { ...config };
   delete cleanConfig.postprocessMessage;
@@ -619,19 +665,108 @@ export function generateCodeSnippet(
     ? { ...options, hooks: normalizeHooks(options.hooks) as CodeGeneratorHooks }
     : undefined;
 
+  let code: string;
   if (format === "esm") {
-    return generateESMCode(cleanConfig, normalizedOptions);
+    code = generateESMCode(cleanConfig, normalizedOptions);
   } else if (format === "script-installer") {
-    return generateScriptInstallerCode(cleanConfig, normalizedOptions);
+    code = generateScriptInstallerCode(cleanConfig, normalizedOptions);
   } else if (format === "script-advanced") {
-    return generateScriptAdvancedCode(cleanConfig, normalizedOptions);
+    code = generateScriptAdvancedCode(cleanConfig, normalizedOptions);
   } else if (format === "react-component") {
-    return generateReactComponentCode(cleanConfig, normalizedOptions);
+    code = generateReactComponentCode(cleanConfig, normalizedOptions);
   } else if (format === "react-advanced") {
-    return generateReactAdvancedCode(cleanConfig, normalizedOptions);
+    code = generateReactAdvancedCode(cleanConfig, normalizedOptions);
   } else {
-    return generateScriptManualCode(cleanConfig, normalizedOptions);
+    code = generateScriptManualCode(cleanConfig, normalizedOptions);
   }
+
+  const omittedFunctions = [
+    ["welcome.icon", config.welcome?.icon],
+    ["approval.formatDescription", config.approval?.formatDescription],
+    ["approval.onDecision", config.approval?.onDecision],
+  ].filter(([, value]) => typeof value === "function").map(([path]) => path);
+  if (omittedFunctions.length === 0) return code;
+  const note = `Function-valued ${omittedFunctions.join(", ")} omitted; reattach in host JavaScript.`;
+  return format.startsWith("script-") ? `<!-- ${note} -->\n${code}` : `// ${note}\n${code}`;
+}
+
+/** Deliberately conservative: implementation objects cannot be reconstructed from JSON. */
+function generateAuthoredCode(config: Record<string, unknown>, format: CodeFormat, options: CodeGeneratorOptions): string {
+  const omitted: string[] = [];
+  const skip = Symbol('omit');
+  const implementations = new Set(['storageAdapter', 'targetProviders', 'components', 'voiceRecognition.provider', 'voiceRecognition.provider.custom']);
+  const containsFunction = (value: unknown): boolean => typeof value === 'function' ||
+    (!!value && typeof value === 'object' && Object.values(value).some(containsFunction));
+  const visit = (value: unknown, path: string): unknown => {
+    if (typeof value === 'function' || typeof value === 'symbol' || value === undefined) {
+      omitted.push(path);
+      return skip;
+    }
+    if (!value || typeof value !== 'object') return value;
+    if ((implementations.has(path) && containsFunction(value)) ||
+        (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype)) {
+      omitted.push(path);
+      return skip;
+    }
+    if (Array.isArray(value)) {
+      const entries = value.map((entry, index) => visit(entry, `${path}.${index}`));
+      // Do not turn function entries into JSON null or reorder implementation lists.
+      if (entries.includes(skip)) { omitted.push(path); return skip; }
+      return entries;
+    }
+    return Object.fromEntries(Object.entries(value).flatMap(([key, entry]) => {
+      const result = visit(entry, path ? `${path}.${key}` : key);
+      return result === skip ? [] : [[key, result]];
+    }));
+  };
+  const serializable = visit(config, '') as Record<string, unknown>;
+  const hooks = normalizeHooks(options.hooks);
+  const isInstaller = format === 'script-installer';
+  let literal = serializeConfigLiteral(serializable, 2);
+  if (hooks) {
+    const hookLines = generateHooksConfig(hooks as CodeGeneratorHooks, '  ');
+    if (hooks.postprocessMessage) hookLines.push(`  postprocessMessage: ${hooks.postprocessMessage},`);
+    const actionHooks = ['onFeedback', 'onCopy'] as const;
+    if (actionHooks.some(key => hooks[key])) {
+      if (!isInstaller) {
+        const baseConfig = { ...serializable };
+        delete baseConfig.messageActions;
+        literal = serializeConfigLiteral(baseConfig, 2);
+      }
+      hookLines.push('  messageActions: {');
+      hookLines.push(...Object.entries((serializable.messageActions ?? {}) as Record<string, unknown>)
+        .map(([key, value]) => `    ${serializeConfigLiteral(key)}: ${serializeConfigLiteral(value)},`));
+      for (const key of actionHooks) if (hooks[key]) hookLines.push(`    ${key}: ${hooks[key]},`);
+      hookLines.push('  },');
+    }
+    if (isInstaller) omitted.push(...Object.keys(hooks).map(key => `hooks.${key}`));
+    else if (hookLines.length) {
+      const baseProperties = literal.slice(1, -1).trim();
+      literal = `{\n${baseProperties}${baseProperties ? ',' : ''}\n${hookLines.join('\n')}\n}`;
+    }
+  }
+  if (format.startsWith('script-')) literal = literal.replace(/<\/script/gi, '<\\/script');
+  let code: string;
+  const target = serializeConfigLiteral(options.target ?? 'body');
+  const windowKey = options.windowKey ? `, windowKey: ${serializeConfigLiteral(options.windowKey)}` : '';
+  const cdn = resolveCdnBase(options);
+  if (isInstaller) {
+    const payload = options.target || options.windowKey
+      ? { config: serializable, ...(options.target ? { target: options.target } : {}), ...(options.windowKey ? { windowKey: options.windowKey } : {}) }
+      : serializable;
+    const attribute = serializeConfigLiteral(payload).replace(/&/g, '&amp;').replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+    code = `<script src="${cdn}/install.global.js" data-config='${attribute}'></script>`;
+  } else if (format.startsWith('script-')) {
+    code = `<link rel="stylesheet" href="${cdn}/widget.css" />\n<script src="${cdn}/index.global.js"></script>\n<script>\nvar config = ${literal};\nvar handle = window.AgentWidget.initAgentWidget({ target: ${target}${windowKey}, config });\n</script>`;
+  } else if (format.startsWith('react-')) {
+    code = `'use client';\nimport { useEffect } from 'react';\nimport '@runtypelabs/persona/widget.css';\nimport { initAgentWidget } from '@runtypelabs/persona';\n\nexport function ChatWidget() {\n  useEffect(() => {\n    const handle = initAgentWidget({ target: ${target}${windowKey}, config: ${literal} });\n    return () => handle.destroy();\n  }, []);\n  return null;\n}`;
+  } else {
+    code = `import '@runtypelabs/persona/widget.css';\nimport { initAgentWidget } from '@runtypelabs/persona';\n\ninitAgentWidget({ target: ${target}${windowKey}, config: ${literal} });`;
+  }
+  if (!omitted.length) return code;
+  // Notes are HTML comments in script formats; sanitize path text as well as values.
+  const note = `Omitted non-serializable inputs: ${[...new Set(omitted)].join(', ')}. Reattach functions/custom implementations in host JavaScript; closures cannot be reconstructed.`;
+  return format.startsWith('script-') ? `<!-- ${note.replace(/--/g, '—').replace(/</g, '&lt;').replace(/>/g, '&gt;')} -->\n${code}` : `// ${note.replace(/[\r\n\u2028\u2029]/g, ' ')}\n${code}`;
 }
 
 function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
@@ -654,7 +789,7 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
   if (config.target) lines.push(`    target: "${config.target}",`);
   if (config.flowId) lines.push(`    flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`    parserType: "${parserType}",`);
-  appendFutureDefaultsConfig(lines, config, "    ");
+  appendThemeDefaultsConfig(lines, config, "    ");
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "    ");
@@ -664,13 +799,7 @@ function generateESMCode(config: any, options?: CodeGeneratorOptions): string {
     appendSerializableObjectBlock(lines, "launcher", config.launcher, "    ");
   }
 
-  if (config.copy) {
-    lines.push("    copy: {");
-    Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`      ${key}: "${value}",`);
-    });
-    lines.push("    },");
-  }
+  appendPresentationConfig(lines, config, "    ");
 
   if (config.sendButton) {
     lines.push("    sendButton: {");
@@ -805,7 +934,7 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
   if (config.target) lines.push(`        target: "${config.target}",`);
   if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`        parserType: "${parserType}",`);
-  appendFutureDefaultsConfig(lines, config, "        ");
+  appendThemeDefaultsConfig(lines, config, "        ");
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "        ");
@@ -815,13 +944,7 @@ function generateReactComponentCode(config: any, options?: CodeGeneratorOptions)
     appendSerializableObjectBlock(lines, "launcher", config.launcher, "        ");
   }
 
-  if (config.copy) {
-    lines.push("        copy: {");
-    Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`          ${key}: "${value}",`);
-    });
-    lines.push("        },");
-  }
+  appendPresentationConfig(lines, config, "        ");
 
   if (config.sendButton) {
     lines.push("        sendButton: {");
@@ -1073,7 +1196,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
   if (config.agentId) lines.push(`        agentId: "${config.agentId}",`);
   if (config.target) lines.push(`        target: "${config.target}",`);
   if (config.flowId) lines.push(`        flowId: "${config.flowId}",`);
-  appendFutureDefaultsConfig(lines, config, "        ");
+  appendThemeDefaultsConfig(lines, config, "        ");
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "        ");
@@ -1083,13 +1206,7 @@ function generateReactAdvancedCode(config: any, options?: CodeGeneratorOptions):
     appendSerializableObjectBlock(lines, "launcher", config.launcher, "        ");
   }
 
-  if (config.copy) {
-    lines.push("        copy: {");
-    Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`          ${key}: "${value}",`);
-    });
-    lines.push("        },");
-  }
+  appendPresentationConfig(lines, config, "        ");
 
   if (config.sendButton) {
     lines.push("        sendButton: {");
@@ -1338,8 +1455,13 @@ function buildSerializableConfig(config: any): Record<string, any> {
     serializableConfig.future = { v5Defaults: config.future.v5Defaults === true };
   }
   if (config.theme) serializableConfig.theme = config.theme;
+  if (config.brand) serializableConfig.brand = config.brand;
+  if (config.darkTheme) serializableConfig.darkTheme = config.darkTheme;
+  if (config.colorScheme !== undefined) serializableConfig.colorScheme = config.colorScheme;
   if (config.launcher) serializableConfig.launcher = config.launcher;
   if (config.copy) serializableConfig.copy = config.copy;
+  if (config.welcome !== undefined) serializableConfig.welcome = config.welcome;
+  if (config.approval !== undefined) serializableConfig.approval = config.approval;
   if (config.sendButton) serializableConfig.sendButton = config.sendButton;
   if (config.voiceRecognition) serializableConfig.voiceRecognition = config.voiceRecognition;
   if (config.statusIndicator) serializableConfig.statusIndicator = config.statusIndicator;
@@ -1457,8 +1579,12 @@ function generateScriptInstallerCode(config: any, options?: CodeGeneratorOptions
       }
     : serializableConfig;
 
-  // Escape single quotes in JSON for HTML attribute
-  const configJson = JSON.stringify(payload, null, 0).replace(/'/g, "&#39;");
+  // Preserve literal entities and quotes when the browser decodes the HTML attribute.
+  const configJson = JSON.stringify(payload)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/'/g, "&#39;");
 
   return `<script src="${resolveCdnBase(options)}/install.global.js" data-config='${configJson}'></script>`;
 }
@@ -1490,7 +1616,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
   if (config.target) lines.push(`      target: "${config.target}",`);
   if (config.flowId) lines.push(`      flowId: "${config.flowId}",`);
   if (shouldEmitParserType) lines.push(`      parserType: "${parserType}",`);
-  appendFutureDefaultsConfig(lines, config, "      ");
+  appendThemeDefaultsConfig(lines, config, "      ");
 
   if (config.theme && typeof config.theme === "object" && Object.keys(config.theme).length > 0) {
     appendSerializableObjectBlock(lines, "theme", config.theme as Record<string, unknown>, "      ");
@@ -1500,13 +1626,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
     appendSerializableObjectBlock(lines, "launcher", config.launcher, "      ");
   }
 
-  if (config.copy) {
-    lines.push("      copy: {");
-    Object.entries(config.copy).forEach(([key, value]) => {
-      lines.push(`        ${key}: "${value}",`);
-    });
-    lines.push("      },");
-  }
+  appendPresentationConfig(lines, config, "      ");
 
   if (config.sendButton) {
     lines.push("      sendButton: {");
@@ -1616,7 +1736,7 @@ function generateScriptManualCode(config: any, options?: CodeGeneratorOptions): 
 function generateScriptAdvancedCode(config: any, options?: CodeGeneratorOptions): string {
   const hooks = options?.hooks;
   const serializableConfig = buildSerializableConfig(config);
-  const configJson = JSON.stringify(serializableConfig, null, 2);
+  const configJson = serializeConfigLiteral(serializableConfig, 2);
 
   const lines: string[] = [
     "<script>",

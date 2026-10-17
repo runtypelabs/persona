@@ -227,10 +227,13 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
       enabled: isLauncher,
       width: isLauncher ? "min(420px, 95vw)" : "100%",
     },
+    welcome: {
+      title: "Slash Commands Demo",
+      subtitle: "Type / at the start of a line for commands (or @ for context).",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Slash Commands Demo",
-      welcomeSubtitle: "Type / at the start of a line for commands (or @ for context).",
       inputPlaceholder: "Type / for commands…",
     },
     contextMentions: buildContextMentions(selectedVariant),

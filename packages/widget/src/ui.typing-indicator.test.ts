@@ -16,7 +16,7 @@ const createMount = () => {
  */
 const renderTypingBubble = async (
   config: Record<string, unknown>
-): Promise<{ bubble: HTMLElement; destroy: () => void }> => {
+): Promise<{ bubble: HTMLElement; mount: HTMLElement; controller: ReturnType<typeof createAgentExperience>; destroy: () => void }> => {
   global.fetch = vi.fn().mockImplementation(
     () => new Promise(() => {})
   ) as unknown as typeof fetch;
@@ -33,7 +33,7 @@ const renderTypingBubble = async (
   await Promise.resolve();
 
   const bubble = mount.querySelector<HTMLElement>('[data-typing-indicator="true"]')!;
-  return { bubble, destroy: () => controller.destroy() };
+  return { bubble, mount, controller, destroy: () => controller.destroy() };
 };
 
 describe("standalone typing indicator bubble", () => {
@@ -41,6 +41,44 @@ describe("standalone typing indicator bubble", () => {
     document.body.innerHTML = "";
     if (typeof localStorage !== "undefined") localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it.each([
+    [{}, false],
+    [{ future: { v5Defaults: true } }, true],
+    [{ loadingIndicator: { variant: "label" } }, true],
+    [{ future: { v5Defaults: true }, loadingIndicator: { variant: "dots" } }, false],
+  ])("resolves loading variant for %j", async (config, label) => {
+    const { bubble, destroy } = await renderTypingBubble(config);
+    expect(Boolean(bubble.querySelector(".persona-loading-label"))).toBe(label);
+    expect(bubble.querySelectorAll(".persona-animate-typing")).toHaveLength(label ? 0 : 3);
+    if (label) expect(bubble.textContent).toBe("Thinking…");
+    destroy();
+  });
+
+  it("uses the configured label in custom defaultRenderer and preserves the wrapper option", async () => {
+    const { bubble, destroy } = await renderTypingBubble({
+      loadingIndicator: {
+        variant: "label",
+        label: "Working…",
+        showBubble: false,
+        render: ({ defaultRenderer }: { defaultRenderer: () => HTMLElement }) => defaultRenderer(),
+      },
+    });
+    expect(bubble.querySelector(".persona-loading-label")?.textContent).toBe("Working…");
+    expect(bubble.classList.contains("persona-message-assistant-bubble")).toBe(false);
+    destroy();
+  });
+
+  it("updates a waiting label and clears it when the user stops", async () => {
+    const { mount, controller, destroy } = await renderTypingBubble({ future: { v5Defaults: true } });
+    controller.update({ loadingIndicator: { variant: "label", label: "Searching…" } });
+    expect(mount.querySelector(".persona-loading-label")?.textContent).toBe("Searching…");
+    const input = mount.querySelector("textarea")!;
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, composed: true }));
+    await Promise.resolve();
+    expect(mount.querySelector(".persona-loading-label")).toBeNull();
+    destroy();
   });
 
   it("uses the assistant bubble classes under the default bubble layout", async () => {
@@ -265,13 +303,14 @@ describe("standalone typing indicator with hidden activity rows", () => {
     controller.destroy();
   });
 
-  it("still hides the dots while a visible tool call renders its own bubble", async () => {
+  it.each([false, true])("hides waiting UI while visible tool activity renders (V5=%s)", async (v5Defaults) => {
     const { mount, controller } = await mountStreaming({
+      future: { v5Defaults },
       features: { showToolCalls: true },
     });
 
     injectTool(controller, "tool-1", "running", seq(1));
-    expect(mount.querySelector(".persona-tool-bubble")).not.toBeNull();
+    expect(mount.querySelector(v5Defaults ? ".persona-activity-row" : ".persona-tool-bubble")).not.toBeNull();
     expect(typingIndicator(mount)).toBeNull();
 
     controller.destroy();

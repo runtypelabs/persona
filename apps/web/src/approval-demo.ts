@@ -137,15 +137,25 @@ const buildConfig = (mode: Mode): AgentWidgetConfig => {
     theme: {
       ...DEFAULT_WIDGET_CONFIG.theme,
     },
+    welcome: {
+      title: "Approval Demo",
+      subtitle: "This demo simulates tool approval requests. Send any message to trigger an approval flow.",
+      variant: "card",
+    },
     copy: {
       ...DEFAULT_WIDGET_CONFIG.copy,
-      welcomeTitle: "Approval Demo",
-      welcomeSubtitle:
-        "This demo simulates tool approval requests. Send any message to trigger an approval flow.",
       inputPlaceholder: "Send a message to trigger approval...",
     },
     features: { showToolCalls: true, showReasoning: true },
-    suggestionChips: ["Search for AI news", "Find recent papers", "Look up documentation"],
+    suggestions: {
+      starters: {
+        items: ["Search for AI news", "Find recent papers", "Look up documentation"],
+        variant: "chip",
+        placement: "composer",
+        overflow: "wrap",
+        maxItems: 4,
+      },
+    },
     postprocessMessage: ({ text }) => markdownPostprocessor(text),
   };
 };

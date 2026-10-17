@@ -733,6 +733,7 @@ const analyticsTheme: NonNullable<AgentWidgetConfig["theme"]> = {
       assistant: { background: "#ffffff", text: "#17211e", borderRadius: "0" },
     },
     introCard: { borderRadius: "0" },
+    suggestion: { chip: { fontWeight: "620", padding: "10px 14px" } },
     input: { background: "#ffffff" },
     artifact: {
       pane: { background: "#f8faf9" },
@@ -878,19 +879,26 @@ const config: AgentWidgetConfig = {
   storageAdapter: createLocalStorageAdapter("persona-state-analytics-agent"),
   theme: analyticsTheme,
   colorScheme: "light",
+  welcome: {
+    variant: "none",
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    showWelcomeCard: false,
     inputPlaceholder: "Ask what changed, why it changed, or where to focus next…",
   },
-  suggestionChips: ANALYTICS_STARTER_SCENARIOS.map((scenario) => scenario.prompt),
-  // Lets Atlas end an analysis with tappable follow-up questions.
-  suggestions: { followUps: { expose: true } },
+  suggestions: {
+    starters: {
+      items: ANALYTICS_STARTER_SCENARIOS.map((scenario) => scenario.prompt),
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+    // Lets Atlas end an analysis with tappable follow-up questions.
+    followUps: { expose: true },
+  },
   suggestionChipsConfig: {
     fontFamily: "sans-serif",
-    fontWeight: "620",
-    paddingX: "14px",
-    paddingY: "10px",
   },
   messageActions: { showCopy: true, showUpvote: false, showDownvote: false },
   toolCall: {

@@ -4,6 +4,9 @@
 
 ## Programmatic control
 
+For instance identity, transcript/run events, managed slots and components,
+composer-mode setters, and link routing, see [Embedded host integration](./EMBEDDED-HOST.md).
+
 `initAgentWidget` (and `createAgentExperience`) return a controller with methods to programmatically control the widget.
 
 ### Basic controls
@@ -997,4 +1000,3 @@ Notes:
   launcher loading (the hook can request open, so the full bundle has to load up
   front). See the deferred launcher notes in
   [Script Tag Installation](./INSTALLATION-FRAMEWORKS.md).
-

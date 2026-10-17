@@ -30,7 +30,7 @@ export default function Page() {
             title="eve"
             subtitle="Ask a question and the eve agent's session stream will be wrapped for Persona."
             accent="#0a0a0a"
-            suggestionChips={[
+            starterItems={[
               "Explain what this adapter does",
               "Write a haiku about streaming",
               "Give me a short checklist for production",

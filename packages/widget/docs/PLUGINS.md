@@ -339,6 +339,13 @@ through the widget's error path and the button returns to rest.
 accessible root with nothing wrapped around it. The returned `destroy()` runs on
 action removal, composer rebuild, plugin removal, and widget destroy.
 
+**Button tooltips.** Icon-only actions show their `label` in a styled tooltip on
+hover or keyboard focus. Use `tooltipText` to override the copy, or
+`showTooltip: false` to disable it while keeping the accessible name. Actions
+with visible text stay quiet unless `tooltipText` or `showTooltip: true` is set.
+The overflow `+` trigger uses the same styled tooltip; it hides while the menu
+is open. Menu rows do not inherit automatic bar tooltips.
+
 ```ts
 {
   id: "picker",
@@ -371,7 +378,35 @@ folded.
 Core built-ins (attachment, mention affordances) are never folded implicitly:
 the host has to name them in `composer.actionOverflow.includeBuiltIns`.
 
-**Motion.** Key any animation off your own data attributes or off public
+**Built-in voice bars.** Button actions can opt into a small SVG/CSS animation
+without an animation library, in both V4 and V5:
+
+```ts
+composer: {
+  actions: [{
+    id: "voice",
+    label: "Start voice",
+    iconName: "voice-bars",
+    iconAnimation: "voice",
+    placement: "end",
+    presentation: "bar",
+    onSelect: (context) => context.toggleVoice(),
+  }],
+}
+```
+
+Configure `voiceRecognition` separately to use `toggleVoice()`. Animation alone
+does not enable or capture audio. Bars animate only during the same widget's live
+voice transcription (recording); they remain static at idle and stop when capture
+ends, including processing and playback. Without provider levels the animation
+uses a steady fallback. During recording,
+the existing `--persona-voice-level` signal modulates their height when available
+(amplitude, not a frequency waveform). Reduced-motion preferences, disabled
+buttons, and overflow-menu rows use the static icon. Omit `iconAnimation` or use
+`"none"` for static bars even during transcription. Other icons
+ignore `"voice"`.
+
+**Custom motion.** Key any animation off your own data attributes or off public
 composer state, never off Persona's internal class names, and read the shared
 motion tokens (`--persona-motion-duration-fast`, `--persona-motion-duration-base`,
 `--persona-motion-easing`) so a host that zeroes them disables your motion too.

@@ -67,6 +67,7 @@ export interface ControlResult {
 /** DOM-specific: search index entry */
 export interface SearchEntry {
   fieldId: string;
+  path?: string;
   label: string;
   description: string;
   keywords: string[];

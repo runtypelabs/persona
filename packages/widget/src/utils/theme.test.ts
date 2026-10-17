@@ -11,6 +11,27 @@ import {
 } from './theme';
 
 describe('theme utils', () => {
+  it.each(['transparent', '#fff0', '#ffffff00', 'rgba(1, 2, 3, 0)', 'rgb(1 2 3 / 0%)'])('leaves transparent V5 header icons unpadded: %s', (iconBackground) => {
+    const variables = themeToCssVariables(getActiveTheme({ future: { v5Defaults: true }, theme: { components: { header: { iconBackground } } } }));
+    expect(variables['--persona-components-header-iconPadding']).toBe('0px');
+  });
+  it.each(['#b9a68a', 'rgb(255, 0, 0)', 'palette.colors.primary.500'])('pads filled V5 header icons: %s', (iconBackground) => {
+    const variables = themeToCssVariables(getActiveTheme({ future: { v5Defaults: true }, theme: { components: { header: { iconBackground } } } }));
+    expect(variables['--persona-components-header-iconPadding']).toBe('6px');
+  });
+  it('resolves header padding from brands and the active dark override', () => {
+    const config = { future: { v5Defaults: true }, brand: { accent: '#b9a68a' }, colorScheme: 'dark' as const };
+    expect(themeToCssVariables(getActiveTheme(config))['--persona-components-header-iconPadding']).toBe('0px');
+    expect(themeToCssVariables(getActiveTheme({ ...config, darkTheme: { components: { header: { iconBackground: 'semantic.colors.primary' } } } }))['--persona-components-header-iconPadding']).toBe('6px');
+  });
+  it.each([false, true])('honors explicit icon padding and preserves legacy defaults (v5=%s)', (v5Defaults) => {
+    const future = { v5Defaults };
+    expect(themeToCssVariables(getActiveTheme({ future }))['--persona-components-header-iconPadding']).toBe(v5Defaults ? '0px' : undefined);
+    for (const iconPadding of ['0', '4px', '2px 8px']) {
+      const variables = themeToCssVariables(getActiveTheme({ future, theme: { components: { header: { iconBackground: '#b9a68a', iconPadding } } } }));
+      expect(variables['--persona-components-header-iconPadding']).toBe(iconPadding);
+    }
+  });
   afterEach(() => {
     document.documentElement.classList.remove('dark');
   });
@@ -872,7 +893,7 @@ describe('theme utils', () => {
     expect(explicit['--persona-history-confirm-scrim']).toBe('rgba(0, 0, 0, 0.6)');
   });
 
-  it('emits messageActions aliases only when the group is configured', () => {
+  it('preserves V4 messageActions aliases only when the group is configured', () => {
     // widget.css chains to the ghost wash and semantic text on its own, so an
     // unset group must leave every alias undefined.
     const defaults = themeToCssVariables(createTheme());
@@ -907,6 +928,28 @@ describe('theme utils', () => {
     );
     expect(partial['--persona-message-action-radius']).toBe('2px');
     expect(partial['--persona-message-action-hover-bg']).toBeUndefined();
+  });
+
+  it.each(['light', 'dark'] as const)('materializes V5 message action tokens in the %s scheme', (colorScheme) => {
+    const config = { future: { v5Defaults: true }, colorScheme };
+    const defaults = themeToCssVariables(getActiveTheme(config));
+    expect(defaults['--persona-message-action-bg']).toBe('transparent');
+    expect(defaults['--persona-message-action-border']).toBe('none');
+    expect(defaults['--persona-message-action-hover-bg']).toBe(
+      colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)'
+    );
+    expect(defaults['--persona-message-action-hover-fg']).toBe(defaults['--persona-text']);
+    expect(defaults['--persona-message-action-radius']).toBe('8px');
+
+    const theme = { components: {
+      button: { ghost: { hoverBackground: '#123456' } },
+      messageActions: { borderRadius: '3px', hoverForeground: '#abcdef' },
+    } };
+    const custom = themeToCssVariables(getActiveTheme({ ...config, theme, darkTheme: theme }));
+    expect(custom['--persona-message-action-hover-bg']).toBe('#123456');
+    expect(custom['--persona-message-action-hover-fg']).toBe('#abcdef');
+    expect(custom['--persona-message-action-radius']).toBe('3px');
+    expect(custom['--persona-message-action-bg']).toBe('transparent');
   });
 
   it('defaults artifact pane fill from semantic container and resolves toolbar background token refs', () => {
@@ -1141,6 +1184,48 @@ describe('theme utils', () => {
     expect(cssVars['--persona-scroll-to-bottom-gap']).toBe('0.5rem');
     expect(cssVars['--persona-scroll-to-bottom-font-size']).toBe('0.875rem');
     expect(cssVars['--persona-scroll-to-bottom-icon-size']).toBe('14px');
+  });
+
+  it('maps count badge overrides without changing the scroll pill', () => {
+    const cssVars = themeToCssVariables(createTheme({
+      components: {
+        scrollToBottom: {
+          border: '#123456',
+          countBadge: {
+            background: 'palette.colors.accent.500',
+            foreground: '#ffffff',
+            border: '#654321',
+            borderRadius: '4px',
+            size: '22px',
+            padding: '0 7px',
+            fontSize: '12px',
+            fontWeight: '700',
+          },
+        },
+      },
+    }));
+    expect(cssVars['--persona-scroll-to-bottom-border']).toBe('#123456');
+    expect(cssVars['--persona-scroll-to-bottom-count-bg']).toBe('#06b6d4');
+    expect(cssVars['--persona-scroll-to-bottom-count-fg']).toBe('#ffffff');
+    expect(cssVars['--persona-scroll-to-bottom-count-border']).toBe('#654321');
+    expect(cssVars['--persona-scroll-to-bottom-count-radius']).toBe('4px');
+    expect(cssVars['--persona-scroll-to-bottom-count-size']).toBe('22px');
+    expect(cssVars['--persona-scroll-to-bottom-count-padding']).toBe('0 7px');
+    expect(cssVars['--persona-scroll-to-bottom-count-font-size']).toBe('12px');
+    expect(cssVars['--persona-scroll-to-bottom-count-font-weight']).toBe('700');
+  });
+
+  it.each([false, true])('preserves CSS count badge fallbacks with V5=%s', (v5Defaults) => {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      const cssVars = themeToCssVariables(getActiveTheme({
+        apiUrl: '/api', future: { v5Defaults }, colorScheme,
+        theme: { components: { scrollToBottom: { border: '#123456' } } },
+        darkTheme: { components: { scrollToBottom: { border: '#123456' } } },
+      }));
+      expect(cssVars['--persona-scroll-to-bottom-border']).toBe('#123456');
+      expect(Object.keys(cssVars).filter(key => key.startsWith('--persona-scroll-to-bottom-count-'))).toEqual([]);
+      expect(cssVars['--persona-scroll-to-bottom-shadow']).toBe(cssVars['--persona-palette-shadows-sm']);
+    }
   });
 
   it('maps introCard component tokens to dedicated CSS variables', () => {
@@ -1458,10 +1543,10 @@ describe.each([false, true])('activity aliases (V5 %s)', v5Defaults => {
   });
   it('keeps legacy values usable while preferring explicit activity tokens', () => {
     const vars = (activity?: { labelSize?: string; bodySurface?: string }) => themeToCssVariables(getActiveTheme({ future: { v5Defaults }, theme: { components: {
-      toolBubble: { labelSize: '17px', shadow: 'none' }, collapsibleWidget: { surface: '#123456' }, activity,
+      toolBubble: { labelSize: '17px', shadow: 'none' }, collapsibleWidget: { surface: '#123456' }, ...(activity ? { activity } : {}),
     } } }));
     expect(vars()['--persona-components-toolBubble-labelSize']).toBe('17px');
-    expect(vars()['--persona-components-activity-bodySurface']).toBe('#123456');
+    expect(vars()['--persona-components-activity-bodySurface']).toBe(v5Defaults ? 'transparent' : '#123456');
     expect(vars({ labelSize: '15px', bodySurface: '#abcdef' })['--persona-components-toolBubble-labelSize']).toBe('15px');
     expect(vars({ bodySurface: '#abcdef' })['--persona-components-activity-bodySurface']).toBe('#abcdef');
   });
@@ -1490,4 +1575,41 @@ describe('V5 header control surfaces', () => {
     expect(custom['--persona-components-header-controlBorderRadius']).toBe('4px');
     expect(custom['--persona-components-header-controlHoverBackground']).toBe('red');
   });
+});
+
+
+it.each(['light', 'dark'] as const)('emits V5 artifact card and inline defaults in %s', colorScheme => {
+  const config = { future: { v5Defaults: true }, colorScheme };
+  const css = themeToCssVariables(getActiveTheme(config));
+  expect(css['--persona-artifact-card-bg']).toBe(css['--persona-surface']);
+  expect(css['--persona-artifact-card-border']).toBe('1px solid var(--persona-border)');
+  expect(css['--persona-artifact-card-radius']).toBe('12px');
+  expect(css['--persona-artifact-card-hover-border']).toBe(css['--persona-border']);
+  expect(css['--persona-artifact-card-hover-bg']).toBe(colorScheme === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)');
+  expect(css['--persona-artifact-inline-bg']).toBe(css['--persona-surface']);
+  expect(css['--persona-artifact-inline-border']).toBe('1px solid var(--persona-border)');
+  expect(css['--persona-artifact-inline-radius']).toBe('12px');
+  expect(css['--persona-artifact-inline-chrome-bg']).toBe(css['--persona-surface']);
+  expect(css['--persona-artifact-inline-chrome-border']).toBe(css['--persona-border']);
+  expect(css['--persona-artifact-inline-title-color']).toBe(css['--persona-text']);
+  expect(css['--persona-artifact-inline-muted-color']).toBe(css['--persona-muted']);
+  const theme = { components: { artifact: {
+    card: { background: '#123456', borderRadius: '3px', hoverBackground: '#234567' },
+    inline: { borderRadius: '4px', chromeBackground: '#345678', titleColor: '#abcdef' },
+  } } };
+  const custom = themeToCssVariables(getActiveTheme({ ...config, theme, darkTheme: theme }));
+  expect(custom['--persona-artifact-card-bg']).toBe('#123456');
+  expect(custom['--persona-artifact-card-radius']).toBe('3px');
+  expect(custom['--persona-artifact-card-hover-bg']).toBe('#234567');
+  expect(custom['--persona-artifact-inline-radius']).toBe('4px');
+  expect(custom['--persona-artifact-inline-chrome-bg']).toBe('#345678');
+  expect(custom['--persona-artifact-inline-title-color']).toBe('#abcdef');
+});
+
+it('preserves V4 artifact card and inline CSS fallbacks', () => {
+  const css = themeToCssVariables(getActiveTheme({}));
+  expect(css['--persona-artifact-card-bg']).toBeUndefined();
+  expect(css['--persona-artifact-card-radius']).toBeUndefined();
+  expect(css['--persona-artifact-inline-bg']).toBeUndefined();
+  expect(css['--persona-artifact-inline-radius']).toBeUndefined();
 });

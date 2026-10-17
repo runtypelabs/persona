@@ -55,14 +55,25 @@ const artifactDemoConfigBase: Partial<AgentWidgetConfig> = {
       allowedTypes: ["markdown", "component"],
     },
   },
+  welcome: {
+    title: "Artifacts demo",
+    subtitle:
+      "Use the artifact buttons to replay a scripted agent turn. Each button streams the real artifact wire frames, rendered per the selected display mode (panel, collapsed, or inline).",
+    variant: "card",
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle: "Artifacts demo",
-    welcomeSubtitle:
-      "Use the artifact buttons to replay a scripted agent turn. Each button streams the real artifact wire frames, rendered per the selected display mode (panel, collapsed, or inline).",
     inputPlaceholder: "Message the model…",
   },
-  suggestionChips: [],
+  suggestions: {
+    starters: {
+      items: [],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
 };
 
 const configInspector = createDemoConfigInspector({

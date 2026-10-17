@@ -9,6 +9,23 @@ import {
 describe.each([false, true])("defaults resolver (v5Defaults: %s)", (v5Defaults) => {
   const future = { v5Defaults };
 
+  it("enables artifacts only by default in V5 and preserves explicit choices", () => {
+    expect(mergeWithDefaults({ future }).features?.artifacts?.enabled === true).toBe(v5Defaults);
+    expect(mergeWithDefaults({ future, features: { artifacts: { display: "collapsed" } } })
+      .features?.artifacts?.enabled === true).toBe(v5Defaults);
+    for (const enabled of [false, true]) {
+      expect(mergeWithDefaults({ future, features: { artifacts: { enabled } } })
+        .features?.artifacts?.enabled).toBe(enabled);
+    }
+  });
+
+  it("leaves V5 suggestion weight to theme tokens and preserves explicit legacy overrides", () => {
+    expect(mergeWithDefaults({ future }).suggestionChipsConfig?.fontWeight)
+      .toBe(v5Defaults ? undefined : "500");
+    expect(mergeWithDefaults({ future, suggestionChipsConfig: { fontWeight: "600" } })
+      .suggestionChipsConfig?.fontWeight).toBe("600");
+  });
+
   it("selects the requested version and its documented defaults", () => {
     expect(resolveDefaultsVersion({ future })).toBe(v5Defaults ? "v5" : "v4");
     const defaults = resolveDefaults({ future });
@@ -66,4 +83,14 @@ it("keeps the legacy defaults when the opt-in is missing", () => {
   expect(resolveDefaultsVersion()).toBe("v4");
   expect(resolveDefaultsVersion({ future: {} })).toBe("v4");
   expect(JSON.stringify(mergeWithDefaults())).toBe(JSON.stringify(DEFAULT_WIDGET_CONFIG));
+});
+
+
+it("merges approval options independently and preserves disabling", () => {
+  const future = { v5Defaults: true };
+  const partial = mergeWithDefaults({ future, approval: { approveLabel: "Proceed" } });
+  expect(partial.approval).toMatchObject({ resolvedDisplay: "row", primaryAction: "allow-once", keyboardShortcuts: "focused", approveLabel: "Proceed" });
+  expect(mergeWithDefaults({ future, approval: false }).approval).toBe(false);
+  expect(mergeWithDefaults({ future, approval: { resolvedDisplay: "trace", primaryAction: "always-allow", keyboardShortcuts: false } }).approval).toEqual({ resolvedDisplay: "trace", primaryAction: "always-allow", keyboardShortcuts: false });
+  expect(mergeWithDefaults({}).approval).toBeUndefined();
 });

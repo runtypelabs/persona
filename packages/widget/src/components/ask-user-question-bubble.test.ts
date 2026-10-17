@@ -18,6 +18,9 @@ import {
   removeAskUserQuestionSheet,
   setCurrentAnswer,
 } from "./ask-user-question-bubble";
+import { mergeWithDefaults } from "../defaults";
+import { mergeConfigUpdate } from "../utils/config-merge";
+import { applyThemeVariables } from "../utils/theme";
 import type {
   AgentWidgetConfig,
   AgentWidgetMessage,
@@ -579,5 +582,51 @@ describe("Skip button", () => {
     ensureAskUserQuestionSheet(makeMessage(), {} as AgentWidgetConfig, overlay);
     const sheet = overlay.querySelector('[data-persona-ask-sheet-for="tool-1"]')!;
     expect(sheet.querySelector('[data-ask-user-action="skip"]')).toBeNull();
+  });
+});
+
+
+describe("question sheet theme migration", () => {
+  const theme: AgentWidgetConfig["theme"] = { components: { askUserQuestion: {
+    sheet: { background: "#123456", border: "#234567", shadow: "none" },
+    pill: { background: "#345678", foreground: "#456789", borderRadius: "0px", selectedBackground: "#567890", selectedForeground: "#678901" },
+    customInput: { background: "#789012" },
+  } } };
+  it.each([false, true])("exposes all nine scoped theme values without moving behavioral settings (v5=%s)", (v5Defaults) => {
+    const config = mergeWithDefaults({ theme, future: { v5Defaults }, features: { askUserQuestion: { layout: "pills", slideInMs: 42 } } });
+    const overlay = makeOverlay();
+    applyThemeVariables(overlay, config);
+    ensureAskUserQuestionSheet(makeMessage(), config, overlay);
+    const sheet = overlay.querySelector<HTMLElement>("[data-persona-ask-sheet-for]")!;
+    expect(sheet.classList.contains("persona-ask-sheet--pills")).toBe(true);
+    expect(sheet.style.getPropertyValue("--persona-ask-sheet-duration")).toBe("42ms");
+    for (const [name, value] of Object.entries({
+      "sheet-bg": "#123456", "sheet-border": "#234567", "sheet-shadow": "none", "pill-bg": "#345678", "pill-fg": "#456789", "pill-radius": "0px", "pill-bg-selected": "#567890", "pill-fg-selected": "#678901", "input-bg": "#789012",
+    })) expect(overlay.style.getPropertyValue(`--persona-ask-${name}`)).toBe(value);
+    expect(sheet.style.getPropertyValue("--persona-ask-sheet-bg")).toBe("");
+    setCurrentAnswer(sheet, "Hobbyists");
+    expect(getSelectedLabels(sheet)).toEqual(["Hobbyists"]);
+  });
+
+  it("keeps local styles highest priority, updates the mounted sheet, and restores inheritance on reset", () => {
+    let config = mergeWithDefaults({ theme, features: { askUserQuestion: { styles: { sheetBackground: "red", pillTextColor: "blue" } } } });
+    const overlay = makeOverlay();
+    applyThemeVariables(overlay, config);
+    const input = makeMessage();
+    ensureAskUserQuestionSheet(input, config, overlay);
+    const sheet = overlay.querySelector<HTMLElement>("[data-persona-ask-sheet-for]")!;
+    setCurrentAnswer(sheet, "Professionals");
+    expect(sheet.style.getPropertyValue("--persona-ask-sheet-bg")).toBe("red");
+    config = mergeConfigUpdate(config, { features: { askUserQuestion: { styles: { sheetBackground: "pink" } } } });
+    ensureAskUserQuestionSheet(input, config, overlay);
+    expect(overlay.querySelector("[data-persona-ask-sheet-for]")).toBe(sheet);
+    expect(sheet.style.getPropertyValue("--persona-ask-sheet-bg")).toBe("pink");
+    expect(getSelectedLabels(sheet)).toEqual(["Professionals"]);
+    config = mergeConfigUpdate(config, { features: { askUserQuestion: { styles: undefined } } });
+    ensureAskUserQuestionSheet(input, config, overlay);
+    expect(sheet.style.getPropertyValue("--persona-ask-sheet-bg")).toBe("");
+    expect(sheet.style.getPropertyValue("--persona-ask-pill-fg")).toBe("");
+    expect(overlay.style.getPropertyValue("--persona-ask-sheet-bg")).toBe("#123456");
+    expect(getSelectedLabels(sheet)).toEqual(["Professionals"]);
   });
 });

@@ -89,19 +89,29 @@ export function initThemeCopilot(): AgentWidgetInitHandle | null {
       storageAdapter: createLocalStorageAdapter('persona-state-theme-copilot'),
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
       colorScheme: 'light',
+      welcome: {
+        title: 'Theme Copilot',
+        subtitle: 'Describe a look, or paste a screenshot of a chat widget you like, and I will restyle the preview to match.',
+        variant: 'card',
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: 'Theme Copilot',
-        welcomeSubtitle:
-          'Describe a look, or paste a screenshot of a chat widget you like, and I will restyle the preview to match.',
         inputPlaceholder: 'e.g. "Deep teal, rounded corners, friendly tone"',
       },
-      suggestionChips: [
-        'Make it feel like a banking app',
-        'Warm, rounded, and friendly',
-        'Switch the preview to dark mode',
-        'Check the contrast ratios',
-      ],
+      suggestions: {
+        starters: {
+          items: [
+            'Make it feel like a banking app',
+            'Warm, rounded, and friendly',
+            'Switch the preview to dark mode',
+            'Check the contrast ratios',
+          ],
+          variant: 'chip',
+          placement: 'composer',
+          overflow: 'wrap',
+          maxItems: 4,
+        },
+      },
       // Image paste/upload for the reference-matching loop.
       attachments: {
         enabled: true,

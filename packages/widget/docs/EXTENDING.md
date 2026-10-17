@@ -19,6 +19,8 @@ section tells you where it can live in this monorepo.
 
 ## Map of extension points
 
+For multiple widgets and host-owned UI lifecycles, see [Embedded host integration](./EMBEDDED-HOST.md).
+
 | Area | What it customizes | Public API | Deep dive |
 | --- | --- | --- | --- |
 | [Plugins](#plugins) | Rendered UI, suggestion transforms, and interaction hooks | `pluginRegistry`, `AgentWidgetPlugin`, `config.plugins` | [PLUGINS.md](./PLUGINS.md) |

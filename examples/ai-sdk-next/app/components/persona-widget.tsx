@@ -11,7 +11,7 @@ type PersonaWidgetProps = {
   title: string;
   subtitle: string;
   accent?: string;
-  suggestionChips?: string[];
+  starterItems?: string[];
 };
 
 export function PersonaWidget({
@@ -19,7 +19,7 @@ export function PersonaWidget({
   title,
   subtitle,
   accent = "#157f8f",
-  suggestionChips,
+  starterItems,
 }: PersonaWidgetProps) {
   useEffect(() => {
     const host = document.getElementById("persona-root");
@@ -30,9 +30,8 @@ export function PersonaWidget({
       // The adapters emit Persona's SSE event vocabulary, which the widget
       // consumes natively (the same wire the Runtype API emits).
       launcher: { enabled: false, width: "100%" },
+      welcome: { title, subtitle, variant: "card" },
       copy: {
-        welcomeTitle: title,
-        welcomeSubtitle: subtitle,
         inputPlaceholder: "Ask anything...",
       },
       theme: {
@@ -56,7 +55,15 @@ export function PersonaWidget({
           },
         },
       },
-      suggestionChips,
+      suggestions: {
+        starters: {
+          items: starterItems,
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       postprocessMessage: ({ text }) => markdownPostprocessor(text),
     });
 
@@ -65,7 +72,7 @@ export function PersonaWidget({
       handle = null;
       host.replaceChildren();
     };
-  }, [apiUrl, title, subtitle, accent, suggestionChips]);
+  }, [apiUrl, title, subtitle, accent, starterItems]);
 
   return <div id="persona-root" />;
 }

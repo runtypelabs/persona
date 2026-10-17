@@ -64,7 +64,7 @@ import {
  * Curated icon registry for `renderLucideIcon` (host-suppliable name strings).
  *
  * Two tiers keep the payload honest:
- *  - CORE (55 names, below): every name the widget itself can emit —
+ *  - CORE (below): every name the widget itself can emit —
  *    config DEFAULTS (bot, send, mic, x, …) plus the chrome names routed
  *    through `utils/buttons` / `utils/dropdown`. Always resolves synchronously.
  *  - EXTRA (63 names, `src/icons-extra.ts`): the config-only tail
@@ -72,8 +72,8 @@ import {
  *    sibling chunk; the first request for one of these names kicks the fetch
  *    and returns a correctly-sized empty placeholder SVG that fills in place
  *    when the chunk lands. Surfaces that clone/morph rendered icons should
- *    subscribe to `onExtraIconsReady` and re-render (ui.ts does this for the
- *    transcript, mirroring the markdown-parsers heal).
+ *    subscribe to `onExtraIconsReady` and re-render. The widget prepares this
+ *    registry before revealing its UI, so controls never show placeholders.
  *
  * Statically-known icons in widget code do NOT use this registry: they import
  * icon data directly and call `renderIconNode` (see utils/icon-node.ts).
@@ -119,6 +119,13 @@ const CORE_LUCIDE_ICONS = {
   "thumbs-up": ThumbsUp,
   "upload": Upload,
   "volume-2": Volume2,
+  "voice-bars": [
+    ["path", { d: "M4 10v4" }],
+    ["path", { d: "M8 6v12" }],
+    ["path", { d: "M12 3v18" }],
+    ["path", { d: "M16 7v10" }],
+    ["path", { d: "M20 10v4" }],
+  ],
   "x": X,
   "at-sign": AtSign,
   "arrow-left": ArrowLeft,
@@ -336,19 +343,15 @@ export const __eagerlyProvideExtraIcons = (
   notifyExtraIconsReady(true);
 };
 
+/** Prepare icon data before revealing controls, including unopened menus. */
+export const prepareIconRegistry = (): Promise<void> | null => extraIconsLoaded ? null :
+  loadIconsExtra().then(mod => __eagerlyProvideExtraIcons(mod.EXTRA_LUCIDE_ICONS));
+
 let extraIconsKickFailedRetry = false;
 const kickExtraIcons = (): void => {
   void loadIconsExtra()
     .then((mod) => {
-      if (extraIconsLoaded) return;
-      for (const [name, data] of Object.entries(mod.EXTRA_LUCIDE_ICONS)) {
-        // The chunk is BASE data: never clobber a host's registerIcons()
-        // override ("later registrations win", and the host's came first).
-        if (!runtimeIcons.has(name)) runtimeIcons.set(name, data);
-      }
-      extraIconsLoaded = true;
-      fillPendingIcons();
-      notifyExtraIconsReady(true);
+      __eagerlyProvideExtraIcons(mod.EXTRA_LUCIDE_ICONS);
     })
     .catch((err) => {
       // Failed fetch (ad blocker, offline, renamed self-hosted bundle):

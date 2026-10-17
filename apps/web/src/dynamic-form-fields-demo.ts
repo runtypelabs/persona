@@ -63,7 +63,15 @@ const widgetConfig: AgentWidgetConfig = {
   // Default header (with the native clear-chat control), matching the other
   // demos: not the minimal/headerless variant.
   statusIndicator: { visible: false },
-  suggestionChips: [],
+  suggestions: {
+    starters: {
+      items: [],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   postprocessMessage: ({ text }) => markdownPostprocessor(text),
 };
 

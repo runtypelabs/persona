@@ -9,12 +9,12 @@ describe('widget config section parity', () => {
     const container = document.createElement('div');
     const controls = render(container, vi.fn());
     const paths = controls.map(control => control.fieldDef.path);
-    const suggestionChipsControl = controls.find(control => control.fieldDef.path === 'suggestionChips');
+    const suggestionChipsControl = controls.find(control => control.fieldDef.path === 'suggestions.starters.items');
 
     // Content sub-group
-    expect(paths).toContain('suggestionChips');
+    expect(paths).toContain('suggestions.starters.items');
     expect(suggestionChipsControl?.fieldDef.type).toBe('chip-list');
-    expect(paths).toContain('copy.welcomeTitle');
+    expect(paths).toContain('welcome.title');
 
     // Layout sub-group
     expect(paths).toContain('layout.header.layout');

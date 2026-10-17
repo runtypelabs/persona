@@ -67,7 +67,7 @@ export interface TooltipOptions {
   viewportPadding?: number;
   /**
    * Hover wait before the first tooltip. Falls back to the widget
-   * `tooltip.delayMs` (default 200). Keyboard focus ignores this.
+   * `tooltip.delayMs` (default 400). Keyboard focus ignores this.
    */
   delayMs?: number;
   /**
@@ -92,7 +92,8 @@ const handles = new WeakMap<HTMLElement, TooltipHandle>();
  * menu sets it on each row: a menu item already shows its name as visible text,
  * so a floating tooltip over it would be redundant and wrong.
  */
-export const TOOLTIP_SUPPRESSED_ATTR = "data-persona-tooltip-suppressed";
+import { TOOLTIP_SUPPRESSED_ATTR } from "./tooltip-constants";
+export { TOOLTIP_SUPPRESSED_ATTR } from "./tooltip-constants";
 
 const isSuppressed = (anchor: HTMLElement): boolean =>
   typeof anchor.closest === "function" &&
@@ -109,7 +110,7 @@ const isShadowRoot = (root: Node): root is ShadowRoot =>
 const tooltipContainer = (anchor: HTMLElement): HTMLElement | ShadowRoot | null => {
   const root = anchor.getRootNode?.();
   if (isShadowRoot(root)) return root;
-  return anchor.ownerDocument.body;
+  return anchor.closest<HTMLElement>("dialog[open]") ?? anchor.ownerDocument.body;
 };
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -293,10 +294,14 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
       }
       if (label) label.textContent = resolvedText();
       if (hintChip) hintChip.textContent = resolvedHint();
+      const container = tooltipContainer(anchor);
+      if (tooltip && container && tooltip.parentNode !== container) container.appendChild(tooltip);
       reposition();
     };
     ownerWindow.addEventListener("scroll", onReposition, true);
     ownerWindow.addEventListener("resize", onReposition);
+    const moveRoot = anchor.closest("[data-persona-root]");
+    moveRoot?.addEventListener("persona:internal:host-moved", onReposition);
 
     const root = anchor.getRootNode();
     const mutationTarget =
@@ -314,6 +319,7 @@ export function attachTooltip(options: TooltipOptions): TooltipHandle {
     detachOpenListeners = () => {
       ownerWindow.removeEventListener("scroll", onReposition, true);
       ownerWindow.removeEventListener("resize", onReposition);
+      moveRoot?.removeEventListener("persona:internal:host-moved", onReposition);
       observer?.disconnect();
     };
   };

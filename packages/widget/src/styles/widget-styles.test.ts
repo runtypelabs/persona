@@ -2,10 +2,19 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-const widgetCss = readFileSync(
-  new URL("./widget.css", import.meta.url),
-  "utf8",
-);
+import { createTheme, themeToCssVariables } from "../utils/tokens";
+
+const coreCss = readFileSync(new URL("./widget.css", import.meta.url), "utf8");
+const artifactCss = readFileSync(new URL("./artifacts.css", import.meta.url), "utf8");
+const menuCss = readFileSync(new URL("./composer-menu.css", import.meta.url), "utf8");
+const widgetCss = [coreCss, artifactCss, menuCss].join("\n");
+
+it("keeps optional surfaces in their feature stylesheets", () => {
+  expect(coreCss).not.toContain(".persona-composer-overflow-menu {");
+  expect(menuCss).toContain(".persona-composer-overflow-menu {");
+  expect(coreCss).not.toContain(".persona-artifact-card {");
+  expect(artifactCss).toContain(".persona-artifact-card {");
+});
 
 describe("suggestion interaction styles", () => {
   it("keeps suggestion surfaces from collapsing inside constrained transcripts", () => {
@@ -220,7 +229,25 @@ describe("composer spacing styles", () => {
     expect(rule).toContain(
       "padding: var(--persona-composer-padding, 0.75rem 1rem)",
     );
-    expect(rule).toContain("gap: var(--persona-composer-gap, 0.5rem)");
+    expect(rule).toContain("row-gap: var(--persona-composer-gap, 0.5rem)");
+    expect(rule).toContain("column-gap: var(--persona-components-composer-controlGap, var(--persona-composer-gap, 0.5rem))");
+  });
+
+  it("separates editor rows, control rails, and segmented tracks in compact and expanded composers", () => {
+    const vars = themeToCssVariables(createTheme({ components: { composer: {
+      gap: "30px", controlGap: "8px", segmented: { gap: "0px", fontSize: "14px" },
+      modelPicker: { height: "40px", fontSize: "14px" }, mode: { height: "32px", fontSize: "14px" },
+    } } }));
+    expect(vars["--persona-composer-gap"]).toBe("30px");
+    expect(vars["--persona-components-composer-controlGap"]).toBe("8px");
+    expect(vars["--persona-components-composer-segmented-gap"]).toBe("0px");
+    expect(vars["--persona-components-composer-modelPicker-height"]).toBe("40px");
+    expect(vars["--persona-components-composer-mode-height"]).toBe("32px");
+    const selector = '[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) :is(.persona-widget-composer__actions, .persona-widget-composer__left-actions, .persona-widget-composer__right-actions, .persona-composer-segmented) {';
+    const start = widgetCss.indexOf(selector);
+    expect(widgetCss.slice(start, widgetCss.indexOf("\n}", start))).not.toContain("--persona-composer-gap");
+    expect(widgetCss).toContain("gap: var(--persona-components-composer-controlGap, 0.5rem)");
+    expect(widgetCss).toContain("gap: var(--persona-components-composer-segmented-gap, 2px)");
   });
 
   it("themes the composer textarea type with text-sm fallbacks", () => {
@@ -244,6 +271,26 @@ describe("composer spacing styles", () => {
     expect(start).toBeGreaterThan(-1);
     expect(rule).toContain("padding: 6px 14px");
     expect(rule).toContain("gap: 8px");
+  });
+
+  it("uses bounded expanded geometry tokens with complete legacy fallbacks", () => {
+    const selector = "[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) {";
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("var(--persona-components-composer-expandedBorderRadius, var(--persona-input-radius, var(--persona-radius-lg, 0.5rem)))");
+    expect(rule).toContain("var(--persona-components-composer-expandedPadding, var(--persona-composer-padding, 0.75rem 1rem))");
+  });
+
+  it("requires both content and width fit for a single row, and wraps crowded toolbars", () => {
+    expect(widgetCss).toContain('[data-persona-composer-layout="single-row"][data-persona-composer-compact][data-persona-composer-fit]');
+    const selector = '[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) :is(.persona-widget-composer__actions, .persona-widget-composer__left-actions, .persona-widget-composer__right-actions, .persona-composer-segmented) {';
+    const start = widgetCss.indexOf(selector);
+    const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
+    expect(start).toBeGreaterThan(-1);
+    expect(rule).toContain("flex-wrap: wrap");
+    expect(rule).toContain("max-width: 100%");
+    expect(widgetCss).not.toContain(".persona-widget-composer__right-actions > :has([data-persona-composer-submit])");
   });
 });
 
@@ -564,7 +611,7 @@ describe("message action button styles", () => {
 
 describe("conversation-open skeleton styles", () => {
   it("follows each role's real bubble radius chain", () => {
-    const leading = ".persona-conversation-loading-bubble {";
+    const leading = ".persona-message-assistant-bubble {";
     const start = widgetCss.indexOf(leading);
     const rule = widgetCss.slice(start, widgetCss.indexOf("\n}", start));
     expect(start).toBeGreaterThan(-1);
@@ -572,7 +619,7 @@ describe("conversation-open skeleton styles", () => {
       "border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))",
     );
 
-    const trailing = ".persona-conversation-loading-bubble--trailing {";
+    const trailing = ".persona-message-user-bubble {";
     const trailingStart = widgetCss.indexOf(trailing);
     const trailingRule = widgetCss.slice(
       trailingStart,
@@ -586,6 +633,24 @@ describe("conversation-open skeleton styles", () => {
 });
 
 describe("overflow menu row shading", () => {
+  it("inherits the portaled panel font on managed action rows", () => {
+    const at = widgetCss.indexOf(".persona-composer-overflow-menu__item {");
+    const row = widgetCss.slice(at, widgetCss.indexOf("}", at));
+    expect(row).toContain("font-family: inherit");
+    expect(row).toContain("font-size: var(--persona-components-composer-overflowMenu-fontSize, 13px)");
+    expect(row).toContain("padding: var(--persona-components-composer-overflowMenu-rowPadding, 6px 8px)");
+  });
+
+  it("uses a V5 menu radius while retaining explicit per-instance overrides", () => {
+    const radiusKey = "--persona-components-composer-overflowMenu-borderRadius";
+    expect(themeToCssVariables(createTheme())[radiusKey]).toBeUndefined();
+    expect(themeToCssVariables(createTheme(undefined, { future: { v5Defaults: true } }))[radiusKey]).toBe("12px");
+    for (const v5Defaults of [false, true]) {
+      const theme = createTheme({ components: { composer: { overflowMenu: { borderRadius: "18px" } } } }, { future: { v5Defaults } });
+      expect(themeToCssVariables(theme)[radiusKey]).toBe("18px");
+    }
+  });
+
   it("shades a folded built-in row on a focus attribute, never on plain focus-within", () => {
     // `:focus-within` matches the programmatic focus `open()` puts on the first
     // row, so a mouse-opened menu would shade whichever row sorts first.
@@ -635,6 +700,45 @@ describe("overflow menu row shading", () => {
     expect(widgetCss).not.toContain(
       "[data-persona-root] .persona-composer-overflow-menu"
     );
+  });
+});
+
+describe("managed composer control typography", () => {
+  const ruleFor = (selector: string): string => {
+    const at = widgetCss.indexOf(selector);
+    expect(at, `selector not found: ${selector}`).toBeGreaterThan(-1);
+    return widgetCss.slice(at, widgetCss.indexOf("}", at));
+  };
+
+  it("resets mode label size and radius on each root before applying V5 treatment", () => {
+    const root = ruleFor("[data-persona-root] {");
+    expect(root).toContain("--persona-internal-composer-action-font-size: 0.875rem");
+    expect(root).toContain("--persona-internal-composer-selected-mode-radius: var(--persona-button-ghost-radius,");
+    const modern = ruleFor('[data-persona-root][data-persona-defaults="v5"] {');
+    expect(modern).toContain("--persona-internal-composer-action-font-size: 0.8125rem");
+    expect(modern).toContain("--persona-internal-composer-selected-mode-radius: var(--persona-button-radius,");
+    const selected = ruleFor('[data-persona-root] [data-persona-composer-action^="core:mode:"] .persona-composer-action-button--text[aria-pressed="true"] {');
+    expect(selected).toContain("border-radius: var(--persona-internal-composer-selected-mode-radius,");
+    // An ancestor V5 selector would also match a nested V4 widget.
+    expect(widgetCss).not.toContain('[data-persona-defaults="v5"] [data-persona-composer-action^="core:mode:"]');
+  });
+
+  it("keeps configured glyph size beside text and uses managed label typography", () => {
+    const text = ruleFor("[data-persona-root] .persona-composer-action-button--text {");
+    expect(text).toContain("font-family: inherit");
+    expect(text).toContain("font-size: var(--persona-internal-composer-action-font-size, 0.875rem)");
+    expect(text).toContain("padding-left: 0.625rem");
+    const glyph = ruleFor(".persona-composer-control--glyph > svg {");
+    expect(glyph).toContain("flex-shrink: 0");
+    expect(glyph).toContain("width: var(--persona-composer-control-icon-size, 24px)");
+  });
+
+  it("bounds managed expanded controls without restyling host slot form elements", () => {
+    const scope = '[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer)';
+    expect(ruleFor(`${scope} :is(.persona-composer-control, .persona-composer-model-picker, .persona-composer-segmented-item) {`)).toContain("max-width: 100%");
+    expect(ruleFor(`${scope} :is(.persona-composer-action-button, .persona-composer-model-picker, .persona-composer-segmented-item) {`)).toContain("text-overflow: ellipsis");
+    expect(widgetCss).not.toContain(`${scope} :is(input, select, button)`);
+    expect(widgetCss).not.toContain(`${scope} button {`);
   });
 });
 
@@ -765,23 +869,24 @@ describe("model picker height", () => {
   };
 
   const TOKEN = "var(--persona-composer-control-size, 40px)";
+  const PICKER_TOKEN = `var(--persona-components-composer-modelPicker-height, ${TOKEN})`;
 
   it("rides the control-size token with a 40px fallback", () => {
     const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
-    expect(rule).toContain(`height: ${TOKEN}`);
-    expect(rule).toContain(`min-height: ${TOKEN}`);
+    expect(rule).toContain(`height: ${PICKER_TOKEN}`);
+    expect(rule).toContain(`min-height: ${PICKER_TOKEN}`);
   });
 
   it("keeps its width intrinsic, like a shortLabel action button", () => {
     const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
     expect(rule).toContain("width: auto");
-    expect(rule).toContain("min-width: 0");
+    expect(rule).toContain("min-width: var(--persona-components-composer-modelPicker-minWidth, 0px)");
     expect(rule).toContain("max-width");
   });
 
   it("centers the label with a full-height line box, not padding", () => {
     const rule = ruleFor("[data-persona-root] .persona-composer-model-picker {");
-    expect(rule).toContain(`line-height: ${TOKEN}`);
+    expect(rule).toContain(`line-height: ${PICKER_TOKEN}`);
     expect(rule).toContain("padding-block: 0;");
     // The dropdown rows must not inherit the tall line box.
     expect(
@@ -799,12 +904,12 @@ describe("model picker height", () => {
     );
     expect(control).toContain(`height: ${TOKEN}`);
     expect(control).toContain(`min-height: ${TOKEN}`);
-    expect(picker).toContain(`height: ${TOKEN}`);
-    expect(picker).toContain(`min-height: ${TOKEN}`);
+    expect(picker).toContain(`height: ${PICKER_TOKEN}`);
+    expect(picker).toContain(`min-height: ${PICKER_TOKEN}`);
     expect(textButton).toContain("width: auto");
     expect(textButton).toContain("min-width: 0");
     expect(picker).toContain("width: auto");
-    expect(picker).toContain("min-width: 0");
+    expect(picker).toContain("min-width: var(--persona-components-composer-modelPicker-minWidth, 0px)");
   });
 
   it("floors the picker at a 40px hit area on a coarse pointer", () => {
@@ -971,6 +1076,7 @@ describe("composer motion", () => {
     for (const marker of [
       "persona-mic-pulse",
       "persona-mic-spin",
+      "persona-voice-bars",
       "persona-chip-enter",
       "persona-chip-exit",
     ]) {
@@ -991,6 +1097,10 @@ describe("composer motion", () => {
     expect(safe).toContain("transition:");
     expect(safe).toContain("transform: scale(0.97)");
     expect(safe).toContain(".persona-composer-glyph-stack > [data-glyph]");
+  });
+
+  it("requires this composer's recording state for voice bar animation", () => {
+    expect(safe).toContain('[data-persona-root] [data-persona-voice-state="recording"] button:not(:disabled) > .persona-voice-bars--animated > path');
   });
 
   it("drives every composer animation off the motion tokens", () => {

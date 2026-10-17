@@ -1,10 +1,11 @@
+import { createIconButton, createLabelButton, createSplitButton, createToggleGroup } from "./utils/buttons";
 import { createChunkLoader } from "./utils/chunk-loader";
 import { componentRegistry } from "./components/registry";
 import {
   getMarkdownParsersSync,
   onMarkdownParsersReady,
 } from "./markdown-parsers-loader";
-import { loadIconsExtra } from "./icons-extra-loader";
+import { loadIconsExtra, setIconsExtraLoader } from "./icons-extra-loader";
 
 /**
  * Loader indirection + ADOPTION for the lazy artifacts-ui chunk. Stays in the
@@ -40,7 +41,7 @@ const adopt = (mod: ArtifactsUiModule): ArtifactsUiModule => {
   if (adopted) return adopted;
   adopted = mod;
 
-  mod.initArtifactsUi({ componentRegistry });
+  mod.initArtifactsUi({ componentRegistry, buttons: { createIconButton, createLabelButton, createSplitButton, createToggleGroup } });
 
   // Host-registered components (config.components / registerAll at widget
   // init) must keep overriding the built-ins, exactly as they did against the
@@ -69,7 +70,11 @@ const adopt = (mod: ArtifactsUiModule): ArtifactsUiModule => {
   }
   // Point the chunk's icons-extra copy at core's loader (its own fallback is
   // a bare subpath import no browser can resolve).
-  mod.__setIconsExtraLoader(() => loadIconsExtra());
+  // Source/eager consumers can share this very loader with the artifact entry.
+  // Wiring it back to itself would recurse before an import can be cached.
+  if (mod.__setIconsExtraLoader !== setIconsExtraLoader) {
+    mod.__setIconsExtraLoader(loadIconsExtra);
+  }
 
   const subs = [...readySubscribers];
   readySubscribers.clear();

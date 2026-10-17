@@ -8,6 +8,9 @@
   /* Column widths plugin content can consume; --persona-content-max-width is
      re-set inline from layout.contentMaxWidth (default 768px). */
   --persona-welcome-max-width: 640px;
+  /* Reset on every root so a nested V4 widget keeps its own control treatment. */
+  --persona-internal-composer-action-font-size: 0.875rem;
+  --persona-internal-composer-selected-mode-radius: var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem));
   
   /* Theme-aware markdown variables - inherit from theme colors set by JavaScript */
   --persona-md-code-block-bg: var(--persona-container, #f3f4f6);
@@ -21,8 +24,20 @@
   --persona-md-blockquote-text-color: var(--persona-muted, #6b7280);
 }
 
+[data-persona-root][data-persona-defaults="v5"] {
+  --persona-internal-composer-action-font-size: 0.8125rem;
+  --persona-internal-composer-selected-mode-radius: var(--persona-button-radius, 9999px);
+}
+
 [data-persona-root] * {
   box-sizing: border-box;
+}
+
+/* Keep host-page selection colors from overriding the widget's theme. */
+[data-persona-root]::selection,
+[data-persona-root] *::selection {
+  background: color-mix(in srgb, var(--persona-primary, #2563eb) 25%, var(--persona-container, #f3f4f6));
+  color: var(--persona-text, #111827);
 }
 
 .persona-flex {
@@ -473,7 +488,8 @@
   overflow-x: auto;
   overscroll-behavior-inline: contain;
   scrollbar-width: thin;
-  scroll-snap-type: inline proximity;
+  scroll-snap-type: none;
+  scroll-padding-inline: var(--persona-suggestion-scroll-fade-size);
   padding: 2px;
 }
 
@@ -561,7 +577,6 @@
 
 .persona-suggestion--chip {
   flex: 0 0 auto;
-  scroll-snap-align: start;
   min-height: var(--persona-components-suggestion-chip-minHeight, 36px);
   gap: var(--persona-components-suggestion-chip-gap, 0.5rem);
   padding: var(
@@ -896,7 +911,7 @@
   .persona-welcome-title-row {
   display: flex;
   align-items: center;
-  gap: var(--persona-welcome-inline-icon-gap, 0.625rem);
+  gap: var(--persona-components-introCard-inlineIconGap, var(--persona-welcome-inline-icon-gap, 0.625rem));
 }
 
 .persona-welcome[data-persona-welcome-icon-placement="inline"]
@@ -918,13 +933,13 @@
 .persona-welcome[data-persona-welcome-icon-placement="inline"]
   .persona-welcome-icon
   > img {
-  width: var(--persona-welcome-inline-icon-size, 1.5rem);
-  height: var(--persona-welcome-inline-icon-size, 1.5rem);
+  width: var(--persona-components-introCard-inlineIconSize, var(--persona-welcome-inline-icon-size, 1.5rem));
+  height: var(--persona-components-introCard-inlineIconSize, var(--persona-welcome-inline-icon-size, 1.5rem));
 }
 
 .persona-welcome[data-persona-welcome-icon-placement="inline"]
   .persona-welcome-icon-text {
-  font-size: var(--persona-welcome-inline-icon-size, 1.5rem);
+  font-size: var(--persona-components-introCard-inlineIconSize, var(--persona-welcome-inline-icon-size, 1.5rem));
 }
 
 /* Welcome copy: `components.introCard.kicker` / `.title` / `.subtitle`
@@ -1109,8 +1124,17 @@
 }
 
 .persona-composer-control--glyph > svg {
+  display: block;
+  flex-shrink: 0;
   width: var(--persona-composer-control-icon-size, 24px);
   height: var(--persona-composer-control-icon-size, 24px);
+}
+
+/* Theme shorthand remains independent of inline legacy padding axes. */
+
+.persona-control-size {
+  min-width: var(--persona-control-size);
+  min-height: var(--persona-control-size);
 }
 
 /* A smaller controlSize must never shrink a touch target below 40px. An
@@ -1161,6 +1185,8 @@
 /* Contributed action buttons with a `shortLabel` render text beside the icon,
    so they size from padding instead of the fixed icon-button box. */
 [data-persona-root] .persona-composer-action-button--text {
+  font-family: inherit;
+  font-size: var(--persona-internal-composer-action-font-size, 0.875rem);
   padding-left: 0.625rem;
   padding-right: 0.625rem;
   white-space: nowrap;
@@ -1173,6 +1199,10 @@
 /* A pressed toggle action reads as active without a second color token. */
 [data-persona-root] .persona-composer-action-button[aria-pressed="true"] {
   background-color: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
+}
+
+[data-persona-root] [data-persona-composer-action^="core:mode:"] .persona-composer-action-button--text[aria-pressed="true"] {
+  border-radius: var(--persona-internal-composer-selected-mode-radius, var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem)));
 }
 
 /* --- Composer motion ---------------------------------------------------
@@ -1311,6 +1341,25 @@
   }
 }
 
+/* Opt-in bar motion only during live transcription. Capture level modulates
+   height when available; providers without levels use a steady fallback. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-persona-root] [data-persona-voice-state="recording"] button:not(:disabled) > .persona-voice-bars--animated > path {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: persona-voice-bars 1s ease-in-out var(--persona-voice-bar-delay, 0s) infinite alternate;
+  }
+  .persona-voice-bars--animated > path:nth-child(2) { --persona-voice-bar-delay: -0.7s; }
+  .persona-voice-bars--animated > path:nth-child(3) { --persona-voice-bar-delay: -0.4s; }
+  .persona-voice-bars--animated > path:nth-child(4) { --persona-voice-bar-delay: -0.9s; }
+  .persona-voice-bars--animated > path:nth-child(5) { --persona-voice-bar-delay: -0.2s; }
+}
+
+@keyframes persona-voice-bars {
+  from { transform: scaleY(0.35); }
+  to { transform: scaleY(calc(0.6 + var(--persona-voice-level, 0.5) * 0.4)); }
+}
+
 @keyframes persona-mic-pulse {
   0% {
     box-shadow: 0 0 0 0
@@ -1370,163 +1419,6 @@
   cursor: progress;
 }
 
-/* --- Overflow `+` menu -------------------------------------------------
- *
- * The panel is mounted by createPopover next to the widget root (or inside the
- * shadow root), so its rules are deliberately un-prefixed by
- * `[data-persona-root]` and must stand on their own. It sits outside the themed
- * mount, so the menu forwards its configured tokens onto the panel on open. */
-.persona-composer-overflow-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 180px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 4px;
-  border-radius: var(
-    --persona-components-composer-overflowMenu-borderRadius,
-    var(--persona-radius-lg, 0.5rem)
-  );
-  border: 1px solid
-    var(
-      --persona-components-composer-overflowMenu-borderColor,
-      var(--persona-border, #e5e7eb)
-    );
-  background: var(
-    --persona-components-composer-overflowMenu-background,
-    var(--persona-surface, #ffffff)
-  );
-  color: var(
-    --persona-components-composer-overflowMenu-foreground,
-    var(--persona-text, #111827)
-  );
-  box-shadow: var(
-    --persona-components-composer-overflowMenu-shadow,
-    var(--persona-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12))
-  );
-  font-family: var(--persona-font-family, inherit);
-}
-
-.persona-composer-overflow-menu__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border: none;
-  border-radius: var(--persona-radius-md, 0.375rem);
-  background: transparent;
-  color: inherit;
-  font-size: 13px;
-  text-align: start;
-  cursor: pointer;
-}
-
-.persona-composer-overflow-menu__item:hover:not(:disabled),
-.persona-composer-overflow-menu__item:focus-visible {
-  background: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
-}
-
-.persona-composer-overflow-menu__item[aria-pressed="true"] {
-  background: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
-  font-weight: 600;
-}
-
-.persona-composer-overflow-menu__item:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.persona-composer-overflow-menu__item[aria-busy="true"] {
-  opacity: 0.6;
-  cursor: progress;
-}
-
-.persona-composer-overflow-menu__icon {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  width: 16px;
-}
-
-.persona-composer-overflow-menu__label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* A folded built-in or custom control keeps its own markup; the slot only
-   gives it the menu's row padding. */
-/* A folded built-in keeps its live element, so the SLOT is the row: same
-   padding, radius, type, and hover treatment as `__item` above. The panel is
-   portaled outside `[data-persona-root]`, so the bar's prefixed ghost-button
-   rules do not reach in here and the control would otherwise fall back to the
-   browser's default button box. */
-.persona-composer-overflow-menu__slot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border-radius: var(--persona-radius-md, 0.375rem);
-  font-size: 13px;
-  text-align: start;
-  cursor: pointer;
-}
-
-/* Modality-aware, matching the `:focus-visible` half of `__item` above. A bare
-   `:focus-within` would shade this row on every MOUSE open, because opening the
-   menu programmatically focuses the first row and this row sorts first. The
-   menu publishes the attribute only when that focus should be visible. */
-.persona-composer-overflow-menu__slot:hover,
-.persona-composer-overflow-menu__slot[data-persona-menu-focus] {
-  background: var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05));
-}
-
-/* The bar wraps each control for tooltip hit area; in a row it must add no box. */
-.persona-composer-overflow-menu__slot .persona-send-button-wrapper {
-  display: contents;
-}
-
-/* Strip every bar affordance off the live control: it is now just the row's
-   icon column. Scoped to the shared composer-control class so a folded CUSTOM
-   action keeps whatever styling its renderer chose. */
-.persona-composer-overflow-menu__slot .persona-composer-control {
-  width: 16px;
-  height: 16px;
-  min-width: 16px;
-  min-height: 16px;
-  flex: 0 0 auto;
-  padding: 0;
-  border: none;
-  background: none;
-  box-shadow: none;
-  border-radius: 0;
-  color: inherit;
-  line-height: 1;
-  cursor: inherit;
-  /* The bar sets font-size inline for the no-icon glyph fallback. */
-  overflow: hidden;
-}
-
-.persona-composer-overflow-menu__slot .persona-composer-control > svg {
-  width: 16px;
-  height: 16px;
-}
-
-/* In a menu the ROW shading is the focus indicator, exactly as it is for a
-   contributed `__item`; a ring around the 16px icon would be a second one. */
-.persona-composer-overflow-menu__slot .persona-composer-control:focus-visible {
-  outline: none;
-}
-
-/* Belt and braces: a tooltip rendered inline rather than portaled must never
-   paint inside a menu row. The JS guard keeps it from opening at all. */
-.persona-composer-overflow-menu__slot .persona-control-tooltip {
-  display: none;
-}
-
 /* --- Model picker ------------------------------------------------------ */
 
 /* One grid cell holding the select and its chevron, so the chevron overlays
@@ -1536,288 +1428,33 @@
 /* `ComposerModeGroup.presentation: "segmented"`: one rounded track, the active
    segment painted as a raised pill. Every token is optional; these fallbacks
    are the whole default appearance. */
-.persona-composer-segmented {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-  padding: var(--persona-components-composer-segmented-padding, 2px);
-  border-radius: var(--persona-components-composer-segmented-trackBorderRadius, 9999px);
-  background: var(
-    --persona-components-composer-segmented-trackBackground,
-    var(--persona-container, #f3f4f6)
-  );
-}
-
-.persona-composer-segmented-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-  background: transparent;
-  box-shadow: none;
-  font-family: inherit;
-  font-size: var(--persona-composer-font-size, 0.875rem);
-  line-height: var(--persona-composer-line-height, 1.25rem);
-  padding: var(--persona-components-composer-segmented-itemPadding, 0.25rem 0.625rem);
-  border-radius: var(--persona-components-composer-segmented-trackBorderRadius, 9999px);
-  color: var(
-    --persona-components-composer-segmented-inactiveForeground,
-    var(--persona-muted, #6b7280)
-  );
-}
-
-.persona-composer-segmented-item[aria-pressed="true"] {
-  background: var(
-    --persona-components-composer-segmented-activeBackground,
-    var(--persona-surface, #ffffff)
-  );
-  color: var(--persona-components-composer-segmented-activeForeground, var(--persona-text, #111827));
-  box-shadow: var(
-    --persona-components-composer-segmented-activeShadow,
-    0 1px 2px 0 rgba(15, 23, 42, 0.12)
-  );
-}
-
-.persona-composer-segmented-item svg {
-  flex: 0 0 auto;
-}
 
 /* Coarse pointers floor the segment hit area, matching the composer controls. */
-@media (pointer: coarse) {
-  .persona-composer-segmented-item {
-    min-height: 36px;
-  }
-}
-
-.persona-composer-model-picker-wrapper {
-  display: inline-grid;
-  align-items: center;
-}
-
-.persona-composer-model-picker-wrapper > * {
-  grid-area: 1 / 1;
-}
-
-[data-persona-root] .persona-composer-model-picker {
-  max-width: 10rem;
-  /* Same rule a `shortLabel` action button follows: the token owns the height,
-     the label and its padding own the width. */
-  height: var(--persona-composer-control-size, 40px);
-  min-height: var(--persona-composer-control-size, 40px);
-  width: auto;
-  min-width: 0;
-  /* Zero, so the token alone decides the box; a full-height line box centers
-     the label instead of padding math that fights the token. */
-  padding-block: 0;
-  line-height: var(--persona-composer-control-size, 40px);
-  /* Logical, so the reserved chevron gutter follows the writing direction.
-     The trailing gutter clears the chevron's box plus its inset. */
-  padding-inline-start: 0.625rem;
-  padding-inline-end: 1.75rem;
-  border: none;
-  border-radius: var(
-    --persona-components-composer-modelPicker-borderRadius,
-    var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem))
-  );
-  background-color: var(
-    --persona-components-composer-modelPicker-background,
-    var(--persona-button-ghost-bg, transparent)
-  );
-  color: var(
-    --persona-components-composer-modelPicker-labelColor,
-    var(--persona-button-ghost-fg, var(--persona-text, #111827))
-  );
-  /* A ring, not a border: `border-box` sizing would pull the label in by 1px on
-     every theme that never sets the token. */
-  box-shadow: inset 0 0 0 1px
-    var(--persona-components-composer-modelPicker-borderColor, transparent);
-  font-family: inherit;
-  font-size: 0.8125rem;
-  cursor: pointer;
-  /* Drops the platform chevron. Chrome draws it hard against the trailing edge
-     and ignores padding-inline-end, so no padding alone could clear it. */
-  -webkit-appearance: none;
-  appearance: none;
-  /* Long model labels ellipsize inside the reserved gutter rather than running
-     under the chevron. */
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: start;
-}
 
 /* The chevron is a MASK, not a data-URI stroke color: the fill follows the
    closed control's own text color, so the glyph and the label never diverge.
    Same Lucide `chevron-down` geometry as the icon registry draws. */
-.persona-composer-model-picker-chevron {
-  justify-self: end;
-  margin-inline-end: 0.625rem;
-  width: 0.875rem;
-  height: 0.875rem;
-  pointer-events: none;
-  background-color: var(
-    --persona-components-composer-modelPicker-labelColor,
-    var(--persona-button-ghost-fg, var(--persona-text, #111827))
-  );
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-}
 
 /* The full-height line box centers the closed label; the dropdown's own rows
    must not inherit it. */
-[data-persona-root] .persona-composer-model-picker option {
-  line-height: normal;
-}
 
 /* Same 40px floor the icon controls get, so a smaller controlSize never takes
    the picker below an accessible touch target. Declared after the base rule so
    equal specificity resolves in the floor's favor. */
-@media (pointer: coarse) {
-  [data-persona-root] .persona-composer-model-picker {
-    min-height: 40px;
-    min-width: 40px;
-  }
-}
-
-[data-persona-root] .persona-composer-model-picker:hover:not(:disabled) {
-  background-color: var(
-    --persona-components-composer-modelPicker-hoverBackground,
-    var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05))
-  );
-}
-
-[data-persona-root] .persona-composer-model-picker:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 
 /* `composer.modelPicker.presentation: "popover"`: the closed control is a
    button carrying the same pill rule above, so a themed page never shifts. */
-[data-persona-root] .persona-composer-model-picker-trigger {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.persona-composer-model-picker-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--persona-components-composer-modelPicker-labelColor, inherit);
-}
 
 /* `:empty` so an unset `suffix` leaves no gap after the label. */
-.persona-composer-model-picker-suffix {
-  flex: 0 0 auto;
-  color: var(
-    --persona-components-composer-modelPicker-suffixColor,
-    var(--persona-muted, #6b7280)
-  );
-}
-
-.persona-composer-model-picker-suffix:empty {
-  display: none;
-}
 
 /* The listbox panel is mounted by createPopover outside the themed mount, so
    these rules are deliberately un-prefixed and stand on their own; the picker
    forwards its configured tokens onto the panel on open. */
-.persona-composer-model-menu {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 220px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 4px;
-  border-radius: var(
-    --persona-components-composer-modelPicker-menuBorderRadius,
-    var(--persona-radius-lg, 0.5rem)
-  );
-  border: 1px solid var(--persona-border, #e5e7eb);
-  background: var(
-    --persona-components-composer-modelPicker-menuBackground,
-    var(--persona-surface, #ffffff)
-  );
-  color: var(--persona-text, #111827);
-  box-shadow: var(--persona-shadow-md, 0 8px 24px rgba(0, 0, 0, 0.12));
-  font-family: var(--persona-font-family, inherit);
-}
-
-.persona-composer-model-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 8px;
-  border: none;
-  border-radius: var(--persona-radius-md, 0.375rem);
-  background: transparent;
-  color: inherit;
-  font-family: inherit;
-  font-size: 13px;
-  text-align: start;
-  cursor: pointer;
-}
 
 /* Plain `:focus`, not `:focus-visible`: in a listbox the focused option is the
    active option and reads as highlighted however focus arrived. */
-.persona-composer-model-option:hover,
-.persona-composer-model-option:focus {
-  background: var(
-    --persona-components-composer-modelPicker-rowHoverBackground,
-    var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05))
-  );
-  outline: none;
-}
-
-.persona-composer-model-option-icon,
-.persona-composer-model-option-check {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  margin-top: 1px;
-}
 
 /* Always drawn so a selection change never rebuilds a row. */
-.persona-composer-model-option-check {
-  visibility: hidden;
-}
-
-.persona-composer-model-option[aria-selected="true"]
-  .persona-composer-model-option-check {
-  visibility: visible;
-}
-
-.persona-composer-model-option-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.persona-composer-model-option-label {
-  color: var(--persona-components-composer-modelPicker-labelColor, inherit);
-}
-
-.persona-composer-model-option-description {
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(
-    --persona-components-composer-modelPicker-descriptionColor,
-    var(--persona-muted, #6b7280)
-  );
-}
 
 /* --- Shared composer chip row ------------------------------------------
  * One wrapping rail in the header region for every pre-send pill: mode chips
@@ -1841,11 +1478,6 @@
 /* --- Active mode chips -------------------------------------------------
  * Same chip geometry as a mention chip so the row reads as one rail; only the
  * accent differs. */
-.persona-composer-mode-chip {
-  background: var(--persona-mode-chip-bg, var(--persona-container, #f3f4f6));
-  border-color: var(--persona-mode-chip-border, var(--persona-border, #e5e7eb));
-  color: var(--persona-mode-chip-fg, var(--persona-text, #111827));
-}
 
 /* --- Quote / reply-to banner -------------------------------------------
  * Header-region row above the editor. Logical insets so the accent bar sits on
@@ -2745,6 +2377,7 @@
 }
 
 .persona-widget-body {
+  background: var(--persona-transcript-background, var(--persona-container));
   overscroll-behavior: contain;
 }
 
@@ -2845,6 +2478,7 @@
 }
 
 .persona-widget-container {
+  background: var(--persona-panel-background, var(--persona-surface));
   position: relative;
   border-radius: var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem));
 }
@@ -2861,7 +2495,8 @@
    grid padding/gap (see `.persona-pill-composer`). */
 [data-persona-root] .persona-widget-composer:not(.persona-pill-composer) {
   padding: var(--persona-composer-padding, 0.75rem 1rem);
-  gap: var(--persona-composer-gap, 0.5rem);
+  row-gap: var(--persona-composer-gap, 0.5rem);
+  column-gap: var(--persona-components-composer-controlGap, var(--persona-composer-gap, 0.5rem));
   /* `components.composer.borderColor`; the fallback matches the
      `persona-border-persona-border` utility the form carries. */
   border-color: var(--persona-composer-border-color, var(--persona-border, #e5e7eb));
@@ -2892,6 +2527,8 @@
 [data-persona-root] .persona-composer-textarea {
   font-size: var(--persona-composer-font-size, 0.875rem);
   line-height: var(--persona-composer-line-height, 1.25rem);
+  min-height: var(--persona-components-composer-editorMinHeight, 24px);
+  padding: var(--persona-components-composer-editorPadding, 2px);
 }
 
 /* `components.input.backdropFilter`. Unconditional: `none` costs nothing and
@@ -2902,12 +2539,19 @@
   backdrop-filter: var(--persona-input-backdrop-filter, none);
 }
 
+/* Expanded geometry is independent of draft state: a narrow host also uses
+   the card. V4 retains its input radius and form padding; pills own their grid. */
+[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) {
+  border-radius: var(--persona-components-composer-expandedBorderRadius, var(--persona-input-radius, var(--persona-radius-lg, 0.5rem)));
+  padding: var(--persona-components-composer-expandedPadding, var(--persona-composer-padding, 0.75rem 1rem));
+}
+
 /* --- Composer layout: single-row --------------------------------------- */
 /* `composer.layout: "single-row"`. The compact attribute is the gate, so a
    wrapped draft, chips, previews, a quote, or a pending card fall back to the
    stacked card. Two attribute selectors outrank the `persona-flex-col`
    utility the form carries. */
-[data-persona-composer-layout="single-row"][data-persona-composer-compact]
+[data-persona-composer-layout="single-row"][data-persona-composer-compact][data-persona-composer-fit]
   .persona-widget-composer {
   flex-direction: row;
   align-items: center;
@@ -2915,11 +2559,11 @@
 
 /* The clusters dissolve into the form's row, so their children lay out beside
    the editor rather than under it; the start cluster leads it. */
-[data-persona-composer-layout="single-row"][data-persona-composer-compact]
+[data-persona-composer-layout="single-row"][data-persona-composer-compact][data-persona-composer-fit]
   .persona-widget-composer__actions {
   display: contents;
 }
-[data-persona-composer-layout="single-row"][data-persona-composer-compact]
+[data-persona-composer-layout="single-row"][data-persona-composer-compact][data-persona-composer-fit]
   .persona-widget-composer__left-actions {
   order: -1;
 }
@@ -2927,16 +2571,36 @@
 /* The clusters keep their intrinsic width: the model picker's select has
    min-width: 0 and would ellipsize to nothing. The editor's zero basis
    absorbs its own full-width utility and does all the flexing. */
-[data-persona-composer-layout="single-row"][data-persona-composer-compact]
+[data-persona-composer-layout="single-row"][data-persona-composer-compact][data-persona-composer-fit]
   .persona-widget-composer__left-actions,
-[data-persona-composer-layout="single-row"][data-persona-composer-compact]
+[data-persona-composer-layout="single-row"][data-persona-composer-compact][data-persona-composer-fit]
   .persona-widget-composer__right-actions {
   flex: 0 0 auto;
 }
-[data-persona-composer-layout="single-row"][data-persona-composer-compact]
+[data-persona-composer-layout="single-row"][data-persona-composer-compact][data-persona-composer-fit]
   .persona-composer-textarea {
   flex: 1 1 0%;
   min-width: 0;
+}
+
+/* Both stacked and expanded single-row composers contain their controls.
+   Crowded rails get their own rows instead of drifting across wrapped lines. */
+[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) :is(.persona-widget-composer__left-actions, .persona-widget-composer__right-actions) > * {
+  flex-shrink: 0;
+  max-width: 100%;
+}
+[data-persona-composer-expanded] .persona-widget-composer:not(.persona-pill-composer) .persona-widget-composer__right-actions {
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+[data-persona-composer-crowded] .persona-widget-composer:not(.persona-pill-composer) :is(.persona-widget-composer__left-actions, .persona-widget-composer__right-actions) {
+  flex: 0 0 100%;
+  justify-content: flex-start;
+  margin-left: 0;
+}
+[data-persona-composer-crowded] .persona-widget-composer:not(.persona-pill-composer) .persona-send-button-wrapper:has(> [data-persona-composer-submit]) {
+  margin-inline-start: auto;
 }
 
 /* --- Composer placement: overlay -------------------------------------- */
@@ -2944,6 +2608,12 @@
    Positioning lives here, never inline: a plugin-owned footer is exempt from
    the cssText reset in applyFullHeightStyles, so an inline design would
    diverge for plugin composers. */
+
+/* Shell tokens are reset on each themed root, including nested instances. */
+.persona-widget-footer {
+  background: var(--persona-composer-footer-background, var(--persona-surface));
+  padding: var(--persona-composer-footer-padding, 1rem 1.5rem);
+}
 
 /* Optional composer chrome tokens retain the legacy fallback in V4. */
 .persona-widget-footer.persona-border-t-persona-divider {
@@ -3192,37 +2862,52 @@
 .persona-conversation-loading-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 20px;
-}
-
-/* Leading bubbles stand in for assistant messages, trailing for user ones,
-   so each follows its role's real radius chain. */
-.persona-conversation-loading-bubble {
-  height: 44px;
-  border-radius: var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem));
-  background: var(--persona-divider, var(--persona-border, #e5e7eb));
-  align-self: flex-start;
+  gap: var(--persona-components-message-gap, 12px);
   animation: persona-conversation-loading-pulse 1400ms ease-in-out infinite;
 }
 
-.persona-conversation-loading-bubble--trailing {
-  align-self: flex-end;
-  border-radius: var(--persona-message-user-radius, var(--persona-radius-lg, 0.5rem));
+.persona-conversation-loading--centered:not([hidden]) {
+  display: grid;
+  flex: 1;
+  min-height: 80px;
+  place-items: center;
+}
+
+.persona-conversation-loading-ring {
+  display: block;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  color: var(--persona-muted, #6b7280);
+  animation: persona-spinner-rotate 800ms linear infinite;
+}
+
+/* The surrounding message uses real role/layout geometry; only its text is
+   replaced. Em-based lines follow the configured transcript type size. */
+.persona-conversation-loading-line {
+  height: 0.65em;
+  margin: 0.55em 0;
+  border-radius: 0.25em;
+  background: currentColor;
+  opacity: 0.12;
 }
 
 @keyframes persona-conversation-loading-pulse {
   0%,
   100% {
-    opacity: 1;
+    opacity: 0.85;
   }
   50% {
-    opacity: 0.55;
+    opacity: 0.5;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .persona-conversation-loading-bubble {
+  .persona-conversation-loading-body,
+  .persona-conversation-loading-ring {
     animation: none;
   }
 }
@@ -3364,6 +3049,7 @@
 }
 
 .persona-message-bubble pre code {
+  color: inherit;
   font-size: inherit;
   background-color: transparent;
   padding: 0;
@@ -3512,6 +3198,7 @@
 }
 
 [data-persona-root] .persona-markdown-bubble pre {
+  color: var(--persona-md-code-block-text-color, inherit);
   background-color: var(--persona-md-code-block-bg);
   border: 1px solid var(--persona-md-code-block-border-color);
   border-radius: var(--persona-radius-md, 0.375rem);
@@ -3519,6 +3206,9 @@
   overflow-x: auto;
   font-size: 0.8125rem;
 }
+
+/* Keep host element-level code colors from bypassing the block text token. */
+[data-persona-root] .persona-markdown-bubble pre code { color: inherit; }
 
 /* Ensure all links in chat bubbles have underlines */
 .persona-message-bubble a {
@@ -3630,7 +3320,9 @@
 }
 
 .persona-message-assistant-bubble p,
-.persona-message-assistant-bubble li {
+.persona-message-assistant-bubble li,
+.persona-error-detail p,
+.persona-error-detail li {
   color: inherit;
 }
 
@@ -4124,6 +3816,18 @@
     /* Keep normal flow positioning on mobile */
     position: static;
     opacity: 1;
+  }
+}
+
+/* The V5 default also stays reachable on hybrid touch devices and narrow
+   viewports. Explicit hover/always modes retain their existing behavior. */
+@media (pointer: coarse), (max-width: 639px) {
+  .persona-message-actions-adaptive.persona-message-actions-hover {
+    position: static;
+    transform: none;
+    opacity: 1;
+    pointer-events: auto;
+    margin-top: 0.5rem;
   }
 }
 
@@ -4883,9 +4587,6 @@
    Vars set from TS: --persona-artifact-split-gap, --persona-artifact-pane-width,
    --persona-artifact-pane-max-width, --persona-artifact-pane-min-width
    ============================================ */
-[data-persona-root] .persona-artifact-split-root {
-  gap: var(--persona-artifact-split-gap, 0.5rem);
-}
 
 /* Split button: one bordered control, two invocable halves, internal hairline
    divider (Primer/Fluent anatomy). The wrap paints border, surface, and radius
@@ -4928,147 +4629,31 @@
    document preset and the inline chrome actions cluster, so both surfaces read
    the same `components.artifact.toolbar` tokens (the vars are emitted globally
    at the widget root). */
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn,
-[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--persona-artifact-toolbar-icon-padding, 0.25rem);
-  border-radius: var(--persona-artifact-toolbar-icon-radius, var(--persona-radius-md, 0.375rem));
-  border: var(--persona-artifact-toolbar-icon-border, 1px solid var(--persona-border, #e5e7eb));
-  background: var(--persona-artifact-toolbar-icon-bg, var(--persona-surface, #ffffff));
-  color: var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827));
-  cursor: pointer;
-  line-height: 1;
-}
-
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn:hover,
-[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn:hover {
-  color: var(--persona-artifact-toolbar-icon-hover-color, inherit);
-  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
-}
-
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-icon-btn[aria-pressed="true"],
-[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-icon-btn[aria-pressed="true"] {
-  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
-  border-color: var(--persona-artifact-doc-toggle-active-border, var(--persona-icon-btn-active-border, var(--persona-border, #e5e7eb)));
-  color: var(--persona-artifact-doc-toggle-active-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
-}
-
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn,
-[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: var(--persona-artifact-toolbar-copy-padding, 0.25rem 0.5rem);
-  border-radius: var(--persona-artifact-toolbar-copy-radius, var(--persona-radius-md, 0.375rem));
-  border: var(--persona-artifact-toolbar-copy-border, 1px solid var(--persona-border, #e5e7eb));
-  background: var(--persona-artifact-toolbar-copy-bg, var(--persona-surface, #ffffff));
-  color: var(--persona-artifact-toolbar-copy-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
-  cursor: pointer;
-  font-size: 0.75rem;
-  line-height: 1.25;
-}
-
-[data-persona-root] .persona-artifact-toolbar-document .persona-artifact-doc-copy-btn:hover,
-[data-persona-root] .persona-artifact-inline-chrome-actions .persona-artifact-doc-copy-btn:hover {
-  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
-}
 
 /* Copy split button inside the document toolbar: the wrap takes over the copy
    pill's themed border/background/radius; the halves fall through to the base
    split-btn rules above, which outrank these context rest rules by tag. */
-[data-persona-root] .persona-artifact-toolbar-document .persona-split-btn,
-[data-persona-root] .persona-artifact-inline-chrome-actions .persona-split-btn {
-  --persona-split-radius: var(--persona-artifact-toolbar-copy-radius, var(--persona-radius-md, 0.375rem));
-  border: var(--persona-artifact-toolbar-copy-border, 1px solid var(--persona-border, #e5e7eb));
-  background: var(--persona-artifact-toolbar-copy-bg, var(--persona-surface, #ffffff));
-}
 
 
 /* Artifact tab theming */
-[data-persona-root] .persona-artifact-tab {
-  background: var(--persona-artifact-tab-bg, transparent);
-  border-radius: var(--persona-artifact-tab-radius, 0.5rem);
-  color: var(--persona-artifact-tab-color, inherit);
-  /* Keep each tab on one line and cap its width so the strip scrolls
-     horizontally instead of wrapping/overflowing the pane. */
-  white-space: nowrap;
-  max-width: var(--persona-artifact-tab-max-width, 12rem);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-[data-persona-root] .persona-artifact-tab.persona-bg-persona-container {
-  background: var(--persona-artifact-tab-active-bg, var(--persona-container, #f3f4f6));
-  border-color: var(--persona-artifact-tab-active-border, var(--persona-border, #e5e7eb));
-}
 
 /* Artifact toolbar background theming */
-[data-persona-root] .persona-artifact-toolbar {
-  background: var(--persona-artifact-toolbar-bg, var(--persona-surface, #fff));
-}
 
 /* Toggle group + view/code button styling lives in the segmented
    .persona-toggle-group.persona-artifact-toggle-group block further down. */
 
 /* Tab hover */
-[data-persona-root] .persona-artifact-tab:hover {
-  background: var(--persona-artifact-tab-hover-bg, var(--persona-container, #f3f4f6));
-}
 
 /* Keyboard focus ring, themed to match cards/buttons instead of the UA default
    (which varies by browser). Custom renderTabBar bars reuse .persona-artifact-tab,
    so they inherit the same ring; give a scroll container enough padding that the
    2px offset isn't clipped. */
-[data-persona-root] .persona-artifact-tab:focus-visible {
-  outline: 2px solid var(--persona-accent, #171717);
-  outline-offset: 2px;
-}
 
 /* Tab list container */
-[data-persona-root] .persona-artifact-list {
-  background: var(--persona-artifact-tab-list-bg, transparent);
-  border-bottom-color: var(--persona-artifact-tab-list-border-color, var(--persona-border, #e5e7eb));
-  padding: var(--persona-artifact-tab-list-padding, 0.5rem);
-  /* Thin, unobtrusive horizontal scrollbar for the tab strip. */
-  scrollbar-width: thin;
-  scroll-behavior: smooth;
-}
-
-[data-persona-root] .persona-artifact-list::-webkit-scrollbar {
-  height: 6px;
-}
-
-[data-persona-root] .persona-artifact-list::-webkit-scrollbar-thumb {
-  background: var(
-    --persona-artifact-tab-list-scrollbar,
-    var(--persona-scrollbar-thumb, var(--persona-border, #e5e7eb))
-  );
-  border-radius: 9999px;
-}
 
 /* Toolbar border override */
-[data-persona-root] .persona-artifact-toolbar-document {
-  border-bottom: var(--persona-artifact-toolbar-border, 1px solid var(--persona-border, #e5e7eb));
-}
 
 /* Artifact reference card (chat thread) */
-[data-persona-root] .persona-artifact-card {
-  background: var(--persona-artifact-card-bg, var(--persona-surface, #ffffff));
-  border: var(--persona-artifact-card-border, 1px solid var(--persona-border, #e5e7eb));
-  border-radius: var(--persona-artifact-card-radius, var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem)));
-  cursor: pointer;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-[data-persona-root] .persona-artifact-card:hover {
-  background: var(--persona-artifact-card-hover-bg, #f3f4f6);
-  border-color: var(--persona-artifact-card-hover-border, var(--persona-border, #e5e7eb));
-}
-[data-persona-root] .persona-artifact-card:focus-visible {
-  outline: 2px solid var(--persona-accent, #171717);
-  outline-offset: 2px;
-}
 
 /* ── Composable button utilities ── */
 
@@ -5172,7 +4757,7 @@
   border: 1px solid var(--persona-scroll-to-bottom-border, var(--persona-primary, #111827));
   background: var(--persona-scroll-to-bottom-bg, var(--persona-button-primary-bg, var(--persona-accent, #0f0f0f)));
   color: var(--persona-scroll-to-bottom-fg, var(--persona-button-primary-fg, var(--persona-text-inverse, #ffffff)));
-  box-shadow: var(--persona-scroll-to-bottom-shadow, 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1));
+  box-shadow: var(--persona-scroll-to-bottom-shadow, var(--persona-palette-shadows-sm, 0 1px 2px 0 rgb(0 0 0 / 0.05)));
   font-size: var(--persona-scroll-to-bottom-font-size, 0.875rem);
   line-height: 1;
 }
@@ -5188,7 +4773,8 @@
   gap: 0;
 }
 
-[data-persona-root] .persona-scroll-to-bottom-indicator svg {
+[data-persona-root] .persona-scroll-to-bottom-indicator svg,
+[data-persona-root] .persona-scroll-to-bottom-indicator > [aria-hidden="true"] {
   width: var(--persona-scroll-to-bottom-icon-size, 14px);
   height: var(--persona-scroll-to-bottom-icon-size, 14px);
 }
@@ -5199,16 +4785,16 @@
   top: -6px;
   right: -6px;
   box-sizing: border-box;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: var(--persona-radius-full, 9999px);
-  border: 1px solid var(--persona-scroll-to-bottom-border, var(--persona-primary, #111827));
+  min-width: var(--persona-scroll-to-bottom-count-size, 18px);
+  height: var(--persona-scroll-to-bottom-count-size, 18px);
+  padding: var(--persona-scroll-to-bottom-count-padding, 0 5px);
+  border-radius: var(--persona-scroll-to-bottom-count-radius, var(--persona-radius-full, 9999px));
+  border: 1px solid var(--persona-scroll-to-bottom-count-border, var(--persona-scroll-to-bottom-border, var(--persona-primary, #111827)));
   background: var(--persona-scroll-to-bottom-count-bg, var(--persona-surface, #ffffff));
   color: var(--persona-scroll-to-bottom-count-fg, var(--persona-primary, #111827));
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
+  font-size: var(--persona-scroll-to-bottom-count-font-size, 11px);
+  font-weight: var(--persona-scroll-to-bottom-count-font-weight, 600);
+  line-height: calc(var(--persona-scroll-to-bottom-count-size, 18px) - 2px);
   text-align: center;
 }
 
@@ -5219,6 +4805,36 @@
 [data-persona-root] .persona-scroll-to-bottom-indicator:focus-visible {
   outline: 2px solid var(--persona-accent, #171717);
   outline-offset: 2px;
+}
+
+/* Visibility reverses in CSS; hidden controls immediately leave hit testing. */
+[data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-visible="false"] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+[data-persona-root] .persona-scroll-to-bottom-dots {
+  display: flex;
+  gap: 2px;
+}
+[data-persona-root] .persona-scroll-to-bottom-dots > span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-transition="fade"] {
+    transition: opacity var(--persona-motion-duration-fast, 120ms) var(--persona-motion-easing, ease-out), visibility 0s;
+  }
+  [data-persona-root] .persona-scroll-to-bottom-indicator[data-persona-scroll-to-bottom-transition="fade"][data-persona-scroll-to-bottom-visible="false"] {
+    transition-delay: 0s, var(--persona-motion-duration-fast, 120ms);
+  }
+  [data-persona-root] .persona-scroll-to-bottom-dots > span {
+    animation: persona-tool-loading-pulse 900ms var(--persona-motion-easing, ease-out) infinite;
+  }
 }
 
 /* Toggle group: mutually exclusive button set created by createToggleGroup() */
@@ -5244,39 +4860,6 @@
 /* Artifact view/source toggle: one segmented pill. The container carries the
    border; segments are borderless and the active one is highlighted, so the
    pair reads as a single mutually exclusive switch instead of two buttons. */
-[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
-  gap: var(--persona-artifact-toolbar-toggle-group-gap, 2px);
-  padding: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
-  border: var(--persona-artifact-toolbar-toggle-group-border, 1px solid var(--persona-border, #e5e7eb));
-  /* Default to the toolbar button radius (document preset var, then the plain
-     icon-button var) so the pill matches the neighboring copy/close buttons
-     instead of standing out as a capsule. */
-  border-radius: var(--persona-artifact-toolbar-toggle-group-radius, var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))));
-  background: var(--persona-artifact-toolbar-toggle-group-bg, var(--persona-surface, #ffffff));
-}
-[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
-  border: none;
-  background: transparent;
-  /* Segment padding = standalone icon-button padding minus the container's
-     padding, so the pill's outer height matches the neighboring icon buttons
-     (the container's 1px border stands in for the border the segments lost).
-     calc() clamps to 0 if a theme sets group padding larger than icon padding. */
-  padding: calc(var(--persona-artifact-toolbar-icon-padding, var(--persona-icon-btn-padding, 0.25rem)) - var(--persona-artifact-toolbar-toggle-group-padding, 2px));
-  /* Container radius minus the 2px padding so the segment nests concentrically. */
-  border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
-}
-[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn:hover {
-  background: var(--persona-artifact-toolbar-icon-hover-bg, var(--persona-icon-btn-hover-bg, var(--persona-container, #f3f4f6)));
-}
-[data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn[aria-pressed="true"] {
-  background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
-  /* Inset ring instead of a border so documentToolbarToggleActiveBorderColor
-     still applies inside the borderless segment (transparent by default). */
-  box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
-  /* Survives the @supports thumb override below, which resets only the
-     background and ring; the active glyph keeps this color either way. */
-  color: var(--persona-artifact-doc-toggle-active-color, var(--persona-artifact-doc-toolbar-icon-color, var(--persona-text, #111827)));
-}
 
 /* Sliding selection thumb: a container ::before that translates between the
    two equal-width segments, keyed off aria-pressed via :has(). The static
@@ -5284,48 +4867,6 @@
    :has() and is disabled inside the @supports block so the highlight is only
    ever painted once. Geometry assumes the group's two segments are equal
    width (both are square icon buttons). */
-@supports selector(:has(*)) {
-  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group {
-    position: relative;
-  }
-  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group::before {
-    content: "";
-    position: absolute;
-    top: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
-    bottom: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
-    left: var(--persona-artifact-toolbar-toggle-group-padding, 2px);
-    width: calc(
-      50% - var(--persona-artifact-toolbar-toggle-group-padding, 2px) -
-        (var(--persona-artifact-toolbar-toggle-group-gap, 2px) / 2)
-    );
-    border-radius: var(--persona-artifact-toolbar-toggle-radius, calc(var(--persona-artifact-toolbar-icon-radius, var(--persona-icon-btn-radius, var(--persona-radius-md, 0.375rem))) - 2px));
-    background: var(--persona-artifact-doc-toggle-active-bg, var(--persona-icon-btn-active-bg, var(--persona-container, #f3f4f6)));
-    box-shadow: inset 0 0 0 1px var(--persona-artifact-doc-toggle-active-border, transparent);
-    transition: transform 0.18s ease;
-    pointer-events: none;
-  }
-  [data-persona-root]
-    .persona-toggle-group.persona-artifact-toggle-group:has(
-      > .persona-icon-btn:last-child[aria-pressed="true"]
-    )::before {
-    transform: translateX(calc(100% + var(--persona-artifact-toolbar-toggle-group-gap, 2px)));
-  }
-  /* Positioned so the segments paint above the absolutely positioned thumb
-     (document order applies once both are in the positioned layer). */
-  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn {
-    position: relative;
-  }
-  /* The thumb carries the highlight; keep the segment itself transparent. */
-  [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group > .persona-icon-btn[aria-pressed="true"] {
-    background: transparent;
-    box-shadow: none;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    [data-persona-root] .persona-toggle-group.persona-artifact-toggle-group::before {
-      transition: none;
-    }
-  }
-}
 
 /* Combo button: label + chevron with dropdown */
 [data-persona-root] .persona-combo-btn {
@@ -5405,50 +4946,8 @@
   outline: none;
 }
 
-[data-persona-root].persona-artifact-narrow-host .persona-artifact-split-handle {
-  display: none !important;
-}
-
-@media (max-width: 640px) {
-  [data-persona-root] .persona-artifact-split-handle {
-    display: none !important;
-  }
-}
-
-@media (min-width: 641px) {
-  [data-persona-root] .persona-artifact-pane {
-    width: var(--persona-artifact-pane-width, 40%);
-    max-width: var(--persona-artifact-pane-max-width, 28rem);
-    min-width: var(--persona-artifact-pane-min-width, 0);
-    flex-shrink: 0;
-    /* No default elevation on the pane; welded reads as one card, detached and
-       the drawer set their own shadow. Explicit paneShadow still wins. */
-    box-shadow: var(--persona-artifact-pane-shadow, none);
-  }
-}
-
 /* Expanded artifact pane: pane takes the whole split root, chat column hides.
    Split-view only: below 641px / narrow hosts the drawer already covers everything. */
-@media (min-width: 641px) {
-  [data-persona-root].persona-artifact-expanded .persona-artifact-split-root > :first-child {
-    display: none;
-  }
-  [data-persona-root].persona-artifact-expanded .persona-artifact-pane {
-    width: 100%;
-    max-width: none;
-  }
-  [data-persona-root].persona-artifact-expanded .persona-artifact-split-handle {
-    display: none !important;
-  }
-}
-@media (max-width: 640px) {
-  [data-persona-root] .persona-artifact-expand-btn {
-    display: none !important;
-  }
-}
-[data-persona-root].persona-artifact-narrow-host .persona-artifact-expand-btn {
-  display: none !important;
-}
 
 /* paneBorderRadius: works on any paneAppearance; overflow clips content to rounded shape */
 /* Positioned frame wrapping the sandboxed preview iframe (artifact-preview.ts).
@@ -5464,63 +4963,17 @@
    pre-paint surface a deliberate, themeable canvas rather than an uncontrolled
    flash. Artifact content generally assumes a light canvas, so white stays the
    default; override via --persona-artifact-frame-bg. */
-[data-persona-root] .persona-artifact-frame {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  background: var(--persona-artifact-frame-bg, #ffffff);
-}
 /* Previewable file artifact: sandboxed iframe fills its frame. */
-[data-persona-root] .persona-artifact-iframe {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border: 0;
-  color-scheme: light;
-  background: var(--persona-artifact-frame-bg, #ffffff);
-}
 
 /* Loading overlay above the preview iframe (artifact-preview.ts): absolutely
    fills the frame with the same themed canvas the iframe paints onto, so the
    pre-paint area reads as one deliberate surface. Appended only after
    `loading.delayMs`; the --out modifier fades it before removal. */
-[data-persona-root] .persona-artifact-frame-loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--persona-artifact-frame-bg, #ffffff);
-  opacity: 1;
-  transition: opacity var(--persona-artifact-frame-loading-fade, 200ms) ease;
-}
-[data-persona-root] .persona-artifact-frame-loading--out {
-  opacity: 0;
-}
 /* Default indicator column: the icon spinner, with the escalation label (when
    present) stacked below it. Icon-first, text only as a later escalation. */
-[data-persona-root] .persona-artifact-frame-loading-indicator {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.625rem;
-}
 /* Escalation label: calm, muted, small — NO shimmer (deliberate, per research).
    Hidden until setupPreviewLoading adds --visible after labelDelayMs; a plain
    opacity transition fades it in. */
-[data-persona-root] .persona-artifact-frame-loading-text {
-  color: var(
-    --persona-artifact-frame-loading-color,
-    var(--persona-text-muted, #6b7280)
-  );
-  font-size: 0.8125rem;
-  font-weight: 500;
-  opacity: 0;
-  transition: opacity 240ms ease;
-}
-[data-persona-root] .persona-artifact-frame-loading-text--visible {
-  opacity: 1;
-}
 
 /* Reusable icon spinner (utils/spinner.ts): a faint full track ring with a
    rotating arc on top. Icon-first loading is the norm across preview surfaces
@@ -5572,31 +5025,11 @@
   [data-persona-root] .persona-spinner {
     animation: none;
   }
-  [data-persona-root] .persona-artifact-frame-loading-text {
-    transition: none;
-  }
 }
 
 /* Shared artifact preview body wrapper (artifact-preview.ts): generates no box
    so children (e.g. the iframe's height: 100%) lay out against the host
    container exactly as if they were its direct children. */
-[data-persona-root] .persona-artifact-content {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-}
-
-[data-persona-root]
-  .persona-artifact-content
-  > .persona-artifact-preview-body
-  > * {
-  min-width: 0;
-  max-width: 100%;
-}
-
-[data-persona-root] .persona-artifact-preview-body {
-  display: contents;
-}
 
 /* Syntax-highlighted source view (code-highlight.ts). The host <pre> keeps its
    wrapping (persona-whitespace-pre-wrap); <code> resets white-space to normal so
@@ -5617,14 +5050,6 @@
 /* Pane source view is full-bleed: the pane drops its content padding (class
    toggled in artifact-pane.ts when the body rendered a code pre) so the
    line-number gutter sits flush against the pane's left edge. */
-[data-persona-root] .persona-artifact-content-flush {
-  padding: 0;
-}
-[data-persona-root] .persona-artifact-content-flush .persona-code-pre {
-  padding: 0.5rem 0.75rem 0.5rem 0;
-  border-radius: 0;
-  min-height: 100%;
-}
 [data-persona-root] .persona-code {
   display: block;
   white-space: normal;
@@ -5730,87 +5155,27 @@
    Reads like a file preview: a flush title/toolbar chrome bar above the body.
    Default vars draw from the same semantic surface/border/text/muted family
    the card uses, so light/dark themes work with zero config. */
-[data-persona-root] .persona-artifact-inline {
-  border: var(--persona-artifact-inline-border, 1px solid var(--persona-border, #e5e7eb));
-  border-radius: var(
-    --persona-artifact-inline-radius,
-    var(--persona-message-assistant-radius, var(--persona-radius-lg, 0.5rem))
-  );
-  background: var(--persona-artifact-inline-bg, var(--persona-surface, #ffffff));
-  overflow: hidden;
-}
 
 /* completeDisplay: "card" — once the block collapses to the compact reference
    card it keeps the same root (updater keying + theme zone survive) but must
    drop the inline frame styling, since the nested card carries its own border,
    background, and radius. overflow: visible so the card's focus outline (which
    uses outline-offset) isn't clipped. */
-[data-persona-root] .persona-artifact-inline.persona-artifact-inline--card {
-  border: none;
-  background: transparent;
-  border-radius: 0;
-  overflow: visible;
-}
 
 /* Title/toolbar chrome bar: flush to the frame edge (no frame padding). */
-[data-persona-root] .persona-artifact-inline-chrome {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  background: var(--persona-artifact-inline-chrome-bg, var(--persona-surface, #ffffff));
-  border-bottom: 1px solid var(--persona-artifact-inline-chrome-border, var(--persona-border, #e5e7eb));
-}
 
 /* Leading cluster: file icon + title + type label / streaming status. */
-[data-persona-root] .persona-artifact-inline-chrome-lead {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  flex: 1 1 auto;
-  color: var(--persona-artifact-inline-title-color, var(--persona-text, #111827));
-  font-size: 0.8125rem;
-  font-weight: 500;
-}
-
-[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-type,
-[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-status {
-  color: var(--persona-artifact-inline-muted-color, var(--persona-text-muted, #6b7280));
-  font-weight: 400;
-}
 
 /* Streaming status: animated label span + optional plain detail span (live
    counters). The label carries the loading animation; the detail updates freely
    per delta and stays un-animated. Shared by the card, the inline chrome, and
    the inline status body (features.artifacts.statusLabel). Keep the status span
    from blowing out the chrome bar when a long detail streams in. */
-[data-persona-root] .persona-artifact-inline-chrome-lead .persona-artifact-inline-status {
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-[data-persona-root] .persona-artifact-status-detail {
-  color: var(--persona-artifact-inline-muted-color, var(--persona-text-muted, #6b7280));
-  margin-left: 0.375rem;
-  font-variant-numeric: tabular-nums;
-}
 
 /* Trailing cluster: custom inlineActions, copy, expand. */
-[data-persona-root] .persona-artifact-inline-chrome-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex: 0 0 auto;
-}
 
 /* Body wraps the chrome-free preview; padding lives here so the chrome sits
    flush to the frame edge. */
-[data-persona-root] .persona-artifact-inline-body {
-  padding: 0.75rem;
-}
 
 /* The preview frame (and its 100%-height iframe) is height: 100%, which
    collapses inside the auto-height inline block; pin a themeable fixed height on
@@ -5820,12 +5185,6 @@
    var still wins when the new one is unset (inlineBody.height "auto"), so themes
    pinned to it keep working. The --sized rule below (equal specificity, declared
    later) overrides this to 100% when the body wrapper owns the height. */
-[data-persona-root] .persona-artifact-inline .persona-artifact-frame {
-  height: var(
-    --persona-artifact-inline-body-height,
-    var(--persona-artifact-inline-frame-height, 320px)
-  );
-}
 
 /* Inline body height model (features.artifacts.inlineBody). The block root sets
    --persona-artifact-inline-body-height (px) for the current state; leaving it
@@ -5836,24 +5195,11 @@
    class the pane toggles): the line-number gutter sits flush against the frame
    edge. Declared after .persona-artifact-inline-body so padding: 0 wins the
    specificity tie. */
-[data-persona-root] .persona-artifact-inline-body.persona-artifact-content-flush {
-  padding: 0;
-}
 
 /* Numeric inlineBody.height: the body wrapper owns the reserved height
    (border-box), so flush code, padded iframe, and padded status bodies all
    occupy the same outer box and every state swap is layout neutral. Fill-capable
    content stretches to the wrapper. */
-[data-persona-root] .persona-artifact-inline-body--sized {
-  height: var(--persona-artifact-inline-body-height, auto);
-}
-[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-source-window--fixed,
-[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-frame {
-  height: 100%;
-}
-[data-persona-root] .persona-artifact-inline-body--sized .persona-artifact-status-view {
-  min-height: 100%;
-}
 
 /* Fixed-height streaming source window: a reserved scroll viewport so streamed
    source no longer grows an unbounded <pre> and then snaps to the preview. The
@@ -5861,214 +5207,43 @@
    ever applied together with it). The bare (non-fixed) window is an inert
    wrapper (pane path never adds it; the source <pre> sits directly on el
    there). */
-[data-persona-root] .persona-artifact-source-window {
-  min-width: 0;
-}
-[data-persona-root] .persona-artifact-source-window--fixed {
-  overflow-y: auto;
-}
 
 /* Clipped preview window (inlineBody.overflow: "clip"): a fixed-height window
    showing the top of the document with no internal scroll. Applied together with
    --fixed (which supplies the reserved height via the --sized body wrapper and
    the fill-capable detection in artifact-inline.ts); declared after --fixed so
    this overflow: hidden wins its overflow-y: auto on the specificity tie. */
-[data-persona-root] .persona-artifact-source-window--clip {
-  overflow: hidden;
-}
 
 /* Edge fade masks on the fixed window (top fade signals content clipped above).
    mask-image works over any themed background; size via --persona-artifact-fade-size
    (defaults to 40px). */
-[data-persona-root]
-  .persona-artifact-fade-top:not(.persona-artifact-fade-bottom) {
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--persona-artifact-fade-size, 40px)
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--persona-artifact-fade-size, 40px)
-  );
-}
-[data-persona-root]
-  .persona-artifact-fade-bottom:not(.persona-artifact-fade-top) {
-  -webkit-mask-image: linear-gradient(
-    to top,
-    transparent 0,
-    #000 var(--persona-artifact-fade-size, 40px)
-  );
-  mask-image: linear-gradient(
-    to top,
-    transparent 0,
-    #000 var(--persona-artifact-fade-size, 40px)
-  );
-}
-[data-persona-root]
-  .persona-artifact-fade-top.persona-artifact-fade-bottom {
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--persona-artifact-fade-size, 40px),
-    #000 calc(100% - var(--persona-artifact-fade-size, 40px)),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    #000 var(--persona-artifact-fade-size, 40px),
-    #000 calc(100% - var(--persona-artifact-fade-size, 40px)),
-    transparent 100%
-  );
-}
 
 /* Edge fade on the horizontally scrollable tab strip. Visual hint only; the
    tablist keyboard behavior is the real affordance. Sized via
    --persona-artifact-tab-fade-size (default 24px). */
-[data-persona-root]
-  .persona-artifact-tab-fade-start:not(.persona-artifact-tab-fade-end) {
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 var(--persona-artifact-tab-fade-size, 24px)
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 var(--persona-artifact-tab-fade-size, 24px)
-  );
-}
-[data-persona-root]
-  .persona-artifact-tab-fade-end:not(.persona-artifact-tab-fade-start) {
-  -webkit-mask-image: linear-gradient(
-    to left,
-    transparent 0,
-    #000 var(--persona-artifact-tab-fade-size, 24px)
-  );
-  mask-image: linear-gradient(
-    to left,
-    transparent 0,
-    #000 var(--persona-artifact-tab-fade-size, 24px)
-  );
-}
-[data-persona-root]
-  .persona-artifact-tab-fade-start.persona-artifact-tab-fade-end {
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 var(--persona-artifact-tab-fade-size, 24px),
-    #000 calc(100% - var(--persona-artifact-tab-fade-size, 24px)),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 var(--persona-artifact-tab-fade-size, 24px),
-    #000 calc(100% - var(--persona-artifact-tab-fade-size, 24px)),
-    transparent 100%
-  );
-}
 
 /* Reserved-height status placeholder (inlineBody.streamingView: "status").
    Numeric height reserves the var; "auto" falls back to a modest 160px min-height
    so the card doesn't collapse. */
-[data-persona-root] .persona-artifact-status-view {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: var(--persona-artifact-inline-body-height, 160px);
-}
 
 /* Complete-state height cap for non-iframe bodies (rendered markdown, source
    view, component). The iframe path is sized by the iframe rule above instead,
    so this class is only applied when the completed body has no iframe. */
-[data-persona-root] .persona-artifact-inline-body--cap {
-  max-height: var(--persona-artifact-inline-body-height, none);
-  overflow-y: auto;
-}
-
-[data-persona-root] .persona-artifact-pane {
-  border-radius: var(--persona-artifact-pane-radius, 0);
-  overflow: hidden;
-  /* Layout paneBackground → theme components.artifact.pane.background → semantic surface */
-  background-color: var(
-    --persona-artifact-pane-bg,
-    var(--persona-components-artifact-pane-background, var(--persona-surface, #ffffff))
-  );
-}
 
 /* paneAppearance: 'seamless': flush with chat, no border/shadow/gap */
 /* `position: relative` for resizer overlay; gap 0; positioning is applied in ui.ts */
-[data-persona-root].persona-artifact-appearance-seamless .persona-artifact-split-root {
-  position: relative;
-  gap: 0 !important;
-}
-
-[data-persona-root].persona-artifact-appearance-seamless .persona-artifact-pane {
-  border-left-width: 0 !important;
-  border-left-color: transparent !important;
-  box-shadow: none !important;
-  /* Same token chain; final fallback stays container for flush split chrome */
-  background-color: var(
-    --persona-artifact-pane-bg,
-    var(--persona-components-artifact-pane-background, var(--persona-container, #f8fafc))
-  );
-}
 
 /* layout.paneBorder / paneBorderLeft: theme overrides (after appearance defaults) */
-[data-persona-root].persona-artifact-border-full .persona-artifact-pane {
-  border: var(--persona-artifact-pane-border) !important;
-}
-
-[data-persona-root].persona-artifact-border-left .persona-artifact-pane {
-  border-top: none !important;
-  border-right: none !important;
-  border-bottom: none !important;
-  border-left: var(--persona-artifact-pane-border-left) !important;
-}
-
-[data-persona-root].persona-artifact-appearance-seamless.persona-artifact-border-left .persona-artifact-pane {
-  border-left: var(--persona-artifact-pane-border-left) !important;
-}
-
-[data-persona-root].persona-artifact-appearance-seamless.persona-artifact-border-full .persona-artifact-pane {
-  border: var(--persona-artifact-pane-border) !important;
-}
 
 /* paneAppearance: 'detached': floating card with gap, all-side border, radius, elevation, canvas behind */
 /* Split gap defaults to --persona-panel-inset from ui.ts; canvas paints behind both columns. */
-[data-persona-root].persona-artifact-appearance-detached .persona-artifact-split-root {
-  background: var(--persona-panel-canvas-bg);
-}
 
 /* Desktop split only (drawer keeps its own chrome). Non-!important so explicit
    paneBorder / paneShadow / paneBorderRadius overrides still win. */
-@media (min-width: 641px) {
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-appearance-detached .persona-artifact-pane {
-    border-radius: var(
-      --persona-artifact-pane-radius,
-      var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))
-    );
-    border: var(--persona-panel-border, 1px solid var(--persona-border, #e5e7eb));
-    box-shadow: var(
-      --persona-artifact-pane-shadow,
-      var(--persona-panel-shadow, var(--persona-palette-shadows-xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25)))
-    );
-  }
-}
 
 /* chatSurface: 'flush': chat is flat flush background, only the pane floats. The
    chat has no perimeter inset, so inset the pane on 3 sides (left gap comes from
    the existing detached split flex gap). Keeps the pane's border/radius/shadow. */
-@media (min-width: 641px) {
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-chat-flush .persona-artifact-pane {
-    margin-top: var(--persona-panel-inset);
-    margin-right: var(--persona-panel-inset);
-    margin-bottom: var(--persona-panel-inset);
-  }
-}
 
 /*
  * Welded split chrome (panel + seamless): one card. The outer panel carries the
@@ -6077,78 +5252,8 @@
  * at the seam. Desktop split only (narrowed via :not(.narrow-host) + breakpoint).
  * Toggled from ui.ts by splitChromeMode(); the pane's flex layout owns gap 0.
  */
-@media (min-width: 641px) {
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-artifact-split-root {
-    position: relative;
-  }
-
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-widget-container {
-    border-top-right-radius: 0 !important;
-    border-bottom-right-radius: 0 !important;
-    overflow: hidden;
-  }
-
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split .persona-artifact-pane {
-    border-top-left-radius: 0 !important;
-    border-bottom-left-radius: 0 !important;
-    border-top-right-radius: var(--persona-artifact-welded-outer-radius, var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))) !important;
-    border-bottom-right-radius: var(--persona-artifact-welded-outer-radius, var(--persona-panel-radius, var(--persona-radius-xl, 0.75rem))) !important;
-    overflow: hidden;
-  }
-
-  /* panel appearance: a hairline divider on the pane's chat-facing edge. seamless
-     omits it (it already zeroes border-left). Non-!important so paneBorder /
-     paneBorderLeft overrides win. */
-  [data-persona-root]:not(.persona-artifact-narrow-host).persona-artifact-welded-split.persona-artifact-appearance-panel .persona-artifact-pane {
-    border-left: 1px solid var(--persona-border, #e5e7eb);
-  }
-}
 
 /* Narrow floating panel: drawer inside panel (class toggled by JS from panel width) */
-[data-persona-root].persona-artifact-narrow-host .persona-artifact-backdrop {
-  position: absolute !important;
-  inset: 0 !important;
-  z-index: 55 !important;
-}
-
-@media (min-width: 641px) {
-  /* Drawer width is its own knob (`layout.drawerWidth`), not the split's
-     pane vars: those are always materialized with split defaults, so reading
-     them here would resize every host's drawer. The outer min() keeps an
-     oversized value inside the panel. */
-  [data-persona-root].persona-artifact-narrow-host .persona-artifact-pane {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(100%, var(--persona-artifact-drawer-width, min(calc(100% - 1rem), 22rem))) !important;
-    max-width: var(--persona-artifact-drawer-width, 22rem) !important;
-    z-index: 60;
-    transform: translateX(100%);
-    transition: transform 0.2s ease;
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
-  }
-  [data-persona-root].persona-artifact-narrow-host .persona-artifact-pane.persona-artifact-drawer-open {
-    transform: translateX(0);
-  }
-}
-
-@media (max-width: 640px) {
-  [data-persona-root] .persona-artifact-pane {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: min(100vw, var(--persona-artifact-drawer-width, min(100vw - 1.5rem, 22rem)));
-    z-index: 60;
-    transform: translateX(100%);
-    transition: transform 0.2s ease;
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
-  }
-  [data-persona-root] .persona-artifact-pane.persona-artifact-drawer-open {
-    transform: translateX(0);
-  }
-}
 
 /* ============================================================
    Stream animations: reveal effects for assistant message text
@@ -7227,6 +6332,18 @@
   white-space: nowrap;
 }
 
+/* Keep atomic mentions inside a narrow editor; the full label remains in the
+   token's accessible name and title, and the whole token stays selectable. */
+.persona-composer-contenteditable .persona-mention-token {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+.persona-composer-contenteditable .persona-mention-token-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Read-only token in a sent bubble: no editable affordances (the composer's
  * atomic caret/select behavior doesn't apply), so it reads as inert prose. */
 .persona-mention-token-readonly {
@@ -7406,6 +6523,14 @@
   margin-left:var(--persona-components-activity-groupIndent, var(--persona-activity-indent));
   padding:var(--persona-components-activity-groupPadding, var(--persona-components-activity-bodyPadding, 8px 0));
 }
+/* Theme padding beats utility, suggestion, and activity-row geometry;
+   explicit legacy axes stay inline. Controls share this shorthand transport. */
+.persona-theme-padding,
+.persona-tool-bubble > .persona-theme-padding,
+.persona-tool-bubble > .persona-activity-header.persona-theme-padding,
+.persona-tool-bubble.persona-activity-row > .persona-activity-body.persona-theme-padding {
+  padding: var(--persona-theme-padding);
+}
 .persona-activity-row > .persona-activity-body.persona-space-y-3 > :not([hidden]) ~ :not([hidden]) {
   margin-top:var(--persona-components-activity-sectionGap, 12px);
 }
@@ -7435,7 +6560,7 @@
 
 /* Keep the top edge soft only while earlier transcript content is out of view. */
 .persona-widget-container:has(> .persona-widget-body[data-persona-top-fade="true"]) {
-  background-color: var(--persona-container);
+  background-color: var(--persona-transcript-top-fade-background, var(--persona-container));
 }
 .persona-widget-body[data-persona-top-fade="true"] {
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 var(--persona-components-message-topFadeHeight, 18px));
@@ -7513,3 +6638,231 @@
 .persona-tool-detail-copy:focus-visible { outline: 2px solid var(--persona-primary); outline-offset: 2px; }
 @media (hover: none) { .persona-tool-detail-copy { opacity: 1; } }
 @media (pointer: coarse) { .persona-tool-detail-copy { width: 40px; height: 40px; top: 2px; right: 2px; } }
+
+.persona-approval-status {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--persona-muted, #6b7280);
+}
+
+
+/* Resolved approvals share activity density; only their disclosure has an icon. */
+.persona-approval-row { width: 100%; min-width: 0; }
+.persona-approval-row > .persona-approval-head {
+  min-height: var(--persona-components-activity-rowHeight, 32px);
+  padding: 4px 0;
+}
+.persona-approval-row .persona-approval-title {
+  font-size: var(--persona-components-activity-labelSize, 13px);
+  color: var(--persona-muted, #6b7280);
+}
+.persona-approval-row .persona-approval-status { display: inline; padding: 0; font: inherit; color: inherit; }
+.persona-approval-row > .persona-approval-body {
+  margin-left: var(--persona-components-activity-indent, 24px);
+  padding: var(--persona-components-activity-bodyPadding, 8px 0);
+  background: var(--persona-components-activity-bodySurface, transparent);
+}
+.persona-approval-row > .persona-approval-body[hidden] { display: none; }
+.persona-approval-row .persona-approval-details { margin: 0; }
+.persona-approval-row .persona-approval-reason { margin-bottom: 0; }
+.persona-approval-row > .persona-approval-head:focus-visible {
+  outline: 2px solid var(--persona-focus-ring, currentColor);
+  outline-offset: 2px;
+}
+
+/* Compact approval disclosures share the tool detail surfaces. */
+.persona-approval-row .persona-approval-details {
+  display: grid;
+  gap: 8px;
+}
+.persona-approval-row .persona-approval-details[hidden] { display: none; }
+.persona-approval-row .persona-tool-detail > .persona-approval-desc,
+.persona-approval-row .persona-tool-detail > .persona-approval-reason {
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.persona-approval-row .persona-tool-detail > :last-child { margin-bottom: 0; }
+
+/* Built-in waiting label; keep readable text when motion is disabled. */
+.persona-loading-label {
+  min-height:20px;
+  font-size:13px;
+  line-height:20px;
+  color:var(--persona-muted);
+  width:fit-content;
+  background:linear-gradient(90deg, var(--persona-muted) 35%, var(--persona-text) 50%, var(--persona-muted) 65%);
+  background-size:200% 100%;
+  background-clip:text;
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:persona-activity-shimmer 2s linear infinite;
+}
+@media (prefers-reduced-motion:reduce), (forced-colors:active) {
+  .persona-loading-label {
+    animation:none;
+    background:none;
+    -webkit-text-fill-color:currentColor;
+  }
+}
+
+/* Keep V5 chip strips quiet even while hovered or actively scrolling. */
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-hide-scrollbar] {
+  scrollbar-width: none;
+}
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-hide-scrollbar]::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* The viewport reaches the panel sides; initial chips align with the composer. */
+.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-edge-to-edge] {
+  box-sizing: border-box;
+  width: calc(100% + var(--persona-suggestion-bleed-left, 0px) + var(--persona-suggestion-bleed-right, 0px)) !important;
+  max-width: none !important;
+  margin-left: calc(-1 * var(--persona-suggestion-bleed-left, 0px)) !important;
+  margin-right: calc(-1 * var(--persona-suggestion-bleed-right, 0px)) !important;
+  padding-left: var(--persona-suggestion-inset-left, 24px);
+  padding-right: var(--persona-suggestion-inset-right, 24px);
+  scroll-padding-left: var(--persona-suggestion-inset-left, 24px);
+  scroll-padding-right: var(--persona-suggestion-inset-right, 24px);
+  --persona-suggestion-scroll-fade-size: min(16px, var(--persona-suggestion-inset-left, 24px));
+}
+.persona-suggestions.persona-suggestions[data-variant="chip"][data-overflow="scroll"][data-edge-style="clip"] {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+/* Dispatch errors retain partial output in the preceding transcript row. */
+.persona-error-block {
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--persona-danger, #dc2626) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--persona-danger, #dc2626) 22%, transparent);
+  color: var(--persona-text, #111827);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.persona-error-title { display: block; font-weight: 600; }
+.persona-error-summary { display: block; cursor: pointer; list-style: none; }
+.persona-error-summary::-webkit-details-marker { display: none; }
+.persona-error-detail { margin-top: 4px; overflow-wrap: anywhere; }
+.persona-error-details:not([open]) .persona-error-detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.persona-error-more, .persona-error-less { font-size: 12px; text-decoration: underline; }
+.persona-error-less, .persona-error-details[open] .persona-error-more { display: none; }
+.persona-error-details[open] .persona-error-less { display: inline; }
+.persona-error-retry {
+  display: inline-flex;
+  width: auto;
+  height: auto;
+  margin-top: 10px;
+  padding: 4px 12px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.persona-error-summary:focus-visible, .persona-error-retry:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+/* Control rails and segmented tracks never inherit the editor row gap. */
+[data-persona-root] .persona-widget-composer :is(.persona-widget-composer__actions, .persona-widget-composer__left-actions, .persona-widget-composer__right-actions) {
+  gap: var(--persona-components-composer-controlGap, 0.5rem);
+}
+[data-persona-root] [data-persona-composer-action^="core:mode:"] .persona-composer-action-button--text {
+  font-size: var(--persona-components-composer-mode-fontSize, var(--persona-internal-composer-action-font-size, 0.875rem));
+  font-weight: var(--persona-components-composer-mode-fontWeight, normal);
+  height: var(--persona-components-composer-mode-height, var(--persona-composer-control-size, 40px));
+  min-height: var(--persona-components-composer-mode-height, var(--persona-composer-control-size, 40px));
+  padding-inline: var(--persona-components-composer-mode-paddingInline, 0.625rem);
+  gap: var(--persona-components-composer-mode-gap, 0.25rem);
+  border-radius: var(--persona-components-composer-mode-borderRadius, var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem)));
+  box-shadow: inset 0 0 0 1px var(--persona-components-composer-mode-borderColor, transparent);
+}
+[data-persona-root] [data-persona-composer-action^="core:mode:"] .persona-composer-action-button--text[aria-pressed="true"] {
+  background-color: var(--persona-components-composer-mode-activeBackground, var(--persona-button-ghost-hover-bg, rgba(0, 0, 0, 0.05)));
+  border-radius: var(--persona-components-composer-mode-borderRadius, var(--persona-internal-composer-selected-mode-radius, var(--persona-button-ghost-radius, var(--persona-radius-md, 0.375rem))));
+  box-shadow: inset 0 0 0 1px var(--persona-components-composer-mode-activeBorderColor, var(--persona-components-composer-mode-borderColor, transparent));
+}
+[data-persona-composer-suggestions][data-persona-suggestions-below] {
+  margin-top: var(--persona-components-composer-suggestionsGap, 0.5rem);
+  margin-bottom: 0;
+}
+@media (pointer: coarse) {
+  [data-persona-root] [data-persona-composer-action^="core:mode:"] .persona-composer-action-button--text { min-height: 40px; }
+}
+
+/* Composer-only attachment presentation. Semantic colors follow the active theme. */
+.persona-attachment-previews { align-items: flex-start; gap: var(--persona-components-attachment-composer-gap, 8px); }
+.persona-attachment-preview { position: relative; flex: 0 1 auto; max-width: 100%; min-width: 0; display: inline-flex; align-items: center; }
+.persona-attachment-image { box-sizing: border-box; display: block; width: var(--persona-components-attachment-composer-image-width, 48px); height: var(--persona-components-attachment-composer-image-height, 48px); border-radius: var(--persona-components-attachment-composer-image-borderRadius, 8px); background: var(--persona-components-attachment-composer-image-background, var(--persona-container)); border: 1px solid var(--persona-components-attachment-composer-image-borderColor, var(--persona-border)); }
+.persona-attachment-file { box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: var(--persona-components-attachment-composer-file-gap, 6px); width: var(--persona-components-attachment-composer-file-width, 48px); min-height: var(--persona-components-attachment-composer-file-minHeight, 48px); max-width: 100%; padding: var(--persona-components-attachment-composer-file-padding, 4px); border-radius: var(--persona-components-attachment-composer-file-borderRadius, 8px); background: var(--persona-components-attachment-composer-file-background, var(--persona-container)); border: 1px solid var(--persona-components-attachment-composer-file-borderColor, var(--persona-border)); color: var(--persona-components-attachment-composer-file-foreground, var(--persona-text)); font-size: var(--persona-components-attachment-composer-file-fontSize, 12px); }
+.persona-attachment-preview[data-layout="tile"] .persona-attachment-file { flex-direction: column; gap: 2px; }
+.persona-attachment-preview[data-layout="horizontal"] .persona-attachment-file { width: var(--persona-components-attachment-composer-file-width, 220px); justify-content: flex-start; padding: var(--persona-components-attachment-composer-file-padding, 10px); }
+.persona-attachment-preview[data-layout="vertical"] .persona-attachment-file { width: var(--persona-components-attachment-composer-file-width, 156px); min-height: var(--persona-components-attachment-composer-file-minHeight, 108px); align-items: flex-start; flex-direction: column; padding: var(--persona-components-attachment-composer-file-padding, 12px); }
+.persona-attachment-file-icon { flex-shrink: 0; width: var(--persona-components-attachment-composer-file-iconSize, 20px); height: var(--persona-components-attachment-composer-file-iconSize, 20px); color: var(--persona-components-attachment-composer-file-iconForeground, var(--persona-components-attachment-composer-file-mutedForeground, var(--persona-muted))); background: var(--persona-components-attachment-composer-file-iconBackground, transparent); border-radius: 4px; }
+.persona-attachment-file-copy { display: flex; flex-direction: column; min-width: 0; max-width: 100%; gap: 3px; }
+.persona-attachment-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; max-width: 100%; }
+.persona-attachment-file-metadata { color: var(--persona-components-attachment-composer-file-mutedForeground, var(--persona-muted)); font-size: 0.85em; }
+.persona-attachment-file-badge { color: var(--persona-components-attachment-composer-file-mutedForeground, var(--persona-muted)); font-size: 8px; font-weight: 600; text-transform: uppercase; line-height: 1; }
+.persona-attachment-preview[data-kind="image"] { --persona-attachment-remove-size: var(--persona-components-attachment-composer-image-remove-size, var(--persona-components-attachment-composer-remove-size, 18px)); --persona-attachment-remove-iconSize: var(--persona-components-attachment-composer-image-remove-iconSize, var(--persona-components-attachment-composer-remove-iconSize, 10px)); --persona-attachment-remove-background: var(--persona-components-attachment-composer-image-remove-background, var(--persona-components-attachment-composer-remove-background, rgba(0,0,0,.6))); --persona-attachment-remove-foreground: var(--persona-components-attachment-composer-image-remove-foreground, var(--persona-components-attachment-composer-remove-foreground, #ffffff)); --persona-attachment-remove-borderRadius: var(--persona-components-attachment-composer-image-remove-borderRadius, var(--persona-components-attachment-composer-remove-borderRadius, 50%)); --persona-attachment-remove-inset: var(--persona-components-attachment-composer-image-remove-inset, var(--persona-components-attachment-composer-remove-inset, 4px)); --persona-attachment-remove-borderColor: var(--persona-components-attachment-composer-image-remove-borderColor, var(--persona-components-attachment-composer-remove-borderColor, transparent)); --persona-attachment-remove-borderWidth: var(--persona-components-attachment-composer-image-remove-borderWidth, var(--persona-components-attachment-composer-remove-borderWidth, 0px)); --persona-attachment-remove-hoverBackground: var(--persona-components-attachment-composer-image-remove-hoverBackground, var(--persona-components-attachment-composer-remove-hoverBackground, var(--persona-attachment-remove-background))); --persona-attachment-remove-hoverForeground: var(--persona-components-attachment-composer-image-remove-hoverForeground, var(--persona-components-attachment-composer-remove-hoverForeground, var(--persona-attachment-remove-foreground))); }
+.persona-attachment-preview[data-kind="file"] { --persona-attachment-remove-size: var(--persona-components-attachment-composer-file-remove-size, var(--persona-components-attachment-composer-remove-size, 18px)); --persona-attachment-remove-iconSize: var(--persona-components-attachment-composer-file-remove-iconSize, var(--persona-components-attachment-composer-remove-iconSize, 10px)); --persona-attachment-remove-background: var(--persona-components-attachment-composer-file-remove-background, var(--persona-components-attachment-composer-remove-background, rgba(0,0,0,.6))); --persona-attachment-remove-foreground: var(--persona-components-attachment-composer-file-remove-foreground, var(--persona-components-attachment-composer-remove-foreground, #ffffff)); --persona-attachment-remove-borderRadius: var(--persona-components-attachment-composer-file-remove-borderRadius, var(--persona-components-attachment-composer-remove-borderRadius, 50%)); --persona-attachment-remove-inset: var(--persona-components-attachment-composer-file-remove-inset, var(--persona-components-attachment-composer-remove-inset, 4px)); --persona-attachment-remove-borderColor: var(--persona-components-attachment-composer-file-remove-borderColor, var(--persona-components-attachment-composer-remove-borderColor, transparent)); --persona-attachment-remove-borderWidth: var(--persona-components-attachment-composer-file-remove-borderWidth, var(--persona-components-attachment-composer-remove-borderWidth, 0px)); --persona-attachment-remove-hoverBackground: var(--persona-components-attachment-composer-file-remove-hoverBackground, var(--persona-components-attachment-composer-remove-hoverBackground, var(--persona-attachment-remove-background))); --persona-attachment-remove-hoverForeground: var(--persona-components-attachment-composer-file-remove-hoverForeground, var(--persona-components-attachment-composer-remove-hoverForeground, var(--persona-attachment-remove-foreground))); }
+.persona-attachment-remove { box-sizing: border-box; color: var(--persona-attachment-remove-foreground); position: absolute; top: calc(-1 * var(--persona-attachment-remove-inset)); inset-inline-end: calc(-1 * var(--persona-attachment-remove-inset)); width: var(--persona-attachment-remove-size); height: var(--persona-attachment-remove-size); display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: var(--persona-attachment-remove-borderWidth) solid var(--persona-attachment-remove-borderColor); padding: 0; border-radius: var(--persona-attachment-remove-borderRadius); background: var(--persona-attachment-remove-background); cursor: pointer; }
+.persona-attachment-remove svg { width: var(--persona-attachment-remove-iconSize); height: var(--persona-attachment-remove-iconSize); }
+.persona-attachment-preview[data-remove-placement="inside"] .persona-attachment-remove { top: var(--persona-attachment-remove-inset); inset-inline-end: var(--persona-attachment-remove-inset); }
+.persona-attachment-preview[data-remove-placement="inline"] { gap: var(--persona-components-attachment-composer-file-gap, 6px); }
+.persona-attachment-preview[data-remove-placement="inline"] .persona-attachment-remove { position: static; }
+.persona-attachment-remove:hover { background: var(--persona-attachment-remove-hoverBackground); color: var(--persona-attachment-remove-hoverForeground); }
+.persona-attachment-remove:focus-visible { outline: 2px solid var(--persona-primary); outline-offset: 2px; }
+@media (hover: hover) and (pointer: fine) {
+  .persona-attachment-preview[data-remove-visibility="hover"] .persona-attachment-remove { opacity: 0; }
+  .persona-attachment-preview[data-remove-visibility="hover"]:hover .persona-attachment-remove,
+  .persona-attachment-preview[data-remove-visibility="hover"]:focus-within .persona-attachment-remove { opacity: 1; }
+}
+/* The preview header remains the complete first row. The opt-in arrangement
+   affects only the editor and controls below, and width-fit retains its fallback. */
+[data-persona-attachment-layout="single-row"][data-persona-has-attachments][data-persona-composer-fit][data-persona-attachment-row-compact] .persona-widget-composer:not(.persona-pill-composer) { display: grid; grid-template-columns: auto minmax(120px, 1fr) auto; align-items: center; }
+[data-persona-attachment-layout="single-row"][data-persona-has-attachments][data-persona-composer-fit][data-persona-attachment-row-compact] .persona-widget-composer__header { display: block !important; grid-column: 1 / -1; grid-row: 1; min-width: 0; }
+[data-persona-attachment-layout="single-row"][data-persona-has-attachments][data-persona-composer-fit][data-persona-attachment-row-compact] .persona-widget-composer__actions { display: contents; }
+[data-persona-attachment-layout="single-row"][data-persona-has-attachments][data-persona-composer-fit][data-persona-attachment-row-compact] .persona-widget-composer__left-actions { grid-column: 1; grid-row: 2; order: 0; }
+[data-persona-attachment-layout="single-row"][data-persona-has-attachments][data-persona-composer-fit][data-persona-attachment-row-compact] .persona-composer-textarea { grid-column: 2; grid-row: 2; width: 100%; min-width: 0; }
+[data-persona-attachment-layout="single-row"][data-persona-has-attachments][data-persona-composer-fit][data-persona-attachment-row-compact] .persona-widget-composer__right-actions { grid-column: 3; grid-row: 2; }
+[data-persona-attachment-layout="stacked"][data-persona-has-attachments] .persona-widget-composer:not(.persona-pill-composer) { flex-direction: column; }
+.persona-attachment-preview[data-layout="vertical"][data-file-icon="false"] .persona-attachment-file-badge { margin-top: auto; }
+.persona-attachment-preview[data-layout="vertical"][data-file-icon="true"] .persona-attachment-file-copy { margin-top: auto; }
+.persona-attachment-preview[data-layout="horizontal"] .persona-attachment-file-copy { flex: 1; }
+@media (any-pointer: coarse) {
+  .persona-attachment-preview[data-remove-visibility="hover"] .persona-attachment-remove { opacity: 1; }
+}
+
+.persona-attachment-image-card { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; gap: 4px; }
+.persona-attachment-preview[data-layout="chip"] .persona-attachment-image-card { box-sizing: border-box; flex-direction: row; width: var(--persona-components-attachment-composer-image-chip-width, auto); min-height: var(--persona-components-attachment-composer-image-chip-minHeight, 40px); gap: var(--persona-components-attachment-composer-image-chip-gap, 8px); padding: var(--persona-components-attachment-composer-image-chip-padding, 4px 8px); background: var(--persona-components-attachment-composer-image-chip-background, var(--persona-container)); border: 1px solid var(--persona-components-attachment-composer-image-chip-borderColor, var(--persona-border)); border-radius: var(--persona-components-attachment-composer-image-chip-borderRadius, 8px); color: var(--persona-components-attachment-composer-image-chip-foreground, var(--persona-text)); font-size: var(--persona-components-attachment-composer-image-chip-fontSize, 12px); }
+.persona-attachment-preview[data-layout="chip"] .persona-attachment-image { flex-shrink: 0; }
+.persona-attachment-preview[data-layout="vertical"][data-icon-placement="center"] .persona-attachment-file-icon { align-self: center; margin-block: auto; }
+/* Installer feedback has inline geometry so it also paints before this file. */
+[data-persona-loading="default"] {
+  animation: persona-install-spin .8s linear infinite;
+}
+[data-persona-launcher-variant="circle"] > [data-persona-loading="default"] {
+  /* Surround the existing icon instead of putting a badge on top of it. */
+  width: calc(100% - 8px) !important;
+  height: calc(100% - 8px) !important;
+  bottom: 4px !important;
+  right: 4px !important;
+}
+@keyframes persona-install-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-persona-loading="default"] { animation: none; }
+}

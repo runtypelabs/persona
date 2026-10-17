@@ -217,6 +217,92 @@ describe("suggest_replies chips UI", () => {
     controller.destroy();
   });
 
+  it.each([
+    [false, false, "wrap", 4],
+    [true, false, "scroll", 3],
+    [true, true, "scroll", 5],
+  ])("resolves follow-up defaults for V5=%s fullscreen=%s", (v5, fullscreen, overflow, count) => {
+    const { mount, controller } = makeController({
+      future: { v5Defaults: v5 },
+      launcher: { enabled: false, fullHeight: fullscreen },
+    });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller, { suggestions: ["One", "Two", "Three", "Four", "Five", "Six"] });
+    expect(mount.querySelector("[data-persona-composer-suggestions]")?.getAttribute("data-overflow")).toBe(overflow);
+    expect(mount.querySelectorAll("button.persona-suggestion")).toHaveLength(count);
+    controller.destroy();
+  });
+
+  it("honors explicit V5 follow-up limits and overflow", () => {
+    const { mount, controller } = makeController({
+      future: { v5Defaults: true },
+      suggestions: { followUps: { overflow: "wrap", maxItems: 2 } },
+    });
+    controller.setFollowUpSuggestions(["One", "Two", "Three"]);
+    expect(mount.querySelector('[data-persona-suggestions="follow-up"]')?.getAttribute("data-overflow")).toBe("wrap");
+    expect(mount.querySelectorAll("button.persona-suggestion")).toHaveLength(2);
+    controller.destroy();
+  });
+
+  it.each([false, true])("dismisses V5 follow-ups on composer input (host=%s)", (host) => {
+    const { mount, controller } = makeController({ future: { v5Defaults: true } });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    if (host) controller.setFollowUpSuggestions(["Host suggestion"]);
+    const input = mount.querySelector("textarea")!;
+    input.value = "New question";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(mount.querySelectorAll("button.persona-suggestion")).toHaveLength(0);
+    // Neither emptying the composer nor unrelated transcript updates restore it.
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    injectAssistantMessage(controller);
+    expect(mount.querySelectorAll("button.persona-suggestion")).toHaveLength(0);
+    injectSuggestReplies(controller, { id: "new-set", suggestions: ["Fresh suggestion"] });
+    expect(chipButtons(mount, "Fresh suggestion")).toHaveLength(1);
+    controller.destroy();
+  });
+
+  it("resets dismissed follow-ups when the chat is cleared", () => {
+    const { mount, controller } = makeController({ future: { v5Defaults: true } });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    mount.querySelector("textarea")!.dispatchEvent(new Event("input", { bubbles: true }));
+    controller.clearChat();
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    expect(chipButtons(mount, "Tell me more")).toHaveLength(1);
+    controller.destroy();
+  });
+
+  it("keeps V4 follow-ups on composer input", () => {
+    const { mount, controller } = makeController();
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    mount.querySelector("textarea")!.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(chipButtons(mount, "Tell me more")).toHaveLength(1);
+    controller.destroy();
+  });
+
+  it.each([false, true])("clears old V5 follow-ups on run start and reveals only new ones after streaming (host=%s)", async (host) => {
+    const { mount, controller } = makeController({ future: { v5Defaults: true } });
+    injectUserMessage(controller);
+    injectSuggestReplies(controller);
+    let streamController!: ReadableStreamDefaultController<Uint8Array>;
+    const stream = controller.connectStream(new ReadableStream<Uint8Array>({
+      start(value) { streamController = value; },
+    }));
+    await vi.waitFor(() => expect(mount.querySelectorAll("button.persona-suggestion")).toHaveLength(0));
+    if (host) controller.setFollowUpSuggestions(["Fresh after run"]);
+    else injectSuggestReplies(controller, { id: "new-stream-set", suggestions: ["Fresh after run"] });
+    expect(chipButtons(mount, "Fresh after run")).toHaveLength(0);
+    streamController.close();
+    await stream;
+    expect(chipButtons(mount, "Tell me more")).toHaveLength(0);
+    expect(chipButtons(mount, "Fresh after run")).toHaveLength(1);
+    controller.destroy();
+  });
+
   it("auto placement follows welcome-card visibility", () => {
     const withCard = makeController({
       suggestions: { starters: { items: ["Compare plans"] } },
@@ -1062,7 +1148,7 @@ describe("follow-ups never called debug hint", () => {
     info.mockClear();
     return () =>
       info.mock.calls.filter((call) =>
-        String(call[0]).includes("has not called suggest_replies"),
+        String(call[0]).includes("No suggest_replies call received"),
       );
   };
 

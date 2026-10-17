@@ -343,20 +343,31 @@ function mountWidget(): void {
       suggestionChipsConfig: {
         fontFamily: "sans-serif",
       },
+      welcome: {
+        title: "Ask the shop copilot",
+        subtitle:
+          "Gemma 4 runs in your browser and filters this storefront with the page's tools. Load a model from the toolbar first.",
+        variant: "card",
+      },
       copy: {
         ...DEFAULT_WIDGET_CONFIG.copy,
-        welcomeTitle: "Ask the shop copilot",
-        welcomeSubtitle:
-          "Gemma 4 runs in your browser and filters this storefront with the page's tools. Load a model from the toolbar first.",
         inputPlaceholder: "Describe what you're looking for…",
       },
-      suggestionChips: [
-        "Waterproof hiking boots under $100",
-        "Something warm for camping in March",
-        "Show me the highest-rated tent",
-        "Only what's in stock, cheapest first",
-        "Clear all filters",
-      ],
+      suggestions: {
+        starters: {
+          items: [
+            "Waterproof hiking boots under $100",
+            "Something warm for camping in March",
+            "Show me the highest-rated tent",
+            "Only what's in stock, cheapest first",
+            "Clear all filters",
+          ],
+          variant: "chip",
+          placement: "composer",
+          overflow: "wrap",
+          maxItems: 4,
+        },
+      },
       launcher: {
         ...DEFAULT_WIDGET_CONFIG.launcher,
         mountMode: "docked",

@@ -441,14 +441,14 @@ describe("WebMCP display titles", () => {
     expect(getWebMcpToolDisplayTitle("search_products")).toBe("Search the catalog");
   });
 
-  it("passes the declared title to the confirm gate", async () => {
+  it("passes the declared title and stable call ID to the confirm gate", async () => {
     registry.tools = [fakeTool({ name: "add_to_cart", title: "Add to Cart" })];
     const onConfirm = vi.fn(async () => true);
     const bridge = new WebMcpBridge({ enabled: true, onConfirm });
-    const r = await bridge.executeToolCall("webmcp:add_to_cart", {});
+    const r = await bridge.executeToolCall("webmcp:add_to_cart", {}, undefined, "call-cart-1");
     expect(r.isError).toBeFalsy();
     expect(onConfirm).toHaveBeenCalledWith(
-      expect.objectContaining({ toolName: "add_to_cart", title: "Add to Cart" })
+      expect.objectContaining({ toolName: "add_to_cart", title: "Add to Cart", toolCallId: "call-cart-1" })
     );
   });
 

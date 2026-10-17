@@ -263,7 +263,12 @@
             subtitle: "Click me to load the full widget",
             iconText: "💬"
           },
-          suggestionChips: ["Hello!", "What can you do?"]
+          suggestions: {
+            starters: {
+              items: ["Hello!", "What can you do?"],
+              variant: "chip", placement: "composer", overflow: "wrap", maxItems: 4
+            }
+          }
         },
 
         // ── The lifecycle callbacks (recommended API) ──
@@ -312,7 +317,11 @@
         "  jsUrl:  \"/widget-dist/index.global.js\",\n" +
         "  config: {\n" +
         "    apiUrl: \"…/api/chat/dispatch\",\n" +
-        "    launcher: { enabled: true, title: \"Lifecycle Demo\" }\n" +
+        "    launcher: { enabled: true, title: \"Lifecycle Demo\" },\n" +
+        "    suggestions: { starters: {\n" +
+        "      items: [\"Hello!\", \"What can you do?\"],\n" +
+        "      variant: \"chip\", placement: \"composer\", overflow: \"wrap\", maxItems: 4\n" +
+        "    } }\n" +
         "  },\n" +
         "  onScriptLoad:    (info)   => { /* info.version */ },\n" +
         "  onLauncherShown: (info)   => { /* info.deferred, info.element */ },\n" +

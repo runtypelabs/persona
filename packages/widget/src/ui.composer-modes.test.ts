@@ -104,6 +104,20 @@ describe("composer modes", () => {
     vi.restoreAllMocks();
   });
 
+  it("renders a decorative trailing mode icon and refreshes it on update", async () => {
+    const { mount, controller } = makeController({ composer: {
+      modes: [{ id: "search", label: "Search", shortLabel: "Search", iconName: "search", trailingIconName: "chevron-down" }],
+    } });
+    const button = modeButton(mount, "search");
+    expect(button.querySelectorAll("svg")).toHaveLength(2);
+    expect(button.children[1].textContent).toBe("Search");
+    button.click();
+    expect(controller.getComposerState().activeModeIds).toEqual(["search"]);
+    controller.update({ composer: { modes: [{ id: "search", label: "Search", shortLabel: "Search", iconName: "search" }] } });
+    await flush();
+    expect(modeButton(mount, "search").querySelectorAll("svg")).toHaveLength(1);
+  });
+
   it("renders one toggle per mode in the start cluster, in config order", () => {
     const { mount } = makeController({ composer: { modes, modeGroups } });
     const ids = Array.from(
@@ -406,5 +420,120 @@ describe("modeGroups chipVisibility", () => {
       chips(mount).map((chip) => chip.getAttribute("data-persona-composer-mode"))
     ).toEqual(["search"]);
     expect(chipRow(mount)!.style.display).toBe("flex");
+  });
+});
+
+describe("selected mode labels", () => {
+  beforeEach(() => { window.scrollTo = vi.fn(); });
+  afterEach(() => {
+    controllers.splice(0).forEach((controller) => controller.destroy());
+    mounts.splice(0).forEach((mount) => mount.remove());
+    document.body.innerHTML = "";
+    vi.restoreAllMocks();
+  });
+  const labeledModes: ComposerMode[] = [
+    { id: "concise", label: "Concise", iconName: "sparkles", groupId: "style" },
+    { id: "detail", label: "Detailed reply", shortLabel: "Detailed", iconName: "sparkles", groupId: "style" },
+  ];
+
+  it("keeps V4 chips and replaces V5 redundant chips with active icon labels", () => {
+    for (const v5Defaults of [false, true]) {
+      const { mount, controller } = makeController({
+        future: { v5Defaults },
+        composer: { modes: labeledModes, defaultActiveModeIds: ["concise"] },
+      });
+      const button = modeButton(mount, "concise");
+      expect(button.querySelector("svg")).toBeTruthy();
+      expect(button.querySelector(".persona-composer-action-button__label")?.textContent ?? "").toBe(v5Defaults ? "Concise" : "");
+      expect(chips(mount).length).toBe(v5Defaults ? 0 : 1);
+      button.click();
+      expect(controller.getComposerState().activeModeIds).toEqual([]);
+      expect(modeButton(mount, "concise").getAttribute("aria-pressed")).toBe("false");
+    }
+  });
+
+  it("respects explicit auto chip visibility under V5 and hidden labels under V4", () => {
+    for (const v5Defaults of [false, true]) {
+      for (const chipVisibility of ["auto", "hidden"] as const) {
+        const { mount } = makeController({
+          future: { v5Defaults }, composer: {
+            modes: labeledModes, defaultActiveModeIds: ["concise"],
+            modeGroups: [{ id: "style", selection: "multiple", chipVisibility }],
+          },
+        });
+        expect(chips(mount).length).toBe(chipVisibility === "auto" ? 1 : 0);
+        expect(modeButton(mount, "concise").querySelector(".persona-composer-action-button__label")?.textContent ?? "").toBe(chipVisibility === "hidden" ? "Concise" : "");
+      }
+    }
+  });
+
+  it("pins every selected mode when automatic overflow would otherwise hide them", () => {
+    const { mount, controller } = makeController({
+      future: { v5Defaults: true }, composer: {
+        modes: labeledModes, defaultActiveModeIds: ["concise", "detail"],
+        actionOverflow: { enabled: true, collapseAutoActionsBelow: 9999 },
+      },
+    });
+    expect(chips(mount)).toHaveLength(0);
+    expect(modeButton(mount, "concise").textContent).toBe("Concise");
+    expect(modeButton(mount, "detail").textContent).toBe("Detailed");
+    modeButton(mount, "concise").click();
+    expect(controller.getComposerState().activeModeIds).toEqual(["detail"]);
+    expect(modeButton(mount, "detail")).toBeTruthy();
+  });
+
+  it("keeps keyboard focus when the last folded mode becomes a pinned label and back", () => {
+    const { mount, controller } = makeController({
+      future: { v5Defaults: true }, composer: {
+        modes: [labeledModes[0]],
+        actionOverflow: { enabled: true, collapseAutoActionsBelow: 9999 },
+      },
+    });
+    Object.defineProperty(mount.querySelector(".persona-widget-footer")!, "clientWidth", { get: () => 280 });
+    controller.update({});
+    const trigger = mount.querySelector<HTMLButtonElement>("[data-persona-composer-overflow-trigger]")!;
+    trigger.focus();
+    trigger.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    const menuItem = document.querySelector<HTMLButtonElement>('[role="menuitem"]')!;
+    expect(document.activeElement).toBe(menuItem);
+    menuItem.click();
+    const selected = modeButton(mount, "concise");
+    expect(document.activeElement).toBe(selected);
+    selected.click();
+    expect(document.activeElement).toBe(mount.querySelector("[data-persona-composer-overflow-trigger]"));
+  });
+
+  it("does not move editor focus for a mode activation that did not own focus", () => {
+    const { mount } = makeController({
+      future: { v5Defaults: true }, composer: { modes: labeledModes },
+    });
+    const input = textareaOf(mount);
+    input.focus();
+    modeButton(mount, "concise").click();
+    expect(document.activeElement).toBe(input);
+  });
+
+  it("keeps an explicitly overflowed selected mode discoverable through a chip", () => {
+    const { mount } = makeController({
+      future: { v5Defaults: true }, composer: {
+        modes: [{ id: "concise", label: "Concise", iconName: "sparkles", presentation: "overflow" }],
+        defaultActiveModeIds: ["concise"], actionOverflow: { enabled: true },
+      },
+    });
+    expect(modeButton(mount, "concise")).toBeNull();
+    expect(chips(mount)).toHaveLength(1);
+    expect(chips(mount)[0].textContent).toContain("Concise");
+  });
+
+  it("lets explicit hidden groups use a visible active label even with overflow placement", () => {
+    const { mount } = makeController({
+      composer: {
+        modes: [{ id: "concise", groupId: "style", label: "Concise", iconName: "sparkles", presentation: "overflow" }],
+        modeGroups: [{ id: "style", selection: "single", chipVisibility: "hidden" }],
+        defaultActiveModeIds: ["concise"], actionOverflow: { enabled: true },
+      },
+    });
+    expect(chips(mount)).toHaveLength(0);
+    expect(modeButton(mount, "concise").textContent).toBe("Concise");
   });
 });

@@ -1856,6 +1856,27 @@ body {
   gap: 12px;
 }
 
+.control-toggle-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.control-row-toggle .toggle-switch {
+  flex-shrink: 0;
+}
+
+.search-result-item {
+  width: 100%;
+  text-align: left;
+}
+
+.search-result-path {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  color: #6b7280;
+}
+
 .control-label {
   display: block;
   margin-bottom: 6px;
@@ -3294,6 +3315,28 @@ body {
   font-size: 11px;
   margin: 0;
   border-radius: 8px;
+}
+
+.export-advanced {
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.export-advanced summary {
+  cursor: pointer;
+  color: #4b5563;
+}
+
+.export-defaults-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 6px;
+}
+
+.export-advanced > a {
+  display: block;
+  margin-top: 10px;
 }
 
 .export-dropdown .json-textarea {

@@ -16,38 +16,14 @@ export const STANDALONE_EXAMPLES: readonly StandaloneExample[] = [
   {
     slug: "sample",
     href: "/standalone/sample.html",
-    title: "Sample",
-    blurb: "Minimal launcher install with shopping-action handlers",
-  },
-  {
-    slug: "shopify",
-    href: "/standalone/shopify.html",
-    title: "Shopify",
-    blurb: "Shopify-style storefront install",
+    title: "Minimal embed",
+    blurb: "A minimal installer configuration and copyable embed snippet",
   },
   {
     slug: "example-shop",
     href: "/standalone/example-shop.html",
-    title: "Example Shop",
-    blurb: "Standalone widget demo on a faux shop page",
-  },
-  {
-    slug: "example-shop-metadata",
-    href: "/standalone/example-shop-metadata.html",
-    title: "Shop · Metadata",
-    blurb: "Example shop with persistent metadata wired in",
-  },
-  {
-    slug: "example-shop-installer",
-    href: "/standalone/example-shop-installer.html",
-    title: "Shop · Installer",
-    blurb: "Installer-script version of the example shop",
-  },
-  {
-    slug: "example-shop-installer-voice-metadata",
-    href: "/standalone/example-shop-installer-voice-metadata.html",
-    title: "Shop · Installer + Voice + Metadata",
-    blurb: "Installer with voice and metadata enabled",
+    title: "Shopping integration",
+    blurb: "Installer with page context, shopping actions, persistence, and voice input",
   },
   {
     slug: "preview-mode",

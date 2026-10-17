@@ -1,6 +1,6 @@
 import { applyActivityRow, activityDisplay, activityVariant, activityDuration } from "./activity-row";
 import { createElement } from "../utils/dom";
-import { renderLucideIcon } from "../utils/icons";
+import { renderLucideIcon } from "./activity-deps";
 import { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { DEFAULT_REASONING_DISPLAY } from "../defaults";
 import { describeReasonStatus, computeReasoningElapsed, parseFormattedTemplate } from "../utils/formatting";

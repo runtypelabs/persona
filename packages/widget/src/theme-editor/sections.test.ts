@@ -418,3 +418,94 @@ describe("theme editor scroll-to-bottom controls", () => {
     expect(speedField?.parseValue?.("240")).toBe(240);
   });
 });
+
+describe("scoped style replacement editor paths", () => {
+  it("exposes independent controls and all surface migrations with resettable CSS values", () => {
+    const fields = COMPONENTS_SECTIONS.flatMap(section => section.fields);
+    const paths = new Map(fields.map(field => [field.path, field]));
+    for (const group of ["header.close", "header.clear", "composer.send", "voice.control"]) {
+      for (const leaf of ["size", "iconSize", "iconStrokeWidth", "background", "foreground", "borderColor", "borderWidth", "borderRadius", "padding"]) {
+        const field = paths.get(`theme.components.${group}.${leaf}`);
+        expect(field, `${group}.${leaf}`).toBeDefined();
+        expect(field?.parseValue?.("  ")).toBeUndefined();
+        expect(field?.parseValue?.(" 0 ")).toBe("0");
+        expect(field?.unsettable).toBe(true);
+      }
+    }
+    const surfaceLeaves: Record<string, string[]> = {
+      voice: ["recording.indicator", "recording.background", "recording.border", "processing.icon", "processing.background", "processing.border", "speaking.icon", "speaking.background", "speaking.border"],
+      toolBubble: ["background", "borderColor", "borderWidth", "borderRadius", "header.background", "header.foreground", "header.padding", "content.background", "content.foreground", "content.padding", "codeBlock.background", "codeBlock.foreground", "codeBlock.borderColor", "toggleForeground", "labelForeground", "loading.primary", "loading.secondary", "loading.duration"],
+      approval: ["requested.titleColor", "requested.descriptionColor", "requested.reasonColor", "requested.parameters.background", "requested.parameters.foreground", "approve.foreground", "deny.foreground"],
+      askUserQuestion: ["sheet.background", "sheet.border", "sheet.shadow", "pill.background", "pill.foreground", "pill.borderRadius", "pill.selectedBackground", "pill.selectedForeground", "customInput.background"],
+      artifact: ["pane.padding", "pane.borderRadius", "pane.shadow", "pane.border", "pane.borderLeft", "chat.shadow", "split.outerRadius", "toolbar.iconColor", "toolbar.toggleActiveBackground", "toolbar.toggleActiveBorderColor", "toolbar.toggleActiveColor", "tab.fadeSize"],
+    };
+    for (const [group, leaves] of Object.entries(surfaceLeaves)) {
+      for (const leaf of leaves) expect(paths.has(`theme.components.${group}.${leaf}`), `${group}.${leaf}`).toBe(true);
+    }
+    const shapePaths = COMPONENT_SHAPE_SECTIONS.flatMap(section => section.fields.map(field => field.path));
+    expect(shapePaths).not.toContain("theme.components.voice.processing.icon");
+    expect(shapePaths).toContain("theme.components.composer.send.size");
+    expect(paths.get("theme.components.toolBubble.loading.duration")?.parseValue?.(" 1600ms ")).toBe("1600ms");
+  });
+
+  it("writes modern welcome/starters paths and keeps behavior outside the theme", () => {
+    const paths = CONFIGURE_SECTIONS.flatMap(section => section.fields.map(field => field.path));
+    expect(paths).toEqual(expect.arrayContaining(["welcome.title", "welcome.subtitle", "welcome.variant", "suggestions.starters.items", "sendButton.useIcon", "launcher.closeButtonPlacement", "launcher.clearChat.enabled"]));
+    expect(paths).not.toEqual(expect.arrayContaining(["copy.welcomeTitle", "suggestionChips"]));
+    expect(paths).not.toContain("sendButton.paddingX");
+    expect(paths).not.toContain("features.artifacts.layout.paneBackground");
+  });
+});
+
+describe('modern authoring discovery', () => {
+  it('offers real idle/stop paths and distinguishes border value kinds', () => {
+    const colorFields = COMPONENT_COLOR_SECTIONS.flatMap(section => section.fields);
+    expect(colorFields.some(field => field.path === 'theme.components.composer.send.foreground')).toBe(true);
+    const stopFields = colorFields.filter(field => field.path.startsWith('theme.components.button.stop.'));
+    expect(stopFields.map(field => field.path).sort()).toEqual([
+      'theme.components.button.stop.background', 'theme.components.button.stop.foreground',
+    ]);
+    expect(colorFields.find(field => field.path === 'theme.components.header.border')?.description).toContain('Border color');
+    expect(COMPONENT_SHAPE_SECTIONS.find(section => section.id === 'comp-artifact-chrome')?.description).toContain('full CSS border shorthands');
+    const configure = CONFIGURE_SECTIONS.flatMap(section => section.fields);
+    expect(configure.find(field => field.path === 'welcome.variant')?.options?.some(option => option.value === 'none')).toBe(true);
+    expect(configure.some(field => field.path === 'suggestions.starters.placement')).toBe(true);
+  });
+});
+
+
+describe("attachment preview editor controls", () => {
+  it("offers presentation choices separately from theme colors and sizes", () => {
+    const fields = CONFIGURE_SECTIONS.find(section => section.id === "attachments-config")?.fields ?? [];
+    const paths = fields.map(field => field.path);
+    expect(paths).toEqual(expect.arrayContaining([
+      "attachments.preview.file.layout", "attachments.preview.file.name",
+      "attachments.preview.file.metadata", "attachments.preview.file.badge",
+      "attachments.preview.file.iconName", "attachments.preview.file.iconPlacement",
+      "attachments.preview.image.layout", "attachments.preview.image.name",
+      "attachments.preview.image.fit", "attachments.preview.image.remove.visibility",
+      "attachments.preview.file.remove.visibility", "composer.attachmentLayout",
+    ]));
+    expect(fields.find(field => field.path === "attachments.preview.file.layout")?.options?.map(option => option.value))
+      .toEqual(["tile", "horizontal", "vertical"]);
+    const colors = COMPONENT_COLOR_SECTIONS.flatMap(section => section.fields.map(field => field.path));
+    const shapes = COMPONENT_SHAPE_SECTIONS.flatMap(section => section.fields.map(field => field.path));
+    expect(colors).toContain("theme.components.attachment.composer.remove.foreground");
+    expect(shapes).toContain("theme.components.attachment.composer.image.width");
+    expect(shapes).toContain("theme.components.attachment.composer.image.chip.width");
+    expect(shapes).toContain("theme.components.attachment.composer.file.remove.borderWidth");
+    expect(colors).toContain("theme.components.attachment.composer.file.iconBackground");
+    expect(colors).toContain("theme.components.attachment.composer.image.remove.hoverForeground");
+    expect(shapes).not.toContain("theme.components.attachment.composer.remove.foreground");
+  });
+});
+
+describe("composer More menu editor", () => {
+  it("keeps menu choices separate from theme sizes and colors", () => {
+    const paths = CONFIGURE_SECTIONS.find(section => section.id === "composer-menu-config")?.fields.map(field => field.path);
+    expect(paths).toContain("composer.actionOverflow.menu.width");
+    expect(paths).toContain("composer.actionOverflow.menu.placement");
+    expect(COMPONENT_SHAPE_SECTIONS.flatMap(section => section.fields.map(field => field.path))).toContain("theme.components.composer.overflowMenu.rowPadding");
+    expect(COMPONENT_COLOR_SECTIONS.flatMap(section => section.fields.map(field => field.path))).toContain("theme.components.composer.overflowMenu.focusBackground");
+  });
+});

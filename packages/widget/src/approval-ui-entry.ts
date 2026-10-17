@@ -13,3 +13,5 @@ export {
 export { createBuiltInApprovalPlugin } from "./components/approval-actions";
 export { initApprovalUi } from "./components/approval-deps";
 export type { ApprovalUiDeps } from "./components/approval-deps";
+
+export { createErrorBlock } from "./components/error-block";

@@ -1,7 +1,8 @@
-// Second minification pass over the CDN IIFE bundles (`dist/*.global.js`).
+// Second minification pass over the CDN IIFEs and selected standalone ESM entries.
 //
 // tsdown (Rolldown + the Oxc minifier) produces the bundle; terser then
-// re-minifies the already-minified output. Byte count barely moves, but
+// re-minifies the already-minified output. ESM mode preserves its exports;
+// IIFE mode preserves the browser globals. Byte count barely moves, but
 // terser's mangler assigns identifiers by character frequency, which Brotli
 // compresses better: ~8 KiB off `index.global.js` when the bundler was esbuild,
 // ~1 KiB after Oxc's mangler. Only safe compress options are used, so behavior
@@ -30,25 +31,37 @@ if (files.length === 0) {
   process.exit(1);
 }
 
-const brotliKiB = (code) =>
-  (
-    brotliCompressSync(Buffer.from(code), {
-      params: { [constants.BROTLI_PARAM_QUALITY]: 11 },
-    }).byteLength / 1024
-  ).toFixed(2);
+const brotliBytes = (code) => brotliCompressSync(Buffer.from(code), {
+  params: { [constants.BROTLI_PARAM_QUALITY]: 11 },
+}).byteLength;
+const brotliKiB = (code) => (brotliBytes(code) / 1024).toFixed(2);
 
 for (const file of files) {
   const mapFile = `${file}.map`;
   const input = readFileSync(file, "utf8");
-  const result = await minify(input, {
+  let result = await minify(input, {
     ecma: 2020,
-    compress: { passes: 2, keep_fargs: false },
+    module: !file.endsWith(".global.js"),
+    compress: { passes: 2, keep_fargs: false, hoist_funs: file.endsWith("theme-editor.js") },
     mangle: true,
     format: { comments: /@license|@preserve|^!/ },
     sourceMap: existsSync(mapFile)
       ? { content: readFileSync(mapFile, "utf8"), url: basename(mapFile) }
       : false,
   });
+  // The core benefits from one additional safe compression pass after Oxc's
+  // and Terser's initial rewrites. Hoisting vars improves Brotli's repeated
+  // structure without property mangling or unsafe transformations.
+  if (file.endsWith("index.global.js")) {
+    const optimized = await minify(result.code, {
+      ecma: 2020,
+      compress: { passes: 3, keep_fargs: false, hoist_vars: true },
+      mangle: true,
+      format: { comments: /@license|@preserve|^!/ },
+      sourceMap: result.map ? { content: result.map, url: basename(mapFile) } : false,
+    });
+    if (brotliBytes(optimized.code) < brotliBytes(result.code)) result = optimized;
+  }
   const code = result.code.replace(
     /(?:^[\w@.-]+\/[\w./-]+\.m?js:\n)+/gm,
     (run) => {

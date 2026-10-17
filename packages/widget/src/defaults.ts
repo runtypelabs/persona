@@ -1,8 +1,10 @@
 import type { AgentWidgetConfig, AgentWidgetLauncherConfig } from "./types";
 import type { DeepPartial, PersonaTheme } from "./types/theme";
 import { deepMerge } from "./utils/deep-merge";
-import { inheritDefaultProvenance } from "./utils/defaults-provenance";
+import { DEFAULT_APPROVAL_V5 } from "./utils/approval-config";
+import { defaultProvenance, inheritDefaultProvenance } from "./utils/defaults-provenance";
 import { inheritPanelAliasProvenance } from "./utils/panel-config";
+import { inheritStyleProvenance } from "./utils/style-provenance";
 import {
   DEFAULT_TOOLTIP_DELAY_MS,
   DEFAULT_TOOLTIP_SKIP_DELAY_MS,
@@ -165,6 +167,10 @@ export const DEFAULTS_BASE: Partial<AgentWidgetConfig> = {
       enabled: true,
       iconName: "arrow-down",
       label: "",
+      streamingIndicator: "arrow",
+      scrollBehavior: "instant",
+      scrollDurationMs: 220,
+      transition: "none",
     },
     scrollBehavior: {
       // ChatGPT-style default: pin the just-sent message near the top and let
@@ -264,8 +270,18 @@ export const DEFAULT_LAUNCHER_V5: Partial<AgentWidgetLauncherConfig> = {
   headerIconSize: "20px",
 };
 export const DEFAULTS_V5: Partial<AgentWidgetConfig> = {
+  // Shared default tracked here so later brand updates retain host scheme intent.
+  colorScheme: "light",
+  errorDisplay: "block",
+  messageActions: { visibility: undefined },
+  // Let the suggestion theme token control weight; explicit legacy overrides still win.
+  suggestionChipsConfig: { fontWeight: undefined },
+  approval: DEFAULT_APPROVAL_V5,
+  loadingIndicator: { variant: "label" },
   launcher: DEFAULT_LAUNCHER_V5,
   features: {
+    artifacts: { enabled: true },
+    scrollToBottom: { streamingIndicator: "dots", transition: "fade", scrollBehavior: "smooth" },
     toolCallDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, grouped: true, groupedMode: "collapsible", loadingAnimation: "shimmer" },
     reasoningDisplay: { variant: "row", iconVisibility: "active", autoExpand: false, loadingAnimation: "shimmer" },
   },
@@ -320,11 +336,19 @@ export function mergeWithDefaults(
   config?: Partial<AgentWidgetConfig>
 ): Partial<AgentWidgetConfig> {
   const defaults = resolveDefaults(config);
-  if (!config) return inheritDefaultProvenance(inheritPanelAliasProvenance(defaults), undefined, DEFAULTS_V5);
+  if (!config) return inheritStyleProvenance(inheritDefaultProvenance(inheritPanelAliasProvenance(defaults), undefined, DEFAULTS_V5));
 
-  return inheritDefaultProvenance(inheritPanelAliasProvenance({
+  return inheritStyleProvenance(inheritDefaultProvenance(inheritPanelAliasProvenance({
     ...defaults,
     ...config,
+    // Leave the scheme unresolved for a brand unless the host chose one.
+    // Provenance also distinguishes the inherited light default on live updates.
+    colorScheme: defaultProvenance(config, ["colorScheme"]).includes("colorScheme")
+      ? config.colorScheme : config.brand ? undefined : defaults.colorScheme,
+    ...((defaults.approval || config.approval !== undefined) ? { approval: config.approval === false ? false : {
+      ...(defaults.approval || {}),
+      ...config.approval,
+    } } : {}),
     theme: mergeThemePartials(defaults.theme, config.theme),
     darkTheme: mergeThemePartials(defaults.darkTheme, config.darkTheme),
     launcher: {
@@ -502,6 +526,6 @@ export function mergeWithDefaults(
       ...defaults.messageActions,
       ...config.messageActions,
     },
-  }, config), config, DEFAULTS_V5);
+  }, config), config, DEFAULTS_V5), config);
 
 }

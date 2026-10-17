@@ -55,9 +55,12 @@ export const PAGE = /* html */ `<!doctype html>
         apiUrl: "/dispatch",
         persistState: false,
         launcher: { enabled: false, width: "100%" },
+        welcome: {
+          title: "Persona × Express",
+          subtitle: "Ask anything. The echo agent streams it back over the Persona wire.",
+          variant: "card",
+        },
         copy: {
-          welcomeTitle: "Persona × Express",
-          welcomeSubtitle: "Ask anything. The echo agent streams it back over the Persona wire.",
           inputPlaceholder: "Ask anything...",
         },
         theme: {
@@ -70,11 +73,19 @@ export const PAGE = /* html */ `<!doctype html>
             },
           },
         },
-        suggestionChips: [
-          "Echo this back to me",
-          "Why does Express need a bridge?",
-          "Explain the Persona wire",
-        ],
+        suggestions: {
+          starters: {
+            items: [
+              "Echo this back to me",
+              "Why does Express need a bridge?",
+              "Explain the Persona wire",
+            ],
+            variant: "chip",
+            placement: "composer",
+            overflow: "wrap",
+            maxItems: 4,
+          },
+        },
       });
     </script>
   </body>

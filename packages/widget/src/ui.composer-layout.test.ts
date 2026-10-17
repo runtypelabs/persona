@@ -52,6 +52,7 @@ describe("composer.layout", () => {
     document.body.innerHTML = "";
     window.localStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("leaves the footer untouched when unset", async () => {
@@ -112,5 +113,48 @@ describe("composer.layout", () => {
     controller.update({ composer: { layout: "stacked" } } as never);
     await flush();
     expect(footerOf(mount).hasAttribute("data-persona-composer-layout")).toBe(false);
+  });
+
+  it.each(["single-row", "stacked"] as const)("contains crowded %s controls and recovers on host resize", async (layout) => {
+    const observers: Array<{ nodes: Element[]; callback: () => void; disconnect: ReturnType<typeof vi.fn> }> = [];
+    vi.stubGlobal("ResizeObserver", class {
+      nodes: Element[] = [];
+      disconnect = vi.fn();
+      constructor(public callback: () => void) { observers.push(this); }
+      observe(node: Element) { this.nodes.push(node); }
+    });
+    const frames: Array<(time: number) => void> = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => { frames.push(callback); return frames.length; });
+    const { mount, controller } = makeController({ future: { v5Defaults: true }, composer: { layout } });
+    const sibling = makeController({ composer: { layout: "single-row" } });
+    await flush();
+    frames.splice(0);
+    const form = mount.querySelector<HTMLElement>("[data-persona-composer-form]")!;
+    const input = mount.querySelector<HTMLTextAreaElement>("[data-persona-composer-input]")!;
+    form.style.cssText = "padding:8px;gap:8px";
+    input.style.lineHeight = "20px";
+    let width = 90;
+    Object.defineProperty(form, "clientWidth", { get: () => width });
+    Object.defineProperty(input, "scrollHeight", { get: () => width < 200 ? 80 : 20 });
+    for (const node of Array.from(form.querySelectorAll<HTMLElement>(".persona-widget-composer__left-actions > *, .persona-widget-composer__right-actions > *"))) {
+      Object.defineProperty(node, "scrollWidth", { get: () => 160 });
+    }
+    const observer = observers.find((item) => item.nodes.includes(form))!;
+    const resize = () => { observer.callback(); frames.splice(0).forEach((frame) => frame(0)); };
+    resize();
+    expect(footerOf(mount).hasAttribute("data-persona-composer-fit")).toBe(layout === "stacked");
+    expect(footerOf(mount).hasAttribute("data-persona-composer-crowded")).toBe(true);
+    expect(footerOf(mount).hasAttribute("data-persona-composer-expanded")).toBe(true);
+    expect(footerOf(sibling.mount).hasAttribute("data-persona-composer-fit")).toBe(true);
+    input.value = "short";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    width = 420;
+    resize();
+    expect(footerOf(mount).hasAttribute("data-persona-composer-fit")).toBe(true);
+    expect(footerOf(mount).hasAttribute("data-persona-composer-compact")).toBe(true);
+    expect(footerOf(mount).hasAttribute("data-persona-composer-expanded")).toBe(layout === "stacked");
+    expect(footerOf(mount).hasAttribute("data-persona-composer-crowded")).toBe(false);
+    controller.destroy();
+    expect(observer.disconnect).toHaveBeenCalled();
   });
 });

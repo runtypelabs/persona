@@ -79,3 +79,45 @@ describe("mount fill min-width (fullHeight embed)", () => {
     controller.destroy();
   });
 });
+
+describe.each([false, true])("inline width with V5=%s", v5Defaults => {
+  it.each([false, true])("preserves width through fullHeight=%s updates and resize", fullHeight => {
+    const mount = createMount();
+    const controller = createAgentExperience(mount, {
+      persistState: false,
+      future: { v5Defaults },
+      launcher: { enabled: false, fullHeight },
+    });
+    const checkWidth = (width: string) => {
+      const wrapper = mount.firstElementChild as HTMLElement;
+      const panel = wrapper.firstElementChild as HTMLElement;
+      expect(wrapper.style.width).toBe(width);
+      expect(panel.style.width).toBe('100%');
+      expect(panel.style.maxWidth).toBe('100%');
+    };
+    try {
+      checkWidth('100%');
+      controller.update({ launcher: { fullHeight: !fullHeight } });
+      checkWidth('100%');
+      controller.update({ launcher: { width: '320px' } });
+      checkWidth('320px');
+      window.dispatchEvent(new Event('resize'));
+      checkWidth('320px');
+      controller.update({ launcher: { fullHeight } });
+      checkWidth('320px');
+      controller.update({ launcher: { width: undefined } });
+      checkWidth('100%');
+      controller.update({ launcherWidth: '360px' });
+      checkWidth('360px');
+      controller.update({ launcherWidth: undefined });
+      checkWidth('100%');
+      controller.update({ theme: { components: { panel: { width: '75%' } } } });
+      checkWidth('var(--persona-components-panel-width)');
+      window.dispatchEvent(new Event('resize'));
+      checkWidth('var(--persona-components-panel-width)');
+    } finally {
+      controller.destroy();
+      mount.remove();
+    }
+  });
+});

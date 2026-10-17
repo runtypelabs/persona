@@ -1,7 +1,8 @@
+import { resolveToolStyles } from "../utils/tool-styles";
 import type { AgentWidgetConfig, AgentWidgetMessage } from "../types";
 import { createNode } from "../utils/dom";
-import { formatUnknownValue } from "../utils/formatting";
-import { renderLucideIcon } from "../utils/icons";
+import { formatUnknownValue } from "../utils/format-value";
+import { renderLucideIcon } from "./activity-deps";
 
 const isEmptyRequest = (value: unknown): boolean => {
   if (value == null) return true;
@@ -25,7 +26,7 @@ const isStructured = (value: unknown): boolean => {
 export function appendToolDetails(content: HTMLElement, message: AgentWidgetMessage, config: AgentWidgetConfig): void {
   const tool = message.toolCall;
   if (!tool) return;
-  const styles = config.toolCall ?? {};
+  const styles = resolveToolStyles(config);
   const section = (label: "Request" | "Response", value: unknown) => {
     const block = createNode("section", {
       className: "persona-tool-detail",

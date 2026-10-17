@@ -1152,10 +1152,13 @@ const config: AgentWidgetConfig = {
   theme: {
     ...DEFAULT_WIDGET_CONFIG.theme
   },
+  welcome: {
+    title: welcomeTitle,
+    subtitle: welcomeSubtitle,
+    variant: "card",
+  },
   copy: {
     ...DEFAULT_WIDGET_CONFIG.copy,
-    welcomeTitle,
-    welcomeSubtitle,
     inputPlaceholder: "Ask about our breads, pastries, or gifts...",
     sendButtonLabel: "Send"
   },
@@ -1163,11 +1166,19 @@ const config: AgentWidgetConfig = {
     enabled: true,
     autoResume: "assistant"
   },
-  suggestionChips: [
-    "I'm looking for a gift",
-    "What's your best seller?",
-    "Tell me about your sourdough"
-  ],
+  suggestions: {
+    starters: {
+      items: [
+        "I'm looking for a gift",
+        "What's your best seller?",
+        "Tell me about your sourdough"
+      ],
+      variant: "chip",
+      placement: "composer",
+      overflow: "wrap",
+      maxItems: 4,
+    },
+  },
   postprocessMessage: ({ text, streaming, message }) => {
     return markdownPostprocessor(text);
   },

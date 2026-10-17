@@ -179,6 +179,12 @@ export interface ThemeEditorPreset {
 
 // ─── State ───────────────────────────────────────────────────────
 
+/** Authored inputs; unknown-origin imports are retained without minimization. */
+export interface AuthoredConfigExport {
+  origin: 'authored' | 'imported';
+  config: Partial<AgentWidgetConfig>;
+}
+
 export interface ConfiguratorSnapshot {
   version: 2;
   config: Record<string, unknown>;

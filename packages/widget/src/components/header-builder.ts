@@ -90,6 +90,9 @@ export const buildHeader = (context: HeaderBuildContext): HeaderElements => {
     style: {
       height: headerIconSize,
       width: headerIconSize,
+      boxSizing: "content-box",
+      padding: "var(--persona-components-header-iconPadding, 0px)",
+      flexShrink: "0",
       backgroundColor: "var(--persona-header-icon-bg, var(--persona-primary, #0f0f0f))",
       color: "var(--persona-header-icon-fg, var(--persona-text-inverse, #ffffff))",
     },

@@ -34,3 +34,6 @@ export type { ArtifactsUiDeps } from "./components/artifacts-deps";
 //    core's sibling-URL loader instead of a bare subpath import.
 export { provideMarkdownParsers as __provideMarkdownParsers } from "./markdown-parsers-loader";
 export { setIconsExtraLoader as __setIconsExtraLoader } from "./icons-extra-loader";
+
+export { createArtifactResizer } from "./artifact-resizer";
+export { ensureArtifactStyles } from "./components/artifact-styles";

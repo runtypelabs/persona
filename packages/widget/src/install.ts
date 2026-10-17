@@ -6,6 +6,10 @@
 
 export {};
 
+import type { BrandConfig } from "./types/theme";
+import { delayInstallLoading } from "./utils/install-loading";
+import type { InstallLoadingRenderer } from "./types/install-loading";
+
 interface SiteAgentInstallConfig {
   // Setting `cdn` explicitly opts into npm-CDN asset URLs (jsDelivr/unpkg),
   // and `version` pins the asset version. When neither is set, assets load
@@ -21,6 +25,7 @@ interface SiteAgentInstallConfig {
   config?: any;
   /** Opt in to the staged v5 defaults when using top-level installer options. */
   future?: { v5Defaults?: boolean };
+  brand?: BrandConfig;
   autoInit?: boolean;
   // Client token mode options (can also be set via data attributes)
   clientToken?: string;
@@ -33,6 +38,8 @@ interface SiteAgentInstallConfig {
   useShadowDom?: boolean;
   // Expose the widget handle on window[windowKey] for programmatic access
   windowKey?: string;
+  /** Replace the delayed loading ring. Persona owns timing and cleanup. */
+  renderLoading?: InstallLoadingRenderer;
   /**
    * Fired as soon as the installer script executes, before it loads or gates
    * anything. For diagnostics / load-timing baselines ("did my embed run").
@@ -105,38 +112,17 @@ declare global {
           scriptConfig.config = parsedConfig;
         }
       } catch (e) {
-        console.error("Failed to parse data-config JSON:", e);
+        console.error("Invalid data-config JSON:", e);
       }
     }
 
-    // Client token from data attribute (primary method for client token mode)
-    const token = script.getAttribute('data-runtype-token');
-    if (token) {
-      scriptConfig.clientToken = token;
-    }
-
-    // Optional flow ID
-    const flowId = script.getAttribute('data-flow-id');
-    if (flowId) {
-      scriptConfig.flowId = flowId;
-    }
-
-    // Optional agent ID
-    const agentId = script.getAttribute('data-agent-id');
-    if (agentId) {
-      scriptConfig.agentId = agentId;
-    }
-
-    // Optional API URL override
-    const apiUrl = script.getAttribute('data-api-url');
-    if (apiUrl) {
-      scriptConfig.apiUrl = apiUrl;
-    }
-
-    // Optional preview query param gate
-    const previewQueryParam = script.getAttribute('data-preview-param');
-    if (previewQueryParam) {
-      scriptConfig.previewQueryParam = previewQueryParam;
+    for (const [key, attribute] of [
+      ["clientToken", "runtype-token"], ["flowId", "flow-id"],
+      ["agentId", "agent-id"], ["apiUrl", "api-url"],
+      ["previewQueryParam", "preview-param"],
+    ] as const) {
+      const value = script.getAttribute(`data-${attribute}`);
+      if (value) scriptConfig[key] = value;
     }
 
     return scriptConfig;
@@ -159,7 +145,7 @@ declare global {
     try {
       fn?.(arg);
     } catch (e) {
-      console.error("[Persona] lifecycle callback threw:", e);
+      console.error("Lifecycle callback failed:", e);
     }
   };
   const dispatchLifecycle = (name: string, detail: unknown): void => {
@@ -170,7 +156,7 @@ declare global {
     }
   };
   const fail = (phase: "css" | "bundle" | "init", error: unknown): void => {
-    console.error("Failed to install AgentWidget:", error);
+    console.error("Widget install failed:", error);
     safeCall(config.onError, { phase, error });
     dispatchLifecycle("persona:error", { phase, error });
   };
@@ -228,6 +214,11 @@ declare global {
   //   2. explicit `cdn` / `version` → npm CDN construction
   //   3. the installer's own directory (default)
   //   4. npm CDN construction (currentScript unavailable)
+  const assetUrls = (base: string) => ({
+    cssUrl: `${base}/widget.css`,
+    jsUrl: `${base}/index.global.js`,
+    launcherUrl: `${base}/launcher.global.js`,
+  });
   const getCdnBase = () => {
     // For a custom URL override, derive the sibling launcher URL when the
     // override mirrors the dist layout (…/index.global.js → …/launcher.global.js)
@@ -250,23 +241,14 @@ declare global {
       const selfBase = getInstallerBase();
       if (selfBase) {
         if (!config.version) {
-          return {
-            cssUrl: `${selfBase}/widget.css`,
-            jsUrl: `${selfBase}/index.global.js`,
-            launcherUrl: `${selfBase}/launcher.global.js` as string | null,
-          };
+          return assetUrls(selfBase);
         }
         // A `version` on the first-party CDN stays first-party: the bucket
         // mirrors every release at /persona/<version>/, and rerouting to a
         // npm CDN would be blocked by the CSP that allowed the installer.
         const selfOrigin = new URL(selfBase).origin;
         if (selfOrigin === "https://cdn.runtype.com") {
-          const base = `${selfOrigin}/persona/${config.version}`;
-          return {
-            cssUrl: `${base}/widget.css`,
-            jsUrl: `${base}/index.global.js`,
-            launcherUrl: `${base}/launcher.global.js` as string | null,
-          };
+          return assetUrls(`${selfOrigin}/persona/${config.version}`);
         }
       }
     }
@@ -278,11 +260,7 @@ declare global {
       : `/npm/${packageName}@${version}/dist`;
     const host = cdn === "unpkg" ? "https://unpkg.com" : "https://cdn.jsdelivr.net";
 
-    return {
-      cssUrl: `${host}${basePath}/widget.css`,
-      jsUrl: `${host}${basePath}/index.global.js`,
-      launcherUrl: `${host}${basePath}/launcher.global.js` as string | null,
-    };
+    return assetUrls(`${host}${basePath}`);
   };
 
   const { cssUrl, jsUrl, launcherUrl } = getCdnBase();
@@ -296,9 +274,7 @@ declare global {
     try {
       if (selfBase && new URL(selfBase).origin !== new URL(jsUrl, document.baseURI).origin) {
         console.warn(
-          `[persona] Widget assets resolve to ${new URL(jsUrl, document.baseURI).origin}, but the installer loaded from ${new URL(selfBase).origin}. ` +
-          "A strict CSP may silently block them. To pin a version, put it in the installer script URL " +
-          "(e.g. https://cdn.runtype.com/persona/<version>/install.global.js) instead of the `version`/`cdn` config keys.",
+          `${jsUrl}: strict CSP may silently block cross-origin assets; pin the installer URL.`,
         );
       }
     } catch {
@@ -308,8 +284,7 @@ declare global {
 
   // Check if CSS is already loaded
   const isCssLoaded = () => {
-    return !!document.head.querySelector('link[data-persona]') ||
-           !!document.head.querySelector(`link[href*="widget.css"]`);
+    return !!document.head.querySelector('link[data-persona],link[href*="widget.css"]');
   };
 
   // Check if JS is already loaded
@@ -323,115 +298,59 @@ declare global {
    * Uses requestIdleCallback + double requestAnimationFrame for reliable detection.
    */
   const waitForHydration = (callback: () => void): void => {
-    let executed = false;
-    
-    const execute = () => {
-      if (executed) return;
-      executed = true;
-      callback();
-    };
-
     const afterDom = () => {
       // Strategy 1: Use requestIdleCallback if available (best for detecting idle after hydration)
       if (typeof requestIdleCallback !== 'undefined') {
         requestIdleCallback(() => {
           // Double requestAnimationFrame ensures at least one full paint cycle completed
           requestAnimationFrame(() => {
-            requestAnimationFrame(execute);
+            requestAnimationFrame(callback);
           });
         }, { timeout: 3000 }); // Max wait 3 seconds, then proceed anyway
       } else {
         // Strategy 2: Fallback for Safari (no requestIdleCallback)
         // 300ms is typically enough for hydration on most pages
-        setTimeout(execute, 300);
+        setTimeout(callback, 300);
       }
     };
 
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', afterDom);
+      document.addEventListener('DOMContentLoaded', afterDom, { once: true });
     } else {
       // DOM already ready, but still wait for potential hydration
       afterDom();
     }
   };
 
-  // Load CSS
-  const loadCSS = (): Promise<void> => {
+  // Stylesheet and script requests share lifecycle and failure handling.
+  const loadAsset = (url: string | null, loaded: boolean, css = false): Promise<void> => {
     return new Promise((resolve, reject) => {
-      if (isCssLoaded()) {
-        resolve();
-        return;
-      }
-
-      const link = document.createElement("link");
-      link.rel = "stylesheet";
-      link.href = cssUrl;
-      link.setAttribute("data-persona", "true");
-      
-      link.onload = () => resolve();
-      link.onerror = () => reject(new Error(`Failed to load CSS from ${cssUrl}`));
-      document.head.appendChild(link);
+      if (loaded || !url) { resolve(); return; }
+      const node = document.createElement(css ? "link" : "script");
+      Object.assign(node, css ? { rel: "stylesheet", href: url } : { src: url, async: true });
+      if (css) node.setAttribute("data-persona", "true");
+      node.onload = () => resolve();
+      node.onerror = () => reject(new Error(`Failed to load ${url}`));
+      document.head.appendChild(node);
     });
   };
-
-  // Load JS
-  const loadJS = (): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (isJsLoaded()) {
-        resolve();
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.src = jsUrl;
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Failed to load JS from ${jsUrl}`));
-      document.head.appendChild(script);
-    });
-  };
-
-  // Load the tiny launcher-only critical bundle (launcher.global.js)
-  const isLauncherLoaded = () => !!window.AgentWidgetLauncher;
-
-  const loadLauncher = (): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (isLauncherLoaded() || !launcherUrl) {
-        resolve();
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.src = launcherUrl;
-      script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error(`Failed to load launcher from ${launcherUrl}`));
-      document.head.appendChild(script);
-    });
-  };
+  const loadCSS = () => loadAsset(cssUrl, isCssLoaded(), true);
+  const loadJS = () => loadAsset(jsUrl, isJsLoaded());
+  const loadLauncher = () => loadAsset(launcherUrl, !!window.AgentWidgetLauncher);
 
   // Warm the full bundle in the background (download-only, not executed) so the
   // first open is quick. Runs at idle so it never competes with the launcher.
   const prefetchFullBundle = (): void => {
     const addPrefetch = () => {
-      if (!isJsLoaded()) {
-        const link = document.createElement("link");
-        link.rel = "prefetch";
-        link.as = "script";
-        link.href = jsUrl;
-        document.head.appendChild(link);
-      }
-
-      // Also prefetch the chunks every conversation needs: the markdown
-      // parsers and the SSE stream processor.
+      const urls = isJsLoaded() ? [] : [jsUrl];
       for (const chunk of ["markdown-parsers.js", "client-stream.js"]) {
-        const chunkUrl = jsUrl.replace(/index\.global\.js($|\?)/, `${chunk}$1`);
-        if (chunkUrl === jsUrl) continue;
-        const link2 = document.createElement("link");
-        link2.rel = "prefetch";
-        link2.as = "script";
-        link2.href = chunkUrl;
-        document.head.appendChild(link2);
+        const url = jsUrl.replace(/index\.global\.js($|\?)/, `${chunk}$1`);
+        if (url !== jsUrl) urls.push(url);
+      }
+      for (const href of urls) {
+        const link = document.createElement("link");
+        Object.assign(link, { rel: "prefetch", as: "script", href });
+        document.head.appendChild(link);
       }
     };
     if (typeof requestIdleCallback !== "undefined") {
@@ -443,33 +362,27 @@ declare global {
 
   // Merge top-level installer options into the widget config. Shared by the
   // eager init path and the deferred-launcher path.
-  const buildWidgetInit = (): { target: string | HTMLElement; widgetConfig: any; hasApiConfig: boolean } => {
+  const buildWidgetInit = (): { target: string | HTMLElement; widgetConfig: any } => {
     const target = config.target || "body";
     const widgetConfig: any = { ...config.config };
 
-    if (config.apiUrl && !widgetConfig.apiUrl) widgetConfig.apiUrl = config.apiUrl;
-    if (config.clientToken && !widgetConfig.clientToken) widgetConfig.clientToken = config.clientToken;
-    if (config.flowId && !widgetConfig.flowId) widgetConfig.flowId = config.flowId;
-    if (config.agentId && !widgetConfig.agentId) widgetConfig.agentId = config.agentId;
-    if (config.future && !widgetConfig.future) widgetConfig.future = config.future;
+    for (const key of ["apiUrl", "clientToken", "flowId", "agentId", "future", "brand"] as const) {
+      if (config[key] && !widgetConfig[key]) widgetConfig[key] = config[key];
+    }
 
-    const hasApiConfig = !!(widgetConfig.apiUrl || widgetConfig.clientToken);
-    return { target, widgetConfig, hasApiConfig };
+    return { target, widgetConfig };
   };
 
   // Initialize the full widget. When `openAfter` is true (the deferred-launcher
   // handoff), open the panel immediately via the public controller API so the
   // user's click on the critical launcher carries through.
-  const initWidget = (openAfter = false): any => {
-    if (!window.AgentWidget || !window.AgentWidget.initAgentWidget) {
-      console.warn("AgentWidget not available. Make sure the script loaded successfully.");
-      return;
-    }
+  const initWidget = async (openAfter = false): Promise<any> => {
+    if (!window.AgentWidget?.initAgentWidget) throw new Error("Widget unavailable");
 
-    const { target, widgetConfig, hasApiConfig } = buildWidgetInit();
+    const { target, widgetConfig } = buildWidgetInit();
 
     // Only initialize if we have either apiUrl OR clientToken (or other config)
-    if (!hasApiConfig && Object.keys(widgetConfig).length === 0) {
+    if (Object.keys(widgetConfig).length === 0) {
       return;
     }
 
@@ -479,8 +392,9 @@ declare global {
         window.AgentWidget.markdownPostprocessor(text);
     }
 
+    let handle: any;
     try {
-      const handle = window.AgentWidget.initAgentWidget({
+      handle = window.AgentWidget.initAgentWidget({
         target,
         config: widgetConfig,
         // Explicitly disable shadow DOM for better CSS compatibility with host page
@@ -488,11 +402,11 @@ declare global {
         windowKey: config.windowKey
       });
 
+      await handle?.ready;
+
       // Handoff from the critical launcher: the user already clicked, so open
       // the panel via the existing public controller method.
-      if (openAfter && handle && typeof handle.open === "function") {
-        handle.open();
-      }
+      if (openAfter) handle?.open?.();
 
       // Eager floating installs paint their launcher at load time too: emit the
       // same page-load "appeared" signal as the deferred path. The deferred
@@ -508,7 +422,8 @@ declare global {
       dispatchLifecycle("persona:chat-ready", handle);
       return handle;
     } catch (error) {
-      fail("init", error);
+      handle?.destroy?.();
+      throw error;
     }
   };
 
@@ -550,22 +465,25 @@ declare global {
   // full widget on first click, then remove the critical launcher.
   const mountDeferredLauncher = (target: string | HTMLElement, widgetConfig: any): void => {
     let phase: "idle" | "loading" | "done" = "idle";
-    let launcherHandle: { destroy: () => void } | undefined;
+    let launcherHandle: { destroy: () => void; element: HTMLButtonElement } | undefined;
 
     const onOpen = () => {
       if (phase !== "idle") return; // already loading or handed off
       phase = "loading";
+      let errorPhase: "bundle" | "init" = "bundle";
+      const stopLoading = delayInstallLoading(launcherHandle?.element ?? null, true, config.renderLoading);
       loadJS()
-        .then(() => {
-          initWidget(true);          // mount the full widget + open the panel
+        .then(async () => {
+          errorPhase = "init";
+          await initWidget(true);    // keep the critical launcher until the panel is complete
+          stopLoading();
           launcherHandle?.destroy();  // remove the critical launcher (same component → invisible)
           phase = "done";
         })
         .catch((error) => {
+          stopLoading();
           phase = "idle";            // allow the click to be retried
-          console.error("Failed to load AgentWidget on open:", error);
-          safeCall(config.onError, { phase: "bundle", error });
-          dispatchLifecycle("persona:error", { phase: "bundle", error });
+          fail(errorPhase, error);
         });
     };
 
@@ -583,6 +501,7 @@ declare global {
 
   // Main installation flow (called after hydration completes)
   const install = async () => {
+    let stopLoading = () => {};
     try {
       // Auto-init if we have config OR apiUrl OR clientToken
       const shouldAutoInit = autoInit && (
@@ -600,18 +519,26 @@ declare global {
           try {
             // CSS + launcher in parallel so the launcher paints correctly styled.
             await Promise.all([loadCSS(), loadLauncher()]);
-            if (window.AgentWidgetLauncher && window.AgentWidgetLauncher.mount) {
+            if (window.AgentWidgetLauncher?.mount) {
               mountDeferredLauncher(target, widgetConfig);
               return;
             }
           } catch (error) {
-            console.warn("Deferred launcher failed; falling back to eager load.", error);
+            console.warn("Launcher failed; loading widget.", error);
           }
           // Fall through to the eager path on any failure.
         }
       }
 
-      // Eager path (unchanged behavior): load the full bundle, then init.
+      // Only an actual visible embedded surface needs initial feedback. A
+      // collapsed floating launcher must not put a spinner over the host page.
+      if (shouldAutoInit) {
+        const { target, widgetConfig } = buildWidgetInit();
+        if (widgetConfig.launcher?.enabled === false) {
+          stopLoading = delayInstallLoading(typeof target === "string" ? document.querySelector(target) : target, false, config.renderLoading);
+        }
+      }
+      // Eager path: retain feedback through all renderer/style preparation.
       try {
         await loadCSS();
       } catch (error) {
@@ -623,12 +550,13 @@ declare global {
         return fail("bundle", error);
       }
       if (shouldAutoInit) {
-        // Wait a tick to ensure AgentWidget is fully initialized
-        setTimeout(() => initWidget(false), 0);
+        await initWidget(false);
       }
     } catch (error) {
       // Safety net for anything unexpected before the eager loads above.
       fail("init", error);
+    } finally {
+      stopLoading();
     }
   };
 

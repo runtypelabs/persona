@@ -13,7 +13,7 @@ import type { GalleryComponent } from "./types";
  *      and page reloads. It also emits a `persona:demo-cart:add` DOM event the
  *      host page can listen to.
  */
-export const ProductCard: ComponentRenderer = (props, context) => {
+export const ProductCard = ((props, context) => {
   const card = document.createElement("div");
   card.className = "product-card";
   card.style.cssText = `
@@ -71,7 +71,7 @@ export const ProductCard: ComponentRenderer = (props, context) => {
   });
 
   return card;
-};
+}) satisfies ComponentRenderer;
 
 const productCard: GalleryComponent = {
   name: "ProductCard",

@@ -1,4 +1,5 @@
-import type { ComponentContext, ComponentRenderer } from "./registry";
+import { ensureArtifactStyles } from "./artifact-styles";
+import type { ComponentContext } from "./registry";
 import type {
   PersonaArtifactFileMeta,
   PersonaArtifactPresentation,
@@ -10,7 +11,7 @@ import {
   clearArtifactStatusTracking,
   resolveArtifactStatusLabel
 } from "../utils/artifact-status-label";
-import { createLabelButton } from "../utils/buttons";
+import { createLabelButton } from "./artifact-buttons";
 import { buildArtifactActionButton } from "../utils/artifact-custom-actions";
 import type { PersonaArtifactActionContext } from "../types";
 
@@ -50,6 +51,7 @@ function renderDefaultArtifactCard(
       : "Document";
 
   const root = document.createElement("div");
+  ensureArtifactStyles(root);
   root.className =
     "persona-artifact-card persona-flex persona-w-full persona-max-w-full persona-items-center persona-gap-3 persona-px-4 persona-py-3";
   root.tabIndex = 0;
@@ -158,7 +160,14 @@ function renderDefaultArtifactCard(
  * Supports a custom `renderCard` callback via `config.features.artifacts.renderCard`
  * that can override the default card rendering.
  */
-export const PersonaArtifactCard: ComponentRenderer = (props, context) => {
+export const PersonaArtifactCard = (props: Record<string, unknown>, context: ComponentContext): HTMLElement => {
+  // V4 historically showed transcript references even when its pane was off.
+  // V5 applies the feature gate before custom renderers or preview work runs.
+  if (context?.config?.future?.v5Defaults === true && context.config.features?.artifacts?.enabled !== true) {
+    const hidden = document.createElement("div");
+    hidden.hidden = true;
+    return hidden;
+  }
   const customRenderer = context?.config?.features?.artifacts?.renderCard;
   if (customRenderer) {
     const title =
